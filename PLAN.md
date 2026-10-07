@@ -4,6 +4,20 @@ Phase 1 delivers the Software Factory. Requirements and page specifications are 
 
 ## Current focus
 
+- **Local UI session with Dan (branch `ui/shell-iteration`, 6 October 2026):** implemented locally:
+  - the stage glass shell, the same on every page, with one shared 3D room behind all pages and sign-in;
+  - the conversation docked to the composer, with its handle and fly-off;
+  - shared window chrome and panel resize handles;
+  - Activity on Settings, and the top-bar screen share;
+  - Kanban as the only Software Factory page (Tasks/Projects lists removed and redirected), with Create task/Create project dialogs and its commit-trail release bar; projects managed in Settings;
+  - side panels that float over content, with the navigation panel only for multi-page areas;
+  - task windows instead of the task page, the tab bar with minimise-to-tab, the chat parked in the rail off home, and a slimmer chat bar with a waking orb;
+  - Settings sections for presence modes (#468) and memory (#469), both against the merged, live APIs;
+  - restyled Settings (with Back) and sign-in pages;
+  - styleable dropdowns, pointer-lit glass, page entrance motion, and deduplicated toasts.
+
+  Web typecheck passes. Web tests pass apart from date/number-format tests that fail only under this machine's en-DK locale (baseline, unrelated files). Shipped in the overnight P8-37 PR (7 October). Next: Dan's review of the deployed app. Hardware-GPU motion, light theme and physical phones still need checking after deploy. See [DESIGN.md](DESIGN.md#stage-glass-shell-and-docked-conversation--6-october-2026-local-ui-session-with-dan).
+
 - **P6-20 (#461):** Backend workflow filtering, cancellation handling and rolling one-hour deployment alert collapse are implemented with webhook/SQL regressions. Migration `0024_dismiss_board_deployment_failures.sql` adds durable deployment failure receipts and dismisses historical board failures without deleting activity; renumbered to avoid #462's 0022 and #459's 0023. Backend tests (1,197), SQL integration tests (80), lint and build pass. Next: merge `main` after #462 lands, then post-deploy Activity-feed verification; live GitHub/Azure acceptance remains unverified.
 - **P6-21 (#463):** Backend-only recorded PR/check/usage summaries and Dan-only pre-start retry are implemented. Focused API/dispatcher checks and real SQL Server schema contracts pass, including concurrent retries and sandbox-history refusal; live deployed behavior and UI consumption remain unverified.
 - **P6-17 (#455):** Implemented offline: background failure event names and bounded error-kind/HTTP-status diagnostics reach stdout and telemetry; presence, budget, archive, policy and bridge callbacks preserve caught errors. Focused backend tests (185), lint and build pass. `ENTRA_JARVIS_AGENT_OBJECT_ID` remains because backend auth reads it. Next: deploy and identify the recurring warning from live logs.

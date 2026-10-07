@@ -95,6 +95,17 @@
   --glass-shell-sheen: linear-gradient(180deg, color-mix(in srgb, var(--glass-edge-cool) 6%, transparent), transparent 42%);
   --message-dan-tint: color-mix(in srgb, var(--glass-edge-warm) 18%, transparent);
   --message-jarvis-tint: color-mix(in srgb, var(--glass-edge-cool) 12%, transparent);
+  /* Stage glass: the Jarvis room shows through angled side slabs, the message window and the composer. */
+  --stage-slab: rgb(240 245 247 / 48%);
+  --shell-slab: rgb(240 245 247 / 38%);
+  --board-slab: rgb(240 245 247 / 56%);
+  --stage-glass: rgb(240 245 247 / 30%);
+  --glass-glow-warm: #c98a3a;
+  --glass-rim-light: rgb(255 255 255 / 70%);
+  --slab-shadow: 0 30px 80px rgb(32 37 44 / 18%);
+  --shell-tilt: 20deg;
+  --shell-perspective: 1000px;
+  --slab-gap: 6px;
   --space-1: calc(4px * var(--theme-density-scale, 1));
   --space-2: calc(8px * var(--theme-density-scale, 1));
   --space-3: calc(12px * var(--theme-density-scale, 1));
@@ -177,6 +188,13 @@
   --stage-orb: var(--theme-accent, #52dcfa);
   --stage-reflector: #526b80;
   --stage-exposure: 1;
+  --stage-slab: rgb(9 16 24 / 40%);
+  --shell-slab: rgb(9 16 24 / 30%);
+  --board-slab: rgb(9 16 24 / 48%);
+  --stage-glass: rgb(9 16 24 / 18%);
+  --glass-glow-warm: #ffb45c;
+  --glass-rim-light: rgb(255 255 255 / 34%);
+  --slab-shadow: 0 30px 80px rgb(0 0 0 / 50%);
 }
 
 :root[data-background="living-aurora"] { --ambient-opacity: .84; }
@@ -207,6 +225,11 @@
 }
 
 * { box-sizing: border-box; }
+/* Thin glass scrollbars: quiet at rest, lit when the pointer is over the scrolling surface. */
+* { scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--text) 20%, transparent) transparent; }
+:is(.conversation-transcript, .area-sidebar, .context-panel, .workspace-view-content, .shell-main):hover {
+  scrollbar-color: color-mix(in srgb, var(--glass-edge-cool) 60%, transparent) transparent;
+}
 body {
   margin: 0;
   min-width: 280px;
@@ -221,7 +244,7 @@ a:focus-visible { outline: 3px solid var(--focus); outline-offset: 5px; }
   position: relative;
   isolation: isolate;
   --rail-size: 56px;
-  --sidebar-size: 220px;
+  --sidebar-size: var(--sidebar-width, 220px);
   --context-size: 0px;
   display: grid;
   height: 100vh;
@@ -250,7 +273,7 @@ a:focus-visible { outline: 3px solid var(--focus); outline-offset: 5px; }
   to { opacity: var(--ambient-opacity); transform: translate3d(1.4%, 1%, 0) scale(1.03); }
 }
 .app-shell[data-navigation-open="false"] { --sidebar-size: 0px; }
-.app-shell[data-context-open="true"] { --context-size: 280px; }
+.app-shell[data-context-open="true"] { --context-size: var(--context-width, 280px); }
 .app-shell button:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 .app-shell button:disabled { cursor: not-allowed; }
 .area-rail {
@@ -282,7 +305,15 @@ a:focus-visible { outline: 3px solid var(--focus); outline-offset: 5px; }
   cursor: pointer;
 }
 .rail-button:hover, .rail-link:hover, .sidebar-close:hover, .topbar-icon-button:hover { background: var(--rule); color: var(--text); }
-.rail-link[aria-current="page"] { background: var(--glass-selected); color: var(--text); box-shadow: var(--glass-selected-glow); }
+/* The current area is shown on the icon itself: brighter, slightly larger and lit, with no tile behind it. */
+.rail-link[aria-current="page"] { background: transparent; color: var(--text); box-shadow: none; }
+.rail-link svg { transition: scale var(--motion-press) var(--ease-standard), filter var(--motion-press) var(--ease-standard), color var(--motion-press) var(--ease-standard); }
+.rail-link[aria-current="page"] svg {
+  color: color-mix(in srgb, var(--glass-edge-cool) 70%, var(--text));
+  scale: 1.14;
+  stroke-width: 2.1;
+  filter: drop-shadow(0 0 5px color-mix(in srgb, var(--glass-edge-cool) 75%, transparent)) drop-shadow(0 0 12px color-mix(in srgb, var(--glass-edge-cool) 35%, transparent));
+}
 .app-shell svg { width: 21px; height: 21px; }
 .area-sidebar {
   z-index: 1;
@@ -716,6 +747,343 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
   -webkit-mask-composite: xor;
   mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
 }
+/* Stage glass: every workspace window and the composer are thick translucent glass lit by the room. */
+.workspace-window.luminous-glass,
+.conversation-input.luminous-glass {
+  border-color: transparent;
+  background: var(--stage-slab);
+  backdrop-filter: blur(24px) saturate(1.3);
+  box-shadow:
+    0 26px 60px -18px rgb(0 0 0 / 55%),
+    0 14px 40px -22px var(--glass-glow-warm),
+    inset 0 1px 0 var(--glass-rim-light),
+    inset 0 -22px 34px -30px var(--glass-glow-warm);
+}
+.workspace-window.luminous-glass::before {
+  padding: 1.5px;
+  background: linear-gradient(180deg, var(--glass-rim-light), color-mix(in srgb, var(--glass-rim-light) 25%, transparent) 38%,
+    color-mix(in srgb, var(--glass-edge-cool) 55%, transparent) 100%);
+}
+.workspace-window.luminous-glass:focus-within { box-shadow: 0 26px 60px -18px rgb(0 0 0 / 55%), inset 0 1px 0 var(--glass-rim-light), 0 0 0 2px var(--focus); }
+/* Conversation bubbles carry their own surfaces, so its window and the composer can be clearer glass. */
+.workspace-window-conversation.luminous-glass, .conversation-input.luminous-glass { background: var(--stage-glass); }
+/* While typing, the conversation window is the upper part of the composer: square lower corners, no lower glow. */
+.app-shell[data-voice-active="false"] .workspace-window-conversation.luminous-glass {
+  border-radius: var(--radius-window) var(--radius-window) 0 0;
+  box-shadow: 0 -18px 50px -24px rgb(0 0 0 / 55%), inset 0 1px 0 var(--glass-rim-light);
+}
+.app-shell[data-voice-active="false"] .workspace-window-conversation.luminous-glass::before { padding: 1.5px 1.5px 0; }
+.app-shell[data-voice-active="false"][data-conversation-open="true"] .conversation-input.luminous-glass {
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+}
+.conversation-input.luminous-glass::before {
+  padding: 1.5px;
+  background:
+    radial-gradient(55% 60% at 50% 100%, var(--glass-glow-warm), transparent 75%),
+    linear-gradient(180deg, var(--glass-rim-light), color-mix(in srgb, var(--glass-rim-light) 25%, transparent) 38%,
+      color-mix(in srgb, var(--glass-edge-cool) 55%, transparent) 82%, color-mix(in srgb, var(--glass-edge-cool) 80%, transparent));
+}
+/* Shared window chrome: workspace windows and shell panels use one compact heading row and quiet round controls. */
+.sidebar-heading, .context-panel-heading { min-height: 36px; margin: 0 0 var(--space-2); gap: var(--space-1); }
+.sidebar-heading { margin-inline: 4px 0; }
+.sidebar-heading > span, .context-panel-heading h2 { font-size: 15px; font-weight: 650; line-height: 1.3; }
+.area-sidebar { padding: var(--space-2) var(--space-2) var(--space-3); }
+.context-panel { padding: var(--space-2) var(--space-2) var(--space-3) var(--space-3); }
+.workspace-window { gap: var(--space-2); padding: 6px 8px 12px 14px; }
+.workspace-window-heading { flex-wrap: nowrap; align-items: center; gap: var(--space-1); min-height: 32px; }
+.workspace-window-heading h3 { font-size: 15px; line-height: 1.3; }
+.workspace-window .workspace-title-drag { min-height: 32px; }
+.workspace-window-actions { flex-wrap: nowrap; gap: 0; }
+.sidebar-close,
+.workspace-window .workspace-icon-control,
+.workspace-window .workspace-arrange-menu > summary {
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  min-height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-muted);
+  transition: background-color var(--motion-press) var(--ease-standard), color var(--motion-press) var(--ease-standard), transform var(--motion-press) var(--ease-standard);
+}
+.sidebar-close svg, .workspace-window .workspace-icon-control svg, .workspace-window .workspace-arrange-menu > summary svg { width: 16px; height: 16px; }
+.sidebar-close:hover, .workspace-window .workspace-icon-control:hover, .workspace-window .workspace-arrange-menu > summary:hover { background: var(--glass-hover); color: var(--text); }
+.sidebar-close:active, .workspace-window .workspace-icon-control:active { background: var(--glass-pressed); transform: scale(.94); }
+.workspace-window .workspace-close-control:hover { background: var(--error-wash); color: var(--text); }
+.workspace-resize-edge-corner::after { content: none; }
+@media (pointer: coarse) {
+  .sidebar-close, .workspace-window .workspace-icon-control, .workspace-window .workspace-arrange-menu > summary { width: 44px; min-width: 44px; height: 44px; min-height: 44px; }
+}
+/* The composer and its menus stay above workspace windows, so More and attach menus are never hidden. */
+.conversation-input.luminous-glass { z-index: 1100; }
+/* Shell panels keep their heading and resize handle in place while only the body scrolls. */
+@media (min-width: 701px) and (not ((max-height: 500px) and (pointer: coarse))) {
+  .area-sidebar, .context-panel { position: relative; display: flex; flex-direction: column; overflow: hidden; }
+  .area-sidebar > nav, .context-panel-body { flex: 1; min-height: 0; align-content: start; overflow-y: auto; }
+}
+.panel-resize-handle {
+  position: absolute;
+  z-index: 3;
+  top: 50%;
+  display: grid;
+  width: 20px;
+  height: 76px;
+  place-items: center;
+  border-radius: var(--radius-pill);
+  cursor: ew-resize;
+  translate: 0 -50%;
+  touch-action: none;
+}
+.panel-resize-handle-right { right: 0; }
+.panel-resize-handle-left { left: 0; }
+.panel-resize-handle span {
+  width: 5px;
+  height: 58px;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--text) 45%, transparent);
+  box-shadow: 0 0 10px color-mix(in srgb, var(--glass-edge-cool) 45%, transparent);
+  scale: 1 .76;
+  transition: scale var(--motion-press) var(--ease-standard), background-color var(--motion-press) var(--ease-standard);
+}
+.panel-resize-handle:hover span, .panel-resize-handle:focus-visible span, :root[data-panel-resizing] .panel-resize-handle:active span {
+  scale: 1 1;
+  background: color-mix(in srgb, var(--glass-edge-cool) 85%, var(--text));
+}
+.panel-resize-handle:focus-visible { outline: 3px solid var(--focus); outline-offset: -3px; }
+:root[data-panel-resizing], :root[data-panel-resizing] * { cursor: ew-resize !important; user-select: none; }
+@media (max-width: 700px), (max-height: 500px) and (pointer: coarse) { .panel-resize-handle { display: none; } }
+/* Top bar: the same smoked glass as the shell, with quiet rounded controls; selection is a lit surface. */
+.app-topbar {
+  border-bottom: 0;
+  background: linear-gradient(180deg, var(--stage-slab), color-mix(in srgb, var(--stage-slab) 55%, transparent));
+  backdrop-filter: blur(20px) saturate(1.3);
+  box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--glass-rim-light) 35%, transparent);
+}
+.brand { font-size: 19px; letter-spacing: -0.01em; }
+.topbar-actions { gap: 4px; }
+.topbar-feature-button, .settings-link, .topbar-icon-button {
+  height: 36px;
+  min-height: 36px;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--text-muted);
+  transition: background-color var(--motion-press) var(--ease-standard), color var(--motion-press) var(--ease-standard), box-shadow var(--motion-press) var(--ease-standard);
+}
+.topbar-feature-button, .topbar-icon-button { width: 36px; min-width: 36px; }
+.topbar-feature-button.camera-control-button { width: auto; padding-inline: 10px; }
+.topbar-feature-button.screen-control-button[aria-pressed="false"] { width: 36px; padding-inline: 0; }
+.topbar-feature-button svg, .settings-link svg, .topbar-icon-button svg { width: 18px; height: 18px; }
+.camera-control-button:hover, .settings-link:hover, .topbar-icon-button:hover { background: var(--glass-hover); color: var(--text); }
+.camera-control-button[aria-pressed="true"], .topbar-icon-button[aria-expanded="true"], .settings-link[aria-current="page"] {
+  background: var(--glass-selected);
+  color: var(--text);
+  box-shadow: var(--glass-selected-glow);
+}
+@media (pointer: coarse) {
+  .topbar-feature-button, .settings-link, .topbar-icon-button { height: 44px; min-height: 44px; }
+  .topbar-feature-button, .topbar-icon-button, .topbar-feature-button.screen-control-button[aria-pressed="false"] { width: 44px; min-width: 44px; }
+}
+/* Desktop shell (every page): the top bar floats as the same glass slab as the side panels. */
+@media (min-width: 701px) and (not ((max-height: 500px) and (pointer: coarse))) {
+  .app-shell:not(.app-signed-out) .app-topbar {
+    position: relative;
+    isolation: isolate;
+    height: calc(var(--rail-size) - var(--slab-gap));
+    min-height: calc(var(--rail-size) - var(--slab-gap));
+    margin: var(--slab-gap) var(--slab-gap) 0;
+    padding-inline: var(--space-3) var(--space-2);
+    border-radius: var(--radius-panel);
+    background: var(--shell-slab);
+    backdrop-filter: blur(14px) saturate(1.35);
+    box-shadow: var(--slab-shadow), inset 0 1px 0 var(--glass-rim-light);
+  }
+  .app-shell:not(.app-signed-out) .app-topbar::before {
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    padding: 1px;
+    border-radius: inherit;
+    background: linear-gradient(180deg, var(--glass-rim-light), color-mix(in srgb, var(--glass-rim-light) 20%, transparent) 55%,
+      color-mix(in srgb, var(--glass-edge-cool) 60%, transparent));
+    content: "";
+    pointer-events: none;
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+  }
+}
+/* One hover and press language for every icon button: a lit glass wash with a faint rim; pressing sinks it slightly.
+   Selected and open controls keep their lit selected surface. */
+:is(.rail-button, .rail-link, .sidebar-close, .topbar-icon-button, .camera-control-button, .settings-link,
+  .topbar-capture-menu > summary, .workspace-window .workspace-icon-control, .workspace-window .workspace-arrange-menu > summary,
+  .more-menu-trigger, .conversation-toast .conversation-toast-dismiss) {
+  transition: background-color var(--motion-press) var(--ease-standard), color var(--motion-press) var(--ease-standard),
+    box-shadow var(--motion-press) var(--ease-standard), transform var(--motion-press) var(--ease-standard);
+}
+:is(.rail-button, .rail-link, .sidebar-close, .topbar-icon-button, .camera-control-button, .settings-link,
+  .topbar-capture-menu > summary, .workspace-window .workspace-icon-control, .workspace-window .workspace-arrange-menu > summary,
+  .more-menu-trigger, .conversation-toast .conversation-toast-dismiss):hover:not(:disabled, [aria-current="page"], [aria-pressed="true"], [aria-expanded="true"]) {
+  background: var(--glass-hover);
+  color: var(--text);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--glass-rim-light) 40%, transparent), 0 0 14px color-mix(in srgb, var(--glass-edge-cool) 14%, transparent);
+}
+:is(.rail-button, .rail-link, .sidebar-close, .topbar-icon-button, .camera-control-button, .settings-link,
+  .topbar-capture-menu > summary, .workspace-window .workspace-icon-control, .workspace-window .workspace-arrange-menu > summary,
+  .more-menu-trigger, .conversation-toast .conversation-toast-dismiss):active:not(:disabled) {
+  background: var(--glass-pressed);
+  transform: scale(.94);
+}
+/* Opening springs up from the composer, overshoots, and settles; closing tucks back down. Dragging follows the pointer. */
+.workspace-window.workspace-window-conversation {
+  transform: none;
+  transform-origin: 50% 100%;
+  translate: 0 var(--sheet-drag, 0px);
+  scale: 1 1;
+  transition:
+    opacity calc(var(--motion-panel) * .5) var(--ease-standard),
+    scale calc(var(--motion-panel) * 1.5) cubic-bezier(.3, 1.55, .5, 1),
+    translate calc(var(--motion-panel) * .6) var(--ease-enter),
+    display calc(var(--motion-panel) * .5) allow-discrete,
+    box-shadow var(--motion-press) var(--ease-standard);
+}
+@starting-style {
+  .workspace-window.workspace-window-conversation { opacity: 0; transform: none; scale: 1 .15; }
+}
+.workspace-window.workspace-window-conversation.workspace-window-minimized {
+  opacity: 0;
+  transform: none;
+  scale: 1 .15;
+  transition:
+    opacity calc(var(--motion-panel) * .5) var(--ease-standard),
+    scale calc(var(--motion-panel) * .5) cubic-bezier(.5, 0, .75, 0),
+    display calc(var(--motion-panel) * .5) allow-discrete;
+}
+.workspace-window.workspace-window-conversation[data-sheet-dragging] { transition: none; }
+.workspace-window-conversation .workspace-title-docked { flex: 1; min-height: 36px; margin: 0; }
+.conversation-handle {
+  position: absolute;
+  z-index: 3;
+  top: -14px;
+  left: 50%;
+  display: grid;
+  width: 72px;
+  height: 28px;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  cursor: grab;
+  translate: -50% 0;
+  touch-action: none;
+}
+.conversation-handle span {
+  width: 58px;
+  height: 5px;
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--text) 55%, transparent);
+  box-shadow: 0 0 10px color-mix(in srgb, var(--glass-edge-cool) 45%, transparent);
+  scale: .76 1;
+  transition: scale var(--motion-press) var(--ease-standard), background-color var(--motion-press) var(--ease-standard);
+}
+.conversation-handle:hover span, .conversation-handle:focus-visible span { scale: 1 1; background: color-mix(in srgb, var(--glass-edge-cool) 85%, var(--text)); }
+.conversation-handle:active { cursor: grabbing; }
+.conversation-handle:active span { scale: .9 1; }
+.conversation-handle:focus-visible { outline: 3px solid var(--focus); outline-offset: 0; }
+@media (pointer: coarse) { .conversation-handle { top: -22px; height: 44px; } }
+/* The handle replaces the minimised-view tab for the conversation on the Jarvis page. */
+.app-shell[data-voice-active="false"] .shell-main:is([data-home="true"] > *) .workspace-tab[data-view-id="conversation"] { display: none; }
+.app-shell[data-voice-active="false"] .shell-main:is([data-home="true"] > *) .workspace-tabs:not(:has(.workspace-tab:not([data-view-id="conversation"]))) { display: none; }
+.conversation-input.luminous-glass:has(textarea:focus-visible) {
+  box-shadow:
+    0 26px 60px -18px rgb(0 0 0 / 55%),
+    0 14px 40px -22px var(--glass-glow-warm),
+    inset 0 1px 0 var(--glass-rim-light);
+}
+/* Hover and typing: a thin light runs around the rim instead of a thick ring; focus brightens it. */
+@property --rim-sweep { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
+.conversation-input.luminous-glass::after {
+  position: absolute;
+  inset: -1px;
+  padding: 2px;
+  border-radius: inherit;
+  background: conic-gradient(from var(--rim-sweep),
+    transparent 0 62%,
+    color-mix(in srgb, var(--glass-edge-cool) 70%, transparent) 78%,
+    var(--glass-rim-light) 86%,
+    var(--glass-glow-warm) 92%,
+    transparent 100%);
+  content: "";
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--motion-state) var(--ease-standard);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+}
+.conversation-input.luminous-glass:hover::after { opacity: .7; animation: rim-sweep 3.6s linear infinite; }
+.conversation-input.luminous-glass:focus-within::after { opacity: 1; animation: rim-sweep 2.8s linear infinite; }
+@keyframes rim-sweep { to { --rim-sweep: 360deg; } }
+:root[data-motion="reduced"] .conversation-input.luminous-glass::after { animation: none; background: color-mix(in srgb, var(--glass-edge-cool) 80%, var(--glass-rim-light)); }
+.workspace-window-conversation.luminous-glass:focus-within { box-shadow: 0 26px 60px -18px rgb(0 0 0 / 55%), 0 0 0 2px var(--focus); }
+/* Desktop shell (every page): rail, navigation and context stand as glass slabs angled back like opened doors. */
+@media (min-width: 701px) and (not ((max-height: 500px) and (pointer: coarse))) {
+  .app-shell:not(.app-signed-out) :is(.area-rail, .area-sidebar, .context-panel) {
+    position: relative;
+    isolation: isolate;
+    margin: var(--slab-gap) 0 clamp(16px, 9vh, 110px);
+    border: 0;
+    border-radius: var(--radius-panel);
+    background: var(--shell-slab);
+    backdrop-filter: blur(14px) saturate(1.35);
+    box-shadow: var(--slab-shadow), inset 0 1px 0 var(--glass-rim-light);
+    transition: transform var(--motion-panel) var(--ease-enter), opacity var(--motion-panel) var(--ease-standard);
+  }
+  .app-shell:not(.app-signed-out) :is(.area-rail, .area-sidebar, .context-panel)::before {
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    padding: 1px;
+    border-radius: inherit;
+    content: "";
+    pointer-events: none;
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+  }
+  /* The inner edge faces the orb, so it catches the most light. */
+  .app-shell:not(.app-signed-out) :is(.area-rail, .area-sidebar)::before {
+    background: linear-gradient(90deg, color-mix(in srgb, var(--glass-rim-light) 20%, transparent), var(--glass-rim-light) 92%, color-mix(in srgb, var(--glass-edge-cool) 70%, transparent));
+  }
+  .app-shell:not(.app-signed-out) .context-panel::before {
+    background: linear-gradient(270deg, color-mix(in srgb, var(--glass-rim-light) 20%, transparent), var(--glass-rim-light) 92%, color-mix(in srgb, var(--glass-edge-cool) 70%, transparent));
+  }
+  /* Rail and navigation share one hinge at the screen's left edge so they read as one receding plane. */
+  .app-shell:not(.app-signed-out) .area-rail {
+    margin-left: var(--slab-gap);
+    padding: 6px 3px;
+    transform-origin: calc(-1 * var(--slab-gap)) 0;
+    transform: perspective(var(--shell-perspective)) rotateY(var(--shell-tilt));
+  }
+  .app-shell:not(.app-signed-out) .area-sidebar {
+    margin-left: var(--slab-gap);
+    transform-origin: calc(-1 * (var(--rail-size) + var(--slab-gap))) 0;
+    transform: perspective(var(--shell-perspective)) rotateY(var(--shell-tilt));
+  }
+  .app-shell:not(.app-signed-out) .context-panel {
+    margin-right: var(--slab-gap);
+    transform-origin: calc(100% + var(--slab-gap)) 0;
+    transform: perspective(var(--shell-perspective)) rotateY(calc(-1 * var(--shell-tilt)));
+  }
+  /* Opening swings the slab in from the hinge. */
+  @starting-style {
+    .app-shell:not(.app-signed-out) .area-sidebar { opacity: 0; transform: perspective(var(--shell-perspective)) rotateY(75deg); }
+    .app-shell:not(.app-signed-out) .context-panel { opacity: 0; transform: perspective(var(--shell-perspective)) rotateY(-75deg); }
+  }
+}
 .more-menu { position: relative; display: inline-flex; }
 .more-menu-trigger { display: grid; width: 44px; height: 44px; place-items: center; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--text); cursor: pointer; transition: background-color var(--motion-press) var(--ease-standard), transform var(--motion-press) var(--ease-standard); }
 .more-menu-trigger svg { width: 20px; height: 20px; }
@@ -773,6 +1141,9 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
 }
 .panel p.error-text { margin-top: 4px; color: var(--error); font-size: 14px; }
 .settings-page form { margin-top: 24px; }
+.settings-activity { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); align-items: start; gap: var(--space-4); margin: var(--space-5) 0 var(--space-6); }
+.settings-activity .now-panel > h2 { margin-top: 0; }
+@media (max-width: 900px) { .settings-activity { grid-template-columns: minmax(0, 1fr); } }
 .settings-section { padding: 26px 0; border-bottom: 1px solid var(--rule); }
 .settings-section:first-child { padding-top: 0; }
 .settings-section h2 { margin-bottom: 18px; }
@@ -1038,6 +1409,80 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
 .task-dialog-actions { display: flex; flex-wrap: wrap; gap: 12px; }
 .task-dialog-actions .primary-button { margin: 0; }
 .task-dialog-actions .secondary-button { margin: 0; }
+/* Kanban: the task board as glass columns and inset glass cards in the shared stage-glass language. */
+.kanban-header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-4); margin-bottom: var(--space-4); }
+.kanban-header h1 { margin: 0; }
+.kanban-create { display: inline-flex; align-items: center; gap: 8px; margin: 0; }
+.kanban-create svg { width: 18px; height: 18px; }
+.kanban-filters { display: grid; grid-template-columns: minmax(220px, 2fr) repeat(4, minmax(140px, 1fr)); gap: var(--space-2); margin: 0 0 var(--space-4); }
+.kanban-search, .kanban-select { position: relative; display: flex; align-items: center; min-width: 0; }
+.kanban-search svg { position: absolute; z-index: 1; left: 14px; width: 18px; height: 18px; color: var(--text-muted); pointer-events: none; }
+.kanban-search input, .kanban-select select {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius-control);
+  background-color: var(--board-slab);
+  backdrop-filter: blur(20px) saturate(1.2);
+  box-shadow: inset 0 1px 0 var(--glass-rim-light);
+  color: var(--text);
+  font: inherit;
+  font-size: var(--type-small);
+  transition: border-color var(--motion-press) var(--ease-standard), background-color var(--motion-press) var(--ease-standard);
+}
+.kanban-search input { padding-left: 42px; }
+.kanban-search input::placeholder { color: var(--text-muted); opacity: 1; }
+.kanban-search input:hover, .kanban-select select:hover { border-color: color-mix(in srgb, var(--glass-rim-light) 70%, var(--rule)); }
+.kanban-search input:focus-visible, .kanban-select select:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.kanban-page .task-release-bar { background: var(--board-slab); box-shadow: inset 0 1px 0 var(--glass-rim-light); }
+.kanban-live-status { margin: var(--space-2) 0; font-size: var(--type-caption); }
+.kanban-board { margin-top: var(--space-2); }
+.kanban-column {
+  position: relative;
+  isolation: isolate;
+  padding: var(--space-2) var(--space-2) var(--space-3);
+  border-radius: var(--radius-panel);
+  background: var(--board-slab);
+  backdrop-filter: blur(24px) saturate(1.2);
+  box-shadow: 0 18px 40px -24px rgb(0 0 0 / 55%), inset 0 1px 0 var(--glass-rim-light);
+}
+.kanban-column-heading { display: flex; align-items: center; gap: var(--space-2); min-height: 36px; margin: 0 0 var(--space-2); padding: 0 var(--space-2); }
+.kanban-column-heading h2 { margin: 0; font-size: 15px; font-weight: 650; line-height: 1.3; }
+.kanban-count { min-width: 24px; padding: 1px 8px; border-radius: var(--radius-pill); background: var(--glass-hover); color: var(--text-muted); font-size: 12px; font-weight: 650; text-align: center; }
+.kanban-dot { --tone: var(--text-muted); width: 10px; height: 10px; flex: 0 0 auto; border-radius: 50%; background: var(--tone); box-shadow: 0 0 10px color-mix(in srgb, var(--tone) 60%, transparent); }
+.kanban-dot-running { --tone: var(--glass-edge-cool); }
+.kanban-dot-paused { --tone: var(--warning); }
+.kanban-dot-needs-attention { --tone: var(--glass-glow-warm); }
+.kanban-dot-done { --tone: var(--success); }
+.kanban-dot-cancelled { --tone: var(--disabled-text); box-shadow: none; }
+.kanban-column .task-column-empty { margin: var(--space-2); color: var(--text-muted); font-size: var(--type-caption); }
+.kanban-card {
+  padding: var(--space-3);
+  border: 1px solid color-mix(in srgb, var(--glass-rim-light) 35%, transparent);
+  border-radius: var(--radius-control);
+  background: color-mix(in srgb, var(--surface) 48%, transparent);
+  box-shadow: inset 0 1px 0 var(--glass-rim-light);
+  backdrop-filter: none;
+}
+.kanban-card h3 { margin: 0 0 var(--space-2); font-size: 15px; line-height: 1.35; }
+.kanban-card[data-selected="true"] { background: var(--glass-selected); box-shadow: var(--glass-selected-glow), inset 0 1px 0 var(--glass-rim-light); }
+.kanban-card[data-state="Running"] { transform: none; box-shadow: 0 0 22px -8px color-mix(in srgb, var(--glass-edge-cool) 60%, transparent), inset 0 1px 0 var(--glass-rim-light); }
+.kanban-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 var(--space-2); padding: 0; list-style: none; }
+.kanban-chips li { max-width: 100%; padding: 2px 8px; overflow: hidden; border-radius: 6px; background: var(--glass-hover); color: var(--text-muted); font-size: 12px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.kanban-activity { max-width: none; margin: 0 0 var(--space-2); color: var(--text); font-size: var(--type-small); overflow-wrap: anywhere; }
+.kanban-meta { display: flex; min-width: 0; max-width: none; align-items: center; gap: 6px; margin: 0 0 4px; color: var(--text-muted); font-size: 13px; }
+.kanban-meta svg { width: 15px; height: 15px; flex: 0 0 auto; }
+.kanban-meta code { min-width: 0; overflow: hidden; font-family: var(--font-mono); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.kanban-card .task-controls { margin-top: var(--space-3); }
+.kanban-card .task-controls .action-row { gap: 6px; }
+.kanban-card .task-controls button { min-height: 36px; margin: 0; padding: 0 12px; font-size: var(--type-small); }
+@media (pointer: coarse) { .kanban-card .task-controls button { min-height: 44px; } }
+@media (min-width: 1200px) { .kanban-board { grid-auto-columns: minmax(168px, 1fr); gap: 12px; } }
+@media (max-width: 900px) {
+  .kanban-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .kanban-search { grid-column: 1 / -1; }
+}
 
 .release-page { width: 100%; max-width: 1200px; margin-inline: auto; }
 .release-page h1 { margin: 8px 0 6px; font-size: clamp(26px, 4vw, 36px); line-height: 1.2; overflow-wrap: anywhere; }
@@ -1139,6 +1584,7 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
 .task-timeline-preview time { color: var(--text-muted); font-size: 12px; }
 .task-open-full { display: inline-flex; min-height: 44px; align-items: center; margin-top: 12px; font-weight: 650; }
 .task-request { margin: -8px 0 20px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.context-panel-body .task-request { margin-top: 0; }
 .task-meta, .task-disk-meta {
   display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px 24px; margin: 0;
 }
@@ -1235,9 +1681,9 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
 }
 
 @media (max-width: 980px) and (min-width: 701px) {
-  .app-shell { --sidebar-size: 190px; }
+  .app-shell { --sidebar-size: var(--sidebar-width, 190px); }
   .app-shell[data-navigation-open="false"] { --sidebar-size: 0px; }
-  .app-shell[data-context-open="true"] { --context-size: 240px; }
+  .app-shell[data-context-open="true"] { --context-size: var(--context-width, 240px); }
   .app-topbar { padding-inline: 8px; }
   .topbar-actions { gap: 4px; }
   .shell-main { padding-inline: 24px; }
@@ -1386,6 +1832,12 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
   .more-menu-list, .more-menu-flyout, .voice-status-glyph * { animation: none !important; }
   .workspace-tab { animation: none; transition: none; }
   .workspace-window { transition: none; transform: none; }
+  .app-shell .area-sidebar, .app-shell .context-panel { transition: none; }
+  .conversation-input.luminous-glass::after { animation: none !important; background: color-mix(in srgb, var(--glass-edge-cool) 80%, var(--glass-rim-light)); }
+  .workspace-window.workspace-window-conversation,
+  .workspace-window.workspace-window-conversation.workspace-window-minimized {
+    transition: opacity var(--motion-fade) ease-out, display var(--motion-fade) allow-discrete;
+  }
   .task-card-list > li, .task-usage-table tbody > tr, .usage-table tbody > tr {
     animation: reduced-row-fade var(--motion-fade) ease-out both;
   }
@@ -1403,3 +1855,625 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
   from { opacity: 0; }
   to { opacity: 1; }
 }
+
+/* ---------------------------------------------------------------------------------------------
+   Settings: a centred column of glass section cards, a Back control and a floating save bar.
+   --------------------------------------------------------------------------------------------- */
+.settings-page { max-width: 980px; margin: 0 auto; }
+.settings-header { display: flex; align-items: center; gap: var(--space-3); margin-bottom: var(--space-4); }
+.settings-header h1 { margin: 0; }
+.settings-back {
+  display: inline-flex;
+  min-height: 36px;
+  align-items: center;
+  gap: 4px;
+  padding: 0 14px 0 8px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--glass-hover);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--glass-rim-light) 35%, transparent);
+  color: var(--text);
+  font: inherit;
+  font-size: var(--type-small);
+  font-weight: 650;
+  cursor: pointer;
+  transition: background-color var(--motion-press) var(--ease-standard), box-shadow var(--motion-press) var(--ease-standard), transform var(--motion-press) var(--ease-standard);
+}
+.settings-back svg { width: 18px; height: 18px; transition: transform var(--motion-press) var(--ease-standard); }
+.settings-back:hover { background: var(--glass-selected); box-shadow: var(--glass-selected-glow); }
+.settings-back:hover svg { transform: translateX(-2px); }
+.settings-back:active { transform: scale(.96); }
+.settings-back:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+@media (pointer: coarse) { .settings-back { min-height: 44px; } }
+.settings-page form { display: grid; gap: var(--space-4); margin-top: var(--space-4); }
+.settings-section, .settings-activity .panel {
+  position: relative;
+  padding: var(--space-5);
+  border: 1px solid color-mix(in srgb, var(--glass-rim-light) 30%, transparent);
+  border-radius: var(--radius-panel);
+  background: var(--stage-slab);
+  backdrop-filter: blur(28px) saturate(1.2);
+  box-shadow: 0 18px 50px -28px rgb(0 0 0 / 60%), inset 0 1px 0 var(--glass-rim-light);
+}
+.settings-section:first-child { padding-top: var(--space-5); }
+.settings-page > .settings-section { margin-top: var(--space-4); }
+.settings-section h2, .settings-activity .panel > h2 { margin: 0 0 var(--space-4); font-size: 18px; }
+.settings-field select, .settings-field input, .settings-field textarea {
+  border-color: var(--rule);
+  border-radius: var(--radius-control);
+  background-color: color-mix(in srgb, var(--surface) 40%, transparent);
+  box-shadow: inset 0 1px 0 var(--glass-rim-light);
+  transition: border-color var(--motion-press) var(--ease-standard);
+}
+.settings-field select:hover:not(:disabled), .settings-field input:hover:not(:disabled), .settings-field textarea:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--glass-rim-light) 70%, var(--rule));
+}
+.settings-save {
+  position: sticky;
+  z-index: 5;
+  bottom: var(--space-3);
+  justify-content: space-between;
+  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-4);
+  border-radius: var(--radius-pill);
+  background: var(--stage-slab);
+  backdrop-filter: blur(24px) saturate(1.3);
+  box-shadow: var(--slab-shadow), inset 0 1px 0 var(--glass-rim-light);
+}
+.settings-save .primary-button { order: 2; border-radius: var(--radius-pill); }
+.settings-save { width: fit-content; max-width: 100%; margin-left: auto; }
+.settings-save .settings-feedback:empty { display: none; }
+.settings-save:has(.settings-feedback:empty) { padding-left: var(--space-2); }
+
+/* ---------------------------------------------------------------------------------------------
+   Sign-in: the room behind a single glass card; the orb ignites and the card rises into place.
+   --------------------------------------------------------------------------------------------- */
+.app-signed-out .shell-main { display: grid; max-width: none; place-items: center; padding: var(--space-5) var(--space-4); }
+.signin { display: grid; width: 100%; min-height: calc(100dvh - var(--rail-size) - var(--space-7)); place-items: center; }
+.signin-card {
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  width: min(440px, 100%);
+  justify-items: center;
+  gap: var(--space-3);
+  padding: var(--space-6) var(--space-5) var(--space-5);
+  border: 1px solid color-mix(in srgb, var(--glass-rim-light) 35%, transparent);
+  border-radius: var(--radius-window);
+  background: var(--stage-glass);
+  backdrop-filter: blur(28px) saturate(1.3);
+  box-shadow: var(--slab-shadow), 0 30px 80px -40px var(--glass-glow-warm), inset 0 1px 0 var(--glass-rim-light);
+  text-align: center;
+  animation: signin-rise calc(var(--motion-panel) * 2.2) var(--ease-enter) both;
+}
+.signin-card h1 { margin: var(--space-2) 0 0; font-size: clamp(26px, 3vw, 32px); }
+.signin-card p { max-width: 34ch; margin: 0 auto; font-size: var(--type-body); }
+.signin-card .sign-in-status { min-height: 1.5em; margin-top: 0; font-size: var(--type-small); }
+.signin-orb {
+  position: relative;
+  display: block;
+  width: 112px;
+  height: 112px;
+  overflow: hidden;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 34% 28%, rgb(255 255 255 / 16%), transparent 42%),
+    radial-gradient(circle, var(--stage-background) 52%, color-mix(in srgb, var(--stage-orb) 55%, var(--stage-background)) 100%);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--stage-orb) 85%, transparent), 0 0 44px color-mix(in srgb, var(--stage-orb) 45%, transparent),
+    inset 0 0 22px color-mix(in srgb, var(--stage-orb) 35%, transparent);
+  animation: signin-ignite calc(var(--motion-panel) * 3.4) var(--ease-enter) both;
+}
+.signin-orb canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+.signin-button { min-width: 240px; min-height: 48px; margin-top: var(--space-2); border-radius: var(--radius-pill); box-shadow: 0 0 24px -6px var(--primary-action); }
+.signin-button:hover:not(:disabled) { box-shadow: 0 0 34px -4px var(--primary-action); }
+@keyframes signin-rise {
+  from { opacity: 0; transform: translateY(20px) scale(.97); filter: blur(6px); }
+  to { opacity: 1; transform: none; filter: none; }
+}
+@keyframes signin-ignite {
+  0% { opacity: 0; transform: scale(.55); }
+  55% { opacity: 1; transform: scale(1.06); }
+  100% { opacity: 1; transform: none; }
+}
+
+/* ---------------------------------------------------------------------------------------------
+   Living surfaces: glass catches light where the pointer is, pages assemble as they open, and a
+   surface Jarvis is acting on glows so Dan can see it change.
+   --------------------------------------------------------------------------------------------- */
+:is(.workspace-window, .kanban-column, .kanban-card, .settings-section, .settings-activity .panel, .signin-card, .area-sidebar,
+  .context-panel, .app-topbar, .area-rail, .conversation-input.luminous-glass, .task-release-bar)[data-lit] {
+  background-image: radial-gradient(circle 260px at var(--light-x, 50%) var(--light-y, 50%),
+    color-mix(in srgb, var(--glass-rim-light) 26%, transparent), transparent 72%);
+}
+.shell-main > :not(.jarvis-page, .jarvis-stage, .jarvis-stage-fallback, .workspace-shell-area, .browser-presence-error, [hidden]) {
+  animation: page-enter calc(var(--motion-panel) * 1.3) var(--ease-enter) both;
+}
+@keyframes page-enter {
+  from { opacity: 0; transform: translateY(14px); filter: blur(4px); }
+  to { opacity: 1; transform: none; filter: none; }
+}
+.kanban-column { animation: page-enter calc(var(--motion-panel) * 1.2) var(--ease-enter) both; }
+.kanban-column:nth-child(2) { animation-delay: 40ms; }
+.kanban-column:nth-child(3) { animation-delay: 80ms; }
+.kanban-column:nth-child(4) { animation-delay: 120ms; }
+.kanban-column:nth-child(5) { animation-delay: 160ms; }
+.kanban-column:nth-child(6) { animation-delay: 200ms; }
+.kanban-column .task-card-list > li { animation-delay: calc(240ms + var(--i, 0) * 50ms); }
+.settings-page form > .settings-section { animation: page-enter calc(var(--motion-panel) * 1.2) var(--ease-enter) both; }
+.settings-page form > .settings-section:nth-child(2) { animation-delay: 50ms; }
+.settings-page form > .settings-section:nth-child(3) { animation-delay: 100ms; }
+.settings-page form > .settings-section:nth-child(n + 4) { animation-delay: 150ms; }
+.workspace-window.workspace-window-jarvis-updating { animation: jarvis-touch calc(var(--motion-panel) * 4) var(--ease-standard) 1; }
+@keyframes jarvis-touch {
+  0% { box-shadow: 0 0 0 1px color-mix(in srgb, var(--glass-edge-cool) 90%, transparent), 0 0 50px -4px color-mix(in srgb, var(--glass-edge-cool) 70%, transparent); }
+  100% { box-shadow: 0 26px 60px -18px rgb(0 0 0 / 55%), inset 0 1px 0 var(--glass-rim-light); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .signin-card, .signin-orb, .shell-main > *, .kanban-column, .settings-page form > .settings-section, .workspace-window.workspace-window-jarvis-updating { animation: none !important; }
+}
+:root[data-motion="reduced"] :is(.signin-card, .signin-orb, .shell-main > *, .kanban-column, .settings-page form > .settings-section,
+  .workspace-window.workspace-window-jarvis-updating) { animation: none !important; }
+/* The Factory composer uses the same clear glass and warm lower light as the Jarvis chat bar. */
+.factory-composer {
+  border-color: transparent;
+  border-radius: 36px;
+  background: var(--stage-glass);
+  backdrop-filter: blur(24px) saturate(1.3);
+  box-shadow: 0 26px 60px -18px rgb(0 0 0 / 55%), 0 14px 40px -22px var(--glass-glow-warm), inset 0 1px 0 var(--glass-rim-light);
+}
+.factory-composer .primary-button, .factory-composer .secondary-button { min-height: 40px; border-radius: var(--radius-pill); }
+/* ---------------------------------------------------------------------------------------------
+   Dropdowns: where the browser allows it (Chrome), every select opens a glass list with lit choices.
+   --------------------------------------------------------------------------------------------- */
+@supports (appearance: base-select) {
+  select, ::picker(select) { appearance: base-select; }
+  select { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+  select::picker-icon { color: var(--text-muted); transition: rotate var(--motion-state) var(--ease-standard); }
+  select:open::picker-icon { rotate: 180deg; }
+  ::picker(select) {
+    margin-block: 6px;
+    padding: 6px;
+    border: 1px solid color-mix(in srgb, var(--glass-rim-light) 35%, transparent);
+    border-radius: var(--radius-panel);
+    background: var(--surface);
+    backdrop-filter: blur(24px) saturate(1.3);
+    box-shadow: var(--dialog-shadow), inset 0 1px 0 var(--glass-rim-light);
+    color: var(--text);
+    opacity: 0;
+    translate: 0 -4px;
+    transition: opacity var(--motion-state) var(--ease-standard), translate var(--motion-state) var(--ease-enter),
+      overlay var(--motion-state) allow-discrete, display var(--motion-state) allow-discrete;
+  }
+  select:open::picker(select) { opacity: 1; translate: 0 0; }
+  @starting-style { select:open::picker(select) { opacity: 0; translate: 0 -4px; } }
+  option {
+    display: flex;
+    min-height: 36px;
+    align-items: center;
+    gap: 8px;
+    padding: 0 12px;
+    border-radius: var(--radius-control);
+    color: var(--text);
+    font-size: var(--type-small);
+    cursor: pointer;
+    transition: background-color var(--motion-press) var(--ease-standard);
+  }
+  option:hover, option:focus-visible { outline: none; background: var(--glass-hover); }
+  option:checked { background: var(--glass-selected); box-shadow: var(--glass-selected-glow); font-weight: 650; }
+  option::checkmark { color: var(--glass-edge-cool); }
+  option:disabled { color: var(--disabled-text); cursor: not-allowed; }
+  @media (pointer: coarse) { option { min-height: 44px; } }
+}
+
+/* ---------------------------------------------------------------------------------------------
+   Kanban, livelier: a live summary beside the title, tinted column light, lifting cards and a
+   commit trail drawn as a lit line.
+   --------------------------------------------------------------------------------------------- */
+.kanban-header { justify-content: flex-start; }
+.kanban-header .kanban-create-project { margin-left: auto; }
+.kanban-header .primary-button.kanban-create { box-shadow: 0 0 24px -6px var(--primary-action); }
+.kanban-header .kanban-create-project svg { width: 18px; height: 18px; }
+.kanban-create-project { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; margin: 0; border-radius: var(--radius-pill); background: var(--glass-hover); border-color: color-mix(in srgb, var(--glass-rim-light) 40%, transparent); }
+.kanban-create-project:hover:not(:disabled) { background: var(--glass-selected); box-shadow: var(--glass-selected-glow); }
+.kanban-header .primary-button.kanban-create { border-radius: var(--radius-pill); }
+.project-dialog { display: grid; gap: var(--space-4); background: var(--surface); }
+.project-dialog h2 { margin: 0; }
+.project-dialog-part { display: grid; gap: var(--space-3); padding: var(--space-4); border: 1px solid color-mix(in srgb, var(--glass-rim-light) 30%, transparent); border-radius: var(--radius-panel); background: var(--glass-hover); }
+.project-dialog-part h3 { margin: 0; font-size: 16px; }
+.project-dialog-repositories { display: grid; gap: 6px; max-height: 240px; margin: 0; padding: 0; overflow-y: auto; list-style: none; }
+.project-dialog-repositories li { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); padding: 8px 8px 8px 12px; border-radius: var(--radius-control); background: color-mix(in srgb, var(--surface) 40%, transparent); }
+.project-dialog-repositories li > span { display: grid; min-width: 0; }
+.project-dialog-repositories code { overflow: hidden; font-family: var(--font-mono); font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
+.project-dialog-repositories small { color: var(--text-muted); font-size: 12px; }
+.project-dialog-repositories .secondary-button { min-height: 36px; border-radius: var(--radius-pill); }
+.kanban-pulse { display: flex; flex-wrap: wrap; gap: var(--space-2); margin: 0; padding: 0; list-style: none; }
+.kanban-pulse li {
+  --tone: var(--text-muted);
+  display: inline-flex;
+  min-height: 32px;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  border: 1px solid color-mix(in srgb, var(--tone) 35%, transparent);
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--tone) 12%, var(--stage-glass));
+  backdrop-filter: blur(16px);
+  color: var(--text);
+  font-size: var(--type-caption);
+  font-weight: 650;
+}
+.kanban-pulse li > span { width: 8px; height: 8px; border-radius: 50%; background: var(--tone); box-shadow: 0 0 10px var(--tone); }
+.kanban-pulse li[data-tone="running"] { --tone: var(--glass-edge-cool); }
+.kanban-pulse li[data-tone="needs-attention"] { --tone: var(--glass-glow-warm); }
+.kanban-pulse li[data-tone="done"] { --tone: var(--success); }
+.kanban-pulse li[data-tone="running"] > span, .kanban-dot-running { animation: kanban-live 2.4s ease-in-out infinite; }
+@keyframes kanban-live {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--glass-edge-cool) 70%, transparent), 0 0 10px var(--glass-edge-cool); }
+  50% { box-shadow: 0 0 0 6px transparent, 0 0 16px var(--glass-edge-cool); }
+}
+.kanban-column { --tone: var(--text-muted); }
+.kanban-column:has(.kanban-dot-running) { --tone: var(--glass-edge-cool); }
+.kanban-column:has(.kanban-dot-paused) { --tone: var(--warning); }
+.kanban-column:has(.kanban-dot-needs-attention) { --tone: var(--glass-glow-warm); }
+.kanban-column:has(.kanban-dot-done) { --tone: var(--success); }
+.kanban-column:has(.kanban-dot-cancelled) { --tone: var(--disabled-text); }
+.kanban-column {
+  background:
+    radial-gradient(120% 60% at 50% -10%, color-mix(in srgb, var(--tone) 22%, transparent), transparent 60%),
+    var(--board-slab);
+}
+.kanban-column-heading { min-height: 40px; }
+.kanban-column-heading h2 { font-size: 15px; letter-spacing: .01em; }
+.kanban-count { margin-left: auto; background: color-mix(in srgb, var(--tone) 22%, transparent); color: var(--text); }
+.kanban-card { transition: transform var(--motion-state) var(--ease-enter), box-shadow var(--motion-state) var(--ease-standard), border-color var(--motion-state) var(--ease-standard); }
+.kanban-card:hover { transform: translateY(-2px); border-color: color-mix(in srgb, var(--tone, var(--glass-edge-cool)) 55%, transparent); box-shadow: 0 14px 30px -18px rgb(0 0 0 / 70%), 0 0 20px -10px var(--tone, var(--glass-edge-cool)), inset 0 1px 0 var(--glass-rim-light); }
+.kanban-card[data-state="Running"]::after {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(110deg, transparent 30%, color-mix(in srgb, var(--glass-edge-cool) 10%, transparent) 50%, transparent 70%);
+  background-size: 250% 100%;
+  content: "";
+  pointer-events: none;
+  animation: activity-shimmer 3.2s var(--ease-standard) infinite;
+}
+.kanban-card { position: relative; }
+.kanban-card[data-state="Done"] .task-controls, .kanban-card[data-state="Cancelled"] .task-controls { display: none; }
+.kanban-card .task-control-guidance { margin-top: 0; font-size: var(--type-caption); }
+.kanban-card-actions { display: flex; align-items: center; gap: 6px; margin-top: var(--space-2); }
+.kanban-card-action {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 12px;
+  border: 1px solid color-mix(in srgb, var(--glass-rim-light) 40%, transparent);
+  border-radius: var(--radius-pill);
+  background: var(--glass-hover);
+  color: var(--text);
+  font: inherit;
+  font-size: var(--type-caption);
+  font-weight: 650;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background-color var(--motion-press) var(--ease-standard), box-shadow var(--motion-press) var(--ease-standard), transform var(--motion-press) var(--ease-standard);
+}
+.kanban-card-action:hover { background: var(--glass-selected); box-shadow: var(--glass-selected-glow); }
+.kanban-card-action:active { transform: scale(.96); }
+.kanban-card-action:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.kanban-card-open { width: 34px; padding: 0; margin-left: auto; }
+.kanban-card-open svg { width: 16px; height: 16px; }
+@media (pointer: coarse) { .kanban-card-action { min-height: 44px; } .kanban-card-open { width: 44px; } }
+
+.release-trail {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(160px, auto) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-4);
+  margin: 0 0 var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid color-mix(in srgb, var(--glass-rim-light) 30%, transparent);
+  border-radius: var(--radius-panel);
+  background: var(--board-slab);
+  backdrop-filter: blur(24px) saturate(1.2);
+  box-shadow: 0 18px 40px -24px rgb(0 0 0 / 55%), inset 0 1px 0 var(--glass-rim-light);
+}
+.release-trail-empty { grid-template-columns: auto minmax(120px, 260px) minmax(0, 1fr); color: var(--text-muted); }
+.release-trail-empty p { margin: 0; font-size: var(--type-small); }
+.release-trail-icon { display: grid; width: 44px; height: 44px; place-items: center; border-radius: var(--radius-control); background: var(--glass-hover); color: var(--text); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--glass-rim-light) 35%, transparent); }
+.release-trail-icon svg { width: 22px; height: 22px; }
+.release-trail-name { display: flex; min-width: 0; align-items: baseline; gap: 6px; margin: 0; color: var(--text); font-size: var(--type-body); font-weight: 650; }
+.release-trail-name a { color: inherit; text-decoration: none; }
+.release-trail-name a:hover { text-decoration: underline; }
+.release-trail-name > span { color: var(--text-muted); font-weight: 400; }
+.release-trail-name code { font-family: var(--font-mono); font-size: 14px; }
+.release-trail-pipeline { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 4px 0 0; padding: 0; list-style: none; color: var(--text-muted); font-size: var(--type-caption); }
+.release-trail-pipeline li { --tone: var(--text-muted); display: inline-flex; align-items: center; gap: 6px; }
+.release-trail-pipeline li::before { width: 7px; height: 7px; border-radius: 50%; background: var(--tone); box-shadow: 0 0 8px var(--tone); content: ""; }
+.release-trail-pipeline li[data-tone="ok"] { --tone: var(--success); }
+.release-trail-pipeline li[data-tone="bad"] { --tone: var(--error); }
+.release-trail-pipeline li[data-tone="live"] { --tone: var(--glass-edge-cool); }
+.release-trail-pipeline a { color: var(--text); }
+.release-trail-commits, .release-trail-line {
+  position: relative;
+  display: grid;
+  grid-auto-columns: minmax(0, 1fr);
+  grid-auto-flow: column;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+/* The trail: a thin lit line through every commit dot, brightening toward the newest. */
+.release-trail-commits::before, .release-trail-line::before {
+  position: absolute;
+  top: 7px;
+  right: 8%;
+  left: 8%;
+  height: 2px;
+  border-radius: var(--radius-pill);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--glass-edge-cool) 15%, transparent), color-mix(in srgb, var(--glass-edge-cool) 80%, transparent));
+  box-shadow: 0 0 10px color-mix(in srgb, var(--glass-edge-cool) 40%, transparent);
+  content: "";
+}
+.release-trail-line::before { top: 50%; opacity: .5; background: repeating-linear-gradient(90deg, var(--rule) 0 6px, transparent 6px 12px); box-shadow: none; }
+.release-trail-line { height: 16px; }
+.release-trail-line span { width: 10px; height: 10px; justify-self: center; align-self: center; border-radius: 50%; background: var(--rule); }
+.release-trail-commits li { min-width: 0; }
+.release-trail-commits a { display: grid; justify-items: center; gap: 2px; min-width: 0; padding: 0 4px; color: inherit; text-align: center; text-decoration: none; }
+.release-trail-dot {
+  position: relative;
+  z-index: 1;
+  width: 16px;
+  height: 16px;
+  margin-bottom: 4px;
+  border: 2px solid color-mix(in srgb, var(--glass-edge-cool) 70%, transparent);
+  border-radius: 50%;
+  background: var(--stage-background);
+  transition: transform var(--motion-press) var(--ease-standard), box-shadow var(--motion-press) var(--ease-standard);
+}
+.release-trail-commits li[data-latest] .release-trail-dot {
+  border-color: var(--glass-edge-cool);
+  background: var(--glass-edge-cool);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--glass-edge-cool) 25%, transparent), 0 0 16px var(--glass-edge-cool);
+  animation: kanban-live 2.4s ease-in-out infinite;
+}
+.release-trail-commits a:hover .release-trail-dot, .release-trail-commits a:focus-visible .release-trail-dot { transform: scale(1.25); box-shadow: 0 0 14px var(--glass-edge-cool); }
+.release-trail-commits a:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; border-radius: var(--radius-control); }
+.release-trail-commits code { color: var(--text); font-family: var(--font-mono); font-size: 12px; }
+.release-trail-message { max-width: 100%; overflow: hidden; color: var(--text-muted); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.release-trail-commits time { color: var(--text-muted); font-size: 11px; }
+.release-trail-note { margin: 0; color: var(--text-muted); font-size: var(--type-caption); }
+.release-trail-wide { grid-column: 1 / -1; }
+.release-trail-actions { display: flex; align-items: center; gap: 6px; }
+.release-trail-button, .release-trail-open {
+  display: inline-flex;
+  min-height: 40px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1px solid color-mix(in srgb, var(--glass-rim-light) 40%, transparent);
+  border-radius: var(--radius-pill);
+  background: var(--glass-hover);
+  color: var(--text);
+  font: inherit;
+  font-size: var(--type-small);
+  font-weight: 650;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background-color var(--motion-press) var(--ease-standard), box-shadow var(--motion-press) var(--ease-standard);
+}
+.release-trail-button { width: 40px; padding: 0; }
+.release-trail-open { padding: 0 14px 0 12px; }
+.release-trail-button svg, .release-trail-open svg { width: 18px; height: 18px; }
+.release-trail-button:hover:not(:disabled), .release-trail-open:hover { background: var(--glass-selected); box-shadow: var(--glass-selected-glow); }
+.release-trail-button:disabled { color: var(--disabled-text); cursor: wait; }
+.release-trail-button:focus-visible, .release-trail-open:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+@media (max-width: 1100px) {
+  .release-trail { grid-template-columns: auto minmax(0, 1fr) auto; }
+  .release-trail-commits { grid-column: 1 / -1; grid-row: 2; }
+}
+@media (max-width: 600px) {
+  .release-trail { grid-template-columns: auto minmax(0, 1fr); }
+  .release-trail-actions { grid-column: 1 / -1; }
+  .release-trail-commits li:nth-last-child(n + 4) { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .kanban-pulse li > span, .kanban-dot-running, .release-trail-commits li[data-latest] .release-trail-dot, .kanban-card[data-state="Running"]::after { animation: none; }
+  .kanban-card:hover { transform: none; }
+}
+:root[data-motion="reduced"] :is(.kanban-pulse li > span, .kanban-dot-running, .release-trail-commits li[data-latest] .release-trail-dot, .kanban-card[data-state="Running"]::after) { animation: none; }
+
+/* Desktop shell: the side panels float over the page like drawers. The main area keeps one constant
+   gutter, so opening, closing or resizing a panel never moves content; content passes behind the glass. */
+@media (min-width: 701px) and (not ((max-height: 500px) and (pointer: coarse))) {
+  .app-shell:not(.app-signed-out) .shell-main {
+    --main-gutter: clamp(24px, 4vw, 56px);
+    --main-pad-start: var(--main-gutter);
+    --main-pad-end: var(--main-gutter);
+    grid-column: 2 / -1;
+    padding-right: var(--main-pad-end);
+    padding-left: var(--main-pad-start);
+  }
+  .app-shell:not(.app-signed-out) .shell-main:is([data-home="true"] > *) { padding: 0; }
+  .app-shell:not(.app-signed-out) :is(.area-sidebar, .context-panel) { z-index: 2; }
+  .kanban-board {
+    margin-inline: calc(-1 * var(--main-pad-start, 0px)) calc(-1 * var(--main-pad-end, 0px));
+    padding-inline: var(--main-pad-start, 0px) var(--main-pad-end, 0px);
+    scroll-padding-inline: var(--main-pad-start, 0px) var(--main-pad-end, 0px);
+  }
+}
+
+/* Tab bar under the top bar: minimised windows are thrown up here as glass tabs (window-fly-away.ts) and come back
+   with a click. It takes no space when empty; pages keep a constant top gutter for it so nothing moves. */
+.window-tabbar { position: fixed; z-index: 35; top: calc(var(--rail-size) + 4px); right: 18px; left: calc(var(--rail-size) + 22px); display: flex; height: 34px; pointer-events: none; }
+.window-tabbar:empty { display: none; }
+.window-tabbar .workspace-tabs { display: flex; min-width: 0; gap: 6px; margin: 0; padding: 2px 4px; overflow-x: auto; scrollbar-width: none; pointer-events: auto; }
+.window-tabbar .workspace-tabs::-webkit-scrollbar { display: none; }
+.workspace-tab-item {
+  display: inline-flex; flex: 0 0 auto; align-items: center; height: 30px; border-radius: var(--radius-pill);
+  background: var(--stage-glass); backdrop-filter: blur(14px) saturate(1.3);
+  box-shadow: inset 0 1px 0 var(--glass-rim-light), inset 0 0 0 1px color-mix(in srgb, var(--glass-rim-light) 26%, transparent), 0 10px 22px -14px rgb(0 0 0 / 70%);
+  animation: tab-arrive var(--motion-state) var(--ease-enter);
+}
+.app-shell[data-voice-active="false"] .workspace-tab-item[data-view-id="conversation"] { display: none; }
+.window-tabbar .workspace-tab { display: inline-flex; min-height: 30px; align-items: center; gap: 7px; margin: 0; padding: 0 4px 0 11px; border: 0; border-radius: var(--radius-pill) 0 0 var(--radius-pill); background: transparent; box-shadow: none; color: var(--text); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+.window-tabbar .workspace-tab svg { width: 15px; height: 15px; color: var(--glass-edge-cool); }
+.window-tabbar .workspace-tab span { max-width: min(26vw, 220px); }
+.workspace-tab-close { display: grid; width: 26px; height: 26px; margin-right: 2px; place-items: center; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--text-muted); cursor: pointer; transition: background-color var(--motion-press) var(--ease-standard), color var(--motion-press) var(--ease-standard); }
+.workspace-tab-close svg { width: 13px; height: 13px; }
+.workspace-tab-item:has(.workspace-tab:hover) { box-shadow: inset 0 1px 0 var(--glass-rim-light), inset 0 0 0 1px color-mix(in srgb, var(--glass-edge-cool) 55%, transparent), 0 0 16px -4px color-mix(in srgb, var(--glass-edge-cool) 50%, transparent); }
+.window-tabbar .workspace-tab:hover { background: transparent; }
+.workspace-tab-close:hover { background: var(--error-wash); color: var(--text); }
+.workspace-tab-close:active, .window-tabbar .workspace-tab:active { transform: scale(.96); }
+.window-tabbar :is(.workspace-tab, .workspace-tab-close):focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+@keyframes tab-arrive { from { opacity: 0; scale: .7; } }
+@media (prefers-reduced-motion: reduce) { .workspace-tab-item { animation: none; } }
+:root[data-motion="reduced"] .workspace-tab-item { animation: none; }
+@media (min-width: 701px) and (not ((max-height: 500px) and (pointer: coarse))) {
+  .app-shell:not(.app-signed-out):not([data-home="true"]) .shell-main { padding-top: 46px; }
+}
+@media (max-width: 700px), (max-height: 500px) and (pointer: coarse) {
+  .window-tabbar { top: calc(var(--rail-size) + 2px); right: 8px; left: calc(var(--rail-size) + 8px); }
+}
+
+/* Task window: summary chips and actions, then the request and a lit timeline beside compact detail cards. */
+.task-window { container-type: inline-size; display: grid; gap: 12px; min-width: 0; }
+.task-window-summary { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 10px 16px; }
+.task-window-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.task-chip, .task-state-chip { display: inline-flex; align-items: center; gap: 7px; min-height: 28px; padding: 0 11px; border-radius: var(--radius-pill); background: var(--glass-hover); color: var(--text); font-size: 13px; font-weight: 600; text-decoration: none; }
+a.task-chip:hover { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--glass-edge-cool) 55%, transparent); }
+.task-chip-mono { font-family: var(--font-mono); font-size: 12px; font-weight: 500; }
+.task-state-chip { --tone: var(--text-muted); background: color-mix(in srgb, var(--tone) 16%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tone) 45%, transparent); }
+.task-state-chip[data-state="Running"] { --tone: var(--glass-edge-cool); }
+.task-state-chip:is([data-state="Paused"], [data-state="PauseRequested"]) { --tone: var(--warning); }
+.task-state-chip[data-state="NeedsAttention"] { --tone: var(--glass-glow-warm); }
+.task-state-chip[data-state="Done"] { --tone: var(--success); }
+.task-state-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--tone); box-shadow: 0 0 10px color-mix(in srgb, var(--tone) 70%, transparent); }
+.task-state-chip[data-state="Running"] .task-state-dot { animation: kanban-live 2.4s ease-in-out infinite; }
+.task-window-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; }
+.task-window-actions > * { margin: 0; }
+.task-window-actions .task-controls, .task-window-actions .action-row { margin: 0; }
+.task-window-note, .task-window-actions .task-window-note { flex-basis: 100%; margin: 0; color: var(--text-muted); font-size: 13px; text-align: right; }
+.task-window-grid { display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(250px, 1fr); align-items: start; gap: 12px; }
+.task-window-main, .task-window-side { display: grid; gap: 12px; min-width: 0; }
+@container (max-width: 720px) { .task-window-grid { grid-template-columns: minmax(0, 1fr); } }
+.task-card { min-width: 0; padding: 12px 14px 14px; border-radius: 16px; background: var(--board-slab); box-shadow: inset 0 1px 0 var(--glass-rim-light), inset 0 0 0 1px color-mix(in srgb, var(--glass-rim-light) 14%, transparent); }
+.task-card h4 { margin: 0 0 8px; color: var(--text); font-size: 14px; font-weight: 650; }
+.task-card .task-window-note { text-align: left; }
+.task-window .task-request { margin: 0; font-size: 15px; line-height: 1.55; }
+.task-attention { margin: 10px 0 0; padding: 8px 12px; border-radius: 10px; background: color-mix(in srgb, var(--glass-glow-warm) 14%, transparent); color: var(--text); font-size: 14px; }
+.task-origin { margin-top: 10px; }
+.task-origin .task-origin-message { margin: 0; padding: 8px 12px; border-radius: 10px; background: var(--glass-hover); font-size: 14px; }
+.task-origin .task-origin-meta { margin: 4px 0 0; color: var(--text-muted); font-size: 12px; }
+.task-card-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-bottom: 6px; }
+.task-card-head h4 { margin: 0; margin-right: auto; }
+.task-card-head .timeline-stream { display: inline-flex; align-items: center; gap: 6px; margin: 0; color: var(--text-muted); font-size: 12px; }
+.timeline-stream-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--disabled-text); }
+.timeline-stream[data-stream="connected"] .timeline-stream-dot { background: var(--success); box-shadow: 0 0 8px var(--success); }
+.timeline-stream[data-stream="error"] .timeline-stream-dot { background: var(--error); }
+.task-timeline-filter { min-height: 30px; padding: 2px 28px 2px 10px; font-size: 13px; }
+.task-trail { position: relative; margin: 6px 0 0; padding: 0; list-style: none; }
+.task-trail::before { position: absolute; top: 8px; bottom: 8px; left: 5px; width: 2px; border-radius: 2px; background: linear-gradient(var(--glass-edge-cool), color-mix(in srgb, var(--glass-edge-cool) 15%, transparent)); content: ""; }
+.task-trail > li { position: relative; display: grid; grid-template-columns: 12px minmax(0, 1fr); gap: 12px; padding: 6px 0; }
+.task-trail-dot { --tone: var(--glass-edge-cool); position: relative; z-index: 1; width: 12px; height: 12px; margin-top: 4px; border-radius: 50%; background: var(--surface); box-shadow: inset 0 0 0 2px var(--tone); }
+.task-trail > li[data-source="dan"] .task-trail-dot { --tone: var(--glass-glow-warm); }
+.task-trail > li[data-source="github"] .task-trail-dot { --tone: var(--success); }
+.task-trail > li[data-source="backend"] .task-trail-dot { --tone: var(--text-muted); }
+.task-trail > li[data-latest] .task-trail-dot { background: var(--tone); box-shadow: 0 0 0 3px color-mix(in srgb, var(--tone) 25%, transparent), 0 0 12px var(--tone); }
+.task-trail-title { margin: 0; font-size: 14px; font-weight: 600; line-height: 1.4; overflow-wrap: anywhere; }
+.task-trail-meta { display: flex; flex-wrap: wrap; gap: 4px 10px; margin: 2px 0 0; color: var(--text-muted); font-size: 12px; }
+.task-trail-type { font-family: var(--font-mono); }
+.task-trail .timeline-payload { margin-top: 6px; }
+.task-trail .timeline-payload pre { max-height: 240px; overflow: auto; }
+.task-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 14px; margin: 0; }
+.task-facts > div { min-width: 0; }
+.task-facts dt { color: var(--text-muted); font-size: 12px; }
+.task-facts dd { margin: 1px 0 0; font-size: 14px; font-weight: 600; overflow-wrap: anywhere; }
+.task-disk-readings { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.task-disk-label { display: flex; justify-content: space-between; gap: 8px; margin: 0 0 6px; font-size: 13px; font-weight: 600; }
+.task-disk-label time { color: var(--text-muted); font-weight: 400; }
+.task-disk-gauge { display: block; height: 6px; overflow: hidden; border-radius: 6px; background: var(--glass-hover); }
+.task-disk-gauge > span { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--glass-edge-cool), color-mix(in srgb, var(--glass-edge-cool) 60%, var(--glass-glow-warm))); }
+.task-disk-readings li[data-low] .task-disk-gauge > span { background: linear-gradient(90deg, var(--glass-glow-warm), var(--error)); }
+.task-disk-readings li[data-low] .task-disk-label { color: var(--warning-text); }
+.task-window .task-disk-meta { display: flex; flex-wrap: wrap; gap: 4px 14px; margin: 6px 0 0; font-size: 12px; }
+.task-window .task-disk-meta > div { display: flex; gap: 4px; }
+.task-window .task-disk-meta dt { color: var(--text-muted); }
+.task-window .task-disk-meta dd { margin: 0; font-weight: 600; }
+.task-window .task-usage-table-wrap { margin: 0 0 8px; }
+.task-window .task-usage-table { font-size: 13px; }
+.task-window-loading { margin: 8px 0; color: var(--text-muted); }
+@media (prefers-reduced-motion: reduce) { .task-state-chip[data-state="Running"] .task-state-dot { animation: none; } }
+:root[data-motion="reduced"] .task-state-chip[data-state="Running"] .task-state-dot { animation: none; }.task-trail .timeline-payload summary { width: fit-content; min-height: 0; padding: 2px 0; color: var(--text-muted); font-size: 12px; font-weight: 600; cursor: pointer; }
+.task-trail .timeline-payload summary:hover { color: var(--text); }
+/* Off the home page, ordinary windows float centred over the page at a readable width. */
+.app-shell[data-home="false"] .workspace-canvas-tiled .workspace-window:not(.workspace-window-conversation, .workspace-window-maximized) { justify-self: center; width: min(1180px, 100%); }/* Over a busy page the conversation sheet needs the denser slab to stay readable. */
+.app-shell[data-home="false"] .workspace-window-conversation.luminous-glass { background: var(--stage-slab); }
+
+/* Presence modes: Present is green, Away is yellow, On the move is blue (Dan, #468). */
+:root, :root[data-theme="dark"] { --presence-present: #3ddc97; --presence-away: #f5c542; --presence-move: #4aa8ff; }
+:root[data-theme="light"] { --presence-present: #17885a; --presence-away: #a87400; --presence-move: #1f6fd1; }
+.presence-dot { width: 9px; height: 9px; flex: 0 0 auto; border-radius: 50%; background: var(--tone); box-shadow: 0 0 10px color-mix(in srgb, var(--tone) 70%, transparent); }
+.presence-chip { position: relative; display: inline-flex; }
+.presence-chip-trigger { display: inline-flex; min-height: 34px; align-items: center; gap: 8px; padding: 0 12px; border: 0; border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--tone) 14%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tone) 40%, transparent);
+  color: var(--text); font: inherit; font-size: 13px; font-weight: 650; cursor: pointer; transition: box-shadow var(--motion-press) var(--ease-standard), transform var(--motion-press) var(--ease-standard); }
+.presence-chip-trigger:hover { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tone) 75%, transparent), 0 0 14px -2px color-mix(in srgb, var(--tone) 55%, transparent); }
+.presence-chip-trigger:active { transform: scale(.96); }
+.presence-chip-trigger:focus-visible, .presence-option:focus-visible, .presence-mode-card:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.presence-menu { position: absolute; z-index: 1200; top: calc(100% + 8px); right: 0; display: grid; gap: 2px; min-width: 190px; padding: 6px; border-radius: 16px; animation: tab-arrive var(--motion-state) var(--ease-enter); }
+.presence-option { display: flex; min-height: 38px; align-items: center; gap: 10px; padding: 0 12px; border: 0; border-radius: 11px; background: transparent; color: var(--text); font: inherit; font-size: 14px; text-align: left; cursor: pointer; }
+.presence-option:hover:not(:disabled) { background: var(--glass-hover); }
+.presence-option[aria-pressed="true"] { background: color-mix(in srgb, var(--tone) 16%, transparent); font-weight: 650; }
+.presence-option:disabled { cursor: wait; opacity: .7; }
+.presence-error { margin: 4px 8px; color: var(--error); font-size: 13px; }
+@media (max-width: 700px) { .presence-chip-label { display: none; } .presence-chip-trigger { padding: 0 11px; } }
+.presence-modes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 12px 0 8px; }
+.presence-mode-card { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 4px 10px; padding: 14px 16px; border: 0; border-radius: 16px;
+  background: var(--glass-hover); color: var(--text); font: inherit; text-align: left; cursor: pointer;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--glass-rim-light) 18%, transparent);
+  transition: background-color var(--motion-state) var(--ease-standard), box-shadow var(--motion-state) var(--ease-standard), transform var(--motion-press) var(--ease-standard); }
+.presence-mode-card:hover:not(:disabled) { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tone) 55%, transparent); }
+.presence-mode-card:active:not(:disabled) { transform: scale(.98); }
+.presence-mode-card[aria-pressed="true"] { background: color-mix(in srgb, var(--tone) 16%, transparent); box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--tone) 80%, transparent), 0 0 22px -8px var(--tone); }
+.presence-mode-card:disabled { cursor: wait; }
+.presence-mode-name { font-weight: 650; }
+.presence-mode-note { grid-column: 2; color: var(--text-muted); font-size: 13px; }
+.presence-instructions-heading { margin: 22px 0 4px; font-size: 16px; }
+.presence-instructions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+.presence-instruction label { display: inline-flex; align-items: center; gap: 8px; font-weight: 650; }
+.presence-instruction textarea { width: 100%; }
+@media (max-width: 900px) { .presence-modes, .presence-instructions { grid-template-columns: minmax(0, 1fr); } }
+.settings-unavailable { margin: 10px 0; padding: 10px 14px; border-radius: 12px; background: var(--glass-hover); color: var(--text-muted); font-size: 14px; }
+
+/* Memory: search and folder filter, a list beside the open memory with its history. */
+.memory-status { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 12px; padding: 0; list-style: none; }
+.memory-status li { padding: 4px 10px; border-radius: var(--radius-pill); background: var(--glass-hover); color: var(--text-muted); font-size: 13px; }
+.memory-status strong { color: var(--text); }
+.memory-toolbar { display: grid; grid-template-columns: minmax(0, 1fr) minmax(150px, 220px); gap: 8px; margin-bottom: 12px; }
+.memory-browser { display: grid; grid-template-columns: minmax(240px, 1fr) minmax(0, 1.5fr); gap: 14px; align-items: start; }
+.memory-results { max-height: 520px; overflow-y: auto; }
+.memory-list { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.memory-item { display: grid; width: 100%; gap: 2px; padding: 10px 12px; border: 0; border-radius: 12px; background: var(--glass-hover); color: var(--text); font: inherit; text-align: left; cursor: pointer; }
+.memory-item:hover { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--glass-edge-cool) 45%, transparent); }
+.memory-item[aria-pressed="true"] { background: var(--glass-selected); box-shadow: var(--glass-selected-glow); }
+.memory-item:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.memory-item-title { font-weight: 650; overflow-wrap: anywhere; }
+.memory-item-meta { color: var(--text-muted); font-size: 12px; }
+.memory-item-text { display: -webkit-box; overflow: hidden; color: var(--text-muted); font-size: 13px; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.memory-detail { min-width: 0; padding: 14px 16px; border-radius: 16px; background: var(--board-slab); box-shadow: inset 0 1px 0 var(--glass-rim-light); }
+.memory-detail-title { margin: 0 0 2px; font-size: 17px; overflow-wrap: anywhere; }
+.memory-text { margin-top: 10px; }
+.memory-text textarea { width: 100%; min-height: 120px; }
+.memory-toolbar .settings-field, .memory-toolbar .settings-field :is(input, select) { width: 100%; margin: 0; }
+.memory-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 10px; }
+.memory-actions > * { margin: 0; }
+.memory-forget:hover:not(:disabled) { background: var(--error-wash); }
+.memory-history-heading { margin: 16px 0 6px; font-size: 14px; }
+.memory-history { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.memory-history li { display: grid; gap: 2px; font-size: 13px; }
+.memory-forget-dialog { max-width: min(460px, calc(100vw - 32px)); padding: 20px 22px; border: 0; border-radius: 20px; color: var(--text); }
+.memory-forget-dialog::backdrop { background: rgb(0 0 0 / 45%); backdrop-filter: blur(4px); }
+.memory-forget-dialog h3 { margin: 0 0 8px; }
+@media (max-width: 900px) { .memory-browser { grid-template-columns: minmax(0, 1fr); } .memory-toolbar { grid-template-columns: minmax(0, 1fr); } }.memory-status li.memory-status-warning { background: color-mix(in srgb, var(--warning) 18%, transparent); color: var(--text); }

@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { backendFetch } from '../backend-request';
 import { Link } from 'react-router-dom';
 import { streamTaskEvents } from '../task-events';
 import { fetchReleaseView } from './release-data';
 import type { PullRequest, ReleaseView } from './release-data';
 import { TaskControls } from './TaskControls';
+import { TaskWindowLink } from '../TaskWindowLink';
 
 type TaskState = 'Ready' | 'Running' | 'PauseRequested' | 'Paused' | 'NeedsAttention' | 'Done' | 'Cancelled';
 type TaskEventSource = 'runner' | 'backend' | 'github' | 'dan';
@@ -313,12 +314,20 @@ function eventState(value: unknown): TaskState | null {
   return taskStates.find((state) => state === value) ?? null;
 }
 
-export function TaskDetailPage({ backendUrl, getAccessToken, taskId, compact = false }: {
+function stateLabel(state: TaskState) {
+  return state === 'NeedsAttention' ? 'Needs attention' : state === 'PauseRequested' ? 'Pause requested' : state;
+}
+
+/** Task details: the compact variant fills the context panel; the full variant is the body of a task window. */
+export function TaskDetailPage({ backendUrl, getAccessToken, taskId, compact = false, onTitle }: {
   backendUrl: string | null;
   getAccessToken: () => Promise<string>;
   taskId: string;
   compact?: boolean;
+  /** Reports the loaded task title, so the window and its tab can show it. */
+  onTitle?: (title: string) => void;
 }) {
+  const ids = useId();
   const [reloadKey, setReloadKey] = useState(0);
   const [loaded, setLoaded] = useState<{ key: string; value: LoadState }>({
     key: '',
@@ -361,9 +370,11 @@ export function TaskDetailPage({ backendUrl, getAccessToken, taskId, compact = f
   const sourceMessage = originMessage.key === originMessageKey ? originMessage.value : null;
   const sourceMessageLoading = taskOriginMessageId !== null && originMessage.key !== originMessageKey;
   const taskBranchUrl = branchUrl(linkedReleaseData?.project ?? linkedProject, task?.branch ?? null);
-  const linkedPullRequest = compact
-    ? linkedReleaseData?.pullRequests.find((pullRequest) => pullRequest.taskId === task?.id)
-    : undefined;
+  const linkedPullRequest = linkedReleaseData?.pullRequests.find((pullRequest) => pullRequest.taskId === task?.id);
+  const loadedTitle = task?.title;
+  useEffect(() => {
+    if (loadedTitle) onTitle?.(loadedTitle);
+  }, [loadedTitle, onTitle]);
   const pullRequestUrl = linkedPullRequest && linkedReleaseData
     ? `https://github.com/${linkedReleaseData.project.repo}/pull/${linkedPullRequest.number}`
     : null;
@@ -455,7 +466,7 @@ export function TaskDetailPage({ backendUrl, getAccessToken, taskId, compact = f
   useEffect(() => {
     let active = true;
     const controller = new AbortController();
-    if (!compact || !backendUrl || !taskProjectId) {
+    if (!backendUrl || !taskProjectId) {
       return () => { active = false; controller.abort(); };
     }
     void fetchReleaseView(backendUrl, taskProjectId, getAccessToken, controller.signal).then((value: unknown) => {
@@ -472,7 +483,7 @@ export function TaskDetailPage({ backendUrl, getAccessToken, taskId, compact = f
       active = false;
       controller.abort();
     };
-  }, [backendUrl, compact, getAccessToken, projectRequestKey, taskProjectId]);
+  }, [backendUrl, getAccessToken, projectRequestKey, taskProjectId]);
 
   useEffect(() => {
     let active = true;
@@ -511,13 +522,211 @@ export function TaskDetailPage({ backendUrl, getAccessToken, taskId, compact = f
     }
   }
 
+  const onTaskControlComplete = (state: TaskState) => setLoaded((current) =>
+    current.key === requestKey && current.value.status === 'ready'
+      ? { ...current, value: { ...current.value, task: { ...current.value.task, state, latestSessionEndReason: null } } }
+      : current);
+
+  if (!compact) {
+    const latestDisk = measurements.at(-1);
+    return (
+      <section className="task-detail task-window" data-task-state={task?.state} aria-label={`Task ${taskId}`}>
+        {result.status === 'loading' && <p className="task-window-loading" role="status">Loading task details…</p>}
+        {result.status === 'error' && (
+          <div className="task-detail-error" role="alert">
+            <p>{result.message}</p>
+            <button className="secondary-button" type="button" onClick={() => setReloadKey((key) => key + 1)}
+              disabled={!backendUrl}>Retry</button>
+          </div>
+        )}
+        {task && (
+          <>
+            <div className="task-window-summary">
+              <ul className="task-window-chips" aria-label="Task summary">
+                <li className="task-state-chip" data-state={task.state}><span className="task-state-dot" aria-hidden="true" />{stateLabel(task.state)}</li>
+                <li><Link className="task-chip" to={`/factory/projects/${task.projectId}`}>
+                  {linkedReleaseData?.project.name ?? linkedProject?.name ?? `Project ${task.projectId}`}
+                </Link></li>
+                {task.branch && <li>{taskBranchUrl
+                  ? <a className="task-chip task-chip-mono" href={taskBranchUrl} target="_blank" rel="noreferrer">{task.branch}</a>
+                  : <span className="task-chip task-chip-mono">{task.branch}</span>}</li>}
+                {latestDisk && <li className="task-chip" title="Latest writable disk reading">
+                  Disk {formatDisk(latestDisk.reading.disk_free_bytes)} free
+                </li>}
+              </ul>
+              <div className="task-window-actions">
+                <TaskControls
+                  backendUrl={backendUrl}
+                  getAccessToken={getAccessToken}
+                  taskId={task.id}
+                  state={task.state}
+                  latestSessionEndReason={task.latestSessionEndReason}
+                  onComplete={onTaskControlComplete}
+                />
+                {pullRequestUrl
+                  ? <a className="secondary-button" href={pullRequestUrl} target="_blank" rel="noreferrer">Open pull request #{linkedPullRequest!.number}</a>
+                  : <button className="secondary-button" type="button" disabled aria-describedby={`${ids}-pr-note`}>Open pull request</button>}
+                {!pullRequestUrl && <p id={`${ids}-pr-note`} className="task-window-note">No pull request has been reported for this task yet.</p>}
+              </div>
+            </div>
+            <div className="task-window-grid">
+              <div className="task-window-main">
+                <section className="task-card" aria-labelledby={`${ids}-request`}>
+                  <h4 id={`${ids}-request`}>Request</h4>
+                  <p className="task-request">{task.request}</p>
+                  {reason && <p className="task-attention" role="note">{reason}</p>}
+                  {task.originMessageId && (
+                    <div className="task-origin">
+                      {sourceMessageLoading
+                        ? <p role="status">Loading the conversation message…</p>
+                        : sourceMessage
+                          ? <>
+                            <blockquote className="task-origin-message">{sourceMessage.text}</blockquote>
+                            <p className="task-origin-meta">{sourceMessage.role === 'dan' ? 'Dan' : 'Jarvis'} · {formatDate(sourceMessage.at)}</p>
+                          </>
+                          : <p className="task-window-note">Message {task.originMessageId} is unavailable.</p>}
+                    </div>
+                  )}
+                </section>
+                <section className="task-card task-timeline-card" aria-labelledby={`${ids}-timeline`}>
+                  <div className="task-card-head">
+                    <h4 id={`${ids}-timeline`}>Timeline</h4>
+                    <span className="timeline-stream" role="status" data-stream={currentStreamStatus}>
+                      <span className="timeline-stream-dot" aria-hidden="true" />
+                      {currentStreamStatus === 'connected' ? 'Live updates connected' :
+                        currentStreamStatus === 'reconnecting' ? 'Reconnecting to live updates…' :
+                          currentStreamStatus === 'error' ? 'Live updates unavailable; refresh to retry.' : 'Connecting to live updates…'}
+                    </span>
+                    <label className="visually-hidden" htmlFor={`${ids}-event-type`}>Event type</label>
+                    <select id={`${ids}-event-type`} className="task-timeline-filter" value={eventType} onChange={(event) => setEventType(event.target.value)}>
+                      <option value="all">All event types</option>
+                      {eventTypes.map((type) => <option key={type} value={type}>{type}</option>)}
+                    </select>
+                  </div>
+                  {task.events.length === 0
+                    ? <p className="task-window-note">No task events have been recorded.</p>
+                    : visibleEvents.length === 0
+                      ? <p className="task-window-note">No events match this event type.</p>
+                      : (
+                        <ol className="task-trail">
+                          {[...visibleEvents].reverse().map((event, index) => (
+                            <li key={event.id} data-source={event.source} data-latest={index === 0 || undefined}>
+                              <span className="task-trail-dot" aria-hidden="true" />
+                              <div className="task-trail-body">
+                                <p className="task-trail-title">{event.summary ?? event.type}</p>
+                                <p className="task-trail-meta">
+                                  <span className="task-trail-type">{event.type}</span>
+                                  <span>{event.source}</span>
+                                  <time dateTime={event.at}>{formatDate(event.at)}</time>
+                                </p>
+                                {event.payloadTruncated
+                                  ? <p className="timeline-payload-note">Event payload is too large to display.</p>
+                                  : event.payload !== null && event.payload !== undefined && (
+                                    <details className="timeline-payload">
+                                      <summary>View event payload</summary>
+                                      <pre>{JSON.stringify(event.payload, null, 2)}</pre>
+                                    </details>
+                                  )}
+                              </div>
+                            </li>
+                          ))}
+                        </ol>
+                      )}
+                  {hasMoreEvents && (
+                    <button className="secondary-button timeline-more" type="button" onClick={() => void loadMoreEvents()} disabled={loadingEvents}>
+                      {loadingEvents ? 'Loading events…' : 'Load more events'}
+                    </button>
+                  )}
+                  {eventsError && <p className="chat-error" role="alert">{eventsError}</p>}
+                </section>
+              </div>
+              <div className="task-window-side">
+                <section className="task-card" aria-labelledby={`${ids}-details`}>
+                  <h4 id={`${ids}-details`}>Details</h4>
+                  <dl className="task-facts">
+                    <div><dt>Agent</dt><dd>{task.agent === 'codex' ? 'Codex' : 'Copilot'}</dd></div>
+                    <div><dt>Attempt</dt><dd>{task.attemptCount}</dd></div>
+                    <div><dt>Model override</dt><dd>{task.modelOverride ?? 'Provider default'}</dd></div>
+                    <div><dt>Reasoning override</dt><dd>{task.reasoningOverride ?? 'Provider default'}</dd></div>
+                    <div><dt>Pull request</dt><dd>{pullRequestUrl
+                      ? <a href={pullRequestUrl} target="_blank" rel="noreferrer">#{linkedPullRequest!.number}</a>
+                      : 'Not reported'}</dd></div>
+                    <div><dt>Checks</dt><dd>{linkedPullRequest
+                      ? <span className={`release-status state-${linkedPullRequest.checks}`}>{linkedPullRequest.checks}</span>
+                      : 'Not reported'}</dd></div>
+                    <div><dt>Source</dt><dd>{task.source === 'board' ? 'Board' : task.source === 'voice' ? 'Voice' : 'Chat'}</dd></div>
+                    <div><dt>Created</dt><dd>{formatDate(task.createdAt)}</dd></div>
+                    <div><dt>Started</dt><dd>{formatDate(task.startedAt)}</dd></div>
+                    <div><dt>Finished</dt><dd>{formatDate(task.finishedAt)}</dd></div>
+                  </dl>
+                </section>
+                <section className="task-card" aria-labelledby={`${ids}-disk`}>
+                  <h4 id={`${ids}-disk`}>Sandbox disk</h4>
+                  {measurements.length === 0
+                    ? <p className="task-window-note">No disk measurements have been recorded for this task.</p>
+                    : (
+                      <ol className="task-disk-readings">
+                        {[...measurements].reverse().map(({ event, reading }) => {
+                          const total = Number(reading.disk_total_bytes);
+                          const free = Number(reading.disk_free_bytes);
+                          const used = total > 0 && Number.isFinite(free) ? Math.min(1, Math.max(0, 1 - free / total)) : null;
+                          return (
+                            <li key={event.id} data-low={event.type === 'disk_low' || undefined}>
+                              <p className="task-disk-label">{event.type === 'disk_low' ? 'Low disk warning' : 'Session snapshot'}
+                                <time dateTime={event.at}>{formatDate(event.at)}</time></p>
+                              {used !== null && <span className="task-disk-gauge" aria-hidden="true"><span style={{ width: `${used * 100}%` }} /></span>}
+                              <dl className="task-disk-meta">
+                                <div><dt>Free</dt><dd>{formatDisk(reading.disk_free_bytes)}</dd></div>
+                                <div><dt>Total</dt><dd>{formatDisk(reading.disk_total_bytes)}</dd></div>
+                                <div><dt>Threshold</dt><dd>{formatDisk(reading.threshold_bytes)}</dd></div>
+                              </dl>
+                            </li>
+                          );
+                        })}
+                      </ol>
+                    )}
+                </section>
+                <section className="task-card" aria-labelledby={`${ids}-usage`}>
+                  <h4 id={`${ids}-usage`}>Usage</h4>
+                  {task.usage.length === 0
+                    ? <p className="task-window-note">No usage has been recorded for this task yet.</p>
+                    : (
+                      <div className="task-usage-table-wrap">
+                        <table className="task-usage-table">
+                          <caption className="visually-hidden">Usage entries for task {taskId}</caption>
+                          <thead>
+                            <tr><th scope="col">Source</th><th scope="col">Usage</th><th scope="col">Quantity</th><th scope="col">Cost</th></tr>
+                          </thead>
+                          <tbody>
+                            {task.usage.map((item, index) => (
+                              <tr key={item.id ?? `${item.sandboxSessionId}-${item.metric}-${index}`}>
+                                <th scope="row">{sourceLabel(item)}</th>
+                                <td>{usageLabel(item.metric)}</td>
+                                <td>{formatQuantity(item)}</td>
+                                <td>{item.costDkk === null ? '—' : `${item.estimated ? 'Estimated · ' : ''}DKK ${item.costDkk.toFixed(4)}`}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  <p className="task-window-note">Sandbox cost is estimated from session time. Agent usage appears only when the provider reports it.</p>
+                </section>
+              </div>
+            </div>
+          </>
+        )}
+      </section>
+    );
+  }
+
   return (
     <section
       className={`task-detail${compact ? ' task-detail-panel' : ''}`}
       data-task-state={task?.state}
       {...(compact ? { 'aria-label': `Details for task ${taskId}` } : { 'aria-labelledby': 'task-heading' })}
     >
-      {!compact && <Link className="home-link" to="/factory/tasks">Back to tasks</Link>}
+      {!compact && <Link className="home-link" to="/factory/kanban">Back to Kanban</Link>}
       {!compact && <h1 id="task-heading">{task?.title ?? `Task ${taskId}`}</h1>}
       {result.status === 'loading' && <p role="status">Loading task details…</p>}
       {result.status === 'error' && (
@@ -741,7 +950,7 @@ export function TaskDetailPage({ backendUrl, getAccessToken, taskId, compact = f
           </section>
         </>
       )}
-      {compact && <Link className="task-open-full" to={`/factory/tasks/${taskId}`}>Open full task</Link>}
+      {compact && <TaskWindowLink className="task-open-full" taskId={taskId} {...(task ? { title: task.title } : {})}>Open task window</TaskWindowLink>}
     </section>
   );
 }

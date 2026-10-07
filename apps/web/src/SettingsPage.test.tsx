@@ -144,10 +144,7 @@ describe('SettingsPage', () => {
       name: 'Play English sample',
       description: /voice playback is connected/,
     })).toHaveProperty('disabled', true);
-    expect(screen.getByRole('link', {
-      name: 'Open the Jarvis main page',
-      description: /Manage backend sleep from the Jarvis main page/,
-    }).getAttribute('href')).toBe('/');
+    expect(screen.queryByRole('link', { name: 'Open the Jarvis main page' })).toBeNull();
     expect(screen.getByRole('button', {
       name: 'Trigger Codex renewal',
       description: /Manual renewal and re-seed instructions are unavailable/,

@@ -1,42 +1,36 @@
 import type { PublicClientApplication } from '@azure/msal-browser';
 import type { PublicConfig } from '../config/public-config';
-import { flushSync } from 'react-dom';
-import { useCallback, useEffect } from 'react';
-import type { WorkspaceCommand } from '@jarvis/contracts';
-import { BackendSleepControl } from './BackendSleepControl';
+import { useCallback, useEffect, useState } from 'react';
 import { ConversationHistory } from './ConversationHistory';
-import { JarvisStage } from './JarvisStage';
-import { NowFeedPanel } from './NowFeedPanel';
-import { ScreenShareControls } from './ScreenShareControls';
-import { useScreenShare, type CameraController } from './screen-sharing';
+import { ConversationToast } from './ConversationToast';
+import type { CameraController, ScreenShareController } from './screen-sharing';
 import { useThemePreference } from './theme-preference-context';
 import { useJarvisActivity } from './activity-context';
 import './ConversationHistory.css';
-import { useWorkspaceCommands } from './workspace-command-state';
 
 export function JarvisPage({
-  name,
   client,
   config,
-  getAccessToken,
   camera,
+  screenShare,
+  docked = false,
+  onDismiss,
 }: {
-  name: string;
+  /** Off the home page the chat bar is tucked into the rail and cannot be reached until it pops out. */
+  docked?: boolean;
+  /** Escape tucks a popped-out chat bar back into the rail. */
+  onDismiss?: () => void;
   client: PublicClientApplication;
   config: PublicConfig;
-  getAccessToken: () => Promise<string>;
   camera: CameraController;
+  screenShare: ScreenShareController;
 }) {
   const themePreference = useThemePreference();
-  const { resolvedTheme, refreshAppearance } = themePreference;
+  const { refreshAppearance, retry: retryTheme } = themePreference;
   const { latestActivity } = useJarvisActivity();
-  const screenShare = useScreenShare(config, getAccessToken);
-  const workspace = useWorkspaceCommands();
-  const applyWorkspaceCommand = useCallback((command: WorkspaceCommand, trustedBlobHost?: string) => {
-    let applied = false;
-    flushSync(() => { applied = workspace.dispatch(command, trustedBlobHost); });
-    return applied;
-  }, [workspace]);
+  const [dismissedThemeError, setDismissedThemeError] = useState('');
+  const themeError = themePreference.error && themePreference.error !== dismissedThemeError ? themePreference.error : '';
+  const dismissThemeError = useCallback(() => setDismissedThemeError(themePreference.error), [themePreference.error]);
   useEffect(() => {
     if (latestActivity?.type === 'tool-call-finished' &&
         latestActivity.toolName === 'set_theme' && latestActivity.outcome === 'ok') {
@@ -44,35 +38,22 @@ export function JarvisPage({
     }
   }, [latestActivity, refreshAppearance]);
   return (
-    <div className="jarvis-page">
-      <JarvisStage theme={resolvedTheme} appearance={themePreference.appearance}>
-        <h1 className="visually-hidden">Welcome, {name}</h1>
-        <h2 id="conversation-heading" className="visually-hidden">Conversation</h2>
-        {themePreference.error && <p className="theme-update-error" role="alert">{themePreference.error}</p>}
-        <ConversationHistory
-          client={client}
-          config={config}
-          screenShare={screenShare}
-          camera={camera}
-        >
-          <details className="conversation-overview">
-            <summary>Activity, sharing and backend</summary>
-            <div className="jarvis-side">
-              <ScreenShareControls screenShare={screenShare} />
-              <NowFeedPanel
-                client={client}
-                config={config}
-                getAccessToken={getAccessToken}
-                applyWorkspaceCommand={applyWorkspaceCommand}
-              />
-              <section className="panel" aria-labelledby="backend-heading">
-                <h2 id="backend-heading">Backend</h2>
-                <BackendSleepControl client={client} config={config} />
-              </section>
-            </div>
-          </details>
-        </ConversationHistory>
-      </JarvisStage>
+    <div className="jarvis-page" inert={docked} aria-label="Jarvis chat" role="region" onKeyDown={(event) => {
+      if (event.key !== 'Escape' || event.defaultPrevented || !onDismiss) return;
+      event.preventDefault();
+      onDismiss();
+    }}>
+      <h2 id="conversation-heading" className="visually-hidden">Conversation</h2>
+      {themeError && (
+        <ConversationToast notification={{ id: 0, message: themeError, error: true }} onDismiss={dismissThemeError}
+          action={{ label: 'Retry', onSelect: retryTheme }} />
+      )}
+      <ConversationHistory
+        client={client}
+        config={config}
+        screenShare={screenShare}
+        camera={camera}
+      />
     </div>
   );
 }

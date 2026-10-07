@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { backendFetch } from '../backend-request';
-import { Link } from 'react-router-dom';
+import { TaskWindowLink } from '../TaskWindowLink';
 import type { AreaProps } from '../areas';
 
 type UsagePeriod = '7d' | '30d' | '90d' | 'all';
@@ -311,7 +311,7 @@ export function UsagePage({ backendUrl, getAccessToken }: AreaProps) {
                         {group.entries.map((entry) => (
                           <tr key={`${entry.taskId ?? 'jarvis'}-${entry.source}-${entry.metric}`}>
                             <td>{entry.taskId
-                              ? <Link to={`/factory/tasks/${entry.taskId}`}>{taskLabel(entry)}</Link>
+                              ? <TaskWindowLink taskId={entry.taskId}>{taskLabel(entry)}</TaskWindowLink>
                               : taskLabel(entry)}</td>
                             <td>{sourceLabel(entry.source)}</td>
                             <td>{metricLabel(entry.metric)}: {formatQuantity(entry)}</td>

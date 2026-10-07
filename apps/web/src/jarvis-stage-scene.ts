@@ -488,11 +488,12 @@ function createJarvisStageSceneWithRenderer(
       }
     }
     const layout = THREE.MathUtils.clamp(windowPosition, 0, 1);
-    const screenX = mobile ? 0.5 : 0.5 - 0.22 * layout;
+    // Desktop keeps the orb fixed in the room behind windows; only phones move it clear of them.
+    const screenX = 0.5;
     let screenY = mobile ? THREE.MathUtils.lerp(0.46, 0.78, layout) : 0.46;
     let pixelRadius = mobile
       ? Math.min(width * 0.28, height * 0.16)
-      : Math.min(width * 0.18, height * 0.18) * (1 - 0.2 * layout);
+      : Math.min(width * 0.18, height * 0.18);
     // During phone voice with a window, the shell publishes a compact dock between the window and
     // the controls so the HTML status can sit beneath the orb without covering it.
     const dock = mobile ? readOrbDock() : null;

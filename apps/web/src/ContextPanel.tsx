@@ -48,7 +48,7 @@ export function ContextPanelProvider({ children }: { children: ReactNode }) {
   );
 }
 
-export function ContextPanel({ closeIcon }: { closeIcon: ReactNode }) {
+export function ContextPanel({ closeIcon, resizeHandle }: { closeIcon: ReactNode; resizeHandle?: ReactNode }) {
   const { content, isOpen, close } = useContextPanel();
   const message = content.status === 'empty'
     ? content.message ?? 'No relevant information is available yet.'
@@ -71,6 +71,7 @@ export function ContextPanel({ closeIcon }: { closeIcon: ReactNode }) {
           {closeIcon}
         </button>
       </div>
+      <div className="context-panel-body">
       {content.status === 'view'
         ? (
           <GeneratedViewRenderer
@@ -85,6 +86,8 @@ export function ContextPanel({ closeIcon }: { closeIcon: ReactNode }) {
             : content.status === 'error'
               ? <p role="alert">{message}</p>
               : <p>{message}</p>}
+      </div>
+      {resizeHandle}
     </aside>
   );
 }

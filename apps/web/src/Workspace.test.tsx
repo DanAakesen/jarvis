@@ -60,6 +60,23 @@ function JarvisWorkspaceRequest() {
 }
 
 describe('Workspace', () => {
+  it('pins windows as tabs in the shell tab bar and lets their owner close them from the tab', () => {
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const onClose = vi.fn();
+    const pinned: WorkspaceView = { id: 'task-7', title: 'Fix the build', initiallyMinimised: true, onClose,
+      content: { status: 'ready', content: <p>Task body</p> } };
+    render(<Workspace views={[pinned]} tabsHost={host} />);
+
+    expect(within(host).getByRole('button', { name: 'Restore Fix the build' })).not.toBeNull();
+    expect(screen.getByText('Task body').closest('article')?.getAttribute('aria-hidden')).toBe('true');
+    fireEvent.click(within(host).getByRole('button', { name: 'Restore Fix the build' }));
+    expect(screen.getByText('Task body').closest('article')?.getAttribute('aria-hidden')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Minimise Fix the build' }));
+    fireEvent.click(within(host).getByRole('button', { name: 'Close Fix the build' }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+    host.remove();
+  });
   it('uses the one-view phone workspace on short coarse-pointer landscape screens', () => {
     const matchMedia = vi.fn((query: string) => ({
       matches: query === PHONE_LAYOUT_MEDIA_QUERY,

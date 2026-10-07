@@ -8,6 +8,10 @@ export interface ConversationWindowHost {
   element: HTMLElement | null;
   /** ConversationHistory reports whether there is history for the window to show. */
   setAvailable: (available: boolean) => void;
+  /** Whether the docked window is currently shown above the composer. */
+  open: boolean;
+  /** Shows (restoring a minimised or closed window) or collapses the docked window; false when the workspace refuses. */
+  setOpen: (open: boolean) => boolean;
 }
 
 export const ConversationWindowContext = createContext<ConversationWindowHost | null>(null);

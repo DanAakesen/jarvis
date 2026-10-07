@@ -5,6 +5,7 @@ import type { PublicConfig } from '../config/public-config';
 import { useJarvisActivity } from './activity-context';
 import { ConversationMoreMenu, type MoreMenuAction } from './ConversationMoreMenu';
 import { ConversationToast, type ConversationNotification } from './ConversationToast';
+import { InputOrbCore } from './InputOrbCore';
 import { VoiceOrbStatus } from './VoiceOrbStatus';
 import { BrowserVoiceClient, type MicrophoneState, type VoiceLanguage, type VoiceStatus } from './voice-client';
 import { languageName } from './voice-language';
@@ -349,7 +350,7 @@ export function VoiceControls({
         </>
       ) : (
         <div className="action-row">
-          <button className="input-orb" type="button" onClick={start} disabled={disabled} aria-label="Start voice" aria-describedby="voice-start-guidance" title="Start voice"><span aria-hidden="true" /></button>
+          <button className="input-orb" type="button" onClick={start} disabled={disabled} aria-label="Start voice" aria-describedby="voice-start-guidance" title="Start voice"><span aria-hidden="true"><InputOrbCore /></span></button>
           <span className="voice-start-label" aria-hidden="true">Start voice</span>
         </div>
       )}

@@ -29,7 +29,7 @@ function releaseView(projectId: string, name: string, sha: string, fetchedAt: st
       truncated: false,
       branches: [{ name: 'main', commits: [sha] }],
       commits: [{
-        sha, message: `${name} commit`, author: 'Dan', committedAt: '2026-10-04T10:00:00.000Z', parents: [],
+        sha, message: `${name} commit`, author: 'Dan', committedAt: '2026-10-04T10:00:00.000Z', parents: [] as string[],
       }],
     },
   };
@@ -54,6 +54,31 @@ afterEach(() => {
 });
 
 describe('TaskReleaseBar', () => {
+  it('draws the Kanban trail as linked commit dots, newest last and lit, with pipeline states named', async () => {
+    const view = releaseView('7', 'Jarvis', 'abc1234def', new Date().toISOString());
+    view.graph.commits = [
+      { sha: 'aaa1111', message: 'First change', author: 'Dan', committedAt: '2026-10-04T08:00:00.000Z', parents: [] },
+      { sha: 'bbb2222', message: 'Second change', author: 'Dan', committedAt: '2026-10-04T09:00:00.000Z', parents: ['aaa1111'] },
+      { sha: 'ccc3333', message: 'Newest change', author: 'Dan', committedAt: '2026-10-04T10:00:00.000Z', parents: ['bbb2222'] },
+    ];
+    fetchMock.mockResolvedValue(response(view));
+    vi.stubGlobal('fetch', fetchMock);
+    render(
+      <MemoryRouter>
+        <TaskReleaseBar backendUrl="https://api.example.com" getAccessToken={getAccessToken} projectId="7" variant="trail" />
+      </MemoryRouter>,
+    );
+
+    const trail = await screen.findByRole('list', { name: 'Recent commits, oldest to newest' });
+    const items = [...trail.querySelectorAll('li')];
+    expect(items.map((item) => item.querySelector('code')?.textContent)).toEqual(['aaa1111', 'bbb2222', 'ccc3333']);
+    expect(items.at(-1)?.hasAttribute('data-latest')).toBe(true);
+    expect(items[0]?.querySelector('a')?.getAttribute('href')).toBe('https://github.com/org/jarvis/commit/aaa1111');
+    expect(screen.getByRole('list', { name: 'Pipeline' }).textContent).toContain('Build failure');
+    expect(screen.getByRole('button', { name: 'Refresh release context' })).not.toBeNull();
+    expect(screen.getByRole('link', { name: 'Open release' }).getAttribute('href')).toBe('/factory/projects/7/releases/release-7');
+  });
+
   it('asks for a project instead of fetching another project release', () => {
     vi.stubGlobal('fetch', fetchMock);
     renderBar('');

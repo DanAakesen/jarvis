@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { backendFetch } from './backend-request';
 import { useThemePreference } from './theme-preference-context';
 import { saveVoiceWorkspacePreference } from './voice-workspace-preference';
@@ -253,9 +253,19 @@ function SelectField({
   );
 }
 
-export function SettingsPage({ backendUrl, getAccessToken }: {
+export function SettingsPage({ backendUrl, getAccessToken, activity, presence, projects, memory, onBack }: {
   backendUrl: string | null;
   getAccessToken: () => Promise<string>;
+  /** Live operational panels (Now feed, backend sleep) shown above the saved settings. */
+  activity?: ReactNode;
+  /** Presence mode and instructions per mode, shown before the saved settings. */
+  presence?: ReactNode;
+  /** Project management (managed projects and repositories), shown after the saved settings. */
+  projects?: ReactNode;
+  /** What Jarvis remembers: browse, correct and forget. */
+  memory?: ReactNode;
+  /** Leaves Settings for the previous page (or Jarvis when Settings was opened directly). */
+  onBack?: () => void;
 }) {
   const themePreference = useThemePreference();
   const [state, setState] = useState<LoadState>(backendUrl ? 'loading' : 'error');
@@ -383,7 +393,19 @@ export function SettingsPage({ backendUrl, getAccessToken }: {
 
   return (
     <section className="settings-page" aria-labelledby="settings-heading">
-      <h1 id="settings-heading">Settings</h1>
+      <header className="settings-header">
+        {onBack && (
+          <button className="settings-back" type="button" onClick={onBack}>
+            <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M15 5l-7 7 7 7" />
+            </svg>
+            <span>Back</span>
+          </button>
+        )}
+        <h1 id="settings-heading">Settings</h1>
+      </header>
+      {activity && <div className="settings-activity">{activity}</div>}
+      {presence}
       {state === 'loading' && <p role="status">Loading settings…</p>}
       {state === 'error' && (
         <div className="settings-feedback" role="alert">
@@ -571,8 +593,6 @@ export function SettingsPage({ backendUrl, getAccessToken }: {
                 onChange={(event) => update('global', 'screenShareDailyFrameCap', Number(event.target.value))} />
               <p className="settings-explanation">Maximum screen frames sent to the vision model per UTC day (1–300).</p>
             </div>
-            <p className="settings-explanation" id="sleep-switch-help">Manage backend sleep from the Jarvis main page.</p>
-            <a className="home-link" href="/" aria-describedby="sleep-switch-help">Open the Jarvis main page</a>
           </section>
 
           <section className="settings-section" aria-labelledby="new-projects-settings-heading">
@@ -652,6 +672,8 @@ export function SettingsPage({ backendUrl, getAccessToken }: {
           </div>
         </form>
       )}
+      {projects}
+      {memory}
       {backendUrl && <TaskRecipesSettings key={backendUrl} backendUrl={backendUrl} getAccessToken={getAccessToken} />}
     </section>
   );

@@ -63,10 +63,10 @@ function response(body: unknown, status = 200) {
   });
 }
 
-function renderFactory() {
+function renderFactory(path = '/factory/kanban') {
   return render(
     <ContextPanelProvider>
-      <MemoryRouter initialEntries={['/factory/tasks']}>
+      <MemoryRouter initialEntries={[path]}>
         <Routes>
           <Route path="/factory/*" element={
             <FactoryArea backendUrl="https://api.example.com" getAccessToken={getAccessToken} />
@@ -106,6 +106,34 @@ beforeEach(() => {
 afterEach(() => { vi.unstubAllGlobals(); });
 
 describe('Factory task board', () => {
+  it('shows the Kanban board with state columns, compact cards, instant filters and the shared details pane', async () => {
+    const user = userEvent.setup();
+    renderFactory('/factory/kanban');
+
+    expect(await screen.findByRole('heading', { level: 1, name: 'Kanban' })).not.toBeNull();
+    const board = await screen.findByRole('region', { name: 'Tasks by state' });
+    for (const name of ['Ready', 'Running', 'Paused', 'Needs attention', 'Done', 'Cancelled']) {
+      expect(within(board).getByRole('heading', { level: 2, name })).not.toBeNull();
+    }
+    const running = within(board).getByRole('heading', { level: 2, name: 'Running' }).closest('section')!;
+    const card = within(running).getByRole('article', { name: 'Fix the bug' });
+    expect(within(card).getByRole('list', { name: 'Project and agent' }).textContent).toContain('Jarvis');
+    expect(within(card).getByText('Updating tests')).not.toBeNull();
+    expect(within(card).getByText(/2 attempts/)).not.toBeNull();
+    expect(within(card).getByText('copilot/fix-the-bug')).not.toBeNull();
+
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Agent' }), 'codex');
+    await waitFor(() => expect(fetchMock.mock.calls.some(([url]) => String(url).includes('agent=codex'))).toBe(true));
+
+    await user.type(screen.getByRole('searchbox', { name: 'Search tasks' }), 'bug');
+    await waitFor(() => expect(fetchMock.mock.calls.some(([url]) => String(url).includes('search=bug'))).toBe(true));
+
+    const title = await screen.findByRole('button', { name: 'Fix the bug' });
+    await user.click(title);
+    expect(title.getAttribute('aria-pressed')).toBe('true');
+    expect(await screen.findByRole('complementary', { name: 'Fix the bug' })).not.toBeNull();
+  });
+
   it('shows task cards by state with activity, timing, attempt, and unavailable data points', async () => {
     renderFactory();
 
@@ -114,10 +142,11 @@ describe('Factory task board', () => {
     expect(within(card).getByText('Jarvis')).not.toBeNull();
     expect(within(card).getByText('Codex')).not.toBeNull();
     expect(within(card).getByText('Updating tests')).not.toBeNull();
-    expect(within(card).getByText('2')).not.toBeNull();
+    expect(within(card).getByText(/2 attempts/)).not.toBeNull();
     expect(within(card).getByRole('button', { name: 'Pause' })).not.toBeNull();
     expect(within(card).getByRole('button', { name: 'Steer' })).not.toBeNull();
-    expect(within(card).getAllByText('Not reported')).toHaveLength(3);
+    expect(within(card).getByRole('button', { name: 'View details' })).not.toBeNull();
+    expect(within(card).getByRole('link', { name: 'Open Fix the bug in a window' }).getAttribute('href')).toBe('/factory/tasks/42');
     expect(within(card).getByRole('button', { name: 'Fix the bug' }).getAttribute('aria-pressed')).toBe('false');
     expect(await screen.findByText('Live updates connected.')).not.toBeNull();
     expect(streamHarness.callbacks.has('42')).toBe(true);
@@ -132,13 +161,13 @@ describe('Factory task board', () => {
     await user.selectOptions(screen.getByRole('combobox', { name: 'Agent' }), 'codex');
     await user.selectOptions(screen.getByRole('combobox', { name: 'State' }), 'Running');
     await user.selectOptions(screen.getByRole('combobox', { name: 'Period' }), '7');
-    await user.type(screen.getByRole('searchbox', { name: 'Search' }), 'tests');
-    await user.click(screen.getByRole('button', { name: 'Apply filters' }));
+    await user.type(screen.getByRole('searchbox', { name: 'Search tasks' }), 'tests');
 
     await waitFor(() => {
       const listRequest = fetchMock.mock.calls.find(([url]) => {
         const parsed = new URL(String(url));
-        return parsed.pathname === '/factory/tasks' && parsed.searchParams.get('projectId') === '7';
+        return parsed.pathname === '/factory/tasks' && parsed.searchParams.get('projectId') === '7' &&
+          parsed.searchParams.get('search') === 'tests';
       });
       expect(listRequest).toBeDefined();
       const url = new URL(String(listRequest?.[0]));
@@ -177,7 +206,7 @@ describe('Factory task board', () => {
     });
   });
 
-  it('updates the last-updated time from a task SSE event', async () => {
+  it('shows the latest activity from a task SSE event', async () => {
     boardTask = { ...task, activity: null };
     renderFactory();
     const card = await screen.findByRole('article', { name: 'Fix the bug' });
@@ -188,7 +217,6 @@ describe('Factory task board', () => {
     onEvent?.({ id: '19', taskId: '42', type: 'progress', summary: 'Tests passed', at: '2026-10-04T00:30:00.000Z' });
 
     await waitFor(() => {
-      expect(within(card).getByText(/Oct 4, 2026/)).not.toBeNull();
       expect(within(card).getByText('Tests passed')).not.toBeNull();
     });
   });
@@ -217,7 +245,7 @@ describe('Factory task board', () => {
     expect(screen.getByRole('link', { name: 'Open pull request' }).getAttribute('href'))
       .toBe('https://github.com/DanAakesen/jarvis/pull/17');
     expect(screen.getByText('failed')).not.toBeNull();
-    expect(screen.getByRole('link', { name: 'Open full task' }).getAttribute('href')).toBe('/factory/tasks/42');
+    expect(screen.getByRole('link', { name: 'Open task window' }).getAttribute('href')).toBe('/factory/tasks/42');
     await user.click(screen.getByRole('button', { name: 'Close context panel' }));
     expect(document.activeElement).toBe(title);
   });

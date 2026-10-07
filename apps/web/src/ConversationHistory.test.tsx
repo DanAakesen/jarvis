@@ -379,7 +379,7 @@ describe('ConversationHistory', () => {
     finish?.(assistantMessage);
 
     expect(await screen.findByText('I am ready.')).not.toBeNull();
-    expect(createChatSession).toHaveBeenCalledWith(client, config, 'da', expect.any(AbortSignal));
+    expect(createChatSession).toHaveBeenCalledWith(client, config, 'en', expect.any(AbortSignal));
     expect(sendChatTurn).toHaveBeenCalledWith(
       client,
       config,
@@ -490,7 +490,7 @@ describe('ConversationHistory', () => {
     submit('Second', true);
     fireEvent.keyDown(input, { key: 'Enter', ctrlKey: true });
     submit('Remove me', true);
-    chooseLanguage('English');
+    chooseLanguage('Danish');
     submit('Third', true);
     expect(screen.getByText('3 messages queued').getAttribute('aria-live')).toBe('polite');
     const queue = screen.getByRole('list', { name: 'Queued messages' });
@@ -501,11 +501,11 @@ describe('ConversationHistory', () => {
     expect(sendChatTurn).toHaveBeenCalledOnce();
     await act(async () => finishes[0]!());
     await waitFor(() => expect(sendChatTurn).toHaveBeenCalledTimes(2));
-    expect(sendChatTurn.mock.calls[1]?.slice(2, 4)).toEqual([session, 'Second']);
+    expect(sendChatTurn.mock.calls[1]?.slice(2, 4)).toEqual([{ id: '41', language: 'en' }, 'Second']);
     expect(screen.getByText('1 message queued')).not.toBeNull();
     await act(async () => finishes[1]!());
     await waitFor(() => expect(sendChatTurn).toHaveBeenCalledTimes(3));
-    expect(sendChatTurn.mock.calls[2]?.slice(2, 4)).toEqual([{ id: '41', language: 'en' }, 'Third']);
+    expect(sendChatTurn.mock.calls[2]?.slice(2, 4)).toEqual([{ id: '41', language: 'da' }, 'Third']);
     await act(async () => finishes[2]!());
     expect(screen.queryByRole('list', { name: 'Queued messages' })).toBeNull();
     expect(sendChatTurn.mock.calls.map((call) => call[3])).toEqual(['First', 'Second', 'Third']);
@@ -932,7 +932,7 @@ describe('ConversationHistory', () => {
 
   it('switches reply language from the More menu by keyboard and sends in that language', async () => {
     const user = userEvent.setup();
-    createChatSession.mockResolvedValue({ ...session, language: 'en' });
+    createChatSession.mockResolvedValue({ ...session, language: 'da' });
     sendChatTurn.mockResolvedValue(assistantMessage);
     renderConversation();
     const input = await screen.findByRole('textbox', { name: 'Message Jarvis' });
@@ -943,16 +943,17 @@ describe('ConversationHistory', () => {
     await user.keyboard('{ArrowDown}');
     expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: 'Language' }));
     await user.keyboard('{ArrowRight}');
-    expect(document.activeElement).toBe(screen.getByRole('menuitemradio', { name: 'Danish' }));
-    expect(screen.getByRole('menuitemradio', { name: 'Danish' }).getAttribute('aria-checked')).toBe('true');
-    await user.keyboard('{ArrowDown}{Enter}');
+    expect(document.activeElement).toBe(screen.getByRole('menuitemradio', { name: 'English' }));
+    expect(screen.getByRole('menuitemradio', { name: 'Danish' }).getAttribute('aria-checked')).toBe('false');
+    expect(screen.getByRole('menuitemradio', { name: 'English' }).getAttribute('aria-checked')).toBe('true');
+    await user.keyboard('{ArrowUp}{Enter}');
     expect(screen.queryByRole('menu')).toBeNull();
     expect(document.activeElement).toBe(more);
-    expect(selectedLanguage()).toBe('English');
+    expect(selectedLanguage()).toBe('Danish');
     await user.click(input);
     await user.type(input, 'Hello');
     await user.keyboard('{Enter}');
-    await waitFor(() => expect(createChatSession).toHaveBeenCalledWith(client, config, 'en', expect.any(AbortSignal)));
+    await waitFor(() => expect(createChatSession).toHaveBeenCalledWith(client, config, 'da', expect.any(AbortSignal)));
   });
 
   it('closes the voice More menu with Escape before Escape ends voice', async () => {
@@ -1062,7 +1063,7 @@ describe('ConversationHistory', () => {
     expect(reply?.querySelector('img, .message-avatar')).toBeNull();
   });
 
-  it('offers visual context from the composer attachment menu only when a source is shared', async () => {
+  it('offers visual context from the composer More menu only when a source is shared', async () => {
     const camera: CameraController = {
       sharing: true,
       starting: false,
@@ -1075,11 +1076,11 @@ describe('ConversationHistory', () => {
     renderConversation(0, camera);
     await screen.findByRole('heading', { name: 'What’s on your mind?' });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Attach visual context' }));
+    fireEvent.click(screen.getByRole('button', { name: 'More options' }));
     const screenItem = screen.getByRole('menuitem', { name: 'Look at screen' });
     expect(screenItem.getAttribute('aria-disabled')).toBe('true');
-    expect(screenItem.getAttribute('title')).toBe('Share your screen from Activity, sharing and backend first.');
-    expect(screen.queryByRole('menuitem', { name: 'Language' })).toBeNull();
+    expect(screenItem.getAttribute('title')).toBe('Share your screen from the top bar first.');
+    expect(screen.getByRole('menuitem', { name: 'Language' })).not.toBeNull();
     fireEvent.click(screen.getByRole('menuitem', { name: 'Look at camera' }));
 
     await waitFor(() => expect(camera.inspect).toHaveBeenCalledWith(session.id));

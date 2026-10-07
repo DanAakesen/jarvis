@@ -121,21 +121,15 @@ describe('shared glass tokens', () => {
     const greeting = ruleDeclaration(styles, /\.conversation-greeting\s*\{([^}]*)\}/, 'background');
     const greetingPosition = ruleDeclaration(styles, /\.conversation-greeting\s*\{([^}]*)\}/, 'align-self');
     const headingFont = ruleDeclaration(styles, /\.conversation-greeting h2\s*\{([^}]*)\}/, 'font-family');
-    const summary = ruleDeclaration(styles, /^\.conversation-overview > summary\s*\{([^}]*)\}/m, 'background');
     const emptyTranscriptLayout = ruleDeclaration(
       styles, /\.conversation-transcript:has\(\.conversation-greeting\)\s*\{([^}]*)\}/, 'display',
-    );
-    const emptyDisclosureAlignment = ruleDeclaration(
-      styles, /\.conversation-transcript:has\(\.conversation-greeting\) > \.conversation-overview\s*\{([^}]*)\}/,
-      'align-self',
     );
 
     expect(greeting).toBe('var(--surface-translucent)');
     expect(greetingPosition).toBe('flex-end');
     expect(headingFont).toBe('var(--font-heading)');
-    expect(summary).toBe('var(--surface-translucent)');
     expect(emptyTranscriptLayout).toBe('flex');
-    expect(emptyDisclosureAlignment).toBe('flex-end');
+    expect(styles).not.toContain('.conversation-overview');
     expect(styles).toContain('padding: clamp(16px, 12vh, 100px) 12px');
     expect(styles).toContain('@media (max-width: 600px)');
   });
@@ -206,7 +200,10 @@ describe('shared glass tokens', () => {
     expect(source).not.toContain('.bottom-bar');
     expect(historyStyles).not.toContain('.bottom-bar');
     expect(ruleDeclaration(source, /\.app-shell\s*\{([^}]*)\}/, 'grid-template-rows')).toBe('var(--rail-size) minmax(0, 1fr)');
-    for (const selector of [/\.rail-link\[aria-current="page"\]\s*\{([^}]*)\}/, /\.sidebar-link\[aria-current="page"\]\s*\{([^}]*)\}/]) {
+    // The rail marks its current area on the icon itself (Dan, 6 October); the sidebar keeps the lit surface.
+    expect(ruleDeclaration(source, /\.rail-link\[aria-current="page"\]\s*\{([^}]*)\}/, 'background')).toBe('transparent');
+    expect(ruleDeclaration(source, /\.rail-link\[aria-current="page"\] svg\s*\{([^}]*)\}/, 'filter')).toContain('drop-shadow');
+    for (const selector of [/\.sidebar-link\[aria-current="page"\]\s*\{([^}]*)\}/]) {
       expect(ruleDeclaration(source, selector, 'background')).toBe('var(--glass-selected)');
       expect(ruleDeclaration(source, selector, 'box-shadow')).toBe('var(--glass-selected-glow)');
     }

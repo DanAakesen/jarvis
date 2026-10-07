@@ -203,11 +203,11 @@ beforeEach(() => {
 
 afterEach(() => { vi.unstubAllGlobals(); });
 
-describe('task detail page', () => {
+describe('task window', () => {
   it('shows task metadata, project and branch links, state-valid actions, disk readings, and every event source', async () => {
     renderTaskPage();
 
-    expect(await screen.findByRole('heading', { name: 'Keep disk headroom' })).not.toBeNull();
+    expect(await screen.findByText('Monitor writable disk')).not.toBeNull();
     expect(screen.getByText('Monitor writable disk')).not.toBeNull();
     expect(screen.getByText('Needs attention')).not.toBeNull();
     expect(screen.getAllByText('disk_low').length).toBeGreaterThan(0);
@@ -251,7 +251,7 @@ describe('task detail page', () => {
     const user = userEvent.setup();
     latestSessionEndReason = 'crashed';
     renderTaskPage();
-    await screen.findByRole('heading', { name: 'Keep disk headroom' });
+    await screen.findByText('Monitor writable disk');
 
     await user.click(screen.getByRole('button', { name: 'Recover' }));
 
@@ -264,7 +264,7 @@ describe('task detail page', () => {
     const user = userEvent.setup();
     taskState = 'Running';
     renderTaskPage();
-    await screen.findByRole('heading', { name: 'Keep disk headroom' });
+    await screen.findByText('Monitor writable disk');
 
     await user.click(screen.getByRole('button', { name: 'Pause' }));
 

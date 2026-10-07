@@ -289,18 +289,18 @@ describe('App shell', () => {
     await waitFor(() => expect(eventRequests()).toHaveLength(2));
   });
 
-  it('mounts the 3D stage on Jarvis and not on other routes', async () => {
+  it('keeps one 3D stage behind every route without remounting it', async () => {
     const user = userEvent.setup();
     await renderSignedIn();
 
-    expect(screen.getByTestId('jarvis-stage')).toBeTruthy();
+    const stage = screen.getByTestId('jarvis-stage');
     await user.click(screen.getByRole('link', { name: 'Software Factory' }));
-    await screen.findByRole('heading', { name: 'Tasks' });
-    expect(screen.queryByTestId('jarvis-stage')).toBeNull();
+    await screen.findByRole('heading', { level: 1, name: 'Kanban' });
+    expect(screen.getByTestId('jarvis-stage')).toBe(stage);
 
     await user.click(screen.getByRole('link', { name: 'Settings' }));
     await screen.findByRole('heading', { name: 'Settings' });
-    expect(screen.queryByTestId('jarvis-stage')).toBeNull();
+    expect(screen.getByTestId('jarvis-stage')).toBe(stage);
   });
 
   it('renders backend-reported waking in the shared signed-in shell', async () => {
@@ -579,6 +579,42 @@ describe('App shell', () => {
     expect(screen.getByRole('article', { name: 'Conversation' }).contains(voiceAlert)).toBe(false);
   });
 
+  it('keeps an unsent draft when moving to another page and back', async () => {
+    const user = userEvent.setup();
+    await renderSignedIn();
+    await user.type(screen.getByRole('textbox', { name: 'Message Jarvis' }), 'Half a thought');
+    await user.click(screen.getByRole('link', { name: 'Settings' }));
+    await screen.findByRole('heading', { name: 'Settings' });
+    await user.click(screen.getAllByRole('link', { name: 'Conversation' })[0]!);
+    expect((await screen.findByRole('textbox', { name: 'Message Jarvis' }) as HTMLTextAreaElement).value).toBe('Half a thought');
+  });
+
+  it('docks history on the composer and lets the handle hide, show and reopen a closed window', async () => {
+    const user = userEvent.setup();
+    loadConversationHistory.mockResolvedValue({ messages: historyPair, nextCursor: null });
+    await renderSignedIn();
+    await screen.findByText('I am ready.');
+    const historyWindow = screen.getByRole('article', { name: 'Conversation' });
+    const shell = historyWindow.closest('.app-shell')!;
+    expect(within(historyWindow).queryByRole('button', { name: 'Arrange Conversation' })).toBeNull();
+    expect(historyWindow.querySelector('.workspace-resize-edge')).toBeNull();
+    expect(shell.getAttribute('data-conversation-open')).toBe('true');
+
+    await user.click(screen.getByRole('button', { name: 'Hide conversation' }));
+    expect(historyWindow.hasAttribute('inert')).toBe(true);
+    expect(shell.getAttribute('data-conversation-open')).toBe('false');
+    const show = screen.getByRole('button', { name: 'Show conversation' });
+    expect(show.getAttribute('aria-expanded')).toBe('false');
+    await user.click(show);
+    expect(historyWindow.hasAttribute('inert')).toBe(false);
+
+    await user.click(within(historyWindow).getByRole('button', { name: 'Close Conversation' }));
+    expect(screen.queryByRole('article', { name: 'Conversation' })).toBeNull();
+    await user.click(screen.getByRole('button', { name: 'Show conversation' }));
+    expect(screen.getByRole('article', { name: 'Conversation' }).contains(screen.getByText('I am ready.'))).toBe(true);
+    expect(screen.getByRole('button', { name: 'Hide conversation' }).getAttribute('aria-expanded')).toBe('true');
+  });
+
   it('restores history minimised for voice when voice ends', async () => {
     const user = userEvent.setup();
     loadConversationHistory.mockResolvedValue({ messages: historyPair, nextCursor: null });
@@ -602,7 +638,7 @@ describe('App shell', () => {
     const menu = trigger.closest('details')!;
     await user.click(trigger);
     expect(menu.open).toBe(true);
-    expect(within(menu).getByRole('button', { name: 'Share screen' }).hasAttribute('disabled')).toBe(true);
+    expect(within(menu).getByRole('button', { name: 'Screen sharing off. Share screen.' }).hasAttribute('disabled')).toBe(false);
     expect(within(menu).getByRole('button', { name: 'Camera off. Turn camera on.' })).not.toBeNull();
     trigger.focus();
     await user.keyboard('{Escape}');
@@ -615,7 +651,7 @@ describe('App shell', () => {
     expect(screen.queryByLabelText('Camera and sharing controls')).toBeNull();
     expect(screen.getByRole('button', { name: 'Camera off. Turn camera on.' }).closest('details')).toBeNull();
     const topbar = screen.getByRole('button', { name: 'Camera off. Turn camera on.' }).closest('.topbar-actions') as HTMLElement;
-    expect(within(topbar).getByRole('button', { name: 'Share screen' }).closest('details')).toBeNull();
+    expect(within(topbar).getByRole('button', { name: 'Screen sharing off. Share screen.' }).closest('details')).toBeNull();
   });
 
   it('shows chat work only after a runtime event and clears it on the reported terminal event', async () => {
@@ -691,10 +727,10 @@ describe('App shell', () => {
     expect(breadcrumb.textContent).toBe('Jarvis');
     expect(screen.queryByText('Local UI fixture · not production')).toBeNull();
     await user.click(screen.getByRole('link', { name: 'Software Factory' }));
-    await screen.findByRole('heading', { name: 'Tasks' });
+    await screen.findByRole('heading', { level: 1, name: 'Kanban' });
 
-    expect(breadcrumb.textContent).toBe('Jarvis/Software Factory/Tasks');
-    expect(breadcrumb.querySelector('[aria-current="page"]')?.textContent).toBe('Tasks');
+    expect(breadcrumb.textContent).toBe('Jarvis/Software Factory/Kanban');
+    expect(breadcrumb.querySelector('[aria-current="page"]')?.textContent).toBe('Kanban');
   });
 
   it('restores the accepted appearance across signed-in app routes', async () => {
@@ -716,24 +752,21 @@ describe('App shell', () => {
 
     await waitFor(() => expect(document.documentElement.dataset.theme).toBe('dark'));
     await user.click(screen.getByRole('link', { name: 'Software Factory' }));
-    expect(await screen.findByRole('heading', { name: 'Tasks' })).not.toBeNull();
+    expect(await screen.findByRole('heading', { level: 1, name: 'Kanban' })).not.toBeNull();
     expect(document.documentElement.dataset.theme).toBe('dark');
   });
 
-  it('opens and closes the area navigation with keyboard focus returning to its toggle', async () => {
+  it('offers no navigation panel for areas that have a single page', async () => {
     const user = userEvent.setup();
     await renderSignedIn();
+    expect(screen.queryByRole('button', { name: /area navigation/ })).toBeNull();
 
-    const collapse = screen.getByRole('button', { name: 'Close area navigation' });
-    collapse.focus();
-    await user.keyboard(' ');
-    const expand = await screen.findByRole('button', { name: 'Expand area navigation' });
-    expect(expand.getAttribute('aria-expanded')).toBe('false');
-    expect(document.activeElement).toBe(expand);
-    expect(screen.queryByRole('navigation', { name: 'Jarvis' })).toBeNull();
-
-    await user.keyboard('{Enter}');
-    expect(await screen.findByRole('navigation', { name: 'Jarvis' })).not.toBeNull();
+    for (const [area, heading] of [['Software Factory', 'Kanban'], ['Usage', 'Usage and cost']] as const) {
+      await user.click(screen.getByRole('link', { name: area }));
+      await screen.findByRole('heading', { level: 1, name: heading });
+      expect(screen.queryByRole('button', { name: /area navigation/ })).toBeNull();
+      expect(screen.queryByRole('navigation', { name: area })).toBeNull();
+    }
   });
 
   it('turns the camera on and off from the shared shell', async () => {
@@ -767,9 +800,8 @@ describe('App shell', () => {
     });
     await user.click(activeCamera);
     expect(track.stop).toHaveBeenCalledOnce();
-    await user.click(screen.getByText('Activity, sharing and backend'));
-    expect(within(screen.getByRole('region', { name: 'Conversation' }))
-      .getByRole('button', { name: 'Share screen' })).toHaveProperty('disabled', false);
+    expect(screen.queryByText('Activity, sharing and backend')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Screen sharing off. Share screen.' })).toHaveProperty('disabled', false);
   });
 
   it('opens and closes the contextual shell panel without replacing page content', async () => {
@@ -789,6 +821,28 @@ describe('App shell', () => {
   });
 
   it('enables chat and explains the other unavailable main-page actions', async () => {
+    await renderSignedIn();
+
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Welcome, Dan Aakesen');
+    expect(screen.getByRole('heading', { level: 2, name: 'Conversation' })).not.toBeNull();
+    expect(screen.queryByRole('heading', { level: 2, name: 'Now' })).toBeNull();
+    expect(screen.queryByRole('heading', { level: 2, name: 'Backend' })).toBeNull();
+
+    expect(screen.getByRole('textbox', { name: 'Message Jarvis' })).toHaveProperty('disabled', false);
+    expect(screen.getByRole('button', { name: 'Send' })).toHaveProperty('disabled', true);
+    expect(screen.queryByRole('button', { name: 'Danish' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'More options' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Language' }));
+    expect(screen.getByRole('menuitemradio', { name: 'Danish' }).getAttribute('aria-checked')).toBe('false');
+    expect(screen.getByRole('menuitemradio', { name: 'English' }).getAttribute('aria-checked')).toBe('true');
+    fireEvent.click(screen.getByRole('button', { name: 'More options' }));
+
+    expect(screen.getByRole('button', { name: 'Start voice' })).toHaveProperty('disabled', false);
+    expect(screen.queryByRole('group', { name: 'Voice controls' })).toBeNull();
+    expect(screen.getByText(/Your browser asks for microphone access when voice starts/)).not.toBeNull();
+  });
+
+  it('shows the Now feed and backend sleep on Settings', async () => {
     let resolveFeed!: (response: Response) => void;
     const pendingFeed = new Promise<Response>((resolve) => { resolveFeed = resolve; });
     fetchMock.mockImplementation(async (input) => {
@@ -797,12 +851,10 @@ describe('App shell', () => {
         status: 200, headers: { 'Content-Type': 'application/json' },
       });
     });
-    await renderSignedIn();
-    await userEvent.click(screen.getByText('Activity, sharing and backend'));
+    await renderSignedIn('/settings');
 
-    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Welcome, Dan Aakesen');
-    for (const name of ['Conversation', 'Now', 'Backend']) {
-      expect(screen.getByRole('heading', { level: 2, name })).not.toBeNull();
+    for (const name of ['Now', 'Backend']) {
+      expect(await screen.findByRole('heading', { level: 2, name })).not.toBeNull();
     }
     expect(screen.getByText(/Loading current activity/)).not.toBeNull();
     resolveFeed(new Response(JSON.stringify({
@@ -811,21 +863,9 @@ describe('App shell', () => {
       status: 200, headers: { 'Content-Type': 'application/json' },
     }));
     expect(await screen.findByText('No tasks are running.')).not.toBeNull();
-
-    expect(screen.getByRole('textbox', { name: 'Message Jarvis' })).toHaveProperty('disabled', false);
-    expect(screen.getByRole('button', { name: 'Send' })).toHaveProperty('disabled', true);
-    expect(screen.queryByRole('button', { name: 'Danish' })).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'More options' }));
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Language' }));
-    expect(screen.getByRole('menuitemradio', { name: 'Danish' }).getAttribute('aria-checked')).toBe('true');
-    expect(screen.getByRole('menuitemradio', { name: 'English' }).getAttribute('aria-checked')).toBe('false');
-    fireEvent.click(screen.getByRole('button', { name: 'More options' }));
-
-    expect(screen.getByRole('button', { name: 'Start voice' })).toHaveProperty('disabled', false);
-    expect(screen.queryByRole('group', { name: 'Voice controls' })).toBeNull();
-    expect(screen.getByText(/Your browser asks for microphone access when voice starts/)).not.toBeNull();
     expect(await screen.findByText('The backend is awake.')).not.toBeNull();
     expect(screen.getByRole('button', { name: 'Put the backend to sleep' })).toHaveProperty('disabled', false);
+    expect(document.querySelectorAll('.now-panel')).toHaveLength(1);
   });
 
   it('renders bounded Now data as an allowlisted generated view after sign-in', async () => {
@@ -848,7 +888,7 @@ describe('App shell', () => {
         status: 200, headers: { 'Content-Type': 'application/json' },
       });
     });
-    await renderSignedIn();
+    await renderSignedIn('/settings');
 
     const title = await screen.findByRole('link', { name: '<script>window.compromised = true</script>' });
     expect(title.getAttribute('href')).toBe('/factory/tasks/42');
@@ -865,28 +905,47 @@ describe('App shell', () => {
     await renderSignedIn();
 
     await user.click(screen.getByRole('link', { name: 'Software Factory' }));
-    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Tasks');
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Kanban');
     expect(screen.getByRole('link', { name: 'Software Factory' }).getAttribute('aria-current')).toBe('page');
-    const factory = screen.getByRole('navigation', { name: 'Software Factory' });
-    expect(within(factory).getByRole('link', { name: 'Tasks' }).getAttribute('aria-current')).toBe('page');
-
-    await user.click(within(factory).getByRole('link', { name: 'Projects' }));
-    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Projects');
+    expect(screen.getByRole('button', { name: 'Create project' })).not.toBeNull();
 
     await user.click(screen.getByRole('link', { name: 'Settings' }));
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Settings');
+    expect(await screen.findByRole('heading', { level: 2, name: 'Projects' })).not.toBeNull();
 
     await user.click(screen.getByRole('link', { name: 'Jarvis home' }));
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Welcome, Dan Aakesen');
     expect(restoreProfile).toHaveBeenCalledTimes(1);
   });
 
-  it.each([
-    ['/factory/tasks/42', 'Task 42'],
-    ['/factory/projects/3', 'Project settings'],
-  ])('opens %s as the page that activity links target', async (path, heading) => {
-    await renderSignedIn(path);
-    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(heading);
+  it('opens /factory/projects/3 as the page that activity links target', async () => {
+    await renderSignedIn('/factory/projects/3');
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Project settings');
+  });
+
+  it('parks the chat in the rail off the home page and pops it out over the current page', async () => {
+    const user = userEvent.setup();
+    await renderSignedIn('/factory/kanban');
+    const shell = document.querySelector('.app-shell')!;
+    const orb = await screen.findByRole('button', { name: 'Chat with Jarvis' });
+    expect(shell.getAttribute('data-chat')).toBe('rail');
+    expect(document.querySelector('.jarvis-page')?.hasAttribute('inert')).toBe(true);
+
+    await user.click(orb);
+    expect(shell.getAttribute('data-chat')).toBe('out');
+    expect(document.querySelector('.jarvis-page')?.hasAttribute('inert')).toBe(false);
+    expect(screen.getByRole('button', { name: 'Hide the chat bar' }).getAttribute('aria-expanded')).toBe('true');
+
+    await user.click(screen.getByRole('link', { name: 'Conversation' }));
+    expect(shell.getAttribute('data-chat')).toBe('home');
+    expect(screen.queryByRole('button', { name: 'Chat with Jarvis' })).toBeNull();
+  });
+
+  it('opens a task address as a task window over Kanban', async () => {
+    await renderSignedIn('/factory/tasks/42');
+    expect((await screen.findByRole('heading', { level: 1 })).textContent).toBe('Kanban');
+    expect(await screen.findByRole('heading', { level: 3, name: 'Task 42' })).not.toBeNull();
+    expect(JSON.parse(localStorage.getItem('jarvis.windows.tasks') ?? '[]')).toEqual([{ taskId: '42', title: 'Task 42' }]);
   });
 
   it('resolves release activity links to the owning project release view', async () => {

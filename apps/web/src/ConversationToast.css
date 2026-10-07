@@ -1,28 +1,45 @@
-.conversation-toast {
+.conversation-toast-stack {
   position: fixed;
-  z-index: 1000;
+  z-index: 1200;
   right: max(20px, env(safe-area-inset-right));
   bottom: max(20px, env(safe-area-inset-bottom));
   display: flex;
-  align-items: flex-start;
-  gap: 12px;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-2);
+  pointer-events: none;
+}
+.conversation-toast-stack:empty { display: none; }
+.conversation-toast {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
   width: min(360px, calc(100vw - 40px));
   box-sizing: border-box;
-  padding: 14px 12px 14px 18px;
+  padding: 10px 8px 10px 16px;
   border-radius: var(--radius-control);
   color: var(--text);
   box-shadow: var(--panel-shadow);
+  pointer-events: auto;
   animation: conversation-toast-arrive 180ms var(--ease-standard);
 }
 .conversation-toast p { flex: 1; min-width: 0; margin: 0; font-size: var(--type-small); line-height: 1.5; overflow-wrap: anywhere; }
-.conversation-toast button { flex: 0 0 44px; width: 44px; height: 44px; display: grid; place-items: center; padding: 0; border: 0; border-radius: var(--radius-control); color: var(--text); background: transparent; cursor: pointer; }
-.conversation-toast button:hover { background: var(--surface); }
+.conversation-toast button { display: grid; place-items: center; padding: 0; border: 0; border-radius: var(--radius-control); color: var(--text); background: transparent; font: inherit; cursor: pointer; }
+.conversation-toast .conversation-toast-dismiss { flex: 0 0 36px; width: 36px; height: 36px; }
+.conversation-toast .conversation-toast-action { flex: 0 0 auto; min-height: 36px; padding: 0 12px; background: var(--glass-selected); box-shadow: var(--glass-selected-glow); font-size: var(--type-small); font-weight: 650; }
+.conversation-toast button:hover { background: var(--glass-hover); }
+.conversation-toast .conversation-toast-action:hover { background: color-mix(in srgb, var(--glass-edge-cool) 28%, var(--surface)); }
 .conversation-toast button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .conversation-toast svg { width: 18px; height: 18px; }
 @keyframes conversation-toast-arrive { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+@media (pointer: coarse) {
+  .conversation-toast .conversation-toast-dismiss { flex-basis: 44px; width: 44px; height: 44px; }
+  .conversation-toast .conversation-toast-action { min-height: 44px; }
+}
 @media (max-width: 700px) {
   /* Keep phone voice/composer controls tappable below transient feedback. */
-  .conversation-toast { bottom: calc(max(20px, env(safe-area-inset-bottom)) + 88px); }
+  .conversation-toast-stack { bottom: calc(max(20px, env(safe-area-inset-bottom)) + 88px); }
 }
 @media (prefers-reduced-motion: reduce) { .conversation-toast { animation: none; } }
 

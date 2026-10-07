@@ -1,3 +1,4 @@
+import { publishPresenceMode } from './presence-store';
 import { useContext, useEffect, useRef, useState } from 'react';
 import type { PublicClientApplication } from '@azure/msal-browser';
 import { useJarvisActivity } from './activity-context';
@@ -93,6 +94,7 @@ export function NowFeedPanel({
           }
         },
         onActivity: applyRuntimeActivity,
+        onPresenceMode: publishPresenceMode,
         onWorkspaceReady: (sessionId, blobHost) => {
           workspaceSessionId = sessionId;
           setWorkspaceSession(sessionId);
