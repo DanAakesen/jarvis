@@ -7,7 +7,6 @@ import {
   type MemoryRecord,
   type MemoryVersion,
   type VaultGraphData,
-  type VaultGraphFile,
   type VaultIndexStore,
   type VaultIndexedChunk,
   type VaultSearchHit,
@@ -44,7 +43,6 @@ const maxMemoryApiHistory = 10;
 const maxMemoryApiHistoryBytes = 512 * 1024;
 const maxGraphNodes = 2_000;
 const maxGraphEdges = 8_000;
-const maxGraphFilesRead = 10_000;
 const maxLinksPerNote = 512;
 const similarityThreshold = 0.75;
 const credentialPattern = /\b(?:password|passphrase|secret|api[ -]?key|access[ -]?token|credential|private[ -]?key|seed[ -]?phrase|recovery[ -]?phrase)\b/iu;
@@ -287,11 +285,17 @@ function extractLinkTargets(content: string): string[] {
   const add = (target: string | undefined) => {
     if (!target) return;
     const cleaned = target.trim().replace(/^<|>$/gu, '').split(/[|#]/u, 1)[0]?.trim();
-    if (!cleaned || cleaned.startsWith('#') || cleaned.startsWith('//') ||
-        /^[a-z][a-z\d+.-]*:/iu.test(cleaned)) return;
-    let decoded = cleaned;
+    if (!cleaned || cleaned.startsWith('#') || cleaned.startsWith('//')) return;
+    let decoded: string;
     try {
-      decoded = decodeURIComponent(cleaned);
+      if (/^[a-z][a-z\d+.-]*:/iu.test(cleaned)) {
+        const url = new URL(cleaned);
+        const prefix = `/${VAULT_REPOSITORY}/blob/${VAULT_BRANCH}/`;
+        if (url.protocol !== 'https:' || url.hostname !== 'github.com' || !url.pathname.startsWith(prefix)) return;
+        decoded = decodeURIComponent(url.pathname.slice(prefix.length));
+      } else {
+        decoded = decodeURIComponent(cleaned);
+      }
     } catch {
       return;
     }
@@ -374,7 +378,7 @@ function cosineSimilarity(left: readonly number[], right: readonly number[]): nu
     rightNorm += b * b;
   }
   if (leftNorm === 0 || rightNorm === 0) return undefined;
-  return dot / Math.sqrt(leftNorm * rightNorm);
+  return Math.max(-1, Math.min(1, dot / Math.sqrt(leftNorm * rightNorm)));
 }
 
 function snippet(value: string): string {
@@ -574,24 +578,37 @@ export function createVaultModule(options: {
     }
     const vectors = meanVectors(graphData.embeddings);
     const similarities: KnowledgeGraphEdge[] = [];
-    for (const source of paths) {
-      const sourceVector = vectors.get(source);
-      if (!sourceVector) continue;
-      const neighbours = paths.flatMap((target) => {
-        if (target === source) return [];
-        const targetVector = vectors.get(target);
-        if (!targetVector) return [];
-        const score = cosineSimilarity(sourceVector, targetVector);
-        return score !== undefined && score > similarityThreshold ? [{ target, score }] : [];
-      }).sort((left, right) => right.score - left.score || left.target.localeCompare(right.target))
-        .slice(0, 3);
-      for (const neighbour of neighbours) {
+    if (graphData.similarities.length > 0) {
+      for (const edge of graphData.similarities) {
+        if (!pathSet.has(edge.sourcePath) || !pathSet.has(edge.targetPath) ||
+            edge.sourcePath === edge.targetPath || edge.score <= similarityThreshold) continue;
         similarities.push({
-          source: ids.get(source)!,
-          target: ids.get(neighbour.target)!,
+          source: ids.get(edge.sourcePath)!,
+          target: ids.get(edge.targetPath)!,
           type: 'similar',
-          score: neighbour.score,
+          score: Math.max(-1, Math.min(1, edge.score)),
         });
+      }
+    } else {
+      for (const source of paths) {
+        const sourceVector = vectors.get(source);
+        if (!sourceVector) continue;
+        const neighbours = paths.flatMap((target) => {
+          if (target === source) return [];
+          const targetVector = vectors.get(target);
+          if (!targetVector) return [];
+          const score = cosineSimilarity(sourceVector, targetVector);
+          return score !== undefined && score > similarityThreshold ? [{ target, score }] : [];
+        }).sort((left, right) => right.score - left.score || left.target.localeCompare(right.target))
+          .slice(0, 3);
+        for (const neighbour of neighbours) {
+          similarities.push({
+            source: ids.get(source)!,
+            target: ids.get(neighbour.target)!,
+            type: 'similar',
+            score: neighbour.score,
+          });
+        }
       }
     }
     const edges = [...links.slice(0, 2_000), ...similarities.slice(0, maxGraphEdges - 2_000)];
@@ -626,6 +643,7 @@ export function createVaultModule(options: {
   }
 
   async function searchVault(query: string, limit: number, signal: AbortSignal): Promise<VaultSearchHit[]> {
+    if (synchronization) throw new ToolFailure('The vault is synchronizing. Please try again shortly.');
     if (indexStatus !== 'ready') {
       throw new ToolFailure(appMissing
         ? 'The GitHub App is not installed on DanAakesen/vault with Contents read/write access.'
@@ -757,12 +775,11 @@ export function createVaultModule(options: {
         }
         const query = value.query.trim();
         const graph = await knowledgeGraph(signal);
-        const nodeIds = new Set(graph.nodes.map((node) => node.id));
         const hits = await searchVault(query, maxSearchResults, signal);
         const byPath = new Map(graph.nodes.map((node) => [node.path, node]));
         const highlight = [...new Set(hits.flatMap((hit) => {
             const node = byPath.get(hit.path);
-            return node && nodeIds.has(node.id) ? [node.id] : [];
+            return node ? [node.id] : [];
         }))].slice(0, maxSearchResults);
         const view = {
             version: 1 as const,
@@ -781,9 +798,14 @@ export function createVaultModule(options: {
             view,
         };
         await request.server.workspaceCommands.execute(request.server.ownerObjectId, command, signal);
+        await request.server.workspaceCommands.execute(request.server.ownerObjectId, {
+          commandId: randomUUID(),
+          operation: 'focus',
+          viewId: 'knowledge-graph',
+        }, signal);
         const summary = hits.length > 0
-            ? `Found ${hits.length} vault match${hits.length === 1 ? '' : 'es'}; top hit: ${hits[0]!.path} — ${snippet(hits[0]!.content)}`
-            : `No vault notes matched “${query}”.`;
+          ? `Found ${hits.length} vault match${hits.length === 1 ? '' : 'es'}; top hit: ${hits[0]!.path} — ${snippet(hits[0]!.content)}`
+          : `No vault notes matched “${query}”.`;
         return { type: 'generated-view', view, summary, confirmation: summary };
       },
     },
@@ -975,7 +997,12 @@ export function createVaultModule(options: {
       }, async (request, reply) => {
         if (!ownerOnly(request, reply)) return;
         if (indexStatus !== 'ready') return reply.code(503).send({ error: 'Vault index is not ready' });
-        return knowledgeGraph(AbortSignal.timeout(30_000));
+        try {
+          return await knowledgeGraph(AbortSignal.timeout(30_000));
+        } catch (error) {
+          if (error instanceof ToolFailure) return reply.code(503).send({ error: error.message });
+          throw error;
+        }
       });
 
       app.get<{ Querystring: { q: string } }>('/knowledge/search', {
@@ -1004,20 +1031,25 @@ export function createVaultModule(options: {
         if (!ownerOnly(request, reply)) return;
         if (indexStatus !== 'ready') return reply.code(503).send({ error: 'Vault index is not ready' });
         const signal = AbortSignal.timeout(30_000);
-        const graph = await knowledgeGraph(signal);
-        const nodeByPath = new Map(graph.nodes.map((node) => [node.path, node]));
-        const ranked = await searchVault(request.query.q.trim(), maxSearchResults, signal);
-        const seen = new Set<string>();
-        const hits = ranked.flatMap((hit, index) => {
-          const node = nodeByPath.get(hit.path);
-          if (!node || seen.has(node.id)) return [];
-          seen.add(node.id);
-          const score = Number.isFinite(hit.score)
-            ? Math.max(-1, Math.min(1, hit.score!))
-            : Math.max(0, 1 - index / maxSearchResults);
-          return [{ nodeId: node.id, score, snippet: snippet(hit.content) }];
-        }).slice(0, maxSearchResults);
-        return { hits };
+        try {
+          const graph = await knowledgeGraph(signal);
+          const nodeByPath = new Map(graph.nodes.map((node) => [node.path, node]));
+          const ranked = await searchVault(request.query.q.trim(), maxSearchResults, signal);
+          const seen = new Set<string>();
+          const hits = ranked.flatMap((hit, index) => {
+            const node = nodeByPath.get(hit.path);
+            if (!node || seen.has(node.id)) return [];
+            seen.add(node.id);
+            const score = Number.isFinite(hit.score)
+              ? Math.max(-1, Math.min(1, hit.score!))
+              : Math.max(0, 1 - index / maxSearchResults);
+            return [{ nodeId: node.id, score, snippet: snippet(hit.content) }];
+          }).slice(0, maxSearchResults);
+          return { hits };
+        } catch (error) {
+          if (error instanceof ToolFailure) return reply.code(503).send({ error: error.message });
+          throw error;
+        }
       });
 
       app.get('/memory/status', async (request, reply) => {

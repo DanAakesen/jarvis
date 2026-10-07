@@ -4,9 +4,6 @@ ALTER TABLE dbo.vault_chunks
 
 CREATE TABLE dbo.vault_links (
   source_path_hash binary(32) NOT NULL,
-  source_path nvarchar(1024) NOT NULL,
-  target_path nvarchar(1024) NOT NULL,
+  target_path nvarchar(180) NOT NULL,
   CONSTRAINT PK_vault_links PRIMARY KEY (source_path_hash, target_path)
 );
-
-CREATE INDEX IX_vault_links_source_path ON dbo.vault_links (source_path);

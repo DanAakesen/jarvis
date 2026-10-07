@@ -88,6 +88,11 @@ export interface VaultGraphFile {
 
 export interface VaultGraphData {
   readonly links: readonly { readonly sourcePath: string; readonly targetPath: string }[];
+  readonly similarities: readonly {
+    readonly sourcePath: string;
+    readonly targetPath: string;
+    readonly score: number;
+  }[];
   readonly embeddings: readonly { readonly path: string; readonly embedding: readonly number[] }[];
 }
 
@@ -557,9 +562,9 @@ export function createVaultIndexStore(pool: sql.ConnectionPool): VaultIndexStore
               embedding nvarchar(max) '$.embedding' AS JSON
             ) AS chunk;`}`;
         const linkStatement = `DELETE FROM dbo.vault_links WHERE source_path_hash = @pathHash;
-          ${links.length === 0 ? '' : `INSERT INTO dbo.vault_links (source_path_hash, source_path, target_path)
-            SELECT @pathHash, @path, link.target_path
-            FROM OPENJSON(@links) WITH (target_path nvarchar(1024) '$') AS link;`}`;
+          ${links.length === 0 ? '' : `INSERT INTO dbo.vault_links (source_path_hash, target_path)
+            SELECT @pathHash, link.target_path
+            FROM OPENJSON(@links) WITH (target_path nvarchar(180) '$') AS link;`}`;
         await execute(request, signal, () => request.query(`${statement} ${linkStatement}`));
         await transaction.commit();
         committed = true;
@@ -572,11 +577,20 @@ export function createVaultIndexStore(pool: sql.ConnectionPool): VaultIndexStore
       ensureInitialized();
       if (paths.length === 0) return;
       const hashes = [...new Set(paths)].map((path) => pathHash(path).toString('hex'));
-      const request = databaseReadRequest(pool).input('hashes', sql.NVarChar(sql.MAX), JSON.stringify(hashes));
-      await execute(request, signal, () => request.query(`DELETE FROM dbo.vault_chunks
-        WHERE path_hash IN (SELECT CONVERT(binary(32), value, 2) FROM OPENJSON(@hashes));
-        DELETE FROM dbo.vault_links
-        WHERE source_path_hash IN (SELECT CONVERT(binary(32), value, 2) FROM OPENJSON(@hashes));`));
+      const transaction = new sql.Transaction(pool);
+      await transaction.begin();
+      let committed = false;
+      try {
+        const request = new sql.Request(transaction).input('hashes', sql.NVarChar(sql.MAX), JSON.stringify(hashes));
+        await execute(request, signal, () => request.query(`DELETE FROM dbo.vault_chunks
+          WHERE path_hash IN (SELECT CONVERT(binary(32), value, 2) FROM OPENJSON(@hashes));
+          DELETE FROM dbo.vault_links
+          WHERE source_path_hash IN (SELECT CONVERT(binary(32), value, 2) FROM OPENJSON(@hashes));`));
+        await transaction.commit();
+        committed = true;
+      } finally {
+        if (!committed) await transaction.rollback();
+      }
     },
 
     async graphFiles(signal) {
@@ -586,13 +600,21 @@ export function createVaultIndexStore(pool: sql.ConnectionPool): VaultIndexStore
         path: string;
         title: string | null;
         updated_at: Date;
-      }>(`SELECT TOP (@take) path,
-          MAX(CASE WHEN chunk_index = 0 THEN heading END) AS title,
-          MAX(indexed_at) AS updated_at
-        FROM dbo.vault_chunks
-        WHERE path LIKE N'People/%' OR path LIKE N'Work/%'
-          OR path LIKE N'Personal/%' OR path LIKE N'General/%'
-        GROUP BY path ORDER BY path;`));
+      }>(`SELECT TOP (@take) notes.path, title.heading AS title, notes.updated_at
+        FROM (
+          SELECT path, MAX(indexed_at) AS updated_at
+          FROM dbo.vault_chunks
+          WHERE path LIKE N'People/%' OR path LIKE N'Work/%'
+            OR path LIKE N'Personal/%' OR path LIKE N'General/%'
+          GROUP BY path
+        ) AS notes
+        OUTER APPLY (
+          SELECT TOP (1) heading
+          FROM dbo.vault_chunks AS chunk
+          WHERE chunk.path = notes.path AND chunk.heading <> N'Introduction'
+          ORDER BY chunk.chunk_index
+        ) AS title
+        ORDER BY notes.path;`));
       return result.recordset.map(({ path, title, updated_at }) => ({
         path,
         title: title ?? '',
@@ -602,42 +624,72 @@ export function createVaultIndexStore(pool: sql.ConnectionPool): VaultIndexStore
 
     async graphData(paths, signal) {
       ensureInitialized();
-      if (paths.length === 0) return { links: [], embeddings: [] };
+      if (paths.length === 0) return { links: [], similarities: [], embeddings: [] };
+      const pathsByHash = new Map(paths.map((path) => [pathHash(path).toString('hex'), path]));
+      const pathSet = new Set(paths);
+      const hashes = [...pathsByHash.keys()];
       const request = databaseReadRequest(pool)
+        .input('hashes', sql.NVarChar(sql.MAX), JSON.stringify(hashes))
+        .input('linkTake', sql.Int, 8_001)
         .input('paths', sql.NVarChar(sql.MAX), JSON.stringify(paths))
-        .input('linkTake', sql.Int, 8_001);
-      const embeddingQuery = vectorSearchAvailable
-        ? `SELECT chunk.path, CAST(chunk.embedding AS nvarchar(max)) AS embedding
+        .input('similarityThreshold', sql.Float, 0.75);
+      const similarityQuery = vectorSearchAvailable
+        ? `CREATE TABLE #vault_note_vectors (path nvarchar(1024) NOT NULL, embedding vector(1536) NOT NULL);
+          ;WITH mean_components AS (
+            SELECT chunk.path, CONVERT(int, component.[key]) AS dimension,
+              AVG(TRY_CONVERT(float, component.value)) AS mean_value
             FROM dbo.vault_chunks AS chunk
             INNER JOIN OPENJSON(@paths) AS selected ON selected.value = chunk.path
-            WHERE chunk.embedding IS NOT NULL ORDER BY chunk.path, chunk.chunk_index;`
-        : `SELECT CAST(NULL AS nvarchar(1024)) AS path, CAST(NULL AS nvarchar(max)) AS embedding WHERE 1 = 0;`;
+            CROSS APPLY OPENJSON(CAST(chunk.embedding AS nvarchar(max))) AS component
+            WHERE chunk.embedding IS NOT NULL
+            GROUP BY chunk.path, component.[key]
+          ), mean_vectors AS (
+            SELECT path,
+              N'[' + STRING_AGG(CONVERT(nvarchar(max), mean_value), N',')
+                WITHIN GROUP (ORDER BY dimension) + N']' AS embedding_json
+            FROM mean_components GROUP BY path
+          )
+          INSERT INTO #vault_note_vectors (path, embedding)
+          SELECT path, CAST(embedding_json AS vector(1536)) FROM mean_vectors;
+          SELECT source.path AS source_path, neighbour.path AS target_path, neighbour.score
+          FROM #vault_note_vectors AS source
+          CROSS APPLY (
+            SELECT TOP (3) candidate.path,
+              CAST(1.0 - VECTOR_DISTANCE('cosine', source.embedding, candidate.embedding) AS float) AS score
+            FROM #vault_note_vectors AS candidate
+            WHERE candidate.path <> source.path
+              AND VECTOR_DISTANCE('cosine', source.embedding, candidate.embedding) < 1.0 - @similarityThreshold
+            ORDER BY VECTOR_DISTANCE('cosine', source.embedding, candidate.embedding), candidate.path
+          ) AS neighbour
+          ORDER BY source.path, neighbour.score DESC, neighbour.path;`
+        : `SELECT CAST(NULL AS nvarchar(1024)) AS source_path,
+            CAST(NULL AS nvarchar(1024)) AS target_path, CAST(NULL AS float) AS score WHERE 1 = 0;`;
       const result = await execute(request, signal, () => request.query<{
+        source_path_hash: string;
+        target_path: string;
+      }>(`SELECT TOP (@linkTake) CONVERT(varchar(64), source_path_hash, 2) AS source_path_hash, target_path
+          FROM dbo.vault_links
+          WHERE source_path_hash IN (SELECT CONVERT(binary(32), value, 2) FROM OPENJSON(@hashes))
+          ORDER BY source_path_hash, target_path;
+        ${similarityQuery}`));
+      const links = result.recordsets[0] as Array<{ source_path_hash: string; target_path: string }> | undefined;
+      const similarities = result.recordsets[1] as Array<{
         source_path: string;
         target_path: string;
-      }>(`SELECT TOP (@linkTake) source_path, target_path
-          FROM dbo.vault_links
-          WHERE source_path IN (SELECT value FROM OPENJSON(@paths))
-          ORDER BY source_path, target_path;
-        ${embeddingQuery}`));
-      const links = result.recordsets[0] as Array<{ source_path: string; target_path: string }> | undefined;
-      const embeddings = result.recordsets[1] as Array<{ path: string; embedding: string }> | undefined;
+        score: number;
+      }> | undefined;
       return {
-        links: (links ?? []).map(({ source_path, target_path }) => ({
-          sourcePath: source_path,
-          targetPath: target_path,
-        })),
-        embeddings: (embeddings ?? []).flatMap(({ path, embedding }) => {
-          try {
-            const vector: unknown = JSON.parse(embedding);
-            return Array.isArray(vector) && vector.length === vectorDimensions &&
-              vector.every((value) => typeof value === 'number' && Number.isFinite(value))
-              ? [{ path, embedding: vector as number[] }]
-              : [];
-          } catch {
-            return [];
-          }
+        links: (links ?? []).flatMap(({ source_path_hash, target_path }) => {
+          const sourcePath = pathsByHash.get(source_path_hash.toLowerCase());
+          return sourcePath ? [{ sourcePath, targetPath: target_path }] : [];
         }),
+        similarities: (similarities ?? []).flatMap(({ source_path, target_path, score }) => {
+          const sourcePath = pathsByHash.get(source_path.toLowerCase());
+          return sourcePath && pathSet.has(target_path) && Number.isFinite(score)
+            ? [{ sourcePath, targetPath: target_path, score: Number(score) }]
+            : [];
+        }),
+        embeddings: [],
       };
     },
 
@@ -680,9 +732,9 @@ export function createVaultIndexStore(pool: sql.ConnectionPool): VaultIndexStore
         heading: string;
         content: string;
         score: number;
-      }>(`SELECT TOP (@take) chunk.path, chunk.heading, chunk.content
-        , CAST(ranked.matches AS float) / @termCount AS score
-      FROM dbo.vault_chunks AS chunk
+      }>(`SELECT TOP (@take) chunk.path, chunk.heading, chunk.content,
+          CAST(ranked.matches AS float) / @termCount AS score
+        FROM dbo.vault_chunks AS chunk
         CROSS APPLY (
           SELECT COUNT(*) AS matches FROM OPENJSON(@terms) AS term
           WHERE chunk.content LIKE N'%' + term.value + N'%'

@@ -28,6 +28,8 @@ and dismisses historical board-sync
 deployment failure activity (P6-20). It retains rows and existing owner dismissal
 timestamps. Its down batch drops the receipts but never resurrects dismissals;
 restoring pre-cleanup visibility requires a reviewed backup restore.
+`0027_vault_knowledge_graph.sql` adds index timestamps to vault chunks and
+persists parsed note-link targets for the P7-43 knowledge graph.
 
 Every migration has a reverse batch with the same name in `down/`, under the
 same format rules. Startup never reads `down/`. Down scripts drop data: only
