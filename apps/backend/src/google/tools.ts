@@ -951,7 +951,7 @@ export function createGoogleModule(
             const messageId = typeof object(draft.message)?.id === 'string'
               ? object(draft.message)!.id as string
               : '';
-            if (!draftId || !messageId) return undefined;
+            if (!draftId || draftId.length > 512 || !messageId || messageId.length > 512) return undefined;
             const message = await google.request(
               'gmail',
               `/users/me/messages/${encodeURIComponent(messageId)}?format=full`,
@@ -1011,7 +1011,7 @@ export function createGoogleModule(
             signal,
           });
           const message = object(draft.message);
-          if (!message || typeof message.id !== 'string') {
+          if (draft.id !== draftId || !message || typeof message.id !== 'string') {
             throw new ToolFailure('Gmail did not return the draft message.');
           }
           const headers = gmailHeaders(message);
@@ -1022,14 +1022,13 @@ export function createGoogleModule(
           return pendingActions.stage({
             scope: 'mail',
             sourceMessageId: source.id,
-            summary: `Replace Gmail draft "${(headers.subject ?? '(no subject)').slice(0, 200)}" with subject "${subject}", to ${recipients.join(', ')}, and this exact plain-text body:\n${body}`,
+            summary: `Replace Gmail draft "${(headers.subject ?? '(no subject)').slice(0, 200)}" (${draftId}) with subject "${subject}", to ${recipients.join(', ')}, and this exact plain-text body:\n${body}`,
             execute: async (signal) => {
               try {
                 await google.request('gmail', path, {
                   method: 'PUT',
                   signal,
                   body: {
-                    id: draftId,
                     message: {
                       raw: mimeMessage(recipients, subject, body, headers),
                       ...(threadId ? { threadId } : {}),
@@ -1060,12 +1059,12 @@ export function createGoogleModule(
         try {
           const draft = await google.request('gmail', `${path}?format=metadata`, { signal });
           const message = object(draft.message);
-          if (!message) throw new ToolFailure('Gmail did not return the draft message.');
+          if (draft.id !== draftId || !message) throw new ToolFailure('Gmail did not return the draft message.');
           const subject = (gmailHeaders(message).subject ?? '(no subject)').slice(0, 200);
           return pendingActions.stage({
             scope: 'mail',
             sourceMessageId: source.id,
-            summary: `Delete Gmail draft "${subject}".`,
+            summary: `Delete Gmail draft "${subject}" (${draftId}).`,
             execute: async (confirmSignal) => {
               try {
                 await google.request('gmail', path, { method: 'DELETE', signal: confirmSignal });
@@ -1127,7 +1126,12 @@ export function createGoogleModule(
         const remove = input?.remove ?? [];
         const validLabels = (labels: unknown): labels is string[] =>
           Array.isArray(labels) && labels.length <= 10 &&
-          labels.every((label) => typeof label === 'string' && label.trim().length > 0 && label.length <= 225);
+          labels.every((label) => typeof label === 'string' && label.trim() === label &&
+            label.length > 0 && label.length <= 225 &&
+            ![...label].some((character) => {
+              const code = character.charCodeAt(0);
+              return code < 32 || code === 127;
+            }));
         if (!validLabels(add) || !validLabels(remove) || (!add.length && !remove.length)) {
           throw new ToolRefusal('Provide at least one existing Gmail label to add or remove, with at most 10 in each list.');
         }

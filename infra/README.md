@@ -59,7 +59,9 @@ verification by the coding agent.
 After the approved core deployment, Dan creates an OAuth **Desktop app** client
 in Google Cloud Console, enables the Gmail and Calendar APIs, and publishes the
 consent screen **In production**. From Windows PowerShell 5.1 at the repository
-root, run `& .\infra\setup-google.ps1`. The PKCE loopback flow stores the OAuth
+root, run `& .\infra\setup-google.ps1`. If a new scope is added, Dan must add it
+under Google Auth Platform **Data Access** and rerun the script to re-consent
+and replace the Key Vault refresh token. The PKCE loopback flow stores the OAuth
 client ID, client secret, and refresh token only in the deployed Key Vault, then
 removes the temporary Key Vault Secrets Officer assignment. It sets
 `JARVIS_GOOGLE_TIME_ZONE` as a nonsecret GitHub Actions variable; deploy `main`

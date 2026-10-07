@@ -61,7 +61,7 @@ describe('Google API client', () => {
   it('sends Gmail draft replacement requests with PUT', async () => {
     const fetcher = vi.fn(async (_input: string | URL | Request, init?: RequestInit) => {
       expect(init?.method).toBe('PUT');
-      expect(JSON.parse(String(init?.body))).toEqual({ id: 'draft-1' });
+      expect(JSON.parse(String(init?.body))).toEqual({ message: { raw: 'encoded-message' } });
       return new Response(null, { status: 204 });
     });
     const google = createGoogleApiClient({
@@ -72,7 +72,7 @@ describe('Google API client', () => {
     await expect(google.request('gmail', '/users/me/drafts/draft-1', {
       method: 'PUT',
       signal: new AbortController().signal,
-      body: { id: 'draft-1' },
+      body: { message: { raw: 'encoded-message' } },
     })).resolves.toEqual({});
     expect(fetcher).toHaveBeenCalledOnce();
   });

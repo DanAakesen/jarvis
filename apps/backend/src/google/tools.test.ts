@@ -723,7 +723,7 @@ describe('Google Calendar and Gmail tools', () => {
     expect(request.mock.calls[1]?.[1]).toBe('/users/me/drafts/draft-1');
     expect(request.mock.calls[1]?.[2]).toMatchObject({
       method: 'PUT',
-      body: { id: 'draft-1', message: { threadId: 'thread-1' } },
+      body: { message: { threadId: 'thread-1' } },
     });
     const updateBody = request.mock.calls[1]?.[2]?.body as {
       message: { raw: string };
