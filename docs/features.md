@@ -38,7 +38,7 @@ Status as of 6 October 2026.
 | Task context | Jarvis knows running tasks and recent events without asking | Background | — | Built | P4-04 |
 | Honest confirmations | Jarvis reports refused or failed actions as such, never as done | Voice/chat | — | Built | P4-05 |
 | Task recipes | Remember successful PC/browser operation sequences without entered values; Jev selects and verifies fresh targets, falling back to planning on drift. List and delete saved recipes. | Both | Voice/chat and Settings → Task recipes | Built offline; live replay timing pending | P7-35, P7-34, P5-14 |
-| Software Factory tools | Ask Jarvis to list projects and tasks, create tasks, change the agent or model on a Ready task, and steer, pause, resume or cancel tasks | Voice/chat | Main page | Built | P4-10, P7-11 |
+| Software Factory tools | Ask Jarvis to list projects and tasks, create tasks, change the agent or model on a Ready task, steer, pause, resume or cancel tasks, retry an eligible failed start, and inspect releases and deploy status | Voice/chat | Main page | Backend tools implemented offline; live GitHub access unverified | P4-10, P7-11, P9-29 |
 | Image generation | Ask Jarvis to create an image with the existing ChatGPT/Codex subscription; open it in the workspace and inspect its saved artifact in chat history | Both | Main conversation and workspace | Built offline; live Codex and Blob acceptance pending | P7-15 |
 | Model switching by voice | Change Jarvis for the next session or a Ready task using verified provider options; running-task changes are refused | Voice/chat | Main page | Built (offline) | P7-11 |
 | Live status by voice | Jarvis announces important task changes and answers "what's going on?" | Voice/chat | — | Built (offline) | P7-12 |
@@ -65,6 +65,7 @@ Status as of 6 October 2026.
 | Create task | Create a task (project, agent, text, optional model/reasoning) | Both | Task view; by voice once P4-10 lands | Built (screen) | P1-04, P1-08, P4-10 |
 | Task detail | See header, full event timeline, sandbox sessions, disk readings, usage | Screen | Task detail | Built | P1-09 |
 | Task controls | Steer, pause, resume, cancel, and continue after a completed turn's session expires | Both | Board, task detail; by voice once P4-10 lands | Built (screen) | P2-07, P2-14, P4-10 |
+| Retry eligible task start | Retry a failed start only when no sandbox work began; use Recover for tasks with sandbox history | Voice/chat | — | Implemented offline; live backend acceptance pending | P9-29 |
 | Recover crashed task | Restart a task after an active-turn crash from its branch in a new sandbox | Both | Task detail | Built (offline) | P2-10 |
 | Continue after idle expiry | Expiry preserves task state; Continue or a steering correction starts a new session on the existing task branch | Both | Board, task detail; steering tool | Built (offline; regression fix) | P2-14 |
 | Sandbox per task | Each task runs Codex or Copilot in its own Foundry sandbox that closes after delivery or cancel | Background | — | Live (start and events); repo clone in progress | P2-02, P2-04, P2-05, P2-13 |
@@ -91,6 +92,7 @@ Status as of 6 October 2026.
 | Project policy and merge | On task completion, open or reuse an App-backed PR only when the task branch is ahead of the default branch; record refusals as Needs attention, then stop at a verified green PR (or a no-CI PR after a two-minute grace period) or squash-merge via the GitHub App when checks, branch freshness and protection rules pass | Background | Project settings; task detail | Built offline with fake GitHub coverage; coordinator live test-repository acceptance pending | P3-06, P3-14, P6-16 |
 | Release records | One release per merge to `main`, linked to runs and deployments by SHA | Background | — | Built (live webhook setup pending) | P3-07 |
 | Release view | Git graph, releases, runs and deployments per project | Screen | Release view | Built | P3-08 |
+| Release and deploy tools | List recorded releases, inspect a release's linked runs/deployments, and check the latest deploy workflow on a project's default branch | Voice/chat | — | Implemented offline; live GitHub App access unverified | P9-29 |
 | Workflow templates | Managed projects copy PR-check and release workflows | Background | — | Built | P3-09 |
 
 ## Settings, usage and operations
