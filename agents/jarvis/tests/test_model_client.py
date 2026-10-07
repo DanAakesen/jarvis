@@ -89,6 +89,7 @@ def test_personalized_instructions_know_the_jarvis_repository_and_added_projects
     )
 
     assert 'DanAakesen/jarvis, already added as project "jarvis" (project ID 2)' in text
+    assert 'When Dan says "your code"' in text
     assert "- target (DanAakesen/jarvis-test-target, project ID 1)" in text
     assert "ask him to confirm before adding it" in text
     assert "which is not added as a project yet" in personalize_instructions(
