@@ -9,11 +9,11 @@ import json
 import logging
 import os
 import time
-from uuid import uuid4
 from collections.abc import AsyncIterator, Sequence
 from contextlib import aclosing
 from typing import Any
 from urllib.parse import urlsplit, urlunsplit
+from uuid import uuid4
 
 from azure.identity.aio import DefaultAzureCredential
 from openai import AsyncOpenAI
@@ -285,7 +285,9 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
         self, messages: Sequence[ModelMessage], *, settings: ModelSettings | None = None
     ) -> AsyncIterator[str]:
         """Run the Jarvis tool loop and stream the spoken text of each model round."""
-        async with aclosing(self._complete(messages, self._system_prompt, settings, role="voice")) as response:
+        async with aclosing(
+            self._complete(messages, self._system_prompt, settings, role="voice")
+        ) as response:
             async for delta in response:
                 yield delta
 

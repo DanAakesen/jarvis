@@ -6,10 +6,10 @@ from __future__ import annotations
 
 import asyncio
 import json
-from uuid import UUID
 from collections.abc import AsyncIterator
 from types import SimpleNamespace
 from typing import Any
+from uuid import UUID
 
 import httpx
 import pytest
@@ -296,7 +296,8 @@ async def test_reports_provider_token_usage_with_the_chat_role_and_model() -> No
     backend = FakeBackend()
     model, _ = client([completed()], backend=backend)
 
-    assert [chunk async for chunk in model.complete_chat([ModelMessage("user", "Hello")], "en")] == []
+    chunks = model.complete_chat([ModelMessage("user", "Hello")], "en")
+    assert [chunk async for chunk in chunks] == []
 
     usage = next(request for request in backend.requests if request.url.path == "/usage/foundry")
     assert usage.method == "POST"
@@ -772,7 +773,9 @@ async def test_tool_loop_calls_the_backend_tool_and_streams_answer() -> None:
         "result": {"id": 7, "state": "Ready"},
     }
     tools = next(request for request in backend.requests if request.url.path == "/tools")
-    context = next(request for request in backend.requests if request.url.path == "/factory/context")
+    context = next(
+        request for request in backend.requests if request.url.path == "/factory/context"
+    )
     post = next(request for request in backend.requests if request.url.path == "/tools/create_task")
     usages = [request for request in backend.requests if request.url.path == "/usage/foundry"]
     assert (tools.method, context.method, post.method) == ("GET", "GET", "POST")

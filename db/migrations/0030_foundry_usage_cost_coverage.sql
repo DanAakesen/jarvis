@@ -6,15 +6,16 @@ ALTER TABLE dbo.usage ADD
   cost_status nvarchar(16) COLLATE Latin1_General_100_BIN2 NOT NULL
     CONSTRAINT DF_usage_cost_status DEFAULT N'unverified';
 
-UPDATE dbo.usage
+-- Columns added above are not visible to statements compiled in the same batch.
+EXEC(N'UPDATE dbo.usage
 SET role = CASE
-    WHEN source = N'jarvis_model' THEN N'vision'
-    WHEN source = N'voice' THEN N'voice'
+    WHEN source = N''jarvis_model'' THEN N''vision''
+    WHEN source = N''voice'' THEN N''voice''
     ELSE NULL
   END,
-  model = CASE WHEN source = N'jarvis_model' THEN N'gpt-6-luna' ELSE NULL END,
+  model = CASE WHEN source = N''jarvis_model'' THEN N''gpt-6-luna'' ELSE NULL END,
   cost_usd = CASE WHEN cost_dkk IS NULL THEN NULL ELSE ROUND(cost_dkk / 6.5785, 8) END,
-  cost_status = CASE WHEN cost_dkk IS NULL THEN N'unverified' ELSE N'estimated' END;
+  cost_status = CASE WHEN cost_dkk IS NULL THEN N''unverified'' ELSE N''estimated'' END');
 
 ALTER TABLE dbo.usage ADD CONSTRAINT CK_usage_role
   CHECK (role IS NULL OR role IN (N'chat', N'voice', N'vision', N'research', N'embeddings'));
