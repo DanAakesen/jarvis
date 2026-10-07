@@ -81,7 +81,10 @@ def test_personalized_instructions_know_the_jarvis_repository_and_added_projects
         "base",
         ModelSettings(
             "gpt-5.6-luna", "none",
-            projects=(("2", "jarvis", "DanAakesen/jarvis"), ("1", "target", "DanAakesen/jarvis-test-target")),
+            projects=(
+                ("2", "jarvis", "DanAakesen/jarvis"),
+                ("1", "target", "DanAakesen/jarvis-test-target"),
+            ),
         ),
     )
 

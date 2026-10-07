@@ -230,7 +230,7 @@ def _jarvis_repository(value: Any) -> str:
 
 
 def _projects(value: Any) -> tuple[tuple[str, str, str], ...]:
-    """Bounded (id, name, repo) entries of the projects added to Jarvis; invalid entries are dropped."""
+    """Bounded (id, name, repo) entries of added projects; invalid entries are dropped."""
     if not isinstance(value, list):
         return ()
     projects: list[tuple[str, str, str]] = []

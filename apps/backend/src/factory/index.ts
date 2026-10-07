@@ -81,7 +81,7 @@ export const factoryModule: BackendModule = {
             alreadyAdded: true,
             project: existing ? { id: String(existing.id), name: existing.name, repo: existing.repo } : null,
             confirmation: existing
-              ? `${existing.repo} is already added as project \"${existing.name}\" (ID ${existing.id}); nothing was changed.`
+              ? `${existing.repo} is already added as project "${existing.name}" (ID ${existing.id}); nothing was changed.`
               : 'That repository is already managed by Jarvis; nothing was changed.',
           };
         }
