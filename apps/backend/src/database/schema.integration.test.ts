@@ -163,7 +163,7 @@ describe('committed domain schema (groups 1-8)', () => {
     await expect(store.update(progressed)).resolves.toMatchObject(progressed);
     expect(await store.list()).toContainEqual(progressed);
 
-    const history = await pool.request().input('jobId', sql.UniqueIdentifier, jobId)
+    const history = await pool.request().input('jobId', sql.NVarChar(36), jobId.toLowerCase())
       .query<{ status: string; step: number }>(`SELECT status, step FROM dbo.background_job_steps
         WHERE job_id = @jobId ORDER BY id;`);
     expect(history.recordset).toEqual([
@@ -176,10 +176,10 @@ describe('committed domain schema (groups 1-8)', () => {
       jobId, status: 'failed', detail: 'interrupted by restart',
     }));
     expect(await store.update({ ...progressed, status: 'done', step: 2, viewId: 'research-result' })).toBeNull();
-    await pool.request().input('jobId', sql.UniqueIdentifier, jobId).query(`UPDATE dbo.background_jobs
+    await pool.request().input('jobId', sql.NVarChar(36), jobId.toLowerCase()).query(`UPDATE dbo.background_jobs
       SET started_at = DATEADD(day, -31, SYSUTCDATETIME()) WHERE job_id = @jobId;`);
     expect(await store.list()).not.toContainEqual(expect.objectContaining({ jobId }));
-    expect((await pool.request().input('jobId', sql.UniqueIdentifier, jobId)
+    expect((await pool.request().input('jobId', sql.NVarChar(36), jobId.toLowerCase())
       .query('SELECT COUNT(1) AS count FROM dbo.background_job_steps WHERE job_id = @jobId')).recordset[0]?.count).toBe(0);
   });
 

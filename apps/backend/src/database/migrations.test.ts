@@ -74,6 +74,8 @@ describe('committed SQL manifest', () => {
     const migration = (await readMigrations()).at(-1);
     expect(migration?.sql).toContain('CREATE TABLE dbo.background_jobs');
     expect(migration?.sql).toContain('CREATE TABLE dbo.background_job_steps');
+    expect(migration?.sql).toContain('job_id nvarchar(36) COLLATE Latin1_General_100_BIN2');
+    expect(migration?.sql).toContain('job_id = LOWER(job_id)');
     expect(migration?.sql).toContain('ON DELETE CASCADE');
     await expect(readDownMigration('0029_background_jobs.sql')).resolves.toMatchObject({
       sql: expect.stringContaining('DROP TABLE dbo.background_job_steps'),

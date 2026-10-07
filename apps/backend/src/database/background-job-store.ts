@@ -26,7 +26,7 @@ export interface BackgroundJobStore {
 
 function mapJob(row: BackgroundJobRow): BackgroundJob {
   const job: BackgroundJob = {
-    jobId: row.job_id,
+    jobId: row.job_id.toLowerCase(),
     kind: row.kind,
     title: row.title,
     status: row.status,
@@ -43,7 +43,7 @@ function mapJob(row: BackgroundJobRow): BackgroundJob {
 
 function addJobInputs(request: sql.Request, job: BackgroundJob): sql.Request {
   return request
-    .input('jobId', sql.UniqueIdentifier, job.jobId)
+    .input('jobId', sql.NVarChar(36), job.jobId.toLowerCase())
     .input('kind', sql.NVarChar(16), job.kind)
     .input('title', sql.NVarChar(80), job.title)
     .input('status', sql.NVarChar(16), job.status)
@@ -57,7 +57,7 @@ function addJobInputs(request: sql.Request, job: BackgroundJob): sql.Request {
 
 async function insertStep(transaction: sql.Transaction, job: BackgroundJob): Promise<void> {
   await new sql.Request(transaction)
-    .input('jobId', sql.UniqueIdentifier, job.jobId)
+    .input('jobId', sql.NVarChar(36), job.jobId.toLowerCase())
     .input('status', sql.NVarChar(16), job.status)
     .input('step', sql.TinyInt, job.step)
     .input('detail', sql.NVarChar(120), job.detail ?? null)
