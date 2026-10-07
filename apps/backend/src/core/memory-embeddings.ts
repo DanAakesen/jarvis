@@ -36,7 +36,7 @@ function embeddingsUrl(projectEndpoint: string): string {
 }
 
 export class MemoryEmbeddingHttpError extends Error {
-  constructor(readonly status: number) {
+  constructor(readonly status: number, readonly retryAfterMs?: number) {
     super(`Foundry embedding request failed with HTTP ${status}`);
     this.name = 'MemoryEmbeddingHttpError';
   }
@@ -98,7 +98,13 @@ export function createFoundryMemoryEmbedder(options: FoundryMemoryEmbedderOption
       redirect: 'error',
       signal: requestSignal,
     });
-    if (!response.ok) throw new MemoryEmbeddingHttpError(response.status);
+    if (!response.ok) {
+      const retryAfter = Number(response.headers.get('retry-after'));
+      throw new MemoryEmbeddingHttpError(
+        response.status,
+        Number.isFinite(retryAfter) && retryAfter >= 0 ? retryAfter * 1000 : undefined,
+      );
+    }
     const body = await readResponse(response) as {
       data?: readonly { embedding?: unknown }[];
       usage?: { prompt_tokens?: unknown; input_tokens?: unknown };
