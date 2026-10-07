@@ -16,6 +16,7 @@ import type {
   CreateTaskInput, RecordTaskEventInput, TaskControlCommand, TaskEventMessage, TaskListFilters,
 } from './task-store.js';
 import { factoryTools } from './tools.js';
+import { repositoryTools } from './repository-tools.js';
 import { registerReleaseViewRoutes } from './release-view.js';
 
 const maxSqlBigInt = 9_223_372_036_854_775_807n;
@@ -57,7 +58,7 @@ function sendBounded(reply: FastifyReply, value: unknown) {
 
 export const factoryModule: BackendModule = {
   id: 'factory',
-  tools: [...factoryTools, createProjectTool, {
+  tools: [...factoryTools, ...repositoryTools, createProjectTool, {
     name: 'manage_repository',
     description: 'Register an existing repository from the GitHub App installation using the New projects defaults. ' +
       'Only after Dan has confirmed adding it; check list_projects first. Returns alreadyAdded when it is already a project.',

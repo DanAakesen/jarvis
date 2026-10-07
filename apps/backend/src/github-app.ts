@@ -5,6 +5,7 @@ export interface GitHubAppTokenIssuer {
   issue(repository: string): Promise<string>;
   issueForActions(repository: string): Promise<string>;
   issueForContents(repository: string): Promise<string>;
+  issueForRepositoryRead(repository: string): Promise<string>;
   issueForContentsWrite(repository: string): Promise<string>;
 }
 
@@ -300,6 +301,8 @@ export function createGitHubAppTokenIssuer({
     issue: (repository) => issue(repository, { contents: 'write', pull_requests: 'write' }),
     issueForActions: (repository) => issue(repository, { actions: 'read' }),
     issueForContents: (repository) => issue(repository, { contents: 'read' }),
+    // The installation has no issues permission; public issues are readable with contents access.
+    issueForRepositoryRead: (repository) => issue(repository, { contents: 'read', pull_requests: 'read' }),
     issueForContentsWrite: (repository) => issue(repository, { contents: 'write' }),
   };
 }

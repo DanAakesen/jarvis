@@ -294,6 +294,7 @@ describe('factory tasks API', () => {
       issue,
       issueForActions: vi.fn(async () => 'actions-token'),
       issueForContents: vi.fn(async () => 'contents-token'),
+      issueForRepositoryRead: vi.fn(async () => 'repository-read-token'),
       issueForContentsWrite: vi.fn(async () => 'contents-write-token'),
     } satisfies GitHubAppTokenIssuer;
     const runnerAuth: TokenVerifier = async () => ({

@@ -103,10 +103,20 @@ describe('Software Factory Jarvis tools', () => {
   it('registers every project and task tool for discovery and English voice', async () => {
     const names = [
       'list_projects', 'list_tasks', 'get_task', 'create_task',
-      'set_task_model', 'steer_task', 'pause_task', 'resume_task', 'cancel_task', 'create_project', 'manage_repository',
+      'set_task_model', 'steer_task', 'pause_task', 'resume_task', 'cancel_task',
+      'list_capabilities', 'repo_overview', 'repo_list', 'repo_read', 'repo_search', 'repo_issues',
+      'create_project', 'manage_repository',
+    ];
+    const repositoryNames = [
+      'list_capabilities', 'repo_overview', 'repo_list', 'repo_read', 'repo_search', 'repo_issues',
     ];
     expect(factoryModule.tools.map(({ name }) => name)).toEqual(names);
-    for (const name of names) expect(ENGLISH_REALTIME_INSTRUCTIONS).toContain(name);
+    for (const name of names.filter((name) => !repositoryNames.includes(name))) {
+      expect(ENGLISH_REALTIME_INSTRUCTIONS).toContain(name);
+    }
+    expect(ENGLISH_REALTIME_INSTRUCTIONS).toContain('repo_overview first');
+    expect(ENGLISH_REALTIME_INSTRUCTIONS).toContain('repo_search or repo_read');
+    expect(ENGLISH_REALTIME_INSTRUCTIONS).toContain('create it only after Dan confirms');
     expect(ENGLISH_REALTIME_INSTRUCTIONS).toContain('set_jarvis_model');
 
     const { app } = fixture();
