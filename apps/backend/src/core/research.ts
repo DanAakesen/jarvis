@@ -393,7 +393,7 @@ export function createHtmlResearchModule(
         const controller = new AbortController();
         const job: ResearchJob = { controller, promise: Promise.resolve(), done: false };
         jobs.set(jobId, job);
-        const tracker = request.server.backgroundJobs.start(
+        const tracker = await request.server.backgroundJobs.start(
           'research', windowTitle, searches.length + 1, () => controller.abort(), 'Starting research',
         );
         job.promise = Promise.resolve().then(async () => {
@@ -410,7 +410,7 @@ export function createHtmlResearchModule(
             for (const [index, search] of searches.entries()) {
               jobSignal.throwIfAborted();
               search.status = 'searching';
-              tracker.progress(index, `Searching: ${search.label}`);
+              await tracker.progress(index, `Searching: ${search.label}`);
               await progress();
               try {
                 const result = await runCodexToolResult(
@@ -434,7 +434,7 @@ export function createHtmlResearchModule(
                 if (jobSignal.aborted) throw error;
                 search.status = 'failed';
               }
-              tracker.progress(index + 1, search.status === 'failed' ? `Search failed: ${search.label}` : `Found: ${search.label}`);
+              await tracker.progress(index + 1, search.status === 'failed' ? `Search failed: ${search.label}` : `Found: ${search.label}`);
               await progress();
             }
             if (findings.length === 0) throw new ToolFailure('No research searches completed successfully.');
@@ -442,7 +442,7 @@ export function createHtmlResearchModule(
             const frame = reportFrame(snapshot);
             const reportSources = sources().slice(0, maxReportSources);
             const partial = searches.some((search) => search.status === 'failed');
-            tracker.progress(searches.length, 'Writing the report');
+            await tracker.progress(searches.length, 'Writing the report');
             const result = await runCodexToolResult(
               clientFor(),
               'html_report',
@@ -477,14 +477,14 @@ export function createHtmlResearchModule(
               if (!(error instanceof ToolRefusal)) throw error;
               await app.workspaceCommands.execute(ownerId, workspaceCommand('create', viewId, view), jobSignal);
             }
-            tracker.done(viewId, partial ? 'Ready with partial findings' : 'Report ready');
+            await tracker.done(viewId, partial ? 'Ready with partial findings' : 'Report ready');
             notifyCompletion(announceCompletion, { status: 'complete', summary: result.spokenSummary });
           } catch (error) {
             if (!controller.signal.aborted) {
               const reason = error instanceof ToolRefusal
                 ? 'Research was refused. Check workspace access and try again.'
                 : 'Research could not be completed. Try again shortly.';
-              tracker.fail(reason);
+              await tracker.fail(reason);
               await sendProgress(
                 app,
                 ownerId,

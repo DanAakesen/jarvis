@@ -29,6 +29,7 @@ import type { NowFeedEventHub, NowFeedStore, NowFeedUpdate } from './core/now.js
 import type { CredentialStatusStore } from './credentials/credential-status.js';
 import type { runCodexRenewalOnce } from './credentials/codex-renewal.js';
 import type { UsageStore } from './core/usage.js';
+import type { BackgroundJobStore } from './database/background-job-store.js';
 import type { SandboxHeartbeat } from './factory/heartbeat.js';
 import type { ContainerAppScaler } from './operations/container-app-scale.js';
 import { createSleepModule } from './operations/sleep.js';
@@ -57,6 +58,7 @@ export interface BuildAppOptions {
   readonly credentialStatusStore?: CredentialStatusStore;
   readonly renewCodexCredential?: () => ReturnType<typeof runCodexRenewalOnce>;
   readonly usageStore?: UsageStore;
+  readonly backgroundJobStore?: BackgroundJobStore;
   readonly nowFeedStore?: NowFeedStore;
   readonly nowEventHub?: NowFeedEventHub;
   readonly jarvisActivityHub?: JarvisActivityHub;
@@ -171,7 +173,9 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
   app.decorate('nowEventHub', options.nowEventHub ?? createEventHub<NowFeedUpdate>());
   app.decorate('jarvisActivityHub', options.jarvisActivityHub ??
     createEventHub<JarvisActivityEvent | JarvisVoiceWakeEvent | BackgroundJobEvent>());
-  app.decorate('backgroundJobs', new BackgroundJobRegistry(app.jarvisActivityHub));
+  const backgroundJobs = new BackgroundJobRegistry(app.jarvisActivityHub, Date.now, options.backgroundJobStore);
+  app.decorate('backgroundJobs', backgroundJobs);
+  app.addHook('onReady', async () => { await backgroundJobs.initialize(); });
   app.decorate('onConversationSessionEnded', options.onConversationSessionEnded ?? (() => {}));
   const workspaceCommands = options.workspaceCommands ?? new WorkspaceCommandBroker();
   app.decorate('workspaceCommands', workspaceCommands);
