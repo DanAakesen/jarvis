@@ -1830,6 +1830,11 @@ describe('backend-relayed Voice Live WebSocket', () => {
       read: vi.fn(async () => ({
         'roles.voice.model': JSON.stringify('gpt-realtime-2.1-mini'),
         'roles.transcription.model': JSON.stringify('mai-transcribe'),
+        'voice.server_vad_threshold': '0.8',
+        'voice.prefix_padding_ms': '500',
+        'voice.silence_duration_ms': '1000',
+        'voice.barge_in_enabled': 'false',
+        'voice.max_spoken_reply_tokens': '512',
       })),
       write: vi.fn(async () => {}),
     };
@@ -1843,6 +1848,13 @@ describe('backend-relayed Voice Live WebSocket', () => {
     expect((received.find((event) => event.type === 'session.update')?.session as {
       input_audio_transcription: { model: string };
     }).input_audio_transcription.model).toBe('mai-transcribe');
+    expect((received.find((event) => event.type === 'session.update')?.session as {
+      max_response_output_tokens: number;
+      turn_detection: { interrupt_response: boolean };
+    })).toMatchObject({
+      max_response_output_tokens: 512,
+      turn_detection: { interrupt_response: false },
+    });
   });
 
   it('relays Danish sessions through gpt-realtime with a Danish session update', async () => {

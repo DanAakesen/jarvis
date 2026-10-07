@@ -1,7 +1,7 @@
 import { defaultAwayModeState, presenceModes } from './away-mode.js';
 import { JARVIS_REPOSITORY, projectContext } from '../factory/project-context.js';
-import { isModelCatalogue, modelRoles, reasoningEfforts } from '@jarvis/contracts';
-import type { ModelCatalogue, ModelRole, ReasoningEffort } from '@jarvis/contracts';
+import { isModelCatalogue, modelRoles, reasoningEfforts, voiceTuningSettingsBounds, voiceTuningSettingsSchema } from '@jarvis/contracts';
+import type { ModelCatalogue, ModelRole, ReasoningEffort, VoiceTuningSettings } from '@jarvis/contracts';
 import {
   defaultRoleModels, fallbackModelCatalogue, isRoleModelSupported, modelsForRole, reasoningForModel,
 } from './model-catalog.js';
@@ -33,7 +33,7 @@ export interface Settings {
     customInstructions: string;
     modeInstructions: Record<'present' | 'away' | 'on_the_move', string>;
   };
-  voice: {
+  voice: VoiceTuningSettings & {
     speechToTextModel: string;
     englishModel: string;
     englishVoice: string;
@@ -97,6 +97,11 @@ export const defaultSettings: Settings = {
     danishVoice: 'da-DK-Harper:MAI-Voice-2',
     defaultLanguage: 'da',
     minimizeWindowsOnVoiceStart: false,
+    serverVadThreshold: 0.7,
+    prefixPaddingMs: 300,
+    silenceDurationMs: 600,
+    bargeInEnabled: true,
+    maxSpokenReplyTokens: 4_096,
   },
   codex: { model: 'default', reasoning: 'default' },
   copilot: { model: 'default' },
@@ -127,6 +132,7 @@ export const settingsOptions = {
   englishVoices: ['en-GB-Ryan:DragonHDLatestNeural'],
   danishVoices: ['da-DK-Harper:MAI-Voice-2'],
   languages: ['da', 'en'],
+  voiceTuning: voiceTuningSettingsBounds,
   projectVisibilities: ['private', 'public'],
   projectAgents: ['codex', 'copilot'],
   projectPolicies: ['deliver_pr', 'complete_without_deployment'],
@@ -162,6 +168,11 @@ const settingKeys = {
     danishVoice: 'voice.da.voice',
     defaultLanguage: 'voice.default_language',
     minimizeWindowsOnVoiceStart: 'voice.minimize_windows_on_voice_start',
+    serverVadThreshold: 'voice.server_vad_threshold',
+    prefixPaddingMs: 'voice.prefix_padding_ms',
+    silenceDurationMs: 'voice.silence_duration_ms',
+    bargeInEnabled: 'voice.barge_in_enabled',
+    maxSpokenReplyTokens: 'voice.max_spoken_reply_tokens',
   },
   codex: { model: 'codex.model', reasoning: 'codex.reasoning_effort' },
   copilot: { model: 'copilot.model' },
@@ -247,6 +258,17 @@ function validSetting(
     if (key === 'danishVoice') return isOption(value, settingsOptions.danishVoices);
     if (key === 'defaultLanguage') return isOption(value, settingsOptions.languages);
     if (key === 'minimizeWindowsOnVoiceStart') return typeof value === 'boolean';
+    if (key === 'serverVadThreshold') {
+      return typeof value === 'number' && Number.isFinite(value) &&
+        value >= voiceTuningSettingsBounds.serverVadThreshold.minimum &&
+        value <= voiceTuningSettingsBounds.serverVadThreshold.maximum;
+    }
+    if (key === 'prefixPaddingMs' || key === 'silenceDurationMs' || key === 'maxSpokenReplyTokens') {
+      const bounds = voiceTuningSettingsBounds[key];
+      return typeof value === 'number' && Number.isSafeInteger(value) &&
+        value >= bounds.minimum && value <= bounds.maximum;
+    }
+    if (key === 'bargeInEnabled') return typeof value === 'boolean';
   }
   if (area === 'codex') {
     if (key === 'model') return typeof value === 'string' && modelsForRole(catalogue, 'codex').includes(value);
@@ -363,6 +385,7 @@ const settingsPatchSchema = {
             danishVoice: selectSchema(settingsOptions.danishVoices),
             defaultLanguage: selectSchema(settingsOptions.languages),
             minimizeWindowsOnVoiceStart: { type: 'boolean' },
+            ...voiceTuningSettingsSchema.properties,
           },
         },
         codex: {
