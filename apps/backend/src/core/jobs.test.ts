@@ -170,4 +170,28 @@ describe('background jobs', () => {
     });
     expect(store.list).toHaveBeenCalled();
   });
+
+  it('allows failure persistence after an earlier store write fails', async () => {
+    const hub: JarvisActivityHub = createEventHub();
+    const events: BackgroundJob[] = [];
+    hub.subscribe((event) => { if (event.type === 'job') events.push(event.job); });
+    const store: BackgroundJobStore = {
+      create: vi.fn(async () => {}),
+      update: vi.fn()
+        .mockRejectedValueOnce(new Error('database unavailable'))
+        .mockImplementation(async (job: BackgroundJob) => job),
+      list: vi.fn(async () => []),
+      reconcileInterrupted: vi.fn(async () => []),
+      prune: vi.fn(async () => {}),
+    };
+    const registry = new BackgroundJobRegistry(hub, Date.now, store);
+    const job = await registry.start('research', 'Research: Store recovery', 2);
+
+    await expect(job.progress(1, 'Searching: sources')).rejects.toThrow('database unavailable');
+    await job.fail('Research could not be completed.');
+
+    expect(store.update).toHaveBeenCalledTimes(2);
+    expect(events.map((event) => event.status)).toEqual(['running', 'failed']);
+    expect(events.at(-1)).toMatchObject({ detail: 'Research could not be completed.' });
+  });
 });

@@ -106,7 +106,7 @@ export class BackgroundJobRegistry {
 
   private update(tracked: TrackedJob, change: Partial<BackgroundJob>): Promise<boolean> {
     let changed = false;
-    tracked.pending = tracked.pending.then(async () => {
+    const operation = tracked.pending.then(async () => {
       if (tracked.job.status !== 'running') return;
       const { detail: nextDetail, ...rest } = change;
       const next: BackgroundJob = { ...tracked.job, ...rest, updatedAt: new Date(this.now()).toISOString() };
@@ -119,7 +119,8 @@ export class BackgroundJobRegistry {
       changed = true;
       this.publish(job);
     });
-    return tracked.pending.then(() => changed);
+    tracked.pending = operation.catch(() => {});
+    return operation.then(() => changed);
   }
 
   private publish(job: BackgroundJob): void {
