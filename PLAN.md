@@ -4,6 +4,7 @@ Phase 1 delivers the Software Factory. Requirements and page specifications are 
 
 ## Current focus
 
+- **P9 — Control and reach (filed 7 October 2026):** 39 tasks ([#495](https://github.com/DanAakesen/jarvis/issues/495)–[#533](https://github.com/DanAakesen/jarvis/issues/533)) from Dan's gap audit: per-role model and reasoning control, the Folio, missing tools and unconnected features. See [P9](#p9--control-and-reach).
 - **Local UI session with Dan (branch `ui/shell-iteration`, 6 October 2026):** implemented locally:
   - the stage glass shell, the same on every page, with one shared 3D room behind all pages and sign-in;
   - the conversation docked to the composer, with its handle and fly-off;
@@ -426,6 +427,54 @@ P8-04–P8-13 are the initial frontend allocation, selected after checking `main
 | P8-43 | [#435](https://github.com/DanAakesen/jarvis/issues/435) | Voice sharing, toast feedback and living orb polish. | Direct native-permission start/stop and on-request inspection from More; dismissible bottom-right toasts with no composer leakage; white under-orb status without badge/dot; subtle dormant light/motion and stronger amber-core movement while preserving wake/state signals, mirror, quality and reduced motion. Verify desktop/phone, permission failure, exit and observed motion; web lint/tests/build. | P8-40 | Complete |
 
 **Consolidated allocations (6 October 2026):** P8-38 ([#399](https://github.com/DanAakesen/jarvis/issues/399), message window) and P8-39 ([#401](https://github.com/DanAakesen/jarvis/issues/401), shell/footer) are retired as separate tasks and fully absorbed into P8-37 ([#398](https://github.com/DanAakesen/jarvis/issues/398)). Their issues are closed as superseded (`not_planned`), not completed implementations. Keep those task IDs reserved; do not recreate them. P8-37 delivers all three surfaces in one implementation PR. P8-36 (#397) remains its separate voice-bar/shared-menu prerequisite.
+
+### P9 — Control and reach
+
+Goal: Dan controls every model and tunable in Settings, Jarvis can reach the remaining gaps found in the 7 October 2026 audit, and everything Jarvis pulls up can be found again in the Folio. Backend tasks go to Copilot (no `apps/web` changes); UI tasks belong to the local UI session. The board starts at most four Copilot tasks at a time, lowest number first, and skips tasks whose "Blocked by" issues are open.
+
+Declined in the audit (do not file): verbosity and max-output-token settings, notification preferences, an effective-config view, settings change history, approved local folders, browser history access, and outbound notifications.
+
+| Task | Issue | Scope | Owner | Depends on | Status |
+| --- | --- | --- | --- | --- | --- |
+| P9-01 | [#495](https://github.com/DanAakesen/jarvis/issues/495) | Model catalogue (`GET /models`) and per-role model and reasoning settings | Backend | — | Planned |
+| P9-02 | [#496](https://github.com/DanAakesen/jarvis/issues/496) | Apply roles at runtime: vision (default `gpt-6-luna`), research, voice model, transcription | Backend | P9-01 | Planned |
+| P9-03 | [#497](https://github.com/DanAakesen/jarvis/issues/497) | Switch embedding model with automatic re-embedding | Backend | P9-01 | Planned |
+| P9-04 | [#498](https://github.com/DanAakesen/jarvis/issues/498) | Codex and Copilot model and reasoning choices that apply | Backend | P9-01 | Planned |
+| P9-05 | [#499](https://github.com/DanAakesen/jarvis/issues/499) | Voice tuning: turn detection, barge-in, reply length | Backend | — | Planned |
+| P9-06 | [#500](https://github.com/DanAakesen/jarvis/issues/500) | Research depth, sources and timeout | Backend | — | Planned |
+| P9-07 | [#501](https://github.com/DanAakesen/jarvis/issues/501) | Model deployment manager (add/remove Foundry deployments with confirmation) | Backend | P9-01 | Planned |
+| P9-08 | [#502](https://github.com/DanAakesen/jarvis/issues/502) | Claude models as the chat model | Backend | P9-01 | Planned |
+| P9-09 | [#503](https://github.com/DanAakesen/jarvis/issues/503) | Settings: expose hidden settings | UI session | — | Planned |
+| P9-10 | [#504](https://github.com/DanAakesen/jarvis/issues/504) | Memory and retrieval tuning | Backend | — | Planned |
+| P9-11 | [#505](https://github.com/DanAakesen/jarvis/issues/505) | Timeout and retry settings | Backend | — | Planned |
+| P9-12 | [#506](https://github.com/DanAakesen/jarvis/issues/506) | `get_settings`/`update_settings` tools | Backend | P9-01 | Planned |
+| P9-13 | [#507](https://github.com/DanAakesen/jarvis/issues/507) | Settings UI: Models, Voice, Research, Memory, Timeouts | UI session | P9-01, P9-05, P9-06, P9-10, P9-11 | Planned |
+| P9-14 | [#508](https://github.com/DanAakesen/jarvis/issues/508) | Persist background jobs | Backend | — | Planned |
+| P9-15 | [#509](https://github.com/DanAakesen/jarvis/issues/509) | Ship the jobs chip | UI session | — | Planned |
+| P9-16 | [#510](https://github.com/DanAakesen/jarvis/issues/510) | Ship the knowledge graph page | UI session | — | Planned |
+| P9-17 | [#511](https://github.com/DanAakesen/jarvis/issues/511) | Show wake-word events | UI session | — | Planned |
+| P9-18 | [#512](https://github.com/DanAakesen/jarvis/issues/512) | Typed server-sent event contracts | Backend | — | Planned |
+| P9-19 | [#513](https://github.com/DanAakesen/jarvis/issues/513) | Renew credential button | UI session | — | Planned |
+| P9-20 | [#514](https://github.com/DanAakesen/jarvis/issues/514) | System status page, including the PC bridge | Backend + UI session | — | Planned |
+| P9-21 | [#515](https://github.com/DanAakesen/jarvis/issues/515) | Watch mode on screen and camera sharing | UI session | — | Planned |
+| P9-22 | [#516](https://github.com/DanAakesen/jarvis/issues/516) | Phone calling: verify and surface | Backend | — | Planned |
+| P9-23 | [#517](https://github.com/DanAakesen/jarvis/issues/517) | Complete cost coverage | Backend | — | Planned |
+| P9-24 | [#518](https://github.com/DanAakesen/jarvis/issues/518) | Conversation search | Backend | — | Planned |
+| P9-25 | [#519](https://github.com/DanAakesen/jarvis/issues/519) | Folio: everything Jarvis pulled up, findable again | Backend + UI session | — | Planned |
+| P9-26 | [#520](https://github.com/DanAakesen/jarvis/issues/520) | Calendar update and delete | Backend | — | Planned |
+| P9-27 | [#521](https://github.com/DanAakesen/jarvis/issues/521) | Mail drafts and triage | Backend | — | Planned |
+| P9-28 | [#522](https://github.com/DanAakesen/jarvis/issues/522) | Project update and archive tools | Backend | — | Planned |
+| P9-29 | [#523](https://github.com/DanAakesen/jarvis/issues/523) | Factory retry and release status tools | Backend | — | Planned |
+| P9-30 | [#524](https://github.com/DanAakesen/jarvis/issues/524) | Job detail and retry | Backend | P9-14 | Planned |
+| P9-31 | [#525](https://github.com/DanAakesen/jarvis/issues/525) | Usage tool | Backend | P9-23 | Planned |
+| P9-32 | [#526](https://github.com/DanAakesen/jarvis/issues/526) | Clipboard read and write via the PC bridge | Backend | — | Planned |
+| P9-33 | [#527](https://github.com/DanAakesen/jarvis/issues/527) | Delete a vault note | Backend | — | Planned |
+| P9-34 | [#528](https://github.com/DanAakesen/jarvis/issues/528) | Weather and location | Backend | — | Planned |
+| P9-35 | [#529](https://github.com/DanAakesen/jarvis/issues/529) | Rename Recipes to Routines, with edit and rename | Backend + UI session | — | Planned |
+| P9-36 | [#530](https://github.com/DanAakesen/jarvis/issues/530) | One capability prompt for voice and chat | Backend | — | Planned |
+| P9-37 | [#531](https://github.com/DanAakesen/jarvis/issues/531) | Tool parity and stale-tool tests | Backend | — | Planned |
+| P9-38 | [#532](https://github.com/DanAakesen/jarvis/issues/532) | Clean up features.md, add a verified-live column | Backend | — | Planned |
+| P9-39 | [#533](https://github.com/DanAakesen/jarvis/issues/533) | Post-deploy smoke checks | Backend | P9-20 | Planned |
 
 ### Out of scope for phase 1
 
