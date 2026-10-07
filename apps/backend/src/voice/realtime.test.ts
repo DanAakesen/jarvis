@@ -62,6 +62,13 @@ describe('English realtime session', () => {
     expect(ENGLISH_REALTIME_INSTRUCTIONS).toContain('Never save secrets or credentials');
   });
 
+  it('uses the transcription role value in the session update', () => {
+    const session = createRealtimeSessionUpdate(
+      registry, undefined, defaultAwayModeState, 'en', [], 'mai-transcribe',
+    ).session;
+    expect(session.input_audio_transcription).toEqual({ model: 'mai-transcribe' });
+  });
+
   it('removes untyped schema combinators that Voice Live rejects, keeping typed unions', () => {
     expect(toModelToolSchema({
       type: 'object',

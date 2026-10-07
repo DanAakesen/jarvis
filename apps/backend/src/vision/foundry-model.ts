@@ -1,13 +1,14 @@
 import { FOUNDRY_SCOPE } from '../foundry/client.js';
-import { foundryTokenCosts } from '../core/usage-pricing.js';
+import { DKK_PER_USD, foundryTokenCosts } from '../core/usage-pricing.js';
+import { defaultSettings } from '../core/settings.js';
 import type { PcActVisionModel } from '../pc-bridge/pc-act.js';
 import { normalizeFoundryProjectEndpoint } from '../voice/relay.js';
 import type { ScreenVisionModel, ScreenVisionResult } from './screen.js';
 
 const MAX_RESPONSE_BYTES = 1_048_576;
 const REQUEST_TIMEOUT_MS = 30_000;
-// Screen and camera vision use their own cheap deployment, not the chat model (Dan, 6 October).
-export const VISION_MODEL_DEPLOYMENT = 'gpt-6-luna';
+export const VISION_MODEL_DEPLOYMENT = defaultSettings.roles.vision.model;
+export { DKK_PER_USD };
 
 interface JsonObject {
   readonly [key: string]: unknown;

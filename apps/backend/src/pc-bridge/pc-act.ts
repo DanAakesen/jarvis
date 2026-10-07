@@ -1,4 +1,5 @@
 import type { FastifyRequest } from 'fastify';
+import { defaultSettings } from '../core/settings.js';
 import { ToolFailure, ToolRefusal } from '../core/tool-registry.js';
 import { createRecipeSession, type RecipeRuntime, type RecipeSession } from '../core/task-recipes.js';
 import {
@@ -654,7 +655,7 @@ export async function runPcAct(
         try {
           candidates = await options.visionModel.locateElements({
             image: capture.image,
-            model: options.visionDeployment ?? 'gpt-5.6-luna',
+            model: options.visionDeployment ?? defaultSettings.roles.vision.model,
             signal: deadline,
           });
         } finally {

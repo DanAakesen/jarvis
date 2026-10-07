@@ -89,4 +89,50 @@ describe('phone call session store', () => {
       status: 'active',
     }]);
   });
+
+  it('returns a bounded newest-first call history without caller identifiers', async () => {
+    const query = vi.fn(async () => ({
+      recordset: [
+        {
+          started_at: new Date('2026-10-07T12:00:00.000Z'),
+          duration_seconds: 120,
+          status: 'ended',
+        },
+        {
+          started_at: new Date('2026-10-07T11:00:00.000Z'),
+          duration_seconds: 18,
+          status: 'active',
+        },
+      ],
+      rowsAffected: [2],
+    }));
+    const request = { input: vi.fn().mockReturnThis(), query };
+    const pool = { request: vi.fn(() => request) } as unknown as sql.ConnectionPool;
+    const store = createPhoneSessionStore(pool);
+
+    await expect(store.recent()).resolves.toEqual([
+      {
+        startedAt: '2026-10-07T12:00:00.000Z',
+        durationSeconds: 120,
+        outcome: 'ended',
+      },
+      {
+        startedAt: '2026-10-07T11:00:00.000Z',
+        durationSeconds: 18,
+        outcome: 'in_progress',
+      },
+    ]);
+    expect(request.input).toHaveBeenCalledWith('limit', sql.Int, 20);
+    expect(query.mock.calls[0]?.[0]).toContain('SELECT TOP (@limit)');
+    expect(query.mock.calls[0]?.[0]).toContain('ORDER BY started_at DESC, jarvis_session_id DESC');
+    expect(query.mock.calls[0]?.[0]).not.toContain('caller_id');
+  });
+
+  it('rejects unbounded call-history limits before querying', async () => {
+    const { store, query } = fixture();
+    await expect(store.recent(0)).rejects.toThrow('Invalid phone call history limit');
+    await expect(store.recent(51)).rejects.toThrow('Invalid phone call history limit');
+    await expect(store.recent(1.5)).rejects.toThrow('Invalid phone call history limit');
+    expect(query).not.toHaveBeenCalled();
+  });
 });

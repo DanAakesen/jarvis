@@ -789,7 +789,7 @@ def test_codex_tool_mode_validates_request_and_uses_codex_without_a_workspace(mo
     monkeypatch.setattr(app, "_run_codex_tool", run_tool)
     payload = {
         "agent": "codex", "mode": "codex-tool", "tool": "web_research",
-        "query": "latest public transport changes", "model": "gpt-5.5",
+        "query": "latest public transport changes", "model": "gpt-5.5", "reasoning": "high",
     }
     request = Request({"type": "http", "method": "POST", "headers": [], "path": "/invocations",
                        "state": {"invocation_id": "research", "session_id": "fresh-session"}})
@@ -807,6 +807,7 @@ def test_codex_tool_mode_validates_request_and_uses_codex_without_a_workspace(mo
     assert calls[0][0].mode == "codex-tool"
     assert calls[0][0].tool == "web_research"
     assert calls[0][0].model == "gpt-5.5"
+    assert calls[0][0].reasoning == "high"
     assert calls[0][1:] == ("web_research", payload["query"])
 
 
@@ -850,6 +851,7 @@ def test_codex_html_report_mode_accepts_a_bounded_json_request(monkeypatch):
         {"agent": "codex", "tool": "web_research", "query": "x" * 2001},
         {"agent": "codex", "tool": "html_report", "query": "x" * (app.MAX_CODEX_REPORT_QUERY_LENGTH + 1)},
         {"agent": "codex", "tool": "web_research", "query": "research", "model": "gpt-6.1-sol"},
+        {"agent": "codex", "tool": "web_research", "query": "research", "reasoning": "unsupported"},
     ],
 )
 def test_codex_tool_mode_rejects_unsupported_inputs(payload, monkeypatch):
@@ -914,7 +916,7 @@ def test_codex_tool_runs_in_a_deleted_empty_workspace_and_preserves_partial_sour
     monkeypatch.setattr(app.asyncio, "create_subprocess_exec", create_process)
     state = app.TaskState(
         "research", "foundry-session", "codex", "latest public transport changes",
-        mode="codex-tool", tool="web_research", model="gpt-5.5",
+        mode="codex-tool", tool="web_research", model="gpt-5.5", reasoning="high",
     )
 
     asyncio.run(app._run_codex_tool(state, "web_research", state.task))
@@ -922,11 +924,11 @@ def test_codex_tool_runs_in_a_deleted_empty_workspace_and_preserves_partial_sour
     assert state.status == "completed"
     assert state.result == result
     args = captured["args"]
-    assert args[:10] == (
+    assert args[:9] == (
         "codex", "--disable", "shell_tool", "exec", "--skip-git-repo-check",
-        "-s", "read-only", "-c", "web_search=live", "-m",
+        "-s", "read-only", "-c", "web_search=live",
     )
-    assert args[10] == "gpt-5.5"
+    assert args[9:13] == ("-c", "model_reasoning_effort=high", "-m", "gpt-5.5")
     assert args[-1].endswith(json.dumps(state.task, ensure_ascii=True))
     assert captured["env"]["CODEX_HOME"] == str(captured["cwd"] / ".codex")
     assert not captured["cwd"].exists()

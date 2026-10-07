@@ -39,6 +39,17 @@ Offline route, settings, dispatcher, agent, research, vision and voice tests
 cover the implementation; live ARM permissions and deployment selection remain
 unverified.
 
+P9-02 (7 October 2026): apply role settings at the next relevant turn or session.
+Use the vision role for screen/camera, browser text reasoning, and PC-act vision;
+offer only image deployments with known cost rates. Snapshot research model and
+reasoning effort at job start and pass both through the existing Codex runner.
+Build the English Voice Live URL with the selected realtime deployment at
+session start; allow `gpt-realtime-2.1` and `gpt-realtime-2.1-mini`, and expose
+only Voice Live-supported `mai-transcribe` for transcription. Add the mini model
+to the existing Bicep deployment chain without a settings migration. Offline
+runtime and runner tests cover these paths; deployed Azure interoperability and
+billed cost remain unverified.
+
 P6-22 (6 October 2026): Jarvis runs in Dan's personal tenant, without Microsoft
 365 or Teams. Keep away mode manual and do not read Graph presence. Route
 notifications and confirmations through the web app and active browser voice
@@ -91,6 +102,7 @@ Windows/Chrome/Jev speedup remains live acceptance.
 
 | Date | Decision | Rationale and evidence | Status |
 | --- | --- | --- | --- |
+| 2026-10-07 | P9-22 exposes owner-authenticated `/phone/status` and a 20-call history through the existing shared contracts and `phone_sessions` table. Keep phone calling dormant unless Dan provisions Teams/ACS and a Teams Phone number; status configuration is not a provider health check. Do not return caller or call IDs, and do not add a migration or web changes. | P6-22 keeps Teams unprovisioned in production; P7-01 records that no phone number was purchased. Backend tests cover owner auth, unavailable history, sanitized failure, bounded history and status mapping. No Azure CLI/live Azure access was available, so current number, ACS resource and callback delivery remain unverified. | Implemented offline; production setup and live callbacks unverified |
 | 2026-10-07 | P9-29 reuses the existing Jarvis tool registry, task/release stores and contracts for retry and release lookup. Deployment status comes from the latest default-branch `deploy*.yml`/`deploy*.yaml` Actions run using a repository-scoped `actions:read` App token; do not add persistence or web UI. | Issue #523's gap audit requests backend-only tools. Existing retry lifecycle checks and webhook-backed release records remain authoritative; bounded fake-provider tests cover Actions run selection, input validation and sanitized failures. | Implemented offline; live GitHub access unverified |
 | 2026-10-06 | P6-16 treats zero GitHub check runs and zero commit statuses as no CI only after two minutes from PR creation; recheck through the project-policy evaluator and record no-CI completion as task activity. Any present pending or failed check still blocks. | Reuse the persisted PR open time, current GitHub check APIs and existing policy flow without a migration. Focused tests cover empty checks after grace, checks appearing during grace, and failed checks. | Implemented offline; live test-repository acceptance pending |
 | 2026-10-06 | P6-17 preserves background failure event names and exports only fixed error kinds and bounded HTTP statuses. Retain `ENTRA_JARVIS_AGENT_OBJECT_ID` in Bicep. | Callback errors now reach the logger without exporting messages or provider data; logging and monitor tests exercise the sanitized diagnostics. `apps/backend/src/auth/config.ts` still reads the agent object ID to authorize the hosted identity, so the setting is not unused. | Implemented offline; live failure identification awaits deployment |

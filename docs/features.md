@@ -35,6 +35,7 @@ Status as of 7 October 2026.
 | Interrupt and reconnect | Interrupt Jarvis by speaking; voice reconnects automatically | Voice/chat | Main page | Built | P5-04 |
 | Language toggle | Switch Danish/English from the shared More → Language menu in the composer and voice bar; during voice the change applies to chat and the next voice session, and the bar says so | Both | Main page, Settings | Built | P5-05, P8-36 |
 | Voice transcripts | Read what was said in each voice sitting, with voice minutes | Screen | Main page | Built | P5-06 |
+| Phone calling | No production number is verified or available in backend configuration today. When Teams Phone is provisioned, call the number assigned to Jarvis's Teams resource account from Dan's Teams identity; `/phone/status` surfaces module configuration and recent call outcomes. | Phone | Backend `/phone/status` | Built offline; production dormant, number/resource unverified | P7-01, P9-22 |
 | Task context | Jarvis knows running tasks and recent events without asking | Background | — | Built | P4-04 |
 | Background jobs | See research and other slow work in the workspace; current status, step history and result-window links persist across reloads and replicas for 30 days; interrupted work is marked failed at startup | Both | `/jobs`, `event: job`, `list_jobs`, `cancel_job` | Built offline; SQL Server/live multi-replica behavior unverified | P9-14 |
 | Honest confirmations | Jarvis reports refused or failed actions as such, never as done | Voice/chat | — | Built | P4-05 |
@@ -102,7 +103,7 @@ Status as of 7 October 2026.
 | --- | --- | --- | --- | --- | --- |
 | Settings | Jarvis, voice and coding-agent defaults; global limits; app-wide light/dark appearance | Screen | Settings | Built | P1-11, P8-13 |
 | Jarvis model per session | Model and reasoning for new Jarvis sessions | Both | Settings; by voice with P7-11 | Built | P4-07 |
-| Model catalogue and per-role settings | List live Foundry deployments and configure model/reasoning effort for chat, vision, research, voice, transcription, embeddings, Codex and Copilot; unavailable ARM reads identify the fallback catalogue | Backend API | Settings API and the corresponding chat, task, research, vision and voice jobs | Backend built offline; live ARM and model-selection acceptance pending | P9-01 |
+| Model catalogue and per-role settings | List live Foundry deployments and configure model/reasoning effort for chat, vision, research, voice, transcription, embeddings, Codex and Copilot; selected research settings apply to the next job, vision settings to the next request, and voice/transcription settings to the next English session | Backend API | Settings API and the corresponding chat, task, research, vision and voice jobs | Backend built offline; live ARM and model-selection acceptance pending | P9-01, P9-02 |
 | Personality preferences | Choose a tone and response style, and add bounded instructions for new chat and voice sessions | Both | Settings, chat and voice | Built offline; live Azure behavior unverified | P7-16, P8-19 |
 | Credentials status | See credential expiry and renewal status (never values) | Screen | Settings | Built | P2-08 |
 | Codex login renewal | Daily automatic renewal of the Jarvis Codex login | Background | Settings | Built | P2-08 |

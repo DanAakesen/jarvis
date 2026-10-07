@@ -36,6 +36,7 @@ export interface FoundryClientOptions {
 }
 
 export interface RequestOptions { signal?: AbortSignal; onResponse?: (statusCode: number) => void }
+export interface CodexToolOptions extends RequestOptions { reasoning?: string }
 /** Effective task configuration; the dispatcher resolves overrides before settings defaults. */
 export interface TaskWorkspace {
   repository: string;
@@ -95,7 +96,7 @@ function text(value: unknown, name: string): string {
   return value;
 }
 
-function codexToolRequest(tool: unknown, query: unknown, model: unknown): JsonObject {
+function codexToolRequest(tool: unknown, query: unknown, model: unknown, reasoning: unknown): JsonObject {
   if (tool !== "web_research" && tool !== "html_report") {
     throw new TypeError("tool must be web_research or html_report");
   }
@@ -107,7 +108,15 @@ function codexToolRequest(tool: unknown, query: unknown, model: unknown): JsonOb
   if (selectedModel === undefined || selectedModel === "gpt-6.1-sol") {
     throw new TypeError("model must be a supported ChatGPT Codex model");
   }
-  return { agent: "codex", mode: "codex-tool", tool, query, model: selectedModel };
+  const selectedReasoning = option(reasoning, "reasoning", 32);
+  if (selectedReasoning !== undefined &&
+      !["minimal", "low", "medium", "high", "xhigh"].includes(selectedReasoning)) {
+    throw new TypeError("reasoning must be a supported Codex reasoning effort");
+  }
+  return {
+    agent: "codex", mode: "codex-tool", tool, query, model: selectedModel,
+    ...(selectedReasoning === undefined ? {} : { reasoning: selectedReasoning }),
+  };
 }
 
 function option(value: unknown, name: string, limit: number): string | undefined {
@@ -246,18 +255,18 @@ export class FoundryClient {
   }
 
   async startCodexTool(request: CodexToolRequest, options?: RequestOptions): Promise<InvocationAccepted>;
-  async startCodexTool(tool: CodexToolName, query: string, model: string, options?: RequestOptions): Promise<InvocationAccepted>;
+  async startCodexTool(tool: CodexToolName, query: string, model: string, options?: CodexToolOptions): Promise<InvocationAccepted>;
   async startCodexTool(
     requestOrTool: CodexToolRequest | CodexToolName,
     optionsOrQuery: RequestOptions | string = {},
     model?: string,
-    researchOptions: RequestOptions = {},
+    researchOptions: CodexToolOptions = {},
   ): Promise<InvocationAccepted> {
     if (typeof requestOrTool === "string") {
       if (typeof optionsOrQuery !== "string" || model === undefined) throw new TypeError("Invalid Codex tool request");
       const body = await this.runtimeRequest(
         "codex-tool", "protocols/invocations", "POST",
-        codexToolRequest(requestOrTool, optionsOrQuery, model), undefined, researchOptions,
+        codexToolRequest(requestOrTool, optionsOrQuery, model, researchOptions.reasoning), undefined, researchOptions,
       );
       return this.accepted(body, "codex-tool", undefined, "codex");
     }
