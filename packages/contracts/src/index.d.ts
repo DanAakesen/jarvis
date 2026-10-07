@@ -319,6 +319,43 @@ export const backgroundJobStatuses: readonly BackgroundJobStatus[];
 export function isBackgroundJob(value: unknown): value is BackgroundJob;
 export function isBackgroundJobEvent(value: unknown): value is BackgroundJobEvent;
 
+export const nowSseEventNames: readonly [
+  'mode', 'now', 'voice-wake', 'job', 'jarvis-activity', 'workspace-ready', 'workspace-command', 'workspace-cancel',
+];
+export interface TaskEventRecord {
+  id: string;
+  type: string;
+  summary: string | null;
+  payload: unknown;
+  payloadTruncated: boolean;
+  source: 'runner' | 'backend' | 'github' | 'dan';
+  at: string;
+}
+export interface TaskEventMessage extends TaskEventRecord {
+  taskId: string;
+}
+export type NowSseEvent =
+  | { event: 'mode'; data: Record<string, never> }
+  | { event: 'now'; data: Record<string, never> }
+  | { event: 'voice-wake'; data: JarvisVoiceWakeEvent }
+  | { event: 'job'; data: BackgroundJob }
+  | { event: 'jarvis-activity'; data: JarvisActivityEvent }
+  | { event: 'workspace-ready'; data: { sessionId: string; trustedBlobHost?: string } }
+  | { event: 'workspace-command'; data: { command: WorkspaceCommand; expiresAt: number } }
+  | { event: 'workspace-cancel'; data: { commandId: string } };
+export type WorkspaceSseEvent = Extract<NowSseEvent, { event: 'workspace-command' | 'workspace-cancel' }>;
+export type TaskEventStreamEvent =
+  | { event: 'task'; id: string; data: TaskEventMessage }
+  | { event: 'ready'; data: Record<string, never> };
+export type ServerSentEvent = NowSseEvent | TaskEventStreamEvent;
+export function isTaskEventRecord(value: unknown): value is TaskEventRecord;
+export function isTaskEventMessage(value: unknown): value is TaskEventMessage;
+export function isNowSseEvent(
+  value: unknown,
+  options?: { trustedBlobHost?: string; registeredTools?: readonly string[] },
+): value is NowSseEvent;
+export function isTaskEventStreamEvent(value: unknown): value is TaskEventStreamEvent;
+
 export type PhoneCallOutcome = 'in_progress' | 'ended' | 'failed';
 export interface PhoneCallHistoryEntry {
   startedAt: string;

@@ -4,6 +4,7 @@ import {
   htmlArtifactFrameSchema,
   isWorkspaceCommand,
   workspaceCommandSchema,
+  type WorkspaceSseEvent,
   type WorkspaceCommand,
   type WorkspaceSnapshot,
 } from '@jarvis/contracts';
@@ -15,8 +16,7 @@ const commandTimeoutMs = 10_000;
 const maxPendingCommands = 8;
 const maxCachedCommands = 128;
 
-type WorkspaceEvent = 'workspace-command' | 'workspace-cancel';
-type WorkspaceEventSender = (event: WorkspaceEvent, data: unknown) => boolean;
+type WorkspaceEventSender = (event: WorkspaceSseEvent) => boolean;
 
 interface WorkspaceConnection {
   readonly sessionId: string;
@@ -163,7 +163,10 @@ export class WorkspaceCommandBroker {
     onAbort = () => {
       if (record.state !== 'pending') return;
       for (const sessionId of record.sessionIds) {
-        this.connections.get(ownerId)?.get(sessionId)?.send('workspace-cancel', { commandId: command.commandId });
+        this.connections.get(ownerId)?.get(sessionId)?.send({
+          event: 'workspace-cancel',
+          data: { commandId: command.commandId },
+        });
       }
       settleError(new ToolFailure('Workspace command was cancelled; the client may already have applied it.'), 'error');
     };
@@ -180,7 +183,7 @@ export class WorkspaceCommandBroker {
       return this.waitFor(promise, signal);
     }
     for (const connection of [...ownerConnections.values()]) {
-      if (!connection.send('workspace-command', { command, expiresAt })) {
+      if (!connection.send({ event: 'workspace-command', data: { command, expiresAt } })) {
         this.decline(record, connection.sessionId, 'error', 'The workspace could not accept the command for delivery.');
       }
     }

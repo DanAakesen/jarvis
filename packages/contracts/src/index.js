@@ -672,3 +672,89 @@ export function isBackgroundJob(value) {
 export function isBackgroundJobEvent(value) {
   return isObject(value) && Object.keys(value).length === 2 && value.type === 'job' && isBackgroundJob(value.job);
 }
+
+export const nowSseEventNames = Object.freeze([
+  'mode', 'now', 'voice-wake', 'job', 'jarvis-activity', 'workspace-ready', 'workspace-command', 'workspace-cancel',
+]);
+
+const taskEventSources = Object.freeze(['runner', 'backend', 'github', 'dan']);
+const taskEventIdPattern = /^[1-9][0-9]{0,18}$/;
+const workspaceSessionIdPattern = /^[\da-f]{8}-(?:[\da-f]{4}-){3}[\da-f]{12}$/i;
+
+function isTaskEventId(value) {
+  return typeof value === 'string' && taskEventIdPattern.test(value) && BigInt(value) <= maxSqlBigInt;
+}
+
+function isEmptyObject(value) {
+  return isObject(value) && Object.keys(value).length === 0;
+}
+
+export function isTaskEventRecord(value) {
+  return isObject(value) &&
+    Object.keys(value).length === 7 &&
+    Object.keys(value).every((key) => ['id', 'type', 'summary', 'payload', 'payloadTruncated', 'source', 'at'].includes(key)) &&
+    isTaskEventId(value.id) &&
+    boundedText(value.type, 64) &&
+    (value.summary === null || typeof value.summary === 'string' && value.summary.length <= 2_000) &&
+    typeof value.payloadTruncated === 'boolean' &&
+    taskEventSources.includes(value.source) &&
+    isTimestamp(value.at);
+}
+
+export function isTaskEventMessage(value) {
+  return isObject(value) &&
+    Object.keys(value).length === 8 &&
+    Object.keys(value).every((key) =>
+      ['id', 'type', 'summary', 'payload', 'payloadTruncated', 'source', 'at', 'taskId'].includes(key)) &&
+    isTaskEventRecord(Object.fromEntries(
+      Object.entries(value).filter(([key]) => key !== 'taskId'),
+    )) &&
+    isTaskEventId(value.taskId);
+}
+
+export function isNowSseEvent(value, options = {}) {
+  if (!isObject(value) || Object.keys(value).length !== 2 ||
+    !Object.keys(value).every((key) => ['event', 'data'].includes(key)) ||
+    !nowSseEventNames.includes(value.event)) return false;
+  switch (value.event) {
+    case 'mode':
+    case 'now':
+      return isEmptyObject(value.data);
+    case 'voice-wake':
+      return isJarvisVoiceWakeEvent(value.data);
+    case 'job':
+      return isBackgroundJob(value.data);
+    case 'jarvis-activity':
+      return isJarvisActivityEvent(value.data);
+    case 'workspace-ready':
+      return isObject(value.data) &&
+        Object.keys(value.data).every((key) => ['sessionId', 'trustedBlobHost'].includes(key)) &&
+        Object.keys(value.data).includes('sessionId') &&
+        typeof value.data.sessionId === 'string' && workspaceSessionIdPattern.test(value.data.sessionId) &&
+        (value.data.trustedBlobHost === undefined ||
+          boundedText(value.data.trustedBlobHost, 253));
+    case 'workspace-command':
+      return isObject(value.data) && Object.keys(value.data).length === 2 &&
+        Object.keys(value.data).every((key) => ['command', 'expiresAt'].includes(key)) &&
+        isWorkspaceCommand(value.data.command, options) &&
+        Number.isSafeInteger(value.data.expiresAt) && value.data.expiresAt > 0;
+    case 'workspace-cancel':
+      return isObject(value.data) && Object.keys(value.data).length === 1 &&
+        typeof value.data.commandId === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(value.data.commandId);
+    default:
+      return false;
+  }
+}
+
+export function isTaskEventStreamEvent(value) {
+  if (!isObject(value) || typeof value.event !== 'string') return false;
+  if (value.event === 'ready') {
+    return Object.keys(value).length === 2 &&
+      Object.keys(value).every((key) => ['event', 'data'].includes(key)) &&
+      isEmptyObject(value.data);
+  }
+  return value.event === 'task' &&
+    Object.keys(value).length === 3 &&
+    Object.keys(value).every((key) => ['event', 'id', 'data'].includes(key)) &&
+    isTaskEventMessage(value.data) && value.id === value.data.id;
+}
