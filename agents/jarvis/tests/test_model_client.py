@@ -14,6 +14,7 @@ from uuid import UUID
 import httpx
 import pytest
 
+import model_client
 from jarvis_tools import (
     BackendToolClient,
     BackendUnavailable,
@@ -23,8 +24,14 @@ from jarvis_tools import (
     current_steering_fetcher,
 )
 from model_client import (
+    ANTHROPIC_THINKING_BUDGETS,
     CHAT_INSTRUCTIONS,
     AzureOpenAIResponsesClient,
+    anthropic_messages,
+    anthropic_resource_from_project_endpoint,
+    anthropic_thinking_parameters,
+    anthropic_tools,
+    is_claude_model,
     parse_max_output_tokens,
     personalize_instructions,
     responses_base_url,
@@ -48,6 +55,56 @@ class FakeStream:
             for event in self._events:
                 yield event
         return iterate()
+
+
+class FakeAnthropicStream:
+    def __init__(
+        self,
+        text: list[str],
+        final: Any,
+        error: BaseException | None = None,
+    ) -> None:
+        self._text = text
+        self._final = final
+        self._error = error
+        self.exited = False
+
+    async def __aenter__(self) -> "FakeAnthropicStream":
+        if self._error is not None:
+            raise self._error
+        return self
+
+    async def __aexit__(self, *args: Any) -> None:
+        self.exited = True
+
+    @property
+    def text_stream(self) -> AsyncIterator[str]:
+        async def iterate() -> AsyncIterator[str]:
+            for text in self._text:
+                yield text
+        return iterate()
+
+    async def get_final_message(self) -> Any:
+        return self._final
+
+
+class FakeAnthropicMessages:
+    def __init__(self, rounds: list[FakeAnthropicStream]) -> None:
+        self._rounds = rounds
+        self.requests: list[dict[str, Any]] = []
+
+    def stream(self, **kwargs: Any) -> FakeAnthropicStream:
+        self.requests.append(kwargs)
+        return self._rounds[len(self.requests) - 1]
+
+
+class FakeAnthropic:
+    def __init__(self, rounds: list[FakeAnthropicStream]) -> None:
+        self.messages = FakeAnthropicMessages(rounds)
+        self.closed = False
+
+    async def close(self) -> None:
+        self.closed = True
 
 
 def test_chat_instructions_ground_vault_answers_in_search_results() -> None:
@@ -183,11 +240,15 @@ class FakeBackend:
         status: int = 200,
         context: dict[str, Any] | None = None,
         context_status: int = 200,
+        model_name: str = "deployment",
+        reasoning_effort: str = "none",
     ) -> None:
         self.catalogue = [CREATE_TASK] if catalogue is None else catalogue
         self.status = status
         self.context_status = context_status
         self.context_snapshot = context or {"runningTasks": [], "truncated": False}
+        self.model_name = model_name
+        self.reasoning_effort = reasoning_effort
         self.requests: list[httpx.Request] = []
 
     def handle(self, request: httpx.Request) -> httpx.Response:
@@ -195,7 +256,8 @@ class FakeBackend:
         if request.method == "GET":
             if request.url.path == "/agent/settings":
                 return httpx.Response(200, json={
-                    "model": "deployment", "reasoningEffort": "none",
+                    "model": self.model_name,
+                    "reasoningEffort": self.reasoning_effort,
                 })
             if request.url.path == "/factory/context":
                 return httpx.Response(
@@ -245,6 +307,121 @@ def test_builds_responses_base_url_from_project_endpoint() -> None:
         responses_base_url("https://example.test/api/projects/demo")
         == "https://example.test/api/projects/demo/openai/v1/"
     )
+
+
+def test_resolves_the_foundry_resource_for_the_anthropic_endpoint() -> None:
+    assert (
+        anthropic_resource_from_project_endpoint(
+            "https://jarvis.services.ai.azure.com/api/projects/jarvis"
+        )
+        == "jarvis"
+    )
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "http://jarvis.services.ai.azure.com/api/projects/demo",
+        "https://example.test/api/projects/demo",
+        "https://jarvis.services.ai.azure.com:443/api/projects/demo",
+        "https://jarvis.services.ai.azure.com/api/projects/demo?key=value",
+    ],
+)
+def test_rejects_invalid_anthropic_project_endpoint(value: str) -> None:
+    with pytest.raises(ValueError, match="FOUNDRY_PROJECT_ENDPOINT"):
+        anthropic_resource_from_project_endpoint(value)
+
+
+@pytest.mark.asyncio
+async def test_configures_foundry_claude_with_managed_identity(monkeypatch) -> None:
+    class Credential:
+        def __init__(self) -> None:
+            self.scopes: list[str] = []
+            self.closed = False
+
+        async def get_token(self, scope: str) -> SimpleNamespace:
+            self.scopes.append(scope)
+            return SimpleNamespace(token="managed-token")
+
+        async def close(self) -> None:
+            self.closed = True
+
+    credential = Credential()
+    captured: dict[str, Any] = {}
+    anthropic = FakeAnthropic([])
+    openai = FakeOpenAI([])
+    monkeypatch.setenv(
+        "FOUNDRY_PROJECT_ENDPOINT",
+        "https://jarvis.services.ai.azure.com/api/projects/jarvis",
+    )
+    monkeypatch.setenv("AZURE_AI_MODEL_DEPLOYMENT_NAME", "gpt-5.6-luna")
+    monkeypatch.setenv("AZURE_OPENAI_API_KEY", "")
+    monkeypatch.setattr(model_client, "DefaultAzureCredential", lambda: credential)
+    monkeypatch.setattr(
+        model_client,
+        "backend_settings_from_environment",
+        lambda: ("https://backend.example", "api://backend/.default"),
+    )
+    monkeypatch.setattr(
+        model_client,
+        "AsyncAnthropicFoundry",
+        lambda **kwargs: captured.update(kwargs) or anthropic,
+    )
+    monkeypatch.setattr(model_client, "AsyncOpenAI", lambda **_: openai)
+
+    client = AzureOpenAIResponsesClient.from_environment()
+
+    assert captured["resource"] == "jarvis"
+    assert "api_key" not in captured
+    assert await captured["azure_ad_token_provider"]() == "managed-token"
+    assert credential.scopes == ["https://ai.azure.com/.default"]
+    await client.close()
+    assert credential.closed
+
+
+def test_selects_claude_models_and_maps_effort_to_thinking_budgets() -> None:
+    assert is_claude_model("claude-sonnet-5-5")
+    assert is_claude_model("CLAUDE-OPUS-5-5")
+    assert not is_claude_model("gpt-5.6-luna")
+    assert anthropic_thinking_parameters("none", 512) == {"max_tokens": 512}
+    for effort, budget in ANTHROPIC_THINKING_BUDGETS.items():
+        assert anthropic_thinking_parameters(effort, 512) == {
+            "max_tokens": 512 + budget,
+            "thinking": {"type": "enabled", "budget_tokens": budget},
+        }
+
+
+def test_converts_openai_tool_schemas_and_merges_adjacent_claude_messages() -> None:
+    assert anthropic_tools([
+        {
+            "type": "function",
+            "name": "create_task",
+            "description": "Start a new coding task.",
+            "parameters": CREATE_TASK["inputSchema"],
+            "strict": False,
+        }
+    ]) == [
+        {
+            "name": "create_task",
+            "description": "Start a new coding task.",
+            "input_schema": CREATE_TASK["inputSchema"],
+        }
+    ]
+    assert anthropic_messages([
+        {"role": "user", "content": "context"},
+        {"role": "user", "content": "question"},
+        {"role": "assistant", "content": [{"type": "thinking", "signature": "signed"}]},
+        {"role": "assistant", "content": [{"type": "tool_use", "id": "t1"}]},
+    ]) == [
+        {"role": "user", "content": "context\nquestion"},
+        {
+            "role": "assistant",
+            "content": [
+                {"type": "thinking", "signature": "signed"},
+                {"type": "tool_use", "id": "t1"},
+            ],
+        },
+    ]
 
 
 @pytest.mark.parametrize(
@@ -783,6 +960,136 @@ async def test_tool_loop_calls_the_backend_tool_and_streams_answer() -> None:
     assert json.loads(post.content) == {"text": "Tilføj dark mode"}
     assert len(usages) == 2
     await model.close()
+
+
+@pytest.mark.asyncio
+async def test_claude_chat_streams_and_uses_backend_tools_thinking_and_usage() -> None:
+    thinking = FakeItem(type="thinking", thinking="private reasoning", signature="signed")
+    tool_call = FakeItem(
+        type="tool_use",
+        id="claude_call_1",
+        name="create_task",
+        input={"text": "Create a Claude task"},
+    )
+    first_final = SimpleNamespace(
+        content=[thinking, tool_call],
+        usage=SimpleNamespace(input_tokens=101, output_tokens=33),
+    )
+    second_final = SimpleNamespace(
+        content=[FakeItem(type="text", text="Task created.")],
+        usage=SimpleNamespace(input_tokens=140, output_tokens=12),
+    )
+    backend = FakeBackend(
+        model_name="claude-sonnet-5-5",
+        reasoning_effort="high",
+    )
+    model, openai_transport = client([], backend=backend)
+    anthropic = FakeAnthropic([
+        FakeAnthropicStream(["I’m creating it. "], first_final),
+        FakeAnthropicStream(["Task created."], second_final),
+    ])
+    model._anthropic_client = anthropic  # type: ignore[assignment]
+
+    message_token = current_message_id.set("42")
+    try:
+        chunks = [
+            chunk
+            async for chunk in model.complete_chat(
+                [ModelMessage("user", "Create a task")], "en"
+            )
+        ]
+    finally:
+        current_message_id.reset(message_token)
+
+    assert chunks == ["I’m creating it. ", "Task created."]
+    assert openai_transport.responses.requests == []
+    first, second = anthropic.messages.requests
+    assert first["model"] == "claude-sonnet-5-5"
+    assert first["system"].startswith("You are Jarvis")
+    assert first["thinking"] == {"type": "enabled", "budget_tokens": 8_192}
+    assert first["max_tokens"] == 8_192 + 32
+    assert first["tools"] == [
+        {
+            "name": "create_task",
+            "description": "Start a new coding task.",
+            "input_schema": CREATE_TASK["inputSchema"],
+        }
+    ]
+    assert second["messages"][-2] == {
+        "role": "assistant",
+        "content": [
+            {
+                "type": "thinking",
+                "thinking": "private reasoning",
+                "signature": "signed",
+            },
+            {
+                "type": "tool_use",
+                "id": "claude_call_1",
+                "name": "create_task",
+                "input": {"text": "Create a Claude task"},
+            },
+        ],
+    }
+    tool_result = second["messages"][-1]["content"][0]
+    assert tool_result["type"] == "tool_result"
+    assert tool_result["tool_use_id"] == "claude_call_1"
+    assert json.loads(tool_result["content"]) == {
+        "tool": "create_task",
+        "outcome": "ok",
+        "result": {"id": 7, "state": "Ready"},
+    }
+    usage = [
+        json.loads(request.content)
+        for request in backend.requests
+        if request.url.path == "/usage/foundry"
+    ]
+    assert [(row["role"], row["model"], row["inputTokens"], row["outputTokens"])
+            for row in usage] == [
+        ("chat", "claude-sonnet-5-5", 101, 33),
+        ("chat", "claude-sonnet-5-5", 140, 12),
+    ]
+    assert anthropic.messages._rounds[0].exited
+    await model.close()
+    assert anthropic.closed
+
+
+@pytest.mark.asyncio
+async def test_claude_stream_errors_are_sanitized() -> None:
+    model, openai_transport = client([])
+    model._anthropic_client = FakeAnthropic([
+        FakeAnthropicStream([], None, ValueError("provider response contained private data"))
+    ])  # type: ignore[assignment]
+
+    with pytest.raises(RuntimeError, match="Foundry Claude model response did not complete"):
+        _ = [
+            chunk
+            async for chunk in model.complete_chat(
+                [ModelMessage("user", "Hello")],
+                "en",
+                settings=ModelSettings("claude-haiku-5-5", "none"),
+            )
+        ]
+
+    assert openai_transport.responses.requests == []
+
+
+@pytest.mark.asyncio
+async def test_voice_keeps_the_responses_path_when_chat_support_is_configured() -> None:
+    model, openai_transport = client([completed()])
+    model._anthropic_client = FakeAnthropic([])  # type: ignore[assignment]
+
+    _ = [
+        chunk
+        async for chunk in model.complete(
+            [ModelMessage("user", "Hello")],
+            settings=ModelSettings("gpt-5.6-luna", "none"),
+        )
+    ]
+
+    assert len(openai_transport.responses.requests) == 1
+    assert openai_transport.responses.requests[0]["model"] == "gpt-5.6-luna"
+    assert model._anthropic_client.messages.requests == []
 
 
 @pytest.mark.asyncio
