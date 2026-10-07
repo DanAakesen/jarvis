@@ -22,7 +22,7 @@ The complete list of what Jarvis does or will do, for UI design and planning. Ea
 | **Phone** | Away from the browser: Teams app or phone |
 | **Background** | Runs without Dan; shows only its effects |
 
-Status as of 6 October 2026.
+Status as of 7 October 2026.
 
 ## Jarvis: conversation and voice
 
@@ -35,6 +35,7 @@ Status as of 6 October 2026.
 | Interrupt and reconnect | Interrupt Jarvis by speaking; voice reconnects automatically | Voice/chat | Main page | Built | P5-04 |
 | Language toggle | Switch Danish/English from the shared More → Language menu in the composer and voice bar; during voice the change applies to chat and the next voice session, and the bar says so | Both | Main page, Settings | Built | P5-05, P8-36 |
 | Voice transcripts | Read what was said in each voice sitting, with voice minutes | Screen | Main page | Built | P5-06 |
+| Phone calling | No production number is verified or available in backend configuration today. When Teams Phone is provisioned, call the number assigned to Jarvis's Teams resource account from Dan's Teams identity; `/phone/status` surfaces module configuration and recent call outcomes. | Phone | Backend `/phone/status` | Built offline; production dormant, number/resource unverified | P7-01, P9-22 |
 | Task context | Jarvis knows running tasks and recent events without asking | Background | — | Built | P4-04 |
 | Honest confirmations | Jarvis reports refused or failed actions as such, never as done | Voice/chat | — | Built | P4-05 |
 | Task recipes | Remember successful PC/browser operation sequences without entered values; Jev selects and verifies fresh targets, falling back to planning on drift. List and delete saved recipes. | Both | Voice/chat and Settings → Task recipes | Built offline; live replay timing pending | P7-35, P7-34, P5-14 |

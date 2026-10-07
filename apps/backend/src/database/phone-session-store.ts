@@ -157,7 +157,7 @@ export function createPhoneSessionStore(pool: sql.ConnectionPool): PhoneSessionS
         .input('limit', sql.Int, limit)
         .query<PhoneCallHistoryRow>(`SELECT TOP (@limit)
             started_at,
-            DATEDIFF(SECOND, started_at, COALESCE(ended_at, SYSUTCDATETIME())) AS duration_seconds,
+            DATEDIFF(MILLISECOND, started_at, COALESCE(ended_at, SYSUTCDATETIME())) / 1000 AS duration_seconds,
             status
           FROM dbo.phone_sessions
           ORDER BY started_at DESC, jarvis_session_id DESC;`);
