@@ -6,7 +6,7 @@ import {
   type MemoryStore,
   VectorSearchUnavailableError,
 } from '../database/memory-store.js';
-import type { MemoryEmbedder } from './memory-embeddings.js';
+import { embeddingFailureStatus, type MemoryEmbedder } from './memory-embeddings.js';
 import { ToolRefusal } from './tool-registry.js';
 
 const MAX_MEMORY_RESULTS = 5;
@@ -158,6 +158,7 @@ export function createMemoryModule(options: MemoryModuleOptions): BackendModule 
         msg: 'memory.embedding',
         outcome: signal.aborted ? 'cancelled' : 'fallback',
         durationMs: Math.max(0, performance.now() - startedAt),
+        ...embeddingFailureStatus(error),
       }, 'memory.embedding');
       if (signal.aborted) throw error;
       return { value: null, unavailable: true };

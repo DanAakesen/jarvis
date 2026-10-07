@@ -13,7 +13,7 @@ import {
   type VaultSearchHit,
 } from '../database/memory-store.js';
 import { isGeneratedView, type WorkspaceCommand } from '@jarvis/contracts';
-import type { MemoryEmbedder } from '../core/memory-embeddings.js';
+import { embeddingFailureStatus, type MemoryEmbedder } from '../core/memory-embeddings.js';
 import { ToolFailure, ToolRefusal } from '../core/tool-registry.js';
 import type { BackendModule } from '../modules.js';
 import type { TeamsNotificationService } from '../teams/service.js';
@@ -66,6 +66,7 @@ export interface MemoryEmbeddingLogFields {
   readonly outcome: 'ok' | 'fallback' | 'cancelled';
   readonly durationMs: number;
   readonly inputTokens?: number;
+  readonly httpStatus?: number;
 }
 
 export interface VaultModule extends BackendModule {
@@ -531,6 +532,7 @@ export function createVaultModule(options: {
           options.logEmbedding?.({
             outcome: signal.aborted ? 'cancelled' : 'fallback',
             durationMs: Math.max(0, performance.now() - startedAt),
+            ...embeddingFailureStatus(error),
           });
           if (signal.aborted) throw error;
         }

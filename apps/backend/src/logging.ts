@@ -161,6 +161,10 @@ function safeFields(input: Record<string, unknown>): Record<string, unknown> {
         Number(input.inputTokens) <= 1_000_000) {
       fields.inputTokens = input.inputTokens;
     }
+    if (Number.isSafeInteger(input.httpStatus) && Number(input.httpStatus) >= 100 &&
+        Number(input.httpStatus) <= 599) {
+      fields.httpStatus = input.httpStatus;
+    }
   }
   if (input.msg === 'vault.index') {
     if (['ok', 'error', 'refused'].includes(String(input.outcome))) fields.outcome = input.outcome;
