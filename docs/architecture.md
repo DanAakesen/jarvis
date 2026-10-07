@@ -434,6 +434,9 @@ without a session row. Final auth/HTTP 4xx refusals (except HTTP 408) now retain
 `foundry_start_rejected` rather than the ambiguous failure reason.
 Use Recover for tasks with sandbox history; ambiguous or archived outcomes need
 reconciliation before another sandbox can safely start.
+The shared `/tools` registry exposes this same lifecycle operation as
+`retry_task`; it validates the task ID and returns a safe refusal for missing or
+ineligible tasks rather than bypassing the store's retry guards.
 The transaction takes the shared sleep-switch lock and locks the task, resets
 the attempt count, retry deadline, lease and start/finish timestamps, and preserves
 the task request, configuration and branch. It records a Dan-sourced
@@ -1970,6 +1973,7 @@ flowchart LR
 - One release per merge to `main`; no tags.
 - Commits are not stored; the release view fetches them from GitHub on demand.
 - Authenticated `GET /factory/projects/:id/releases` returns the active project's bounded persisted release, PR, workflow-run, and deployment records together with an on-demand graph. Refresh fetches the graph again; a GitHub graph failure leaves the persisted records available with `graph: null`. `GET /factory/releases/:id` resolves an existing release activity link to its project.
+- The shared `/tools` registry exposes `list_releases` and `get_release` over those same persisted records, scoped to active managed projects. `get_deployment_status` reads the latest run on the project's default branch whose workflow file is `deploy*.yml` or `deploy*.yaml`; it uses a repository-scoped installation token with `actions:read`, not the webhook cache. The Actions response is limited to 100 runs/1 MiB with a 10-second request deadline. No matching run returns `null`; provider failures are sanitized and the token is never returned.
 - The graph reader uses a repository-scoped installation token with `contents:read`, at most 20 branches and 30 commits per branch, and a 25-second overall deadline; it does not persist GitHub commit data. The UI exposes keyboard-focusable, 44-pixel commit links and keeps a wide graph in its own horizontal scroll region.
 - Copy-ready managed-project examples live in [`templates/github-actions/`](../templates/github-actions/), with Azure OIDC setup and customization steps in [github-actions-templates.md](github-actions-templates.md). PR checks have read-only permissions; the release build and tests precede an artifact upload, and only the `main`-gated deploy job receives `id-token: write`. Azure federation and deployment in an adopting project remain unverified.
 

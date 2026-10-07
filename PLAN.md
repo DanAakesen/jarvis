@@ -427,6 +427,14 @@ P8-04–P8-13 are the initial frontend allocation, selected after checking `main
 
 **Consolidated allocations (6 October 2026):** P8-38 ([#399](https://github.com/DanAakesen/jarvis/issues/399), message window) and P8-39 ([#401](https://github.com/DanAakesen/jarvis/issues/401), shell/footer) are retired as separate tasks and fully absorbed into P8-37 ([#398](https://github.com/DanAakesen/jarvis/issues/398)). Their issues are closed as superseded (`not_planned`), not completed implementations. Keep those task IDs reserved; do not recreate them. P8-37 delivers all three surfaces in one implementation PR. P8-36 (#397) remains its separate voice-bar/shared-menu prerequisite.
 
+### P9 — Factory status tools
+
+Goal: expose safe Factory retry, release lookup and current deploy status through Jarvis's existing shared tool registry; do not add UI or persistence.
+
+| ID | Issue | Task | Acceptance criteria | Depends on | Status |
+| --- | --- | --- | --- | --- | --- |
+| P9-29 | [#523](https://github.com/DanAakesen/jarvis/issues/523) | Add `retry_task`, `list_releases`, `get_release` and default-branch GitHub Actions deployment status tools | Reuse task/release stores and existing tool contracts; keep retry limited to eligible pre-sandbox failures; use a bounded repository-scoped `actions:read` App token for the latest deploy workflow; validate inputs, sanitize provider failures, and cover tool discovery and success/refusal/error outcomes. No `apps/web` changes or migration. | P2-07, P3-02, P3-07, P3-08, P4-10, P6-21 | In progress |
+
 ### Out of scope for phase 1
 
 Banking, health and fitness, and other areas;  a paid phone number for Jarvis; Azure Web PubSub; the Codex API-key fallback (see [Ideas](#ideas)).

@@ -102,8 +102,8 @@ afterEach(async () => {
 describe('Software Factory Jarvis tools', () => {
   it('registers every project and task tool for discovery and English voice', async () => {
     const names = [
-      'list_projects', 'list_tasks', 'get_task', 'create_task',
-      'set_task_model', 'steer_task', 'pause_task', 'resume_task', 'cancel_task',
+      'list_projects', 'list_tasks', 'get_task', 'list_releases', 'get_release', 'get_deployment_status',
+      'create_task', 'set_task_model', 'retry_task', 'steer_task', 'pause_task', 'resume_task', 'cancel_task',
       'list_capabilities', 'repo_overview', 'repo_list', 'repo_read', 'repo_search', 'repo_issues',
       'create_project', 'manage_repository',
     ];
