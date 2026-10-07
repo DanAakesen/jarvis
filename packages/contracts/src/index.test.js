@@ -171,6 +171,11 @@ test('accepts each allowlisted renderer and action without interpreting its cont
     { renderer: 'status', data: { label: 'Backend', state: 'ok' } },
     { renderer: 'image', data: { images: [{ url: 'https://github.com/example/task.png', alt: 'Task' }] } },
     { renderer: 'html-app', data: { artifactId: '12345678-1234-4234-8234-123456789abc' } },
+    {
+      renderer: 'knowledge-graph',
+      source: { id: 'knowledge_graph', status: 'complete', updatedAt: '2026-10-07T12:00:00Z' },
+      data: { query: 'project notes', highlight: ['a'.repeat(64)] },
+    },
   ];
   for (const view of views) assert.equal(isGeneratedView(listView(view)), true, view.renderer);
   assert.equal(isGeneratedView(listView({
@@ -208,6 +213,16 @@ test('rejects malformed, unsupported, extra-field, and invalid-action payloads',
   assert.equal(isGeneratedView(listView({ data: { items: [{ title: 42 }] } })), false);
   assert.equal(isGeneratedView(listView({ version: 2 })), false);
   assert.equal(isGeneratedView(listView({ renderer: 'script' })), false);
+  assert.equal(isGeneratedView(listView({
+    renderer: 'knowledge-graph',
+    source: { id: 'knowledge_graph', status: 'complete' },
+    data: { query: '   ', highlight: [] },
+  })), false);
+  assert.equal(isGeneratedView(listView({
+    renderer: 'knowledge-graph',
+    source: { id: 'knowledge_graph', status: 'complete' },
+    data: { query: 'graph', highlight: ['invalid'] },
+  })), false);
   assert.equal(isGeneratedView({ ...listView(), extra: true }), false);
   assert.equal(isGeneratedView(listView({ actions: [{ type: 'open-route', route: '//evil.example' }] })), false);
   assert.equal(isGeneratedView(listView({

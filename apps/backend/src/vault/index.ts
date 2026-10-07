@@ -1,12 +1,17 @@
 import type { FastifyRequest } from 'fastify';
+import { createHash, randomUUID } from 'node:crypto';
+import { posix } from 'node:path';
 import {
   VectorSearchUnavailableError,
   type MemoryStore,
   type MemoryRecord,
   type MemoryVersion,
+  type VaultGraphData,
   type VaultIndexStore,
   type VaultIndexedChunk,
+  type VaultSearchHit,
 } from '../database/memory-store.js';
+import { isGeneratedView, type WorkspaceCommand } from '@jarvis/contracts';
 import type { MemoryEmbedder } from '../core/memory-embeddings.js';
 import { ToolFailure, ToolRefusal } from '../core/tool-registry.js';
 import type { BackendModule } from '../modules.js';
@@ -36,6 +41,10 @@ const maxMemoryApiResults = 50;
 const maxMemoryApiOffset = 10_000;
 const maxMemoryApiHistory = 10;
 const maxMemoryApiHistoryBytes = 512 * 1024;
+const maxGraphNodes = 2_000;
+const maxGraphEdges = 8_000;
+const maxLinksPerNote = 512;
+const similarityThreshold = 0.75;
 const credentialPattern = /\b(?:password|passphrase|secret|api[ -]?key|access[ -]?token|credential|private[ -]?key|seed[ -]?phrase|recovery[ -]?phrase)\b/iu;
 const sensitivePattern = /\b(?:bank(?:ing)?|bank account|credit card|debit card|account number|iban|routing number|swift code|health|medical|diagnosis|medication|symptom|patient|clinic|therapy|prescription|social security|ssn)\b/iu;
 const secretPattern = /-----BEGIN [A-Z ]*PRIVATE KEY-----|\b(?:gh[pousr]_[A-Za-z0-9_]{20,}|github_pat_[A-Za-z0-9_]{20,}|AKIA[0-9A-Z]{16}|xox[baprs]-[A-Za-z0-9-]{20,})\b|(?:password|client[_ -]?secret|api[_ -]?key|access[_ -]?token)\s*[:=]\s*["']?[^\s"']{8,}/iu;
@@ -267,6 +276,111 @@ function memorySearchTerms(value: string): string[] {
   return [...new Set(value.match(/[\p{L}\p{N}]{2,}/gu)?.map((term) => term.toLowerCase()) ?? [])].slice(0, 8);
 }
 
+function graphNodeId(path: string): string {
+  return createHash('sha256').update(path, 'utf8').digest('hex');
+}
+
+function extractLinkTargets(content: string): string[] {
+  const targets = new Set<string>();
+  const add = (target: string | undefined) => {
+    if (!target) return;
+    const cleaned = target.trim().replace(/^<|>$/gu, '').split(/[|#]/u, 1)[0]?.trim();
+    if (!cleaned || cleaned.startsWith('#') || cleaned.startsWith('//')) return;
+    let decoded: string;
+    try {
+      if (/^[a-z][a-z\d+.-]*:/iu.test(cleaned)) {
+        const url = new URL(cleaned);
+        const prefix = `/${VAULT_REPOSITORY}/blob/${VAULT_BRANCH}/`;
+        if (url.protocol !== 'https:' || url.hostname !== 'github.com' || !url.pathname.startsWith(prefix)) return;
+        decoded = decodeURIComponent(url.pathname.slice(prefix.length));
+      } else {
+        decoded = decodeURIComponent(cleaned);
+      }
+    } catch {
+      return;
+    }
+    if (decoded.length <= maxPathLength && !decoded.includes('\\') && !hasControlCharacters(decoded)) {
+      targets.add(decoded);
+    }
+  };
+
+  for (const match of content.matchAll(/\[\[([^\]]+)\]\]/gu)) {
+    add(match[1]);
+  }
+  for (const match of content.matchAll(/\[[^\]]*\]\((?:<([^>]+)>|([^\s)]+))(?:\s+["'][^"']*["'])?\)/gu)) {
+    add(match[1] ?? match[2]);
+  }
+  return [...targets].slice(0, maxLinksPerNote);
+}
+
+function resolveLinkTarget(sourcePath: string, rawTarget: string, paths: ReadonlySet<string>): string | undefined {
+  let target = rawTarget.replace(/[?#].*$/u, '').replace(/^\/+/u, '');
+  if (!target || target.startsWith('//') || /^[a-z][a-z\d+.-]*:/iu.test(target) || target.includes('\\')) return undefined;
+  if (!target.toLowerCase().endsWith('.md')) target += '.md';
+  const candidates = [target, posix.normalize(posix.join(posix.dirname(sourcePath), target))]
+    .filter((candidate) => candidate !== '.' && !candidate.startsWith('../') && !candidate.startsWith('/'));
+  for (const candidate of candidates) if (paths.has(candidate)) return candidate;
+  if (!target.includes('/')) {
+    const matches = [...paths].filter((path) => posix.basename(path).toLowerCase() === target.toLowerCase());
+    if (matches.length === 1) return matches[0];
+  }
+  return undefined;
+}
+
+interface KnowledgeGraphNode {
+  readonly id: string;
+  readonly path: string;
+  readonly title: string;
+  readonly folder: 'People' | 'Work' | 'Personal' | 'General';
+  readonly updatedAt: string;
+  readonly degree: number;
+}
+
+interface KnowledgeGraphEdge {
+  readonly source: string;
+  readonly target: string;
+  readonly type: 'link' | 'similar';
+  readonly score?: number;
+}
+
+interface KnowledgeGraph {
+  readonly nodes: readonly KnowledgeGraphNode[];
+  readonly edges: readonly KnowledgeGraphEdge[];
+  readonly updatedAt: string;
+}
+
+function meanVectors(rows: VaultGraphData['embeddings']): Map<string, number[]> {
+  const sums = new Map<string, { values: number[]; count: number }>();
+  for (const { path, embedding } of rows) {
+    const current = sums.get(path);
+    if (!current) sums.set(path, { values: [...embedding], count: 1 });
+    else if (current.values.length === embedding.length) {
+      for (let index = 0; index < embedding.length; index += 1) {
+        current.values[index] = current.values[index]! + embedding[index]!;
+      }
+      current.count += 1;
+    }
+  }
+  return new Map([...sums].map(([path, { values, count }]) =>
+    [path, values.map((value) => value / count)]));
+}
+
+function cosineSimilarity(left: readonly number[], right: readonly number[]): number | undefined {
+  if (left.length === 0 || left.length !== right.length) return undefined;
+  let dot = 0;
+  let leftNorm = 0;
+  let rightNorm = 0;
+  for (let index = 0; index < left.length; index += 1) {
+    const a = left[index]!;
+    const b = right[index]!;
+    dot += a * b;
+    leftNorm += a * a;
+    rightNorm += b * b;
+  }
+  if (leftNorm === 0 || rightNorm === 0) return undefined;
+  return Math.max(-1, Math.min(1, dot / Math.sqrt(leftNorm * rightNorm)));
+}
+
 function snippet(value: string): string {
   return value.replace(/\s+/gu, ' ').trim().slice(0, maxSnippetLength);
 }
@@ -299,6 +413,7 @@ export function createVaultModule(options: {
   let lastVaultSyncAt: string | null = null;
   let lastIndexOutcome: VaultIndexOutcome = { outcome: 'pending', at: new Date().toISOString() };
   const pendingVaultDeletions = new Set<string>();
+  let graphCache: Promise<KnowledgeGraph> | undefined;
 
   async function loadRoutingRules(signal: AbortSignal): Promise<{
     readonly text: string;
@@ -384,7 +499,7 @@ export function createVaultModule(options: {
         continue;
       }
       const chunks = await makeChunks(note, signal);
-      await options.indexStore.replaceFile(note.path, note.sha, chunks, signal);
+      await options.indexStore.replaceFile(note.path, note.sha, chunks, extractLinkTargets(note.content), signal);
       if (oldByPath.has(note.path)) changed += 1;
       else added += 1;
       const folder = safeFolder(note.path);
@@ -411,6 +526,7 @@ export function createVaultModule(options: {
         appMissing = false;
         lastVaultSyncAt = new Date().toISOString();
         lastIndexOutcome = { outcome: 'ok', at: lastVaultSyncAt, ...summary };
+        graphCache = undefined;
         return summary;
       })
       .catch((error: unknown) => {
@@ -422,6 +538,138 @@ export function createVaultModule(options: {
       })
       .finally(() => { synchronization = undefined; });
     return synchronization;
+  }
+
+  async function buildKnowledgeGraph(signal: AbortSignal): Promise<KnowledgeGraph> {
+    const files = (await options.indexStore.graphFiles(signal))
+      .filter(({ path }) => isRoutedNotePath(path))
+      .slice(0, maxGraphNodes);
+    const paths = files.map(({ path }) => path);
+    const pathSet = new Set(paths);
+    const graphData = await options.indexStore.graphData(paths, signal);
+    const ids = new Map(paths.map((path) => [path, graphNodeId(path)]));
+    const nodes: KnowledgeGraphNode[] = files.flatMap((file) => {
+      const folder = safeFolder(file.path);
+      if (!folder) return [];
+      const filename = posix.basename(file.path).replace(/\.md$/iu, '').replace(/[-_]/gu, ' ');
+      const heading = file.title.trim();
+      const title = heading && heading !== 'Introduction' ? heading.split(' > ', 1)[0]! : filename;
+      return [{
+        id: ids.get(file.path)!,
+        path: file.path,
+        title: title.slice(0, 200),
+        folder: folder as KnowledgeGraphNode['folder'],
+        updatedAt: file.updatedAt.toISOString(),
+        degree: 0,
+      }];
+    });
+    const links: KnowledgeGraphEdge[] = [];
+    const seenLinks = new Set<string>();
+    for (const link of graphData.links) {
+      if (!pathSet.has(link.sourcePath)) continue;
+      const target = resolveLinkTarget(link.sourcePath, link.targetPath, pathSet);
+      if (!target || target === link.sourcePath) continue;
+      const sourceId = ids.get(link.sourcePath)!;
+      const targetId = ids.get(target)!;
+      const key = `${sourceId}:${targetId}`;
+      if (seenLinks.has(key)) continue;
+      seenLinks.add(key);
+      links.push({ source: sourceId, target: targetId, type: 'link' });
+    }
+    const vectors = meanVectors(graphData.embeddings);
+    const similarities: KnowledgeGraphEdge[] = [];
+    if (graphData.similarities.length > 0) {
+      for (const edge of graphData.similarities) {
+        if (!pathSet.has(edge.sourcePath) || !pathSet.has(edge.targetPath) ||
+            edge.sourcePath === edge.targetPath || edge.score <= similarityThreshold) continue;
+        similarities.push({
+          source: ids.get(edge.sourcePath)!,
+          target: ids.get(edge.targetPath)!,
+          type: 'similar',
+          score: Math.max(-1, Math.min(1, edge.score)),
+        });
+      }
+    } else {
+      for (const source of paths) {
+        const sourceVector = vectors.get(source);
+        if (!sourceVector) continue;
+        const neighbours = paths.flatMap((target) => {
+          if (target === source) return [];
+          const targetVector = vectors.get(target);
+          if (!targetVector) return [];
+          const score = cosineSimilarity(sourceVector, targetVector);
+          return score !== undefined && score > similarityThreshold ? [{ target, score }] : [];
+        }).sort((left, right) => right.score - left.score || left.target.localeCompare(right.target))
+          .slice(0, 3);
+        for (const neighbour of neighbours) {
+          similarities.push({
+            source: ids.get(source)!,
+            target: ids.get(neighbour.target)!,
+            type: 'similar',
+            score: neighbour.score,
+          });
+        }
+      }
+    }
+    const edges = [...links.slice(0, 2_000), ...similarities.slice(0, maxGraphEdges - 2_000)];
+    const degree = new Map<string, number>();
+    for (const edge of edges) {
+      degree.set(edge.source, (degree.get(edge.source) ?? 0) + 1);
+      degree.set(edge.target, (degree.get(edge.target) ?? 0) + 1);
+    }
+    return {
+      nodes: nodes.map((node) => ({ ...node, degree: degree.get(node.id) ?? 0 })),
+      edges,
+      updatedAt: lastVaultSyncAt ?? new Date().toISOString(),
+    };
+  }
+
+  async function knowledgeGraph(signal: AbortSignal): Promise<KnowledgeGraph> {
+    if (graphCache) return graphCache;
+    if (synchronization) await synchronization;
+    if (indexStatus !== 'ready') {
+      throw new ToolFailure(appMissing
+        ? 'The GitHub App is not installed on DanAakesen/vault with Contents read/write access.'
+        : 'The vault index is not ready. Please try again after synchronization finishes.');
+    }
+    const pending = buildKnowledgeGraph(signal);
+    graphCache = pending;
+    try {
+      return await pending;
+    } catch (error) {
+      if (graphCache === pending) graphCache = undefined;
+      throw error;
+    }
+  }
+
+  async function searchVault(query: string, limit: number, signal: AbortSignal): Promise<VaultSearchHit[]> {
+    if (synchronization) throw new ToolFailure('The vault is synchronizing. Please try again shortly.');
+    if (indexStatus !== 'ready') {
+      throw new ToolFailure(appMissing
+        ? 'The GitHub App is not installed on DanAakesen/vault with Contents read/write access.'
+        : 'The vault index is not ready. Please try again after synchronization finishes.');
+    }
+    let hits: VaultSearchHit[] = [];
+    if (options.indexStore.supportsVectorSearch() && options.embedder) {
+      let embedding: readonly number[] | undefined;
+      try {
+        embedding = await options.embedder.embed(query, signal);
+      } catch (error) {
+        if (signal.aborted) throw error;
+      }
+      if (embedding) {
+        try {
+          hits = await options.indexStore.searchByVector(embedding, limit, signal);
+        } catch (error) {
+          if (!(error instanceof VectorSearchUnavailableError)) {
+            if (signal.aborted) throw error;
+            throw new ToolFailure('Vault search is temporarily unavailable.');
+          }
+        }
+      }
+    }
+    if (hits.length === 0) hits = await options.indexStore.searchByTerms(queryTerms(query), limit, signal);
+    return hits;
   }
 
   async function checkSource(request: FastifyRequest, content: string, reason: string, signal: AbortSignal) {
@@ -487,11 +735,6 @@ export function createVaultModule(options: {
       },
       sensitive: true,
       execute: async (value: unknown, _request: FastifyRequest, signal: AbortSignal) => {
-        if (indexStatus !== 'ready') {
-          throw new ToolFailure(appMissing
-            ? 'The GitHub App is not installed on DanAakesen/vault with Contents read/write access.'
-            : 'The vault index is not ready. Please try again after synchronization finishes.');
-        }
         if (!isRecord(value) || Object.keys(value).some((key) => key !== 'query' && key !== 'k') ||
             typeof value.query !== 'string' || !value.query.trim() || value.query.length > maxQueryLength ||
             (value.k !== undefined && (!Number.isInteger(value.k) || Number(value.k) < 1 ||
@@ -500,28 +743,7 @@ export function createVaultModule(options: {
         }
         const query = value.query.trim();
         const limit = value.k === undefined ? 5 : Number(value.k);
-        let hits: Awaited<ReturnType<VaultIndexStore['searchByVector']>> = [];
-        if (options.indexStore.supportsVectorSearch() && options.embedder) {
-          let embedding: readonly number[] | undefined;
-          try {
-            embedding = await options.embedder.embed(query, signal);
-          } catch (error) {
-            if (signal.aborted) throw error;
-          }
-          if (embedding) {
-            try {
-              hits = await options.indexStore.searchByVector(embedding, limit, signal);
-            } catch (error) {
-              if (!(error instanceof VectorSearchUnavailableError)) {
-                if (signal.aborted) throw error;
-                throw new ToolFailure('Vault search is temporarily unavailable.');
-              }
-            }
-          }
-        }
-        if (hits.length === 0) {
-          hits = await options.indexStore.searchByTerms(queryTerms(query), limit, signal);
-        }
+        const hits = await searchVault(query, limit, signal);
         return {
           results: hits.map((hit) => ({
             path: hit.path,
@@ -534,6 +756,57 @@ export function createVaultModule(options: {
             ? `Found ${hits.length} vault note${hits.length === 1 ? '' : 's'}.`
             : 'No vault notes matched that search.',
         };
+      },
+    },
+    {
+      name: 'show_knowledge',
+      description: 'Search Dan’s vault and open or focus the knowledge graph on matching notes.',
+      inputSchema: {
+        type: 'object',
+        properties: { query: { type: 'string', minLength: 1, maxLength: maxQueryLength, pattern: '\\S' } },
+        required: ['query'],
+        additionalProperties: false,
+      },
+      sensitive: true,
+      execute: async (value: unknown, request: FastifyRequest, signal: AbortSignal) => {
+        if (!isRecord(value) || Object.keys(value).some((key) => key !== 'query') ||
+              typeof value.query !== 'string' || !value.query.trim() || value.query.length > maxQueryLength) {
+            throw new ToolRefusal('Knowledge search query is invalid.');
+        }
+        const query = value.query.trim();
+        const graph = await knowledgeGraph(signal);
+        const hits = await searchVault(query, maxSearchResults, signal);
+        const byPath = new Map(graph.nodes.map((node) => [node.path, node]));
+        const highlight = [...new Set(hits.flatMap((hit) => {
+            const node = byPath.get(hit.path);
+            return node ? [node.id] : [];
+        }))].slice(0, maxSearchResults);
+        const view = {
+            version: 1 as const,
+            title: 'Knowledge graph',
+            renderer: 'knowledge-graph' as const,
+            source: { id: 'knowledge_graph' as const, status: 'complete' as const, updatedAt: graph.updatedAt },
+            data: { query, highlight },
+        };
+        if (!isGeneratedView(view)) throw new ToolFailure('The knowledge graph view is invalid.');
+        const existing = request.server.workspaceCommands.snapshot(request.server.ownerObjectId)
+            ?.windows.some((window) => window.viewId === 'knowledge-graph') ?? false;
+        const command: WorkspaceCommand = {
+            commandId: randomUUID(),
+            operation: existing ? 'update' : 'create',
+            viewId: 'knowledge-graph',
+            view,
+        };
+        await request.server.workspaceCommands.execute(request.server.ownerObjectId, command, signal);
+        await request.server.workspaceCommands.execute(request.server.ownerObjectId, {
+          commandId: randomUUID(),
+          operation: 'focus',
+          viewId: 'knowledge-graph',
+        }, signal);
+        const summary = hits.length > 0
+          ? `Found ${hits.length} vault match${hits.length === 1 ? '' : 'es'}; top hit: ${hits[0]!.path} — ${snippet(hits[0]!.content)}`
+          : `No vault notes matched “${query}”.`;
+        return { type: 'generated-view', view, summary, confirmation: summary };
       },
     },
     {
@@ -672,6 +945,112 @@ export function createVaultModule(options: {
         required: ['error'],
         additionalProperties: false,
       };
+      const graphResponseSchema = {
+        type: 'object',
+        properties: {
+          nodes: {
+            type: 'array',
+            maxItems: maxGraphNodes,
+            items: {
+              type: 'object',
+              properties: {
+                id: { type: 'string', pattern: '^[0-9a-f]{64}$' },
+                path: { type: 'string', minLength: 1, maxLength: 180 },
+                title: { type: 'string', minLength: 1, maxLength: 200 },
+                folder: { type: 'string', enum: [...folderNames] },
+                updatedAt: { type: 'string', format: 'date-time' },
+                degree: { type: 'integer', minimum: 0, maximum: maxGraphEdges * 2 },
+              },
+              required: ['id', 'path', 'title', 'folder', 'updatedAt', 'degree'],
+              additionalProperties: false,
+            },
+          },
+          edges: {
+            type: 'array',
+            maxItems: maxGraphEdges,
+            items: {
+              type: 'object',
+              properties: {
+                source: { type: 'string', pattern: '^[0-9a-f]{64}$' },
+                target: { type: 'string', pattern: '^[0-9a-f]{64}$' },
+                type: { type: 'string', enum: ['link', 'similar'] },
+                score: { type: 'number', minimum: -1, maximum: 1 },
+              },
+              required: ['source', 'target', 'type'],
+              additionalProperties: false,
+            },
+          },
+          updatedAt: { type: 'string', format: 'date-time' },
+        },
+        required: ['nodes', 'edges', 'updatedAt'],
+        additionalProperties: false,
+      };
+      const graphQuerySchema = {
+        type: 'object',
+        properties: { q: { type: 'string', minLength: 1, maxLength: maxQueryLength, pattern: '\\S' } },
+        required: ['q'],
+        additionalProperties: false,
+      };
+
+      app.get('/knowledge/graph', {
+        schema: { response: { 200: graphResponseSchema, 403: apiError, 503: apiError } },
+      }, async (request, reply) => {
+        if (!ownerOnly(request, reply)) return;
+        if (indexStatus !== 'ready') return reply.code(503).send({ error: 'Vault index is not ready' });
+        try {
+          return await knowledgeGraph(AbortSignal.timeout(30_000));
+        } catch (error) {
+          if (error instanceof ToolFailure) return reply.code(503).send({ error: error.message });
+          throw error;
+        }
+      });
+
+      app.get<{ Querystring: { q: string } }>('/knowledge/search', {
+        schema: { querystring: graphQuerySchema, response: { 200: {
+          type: 'object',
+          properties: {
+            hits: {
+              type: 'array',
+              maxItems: maxSearchResults,
+              items: {
+                type: 'object',
+                properties: {
+                  nodeId: { type: 'string', pattern: '^[0-9a-f]{64}$' },
+                  score: { type: 'number', minimum: -1, maximum: 1 },
+                  snippet: { type: 'string', maxLength: maxSnippetLength },
+                },
+                required: ['nodeId', 'score', 'snippet'],
+                additionalProperties: false,
+              },
+            },
+          },
+          required: ['hits'],
+          additionalProperties: false,
+        }, 400: apiError, 403: apiError, 503: apiError } },
+      }, async (request, reply) => {
+        if (!ownerOnly(request, reply)) return;
+        if (indexStatus !== 'ready') return reply.code(503).send({ error: 'Vault index is not ready' });
+        const signal = AbortSignal.timeout(30_000);
+        try {
+          const graph = await knowledgeGraph(signal);
+          const nodeByPath = new Map(graph.nodes.map((node) => [node.path, node]));
+          const ranked = await searchVault(request.query.q.trim(), maxSearchResults, signal);
+          const seen = new Set<string>();
+          const hits = ranked.flatMap((hit, index) => {
+            const node = nodeByPath.get(hit.path);
+            if (!node || seen.has(node.id)) return [];
+            seen.add(node.id);
+            const score = Number.isFinite(hit.score)
+              ? Math.max(-1, Math.min(1, hit.score!))
+              : Math.max(0, 1 - index / maxSearchResults);
+            return [{ nodeId: node.id, score, snippet: snippet(hit.content) }];
+          }).slice(0, maxSearchResults);
+          return { hits };
+        } catch (error) {
+          if (error instanceof ToolFailure) return reply.code(503).send({ error: error.message });
+          throw error;
+        }
+      });
 
       app.get('/memory/status', async (request, reply) => {
         if (!ownerOnly(request, reply) || !apiStore(reply)) return;

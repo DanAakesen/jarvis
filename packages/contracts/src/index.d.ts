@@ -1,6 +1,7 @@
 export const generatedViewVersion: 1;
 export const generatedViewRenderers: readonly [
   'table', 'list', 'detail', 'text', 'timeline', 'chart', 'task-card', 'status', 'image', 'html-app',
+  'knowledge-graph',
 ];
 export const htmlArtifactByteLimit: 524288;
 export const generatedViewActionTypes: readonly ['open-route', 'open-link', 'call-tool', 'window'];
@@ -16,7 +17,7 @@ export interface GeneratedViewPage {
 }
 
 export interface GeneratedViewSource {
-  id: 'now' | 'factory.tasks' | 'factory.projects' | 'usage' | 'image_generation' | 'html_generation' | 'research';
+  id: 'now' | 'factory.tasks' | 'factory.projects' | 'usage' | 'image_generation' | 'html_generation' | 'research' | 'knowledge_graph';
   status: 'complete' | 'partial' | 'unavailable';
   updatedAt?: string;
   reason?: string;
@@ -63,6 +64,11 @@ export interface GeneratedViewListData {
   items: GeneratedViewListItem[];
 }
 
+export interface GeneratedKnowledgeGraphData {
+  query: string;
+  highlight: string[];
+}
+
 interface GeneratedViewBase {
   version: 1;
   title: string;
@@ -98,7 +104,8 @@ export type GeneratedView =
     data: { label: string; value?: string; state: 'ok' | 'warning' | 'error' | 'unknown' };
   })
   | (GeneratedViewBase & { renderer: 'image'; data: { images: { url: string; alt: string }[] } })
-  | (GeneratedViewBase & { renderer: 'html-app'; data: { artifactId: string } });
+  | (GeneratedViewBase & { renderer: 'html-app'; data: { artifactId: string } })
+  | (GeneratedViewBase & { renderer: 'knowledge-graph'; data: GeneratedKnowledgeGraphData });
 
 export interface HtmlArtifactSource {
   title: string;

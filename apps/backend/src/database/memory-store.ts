@@ -77,14 +77,39 @@ export interface VaultSearchHit {
   readonly path: string;
   readonly heading: string;
   readonly content: string;
+  readonly score?: number;
+}
+
+export interface VaultGraphFile {
+  readonly path: string;
+  readonly title: string;
+  readonly updatedAt: Date;
+}
+
+export interface VaultGraphData {
+  readonly links: readonly { readonly sourcePath: string; readonly targetPath: string }[];
+  readonly similarities: readonly {
+    readonly sourcePath: string;
+    readonly targetPath: string;
+    readonly score: number;
+  }[];
+  readonly embeddings: readonly { readonly path: string; readonly embedding: readonly number[] }[];
 }
 
 export interface VaultIndexStore {
   initialize(): Promise<void>;
   supportsVectorSearch(): boolean;
   files(signal: AbortSignal): Promise<VaultIndexedFile[]>;
-  replaceFile(path: string, blobSha: string, chunks: readonly VaultIndexedChunk[], signal: AbortSignal): Promise<void>;
+  replaceFile(
+    path: string,
+    blobSha: string,
+    chunks: readonly VaultIndexedChunk[],
+    links: readonly string[],
+    signal: AbortSignal,
+  ): Promise<void>;
   deleteFiles(paths: readonly string[], signal: AbortSignal): Promise<void>;
+  graphFiles(signal: AbortSignal): Promise<VaultGraphFile[]>;
+  graphData(paths: readonly string[], signal: AbortSignal): Promise<VaultGraphData>;
   searchByVector(embedding: readonly number[], limit: number, signal: AbortSignal): Promise<VaultSearchHit[]>;
   searchByTerms(terms: readonly string[], limit: number, signal: AbortSignal): Promise<VaultSearchHit[]>;
 }
@@ -506,9 +531,9 @@ export function createVaultIndexStore(pool: sql.ConnectionPool): VaultIndexStore
       return result.recordset.map(({ path, blob_sha }) => ({ path, blobSha: blob_sha.trim() }));
     },
 
-    async replaceFile(path, blobSha, chunks, signal) {
+    async replaceFile(path, blobSha, chunks, links, signal) {
       ensureInitialized();
-      if (!/^[\da-f]{40}$/u.test(blobSha) || chunks.length > 512) {
+      if (!/^[\da-f]{40}$/u.test(blobSha) || chunks.length > 512 || links.length > 512) {
         throw new TypeError('Vault index entry is invalid');
       }
       const hash = pathHash(path);
@@ -520,7 +545,8 @@ export function createVaultIndexStore(pool: sql.ConnectionPool): VaultIndexStore
           .input('pathHash', sql.VarBinary(32), hash)
           .input('path', sql.NVarChar(1024), path)
           .input('blobSha', sql.Char(40), blobSha)
-          .input('chunks', sql.NVarChar(sql.MAX), JSON.stringify(chunks));
+          .input('chunks', sql.NVarChar(sql.MAX), JSON.stringify(chunks))
+          .input('links', sql.NVarChar(sql.MAX), JSON.stringify(links));
         const embeddingColumn = vectorSearchAvailable ? ', embedding' : '';
         const embeddingValue = vectorSearchAvailable
           ? ', CASE WHEN chunk.embedding IS NULL THEN NULL ELSE CAST(chunk.embedding AS vector(1536)) END'
@@ -535,7 +561,11 @@ export function createVaultIndexStore(pool: sql.ConnectionPool): VaultIndexStore
               content nvarchar(max) '$.content',
               embedding nvarchar(max) '$.embedding' AS JSON
             ) AS chunk;`}`;
-        await execute(request, signal, () => request.query(statement));
+        const linkStatement = `DELETE FROM dbo.vault_links WHERE source_path_hash = @pathHash;
+          ${links.length === 0 ? '' : `INSERT INTO dbo.vault_links (source_path_hash, target_path)
+            SELECT @pathHash, link.target_path
+            FROM OPENJSON(@links) WITH (target_path nvarchar(180) '$') AS link;`}`;
+        await execute(request, signal, () => request.query(`${statement} ${linkStatement}`));
         await transaction.commit();
         committed = true;
       } finally {
@@ -547,9 +577,120 @@ export function createVaultIndexStore(pool: sql.ConnectionPool): VaultIndexStore
       ensureInitialized();
       if (paths.length === 0) return;
       const hashes = [...new Set(paths)].map((path) => pathHash(path).toString('hex'));
-      const request = databaseReadRequest(pool).input('hashes', sql.NVarChar(sql.MAX), JSON.stringify(hashes));
-      await execute(request, signal, () => request.query(`DELETE FROM dbo.vault_chunks
-        WHERE path_hash IN (SELECT CONVERT(binary(32), value, 2) FROM OPENJSON(@hashes));`));
+      const transaction = new sql.Transaction(pool);
+      await transaction.begin();
+      let committed = false;
+      try {
+        const request = new sql.Request(transaction).input('hashes', sql.NVarChar(sql.MAX), JSON.stringify(hashes));
+        await execute(request, signal, () => request.query(`DELETE FROM dbo.vault_chunks
+          WHERE path_hash IN (SELECT CONVERT(binary(32), value, 2) FROM OPENJSON(@hashes));
+          DELETE FROM dbo.vault_links
+          WHERE source_path_hash IN (SELECT CONVERT(binary(32), value, 2) FROM OPENJSON(@hashes));`));
+        await transaction.commit();
+        committed = true;
+      } finally {
+        if (!committed) await transaction.rollback();
+      }
+    },
+
+    async graphFiles(signal) {
+      ensureInitialized();
+      const request = databaseReadRequest(pool).input('take', sql.Int, 10_000);
+      const result = await execute(request, signal, () => request.query<{
+        path: string;
+        title: string | null;
+        updated_at: Date;
+      }>(`SELECT TOP (@take) notes.path, title.heading AS title, notes.updated_at
+        FROM (
+          SELECT path, MAX(indexed_at) AS updated_at
+          FROM dbo.vault_chunks
+          WHERE path LIKE N'People/%' OR path LIKE N'Work/%'
+            OR path LIKE N'Personal/%' OR path LIKE N'General/%'
+          GROUP BY path
+        ) AS notes
+        OUTER APPLY (
+          SELECT TOP (1) heading
+          FROM dbo.vault_chunks AS chunk
+          WHERE chunk.path = notes.path AND chunk.heading <> N'Introduction'
+          ORDER BY chunk.chunk_index
+        ) AS title
+        ORDER BY notes.path;`));
+      return result.recordset.map(({ path, title, updated_at }) => ({
+        path,
+        title: title ?? '',
+        updatedAt: updated_at,
+      }));
+    },
+
+    async graphData(paths, signal) {
+      ensureInitialized();
+      if (paths.length === 0) return { links: [], similarities: [], embeddings: [] };
+      const pathsByHash = new Map(paths.map((path) => [pathHash(path).toString('hex'), path]));
+      const pathSet = new Set(paths);
+      const hashes = [...pathsByHash.keys()];
+      const request = databaseReadRequest(pool)
+        .input('hashes', sql.NVarChar(sql.MAX), JSON.stringify(hashes))
+        .input('linkTake', sql.Int, 8_001)
+        .input('paths', sql.NVarChar(sql.MAX), JSON.stringify(paths))
+        .input('similarityThreshold', sql.Float, 0.75);
+      const similarityQuery = vectorSearchAvailable
+        ? `CREATE TABLE #vault_note_vectors (path nvarchar(1024) NOT NULL, embedding vector(1536) NOT NULL);
+          ;WITH mean_components AS (
+            SELECT chunk.path, CONVERT(int, component.[key]) AS dimension,
+              AVG(TRY_CONVERT(float, component.value)) AS mean_value
+            FROM dbo.vault_chunks AS chunk
+            INNER JOIN OPENJSON(@paths) AS selected ON selected.value = chunk.path
+            CROSS APPLY OPENJSON(CAST(chunk.embedding AS nvarchar(max))) AS component
+            WHERE chunk.embedding IS NOT NULL
+            GROUP BY chunk.path, component.[key]
+          ), mean_vectors AS (
+            SELECT path,
+              N'[' + STRING_AGG(CONVERT(nvarchar(max), mean_value), N',')
+                WITHIN GROUP (ORDER BY dimension) + N']' AS embedding_json
+            FROM mean_components GROUP BY path
+          )
+          INSERT INTO #vault_note_vectors (path, embedding)
+          SELECT path, CAST(embedding_json AS vector(1536)) FROM mean_vectors;
+          SELECT source.path AS source_path, neighbour.path AS target_path, neighbour.score
+          FROM #vault_note_vectors AS source
+          CROSS APPLY (
+            SELECT TOP (3) candidate.path,
+              CAST(1.0 - VECTOR_DISTANCE('cosine', source.embedding, candidate.embedding) AS float) AS score
+            FROM #vault_note_vectors AS candidate
+            WHERE candidate.path <> source.path
+              AND VECTOR_DISTANCE('cosine', source.embedding, candidate.embedding) < 1.0 - @similarityThreshold
+            ORDER BY VECTOR_DISTANCE('cosine', source.embedding, candidate.embedding), candidate.path
+          ) AS neighbour
+          ORDER BY source.path, neighbour.score DESC, neighbour.path;`
+        : `SELECT CAST(NULL AS nvarchar(1024)) AS source_path,
+            CAST(NULL AS nvarchar(1024)) AS target_path, CAST(NULL AS float) AS score WHERE 1 = 0;`;
+      const result = await execute(request, signal, () => request.query<{
+        source_path_hash: string;
+        target_path: string;
+      }>(`SELECT TOP (@linkTake) CONVERT(varchar(64), source_path_hash, 2) AS source_path_hash, target_path
+          FROM dbo.vault_links
+          WHERE source_path_hash IN (SELECT CONVERT(binary(32), value, 2) FROM OPENJSON(@hashes))
+          ORDER BY source_path_hash, target_path;
+        ${similarityQuery}`));
+      const links = result.recordsets[0] as Array<{ source_path_hash: string; target_path: string }> | undefined;
+      const similarities = result.recordsets[1] as Array<{
+        source_path: string;
+        target_path: string;
+        score: number;
+      }> | undefined;
+      return {
+        links: (links ?? []).flatMap(({ source_path_hash, target_path }) => {
+          const sourcePath = pathsByHash.get(source_path_hash.toLowerCase());
+          return sourcePath ? [{ sourcePath, targetPath: target_path }] : [];
+        }),
+        similarities: (similarities ?? []).flatMap(({ source_path, target_path, score }) => {
+          const sourcePath = pathsByHash.get(source_path.toLowerCase());
+          return sourcePath && pathSet.has(target_path) && Number.isFinite(score)
+            ? [{ sourcePath, targetPath: target_path, score: Number(score) }]
+            : [];
+        }),
+        embeddings: [],
+      };
     },
 
     async searchByVector(embedding, limit, signal) {
@@ -565,10 +706,13 @@ export function createVaultIndexStore(pool: sql.ConnectionPool): VaultIndexStore
           path: string;
           heading: string;
           content: string;
-        }>(`SELECT TOP (@take) path, heading, content FROM dbo.vault_chunks
+          score: number;
+        }>(`SELECT TOP (@take) path, heading, content,
+            1.0 - VECTOR_DISTANCE('cosine', embedding, CAST(@embedding AS vector(1536))) AS score
+          FROM dbo.vault_chunks
           WHERE embedding IS NOT NULL
           ORDER BY VECTOR_DISTANCE('cosine', embedding, CAST(@embedding AS vector(1536))), path, chunk_index;`));
-        return result.recordset;
+        return result.recordset.map((hit) => ({ ...hit, score: Number(hit.score) }));
       } catch (error) {
         const number = (error as { number?: unknown } | null)?.number;
         if (number === 195 || number === 206) throw new VectorSearchUnavailableError();
@@ -581,12 +725,15 @@ export function createVaultIndexStore(pool: sql.ConnectionPool): VaultIndexStore
       if (terms.length === 0) return [];
       const request = databaseReadRequest(pool)
         .input('take', sql.Int, limit)
+        .input('termCount', sql.Int, terms.length)
         .input('terms', sql.NVarChar(2000), JSON.stringify(terms));
       const result = await execute(request, signal, () => request.query<{
         path: string;
         heading: string;
         content: string;
-      }>(`SELECT TOP (@take) chunk.path, chunk.heading, chunk.content
+        score: number;
+      }>(`SELECT TOP (@take) chunk.path, chunk.heading, chunk.content,
+          CAST(ranked.matches AS float) / @termCount AS score
         FROM dbo.vault_chunks AS chunk
         CROSS APPLY (
           SELECT COUNT(*) AS matches FROM OPENJSON(@terms) AS term
@@ -596,7 +743,7 @@ export function createVaultIndexStore(pool: sql.ConnectionPool): VaultIndexStore
         ) AS ranked
         WHERE ranked.matches > 0
         ORDER BY ranked.matches DESC, chunk.path, chunk.chunk_index;`));
-      return result.recordset;
+      return result.recordset.map((hit) => ({ ...hit, score: Number(hit.score) }));
     },
   };
 }
