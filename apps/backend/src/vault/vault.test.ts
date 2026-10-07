@@ -461,6 +461,32 @@ describe('GitHub vault', () => {
     const id = (path: string) => createHash('sha256').update(path).digest('hex');
     expect(graph.edges).toEqual([{ source: id('People/Alex.md'), target: id('Work/Project.md'), type: 'link' }]);
   });
+  it('falls back to text similarity when the database stores no embeddings', async () => {
+    const remote = {
+      'Work/Azure.md': { sha: sha('a'), content: '# Azure\n\nFoundry agents and hosted runners.' },
+      'Work/Foundry.md': { sha: sha('b'), content: '# Foundry\n\nFoundry agents deploy hosted runners.' },
+      'Personal/Garden.md': { sha: sha('c'), content: '# Garden\n\nTomatoes and basil.' },
+      'Personal/Kitchen.md': { sha: sha('d'), content: '# Kitchen\n\nBasil pesto with tomatoes.' },
+    };
+    const index = new FakeIndexStore(true);
+    const { module } = moduleFor({ remote, index });
+    await module.synchronize(signal());
+    vi.spyOn(index, 'graphData').mockResolvedValue({
+      links: [],
+      similarities: [],
+      embeddings: [],
+      contents: Object.entries(remote).map(([path, note]) => ({ path, content: note.content })),
+    });
+    const app = memoryApiApp(module);
+
+    const graph = (await app.inject({ url: '/knowledge/graph', headers: apiAuthorization })).json();
+    const id = (path: string) => createHash('sha256').update(path).digest('hex');
+    const pairs = graph.edges.filter((edge: { type: string }) => edge.type === 'similar')
+      .map((edge: { source: string; target: string }) => [edge.source, edge.target].sort().join(':'));
+    expect(pairs).toContain([id('Work/Azure.md'), id('Work/Foundry.md')].sort().join(':'));
+    expect(pairs).toContain([id('Personal/Garden.md'), id('Personal/Kitchen.md')].sort().join(':'));
+    expect(pairs).not.toContain([id('Work/Azure.md'), id('Personal/Garden.md')].sort().join(':'));
+  });
   it('bounds the graph to two thousand nodes and eight thousand edges', async () => {
     const index = new FakeIndexStore();
     const { module } = moduleFor({ index });
