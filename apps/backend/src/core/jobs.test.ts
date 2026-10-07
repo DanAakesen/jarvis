@@ -34,7 +34,7 @@ describe('background jobs', () => {
     let time = Date.parse('2026-10-07T12:00:00.000Z');
     const registry = new BackgroundJobRegistry(hub, () => time);
 
-    const job = await registry.start('research', `Research: ${'x'.repeat(200)}`, 3, undefined, 'Starting');
+    const job = await registry.start('embedding', `Research: ${'x'.repeat(200)}`, 3, undefined, 'Starting');
     time += 1_000;
     await job.progress(1, 'Searching: key facts\nwith a newline');
     await job.progress(9);

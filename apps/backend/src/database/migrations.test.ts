@@ -58,6 +58,7 @@ describe('committed SQL manifest', () => {
       '0027_vault_knowledge_graph.sql',
       '0028_json_embeddings_without_vector.sql',
       '0029_background_jobs.sql',
+      '0030_embedding_model_identity.sql',
     ]);
     for (const migration of migrations) await expect(readDownMigration(migration.name)).resolves.toMatchObject({ name: migration.name });
   });
@@ -71,7 +72,7 @@ describe('committed SQL manifest', () => {
     });
   });
   it('stores background jobs and their step history with cascading retention', async () => {
-    const migration = (await readMigrations()).at(-1);
+    const migration = (await readMigrations()).find(({ name }) => name === '0029_background_jobs.sql');
     expect(migration?.sql).toContain('CREATE TABLE dbo.background_jobs');
     expect(migration?.sql).toContain('CREATE TABLE dbo.background_job_steps');
     expect(migration?.sql).toContain('job_id nvarchar(36) COLLATE Latin1_General_100_BIN2');
@@ -79,6 +80,15 @@ describe('committed SQL manifest', () => {
     expect(migration?.sql).toContain('ON DELETE CASCADE');
     await expect(readDownMigration('0029_background_jobs.sql')).resolves.toMatchObject({
       sql: expect.stringContaining('DROP TABLE dbo.background_job_steps'),
+    });
+  });
+  it('stores the embedding model identity and permits embedding background jobs', async () => {
+    const migration = (await readMigrations()).at(-1);
+    expect(migration?.sql).toContain('ALTER TABLE dbo.memories ADD embedding_model nvarchar(128) NULL');
+    expect(migration?.sql).toContain('ALTER TABLE dbo.vault_chunks ADD embedding_model nvarchar(128) NULL');
+    expect(migration?.sql).toContain("N'embedding'");
+    await expect(readDownMigration('0030_embedding_model_identity.sql')).resolves.toMatchObject({
+      sql: expect.stringContaining('DROP COLUMN embedding_model'),
     });
   });
   it('reads down scripts from down/ without treating them as forward migrations', async () => {

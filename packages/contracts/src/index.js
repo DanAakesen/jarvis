@@ -640,7 +640,7 @@ export function isJarvisVoiceWakeEvent(value) {
     Number.isFinite(Date.parse(value.at)) && new Date(value.at).toISOString() === value.at;
 }
 
-export const backgroundJobKinds = Object.freeze(['research', 'image', 'html_app']);
+export const backgroundJobKinds = Object.freeze(['research', 'image', 'html_app', 'embedding']);
 export const backgroundJobStatuses = Object.freeze(['running', 'done', 'failed', 'cancelled']);
 const jobIdPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const viewIdPattern = /^[A-Za-z0-9_-]{1,64}$/;

@@ -97,6 +97,7 @@ describe('long-term memory tools', () => {
       content: record.content,
       sourceMessageId: source.messageId,
       embedding: null,
+      embeddingModel: null,
     }, expect.any(AbortSignal));
     expect(recordCall).toHaveBeenCalledWith({
       messageId: source.messageId,
@@ -193,6 +194,7 @@ describe('long-term memory tools', () => {
       content: 'Dan prefers VS Code and Vim.',
       sourceMessageId: source.messageId,
       embedding: null,
+      embeddingModel: null,
     }, expect.any(AbortSignal));
 
     const forgotten = await app.inject({

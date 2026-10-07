@@ -22,6 +22,10 @@ const fallback: ModelDeployment[] = [
     capacity: 150, capabilities: ['embeddings'], reasoningEfforts: ['none'],
   },
   {
+    name: 'text-embedding-3-large', model: 'text-embedding-3-large', version: '1', sku: 'GlobalStandard',
+    capacity: 150, capabilities: ['embeddings'], reasoningEfforts: ['none'],
+  },
+  {
     name: 'gpt-6-luna', model: 'gpt-6-luna', version: '2026-09-22', sku: 'GlobalStandard',
     capacity: 50, capabilities: ['chat', 'responses', 'image'],
     reasoningEfforts: ['none', 'minimal', 'low', 'medium', 'high', 'xhigh'],
