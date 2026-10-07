@@ -2,6 +2,7 @@ import type { FastifyReply } from 'fastify';
 import type { BackendModule } from '../modules.js';
 import { ToolRefusal } from '../core/tool-registry.js';
 import { readSettings } from '../core/settings.js';
+import { sseHeaders } from '../core/now.js';
 import {
   GitHubRepositoryUnavailableError,
   ProjectConflictError,
@@ -344,6 +345,7 @@ export const factoryModule: BackendModule = {
       response.once('close', cleanup);
       response.once('error', end);
       response.writeHead(200, {
+        ...sseHeaders(reply),
         'Content-Type': 'text/event-stream; charset=utf-8',
         'Cache-Control': 'no-cache, no-transform',
         Connection: 'keep-alive',
