@@ -117,7 +117,7 @@ jobs:
           } >>"$GITHUB_ENV"
       - name: Build the backend image in ACR
         run: |
-          az acr build --registry "$REGISTRY" --image "jarvis-backend:$IMAGE_TAG" --file apps/backend/Dockerfile --platform linux/amd64 --subscription "$SUBSCRIPTION_ID" --only-show-errors .
+          az acr build --registry "$REGISTRY" --image "jarvis-backend:$IMAGE_TAG" --file apps/backend/Dockerfile --platform linux/amd64 --subscription "$SUBSCRIPTION_ID" --build-arg "JARVIS_DEPLOYED_COMMIT=$GITHUB_SHA" --only-show-errors .
           digest=$(az acr manifest show-metadata --registry "$REGISTRY" --name "jarvis-backend:$IMAGE_TAG" --subscription "$SUBSCRIPTION_ID" --query digest --output tsv --only-show-errors)
           [[ "$digest" == sha256:* ]] || { echo "::error::ACR image has no manifest digest"; exit 1; }
           echo "IMAGE=$REGISTRY_HOST/jarvis-backend@$digest" >>"$GITHUB_ENV"

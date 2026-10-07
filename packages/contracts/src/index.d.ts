@@ -330,3 +330,27 @@ export interface PhoneStatus {
   historyAvailable: boolean;
   recentCalls: readonly PhoneCallHistoryEntry[];
 }
+
+export type SystemStatusValue = 'ok' | 'degraded' | 'down' | 'unknown';
+export type SystemStatusSubsystem =
+  | 'database'
+  | 'foundry.chat'
+  | 'foundry.voice'
+  | 'foundry.embeddings'
+  | 'vault_index'
+  | 'github_app'
+  | 'google'
+  | 'pc_bridge'
+  | 'runner'
+  | 'deployed_commit'
+  | 'last_error';
+export interface SystemStatusEntry {
+  id: SystemStatusSubsystem;
+  status: SystemStatusValue;
+  checkedAt: string;
+  details?: Readonly<Record<string, string | number | boolean | null>>;
+}
+export interface SystemStatus {
+  checkedAt: string;
+  entries: readonly SystemStatusEntry[];
+}

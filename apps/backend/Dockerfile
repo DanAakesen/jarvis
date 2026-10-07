@@ -22,7 +22,8 @@ COPY packages/contracts/package.json packages/contracts/package.json
 RUN npm ci --omit=dev --workspace @jarvis/backend --include-workspace-root=false
 
 FROM node:22.23.3-bookworm-slim AS runtime
-ENV NODE_ENV=production PORT=3000
+ARG JARVIS_DEPLOYED_COMMIT
+ENV NODE_ENV=production PORT=3000 JARVIS_DEPLOYED_COMMIT=${JARVIS_DEPLOYED_COMMIT}
 WORKDIR /app
 COPY --from=production-dependencies /app/node_modules ./node_modules
 COPY --from=production-dependencies /app/apps/backend ./apps/backend

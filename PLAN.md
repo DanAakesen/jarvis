@@ -462,7 +462,7 @@ Declined in the audit (do not file): verbosity and max-output-token settings, no
 | P9-17 | [#511](https://github.com/DanAakesen/jarvis/issues/511) | Show wake-word events | UI session | — | In progress |
 | P9-18 | [#512](https://github.com/DanAakesen/jarvis/issues/512) | Typed server-sent event contracts | Backend | — | Not started |
 | P9-19 | [#513](https://github.com/DanAakesen/jarvis/issues/513) | Renew credential button | UI session | — | In progress |
-| P9-20 | [#514](https://github.com/DanAakesen/jarvis/issues/514) | System status page, including the PC bridge | Backend + UI session | — | Not started |
+| P9-20 | [#514](https://github.com/DanAakesen/jarvis/issues/514) | Shared contracts and cached Dan-only `GET /status` for backend, Foundry, vault freshness/embedding coverage, GitHub App permissions, Google, PC bridge, runner, deployed commit and last error; reuse in `get_status_summary` | Backend + UI session | — | In progress (backend complete; UI pending) |
 | P9-21 | [#515](https://github.com/DanAakesen/jarvis/issues/515) | Watch mode on screen and camera sharing | UI session | — | In progress |
 | P9-22 | [#516](https://github.com/DanAakesen/jarvis/issues/516) | Owner-authenticated `GET /phone/status` and bounded recent call history using existing contracts and storage; document the dormant Teams/ACS setup and activation path | History returns UTC start time, duration and outcome without caller IDs; tests cover auth, availability and failures; no web changes or migration. Production number, ACS resource and callbacks remain unverified and require Dan's Azure/Teams access. | — | Complete |
 | P9-23 | [#517](https://github.com/DanAakesen/jarvis/issues/517) | Complete cost coverage | Backend | — | Complete |

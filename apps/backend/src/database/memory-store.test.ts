@@ -59,6 +59,40 @@ describe('JSON embedding ranking', () => {
       statement.includes('embedding_json'))).toHaveLength(1);
   });
 
+  it('returns bounded vault index freshness and embedding coverage without note contents', async () => {
+    const queries: string[] = [];
+    const pool = {
+      request: () => ({
+        input() { return this; },
+        async query(statement: string) {
+          queries.push(statement);
+          return statement.includes('json_embedding_search')
+            ? { recordset: [{ vector_search: false, json_embedding_search: true }] }
+            : {
+              recordset: [{
+                notes: 12,
+                chunks: 40,
+                embedded_chunks: 35,
+                latest_indexed_at: new Date('2026-10-07T11:00:00.000Z'),
+              }],
+            };
+        },
+      }),
+    } as unknown as sql.ConnectionPool;
+    const store = createVaultIndexStore(pool);
+    await store.initialize();
+
+    await expect(store.summary('text-embedding-3-small', new AbortController().signal)).resolves.toEqual({
+      notes: 12,
+      chunks: 40,
+      embeddedChunks: 35,
+      latestIndexedAt: new Date('2026-10-07T11:00:00.000Z'),
+    });
+    expect(queries.at(-1)).toContain('COUNT(DISTINCT path)');
+    expect(queries.at(-1)).toContain('MAX(indexed_at)');
+    expect(queries.at(-1)).not.toMatch(/content|heading/u);
+  });
+
   it('persists memory-search JSON embeddings in the application ranking path', async () => {
     const vector = (first: number, second: number) => [
       first, second, ...Array.from({ length: 1534 }, () => 0),
