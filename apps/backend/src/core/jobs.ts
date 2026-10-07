@@ -87,7 +87,7 @@ export class BackgroundJobRegistry {
       .sort((left, right) => right.startedAt.localeCompare(left.startedAt));
     for (const job of jobs) {
       const tracked = this.jobs.get(job.jobId);
-      if (tracked && Date.parse(job.updatedAt) > Date.parse(tracked.job.updatedAt)) tracked.job = job;
+      if (tracked && Date.parse(job.updatedAt) >= Date.parse(tracked.job.updatedAt)) tracked.job = job;
     }
     return jobs;
   }
@@ -176,7 +176,7 @@ function describeJob(job: BackgroundJob, now: number): Record<string, unknown> {
 export const listJobsTool: JarvisTool = {
   name: 'list_jobs',
   description: 'List Jarvis background jobs (research, images, HTML apps) shown in the job tabs: running jobs with ' +
-    'progress and current step, and jobs finished in the last 10 minutes (done with their result window, failed with ' +
+    'progress and current step, and jobs finished in the last 30 days (done with their result window, failed with ' +
     'the reason, or cancelled). Use it whenever Dan asks about a running or recent background task.',
   inputSchema: { type: 'object', properties: {}, additionalProperties: false },
   reflexSafe: true,

@@ -62,7 +62,7 @@ describe('committed SQL manifest', () => {
     for (const migration of migrations) await expect(readDownMigration(migration.name)).resolves.toMatchObject({ name: migration.name });
   });
   it('stores JSON embeddings only when SQL vector support is unavailable', async () => {
-    const migration = (await readMigrations()).at(-1);
+    const migration = (await readMigrations()).find(({ name }) => name === '0028_json_embeddings_without_vector.sql');
     expect(migration?.sql).toContain("IF TYPE_ID(N'vector') IS NULL");
     expect(migration?.sql).toContain("ALTER TABLE dbo.memories ADD embedding_json nvarchar(max) NULL");
     expect(migration?.sql).toContain("ALTER TABLE dbo.vault_chunks ADD embedding_json nvarchar(max) NULL");

@@ -67,10 +67,16 @@ async function insertStep(transaction: sql.Transaction, job: BackgroundJob): Pro
       VALUES (@jobId, @status, @step, @detail, @viewId, @updatedAt);`);
 }
 
+async function pruneJobs(pool: sql.ConnectionPool): Promise<void> {
+  await pool.request().query(`DELETE dbo.background_jobs
+    WHERE started_at < DATEADD(day, -${retentionDays}, SYSUTCDATETIME());`);
+}
+
 export function createBackgroundJobStore(pool: sql.ConnectionPool): BackgroundJobStore {
   return {
     async create(job) {
       if (!isBackgroundJob(job)) throw new TypeError('Invalid background job');
+      await pruneJobs(pool);
       const transaction = new sql.Transaction(pool);
       await transaction.begin();
       try {
@@ -104,7 +110,7 @@ export function createBackgroundJobStore(pool: sql.ConnectionPool): BackgroundJo
       }
     },
     async list() {
-      await this.prune();
+      await pruneJobs(pool);
       const { recordset } = await pool.request().query<BackgroundJobRow>(`SELECT job_id, kind, title, status, step, steps,
         detail, view_id, started_at, updated_at
         FROM dbo.background_jobs
@@ -113,6 +119,7 @@ export function createBackgroundJobStore(pool: sql.ConnectionPool): BackgroundJo
       return recordset.map(mapJob);
     },
     async reconcileInterrupted() {
+      await pruneJobs(pool);
       const transaction = new sql.Transaction(pool);
       await transaction.begin();
       try {
@@ -124,7 +131,6 @@ export function createBackgroundJobStore(pool: sql.ConnectionPool): BackgroundJo
         const jobs = recordset.map(mapJob);
         for (const job of jobs) await insertStep(transaction, job);
         await transaction.commit();
-        await this.prune();
         return jobs;
       } catch (error) {
         await transaction.rollback();
@@ -132,8 +138,7 @@ export function createBackgroundJobStore(pool: sql.ConnectionPool): BackgroundJo
       }
     },
     async prune() {
-      await pool.request().query(`DELETE dbo.background_jobs
-        WHERE started_at < DATEADD(day, -${retentionDays}, SYSUTCDATETIME());`);
+      await pruneJobs(pool);
     },
   };
 }

@@ -8,14 +8,15 @@ import { BackgroundJobRegistry, cancelJobTool, listJobsTool } from './jobs.js';
 import type { FastifyRequest } from 'fastify';
 import { ToolRefusal } from './tool-registry.js';
 import type { JarvisActivityHub } from './activity.js';
+import type { BackgroundJobStore } from '../database/background-job-store.js';
 
 const config = { ...loadConfig({}), logLevel: 'silent' as const };
 const headers = { authorization: `${['Bear', 'er'].join('')} ${['e30', 'e30', 'sig'].join('.')}` };
 const apps: ReturnType<typeof buildApp>[] = [];
 
-function fixture(objectId = config.auth.ownerObjectId) {
+function fixture(objectId = config.auth.ownerObjectId, backgroundJobStore?: BackgroundJobStore) {
   const auth: TokenVerifier = async () => ({ objectId, tenantId: config.auth.tenantId, displayName: 'Dan' });
-  const app = buildApp(config, undefined, { auth });
+  const app = buildApp(config, undefined, { auth, ...(backgroundJobStore ? { backgroundJobStore } : {}) });
   apps.push(app);
   return app;
 }
@@ -23,6 +24,7 @@ function fixture(objectId = config.auth.ownerObjectId) {
 afterEach(async () => {
   await Promise.all(apps.splice(0).map((app) => app.close()));
 });
+
 
 describe('background jobs', () => {
   it('publishes bounded, contract-valid job changes and ignores updates after the job ends', async () => {
@@ -105,5 +107,67 @@ describe('background jobs', () => {
     await app.backgroundJobs.start('research', 'Research: Azure pricing', 2, vi.fn());
     await app.backgroundJobs.start('research', 'Research: Azure quotas', 2, vi.fn());
     await expect(cancelJobTool.execute({ query: 'azure' }, request, signal)).rejects.toThrow(/Several running jobs/);
+  });
+
+  it('reconciles interrupted persisted work and serves API, event, and tool reads from the store', async () => {
+    const jobs: BackgroundJob[] = [
+      {
+        jobId: '00000000-0000-4000-8000-000000000014',
+        kind: 'research',
+        title: 'Research: Restart regression',
+        status: 'running',
+        step: 1,
+        steps: 3,
+        detail: 'Searching: sources',
+        startedAt: '2026-10-07T12:00:00.000Z',
+        updatedAt: '2026-10-07T12:01:00.000Z',
+      },
+      {
+        jobId: '00000000-0000-4000-8000-000000000015',
+        kind: 'image',
+        title: 'Image: Robot Butler',
+        status: 'done',
+        step: 1,
+        steps: 1,
+        viewId: 'image-robot-result',
+        startedAt: '2026-10-07T11:00:00.000Z',
+        updatedAt: '2026-10-07T11:05:00.000Z',
+      },
+    ];
+    const store: BackgroundJobStore = {
+      create: vi.fn(async () => {}),
+      update: vi.fn(async (job) => job),
+      list: vi.fn(async () => jobs),
+      reconcileInterrupted: vi.fn(async () => {
+        const interrupted = jobs.filter((job) => job.status === 'running').map((job) => ({
+          ...job, status: 'failed' as const, detail: 'interrupted by restart',
+        }));
+        for (const job of interrupted) jobs[jobs.findIndex((existing) => existing.jobId === job.jobId)] = job;
+        return interrupted;
+      }),
+      prune: vi.fn(async () => {}),
+    };
+    const app = fixture(config.auth.ownerObjectId, store);
+    const events: BackgroundJob[] = [];
+    app.jarvisActivityHub.subscribe((event) => { if (event.type === 'job') events.push(event.job); });
+
+    const response = await app.inject({ url: '/jobs', headers });
+    expect(response.statusCode).toBe(200);
+    expect(store.reconcileInterrupted).toHaveBeenCalledOnce();
+    expect(response.json().jobs).toEqual(expect.arrayContaining([
+      expect.objectContaining({ status: 'failed', detail: 'interrupted by restart' }),
+      expect.objectContaining({ status: 'done', viewId: 'image-robot-result' }),
+    ]));
+    expect(events).toEqual([expect.objectContaining({ status: 'failed', detail: 'interrupted by restart' })]);
+
+    const listed = await listJobsTool.execute({}, { server: app } as unknown as FastifyRequest, new AbortController().signal);
+    expect(listed).toMatchObject({
+      running: [],
+      finished: [
+        { title: 'Research: Restart regression', status: 'failed', detail: 'interrupted by restart' },
+        { title: 'Image: Robot Butler', status: 'done', resultWindow: 'image-robot-result' },
+      ],
+    });
+    expect(store.list).toHaveBeenCalled();
   });
 });
