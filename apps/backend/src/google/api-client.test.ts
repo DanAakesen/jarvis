@@ -58,6 +58,25 @@ describe('Google API client', () => {
     expect(fetcher).toHaveBeenCalledOnce();
   });
 
+  it('sends Gmail draft replacement requests with PUT', async () => {
+    const fetcher = vi.fn(async (_input: string | URL | Request, init?: RequestInit) => {
+      expect(init?.method).toBe('PUT');
+      expect(JSON.parse(String(init?.body))).toEqual({ id: 'draft-1' });
+      return new Response(null, { status: 204 });
+    });
+    const google = createGoogleApiClient({
+      tokens: { getToken: async () => 'fixture-token' },
+      fetch: fetcher,
+    });
+
+    await expect(google.request('gmail', '/users/me/drafts/draft-1', {
+      method: 'PUT',
+      signal: new AbortController().signal,
+      body: { id: 'draft-1' },
+    })).resolves.toEqual({});
+    expect(fetcher).toHaveBeenCalledOnce();
+  });
+
   it('turns a rejected refresh token into a credential-expiry result', async () => {
     const google = createGoogleApiClient({
       tokens: {
