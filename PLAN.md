@@ -42,7 +42,7 @@ Phase 1 delivers the Software Factory. Requirements and page specifications are 
 
 | ID | Issue | Task | Acceptance criteria | Depends on | Status |
 | --- | --- | --- | --- | --- | --- |
-| P9-01 | [#495](https://github.com/DanAakesen/jarvis/issues/495) | Expose the live Foundry deployment catalogue to Dan through `GET /models`; validate model and reasoning effort settings for chat, vision, research, voice, transcription, embeddings, Codex and Copilot; preserve `jarvis.model`/`jarvis.reasoning` as chat aliases | ARM catalogue reads use backend managed identity with account-scoped Reader and a five-minute cache; unavailable ARM returns configured defaults with `source: 'fallback'`; PATCHing `gpt-6-luna`/`high` for chat affects the next chat session; `/agent/settings` exposes resolved role values; no `apps/web` changes | P1-11, P4-09, P2-11 | Complete offline; live ARM acceptance pending |
+| P9-01 | [#495](https://github.com/DanAakesen/jarvis/issues/495) | Expose the live Foundry deployment catalogue to Dan through `GET /models`; validate model and reasoning effort settings for chat, vision, research, voice, transcription, embeddings, Codex and Copilot; preserve `jarvis.model`/`jarvis.reasoning` as chat aliases | ARM catalogue reads use backend managed identity with account-scoped Reader and a five-minute cache; unavailable ARM returns configured defaults with `source: 'fallback'`; PATCHing `gpt-6-luna`/`high` for chat affects the next chat session; `/agent/settings` exposes resolved role values; no `apps/web` changes | P1-11, P4-09, P2-11 | Complete |
 
 - **Approved Software Factory layout (#369):** P8-34 is implemented offline on the merged P8-28/P8-31 foundations. The task lens retains all six states, filters, live updates and bounded results; its project-scoped release bar and closable contextual details pane reuse the existing authenticated contracts. Focused web checks and Chromium fixture verification pass; live Entra/backend/provider data and physical-device acceptance remain unverified. Fixture screenshots are in `docs/ui/screenshots/p8-34-fixture-*`.
 
@@ -443,9 +443,9 @@ Declined in the audit (do not file): verbosity and max-output-token settings, no
 
 | Task | Issue | Scope | Owner | Depends on | Status |
 | --- | --- | --- | --- | --- | --- |
-| P9-01 | [#495](https://github.com/DanAakesen/jarvis/issues/495) | Model catalogue (`GET /models`) and per-role model and reasoning settings | Backend | — | In progress |
+| P9-01 | [#495](https://github.com/DanAakesen/jarvis/issues/495) | Model catalogue (`GET /models`) and per-role model and reasoning settings | Backend | — | Complete |
 | P9-02 | [#496](https://github.com/DanAakesen/jarvis/issues/496) | Apply roles at runtime: vision (default `gpt-6-luna`), research, voice model, transcription | Backend | P9-01 | Complete |
-| P9-03 | [#497](https://github.com/DanAakesen/jarvis/issues/497) | Switch embedding model with automatic re-embedding | Backend | P9-01 | Not started |
+| P9-03 | [#497](https://github.com/DanAakesen/jarvis/issues/497) | Switch embedding model with automatic re-embedding | Backend | P9-01 | In progress |
 | P9-04 | [#498](https://github.com/DanAakesen/jarvis/issues/498) | Codex and Copilot model and reasoning choices that apply | Backend | P9-01 | Not started |
 | P9-05 | [#499](https://github.com/DanAakesen/jarvis/issues/499) | Voice tuning: turn detection, barge-in, reply length | Backend | — | Not started |
 | P9-06 | [#500](https://github.com/DanAakesen/jarvis/issues/500) | Research depth, sources and timeout | Backend | — | Not started |
