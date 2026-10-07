@@ -353,7 +353,7 @@ export function createHtmlResearchModule(
     tools: [{
       name: 'research',
       description: 'Research a topic in the background and open an interactive cited HTML report in the workspace. ' +
-        'Set title to a short 3-6 word window title such as \"Microsoft Foundry IQ\"; put the full request in topic.',
+        'Set title to a short 3-6 word window title such as "Microsoft Foundry IQ"; put the full request in topic.',
       inputSchema,
       sensitive: true,
       execute: async (input, request, signal) => {
