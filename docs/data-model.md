@@ -1,6 +1,6 @@
 # Data model
 
-Version 1, updated 6 October 2026 for P6-22, P7-01, P7-02, P7-03, P7-08, P7-13, P7-15, P7-22, P7-37 and P7-40. Scope: the Jarvis core, Software Factory, Teams calling, notification and browser-confirmation state, Google Calendar/Gmail tools, the GitHub vault's derived search index, long-term memory, image metadata and generated HTML report artifacts. Azure SQL is the source of truth for operational records; Dan's private GitHub vault is the source of truth for durable knowledge. Blob Storage holds large files referenced from SQL. Requirements: [PRODUCT.md](../PRODUCT.md); system: [architecture.md](architecture.md).
+Version 1, updated 7 October 2026 for P6-22, P7-01, P7-02, P7-03, P7-08, P7-13, P7-15, P7-22, P7-37, P7-40 and P7-44. Scope: the Jarvis core, Software Factory, Teams calling, notification and browser-confirmation state, Google Calendar/Gmail tools, the GitHub vault's derived search index, long-term memory, image metadata and generated HTML report artifacts. Azure SQL is the source of truth for operational records; Dan's private GitHub vault is the source of truth for durable knowledge. Blob Storage holds large files referenced from SQL. Requirements: [PRODUCT.md](../PRODUCT.md); system: [architecture.md](architecture.md).
 
 ## Migration infrastructure
 
@@ -67,8 +67,13 @@ the Usage page includes in its daily per-tool count. Its down migration refuses
 to restore the old constraint while refused rows exist.
 P7-40 adds group 11 in `0021_vault_memory_index.sql`: heading chunks indexed by
 vault path and blob SHA, with an optional `vector(1536)` column when available.
-The table is a derived cache of the private GitHub vault, not an authoritative
-store; the paired down migration removes only this index table.
+P7-44 adds nullable `embedding_json` to `memories` and `vault_chunks` in
+`0028_json_embeddings_without_vector.sql` only when SQL Server has no `vector`
+type. The backend stores and ranks those JSON vectors in code, then retains
+full-text/term search as fallback; vault embedding matrices are cached until
+index changes. A bounded 4,096-embedding-per-sync backfill resumes from notes whose
+embeddings remain null. `vault_chunks` remains only a derived cache of the
+private GitHub vault; its paired down migration removes that index table.
 
 P7-37 adds `dbo.workspace_html_artifacts` in
 `0025_workspace_html_artifacts.sql`, separate from the image artifact table. It
