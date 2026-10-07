@@ -1,4 +1,5 @@
 import sql from 'mssql';
+import type { PhoneCallHistoryEntry } from '@jarvis/contracts';
 
 export interface PhoneCallSession {
   readonly sessionId: string;
@@ -18,6 +19,7 @@ export interface PhoneSessionStore {
   activate(sessionId: string, callConnectionId: string): Promise<boolean>;
   finish(sessionId: string, status: 'ended' | 'failed'): Promise<void>;
   active(): Promise<readonly PhoneCallSession[]>;
+  recent(limit?: number): Promise<readonly PhoneCallHistoryEntry[]>;
 }
 
 interface PhoneCallSessionRow {
@@ -25,6 +27,12 @@ interface PhoneCallSessionRow {
   call_id: string;
   caller_id: string;
   call_connection_id: string | null;
+  status: PhoneCallSession['status'];
+}
+
+interface PhoneCallHistoryRow {
+  started_at: Date;
+  duration_seconds: number;
   status: PhoneCallSession['status'];
 }
 
@@ -140,6 +148,26 @@ export function createPhoneSessionStore(pool: sql.ConnectionPool): PhoneSessionS
         FROM dbo.phone_sessions
         WHERE status IN ('answering', 'active');`);
       return recordset.map(mapRow);
+    },
+    async recent(limit = 20) {
+      if (!Number.isSafeInteger(limit) || limit < 1 || limit > 50) {
+        throw new TypeError('Invalid phone call history limit');
+      }
+      const { recordset } = await pool.request()
+        .input('limit', sql.Int, limit)
+        .query<PhoneCallHistoryRow>(`SELECT TOP (@limit)
+            started_at,
+            DATEDIFF(SECOND, started_at, COALESCE(ended_at, SYSUTCDATETIME())) AS duration_seconds,
+            status
+          FROM dbo.phone_sessions
+          ORDER BY started_at DESC, jarvis_session_id DESC;`);
+      return recordset.map((row): PhoneCallHistoryEntry => ({
+        startedAt: row.started_at.toISOString(),
+        durationSeconds: Math.max(0, row.duration_seconds),
+        outcome: row.status === 'answering' || row.status === 'active'
+          ? 'in_progress'
+          : row.status,
+      }));
     },
   };
 }

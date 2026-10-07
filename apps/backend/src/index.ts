@@ -14,6 +14,7 @@ import { createProjectStore } from './database/project-store.js';
 import { createReleaseViewStore } from './database/release-view-store.js';
 import { createConversationStore } from './database/conversation-store.js';
 import { createPhoneSessionStore } from './database/phone-session-store.js';
+import { createPhoneStatusModule } from './phone/status.js';
 import { createTaskStore } from './database/task-store.js';
 import { createTaskStatusNotificationStore } from './database/task-status-notification-store.js';
 import { createDispatcherStore } from './database/dispatcher-store.js';
@@ -122,7 +123,7 @@ try {
   const memoryStore = database ? createMemoryStore(database.pool) : undefined;
   const htmlArtifactStore = database ? new HtmlArtifactStore(database.pool) : undefined;
   const vaultIndexStore = database ? createVaultIndexStore(database.pool) : undefined;
-  const phoneSessionStore = database && config.phone
+  const phoneSessionStore = database
     ? createPhoneSessionStore(database.pool)
     : undefined;
   const eventHub: TaskEventHub = createEventHub<TaskEventMessage>();
@@ -589,6 +590,10 @@ try {
     })
     : undefined;
   if (phoneCallModule) modules.push(phoneCallModule);
+  modules.push(createPhoneStatusModule({
+    configured: phoneCallModule !== undefined,
+    store: phoneSessionStore ?? null,
+  }));
   if (browserAgent) modules.push(createBrowserAgentModule(browserAgent));
   if (workspaceArtifacts && config.foundryEndpoints && config.foundryRunnerAgentName) {
     modules.push(createImageGenerationModule({
