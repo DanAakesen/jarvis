@@ -1,6 +1,6 @@
 import { FOUNDRY_SCOPE } from '../foundry/client.js';
+import { DKK_PER_USD, foundryTokenCosts } from '../core/usage-pricing.js';
 import { defaultSettings } from '../core/settings.js';
-import { visionModelRatesDkkPerMillionTokens } from '../core/model-catalog.js';
 import type { PcActVisionModel } from '../pc-bridge/pc-act.js';
 import { normalizeFoundryProjectEndpoint } from '../voice/relay.js';
 import type { ScreenVisionModel, ScreenVisionResult } from './screen.js';
@@ -8,7 +8,7 @@ import type { ScreenVisionModel, ScreenVisionResult } from './screen.js';
 const MAX_RESPONSE_BYTES = 1_048_576;
 const REQUEST_TIMEOUT_MS = 30_000;
 export const VISION_MODEL_DEPLOYMENT = defaultSettings.roles.vision.model;
-export const DKK_PER_USD = 6.5785;
+export { DKK_PER_USD };
 
 interface JsonObject {
   readonly [key: string]: unknown;
@@ -20,12 +20,6 @@ function isObject(value: unknown): value is JsonObject {
 
 function tokenCount(value: unknown): number {
   return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : 0;
-}
-
-function estimateCostDkk(model: string, inputTokens: number, outputTokens: number): number | undefined {
-  const rates = visionModelRatesDkkPerMillionTokens.get(model);
-  if (!rates) return undefined;
-  return Math.round((inputTokens * rates.input + outputTokens * rates.output) / 1_000_000 * 10_000) / 10_000;
 }
 
 async function readBoundedJson(response: Response): Promise<unknown> {
@@ -138,12 +132,15 @@ export function createFoundryScreenVisionModel(
         Number(body['usage']['prompt_tokens']) >= 0 &&
         Number.isSafeInteger(body['usage']['completion_tokens']) &&
         Number(body['usage']['completion_tokens']) >= 0;
-      const costDkk = hasTokenUsage ? estimateCostDkk(model, inputTokens, outputTokens) : undefined;
+      const costs = hasTokenUsage ? foundryTokenCosts(model, inputTokens, outputTokens) : null;
+      const costDkk = costs ? costs.inputDkk + costs.outputDkk : undefined;
+      const costUsd = costs ? costs.inputUsd + costs.outputUsd : undefined;
       return {
         description: choice['message']['content'],
         inputTokens,
         outputTokens,
         ...(costDkk === undefined ? {} : { costDkk }),
+        ...(costUsd === undefined ? {} : { costUsd }),
       };
     },
     async locateElements({ image, model, signal }) {

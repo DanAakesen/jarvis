@@ -6,6 +6,7 @@ import type { ConversationStore } from './conversation-store.js';
 import { coreModule } from './index.js';
 import { createMemoryModule } from './memory.js';
 import type { MemoryEmbedder } from './memory-embeddings.js';
+import type { UsageStore } from './usage.js';
 
 const config = loadConfig({});
 const source = { messageId: '42', text: 'I prefer VS Code for this project.' };
@@ -45,6 +46,8 @@ function appFor(
   options: {
     readonly agent?: boolean;
     readonly embedder?: MemoryEmbedder;
+    readonly embeddingModel?: string;
+    readonly usageStore?: Pick<UsageStore, 'recordFoundryUsage'>;
     readonly conversationStore?: Pick<ConversationStore, 'getDanMessageIdBySourceItemId'>;
   } = {},
 ) {
@@ -55,6 +58,8 @@ function appFor(
       createMemoryModule({
         store,
         ...(options.embedder ? { embedder: options.embedder } : {}),
+        ...(options.embeddingModel ? { embeddingModel: options.embeddingModel } : {}),
+        ...(options.usageStore ? { usageStore: options.usageStore } : {}),
       }),
     ],
     auth: async () => options.agent
@@ -240,6 +245,36 @@ describe('long-term memory tools', () => {
       arguments: {},
       result: { confirmation: 'Memory operation completed.' },
       outcome: 'ok',
+    });
+  });
+
+  it('persists provider-reported memory embedding input tokens without retaining text', async () => {
+    const store = memoryStore({ supportsVectorSearch: vi.fn(() => true) });
+    const recordFoundryUsage = vi.fn(async () => {});
+    const embedder: MemoryEmbedder = {
+      embed: vi.fn(async () => [1, 0]),
+      embedWithUsage: vi.fn(async () => ({ embedding: [1, 0], inputTokens: 17 })),
+    };
+    const { app } = appFor(store, {
+      embedder,
+      embeddingModel: 'text-embedding-3-small',
+      usageStore: { recordFoundryUsage },
+    });
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/tools/memory_search',
+      headers: userHeaders,
+      payload: { query: 'Which editor do I prefer?' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(recordFoundryUsage).toHaveBeenCalledWith({
+      role: 'embeddings',
+      model: 'text-embedding-3-small',
+      inputTokens: 17,
+      outputTokens: 0,
+      eventId: expect.any(String),
     });
   });
 

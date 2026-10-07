@@ -32,6 +32,8 @@ restoring pre-cleanup visibility requires a reviewed backup restore.
 persists parsed note-link targets for the P7-43 knowledge graph.
 `0028_json_embeddings_without_vector.sql` stores nullable JSON embeddings for
 memories and vault chunks only when SQL Server does not expose the `vector` type.
+`0030_foundry_usage_cost_coverage.sql` adds model/role attribution and USD cost
+estimates to usage rows; migration 0029 is reserved for P9-14.
 
 Every migration has a reverse batch with the same name in `down/`, under the
 same format rules. Startup never reads `down/`. Down scripts drop data: only

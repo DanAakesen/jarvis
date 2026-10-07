@@ -73,7 +73,8 @@ describe('Foundry screen vision model', () => {
       description: 'A browser window with a chart.',
       inputTokens: 1136,
       outputTokens: 26,
-      costDkk: 0.0008,
+      costDkk: 0.00083289,
+      costUsd: 0.00012661,
     });
     expect(getToken).toHaveBeenCalledOnce();
     expect(fetcher).toHaveBeenCalledOnce();

@@ -58,6 +58,7 @@ describe('committed SQL manifest', () => {
       '0027_vault_knowledge_graph.sql',
       '0028_json_embeddings_without_vector.sql',
       '0029_background_jobs.sql',
+      '0030_foundry_usage_cost_coverage.sql',
     ]);
     for (const migration of migrations) await expect(readDownMigration(migration.name)).resolves.toMatchObject({ name: migration.name });
   });
@@ -71,7 +72,7 @@ describe('committed SQL manifest', () => {
     });
   });
   it('stores background jobs and their step history with cascading retention', async () => {
-    const migration = (await readMigrations()).at(-1);
+    const migration = (await readMigrations()).find(({ name }) => name === '0029_background_jobs.sql');
     expect(migration?.sql).toContain('CREATE TABLE dbo.background_jobs');
     expect(migration?.sql).toContain('CREATE TABLE dbo.background_job_steps');
     expect(migration?.sql).toContain('job_id nvarchar(36) COLLATE Latin1_General_100_BIN2');

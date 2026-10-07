@@ -9,6 +9,7 @@ import json
 from collections.abc import AsyncIterator
 from types import SimpleNamespace
 from typing import Any
+from uuid import UUID
 
 import httpx
 import pytest
@@ -206,6 +207,8 @@ class FakeBackend:
             if self.status != 200:
                 return httpx.Response(self.status, json={"error": "Forbidden"})
             return httpx.Response(200, json=self.catalogue)
+        if request.url.path == "/usage/foundry":
+            return httpx.Response(204)
         name = request.url.path.rsplit("/", 1)[-1]
         return httpx.Response(
             200, json={"tool": name, "outcome": "ok", "result": {"id": 7, "state": "Ready"}}
@@ -286,6 +289,38 @@ async def test_streams_text_and_disables_remote_storage() -> None:
     assert transport.responses.stream.exited
     await model.close()
     assert transport.closed
+
+
+@pytest.mark.asyncio
+async def test_reports_provider_token_usage_with_the_chat_role_and_model() -> None:
+    backend = FakeBackend()
+    model, _ = client([completed()], backend=backend)
+
+    chunks = model.complete_chat([ModelMessage("user", "Hello")], "en")
+    assert [chunk async for chunk in chunks] == []
+
+    usage = next(request for request in backend.requests if request.url.path == "/usage/foundry")
+    assert usage.method == "POST"
+    payload = json.loads(usage.content)
+    assert payload == {
+        "role": "chat",
+        "model": "deployment",
+        "inputTokens": 100,
+        "outputTokens": 20,
+        "eventId": payload["eventId"],
+    }
+    assert str(UUID(payload["eventId"])) == payload["eventId"]
+
+
+@pytest.mark.asyncio
+async def test_reports_provider_token_usage_with_the_voice_role() -> None:
+    backend = FakeBackend()
+    model, _ = client([completed()], backend=backend)
+
+    _ = [chunk async for chunk in model.complete([ModelMessage("user", "Hello")])]
+
+    usage = next(request for request in backend.requests if request.url.path == "/usage/foundry")
+    assert json.loads(usage.content)["role"] == "voice"
 
 
 @pytest.mark.asyncio
@@ -398,7 +433,7 @@ async def test_chat_picks_up_steering_after_a_tool_round_without_repeating_the_t
             "Reply in English:\nContinue in English."
         ),
     }
-    tool_posts = [request for request in backend.requests if request.method == "POST"]
+    tool_posts = [request for request in backend.requests if request.url.path.startswith("/tools/")]
     assert len(tool_posts) == 1
 
 
@@ -570,6 +605,7 @@ async def test_adds_running_tasks_before_history_and_keeps_the_latest_exchange_a
     assert [(request.method, request.url.path) for request in backend.requests] == [
         ("GET", "/tools"),
         ("GET", "/factory/context"),
+        ("POST", "/usage/foundry"),
     ]
 
 
@@ -638,7 +674,9 @@ async def test_try_again_after_refused_pc_open_selects_pc_open_again() -> None:
         "/tools",
         "/factory/context",
         "/agent/settings",
+        "/usage/foundry",
         "/tools/pc_open",
+        "/usage/foundry",
     ]
 
 
@@ -734,12 +772,16 @@ async def test_tool_loop_calls_the_backend_tool_and_streams_answer() -> None:
         "outcome": "ok",
         "result": {"id": 7, "state": "Ready"},
     }
-    tools, context, post = backend.requests
-    assert (tools.method, tools.url.path) == ("GET", "/tools")
-    assert (context.method, context.url.path) == ("GET", "/factory/context")
-    assert (post.method, post.url.path) == ("POST", "/tools/create_task")
+    tools = next(request for request in backend.requests if request.url.path == "/tools")
+    context = next(
+        request for request in backend.requests if request.url.path == "/factory/context"
+    )
+    post = next(request for request in backend.requests if request.url.path == "/tools/create_task")
+    usages = [request for request in backend.requests if request.url.path == "/usage/foundry"]
+    assert (tools.method, context.method, post.method) == ("GET", "GET", "POST")
     assert post.headers["x-jarvis-message-id"] == "42"
     assert json.loads(post.content) == {"text": "Tilføj dark mode"}
+    assert len(usages) == 2
     await model.close()
 
 
@@ -760,7 +802,9 @@ async def test_tool_call_without_a_stored_message_is_reported_as_not_done() -> N
 
     output = json.loads(transport.responses.requests[1]["input"][-1]["output"])
     assert output["outcome"] == "error" and "nothing was done" in output["error"]
-    assert [request.url.path for request in backend.requests] == ["/tools", "/factory/context"]
+    assert [request.url.path for request in backend.requests] == [
+        "/tools", "/factory/context", "/usage/foundry", "/usage/foundry",
+    ]
 
 
 @pytest.mark.asyncio
