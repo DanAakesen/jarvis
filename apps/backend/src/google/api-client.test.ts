@@ -40,6 +40,24 @@ describe('Google API client', () => {
       .rejects.toMatchObject({ kind: 'uncertain' });
   });
 
+  it('sends Calendar delete requests without a body and accepts the 204 response', async () => {
+    const fetcher = vi.fn(async (_input: string | URL | Request, init?: RequestInit) => {
+      expect(init?.method).toBe('DELETE');
+      expect(init?.body).toBeUndefined();
+      return new Response(null, { status: 204 });
+    });
+    const google = createGoogleApiClient({
+      tokens: { getToken: async () => 'fixture-token' },
+      fetch: fetcher,
+    });
+
+    await expect(google.request('calendar', '/calendars/primary/events/event-1', {
+      method: 'DELETE',
+      signal: new AbortController().signal,
+    })).resolves.toEqual({});
+    expect(fetcher).toHaveBeenCalledOnce();
+  });
+
   it('turns a rejected refresh token into a credential-expiry result', async () => {
     const google = createGoogleApiClient({
       tokens: {

@@ -10,7 +10,7 @@ const MAX_RESPONSE_BYTES = 1024 * 1024;
 export type GoogleApi = keyof typeof ORIGINS;
 
 export interface GoogleApiRequest {
-  readonly method?: 'GET' | 'POST' | 'PATCH';
+  readonly method?: 'GET' | 'POST' | 'PATCH' | 'DELETE';
   readonly body?: unknown;
   readonly signal: AbortSignal;
 }
