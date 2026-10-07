@@ -70,6 +70,16 @@ function sendBounded(reply: FastifyReply, value: unknown) {
   return reply.send(value);
 }
 
+/** Fastify reply headers (CORS, Vary) that a hijacked stream must send itself. */
+export function sseHeaders(reply: FastifyReply): Record<string, string> {
+  const headers: Record<string, string> = {};
+  for (const [name, value] of Object.entries(reply.getHeaders())) {
+    if (value === undefined) continue;
+    headers[name] = Array.isArray(value) ? value.join(', ') : String(value);
+  }
+  return headers;
+}
+
 export function registerNowRoutes(app: FastifyInstance) {
   app.get('/presence', async (request, reply) => {
     if (!request.principal || request.principal.objectId.toLowerCase() !== app.ownerObjectId.toLowerCase()) {
@@ -206,7 +216,9 @@ export function registerNowRoutes(app: FastifyInstance) {
     }, 25_000);
     response.once('close', cleanup);
     response.once('error', end);
+    // hijack() bypasses Fastify's reply headers, so carry CORS across or browsers block the stream.
     response.writeHead(200, {
+      ...sseHeaders(reply),
       'Content-Type': 'text/event-stream; charset=utf-8',
       'Cache-Control': 'no-cache, no-store, no-transform',
       Connection: 'keep-alive',

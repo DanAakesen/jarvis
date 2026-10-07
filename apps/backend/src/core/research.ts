@@ -203,12 +203,30 @@ function parseReport(value: unknown, sources: readonly HtmlArtifactSource[]): Re
   };
 }
 
-function reportFrame(snapshot: ReturnType<FastifyInstance['workspaceCommands']['snapshot']>): HtmlArtifactFrame {
+// Used until the web app reports its real window frame; matches the dark glass shell on a desktop.
+export const defaultReportFrame: HtmlArtifactFrame = {
+  widthPx: 1100,
+  heightPx: 760,
+  device: 'desktop',
+  theme: 'dark',
+  reducedMotion: false,
+  density: 'comfortable',
+  designTokens: {
+    '--background': '#07090f',
+    '--surface': '#111622',
+    '--text': '#e8ecf4',
+    '--muted': '#9aa3b5',
+    '--accent': '#d7a67a',
+    '--border': '#2a3142',
+  },
+  fonts: { body: 'system-ui, sans-serif', heading: 'system-ui, sans-serif', mono: 'ui-monospace, monospace' },
+  layout: 'tiled',
+  pinned: false,
+};
+
+export function reportFrame(snapshot: ReturnType<FastifyInstance['workspaceCommands']['snapshot']>): HtmlArtifactFrame {
   const frame = snapshot?.frame;
-  if (!isHtmlArtifactFrame(frame)) {
-    throw new ToolRefusal('The workspace display settings are not available yet.');
-  }
-  return { ...frame, pinned: false };
+  return isHtmlArtifactFrame(frame) ? { ...frame, pinned: false } : defaultReportFrame;
 }
 
 function notifyCompletion(

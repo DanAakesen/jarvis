@@ -355,6 +355,22 @@ describe('Now feed API', () => {
     expect(store.dismiss).not.toHaveBeenCalled();
   });
 
+  it('sends CORS headers on the hijacked stream so the web app can read it', async () => {
+    const store: NowFeedStore = { read: vi.fn(async () => feed), dismiss: vi.fn(async () => true) };
+    const { app } = fixture(store);
+    const address = await app.listen({ port: 0, host: '127.0.0.1' });
+    const controller = new AbortController();
+    const origin = 'http://localhost:5173';
+    const response = await fetch(`${address}/now/events`, { headers: { ...headers, origin }, signal: controller.signal });
+    try {
+      expect(response.status).toBe(200);
+      expect(response.headers.get('access-control-allow-origin')).toBe(origin);
+      expect(response.headers.get('content-type')).toContain('text/event-stream');
+    } finally {
+      controller.abort();
+      await app.close();
+    }
+  });
   it('streams authenticated refresh events after a task event', async () => {
     const store: NowFeedStore = { read: vi.fn(async () => feed), dismiss: vi.fn(async () => true) };
     const { app } = fixture(store);
