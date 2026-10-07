@@ -1,11 +1,12 @@
 import type { JarvisTool } from '../core/tool-registry.js';
-import { ToolRefusal } from '../core/tool-registry.js';
+import { ToolFailure, ToolRefusal } from '../core/tool-registry.js';
 import { taskStates, type TaskState } from './task-lifecycle.js';
 import type { Project } from './projects.js';
 import type { TaskDetail, TaskListFilters, TaskRecord } from './task-store.js';
 import { settingsOptions } from '../core/settings.js';
 import { modelsForRole, reasoningForModel } from '../core/model-catalog.js';
 import type { ModelCatalogue } from '@jarvis/contracts';
+import { createGitHubActionsRunClient } from '../github/actions-runs.js';
 
 const idSchema = { type: 'string', pattern: '^[1-9][0-9]{0,18}$', maxLength: 19 };
 const maxSqlBigInt = 9_223_372_036_854_775_807n;
@@ -95,6 +96,14 @@ function taskDetailSummary(detail: TaskDetail) {
   };
 }
 
+async function activeProject(projectId: string, request: import('fastify').FastifyRequest): Promise<Project> {
+  assertSqlBigInt(projectId);
+  const store = requireStore(request.server.projectStore, 'Project service');
+  const project = (await store.list()).find(({ id }) => id === projectId);
+  if (!project) throw new ToolRefusal('Active project not found.');
+  return project;
+}
+
 function taskListFilters(input: TaskListInput): TaskListFilters {
   if (input.projectId !== undefined) assertSqlBigInt(input.projectId);
   if (input.createdAfter && input.createdBefore &&
@@ -176,6 +185,80 @@ export const factoryTools: readonly JarvisTool[] = [
       const detail = await store.get(taskId, eventLimit ?? 100, eventOffset ?? 0);
       if (!detail) throw new ToolRefusal('Task not found.');
       return taskDetailSummary(detail);
+    },
+  },
+  {
+    name: 'list_releases',
+    description: 'List the recorded releases for an active Software Factory project.',
+    inputSchema: {
+      type: 'object',
+      properties: { projectId: idSchema },
+      required: ['projectId'],
+      additionalProperties: false,
+    },
+    reflexSafe: true,
+    execute: async (input, request) => {
+      const project = await activeProject((input as { projectId: string }).projectId, request);
+      const store = requireStore(request.server.releaseViewStore, 'Release service');
+      const records = await store.read(project.id);
+      return {
+        project: { id: project.id, name: project.name, repo: project.repo },
+        releases: records.releases,
+      };
+    },
+  },
+  {
+    name: 'get_release',
+    description: 'Get a recorded release and its linked workflow and deployment status.',
+    inputSchema: {
+      type: 'object',
+      properties: { releaseId: idSchema },
+      required: ['releaseId'],
+      additionalProperties: false,
+    },
+    reflexSafe: true,
+    execute: async (input, request) => {
+      const { releaseId } = input as { releaseId: string };
+      assertSqlBigInt(releaseId);
+      const store = requireStore(request.server.releaseViewStore, 'Release service');
+      const projectId = await store.projectForRelease(releaseId);
+      if (!projectId) throw new ToolRefusal('Release not found.');
+      const project = await activeProject(projectId, request);
+      const records = await store.read(project.id);
+      const release = records.releases.find(({ id }) => id === releaseId);
+      if (!release) throw new ToolRefusal('Release not found.');
+      return {
+        project: { id: project.id, name: project.name, repo: project.repo },
+        release,
+        workflowRuns: records.workflowRuns.filter(({ releaseId: linkedReleaseId }) => linkedReleaseId === release.id),
+        deployments: records.deployments.filter(({ releaseId: linkedReleaseId }) => linkedReleaseId === release.id),
+      };
+    },
+  },
+  {
+    name: 'get_deployment_status',
+    description: 'Check the latest deploy workflow run on an active project’s default branch.',
+    inputSchema: {
+      type: 'object',
+      properties: { projectId: idSchema },
+      required: ['projectId'],
+      additionalProperties: false,
+    },
+    reflexSafe: true,
+    execute: async (input, request, signal) => {
+      const project = await activeProject((input as { projectId: string }).projectId, request);
+      const tokenIssuer = request.server.githubAppTokenIssuer;
+      if (!tokenIssuer) throw new ToolFailure('GitHub deployment status is unavailable.');
+      try {
+        const deployment = await createGitHubActionsRunClient(tokenIssuer)
+          .latestDeployment(project.repo, project.default_branch, signal);
+        return {
+          project: { id: project.id, name: project.name, repo: project.repo },
+          deployment,
+        };
+      } catch {
+        throw new ToolFailure('GitHub deployment status could not be read.');
+      }
     },
   },
   {
@@ -292,6 +375,37 @@ export const factoryTools: readonly JarvisTool[] = [
         model: result.task.modelOverride,
         reasoning: result.task.reasoningOverride,
         applies: 'next task turn',
+      };
+    },
+  },
+  {
+    name: 'retry_task',
+    description: 'Retry an eligible task that failed before sandbox work began; use Recover for tasks that ran.',
+    inputSchema: {
+      type: 'object',
+      properties: { taskId: idSchema },
+      required: ['taskId'],
+      additionalProperties: false,
+    },
+    execute: async (input, request) => {
+      const { taskId } = input as { taskId: string };
+      assertSqlBigInt(taskId);
+      const store = requireStore(request.server.taskStore, 'Task service');
+      const result = await store.retry(taskId);
+      if (result.kind === 'not-found') throw new ToolRefusal('Task not found.');
+      if (result.kind === 'invalid-transition') {
+        throw new ToolRefusal('Only eligible failed starts without sandbox history can be retried; use Recover for tasks that ran.');
+      }
+      if (result.kind === 'credential-unavailable') {
+        throw new ToolRefusal('Retry is unavailable while the task credentials are unavailable.');
+      }
+      if (result.kind === 'renewal-active') {
+        throw new ToolRefusal('Retry is unavailable while Codex credential renewal is active.');
+      }
+      return {
+        id: result.task.id,
+        state: result.task.state,
+        attemptCount: result.task.attemptCount,
       };
     },
   },
