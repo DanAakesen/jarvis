@@ -448,7 +448,7 @@ Declined in the audit (do not file): verbosity and max-output-token settings, no
 | P9-03 | [#497](https://github.com/DanAakesen/jarvis/issues/497) | Switch embedding model with automatic re-embedding | Backend | P9-01 | Complete |
 | P9-04 | [#498](https://github.com/DanAakesen/jarvis/issues/498) | Codex and Copilot model and reasoning choices that apply | Backend | P9-01 | Complete |
 | P9-05 | [#499](https://github.com/DanAakesen/jarvis/issues/499) | Voice tuning: turn detection, barge-in, reply length | Backend | — | Complete |
-| P9-06 | [#500](https://github.com/DanAakesen/jarvis/issues/500) | Research depth, sources and timeout | Backend | — | Not started |
+| P9-06 | [#500](https://github.com/DanAakesen/jarvis/issues/500) | Research depth, sources and timeout | Backend | — | In progress |
 | P9-07 | [#501](https://github.com/DanAakesen/jarvis/issues/501) | Model deployment manager (add/remove Foundry deployments with confirmation) | Backend | P9-01 | Complete |
 | P9-08 | [#502](https://github.com/DanAakesen/jarvis/issues/502) | Claude models as the chat model | Backend | P9-01 | Complete |
 | P9-09 | [#503](https://github.com/DanAakesen/jarvis/issues/503) | Settings: expose hidden settings | UI session | — | In progress |
@@ -469,7 +469,7 @@ Declined in the audit (do not file): verbosity and max-output-token settings, no
 | P9-24 | [#518](https://github.com/DanAakesen/jarvis/issues/518) | Conversation search | Backend | — | In progress |
 | P9-25 | [#519](https://github.com/DanAakesen/jarvis/issues/519) | Folio: everything Jarvis pulled up, findable again | Backend + UI session | — | Not started |
 | P9-26 | [#520](https://github.com/DanAakesen/jarvis/issues/520) | Calendar update and delete | Backend | — | Complete |
-| P9-27 | [#521](https://github.com/DanAakesen/jarvis/issues/521) | Mail drafts and triage | Backend | — | Not started |
+| P9-27 | [#521](https://github.com/DanAakesen/jarvis/issues/521) | Mail drafts and triage | Backend | — | In progress |
 | P9-28 | [#522](https://github.com/DanAakesen/jarvis/issues/522) | Project update and archive tools | Backend | — | Not started |
 | P9-29 | [#523](https://github.com/DanAakesen/jarvis/issues/523) | Factory retry and release status tools | Backend | — | Complete |
 | P9-30 | [#524](https://github.com/DanAakesen/jarvis/issues/524) | Job detail and retry | Backend | P9-14 | Not started |
