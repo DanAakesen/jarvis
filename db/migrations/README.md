@@ -30,6 +30,8 @@ timestamps. Its down batch drops the receipts but never resurrects dismissals;
 restoring pre-cleanup visibility requires a reviewed backup restore.
 `0027_vault_knowledge_graph.sql` adds index timestamps to vault chunks and
 persists parsed note-link targets for the P7-43 knowledge graph.
+`0028_json_embeddings_without_vector.sql` stores nullable JSON embeddings for
+memories and vault chunks only when SQL Server does not expose the `vector` type.
 
 Every migration has a reverse batch with the same name in `down/`, under the
 same format rules. Startup never reads `down/`. Down scripts drop data: only

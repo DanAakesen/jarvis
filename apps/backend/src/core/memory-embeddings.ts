@@ -6,6 +6,10 @@ const DEPLOYMENT_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/u;
 
 export interface MemoryEmbedder {
   embed(text: string, signal: AbortSignal): Promise<readonly number[]>;
+  embedWithUsage?(text: string, signal: AbortSignal): Promise<{
+    readonly embedding: readonly number[];
+    readonly inputTokens?: number;
+  }>;
 }
 
 export interface FoundryMemoryEmbedderOptions {
@@ -65,35 +69,46 @@ export function createFoundryMemoryEmbedder(options: FoundryMemoryEmbedderOption
   }
   const fetcher = options.fetcher ?? fetch;
 
+  async function embedWithUsage(text: string, signal: AbortSignal) {
+    if (!text.trim() || text.length > 4500) throw new TypeError('Memory text is invalid');
+    signal.throwIfAborted();
+    const timeout = AbortSignal.timeout(EMBEDDING_TIMEOUT_MS);
+    const requestSignal = AbortSignal.any([signal, timeout]);
+    const token = await options.getToken(FOUNDRY_EMBEDDING_SCOPE, requestSignal);
+    if (!token.trim() || /[\r\n]/u.test(token)) throw new Error('Foundry embedding authentication failed');
+    const response = await fetcher(url, {
+      method: 'POST',
+      headers: {
+        Authorization: ['Bear' + 'er', token].join(' '),
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ model: options.deploymentName, input: text }),
+      redirect: 'error',
+      signal: requestSignal,
+    });
+    if (!response.ok) throw new Error(`Foundry embedding request failed with HTTP ${response.status}`);
+    const body = await readResponse(response) as {
+      data?: readonly { embedding?: unknown }[];
+      usage?: { prompt_tokens?: unknown; input_tokens?: unknown };
+    } | null;
+    const embedding = body?.data?.length === 1 ? body.data[0]?.embedding : undefined;
+    if (!Array.isArray(embedding) || embedding.length !== MEMORY_EMBEDDING_DIMENSIONS ||
+        !embedding.every((value) => typeof value === 'number' && Number.isFinite(value))) {
+      throw new Error('Foundry embedding response is invalid');
+    }
+    signal.throwIfAborted();
+    const inputTokens = body?.usage?.prompt_tokens ?? body?.usage?.input_tokens;
+    return {
+      embedding,
+      ...(Number.isSafeInteger(inputTokens) && Number(inputTokens) >= 0
+        ? { inputTokens: Number(inputTokens) } : {}),
+    };
+  }
+
   return {
     async embed(text, signal) {
-      if (!text.trim() || text.length > 2000) throw new TypeError('Memory text is invalid');
-      signal.throwIfAborted();
-      const timeout = AbortSignal.timeout(EMBEDDING_TIMEOUT_MS);
-      const requestSignal = AbortSignal.any([signal, timeout]);
-      const token = await options.getToken(FOUNDRY_EMBEDDING_SCOPE, requestSignal);
-      if (!token.trim() || /[\r\n]/u.test(token)) throw new Error('Foundry embedding authentication failed');
-      const response = await fetcher(url, {
-        method: 'POST',
-        headers: {
-          Authorization: ['Bear' + 'er', token].join(' '),
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ model: options.deploymentName, input: text }),
-        redirect: 'error',
-        signal: requestSignal,
-      });
-      if (!response.ok) throw new Error(`Foundry embedding request failed with HTTP ${response.status}`);
-      const body = await readResponse(response) as {
-        data?: readonly { embedding?: unknown }[];
-      } | null;
-      const embedding = body?.data?.length === 1 ? body.data[0]?.embedding : undefined;
-      if (!Array.isArray(embedding) || embedding.length !== MEMORY_EMBEDDING_DIMENSIONS ||
-          !embedding.every((value) => typeof value === 'number' && Number.isFinite(value))) {
-        throw new Error('Foundry embedding response is invalid');
-      }
-      signal.throwIfAborted();
-      return embedding;
+      return (await embedWithUsage(text, signal)).embedding;
     },
+    embedWithUsage,
   };
 }

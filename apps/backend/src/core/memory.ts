@@ -143,13 +143,16 @@ export function createMemoryModule(options: MemoryModuleOptions): BackendModule 
     if (!store.supportsVectorSearch() || !embedder) return { value: null, unavailable: false };
     const startedAt = performance.now();
     try {
-      const value = await embedder.embed(content, signal);
+      const embedded = embedder.embedWithUsage
+        ? await embedder.embedWithUsage(content, signal)
+        : { embedding: await embedder.embed(content, signal) };
       request.log.info({
         msg: 'memory.embedding',
         outcome: 'ok',
         durationMs: Math.max(0, performance.now() - startedAt),
+        ...(embedded.inputTokens !== undefined ? { inputTokens: embedded.inputTokens } : {}),
       }, 'memory.embedding');
-      return { value, unavailable: false };
+      return { value: embedded.embedding, unavailable: false };
     } catch (error) {
       request.log.info({
         msg: 'memory.embedding',

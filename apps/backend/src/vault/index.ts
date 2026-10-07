@@ -38,6 +38,7 @@ const maxMarkdownFiles = 10_000;
 const maxRoutingBytes = 512 * 1024;
 const maxInstructionFiles = 32;
 const maxVaultChunks = 512;
+const maxBackfillEmbeddingsPerSync = 4_096;
 const maxMemoryApiResults = 50;
 const maxMemoryApiOffset = 10_000;
 const maxMemoryApiHistory = 10;
@@ -59,6 +60,12 @@ export interface VaultLogFields {
   readonly removed?: number;
   readonly folder?: string;
   readonly folders?: readonly string[];
+}
+
+export interface MemoryEmbeddingLogFields {
+  readonly outcome: 'ok' | 'fallback' | 'cancelled';
+  readonly durationMs: number;
+  readonly inputTokens?: number;
 }
 
 export interface VaultModule extends BackendModule {
@@ -427,6 +434,7 @@ function cosineSimilarity(left: readonly number[], right: readonly number[]): nu
     rightNorm += b * b;
   }
   if (leftNorm === 0 || rightNorm === 0) return undefined;
+  if (!Number.isFinite(dot) || !Number.isFinite(leftNorm) || !Number.isFinite(rightNorm)) return undefined;
   return Math.max(-1, Math.min(1, dot / Math.sqrt(leftNorm * rightNorm)));
 }
 
@@ -450,6 +458,7 @@ export function createVaultModule(options: {
   readonly apiMemoryStore?: MemoryStore;
   readonly embedder?: MemoryEmbedder;
   readonly log?: (event: 'vault.index' | 'vault.write', fields: VaultLogFields) => void;
+  readonly logEmbedding?: (fields: MemoryEmbeddingLogFields) => void;
 }): VaultModule {
   const log = options.log ?? (() => {});
   let routingRules: Promise<{
@@ -505,12 +514,27 @@ export function createVaultModule(options: {
     if (sections.length > maxVaultChunks) throw new Error('Vault note has too many index chunks');
     const chunks: VaultIndexedChunk[] = [];
     for (const [index, section] of sections.entries()) {
-      const embedding = options.embedder
-        ? await options.embedder.embed(`${section.heading}\n${section.content}`, signal).catch((error: unknown) => {
+      let embedding: readonly number[] | null = null;
+      if (options.embedder) {
+        const startedAt = performance.now();
+        try {
+          const embedded = options.embedder.embedWithUsage
+            ? await options.embedder.embedWithUsage(`${section.heading}\n${section.content}`, signal)
+            : { embedding: await options.embedder.embed(`${section.heading}\n${section.content}`, signal) };
+          embedding = embedded.embedding;
+          options.logEmbedding?.({
+            outcome: 'ok',
+            durationMs: Math.max(0, performance.now() - startedAt),
+            ...(embedded.inputTokens !== undefined ? { inputTokens: embedded.inputTokens } : {}),
+          });
+        } catch (error) {
+          options.logEmbedding?.({
+            outcome: signal.aborted ? 'cancelled' : 'fallback',
+            durationMs: Math.max(0, performance.now() - startedAt),
+          });
           if (signal.aborted) throw error;
-          return null;
-        })
-        : null;
+        }
+      }
       chunks.push({ index, ...section, embedding });
     }
     return chunks;
@@ -522,15 +546,19 @@ export function createVaultModule(options: {
     if (markdown.length > maxMarkdownFiles) throw new Error('Vault has too many Markdown notes to index');
     const indexed = await options.indexStore.files(signal);
     if (indexed.length > maxMarkdownFiles) throw new Error('Vault index exceeds the supported size');
-    const oldByPath = new Map(indexed.map((file) => [file.path, file.blobSha]));
+    const oldByPath = new Map(indexed.map((file) => [file.path, file]));
     const newPaths = new Set(markdown.map(({ path }) => path));
     const remove = indexed.filter(({ path }) => !newPaths.has(path)).map(({ path }) => path);
     let added = 0;
     let changed = 0;
+    let remainingBackfillEmbeddings = maxBackfillEmbeddingsPerSync;
     const touchedFolders = new Set<string>();
 
     for (const file of markdown) {
-      if (oldByPath.get(file.path) === file.sha) continue;
+      const previous = oldByPath.get(file.path);
+      const unchanged = previous?.blobSha === file.sha;
+      const backfill = unchanged && previous?.embeddingMissing === true;
+      if (unchanged && (!backfill || !options.embedder)) continue;
       let note: VaultFile | null;
       try {
         note = await options.client.read(file.path, signal);
@@ -547,6 +575,9 @@ export function createVaultModule(options: {
         remove.push(file.path);
         continue;
       }
+      const sectionCount = chunkMarkdown(note.content).length;
+      if (backfill && sectionCount > remainingBackfillEmbeddings) continue;
+      if (backfill) remainingBackfillEmbeddings -= sectionCount;
       const chunks = await makeChunks(note, signal);
       await options.indexStore.replaceFile(note.path, note.sha, chunks, extractLinkTargets(note.content), signal);
       if (oldByPath.has(note.path)) changed += 1;
@@ -629,39 +660,7 @@ export function createVaultModule(options: {
     }
     const vectors = meanVectors(graphData.embeddings);
     const similarities: KnowledgeGraphEdge[] = [];
-    if (graphData.similarities.length > 0) {
-      for (const edge of graphData.similarities) {
-        if (!pathSet.has(edge.sourcePath) || !pathSet.has(edge.targetPath) ||
-            edge.sourcePath === edge.targetPath || edge.score <= similarityThreshold) continue;
-        similarities.push({
-          source: ids.get(edge.sourcePath)!,
-          target: ids.get(edge.targetPath)!,
-          type: 'similar',
-          score: Math.max(-1, Math.min(1, edge.score)),
-        });
-      }
-    } else if (vectors.size === 0) {
-      const textual = textVectors(graphData.contents ?? []);
-      for (const source of paths) {
-        const sourceVector = textual.get(source);
-        if (!sourceVector) continue;
-        const neighbours = paths.flatMap((target) => {
-          const targetVector = target === source ? undefined : textual.get(target);
-          if (!targetVector) return [];
-          const score = sparseCosine(sourceVector, targetVector);
-          return score > textSimilarityThreshold ? [{ target, score }] : [];
-        }).sort((left, right) => right.score - left.score || left.target.localeCompare(right.target))
-          .slice(0, 3);
-        for (const neighbour of neighbours) {
-          similarities.push({
-            source: ids.get(source)!,
-            target: ids.get(neighbour.target)!,
-            type: 'similar',
-            score: Math.round(neighbour.score * 1000) / 1000,
-          });
-        }
-      }
-    } else {
+    if (vectors.size > 0) {
       for (const source of paths) {
         const sourceVector = vectors.get(source);
         if (!sourceVector) continue;
@@ -679,6 +678,39 @@ export function createVaultModule(options: {
             target: ids.get(neighbour.target)!,
             type: 'similar',
             score: neighbour.score,
+          });
+        }
+      }
+    } else if (graphData.similarities.length > 0) {
+      for (const edge of graphData.similarities) {
+        if (!pathSet.has(edge.sourcePath) || !pathSet.has(edge.targetPath) ||
+            edge.sourcePath === edge.targetPath || edge.score <= similarityThreshold) continue;
+        similarities.push({
+          source: ids.get(edge.sourcePath)!,
+          target: ids.get(edge.targetPath)!,
+          type: 'similar',
+          score: Math.max(-1, Math.min(1, edge.score)),
+        });
+      }
+    } else {
+      // No vector support and no stored embeddings: fall back to TF-IDF over the note text.
+      const textual = textVectors(graphData.contents ?? []);
+      for (const source of paths) {
+        const sourceVector = textual.get(source);
+        if (!sourceVector) continue;
+        const neighbours = paths.flatMap((target) => {
+          const targetVector = target === source ? undefined : textual.get(target);
+          if (!targetVector) return [];
+          const score = sparseCosine(sourceVector, targetVector);
+          return score > textSimilarityThreshold ? [{ target, score }] : [];
+        }).sort((left, right) => right.score - left.score || left.target.localeCompare(right.target))
+          .slice(0, 3);
+        for (const neighbour of neighbours) {
+          similarities.push({
+            source: ids.get(source)!,
+            target: ids.get(neighbour.target)!,
+            type: 'similar',
+            score: Math.round(neighbour.score * 1000) / 1000,
           });
         }
       }

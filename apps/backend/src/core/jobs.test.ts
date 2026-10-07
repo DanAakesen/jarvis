@@ -4,7 +4,9 @@ import { buildApp } from '../app.js';
 import { loadConfig } from '../config.js';
 import type { TokenVerifier } from '../auth/verify.js';
 import { createEventHub } from './event-hub.js';
-import { BackgroundJobRegistry } from './jobs.js';
+import { BackgroundJobRegistry, cancelJobTool, listJobsTool } from './jobs.js';
+import type { FastifyRequest } from 'fastify';
+import { ToolRefusal } from './tool-registry.js';
 import type { JarvisActivityHub } from './activity.js';
 
 const config = { ...loadConfig({}), logLevel: 'silent' as const };
@@ -72,5 +74,36 @@ describe('background jobs', () => {
 
     const stranger = fixture('00000000-0000-4000-8000-000000000001');
     expect([401, 403]).toContain((await stranger.inject({ url: '/jobs', headers })).statusCode);
+  });
+
+  it('lets Jarvis list jobs and cancel one by title in chat or voice', async () => {
+    const app = fixture();
+    const request = { server: app } as unknown as FastifyRequest;
+    const signal = new AbortController().signal;
+    const stopIgnite = vi.fn();
+    const ignite = app.backgroundJobs.start('research', 'Research: Microsoft Ignite 2026', 3, stopIgnite);
+    ignite.progress(1, 'Searching: Key findings');
+    const foundry = app.backgroundJobs.start('research', 'Research: Foundry IQ', 3, vi.fn());
+    foundry.done('research-foundry', 'Report ready');
+
+    const listed = await listJobsTool.execute({}, request, signal) as {
+      running: Array<Record<string, unknown>>; finished: Array<Record<string, unknown>>;
+    };
+    expect(listed.running).toEqual([expect.objectContaining({
+      title: 'Research: Microsoft Ignite 2026', status: 'running', progress: '1/3', detail: 'Searching: Key findings',
+    })]);
+    expect(listed.finished).toEqual([expect.objectContaining({
+      title: 'Research: Foundry IQ', status: 'done', resultWindow: 'research-foundry',
+    })]);
+
+    await expect(cancelJobTool.execute({ query: 'Foundry' }, request, signal)).rejects.toBeInstanceOf(ToolRefusal);
+    await expect(cancelJobTool.execute({ query: 'ignite research' }, request, signal))
+      .resolves.toMatchObject({ cancelled: 'Research: Microsoft Ignite 2026' });
+    expect(stopIgnite).toHaveBeenCalledOnce();
+    await expect(cancelJobTool.execute({ jobId: ignite.jobId }, request, signal)).rejects.toBeInstanceOf(ToolRefusal);
+
+    app.backgroundJobs.start('research', 'Research: Azure pricing', 2, vi.fn());
+    app.backgroundJobs.start('research', 'Research: Azure quotas', 2, vi.fn());
+    await expect(cancelJobTool.execute({ query: 'azure' }, request, signal)).rejects.toThrow(/Several running jobs/);
   });
 });
