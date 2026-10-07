@@ -1739,6 +1739,19 @@ describe('backend-relayed Voice Live WebSocket', () => {
     );
   });
 
+  it('builds the Voice Live endpoint for the mini deployment and rejects unknown models', () => {
+    expect(normalizeVoiceLiveEndpoint(
+      'wss://resource.services.ai.azure.com/voice-live/realtime?api-version=2026-07-15',
+      'gpt-realtime-2.1-mini',
+    )).toBe(
+      'wss://resource.services.ai.azure.com/voice-live/realtime?api-version=2026-07-15&model=gpt-realtime-2.1-mini',
+    );
+    expect(() => normalizeVoiceLiveEndpoint(
+      'wss://resource.services.ai.azure.com/voice-live/realtime?api-version=2026-07-15',
+      'unknown-model',
+    )).toThrow(TypeError);
+  });
+
   it('builds the configured Foundry Danish voice-agent endpoint', () => {
     const projectEndpoint = 'https://resource.services.ai.azure.com/api/projects/jarvis';
     expect(normalizeFoundryProjectEndpoint(projectEndpoint)).toBe(projectEndpoint);
@@ -1795,6 +1808,41 @@ describe('backend-relayed Voice Live WebSocket', () => {
     const instructions = (updates[1]?.session as { instructions: string }).instructions;
     expect(instructions).toContain("Dan's current mode: On the move since 2026-10-06T12:15:00.000Z.");
     expect(instructions).toContain(JSON.stringify('Keep directions short.'));
+  });
+
+  it('snapshots the selected voice and transcription roles when an English session starts', async () => {
+    const received: Record<string, unknown>[] = [];
+    const selectedVoiceModels: string[] = [];
+    const upstreamUrl = await echoServer((socket) => {
+      socket.on('message', (data) => {
+        const event = JSON.parse(data.toString()) as Record<string, unknown>;
+        received.push(event);
+        if (event.type === 'session.update') socket.send(JSON.stringify({ type: 'session.updated' }));
+      });
+    });
+    const connect = (
+      _token: string, signal: AbortSignal, _agentSessionId?: string, model?: string,
+    ) => {
+      selectedVoiceModels.push(model ?? '');
+      return new WebSocket(upstreamUrl, { headers: { Authorization: ['Bearer', voiceToken].join(' ') }, signal });
+    };
+    const settingsStore: SettingsStore = {
+      read: vi.fn(async () => ({
+        'roles.voice.model': JSON.stringify('gpt-realtime-2.1-mini'),
+        'roles.transcription.model': JSON.stringify('mai-transcribe'),
+      })),
+      write: vi.fn(async () => {}),
+    };
+    const { app } = appFor(connect, undefined, [], [], undefined, undefined, settingsStore);
+    await app.listen({ host: '127.0.0.1', port: 0 });
+    const address = app.server.address() as AddressInfo;
+    await openBrowser(`ws://127.0.0.1:${address.port}/voice`);
+    await vi.waitFor(() => expect(received.some((event) => event.type === 'session.update')).toBe(true));
+
+    expect(selectedVoiceModels).toEqual(['gpt-realtime-2.1-mini']);
+    expect((received.find((event) => event.type === 'session.update')?.session as {
+      input_audio_transcription: { model: string };
+    }).input_audio_transcription.model).toBe('mai-transcribe');
   });
 
   it('relays Danish sessions through gpt-realtime with a Danish session update', async () => {

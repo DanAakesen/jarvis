@@ -39,6 +39,17 @@ Offline route, settings, dispatcher, agent, research, vision and voice tests
 cover the implementation; live ARM permissions and deployment selection remain
 unverified.
 
+P9-02 (7 October 2026): apply role settings at the next relevant turn or session.
+Use the vision role for screen/camera, browser text reasoning, and PC-act vision;
+offer only image deployments with known cost rates. Snapshot research model and
+reasoning effort at job start and pass both through the existing Codex runner.
+Build the English Voice Live URL with the selected realtime deployment at
+session start; allow `gpt-realtime-2.1` and `gpt-realtime-2.1-mini`, and expose
+only Voice Live-supported `mai-transcribe` for transcription. Add the mini model
+to the existing Bicep deployment chain without a settings migration. Offline
+runtime and runner tests cover these paths; deployed Azure interoperability and
+billed cost remain unverified.
+
 P6-22 (6 October 2026): Jarvis runs in Dan's personal tenant, without Microsoft
 365 or Teams. Keep away mode manual and do not read Graph presence. Route
 notifications and confirmations through the web app and active browser voice

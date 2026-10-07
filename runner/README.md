@@ -54,8 +54,8 @@ session as `agent_session_id` to resume, steer, or pause.
 | Pause | `{"mode":"pause"}` |
 | Credential probe | `{"agent":"copilot","probe":"key-vault"}` |
 | Codex renewal | `{"agent":"codex","mode":"renew-codex","min_days_left":3}` |
-| Codex web research | `{"agent":"codex","mode":"codex-tool","tool":"web_research","query":"...","model":"gpt-5.5"}` |
-| Codex HTML report | `{"agent":"codex","mode":"codex-tool","tool":"html_report","query":"<bounded JSON report request>","model":"gpt-5.5"}` |
+| Codex web research | `{"agent":"codex","mode":"codex-tool","tool":"web_research","query":"...","model":"gpt-5.5","reasoning":"high"}` (`reasoning` optional) |
+| Codex HTML report | `{"agent":"codex","mode":"codex-tool","tool":"html_report","query":"<bounded JSON report request>","model":"gpt-5.5","reasoning":"high"}` (`reasoning` optional) |
 
 Start, steer and renewal return `invocation_id`, `session_id`, `status`,
 `agent`, and `mode`. Poll the invocation for bounded events, result, error, and

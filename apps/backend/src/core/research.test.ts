@@ -8,6 +8,7 @@ import { createHtmlResearchModule, defaultReportFrame, reportFrame, researchWind
 import { coreModule } from './index.js';
 import { WorkspaceCommandBroker } from './workspace-commands.js';
 import type { WebResearchClient } from './web-research.js';
+import type { SettingsStore } from './settings.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const config = { ...loadConfig({}), logLevel: 'silent' as const };
@@ -47,7 +48,7 @@ function deferred() {
 function makeRunner(report = reportHtml(), firstSearchGate?: Promise<void>) {
   let invocation = 0;
   const results = new Map<string, unknown>();
-  const requests: { tool: string; query: string }[] = [];
+  const requests: { tool: string; query: string; model: string; reasoning?: string }[] = [];
   const accepted = (id: string): InvocationAccepted => ({
     invocationId: id,
     sessionId: `session-${id}`,
@@ -55,10 +56,15 @@ function makeRunner(report = reportHtml(), firstSearchGate?: Promise<void>) {
     agent: 'codex',
   });
   const client: WebResearchClient = {
-    startCodexTool: vi.fn(async (tool, query) => {
+    startCodexTool: vi.fn(async (tool, query, model, options) => {
       invocation += 1;
       const id = `invocation-${invocation}`;
-      requests.push({ tool, query });
+      requests.push({
+        tool,
+        query,
+        model,
+        ...(options?.reasoning ? { reasoning: options.reasoning } : {}),
+      });
       if (invocation === 1 && firstSearchGate) await firstSearchGate;
       results.set(id, tool === 'web_research'
         ? {
@@ -83,7 +89,7 @@ function makeRunner(report = reportHtml(), firstSearchGate?: Promise<void>) {
   return { client, requests };
 }
 
-function fixture(runner: ReturnType<typeof makeRunner>) {
+function fixture(runner: ReturnType<typeof makeRunner>, settingsStore?: SettingsStore) {
   const broker = new WorkspaceCommandBroker();
   const commands: WorkspaceCommand[] = [];
   const artifacts: HtmlArtifact[] = [];
@@ -119,6 +125,7 @@ function fixture(runner: ReturnType<typeof makeRunner>) {
     }),
     toolCallStore: { record: async () => {} },
     workspaceCommands: broker,
+    ...(settingsStore ? { settingsStore } : {}),
   });
   apps.push(app);
   const connection = broker.connect(ownerId, (event, data) => {
@@ -166,7 +173,14 @@ describe('background interactive research', () => {
   it('returns after opening progress, then stores a valid report and replaces that view', async () => {
     const gate = deferred();
     const runner = makeRunner(reportHtml(), gate.promise);
-    const { app, commands, artifacts, artifactStore } = fixture(runner);
+    const settingsStore: SettingsStore = {
+      read: async () => ({
+        'roles.research.model': JSON.stringify('gpt-6-luna'),
+        'roles.research.reasoning_effort': JSON.stringify('high'),
+      }),
+      write: async () => {},
+    };
+    const { app, commands, artifacts, artifactStore } = fixture(runner, settingsStore);
     const completion = vi.fn();
     const jobEvents: BackgroundJob[] = [];
     app.jarvisActivityHub.subscribe((event) => { if (event.type === 'job') jobEvents.push(event.job); });
@@ -186,6 +200,11 @@ describe('background interactive research', () => {
 
     expect(runner.requests).toHaveLength(3);
     expect(runner.requests.map(({ tool }) => tool)).toEqual(['web_research', 'web_research', 'html_report']);
+    expect(runner.requests.map(({ model, reasoning }) => [model, reasoning])).toEqual([
+      ['gpt-6-luna', 'high'],
+      ['gpt-6-luna', 'high'],
+      ['gpt-6-luna', 'high'],
+    ]);
     expect(JSON.parse(runner.requests[2]!.query)).toMatchObject({
       frame: { widthPx: 390, device: 'phone', theme: 'dark', reducedMotion: true, layout: 'layered' },
     });

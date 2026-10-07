@@ -1,17 +1,13 @@
 import { FOUNDRY_SCOPE } from '../foundry/client.js';
+import { defaultSettings } from '../core/settings.js';
+import { visionModelRatesDkkPerMillionTokens } from '../core/model-catalog.js';
 import type { PcActVisionModel } from '../pc-bridge/pc-act.js';
 import { normalizeFoundryProjectEndpoint } from '../voice/relay.js';
 import type { ScreenVisionModel, ScreenVisionResult } from './screen.js';
 
 const MAX_RESPONSE_BYTES = 1_048_576;
 const REQUEST_TIMEOUT_MS = 30_000;
-// USD list prices (Sweden Central, Global Standard) converted at the existing 6.5785 DKK/USD.
-const MODEL_RATES_DKK_PER_MILLION_TOKENS = new Map([
-  ['gpt-5.6-luna', { input: 1.3157, output: 7.8941 }],
-  ['gpt-6-luna', { input: 0.6579, output: 3.2893 }],
-]);
-// Screen and camera vision use their own cheap deployment, not the chat model (Dan, 6 October).
-export const VISION_MODEL_DEPLOYMENT = 'gpt-6-luna';
+export const VISION_MODEL_DEPLOYMENT = defaultSettings.roles.vision.model;
 export const DKK_PER_USD = 6.5785;
 
 interface JsonObject {
@@ -27,7 +23,7 @@ function tokenCount(value: unknown): number {
 }
 
 function estimateCostDkk(model: string, inputTokens: number, outputTokens: number): number | undefined {
-  const rates = MODEL_RATES_DKK_PER_MILLION_TOKENS.get(model);
+  const rates = visionModelRatesDkkPerMillionTokens.get(model);
   if (!rates) return undefined;
   return Math.round((inputTokens * rates.input + outputTokens * rates.output) / 1_000_000 * 10_000) / 10_000;
 }
