@@ -444,12 +444,31 @@ resource memoryEmbeddingDeployment 'Microsoft.CognitiveServices/accounts/deploym
   }
 }
 
+resource memoryEmbeddingLargeDeployment 'Microsoft.CognitiveServices/accounts/deployments@2024-10-01' = {
+  parent: foundryAccount
+  name: 'text-embedding-3-large'
+  dependsOn: [
+    memoryEmbeddingDeployment
+  ]
+  sku: {
+    name: 'GlobalStandard'
+    capacity: 150
+  }
+  properties: {
+    model: {
+      format: 'OpenAI'
+      name: 'text-embedding-3-large'
+      version: '1'
+    }
+  }
+}
+
 // Continuous screen and camera vision (Dan's choice, 6 October): cheapest capable vision model.
 resource gpt6LunaVisionDeployment 'Microsoft.CognitiveServices/accounts/deployments@2024-10-01' = {
   parent: foundryAccount
   name: 'gpt-6-luna'
   dependsOn: [
-    memoryEmbeddingDeployment
+    memoryEmbeddingLargeDeployment
   ]
   sku: {
     name: 'GlobalStandard'

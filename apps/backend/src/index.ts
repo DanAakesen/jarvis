@@ -76,6 +76,8 @@ import type { NowFeedUpdate } from './core/now.js';
 import { createAlertActivityStore } from './database/alert-store.js';
 import { createMemoryStore, createVaultIndexStore } from './database/memory-store.js';
 import { createFoundryMemoryEmbedder } from './core/memory-embeddings.js';
+import type { MemoryEmbedder } from './core/memory-embeddings.js';
+import { readSettings } from './core/settings.js';
 import { createGitHubVaultClient, VAULT_BRANCH, VAULT_REPOSITORY } from './vault/github-client.js';
 import { createVaultModule } from './vault/index.js';
 import { createArmBudgetReader, startBudgetAlertMonitor } from './operations/budget-alert.js';
@@ -124,6 +126,7 @@ try {
   const database = databaseConfig ? createDatabase(databaseConfig) : undefined;
   const usageStore = database ? createUsageStore(database.pool) : undefined;
   const memoryStore = database ? createMemoryStore(database.pool) : undefined;
+  const settingsStore = database ? createSettingsStore(database.pool) : undefined;
   const htmlArtifactStore = database ? new HtmlArtifactStore(database.pool) : undefined;
   const vaultIndexStore = database ? createVaultIndexStore(database.pool) : undefined;
   const phoneSessionStore = database
@@ -302,6 +305,38 @@ try {
       .finally(() => { webhookSecretRequest = undefined; });
     return webhookSecretRequest;
   };
+  const modelCatalogue = config.foundryAccountResourceId && credential
+    ? createArmModelCatalogueReader({
+      resourceId: config.foundryAccountResourceId,
+      getToken: async (scope, signal) => {
+        const token = await credential.getToken(scope, { abortSignal: signal });
+        if (!token) throw new Error('Foundry catalogue identity unavailable');
+        return token.token;
+      },
+    })
+    : { read: async () => fallbackModelCatalogue() };
+  const embeddingModel = async () => settingsStore
+    ? (await readSettings(settingsStore, await modelCatalogue.read())).roles.embedding.model
+    : config.foundryMemoryEmbeddingDeploymentName ?? 'text-embedding-3-small';
+  const embeddingClients = new Map<string, MemoryEmbedder>();
+  const getMemoryEmbedder = async (): Promise<MemoryEmbedder | undefined> => {
+    if (!config.foundryProjectEndpoint || !credential) return undefined;
+    const model = await embeddingModel();
+    let embedder = embeddingClients.get(model);
+    if (!embedder) {
+      embedder = createFoundryMemoryEmbedder({
+        projectEndpoint: config.foundryProjectEndpoint,
+        deploymentName: model,
+        getToken: async (scope, signal) => {
+          const token = await credential.getToken(scope, { abortSignal: signal });
+          if (!token) throw new Error('Foundry memory embedding identity unavailable');
+          return token.token;
+        },
+      });
+      embeddingClients.set(model, embedder);
+    }
+    return embedder;
+  };
   const conversationAgent = config.foundryProjectEndpoint && config.foundryChatAgentName && credential
     ? createFoundryInvocationConversationAgent(
       config.foundryProjectEndpoint,
@@ -313,29 +348,15 @@ try {
       },
     )
     : undefined;
-  const memoryEmbedder = config.foundryProjectEndpoint &&
-    config.foundryMemoryEmbeddingDeploymentName && credential
-    ? createFoundryMemoryEmbedder({
-      projectEndpoint: config.foundryProjectEndpoint,
-      deploymentName: config.foundryMemoryEmbeddingDeploymentName,
-      getToken: async (scope, signal) => {
-        const token = await credential.getToken(scope, { abortSignal: signal });
-        if (!token) throw new Error('Foundry memory embedding identity unavailable');
-        return token.token;
-      },
-    })
-    : undefined;
   const vaultModule = memoryStore && vaultIndexStore && githubAppTokenIssuer
     ? createVaultModule({
       client: createGitHubVaultClient({ tokenIssuer: githubAppTokenIssuer }),
       indexStore: vaultIndexStore,
       memoryStore,
       apiMemoryStore: memoryStore,
-      ...(memoryEmbedder ? { embedder: memoryEmbedder } : {}),
+      getEmbedder: getMemoryEmbedder,
+      getEmbeddingModel: embeddingModel,
       ...(usageStore ? { usageStore } : {}),
-      ...(config.foundryMemoryEmbeddingDeploymentName ? {
-        embeddingModel: config.foundryMemoryEmbeddingDeploymentName,
-      } : {}),
       onUsageRecordFailure: () => logger.warn('usage.embedding_tokens_unavailable'),
       log: (event, fields) => logger.info({ msg: event, ...fields }, event),
       logEmbedding: (fields) => logger.info({ msg: 'memory.embedding', ...fields }, 'memory.embedding'),
@@ -467,7 +488,6 @@ try {
       onError: (error) => logger.warn(safeErrorFields(error), 'project_policy.recheck_failed'),
     })
     : undefined;
-  const settingsStore = database ? createSettingsStore(database.pool) : undefined;
   const pcBridgeStatusStore = database
     ? createPcBridgeStatusStore(database.pool, () => nowEventHub.publish({ type: 'refresh' }))
     : undefined;
@@ -665,16 +685,7 @@ try {
       },
     })
     : undefined;
-  const modelCatalogue = config.foundryAccountResourceId && credential
-    ? createArmModelCatalogueReader({
-      resourceId: config.foundryAccountResourceId,
-      getToken: async (scope, signal) => {
-        const token = await credential.getToken(scope, { abortSignal: signal });
-        if (!token) throw new Error('Foundry catalogue identity unavailable');
-        return token.token;
-      },
-    })
-    : { read: async () => fallbackModelCatalogue() };
+  let activeEmbeddingReindex: { readonly controller: AbortController; readonly pending: Promise<void> } | undefined;
   const app = buildApp(config, logger, {
     modules,
     modelCatalogue,
@@ -699,6 +710,35 @@ try {
       ...(usageStore ? { usageStore } : {}),
     } : {}),
     ...(database ? { backgroundJobStore: createBackgroundJobStore(database.pool) } : {}),
+    ...(vaultModule && config.foundryProjectEndpoint && credential ? {
+      onEmbeddingModelChanged: async (jobs) => {
+        if (activeEmbeddingReindex) {
+          activeEmbeddingReindex.controller.abort();
+          await activeEmbeddingReindex.pending;
+        }
+        const controller = new AbortController();
+        const job = await jobs.start(
+          'embedding', 'Re-embed memory and vault', 2, () => controller.abort(), 'Re-embedding saved memories',
+        );
+        const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(60 * 60_000)]);
+        const pending = vaultModule.reembed(signal, (step, detail) => job.progress(step, detail))
+          .then(async ({ memoryPending, vaultPending }) => {
+            const pending = memoryPending || vaultPending > 0;
+            await job.done('embedding-backfill', pending
+              ? 'Batch complete; remaining vectors await the next paced sync'
+              : 'Memory and vault embeddings are current');
+          })
+          .catch(async (error: unknown) => {
+            await job.fail('Re-embedding failed').catch(() => undefined);
+            logger.warn(safeErrorFields(error), 'memory.embedding_backfill_failed');
+          });
+        activeEmbeddingReindex = { controller, pending };
+        const clearActive = () => {
+          if (activeEmbeddingReindex?.controller === controller) activeEmbeddingReindex = undefined;
+        };
+        void pending.then(clearActive, clearActive);
+      },
+    } : {}),
     ...(awayModeStore ? { awayModeStore } : {}),
     ...(credentialStatusStore ? { credentialStatusStore } : {}),
     ...(credentialStatusStore && credential && config.foundryEndpoints && config.foundryRunnerAgentName ? {
@@ -799,11 +839,23 @@ try {
       dispatcher?.start();
       await app.listen({ port: config.port, host: '0.0.0.0' });
       if (vaultModule) {
-        void vaultModule.synchronize(AbortSignal.timeout(10 * 60_000)).catch(() => {
-          logger.warn({
-            msg: 'vault.index', outcome: 'error', added: 0, changed: 0, removed: 0,
-          }, 'vault.index');
-        });
+        const signal = AbortSignal.timeout(10 * 60_000);
+        const model = await embeddingModel();
+        const memoryNeedsBackfill = memoryStore
+          ? (await memoryStore.embeddingsToBackfill(model, '0', 1, signal)).length > 0
+          : false;
+        const vaultNeedsBackfill = vaultIndexStore
+          ? (await vaultIndexStore.files(model, signal)).some(({ embeddingMissing }) => embeddingMissing)
+          : false;
+        if ((memoryNeedsBackfill || vaultNeedsBackfill) && app.onEmbeddingModelChanged) {
+          await app.onEmbeddingModelChanged(app.backgroundJobs);
+        } else {
+          void vaultModule.synchronize(signal).catch(() => {
+            logger.warn({
+              msg: 'vault.index', outcome: 'error', added: 0, changed: 0, removed: 0,
+            }, 'vault.index');
+          });
+        }
       }
       void checksLoop?.start();
       taskEventArchiveJob?.start();

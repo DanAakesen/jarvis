@@ -142,9 +142,11 @@ export function createMemoryModule(options: MemoryModuleOptions): BackendModule 
 
   async function embed(content: string, signal: AbortSignal, request: FastifyRequest): Promise<{
     readonly value: readonly number[] | null;
+    readonly model: string | null;
     readonly unavailable: boolean;
   }> {
-    if (!store.supportsVectorSearch() || !embedder) return { value: null, unavailable: false };
+    if (!store.supportsVectorSearch() || !embedder) return { value: null, model: null, unavailable: false };
+    const model = embedder.model ?? options.embeddingModel ?? 'text-embedding-3-small';
     const startedAt = performance.now();
     try {
       const embedded = embedder.embedWithUsage
@@ -156,12 +158,12 @@ export function createMemoryModule(options: MemoryModuleOptions): BackendModule 
         durationMs: Math.max(0, performance.now() - startedAt),
         ...(embedded.inputTokens !== undefined ? { inputTokens: embedded.inputTokens } : {}),
       }, 'memory.embedding');
-      if (embedded.inputTokens !== undefined && options.embeddingModel &&
+      if (embedded.inputTokens !== undefined &&
           options.usageStore?.recordFoundryUsage) {
         try {
           await options.usageStore.recordFoundryUsage({
             role: 'embeddings',
-            model: options.embeddingModel,
+            model,
             inputTokens: embedded.inputTokens,
             outputTokens: 0,
             eventId: randomUUID(),
@@ -170,7 +172,7 @@ export function createMemoryModule(options: MemoryModuleOptions): BackendModule 
           request.log.warn('usage.embedding_tokens_unavailable');
         }
       }
-      return { value: embedded.embedding, unavailable: false };
+      return { value: embedded.embedding, model, unavailable: false };
     } catch (error) {
       request.log.info({
         msg: 'memory.embedding',
@@ -179,7 +181,7 @@ export function createMemoryModule(options: MemoryModuleOptions): BackendModule 
         ...embeddingFailureStatus(error),
       }, 'memory.embedding');
       if (signal.aborted) throw error;
-      return { value: null, unavailable: true };
+      return { value: null, model: null, unavailable: true };
     }
   }
 
@@ -189,17 +191,19 @@ export function createMemoryModule(options: MemoryModuleOptions): BackendModule 
     let fallbackReason: MemorySearchResult['fallbackReason'];
     if (store.supportsVectorSearch() && embedder) {
       let queryVector: readonly number[] | null = null;
+      let queryModel: string | null = null;
       try {
         const embedded = await embed(query, signal, request);
         queryVector = embedded.value;
+        queryModel = embedded.model;
         if (embedded.unavailable) fallbackReason = 'embedding_unavailable';
       } catch (error) {
         if (signal.aborted) throw error;
         fallbackReason = 'embedding_unavailable';
       }
-      if (queryVector) {
+      if (queryVector && queryModel) {
         try {
-          const memories = await store.searchByVector(queryVector, MAX_MEMORY_RESULTS + 1, signal);
+          const memories = await store.searchByVector(queryVector, queryModel, MAX_MEMORY_RESULTS + 1, signal);
           if (memories.length > 0) {
             return {
               memories: memories.slice(0, MAX_MEMORY_RESULTS),
@@ -246,6 +250,7 @@ export function createMemoryModule(options: MemoryModuleOptions): BackendModule 
         const embedding = await embed(content, signal, request);
         const saved = await store.save({
           category: kind, key, content, sourceMessageId: source.messageId, embedding: embedding.value,
+          embeddingModel: embedding.model,
         }, signal);
         return {
           id: saved.memory.id,
@@ -366,6 +371,7 @@ export function createMemoryModule(options: MemoryModuleOptions): BackendModule 
           content,
           sourceMessageId: source.messageId,
           embedding: embedding.value,
+          embeddingModel: embedding.model,
         }, signal);
         return {
           id: corrected.memory.id,

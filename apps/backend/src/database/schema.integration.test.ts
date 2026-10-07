@@ -274,9 +274,10 @@ describe('committed domain schema (groups 1-8)', () => {
       content: 'Dan prefers English for Jarvis.',
       sourceMessageId: firstSource.id,
       embedding: vector,
+      embeddingModel: 'text-embedding-3-small',
     }, new AbortController().signal);
     if (firstStore.supportsVectorSearch()) {
-      await expect(firstStore.searchByVector(vector, 5, new AbortController().signal))
+      await expect(firstStore.searchByVector(vector, 'text-embedding-3-small', 5, new AbortController().signal))
         .resolves.toEqual([initial.memory]);
       const type = await pool.request().query<{ vector_type: number | null }>(
         `SELECT TYPE_ID(N'vector') AS vector_type;`);
@@ -293,6 +294,7 @@ describe('committed domain schema (groups 1-8)', () => {
       content: 'Dan prefers English for Jarvis.',
       sourceMessageId: firstSource.id,
       embedding: null,
+      embeddingModel: null,
     }, new AbortController().signal);
     const changed = await firstStore.save({
       category: 'preference',
@@ -300,6 +302,7 @@ describe('committed domain schema (groups 1-8)', () => {
       content: 'Dan prefers Danish for Jarvis voice.',
       sourceMessageId: secondSource.id,
       embedding: null,
+      embeddingModel: null,
     }, new AbortController().signal);
 
     expect(initial).toMatchObject({ created: true, changed: true, memory: { revision: 1 } });
@@ -348,15 +351,21 @@ describe('committed domain schema (groups 1-8)', () => {
     const queryVector = Array.from({ length: 1536 }, (_, index) => index === 0 ? 1 : 0);
     const otherVector = Array.from({ length: 1536 }, (_, index) => index === 1 ? 1 : 0);
     await store.replaceFile('People/Embedding ranking.md', 'a'.repeat(40), [
-      { index: 0, heading: 'Orthogonal', content: 'Other vector', embedding: otherVector },
-      { index: 1, heading: 'Nearest', content: 'Matching vector', embedding: queryVector },
+      {
+        index: 0, heading: 'Orthogonal', content: 'Other vector',
+        embedding: otherVector, embeddingModel: 'text-embedding-3-small',
+      },
+      {
+        index: 1, heading: 'Nearest', content: 'Matching vector',
+        embedding: queryVector, embeddingModel: 'text-embedding-3-small',
+      },
     ], [], new AbortController().signal);
 
     if (store.supportsVectorSearch()) {
-      await expect(store.searchByVector(queryVector, 1, new AbortController().signal)).resolves.toMatchObject([
+      await expect(store.searchByVector(queryVector, 'text-embedding-3-small', 1, new AbortController().signal)).resolves.toMatchObject([
         { path: 'People/Embedding ranking.md', heading: 'Nearest', content: 'Matching vector' },
       ]);
-      const graph = await store.graphData(['People/Embedding ranking.md'], new AbortController().signal);
+      const graph = await store.graphData(['People/Embedding ranking.md'], 'text-embedding-3-small', new AbortController().signal);
       const type = await pool.request().query<{ vector_type: number | null }>(
         `SELECT TYPE_ID(N'vector') AS vector_type;`);
       if (type.recordset[0]?.vector_type === null) expect(graph.embeddings).toHaveLength(2);
