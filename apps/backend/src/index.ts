@@ -329,6 +329,7 @@ try {
       apiMemoryStore: memoryStore,
       ...(memoryEmbedder ? { embedder: memoryEmbedder } : {}),
       log: (event, fields) => logger.info({ msg: event, ...fields }, event),
+      logEmbedding: (fields) => logger.info({ msg: 'memory.embedding', ...fields }, 'memory.embedding'),
     })
     : undefined;
   const foundryClients = new Map<string, FoundryClient>();
