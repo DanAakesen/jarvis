@@ -5,7 +5,7 @@ import { ToolFailure, ToolRefusal, type ToolRegistry } from '../core/tool-regist
 import { defaultSettings, type Settings } from '../core/settings.js';
 import { defaultAwayModeState, type AwayModeState, type PresenceMode } from '../core/away-mode.js';
 
-export const ENGLISH_REALTIME_MODEL = 'gpt-realtime-2.1';
+export const ENGLISH_REALTIME_MODEL = defaultSettings.roles.voice.model;
 export const ENGLISH_REALTIME_VOICE = 'en-GB-Ryan:DragonHDLatestNeural';
 export const ENGLISH_REALTIME_INSTRUCTIONS = `You are Jarvis, Dan's personal AI butler, running his software factory.
 Speak British English as a well-educated Englishman would: courteous, composed, precise, with dry,
@@ -185,7 +185,7 @@ export function createRealtimeSessionUpdate(
   presence: AwayModeState = defaultAwayModeState,
   language: 'da' | 'en' = 'en',
   projects: readonly ProjectContextEntry[] = [],
-  transcriptionModel = 'mai-transcribe',
+  transcriptionModel = defaultSettings.roles.transcription.model,
 ) {
   const danish = language === 'da';
   return {

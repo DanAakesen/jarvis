@@ -182,6 +182,65 @@ export interface WebResearchResult {
   sources: WebResearchSource[];
 }
 
+export type UsageRole = 'chat' | 'voice' | 'vision' | 'research' | 'embeddings';
+export type UsageVerification = 'measured' | 'estimated' | 'unverified';
+export type UsageSource = 'sandbox' | 'jarvis_model' | 'voice' | 'codex' | 'copilot';
+export type UsageMetric = 'minutes' | 'input_tokens' | 'output_tokens' | 'turns' | 'premium_requests' | 'screen_frames';
+
+export interface UsageEntry {
+  taskId: string | null;
+  taskTitle: string | null;
+  projectId: string | null;
+  projectName: string | null;
+  agent: 'codex' | 'copilot' | 'jarvis';
+  source: 'sandbox' | 'jarvis_model' | 'voice' | 'codex' | 'copilot';
+  metric: 'minutes' | 'input_tokens' | 'output_tokens' | 'turns' | 'premium_requests' | 'screen_frames';
+  quantity: number;
+  costUsd: number | null;
+  costDkk: number | null;
+  costStatus: UsageVerification;
+  role: UsageRole | null;
+  model: string | null;
+  at: string;
+  estimated: boolean;
+}
+
+export interface UsageCostTotal {
+  period: string;
+  usd: number;
+  dkk: number;
+  estimatedEntries: number;
+  unverifiedEntries: number;
+}
+
+export interface UsageToolCallCount {
+  tool: 'research' | 'web_research' | 'image_generation';
+  count: string;
+  costStatus: 'unverified';
+}
+
+export interface UsageRoleCoverage {
+  role: UsageRole;
+  usageStatus: UsageVerification;
+  costStatus: UsageVerification;
+  note: string;
+}
+
+export interface UsageReport {
+  period: '7d' | '30d' | '90d' | 'all';
+  from: string | null;
+  to: string;
+  entries: UsageEntry[];
+  totalEntries: string;
+  dailyToolUsage: { date: string; tools: { tool: string; count: string }[] };
+  dailyCostTotals: UsageCostTotal[];
+  monthlyCostTotals: UsageCostTotal[];
+  toolCalls: UsageToolCallCount[];
+  roleCoverage: UsageRoleCoverage[];
+  codexToolCallsToday: { tool: 'web_research'; count: string }[] | null;
+  truncated: boolean;
+}
+
 export type JarvisActivitySource = 'chat' | 'voice';
 export type JarvisActivityOutcome = 'ok' | 'refused' | 'error';
 export type JarvisActivityEvent =
@@ -259,3 +318,15 @@ export const backgroundJobKinds: readonly BackgroundJobKind[];
 export const backgroundJobStatuses: readonly BackgroundJobStatus[];
 export function isBackgroundJob(value: unknown): value is BackgroundJob;
 export function isBackgroundJobEvent(value: unknown): value is BackgroundJobEvent;
+
+export type PhoneCallOutcome = 'in_progress' | 'ended' | 'failed';
+export interface PhoneCallHistoryEntry {
+  startedAt: string;
+  durationSeconds: number;
+  outcome: PhoneCallOutcome;
+}
+export interface PhoneStatus {
+  configured: boolean;
+  historyAvailable: boolean;
+  recentCalls: readonly PhoneCallHistoryEntry[];
+}

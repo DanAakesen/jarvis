@@ -13,6 +13,7 @@ from collections.abc import AsyncIterator, Sequence
 from contextlib import aclosing
 from typing import Any
 from urllib.parse import urlsplit, urlunsplit
+from uuid import uuid4
 
 from azure.identity.aio import DefaultAzureCredential
 from openai import AsyncOpenAI
@@ -284,7 +285,9 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
         self, messages: Sequence[ModelMessage], *, settings: ModelSettings | None = None
     ) -> AsyncIterator[str]:
         """Run the Jarvis tool loop and stream the spoken text of each model round."""
-        async with aclosing(self._complete(messages, self._system_prompt, settings)) as response:
+        async with aclosing(
+            self._complete(messages, self._system_prompt, settings, role="voice")
+        ) as response:
             async for delta in response:
                 yield delta
 
@@ -313,7 +316,7 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                 + " Relay the result honestly and acknowledge briefly. Do not repeat the action."
             )
         async with aclosing(self._complete(
-            messages, instructions, settings, load_settings=settings is None,
+            messages, instructions, settings, load_settings=settings is None, role="chat",
         )) as response:
             async for delta in response:
                 yield delta
@@ -325,6 +328,7 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
         settings: ModelSettings | None,
         *,
         load_settings: bool = False,
+        role: str,
     ) -> AsyncIterator[str]:
         with _tracer.start_as_current_span(
             "chat",
@@ -448,6 +452,33 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
 
                     calls = [item for item in final.output if item.type == "function_call"]
                     usage = final.usage
+                    input_tokens = getattr(usage, "input_tokens", None)
+                    output_tokens = getattr(usage, "output_tokens", None)
+                    reporter = getattr(self._tools, "record_model_usage", None)
+                    if (
+                        callable(reporter)
+                        and isinstance(input_tokens, int)
+                        and not isinstance(input_tokens, bool)
+                        and 0 <= input_tokens <= 10_000_000
+                        and isinstance(output_tokens, int)
+                        and not isinstance(output_tokens, bool)
+                        and 0 <= output_tokens <= 10_000_000
+                    ):
+                        try:
+                            await reporter(
+                                role=role,
+                                model=model_name,
+                                input_tokens=input_tokens,
+                                output_tokens=output_tokens,
+                                event_id=str(uuid4()),
+                            )
+                        except asyncio.CancelledError:
+                            raise
+                        except Exception as exc:
+                            logger.warning(
+                                "Foundry model usage was not recorded; error=%s",
+                                type(exc).__name__,
+                            )
                     logger.info(
                         "Model round finished; round=%d input_tokens=%s output_tokens=%s "
                         "first_text_ms=%s total_ms=%d tool_calls=%d",

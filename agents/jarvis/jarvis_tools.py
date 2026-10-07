@@ -407,6 +407,38 @@ class BackendToolClient:
         with latency_span("settings"):
             return await self._model_settings()
 
+    async def record_model_usage(
+        self,
+        *,
+        role: str,
+        model: str,
+        input_tokens: int,
+        output_tokens: int,
+        event_id: str,
+    ) -> None:
+        """Record provider-reported model usage without sending conversation content."""
+        try:
+            headers = {"Authorization": _bearer(await self._token())}
+            async with self._http.stream(
+                "POST",
+                f"{self._base_url}/usage/foundry",
+                headers=headers,
+                json={
+                    "role": role,
+                    "model": model,
+                    "inputTokens": input_tokens,
+                    "outputTokens": output_tokens,
+                    "eventId": event_id,
+                },
+            ) as response:
+                if response.status_code != 204:
+                    raise RuntimeError(f"POST /usage/foundry returned HTTP {response.status_code}")
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            self.last_error = f"usage: {type(exc).__name__}"
+            raise BackendUnavailable("Foundry model usage could not be recorded") from exc
+
     async def _model_settings(self) -> ModelSettings:
         try:
             headers = {"Authorization": _bearer(await self._token())}

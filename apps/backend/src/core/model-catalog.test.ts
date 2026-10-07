@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createArmModelCatalogueReader, fallbackModelCatalogue, isRoleModelSupported, modelsForRole } from './model-catalog.js';
+import {
+  createArmModelCatalogueReader, fallbackModelCatalogue, isRoleModelSupported, modelsForRole,
+  visionModelRatesDkkPerMillionTokens,
+} from './model-catalog.js';
 
 const resourceId = '/subscriptions/12345678-1234-1234-1234-123456789abc/resourceGroups/rg-jarvis/providers/Microsoft.CognitiveServices/accounts/jarvis-prod';
 
@@ -69,6 +72,18 @@ describe('Foundry model catalogue', () => {
     expect(isRoleModelSupported(catalogue, 'chat', 'gpt-6-luna', 'high')).toBe(true);
     expect(isRoleModelSupported(catalogue, 'chat', 'gpt-6-luna', 'xhigh')).toBe(true);
     expect(isRoleModelSupported(catalogue, 'chat', 'gpt-5.6-luna', 'xhigh')).toBe(false);
+    expect(modelsForRole(catalogue, 'voice')).toEqual(['gpt-realtime-2.1', 'gpt-realtime-2.1-mini']);
+    expect(modelsForRole(catalogue, 'transcription')).toEqual(['mai-transcribe']);
+    expect(modelsForRole(catalogue, 'vision').every((model) =>
+      visionModelRatesDkkPerMillionTokens.has(model))).toBe(true);
+    const unpricedVision = {
+      ...catalogue.deployments[0]!,
+      name: 'unpriced-vision',
+      model: 'unpriced-vision',
+      capabilities: ['image'] as const,
+    };
+    expect(modelsForRole({ ...catalogue, deployments: [...catalogue.deployments, unpricedVision] }, 'vision'))
+      .not.toContain('unpriced-vision');
   });
 
   it('rejects unsafe account IDs and pagination targets', async () => {

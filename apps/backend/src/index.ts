@@ -14,6 +14,7 @@ import { createProjectStore } from './database/project-store.js';
 import { createReleaseViewStore } from './database/release-view-store.js';
 import { createConversationStore } from './database/conversation-store.js';
 import { createPhoneSessionStore } from './database/phone-session-store.js';
+import { createPhoneStatusModule } from './phone/status.js';
 import { createTaskStore } from './database/task-store.js';
 import { createTaskStatusNotificationStore } from './database/task-status-notification-store.js';
 import { createDispatcherStore } from './database/dispatcher-store.js';
@@ -123,11 +124,12 @@ try {
   const telemetry = await createTelemetry(config.applicationInsightsConnectionString);
   const logger = createLogger(config, telemetry);
   const database = databaseConfig ? createDatabase(databaseConfig) : undefined;
+  const usageStore = database ? createUsageStore(database.pool) : undefined;
   const memoryStore = database ? createMemoryStore(database.pool) : undefined;
   const settingsStore = database ? createSettingsStore(database.pool) : undefined;
   const htmlArtifactStore = database ? new HtmlArtifactStore(database.pool) : undefined;
   const vaultIndexStore = database ? createVaultIndexStore(database.pool) : undefined;
-  const phoneSessionStore = database && config.phone
+  const phoneSessionStore = database
     ? createPhoneSessionStore(database.pool)
     : undefined;
   const eventHub: TaskEventHub = createEventHub<TaskEventMessage>();
@@ -354,6 +356,8 @@ try {
       apiMemoryStore: memoryStore,
       getEmbedder: getMemoryEmbedder,
       getEmbeddingModel: embeddingModel,
+      ...(usageStore ? { usageStore } : {}),
+      onUsageRecordFailure: () => logger.warn('usage.embedding_tokens_unavailable'),
       log: (event, fields) => logger.info({ msg: event, ...fields }, event),
       logEmbedding: (fields) => logger.info({ msg: 'memory.embedding', ...fields }, 'memory.embedding'),
     })
@@ -579,7 +583,6 @@ try {
     createPcBridgeModule({
       ...(screenVisionModel ? {
         pcActVisionModel: screenVisionModel,
-        pcActVisionDeployment: 'gpt-5.6-luna',
       } : {}),
       ...(pcActPlanner ? {
         pcActPlanner,
@@ -614,6 +617,10 @@ try {
     })
     : undefined;
   if (phoneCallModule) modules.push(phoneCallModule);
+  modules.push(createPhoneStatusModule({
+    configured: phoneCallModule !== undefined,
+    store: phoneSessionStore ?? null,
+  }));
   if (browserAgent) modules.push(createBrowserAgentModule(browserAgent));
   if (workspaceArtifacts && config.foundryEndpoints && config.foundryRunnerAgentName) {
     modules.push(createImageGenerationModule({
@@ -700,7 +707,7 @@ try {
       ...(githubRepositoryCatalog ? { githubRepositoryCatalog } : {}),
       ...(dispatcher ? { taskController: dispatcher } : {}),
       nowFeedStore,
-      usageStore: createUsageStore(database.pool),
+      ...(usageStore ? { usageStore } : {}),
     } : {}),
     ...(database ? { backgroundJobStore: createBackgroundJobStore(database.pool) } : {}),
     ...(vaultModule && config.foundryProjectEndpoint && credential ? {

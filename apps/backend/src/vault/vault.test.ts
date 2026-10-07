@@ -477,6 +477,7 @@ describe('GitHub vault', () => {
     expect(index.entry('People/Alex.md')?.chunks[0]?.embedding).toBeNull();
 
     const logEmbedding = vi.fn();
+    const recordFoundryUsage = vi.fn(async () => {});
     const embedder = {
       embedWithUsage: vi.fn(async () => ({ embedding: [1, 0], inputTokens: 12 })),
       embed: vi.fn(async () => [1, 0]),
@@ -489,12 +490,21 @@ describe('GitHub vault', () => {
       indexStore: index,
       memoryStore: { getSourceMessage: async () => null },
       embedder,
+      embeddingModel: 'text-embedding-3-small',
+      usageStore: { recordFoundryUsage },
       logEmbedding,
     });
     await backfillModule.synchronize(signal());
     expect(embedder.embedWithUsage).toHaveBeenCalledOnce();
     expect(index.entry('People/Alex.md')?.chunks[0]?.embedding).toEqual([1, 0]);
     expect(logEmbedding).toHaveBeenCalledWith(expect.objectContaining({ outcome: 'ok', inputTokens: 12 }));
+    expect(recordFoundryUsage).toHaveBeenCalledWith({
+      role: 'embeddings',
+      model: 'text-embedding-3-small',
+      inputTokens: 12,
+      outputTokens: 0,
+      eventId: expect.any(String),
+    });
   });
 
   it('waits out embedding throttling during indexing instead of storing a null vector', async () => {

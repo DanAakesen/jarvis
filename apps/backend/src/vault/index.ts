@@ -17,6 +17,7 @@ import { setTimeout as sleep } from 'node:timers/promises';
 import {
   embeddingFailureStatus, MemoryEmbeddingHttpError, type MemoryEmbedder,
 } from '../core/memory-embeddings.js';
+import type { UsageStore } from '../core/usage.js';
 import { ToolFailure, ToolRefusal } from '../core/tool-registry.js';
 import type { BackendModule } from '../modules.js';
 import type { TeamsNotificationService } from '../teams/service.js';
@@ -475,6 +476,9 @@ export function createVaultModule(options: {
   readonly embedder?: MemoryEmbedder;
   readonly getEmbedder?: () => Promise<MemoryEmbedder | undefined>;
   readonly getEmbeddingModel?: () => Promise<string>;
+  readonly embeddingModel?: string;
+  readonly usageStore?: Pick<UsageStore, 'recordFoundryUsage'>;
+  readonly onUsageRecordFailure?: () => void;
   readonly log?: (event: 'vault.index' | 'vault.write', fields: VaultLogFields) => void;
   readonly logEmbedding?: (fields: MemoryEmbeddingLogFields) => void;
 }): VaultModule {
@@ -496,7 +500,8 @@ export function createVaultModule(options: {
   }
 
   async function activeEmbeddingModel(embedder?: MemoryEmbedder): Promise<string> {
-    const model = embedder?.model ?? await options.getEmbeddingModel?.() ?? 'text-embedding-3-small';
+    const model = embedder?.model ?? await options.getEmbeddingModel?.() ??
+      options.embeddingModel ?? 'text-embedding-3-small';
     if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u.test(model)) {
       throw new Error('Embedding model setting is invalid');
     }
@@ -578,6 +583,20 @@ export function createVaultModule(options: {
             durationMs: Math.max(0, performance.now() - startedAt),
             ...(embedded.inputTokens !== undefined ? { inputTokens: embedded.inputTokens } : {}),
           });
+          if (embedded.inputTokens !== undefined &&
+              options.usageStore?.recordFoundryUsage) {
+            try {
+              await options.usageStore.recordFoundryUsage({
+                role: 'embeddings',
+                model: embeddingModel,
+                inputTokens: embedded.inputTokens,
+                outputTokens: 0,
+                eventId: randomUUID(),
+              });
+            } catch {
+              options.onUsageRecordFailure?.();
+            }
+          }
         } catch (error) {
           options.logEmbedding?.({
             outcome: signal.aborted ? 'cancelled' : 'fallback',

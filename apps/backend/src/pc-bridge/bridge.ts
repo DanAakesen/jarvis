@@ -3,6 +3,7 @@ import type { FastifyRequest } from 'fastify';
 import websocket from '@fastify/websocket';
 import WebSocket, { type RawData } from 'ws';
 import type { BackgroundJobEvent, JarvisActivityEvent, JarvisVoiceWakeEvent } from '@jarvis/contracts';
+import { defaultSettings, readSettings } from '../core/settings.js';
 import { ToolRefusal } from '../core/tool-registry.js';
 import type { BackendModule } from '../modules.js';
 import {
@@ -182,7 +183,6 @@ export interface PcBridgeConnectionOptions {
 export interface PcBridgeModuleOptions extends PcBridgeConnectionOptions {
   readonly pcActPlanner?: PcActPlanner;
   readonly pcActVisionModel?: PcActVisionModel;
-  readonly pcActVisionDeployment?: string;
   readonly recipes?: PcActOptions['recipes'];
   readonly onPcActStep?: PcActOptions['onStep'];
   readonly runConfirmed?: <T>(
@@ -608,8 +608,11 @@ export function createPcBridgeModule(options: PcBridgeModuleOptions = {}): Backe
         },
         reflexSafe: true,
         sensitive: true,
-        execute: (input: unknown, request: FastifyRequest, signal: AbortSignal) =>
-          runPcAct(input, request, signal, {
+        execute: async (input: unknown, request: FastifyRequest, signal: AbortSignal) => {
+          const settings = request.server.settingsStore
+            ? await readSettings(request.server.settingsStore, await request.server.modelCatalogue.read())
+            : defaultSettings;
+          return runPcAct(input, request, signal, {
             observe: (commandSignal) => bridge.execute(
               { name: 'uia_snapshot', arguments: {} },
               commandSignal,
@@ -651,11 +654,12 @@ export function createPcBridgeModule(options: PcBridgeModuleOptions = {}): Backe
           }, {
             planner: options.pcActPlanner!,
             ...(options.pcActVisionModel ? { visionModel: options.pcActVisionModel } : {}),
-            ...(options.pcActVisionDeployment ? { visionDeployment: options.pcActVisionDeployment } : {}),
+            visionDeployment: settings.roles.vision.model,
             ...(options.recipes ? { recipes: options.recipes } : {}),
             ...(options.runConfirmed ? { runConfirmed: options.runConfirmed } : {}),
             ...(options.onPcActStep ? { onStep: options.onPcActStep } : {}),
-          }),
+          });
+        },
       }] : []),
       ...(options.pcActPlanner ? [{
         name: 'codex_prompt',

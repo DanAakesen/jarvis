@@ -121,6 +121,22 @@ describe("Foundry runner wire contract", () => {
     });
   });
 
+  it("forwards a selected reasoning effort to the Codex tool invocation", async () => {
+    const { client, fetch } = setup({ ...(fixtures["task_start"] as object), agent: "codex" });
+    await client.startCodexTool("web_research", "Research this", "gpt-5.5", { reasoning: "high" });
+    expect(request(fetch).body).toMatchObject({
+      tool: "web_research", model: "gpt-5.5", reasoning: "high",
+    });
+  });
+
+  it("rejects an unsupported Codex tool reasoning effort before making a request", async () => {
+    const { client, fetch } = setup();
+    await expect(client.startCodexTool(
+      "web_research", "Research this", "gpt-5.5", { reasoning: "unsupported" },
+    )).rejects.toBeInstanceOf(TypeError);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
   it("starts a bounded Codex HTML report invocation without adding a provider", async () => {
     const { client, fetch } = setup({ ...(fixtures["task_start"] as object), agent: "codex" });
     const query = JSON.stringify({ topic: "A topic", findings: [{ answer: "Evidence" }] });

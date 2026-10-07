@@ -1,5 +1,5 @@
 IF EXISTS (SELECT 1 FROM dbo.background_jobs WHERE kind = N'embedding')
-  THROW 51000, 'Embedding background jobs exist; remove them before reverting migration 0030.', 1;
+  THROW 51000, 'Embedding background jobs exist; remove them before reverting migration 0031.', 1;
 
 ALTER TABLE dbo.background_jobs DROP CONSTRAINT CK_background_jobs_kind;
 ALTER TABLE dbo.background_jobs ADD CONSTRAINT CK_background_jobs_kind CHECK (

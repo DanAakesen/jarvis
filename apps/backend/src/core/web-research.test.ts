@@ -47,7 +47,7 @@ function execute(
 afterEach(() => { vi.useRealTimers(); });
 
 describe('web_research tool', () => {
-  it('uses the configured research role model for new research calls', async () => {
+  it('uses the configured research role model and reasoning effort for new calls', async () => {
     const runner = client(snapshot({
       status: 'completed',
       finishedAt: 100,
@@ -55,7 +55,12 @@ describe('web_research tool', () => {
     }));
     const request = {
       server: {
-        settingsStore: { read: async () => ({ 'roles.research.model': '"gpt-6-luna"' }) },
+        settingsStore: {
+          read: async () => ({
+            'roles.research.model': '"gpt-6-luna"',
+            'roles.research.reasoning_effort': '"high"',
+          }),
+        },
         modelCatalogue: { read: async () => fallbackModelCatalogue() },
       },
     } as unknown as FastifyRequest;
@@ -63,7 +68,8 @@ describe('web_research tool', () => {
     await execute(runner, {}, request);
 
     expect(runner.startCodexTool).toHaveBeenCalledWith(
-      'web_research', 'Research this topic', 'gpt-6-luna', expect.any(Object),
+      'web_research', 'Research this topic', 'gpt-6-luna',
+      expect.objectContaining({ reasoning: 'high', signal: expect.any(AbortSignal) }),
     );
   });
 

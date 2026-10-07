@@ -405,11 +405,30 @@ resource gptRealtime21Deployment 'Microsoft.CognitiveServices/accounts/deploymen
   }
 }
 
+resource gptRealtime21MiniDeployment 'Microsoft.CognitiveServices/accounts/deployments@2024-10-01' = {
+  parent: foundryAccount
+  name: 'gpt-realtime-2.1-mini'
+  dependsOn: [
+    gptRealtime21Deployment
+  ]
+  sku: {
+    name: 'GlobalStandard'
+    capacity: 10
+  }
+  properties: {
+    model: {
+      format: 'OpenAI'
+      name: 'gpt-realtime-2.1-mini'
+      version: '2026-07-07'
+    }
+  }
+}
+
 resource memoryEmbeddingDeployment 'Microsoft.CognitiveServices/accounts/deployments@2024-10-01' = {
   parent: foundryAccount
   name: 'text-embedding-3-small'
   dependsOn: [
-    gptRealtime21Deployment
+    gptRealtime21MiniDeployment
   ]
   sku: {
     name: 'GlobalStandard'
