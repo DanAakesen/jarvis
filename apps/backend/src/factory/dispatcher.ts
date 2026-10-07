@@ -706,6 +706,13 @@ export class TaskDispatcher implements TaskController {
       configuredValue(stored['codex.reasoning_effort'], defaultSettings.codex.reasoning, maxSettingsReasoningLength),
       maxSettingsReasoningLength,
     );
+    const copilotReasoning = configuredValue(
+      stored['roles.copilot.reasoning_effort'],
+      'none',
+      maxSettingsReasoningLength,
+    );
+    const reasoning = task.agent === 'codex' ? task.reasoningOverride ?? codexReasoning :
+      task.reasoningOverride ?? copilotReasoning;
     const request: TaskRequest = task.agent === 'codex'
       ? {
         agent: 'codex',
@@ -715,9 +722,9 @@ export class TaskDispatcher implements TaskController {
         defaultBranch: task.defaultBranch,
         branch: task.branch,
         ...(model === 'default' ? {} : { model }),
-        ...((task.reasoningOverride ?? codexReasoning) === 'default'
+        ...(reasoning === 'default'
           ? {}
-          : { reasoning: task.reasoningOverride ?? codexReasoning }),
+          : { reasoning }),
       }
       : {
         agent: 'copilot',
@@ -727,6 +734,7 @@ export class TaskDispatcher implements TaskController {
         defaultBranch: task.defaultBranch,
         branch: task.branch,
         ...(model === 'default' ? {} : { model }),
+        ...(reasoning === 'none' || reasoning === 'default' ? {} : { reasoning }),
       };
     return request;
   }

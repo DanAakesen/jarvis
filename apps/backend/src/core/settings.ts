@@ -651,8 +651,9 @@ export function settingsOptionsForCatalogue(catalogue: ModelCatalogue) {
     speechToTextModels: modelsForRole(catalogue, 'transcription'),
     englishModels: modelsForRole(catalogue, 'voice'),
     codexModels: modelsForRole(catalogue, 'codex'),
-    codexReasoningEfforts: ['default'],
+    codexReasoningEfforts: ['default', ...reasoningForModel(catalogue, 'codex', defaultRoleModels.codex)],
     copilotModels: modelsForRole(catalogue, 'copilot'),
+    copilotReasoningEfforts: reasoningForModel(catalogue, 'copilot', defaultRoleModels.copilot),
   };
 }
 

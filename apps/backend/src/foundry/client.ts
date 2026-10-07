@@ -44,7 +44,7 @@ export interface TaskWorkspace {
   branch: string;
 }
 export type TaskRequest = TaskWorkspace & (
-  | { agent: "copilot"; task: string; taskId?: string; model?: string }
+  | { agent: "copilot"; task: string; taskId?: string; model?: string; reasoning?: string }
   | { agent: "codex"; task: string; taskId?: string; model?: string; reasoning?: string });
 export interface CodexToolRequest {
   task: string;

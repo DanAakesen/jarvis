@@ -50,6 +50,16 @@ to the existing Bicep deployment chain without a settings migration. Offline
 runtime and runner tests cover these paths; deployed Azure interoperability and
 billed cost remain unverified.
 
+P9-04 (7 October 2026): give Codex and Copilot provider-specific model and
+reasoning allowlists in the settings options, and apply the selected role
+defaults when a Factory task starts. A per-task model or reasoning override
+continues to take precedence; the runner applies Codex choices through ACP
+configuration and Copilot choices through CLI arguments, then persists them
+with the ACP session for resumed turns. Reuse the existing settings and task
+columns without a migration. Keep `JARVIS_CODEX_TOOL_MODEL` scoped to isolated
+Codex tools. Offline catalogue, dispatch and runner tests cover the path; live
+provider/account availability remains unverified.
+
 P6-22 (6 October 2026): Jarvis runs in Dan's personal tenant, without Microsoft
 365 or Teams. Keep away mode manual and do not read Graph presence. Route
 notifications and confirmations through the web app and active browser voice
