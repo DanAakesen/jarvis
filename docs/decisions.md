@@ -69,6 +69,16 @@ with the ACP session for resumed turns. Reuse the existing settings and task
 columns without a migration. Keep `JARVIS_CODEX_TOOL_MODEL` scoped to isolated
 Codex tools. Offline catalogue, dispatch and runner tests cover the path; live
 provider/account availability remains unverified.
+P9-05 (7 October 2026): persist bounded voice tuning in the existing global
+settings store and expose its limits through the shared contracts and
+`/settings`; no migration is needed. Preserve the current server-VAD defaults
+(threshold 0.7, 300 ms prefix padding, 600 ms silence), enable barge-in by
+default, and cap replies at the existing provider default of 4,096 output
+tokens. Apply settings when building a realtime session; keep English semantic
+VAD's existing 0.6/300/500 ms configuration. The live Danish hosted agent has
+separately provisioned turn detection and is not changed by this session
+settings API. Offline contract, settings, relay and session tests cover the
+backend behavior; live Voice Live behavior remains unverified.
 P9-07 (7 October 2026): manage model deployments only from models present in the
 live Foundry account catalogue. Generate deployment names from model and version;
 require the existing one-time `model_deployment` Now confirmation for both

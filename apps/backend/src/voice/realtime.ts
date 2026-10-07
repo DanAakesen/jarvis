@@ -4,6 +4,7 @@ import { confirmToolCall, type ToolCallOutcome } from '../core/tool-calls.js';
 import { ToolFailure, ToolRefusal, type ToolRegistry } from '../core/tool-registry.js';
 import { defaultSettings, type Settings } from '../core/settings.js';
 import { defaultAwayModeState, type AwayModeState, type PresenceMode } from '../core/away-mode.js';
+import type { VoiceTuningSettings } from '@jarvis/contracts';
 
 export const ENGLISH_REALTIME_MODEL = defaultSettings.roles.voice.model;
 export const ENGLISH_REALTIME_VOICE = 'en-GB-Ryan:DragonHDLatestNeural';
@@ -186,6 +187,7 @@ export function createRealtimeSessionUpdate(
   language: 'da' | 'en' = 'en',
   projects: readonly ProjectContextEntry[] = [],
   transcriptionModel = defaultSettings.roles.transcription.model,
+  voiceTuning: VoiceTuningSettings = defaultSettings.voice,
 ) {
   const danish = language === 'da';
   return {
@@ -202,13 +204,20 @@ export function createRealtimeSessionUpdate(
       // threshold and a minimum speech length stop background noise from interrupting replies.
       turn_detection: danish
         ? {
-          type: 'server_vad', threshold: 0.7, prefix_padding_ms: 300, silence_duration_ms: 600,
-          speech_duration_ms: 350, create_response: false,
+          type: 'server_vad',
+          threshold: voiceTuning.serverVadThreshold,
+          prefix_padding_ms: voiceTuning.prefixPaddingMs,
+          silence_duration_ms: voiceTuning.silenceDurationMs,
+          speech_duration_ms: 350,
+          create_response: false,
+          interrupt_response: voiceTuning.bargeInEnabled,
         }
         : {
           type: 'azure_semantic_vad_en', threshold: 0.6, prefix_padding_ms: 300, silence_duration_ms: 500,
           speech_duration_ms: 300, remove_filler_words: true, create_response: false,
+          interrupt_response: voiceTuning.bargeInEnabled,
         },
+      max_response_output_tokens: voiceTuning.maxSpokenReplyTokens,
       input_audio_transcription: danish
         ? { model: transcriptionModel, language: 'da', phrase_list: DANISH_PHRASE_LIST }
         : { model: transcriptionModel },

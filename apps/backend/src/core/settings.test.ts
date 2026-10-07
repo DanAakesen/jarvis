@@ -60,7 +60,15 @@ describe('settings API', () => {
         appearance: { theme: 'light' },
         jarvis: { model: 'gpt-5.6-luna', reasoning: 'none' },
         personality: { tone: 'british_butler', responseStyle: 'concise', customInstructions: '' },
-        voice: { defaultLanguage: 'da', minimizeWindowsOnVoiceStart: false },
+        voice: {
+          defaultLanguage: 'da',
+          minimizeWindowsOnVoiceStart: false,
+          serverVadThreshold: 0.7,
+          prefixPaddingMs: 300,
+          silenceDurationMs: 600,
+          bargeInEnabled: true,
+          maxSpokenReplyTokens: 4_096,
+        },
         codex: { model: 'default' },
         copilot: { model: 'default' },
         global: { maxParallelTasks: 1, maxCheckAttempts: 3, screenShareDailyFrameCap: 300, visionDailyBudgetUsd: 1 },
@@ -74,6 +82,12 @@ describe('settings API', () => {
           defaultBranch: 'main',
         },
       },
+    });
+    expect(response.json().options.voiceTuning).toEqual({
+      serverVadThreshold: { minimum: 0, maximum: 1 },
+      prefixPaddingMs: { minimum: 0, maximum: 2_000 },
+      silenceDurationMs: { minimum: 100, maximum: 5_000 },
+      maxSpokenReplyTokens: { minimum: 1, maximum: 4_096 },
     });
   });
 
@@ -207,7 +221,14 @@ describe('settings API', () => {
         radius: 24,
         density: 'comfortable',
       },
-      voice: { minimizeWindowsOnVoiceStart: true },
+      voice: {
+        minimizeWindowsOnVoiceStart: true,
+        serverVadThreshold: 0.85,
+        prefixPaddingMs: 600,
+        silenceDurationMs: 900,
+        bargeInEnabled: false,
+        maxSpokenReplyTokens: 800,
+      },
     };
 
     const saved = await app.inject({
@@ -227,6 +248,11 @@ describe('settings API', () => {
       'appearance.radius': '24',
       'appearance.density': '"comfortable"',
       'voice.minimize_windows_on_voice_start': 'true',
+      'voice.server_vad_threshold': '0.85',
+      'voice.prefix_padding_ms': '600',
+      'voice.silence_duration_ms': '900',
+      'voice.barge_in_enabled': 'false',
+      'voice.max_spoken_reply_tokens': '800',
     });
     const reloaded = await app.inject({ url: '/settings', headers: authorization });
     expect(reloaded.json().settings).toMatchObject(patch);
@@ -561,6 +587,19 @@ describe('settings API', () => {
     { settings: { appearance: { density: 'spacious' } } },
     { settings: { appearance: { customToken: '#123456' } } },
     { settings: { voice: { minimizeWindowsOnVoiceStart: 'yes' } } },
+    { settings: { voice: { serverVadThreshold: -0.01 } } },
+    { settings: { voice: { serverVadThreshold: 1.01 } } },
+    { settings: { voice: { serverVadThreshold: '0.7' } } },
+    { settings: { voice: { prefixPaddingMs: -1 } } },
+    { settings: { voice: { prefixPaddingMs: 2_001 } } },
+    { settings: { voice: { prefixPaddingMs: 1.5 } } },
+    { settings: { voice: { silenceDurationMs: 99 } } },
+    { settings: { voice: { silenceDurationMs: 5_001 } } },
+    { settings: { voice: { silenceDurationMs: 1.5 } } },
+    { settings: { voice: { bargeInEnabled: 'yes' } } },
+    { settings: { voice: { maxSpokenReplyTokens: 0 } } },
+    { settings: { voice: { maxSpokenReplyTokens: 4_097 } } },
+    { settings: { voice: { maxSpokenReplyTokens: 1.5 } } },
     { settings: { jarvis: { model: 'not-available' } } },
     { settings: { jarvis: { reasoning: 'unsupported' } } },
     { settings: { personality: { tone: 'unbounded' } } },

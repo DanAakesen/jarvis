@@ -69,6 +69,55 @@ describe('English realtime session', () => {
     expect(session.input_audio_transcription).toEqual({ model: 'mai-transcribe' });
   });
 
+  it('keeps default VAD behavior and bounds spoken replies', () => {
+    const english = createEnglishSessionUpdate(registry).session;
+    const danish = createRealtimeSessionUpdate(registry, undefined, defaultAwayModeState, 'da').session;
+
+    expect(english.turn_detection).toMatchObject({
+      type: 'azure_semantic_vad_en',
+      threshold: 0.6,
+      prefix_padding_ms: 300,
+      silence_duration_ms: 500,
+      interrupt_response: true,
+    });
+    expect(danish.turn_detection).toMatchObject({
+      type: 'server_vad',
+      threshold: 0.7,
+      prefix_padding_ms: 300,
+      silence_duration_ms: 600,
+      interrupt_response: true,
+    });
+    expect(english.max_response_output_tokens).toBe(4_096);
+    expect(danish.max_response_output_tokens).toBe(4_096);
+  });
+
+  it('applies bounded voice tuning to server VAD, barge-in, and spoken reply length', () => {
+    const session = createRealtimeSessionUpdate(
+      registry,
+      undefined,
+      defaultAwayModeState,
+      'da',
+      [],
+      undefined,
+      {
+        serverVadThreshold: 0.9,
+        prefixPaddingMs: 800,
+        silenceDurationMs: 1_200,
+        bargeInEnabled: false,
+        maxSpokenReplyTokens: 256,
+      },
+    ).session;
+
+    expect(session.turn_detection).toMatchObject({
+      type: 'server_vad',
+      threshold: 0.9,
+      prefix_padding_ms: 800,
+      silence_duration_ms: 1_200,
+      interrupt_response: false,
+    });
+    expect(session.max_response_output_tokens).toBe(256);
+  });
+
   it('removes untyped schema combinators that Voice Live rejects, keeping typed unions', () => {
     expect(toModelToolSchema({
       type: 'object',
