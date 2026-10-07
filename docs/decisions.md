@@ -19,6 +19,14 @@ The nine design areas and where each stands. **Confirmed** = Dan's requirement o
 
 ## Decision log
 
+P9-14 (7 October 2026): persist each background-job state and step transition in
+SQL, and publish job events only after the state transaction commits. Keep jobs and
+step history for 30 days. No current job is resumable, so startup marks running
+jobs `failed` with `interrupted by restart`; do not attempt to repeat external
+research or artifact side effects. Evidence: migration 0029 and focused lifecycle
+tests, with SQL persistence and schema coverage in Database CI. Cross-replica live
+acceptance remains unverified.
+
 P9-01 (7 October 2026): use the existing `dbo.settings` key/value store for
 per-role model and reasoning-effort preferences; do not add a migration.
 `jarvis.model` and `jarvis.reasoning` remain compatible aliases for `roles.chat`.
