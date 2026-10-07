@@ -163,6 +163,8 @@ Every task issue ends with the same "Before you start" and "Definition of done" 
 | --- | --- | --- |
 | Contents | Read and write | Read task repositories and push agent branches |
 | Pull requests | Read and write | Create, inspect, and merge pull requests |
+| Issues | Read-only | List repository issues alongside pull requests |
+| Commit statuses | Read-only | Read commit status contexts |
 | Checks | Read-only | Read check results |
 | Actions | Read-only | Read workflow runs |
 | Deployments | Read-only | Read deployment status |
@@ -200,7 +202,7 @@ Dan's manual setup checklist:
 
    In **GitHub → Settings → Developer settings → GitHub Apps → Jarvis Software Factory → Webhook**, set the URL to `https://<backendFqdn>/github/webhooks`, choose `application/json`, paste the same secret, enable the webhook, and subscribe to `pull_request`, `check_run`, `workflow_run`, `deployment_status`, and `push`. Save the settings, remove the temporary local copy, and inspect **Recent Deliveries** for a successful 2xx response to GitHub's initial `ping`. The receiver records that signed but unsupported event as ignored. Never put either copy in source control or logs.
 
-Status, 4 October 2026: Dan registered the App, installed it on all repositories of his account, trimmed its permissions, and stored `github-app-private-key` in Key Vault (P3-10). P3-02 code is merged but its live token issuance and sandbox push are not yet verified. P7-45 does not request Issues permission: issue summaries work for public repositories with the contents token; private repository issues need Dan to grant Issues read and the token scope to be widened. The webhook receiver (P3-03) is implemented; webhook secret provisioning, App URL configuration, and live delivery remain Dan's post-merge steps. P3-05 uses a separate repository-scoped token with only Actions read permission in the backend, stores failed-job logs in the existing private `logs` container, and never passes that token to the sandbox. The backend setting `global.max_check_attempts` defaults to 3 and accepts 0–10; 0 disables automatic repairs. The receiver caches the webhook secret after its first successful lookup, so restart the backend when rotating it.
+Status, 4 October 2026: Dan registered the App, installed it on all repositories of his account, trimmed its permissions, and stored `github-app-private-key` in Key Vault (P3-10). P3-02 code is merged but its live token issuance and sandbox push are not yet verified. On 7 October Dan added Issues, commit statuses and environments read to the App; P7-45 issue summaries request Issues read, so they cover private registered repositories. The webhook receiver (P3-03) is implemented; webhook secret provisioning, App URL configuration, and live delivery remain Dan's post-merge steps. P3-05 uses a separate repository-scoped token with only Actions read permission in the backend, stores failed-job logs in the existing private `logs` container, and never passes that token to the sandbox. The backend setting `global.max_check_attempts` defaults to 3 and accepts 0–10; 0 disables automatic repairs. The receiver caches the webhook secret after its first successful lookup, so restart the backend when rotating it.
 
 ## Accepted visual reference handoff
 
