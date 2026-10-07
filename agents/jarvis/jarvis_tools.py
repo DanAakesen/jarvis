@@ -161,7 +161,9 @@ def _model_settings(value: Any) -> ModelSettings:
     reasoning_effort = value.get("reasoningEffort")
     roles = value.get("roles")
     if roles is not None:
-        names = {"chat", "vision", "research", "voice", "transcription", "embedding", "codex", "copilot"}
+        names = {
+            "chat", "vision", "research", "voice", "transcription", "embedding", "codex", "copilot"
+        }
         if not isinstance(roles, dict) or set(roles) != names:
             raise ValueError("invalid Jarvis settings")
         for role_settings in roles.values():

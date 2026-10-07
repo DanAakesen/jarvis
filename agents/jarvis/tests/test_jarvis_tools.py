@@ -224,7 +224,9 @@ async def test_loads_effective_model_settings_for_a_new_session() -> None:
 async def test_resolved_chat_role_settings_override_legacy_model_fields() -> None:
     roles = {
         role: {"model": "deployment", "reasoningEffort": "none"}
-        for role in ("chat", "vision", "research", "voice", "transcription", "embedding", "codex", "copilot")
+        for role in (
+            "chat", "vision", "research", "voice", "transcription", "embedding", "codex", "copilot"
+        )
     }
     roles["chat"] = {"model": "gpt-6-luna", "reasoningEffort": "high"}
     client = make_client(Backend(settings={
