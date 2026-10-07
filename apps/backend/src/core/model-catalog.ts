@@ -18,6 +18,10 @@ const fallback: ModelDeployment[] = [
     capacity: 10, capabilities: ['realtime', 'transcription'], reasoningEfforts: ['none'],
   },
   {
+    name: 'gpt-realtime-2.1-mini', model: 'gpt-realtime-2.1-mini', version: '2026-07-07', sku: 'GlobalStandard',
+    capacity: 10, capabilities: ['realtime', 'transcription'], reasoningEfforts: ['none'],
+  },
+  {
     name: 'text-embedding-3-small', model: 'text-embedding-3-small', version: '1', sku: 'GlobalStandard',
     capacity: 150, capabilities: ['embeddings'], reasoningEfforts: ['none'],
   },
@@ -253,6 +257,12 @@ export const defaultRoleModels: Readonly<Record<ModelRole, string>> = Object.fre
   copilot: 'default',
 });
 
+export const voiceLiveModels = ['gpt-realtime-2.1', 'gpt-realtime-2.1-mini'] as const;
+export const visionModelRatesDkkPerMillionTokens: ReadonlyMap<string, { input: number; output: number }> = new Map([
+  ['gpt-5.6-luna', { input: 1.3157, output: 7.8941 }],
+  ['gpt-6-luna', { input: 0.6579, output: 3.2893 }],
+]);
+
 const roleCapabilities: Partial<Record<ModelRole, readonly ModelCapability[]>> = {
   chat: ['chat', 'responses'],
   vision: ['image'],
@@ -264,13 +274,17 @@ const roleCapabilities: Partial<Record<ModelRole, readonly ModelCapability[]>> =
 
 export function modelsForRole(catalogue: ModelCatalogue, role: ModelRole): string[] {
   if (role === 'codex' || role === 'copilot') return ['default'];
-  if (role === 'transcription') {
-    return [...new Set([
-      'mai-transcribe',
-      ...catalogue.deployments
-        .filter((deployment) => deployment.capabilities.includes('transcription'))
-        .map((deployment) => deployment.name),
-    ])].sort();
+  if (role === 'transcription') return ['mai-transcribe'];
+  if (role === 'voice') {
+    return voiceLiveModels.filter((model) =>
+      catalogue.deployments.some((deployment) => deployment.name === model && deployment.capabilities.includes('realtime')));
+  }
+  if (role === 'vision') {
+    return catalogue.deployments
+      .filter((deployment) => deployment.capabilities.includes('image') &&
+        visionModelRatesDkkPerMillionTokens.has(deployment.name))
+      .map((deployment) => deployment.name)
+      .sort();
   }
   const required = roleCapabilities[role] ?? [];
   return catalogue.deployments

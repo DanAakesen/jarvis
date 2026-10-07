@@ -15,6 +15,7 @@ import { parse } from 'parse5';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { BackendModule } from '../modules.js';
 import { generatedViewValidationOptions } from './generated-view-validation.js';
+import { readSettings } from './settings.js';
 import { ToolFailure, ToolRefusal } from './tool-registry.js';
 import { runCodexToolResult, type WebResearchClient } from './web-research.js';
 
@@ -367,6 +368,9 @@ export function createHtmlResearchModule(
             request.principal?.objectId.toLowerCase() !== ownerId.toLowerCase()) {
           throw new ToolRefusal('Research requires an authenticated workspace owner.');
         }
+        const researchSettings = request.server.settingsStore
+          ? (await readSettings(request.server.settingsStore, await request.server.modelCatalogue.read())).roles.research
+          : { model, reasoningEffort: 'none' as const };
         const announceCompletion = request.announceResearchCompletion;
         for (const [id, job] of jobs) {
           if (job.done) jobs.delete(id);
@@ -417,11 +421,12 @@ export function createHtmlResearchModule(
                   clientFor(),
                   'web_research',
                   search.query,
-                  model,
+                  researchSettings.model,
                   jobSignal,
                   invocationTimeoutMs,
                   pollIntervalMs,
                   (value) => parseWebResearchResult(value),
+                  { reasoningEffort: researchSettings.reasoningEffort },
                 );
                 search.status = 'complete';
                 search.answer = result.answer.slice(0, maxFindingLength);
@@ -447,11 +452,12 @@ export function createHtmlResearchModule(
               clientFor(),
               'html_report',
               reportRequest(topic, input.depth as 'quick' | 'deep', partial, frame, findings, reportSources),
-              model,
+              researchSettings.model,
               jobSignal,
               invocationTimeoutMs,
               pollIntervalMs,
               (value) => parseReport(value, reportSources),
+              { reasoningEffort: researchSettings.reasoningEffort },
             );
             const artifact = await artifacts.create(ownerId, result.title, result.html, sources(), jobSignal);
             if (!isHtmlArtifact(artifact)) throw new ToolFailure('The report failed artifact validation.');
