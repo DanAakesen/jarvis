@@ -792,6 +792,28 @@ The tools support Jarvis chat, voice and the hosted agent through the existing
 The [module guide](../apps/backend/src/modules.README.md) explains adding areas,
 resource lifetimes and the verified offline extension contract.
 
+### System status (P9-20)
+
+Dan-only `GET /status` returns the shared `SystemStatus` contract with one
+`checkedAt` per subsystem. The backend caches the snapshot for 60 seconds and
+sets a private 30-second HTTP cache. `get_status_summary` reads the same snapshot
+and combines health counts with the existing Now-feed counts.
+
+The database check runs a bounded `SELECT 1`; Foundry chat, voice and embedding
+entries compare configuration and the cached ARM catalogue, without claiming a
+successful model invocation. Vault status aggregates note/chunk counts, latest
+`indexed_at`, and embedding coverage without reading note text. GitHub App
+permissions come from the repository's installation metadata; Google uses a
+bounded Calendar list read. PC bridge state is live in process and reports
+connection, pause and wake-word state. Its current protocol does not provide
+bridge or Chrome extension versions, so those fields are `null`. Runner status
+reports configuration and tracked-session count but remains `unknown` because
+there is no runner health endpoint. Deploy embeds the source commit in the
+backend image. `last_error` records only the latest uncaught HTTP 5xx route
+template, timestamp and status code; exception text and credentials are never
+returned. Probe failures are reduced to fixed status details. No status table or
+migration is added.
+
 ### Local PC bridge (P7-06)
 
 `pc-bridge/Jarvis.PcBridge` is a per-user .NET 10 WinForms tray app. It signs in

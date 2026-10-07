@@ -107,6 +107,10 @@ export class SandboxHeartbeat {
     return this.tracked.size > 0;
   }
 
+  trackedSessionCount(): number {
+    return this.tracked.size;
+  }
+
   untrack(sandboxSessionId: string): void {
     const entry = this.tracked.get(sandboxSessionId);
     if (entry) this.cancel(entry);

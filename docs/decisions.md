@@ -19,6 +19,16 @@ The nine design areas and where each stands. **Confirmed** = Dan's requirement o
 
 ## Decision log
 
+P9-20 (7 October 2026): expose one owner-authenticated, cached `/status`
+snapshot using the shared contracts; reuse it in `get_status_summary`. Keep
+status probes bounded and return only allowlisted metadata, never provider
+errors, tokens, or vault content. Use existing database index timestamps for
+vault freshness/coverage and the built image's commit metadata; add no migration
+or web changes. Report unknown where the existing Foundry/runner signals do not
+prove runtime health, and leave bridge versions null until its protocol reports
+them. Focused offline tests cover caching, authorization, status details and
+sanitized failures; production provider health and UI acceptance remain pending.
+
 P9-14 (7 October 2026): persist each background-job state and step transition in
 SQL, and publish job events only after the state transaction commits. Keep jobs and
 step history for 30 days. No current job is resumable, so startup marks running

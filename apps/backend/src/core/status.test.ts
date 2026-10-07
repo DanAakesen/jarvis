@@ -5,6 +5,7 @@ import type { AwayModeStore } from './away-mode.js';
 import type { NowFeedSnapshot, NowFeedStore } from './now.js';
 import { coreModule } from './index.js';
 import { summarizeNowFeed } from './status.js';
+import { createSystemStatusReader } from '../system-status.js';
 
 const config = { ...loadConfig({}), logLevel: 'silent' as const };
 const headers = {
@@ -31,13 +32,18 @@ const feed: NowFeedSnapshot = {
   ],
 };
 
-function fixture(store: NowFeedStore | null, awayModeStore?: AwayModeStore) {
+function fixture(
+  store: NowFeedStore | null,
+  awayModeStore?: AwayModeStore,
+  systemStatusReader = createSystemStatusReader({}, undefined),
+) {
   const record = vi.fn(async () => {});
   const app = buildApp(config, undefined, {
     modules: [coreModule],
     auth: async () => ({ objectId: config.auth.ownerObjectId, tenantId: config.auth.tenantId }),
     nowFeedStore: store,
     awayModeStore,
+    systemStatusReader,
     toolCallStore: { record },
   });
   apps.push(app);
@@ -61,7 +67,7 @@ describe('get_status_summary', () => {
       tool: 'get_status_summary',
       outcome: 'ok',
       result: {
-        summary: 'The Now feed shows 1 running task, 1 task needing attention, 1 release or deployment update, 1 credential warning, 1 alert.',
+        summary: 'System status: 0 ok, 0 degraded, 0 down, 10 unknown. The Now feed shows 1 running task, 1 task needing attention, 1 release or deployment update, 1 credential warning, 1 alert.',
       },
       confirmation: 'Done: get_status_summary succeeded.',
     });
@@ -102,8 +108,38 @@ describe('get_status_summary', () => {
 
     expect(response.json()).toMatchObject({
       result: {
-        summary: 'The Now feed shows 1 running task, 1 task needing attention, 1 release or deployment update, 1 credential warning, 1 alert.',
+        summary: 'System status: 0 ok, 0 degraded, 0 down, 10 unknown. The Now feed shows 1 running task, 1 task needing attention, 1 release or deployment update, 1 credential warning, 1 alert.',
       },
     });
+  });
+
+  it('serves a cached owner-only status snapshot without exposing integration secrets', async () => {
+    const database = vi.fn(async () => ({ status: 'ok' as const, details: { configured: true } }));
+    const reader = createSystemStatusReader({ database }, undefined);
+    const { app } = fixture(null, undefined, reader);
+    const first = await app.inject({ url: '/status', headers });
+    const second = await app.inject({ url: '/status', headers });
+
+    expect(first.statusCode).toBe(200);
+    expect(first.headers['cache-control']).toBe('private, max-age=30');
+    expect(first.json().entries).toHaveLength(11);
+    expect(first.json().entries[0]).toMatchObject({ id: 'database', status: 'ok' });
+    expect(second.json()).toEqual(first.json());
+    expect(database).toHaveBeenCalledOnce();
+    expect(JSON.stringify(first.json())).not.toMatch(/token|secret|private/iu);
+  });
+
+  it('keeps GET /status unavailable to unauthenticated and agent-only identities', async () => {
+    const noAuth = buildApp(config, undefined, { modules: [coreModule] });
+    apps.push(noAuth);
+    expect((await noAuth.inject({ url: '/status' })).statusCode).toBe(401);
+
+    const agent = buildApp(config, undefined, {
+      modules: [coreModule],
+      auth: async () => ({ kind: 'jarvis-agent', objectId: 'agent', tenantId: config.auth.tenantId }),
+    });
+    apps.push(agent);
+    const response = await agent.inject({ url: '/status', headers });
+    expect(response.statusCode).toBe(403);
   });
 });

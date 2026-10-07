@@ -106,6 +106,7 @@ import { createImageGenerationModule } from './core/image-generation.js';
 import { WorkspaceArtifactStore } from './database/workspace-artifact-store.js';
 import { WorkspaceHtmlArtifactStore } from './database/workspace-html-artifact-store.js';
 import { createHtmlViewModule } from './core/html-view.js';
+import { createSystemStatusReader } from './system-status.js';
 
 try {
   const config = loadConfig();
@@ -175,8 +176,8 @@ try {
   const googleSecretClient = config.googleTimeZone && config.keyVaultUri && credential
     ? new SecretClient(config.keyVaultUri, credential)
     : undefined;
-  const googleModule = config.googleTimeZone && googleSecretClient
-    ? createGoogleModule(createGoogleApiClient({
+  const googleApiClient = config.googleTimeZone && googleSecretClient
+    ? createGoogleApiClient({
       tokens: createGoogleTokenProvider({
         getCredentials: async (): Promise<GoogleOAuthCredentials> => {
           const [clientId, clientSecret, refreshToken] = await Promise.all([
@@ -212,7 +213,10 @@ try {
           }
         },
       }),
-    }), { timeZone: config.googleTimeZone })
+    })
+    : undefined;
+  const googleModule = googleApiClient
+    ? createGoogleModule(googleApiClient, { timeZone: config.googleTimeZone! })
     : undefined;
   const getGitHubAppPrivateKey = async () => {
     if (!githubAppKeyVault) throw new Error('GitHub App private key is unavailable');
@@ -551,6 +555,22 @@ try {
       return token.token;
     })
     : undefined;
+  const pcBridgeModule = createPcBridgeModule({
+    ...(screenVisionModel ? { pcActVisionModel: screenVisionModel } : {}),
+    ...(pcActPlanner ? {
+      pcActPlanner,
+      ...(recipes ? { recipes } : {}),
+      onPcActStep: (activity) => logger.info(activity, 'pc_act.step'),
+    } : {}),
+    ...(pcBridgeStatusStore ? {
+      onStatusChange: (online, controlPaused) => pcBridgeStatusStore.setStatus(online, controlPaused),
+    } : {}),
+    ...(teamsNotifications ? {
+      runConfirmed: (summary, action, signal) =>
+        teamsNotifications.runConfirmed('computer_use', summary, action, signal),
+    } : {}),
+    onStatusError: (error) => logger.warn(safeErrorFields(error), 'pc_bridge.status_update_failed'),
+  });
   const modules: BackendModule[] = [
     coreModule, conversationModule, factoryModule, createSleepModule(containerAppScaler),
     createRecipeModule(recipeStore),
@@ -581,24 +601,7 @@ try {
         },
       } : {}),
     }),
-    createPcBridgeModule({
-      ...(screenVisionModel ? {
-        pcActVisionModel: screenVisionModel,
-      } : {}),
-      ...(pcActPlanner ? {
-        pcActPlanner,
-        ...(recipes ? { recipes } : {}),
-        onPcActStep: (activity) => logger.info(activity, 'pc_act.step'),
-      } : {}),
-      ...(pcBridgeStatusStore ? {
-        onStatusChange: (online, controlPaused) => pcBridgeStatusStore.setStatus(online, controlPaused),
-      } : {}),
-      ...(teamsNotifications ? {
-        runConfirmed: (summary, action, signal) =>
-          teamsNotifications.runConfirmed('computer_use', summary, action, signal),
-      } : {}),
-      onStatusError: (error) => logger.warn(safeErrorFields(error), 'pc_bridge.status_update_failed'),
-    }),
+    pcBridgeModule,
   ];
   const phoneCallModule = config.phone && phoneSessionStore && phoneSecretClient && credential &&
     config.teams && config.foundryProjectEndpoint
@@ -704,8 +707,124 @@ try {
     })
     : undefined;
   let activeEmbeddingReindex: { readonly controller: AbortController; readonly pending: Promise<void> } | undefined;
+  const foundryCapabilityStatus = async (
+    configured: boolean,
+    capability: 'chat' | 'realtime' | 'embeddings',
+  ) => {
+    if (!configured) return { status: 'down' as const, details: { configured: false } };
+    try {
+      const catalogue = await modelCatalogue.read();
+      const deploymentAvailable = catalogue.deployments.some(({ capabilities }) => capabilities.includes(capability));
+      if (catalogue.source !== 'arm') {
+        return { status: 'degraded' as const, details: { configured: true, deploymentAvailable, catalogue: 'fallback' } };
+      }
+      return {
+        status: deploymentAvailable ? 'unknown' as const : 'degraded' as const,
+        details: { configured: true, deploymentAvailable, catalogue: 'live' },
+      };
+    } catch {
+      return { status: 'degraded' as const, details: { configured: true, deploymentAvailable: false } };
+    }
+  };
+  const deployedCommit = process.env.JARVIS_DEPLOYED_COMMIT;
+  const systemStatusReader = createSystemStatusReader({
+    database: async () => {
+      if (!database) return { status: 'down', details: { configured: false } };
+      if (!database.pool.connected) return { status: 'down', details: { configured: true } };
+      const request = database.pool.request();
+      const timer = setTimeout(() => request.cancel(), 2_000);
+      timer.unref();
+      try {
+        await request.query('SELECT 1 AS ready;');
+        return { status: 'ok', details: { configured: true } };
+      } finally {
+        clearTimeout(timer);
+      }
+    },
+    'foundry.chat': () => foundryCapabilityStatus(Boolean(conversationAgent), 'chat'),
+    'foundry.voice': () => foundryCapabilityStatus(
+      Boolean(credential && (config.voiceLiveEndpoint || config.foundryProjectEndpoint)),
+      'realtime',
+    ),
+    'foundry.embeddings': () => foundryCapabilityStatus(
+      Boolean(config.foundryProjectEndpoint && credential),
+      'embeddings',
+    ),
+    vault_index: async () => {
+      if (!vaultIndexStore || !config.foundryProjectEndpoint || !credential) {
+        return { status: 'down', details: { configured: false } };
+      }
+      const model = await embeddingModel();
+      const summary = await vaultIndexStore.summary(model, AbortSignal.timeout(2_000));
+      const latestIndexedAt = summary.latestIndexedAt?.toISOString() ?? null;
+      const stale = !summary.latestIndexedAt ||
+        Date.now() - summary.latestIndexedAt.getTime() > 24 * 60 * 60_000;
+      const coveragePercent = summary.chunks === 0
+        ? null
+        : Math.round(summary.embeddedChunks / summary.chunks * 100);
+      return {
+        status: summary.chunks === 0
+          ? 'unknown'
+          : stale || summary.embeddedChunks < summary.chunks ? 'degraded' : 'ok',
+        details: {
+          notes: summary.notes,
+          chunks: summary.chunks,
+          embeddedChunks: summary.embeddedChunks,
+          embeddingCoveragePercent: coveragePercent,
+          latestIndexedAt,
+        },
+      };
+    },
+    github_app: async () => {
+      if (!githubAppTokenIssuer) return { status: 'down', details: { configured: false } };
+      if (!githubAppTokenIssuer.readInstallationPermissions) {
+        return { status: 'unknown', details: { configured: true, permissions: 'unavailable' } };
+      }
+      const permissions = await githubAppTokenIssuer.readInstallationPermissions('DanAakesen/jarvis');
+      return {
+        status: 'ok',
+        details: {
+          configured: true,
+          permissions: Object.entries(permissions).sort(([left], [right]) => left.localeCompare(right))
+            .map(([permission, access]) => `${permission}:${access}`).join(','),
+        },
+      };
+    },
+    google: async () => {
+      if (!googleApiClient) return { status: 'down', details: { configured: false } };
+      await googleApiClient.request('calendar', '/users/me/calendarList?maxResults=1', {
+        signal: AbortSignal.timeout(5_000),
+      });
+      return { status: 'ok', details: { configured: true, check: 'calendar_read' } };
+    },
+    pc_bridge: async () => {
+      const bridge = pcBridgeModule.connection.readStatus();
+      return {
+        status: bridge.connected ? 'ok' : 'down',
+        details: {
+          connected: bridge.connected,
+          controlPaused: bridge.controlPaused,
+          bridgeVersion: bridge.bridgeVersion,
+          chromeExtensionVersion: bridge.chromeExtensionVersion,
+          wakeWordEnabled: bridge.wakeWordEnabled,
+        },
+      };
+    },
+    runner: async () => {
+      const configured = Boolean(database && config.foundryEndpoints && config.foundryRunnerAgentName);
+      return {
+        status: configured ? 'unknown' : 'down',
+        details: {
+          configured,
+          activeSessions: sandboxHeartbeat?.trackedSessionCount() ?? 0,
+          healthProbe: 'not_run',
+        },
+      };
+    },
+  }, deployedCommit && /^[\da-f]{7,64}$/iu.test(deployedCommit) ? deployedCommit.toLowerCase() : undefined);
   const app = buildApp(config, logger, {
     modules,
+    systemStatusReader,
     modelCatalogue,
     ...(modelDeploymentWorkflow ? { modelDeploymentWorkflow } : {}),
     ...(jevSecretClient ? { reflexClassifier } : {}),
