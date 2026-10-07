@@ -15,6 +15,7 @@ from typing import Any
 from urllib.parse import urlsplit, urlunsplit
 from uuid import uuid4
 
+from anthropic import AsyncAnthropicFoundry
 from azure.identity.aio import DefaultAzureCredential
 from openai import AsyncOpenAI
 from opentelemetry import trace
@@ -40,6 +41,13 @@ DEFAULT_SYSTEM_PROMPT = INSTRUCTIONS
 DEFAULT_MAX_OUTPUT_TOKENS = 512
 MAX_OUTPUT_TOKENS = 4096
 MAX_TOOL_ROUNDS = 5
+ANTHROPIC_THINKING_BUDGETS = {
+    "minimal": 1_024,
+    "low": 2_048,
+    "medium": 4_096,
+    "high": 8_192,
+    "xhigh": 16_384,
+}
 CHAT_INSTRUCTIONS = {
     "da": """You are Jarvis, Dan's personal AI assistant for his software factory.
 Reply in natural Danish, using concise written language and markdown only when it helps.
@@ -191,6 +199,88 @@ def responses_base_url(project_endpoint: str) -> str:
     return urlunsplit((parsed.scheme, parsed.netloc, f"{path}/openai/v1/", "", ""))
 
 
+def anthropic_resource_from_project_endpoint(project_endpoint: str) -> str:
+    """Get the Foundry resource name used by the Anthropic Messages endpoint."""
+    responses_base_url(project_endpoint)
+    parsed = urlsplit(project_endpoint.strip())
+    hostname = parsed.hostname or ""
+    suffix = ".services.ai.azure.com"
+    if parsed.port is not None or not hostname.endswith(suffix):
+        raise ValueError("FOUNDRY_PROJECT_ENDPOINT must identify an Azure AI Foundry resource")
+    resource = hostname.removesuffix(suffix)
+    if not resource:
+        raise ValueError("FOUNDRY_PROJECT_ENDPOINT must identify an Azure AI Foundry resource")
+    return resource
+
+
+def is_claude_model(model_name: str) -> bool:
+    return model_name.casefold().startswith("claude-")
+
+
+def anthropic_tools(tools: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Convert the backend's OpenAI Responses tools to Anthropic's schema."""
+    return [
+        {
+            "name": tool["name"],
+            "description": tool["description"],
+            "input_schema": tool["parameters"],
+        }
+        for tool in tools
+    ]
+
+
+def anthropic_messages(messages: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Normalize the internal conversation for Anthropic's alternating message format."""
+    normalized: list[dict[str, Any]] = []
+    for message in messages:
+        role = message.get("role")
+        content = message.get("content")
+        if role not in {"user", "assistant"} or not isinstance(content, (str, list)):
+            raise ValueError("Invalid Claude conversation message")
+        if normalized and normalized[-1]["role"] == role:
+            previous = normalized[-1]["content"]
+            if isinstance(previous, str) and isinstance(content, str):
+                normalized[-1]["content"] = f"{previous}\n{content}"
+            else:
+                previous_blocks = (
+                    [{"type": "text", "text": previous}]
+                    if isinstance(previous, str)
+                    else previous
+                )
+                next_blocks = (
+                    [{"type": "text", "text": content}]
+                    if isinstance(content, str)
+                    else content
+                )
+                normalized[-1]["content"] = [*previous_blocks, *next_blocks]
+        else:
+            normalized.append({"role": role, "content": content})
+    return normalized
+
+
+def anthropic_assistant_content(message: Any) -> list[dict[str, Any]]:
+    """Serialize provider content blocks, retaining signed thinking blocks for tool turns."""
+    return [
+        block.model_dump(exclude_none=True, mode="json")
+        if callable(getattr(block, "model_dump", None))
+        else dict(block)
+        for block in message.content
+    ]
+
+
+def anthropic_thinking_parameters(
+    reasoning_effort: str | None, max_output_tokens: int
+) -> dict[str, Any]:
+    """Map the shared reasoning setting to Claude's minimum-valid thinking budget."""
+    budget = ANTHROPIC_THINKING_BUDGETS.get(reasoning_effort or "")
+    if budget is None:
+        return {"max_tokens": max_output_tokens}
+    return {
+        "max_tokens": max_output_tokens + budget,
+        "thinking": {"type": "enabled", "budget_tokens": budget},
+    }
+
+
 def parse_max_output_tokens(value: str | None) -> int:
     """Parse and bound the configured output-token limit."""
     if value is None or not value.strip():
@@ -215,6 +305,7 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
         self,
         *,
         client: AsyncOpenAI,
+        anthropic_client: AsyncAnthropicFoundry | None = None,
         credential: DefaultAzureCredential | None,
         model_name: str,
         server_address: str,
@@ -224,6 +315,7 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
         reasoning_effort: str | None = None,
     ) -> None:
         self._client = client
+        self._anthropic_client = anthropic_client
         self._credential = credential
         self._system_prompt = system_prompt
         self._max_output_tokens = max_output_tokens
@@ -243,22 +335,28 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
             )
 
         base_url = responses_base_url(endpoint)
+        anthropic_resource = anthropic_resource_from_project_endpoint(endpoint)
         api_key = os.getenv("AZURE_OPENAI_API_KEY", "").strip()
         backend_url, backend_scope = backend_settings_from_environment()
         # The agent identity always authenticates backend tool calls.
         credential = DefaultAzureCredential()
         tools = BackendToolClient.for_identity(credential, backend_url, backend_scope)
+
+        async def token() -> str:
+            return (await credential.get_token(FOUNDRY_TOKEN_SCOPE)).token
+
+        anthropic_client = AsyncAnthropicFoundry(
+            resource=anthropic_resource,
+            azure_ad_token_provider=token,
+        )
         if api_key:
             client = AsyncOpenAI(api_key=api_key, base_url=base_url)
         else:
-
-            async def token() -> str:
-                return (await credential.get_token(FOUNDRY_TOKEN_SCOPE)).token
-
             client = AsyncOpenAI(api_key=token, base_url=base_url)
 
         return cls(
             client=client,
+            anthropic_client=anthropic_client,
             credential=credential,
             tools=tools,
             model_name=deployment,
@@ -337,7 +435,9 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
             set_status_on_exception=False,
             attributes={
                 "gen_ai.operation.name": "chat",
-                "gen_ai.provider.name": "Azure OpenAI",
+                "gen_ai.provider.name": (
+                    "Anthropic" if is_claude_model(self.model_name) else "Azure OpenAI"
+                ),
                 "server.address": self.server_address,
             },
         ) as span:
@@ -358,6 +458,12 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                     await asyncio.gather(*setup_tasks, return_exceptions=True)
                     raise
                 model_name = settings.model if settings is not None else self.model_name
+                use_anthropic = role == "chat" and is_claude_model(model_name)
+                span.set_attribute(
+                    "gen_ai.provider.name", "Anthropic" if use_anthropic else "Azure OpenAI"
+                )
+                if use_anthropic and self._anthropic_client is None:
+                    raise RuntimeError("Foundry Claude client is unavailable")
                 reasoning_effort = (
                     settings.reasoning_effort if settings is not None else self._reasoning_effort
                 )
@@ -424,25 +530,70 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                         request["reasoning"] = {"effort": reasoning_effort}
                         request["include"] = ["reasoning.encrypted_content"]
                     with latency_span("model_call") as model_span:
-                        with latency_span("responses_create"):
-                            stream = await self._client.responses.create(**request)
-                        async with stream:
-                            async for event in stream:
-                                if event.type == "response.output_text.delta" and event.delta:
-                                    if first_text_ms is None:
-                                        first_text_ms = int((time.monotonic() - started) * 1000)
-                                        model_span.set_attribute(
-                                            "first_text.duration_ms", first_text_ms
+                        if use_anthropic:
+                            anthropic_request: dict[str, Any] = {
+                                "model": model_name,
+                                "system": instructions,
+                                "messages": anthropic_messages(model_input),
+                                **anthropic_thinking_parameters(
+                                    reasoning_effort, self._max_output_tokens
+                                ),
+                            }
+                            if tools:
+                                anthropic_request["tools"] = anthropic_tools(tools)
+                            try:
+                                with latency_span("messages_create"):
+                                    stream = self._anthropic_client.messages.stream(
+                                        **anthropic_request
+                                    )
+                                async with stream:
+                                    async for text in stream.text_stream:
+                                        if text:
+                                            if first_text_ms is None:
+                                                first_text_ms = int(
+                                                    (time.monotonic() - started) * 1000
+                                                )
+                                                model_span.set_attribute(
+                                                    "first_text.duration_ms", first_text_ms
+                                                )
+                                                log_latency("model_first_delta", started)
+                                            yield text
+                                    final = await stream.get_final_message()
+                            except Exception as exc:
+                                logger.warning(
+                                    "Foundry Claude model request failed; error=%s",
+                                    type(exc).__name__,
+                                )
+                                raise RuntimeError(
+                                    "Foundry Claude model response did not complete"
+                                ) from exc
+                        else:
+                            with latency_span("responses_create"):
+                                stream = await self._client.responses.create(**request)
+                            async with stream:
+                                async for event in stream:
+                                    if (
+                                        event.type == "response.output_text.delta"
+                                        and event.delta
+                                    ):
+                                        if first_text_ms is None:
+                                            first_text_ms = int(
+                                                (time.monotonic() - started) * 1000
+                                            )
+                                            model_span.set_attribute(
+                                                "first_text.duration_ms", first_text_ms
+                                            )
+                                            log_latency("model_first_delta", started)
+                                        yield event.delta
+                                    elif event.type == "response.completed":
+                                        final = event.response
+                                        break
+                                    elif event.type in {
+                                        "error", "response.failed", "response.incomplete"
+                                    }:
+                                        raise RuntimeError(
+                                            "Foundry model response did not complete"
                                         )
-                                        log_latency("model_first_delta", started)
-                                    yield event.delta
-                                elif event.type == "response.completed":
-                                    final = event.response
-                                    break
-                                elif event.type in {
-                                    "error", "response.failed", "response.incomplete"
-                                }:
-                                    raise RuntimeError("Foundry model response did not complete")
                         model_span.set_attribute(
                             "duration_ms",
                             (time.monotonic() - started) * 1000,
@@ -450,7 +601,11 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                     if final is None:
                         raise RuntimeError("Foundry model response stream ended before completion")
 
-                    calls = [item for item in final.output if item.type == "function_call"]
+                    calls = (
+                        [item for item in final.content if item.type == "tool_use"]
+                        if use_anthropic
+                        else [item for item in final.output if item.type == "function_call"]
+                    )
                     usage = final.usage
                     input_tokens = getattr(usage, "input_tokens", None)
                     output_tokens = getattr(usage, "output_tokens", None)
@@ -494,22 +649,44 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                             continue
                         return
 
-                    model_input.extend(
-                        item.model_dump(exclude_none=True, mode="json") for item in final.output
-                    )
+                    if use_anthropic:
+                        model_input.append({
+                            "role": "assistant",
+                            "content": anthropic_assistant_content(final),
+                        })
+                    else:
+                        model_input.extend(
+                            item.model_dump(exclude_none=True, mode="json")
+                            for item in final.output
+                        )
                     if phase_setter is not None and turn_id is not None:
                         await phase_setter("tools")
+                    tool_results = []
                     for call in calls:
+                        arguments = (
+                            json.dumps(call.input, ensure_ascii=False, separators=(",", ":"))
+                            if use_anthropic
+                            else call.arguments
+                        )
                         result = await self._tools.call(
-                            call.name, call.arguments, current_message_id.get()
+                            call.name, arguments, current_message_id.get()
                         )
-                        model_input.append(
-                            {
-                                "type": "function_call_output",
-                                "call_id": call.call_id,
-                                "output": json.dumps(result, ensure_ascii=False),
-                            }
-                        )
+                        if use_anthropic:
+                            tool_results.append({
+                                "type": "tool_result",
+                                "tool_use_id": call.id,
+                                "content": json.dumps(result, ensure_ascii=False),
+                            })
+                        else:
+                            model_input.append(
+                                {
+                                    "type": "function_call_output",
+                                    "call_id": call.call_id,
+                                    "output": json.dumps(result, ensure_ascii=False),
+                                }
+                            )
+                    if use_anthropic and tool_results:
+                        model_input.append({"role": "user", "content": tool_results})
                     await append_steering()
                 raise RuntimeError("Jarvis tool loop exceeded its round limit")
             except (asyncio.CancelledError, GeneratorExit):
@@ -528,6 +705,11 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
             await self._client.close()
         except BaseException as exc:
             errors.append(exc)
+        if self._anthropic_client is not None:
+            try:
+                await self._anthropic_client.close()
+            except BaseException as exc:
+                errors.append(exc)
         try:
             await self._tools.close()
         except BaseException as exc:

@@ -24,7 +24,7 @@ Jarvis is one backend with a shared core and one module per area, a static web a
 | Infrastructure as code | Bicep, deployed by GitHub Actions with OpenID Connect | Bicep provisions no Teams Bot or separate Speech F0 resources; local Bicep checks pass, live Azure setup remains pending |
 | Sign-in | Entra ID: tenant-specific MSAL Browser requests the delegated `jarvis-api` scope; backend verifies bearer tokens with jose 6.2.12 and Dan's object ID. `/me` returns only the validated display name. The hosted Jarvis agent's app-only token (`Jarvis.Tools`), runner identity, and P7-06 device-code bridge identity are restricted to explicitly opted-in routes; the bridge also requires its client ID, Dan's object ID, tenant and delegated API scope | Browser, agent, runner and bridge auth contracts are checked offline; live Dan sign-in, deployed chat invocation and the bridge's live Windows sign-in remain unverified |
 | Board updates | Authenticated server-sent events (SSE) over `fetch`, so the bearer token can be sent. Reconnects resume from `Last-Event-ID`; persisted task events replay before buffered live hub events, with duplicate IDs suppressed. A comment heartbeat is sent every 25 seconds. | Implemented and tested offline; SQL Server integration and deployed streaming remain unverified |
-| Jarvis agent and runner | Python 3.12 (Foundry hosted agents support Python or C#). `agents/jarvis` (P4-01): Python 3.12.14 image, `azure-ai-agentserver-invocations` 1.2.0 voice host, `openai` 3.24.0 Responses API, `azure-identity` 1.26.0, `httpx` 0.28.1; hash-locked `requirements.txt` | Agent ported and checked offline and as a local container in P4-01; Foundry deployment completed in P4-08; P4-09 registers chat through the public Invocations handler |
+| Jarvis agent and runner | Python 3.12 (Foundry hosted agents support Python or C#). `agents/jarvis` (P4-01): Python 3.12.14 image, `azure-ai-agentserver-invocations` 1.2.0 voice host, `openai` 3.24.0 Responses API, `anthropic` 1.12.0 Foundry Messages API, `azure-identity` 1.26.0, `httpx` 0.28.1; hash-locked `requirements.txt` | Agent ported and checked offline and as a local container in P4-01; Foundry deployment completed in P4-08; P4-09 registers chat through the public Invocations handler |
 | Coding sandbox | Foundry Hosted Agents, Invocations protocol, one session per task; Container Apps Jobs as fallback | Proven |
 | Agent protocol | ACP for both agents: Copilot CLI `--acp` (preview); Codex via `codex-acp`; CLI versions pinned (L13) | Proven |
 | Voice | Danish: Voice Live voice bridge, MAI Transcribe, Harper. English: `gpt-realtime-2.1` speech to speech, Ryan HD. Browser traffic uses an authenticated backend WebSocket relay; provider credentials stay server-side. | Relay design selected; local mock spike verified, Azure interoperability unverified |
@@ -2073,7 +2073,8 @@ Watch frames replace the 300-frame cap with `global.vision_daily_budget_usd` (de
 
 `agents/jarvis` (P4-01) is the ported voice-prototype agent: the Voice Live Bridge
 runtime, response coordinator, strict action rules for spoken Danish replies and
-a per-session model tool loop over the Responses API. At voice session start and
+a per-session model tool loop over the Responses API, with Claude chat routed through
+the Anthropic Messages API. At voice session start and
 for each new chat invocation, it reads effective model, reasoning, and personality
 settings from the agent-only `GET /agent/settings` route. The voice runtime keeps
 that immutable snapshot for the session; chat uses a per-invocation snapshot.
@@ -2082,9 +2083,26 @@ only, with identity, backend tool permissions, and truthful action outcomes
 remaining fixed. It defines no tools itself. Each turn loads the backend catalogue from `GET /tools`
 (cached for 60 seconds) and sends each model tool call to `POST /tools/{name}`.
 The agent gets a token for `api://<jarvis-api>/.default`
-from its platform identity through `DefaultAzureCredential`; the same credential
-reaches the model when no API key is set. The backend result is passed back to the
-model unchanged. Only `outcome: "ok"` counts as done.
+from its platform identity through `DefaultAzureCredential`; OpenAI uses the same
+credential when no API key is set. Claude requests use
+`https://{resource}.services.ai.azure.com/anthropic/v1/messages` and a bearer token for
+`https://ai.azure.com/.default`.
+
+For chat only, an effective deployment name beginning with `claude-` selects
+`AsyncAnthropicFoundry`; other chat models and the separate voice role stay on
+Responses. The adapter converts registered tool schemas to Anthropic's
+`input_schema`, streams text deltas, preserves assistant content (including signed
+thinking blocks), and returns tool-use results through the same backend tool
+dispatcher and bounded round loop. `none` disables extended thinking; the shared
+reasoning efforts map to budgets from 1,024 (`minimal`) through 16,384 (`xhigh`)
+tokens, with the output allowance added to `max_tokens`. Provider-reported token
+usage remains recorded by role and deployment. Provider failures become a
+content-free error event at the chat boundary.
+
+The endpoint and managed-identity integration are covered offline. This coding-agent
+worker had no `FOUNDRY_PROJECT_ENDPOINT` and could not acquire an Azure token, so a
+live Claude request from the deployed hosted agent remains unverified. The backend
+result is passed back to the model unchanged. Only `outcome: "ok"` counts as done.
 
 Failures come back to the model as `outcome: "error"`. They say whether nothing was
 done (the request never left the agent), or whether a timeout or broken

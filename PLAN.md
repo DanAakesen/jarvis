@@ -450,7 +450,7 @@ Declined in the audit (do not file): verbosity and max-output-token settings, no
 | P9-05 | [#499](https://github.com/DanAakesen/jarvis/issues/499) | Voice tuning: turn detection, barge-in, reply length | Backend | — | Not started |
 | P9-06 | [#500](https://github.com/DanAakesen/jarvis/issues/500) | Research depth, sources and timeout | Backend | — | Not started |
 | P9-07 | [#501](https://github.com/DanAakesen/jarvis/issues/501) | Model deployment manager (add/remove Foundry deployments with confirmation) | Backend | P9-01 | In progress |
-| P9-08 | [#502](https://github.com/DanAakesen/jarvis/issues/502) | Claude models as the chat model | Backend | P9-01 | In progress |
+| P9-08 | [#502](https://github.com/DanAakesen/jarvis/issues/502) | Claude models as the chat model | Backend | P9-01 | Complete |
 | P9-09 | [#503](https://github.com/DanAakesen/jarvis/issues/503) | Settings: expose hidden settings | UI session | — | In progress |
 | P9-10 | [#504](https://github.com/DanAakesen/jarvis/issues/504) | Memory and retrieval tuning | Backend | — | Not started |
 | P9-11 | [#505](https://github.com/DanAakesen/jarvis/issues/505) | Timeout and retry settings | Backend | — | Not started |
