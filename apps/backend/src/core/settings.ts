@@ -1,5 +1,15 @@
 import { defaultAwayModeState, presenceModes } from './away-mode.js';
 import { JARVIS_REPOSITORY, projectContext } from '../factory/project-context.js';
+import { isModelCatalogue, modelRoles, reasoningEfforts } from '@jarvis/contracts';
+import type { ModelCatalogue, ModelRole, ReasoningEffort } from '@jarvis/contracts';
+import {
+  defaultRoleModels, fallbackModelCatalogue, isRoleModelSupported, modelsForRole, reasoningForModel,
+} from './model-catalog.js';
+
+export interface RoleModelSettings {
+  model: string;
+  reasoningEffort: ReasoningEffort;
+}
 
 export interface Settings {
   appearance: {
@@ -38,6 +48,7 @@ export interface Settings {
   copilot: {
     model: string;
   };
+  roles: Record<ModelRole, RoleModelSettings>;
   global: {
     maxParallelTasks: number;
     maxCheckAttempts: number;
@@ -60,6 +71,8 @@ export type SettingsPatch = {
     ? Omit<Partial<Settings[Area]>, 'modeInstructions'> & {
       modeInstructions?: Partial<Settings['personality']['modeInstructions']>;
     }
+    : Area extends 'roles'
+      ? Partial<Record<ModelRole, Partial<RoleModelSettings>>>
     : Partial<Settings[Area]>;
 };
 
@@ -87,6 +100,10 @@ export const defaultSettings: Settings = {
   },
   codex: { model: 'default', reasoning: 'default' },
   copilot: { model: 'default' },
+  roles: Object.fromEntries(modelRoles.map((role) => [role, {
+    model: defaultRoleModels[role],
+    reasoningEffort: 'none',
+  }])) as Record<ModelRole, RoleModelSettings>,
   global: { maxParallelTasks: 1, maxCheckAttempts: 3, screenShareDailyFrameCap: 300, visionDailyBudgetUsd: 1 },
   newProjects: {
     owner: 'DanAakesen',
@@ -104,18 +121,12 @@ export const settingsOptions = {
   backgrounds: ['living-aurora', 'daylight-studio'],
   themeMotions: ['full', 'calm', 'reduced'],
   themeDensities: ['compact', 'comfortable'],
-  jarvisModels: ['gpt-5.6-luna'],
-  reasoningEfforts: ['none', 'low', 'medium', 'high'],
+  reasoningEfforts,
   personalityTones: ['british_butler', 'warm', 'direct', 'playful'],
   personalityResponseStyles: ['concise', 'balanced', 'detailed'],
-  speechToTextModels: ['mai-transcribe'],
-  englishModels: ['gpt-realtime-2.1'],
   englishVoices: ['en-GB-Ryan:DragonHDLatestNeural'],
   danishVoices: ['da-DK-Harper:MAI-Voice-2'],
   languages: ['da', 'en'],
-  codexModels: ['default'],
-  codexReasoningEfforts: ['default'],
-  copilotModels: ['default'],
   projectVisibilities: ['private', 'public'],
   projectAgents: ['codex', 'copilot'],
   projectPolicies: ['deliver_pr', 'complete_without_deployment'],
@@ -169,6 +180,10 @@ const settingKeys = {
     maxParallelTasks: 'new_projects.max_parallel_tasks',
     defaultBranch: 'new_projects.default_branch',
   },
+  roles: Object.fromEntries(modelRoles.map((role) => [role, {
+    model: `roles.${role}.model`,
+    reasoningEffort: `roles.${role}.reasoning_effort`,
+  }])) as Record<ModelRole, { model: string; reasoningEffort: string }>,
 } as const;
 
 export const settingsStoreKeys = Object.freeze(
@@ -188,7 +203,12 @@ function validInstruction(value: unknown): value is string {
     });
 }
 
-function validSetting(area: keyof Settings, key: string, value: unknown): boolean {
+function validSetting(
+  area: keyof Settings,
+  key: string,
+  value: unknown,
+  catalogue: ModelCatalogue = fallbackModelCatalogue(),
+): boolean {
   if (area === 'appearance') {
     if (key === 'theme') return isOption(value, settingsOptions.themes);
     if (key === 'accent' || key === 'accent-secondary' || key === 'surface-tint') {
@@ -205,7 +225,7 @@ function validSetting(area: keyof Settings, key: string, value: unknown): boolea
     if (key === 'density') return isOption(value, settingsOptions.themeDensities);
   }
   if (area === 'jarvis') {
-    if (key === 'model') return isOption(value, settingsOptions.jarvisModels);
+    if (key === 'model') return typeof value === 'string' && modelsForRole(catalogue, 'chat').includes(value);
     if (key === 'reasoning') return isOption(value, settingsOptions.reasoningEfforts);
   }
   if (area === 'personality') {
@@ -221,18 +241,20 @@ function validSetting(area: keyof Settings, key: string, value: unknown): boolea
     }
   }
   if (area === 'voice') {
-    if (key === 'speechToTextModel') return isOption(value, settingsOptions.speechToTextModels);
-    if (key === 'englishModel') return isOption(value, settingsOptions.englishModels);
+    if (key === 'speechToTextModel') return typeof value === 'string' && modelsForRole(catalogue, 'transcription').includes(value);
+    if (key === 'englishModel') return typeof value === 'string' && modelsForRole(catalogue, 'voice').includes(value);
     if (key === 'englishVoice') return isOption(value, settingsOptions.englishVoices);
     if (key === 'danishVoice') return isOption(value, settingsOptions.danishVoices);
     if (key === 'defaultLanguage') return isOption(value, settingsOptions.languages);
     if (key === 'minimizeWindowsOnVoiceStart') return typeof value === 'boolean';
   }
   if (area === 'codex') {
-    if (key === 'model') return isOption(value, settingsOptions.codexModels);
-    if (key === 'reasoning') return isOption(value, settingsOptions.codexReasoningEfforts);
+    if (key === 'model') return typeof value === 'string' && modelsForRole(catalogue, 'codex').includes(value);
+    if (key === 'reasoning') return isOption(value, ['default', ...reasoningEfforts]);
   }
-  if (area === 'copilot' && key === 'model') return isOption(value, settingsOptions.copilotModels);
+  if (area === 'copilot' && key === 'model') {
+    return typeof value === 'string' && modelsForRole(catalogue, 'copilot').includes(value);
+  }
   if (area === 'global' && key === 'maxParallelTasks') {
     return typeof value === 'number' && Number.isSafeInteger(value) && value >= 1 && value <= 100;
   }
@@ -272,6 +294,17 @@ function validSetting(area: keyof Settings, key: string, value: unknown): boolea
 }
 
 const selectSchema = (values: readonly string[]) => ({ type: 'string', enum: [...values] });
+const boundedModelSchema = { type: 'string', minLength: 1, maxLength: 128 };
+const rolesSchema = {
+  type: 'object', minProperties: 1, additionalProperties: false,
+  properties: Object.fromEntries(modelRoles.map((role) => [role, {
+    type: 'object', minProperties: 1, additionalProperties: false,
+    properties: {
+      model: boundedModelSchema,
+      reasoningEffort: selectSchema(reasoningEfforts),
+    },
+  }])),
+};
 const settingsPatchSchema = {
   type: 'object',
   required: ['settings'],
@@ -299,7 +332,7 @@ const settingsPatchSchema = {
         jarvis: {
           type: 'object', minProperties: 1, additionalProperties: true,
           properties: {
-            model: selectSchema(settingsOptions.jarvisModels),
+            model: boundedModelSchema,
             reasoning: selectSchema(settingsOptions.reasoningEfforts),
           },
         },
@@ -324,8 +357,8 @@ const settingsPatchSchema = {
         voice: {
           type: 'object', minProperties: 1, additionalProperties: true,
           properties: {
-            speechToTextModel: selectSchema(settingsOptions.speechToTextModels),
-            englishModel: selectSchema(settingsOptions.englishModels),
+            speechToTextModel: boundedModelSchema,
+            englishModel: boundedModelSchema,
             englishVoice: selectSchema(settingsOptions.englishVoices),
             danishVoice: selectSchema(settingsOptions.danishVoices),
             defaultLanguage: selectSchema(settingsOptions.languages),
@@ -335,14 +368,15 @@ const settingsPatchSchema = {
         codex: {
           type: 'object', minProperties: 1, additionalProperties: true,
           properties: {
-            model: selectSchema(settingsOptions.codexModels),
-            reasoning: selectSchema(settingsOptions.codexReasoningEfforts),
+            model: boundedModelSchema,
+            reasoning: selectSchema(['default', ...reasoningEfforts]),
           },
         },
         copilot: {
           type: 'object', minProperties: 1, additionalProperties: true,
-          properties: { model: selectSchema(settingsOptions.copilotModels) },
+          properties: { model: boundedModelSchema },
         },
+        roles: rolesSchema,
         global: {
           type: 'object', minProperties: 1, additionalProperties: true,
           properties: {
@@ -369,7 +403,29 @@ const settingsPatchSchema = {
   },
 };
 
-function isSettingsPatch(value: unknown): value is SettingsPatch {
+function isObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isRolePatch(
+  role: ModelRole,
+  value: unknown,
+  current: RoleModelSettings,
+  catalogue: ModelCatalogue,
+): value is Partial<RoleModelSettings> {
+  if (!isObject(value) || Object.keys(value).length === 0 ||
+      Object.keys(value).some((key) => !['model', 'reasoningEffort'].includes(key))) return false;
+  const model = value.model ?? current.model;
+  const effort = value.reasoningEffort ?? current.reasoningEffort;
+  return typeof model === 'string' && typeof effort === 'string' &&
+    isRoleModelSupported(catalogue, role, model, effort);
+}
+
+function isSettingsPatch(
+  value: unknown,
+  catalogue: ModelCatalogue = fallbackModelCatalogue(),
+  current: Settings = defaultSettings,
+): value is SettingsPatch {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
   const areas = Object.keys(value);
   if (areas.length === 0) return false;
@@ -379,23 +435,35 @@ function isSettingsPatch(value: unknown): value is SettingsPatch {
     if (typeof values !== 'object' || values === null || Array.isArray(values)) return false;
     const keys = Object.keys(values);
     if (keys.length === 0) return false;
+    if (area === 'roles') {
+      for (const role of keys) {
+        if (!modelRoles.includes(role as ModelRole) ||
+            !isRolePatch(
+              role as ModelRole,
+              (values as Record<string, unknown>)[role],
+              current.roles[role as ModelRole],
+              catalogue,
+            )) return false;
+      }
+      continue;
+    }
     for (const key of keys) {
       if (!Object.hasOwn(settingKeys[area as keyof Settings], key)) return false;
       const setting = (values as Record<string, unknown>)[key];
-      if (!validSetting(area as keyof Settings, key, setting)) return false;
+      if (!validSetting(area as keyof Settings, key, setting, catalogue)) return false;
     }
   }
   return true;
 }
 
-function mergeSettings(stored: Partial<Settings>): Settings {
+function mergeSettings(stored: Partial<Settings>, catalogue: ModelCatalogue = fallbackModelCatalogue()): Settings {
   const merged = structuredClone(defaultSettings);
-  for (const area of Object.keys(settingKeys) as (keyof Settings)[]) {
+  for (const area of Object.keys(settingKeys).filter((key) => key !== 'roles') as Exclude<keyof Settings, 'roles'>[]) {
     const values = stored[area];
     if (!values || typeof values !== 'object') continue;
     for (const key of Object.keys(settingKeys[area]) as (keyof Settings[typeof area])[]) {
       const value = (values as Record<string, unknown>)[key];
-      if (validSetting(area, key, value)) {
+      if (validSetting(area, key, value, catalogue)) {
         if (area === 'personality' && key === 'modeInstructions') {
           Object.assign(merged.personality.modeInstructions, value);
         } else {
@@ -404,19 +472,60 @@ function mergeSettings(stored: Partial<Settings>): Settings {
       }
     }
   }
+  for (const role of modelRoles) {
+    const legacy = role === 'chat'
+      ? { model: stored.jarvis?.model, reasoningEffort: stored.jarvis?.reasoning }
+      : role === 'voice'
+        ? { model: stored.voice?.englishModel }
+        : role === 'transcription'
+          ? { model: stored.voice?.speechToTextModel }
+          : role === 'codex'
+            ? {
+              model: stored.codex?.model,
+              reasoningEffort: stored.codex?.reasoning === 'default' ? 'none' : stored.codex?.reasoning,
+            }
+            : role === 'copilot'
+              ? { model: stored.copilot?.model }
+              : {};
+    const saved = stored.roles?.[role];
+    const model = saved?.model ?? legacy.model ?? merged.roles[role].model;
+    const supported = modelsForRole(catalogue, role).includes(model);
+    const effort = saved?.reasoningEffort ?? legacy.reasoningEffort ?? 'none';
+    merged.roles[role] = {
+      model: supported ? model : merged.roles[role].model,
+      reasoningEffort: supported && isRoleModelSupported(catalogue, role, model, effort)
+        ? effort as ReasoningEffort
+        : 'none',
+    };
+  }
+  merged.jarvis = {
+    model: merged.roles.chat.model,
+    reasoning: merged.roles.chat.reasoningEffort,
+  };
+  merged.voice.englishModel = merged.roles.voice.model;
+  merged.voice.speechToTextModel = merged.roles.transcription.model;
+  merged.codex = {
+    model: merged.roles.codex.model,
+    reasoning: merged.roles.codex.reasoningEffort === 'none' ? 'default' : merged.roles.codex.reasoningEffort,
+  };
+  merged.copilot.model = merged.roles.copilot.model;
   return merged;
 }
 
-function parseStoredValues(values: Record<string, unknown>): Partial<Settings> {
+function parseStoredValues(
+  values: Record<string, unknown>,
+  catalogue: ModelCatalogue = fallbackModelCatalogue(),
+): Partial<Settings> {
   const stored: Record<string, Record<string, unknown>> = {};
-  for (const area of Object.keys(settingKeys) as (keyof Settings)[]) {
+  const storedRoles: Partial<Record<ModelRole, Partial<RoleModelSettings>>> = {};
+  for (const area of Object.keys(settingKeys).filter((key) => key !== 'roles') as Exclude<keyof Settings, 'roles'>[]) {
     for (const [key, storeKey] of Object.entries(settingKeys[area])) {
       if (typeof storeKey === 'string') {
         const persisted = values[storeKey];
         if (persisted === undefined) continue;
         let value: unknown;
         try { value = JSON.parse(String(persisted)); } catch { continue; }
-        if (validSetting(area, key, value)) (stored[area] ??= {})[key] = value;
+        if (validSetting(area, key, value, catalogue)) (stored[area] ??= {})[key] = value;
       } else {
         const instructions: Record<string, string> = {};
         for (const [mode, nestedStoreKey] of Object.entries(storeKey as Record<string, string>)) {
@@ -432,18 +541,41 @@ function parseStoredValues(values: Record<string, unknown>): Partial<Settings> {
       }
     }
   }
+  for (const role of modelRoles) {
+    const modelValue = values[`roles.${role}.model`];
+    const effortValue = values[`roles.${role}.reasoning_effort`];
+    let model: unknown;
+    let effort: unknown;
+    try { model = modelValue === undefined ? undefined : JSON.parse(String(modelValue)); } catch { /* Ignore invalid persisted values. */ }
+    try { effort = effortValue === undefined ? undefined : JSON.parse(String(effortValue)); } catch { /* Ignore invalid persisted values. */ }
+    if (typeof model === 'string' && modelsForRole(catalogue, role).includes(model)) {
+      (storedRoles[role] ??= {}).model = model;
+    }
+    if (typeof effort === 'string' && (reasoningEfforts as readonly string[]).includes(effort)) {
+      (storedRoles[role] ??= {}).reasoningEffort = effort as ReasoningEffort;
+    }
+  }
+  if (Object.keys(storedRoles).length) stored.roles = storedRoles as Record<string, unknown>;
   return stored as Partial<Settings>;
 }
 
 function flattenedKey(area: keyof Settings, key: string, nestedKey?: string): string {
+  if (area === 'roles') {
+    if (!modelRoles.includes(key as ModelRole) || !nestedKey ||
+        !['model', 'reasoningEffort'].includes(nestedKey)) throw new TypeError('Invalid settings key');
+    return `roles.${key}.${nestedKey === 'reasoningEffort' ? 'reasoning_effort' : 'model'}`;
+  }
   const mapping = settingKeys[area][key as keyof Settings[typeof area]];
   if (typeof mapping === 'string') return mapping;
   if (!nestedKey || !Object.hasOwn(mapping, nestedKey)) throw new TypeError('Invalid settings key');
   return mapping[nestedKey];
 }
 
-export async function readSettings(settingsStore: SettingsStore): Promise<Settings> {
-  return mergeSettings(parseStoredValues(await settingsStore.read()));
+export async function readSettings(
+  settingsStore: SettingsStore,
+  catalogue: ModelCatalogue = fallbackModelCatalogue(),
+): Promise<Settings> {
+  return mergeSettings(parseStoredValues(await settingsStore.read(), catalogue), catalogue);
 }
 
 function flattenSettings(settings: SettingsPatch): { key: string; value: string }[] {
@@ -458,12 +590,70 @@ function flattenSettings(settings: SettingsPatch): { key: string; value: string 
         for (const [mode, instruction] of Object.entries(value)) {
           entries.push({ key: flattenedKey(area, key, mode), value: JSON.stringify(instruction) });
         }
+      } else if (area === 'roles') {
+        for (const [roleField, roleValue] of Object.entries(value)) {
+          entries.push({ key: flattenedKey(area, key as string, roleField), value: JSON.stringify(roleValue) });
+        }
       } else {
         entries.push({ key: flattenedKey(area, key as string), value: JSON.stringify(value) });
       }
     }
   }
   return entries;
+}
+
+function withRoleSettings(settings: SettingsPatch): SettingsPatch {
+  const roles: Partial<Record<ModelRole, Partial<RoleModelSettings>>> = {};
+  const merge = (role: ModelRole, update: Partial<RoleModelSettings>) => {
+    roles[role] = { ...roles[role], ...update };
+  };
+  const explicitRoles = settings.roles;
+  if (settings.jarvis) {
+    merge('chat', {
+      ...(settings.jarvis.model === undefined ? {} : { model: settings.jarvis.model }),
+      ...(settings.jarvis.reasoning === undefined ? {} : { reasoningEffort: settings.jarvis.reasoning as ReasoningEffort }),
+    });
+  }
+  if (settings.voice) {
+    if (settings.voice.englishModel !== undefined) merge('voice', { model: settings.voice.englishModel });
+    if (settings.voice.speechToTextModel !== undefined) {
+      merge('transcription', { model: settings.voice.speechToTextModel });
+    }
+  }
+  if (settings.codex) {
+    merge('codex', {
+      ...(settings.codex.model === undefined ? {} : { model: settings.codex.model }),
+      ...(settings.codex.reasoning === undefined || settings.codex.reasoning === 'default'
+        ? settings.codex.reasoning === 'default' ? { reasoningEffort: 'none' } : {}
+        : { reasoningEffort: settings.codex.reasoning as ReasoningEffort }),
+    });
+  }
+  if (settings.copilot?.model !== undefined) merge('copilot', { model: settings.copilot.model });
+  for (const [role, update] of Object.entries(explicitRoles ?? {}) as [ModelRole, Partial<RoleModelSettings>][]) {
+    merge(role, update);
+  }
+  return { ...settings, ...(Object.keys(roles).length === 0 ? {} : { roles }) };
+}
+
+export function settingsOptionsForCatalogue(catalogue: ModelCatalogue) {
+  const roles = Object.fromEntries(modelRoles.map((role) => {
+    const models = modelsForRole(catalogue, role);
+    return [role, {
+      models,
+      reasoningEffortsByModel: Object.fromEntries(models.map((model) =>
+        [model, [...reasoningForModel(catalogue, role, model)]])),
+    }];
+  }));
+  return {
+    ...settingsOptions,
+    roles,
+    jarvisModels: modelsForRole(catalogue, 'chat'),
+    speechToTextModels: modelsForRole(catalogue, 'transcription'),
+    englishModels: modelsForRole(catalogue, 'voice'),
+    codexModels: modelsForRole(catalogue, 'codex'),
+    codexReasoningEfforts: ['default'],
+    copilotModels: modelsForRole(catalogue, 'copilot'),
+  };
 }
 
 export async function registerSettingsRoutes(app: import('fastify').FastifyInstance) {
@@ -497,12 +687,23 @@ export async function registerSettingsRoutes(app: import('fastify').FastifyInsta
     }
   });
 
+  app.get('/models', async (request, reply) => {
+    if (request.principal?.objectId !== app.ownerObjectId) {
+      return reply.code(403).send({ error: 'Forbidden' });
+    }
+    const catalogue = await app.modelCatalogue.read();
+    if (!isModelCatalogue(catalogue)) throw new Error('Foundry model catalogue was invalid');
+    reply.header('Cache-Control', 'private, max-age=300');
+    return catalogue;
+  });
+
   app.get('/settings', async (_request, reply) => {
     if (!app.settingsStore) return reply.code(503).send({ error: 'Settings unavailable' });
+    const catalogue = await app.modelCatalogue.read();
     const credentials = await app.credentialStatusStore?.list() ?? [];
     return {
-      settings: await readSettings(app.settingsStore),
-      options: settingsOptions,
+      settings: await readSettings(app.settingsStore, catalogue),
+      options: settingsOptionsForCatalogue(catalogue),
       credentials,
     };
   });
@@ -516,6 +717,20 @@ export async function registerSettingsRoutes(app: import('fastify').FastifyInsta
           properties: {
             model: { type: 'string' },
             reasoningEffort: { type: 'string' },
+            roles: {
+              type: 'object',
+              properties: Object.fromEntries(modelRoles.map((role) => [role, {
+                type: 'object',
+                properties: {
+                  model: { type: 'string', minLength: 1, maxLength: 128 },
+                  reasoningEffort: selectSchema(reasoningEfforts),
+                },
+                required: ['model', 'reasoningEffort'],
+                additionalProperties: false,
+              }])),
+              required: [...modelRoles],
+              additionalProperties: false,
+            },
             personality: {
               type: 'object',
               properties: {
@@ -551,7 +766,7 @@ export async function registerSettingsRoutes(app: import('fastify').FastifyInsta
               },
             },
           },
-          required: ['model', 'reasoningEffort', 'personality', 'awayMode', 'mode', 'changedAt'],
+          required: ['model', 'reasoningEffort', 'roles', 'personality', 'awayMode', 'mode', 'changedAt'],
           additionalProperties: false,
         },
         403: {
@@ -571,11 +786,13 @@ export async function registerSettingsRoutes(app: import('fastify').FastifyInsta
   }, async (request, reply) => {
     if (!request.agentPrincipal) return reply.code(403).send({ error: 'Forbidden' });
     if (!app.settingsStore) return reply.code(503).send({ error: 'Settings unavailable' });
-    const settings = await readSettings(app.settingsStore);
+    const catalogue = await app.modelCatalogue.read();
+    const settings = await readSettings(app.settingsStore, catalogue);
     const presence = await app.awayModeStore?.read() ?? defaultAwayModeState;
     return {
       model: settings.jarvis.model,
       reasoningEffort: settings.jarvis.reasoning,
+      roles: settings.roles,
       personality: settings.personality,
       awayMode: presence.mode !== 'present',
       mode: presence.mode,
@@ -599,13 +816,18 @@ export async function registerSettingsRoutes(app: import('fastify').FastifyInsta
   }, async (request, reply) => {
     if (!app.settingsStore) return reply.code(503).send({ error: 'Settings unavailable' });
     const body = request.body as { settings: unknown };
-    if (!isSettingsPatch(body.settings)) return reply.code(400).send({ error: 'Invalid setting value' });
-    const patch = body.settings;
+    const catalogue = await app.modelCatalogue.read();
+    const current = await readSettings(app.settingsStore, catalogue);
+    if (!isSettingsPatch(body.settings, catalogue, current)) {
+      return reply.code(400).send({ error: 'Invalid setting value' });
+    }
+    const patch = withRoleSettings(body.settings);
+    if (!isSettingsPatch(patch, catalogue, current)) return reply.code(400).send({ error: 'Invalid setting value' });
     await app.settingsStore.write(patch);
     const credentials = await app.credentialStatusStore?.list() ?? [];
     return {
-      settings: await readSettings(app.settingsStore),
-      options: settingsOptions,
+      settings: await readSettings(app.settingsStore, catalogue),
+      options: settingsOptionsForCatalogue(catalogue),
       credentials,
     };
   });

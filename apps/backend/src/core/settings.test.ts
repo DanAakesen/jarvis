@@ -70,6 +70,76 @@ describe('settings API', () => {
     });
   });
 
+  it('serves a Dan-only model catalogue and applies the selected chat model to agent settings', async () => {
+    const { store, values } = createStore();
+    const app = fixture(store);
+    const catalogue = await app.inject({ url: '/models', headers: authorization });
+
+    expect(catalogue.statusCode).toBe(200);
+    expect(catalogue.headers['cache-control']).toBe('private, max-age=300');
+    expect(catalogue.json()).toMatchObject({
+      source: 'fallback',
+      deployments: expect.arrayContaining([
+        expect.objectContaining({ name: 'gpt-6-luna', capabilities: expect.arrayContaining(['chat', 'image']) }),
+      ]),
+    });
+    const saved = await app.inject({
+      method: 'PATCH', url: '/settings', headers: authorization,
+      payload: { settings: { roles: { chat: { model: 'gpt-6-luna', reasoningEffort: 'high' } } } },
+    });
+    expect(saved.statusCode).toBe(200);
+    expect(saved.json().settings.roles.chat).toEqual({ model: 'gpt-6-luna', reasoningEffort: 'high' });
+    expect(saved.json().settings.jarvis).toEqual({ model: 'gpt-6-luna', reasoning: 'high' });
+    expect(values).toMatchObject({
+      'roles.chat.model': '"gpt-6-luna"',
+      'roles.chat.reasoning_effort': '"high"',
+    });
+
+    const agent = fixture(store, async () => ({
+      kind: 'jarvis-agent',
+      objectId: '00000000-0000-0000-0000-000000000001',
+      tenantId: config.auth.tenantId,
+    }));
+    const settings = await agent.inject({ url: '/agent/settings', headers: authorization });
+    expect(settings.statusCode).toBe(200);
+    expect(settings.json()).toMatchObject({
+      model: 'gpt-6-luna',
+      reasoningEffort: 'high',
+      roles: { chat: { model: 'gpt-6-luna', reasoningEffort: 'high' } },
+    });
+  });
+
+  it('denies the model catalogue to non-owner principals', async () => {
+    const app = fixture(createStore().store, async () => ({
+      objectId: '00000000-0000-0000-0000-000000000002',
+      tenantId: config.auth.tenantId,
+      displayName: 'Other user',
+    }));
+    expect((await app.inject({ url: '/models', headers: authorization })).statusCode).toBe(403);
+  });
+
+  it.each([
+    { settings: { roles: { chat: { model: 'text-embedding-3-small' } } } },
+    { settings: { roles: { chat: { model: 'gpt-5.6-luna', reasoningEffort: 'xhigh' } } } },
+  ])('rejects role models without the capability or supported effort: %j', async (payload) => {
+    const app = fixture(createStore().store);
+    const response = await app.inject({
+      method: 'PATCH', url: '/settings', headers: authorization, payload,
+    });
+    expect(response.statusCode).toBe(400);
+  });
+
+  it('resolves legacy stored Jarvis model keys into the chat role', async () => {
+    const { store, values } = createStore();
+    values['jarvis.model'] = '"gpt-6-luna"';
+    values['jarvis.reasoning_effort'] = '"high"';
+
+    const settings = await readSettings(store);
+
+    expect(settings.roles.chat).toEqual({ model: 'gpt-6-luna', reasoningEffort: 'high' });
+    expect(settings.jarvis).toEqual({ model: 'gpt-6-luna', reasoning: 'high' });
+  });
+
   it('persists allowlisted appearance tokens and the default-off voice window preference', async () => {
     const { store, values } = createStore();
     const app = fixture(store);
@@ -141,6 +211,7 @@ describe('settings API', () => {
     expect(values).toEqual({
       'appearance.theme': '"dark"',
       'jarvis.reasoning_effort': '"high"',
+      'roles.chat.reasoning_effort': '"high"',
       'voice.default_language': '"en"',
       'global.max_parallel_tasks': '4',
       'global.max_check_attempts': '2',
@@ -385,6 +456,16 @@ describe('settings API', () => {
     expect(response.json()).toEqual({
       model: 'gpt-5.6-luna',
       reasoningEffort: 'high',
+      roles: {
+        chat: { model: 'gpt-5.6-luna', reasoningEffort: 'high' },
+        vision: { model: 'gpt-6-luna', reasoningEffort: 'none' },
+        research: { model: 'gpt-5.6-luna', reasoningEffort: 'none' },
+        voice: { model: 'gpt-realtime-2.1', reasoningEffort: 'none' },
+        transcription: { model: 'mai-transcribe', reasoningEffort: 'none' },
+        embedding: { model: 'text-embedding-3-small', reasoningEffort: 'none' },
+        codex: { model: 'default', reasoningEffort: 'none' },
+        copilot: { model: 'default', reasoningEffort: 'none' },
+      },
       personality: {
         tone: 'direct',
         responseStyle: 'balanced',

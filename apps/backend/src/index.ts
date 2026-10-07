@@ -44,6 +44,7 @@ import {
   createVoiceRelayModule,
 } from './voice/relay.js';
 import { createArmContainerAppScaler } from './operations/container-app-scale.js';
+import { createArmModelCatalogueReader, fallbackModelCatalogue } from './core/model-catalog.js';
 import { createSleepModule } from './operations/sleep.js';
 import { createFoundryInvocationConversationAgent } from './core/chat-agent.js';
 import { FoundryClient } from './foundry/client.js';
@@ -82,6 +83,7 @@ import { createGoogleApiClient } from './google/api-client.js';
 import { createGoogleTokenProvider, type GoogleOAuthCredentials } from './google/oauth.js';
 import { createGoogleModule } from './google/tools.js';
 import { createScreenFrameUsageStore } from './database/screen-usage-store.js';
+import { createBackgroundJobStore } from './database/background-job-store.js';
 import { createFoundryScreenVisionModel } from './vision/foundry-model.js';
 import { createScreenVisionModule, ScreenVisionService } from './vision/screen.js';
 import { createVisionWatchModule, VisionWatchService } from './vision/watch.js';
@@ -147,7 +149,7 @@ try {
     onAlert: () => nowEventHub.publish({ type: 'refresh' }),
   }) : undefined;
   const credential = archiveStorageAccount || config.keyVaultUri || config.voiceLiveEndpoint || config.foundryProjectEndpoint ||
-    config.foundryEndpoints || config.githubAppId || config.googleTimeZone || config.teams || sleepResourceId
+    config.foundryEndpoints || config.foundryAccountResourceId || config.githubAppId || config.googleTimeZone || config.teams || sleepResourceId
     ? new DefaultAzureCredential(managedIdentityClientId
       ? { managedIdentityClientId }
       : {})
@@ -658,8 +660,19 @@ try {
       },
     })
     : undefined;
+  const modelCatalogue = config.foundryAccountResourceId && credential
+    ? createArmModelCatalogueReader({
+      resourceId: config.foundryAccountResourceId,
+      getToken: async (scope, signal) => {
+        const token = await credential.getToken(scope, { abortSignal: signal });
+        if (!token) throw new Error('Foundry catalogue identity unavailable');
+        return token.token;
+      },
+    })
+    : { read: async () => fallbackModelCatalogue() };
   const app = buildApp(config, logger, {
     modules,
+    modelCatalogue,
     ...(jevSecretClient ? { reflexClassifier } : {}),
     ...(browserAgent ? { browserAgent } : {}),
     ...(database ? { databaseStatus: () => database.isWaking() } : {}),
@@ -680,6 +693,7 @@ try {
       nowFeedStore,
       usageStore: createUsageStore(database.pool),
     } : {}),
+    ...(database ? { backgroundJobStore: createBackgroundJobStore(database.pool) } : {}),
     ...(awayModeStore ? { awayModeStore } : {}),
     ...(credentialStatusStore ? { credentialStatusStore } : {}),
     ...(credentialStatusStore && credential && config.foundryEndpoints && config.foundryRunnerAgentName ? {

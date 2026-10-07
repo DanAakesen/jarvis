@@ -1,6 +1,7 @@
 import type { FastifyRequest } from 'fastify';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { InvocationAccepted, InvocationSnapshot } from '../foundry/client.js';
+import { fallbackModelCatalogue } from './model-catalog.js';
 import { createWebResearchModule } from './web-research.js';
 import { ToolFailure, ToolRefusal } from './tool-registry.js';
 
@@ -35,16 +36,37 @@ function client(initial: InvocationSnapshot = snapshot()) {
 function execute(
   runner: ReturnType<typeof client>,
   options: { timeoutMs?: number; pollIntervalMs?: number } = {},
+  request: FastifyRequest = {} as FastifyRequest,
 ) {
   const module = createWebResearchModule(() => runner, 'gpt-5.5', options);
   return module.tools[0]!.execute(
-    { query: 'Research this topic' }, {} as FastifyRequest, new AbortController().signal,
+    { query: 'Research this topic' }, request, new AbortController().signal,
   );
 }
 
 afterEach(() => { vi.useRealTimers(); });
 
 describe('web_research tool', () => {
+  it('uses the configured research role model for new research calls', async () => {
+    const runner = client(snapshot({
+      status: 'completed',
+      finishedAt: 100,
+      result: { answer: 'Found an answer.', sources: [] },
+    }));
+    const request = {
+      server: {
+        settingsStore: { read: async () => ({ 'roles.research.model': '"gpt-6-luna"' }) },
+        modelCatalogue: { read: async () => fallbackModelCatalogue() },
+      },
+    } as unknown as FastifyRequest;
+
+    await execute(runner, {}, request);
+
+    expect(runner.startCodexTool).toHaveBeenCalledWith(
+      'web_research', 'Research this topic', 'gpt-6-luna', expect.any(Object),
+    );
+  });
+
   it('returns bounded source links and retrieval timestamps from partial research', async () => {
     const runner = client(snapshot({
       status: 'completed',

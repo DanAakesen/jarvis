@@ -178,18 +178,21 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   window therefore uses the shared tabs, geometry, focus, snapshot and Jarvis
   commands. Voice entry minimises it, voice exit restores it, and sending or
   Conversation navigation restores it after Close.
-- Background jobs (7 October): slow work that ends in a workspace window (research
-  today; images and HTML apps next) registers with the in-memory
-  `BackgroundJobRegistry` (`apps/backend/src/core/jobs.ts`). Every change publishes a
-  contract-valid `BackgroundJob` (`packages/contracts`: `jobId`, `kind`, a 3-6 word
-  `title`, `status` running/done/failed/cancelled, `step`/`steps`, optional `detail`,
-  and `viewId` once done) as `event: job` on `/now/events`. `GET /jobs` lists current
-  and recently finished jobs (kept 10 minutes, at most 20) so a reloaded tab can
-  rebuild its job chip, and `POST /jobs/:jobId/cancel` (owner only) aborts a running
-  job. Jarvis reads the same state through the `list_jobs` tool (chat and voice) and
-  cancels by id or title words with `cancel_job`. Research progress windows are best effort, so a missed update no longer stops
-  the job, and the final report falls back to `create` when no open tab still has the
-  progress window.- P7-27 publishes a bounded `WorkspaceSnapshot` (at most 32 open-window titles
+- Background jobs (P9-14, 7 October): slow work that ends in a workspace window
+  (research today; images and HTML apps next) registers with
+  `BackgroundJobRegistry` (`apps/backend/src/core/jobs.ts`). Migration 0029 stores
+  each current job in `background_jobs` and every committed state/step in
+  `background_job_steps`. A non-resumable job still running at startup becomes failed
+  with `interrupted by restart`; jobs and their history are retained for 30 days.
+  Every change is committed before its contract-valid `BackgroundJob` is published
+  as `event: job` on `/now/events`. `GET /jobs` and Jarvis's `list_jobs` tool read
+  the SQL store, so reloads and requests served by another replica see the same
+  current state and result-window link. `POST /jobs/:jobId/cancel` (owner only)
+  aborts locally tracked work; Jarvis can also cancel by id or title words with
+  `cancel_job`. Research progress windows are best effort, so a missed update no
+  longer stops the job, and the final report falls back to `create` when no open
+  tab still has the progress window.
+- P7-27 publishes a bounded `WorkspaceSnapshot` (at most 32 open-window titles
   and IDs, including minimised windows, plus context-panel visibility) through
   owner-authenticated `POST /now/workspace/state`. The broker keeps one snapshot per
   open `/now/events` session, uses the most recently reported one, and drops a
@@ -299,7 +302,7 @@ Jarvis is one backend with a shared core and one module per area, a static web a
 - `GET /settings` and `PATCH /settings` inherit the same Dan-only delegated
   authentication. The backend returns effective defaults with the validated
   model catalog, rejects unknown keys and unsupported values, and writes a
-  partial update transactionally to whitelisted `global` rows in `dbo.settings`.
+  partial update transactionally to whitelisted `dbo.settings` rows.
   The `appearance.theme` value accepts only `light` or `dark` and reuses the
   global `dbo.settings` key/value table without a migration. The `newProjects`
   settings area validates owner, visibility, templates
@@ -319,14 +322,23 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   already-open client without reload depends on the P8-13 consumer and remains
   unverified.
   The SQL adapter is injected only when database configuration exists; the API
-  returns 503 without it. The model catalog offers deployed Jarvis models and
-  only provider defaults for Codex and Copilot because their available-model
-  catalog values have not been verified. The agent-only `GET /agent/settings`
-  route returns only the effective Jarvis model and reasoning effort to the
-  `Jarvis.Tools` principal. The hosted agent reads it before acknowledging a new
-  session and holds that snapshot for the session; if the read is unavailable,
-  it logs a warning and uses the defaults. Future task creation reads these
-  defaults; existing sessions and tasks are not updated.
+  returns 503 without it. Dan-only `GET /models` reads Foundry deployments
+  through ARM with the backend managed identity's account-scoped Reader role.
+  It caches results for five minutes and returns configured defaults with
+  `source: 'fallback'` when ARM cannot be reached. Entries include deployment
+  name, model, version, SKU, capacity, inferred capabilities and supported
+  reasoning efforts. Settings persist `roles.<role>.model` and
+  `roles.<role>.reasoning_effort` in the existing key/value table; no migration
+  is needed. The eight roles are chat, vision, research, voice, transcription,
+  embedding, Codex and Copilot. Legacy `jarvis.model`/`jarvis.reasoning` values
+  resolve to the chat role and remain available through the previous settings
+  keys. `GET /agent/settings` returns the resolved role settings to the
+  `Jarvis.Tools` principal. The hosted agent reads chat model/effort before
+  acknowledging a new session and keeps that snapshot for the session.
+  Dispatcher task starts, web research, screen/camera vision and new English
+  voice sessions resolve their corresponding role settings. Codex and Copilot
+  retain their provider `default` option until their provider model catalogues
+  are available. ARM/live Azure selection remains unverified.
 - `ci.yml` (P0-10) is the aggregate CI on every PR, `main` push and
   `workflow_dispatch`. It calls the reusable `web-ci.yml`, `backend-ci.yml`
   (including the container smoke), `database-ci.yml` (isolated SQL Server migrations), `foundry-contract.yml`, `runner-ci.yml`

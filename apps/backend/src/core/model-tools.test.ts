@@ -61,16 +61,16 @@ describe('Jarvis model tool', () => {
       result: { model: 'gpt-5.6-luna', reasoning: 'high', applies: 'next session' },
     });
     expect(settingsStore.write).toHaveBeenCalledWith({
-      jarvis: { model: 'gpt-5.6-luna', reasoning: 'high' },
+      roles: { chat: { model: 'gpt-5.6-luna', reasoningEffort: 'high' } },
     });
     expect(values).toEqual({
-      'jarvis.model': '"gpt-5.6-luna"',
-      'jarvis.reasoning_effort': '"high"',
+      'roles.chat.model': '"gpt-5.6-luna"',
+      'roles.chat.reasoning_effort': '"high"',
     });
   });
 
   it.each([
-    ['model', { model: 'not-verified' }, 'Unsupported Jarvis model. Valid models: gpt-5.6-luna.'],
+    ['model', { model: 'not-verified' }, 'Unsupported Jarvis model. Valid models: gpt-5.6-luna, gpt-6-luna.'],
     ['reasoning', { reasoning: 'extreme' }, 'Unsupported Jarvis reasoning. Valid reasoning levels: none, low, medium, high.'],
   ])('refuses an unknown %s and lists verified options', async (_name, payload, reason) => {
     const { app, settingsStore, record } = fixture();

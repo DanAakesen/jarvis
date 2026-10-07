@@ -1,4 +1,25 @@
 export const generatedViewVersion: 1;
+export const modelRoles: readonly ['chat', 'vision', 'research', 'voice', 'transcription', 'embedding', 'codex', 'copilot'];
+export type ModelRole = typeof modelRoles[number];
+export const reasoningEfforts: readonly ['none', 'minimal', 'low', 'medium', 'high', 'xhigh'];
+export type ReasoningEffort = typeof reasoningEfforts[number];
+export const modelCapabilities: readonly ['chat', 'responses', 'realtime', 'transcription', 'embeddings', 'image'];
+export type ModelCapability = typeof modelCapabilities[number];
+export interface ModelDeployment {
+  name: string;
+  model: string;
+  version: string;
+  sku: string;
+  capacity: number;
+  capabilities: ModelCapability[];
+  reasoningEfforts: ReasoningEffort[];
+}
+export interface ModelCatalogue {
+  source: 'arm' | 'fallback';
+  deployments: ModelDeployment[];
+  reason?: string;
+}
+export function isModelCatalogue(value: unknown): value is ModelCatalogue;
 export const generatedViewRenderers: readonly [
   'table', 'list', 'detail', 'text', 'timeline', 'chart', 'task-card', 'status', 'image', 'html-app',
   'knowledge-graph',
