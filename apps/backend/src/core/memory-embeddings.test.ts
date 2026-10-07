@@ -35,7 +35,7 @@ describe('Foundry memory embeddings', () => {
           Authorization: ['Bear' + 'er', 'not-a-secret-token'].join(' '),
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ model: 'text-embedding-3-small', input: 'A confirmed preference.' }),
+        body: JSON.stringify({ model: 'text-embedding-3-small', input: 'A confirmed preference.', dimensions: 1536 }),
         redirect: 'error',
         signal: expect.any(AbortSignal),
       }),

@@ -102,6 +102,7 @@ describe('long-term memory tools', () => {
       content: record.content,
       sourceMessageId: source.messageId,
       embedding: null,
+      embeddingModel: null,
     }, expect.any(AbortSignal));
     expect(recordCall).toHaveBeenCalledWith({
       messageId: source.messageId,
@@ -198,6 +199,7 @@ describe('long-term memory tools', () => {
       content: 'Dan prefers VS Code and Vim.',
       sourceMessageId: source.messageId,
       embedding: null,
+      embeddingModel: null,
     }, expect.any(AbortSignal));
 
     const forgotten = await app.inject({
@@ -257,7 +259,7 @@ describe('long-term memory tools', () => {
     };
     const { app } = appFor(store, {
       embedder,
-      embeddingModel: 'text-embedding-3-small',
+      embeddingModel: 'text-embedding-3-large',
       usageStore: { recordFoundryUsage },
     });
 
@@ -271,7 +273,7 @@ describe('long-term memory tools', () => {
     expect(response.statusCode).toBe(200);
     expect(recordFoundryUsage).toHaveBeenCalledWith({
       role: 'embeddings',
-      model: 'text-embedding-3-small',
+      model: 'text-embedding-3-large',
       inputTokens: 17,
       outputTokens: 0,
       eventId: expect.any(String),

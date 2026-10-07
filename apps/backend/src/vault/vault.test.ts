@@ -106,7 +106,7 @@ class FakeIndexStore implements VaultIndexStore {
     chunks: VaultIndexedChunk[];
     links: string[];
   }>();
-  vectorSearch = vi.fn(async (_embedding: readonly number[], limit: number) =>
+  vectorSearch = vi.fn(async (_embedding: readonly number[], _model: string, limit: number) =>
     [...this.indexed.entries()].flatMap(([path, file]) => file.chunks.map((chunk) => ({
       path, heading: chunk.heading, content: chunk.content,
     } satisfies VaultSearchHit))).slice(0, limit));
@@ -118,11 +118,12 @@ class FakeIndexStore implements VaultIndexStore {
   constructor(private readonly vectors = false) {}
   async initialize() {}
   supportsVectorSearch() { return this.vectors; }
-  async files() {
+  async files(embeddingModel: string | null) {
     return [...this.indexed.entries()].map(([path, file]) => ({
       path,
       blobSha: file.blobSha,
-      embeddingMissing: file.chunks.some((chunk) => chunk.embedding === null),
+      embeddingMissing: file.chunks.some((chunk) =>
+        chunk.embedding === null || chunk.embeddingModel !== embeddingModel),
     }));
   }
   async replaceFile(path: string, blobSha: string, chunks: readonly VaultIndexedChunk[], links: readonly string[]) {
@@ -131,8 +132,8 @@ class FakeIndexStore implements VaultIndexStore {
   async deleteFiles(paths: readonly string[]) {
     for (const path of paths) this.indexed.delete(path);
   }
-  searchByVector(embedding: readonly number[], limit: number) {
-    return this.vectorSearch(embedding, limit);
+  searchByVector(embedding: readonly number[], model: string, limit: number) {
+    return this.vectorSearch(embedding, model, limit);
   }
   searchByTerms(terms: readonly string[], limit: number) {
     return this.termSearch(terms, limit);
@@ -144,7 +145,7 @@ class FakeIndexStore implements VaultIndexStore {
       updatedAt: new Date('2026-10-07T12:00:00.000Z'),
     }));
   }
-  async graphData(paths: readonly string[]): Promise<VaultGraphData> {
+  async graphData(paths: readonly string[], model: string): Promise<VaultGraphData> {
     const selected = new Set(paths);
     return {
       links: [...this.indexed.entries()].flatMap(([sourcePath, file]) =>
@@ -152,12 +153,12 @@ class FakeIndexStore implements VaultIndexStore {
       similarities: [],
       embeddings: [...this.indexed.entries()].flatMap(([path, file]) =>
         selected.has(path) ? file.chunks.flatMap((chunk) =>
-          chunk.embedding ? [{ path, embedding: chunk.embedding }] : []) : []),
+          chunk.embedding && chunk.embeddingModel === model ? [{ path, embedding: chunk.embedding }] : []) : []),
     };
   }
   entry(path: string) { return this.indexed.get(path); }
   setRankedHits(hits: readonly VaultSearchHit[]) {
-    this.vectorSearch.mockImplementation(async (_embedding, limit) => [...hits].slice(0, limit));
+    this.vectorSearch.mockImplementation(async (_embedding, _model, limit) => [...hits].slice(0, limit));
   }
 }
 
@@ -313,7 +314,7 @@ describe('GitHub vault', () => {
       { query: 'project decision', k: 2 }, {} as FastifyRequest, signal(),
     ) as { results: Array<Record<string, string>>; count: number };
     expect(embedder.embed).toHaveBeenCalledWith('project decision', expect.any(AbortSignal));
-    expect(index.vectorSearch).toHaveBeenCalledWith([0.5], 2);
+    expect(index.vectorSearch).toHaveBeenCalledWith([0.5], 'text-embedding-3-small', 2);
     expect(result).toMatchObject({
       count: 2,
       results: [
@@ -324,6 +325,61 @@ describe('GitHub vault', () => {
         { path: 'General/notes.md', heading: 'Overview' },
       ],
     });
+
+  });
+
+  it('re-embeds unchanged vault files when the active embedding model changes', async () => {
+    const remote = { 'Work/project.md': { sha: sha('a'), content: '# Project\n\nSame stored note.' } };
+    const index = new FakeIndexStore(true);
+    await index.replaceFile('Work/project.md', sha('a'), [{
+      index: 0, heading: 'Project', content: 'Same stored note.', embedding: [1],
+      embeddingModel: 'text-embedding-3-small',
+    }], []);
+    const embedder: MemoryEmbedder = {
+      model: 'text-embedding-3-large',
+      embed: vi.fn(async () => [0, 1]),
+    };
+    const { module } = moduleFor({ remote, index, embedder });
+
+    await module.synchronize(signal());
+
+    expect(embedder.embed).toHaveBeenCalledOnce();
+    expect(index.entry('Work/project.md')?.chunks[0]).toMatchObject({
+      embedding: [0, 1],
+      embeddingModel: 'text-embedding-3-large',
+    });
+  });
+
+  it('backfills missing memory vectors and reports paced vault progress', async () => {
+    const index = new FakeIndexStore(true);
+    const apiMemoryStore = {
+      embeddingsToBackfill: vi.fn()
+        .mockResolvedValueOnce([{ id: '7', content: 'Saved preference.', revision: 2 }])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([]),
+      updateEmbedding: vi.fn(async () => true),
+    } as unknown as MemoryStore;
+    const embedder: MemoryEmbedder = {
+      model: 'text-embedding-3-large',
+      embed: vi.fn(async () => [0, 1]),
+    };
+    const { module } = moduleFor({
+      remote: { 'Work/project.md': { sha: sha('a'), content: '# Project\n\nVault note.' } },
+      index, embedder, apiMemoryStore,
+    });
+    const progress = vi.fn(async () => {});
+
+    await expect(module.reembed(signal(), progress)).resolves.toMatchObject({
+      memories: 1,
+      memoryPending: false,
+      vaultFiles: 1,
+      vaultPending: 0,
+    });
+    expect(apiMemoryStore.updateEmbedding).toHaveBeenCalledWith(
+      '7', 2, 'text-embedding-3-large', [0, 1], expect.any(AbortSignal),
+    );
+    expect(progress).toHaveBeenCalledWith(1, 'Updated 1 memories');
+    expect(progress).toHaveBeenCalledWith(2, 'Vault backfill complete');
   });
 
   it('returns a cached graph with stable note IDs, persisted links, mean-vector neighbours, and degrees', async () => {
@@ -524,7 +580,10 @@ describe('GitHub vault', () => {
     const seedCount = 2_005;
     await Promise.all(Array.from({ length: seedCount }, (_, number) =>
       index.replaceFile(`General/Note-${String(number).padStart(4, '0')}.md`, sha('a'), [
-        { index: 0, heading: `Note ${number}`, content: 'Bounded node.', embedding: [1, 0] },
+        {
+          index: 0, heading: `Note ${number}`, content: 'Bounded node.',
+          embedding: [1, 0], embeddingModel: 'text-embedding-3-small',
+        },
       ], number < 2_000
         ? [`General/Note-${String((number + 1) % 2_000).padStart(4, '0')}.md`]
         : [], signal())));
