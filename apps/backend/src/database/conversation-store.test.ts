@@ -218,6 +218,74 @@ describe('SQL conversation store', () => {
     expect(query.mock.calls[0]?.[0]).toContain("JSON_VALUE(tc.result, '$.artifactId')");
   });
 
+  it('searches message text with parameterized filters and returns only bounded snippets', async () => {
+    const at = new Date('2026-10-03T12:00:00Z');
+    const { store, input, query } = fixture({
+      recordset: [
+        { message_id: '42', session_id: '41', source: 'voice', role: 'dan', at, snippet: 'First matching decision' },
+        { message_id: '43', session_id: '41', source: 'voice', role: 'jarvis', at, snippet: 'Another matching decision' },
+      ],
+      recordsets: [],
+      rowsAffected: [],
+    });
+
+    await expect(store.searchMessages!({
+      query: 'Decision about Jarvis',
+      from: new Date('2026-10-01T00:00:00Z'),
+      toExclusive: new Date('2026-10-08T00:00:00Z'),
+      source: 'voice',
+      limit: 1,
+    }, new AbortController().signal)).resolves.toEqual({
+      results: [{
+        messageId: '42',
+        sessionId: '41',
+        source: 'voice',
+        role: 'dan',
+        at: at.toISOString(),
+        snippet: 'First matching decision',
+      }],
+      hasMore: true,
+    });
+
+    expect(input).toHaveBeenCalledWith('take', sql.Int, 2);
+    expect(input).toHaveBeenCalledWith('source', sql.NVarChar(16), 'voice');
+    expect(input).toHaveBeenCalledWith('from', sql.DateTime2(7), new Date('2026-10-01T00:00:00Z'));
+    expect(input).toHaveBeenCalledWith('toExclusive', sql.DateTime2(7), new Date('2026-10-08T00:00:00Z'));
+    expect(input).toHaveBeenCalledWith('term0', sql.NVarChar(64), 'decision');
+    expect(query.mock.calls[0]?.[0]).toContain('m.text LIKE N\'%\' + @term0 + N\'%\'');
+    expect(query.mock.calls[0]?.[0]).toContain('m.at >= @from');
+    expect(query.mock.calls[0]?.[0]).toContain('m.at < @toExclusive');
+    expect(query.mock.calls[0]?.[0]).not.toContain('Decision about Jarvis');
+  });
+
+  it('does not query when input contains no searchable words and rejects invalid bounds', async () => {
+    const { store, query } = fixture();
+    await expect(store.searchMessages!({ query: '+++', limit: 5 }, new AbortController().signal))
+      .resolves.toEqual({ results: [], hasMore: false });
+    await expect(store.searchMessages!({ query: 'search', limit: 51 }, new AbortController().signal))
+      .rejects.toThrow('Conversation search request is invalid');
+    expect(query).not.toHaveBeenCalled();
+  });
+
+  it('uses the optional full-text index after initializing its setup script', async () => {
+    const query = vi.fn()
+      .mockResolvedValueOnce({ recordset: [], recordsets: [], rowsAffected: [] })
+      .mockResolvedValueOnce({ recordset: [{ fulltext_search: true }], recordsets: [], rowsAffected: [] })
+      .mockResolvedValueOnce({ recordset: [], recordsets: [], rowsAffected: [] });
+    const input = vi.fn();
+    const request = { input, query, cancel: vi.fn() };
+    input.mockReturnValue(request);
+    const pool = { request: vi.fn(() => request) } as unknown as sql.ConnectionPool;
+    const store = createConversationStore(pool);
+    await store.initialize?.();
+    await store.searchMessages!({ query: 'decision project', limit: 5 }, new AbortController().signal);
+
+    expect(query.mock.calls[0]?.[0]).toContain('CREATE FULLTEXT INDEX ON dbo.messages');
+    expect(input).toHaveBeenCalledWith('condition', sql.NVarChar(4000), '"decision" OR "project"');
+    expect(query.mock.calls[2]?.[0]).toContain('CONTAINSTABLE(dbo.messages, text, @condition)');
+    expect(query.mock.calls[2]?.[0]).not.toContain("m.text LIKE");
+  });
+
   it('reads bounded Dan steering messages after the current turn cursor', async () => {
     const { store, input, query } = fixture({
       recordset: [{ id: '43', text: 'Continue', language: 'en' }],

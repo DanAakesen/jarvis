@@ -325,6 +325,19 @@ export interface PhoneCallHistoryEntry {
   durationSeconds: number;
   outcome: PhoneCallOutcome;
 }
+export type ConversationSearchSource = 'chat' | 'voice' | 'phone';
+export interface ConversationSearchHit {
+  messageId: string;
+  sessionId: string;
+  source: ConversationSearchSource;
+  role: 'dan' | 'jarvis';
+  at: string;
+  snippet: string;
+}
+export interface ConversationSearchPage {
+  results: ConversationSearchHit[];
+  hasMore: boolean;
+}
 export interface PhoneStatus {
   configured: boolean;
   historyAvailable: boolean;

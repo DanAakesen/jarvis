@@ -1345,6 +1345,14 @@ in pages of 50 (maximum 100), ordered oldest-to-newest within each page and
 continued with a message-ID cursor. Each entry includes its session's chat/voice
 channel and language. It returns tool-call names, outcomes and task IDs, not the
 stored arguments or results.
+P9-24 adds owner-authenticated `GET /conversation/search?q&from&to&source&limit`
+and the `conversation_search` tool through the shared registry. Search dates are
+inclusive UTC calendar days; `source` filters the stored session channel. Results
+contain message/session IDs, source, role, timestamp and a 240-character snippet,
+with a `hasMore` flag and a maximum of 50 rows. Migration 0032 adds a timestamp
+index; startup creates an optional SQL full-text index outside the migration
+transaction when supported, otherwise the store uses a bounded substring query.
+Tool arguments and results are redacted from the persistent tool-call audit.
 
 P8-26/P8-35 keep chat draft, turn state and a removable FIFO queue in
 `ConversationHistory`. Each submission captures text and language and clears

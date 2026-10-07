@@ -1,6 +1,7 @@
 import { Writable } from 'node:stream';
 import type { AddressInfo } from 'node:net';
 import type { ServerResponse } from 'node:http';
+import type { FastifyRequest } from 'fastify';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { buildApp, type BuildAppOptions } from '../app.js';
 import { loadConfig } from '../config.js';
@@ -654,11 +655,76 @@ describe('conversation routes', () => {
     expect(store.endSession).toHaveBeenCalledWith('41');
   });
 
+  it('searches dated conversation messages with a source filter and bounded snippets', async () => {
+    const search = {
+      results: [{
+        messageId: '42',
+        sessionId: '41',
+        source: 'voice' as const,
+        role: 'dan' as const,
+        at: startedAt.toISOString(),
+        snippet: 'We decided to keep conversation search indexed.',
+      }],
+      hasMore: false,
+    };
+    const store = storeFixture({ searchMessages: vi.fn(async () => search) });
+    const app = createApp(store);
+    const response = await app.inject({
+      url: '/conversation/search?q=decision&from=2026-10-01&to=2026-10-07&source=voice&limit=3',
+      headers,
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual(search);
+    expect(store.searchMessages).toHaveBeenCalledWith({
+      query: 'decision',
+      from: new Date('2026-10-01T00:00:00.000Z'),
+      toExclusive: new Date('2026-10-08T00:00:00.000Z'),
+      source: 'voice',
+      limit: 3,
+    }, expect.any(AbortSignal));
+    const invalidDate = await app.inject({ url: '/conversation/search?q=decision&from=2026-02-30', headers });
+    const invalidSource = await app.inject({ url: '/conversation/search?q=decision&source=notes', headers });
+    const unauthorized = await app.inject({ url: '/conversation/search?q=decision' });
+    expect(invalidDate.statusCode).toBe(400);
+    expect(invalidSource.statusCode).toBe(400);
+    expect(unauthorized.statusCode).toBe(401);
+    expect(store.searchMessages).toHaveBeenCalledOnce();
+  });
+
+  it('registers a private conversation search tool that reuses the store', async () => {
+    const search = { results: [], hasMore: false };
+    const store = storeFixture({ searchMessages: vi.fn(async () => search) });
+    const app = createApp(store);
+    const tool = app.jarvisTools.get('conversation_search');
+
+    expect(tool).toMatchObject({ sensitive: true });
+    await expect(tool!.execute(
+      { query: 'launch decision', from: '2026-10-01', to: '2026-10-07', limit: 5 },
+      { server: app } as unknown as FastifyRequest,
+      new AbortController().signal,
+    )).resolves.toEqual(search);
+    expect(store.searchMessages).toHaveBeenCalledWith({
+      query: 'launch decision',
+      from: new Date('2026-10-01T00:00:00.000Z'),
+      toExclusive: new Date('2026-10-08T00:00:00.000Z'),
+      limit: 5,
+    }, expect.any(AbortSignal));
+  });
+
   it('returns an unavailable response when persistence is not configured', async () => {
     const app = createApp();
     const response = await app.inject({ url: '/conversation/history', headers });
 
     expect(response.statusCode).toBe(503);
     expect(response.json()).toEqual({ error: 'Conversation storage unavailable' });
+  });
+
+  it('returns an unavailable search response when search persistence is absent', async () => {
+    const app = createApp();
+    const response = await app.inject({ url: '/conversation/search?q=decision', headers });
+
+    expect(response.statusCode).toBe(503);
+    expect(response.json()).toEqual({ error: 'Conversation search unavailable' });
   });
 });

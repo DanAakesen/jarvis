@@ -672,7 +672,7 @@ approval is atomically consumed before the backend invokes its action.
 | `messages` | `model` and token counts are nullable (Dan's messages have none); token counts ≥ 0 |
 | `tool_calls` | `result` nullable; current outcome vocabulary is `ok`, `refused` or `error` (`0001` originally permitted only `ok`/`error`, expanded by `0018_tool_call_refused_outcome.sql`); `task_id` nullable |
 | Foreign keys | No cascades. Projects are archived (`active = 0`), not deleted |
-| Indexes | Dispatcher `IX_tasks_state_next_attempt_at`; timeline `IX_task_events_task_id_at`; plus one per foreign key: `IX_messages_jarvis_session_id_at`, `IX_tasks_project_id_state` (also the per-project running count), filtered `IX_tasks_origin_message_id`, `IX_tool_calls_message_id`, filtered `IX_tool_calls_task_id` |
+| Indexes | Dispatcher `IX_tasks_state_next_attempt_at`; timeline `IX_task_events_task_id_at`; conversation search `IX_messages_at` plus the optional full-text index; and one per foreign key: `IX_messages_jarvis_session_id_at`, `IX_tasks_project_id_state` (also the per-project running count), filtered `IX_tasks_origin_message_id`, `IX_tool_calls_message_id`, filtered `IX_tool_calls_task_id` |
 
 P6-03's `0005_task_event_archives.sql` adds the archive index table without changing
 the `task_events` producer schema. The API still validates every field (P1-03,
