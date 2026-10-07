@@ -1,7 +1,10 @@
 import { defaultAwayModeState, presenceModes } from './away-mode.js';
 import { JARVIS_REPOSITORY, projectContext } from '../factory/project-context.js';
-import { isModelCatalogue, modelRoles, reasoningEfforts, voiceTuningSettingsBounds, voiceTuningSettingsSchema } from '@jarvis/contracts';
-import type { ModelCatalogue, ModelRole, ReasoningEffort, VoiceTuningSettings } from '@jarvis/contracts';
+import {
+  isModelCatalogue, modelRoles, reasoningEfforts, researchDepths, researchSettingsBounds,
+  researchSettingsSchema, voiceTuningSettingsBounds, voiceTuningSettingsSchema,
+} from '@jarvis/contracts';
+import type { ModelCatalogue, ModelRole, ReasoningEffort, ResearchSettings, VoiceTuningSettings } from '@jarvis/contracts';
 import {
   defaultRoleModels, fallbackModelCatalogue, isRoleModelSupported, modelsForRole, reasoningForModel,
 } from './model-catalog.js';
@@ -41,6 +44,7 @@ export interface Settings {
     defaultLanguage: 'da' | 'en';
     minimizeWindowsOnVoiceStart: boolean;
   };
+  research: ResearchSettings;
   codex: {
     model: string;
     reasoning: string;
@@ -103,6 +107,7 @@ export const defaultSettings: Settings = {
     bargeInEnabled: true,
     maxSpokenReplyTokens: 4_096,
   },
+  research: { depth: 'quick', maxSources: 50, timeoutSeconds: 305 },
   codex: { model: 'default', reasoning: 'default' },
   copilot: { model: 'default' },
   roles: Object.fromEntries(modelRoles.map((role) => [role, {
@@ -133,6 +138,8 @@ export const settingsOptions = {
   danishVoices: ['da-DK-Harper:MAI-Voice-2'],
   languages: ['da', 'en'],
   voiceTuning: voiceTuningSettingsBounds,
+  researchDepths,
+  researchSettings: researchSettingsBounds,
   projectVisibilities: ['private', 'public'],
   projectAgents: ['codex', 'copilot'],
   projectPolicies: ['deliver_pr', 'complete_without_deployment'],
@@ -173,6 +180,11 @@ const settingKeys = {
     silenceDurationMs: 'voice.silence_duration_ms',
     bargeInEnabled: 'voice.barge_in_enabled',
     maxSpokenReplyTokens: 'voice.max_spoken_reply_tokens',
+  },
+  research: {
+    depth: 'research.depth',
+    maxSources: 'research.max_sources',
+    timeoutSeconds: 'research.timeout_seconds',
   },
   codex: { model: 'codex.model', reasoning: 'codex.reasoning_effort' },
   copilot: { model: 'copilot.model' },
@@ -269,6 +281,19 @@ function validSetting(
         value >= bounds.minimum && value <= bounds.maximum;
     }
     if (key === 'bargeInEnabled') return typeof value === 'boolean';
+  }
+  if (area === 'research') {
+    if (key === 'depth') return isOption(value, researchDepths);
+    if (key === 'maxSources') {
+      return typeof value === 'number' && Number.isSafeInteger(value) &&
+        value >= researchSettingsBounds.maxSources.minimum &&
+        value <= researchSettingsBounds.maxSources.maximum;
+    }
+    if (key === 'timeoutSeconds') {
+      return typeof value === 'number' && Number.isSafeInteger(value) &&
+        value >= researchSettingsBounds.timeoutSeconds.minimum &&
+        value <= researchSettingsBounds.timeoutSeconds.maximum;
+    }
   }
   if (area === 'codex') {
     if (key === 'model') return typeof value === 'string' && modelsForRole(catalogue, 'codex').includes(value);
@@ -387,6 +412,10 @@ const settingsPatchSchema = {
             minimizeWindowsOnVoiceStart: { type: 'boolean' },
             ...voiceTuningSettingsSchema.properties,
           },
+        },
+        research: {
+          type: 'object', minProperties: 1, additionalProperties: true,
+          properties: researchSettingsSchema.properties,
         },
         codex: {
           type: 'object', minProperties: 1, additionalProperties: true,
@@ -843,6 +872,15 @@ export async function registerSettingsRoutes(app: import('fastify').FastifyInsta
         const numericTuning = ['serverVadThreshold', 'prefixPaddingMs', 'silenceDurationMs', 'maxSpokenReplyTokens'];
         if (numericTuning.some((key) => voice[key] !== undefined && typeof voice[key] !== 'number') ||
             (voice.bargeInEnabled !== undefined && typeof voice.bargeInEnabled !== 'boolean')) {
+          return reply.code(400).send({ error: 'Invalid setting value' });
+        }
+      }
+      const research = (request.body as {
+        settings?: { research?: Record<string, unknown> };
+      } | undefined)?.settings?.research;
+      if (research && typeof research === 'object' && !Array.isArray(research)) {
+        const numericSettings = ['maxSources', 'timeoutSeconds'];
+        if (numericSettings.some((key) => research[key] !== undefined && typeof research[key] !== 'number')) {
           return reply.code(400).send({ error: 'Invalid setting value' });
         }
       }

@@ -24,6 +24,23 @@ export const voiceTuningSettingsSchema: Readonly<{
   additionalProperties: false;
   properties: Readonly<Record<keyof VoiceTuningSettings, Readonly<Record<string, unknown>>>>;
 }>;
+export const researchDepths: readonly ['quick', 'standard', 'deep'];
+export type ResearchDepth = typeof researchDepths[number];
+export interface ResearchSettings {
+  depth: ResearchDepth;
+  maxSources: number;
+  timeoutSeconds: number;
+}
+export const researchSettingsBounds: Readonly<{
+  maxSources: Readonly<{ minimum: 1; maximum: 50 }>;
+  timeoutSeconds: Readonly<{ minimum: 1; maximum: 320 }>;
+}>;
+export const researchSettingsSchema: Readonly<{
+  type: 'object';
+  minProperties: 1;
+  additionalProperties: false;
+  properties: Readonly<Record<keyof ResearchSettings, Readonly<Record<string, unknown>>>>;
+}>;
 export interface ModelDeployment {
   name: string;
   model: string;

@@ -25,7 +25,21 @@ export const voiceTuningSettingsSchema = Object.freeze({
     maxSpokenReplyTokens: Object.freeze({ type: 'integer', ...voiceTuningSettingsBounds.maxSpokenReplyTokens }),
   }),
 });
-
+export const researchDepths = Object.freeze(['quick', 'standard', 'deep']);
+export const researchSettingsBounds = Object.freeze({
+  maxSources: Object.freeze({ minimum: 1, maximum: 50 }),
+  timeoutSeconds: Object.freeze({ minimum: 1, maximum: 320 }),
+});
+export const researchSettingsSchema = Object.freeze({
+  type: 'object',
+  minProperties: 1,
+  additionalProperties: false,
+  properties: Object.freeze({
+    depth: Object.freeze({ type: 'string', enum: [...researchDepths] }),
+    maxSources: Object.freeze({ type: 'integer', ...researchSettingsBounds.maxSources }),
+    timeoutSeconds: Object.freeze({ type: 'integer', ...researchSettingsBounds.timeoutSeconds }),
+  }),
+});
 export function isModelCatalogue(value) {
   if (!isObject(value) || !['arm', 'fallback'].includes(value.source) ||
       !Array.isArray(value.deployments) || value.deployments.length > 1_000 ||

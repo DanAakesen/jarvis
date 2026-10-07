@@ -13,6 +13,9 @@ import {
   modelCapabilities,
   modelRoles,
   reasoningEfforts,
+  researchDepths,
+  researchSettingsBounds,
+  researchSettingsSchema,
   voiceTuningSettingsBounds,
   voiceTuningSettingsSchema,
   isGeneratedView,
@@ -75,6 +78,19 @@ test('voice tuning contracts bound persisted VAD, interruption, and reply length
     silenceDurationMs: { type: 'integer', minimum: 100, maximum: 5_000 },
     bargeInEnabled: { type: 'boolean' },
     maxSpokenReplyTokens: { type: 'integer', minimum: 1, maximum: 4_096 },
+  });
+});
+
+test('research settings contracts bound depth, source count, and invocation timeout', () => {
+  assert.deepEqual(researchDepths, ['quick', 'standard', 'deep']);
+  assert.deepEqual(researchSettingsBounds, {
+    maxSources: { minimum: 1, maximum: 50 },
+    timeoutSeconds: { minimum: 1, maximum: 320 },
+  });
+  assert.deepEqual(researchSettingsSchema.properties, {
+    depth: { type: 'string', enum: ['quick', 'standard', 'deep'] },
+    maxSources: { type: 'integer', minimum: 1, maximum: 50 },
+    timeoutSeconds: { type: 'integer', minimum: 1, maximum: 320 },
   });
 });
 
