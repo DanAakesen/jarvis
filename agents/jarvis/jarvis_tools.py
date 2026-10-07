@@ -100,6 +100,8 @@ Long-term knowledge:
 # Nonsecret ID of the `jarvis-api` app from infra/bootstrap.output.json.
 DEFAULT_API_CLIENT_ID = "9f751b64-ea0f-484f-bf09-f08276a69e2f"
 REQUEST_TIMEOUT_SECONDS = 30.0
+# Tools that legitimately run longer than one request; each sits just above the backend's own limit.
+LONG_TOOL_TIMEOUT_SECONDS = {"web_research": 320.0}
 CATALOGUE_TTL_SECONDS = 60.0
 MAX_RESPONSE_BYTES = 1024 * 1024
 MAX_TOOLS = 128
@@ -518,8 +520,13 @@ class BackendToolClient:
                 return _error(name, "This phone session is invalid; nothing was done.")
             headers["X-Jarvis-Phone-Session-ID"] = phone_session_id
         try:
+            read_timeout = LONG_TOOL_TIMEOUT_SECONDS.get(name, REQUEST_TIMEOUT_SECONDS)
             async with self._http.stream(
-                "POST", f"{self._base_url}/tools/{name}", headers=headers, json=arguments
+                "POST",
+                f"{self._base_url}/tools/{name}",
+                headers=headers,
+                json=arguments,
+                timeout=httpx.Timeout(REQUEST_TIMEOUT_SECONDS, read=read_timeout),
             ) as response:
                 status = response.status_code
                 body = await _read_bounded(response)
