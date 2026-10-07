@@ -13,6 +13,8 @@ import {
   isValidHtmlArtifactHtml,
   isJarvisActivityEvent,
   isJarvisVoiceWakeEvent,
+  isBackgroundJob,
+  isBackgroundJobEvent,
   isWebResearchResult,
   isWorkspaceCommand,
   generatedViewVersion,
@@ -296,4 +298,27 @@ test('rejects invalid workspace IDs, geometry, operations, and generated-view al
       actions: [{ type: 'call-tool', tool: 'unknown_tool' }],
     }),
   }, { registeredTools: ['list_tasks'] }), false);
+});
+
+test('background jobs are bounded and typed', () => {
+  const job = {
+    jobId: '11111111-1111-4111-8111-111111111111',
+    kind: 'research',
+    title: 'Research: Microsoft Foundry IQ',
+    status: 'running',
+    step: 1,
+    steps: 3,
+    detail: 'Searching: Key findings',
+    startedAt: '2026-10-07T12:00:00.000Z',
+    updatedAt: '2026-10-07T12:00:05.000Z',
+  };
+  assert.equal(isBackgroundJob(job), true);
+  assert.equal(isBackgroundJob({ ...job, status: 'done', step: 3, viewId: 'research-abc' }), true);
+  assert.equal(isBackgroundJob({ ...job, step: 4 }), false);
+  assert.equal(isBackgroundJob({ ...job, title: 'x'.repeat(81) }), false);
+  assert.equal(isBackgroundJob({ ...job, kind: 'shell' }), false);
+  assert.equal(isBackgroundJob({ ...job, viewId: '../etc' }), false);
+  assert.equal(isBackgroundJob({ ...job, extra: true }), false);
+  assert.equal(isBackgroundJobEvent({ type: 'job', job }), true);
+  assert.equal(isBackgroundJobEvent({ type: 'job', job, more: 1 }), false);
 });

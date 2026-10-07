@@ -589,3 +589,36 @@ export function isJarvisVoiceWakeEvent(value) {
     typeof value.at === 'string' && wakeTimestampPattern.test(value.at) &&
     Number.isFinite(Date.parse(value.at)) && new Date(value.at).toISOString() === value.at;
 }
+
+export const backgroundJobKinds = Object.freeze(['research', 'image', 'html_app']);
+export const backgroundJobStatuses = Object.freeze(['running', 'done', 'failed', 'cancelled']);
+const jobIdPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const viewIdPattern = /^[A-Za-z0-9_-]{1,64}$/;
+
+function boundedText(value, maximum) {
+  return typeof value === 'string' && value.trim().length > 0 && value.length <= maximum &&
+    !Array.from(value).some((character) => character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127);
+}
+
+function isTimestamp(value) {
+  return typeof value === 'string' && wakeTimestampPattern.test(value) &&
+    Number.isFinite(Date.parse(value)) && new Date(value).toISOString() === value;
+}
+
+export function isBackgroundJob(value) {
+  if (!isObject(value)) return false;
+  const allowed = ['jobId', 'kind', 'title', 'status', 'step', 'steps', 'detail', 'viewId', 'startedAt', 'updatedAt'];
+  if (Object.keys(value).some((key) => !allowed.includes(key))) return false;
+  return typeof value.jobId === 'string' && jobIdPattern.test(value.jobId) &&
+    backgroundJobKinds.includes(value.kind) && boundedText(value.title, 80) &&
+    backgroundJobStatuses.includes(value.status) &&
+    Number.isSafeInteger(value.steps) && value.steps >= 1 && value.steps <= 20 &&
+    Number.isSafeInteger(value.step) && value.step >= 0 && value.step <= value.steps &&
+    (value.detail === undefined || boundedText(value.detail, 120)) &&
+    (value.viewId === undefined || (typeof value.viewId === 'string' && viewIdPattern.test(value.viewId))) &&
+    isTimestamp(value.startedAt) && isTimestamp(value.updatedAt);
+}
+
+export function isBackgroundJobEvent(value) {
+  return isObject(value) && Object.keys(value).length === 2 && value.type === 'job' && isBackgroundJob(value.job);
+}

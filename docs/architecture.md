@@ -178,7 +178,17 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   window therefore uses the shared tabs, geometry, focus, snapshot and Jarvis
   commands. Voice entry minimises it, voice exit restores it, and sending or
   Conversation navigation restores it after Close.
-- P7-27 publishes a bounded `WorkspaceSnapshot` (at most 32 open-window titles
+- Background jobs (7 October): slow work that ends in a workspace window (research
+  today; images and HTML apps next) registers with the in-memory
+  `BackgroundJobRegistry` (`apps/backend/src/core/jobs.ts`). Every change publishes a
+  contract-valid `BackgroundJob` (`packages/contracts`: `jobId`, `kind`, a 3-6 word
+  `title`, `status` running/done/failed/cancelled, `step`/`steps`, optional `detail`,
+  and `viewId` once done) as `event: job` on `/now/events`. `GET /jobs` lists current
+  and recently finished jobs (kept 10 minutes, at most 20) so a reloaded tab can
+  rebuild its job chip, and `POST /jobs/:jobId/cancel` (owner only) aborts a running
+  job. Research progress windows are best effort, so a missed update no longer stops
+  the job, and the final report falls back to `create` when no open tab still has the
+  progress window.- P7-27 publishes a bounded `WorkspaceSnapshot` (at most 32 open-window titles
   and IDs, including minimised windows, plus context-panel visibility) through
   owner-authenticated `POST /now/workspace/state`. The broker keeps one snapshot per
   open `/now/events` session, uses the most recently reported one, and drops a

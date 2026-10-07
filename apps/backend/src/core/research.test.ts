@@ -3,7 +3,7 @@ import type { InvocationAccepted, InvocationSnapshot } from '../foundry/client.j
 import { buildApp } from '../app.js';
 import { loadConfig } from '../config.js';
 import type { BackendModule } from '../modules.js';
-import { isHtmlArtifact, isHtmlArtifactFrame, type HtmlArtifact, type HtmlArtifactFrame, type WorkspaceCommand } from '@jarvis/contracts';
+import { isBackgroundJob, isHtmlArtifact, isHtmlArtifactFrame, type BackgroundJob, type HtmlArtifact, type HtmlArtifactFrame, type WorkspaceCommand } from '@jarvis/contracts';
 import { createHtmlResearchModule, defaultReportFrame, reportFrame, researchWindowTitle } from './research.js';
 import { coreModule } from './index.js';
 import { WorkspaceCommandBroker } from './workspace-commands.js';
@@ -168,6 +168,8 @@ describe('background interactive research', () => {
     const runner = makeRunner(reportHtml(), gate.promise);
     const { app, commands, artifacts, artifactStore } = fixture(runner);
     const completion = vi.fn();
+    const jobEvents: BackgroundJob[] = [];
+    app.jarvisActivityHub.subscribe((event) => { if (event.type === 'job') jobEvents.push(event.job); });
     app.addHook('preHandler', (request, _reply, done) => {
       request.announceResearchCompletion = completion;
       done();
@@ -198,6 +200,10 @@ describe('background interactive research', () => {
       status: 'complete',
       summary: 'The research found a supported result.',
     });
+    expect(jobEvents[0]).toMatchObject({ kind: 'research', status: 'running', step: 0, steps: 3 });
+    expect(jobEvents.every((job) => isBackgroundJob(job))).toBe(true);
+    expect(jobEvents.at(-1)).toMatchObject({ status: 'done', step: 3, viewId: (commands.at(-1) as { viewId: string }).viewId });
+    expect(app.backgroundJobs.list()[0]).toMatchObject({ status: 'done' });
   });
 
   it('rejects unsafe generated citations and updates the progress window with failure', async () => {

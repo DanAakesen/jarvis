@@ -207,7 +207,9 @@ export function registerNowRoutes(app: FastifyInstance) {
       if (closed) return;
       const frame = event.type === 'voice.wake'
         ? `event: voice-wake\ndata: ${JSON.stringify(event)}\n\n`
-        : `event: jarvis-activity\ndata: ${JSON.stringify(event)}\n\n`;
+        : event.type === 'job'
+          ? `event: job\ndata: ${JSON.stringify(event.job)}\n\n`
+          : `event: jarvis-activity\ndata: ${JSON.stringify(event)}\n\n`;
       if (!response.write(frame)) end();
     });
     reply.hijack();

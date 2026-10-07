@@ -203,3 +203,31 @@ export function isWorkspaceCommand(
   value: unknown,
   options?: { trustedBlobHost?: string; registeredTools?: readonly string[] },
 ): value is WorkspaceCommand;
+
+export type BackgroundJobKind = 'research' | 'image' | 'html_app';
+export type BackgroundJobStatus = 'running' | 'done' | 'failed' | 'cancelled';
+/** A slow Jarvis task running in the background; the shell shows it as a job chip until its window is ready. */
+export interface BackgroundJob {
+  jobId: string;
+  kind: BackgroundJobKind;
+  /** Short title, 3-6 words, at most 80 characters. */
+  title: string;
+  status: BackgroundJobStatus;
+  /** Completed steps, 0..steps. */
+  step: number;
+  steps: number;
+  /** Current step or failure reason, at most 120 characters. */
+  detail?: string;
+  /** Workspace view that holds the result; present when status is done. */
+  viewId?: string;
+  startedAt: string;
+  updatedAt: string;
+}
+export interface BackgroundJobEvent {
+  type: 'job';
+  job: BackgroundJob;
+}
+export const backgroundJobKinds: readonly BackgroundJobKind[];
+export const backgroundJobStatuses: readonly BackgroundJobStatus[];
+export function isBackgroundJob(value: unknown): value is BackgroundJob;
+export function isBackgroundJobEvent(value: unknown): value is BackgroundJobEvent;

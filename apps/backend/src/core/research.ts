@@ -393,6 +393,9 @@ export function createHtmlResearchModule(
         const controller = new AbortController();
         const job: ResearchJob = { controller, promise: Promise.resolve(), done: false };
         jobs.set(jobId, job);
+        const tracker = request.server.backgroundJobs.start(
+          'research', windowTitle, searches.length + 1, () => controller.abort(), 'Starting research',
+        );
         job.promise = Promise.resolve().then(async () => {
           const timeoutSignal = AbortSignal.timeout(jobTimeoutMs);
           const jobSignal = AbortSignal.any([controller.signal, timeoutSignal]);
@@ -401,10 +404,14 @@ export function createHtmlResearchModule(
           const app = request.server;
           const sources = () => [...sourcesByUrl.values()].slice(0, 50);
           try {
-            for (const search of searches) {
+            // Progress windows are best effort: a tab that misses one update must not stop the research.
+            const progress = () => sendProgress(app, ownerId, viewId, windowTitle, searches, sources(), jobSignal)
+              .catch(() => { jobSignal.throwIfAborted(); });
+            for (const [index, search] of searches.entries()) {
               jobSignal.throwIfAborted();
               search.status = 'searching';
-              await sendProgress(app, ownerId, viewId, windowTitle, searches, sources(), jobSignal);
+              tracker.progress(index, `Searching: ${search.label}`);
+              await progress();
               try {
                 const result = await runCodexToolResult(
                   clientFor(),
@@ -427,13 +434,15 @@ export function createHtmlResearchModule(
                 if (jobSignal.aborted) throw error;
                 search.status = 'failed';
               }
-              await sendProgress(app, ownerId, viewId, windowTitle, searches, sources(), jobSignal);
+              tracker.progress(index + 1, search.status === 'failed' ? `Search failed: ${search.label}` : `Found: ${search.label}`);
+              await progress();
             }
             if (findings.length === 0) throw new ToolFailure('No research searches completed successfully.');
             const snapshot = app.workspaceCommands.snapshot(ownerId);
             const frame = reportFrame(snapshot);
             const reportSources = sources().slice(0, maxReportSources);
             const partial = searches.some((search) => search.status === 'failed');
+            tracker.progress(searches.length, 'Writing the report');
             const result = await runCodexToolResult(
               clientFor(),
               'html_report',
@@ -461,13 +470,21 @@ export function createHtmlResearchModule(
             if (!isWorkspaceCommand(command, generatedViewValidationOptions(app))) {
               throw new ToolFailure('The report did not pass workspace validation.');
             }
-            await app.workspaceCommands.execute(ownerId, command, jobSignal);
+            try {
+              await app.workspaceCommands.execute(ownerId, command, jobSignal);
+            } catch (error) {
+              // No open tab still has the progress window (reloaded or closed): open the report fresh.
+              if (!(error instanceof ToolRefusal)) throw error;
+              await app.workspaceCommands.execute(ownerId, workspaceCommand('create', viewId, view), jobSignal);
+            }
+            tracker.done(viewId, partial ? 'Ready with partial findings' : 'Report ready');
             notifyCompletion(announceCompletion, { status: 'complete', summary: result.spokenSummary });
           } catch (error) {
             if (!controller.signal.aborted) {
               const reason = error instanceof ToolRefusal
                 ? 'Research was refused. Check workspace access and try again.'
                 : 'Research could not be completed. Try again shortly.';
+              tracker.fail(reason);
               await sendProgress(
                 app,
                 ownerId,
