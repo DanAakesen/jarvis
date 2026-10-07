@@ -8,6 +8,7 @@ import {
   type MemoryVersion,
   type VaultGraphData,
   type VaultIndexStore,
+  vaultSimilarityThreshold,
   type VaultIndexedChunk,
   type VaultSearchHit,
 } from '../database/memory-store.js';
@@ -44,7 +45,7 @@ const maxMemoryApiHistoryBytes = 512 * 1024;
 const maxGraphNodes = 2_000;
 const maxGraphEdges = 8_000;
 const maxLinksPerNote = 512;
-const similarityThreshold = 0.75;
+const similarityThreshold = vaultSimilarityThreshold;
 const credentialPattern = /\b(?:password|passphrase|secret|api[ -]?key|access[ -]?token|credential|private[ -]?key|seed[ -]?phrase|recovery[ -]?phrase)\b/iu;
 const sensitivePattern = /\b(?:bank(?:ing)?|bank account|credit card|debit card|account number|iban|routing number|swift code|health|medical|diagnosis|medication|symptom|patient|clinic|therapy|prescription|social security|ssn)\b/iu;
 const secretPattern = /-----BEGIN [A-Z ]*PRIVATE KEY-----|\b(?:gh[pousr]_[A-Za-z0-9_]{20,}|github_pat_[A-Za-z0-9_]{20,}|AKIA[0-9A-Z]{16}|xox[baprs]-[A-Za-z0-9-]{20,})\b|(?:password|client[_ -]?secret|api[_ -]?key|access[_ -]?token)\s*[:=]\s*["']?[^\s"']{8,}/iu;
@@ -565,7 +566,9 @@ export function createVaultModule(options: {
     });
     const links: KnowledgeGraphEdge[] = [];
     const seenLinks = new Set<string>();
-    for (const link of graphData.links) {
+    const contentLinks = (graphData.contents ?? []).flatMap(({ path, content }) =>
+      extractLinkTargets(content).map((targetPath) => ({ sourcePath: path, targetPath })));
+    for (const link of [...graphData.links, ...contentLinks]) {
       if (!pathSet.has(link.sourcePath)) continue;
       const target = resolveLinkTarget(link.sourcePath, link.targetPath, pathSet);
       if (!target || target === link.sourcePath) continue;

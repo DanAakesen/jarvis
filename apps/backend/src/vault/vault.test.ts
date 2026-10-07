@@ -372,6 +372,26 @@ describe('GitHub vault', () => {
     expect(graphFiles).toHaveBeenCalledTimes(2);
   });
 
+  it('reads links from indexed note text when no link rows were stored', async () => {
+    const remote = {
+      'People/Alex.md': { sha: sha('a'), content: '# Alex\n\nSee [[Project]].' },
+      'Work/Project.md': { sha: sha('b'), content: '# Project\n\nProject notes.' },
+    };
+    const index = new FakeIndexStore(true);
+    const { module } = moduleFor({ remote, index });
+    await module.synchronize(signal());
+    vi.spyOn(index, 'graphData').mockResolvedValue({
+      links: [],
+      similarities: [],
+      embeddings: [],
+      contents: [{ path: 'People/Alex.md', content: 'See [[Project]] and [[Missing note]].' }],
+    });
+    const app = memoryApiApp(module);
+
+    const graph = (await app.inject({ url: '/knowledge/graph', headers: apiAuthorization })).json();
+    const id = (path: string) => createHash('sha256').update(path).digest('hex');
+    expect(graph.edges).toEqual([{ source: id('People/Alex.md'), target: id('Work/Project.md'), type: 'link' }]);
+  });
   it('bounds the graph to two thousand nodes and eight thousand edges', async () => {
     const index = new FakeIndexStore();
     const { module } = moduleFor({ index });
