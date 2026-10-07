@@ -1,4 +1,5 @@
 import { defaultAwayModeState, presenceModes } from './away-mode.js';
+import { JARVIS_REPOSITORY, projectContext } from '../factory/project-context.js';
 
 export interface Settings {
   appearance: {
@@ -538,6 +539,17 @@ export async function registerSettingsRoutes(app: import('fastify').FastifyInsta
             awayMode: { type: 'boolean' },
             mode: { type: 'string', enum: [...presenceModes] },
             changedAt: { type: ['string', 'null'] },
+            jarvisRepository: { type: 'string' },
+            projects: {
+              type: 'array',
+              maxItems: 50,
+              items: {
+                type: 'object',
+                properties: { id: { type: 'string' }, name: { type: 'string' }, repo: { type: 'string' } },
+                required: ['id', 'name', 'repo'],
+                additionalProperties: false,
+              },
+            },
           },
           required: ['model', 'reasoningEffort', 'personality', 'awayMode', 'mode', 'changedAt'],
           additionalProperties: false,
@@ -568,6 +580,8 @@ export async function registerSettingsRoutes(app: import('fastify').FastifyInsta
       awayMode: presence.mode !== 'present',
       mode: presence.mode,
       changedAt: presence.changedAt,
+      jarvisRepository: JARVIS_REPOSITORY,
+      projects: await projectContext(app),
     };
   });
 

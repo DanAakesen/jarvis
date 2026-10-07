@@ -185,10 +185,18 @@ async def test_loads_effective_model_settings_for_a_new_session() -> None:
                 "on_the_move": "Keep it brief.",
             },
         },
+        "jarvisRepository": "DanAakesen/jarvis",
+        "projects": [
+            {"id": "2", "name": "jarvis", "repo": "DanAakesen/jarvis"},
+            {"id": "x", "name": "bad id", "repo": "DanAakesen/other"},
+            {"id": "3", "name": "bad\nname", "repo": "DanAakesen/other"},
+        ],
     })
     client = make_client(backend)
 
     settings = await client.model_settings()
+    assert settings.projects == (("2", "jarvis", "DanAakesen/jarvis"),)
+    assert settings.jarvis_repository == "DanAakesen/jarvis"
 
     request = backend.requests[0]
     assert request.method == "GET"

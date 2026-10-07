@@ -1,4 +1,5 @@
 import type { FastifyRequest } from 'fastify';
+import { projectAwarenessInstructions, type ProjectContextEntry } from '../factory/project-context.js';
 import { confirmToolCall, type ToolCallOutcome } from '../core/tool-calls.js';
 import { ToolFailure, ToolRefusal, type ToolRegistry } from '../core/tool-registry.js';
 import { defaultSettings, type Settings } from '../core/settings.js';
@@ -98,8 +99,14 @@ function modeContext(presence: AwayModeState): string {
   return `Dan's current mode: ${modeLabel(presence.mode)} since ${presence.changedAt ?? 'an unknown time'}.`;
 }
 
-function englishPersonalityInstructions(personality: Settings['personality'], presence: AwayModeState): string {
+function englishPersonalityInstructions(
+  personality: Settings['personality'],
+  presence: AwayModeState,
+  projects: readonly ProjectContextEntry[] = [],
+): string {
   return `${ENGLISH_REALTIME_INSTRUCTIONS}
+
+${projectAwarenessInstructions(projects)}
 
 ${modeContext(presence)}
 
@@ -123,8 +130,12 @@ const DANISH_PHRASE_LIST = [
 ];
 
 // Danish speech in Danish; tool, memory and safety rules are shared with English.
-function danishInstructions(personality: Settings['personality'], presence: AwayModeState): string {
-  const rules = englishPersonalityInstructions(personality, presence)
+function danishInstructions(
+  personality: Settings['personality'],
+  presence: AwayModeState,
+  projects: readonly ProjectContextEntry[] = [],
+): string {
+  const rules = englishPersonalityInstructions(personality, presence, projects)
     .split('\n\n').slice(1).join('\n\n')
     .replace(/\n\nResearch:\n[\s\S]*?(?=\n\n(?:Memory|Long-term knowledge):)/u, '')
     .replace('Preserve English as the selected language', 'Preserve Danish as the selected language');
@@ -166,14 +177,15 @@ export function createRealtimeSessionUpdate(
   personality: Settings['personality'] = defaultSettings.personality,
   presence: AwayModeState = defaultAwayModeState,
   language: 'da' | 'en' = 'en',
+  projects: readonly ProjectContextEntry[] = [],
 ) {
   const danish = language === 'da';
   return {
     type: 'session.update',
     session: {
       instructions: danish
-        ? danishInstructions(personality, presence)
-        : englishPersonalityInstructions(personality, presence),
+        ? danishInstructions(personality, presence, projects)
+        : englishPersonalityInstructions(personality, presence, projects),
       modalities: ['text', 'audio'],
       input_audio_sampling_rate: 24_000,
       input_audio_noise_reduction: { type: 'azure_deep_noise_suppression' },
