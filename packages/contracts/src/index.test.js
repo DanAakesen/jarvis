@@ -148,7 +148,9 @@ test('task-event and task stream contracts constrain persisted event identity an
     at: '2026-10-07T12:00:00.000Z',
   };
 
-  assert.equal(isTaskEventRecord(event), true);
+  assert.equal(isTaskEventRecord(Object.fromEntries(
+    Object.entries(event).filter(([key]) => key !== 'taskId'),
+  )), true);
   assert.equal(isTaskEventMessage(event), true);
   assert.equal(isTaskEventStreamEvent({ event: 'task', id: event.id, data: event }), true);
   assert.equal(isTaskEventStreamEvent({ event: 'ready', data: {} }), true);
