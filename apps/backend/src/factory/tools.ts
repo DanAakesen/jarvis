@@ -214,7 +214,7 @@ export const factoryTools: readonly JarvisTool[] = [
       if (model !== undefined && !isOption(model, modelOptions)) {
         throw new ToolRefusal(`Unsupported coding-agent model. Valid models: ${optionsList(modelOptions)}.`);
       }
-      const codexEfforts = reasoningForModel(catalogue, 'codex', model ?? 'default');
+      const codexEfforts = ['default', ...reasoningForModel(catalogue, 'codex', model ?? 'default')];
       if (reasoning !== undefined && (agent !== 'codex' || !isOption(reasoning, codexEfforts))) {
         throw new ToolRefusal(`Unsupported reasoning. Specify Codex and use one of the valid Codex reasoning levels: ${optionsList(codexEfforts)}.`);
       }
@@ -267,7 +267,10 @@ export const factoryTools: readonly JarvisTool[] = [
       if (model !== undefined && !isOption(model, modelOptions)) {
         throw new ToolRefusal(`Unsupported ${agent} model. Valid models: ${optionsList(modelOptions)}.`);
       }
-      const codexEfforts = reasoningForModel(catalogue, 'codex', model ?? current.modelOverride ?? 'default');
+      const codexEfforts = [
+        'default',
+        ...reasoningForModel(catalogue, 'codex', model ?? current.modelOverride ?? 'default'),
+      ];
       if (reasoning !== undefined && (agent !== 'codex' || !isOption(reasoning, codexEfforts))) {
         throw new ToolRefusal(`Unsupported ${agent} reasoning. Valid Codex reasoning levels: ${optionsList(codexEfforts)}.`);
       }

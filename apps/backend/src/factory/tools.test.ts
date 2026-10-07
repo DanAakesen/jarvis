@@ -286,7 +286,7 @@ describe('Software Factory Jarvis tools', () => {
     expect(record.mock.calls.map(([call]) => call.outcome)).toEqual(['refused', 'refused']);
   });
 
-  it('refuses unknown reasoning and reports the verified Codex options', async () => {
+  it('accepts supported Codex reasoning levels for ready tasks', async () => {
     const { app, taskStore } = fixture();
     const response = await app.inject({
       method: 'POST', url: '/tools/set_task_model', headers,
@@ -294,10 +294,12 @@ describe('Software Factory Jarvis tools', () => {
     });
 
     expect(response.json()).toMatchObject({
-      outcome: 'refused',
-      result: { refused: 'Unsupported codex reasoning. Valid Codex reasoning levels: default.' },
+      outcome: 'ok',
+      result: { agent: 'codex', reasoning: 'high', state: 'Ready' },
     });
-    expect(taskStore.updateModelConfig).not.toHaveBeenCalled();
+    expect(taskStore.updateModelConfig).toHaveBeenCalledWith('42', {
+      agent: 'codex', modelOverride: null, reasoningOverride: 'high',
+    });
   });
 
   it('clears provider-specific overrides when switching the agent', async () => {

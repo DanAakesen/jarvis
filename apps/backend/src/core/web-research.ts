@@ -124,7 +124,7 @@ export function createWebResearchModule(
           throw new ToolFailure('A valid web research query is required.');
         }
         try {
-          const selectedModel = request.server.settingsStore
+          const selectedModel = request.server?.settingsStore && request.server.modelCatalogue
             ? (await readSettings(
               request.server.settingsStore,
               await request.server.modelCatalogue.read(),

@@ -98,7 +98,7 @@ export class ScreenVisionService {
       const result = await this.model.describe({
         image: input.image,
         model: input.model,
-        reasoningEffort: input.reasoningEffort,
+        ...(input.reasoningEffort === undefined ? {} : { reasoningEffort: input.reasoningEffort }),
         signal: input.signal,
       });
       if (!result.description.trim() || result.description.length > MAX_SCREEN_DESCRIPTION_CHARACTERS ||

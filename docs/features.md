@@ -99,6 +99,7 @@ Status as of 6 October 2026.
 | --- | --- | --- | --- | --- | --- |
 | Settings | Jarvis, voice and coding-agent defaults; global limits; app-wide light/dark appearance | Screen | Settings | Built | P1-11, P8-13 |
 | Jarvis model per session | Model and reasoning for new Jarvis sessions | Both | Settings; by voice with P7-11 | Built | P4-07 |
+| Model catalogue and per-role settings | List live Foundry deployments and configure model/reasoning effort for chat, vision, research, voice, transcription, embeddings, Codex and Copilot; unavailable ARM reads identify the fallback catalogue | Backend API | Settings API and the corresponding chat, task, research, vision and voice jobs | Backend built offline; live ARM and model-selection acceptance pending | P9-01 |
 | Personality preferences | Choose a tone and response style, and add bounded instructions for new chat and voice sessions | Both | Settings, chat and voice | Built offline; live Azure behavior unverified | P7-16, P8-19 |
 | Credentials status | See credential expiry and renewal status (never values) | Screen | Settings | Built | P2-08 |
 | Codex login renewal | Daily automatic renewal of the Jarvis Codex login | Background | Settings | Built | P2-08 |
