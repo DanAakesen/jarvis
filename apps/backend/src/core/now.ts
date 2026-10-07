@@ -1,8 +1,8 @@
 import type { FastifyReply } from 'fastify';
 import type { FastifyInstance } from 'fastify';
+import { isNowSseEvent, type NowSseEvent } from '@jarvis/contracts';
 import type { EventHub } from './event-hub.js';
 import type { JarvisActivityHub } from './activity.js';
-import type { NowSseEvent } from '@jarvis/contracts';
 import { defaultAwayModeState } from './away-mode.js';
 import { presenceModes, type PresenceMode } from './away-mode.js';
 import type { BrowserConfirmation } from '../teams/service.js';
@@ -229,13 +229,17 @@ export function registerNowRoutes(app: FastifyInstance) {
       'X-Accel-Buffering': 'no',
     });
     response.flushHeaders();
-    const workspaceConnection = app.workspaceCommands.connect(principal.objectId, (event) => {
-      const frame = formatSseEvent(event);
+    const viewValidation = generatedViewValidationOptions(app);
+    const workspaceConnection = app.workspaceCommands.connect(principal.objectId, (event, data) => {
+      const candidate = { event, data };
+      if (!isNowSseEvent(candidate, viewValidation)) return false;
+      const workspaceEvent: NowSseEvent = candidate;
+      const frame = formatSseEvent(workspaceEvent);
       if (response.writableLength + Buffer.byteLength(frame) > 1024 * 1024) return false;
-      return writeSseEvent(response, event);
+      return writeSseEvent(response, workspaceEvent);
     });
     closeWorkspace = workspaceConnection.close;
-    const trustedBlobHost = generatedViewValidationOptions(app).trustedBlobHost;
+    const trustedBlobHost = viewValidation.trustedBlobHost;
     const ready = {
       sessionId: workspaceConnection.sessionId,
       ...(trustedBlobHost ? { trustedBlobHost } : {}),

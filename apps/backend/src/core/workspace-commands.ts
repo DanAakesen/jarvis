@@ -16,7 +16,16 @@ const commandTimeoutMs = 10_000;
 const maxPendingCommands = 8;
 const maxCachedCommands = 128;
 
-type WorkspaceEventSender = (event: WorkspaceSseEvent) => boolean;
+type WorkspaceEventArgs =
+  | [
+    event: 'workspace-command',
+    data: Extract<WorkspaceSseEvent, { event: 'workspace-command' }>['data'],
+  ]
+  | [
+    event: 'workspace-cancel',
+    data: Extract<WorkspaceSseEvent, { event: 'workspace-cancel' }>['data'],
+  ];
+type WorkspaceEventSender = (...args: WorkspaceEventArgs) => boolean;
 
 interface WorkspaceConnection {
   readonly sessionId: string;
@@ -163,10 +172,7 @@ export class WorkspaceCommandBroker {
     onAbort = () => {
       if (record.state !== 'pending') return;
       for (const sessionId of record.sessionIds) {
-        this.connections.get(ownerId)?.get(sessionId)?.send({
-          event: 'workspace-cancel',
-          data: { commandId: command.commandId },
-        });
+        this.connections.get(ownerId)?.get(sessionId)?.send('workspace-cancel', { commandId: command.commandId });
       }
       settleError(new ToolFailure('Workspace command was cancelled; the client may already have applied it.'), 'error');
     };
@@ -183,7 +189,7 @@ export class WorkspaceCommandBroker {
       return this.waitFor(promise, signal);
     }
     for (const connection of [...ownerConnections.values()]) {
-      if (!connection.send({ event: 'workspace-command', data: { command, expiresAt } })) {
+      if (!connection.send('workspace-command', { command, expiresAt })) {
         this.decline(record, connection.sessionId, 'error', 'The workspace could not accept the command for delivery.');
       }
     }

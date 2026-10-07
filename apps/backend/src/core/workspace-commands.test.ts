@@ -44,9 +44,9 @@ describe('workspace command delivery', () => {
   it('undoes a contradicted partial window close using the same restore contract', async () => {
     const { app, broker } = fixture();
     const commands: WorkspaceCommand[] = [];
-    const connection = broker.connect(ownerId, (event) => {
-      if (event.event === 'workspace-command') {
-        const command = event.data.command;
+    const connection = broker.connect(ownerId, (event, data) => {
+      if (event === 'workspace-command') {
+        const command = data.command;
         commands.push(command);
         broker.acknowledge(ownerId, connection.sessionId, command.commandId, true);
       }
@@ -115,9 +115,9 @@ describe('workspace command delivery', () => {
     const broker = new WorkspaceCommandBroker();
     const deliveries: Array<{ tab: string; commandId: string }> = [];
     const tab = (name: string) => {
-      const connection = broker.connect(ownerId, (event) => {
-        if (event.event === 'workspace-command') {
-          deliveries.push({ tab: name, commandId: event.data.command.commandId });
+      const connection = broker.connect(ownerId, (event, data) => {
+        if (event === 'workspace-command') {
+          deliveries.push({ tab: name, commandId: data.command.commandId });
         }
         return true;
       });
@@ -154,9 +154,9 @@ describe('workspace command delivery', () => {
   it.each(['final', 'partial'] as const)('executes %s workspace reflexes and replays the agent action despite a new command ID', async (mode) => {
     const { app, broker, records } = fixture();
     const delivered: WorkspaceCommand[] = [];
-    const connection = broker.connect(ownerId, (event) => {
-      if (event.event === 'workspace-command') {
-        const command = event.data.command;
+    const connection = broker.connect(ownerId, (event, data) => {
+      if (event === 'workspace-command') {
+        const command = data.command;
         delivered.push(command);
         broker.acknowledge(ownerId, connection.sessionId, command.commandId, true);
       }
@@ -216,9 +216,9 @@ describe('workspace command delivery', () => {
     let delivered!: { command: WorkspaceCommand; expiresAt: number };
     let onDelivery!: () => void;
     const deliveredPromise = new Promise<void>((resolve) => { onDelivery = resolve; });
-    const connection = broker.connect(ownerId, (event) => {
-      if (event.event === 'workspace-command') {
-        delivered = event.data;
+    const connection = broker.connect(ownerId, (event, data) => {
+      if (event === 'workspace-command') {
+        delivered = data;
         onDelivery();
       }
       return true;
@@ -274,7 +274,7 @@ describe('workspace command delivery', () => {
     }, new AbortController().signal)).rejects.toBeInstanceOf(ToolRefusal);
 
     const events: unknown[] = [];
-    const first = broker.connect(ownerId, (event) => { events.push(event.data); return true; });
+    const first = broker.connect(ownerId, (_event, data) => { events.push(data); return true; });
     const command: WorkspaceCommand = { commandId: 'same-command', operation: 'layout', arrangement: 'layered' };
     const pending = broker.execute(ownerId, command, new AbortController().signal);
     const duplicate = broker.execute(ownerId, command, new AbortController().signal);
@@ -287,7 +287,7 @@ describe('workspace command delivery', () => {
     first.close();
     await Promise.all([pendingFailure, duplicateFailure]);
 
-    const current = broker.connect(ownerId, (event) => { events.push(event.data); return true; });
+    const current = broker.connect(ownerId, (_event, data) => { events.push(data); return true; });
     expect(broker.acknowledge(ownerId, first.sessionId, command.commandId, true).status).toBe('stale');
     const rejected = broker.execute(ownerId, {
       commandId: 'unsupported-view', operation: 'show', viewId: 'missing',
