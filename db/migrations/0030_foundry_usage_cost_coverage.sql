@@ -17,11 +17,7 @@ SET role = CASE
   cost_usd = CASE WHEN cost_dkk IS NULL THEN NULL ELSE ROUND(cost_dkk / 6.5785, 8) END,
   cost_status = CASE WHEN cost_dkk IS NULL THEN N''unverified'' ELSE N''estimated'' END');
 
-ALTER TABLE dbo.usage ADD CONSTRAINT CK_usage_role
-  CHECK (role IS NULL OR role IN (N'chat', N'voice', N'vision', N'research', N'embeddings'));
-ALTER TABLE dbo.usage ADD CONSTRAINT CK_usage_model
-  CHECK (model IS NULL OR LEN(model) BETWEEN 1 AND 128);
-ALTER TABLE dbo.usage ADD CONSTRAINT CK_usage_cost_usd
-  CHECK (cost_usd IS NULL OR cost_usd >= 0);
-ALTER TABLE dbo.usage ADD CONSTRAINT CK_usage_cost_status
-  CHECK (cost_status IN (N'measured', N'estimated', N'unverified'));
+EXEC(N'ALTER TABLE dbo.usage ADD CONSTRAINT CK_usage_role CHECK (role IS NULL OR role IN (N''chat'', N''voice'', N''vision'', N''research'', N''embeddings''))');
+EXEC(N'ALTER TABLE dbo.usage ADD CONSTRAINT CK_usage_model CHECK (model IS NULL OR LEN(model) BETWEEN 1 AND 128)');
+EXEC(N'ALTER TABLE dbo.usage ADD CONSTRAINT CK_usage_cost_usd CHECK (cost_usd IS NULL OR cost_usd >= 0)');
+EXEC(N'ALTER TABLE dbo.usage ADD CONSTRAINT CK_usage_cost_status CHECK (cost_status IN (N''measured'', N''estimated'', N''unverified''))');
