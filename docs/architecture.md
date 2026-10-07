@@ -186,7 +186,8 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   and `viewId` once done) as `event: job` on `/now/events`. `GET /jobs` lists current
   and recently finished jobs (kept 10 minutes, at most 20) so a reloaded tab can
   rebuild its job chip, and `POST /jobs/:jobId/cancel` (owner only) aborts a running
-  job. Research progress windows are best effort, so a missed update no longer stops
+  job. Jarvis reads the same state through the `list_jobs` tool (chat and voice) and
+  cancels by id or title words with `cancel_job`. Research progress windows are best effort, so a missed update no longer stops
   the job, and the final report falls back to `create` when no open tab still has the
   progress window.- P7-27 publishes a bounded `WorkspaceSnapshot` (at most 32 open-window titles
   and IDs, including minimised windows, plus context-panel visibility) through
