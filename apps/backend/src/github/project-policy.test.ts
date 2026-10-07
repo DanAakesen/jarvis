@@ -122,6 +122,7 @@ function fixture(
     issue,
     issueForActions: vi.fn(async () => 'actions-token'),
     issueForContents: vi.fn(async () => 'contents-token'),
+    issueForRepositoryRead: vi.fn(async () => 'repository-read-token'),
     issueForContentsWrite: vi.fn(async () => 'contents-write-token'),
   };
   const api = github(githubOptions, onBaseBranchRead);

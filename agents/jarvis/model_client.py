@@ -22,6 +22,7 @@ from opentelemetry.trace import SpanKind, Status, StatusCode
 from chat_telemetry import latency_span, log_latency
 from jarvis_tools import (
     INSTRUCTIONS,
+    REPOSITORY_INSTRUCTIONS,
     BackendToolClient,
     backend_settings_from_environment,
     current_chat_phase_setter,
@@ -266,7 +267,13 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
         """Stream a written chat reply in the selected language."""
         if language not in CHAT_INSTRUCTIONS:
             raise ValueError("Unsupported chat language")
-        instructions = CHAT_INSTRUCTIONS[language] + "\n" + MEMORY_CHAT_INSTRUCTIONS
+        instructions = (
+            CHAT_INSTRUCTIONS[language]
+            + "\n"
+            + REPOSITORY_INSTRUCTIONS
+            + "\n"
+            + MEMORY_CHAT_INSTRUCTIONS
+        )
         if reflex_note is not None:
             instructions += (
                 "\nTrusted backend reflex result for this turn: "
