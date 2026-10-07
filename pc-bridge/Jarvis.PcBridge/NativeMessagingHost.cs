@@ -6,19 +6,49 @@ namespace Jarvis.PcBridge;
 
 internal static class NativeMessagingHost
 {
-    public static async Task RunAsync()
+    // Chrome relaunches this host on every reconnect; an unhandled failure here writes a crash dump each time.
+    private static readonly TimeSpan ConnectTimeout = TimeSpan.FromSeconds(3);
+    private static readonly byte[] BusyMessage = """{"type":"host_unavailable","reason":"bridge_unavailable"}"""u8.ToArray();
+
+    public static async Task<int> RunAsync()
+    {
+        var output = Console.OpenStandardOutput();
+        try
+        {
+            await RelayThroughBridgeAsync(output).ConfigureAwait(false);
+            return 0;
+        }
+        catch (Exception exception) when (exception is OperationCanceledException or TimeoutException or IOException
+            or UnauthorizedAccessException or InvalidDataException or ObjectDisposedException)
+        {
+            // The bridge is not running or already serves another extension host. Tell the extension to back off.
+            try
+            {
+                var header = new byte[sizeof(int)];
+                BinaryPrimitives.WriteInt32LittleEndian(header, BusyMessage.Length);
+                await output.WriteAsync(header).ConfigureAwait(false);
+                await output.WriteAsync(BusyMessage).ConfigureAwait(false);
+                await output.FlushAsync().ConfigureAwait(false);
+            }
+            catch (IOException) { }
+            catch (ObjectDisposedException) { }
+            return 0;
+        }
+    }
+
+    private static async Task RelayThroughBridgeAsync(Stream output)
     {
         await using var pipe = new NamedPipeClientStream(
             ".",
             NativeMessagingBrowserPort.PipeName,
             PipeDirection.InOut,
             PipeOptions.Asynchronous);
-        using var stopping = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-        await pipe.ConnectAsync(stopping.Token).ConfigureAwait(false);
-        stopping.CancelAfter(Timeout.InfiniteTimeSpan);
+        using (var connecting = new CancellationTokenSource(ConnectTimeout))
+        {
+            await pipe.ConnectAsync(connecting.Token).ConfigureAwait(false);
+        }
 
         var input = Console.OpenStandardInput();
-        var output = Console.OpenStandardOutput();
         using var relayStopping = new CancellationTokenSource();
         var toBridge = RelayAsync(input, pipe, relayStopping.Token);
         var toChrome = RelayAsync(pipe, output, relayStopping.Token);
