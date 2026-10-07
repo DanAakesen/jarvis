@@ -465,7 +465,7 @@ Declined in the audit (do not file): verbosity and max-output-token settings, no
 | P9-20 | [#514](https://github.com/DanAakesen/jarvis/issues/514) | System status page, including the PC bridge | Backend + UI session | — | Not started |
 | P9-21 | [#515](https://github.com/DanAakesen/jarvis/issues/515) | Watch mode on screen and camera sharing | UI session | — | In progress |
 | P9-22 | [#516](https://github.com/DanAakesen/jarvis/issues/516) | Owner-authenticated `GET /phone/status` and bounded recent call history using existing contracts and storage; document the dormant Teams/ACS setup and activation path | History returns UTC start time, duration and outcome without caller IDs; tests cover auth, availability and failures; no web changes or migration. Production number, ACS resource and callbacks remain unverified and require Dan's Azure/Teams access. | — | Complete |
-| P9-23 | [#517](https://github.com/DanAakesen/jarvis/issues/517) | Complete cost coverage | Backend | — | Implemented offline; UI integration and live billing validation pending |
+| P9-23 | [#517](https://github.com/DanAakesen/jarvis/issues/517) | Complete cost coverage | Backend | — | Complete |
 | P9-24 | [#518](https://github.com/DanAakesen/jarvis/issues/518) | Conversation search | Backend | — | Not started |
 | P9-25 | [#519](https://github.com/DanAakesen/jarvis/issues/519) | Folio: everything Jarvis pulled up, findable again | Backend + UI session | — | Not started |
 | P9-26 | [#520](https://github.com/DanAakesen/jarvis/issues/520) | Calendar update and delete | Backend | — | Complete |
