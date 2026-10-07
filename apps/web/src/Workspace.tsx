@@ -1,7 +1,9 @@
 import { forwardRef, useCallback, useEffect, useId, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, KeyboardEvent, PointerEvent, ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { isWorkspaceCommand, type GeneratedView, type WorkspaceCommand, type WorkspaceSnapshot } from '@jarvis/contracts';
 import { GeneratedViewRenderer } from './GeneratedViewRenderer';
+import { flyWindowAway, flyWindowToTab } from './window-fly-away';
 export type { WorkspaceCommand } from '@jarvis/contracts';
 
 export type WorkspaceViewContent =
@@ -19,6 +21,10 @@ export interface WorkspaceView {
   /** `conversation` hosts the shell's conversation history: glass material and a visually hidden title. */
   presentation?: 'conversation';
   initialGeometry?: Partial<WorkspaceGeometry>;
+  /** Starts as a tab in the tab bar (for example a window pinned before a reload). */
+  initiallyMinimised?: boolean;
+  /** The owner removes the view itself when it closes, so reopening it later starts fresh. */
+  onClose?: () => void;
 }
 
 export interface WorkspaceController {
@@ -80,7 +86,11 @@ export const Workspace = forwardRef<WorkspaceController, {
   views: readonly WorkspaceView[];
   onVisibleViewsChange?: (visible: boolean) => void;
   onOpenWindowsChange?: (windows: WorkspaceSnapshot['windows']) => void;
-}>(function Workspace({ views, onVisibleViewsChange, onOpenWindowsChange }, ref) {
+  /** Ids of views currently shown (not minimised or closed; on phones only the foreground view). */
+  onVisibleViewIdsChange?: (ids: readonly string[]) => void;
+  /** The shell's tab bar under the top bar; minimised windows become tabs there. */
+  tabsHost?: HTMLElement | null;
+}>(function Workspace({ views, onVisibleViewsChange, onOpenWindowsChange, onVisibleViewIdsChange, tabsHost }, ref) {
   const workspaceId = useId();
   const [agentViews, setAgentViews] = useState<WorkspaceView[]>([]);
   const closedAgentViews = useRef(new Map<string, { view: WorkspaceView; geometry: Geometry | undefined }>());
@@ -157,6 +167,13 @@ export const Workspace = forwardRef<WorkspaceController, {
     ));
   }, [order, workspaceViews]);
   const viewIds = useMemo(() => new Set(workspaceViews.map(({ id }) => id)), [workspaceViews]);
+  // Views that arrive already pinned start as tabs; each id is only considered once while it stays present.
+  const seenViewIds = useRef(new Set<string>());
+  useLayoutEffect(() => {
+    const pinned = workspaceViews.filter((view) => view.initiallyMinimised && !seenViewIds.current.has(view.id)).map((view) => view.id);
+    seenViewIds.current = new Set(workspaceViews.map((view) => view.id));
+    if (pinned.length) setMinimizedViewIds((current) => new Set([...current, ...pinned]));
+  }, [workspaceViews]);
   const minimizedViewIds = useMemo(
     () => new Set([...minimizedViewIdsState].filter((id) => viewIds.has(id))),
     [minimizedViewIdsState, viewIds],
@@ -178,6 +195,11 @@ export const Workspace = forwardRef<WorkspaceController, {
   useLayoutEffect(() => {
     onVisibleViewsChange?.(visibleViews.length > 0);
   }, [onVisibleViewsChange, visibleViews.length]);
+
+  const shownViewIds = (phone ? (foreground ? [foreground.id] : []) : visibleViews.map((view) => view.id)).join('\n');
+  useLayoutEffect(() => {
+    onVisibleViewIdsChange?.(shownViewIds ? shownViewIds.split('\n') : []);
+  }, [onVisibleViewIdsChange, shownViewIds]);
 
   useLayoutEffect(() => {
     const next = pendingFocus.current;
@@ -229,6 +251,10 @@ export const Workspace = forwardRef<WorkspaceController, {
     }
     setMaximizedViewId((current) => current === id ? null : current);
     setMinimizedViewIds((current) => new Set(current).add(id));
+    // Every window except the docked conversation (which tucks into the composer) is thrown up to its tab.
+    if (workspaceViews.find((view) => view.id === id)?.presentation !== 'conversation') {
+      flyWindowToTab(windowElements.current.get(id), () => tabElements.current.get(id) ?? null);
+    }
     setAnnouncement(`${workspaceViews.find((view) => view.id === id)?.title} minimised.`);
     return true;
   }, [isViewOpen, minimizedViewIds, workspaceViews]);
@@ -268,6 +294,7 @@ export const Workspace = forwardRef<WorkspaceController, {
     const generated = agentViews.some((view) => view.id === id);
     if (!workspaceViews.some((view) => view.id === id)) return false;
     if (closedViewIds.has(id)) return true;
+    if (!minimizedViewIds.has(id)) flyWindowAway(windowElements.current.get(id));
     if (windowElements.current.get(id)?.contains(document.activeElement)) {
       const remaining = openViews.filter((view) => view.id !== id);
       const next = remaining.find((view) => !minimizedViewIds.has(view.id)) ?? remaining[0];
@@ -299,7 +326,18 @@ export const Workspace = forwardRef<WorkspaceController, {
       });
       setOrder((current) => current.filter((viewId) => viewId !== id));
     } else {
-      setClosedViewIds((current) => new Set(current).add(id));
+      const owned = workspaceViews.find((view) => view.id === id)?.onClose;
+      if (owned) {
+        owned();
+        setGeometry((current) => {
+          const next = { ...current };
+          delete next[id];
+          return next;
+        });
+        setOrder((current) => current.filter((viewId) => viewId !== id));
+      } else {
+        setClosedViewIds((current) => new Set(current).add(id));
+      }
     }
     setMinimizedViewIds((current) => {
       if (!current.has(id)) return current;
@@ -661,6 +699,8 @@ export const Workspace = forwardRef<WorkspaceController, {
     }
   }
 
+  const maybePortal = (node: ReactNode) => tabsHost ? createPortal(node, tabsHost) : node;
+
   return (
     <section ref={workspaceSection} className="workspace" data-phone={phone} aria-labelledby={`${workspaceId}-heading`}>
       <header className="workspace-heading">
@@ -716,25 +756,32 @@ export const Workspace = forwardRef<WorkspaceController, {
           ))}
         </nav>
       )}
-      {minimizedViews.length > 0 && (
+      {minimizedViews.length > 0 && maybePortal(
         <nav className="workspace-tabs" aria-label="Minimised views">
           {minimizedViews.map((view) => (
-            <button
-              className="workspace-tab"
-              key={view.id}
-              ref={(element) => {
-                if (element) tabElements.current.set(view.id, element);
-                else tabElements.current.delete(view.id);
-              }}
-              type="button"
-              aria-label={`Restore ${view.title}`}
-              onClick={() => restoreView(view.id)}
-            >
-              <WindowIcon name="view" />
-              <span>{view.title}</span>
-            </button>
+            <span className="workspace-tab-item" key={view.id} data-view-id={view.id}>
+              <button
+                className="workspace-tab"
+                data-view-id={view.id}
+                ref={(element) => {
+                  if (element) tabElements.current.set(view.id, element);
+                  else tabElements.current.delete(view.id);
+                }}
+                type="button"
+                aria-label={`Restore ${view.title}`}
+                title={view.title}
+                onClick={() => restoreView(view.id)}
+              >
+                <WindowIcon name="view" />
+                <span>{view.title}</span>
+              </button>
+              <button className="workspace-tab-close" type="button" aria-label={`Close ${view.title}`} title={`Close ${view.title}`}
+                onClick={() => closeView(view.id)}>
+                <WindowIcon name="close" />
+              </button>
+            </span>
           ))}
-        </nav>
+        </nav>,
       )}
       <div
         ref={canvas}
@@ -762,12 +809,14 @@ export const Workspace = forwardRef<WorkspaceController, {
             '--workspace-depth': index + 1,
           } as CSSProperties;
           const actionPending = pendingActions.has(view.id);
+          // The conversation is docked onto the composer: no free move/resize; the composer handle shows and hides it.
+          const docked = view.presentation === 'conversation';
           const retry = view.content.status === 'error' ? view.content.retry : undefined;
           const resume = view.content.status === 'interrupted' ? view.content.resume : undefined;
 
           return (
             <article
-              className={`workspace-window${view.presentation === 'conversation' ? ' workspace-window-conversation luminous-glass' : ''}${minimized ? ' workspace-window-minimized' : ''}${maximized ? ' workspace-window-maximized' : ''}${activeGestureId === view.id ? ' workspace-window-dragging' : ''}${jarvisUpdatingIds.has(view.id) ? ' workspace-window-jarvis-updating' : ''}`}
+              className={`workspace-window luminous-glass${view.presentation === 'conversation' ? ' workspace-window-conversation' : ''}${minimized ? ' workspace-window-minimized' : ''}${maximized ? ' workspace-window-maximized' : ''}${activeGestureId === view.id ? ' workspace-window-dragging' : ''}${jarvisUpdatingIds.has(view.id) ? ' workspace-window-jarvis-updating' : ''}`}
               key={view.id}
               style={style}
               aria-labelledby={titleId}
@@ -789,16 +838,18 @@ export const Workspace = forwardRef<WorkspaceController, {
                   }}
                   id={titleId}
                   tabIndex={-1}
-                  className={maximized ? undefined : 'workspace-title-drag'}
-                  onPointerDown={(event) => beginGesture(event, view.id, 'move', index)}
-                  onPointerMove={updateGesture}
-                  onPointerUp={endGesture}
-                  onPointerCancel={endGesture}
+                  className={docked ? 'workspace-title-docked' : maximized ? undefined : 'workspace-title-drag'}
+                  {...(docked ? {} : {
+                    onPointerDown: (event: PointerEvent<HTMLElement>) => beginGesture(event, view.id, 'move', index),
+                    onPointerMove: updateGesture,
+                    onPointerUp: endGesture,
+                    onPointerCancel: endGesture,
+                  })}
                 >
-                  {view.presentation === 'conversation' ? <span className="visually-hidden">{view.title}</span> : view.title}
+                  {docked ? <span className="visually-hidden">{view.title}</span> : view.title}
                 </h3>
                 <div className="workspace-window-actions">
-                  {!maximized && !phone && <details className="workspace-arrange-menu" onKeyDown={arrangeKeyDown}>
+                  {!maximized && !phone && !docked && <details className="workspace-arrange-menu" onKeyDown={arrangeKeyDown}>
                     <summary className="workspace-arrange-trigger" role="button" aria-label={`Arrange ${view.title}`} title={`Arrange ${view.title}`}>
                       <WindowIcon name="more" />
                     </summary>
@@ -905,7 +956,7 @@ export const Workspace = forwardRef<WorkspaceController, {
                 {actionSuccess[view.id] && <p role="status">{actionSuccess[view.id]}</p>}
                 {actionErrors[view.id] && <p role="alert">{actionErrors[view.id]}</p>}
               </div>
-              {!maximized && !phone && <>
+              {!maximized && !phone && !docked && <>
                 <div
                   className="workspace-resize-edge workspace-resize-edge-right"
                   aria-hidden="true"

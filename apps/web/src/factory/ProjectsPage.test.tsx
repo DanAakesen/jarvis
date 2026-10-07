@@ -2,7 +2,9 @@ import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { ContextPanelProvider } from '../ContextPanel';
 import { FactoryArea } from './FactoryArea';
+import { ProjectsPage } from './ProjectsPage';
 
 const project = {
   id: '7',
@@ -36,15 +38,18 @@ function response(body: unknown, status = 200) {
   });
 }
 
-function renderFactory(path = '/factory/projects') {
+function renderFactory(path = '/settings') {
   return render(
-    <MemoryRouter initialEntries={[path]}>
-      <Routes>
-        <Route path="/factory/*" element={
-          <FactoryArea backendUrl="https://api.example.com" getAccessToken={getAccessToken} />
-        } />
-      </Routes>
-    </MemoryRouter>,
+    <ContextPanelProvider>
+      <MemoryRouter initialEntries={[path]}>
+        <Routes>
+          <Route path="/settings" element={<ProjectsPage backendUrl="https://api.example.com" getAccessToken={getAccessToken} />} />
+          <Route path="/factory/*" element={
+            <FactoryArea backendUrl="https://api.example.com" getAccessToken={getAccessToken} />
+          } />
+        </Routes>
+      </MemoryRouter>
+    </ContextPanelProvider>,
   );
 }
 
@@ -103,6 +108,28 @@ beforeEach(() => {
 afterEach(() => { vi.unstubAllGlobals(); });
 
 describe('Projects page', () => {
+  it('redirects the old Projects address to the Projects section in Settings', async () => {
+    renderFactory('/factory/projects');
+    expect(await screen.findByRole('heading', { level: 2, name: 'Projects' })).not.toBeNull();
+  });
+
+  it('adds an existing repository from the Kanban Create project dialog', async () => {
+    const user = userEvent.setup();
+    renderFactory('/factory/kanban');
+    await user.click(await screen.findByRole('button', { name: 'Create project' }));
+    const dialog = screen.getByRole('dialog', { name: 'Create project' });
+    const list = await within(dialog).findByRole('list', { name: 'Repositories you can add' });
+    expect(within(list).getByText('DanAakesen/second-project')).not.toBeNull();
+    expect(within(list).queryByText('DanAakesen/jarvis')).toBeNull();
+    expect(within(dialog).getByRole('button', { name: 'Ask Jarvis to create it' })).toHaveProperty('disabled', true);
+
+    await user.click(within(list).getByRole('button', { name: 'Add' }));
+    expect(await screen.findByText('Added DanAakesen/second-project as a project.')).not.toBeNull();
+    expect(screen.queryByRole('dialog', { name: 'Create project' })).toBeNull();
+    const manage = fetchMock.mock.calls.find(([url, init]) => String(url).endsWith('/factory/projects/manage') && init?.method === 'POST');
+    expect(JSON.parse(String(manage?.[1]?.body))).toEqual({ repository: 'DanAakesen/second-project' });
+  });
+
   it('lists project settings, running tasks, and honest release availability', async () => {
     renderFactory();
 

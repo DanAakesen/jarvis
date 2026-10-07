@@ -151,6 +151,23 @@ describe('Now feed client', () => {
     expect(updates).toHaveBeenCalledTimes(2);
   });
 
+  it('forwards presence mode changes from mode_changed events', async () => {
+    fetchMock.mockResolvedValueOnce(eventStream('event: mode_changed\ndata: {"mode":"on_the_move","away":true}\n\n'));
+    const controller = new AbortController();
+    const onPresenceMode = vi.fn();
+    const updates = vi.fn(() => { if (updates.mock.calls.length === 2) controller.abort(); });
+
+    await streamNowFeed({
+      backendUrl: 'https://api.example.com',
+      getAccessToken,
+      onUpdate: updates,
+      onStatus: () => {},
+      onPresenceMode,
+      signal: controller.signal,
+    });
+
+    expect(onPresenceMode).toHaveBeenCalledWith('on_the_move');
+  });
   it('forwards only valid ephemeral Jarvis activity events from SSE', async () => {
     const controller = new AbortController();
     const onActivity = vi.fn(() => controller.abort());

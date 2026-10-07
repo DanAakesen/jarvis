@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { backendFetch } from '../backend-request';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
+import { useConversationIntents } from '../conversation-intents';
 
 interface Project {
   id: string;
@@ -319,9 +320,9 @@ export function ProjectsPage({ backendUrl, getAccessToken }: ProjectsPageProps) 
   const otherRepositories = repositories.filter((repository) => !managedRepositories.has(repository.fullName.toLowerCase()));
 
   return (
-    <section className="projects-page" aria-labelledby="projects-heading">
-      <h1 id="projects-heading">Projects</h1>
-      <p>Manage repositories and the defaults used for new tasks. Changes do not alter running tasks.</p>
+    <section className="projects-page settings-section" id="projects" aria-labelledby="projects-heading">
+      <h2 id="projects-heading">Projects</h2>
+      <p className="settings-explanation">Manage repositories and the defaults used for new tasks. Changes do not alter running tasks.</p>
       <div className="projects-toolbar">
         {visibleState === 'ready' && (
           <button className="secondary-button" type="button" onClick={retry}>Refresh projects and repositories</button>
@@ -343,7 +344,7 @@ export function ProjectsPage({ backendUrl, getAccessToken }: ProjectsPageProps) 
           <p className="projects-freshness">Running task counts update when you refresh this page. Open a project&apos;s release view for its latest recorded build and deployment state.</p>
           {projects.length === 0 ? (
             <section className="project-empty" aria-labelledby="empty-projects-heading">
-              <h2 id="empty-projects-heading">No managed projects</h2>
+              <h3 id="empty-projects-heading">No managed projects</h3>
               <p>Register an existing repository below or configure New projects defaults in Settings.</p>
               <Link className="home-link" to="/settings">New project defaults</Link>
             </section>
@@ -353,9 +354,9 @@ export function ProjectsPage({ backendUrl, getAccessToken }: ProjectsPageProps) 
                 <li key={project.id}>
                   <article className="project-item" aria-labelledby={`project-${project.id}-name`}>
                     <div className="project-title-row">
-                      <h2 id={`project-${project.id}-name`}>
+                      <h3 id={`project-${project.id}-name`}>
                         <Link to={`/factory/projects/${project.id}`}>{project.name}</Link>
-                      </h2>
+                      </h3>
                       <Link className="secondary-button project-edit-link" to={`/factory/projects/${project.id}`}>Edit settings</Link>
                     </div>
                     <dl className="project-meta">
@@ -372,7 +373,7 @@ export function ProjectsPage({ backendUrl, getAccessToken }: ProjectsPageProps) 
             </ul>
           )}
           <section className="existing-repositories" aria-labelledby="existing-repositories-heading">
-            <h2 id="existing-repositories-heading">Existing repositories</h2>
+            <h3 id="existing-repositories-heading">Existing repositories</h3>
             {repositoryFetchedAt && (
               <p className="repository-freshness">Repository list refreshed {repositoryDate(repositoryFetchedAt)}.</p>
             )}
@@ -392,7 +393,7 @@ export function ProjectsPage({ backendUrl, getAccessToken }: ProjectsPageProps) 
                   <li key={repository.fullName.toLowerCase()}>
                     <article className="repository-item" aria-labelledby={`repository-${repository.name}-name`}>
                       <div className="repository-info">
-                        <h3 id={`repository-${repository.name}-name`}><code>{repository.fullName}</code></h3>
+                        <h4 id={`repository-${repository.name}-name`}><code>{repository.fullName}</code></h4>
                         <dl className="repository-meta">
                           <div>
                             <dt>Last push</dt>
@@ -512,7 +513,7 @@ export function ProjectSettingsPage({ backendUrl, getAccessToken }: ProjectsPage
     setError('');
     try {
       await request(backendUrl, getAccessToken, `/factory/projects/${projectId}`, 'DELETE');
-      navigate('/factory/projects', { replace: true, state: { notice: 'Project archived. Its task history is retained and its repository remains reserved.' } });
+      navigate('/settings#projects', { replace: true, state: { notice: 'Project archived. Its task history is retained and its repository remains reserved.' } });
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Project could not be archived. Try again.');
       setShowArchiveConfirmation(false);
@@ -537,7 +538,7 @@ export function ProjectSettingsPage({ backendUrl, getAccessToken }: ProjectsPage
         <div className="projects-feedback" role="alert">
           <p>{visibleError}</p>
           {backendUrl && projectId && !invalidProjectId && <button className="secondary-button" type="button" onClick={() => setRetryKey((value) => value + 1)}>Retry</button>}
-          <Link className="home-link" to="/factory/projects">Back to projects</Link>
+          <Link className="home-link" to="/settings#projects">Back to projects</Link>
         </div>
       ) : (
         <form className="project-form" noValidate onSubmit={(event) => { void save(event); }}>
@@ -620,7 +621,7 @@ export function ProjectSettingsPage({ backendUrl, getAccessToken }: ProjectsPage
             <button className="primary-button" type="submit" disabled={disabled || !dirty}>
               {saving ? 'Saving…' : 'Save project'}
             </button>
-            <Link className="secondary-button" to="/factory/projects">Cancel</Link>
+            <Link className="secondary-button" to="/settings#projects">Cancel</Link>
             {message && <p className="settings-feedback" role="status">{message}</p>}
           </div>
           <section className="project-archive" aria-labelledby="archive-project-heading">
@@ -645,5 +646,142 @@ export function ProjectSettingsPage({ backendUrl, getAccessToken }: ProjectsPage
         </form>
       )}
     </section>
+  );
+}
+
+/**
+ * Create project from the Kanban board. An existing GitHub repository is added with the same manage action
+ * as Settings; a brand-new repository is requested from Jarvis, which creates and registers projects.
+ */
+export function CreateProjectDialog({ backendUrl, getAccessToken, onClose, onAdded }: ProjectsPageProps & {
+  onClose: () => void;
+  onAdded: (repository: string) => void;
+}) {
+  const [state, setState] = useState<LoadState>(backendUrl ? 'loading' : 'error');
+  const [error, setError] = useState(backendUrl ? '' : 'Projects are unavailable until the backend is deployed.');
+  const [repositories, setRepositories] = useState<ExistingRepository[]>([]);
+  const [reloadKey, setReloadKey] = useState(0);
+  const [managing, setManaging] = useState('');
+  const [manageError, setManageError] = useState('');
+  const [idea, setIdea] = useState('');
+  const conversationIntents = useConversationIntents();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    let active = true;
+    if (!backendUrl) return () => { active = false; };
+    void Promise.all([loadProjects(backendUrl, getAccessToken), loadRepositories(backendUrl, getAccessToken, reloadKey > 0)])
+      .then(([projects, listing]) => {
+        if (!active) return;
+        const managed = new Set(projects.map((project) => project.repo.toLowerCase()));
+        setRepositories(listing.repositories.filter((repository) => !managed.has(repository.fullName.toLowerCase())));
+        setState('ready');
+        setError('');
+      })
+      .catch((cause: unknown) => {
+        if (!active) return;
+        setState('error');
+        setError(cause instanceof Error ? cause.message : 'Existing repositories could not be loaded. Try again.');
+      });
+    return () => { active = false; };
+  }, [backendUrl, getAccessToken, reloadKey]);
+
+  const manage = async (repository: ExistingRepository) => {
+    if (!backendUrl || managing) return;
+    setManaging(repository.fullName);
+    setManageError('');
+    try {
+      const value = await request(backendUrl, getAccessToken, '/factory/projects/manage', 'POST', { repository: repository.fullName });
+      if (!isProject(value) || !value.active) throw new Error('Jarvis returned invalid project data. Try again.');
+      onAdded(value.repo);
+    } catch (cause) {
+      setManageError(cause instanceof Error ? cause.message : `Jarvis could not manage ${repository.fullName}. Try again.`);
+    } finally {
+      setManaging('');
+    }
+  };
+
+  const askJarvis = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const description = idea.trim();
+    if (!description) return;
+    conversationIntents.sendMessage(`Create a new project: ${description}`);
+    navigate('/');
+  };
+
+  return (
+    <div className="task-dialog-backdrop">
+      <section
+        className="task-dialog project-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="create-project-heading"
+        onKeyDown={(event) => {
+          if (event.key === 'Escape' && !managing) {
+            event.preventDefault();
+            onClose();
+            return;
+          }
+          if (event.key !== 'Tab') return;
+          const controls = event.currentTarget.querySelectorAll<HTMLElement>(
+            'button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), a[href]',
+          );
+          const first = controls[0];
+          const last = controls[controls.length - 1];
+          if (event.shiftKey && document.activeElement === first) {
+            event.preventDefault();
+            last?.focus();
+          } else if (!event.shiftKey && document.activeElement === last) {
+            event.preventDefault();
+            first?.focus();
+          }
+        }}
+      >
+        <h2 id="create-project-heading">Create project</h2>
+        <section className="project-dialog-part" aria-labelledby="project-existing-heading">
+          <h3 id="project-existing-heading">From an existing repository</h3>
+          {state === 'loading' && <p role="status">Loading repositories…</p>}
+          {state === 'error' && (
+            <div className="tasks-feedback" role="alert">
+              <p>{error}</p>
+              {backendUrl && <button className="secondary-button" type="button" onClick={() => { setState('loading'); setReloadKey((value) => value + 1); }}>Retry</button>}
+            </div>
+          )}
+          {state === 'ready' && repositories.length === 0 && <p>Every repository in the GitHub App installation is already a project.</p>}
+          {state === 'ready' && repositories.length > 0 && (
+            <ul className="project-dialog-repositories" aria-label="Repositories you can add">
+              {repositories.map((repository) => (
+                <li key={repository.fullName.toLowerCase()}>
+                  <span>
+                    <code>{repository.fullName}</code>
+                    <small>{repository.language ?? 'Language not reported'}{repository.pushedAt ? ` · pushed ${repositoryDate(repository.pushedAt)}` : ''}</small>
+                  </span>
+                  <button className="secondary-button" type="button" disabled={!!managing}
+                    onClick={() => { void manage(repository); }}>
+                    {managing === repository.fullName ? 'Adding…' : 'Add'}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          {manageError && <p className="tasks-feedback" role="alert">{manageError}</p>}
+        </section>
+        <form className="project-dialog-part task-create-form" onSubmit={askJarvis}>
+          <h3>Start a new repository</h3>
+          <div className="task-form-field">
+            <label htmlFor="new-project-idea">What should Jarvis build?</label>
+            <textarea id="new-project-idea" rows={3} maxLength={2_000} value={idea} onChange={(event) => setIdea(event.target.value)}
+              aria-describedby="new-project-help" />
+          </div>
+          <p id="new-project-help" className="settings-explanation">
+            Jarvis creates and registers the repository using your New projects defaults in Settings. This opens the conversation.
+          </p>
+          <div className="task-dialog-actions">
+            <button className="primary-button" type="submit" disabled={!idea.trim()}>Ask Jarvis to create it</button>
+            <button className="secondary-button" type="button" onClick={onClose} disabled={!!managing}>Close</button>
+          </div>
+        </form>
+      </section>
+    </div>
   );
 }

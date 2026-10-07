@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { TaskWindowLink } from '../TaskWindowLink';
 import { backendFetch } from '../backend-request';
 import { useConversationIntents } from '../conversation-intents';
 import { streamTaskEvents } from '../task-events';
@@ -7,6 +8,7 @@ import { useContextPanel } from '../context-panel-state';
 import { TaskDetailPage } from './TaskDetailPage';
 import { TaskReleaseBar } from './TaskReleaseBar';
 import { TaskControls } from './TaskControls';
+import { CreateProjectDialog } from './ProjectsPage';
 
 interface Project {
   id: string;
@@ -177,10 +179,6 @@ function stateLabel(state: TaskState): string {
     state === 'NeedsAttention' ? 'Needs attention' : state;
 }
 
-function formatDate(value: string): string {
-  return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value));
-}
-
 function formatDuration(task: Task, now: number): string {
   if (!task.startedAt) return 'Not started';
   const end = task.finishedAt ? Date.parse(task.finishedAt) : now;
@@ -195,6 +193,35 @@ function projectName(projects: Project[], projectId: string): string {
   return projects.find((project) => project.id === projectId)?.name ?? `Unavailable project (${projectId})`;
 }
 
+function KanbanIcon({ name }: { name: 'search' | 'plus' | 'clock' | 'branch' }) {
+  const common = { 'aria-hidden': true as const, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
+  switch (name) {
+    case 'search': return <svg {...common}><circle cx="11" cy="11" r="6.5" /><path d="m16 16 4.5 4.5" /></svg>;
+    case 'plus': return <svg {...common}><path d="M12 5v14M5 12h14" /></svg>;
+    case 'clock': return <svg {...common}><circle cx="12" cy="12" r="8.5" /><path d="M12 7.5V12l3 2" /></svg>;
+    case 'branch': return <svg {...common}><circle cx="7" cy="5.5" r="2" /><circle cx="7" cy="18.5" r="2" /><circle cx="17" cy="8" r="2" /><path d="M7 7.5v9M17 10c0 4-10 2.5-10 6.5" /></svg>;
+  }
+}
+
+/** Kanban column dots use one class per column; the column name is always shown beside the dot. */
+function columnTone(label: string): string {
+  return label.replace(/\W+/g, '-').toLowerCase();
+}
+
+/** What the card says when the runtime has not reported an activity line; derived only from the task state. */
+function stateSummary(task: Task): string {
+  switch (task.state) {
+    case 'Ready': return task.startedAt ? 'Waiting to continue' : 'Not started';
+    case 'Running': return 'Working';
+    case 'PauseRequested': return 'Pause requested';
+    case 'Paused': return 'Paused';
+    case 'NeedsAttention': return 'Needs your attention';
+    case 'Done': return 'Completed';
+    case 'Cancelled': return 'Cancelled';
+  }
+}
+
+/** The Software Factory Kanban board: the only task list, with create-task and create-project dialogs. */
 export function TasksPage({ backendUrl, getAccessToken }: Props) {
   const [projects, setProjects] = useState<Project[]>([]);
   const [projectState, setProjectState] = useState<PageState>(backendUrl ? 'loading' : 'error');
@@ -210,7 +237,6 @@ export function TasksPage({ backendUrl, getAccessToken }: Props) {
   const [reloadKey, setReloadKey] = useState(0);
   const [streamKey, setStreamKey] = useState(0);
   const [liveStatuses, setLiveStatuses] = useState<Record<string, StreamStatus>>({});
-  const [lastUpdated, setLastUpdated] = useState<Record<string, string>>({});
   const [lastActivity, setLastActivity] = useState<Record<string, string>>({});
   const [notice, setNotice] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -227,6 +253,8 @@ export function TasksPage({ backendUrl, getAccessToken }: Props) {
   const contextPanel = useContextPanel();
   const closeContextPanel = contextPanel.close;
   const createButtonRef = useRef<HTMLButtonElement>(null);
+  const createProjectButtonRef = useRef<HTMLButtonElement>(null);
+  const [projectDialogOpen, setProjectDialogOpen] = useState(false);
   const lastEventIds = useRef(new Map<string, string>());
   const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const taskIds = tasks.filter((task) => task.state !== 'Done' && task.state !== 'Cancelled').map((task) => task.id).join(',');
@@ -309,11 +337,6 @@ export function TasksPage({ backendUrl, getAccessToken }: Props) {
         onEvent: (event) => {
           if (!isTaskEvent(event) || event.taskId !== taskId) return;
           lastEventIds.current.set(taskId, event.id);
-          setLastUpdated((current) => {
-            const previous = current[taskId];
-            return !previous || Date.parse(event.at) > Date.parse(previous)
-              ? { ...current, [taskId]: event.at } : current;
-          });
           if (event.summary) setLastActivity((current) => ({ ...current, [taskId]: event.summary as string }));
           if (refreshTimer.current) clearTimeout(refreshTimer.current);
           refreshTimer.current = setTimeout(() => setReloadKey((value) => value + 1), 150);
@@ -333,12 +356,43 @@ export function TasksPage({ backendUrl, getAccessToken }: Props) {
 
   const applyFilters = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    applyNow(filters);
+  };
+
+  // Kanban applies filters as they change; search waits for a short pause in typing.
+  function applyNow(next: TaskFilters) {
+    setFilters(next);
     setTasks([]);
     setLiveStatuses({});
-    setLastUpdated({});
     setLastActivity({});
-    setAppliedFilters({ ...filters });
+    setAppliedFilters({ ...next });
     setReloadKey((value) => value + 1);
+  }
+  const pendingSearch = filters.search !== appliedFilters.search ? filters.search : null;
+  useEffect(() => {
+    if (pendingSearch === null) return undefined;
+    const timer = setTimeout(() => {
+      setTasks([]);
+      setAppliedFilters((current) => ({ ...current, search: pendingSearch }));
+      setReloadKey((value) => value + 1);
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [pendingSearch]);
+
+  const selectTask = (task: Task, trigger: HTMLElement) => {
+    selectedTaskIdRef.current = task.id;
+    setSelectedTaskId(task.id);
+    contextPanel.show({
+      title: task.title,
+      status: 'custom',
+      content: <TaskDetailPage
+        key={task.id}
+        backendUrl={backendUrl}
+        getAccessToken={getAccessToken}
+        taskId={task.id}
+        compact
+      />,
+    }, trigger);
   };
 
   const closeDialog = () => {
@@ -410,303 +464,314 @@ export function TasksPage({ backendUrl, getAccessToken }: Props) {
   const allConnected = streamValues.length > 0 && streamValues.every((status) => status === 'connected');
   const anyReconnecting = streamValues.some((status) => status === 'reconnecting');
 
-  return (
-    <section className="tasks-page" aria-labelledby="tasks-heading">
-      <h1 id="tasks-heading">Tasks</h1>
-      <p>Follow task state and progress, or create a task for an active project.</p>
-      <div className="tasks-toolbar">
-        <button
-          ref={createButtonRef}
-          className="primary-button"
-          type="button"
-          onClick={() => {
-            const selected = projects.find((project) => project.id === createProjectId) ?? projects[0];
-            if (selected) {
-              setCreateProjectId(selected.id);
-              setCreateAgent(selected.default_agent);
-            }
-            setDialogOpen(true);
-            setCreateError('');
-          }}
-          disabled={!backendUrl || visibleProjectState !== 'ready' || projects.length === 0}
-          aria-describedby="create-task-help"
-        >
-          Create task
-        </button>
-        <button className="secondary-button" type="button" onClick={() => setReloadKey((value) => value + 1)} disabled={!backendUrl}>
-          Refresh tasks
-        </button>
-      </div>
-      <p id="create-task-help" className="tasks-help">
-        {visibleProjectState === 'loading' ? 'Loading projects before task creation is available.' :
-          visibleProjectState === 'error' ? 'Retry project loading before creating a task.' :
-            projects.length === 0 ? 'No active projects are available. Project registration is managed by Jarvis.' :
-              'Create a task on an active project. Model and reasoning overrides apply to this task only.'}
-      </p>
-      {visibleProjectState === 'error' && (
-        <div className="tasks-feedback" role="alert">
-          <p>{visibleProjectError}</p>
-          <button className="secondary-button" type="button" onClick={() => setProjectRetry((value) => value + 1)}>Retry projects</button>
-        </div>
-      )}
-      {notice && <p className="tasks-feedback" role="status">{notice}</p>}
-
-      <form className="task-filters" onSubmit={applyFilters}>
-        <div className="task-filter-field">
-          <label htmlFor="filter-project">Project</label>
-          <select id="filter-project" value={filters.projectId} onChange={(event) => setFilters({ ...filters, projectId: event.target.value })}>
-            <option value="">All projects</option>
-            {projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}
-          </select>
-        </div>
-        <div className="task-filter-field">
-          <label htmlFor="filter-agent">Agent</label>
-          <select id="filter-agent" value={filters.agent} onChange={(event) => setFilters({ ...filters, agent: event.target.value })}>
-            <option value="">All agents</option>
-            <option value="codex">Codex</option>
-            <option value="copilot">Copilot</option>
-          </select>
-        </div>
-        <div className="task-filter-field">
-          <label htmlFor="filter-state">State</label>
-          <select id="filter-state" value={filters.state} onChange={(event) => setFilters({ ...filters, state: event.target.value })}>
-            <option value="">All states</option>
-            {taskStates.map((state) => <option key={state} value={state}>{stateLabel(state)}</option>)}
-          </select>
-        </div>
-        <div className="task-filter-field">
-          <label htmlFor="filter-period">Period</label>
-          <select id="filter-period" value={filters.period} onChange={(event) => setFilters({ ...filters, period: event.target.value })}>
-            <option value="">Any time</option>
-            <option value="7">Last 7 days</option>
-            <option value="30">Last 30 days</option>
-            <option value="90">Last 90 days</option>
-          </select>
-        </div>
-        <div className="task-filter-field task-search-field">
-          <label htmlFor="filter-search">Search</label>
-          <input
-            id="filter-search"
-            type="search"
-            value={filters.search}
-            maxLength={100}
-            onChange={(event) => setFilters({ ...filters, search: event.target.value })}
-          />
-        </div>
-        <button className="secondary-button" type="submit">Apply filters</button>
-      </form>
-
-      <TaskReleaseBar
-        backendUrl={backendUrl}
-        getAccessToken={getAccessToken}
-        projectId={appliedFilters.projectId}
+  const factoryComposer = (
+    <form className="factory-composer" onSubmit={sendToJarvis}>
+      <label className="visually-hidden" htmlFor="factory-ask-jarvis">Ask Jarvis</label>
+      <textarea
+        id="factory-ask-jarvis"
+        rows={1}
+        maxLength={20_000}
+        placeholder="Ask Jarvis"
+        value={conversationDraft}
+        onChange={(event) => setConversationDraft(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
+            event.preventDefault();
+            event.currentTarget.form?.requestSubmit();
+          }
+        }}
+        aria-describedby="factory-composer-guidance"
       />
-
-      {visibleTaskState === 'loading' && <p className="tasks-feedback" role="status">Loading tasks…</p>}
-      {visibleTaskState === 'error' && (
-        <div className="tasks-feedback" role="alert">
-          <p>{visibleTaskError}</p>
-          <button className="secondary-button" type="button" onClick={() => setReloadKey((value) => value + 1)}>Retry tasks</button>
-        </div>
-      )}
-      {(visibleTaskState === 'ready' || tasks.length > 0) && (
-        <>
-          <div className="task-live-status" role="status" aria-live="polite">
-            {streamErrorCount > 0
-              ? <><span>Live updates need attention for {streamErrorCount} task{streamErrorCount === 1 ? '' : 's'}.</span> <button type="button" className="task-inline-button" onClick={() => setStreamKey((value) => value + 1)}>Reconnect</button></>
-              : allConnected ? 'Live updates connected.' :
-                anyReconnecting ? 'Reconnecting to live task updates…' :
-                  streamValues.length > 0 ? 'Connecting to live task updates…' : 'Live updates connect while tasks are active.'}
-          </div>
-          {visibleTaskState === 'error' && tasks.length > 0 &&
-            <p className="tasks-feedback" role="status">Showing the last loaded tasks because refresh failed.</p>}
-          {tasks.length === 100 && <p className="task-limit-note">Showing the 100 most recent matching tasks. Refine filters to narrow the list.</p>}
-          <div className="task-board" role="region" aria-label="Tasks by state">
-            {columns.map((column) => {
-              const items = tasks.filter((task) => column.states.includes(task.state));
-              return (
-                <section className="task-column" key={column.label} aria-labelledby={`column-${column.label.replace(/\W/g, '-').toLowerCase()}`}>
-                  <header className="task-column-heading">
-                    <h2 id={`column-${column.label.replace(/\W/g, '-').toLowerCase()}`}>{column.label}</h2>
-                    <span aria-label={`${items.length} tasks`}>{items.length}</span>
-                  </header>
-                  {items.length === 0
-                    ? <p className="task-column-empty">No matching tasks.</p>
-                    : <ul className="task-card-list">
-                      {items.map((task) => (
-                        <li key={task.id}>
-                          <article className="task-card" data-state={task.state} data-selected={selectedTaskId === task.id || undefined}
-                            aria-labelledby={`task-title-${task.id}`}>
-                            <h3 id={`task-title-${task.id}`}>
-                              <button
-                                className="task-card-title"
-                                type="button"
-                                aria-pressed={selectedTaskId === task.id}
-                                aria-controls="context-panel"
-                                onClick={(event) => {
-                                  const trigger = event.currentTarget;
-                                  selectedTaskIdRef.current = task.id;
-                                  setSelectedTaskId(task.id);
-                                  contextPanel.show({
-                                    title: task.title,
-                                    status: 'custom',
-                                    content: <TaskDetailPage
-                                      key={task.id}
-                                      backendUrl={backendUrl}
-                                      getAccessToken={getAccessToken}
-                                      taskId={task.id}
-                                      compact
-                                    />,
-                                  }, trigger);
-                                }}
-                              >
-                                {task.title}
-                              </button>
-                            </h3>
-                            <dl className="task-card-details">
-                              <div><dt>Project</dt><dd>{projectName(projects, task.projectId)}</dd></div>
-                              <div><dt>Agent</dt><dd>{agentLabel(task.agent)}</dd></div>
-                              <div><dt>State</dt><dd><span className={`task-state task-state-${task.state.toLowerCase()}`}>{stateLabel(task.state)}</span></dd></div>
-                              <div><dt>Activity</dt><dd>{task.activity || lastActivity[task.id] || 'No activity reported.'}</dd></div>
-                              <div><dt>Last updated</dt><dd>{formatDate(lastUpdated[task.id] ?? task.finishedAt ?? task.createdAt)}</dd></div>
-                              <div><dt>Duration</dt><dd>{formatDuration(task, now)}</dd></div>
-                              <div><dt>Attempts</dt><dd>{task.attemptCount}</dd></div>
-                              {task.branch && <div><dt>Branch</dt><dd><code>{task.branch}</code></dd></div>}
-                              <div><dt>Pull request</dt><dd>Not reported</dd></div>
-                              <div><dt>Checks</dt><dd>Not reported</dd></div>
-                              <div><dt>Usage</dt><dd>Not reported</dd></div>
-                            </dl>
-                            <TaskControls
-                              backendUrl={backendUrl}
-                              getAccessToken={getAccessToken}
-                              taskId={task.id}
-                              state={task.state}
-                              latestSessionEndReason={task.latestSessionEndReason}
-                              onComplete={() => setReloadKey((value) => value + 1)}
-                            />
-                          </article>
-                        </li>
-                      ))}
-                    </ul>}
-                </section>
-              );
-            })}
-          </div>
-          <p className="task-data-note">Pull request, checks, and usage details will appear when those data sources are connected.</p>
-        </>
-      )}
-
-      <form className="factory-composer" onSubmit={sendToJarvis}>
-        <label className="visually-hidden" htmlFor="factory-ask-jarvis">Ask Jarvis</label>
-        <textarea
-          id="factory-ask-jarvis"
-          rows={1}
-          maxLength={20_000}
-          placeholder="Ask Jarvis"
-          value={conversationDraft}
-          onChange={(event) => setConversationDraft(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
-              event.preventDefault();
-              event.currentTarget.form?.requestSubmit();
-            }
-          }}
-          aria-describedby="factory-composer-guidance"
-        />
-        <button className="primary-button" type="submit" disabled={!conversationDraft.trim()}>
-          Send
-        </button>
-        <button className="secondary-button" type="button" onClick={openVoiceStart}>
-          Start voice in Jarvis
-        </button>
-        <p id="factory-composer-guidance">
-          Sending opens the conversation and uses its normal message queue. Voice opens Jarvis with its explicit Start voice control focused; your browser asks for microphone access only when you press it.
-        </p>
-      </form>
-
-      {dialogOpen && (
-        <div className="task-dialog-backdrop">
-          <section
-            className="task-dialog"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="create-task-heading"
-            onKeyDown={(event) => {
-              if (event.key === 'Escape' && !creating) {
-                event.preventDefault();
-                closeDialog();
-                return;
-              }
-              if (event.key === 'Tab') {
-                const controls = event.currentTarget.querySelectorAll<HTMLElement>(
-                  'button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), a[href]',
-                );
-                const first = controls[0];
-                const last = controls[controls.length - 1];
-                if (event.shiftKey && document.activeElement === first) {
-                  event.preventDefault();
-                  last?.focus();
-                } else if (!event.shiftKey && document.activeElement === last) {
-                  event.preventDefault();
-                  first?.focus();
-                }
-              }
-            }}
-          >
-            <h2 id="create-task-heading">Create task</h2>
-            <p>Choose the project and agent, then describe the work.</p>
-            <form className="task-create-form" onSubmit={(event) => { void createTask(event); }}>
-              <div className="task-form-field">
-                <label htmlFor="create-project">Project</label>
-                <select
-                  id="create-project"
-                  name="projectId"
-                  required
-                  autoFocus
-                  value={createProjectId}
-                  onChange={(event) => {
-                    const selected = projects.find((project) => project.id === event.target.value);
-                    setCreateProjectId(event.target.value);
-                    if (selected) setCreateAgent(selected.default_agent);
-                  }}
-                >
-                  {projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}
-                </select>
-              </div>
-              <div className="task-form-field">
-                <label htmlFor="create-agent">Agent</label>
-                <select id="create-agent" name="agent" value={createAgent} onChange={(event) => setCreateAgent(event.target.value as Agent)}>
-                  <option value="codex">Codex</option>
-                  <option value="copilot">Copilot</option>
-                </select>
-              </div>
-              <div className="task-form-field">
-                <label htmlFor="create-title">Task title</label>
-                <input id="create-title" name="title" required maxLength={200} />
-              </div>
-              <div className="task-form-field">
-                <label htmlFor="create-request">Request</label>
-                <textarea id="create-request" name="request" required maxLength={50_000} rows={5} />
-              </div>
-              <div className="task-form-field">
-                <label htmlFor="create-model">Model override (optional)</label>
-                <input id="create-model" name="modelOverride" maxLength={100} />
-              </div>
-              <div className="task-form-field">
-                <label htmlFor="create-reasoning">Reasoning override (optional)</label>
-                <input id="create-reasoning" name="reasoningOverride" maxLength={32} />
-              </div>
-              {createError && <p className="tasks-feedback" role="alert">{createError}</p>}
-              <div className="task-dialog-actions">
-                <button className="primary-button" type="submit" disabled={creating || !backendUrl}>
-                  {creating ? 'Creating task…' : 'Create task'}
-                </button>
-                <button className="secondary-button" type="button" onClick={closeDialog} disabled={creating}>Cancel</button>
-              </div>
-            </form>
-          </section>
-        </div>
-      )}
-    </section>
+      <button className="primary-button" type="submit" disabled={!conversationDraft.trim()}>
+        Send
+      </button>
+      <button className="secondary-button" type="button" onClick={openVoiceStart}>
+        Start voice in Jarvis
+      </button>
+      <p id="factory-composer-guidance">
+        Sending opens the conversation and uses its normal message queue. Voice opens Jarvis with its explicit Start voice control focused; your browser asks for microphone access only when you press it.
+      </p>
+    </form>
   );
+  const createDialog = dialogOpen && (
+    <div className="task-dialog-backdrop">
+      <section
+        className="task-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="create-task-heading"
+        onKeyDown={(event) => {
+          if (event.key === 'Escape' && !creating) {
+            event.preventDefault();
+            closeDialog();
+            return;
+          }
+          if (event.key === 'Tab') {
+            const controls = event.currentTarget.querySelectorAll<HTMLElement>(
+              'button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), a[href]',
+            );
+            const first = controls[0];
+            const last = controls[controls.length - 1];
+            if (event.shiftKey && document.activeElement === first) {
+              event.preventDefault();
+              last?.focus();
+            } else if (!event.shiftKey && document.activeElement === last) {
+              event.preventDefault();
+              first?.focus();
+            }
+          }
+        }}
+      >
+        <h2 id="create-task-heading">Create task</h2>
+        <p>Choose the project and agent, then describe the work.</p>
+        <form className="task-create-form" onSubmit={(event) => { void createTask(event); }}>
+          <div className="task-form-field">
+            <label htmlFor="create-project">Project</label>
+            <select
+              id="create-project"
+              name="projectId"
+              required
+              autoFocus
+              value={createProjectId}
+              onChange={(event) => {
+                const selected = projects.find((project) => project.id === event.target.value);
+                setCreateProjectId(event.target.value);
+                if (selected) setCreateAgent(selected.default_agent);
+              }}
+            >
+              {projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}
+            </select>
+          </div>
+          <div className="task-form-field">
+            <label htmlFor="create-agent">Agent</label>
+            <select id="create-agent" name="agent" value={createAgent} onChange={(event) => setCreateAgent(event.target.value as Agent)}>
+              <option value="codex">Codex</option>
+              <option value="copilot">Copilot</option>
+            </select>
+          </div>
+          <div className="task-form-field">
+            <label htmlFor="create-title">Task title</label>
+            <input id="create-title" name="title" required maxLength={200} />
+          </div>
+          <div className="task-form-field">
+            <label htmlFor="create-request">Request</label>
+            <textarea id="create-request" name="request" required maxLength={50_000} rows={5} />
+          </div>
+          <div className="task-form-field">
+            <label htmlFor="create-model">Model override (optional)</label>
+            <input id="create-model" name="modelOverride" maxLength={100} />
+          </div>
+          <div className="task-form-field">
+            <label htmlFor="create-reasoning">Reasoning override (optional)</label>
+            <input id="create-reasoning" name="reasoningOverride" maxLength={32} />
+          </div>
+          {createError && <p className="tasks-feedback" role="alert">{createError}</p>}
+          <div className="task-dialog-actions">
+            <button className="primary-button" type="submit" disabled={creating || !backendUrl}>
+              {creating ? 'Creating task…' : 'Create task'}
+            </button>
+            <button className="secondary-button" type="button" onClick={closeDialog} disabled={creating}>Cancel</button>
+          </div>
+        </form>
+      </section>
+    </div>
+  );
+  const openCreateDialog = () => {
+    const selected = projects.find((project) => project.id === createProjectId) ?? projects[0];
+    if (selected) {
+      setCreateProjectId(selected.id);
+      setCreateAgent(selected.default_agent);
+    }
+    setDialogOpen(true);
+    setCreateError('');
+  };
+  const createUnavailable = !backendUrl || visibleProjectState !== 'ready' || projects.length === 0;
+  const createHelp = visibleProjectState === 'loading' ? 'Loading projects before task creation is available.' :
+    visibleProjectState === 'error' ? 'Retry project loading before creating a task.' :
+      projects.length === 0 ? 'No active projects are available. Project registration is managed by Jarvis.' :
+        'Create a task on an active project. Model and reasoning overrides apply to this task only.';
+  const liveStatusText = streamErrorCount > 0
+    ? <><span>Live updates need attention for {streamErrorCount} task{streamErrorCount === 1 ? '' : 's'}.</span> <button type="button" className="task-inline-button" onClick={() => setStreamKey((value) => value + 1)}>Reconnect</button></>
+    : allConnected ? 'Live updates connected.' :
+      anyReconnecting ? 'Reconnecting to live task updates…' :
+        streamValues.length > 0 ? 'Connecting to live task updates…' : 'Live updates connect while tasks are active.';
+
+  {
+    return (
+      <section className="tasks-page kanban-page" aria-labelledby="tasks-heading">
+        <header className="kanban-header">
+          <h1 id="tasks-heading">Kanban</h1>
+          {visibleTaskState === 'ready' && (
+            <ul className="kanban-pulse" aria-label="Board summary">
+              <li data-tone="running"><span aria-hidden="true" />{tasks.filter((task) => task.state === 'Running').length} running</li>
+              <li data-tone="needs-attention"><span aria-hidden="true" />{tasks.filter((task) => task.state === 'NeedsAttention').length} need you</li>
+              <li data-tone="done"><span aria-hidden="true" />{tasks.filter((task) => task.state === 'Done').length} done</li>
+            </ul>
+          )}
+          <button className="secondary-button kanban-create kanban-create-project" type="button" ref={createProjectButtonRef}
+            onClick={() => setProjectDialogOpen(true)} disabled={!backendUrl}>
+            <KanbanIcon name="plus" />
+            <span>Create project</span>
+          </button>
+          <button ref={createButtonRef} className="primary-button kanban-create" type="button" onClick={openCreateDialog}
+            disabled={createUnavailable} aria-describedby="create-task-help">
+            <KanbanIcon name="plus" />
+            <span>Create task</span>
+          </button>
+        </header>
+        <p id="create-task-help" className={createUnavailable ? 'tasks-help' : 'visually-hidden'}>{createHelp}</p>
+        {visibleProjectState === 'error' && (
+          <div className="tasks-feedback" role="alert">
+            <p>{visibleProjectError}</p>
+            <button className="secondary-button" type="button" onClick={() => setProjectRetry((value) => value + 1)}>Retry projects</button>
+          </div>
+        )}
+        {notice && <p className="tasks-feedback" role="status">{notice}</p>}
+
+        <form className="kanban-filters" role="search" aria-label="Filter tasks" onSubmit={applyFilters}>
+          <label className="kanban-search">
+            <KanbanIcon name="search" />
+            <span className="visually-hidden">Search tasks</span>
+            <input id="filter-search" type="search" placeholder="Search tasks…" value={filters.search} maxLength={100}
+              onChange={(event) => setFilters({ ...filters, search: event.target.value })} />
+          </label>
+          <label className="kanban-select">
+            <span className="visually-hidden">Project</span>
+            <select id="filter-project" value={filters.projectId} onChange={(event) => applyNow({ ...filters, projectId: event.target.value })}>
+              <option value="">Project: All</option>
+              {projects.map((project) => <option key={project.id} value={project.id}>Project: {project.name}</option>)}
+            </select>
+          </label>
+          <label className="kanban-select">
+            <span className="visually-hidden">Agent</span>
+            <select id="filter-agent" value={filters.agent} onChange={(event) => applyNow({ ...filters, agent: event.target.value })}>
+              <option value="">Agent: All</option>
+              <option value="codex">Agent: Codex</option>
+              <option value="copilot">Agent: Copilot</option>
+            </select>
+          </label>
+          <label className="kanban-select">
+            <span className="visually-hidden">State</span>
+            <select id="filter-state" value={filters.state} onChange={(event) => applyNow({ ...filters, state: event.target.value })}>
+              <option value="">State: All</option>
+              {taskStates.map((state) => <option key={state} value={state}>State: {stateLabel(state)}</option>)}
+            </select>
+          </label>
+          <label className="kanban-select">
+            <span className="visually-hidden">Period</span>
+            <select id="filter-period" value={filters.period} onChange={(event) => applyNow({ ...filters, period: event.target.value })}>
+              <option value="">Any time</option>
+              <option value="7">Last 7 days</option>
+              <option value="30">Last 30 days</option>
+              <option value="90">Last 90 days</option>
+            </select>
+          </label>
+        </form>
+
+        <TaskReleaseBar backendUrl={backendUrl} getAccessToken={getAccessToken} projectId={appliedFilters.projectId} variant="trail" />
+
+        {visibleTaskState === 'loading' && <p className="tasks-feedback" role="status">Loading tasks…</p>}
+        {visibleTaskState === 'error' && (
+          <div className="tasks-feedback" role="alert">
+            <p>{visibleTaskError}</p>
+            <button className="secondary-button" type="button" onClick={() => setReloadKey((value) => value + 1)}>Retry tasks</button>
+          </div>
+        )}
+        {(visibleTaskState === 'ready' || tasks.length > 0) && (
+          <>
+            <div className="task-live-status kanban-live-status" role="status" aria-live="polite">{liveStatusText}</div>
+            {visibleTaskState === 'error' && tasks.length > 0 &&
+              <p className="tasks-feedback" role="status">Showing the last loaded tasks because refresh failed.</p>}
+            {tasks.length === 100 && <p className="task-limit-note">Showing the 100 most recent matching tasks. Refine filters to narrow the list.</p>}
+            <div className="task-board kanban-board" role="region" aria-label="Tasks by state">
+              {columns.map((column) => {
+                const items = tasks.filter((task) => column.states.includes(task.state));
+                const headingId = `column-${columnTone(column.label)}`;
+                return (
+                  <section className="task-column kanban-column" key={column.label} aria-labelledby={headingId}>
+                    <header className="kanban-column-heading">
+                      <span className={`kanban-dot kanban-dot-${columnTone(column.label)}`} aria-hidden="true" />
+                      <h2 id={headingId}>{column.label}</h2>
+                      <span className="kanban-count" aria-label={`${items.length} tasks`}>{items.length}</span>
+                    </header>
+                    {items.length === 0
+                      ? <p className="task-column-empty">No matching tasks.</p>
+                      : <ul className="task-card-list">
+                        {items.map((task, index) => (
+                          <li key={task.id} style={{ '--i': index } as CSSProperties}>
+                            <article className="task-card kanban-card" data-state={task.state}
+                              data-selected={selectedTaskId === task.id || undefined} aria-labelledby={`task-title-${task.id}`}>
+                              <h3 id={`task-title-${task.id}`}>
+                                <button className="task-card-title" type="button" aria-pressed={selectedTaskId === task.id}
+                                  aria-controls="context-panel" onClick={(event) => selectTask(task, event.currentTarget)}>
+                                  {task.title}
+                                </button>
+                              </h3>
+                              <ul className="kanban-chips" aria-label="Project and agent">
+                                <li>{projectName(projects, task.projectId)}</li>
+                                <li>{agentLabel(task.agent)}</li>
+                              </ul>
+                              <p className="kanban-activity">{task.activity || lastActivity[task.id] || stateSummary(task)}</p>
+                              <p className="kanban-meta">
+                                <KanbanIcon name="clock" />
+                                <span>{formatDuration(task, now)} · {task.attemptCount} attempt{task.attemptCount === 1 ? '' : 's'}</span>
+                              </p>
+                              <p className="kanban-meta">
+                                <KanbanIcon name="branch" />
+                                {task.branch ? <code>{task.branch}</code> : <span className="kanban-muted">Branch not reported</span>}
+                              </p>
+                              <TaskControls
+                                backendUrl={backendUrl}
+                                getAccessToken={getAccessToken}
+                                taskId={task.id}
+                                state={task.state}
+                                latestSessionEndReason={task.latestSessionEndReason}
+                                onComplete={() => setReloadKey((value) => value + 1)}
+                              />
+                              <div className="kanban-card-actions">
+                                <button className="kanban-card-action" type="button" aria-controls="context-panel"
+                                  onClick={(event) => selectTask(task, event.currentTarget)}>
+                                  View details
+                                </button>
+                                <TaskWindowLink className="kanban-card-action kanban-card-open" taskId={task.id} title={task.title}
+                                  aria-label={`Open ${task.title} in a window`}>
+                                  <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                                    <rect x="3.5" y="5" width="17" height="14" rx="2.5" /><path d="M3.5 9h17M7 7h.01M9.5 7h.01" />
+                                  </svg>
+                                </TaskWindowLink>
+                              </div>
+                            </article>
+                          </li>
+                        ))}
+                      </ul>}
+                  </section>
+                );
+              })}
+            </div>
+          </>
+        )}
+
+        {factoryComposer}
+
+        {createDialog}
+        {projectDialogOpen && (
+          <CreateProjectDialog
+            backendUrl={backendUrl}
+            getAccessToken={getAccessToken}
+            onClose={() => {
+              setProjectDialogOpen(false);
+              window.setTimeout(() => createProjectButtonRef.current?.focus(), 0);
+            }}
+            onAdded={(repository) => {
+              setProjectDialogOpen(false);
+              setNotice(`Added ${repository} as a project.`);
+              setProjectRetry((value) => value + 1);
+              window.setTimeout(() => createProjectButtonRef.current?.focus(), 0);
+            }}
+          />
+        )}
+      </section>
+    );
+  }
+
 }

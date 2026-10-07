@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
+import { TaskWindowLink } from '../TaskWindowLink';
 import { backendFetch } from '../backend-request';
 import type { AreaProps } from '../areas';
 import { fetchReleaseView } from './release-data';
@@ -237,7 +238,7 @@ export function ReleasePage({ backendUrl, getAccessToken }: AreaProps) {
           <p>{error}</p>
           <button className="secondary-button" type="button" onClick={refresh}>Retry</button>
         </div>
-        <Link className="home-link" to="/factory/projects">Back to projects</Link>
+        <Link className="home-link" to="/settings#projects">Back to projects</Link>
       </section>
     );
   }
@@ -260,7 +261,7 @@ export function ReleasePage({ backendUrl, getAccessToken }: AreaProps) {
     <section className="release-page" aria-labelledby="release-heading">
       <div className="release-page-header">
         <div>
-          <Link className="release-back-link" to="/factory/projects">Back to projects</Link>
+          <Link className="release-back-link" to="/settings#projects">Back to projects</Link>
           <h1 id="release-heading">{data.project.name} releases</h1>
           <p><a href={repositoryUrl} target="_blank" rel="noreferrer">{data.project.repo}</a> · default branch <code>{data.project.defaultBranch}</code></p>
         </div>
@@ -366,7 +367,7 @@ export function ReleasePage({ backendUrl, getAccessToken }: AreaProps) {
                     <div><dt>Duration</dt><dd>{formatDuration(run.startedAt, run.completedAt)}</dd></div>
                     <div><dt>Commit</dt><dd><a href={`${repositoryUrl}/commit/${encodeURIComponent(run.headSha)}`} target="_blank" rel="noreferrer"><code>{shortSha(run.headSha)}</code></a></dd></div>
                     {run.pullRequestNumber !== null && <div><dt>Pull request</dt><dd><a href={`${repositoryUrl}/pull/${run.pullRequestNumber}`} target="_blank" rel="noreferrer">#{run.pullRequestNumber}</a></dd></div>}
-                    {run.taskId && <div><dt>Task</dt><dd><Link to={`/factory/tasks/${run.taskId}`}>Task #{run.taskId}</Link></dd></div>}
+                    {run.taskId && <div><dt>Task</dt><dd><TaskWindowLink taskId={run.taskId}>Task #{run.taskId}</TaskWindowLink></dd></div>}
                   </dl>
                   {run.conclusion === 'failure' && (
                     <a className="release-log-link" href={linkedRunUrl(repositoryUrl, run.id)} target="_blank" rel="noreferrer">Open failing log on GitHub</a>
@@ -454,7 +455,7 @@ export function ReleaseRedirectPage({ backendUrl, getAccessToken }: AreaProps) {
             }}>Retry</button>
           </div>
         )}
-      <Link className="home-link" to="/factory/projects">Back to projects</Link>
+      <Link className="home-link" to="/settings#projects">Back to projects</Link>
     </section>
   );
 }
@@ -486,7 +487,7 @@ function RelatedReleaseItems({ release, repositoryUrl, runs, deployments, pullRe
         {pullRequests.length || taskIds.length ? (
           <ul>
             {pullRequests.map((pr) => <li key={pr.id}><a href={`${repositoryUrl}/pull/${pr.number}`} target="_blank" rel="noreferrer">PR #{pr.number} · {pr.state} · checks {pr.checks}</a></li>)}
-            {taskIds.map((taskId) => <li key={taskId}><Link to={`/factory/tasks/${taskId}`}>Task #{taskId}</Link></li>)}
+            {taskIds.map((taskId) => <li key={taskId}><TaskWindowLink taskId={taskId}>Task #{taskId}</TaskWindowLink></li>)}
           </ul>
         ) : <p>No linked pull requests or tasks were recorded for this release.</p>}
       </div>

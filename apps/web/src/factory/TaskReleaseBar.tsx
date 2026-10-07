@@ -60,14 +60,43 @@ function latestByDate<T>(values: T[], date: (value: T) => string | null): T | un
     Date.parse(date(right) ?? '') - Date.parse(date(left) ?? ''))[0];
 }
 
+function TrailIcon({ name }: { name: 'repo' | 'refresh' | 'open' }) {
+  const common = { 'aria-hidden': true as const, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
+  switch (name) {
+    case 'repo': return <svg {...common}><rect x="3.5" y="4" width="17" height="16" rx="3" /><path d="M3.5 9h17M8 4v5" /></svg>;
+    case 'refresh': return <svg {...common}><path d="M19 12a7 7 0 1 1-2.05-4.95" /><path d="M19 4.5V8h-3.5" /></svg>;
+    case 'open': return <svg {...common}><path d="M14 4h6v6M20 4l-8.5 8.5" /><path d="M18 14v4.5A1.5 1.5 0 0 1 16.5 20h-11A1.5 1.5 0 0 1 4 18.5v-11A1.5 1.5 0 0 1 5.5 6H10" /></svg>;
+  }
+}
+
+function relativeTime(value: string): string {
+  const minutes = Math.round((Date.now() - Date.parse(value)) / 60_000);
+  if (minutes < 1) return 'just now';
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.round(hours / 24)}d ago`;
+}
+
+/** Tone for a pipeline dot; the state word is always shown beside it. */
+function pipelineTone(value: string | null | undefined): string {
+  if (!value) return 'idle';
+  if (['success', 'released', 'completed'].includes(value)) return 'ok';
+  if (['failure', 'failed', 'cancelled'].includes(value)) return 'bad';
+  return 'live';
+}
+
 export function TaskReleaseBar({
   backendUrl,
   getAccessToken,
   projectId,
+  variant = 'bar',
 }: {
   backendUrl: string | null;
   getAccessToken: () => Promise<string>;
   projectId: string;
+  /** `trail` draws the project's recent commits as a lit timeline for the Kanban board. */
+  variant?: 'bar' | 'trail';
 }) {
   const [view, setView] = useState<{ data: ReleaseView; stale: boolean } | null>(null);
   const [result, setResult] = useState<{
@@ -108,6 +137,15 @@ export function TaskReleaseBar({
   }, [backendUrl, getAccessToken, projectId, refreshKey, requestKey]);
 
   if (!projectId) {
+    if (variant === 'trail') {
+      return (
+        <section className="release-trail release-trail-empty" aria-label="Project release context">
+          <span className="release-trail-icon"><TrailIcon name="repo" /></span>
+          <div className="release-trail-line" aria-hidden="true"><span /><span /><span /><span /></div>
+          <p>Choose a project to see its commit trail.</p>
+        </section>
+      );
+    }
     return (
       <section className="task-release-bar" aria-label="Project release context">
         <p>Select a project to view its release and commit context.</p>
@@ -117,7 +155,7 @@ export function TaskReleaseBar({
 
   if (!currentView) {
     return (
-      <section className="task-release-bar" aria-label="Project release context">
+      <section className={variant === 'trail' ? 'release-trail release-trail-empty' : 'task-release-bar'} aria-label="Project release context">
         <p role={currentResult?.status === 'error' ? 'alert' : 'status'}>
           {currentResult?.status === 'error'
             ? currentResult.message
@@ -146,6 +184,62 @@ export function TaskReleaseBar({
   const releaseUrl = latestRelease
     ? `/factory/projects/${projectId}/releases/${encodeURIComponent(latestRelease.id)}`
     : `/factory/projects/${projectId}/releases`;
+
+  if (variant === 'trail') {
+    const trail = currentView.graph
+      ? [...currentView.graph.commits].sort((left, right) =>
+        Date.parse(right.committedAt) - Date.parse(left.committedAt)).slice(0, 5).reverse()
+      : [];
+    const buildState = latestBuild ? latestBuild.conclusion ?? latestBuild.status : null;
+    return (
+      <section className="release-trail" aria-label="Project release context">
+        <span className="release-trail-icon"><TrailIcon name="repo" /></span>
+        <div className="release-trail-project">
+          <p className="release-trail-name">
+            <Link to={`/factory/projects/${projectId}`}>{currentView.project.name}</Link>
+            <span aria-hidden="true">/</span>
+            <code>{currentView.project.defaultBranch}</code>
+          </p>
+          <ul className="release-trail-pipeline" aria-label="Pipeline">
+            <li data-tone={pipelineTone(buildState)}>Build {buildState ? statusLabel(buildState) : 'not reported'}</li>
+            <li data-tone={pipelineTone(latestDeployment?.status)}>Deploy {latestDeployment ? statusLabel(latestDeployment.status) : 'not reported'}</li>
+            {latestRelease && <li data-tone={pipelineTone(latestRelease.status)}><Link to={releaseUrl}>v{latestRelease.version}</Link></li>}
+          </ul>
+        </div>
+        {currentView.graph === null
+          ? <p className="release-trail-note" role="status">Commit history is unavailable.</p>
+          : trail.length === 0
+            ? <p className="release-trail-note">No commits yet.</p>
+            : (
+              <ol className="release-trail-commits" aria-label="Recent commits, oldest to newest">
+                {trail.map((commit, index) => (
+                  <li key={commit.sha} data-latest={index === trail.length - 1 || undefined}>
+                    <a href={`${repositoryUrl}/commit/${encodeURIComponent(commit.sha)}`} target="_blank" rel="noreferrer"
+                      title={`${commit.message} · ${formatDate(commit.committedAt)}`}>
+                      <span className="release-trail-dot" aria-hidden="true" />
+                      <code>{commit.sha.slice(0, 7)}</code>
+                      <span className="release-trail-message">{commit.message}</span>
+                      <time dateTime={commit.committedAt}>{relativeTime(commit.committedAt)}</time>
+                    </a>
+                  </li>
+                ))}
+              </ol>
+            )}
+        <div className="release-trail-actions">
+          <button className="release-trail-button" type="button" disabled={loading} onClick={() => setRefreshKey((key) => key + 1)}
+            aria-label={loading ? 'Refreshing release context' : 'Refresh release context'} title="Refresh">
+            <TrailIcon name="refresh" />
+          </button>
+          <Link className="release-trail-open" to={releaseUrl}><TrailIcon name="open" /><span>Open release</span></Link>
+        </div>
+        {currentStale && currentView.graph &&
+          <p className="release-trail-note release-trail-wide" role="status">Commit data may be stale. Fetched {formatDate(currentView.graph.fetchedAt)}.</p>}
+        {currentResult?.status === 'error' && currentResult.message && (
+          <p className="release-trail-note release-trail-wide" role="alert">Refresh failed; showing the last loaded project data. {currentResult.message}</p>
+        )}
+      </section>
+    );
+  }
 
   return (
     <section className="task-release-bar" aria-label="Project release context">

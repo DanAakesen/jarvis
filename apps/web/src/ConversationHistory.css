@@ -1,70 +1,54 @@
-.shell-main:has(.jarvis-page) { padding: 0; overflow: hidden; }
-.app-shell:has(.jarvis-page) { height: 100vh; height: 100dvh; }
+:root { --chat-width: 740px; --chat-height: 380px; }
+.shell-main:is([data-home="true"] > *) { padding: 0; overflow: hidden; }
+.app-shell[data-home="true"] { height: 100vh; height: 100dvh; }
 .jarvis-page { display: flex; flex-direction: column; height: 100%; min-height: 0; padding: var(--space-5) clamp(12px, 3vw, 40px); }
 .conversation-history { position: relative; display: flex; flex: 1; flex-direction: column; min-height: 0; min-width: 0; }
-.conversation-history[data-history-hosted] > .conversation-dock:not([hidden]) { display: flex; flex: 0 0 auto; flex-direction: column; align-items: flex-end; width: min(860px, 100%); margin: auto auto var(--space-2); }
+.conversation-history[data-history-hosted] > .conversation-dock:not([hidden]) { display: flex; flex: 0 0 auto; flex-direction: column; align-items: flex-end; width: min(var(--chat-width), 100%); margin: auto auto 0; }
 .conversation-dock[hidden] { display: none; }
-.conversation-dock > .conversation-overview { margin: 0; }
-.conversation-dock > .conversation-overview[open] {
-  position: fixed;
-  z-index: 4;
-  top: calc(var(--rail-size) + var(--space-4));
-  right: clamp(12px, 3vw, 40px);
-  bottom: 112px;
-  width: min(760px, calc(100vw - 24px));
-  overflow-y: auto;
-  padding: 8px;
-  box-sizing: border-box;
-  border: 1px solid var(--rule);
-  border-radius: var(--radius-panel);
-  background: var(--surface-translucent);
-  box-shadow: var(--panel-shadow);
-  backdrop-filter: blur(var(--surface-blur));
-}
-.conversation-dock > .conversation-overview[open] > summary { position: sticky; top: 0; z-index: 1; margin: 0 0 var(--space-2) auto; }
-/* The shared workspace window hosting the conversation: Architectural Glass, no visible title, quiet top-right controls. */
-.workspace-window-conversation { gap: 0; padding: 0; }
-.workspace-window-conversation .workspace-window-heading { flex-wrap: nowrap; align-items: center; gap: var(--space-1); padding: 6px 8px 0 12px; }
-.workspace-window-conversation .workspace-title-drag { position: relative; justify-content: center; min-height: 36px; color: var(--text-muted); }
-.workspace-window-conversation .workspace-title-drag::after { width: 40px; height: 4px; border-radius: var(--radius-pill); background: currentColor; opacity: 0; content: ""; transition: opacity var(--motion-fade) var(--ease-standard); }
-.workspace-window-conversation .workspace-title-drag:hover::after, .workspace-window-conversation.workspace-window-dragging .workspace-title-drag::after { opacity: .45; }
-.workspace-window-conversation .workspace-window-actions { flex-wrap: nowrap; gap: 2px; }
-.workspace-window-conversation .workspace-icon-control,
-.workspace-window-conversation .workspace-arrange-menu > summary { width: 36px; min-width: 36px; height: 36px; min-height: 36px; border: 0; border-radius: 50%; background: transparent; color: var(--text-muted); transition: background-color var(--motion-press) var(--ease-standard), color var(--motion-press) var(--ease-standard), transform var(--motion-press) var(--ease-standard); }
-.workspace-window-conversation .workspace-icon-control:hover,
-.workspace-window-conversation .workspace-arrange-menu > summary:hover { background: var(--glass-hover); color: var(--text); }
-.workspace-window-conversation .workspace-icon-control:active { background: var(--glass-pressed); transform: scale(.94); }
+/* The shared workspace window hosting the conversation: no visible title; the shared controls float over the transcript. */
+.workspace-window.workspace-window-conversation { gap: 0; padding: 0; }
+.workspace-window-conversation .workspace-window-heading { position: absolute; z-index: 2; inset: 0 0 auto; min-height: 0; padding: 6px 8px 0 12px; pointer-events: none; }
+.workspace-window-conversation .workspace-window-actions { pointer-events: auto; }
 .workspace-conversation-content { position: relative; display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; }
 .conversation-window-host { position: relative; display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; }
-.conversation-window-host > .conversation-transcript { padding: 0 var(--space-5) var(--space-4); }
+/* Messages scroll up under the controls and fade out at the top edge of the window. */
+.conversation-window-host > .conversation-transcript {
+  padding: 40px var(--space-5) var(--space-4);
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 64px);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 64px);
+}
 .conversation-latest { position: absolute; bottom: var(--space-3); left: 50%; display: inline-flex; min-height: 40px; align-items: center; gap: 6px; padding: 0 14px 0 12px; border: 1px solid var(--rule); border-radius: var(--radius-pill); background: var(--glass-selected); box-shadow: var(--panel-shadow); color: var(--text); font: inherit; font-size: var(--type-small); font-weight: 650; cursor: pointer; transform: translateX(-50%); animation: conversation-enter var(--motion-state) var(--ease-enter); }
 .conversation-latest svg { width: 18px; height: 18px; flex: 0 0 auto; }
 .conversation-latest:hover { box-shadow: var(--panel-shadow), var(--glass-selected-glow); }
 .conversation-latest:active { transform: translateX(-50%) scale(.97); }
 .conversation-latest:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 /* Typing mode on the Jarvis page: the workspace fills the stage above the composer without its own panel chrome. */
-.app-shell[data-voice-active="false"] .shell-main:has(.jarvis-page) { display: flex; flex-direction: column; }
+.app-shell[data-voice-active="false"] .shell-main:is([data-home="true"] > *) { display: flex; flex-direction: column; }
 .app-shell[data-voice-active="false"] .jarvis-page { flex: 1; height: auto; min-height: 0; }
 .app-shell[data-voice-active="false"][data-voice-has-windows="false"] .workspace-shell-area { display: none; }
 .app-shell[data-voice-active="false"][data-voice-has-windows="false"] .workspace-shell-area:not([hidden]):has(.workspace-tabs) { display: block; order: -1; flex: 0 0 auto; }
 .app-shell[data-voice-active="false"][data-voice-has-windows="true"] .workspace-shell-area { order: -1; flex: 1; min-height: 0; overflow: hidden; }
-.app-shell[data-voice-active="false"] .shell-main:has(.jarvis-page) .workspace-shell-area { padding: var(--space-4) clamp(12px, 3vw, 40px) 0; }
+.app-shell[data-voice-active="false"] .shell-main:is([data-home="true"] > *) .workspace-shell-area { padding: var(--space-4) clamp(12px, 3vw, 40px) 0; }
 .app-shell[data-voice-active="false"][data-voice-has-windows="true"] .jarvis-page { flex: 0 0 auto; height: auto; padding-top: var(--space-2); }
+.app-shell[data-voice-active="false"][data-conversation-open="true"] .jarvis-page { padding-top: 0; }
 .app-shell[data-voice-active="false"][data-voice-has-windows="true"] .conversation-history > .conversation-transcript { flex: 0 0 auto; padding: 0; overflow: visible; }
-.app-shell[data-voice-active="false"][data-voice-has-windows="true"] .conversation-history > .conversation-transcript > :not(.conversation-overview) { display: none; }
-.app-shell[data-voice-active="false"] .shell-main:has(.jarvis-page) .workspace { display: flex; height: 100%; min-height: 0; flex-direction: column; gap: var(--space-2); margin: 0; padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; backdrop-filter: none; }
-.app-shell[data-voice-active="false"] .shell-main:has(.jarvis-page) .workspace-heading { flex: 0 0 auto; justify-content: flex-end; }
-.app-shell[data-voice-active="false"] .shell-main:has(.jarvis-page) .workspace-heading h2,
-.app-shell[data-voice-active="false"] .shell-main:has(.jarvis-page) .workspace-announcement { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.app-shell[data-voice-active="false"][data-voice-has-windows="true"] .conversation-history > .conversation-transcript > * { display: none; }
+.app-shell[data-voice-active="false"] .workspace { display: flex; height: 100%; min-height: 0; flex-direction: column; gap: var(--space-2); margin: 0; padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; backdrop-filter: none; }
+.app-shell[data-voice-active="false"] .workspace-heading { flex: 0 0 auto; justify-content: flex-end; }
+.app-shell[data-voice-active="false"] .workspace-heading h2,
+.app-shell[data-voice-active="false"] .workspace-announcement { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .app-shell[data-voice-active="false"][data-voice-has-windows="false"] .workspace-arrangements,
-.app-shell[data-voice-active="false"] .shell-main:has(.jarvis-page) .workspace-guidance,
-.app-shell[data-voice-active="false"] .shell-main:has(.jarvis-page) .workspace-empty { display: none; }
-.app-shell[data-voice-active="false"] .shell-main:has(.jarvis-page) .workspace-tabs { flex: 0 0 auto; margin: 0; }
-.app-shell[data-voice-active="false"] .shell-main:has(.jarvis-page) .workspace-canvas { flex: 1; min-height: 0; }
-.app-shell[data-voice-active="false"] .shell-main:has(.jarvis-page) .workspace-canvas-tiled { grid-auto-rows: minmax(0, 1fr); }
-.app-shell[data-voice-active="false"] .shell-main:has(.jarvis-page) .workspace-canvas-layered,
-.app-shell[data-voice-active="false"] .shell-main:has(.jarvis-page) .workspace-canvas-has-maximized { height: auto; min-height: 0; }
-.app-shell[data-voice-active="false"] .workspace-canvas-tiled .workspace-window-conversation:not(.workspace-window-maximized) { align-self: end; justify-self: center; width: min(860px, 100%); max-height: min(44vh, 460px); }
+.app-shell[data-voice-active="false"] .workspace-arrangements,
+.app-shell[data-voice-active="false"] .workspace-guidance,
+.app-shell[data-voice-active="false"] .workspace-empty { display: none; }
+.app-shell[data-voice-active="false"] .workspace-tabs { flex: 0 0 auto; margin: 0; }
+.app-shell[data-voice-active="false"] .workspace-canvas { flex: 1; min-height: 0; }
+.app-shell[data-voice-active="false"] .workspace-canvas-tiled { grid-auto-rows: minmax(0, 1fr); }
+.app-shell[data-voice-active="false"] .workspace-canvas-layered,
+.app-shell[data-voice-active="false"] .workspace-canvas-has-maximized { height: auto; min-height: 0; }
+.app-shell[data-voice-active="false"] .workspace-canvas-tiled .workspace-window-conversation:not(.workspace-window-maximized) { order: 9999; align-self: end; justify-self: center; width: min(var(--chat-width), 100%); max-height: min(var(--chat-height), 44vh); }
+/* Docked to the composer in every arrangement: other windows stack above it. */
+.app-shell[data-voice-active="false"] .workspace-canvas-layered .workspace-window-conversation:not(.workspace-window-maximized) { top: auto; bottom: 0; left: max(0px, calc(50% - var(--chat-width) / 2)); width: min(var(--chat-width), 100%); height: min(var(--chat-height), 44vh); }
 .conversation-transcript { position: relative; flex: 1; min-height: 0; overflow-y: auto; padding: 0 max(4px, calc((100% - 760px) / 2)) var(--space-6); scrollbar-gutter: stable; }
 .conversation-transcript:has(.conversation-greeting) { display: flex; flex-direction: column; padding: clamp(16px, 12vh, 100px) 12px var(--space-6); }
 .conversation-greeting {
@@ -83,49 +67,20 @@
 .conversation-greeting p { max-width: 36ch; margin: var(--space-3) 0 0; color: var(--text-muted); }
 .conversation-transcript[hidden], .composer[hidden] { display: none; }
 .conversation-transcript:focus-visible { outline: 3px solid var(--focus); outline-offset: -3px; }
-.conversation-input { position: relative; display: grid; grid-template-columns: 44px minmax(0, 1fr); align-items: center; gap: var(--space-2); flex: 0 0 auto; width: 100%; max-width: 860px; margin: 0 auto; padding: 10px 12px; border: 1px solid var(--rule); border-radius: 30px; background: var(--surface-translucent); backdrop-filter: blur(var(--surface-blur)); box-shadow: var(--dialog-shadow); }
+.conversation-input { position: relative; display: grid; grid-template-columns: 40px minmax(0, 1fr); align-items: center; gap: 22px; flex: 0 0 auto; width: 100%; max-width: var(--chat-width); margin: 0 auto; padding: 5px 6px 5px 7px; border: 1px solid var(--rule); border-radius: 26px; background: var(--surface-translucent); backdrop-filter: blur(var(--surface-blur)); box-shadow: var(--dialog-shadow); }
 .conversation-input:has(textarea:focus-visible) { box-shadow: var(--dialog-shadow), 0 0 0 3px var(--focus); }
 /* In typing mode the voice wrappers dissolve into the shared composer grid. Feedback is portalled outside the composer. */
 .conversation-input[data-voice-active="false"] > .conversation-actions,
 .conversation-input[data-voice-active="false"] .voice-controls[data-active="false"] { display: contents; }
-.conversation-input[data-voice-active="false"] .voice-controls[data-active="false"] > .action-row { position: relative; padding-right: var(--space-2); }
-.conversation-input[data-voice-active="false"] .voice-controls[data-active="false"] > .action-row::after,
-.conversation-history .composer-attach::after,
-.conversation-history .composer-more::after { position: absolute; top: 10px; right: -1px; bottom: 10px; width: 1px; background: var(--rule); content: ""; }
-.conversation-history .composer-attach, .conversation-history .composer-more { padding-right: var(--space-2); }
+/* One divider separates the orb from the message, with room on both sides so the orb can breathe. */
+.conversation-input[data-voice-active="false"] .voice-controls[data-active="false"] > .action-row { position: relative; }
+.conversation-input[data-voice-active="false"] .voice-controls[data-active="false"] > .action-row::after { position: absolute; top: 9px; right: -11px; bottom: 9px; width: 1px; background: linear-gradient(transparent, var(--rule) 25% 75%, transparent); content: ""; }
 .conversation-input[data-voice-active="true"] { display: block; margin: auto; }
-.conversation-overview { margin-top: var(--space-5); }
-.conversation-transcript:has(.conversation-greeting) > .conversation-overview {
-  align-self: flex-end;
-  width: min(320px, calc(100% - 24px));
-  margin: var(--space-2) 12px 0 0;
-}
-.conversation-transcript:has(.conversation-greeting) > .conversation-overview > summary {
-  margin: 0 0 0 auto;
-}
-.conversation-overview > summary {
-  width: fit-content;
-  min-height: 44px;
-  margin: 0 auto;
-  padding: var(--space-2) var(--space-3);
-  border: 1px solid var(--rule);
-  border-radius: var(--radius-control);
-  background: var(--surface-translucent);
-  box-shadow: var(--soft-shadow);
-  backdrop-filter: blur(var(--surface-blur));
-  color: var(--text);
-  cursor: pointer;
-  font-size: var(--type-small);
-}
-.conversation-overview summary:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
-.conversation-overview .jarvis-side { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); margin-top: var(--space-3); }
-.conversation-overview .now-panel { grid-column: 1; grid-row: 1 / 3; }
-.conversation-overview .screen-share-controls { padding: var(--space-5); border-radius: var(--radius-panel); background: var(--surface-translucent); box-shadow: var(--panel-shadow); }
 .conversation-history > p, .history-feedback p, .history-error { font-size: 16px; }
 .conversation-messages { margin: 20px 0; padding: 0; list-style: none; }
-.conversation-message { position: relative; width: fit-content; max-width: min(88%, 62ch); margin: var(--space-4) 0; padding: var(--space-3) var(--space-5) var(--space-2); border-radius: var(--radius-window); animation: conversation-enter var(--motion-state) var(--ease-enter); }
-.conversation-message[data-speaker="dan"] { margin-left: auto; border: 1px solid color-mix(in srgb, var(--glass-edge-warm) 38%, transparent); border-bottom-right-radius: 8px; background: var(--surface-translucent); background-image: linear-gradient(var(--message-dan-tint), var(--message-dan-tint)); box-shadow: var(--soft-shadow); }
-.conversation-message[data-speaker="jarvis"] { margin-right: auto; padding-left: var(--space-5); border: 1px solid color-mix(in srgb, var(--glass-edge-cool) 26%, transparent); border-bottom-left-radius: 8px; background: var(--surface-translucent); background-image: linear-gradient(var(--message-jarvis-tint), var(--message-jarvis-tint)); box-shadow: var(--soft-shadow); }
+.conversation-message { position: relative; width: fit-content; max-width: min(88%, 62ch); margin: var(--space-4) 0; padding: var(--space-3) var(--space-5) var(--space-2); border-radius: var(--radius-panel); animation: conversation-enter var(--motion-state) var(--ease-enter); }
+.conversation-message[data-speaker="dan"] { margin-left: auto; border: 1px solid color-mix(in srgb, var(--glass-glow-warm) 75%, transparent); background: var(--surface-translucent); background-image: linear-gradient(var(--message-dan-tint), var(--message-dan-tint)); box-shadow: 0 0 18px -4px color-mix(in srgb, var(--glass-glow-warm) 45%, transparent), inset 0 0 12px -6px var(--glass-glow-warm); }
+.conversation-message[data-speaker="jarvis"] { margin-right: auto; padding-left: var(--space-5); border: 1px solid color-mix(in srgb, var(--glass-edge-cool) 26%, transparent); background: var(--surface-translucent); background-image: linear-gradient(var(--message-jarvis-tint), var(--message-jarvis-tint)); box-shadow: var(--soft-shadow), inset 0 1px 0 var(--glass-rim-light); }
 .conversation-message:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
 .message-heading { margin-bottom: var(--space-2); font-size: var(--type-small); }
 .queue-count, .conversation-message[data-speaker="dan"] > .queued-state { color: var(--text-muted); font-size: var(--type-small); }
@@ -160,14 +115,32 @@
 .tool-call { display: inline-block; padding: 4px 9px; border-radius: var(--radius-pill); background: var(--surface-muted); color: var(--text); font-size: 13px; overflow-wrap: anywhere; }
 .tool-call-running { background-image: linear-gradient(110deg, transparent 20%, var(--feedback-sheen) 48%, transparent 76%); background-size: 250% 100%; animation: tool-shimmer calc(var(--motion-panel) * 3) var(--ease-standard) infinite; }
 .task-reference { display: inline-flex; align-items: center; min-height: 44px; font-size: 14px; font-weight: 600; }
-.conversation-history .composer { display: grid; grid-template-columns: auto minmax(0, 1fr) auto 44px; align-items: center; gap: var(--space-2); min-width: 0; margin: 0; }
+.conversation-history .composer { display: grid; grid-template-columns: minmax(0, 1fr) auto 36px; align-items: center; gap: 4px; min-width: 0; margin: 0; }
 .conversation-history .composer[hidden] { display: none; }
 .conversation-history .composer label { margin: -1px; }
-.conversation-history .composer textarea { min-height: 44px; max-height: 160px; padding: 10px 4px; border: 0; border-radius: 0; background: transparent; resize: none; font-size: var(--type-body); line-height: 24px; }
+.conversation-history .composer textarea { min-height: 40px; max-height: 160px; padding: 8px 2px; border: 0; border-radius: 0; background: transparent; resize: none; font-size: var(--type-body); line-height: 24px; }
 .conversation-history .composer textarea::placeholder { color: var(--text-muted); opacity: 1; }
 .conversation-history .composer textarea:focus-visible { outline: none; }
-.conversation-history .composer-send { display: grid; place-items: center; width: 44px; min-height: 44px; padding: 0; margin: 0; border-radius: 50%; }
-.composer-send svg { width: 22px; height: 22px; }
+/* Send is a small lit glass lens: quiet until there is a message, then it warms up like the orb's core. */
+.conversation-history .composer-send {
+  position: relative; display: grid; place-items: center; width: 36px; height: 36px; min-height: 36px; padding: 0; margin: 0;
+  border: 0; border-radius: 50%; cursor: pointer; color: var(--text-muted);
+  background: radial-gradient(circle at 50% 30%, color-mix(in srgb, var(--glass-rim-light) 30%, transparent), transparent 70%), var(--glass-hover);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--glass-rim-light) 35%, transparent);
+  transition: background-color var(--motion-press) var(--ease-standard), color var(--motion-press) var(--ease-standard), box-shadow var(--motion-state) var(--ease-standard), transform var(--motion-press) var(--ease-standard);
+}
+.conversation-history .composer-send:not(:disabled) {
+  color: var(--text);
+  background: radial-gradient(circle at 50% 28%, color-mix(in srgb, #fff 34%, transparent), transparent 62%),
+    radial-gradient(circle at 50% 100%, color-mix(in srgb, var(--glass-glow-warm) 75%, transparent), color-mix(in srgb, var(--glass-glow-warm) 28%, transparent) 70%);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--glass-glow-warm) 80%, transparent), 0 0 14px -2px color-mix(in srgb, var(--glass-glow-warm) 70%, transparent);
+}
+.conversation-history .composer-send:hover:not(:disabled) { box-shadow: inset 0 0 0 1px var(--glass-glow-warm), 0 0 20px 0 color-mix(in srgb, var(--glass-glow-warm) 80%, transparent); }
+.conversation-history .composer-send:hover:not(:disabled) svg { translate: 0 -1.5px; }
+.conversation-history .composer-send:active:not(:disabled) { transform: scale(.92); }
+.conversation-history .composer-send:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.conversation-history .composer-send:disabled { cursor: default; opacity: .7; }
+.composer-send svg { width: 18px; height: 18px; stroke-width: 2.2; transition: translate var(--motion-press) var(--ease-standard); }
 .composer-status { grid-column: 1 / -1; margin: 0 4px 4px; font-size: var(--type-small); }
 .chat-guidance { margin: 6px 0 0; color: var(--text-muted); font-size: 13px; }
 .chat-error { margin-top: 12px; color: var(--error); font-size: 15px; }
@@ -177,9 +150,22 @@
 .conversation-input .voice-controls[data-active="true"] { width: 100%; }
 .voice-controls[data-active="false"] .action-row { display: grid; justify-items: center; gap: 2px; margin: 0; }
 .voice-start-label { display: none; }
-.input-orb { display: grid; width: 44px; height: 44px; place-items: center; border: 1px solid var(--rule); border-radius: 50%; background: var(--surface); cursor: pointer; transition: background-color var(--motion-press) var(--ease-standard), transform var(--motion-press) var(--ease-standard); }
-.input-orb span { display: block; width: 26px; height: 26px; border-radius: 45% 55% 60% 40%; background: radial-gradient(circle at 30% 28%, var(--orb-highlight), transparent 65%), var(--state-listening); box-shadow: inset -3px -4px 8px var(--orb-shadow), 0 0 12px var(--feedback-sheen); }
-.input-orb:hover:not(:disabled) { background: var(--rule); }
+.input-orb { position: relative; display: grid; width: 40px; height: 40px; place-items: center; padding: 0; border: 0; border-radius: 50%; background: transparent; cursor: pointer; transition: filter var(--motion-press) var(--ease-standard), transform var(--motion-press) var(--ease-standard); }
+.input-orb span { position: relative; display: block; width: 36px; height: 36px; overflow: hidden; border-radius: 50%;
+  background:
+    radial-gradient(circle at 34% 28%, rgb(255 255 255 / 18%), transparent 42%),
+    radial-gradient(circle, var(--stage-background) 52%, color-mix(in srgb, var(--stage-orb) 55%, var(--stage-background)) 100%);
+  box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--stage-orb) 85%, transparent), 0 0 16px color-mix(in srgb, var(--stage-orb) 45%, transparent), inset 0 0 10px color-mix(in srgb, var(--stage-orb) 35%, transparent); }
+/* Hovering the orb wakes it: the core quickens (InputOrbCore), the shell warms and a ripple breathes outwards. */
+.input-orb span { transition: box-shadow var(--motion-state) var(--ease-standard); }
+.input-orb:is(:hover, :focus-visible):not(:disabled) { filter: brightness(1.15); transform: scale(1.06); }
+.input-orb:is(:hover, :focus-visible):not(:disabled) span { box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--glass-glow-warm) 80%, transparent), 0 0 20px color-mix(in srgb, var(--glass-glow-warm) 55%, transparent), inset 0 0 12px color-mix(in srgb, var(--glass-glow-warm) 45%, transparent); }
+.input-orb::after { position: absolute; inset: 2px; border-radius: 50%; box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--glass-glow-warm) 70%, transparent), 0 0 12px color-mix(in srgb, var(--glass-glow-warm) 45%, transparent); content: ""; opacity: 0; pointer-events: none; }
+.input-orb:is(:hover, :focus-visible):not(:disabled)::after { animation: orb-wake 1.5s var(--ease-enter) infinite; }
+@keyframes orb-wake { 0% { opacity: .95; scale: .96; } 100% { opacity: 0; scale: 1.55; } }
+@media (prefers-reduced-motion: reduce) { .input-orb:is(:hover, :focus-visible):not(:disabled)::after { animation: none; opacity: .8; } }
+:root[data-motion="reduced"] .input-orb:is(:hover, :focus-visible):not(:disabled)::after { animation: none; opacity: .8; }
+.input-orb-core { position: absolute; inset: 0; width: 100%; height: 100%; }
 .input-orb:active:not(:disabled) { transform: scale(0.95); }
 .input-orb:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 .input-orb:disabled { opacity: 0.5; cursor: not-allowed; }
@@ -247,13 +233,11 @@
   .conversation-input { gap: var(--space-2); padding: var(--space-2); }
   .conversation-message, .streaming-message { max-width: 96%; }
   .conversation-message { padding: var(--space-3) var(--space-4); }
-  .conversation-window-host > .conversation-transcript { padding: 0 var(--space-3) var(--space-3); }
+  .conversation-window-host > .conversation-transcript { padding: 48px var(--space-3) var(--space-3); }
   .conversation-input { border-radius: 26px; padding: 6px 8px; }
   .conversation-input[data-voice-active="false"] .voice-controls[data-active="false"] > .action-row { padding-right: var(--space-1); }
   .conversation-history .composer-attach, .conversation-history .composer-more { padding-right: 2px; }
   .conversation-history .composer { gap: var(--space-1); }
-  .conversation-overview .jarvis-side { grid-template-columns: minmax(0, 1fr); }
-  .conversation-overview .now-panel { grid-column: auto; grid-row: auto; }
 }
 
 @media (max-width: 360px) {
@@ -264,32 +248,10 @@
 
 @media (max-width: 700px), (max-height: 500px) and (pointer: coarse) {
   .app-shell[data-voice-active="false"] .shell-main { display: flex; flex-direction: column; }
-  .app-shell[data-voice-active="false"] .shell-main:has(.jarvis-page) .workspace-shell-area { padding: var(--space-3) var(--space-3) 0; }
+  .app-shell[data-voice-active="false"] .shell-main:is([data-home="true"] > *) .workspace-shell-area { padding: var(--space-3) var(--space-3) 0; }
   .app-shell[data-voice-active="false"] .workspace[data-phone="true"] .workspace-window-conversation:not(.workspace-window-maximized) { flex: 0 1 auto; align-self: flex-end; max-height: min(46dvh, 420px); }
   .workspace[data-phone="true"] .workspace-conversation-content { touch-action: pan-y pinch-zoom; }
   .workspace[data-phone="true"] .workspace-window-conversation .workspace-icon-control { width: 44px; min-width: 44px; height: 44px; min-height: 44px; }
-  .conversation-overview[open] {
-    position: fixed;
-    z-index: 4;
-    top: max(64px, calc(env(safe-area-inset-top) + 56px));
-    right: 12px;
-    bottom: max(84px, calc(env(safe-area-inset-bottom) + 72px));
-    left: 12px;
-    width: auto;
-    height: calc(100dvh - max(64px, calc(env(safe-area-inset-top) + 56px)) - max(84px, calc(env(safe-area-inset-bottom) + 72px)));
-    min-height: 0;
-    margin: 0;
-    padding: 8px;
-    box-sizing: border-box;
-    overflow-y: auto;
-    border: 1px solid var(--rule);
-    border-radius: var(--radius-panel);
-    background: var(--surface-translucent);
-    box-shadow: var(--panel-shadow);
-    backdrop-filter: blur(var(--surface-blur));
-  }
-  .conversation-overview[open] > summary { position: sticky; top: 0; z-index: 1; margin: 0 0 var(--space-2) auto; }
-  .conversation-transcript:has(.conversation-greeting) > .conversation-overview[open] { width: auto; }
   .app-shell[data-voice-active="true"] { --phone-dock-height: var(--voice-bar-height, 60px); --phone-dock-bottom: max(16px, env(safe-area-inset-bottom)); }
   .app-shell[data-voice-active="true"] .voice-bar,
   .app-shell[data-voice-active="true"][data-voice-has-windows="true"] .voice-bar { bottom: var(--phone-dock-bottom); left: 50%; width: max-content; max-width: calc(100vw - 24px); transform: translateX(-50%); }
@@ -300,7 +262,7 @@
 @media (prefers-reduced-motion: reduce) {
   .conversation-message, .streaming-message, .streaming-caret, .tool-call-running,
   .history-button, .input-orb, .message-metadata, .voice-end-control,
-  .workspace-window-conversation .workspace-title-drag::after, .workspace-window-conversation .workspace-icon-control { transition: none; }
+  .workspace-window .workspace-icon-control, .sidebar-close { transition: none; }
   .conversation-message, .streaming-message, .streaming-caret, .thinking-dot, .tool-call-running,
   .conversation-latest { animation: none; }
   .message-metadata { opacity: 1; }
@@ -325,3 +287,32 @@
   to { background-position: -100% 0; }
 }
 .visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
+
+/* Off the home page the chat floats over the page: the bar sits bottom-centre and windows share one overlay layer.
+   In the rail state the bar has flown into the rail orb (chat-flight.ts) and stays hidden until it pops out again. */
+.app-shell[data-home="false"]:not(.app-signed-out) .jarvis-page {
+  position: fixed; z-index: 40; right: 16px; bottom: 14px; left: calc(var(--rail-size) + 16px);
+  width: auto; max-width: var(--chat-width); height: auto; min-height: 0; margin-inline: auto; padding: 0; pointer-events: none;
+}
+.app-shell[data-home="false"] .jarvis-page .conversation-history { flex: 0 0 auto; }
+.app-shell[data-home="false"] .jarvis-page .conversation-input,
+.app-shell[data-home="false"] .jarvis-page .conversation-toast { pointer-events: auto; }
+.app-shell[data-chat="rail"] .jarvis-page .conversation-input { visibility: hidden; pointer-events: none; transition: visibility 0s linear .52s; }
+.app-shell[data-home="false"]:not(.app-signed-out) .workspace-shell-area {
+  position: fixed; z-index: 30; top: calc(var(--rail-size) + 44px); right: 16px; bottom: 68px; left: calc(var(--rail-size) + 16px);
+  padding: 0; pointer-events: none;
+}
+.app-shell[data-chat="rail"]:not(.app-signed-out) .workspace-shell-area { bottom: 16px; }
+.app-shell[data-home="false"] .workspace-shell-area :is(.workspace-window, .workspace-view-switcher) { pointer-events: auto; }
+/* While the bar is in the rail its conversation sheet leaves the tiling and hides after the flight. */
+.app-shell[data-chat="rail"] .workspace-canvas { position: relative; }
+.app-shell[data-chat="rail"] .workspace-window-conversation:not(.workspace-window-maximized) {
+  position: absolute; bottom: 0; left: max(0px, calc(50% - var(--chat-width) / 2)); visibility: hidden; pointer-events: none;
+}
+.app-shell[data-chat="rail"] .workspace-window-conversation { visibility: hidden; pointer-events: none; }
+/* The rail orb: the same living orb as the chat bar, parked at the foot of the rail. */
+.area-rail .rail-chat-orb { margin-top: auto; align-self: center; }
+.area-rail .rail-chat-orb[aria-expanded="true"] span { box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--glass-glow-warm) 85%, transparent), 0 0 18px color-mix(in srgb, var(--glass-glow-warm) 55%, transparent); }
+@media (max-width: 700px), (max-height: 500px) and (pointer: coarse) {
+  .app-shell[data-home="false"]:not(.app-signed-out) .jarvis-page { right: 8px; bottom: 8px; left: calc(var(--rail-size) + 8px); }
+  .app-shell[data-home="false"]:not(.app-signed-out) .workspace-shell-area { top: calc(var(--rail-size) + 40px); right: 8px; bottom: 62px; left: calc(var(--rail-size) + 8px); }

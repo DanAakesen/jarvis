@@ -23,8 +23,7 @@ export const areas: readonly Area[] = [
     label: 'Software Factory',
     path: 'factory',
     navigation: [
-      { label: 'Tasks', path: '/factory/tasks' },
-      { label: 'Projects', path: '/factory/projects' },
+      { label: 'Kanban', path: '/factory/kanban' },
     ],
     Component: FactoryArea,
   },

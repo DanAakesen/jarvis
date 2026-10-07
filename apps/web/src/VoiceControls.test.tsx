@@ -264,7 +264,7 @@ describe('VoiceControls', () => {
     fireEvent.click(screen.getByRole('button', { name: 'More options' }));
     fireEvent.click(screen.getByRole('menuitem', { name: 'Turn on camera' }));
     const toast = screen.getByRole('alert').closest('.conversation-toast');
-    expect(toast?.parentElement).toBe(document.body);
+    expect(toast?.parentElement?.id).toBe('jarvis-toast-stack');
     expect(container.contains(toast)).toBe(false);
     fireEvent.click(screen.getByRole('button', { name: 'More options' }));
     expect(screen.getByRole('menu').contains(toast)).toBe(false);

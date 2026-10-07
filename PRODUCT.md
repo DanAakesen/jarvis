@@ -228,6 +228,15 @@ The board shows up to 100 newest matching tasks. Pull request, checks, and usage
 
 P8-34 (#369) implements the approved board/release-bar/right-details composition. Selecting a task opens its existing task detail data in the contextual right pane while retaining filters and board position; Open full task keeps the complete timeline available. The release bar uses the existing authenticated project release source, never mixes data between projects, and shows honest loading/empty/unavailable/stale states. The Factory Ask Jarvis composer hands messages to the existing conversation queue and focuses the explicit voice-start control without activating the microphone. These paths reuse existing contracts; fixture browser checks do not establish live Entra, backend, release, provider-usage, or voice behavior.
 
+**Kanban (6 October 2026, Dan):** `/factory/kanban` is the only Software Factory page. It shows the task data, live updates, task actions and details pane, with:
+- a live summary of running, needs-you and done counts;
+- filters that apply instantly;
+- compact cards ending in View details and Open task;
+- a commit-trail release bar with project, branch, pipeline states and up to five linked recent commits;
+- Create task and Create project dialogs.
+
+Create project adds an existing GitHub App repository through the existing manage action. Requests for a new repository go to Jarvis in the conversation. Project management (managed projects, existing repositories, project settings links) lives in Settings → Projects. A task opens as a window over the current page (from Kanban, chat, releases, usage or its address); minimised windows become tabs under the top bar, and open task windows return as tabs after a reload. Off the home page the chat waits as an orb in the rail and pops out over any page. The former Tasks and Projects list addresses redirect to Kanban and Settings. Kanban adds no data source and infers no values; unreported pull request, checks and usage data stay off the cards.
+
 #### Software Factory — task detail
 
 | Data points | Actions |
@@ -374,7 +383,7 @@ partially applied commands return a refusal or error rather than false success.
 Closing a view changes only the temporary workspace and does not delete
 conversation or source records.
 Voice enters immediately, hiding typing history and the composer. On desktop, the
-orb is centred without content windows and moves left when windows are present;
+orb stays centred and fixed in the room whether or not windows are open;
 the existing layout carries into voice and returns on natural end, connection
 failure, Escape, or End voice. A speech interruption leaves voice active. The
 optional “Minimise all windows when starting voice”

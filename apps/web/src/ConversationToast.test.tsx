@@ -10,8 +10,19 @@ describe('conversation notifications', () => {
     const { container } = render(<ConversationToast notification={{ id: 1, error: true, message: 'Camera access was not started.' }} onDismiss={dismiss} />);
     const alert = screen.getByRole('alert');
     expect(container.contains(alert)).toBe(false);
-    expect(alert.closest('.conversation-toast')?.parentElement).toBe(document.body);
+    expect(alert.closest('.conversation-toast')?.parentElement?.id).toBe('jarvis-toast-stack');
+    expect(alert.closest('#jarvis-toast-stack')?.parentElement).toBe(document.body);
     fireEvent.click(screen.getByRole('button', { name: 'Dismiss notification' }));
+    expect(dismiss).toHaveBeenCalledOnce();
+  });
+
+  it('offers a recovery action that runs once and dismisses the notification', () => {
+    const dismiss = vi.fn();
+    const retry = vi.fn();
+    render(<ConversationToast notification={{ id: 1, error: true, message: 'Jarvis could not load conversation history.' }}
+      onDismiss={dismiss} action={{ label: 'Retry', onSelect: retry }} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(retry).toHaveBeenCalledOnce();
     expect(dismiss).toHaveBeenCalledOnce();
   });
 

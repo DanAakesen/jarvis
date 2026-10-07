@@ -4,6 +4,20 @@ Phase 1 delivers the Software Factory. Requirements and page specifications are 
 
 ## Current focus
 
+- **Local UI session with Dan (branch `ui/shell-iteration`, 6 October 2026):** implemented locally:
+  - the stage glass shell, the same on every page, with one shared 3D room behind all pages and sign-in;
+  - the conversation docked to the composer, with its handle and fly-off;
+  - shared window chrome and panel resize handles;
+  - Activity on Settings, and the top-bar screen share;
+  - Kanban as the only Software Factory page (Tasks/Projects lists removed and redirected), with Create task/Create project dialogs and its commit-trail release bar; projects managed in Settings;
+  - side panels that float over content, with the navigation panel only for multi-page areas;
+  - task windows instead of the task page, the tab bar with minimise-to-tab, the chat parked in the rail off home, and a slimmer chat bar with a waking orb;
+  - Settings sections for presence modes (#468) and memory (#469), both against the merged, live APIs;
+  - restyled Settings (with Back) and sign-in pages;
+  - styleable dropdowns, pointer-lit glass, page entrance motion, and deduplicated toasts.
+
+  Web typecheck passes. Web tests pass apart from date/number-format tests that fail only under this machine's en-DK locale (baseline, unrelated files). Next: Dan's sign-off, then commit, PR and deploy. Hardware-GPU motion, light theme and physical phones still need checking after deploy. See [DESIGN.md](DESIGN.md#stage-glass-shell-and-docked-conversation--6-october-2026-local-ui-session-with-dan).
+
 - **P7-35 (#425):** Implemented offline after merged P7-34. Value-free recipes reuse `dbo.settings` under `global` / `recipe.<hash>` (0020 is occupied; no new migration). Jev chooses among app/site candidates plus `none`, verifies uniquely re-located fresh targets, and falls back to planning on drift; pause, sensitive-input and irreversible-only approval gates remain authoritative. The list/delete tool and Settings view are implemented. Backend (1,049 tests), web (322 tests), lint/build, .NET (147 tests) and Windows-target build pass. Chromium fixtures cover desktop/mobile management states. P5-14 whole-run controlled timings: PC 220→65 ms, browser 234→79 ms, including selection. Next: coordinator live Windows/Chrome/Jev replay and approval acceptance; controlled timings are not live speed evidence.
 - **Voice UI hotfix (#435):** Implemented in PR #437: direct screen/camera sharing from More, bottom-right transient notifications, white projected orb status and livelier dormant/active core motion. Browser fixtures and relevant web checks pass. Preserve the approved wake sequence and real capture/playback lifecycle; coordinate shared conversation files with #418.
 

@@ -29,6 +29,21 @@ function resolveTheme(theme: ThemeMode): ResolvedTheme {
     theme === 'system' ? 'light' : theme;
 }
 
+const lastThemeKey = 'jarvis.lastTheme';
+
+function readLastTheme(): ThemeMode {
+  try {
+    const value = localStorage.getItem(lastThemeKey);
+    return value === 'dark' || value === 'system' || value === 'light' ? value : 'light';
+  } catch {
+    return 'light';
+  }
+}
+
+function saveLastTheme(theme: ThemeMode) {
+  try { localStorage.setItem(lastThemeKey, theme); } catch { /* Signed-out pages then use the light default. */ }
+}
+
 function foregroundFor(hex: string): string {
   const channels = hex.slice(1).match(/.{2}/g)!.map((channel) => Number.parseInt(channel, 16) / 255)
     .map((channel) => channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4);
@@ -92,8 +107,8 @@ export function ThemePreferenceProvider({
   getAccessToken: () => Promise<string>;
   children: ReactNode;
 }) {
-  const [appearance, setAppearance] = useState<AppearancePreferences>({ theme: 'light' });
-  const [resolvedTheme, setResolvedTheme] = useState<ResolvedTheme>('light');
+  const [appearance, setAppearance] = useState<AppearancePreferences>(() => ({ theme: readLastTheme() }));
+  const [resolvedTheme, setResolvedTheme] = useState<ResolvedTheme>(() => resolveTheme(readLastTheme()));
   const [state, setState] = useState<'loading' | 'ready' | 'error' | 'unavailable'>(
     enabled && backendUrl ? 'loading' : 'unavailable',
   );
@@ -109,11 +124,13 @@ export function ThemePreferenceProvider({
       applyAppearance(appearance, resolved);
     };
     apply();
+    // Signed out, Jarvis cannot read the saved theme yet, so it starts from the last one used on this device.
+    if (enabled) saveLastTheme(appearance.theme);
     if (appearance.theme !== 'system') return;
     const media = window.matchMedia?.('(prefers-color-scheme: dark)');
     media?.addEventListener?.('change', apply);
     return () => media?.removeEventListener?.('change', apply);
-  }, [appearance]);
+  }, [appearance, enabled]);
 
   useEffect(() => {
     if (!enabled || !backendUrl) return;

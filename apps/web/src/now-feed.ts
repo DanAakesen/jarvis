@@ -26,6 +26,8 @@ export interface NowFeedStreamOptions {
   onWorkspaceCommand?: (command: WorkspaceCommand, expiresAt: number, trustedBlobHost?: string) => void;
   onWorkspaceCancel?: (commandId: string) => void;
   onActivity?: (event: JarvisActivityEvent) => void;
+  /** Receives the raw mode from mode_changed events; the presence store validates it. */
+  onPresenceMode?: (mode: string) => void;
   signal: AbortSignal;
 }
 
@@ -256,7 +258,16 @@ async function readNowEvents(body: ReadableStream<Uint8Array>, signal: AbortSign
   const processLine = (line: string) => {
     if (line.endsWith('\r')) line = line.slice(0, -1);
     if (!line) {
-      if (event === 'now' || event === 'mode') {
+      if (event === 'now' || event === 'mode' || event === 'mode_changed') {
+        if (event !== 'now') {
+          // Presence mode changes (Present, Away, On the move) update the shell live, including when Jarvis switches.
+          try {
+            const value: unknown = JSON.parse(data.join('\n') || '{}');
+            if (isRecord(value) && typeof value.mode === 'string') options.onPresenceMode?.(value.mode);
+          } catch {
+            // A malformed mode payload still refreshes the feed below.
+          }
+        }
         options.onUpdate();
       } else if (event === 'jarvis-activity') {
         let value: unknown;

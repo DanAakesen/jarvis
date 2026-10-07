@@ -1,10 +1,13 @@
 import { useCallback, useContext, useEffect, useLayoutEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import type { PublicClientApplication } from '@azure/msal-browser';
-import { Link, useLocation } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
+import { TaskWindowLink } from './TaskWindowLink';
 import type { PublicConfig } from '../config/public-config';
 import { sharedScreenContext, type CameraController, type ScreenShareController } from './screen-sharing';
+import { ConversationHandle } from './ConversationHandle';
 import { ConversationMoreMenu, type MoreMenuAction } from './ConversationMoreMenu';
+import { ConversationToast } from './ConversationToast';
 import { VoiceControls } from './VoiceControls';
 import { useVoiceWorkspace } from './voice-workspace-state';
 import { WorkspaceCommandContext } from './workspace-command-state';
@@ -27,6 +30,19 @@ const maxTaskId = 9_223_372_036_854_775_807n;
 
 type QueuedMessage = { id: number; text: string; language: 'da' | 'en' };
 const followThreshold = 32;
+const draftKey = 'jarvis.chat.draft';
+
+/** The unsent message survives moving between pages in this tab; it is never sent anywhere. */
+function readDraft(): string {
+  try { return sessionStorage.getItem(draftKey) ?? ''; } catch { return ''; }
+}
+
+function writeDraft(value: string) {
+  try {
+    if (value) sessionStorage.setItem(draftKey, value);
+    else sessionStorage.removeItem(draftKey);
+  } catch { /* The draft then lasts only while the page is open. */ }
+}
 
 function ConversationIcon({ name }: { name: 'screen' | 'camera' | 'send' | 'latest' }) {
   const common = { 'aria-hidden': true as const, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
@@ -36,7 +52,7 @@ function ConversationIcon({ name }: { name: 'screen' | 'camera' | 'send' | 'late
     case 'camera':
       return <svg {...common}><path d="M4 7h3l2-3h6l2 3h3a2 2 0 0 1 2 2v10H2V9a2 2 0 0 1 2-2Z" /><circle cx="12" cy="12" r="3" /></svg>;
     case 'send':
-      return <svg {...common}><path d="M21 3 10.5 13.5M21 3l-6.5 18-4-7.5L3 9.5Z" /></svg>;
+      return <svg {...common}><path d="M12 19V5M5.5 11.5 12 5l6.5 6.5" /></svg>;
     case 'latest':
       return <svg {...common}><path d="M12 5v14m-6-6 6 6 6-6" /></svg>;
   }
@@ -147,10 +163,11 @@ export function ConversationHistory({
   const [loading, setLoading] = useState(true);
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [historyError, setHistoryError] = useState('');
+  const [historyErrorId, setHistoryErrorId] = useState(0);
   const [reload, setReload] = useState(0);
-  const [language, setLanguage] = useState<'da' | 'en'>('da');
+  const [language, setLanguage] = useState<'da' | 'en'>('en');
   const [session, setSession] = useState<ChatSession | null>(null);
-  const [draft, setDraft] = useState('');
+  const [draft, setDraft] = useState(readDraft);
   const [sending, setSending] = useState(false);
   const [queue, setQueue] = useState<QueuedMessage[]>([]);
   const [activeMessage, setActiveMessage] = useState<QueuedMessage | null>(null);
@@ -182,7 +199,9 @@ export function ConversationHistory({
   const hasLoadedOlder = useRef(false);
   const nextQueueId = useRef(0);
   const turnInFlight = useRef(false);
-  const draftValue = useRef('');
+  const draftValue = useRef(draft);
+  useEffect(() => { writeDraft(draft); }, [draft]);
+  const dismissHistoryError = useCallback(() => setHistoryError(''), []);
   const turnController = useRef<AbortController | null>(null);
   const turnSession = useRef<ChatSession | null>(null);
 
@@ -306,6 +325,7 @@ export function ConversationHistory({
     }).catch((reason: unknown) => {
       if (!active) return;
       setHistoryError(reason instanceof Error ? reason.message : 'Jarvis could not load conversation history.');
+      setHistoryErrorId((value) => value + 1);
     }).finally(() => {
       if (active) setLoading(false);
     });
@@ -329,6 +349,7 @@ export function ConversationHistory({
       setNextCursor(page.nextCursor);
     } catch (reason) {
       setHistoryError(reason instanceof Error ? reason.message : 'Jarvis could not load older conversation history.');
+      setHistoryErrorId((value) => value + 1);
     } finally {
       setLoadingOlder(false);
     }
@@ -555,7 +576,7 @@ export function ConversationHistory({
       icon: <ConversationIcon name="screen" />,
       onSelect: () => void inspectVision('screen'),
       disabled: !screenShare?.sharing || screenShare.inspecting,
-      ...(!screenShare?.sharing ? { description: 'Share your screen from Activity, sharing and backend first.' } : {}),
+      ...(!screenShare?.sharing ? { description: 'Share your screen from the top bar first.' } : {}),
     },
     {
       id: 'camera',
@@ -577,14 +598,7 @@ export function ConversationHistory({
     <>
         {loading ? (
           <p role="status" aria-live="polite">Loading conversation history…</p>
-        ) : historyError && messages.length === 0 ? (
-          <div className="history-feedback">
-            <p role="alert">{historyError}</p>
-            <button className="history-button" type="button" onClick={retry}>
-              Retry
-            </button>
-          </div>
-        ) : messages.length === 0 && !sending && queue.length === 0 && failedTurns.length === 0 ? (
+        ) : historyError && messages.length === 0 ? null : messages.length === 0 && !sending && queue.length === 0 && failedTurns.length === 0 ? (
           <div className="conversation-greeting">
             <h2>What’s on your mind?</h2>
             <p>Make a plan, explore an idea, or pick up where you left off.</p>
@@ -596,7 +610,6 @@ export function ConversationHistory({
                 {loadingOlder ? 'Loading older history…' : 'Load older history'}
               </button>
             )}
-            {historyError && <p role="alert" className="history-error">{historyError}</p>}
             <ol className="conversation-messages" aria-label="Messages between Dan and Jarvis">
               {messages.map((message) => {
                 const voiceUsageText = message.channel === 'voice' && message.voiceMinutes != null &&
@@ -624,9 +637,9 @@ export function ConversationHistory({
                           <li key={call.id}>
                             <span className="tool-call">{call.tool} · {call.outcome}</span>
                             {validTaskId(call.taskId) && (
-                              <Link className="task-reference" to={`/factory/tasks/${call.taskId}`}>
+                              <TaskWindowLink className="task-reference" taskId={call.taskId}>
                                 Task #{call.taskId}
-                              </Link>
+                              </TaskWindowLink>
                             )}
                             {call.tool === 'image_generation' && call.outcome === 'ok' && call.artifactId && (
                               <ConversationImageArtifact client={client} config={config} artifactId={call.artifactId} />
@@ -728,6 +741,7 @@ export function ConversationHistory({
       )}
 
       <div ref={inputBar} className={`conversation-input${voiceActive ? '' : ' luminous-glass'}`} data-voice-active={voiceActive}>
+      {hosted && conversationWindow && !voiceActive && <ConversationHandle host={conversationWindow} />}
       <div className="conversation-actions">
       <VoiceControls
         client={client}
@@ -745,7 +759,6 @@ export function ConversationHistory({
       />
       </div>
       <form id="conversation-composer" className="composer" hidden={voiceActive} onSubmit={(event) => void sendMessage(event)}>
-        <ConversationMoreMenu className="composer-attach" icon="attach" label="Attach visual context" actions={attachActions} />
         <label className="visually-hidden" htmlFor="message">Message Jarvis</label>
         <textarea
           ref={input}
@@ -772,8 +785,8 @@ export function ConversationHistory({
           }}
           aria-describedby="chat-guidance"
         />
-        <ConversationMoreMenu className="composer-more" language={language} onLanguageChange={setLanguage} align="end" />
-        <button className="primary-button composer-send" type="submit" disabled={!draft.trim()} aria-label="Send" title="Send message">
+        <ConversationMoreMenu className="composer-more" language={language} onLanguageChange={setLanguage} actions={attachActions} align="end" />
+        <button className="composer-send" type="submit" disabled={!draft.trim()} aria-label="Send" title="Send message">
           <ConversationIcon name="send" />
         </button>
         <p id="chat-guidance" className="visually-hidden">
@@ -785,6 +798,11 @@ export function ConversationHistory({
           <p className="composer-status" role="status">{visionContext.source === 'camera' ? 'Camera' : 'Screen'} context is ready for the next message; it will not be saved in conversation history.</p>}
       </form>
       </div>
+      {historyError && (
+        <ConversationToast notification={{ id: historyErrorId, message: historyError, error: true }}
+          onDismiss={dismissHistoryError} voiceActive={voiceActive}
+          action={{ label: 'Retry', onSelect: messages.length === 0 ? retry : () => void loadOlder() }} />
+      )}
     </section>
   );
 }
