@@ -348,6 +348,17 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   supported embedding deployments. Requests explicitly ask for 1,536 dimensions,
   including when `text-embedding-3-large` is selected. ARM/live Azure selection
   remains unverified.
+  uses the Voice Live-supported `mai-transcribe` model. Codex and Copilot expose
+  provider-specific model and reasoning allowlists through the same settings
+  options. Factory task starts prefer per-task model/reasoning overrides to the
+  corresponding role settings, then pass the effective choices to the runner.
+  Codex applies both through ACP config options; Copilot receives its model and
+  reasoning effort as CLI arguments. `default` omits the setting; Codex's
+  `none` effort is passed through, while Copilot's `none` omits its CLI flag.
+  The runner persists effective options with the ACP session for resumed turns.
+  `JARVIS_CODEX_TOOL_MODEL` remains specific to isolated Codex
+  research and image-generation tools. Provider/account availability and live
+  Azure selection remain unverified.
 - `ci.yml` (P0-10) is the aggregate CI on every PR, `main` push and
   `workflow_dispatch`. It calls the reusable `web-ci.yml`, `backend-ci.yml`
   (including the container smoke), `database-ci.yml` (isolated SQL Server migrations), `foundry-contract.yml`, `runner-ci.yml`

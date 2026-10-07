@@ -591,6 +591,20 @@ def _optional_config(payload: dict[str, Any], key: str, max_length: int) -> str 
     return None if value == "default" else value
 
 
+def _optional_reasoning(payload: dict[str, Any], agent: str) -> str | None:
+    reasoning = _optional_config(payload, "reasoning", 32)
+    if reasoning is None:
+        return None
+    supported = (
+        {"none", "minimal", "low", "medium", "high", "xhigh"}
+        if agent == "codex"
+        else {"none", "low", "medium", "high"}
+    )
+    if reasoning not in supported:
+        raise ValueError("'reasoning' is not supported for this agent")
+    return reasoning
+
+
 def _workspace_config(payload: dict[str, Any]) -> dict[str, str]:
     if not isinstance(payload, dict):
         raise ValueError("Workspace configuration must be an object")
@@ -1495,10 +1509,13 @@ class ACPClient:
             await asyncio.gather(self._reader_task, return_exceptions=True)
 
 
-def _agent_command(agent: str, model: str | None = None) -> list[str]:
+def _agent_command(agent: str, model: str | None = None, reasoning: str | None = None) -> list[str]:
     command = ["copilot", "--acp", "--stdio", "--allow-all"] if agent == "copilot" else ["codex-acp"]
-    if agent == "copilot" and model is not None:
-        command.extend(["--model", model])
+    if agent == "copilot":
+        if model is not None:
+            command.extend(["--model", model])
+        if reasoning is not None and reasoning != "none":
+            command.extend(["--reasoning-effort", reasoning])
     return command
 
 
@@ -1718,7 +1735,7 @@ async def _run_task(
                 state.model = persisted_session["model"]
                 state.reasoning = persisted_session["reasoning"]
             client = ACPClient(
-                _agent_command(state.agent, state.model),
+                _agent_command(state.agent, state.model, state.reasoning),
                 project,
                 state,
                 env,
@@ -2044,9 +2061,7 @@ async def invoke(request: Request) -> Response:
         return JSONResponse({"error": str(exc)}, status_code=400)
     try:
         model = _optional_config(payload, "model", 100)
-        reasoning = _optional_config(payload, "reasoning", 32)
-        if agent == "copilot" and reasoning is not None:
-            raise ValueError("'reasoning' is only supported for Codex")
+        reasoning = _optional_reasoning(payload, agent)
         workspace = _session_workspace(session_id, payload)
     except ValueError as exc:
         return JSONResponse({"error": str(exc)}, status_code=400)
