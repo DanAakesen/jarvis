@@ -5,6 +5,7 @@ const EMBEDDING_TIMEOUT_MS = 10_000;
 const DEPLOYMENT_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/u;
 
 export interface MemoryEmbedder {
+  readonly model?: string;
   embed(text: string, signal: AbortSignal): Promise<readonly number[]>;
   embedWithUsage?(text: string, signal: AbortSignal): Promise<{
     readonly embedding: readonly number[];
@@ -94,7 +95,7 @@ export function createFoundryMemoryEmbedder(options: FoundryMemoryEmbedderOption
         Authorization: ['Bear' + 'er', token].join(' '),
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ model: options.deploymentName, input: text }),
+      body: JSON.stringify({ model: options.deploymentName, input: text, dimensions: MEMORY_EMBEDDING_DIMENSIONS }),
       redirect: 'error',
       signal: requestSignal,
     });
@@ -124,6 +125,7 @@ export function createFoundryMemoryEmbedder(options: FoundryMemoryEmbedderOption
   }
 
   return {
+    model: options.deploymentName,
     async embed(text, signal) {
       return (await embedWithUsage(text, signal)).embedding;
     },

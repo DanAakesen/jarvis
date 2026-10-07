@@ -344,6 +344,10 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   are `gpt-realtime-2.1` and `gpt-realtime-2.1-mini`, and input transcription
   uses the Voice Live-supported `mai-transcribe` model. Codex and Copilot retain
   their provider `default` option until their provider model catalogues are
+  available. Embedding defaults to `text-embedding-3-small`; Bicep deploys both
+  supported embedding deployments. Requests explicitly ask for 1,536 dimensions,
+  including when `text-embedding-3-large` is selected. ARM/live Azure selection
+  remains unverified.
   available. ARM/live Azure selection remains unverified.
   P9-07 adds Dan-only `POST /models/deployments` and
   `DELETE /models/deployments/:name`, backed by the same Foundry account
@@ -1149,17 +1153,23 @@ scoped to that repository with Contents write permission (which includes read);
 the backend never uses a personal token. A signed `push` webhook for `master`
 and a startup sync read the recursive Git tree. Sync fetches changed Markdown
 notes by blob SHA, skips `.obsidian/`, `.github/`, `.codex/`, `.vscode/` and
-non-text/binary files, chunks notes by heading, embeds them with the existing
-`text-embedding-3-small` deployment when available, and removes deleted notes.
+non-text/binary files, chunks notes by heading, embeds them with the selected
+embedding role deployment when available, and removes deleted notes.
 `dbo.vault_chunks` in migration `0021_vault_memory_index.sql` is only a derived
 index/cache keyed by path and blob SHA. Migration `0028_json_embeddings_without_vector.sql`
 stores nullable JSON vectors for both vault chunks and legacy SQL memories when
-SQL Server has no `vector` type. In that mode, the backend ranks stored vectors
-with cosine similarity in code, caches the bounded vault matrix until index
-changes, and retains full-text/term search as fallback. A sync backfills missing
-vault embeddings with a 4,096-call limit; successful note replacements
-persist progress for later syncs. Embedding telemetry records provider input
-tokens when the response supplies them.
+SQL Server has no `vector` type. Migration `0031_embedding_model_identity.sql`
+stores the deployment name beside every memory and vault vector. Vector search
+and graph similarity use only rows from the active model; vectors with another
+or unknown model are treated as missing. JSON mode ranks the matching vectors
+with cosine similarity in code and caches the bounded vault matrix until index
+changes; full-text/term search remains the fallback. A sync backfills missing
+vault embeddings with a 4,096-call limit. Changing the embedding role starts a
+cancellable, persisted background job that re-embeds up to 4,096 memories and
+runs the paced vault synchronization. Startup detects remaining mismatched
+vectors and resumes the job; job detail reports when another bounded pass
+remains. Embedding telemetry records provider input tokens when the response
+supplies them.
 
 The backend exposes `vault_search` (up to eight ranked snippets with heading,
 path and GitHub note URL), `vault_read` (one Markdown note, at most 256 KiB),

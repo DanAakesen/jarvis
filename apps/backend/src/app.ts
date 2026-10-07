@@ -63,6 +63,7 @@ export interface BuildAppOptions {
   readonly renewCodexCredential?: () => ReturnType<typeof runCodexRenewalOnce>;
   readonly usageStore?: UsageStore;
   readonly backgroundJobStore?: BackgroundJobStore;
+  readonly onEmbeddingModelChanged?: (jobs: BackgroundJobRegistry) => Promise<void>;
   readonly nowFeedStore?: NowFeedStore;
   readonly nowEventHub?: NowFeedEventHub;
   readonly jarvisActivityHub?: JarvisActivityHub;
@@ -115,6 +116,7 @@ declare module 'fastify' {
     taskStatusNotificationStore: TaskStatusNotificationStore | null;
     workspaceCommands: WorkspaceCommandBroker;
     backgroundJobs: BackgroundJobRegistry;
+    onEmbeddingModelChanged: ((jobs: BackgroundJobRegistry) => Promise<void>) | null;
   }
 }
 
@@ -181,6 +183,7 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
     createEventHub<JarvisActivityEvent | JarvisVoiceWakeEvent | BackgroundJobEvent>());
   const backgroundJobs = new BackgroundJobRegistry(app.jarvisActivityHub, Date.now, options.backgroundJobStore);
   app.decorate('backgroundJobs', backgroundJobs);
+  app.decorate('onEmbeddingModelChanged', options.onEmbeddingModelChanged ?? null);
   app.addHook('onReady', async () => { await backgroundJobs.initialize(); });
   app.decorate('onConversationSessionEnded', options.onConversationSessionEnded ?? (() => {}));
   const workspaceCommands = options.workspaceCommands ?? new WorkspaceCommandBroker();

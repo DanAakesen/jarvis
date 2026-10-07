@@ -50,6 +50,16 @@ to the existing Bicep deployment chain without a settings migration. Offline
 runtime and runner tests cover these paths; deployed Azure interoperability and
 billed cost remain unverified.
 
+P9-03 (7 October 2026): persist the deployment name with each memory and vault
+embedding and never compare vectors unless their model names match. Keep vector
+dimensions at 1,536 by setting the embeddings request `dimensions` field, so
+the existing SQL vector schema supports both small and large deployments.
+Treat legacy or different-model vectors as missing; on a role change, a
+cancellable durable background job re-embeds bounded memory batches and invokes
+the existing paced vault synchronization. Startup checks for remaining missing
+vectors and resumes the job. Evidence: migration `0031_embedding_model_identity.sql`,
+model-filtered SQL/JSON search, and focused model-switch/backfill tests. Live
+Foundry and SQL Server acceptance remains unverified.
 P9-07 (7 October 2026): manage model deployments only from models present in the
 live Foundry account catalogue. Generate deployment names from model and version;
 require the existing one-time `model_deployment` Now confirmation for both

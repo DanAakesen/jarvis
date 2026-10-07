@@ -80,6 +80,9 @@ describe('Foundry model catalogue', () => {
     expect(catalogue.reason).toContain('configured model defaults');
     expect(catalogue.deployments).toEqual(fallbackModelCatalogue().deployments);
     expect(modelsForRole(catalogue, 'chat')).toContain('gpt-6-luna');
+    expect(modelsForRole(catalogue, 'embedding')).toEqual([
+      'text-embedding-3-large', 'text-embedding-3-small',
+    ]);
     expect(isRoleModelSupported(catalogue, 'chat', 'gpt-6-luna', 'high')).toBe(true);
     expect(isRoleModelSupported(catalogue, 'chat', 'gpt-6-luna', 'xhigh')).toBe(true);
     expect(isRoleModelSupported(catalogue, 'chat', 'gpt-5.6-luna', 'xhigh')).toBe(false);
