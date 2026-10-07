@@ -824,7 +824,10 @@ export async function registerSettingsRoutes(app: import('fastify').FastifyInsta
     }
     const patch = withRoleSettings(body.settings);
     if (!isSettingsPatch(patch, catalogue, current)) return reply.code(400).send({ error: 'Invalid setting value' });
+    const embeddingModelChanged = patch.roles?.embedding?.model !== undefined &&
+      patch.roles.embedding.model !== current.roles.embedding.model;
     await app.settingsStore.write(patch);
+    if (embeddingModelChanged) await app.onEmbeddingModelChanged?.(app.backgroundJobs);
     const credentials = await app.credentialStatusStore?.list() ?? [];
     return {
       settings: await readSettings(app.settingsStore, catalogue),

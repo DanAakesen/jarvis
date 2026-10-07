@@ -23,16 +23,23 @@ function createStore(): { store: SettingsStore; values: Record<string, unknown> 
   return { store, values };
 }
 
-function fixture(settingsStore?: SettingsStore, auth: TokenVerifier = async () => ({
+function fixture(
+  settingsStore?: SettingsStore,
+  auth: TokenVerifier = async () => ({
   objectId: config.auth.ownerObjectId,
   tenantId: config.auth.tenantId,
   displayName: 'Dan',
-}), credentialStatusStore?: CredentialStatusStore, awayModeStore?: AwayModeStore) {
+  }),
+  credentialStatusStore?: CredentialStatusStore,
+  awayModeStore?: AwayModeStore,
+  onEmbeddingModelChanged?: () => Promise<void>,
+) {
   const app = buildApp(config, undefined, {
     auth,
     ...(settingsStore ? { settingsStore } : {}),
     ...(credentialStatusStore ? { credentialStatusStore } : {}),
     ...(awayModeStore ? { awayModeStore } : {}),
+    ...(onEmbeddingModelChanged ? { onEmbeddingModelChanged } : {}),
   });
   apps.push(app);
   return app;
@@ -83,6 +90,7 @@ describe('settings API', () => {
         expect.objectContaining({ name: 'gpt-6-luna', capabilities: expect.arrayContaining(['chat', 'image']) }),
       ]),
     });
+
     const saved = await app.inject({
       method: 'PATCH', url: '/settings', headers: authorization,
       payload: { settings: { roles: { chat: { model: 'gpt-6-luna', reasoningEffort: 'high' } } } },
@@ -134,6 +142,23 @@ describe('settings API', () => {
       codex: { model: 'gpt-5.5', reasoningEffort: 'xhigh' },
       copilot: { model: 'claude-sonnet-4.6', reasoningEffort: 'high' },
     });
+  });
+
+  it('starts re-embedding only when the embedding role model changes', async () => {
+    const { store } = createStore();
+    const onEmbeddingModelChanged = vi.fn(async () => {});
+    const app = fixture(store, undefined, undefined, undefined, onEmbeddingModelChanged);
+    const patch = {
+      method: 'PATCH' as const,
+      url: '/settings',
+      headers: authorization,
+      payload: { settings: { roles: { embedding: { model: 'text-embedding-3-large' } } } },
+    };
+
+    expect((await app.inject(patch)).statusCode).toBe(200);
+    expect(onEmbeddingModelChanged).toHaveBeenCalledOnce();
+    expect((await app.inject(patch)).statusCode).toBe(200);
+    expect(onEmbeddingModelChanged).toHaveBeenCalledOnce();
   });
 
   it('denies the model catalogue to non-owner principals', async () => {

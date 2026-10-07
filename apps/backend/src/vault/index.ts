@@ -43,6 +43,7 @@ const maxRoutingBytes = 512 * 1024;
 const maxInstructionFiles = 32;
 const maxVaultChunks = 512;
 const maxBackfillEmbeddingsPerSync = 4_096;
+const maxMemoryBackfillEmbeddingsPerJob = 4_096;
 const maxThrottledEmbeddingAttempts = 4;
 const maxThrottleDelayMs = 15_000;
 const maxMemoryApiResults = 50;
@@ -77,6 +78,15 @@ export interface MemoryEmbeddingLogFields {
 
 export interface VaultModule extends BackendModule {
   synchronize(signal: AbortSignal): Promise<{ readonly added: number; readonly changed: number; readonly removed: number }>;
+  reembed(
+    signal: AbortSignal,
+    progress: (step: number, detail: string) => Promise<void>,
+  ): Promise<{
+    readonly memories: number;
+    readonly memoryPending: boolean;
+    readonly vaultFiles: number;
+    readonly vaultPending: number;
+  }>;
 }
 
 interface MemoryApiItem {
@@ -464,6 +474,8 @@ export function createVaultModule(options: {
   readonly memoryStore: Pick<MemoryStore, 'getSourceMessage'>;
   readonly apiMemoryStore?: MemoryStore;
   readonly embedder?: MemoryEmbedder;
+  readonly getEmbedder?: () => Promise<MemoryEmbedder | undefined>;
+  readonly getEmbeddingModel?: () => Promise<string>;
   readonly embeddingModel?: string;
   readonly usageStore?: Pick<UsageStore, 'recordFoundryUsage'>;
   readonly onUsageRecordFailure?: () => void;
@@ -482,6 +494,19 @@ export function createVaultModule(options: {
   let lastIndexOutcome: VaultIndexOutcome = { outcome: 'pending', at: new Date().toISOString() };
   const pendingVaultDeletions = new Set<string>();
   let graphCache: Promise<KnowledgeGraph> | undefined;
+
+  async function activeEmbedder(): Promise<MemoryEmbedder | undefined> {
+    return options.getEmbedder ? options.getEmbedder() : options.embedder;
+  }
+
+  async function activeEmbeddingModel(embedder?: MemoryEmbedder): Promise<string> {
+    const model = embedder?.model ?? await options.getEmbeddingModel?.() ??
+      options.embeddingModel ?? 'text-embedding-3-small';
+    if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u.test(model)) {
+      throw new Error('Embedding model setting is invalid');
+    }
+    return model;
+  }
 
   async function loadRoutingRules(signal: AbortSignal): Promise<{
     readonly text: string;
@@ -537,28 +562,33 @@ export function createVaultModule(options: {
     }
   }
 
-  async function makeChunks(file: VaultFile, signal: AbortSignal): Promise<VaultIndexedChunk[]> {
+  async function makeChunks(
+    file: VaultFile,
+    signal: AbortSignal,
+    embedder: MemoryEmbedder | undefined,
+    embeddingModel: string,
+  ): Promise<VaultIndexedChunk[]> {
     const sections = chunkMarkdown(file.content);
     if (sections.length > maxVaultChunks) throw new Error('Vault note has too many index chunks');
     const chunks: VaultIndexedChunk[] = [];
     for (const [index, section] of sections.entries()) {
       let embedding: readonly number[] | null = null;
-      if (options.embedder) {
+      if (embedder) {
         const startedAt = performance.now();
         try {
-          const embedded = await embedThrottled(options.embedder, `${section.heading}\n${section.content}`, signal);
+          const embedded = await embedThrottled(embedder, `${section.heading}\n${section.content}`, signal);
           embedding = embedded.embedding;
           options.logEmbedding?.({
             outcome: 'ok',
             durationMs: Math.max(0, performance.now() - startedAt),
             ...(embedded.inputTokens !== undefined ? { inputTokens: embedded.inputTokens } : {}),
           });
-          if (embedded.inputTokens !== undefined && options.embeddingModel &&
+          if (embedded.inputTokens !== undefined &&
               options.usageStore?.recordFoundryUsage) {
             try {
               await options.usageStore.recordFoundryUsage({
                 role: 'embeddings',
-                model: options.embeddingModel,
+                model: embeddingModel,
                 inputTokens: embedded.inputTokens,
                 outputTokens: 0,
                 eventId: randomUUID(),
@@ -576,16 +606,18 @@ export function createVaultModule(options: {
           if (signal.aborted) throw error;
         }
       }
-      chunks.push({ index, ...section, embedding });
+      chunks.push({ index, ...section, embedding, embeddingModel: embedding ? embeddingModel : null });
     }
     return chunks;
   }
 
   async function performSynchronization(signal: AbortSignal) {
+    const embedder = await activeEmbedder();
+    const embeddingModel = await activeEmbeddingModel(embedder);
     const tree = await options.client.tree(signal);
     const markdown = tree.filter(({ path }) => eligibleMarkdown(path));
     if (markdown.length > maxMarkdownFiles) throw new Error('Vault has too many Markdown notes to index');
-    const indexed = await options.indexStore.files(signal);
+    const indexed = await options.indexStore.files(embedder ? embeddingModel : null, signal);
     if (indexed.length > maxMarkdownFiles) throw new Error('Vault index exceeds the supported size');
     const oldByPath = new Map(indexed.map((file) => [file.path, file]));
     const newPaths = new Set(markdown.map(({ path }) => path));
@@ -599,7 +631,7 @@ export function createVaultModule(options: {
       const previous = oldByPath.get(file.path);
       const unchanged = previous?.blobSha === file.sha;
       const backfill = unchanged && previous?.embeddingMissing === true;
-      if (unchanged && (!backfill || !options.embedder)) continue;
+      if (unchanged && (!backfill || !embedder)) continue;
       let note: VaultFile | null;
       try {
         note = await options.client.read(file.path, signal);
@@ -619,7 +651,7 @@ export function createVaultModule(options: {
       const sectionCount = chunkMarkdown(note.content).length;
       if (backfill && sectionCount > remainingBackfillEmbeddings) continue;
       if (backfill) remainingBackfillEmbeddings -= sectionCount;
-      const chunks = await makeChunks(note, signal);
+      const chunks = await makeChunks(note, signal, embedder, embeddingModel);
       await options.indexStore.replaceFile(note.path, note.sha, chunks, extractLinkTargets(note.content), signal);
       if (oldByPath.has(note.path)) changed += 1;
       else added += 1;
@@ -661,13 +693,61 @@ export function createVaultModule(options: {
     return synchronization;
   }
 
+  async function reembed(
+    signal: AbortSignal,
+    progress: (step: number, detail: string) => Promise<void>,
+  ) {
+    const embedder = await activeEmbedder();
+    if (!embedder) throw new Error('Embedding provider is unavailable');
+    const embeddingModel = await activeEmbeddingModel(embedder);
+    let memories = 0;
+    let processed = 0;
+    let afterId = '0';
+    await progress(0, 'Checking saved memory embeddings');
+    while (options.apiMemoryStore && processed < maxMemoryBackfillEmbeddingsPerJob) {
+      const batch = await options.apiMemoryStore.embeddingsToBackfill(
+        embeddingModel, afterId, Math.min(100, maxMemoryBackfillEmbeddingsPerJob - processed), signal,
+      );
+      if (batch.length === 0) break;
+      for (const memory of batch) {
+        signal.throwIfAborted();
+        const result = await embedThrottled(embedder, memory.content, signal);
+        const updated = await options.apiMemoryStore.updateEmbedding(
+          memory.id, memory.revision, embeddingModel, result.embedding, signal,
+        );
+        afterId = memory.id;
+        if (updated) memories += 1;
+        processed += 1;
+        if (processed % 100 === 0) {
+          await progress(0, `Processed ${processed} saved memories`);
+        }
+        if (processed >= maxMemoryBackfillEmbeddingsPerJob) break;
+      }
+    }
+    const memoryPending = options.apiMemoryStore
+      ? (await options.apiMemoryStore.embeddingsToBackfill(embeddingModel, '0', 1, signal)).length > 0
+      : false;
+    await progress(1, memoryPending
+      ? `Updated ${memories} memories; more remain`
+      : `Updated ${memories} memories`);
+    await progress(1, 'Re-indexing vault in paced batches');
+    await synchronize(signal);
+    const vaultFiles = await options.indexStore.files(embeddingModel, signal);
+    const vaultPending = vaultFiles.filter(({ embeddingMissing }) => embeddingMissing).length;
+    await progress(2, vaultPending
+      ? `Vault backfill paced; ${vaultPending} notes remain`
+      : 'Vault backfill complete');
+    return { memories, memoryPending, vaultFiles: vaultFiles.length, vaultPending };
+  }
+
   async function buildKnowledgeGraph(signal: AbortSignal): Promise<KnowledgeGraph> {
+    const embeddingModel = await activeEmbeddingModel(await activeEmbedder());
     const files = (await options.indexStore.graphFiles(signal))
       .filter(({ path }) => isRoutedNotePath(path))
       .slice(0, maxGraphNodes);
     const paths = files.map(({ path }) => path);
     const pathSet = new Set(paths);
-    const graphData = await options.indexStore.graphData(paths, signal);
+    const graphData = await options.indexStore.graphData(paths, embeddingModel, signal);
     const ids = new Map(paths.map((path) => [path, graphNodeId(path)]));
     const nodes: KnowledgeGraphNode[] = files.flatMap((file) => {
       const folder = safeFolder(file.path);
@@ -795,16 +875,18 @@ export function createVaultModule(options: {
         : 'The vault index is not ready. Please try again after synchronization finishes.');
     }
     let hits: VaultSearchHit[] = [];
-    if (options.indexStore.supportsVectorSearch() && options.embedder) {
+    const embedder = await activeEmbedder();
+    const embeddingModel = await activeEmbeddingModel(embedder);
+    if (options.indexStore.supportsVectorSearch() && embedder) {
       let embedding: readonly number[] | undefined;
       try {
-        embedding = await options.embedder.embed(query, signal);
+        embedding = await embedder.embed(query, signal);
       } catch (error) {
         if (signal.aborted) throw error;
       }
       if (embedding) {
         try {
-          hits = await options.indexStore.searchByVector(embedding, limit, signal);
+          hits = await options.indexStore.searchByVector(embedding, embeddingModel, limit, signal);
         } catch (error) {
           if (!(error instanceof VectorSearchUnavailableError)) {
             if (signal.aborted) throw error;
@@ -1058,6 +1140,7 @@ export function createVaultModule(options: {
     id: 'vault',
     tools,
     synchronize,
+    reembed,
     registerRoutes: async (app) => {
       const ownerOnly = (request: FastifyRequest, reply: import('fastify').FastifyReply): boolean => {
         if (!request.principal || request.principal.objectId.toLowerCase() !== app.ownerObjectId.toLowerCase()) {
@@ -1200,7 +1283,9 @@ export function createVaultModule(options: {
       app.get('/memory/status', async (request, reply) => {
         if (!ownerOnly(request, reply) || !apiStore(reply)) return;
         const counts: Record<string, number> = Object.fromEntries([...folderNames].map((folder) => [folder, 0]));
-        for (const file of await options.indexStore.files(AbortSignal.timeout(10_000))) {
+        for (const file of await options.indexStore.files(
+          await activeEmbeddingModel(await activeEmbedder()), AbortSignal.timeout(10_000),
+        )) {
           const folder = isRoutedNotePath(file.path) ? safeFolder(file.path) : undefined;
           if (folder) counts[folder] = (counts[folder] ?? 0) + 1;
         }
@@ -1232,17 +1317,19 @@ export function createVaultModule(options: {
           const terms = memorySearchTerms(query);
           if (terms.length > 0) {
             let embedding: readonly number[] | undefined;
-            if (options.embedder &&
+            const embedder = await activeEmbedder();
+            const embeddingModel = await activeEmbeddingModel(embedder);
+            if (embedder &&
                 (store.supportsVectorSearch() || options.indexStore.supportsVectorSearch())) {
               try {
-                embedding = await options.embedder.embed(query, signal);
+                embedding = await embedder.embed(query, signal);
               } catch (error) {
                 if (signal.aborted) throw error;
               }
             }
             if (embedding) {
               try {
-                memories = await store.searchByVector(embedding, fetchLimit, signal);
+                memories = await store.searchByVector(embedding, embeddingModel, fetchLimit, signal);
                 if (memories.length > 0) searchMethod = 'vector';
               } catch (error) {
                 if (!(error instanceof VectorSearchUnavailableError)) throw error;
@@ -1258,7 +1345,7 @@ export function createVaultModule(options: {
             }
             if (embedding && options.indexStore.supportsVectorSearch()) {
               try {
-                vaultHits = await options.indexStore.searchByVector(embedding, fetchLimit, signal);
+                vaultHits = await options.indexStore.searchByVector(embedding, embeddingModel, fetchLimit, signal);
               } catch (error) {
                 if (!(error instanceof VectorSearchUnavailableError)) throw error;
               }
@@ -1270,7 +1357,9 @@ export function createVaultModule(options: {
         } else {
           const page = await store.list(fetchLimit, signal);
           memories = page.memories;
-          const noteFiles = await options.indexStore.files(signal);
+          const noteFiles = await options.indexStore.files(
+            await activeEmbeddingModel(await activeEmbedder()), signal,
+          );
           const notes = noteFiles.filter(({ path }) => isRoutedNotePath(path) &&
             (folder === undefined || safeFolder(path) === folder));
           const eligibleMemories = folder === undefined || folder === 'General' ? memories : [];
@@ -1407,8 +1496,10 @@ export function createVaultModule(options: {
           const versions = await options.apiMemoryStore!.history(id, 1, signal);
           const current = versions[0];
           if (!current) return reply.code(404).send({ error: 'Memory not found' });
-          const embedding = options.embedder && options.apiMemoryStore!.supportsVectorSearch()
-            ? await options.embedder.embed(text, signal).catch((error: unknown) => {
+          const embedder = await activeEmbedder();
+          const embeddingModel = await activeEmbeddingModel(embedder);
+          const embedding = embedder && options.apiMemoryStore!.supportsVectorSearch()
+            ? await embedder.embed(text, signal).catch((error: unknown) => {
               if (signal.aborted) throw error;
               return null;
             })
@@ -1419,6 +1510,7 @@ export function createVaultModule(options: {
             content: text,
             sourceMessageId: current.sourceMessageId,
             embedding,
+            embeddingModel: embedding ? embeddingModel : null,
           }, signal);
           return { item: memoryApiItem(corrected.memory), commitUrl: null };
         }

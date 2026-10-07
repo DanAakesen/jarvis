@@ -291,7 +291,7 @@ export function isWorkspaceCommand(
   options?: { trustedBlobHost?: string; registeredTools?: readonly string[] },
 ): value is WorkspaceCommand;
 
-export type BackgroundJobKind = 'research' | 'image' | 'html_app';
+export type BackgroundJobKind = 'research' | 'image' | 'html_app' | 'embedding';
 export type BackgroundJobStatus = 'running' | 'done' | 'failed' | 'cancelled';
 /** A slow Jarvis task running in the background; the shell shows it as a job chip until its window is ready. */
 export interface BackgroundJob {

@@ -34,6 +34,7 @@ export interface MemorySaveInput {
   readonly content: string;
   readonly sourceMessageId: string;
   readonly embedding: readonly number[] | null;
+  readonly embeddingModel: string | null;
 }
 
 export interface MemorySaveResult {
@@ -54,7 +55,25 @@ export interface MemoryStore {
   }>;
   history(memoryId: string, limit: number, signal: AbortSignal): Promise<MemoryVersion[]>;
   forget(memoryId: string, requestMessageId: string, signal: AbortSignal): Promise<Pick<MemoryRecord, 'category' | 'key'> | null>;
-  searchByVector(embedding: readonly number[], limit: number, signal: AbortSignal): Promise<MemoryRecord[]>;
+  searchByVector(
+    embedding: readonly number[],
+    embeddingModel: string,
+    limit: number,
+    signal: AbortSignal,
+  ): Promise<MemoryRecord[]>;
+  embeddingsToBackfill(
+    model: string,
+    afterId: string,
+    limit: number,
+    signal: AbortSignal,
+  ): Promise<{ readonly id: string; readonly content: string; readonly revision: number }[]>;
+  updateEmbedding(
+    memoryId: string,
+    revision: number,
+    model: string,
+    embedding: readonly number[],
+    signal: AbortSignal,
+  ): Promise<boolean>;
   searchByFullText(terms: readonly string[], limit: number, signal: AbortSignal): Promise<{
     readonly method: 'fulltext' | 'substring';
     readonly memories: MemoryRecord[];
@@ -72,6 +91,7 @@ export interface VaultIndexedChunk {
   readonly heading: string;
   readonly content: string;
   readonly embedding: readonly number[] | null;
+  readonly embeddingModel: string | null;
 }
 
 export interface VaultSearchHit {
@@ -105,7 +125,7 @@ export const vaultSimilarityThreshold = 0.35;
 export interface VaultIndexStore {
   initialize(): Promise<void>;
   supportsVectorSearch(): boolean;
-  files(signal: AbortSignal): Promise<VaultIndexedFile[]>;
+  files(embeddingModel: string | null, signal: AbortSignal): Promise<VaultIndexedFile[]>;
   replaceFile(
     path: string,
     blobSha: string,
@@ -115,8 +135,8 @@ export interface VaultIndexStore {
   ): Promise<void>;
   deleteFiles(paths: readonly string[], signal: AbortSignal): Promise<void>;
   graphFiles(signal: AbortSignal): Promise<VaultGraphFile[]>;
-  graphData(paths: readonly string[], signal: AbortSignal): Promise<VaultGraphData>;
-  searchByVector(embedding: readonly number[], limit: number, signal: AbortSignal): Promise<VaultSearchHit[]>;
+  graphData(paths: readonly string[], embeddingModel: string, signal: AbortSignal): Promise<VaultGraphData>;
+  searchByVector(embedding: readonly number[], embeddingModel: string, limit: number, signal: AbortSignal): Promise<VaultSearchHit[]>;
   searchByTerms(terms: readonly string[], limit: number, signal: AbortSignal): Promise<VaultSearchHit[]>;
 }
 
@@ -258,7 +278,12 @@ export function createMemoryStore(pool: sql.ConnectionPool): MemoryStore {
     if (input.embedding !== null && !parseEmbedding(input.embedding)) {
       throw new TypeError('Memory embedding is invalid');
     }
+    if (input.embedding !== null &&
+        (typeof input.embeddingModel !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u.test(input.embeddingModel))) {
+      throw new TypeError('Memory embedding model is invalid');
+    }
     const targetId = memoryId === undefined ? null : toSqlId(memoryId);
+    const embeddingModel = vectorSearchAvailable || jsonEmbeddingAvailable ? input.embeddingModel : null;
     const transaction = new sql.Transaction(pool);
     await transaction.begin(sql.ISOLATION_LEVEL.SERIALIZABLE);
     let committed = false;
@@ -269,20 +294,23 @@ export function createMemoryStore(pool: sql.ConnectionPool): MemoryStore {
         .input('content', sql.NVarChar(2000), input.content)
         .input('sourceMessageId', sql.BigInt, sourceMessageId)
         .input('targetId', sql.BigInt, targetId)
-        .input('embedding', sql.NVarChar(sql.MAX), input.embedding === null ? null : JSON.stringify(input.embedding));
+        .input('embedding', sql.NVarChar(sql.MAX), input.embedding === null ? null : JSON.stringify(input.embedding))
+        .input('embeddingModel', sql.NVarChar(128), input.embedding === null ? null : embeddingModel);
       const embeddingColumn = vectorSearchAvailable ? ', embedding' : jsonEmbeddingAvailable ? ', embedding_json' : '';
       const embeddingValue = vectorSearchAvailable
         ? ', CASE WHEN @embedding IS NULL THEN NULL ELSE CAST(@embedding AS vector(1536)) END'
         : jsonEmbeddingAvailable ? ', @embedding' : '';
       const embeddingUpdate = vectorSearchAvailable
         ? `, embedding = CASE
-            WHEN @contentChanged = 1 THEN CAST(@embedding AS vector(1536))
-            ELSE COALESCE(CAST(@embedding AS vector(1536)), embedding)
+            WHEN @contentChanged = 1 OR (@embeddingModel IS NOT NULL AND ISNULL(embedding_model, N'') <> @embeddingModel)
+              THEN CAST(@embedding AS vector(1536))
+            ELSE embedding
           END`
         : jsonEmbeddingAvailable
           ? `, embedding_json = CASE
-              WHEN @contentChanged = 1 THEN @embedding
-              ELSE COALESCE(@embedding, embedding_json)
+              WHEN @contentChanged = 1 OR (@embeddingModel IS NOT NULL AND ISNULL(embedding_model, N'') <> @embeddingModel)
+                THEN @embedding
+              ELSE embedding_json
             END`
           : '';
       const statement = `DECLARE @memoryId bigint;
@@ -314,8 +342,8 @@ export function createMemoryStore(pool: sql.ConnectionPool): MemoryStore {
         BEGIN
           IF @targetId IS NOT NULL
             THROW 51002, 'Memory not found.', 1;
-          INSERT INTO dbo.memories (category, memory_key, content, source_message_id${embeddingColumn})
-            VALUES (@category, @memoryKey, @content, @sourceMessageId${embeddingValue});
+          INSERT INTO dbo.memories (category, memory_key, content, source_message_id, embedding_model${embeddingColumn})
+           VALUES (@category, @memoryKey, @content, @sourceMessageId, @embeddingModel${embeddingValue});
           SET @memoryId = CONVERT(bigint, SCOPE_IDENTITY());
           SET @created = 1;
           SET @changed = 1;
@@ -336,8 +364,22 @@ export function createMemoryStore(pool: sql.ConnectionPool): MemoryStore {
             UPDATE dbo.memories
             SET content = @content, source_message_id = @sourceMessageId,
               revision = revision + 1, updated_at = SYSUTCDATETIME()${embeddingUpdate}
+              , embedding_model = CASE
+                WHEN @contentChanged = 1 OR (@embeddingModel IS NOT NULL AND ISNULL(embedding_model, N'') <> @embeddingModel)
+                  THEN @embeddingModel
+                ELSE embedding_model
+              END
             WHERE id = @memoryId;
             SET @changed = 1;
+          END
+          ELSE IF @embeddingModel IS NOT NULL AND EXISTS (
+            SELECT 1 FROM dbo.memories WHERE id = @memoryId AND
+              (embedding_model IS NULL OR embedding_model <> @embeddingModel)
+          )
+          BEGIN
+            UPDATE dbo.memories
+            SET embedding_model = @embeddingModel${embeddingUpdate}
+            WHERE id = @memoryId;
           END
         END;
 
@@ -502,20 +544,23 @@ export function createMemoryStore(pool: sql.ConnectionPool): MemoryStore {
       }
     },
 
-    async searchByVector(embedding, limit, signal) {
+    async searchByVector(embedding, embeddingModel, limit, signal) {
       if (!initialized) throw new Error('Memory store is not initialized');
       if (embedding.length !== vectorDimensions || !embedding.every(Number.isFinite) ||
+          !/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u.test(embeddingModel) ||
           (!vectorSearchAvailable && !jsonEmbeddingAvailable)) {
         throw new VectorSearchUnavailableError();
       }
       if (jsonEmbeddingAvailable) {
-        const request = databaseReadRequest(pool).input('take', sql.Int, maxVectorCandidates);
+        const request = databaseReadRequest(pool)
+          .input('take', sql.Int, maxVectorCandidates)
+          .input('embeddingModel', sql.NVarChar(128), embeddingModel);
         const result = await execute(request, signal, () => request.query<{
           embedding_json: string | null;
         } & Parameters<typeof recordFromRow>[0]>(`SELECT TOP (@take) ${memoryColumns}, m.embedding_json
           FROM dbo.memories AS m
           ${sourceJoin}
-          WHERE m.embedding_json IS NOT NULL
+          WHERE m.embedding_json IS NOT NULL AND m.embedding_model = @embeddingModel
           ORDER BY m.updated_at DESC, m.id DESC;`));
         return rankByCosineSimilarity(embedding, result.recordset.flatMap((row) => {
           const vector = parseEmbedding(row.embedding_json);
@@ -526,11 +571,12 @@ export function createMemoryStore(pool: sql.ConnectionPool): MemoryStore {
         return await readMemories(`SELECT TOP (@take) ${memoryColumns}
           FROM dbo.memories AS m
           ${sourceJoin}
-          WHERE m.embedding IS NOT NULL
+          WHERE m.embedding IS NOT NULL AND m.embedding_model = @embeddingModel
           ORDER BY VECTOR_DISTANCE('cosine', m.embedding, CAST(@embedding AS vector(1536))), m.id DESC;`,
         (bound) => {
           bound.input('take', sql.Int, limit);
           bound.input('embedding', sql.NVarChar(sql.MAX), JSON.stringify(embedding));
+          bound.input('embeddingModel', sql.NVarChar(128), embeddingModel);
           return bound;
         }, signal);
       } catch (error) {
@@ -538,6 +584,56 @@ export function createMemoryStore(pool: sql.ConnectionPool): MemoryStore {
         if (number === 195 || number === 206) throw new VectorSearchUnavailableError();
         throw error;
       }
+    },
+
+    async embeddingsToBackfill(embeddingModel, afterId, limit, signal) {
+      if (!initialized) throw new Error('Memory store is not initialized');
+      if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u.test(embeddingModel) ||
+          !Number.isSafeInteger(limit) || limit < 1 || limit > 100 ||
+          !/^(?:0|[1-9]\d{0,18})$/u.test(afterId)) {
+        throw new TypeError('Memory embedding backfill request is invalid');
+      }
+      if (!vectorSearchAvailable && !jsonEmbeddingAvailable) return [];
+      const request = databaseReadRequest(pool)
+        .input('take', sql.Int, limit)
+        .input('afterId', sql.BigInt, BigInt(afterId))
+        .input('embeddingModel', sql.NVarChar(128), embeddingModel);
+      const result = await execute(request, signal, () => request.query<{
+        id: string;
+        content: string;
+        revision: number;
+      }>(`SELECT TOP (@take) CONVERT(varchar(20), m.id) AS id, m.content, m.revision
+        FROM dbo.memories AS m
+        WHERE m.id > @afterId AND (m.embedding_model IS NULL OR m.embedding_model <> @embeddingModel
+          OR ${vectorSearchAvailable ? 'm.embedding IS NULL' : 'm.embedding_json IS NULL'})
+        ORDER BY m.id;`));
+      return result.recordset;
+    },
+
+    async updateEmbedding(memoryId, revision, embeddingModel, embedding, signal) {
+      if (!initialized) throw new Error('Memory store is not initialized');
+      const id = toSqlId(memoryId);
+      if (!Number.isSafeInteger(revision) || revision < 1 ||
+          !/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u.test(embeddingModel) || !parseEmbedding(embedding)) {
+        throw new TypeError('Memory embedding update is invalid');
+      }
+      if (!vectorSearchAvailable && !jsonEmbeddingAvailable) return false;
+      const request = databaseReadRequest(pool)
+        .input('memoryId', sql.BigInt, id)
+        .input('revision', sql.Int, revision)
+        .input('embeddingModel', sql.NVarChar(128), embeddingModel)
+        .input('embedding', sql.NVarChar(sql.MAX), JSON.stringify(embedding));
+      const embeddingUpdate = vectorSearchAvailable
+        ? 'embedding = CAST(@embedding AS vector(1536))'
+        : 'embedding_json = @embedding';
+      const result = await execute(request, signal, () => request.query<{ id: string }>(
+        `UPDATE dbo.memories SET ${embeddingUpdate}, embedding_model = @embeddingModel
+          OUTPUT CONVERT(varchar(20), inserted.id) AS id
+          WHERE id = @memoryId AND revision = @revision
+            AND (embedding_model IS NULL OR embedding_model <> @embeddingModel
+              OR ${vectorSearchAvailable ? 'embedding IS NULL' : 'embedding_json IS NULL'});`,
+      ));
+      return result.recordset.length > 0;
     },
 
     async searchByFullText(terms, limit, signal) {
@@ -581,11 +677,16 @@ export function createVaultIndexStore(pool: sql.ConnectionPool): VaultIndexStore
   let initialized = false;
   let vectorSearchAvailable = false;
   let jsonEmbeddingAvailable = false;
-  let embeddingMatrix: Array<VaultSearchHit & { readonly chunkIndex: number; readonly embedding: readonly number[] }> | undefined;
+  let embeddingMatrix: Array<VaultSearchHit & {
+    readonly chunkIndex: number;
+    readonly embedding: readonly number[];
+    readonly embeddingModel: string;
+  }> | undefined;
   let embeddingMatrixRevision = 0;
   let embeddingMatrixLoad: Promise<Array<VaultSearchHit & {
     readonly chunkIndex: number;
     readonly embedding: readonly number[];
+    readonly embeddingModel: string;
   }>> | undefined;
 
   function pathHash(path: string): Buffer {
@@ -612,14 +713,18 @@ export function createVaultIndexStore(pool: sql.ConnectionPool): VaultIndexStore
         content: string;
         chunk_index: number;
         embedding_json: string;
-      }>(`SELECT TOP (@take) path, heading, content, chunk_index, embedding_json
+        embedding_model: string;
+      }>(`SELECT TOP (@take) path, heading, content, chunk_index, embedding_json, embedding_model
         FROM dbo.vault_chunks
-        WHERE embedding_json IS NOT NULL
+        WHERE embedding_json IS NOT NULL AND embedding_model IS NOT NULL
         ORDER BY path, chunk_index;`)).then(({ recordset }) => recordset.flatMap((row) => {
         const embedding = parseEmbedding(row.embedding_json);
         return embedding
-          ? [{ path: row.path, heading: row.heading, content: row.content, chunkIndex: row.chunk_index, embedding }]
-          : [];
+        ? [{
+          path: row.path, heading: row.heading, content: row.content, chunkIndex: row.chunk_index,
+          embedding, embeddingModel: row.embedding_model,
+        }]
+        : [];
       }));
     }
     const pending = embeddingMatrixLoad;
@@ -654,12 +759,16 @@ export function createVaultIndexStore(pool: sql.ConnectionPool): VaultIndexStore
       return initialized && (vectorSearchAvailable || jsonEmbeddingAvailable);
     },
 
-    async files(signal) {
+    async files(embeddingModel, signal) {
       ensureInitialized();
-      const request = databaseReadRequest(pool).input('take', sql.Int, 10_001);
+      const request = databaseReadRequest(pool)
+        .input('take', sql.Int, 10_001)
+        .input('embeddingModel', sql.NVarChar(128), embeddingModel);
       const embeddingColumn = vectorSearchAvailable ? 'embedding' : jsonEmbeddingAvailable ? 'embedding_json' : undefined;
       const missingEmbeddings = embeddingColumn
-        ? `CONVERT(bit, CASE WHEN COUNT(${embeddingColumn}) < COUNT(*) THEN 1 ELSE 0 END) AS embedding_missing`
+        ? `CONVERT(bit, CASE WHEN @embeddingModel IS NULL OR
+            COUNT(CASE WHEN ${embeddingColumn} IS NOT NULL AND embedding_model = @embeddingModel THEN 1 END) < COUNT(*)
+            THEN 1 ELSE 0 END) AS embedding_missing`
         : 'CONVERT(bit, 0) AS embedding_missing';
       const result = await execute(request, signal, () => request.query<{
         path: string;
@@ -679,7 +788,10 @@ export function createVaultIndexStore(pool: sql.ConnectionPool): VaultIndexStore
       if (!/^[\da-f]{40}$/u.test(blobSha) || chunks.length > 512 || links.length > 512) {
         throw new TypeError('Vault index entry is invalid');
       }
-      if (chunks.some(({ embedding }) => embedding !== null && !parseEmbedding(embedding))) {
+      if (chunks.some(({ embedding, embeddingModel }) =>
+        (embedding !== null && (!parseEmbedding(embedding) ||
+          typeof embeddingModel !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u.test(embeddingModel))) ||
+        (embedding === null && embeddingModel !== null))) {
         throw new TypeError('Vault index embedding is invalid');
       }
       const hash = pathHash(path);
@@ -699,12 +811,13 @@ export function createVaultIndexStore(pool: sql.ConnectionPool): VaultIndexStore
           : jsonEmbeddingAvailable ? ', chunk.embedding' : '';
         const statement = `DELETE FROM dbo.vault_chunks WHERE path_hash = @pathHash;
           ${chunks.length === 0 ? '' : `INSERT INTO dbo.vault_chunks
-            (path_hash, path, blob_sha, chunk_index, heading, content${embeddingColumn})
-            SELECT @pathHash, @path, @blobSha, chunk.chunk_index, chunk.heading, chunk.content${embeddingValue}
+            (path_hash, path, blob_sha, chunk_index, heading, content, embedding_model${embeddingColumn})
+            SELECT @pathHash, @path, @blobSha, chunk.chunk_index, chunk.heading, chunk.content, chunk.embedding_model${embeddingValue}
             FROM OPENJSON(@chunks) WITH (
               chunk_index int '$.index',
               heading nvarchar(500) '$.heading',
               content nvarchar(max) '$.content',
+              embedding_model nvarchar(128) '$.embeddingModel',
               embedding nvarchar(max) '$.embedding' AS JSON
             ) AS chunk;`}`;
         const linkStatement = `DELETE FROM dbo.vault_links WHERE source_path_hash = @pathHash;
@@ -770,7 +883,7 @@ export function createVaultIndexStore(pool: sql.ConnectionPool): VaultIndexStore
       }));
     },
 
-    async graphData(paths, signal) {
+    async graphData(paths, embeddingModel, signal) {
       ensureInitialized();
       if (paths.length === 0) return { links: [], similarities: [], embeddings: [] };
       const pathsByHash = new Map(paths.map((path) => [pathHash(path).toString('hex'), path]));
@@ -780,6 +893,7 @@ export function createVaultIndexStore(pool: sql.ConnectionPool): VaultIndexStore
         .input('hashes', sql.NVarChar(sql.MAX), JSON.stringify(hashes))
         .input('linkTake', sql.Int, 8_001)
         .input('paths', sql.NVarChar(sql.MAX), JSON.stringify(paths))
+        .input('embeddingModel', sql.NVarChar(128), embeddingModel)
         .input('similarityThreshold', sql.Float, vaultSimilarityThreshold);
       const similarityQuery = vectorSearchAvailable
         ? `CREATE TABLE #vault_note_vectors (path nvarchar(1024) NOT NULL, embedding vector(1536) NOT NULL);
@@ -789,7 +903,7 @@ export function createVaultIndexStore(pool: sql.ConnectionPool): VaultIndexStore
             FROM dbo.vault_chunks AS chunk
             INNER JOIN OPENJSON(@paths) AS selected ON selected.value = chunk.path
             CROSS APPLY OPENJSON(CAST(chunk.embedding AS nvarchar(max))) AS component
-            WHERE chunk.embedding IS NOT NULL
+            WHERE chunk.embedding IS NOT NULL AND chunk.embedding_model = @embeddingModel
             GROUP BY chunk.path, component.[key]
           ), mean_vectors AS (
             SELECT path,
@@ -832,8 +946,8 @@ export function createVaultIndexStore(pool: sql.ConnectionPool): VaultIndexStore
         score: number;
       }> | undefined;
       const embeddings = jsonEmbeddingAvailable
-        ? (await loadEmbeddingMatrix(signal)).flatMap(({ path, embedding }) =>
-          pathSet.has(path) ? [{ path, embedding }] : [])
+        ? (await loadEmbeddingMatrix(signal)).flatMap(({ path, embedding, embeddingModel: model }) =>
+          pathSet.has(path) && model === embeddingModel ? [{ path, embedding }] : [])
         : [];
       return {
         links: (links ?? []).flatMap(({ source_path_hash, target_path }) => {
@@ -851,15 +965,17 @@ export function createVaultIndexStore(pool: sql.ConnectionPool): VaultIndexStore
       };
     },
 
-    async searchByVector(embedding, limit, signal) {
+    async searchByVector(embedding, embeddingModel, limit, signal) {
       ensureInitialized();
       if ((!vectorSearchAvailable && !jsonEmbeddingAvailable) ||
-          embedding.length !== vectorDimensions || !embedding.every(Number.isFinite)) {
+          embedding.length !== vectorDimensions || !embedding.every(Number.isFinite) ||
+          !/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u.test(embeddingModel)) {
         throw new VectorSearchUnavailableError();
       }
       if (jsonEmbeddingAvailable) {
         const matrix = await loadEmbeddingMatrix(signal);
         const ranking = matrix.flatMap((hit) => {
+          if (hit.embeddingModel !== embeddingModel) return [];
           const score = cosineSimilarity(embedding, hit.embedding);
           return score === undefined ? [] : [{ hit, score }];
         }).sort((left, right) => right.score - left.score || left.hit.path.localeCompare(right.hit.path) ||
@@ -870,7 +986,8 @@ export function createVaultIndexStore(pool: sql.ConnectionPool): VaultIndexStore
       }
       const request = databaseReadRequest(pool)
         .input('take', sql.Int, limit)
-        .input('embedding', sql.NVarChar(sql.MAX), JSON.stringify(embedding));
+        .input('embedding', sql.NVarChar(sql.MAX), JSON.stringify(embedding))
+        .input('embeddingModel', sql.NVarChar(128), embeddingModel);
       try {
         const result = await execute(request, signal, () => request.query<{
           path: string;
@@ -880,7 +997,7 @@ export function createVaultIndexStore(pool: sql.ConnectionPool): VaultIndexStore
         }>(`SELECT TOP (@take) path, heading, content,
             1.0 - VECTOR_DISTANCE('cosine', embedding, CAST(@embedding AS vector(1536))) AS score
           FROM dbo.vault_chunks
-          WHERE embedding IS NOT NULL
+          WHERE embedding IS NOT NULL AND embedding_model = @embeddingModel
           ORDER BY VECTOR_DISTANCE('cosine', embedding, CAST(@embedding AS vector(1536))), path, chunk_index;`));
         return result.recordset.map((hit) => ({ ...hit, score: Number(hit.score) }));
       } catch (error) {
