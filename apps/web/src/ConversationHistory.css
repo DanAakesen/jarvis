@@ -316,3 +316,4 @@
 @media (max-width: 700px), (max-height: 500px) and (pointer: coarse) {
   .app-shell[data-home="false"]:not(.app-signed-out) .jarvis-page { right: 8px; bottom: 8px; left: calc(var(--rail-size) + 8px); }
   .app-shell[data-home="false"]:not(.app-signed-out) .workspace-shell-area { top: calc(var(--rail-size) + 40px); right: 8px; bottom: 62px; left: calc(var(--rail-size) + 8px); }
+}
