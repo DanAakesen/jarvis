@@ -766,3 +766,12 @@ Dan supplied a reference image and iterated live. Canonical values live in `styl
 - **Memory:** a Settings section to browse, search and filter (People, Work, Personal, General) what Jarvis knows, with sync status and counts. Choosing an entry shows it beside the list with its history, a Save correction action (vault notes link to the resulting commit) and Forget. Forget explains the outcome first: memories Jarvis keeps are forgotten at once; vault notes need approval in the conversation, and the page reports when approval is pending, refused while away, or unavailable.
 
 Evidence: local fixture captures from a stubbed sign-in harness (desktop 1480×1000 dark, phone 390×844), plus Dan's live review against the production backend in the local dev server. Hardware-GPU motion, light theme and physical phones still need Dan's check after deployment.
+## Folio — 7 October 2026 (proposed, [#519](https://github.com/DanAakesen/jarvis/issues/519))
+
+The Folio is where everything Jarvis has pulled up lives afterwards. It replaces the idea of a "windows" or "research" page.
+
+- **Entry:** a Folio icon on the left rail (stacked pages). It opens the left pane; the stage and any open windows stay in place.
+- **Pane:** a search field at the top, then kind filter chips (Reports, Apps, Images, Graphs). Pinned items come first, then Today, This week and Earlier. Each row shows a kind icon, the short title, and the time; hover shows the one-line prompt summary.
+- **Open:** a click reopens the item as a workspace window, or focuses it when already open. Rows offer pin, rename and delete (delete asks first).
+- **Jarvis:** "pull up the Ignite research again" reopens the best match and highlights it in the pane when the pane is open.
+- **States:** loading skeleton rows, an empty state that explains what will appear here, a no-results state with a clear-search action, and an error state with retry.

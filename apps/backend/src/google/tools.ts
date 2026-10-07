@@ -298,6 +298,14 @@ function validEmail(value: string): boolean {
     /^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$/u.test(value);
 }
 
+function calendarAttendees(value: unknown): string[] {
+  if (!Array.isArray(value) || value.length > 10 ||
+      value.some((email) => typeof email !== 'string' || !validEmail(email))) {
+    throw new ToolRefusal('attendees must contain at most 10 valid email addresses.');
+  }
+  return value;
+}
+
 function messageIds(value: string): string[] {
   return (value.match(/<[^<>\s]{1,998}>/gu) ?? []).slice(-20);
 }
@@ -664,15 +672,12 @@ export function createGoogleModule(
         const end = dateTime(input?.endDateTime, 'endDateTime');
         validateWindow(start, end, 14);
         const attendees = input?.attendees ?? [];
-        if (!Array.isArray(attendees) || attendees.length > 10 ||
-            attendees.some((email) => typeof email !== 'string' || !validEmail(email))) {
-          throw new ToolRefusal('attendees must contain at most 10 valid email addresses.');
-        }
+        const validatedAttendees = calendarAttendees(attendees);
         const source = await currentDanMessage(request);
         return pendingActions.stage({
           scope: 'calendar',
           sourceMessageId: source.id,
-          summary: `Create "${subject}" from ${start.toISOString()} to ${end.toISOString()}${attendees.length ? `; invite ${attendees.join(', ')}.` : '.'}`,
+          summary: `Create "${subject}" from ${start.toISOString()} to ${end.toISOString()}${validatedAttendees.length ? `; invite ${validatedAttendees.join(', ')}.` : '.'}`,
           execute: async (signal) => {
             try {
               await google.request('calendar', '/calendars/primary/events', {
@@ -682,8 +687,8 @@ export function createGoogleModule(
                   summary: subject,
                   start: dateTimeBody(start),
                   end: dateTimeBody(end),
-                  ...(attendees.length ? {
-                    attendees: attendees.map((email) => ({
+                  ...(validatedAttendees.length ? {
+                    attendees: validatedAttendees.map((email) => ({
                       email,
                     })),
                   } : {}),
@@ -693,6 +698,81 @@ export function createGoogleModule(
             } catch (error) { googleFailure(error); }
           },
         });
+      },
+    },
+    {
+      name: 'calendar_update_event',
+      description: 'Prepare to update one of Dan’s Google Calendar events. No change is made until Dan approves it with the exact confirmation phrase returned.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          eventId: { type: 'string', minLength: 1, maxLength: 512 },
+          title: { type: 'string', minLength: 1, maxLength: 200 },
+          startDateTime: dateTimeSchema,
+          endDateTime: dateTimeSchema,
+          location: { type: 'string', maxLength: 500 },
+          attendees: { type: 'array', maxItems: 10, items: { type: 'string', format: 'email', maxLength: 254 } },
+          description: { type: 'string', maxLength: 8000 },
+        },
+        required: ['eventId'],
+        minProperties: 2,
+        additionalProperties: false,
+      },
+      sensitive: true,
+      execute: async (raw, request, signal) => {
+        const input = object(raw);
+        const eventId = string(input?.eventId, 'eventId', 1, 512);
+        const hasStart = input?.startDateTime !== undefined;
+        const hasEnd = input?.endDateTime !== undefined;
+        if (hasStart !== hasEnd) {
+          throw new ToolRefusal('startDateTime and endDateTime must be provided together.');
+        }
+        const start = hasStart ? dateTime(input?.startDateTime, 'startDateTime') : undefined;
+        const end = hasEnd ? dateTime(input?.endDateTime, 'endDateTime') : undefined;
+        if (start && end) validateWindow(start, end, 14);
+        const title = input?.title === undefined ? undefined : string(input.title, 'title', 1, 200);
+        const location = input?.location === undefined ? undefined : string(input.location, 'location', 0, 500);
+        const description = input?.description === undefined
+          ? undefined
+          : string(input.description, 'description', 0, 8000, true);
+        const attendees = input?.attendees === undefined ? undefined : calendarAttendees(input.attendees);
+        const patch: Record<string, unknown> = {};
+        if (title !== undefined) patch.summary = title;
+        if (start && end) {
+          patch.start = dateTimeBody(start);
+          patch.end = dateTimeBody(end);
+        }
+        if (location !== undefined) patch.location = location;
+        if (attendees !== undefined) patch.attendees = attendees.map((email) => ({ email }));
+        if (description !== undefined) patch.description = description;
+
+        const source = await currentDanMessage(request);
+        try {
+          const path = `/calendars/primary/events/${encodeURIComponent(eventId)}`;
+          const event = requiredEvent(await google.request('calendar', path, { signal }));
+          const changes = [
+            title === undefined ? undefined : `title to "${title}"`,
+            start && end ? `time to ${start.toISOString()}–${end.toISOString()}` : undefined,
+            location === undefined ? undefined : `location to "${location}"`,
+            attendees === undefined ? undefined : `attendees to ${attendees.length ? attendees.join(', ') : 'none'}`,
+            description === undefined ? undefined : `description to ${JSON.stringify(description)}`,
+          ].filter((change): change is string => change !== undefined);
+          return pendingActions.stage({
+            scope: 'calendar',
+            sourceMessageId: source.id,
+            summary: `Update "${event.summary}" in Google Calendar: ${changes.join('; ')}.`,
+            execute: async (confirmSignal) => {
+              try {
+                await google.request('calendar', path, {
+                  method: 'PATCH',
+                  signal: confirmSignal,
+                  body: patch,
+                });
+                return { status: 'completed', detail: 'The event was updated in Google Calendar.' };
+              } catch (error) { googleFailure(error); }
+            },
+          });
+        } catch (error) { googleFailure(error); }
       },
     },
     {
@@ -735,6 +815,36 @@ export function createGoogleModule(
                   body: { start: dateTimeBody(start), end: dateTimeBody(end) },
                 });
                 return { status: 'completed', detail: 'The event was moved in Google Calendar.' };
+              } catch (error) { googleFailure(error); }
+            },
+          });
+        } catch (error) { googleFailure(error); }
+      },
+    },
+    {
+      name: 'calendar_delete_event',
+      description: 'Prepare to delete one of Dan’s Google Calendar events. No change is made until Dan approves it with the exact confirmation phrase returned.',
+      inputSchema: {
+        type: 'object',
+        properties: { eventId: { type: 'string', minLength: 1, maxLength: 512 } },
+        required: ['eventId'],
+        additionalProperties: false,
+      },
+      sensitive: true,
+      execute: async (raw, request, signal) => {
+        const eventId = string(object(raw)?.eventId, 'eventId', 1, 512);
+        const source = await currentDanMessage(request);
+        const path = `/calendars/primary/events/${encodeURIComponent(eventId)}`;
+        try {
+          const event = requiredEvent(await google.request('calendar', path, { signal }));
+          return pendingActions.stage({
+            scope: 'calendar',
+            sourceMessageId: source.id,
+            summary: `Delete "${event.summary}" from Google Calendar.`,
+            execute: async (confirmSignal) => {
+              try {
+                await google.request('calendar', path, { method: 'DELETE', signal: confirmSignal });
+                return { status: 'completed', detail: 'The event was deleted from Google Calendar.' };
               } catch (error) { googleFailure(error); }
             },
           });
