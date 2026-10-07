@@ -836,6 +836,16 @@ export async function registerSettingsRoutes(app: import('fastify').FastifyInsta
       if (budget !== undefined && typeof budget !== 'number') {
         return reply.code(400).send({ error: 'Invalid setting value' });
       }
+      const voice = (request.body as {
+        settings?: { voice?: Record<string, unknown> };
+      } | undefined)?.settings?.voice;
+      if (voice && typeof voice === 'object' && !Array.isArray(voice)) {
+        const numericTuning = ['serverVadThreshold', 'prefixPaddingMs', 'silenceDurationMs', 'maxSpokenReplyTokens'];
+        if (numericTuning.some((key) => voice[key] !== undefined && typeof voice[key] !== 'number') ||
+            (voice.bargeInEnabled !== undefined && typeof voice.bargeInEnabled !== 'boolean')) {
+          return reply.code(400).send({ error: 'Invalid setting value' });
+        }
+      }
     },
   }, async (request, reply) => {
     if (!app.settingsStore) return reply.code(503).send({ error: 'Settings unavailable' });

@@ -447,7 +447,7 @@ Declined in the audit (do not file): verbosity and max-output-token settings, no
 | P9-02 | [#496](https://github.com/DanAakesen/jarvis/issues/496) | Apply roles at runtime: vision (default `gpt-6-luna`), research, voice model, transcription | Backend | P9-01 | Complete |
 | P9-03 | [#497](https://github.com/DanAakesen/jarvis/issues/497) | Switch embedding model with automatic re-embedding | Backend | P9-01 | Complete |
 | P9-04 | [#498](https://github.com/DanAakesen/jarvis/issues/498) | Codex and Copilot model and reasoning choices that apply | Backend | P9-01 | Complete |
-| P9-05 | [#499](https://github.com/DanAakesen/jarvis/issues/499) | Voice tuning: turn detection, barge-in, reply length | Backend | — | Not started |
+| P9-05 | [#499](https://github.com/DanAakesen/jarvis/issues/499) | Voice tuning: turn detection, barge-in, reply length | Backend | — | In progress |
 | P9-06 | [#500](https://github.com/DanAakesen/jarvis/issues/500) | Research depth, sources and timeout | Backend | — | Not started |
 | P9-07 | [#501](https://github.com/DanAakesen/jarvis/issues/501) | Model deployment manager (add/remove Foundry deployments with confirmation) | Backend | P9-01 | Complete |
 | P9-08 | [#502](https://github.com/DanAakesen/jarvis/issues/502) | Claude models as the chat model | Backend | P9-01 | Complete |
