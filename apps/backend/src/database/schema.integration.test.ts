@@ -14,7 +14,7 @@ import { createAlertActivityStore } from './alert-store.js';
 import { createAwayModeStore } from './away-mode-store.js';
 import { createDispatcherStore } from './dispatcher-store.js';
 import { createConversationStore } from './conversation-store.js';
-import { createMemoryStore } from './memory-store.js';
+import { createMemoryStore, createVaultIndexStore } from './memory-store.js';
 import { createTaskStatusNotificationStore } from './task-status-notification-store.js';
 import {
   createTaskEventArchive,
@@ -98,6 +98,22 @@ describe('committed domain schema (groups 1-8)', () => {
     expect(await applyMigrations(pool, committed)).toEqual([]);
     expect(await ledger()).toEqual(committed.map((migration) => migration.name));
     expect(await tables()).toEqual(tablesInSchema);
+    const embeddings = await pool.request().query<{ vector_type: number | null; table_name: string; column_name: string }>(
+      `SELECT TYPE_ID(N'vector') AS vector_type, tables.name AS table_name, columns.name AS column_name
+        FROM sys.tables AS tables
+        INNER JOIN sys.columns AS columns ON columns.object_id = tables.object_id
+        WHERE tables.name IN (N'memories', N'vault_chunks')
+          AND columns.name IN (N'embedding', N'embedding_json')
+        ORDER BY tables.name, columns.name;`);
+    if (embeddings.recordset[0]?.vector_type === null) {
+      expect(embeddings.recordset.map(({ table_name, column_name }) => `${table_name}.${column_name}`)).toEqual([
+        'memories.embedding_json', 'vault_chunks.embedding_json',
+      ]);
+    } else {
+      expect(embeddings.recordset.map(({ table_name, column_name }) => `${table_name}.${column_name}`)).toEqual([
+        'memories.embedding', 'vault_chunks.embedding',
+      ]);
+    }
     const credentials = await pool.request().query<{ name: string; status: string }>(
       `SELECT name, status FROM dbo.credential_status WHERE name IN (N'codex-login', N'copilot-token') ORDER BY name;`);
     expect(credentials.recordset).toEqual([
@@ -186,6 +202,7 @@ describe('committed domain schema (groups 1-8)', () => {
 
     const firstStore = createMemoryStore(pool);
     await firstStore.initialize();
+    const vector = Array.from({ length: 1536 }, (_, index) => index === 0 ? 1 : 0);
     const searchSetup = await pool.request().query<{
       fulltext_installed: boolean;
       fulltext_indexed: boolean;
@@ -209,8 +226,20 @@ describe('committed domain schema (groups 1-8)', () => {
       key: 'language',
       content: 'Dan prefers English for Jarvis.',
       sourceMessageId: firstSource.id,
-      embedding: null,
+      embedding: vector,
     }, new AbortController().signal);
+    if (firstStore.supportsVectorSearch()) {
+      await expect(firstStore.searchByVector(vector, 5, new AbortController().signal))
+        .resolves.toEqual([initial.memory]);
+      const type = await pool.request().query<{ vector_type: number | null }>(
+        `SELECT TYPE_ID(N'vector') AS vector_type;`);
+      if (type.recordset[0]?.vector_type === null) {
+        const storage = await pool.request().input('memoryId', sql.BigInt, BigInt(initial.memory.id))
+          .query<{ embedding_json: string | null }>(
+            `SELECT embedding_json FROM dbo.memories WHERE id = @memoryId;`);
+        expect(JSON.parse(storage.recordset[0]!.embedding_json!)).toEqual(vector);
+      }
+    }
     const repeated = await firstStore.save({
       category: 'preference',
       key: 'language',
@@ -264,6 +293,27 @@ describe('committed domain schema (groups 1-8)', () => {
     const deletionLog = await pool.request().input('memoryId', sql.BigInt, BigInt(initial.memory.id))
       .query('SELECT COUNT(*) AS count FROM dbo.memory_deletions WHERE memory_id = @memoryId;');
     expect(deletionLog.recordset[0]?.count).toBe(1);
+  });
+
+  it('persists and ranks vault JSON embeddings on SQL Server without vector support', async () => {
+    const store = createVaultIndexStore(pool);
+    await store.initialize();
+    const queryVector = Array.from({ length: 1536 }, (_, index) => index === 0 ? 1 : 0);
+    const otherVector = Array.from({ length: 1536 }, (_, index) => index === 1 ? 1 : 0);
+    await store.replaceFile('People/Embedding ranking.md', 'a'.repeat(40), [
+      { index: 0, heading: 'Orthogonal', content: 'Other vector', embedding: otherVector },
+      { index: 1, heading: 'Nearest', content: 'Matching vector', embedding: queryVector },
+    ], [], new AbortController().signal);
+
+    if (store.supportsVectorSearch()) {
+      await expect(store.searchByVector(queryVector, 1, new AbortController().signal)).resolves.toMatchObject([
+        { path: 'People/Embedding ranking.md', heading: 'Nearest', content: 'Matching vector' },
+      ]);
+      const graph = await store.graphData(['People/Embedding ranking.md'], new AbortController().signal);
+      const type = await pool.request().query<{ vector_type: number | null }>(
+        `SELECT TYPE_ID(N'vector') AS vector_type;`);
+      if (type.recordset[0]?.vector_type === null) expect(graph.embeddings).toHaveLength(2);
+    }
   });
 
   it('ignores a concurrently repeated webhook delivery ID', async () => {

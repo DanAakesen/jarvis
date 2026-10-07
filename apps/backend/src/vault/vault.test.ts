@@ -119,7 +119,11 @@ class FakeIndexStore implements VaultIndexStore {
   async initialize() {}
   supportsVectorSearch() { return this.vectors; }
   async files() {
-    return [...this.indexed.entries()].map(([path, file]) => ({ path, blobSha: file.blobSha }));
+    return [...this.indexed.entries()].map(([path, file]) => ({
+      path,
+      blobSha: file.blobSha,
+      embeddingMissing: file.chunks.some((chunk) => chunk.embedding === null),
+    }));
   }
   async replaceFile(path: string, blobSha: string, chunks: readonly VaultIndexedChunk[], links: readonly string[]) {
     this.indexed.set(path, { blobSha, chunks: [...chunks], links: [...links] });
@@ -370,6 +374,71 @@ describe('GitHub vault', () => {
     await module.synchronize(signal());
     await app.inject({ url: '/knowledge/graph', headers: apiAuthorization });
     expect(graphFiles).toHaveBeenCalledTimes(2);
+  });
+
+  it('prefers stored chunk embeddings over precomputed similarities when building graph edges', async () => {
+    const remote = {
+      'People/Alex.md': { sha: sha('a'), content: '# Alex\n\nEngineer.' },
+      'Work/Project.md': { sha: sha('b'), content: '# Project\n\nProject notes.' },
+      'General/Other.md': { sha: sha('c'), content: '# Other\n\nOther notes.' },
+    };
+    const index = new FakeIndexStore(true);
+    const { module } = moduleFor({
+      remote,
+      index,
+      embedder: { embed: async (text) => text.includes('Alex') ? [1, 0] : [0.8, 0.6] },
+    });
+    await module.synchronize(signal());
+    vi.spyOn(index, 'graphData').mockResolvedValue({
+      links: [],
+      similarities: [{
+        sourcePath: 'People/Alex.md', targetPath: 'General/Other.md', score: 0.95,
+      }],
+      embeddings: [
+        { path: 'People/Alex.md', embedding: [1, 0] },
+        { path: 'Work/Project.md', embedding: [0.8, 0.6] },
+        { path: 'General/Other.md', embedding: [0, 1] },
+      ],
+    });
+    const app = memoryApiApp(module);
+    const graph = (await app.inject({ url: '/knowledge/graph', headers: apiAuthorization })).json();
+    const id = (path: string) => createHash('sha256').update(path).digest('hex');
+    expect(graph.edges).toContainEqual({
+      source: id('People/Alex.md'), target: id('Work/Project.md'), type: 'similar', score: 0.8,
+    });
+    expect(graph.edges).not.toContainEqual({
+      source: id('People/Alex.md'), target: id('General/Other.md'), type: 'similar', score: 0.95,
+    });
+  });
+
+  it('resumes indexing existing notes that are missing embeddings and reports embedding usage', async () => {
+    const remote = {
+      'People/Alex.md': { sha: sha('a'), content: '# Alex\n\nEngineer.' },
+    };
+    const index = new FakeIndexStore();
+    const initial = moduleFor({ remote, index }).module;
+    await initial.synchronize(signal());
+    expect(index.entry('People/Alex.md')?.chunks[0]?.embedding).toBeNull();
+
+    const logEmbedding = vi.fn();
+    const embedder = {
+      embedWithUsage: vi.fn(async () => ({ embedding: [1, 0], inputTokens: 12 })),
+      embed: vi.fn(async () => [1, 0]),
+    };
+    const backfillModule = createVaultModule({
+      client: createGitHubVaultClient({
+        tokenIssuer: { issueForContentsWrite: async () => 'installation-token' },
+        fetcher: fakeGitHub(remote).fetcher,
+      }),
+      indexStore: index,
+      memoryStore: { getSourceMessage: async () => null },
+      embedder,
+      logEmbedding,
+    });
+    await backfillModule.synchronize(signal());
+    expect(embedder.embedWithUsage).toHaveBeenCalledOnce();
+    expect(index.entry('People/Alex.md')?.chunks[0]?.embedding).toEqual([1, 0]);
+    expect(logEmbedding).toHaveBeenCalledWith(expect.objectContaining({ outcome: 'ok', inputTokens: 12 }));
   });
 
   it('reads links from indexed note text when no link rows were stored', async () => {

@@ -64,6 +64,7 @@ export interface MemoryStore {
 export interface VaultIndexedFile {
   readonly path: string;
   readonly blobSha: string;
+  readonly embeddingMissing: boolean;
 }
 
 export interface VaultIndexedChunk {
@@ -129,9 +130,54 @@ export class VectorSearchUnavailableError extends Error {
 const maxSqlBigInt = 9_223_372_036_854_775_807n;
 const sqlId = /^[1-9]\d{0,18}$/;
 const vectorDimensions = 1536;
+const maxVectorCandidates = 10_000;
 const fullTextSetupPath = fileURLToPath(
   new URL('../../../../db/migrations/setup/0016_long_term_memory.sql', import.meta.url),
 );
+
+function parseEmbedding(value: unknown): number[] | undefined {
+  let embedding = value;
+  if (typeof value === 'string') {
+    try {
+      embedding = JSON.parse(value) as unknown;
+    } catch {
+      return undefined;
+    }
+  }
+  return Array.isArray(embedding) && embedding.length === vectorDimensions &&
+    embedding.every((component) => typeof component === 'number' && Number.isFinite(component))
+    ? embedding
+    : undefined;
+}
+
+function cosineSimilarity(left: readonly number[], right: readonly number[]): number | undefined {
+  if (left.length !== vectorDimensions || right.length !== vectorDimensions) return undefined;
+  let dot = 0;
+  let leftNorm = 0;
+  let rightNorm = 0;
+  for (let index = 0; index < vectorDimensions; index += 1) {
+    const a = left[index]!;
+    const b = right[index]!;
+    dot += a * b;
+    leftNorm += a * a;
+    rightNorm += b * b;
+  }
+  if (leftNorm === 0 || rightNorm === 0) return undefined;
+  if (!Number.isFinite(dot) || !Number.isFinite(leftNorm) || !Number.isFinite(rightNorm)) return undefined;
+  return Math.max(-1, Math.min(1, dot / Math.sqrt(leftNorm * rightNorm)));
+}
+
+export function rankByCosineSimilarity<T>(
+  query: readonly number[],
+  candidates: readonly { readonly embedding: readonly number[]; readonly value: T }[],
+  limit: number,
+): T[] {
+  return candidates.flatMap(({ embedding, value }, order) => {
+    const score = cosineSimilarity(query, embedding);
+    return score === undefined ? [] : [{ value, score, order }];
+  }).sort((left, right) => right.score - left.score || left.order - right.order)
+    .slice(0, limit).map(({ value }) => value);
+}
 
 function toSqlId(value: string): bigint {
   if (!sqlId.test(value) || BigInt(value) > maxSqlBigInt) throw new TypeError('Invalid memory ID');
@@ -189,6 +235,7 @@ const sourceJoin = `INNER JOIN dbo.messages AS source
 
 export function createMemoryStore(pool: sql.ConnectionPool): MemoryStore {
   let vectorSearchAvailable = false;
+  let jsonEmbeddingAvailable = false;
   let fullTextSearchAvailable = false;
   let initialized = false;
 
@@ -208,6 +255,9 @@ export function createMemoryStore(pool: sql.ConnectionPool): MemoryStore {
     memoryId?: string,
   ): Promise<MemorySaveResult> {
     const sourceMessageId = toSqlId(input.sourceMessageId);
+    if (input.embedding !== null && !parseEmbedding(input.embedding)) {
+      throw new TypeError('Memory embedding is invalid');
+    }
     const targetId = memoryId === undefined ? null : toSqlId(memoryId);
     const transaction = new sql.Transaction(pool);
     await transaction.begin(sql.ISOLATION_LEVEL.SERIALIZABLE);
@@ -220,16 +270,21 @@ export function createMemoryStore(pool: sql.ConnectionPool): MemoryStore {
         .input('sourceMessageId', sql.BigInt, sourceMessageId)
         .input('targetId', sql.BigInt, targetId)
         .input('embedding', sql.NVarChar(sql.MAX), input.embedding === null ? null : JSON.stringify(input.embedding));
-      const embeddingColumn = vectorSearchAvailable ? ', embedding' : '';
+      const embeddingColumn = vectorSearchAvailable ? ', embedding' : jsonEmbeddingAvailable ? ', embedding_json' : '';
       const embeddingValue = vectorSearchAvailable
         ? ', CASE WHEN @embedding IS NULL THEN NULL ELSE CAST(@embedding AS vector(1536)) END'
-        : '';
+        : jsonEmbeddingAvailable ? ', @embedding' : '';
       const embeddingUpdate = vectorSearchAvailable
         ? `, embedding = CASE
             WHEN @contentChanged = 1 THEN CAST(@embedding AS vector(1536))
             ELSE COALESCE(CAST(@embedding AS vector(1536)), embedding)
           END`
-        : '';
+        : jsonEmbeddingAvailable
+          ? `, embedding_json = CASE
+              WHEN @contentChanged = 1 THEN @embedding
+              ELSE COALESCE(@embedding, embedding_json)
+            END`
+          : '';
       const statement = `DECLARE @memoryId bigint;
         DECLARE @created bit = 0;
         DECLARE @changed bit = 0;
@@ -315,6 +370,7 @@ export function createMemoryStore(pool: sql.ConnectionPool): MemoryStore {
       await pool.request().query(fullTextSetup);
       const result = await pool.request().query<{
         vector_search: boolean;
+        json_embedding_search: boolean;
         fulltext_search: boolean;
       }>(`DECLARE @fullTextInstalled bit = 0;
         BEGIN TRY
@@ -328,16 +384,20 @@ export function createMemoryStore(pool: sql.ConnectionPool): MemoryStore {
           WHEN TYPE_ID(N'vector') IS NOT NULL
             AND COL_LENGTH(N'dbo.memories', N'embedding') IS NOT NULL THEN 1 ELSE 0 END) AS vector_search,
         CONVERT(bit, CASE
+          WHEN TYPE_ID(N'vector') IS NULL
+            AND COL_LENGTH(N'dbo.memories', N'embedding_json') IS NOT NULL THEN 1 ELSE 0 END) AS json_embedding_search,
+        CONVERT(bit, CASE
           WHEN @fullTextInstalled = 1
             AND EXISTS (SELECT 1 FROM sys.fulltext_indexes
               WHERE object_id = OBJECT_ID(N'dbo.memories')) THEN 1 ELSE 0 END) AS fulltext_search;`);
       vectorSearchAvailable = result.recordset[0]?.vector_search === true;
+      jsonEmbeddingAvailable = result.recordset[0]?.json_embedding_search === true;
       fullTextSearchAvailable = result.recordset[0]?.fulltext_search === true;
       initialized = true;
     },
 
     supportsVectorSearch() {
-      return initialized && vectorSearchAvailable;
+      return initialized && (vectorSearchAvailable || jsonEmbeddingAvailable);
     },
 
     async getSourceMessage(messageId, signal) {
@@ -444,7 +504,24 @@ export function createMemoryStore(pool: sql.ConnectionPool): MemoryStore {
 
     async searchByVector(embedding, limit, signal) {
       if (!initialized) throw new Error('Memory store is not initialized');
-      if (!vectorSearchAvailable || embedding.length !== vectorDimensions) throw new VectorSearchUnavailableError();
+      if (embedding.length !== vectorDimensions || !embedding.every(Number.isFinite) ||
+          (!vectorSearchAvailable && !jsonEmbeddingAvailable)) {
+        throw new VectorSearchUnavailableError();
+      }
+      if (jsonEmbeddingAvailable) {
+        const request = databaseReadRequest(pool).input('take', sql.Int, maxVectorCandidates);
+        const result = await execute(request, signal, () => request.query<{
+          embedding_json: string | null;
+        } & Parameters<typeof recordFromRow>[0]>(`SELECT TOP (@take) ${memoryColumns}, m.embedding_json
+          FROM dbo.memories AS m
+          ${sourceJoin}
+          WHERE m.embedding_json IS NOT NULL
+          ORDER BY m.updated_at DESC, m.id DESC;`));
+        return rankByCosineSimilarity(embedding, result.recordset.flatMap((row) => {
+          const vector = parseEmbedding(row.embedding_json);
+          return vector ? [{ embedding: vector, value: recordFromRow(row) }] : [];
+        }), limit);
+      }
       try {
         return await readMemories(`SELECT TOP (@take) ${memoryColumns}
           FROM dbo.memories AS m
@@ -503,6 +580,13 @@ export function createMemoryStore(pool: sql.ConnectionPool): MemoryStore {
 export function createVaultIndexStore(pool: sql.ConnectionPool): VaultIndexStore {
   let initialized = false;
   let vectorSearchAvailable = false;
+  let jsonEmbeddingAvailable = false;
+  let embeddingMatrix: Array<VaultSearchHit & { readonly chunkIndex: number; readonly embedding: readonly number[] }> | undefined;
+  let embeddingMatrixRevision = 0;
+  let embeddingMatrixLoad: Promise<Array<VaultSearchHit & {
+    readonly chunkIndex: number;
+    readonly embedding: readonly number[];
+  }>> | undefined;
 
   function pathHash(path: string): Buffer {
     return createHash('sha256').update(path, 'utf8').digest();
@@ -512,34 +596,91 @@ export function createVaultIndexStore(pool: sql.ConnectionPool): VaultIndexStore
     if (!initialized) throw new Error('Vault index store is not initialized');
   }
 
+  function invalidateEmbeddingMatrix(): void {
+    embeddingMatrixRevision += 1;
+    embeddingMatrix = undefined;
+    embeddingMatrixLoad = undefined;
+  }
+
+  async function loadEmbeddingMatrix(signal: AbortSignal) {
+    if (embeddingMatrix) return embeddingMatrix;
+    if (!embeddingMatrixLoad) {
+      const request = databaseReadRequest(pool).input('take', sql.Int, maxVectorCandidates);
+      embeddingMatrixLoad = execute(request, signal, () => request.query<{
+        path: string;
+        heading: string;
+        content: string;
+        chunk_index: number;
+        embedding_json: string;
+      }>(`SELECT TOP (@take) path, heading, content, chunk_index, embedding_json
+        FROM dbo.vault_chunks
+        WHERE embedding_json IS NOT NULL
+        ORDER BY path, chunk_index;`)).then(({ recordset }) => recordset.flatMap((row) => {
+        const embedding = parseEmbedding(row.embedding_json);
+        return embedding
+          ? [{ path: row.path, heading: row.heading, content: row.content, chunkIndex: row.chunk_index, embedding }]
+          : [];
+      }));
+    }
+    const pending = embeddingMatrixLoad;
+    const revision = embeddingMatrixRevision;
+    try {
+      const rows = await pending;
+      if (revision === embeddingMatrixRevision) embeddingMatrix = rows;
+      return rows;
+    } finally {
+      if (embeddingMatrixLoad === pending) embeddingMatrixLoad = undefined;
+    }
+  }
+
   return {
     async initialize() {
       if (initialized) return;
-      const result = await pool.request().query<{ vector_search: boolean }>(`SELECT CONVERT(bit, CASE
+      const result = await pool.request().query<{
+        vector_search: boolean;
+        json_embedding_search: boolean;
+      }>(`SELECT CONVERT(bit, CASE
         WHEN TYPE_ID(N'vector') IS NOT NULL
-          AND COL_LENGTH(N'dbo.vault_chunks', N'embedding') IS NOT NULL THEN 1 ELSE 0 END) AS vector_search;`);
+          AND COL_LENGTH(N'dbo.vault_chunks', N'embedding') IS NOT NULL THEN 1 ELSE 0 END) AS vector_search,
+        CONVERT(bit, CASE
+          WHEN TYPE_ID(N'vector') IS NULL
+            AND COL_LENGTH(N'dbo.vault_chunks', N'embedding_json') IS NOT NULL THEN 1 ELSE 0 END) AS json_embedding_search;`);
       vectorSearchAvailable = result.recordset[0]?.vector_search === true;
+      jsonEmbeddingAvailable = result.recordset[0]?.json_embedding_search === true;
       initialized = true;
     },
 
     supportsVectorSearch() {
-      return initialized && vectorSearchAvailable;
+      return initialized && (vectorSearchAvailable || jsonEmbeddingAvailable);
     },
 
     async files(signal) {
       ensureInitialized();
       const request = databaseReadRequest(pool).input('take', sql.Int, 10_001);
-      const result = await execute(request, signal, () => request.query<{ path: string; blob_sha: string }>(
-        `SELECT TOP (@take) path, MAX(blob_sha) AS blob_sha
+      const embeddingColumn = vectorSearchAvailable ? 'embedding' : jsonEmbeddingAvailable ? 'embedding_json' : undefined;
+      const missingEmbeddings = embeddingColumn
+        ? `CONVERT(bit, CASE WHEN COUNT(${embeddingColumn}) < COUNT(*) THEN 1 ELSE 0 END) AS embedding_missing`
+        : 'CONVERT(bit, 0) AS embedding_missing';
+      const result = await execute(request, signal, () => request.query<{
+        path: string;
+        blob_sha: string;
+        embedding_missing: boolean;
+      }>(
+        `SELECT TOP (@take) path, MAX(blob_sha) AS blob_sha, ${missingEmbeddings}
           FROM dbo.vault_chunks GROUP BY path ORDER BY path;`,
       ));
-      return result.recordset.map(({ path, blob_sha }) => ({ path, blobSha: blob_sha.trim() }));
+      return result.recordset.map(({ path, blob_sha, embedding_missing }) => ({
+        path, blobSha: blob_sha.trim(), embeddingMissing: embedding_missing,
+      }));
     },
 
     async replaceFile(path, blobSha, chunks, links, signal) {
       ensureInitialized();
       if (!/^[\da-f]{40}$/u.test(blobSha) || chunks.length > 512 || links.length > 512) {
         throw new TypeError('Vault index entry is invalid');
+      }
+      if (chunks.some(({ embedding }) => embedding !== null && !parseEmbedding(embedding))) {
+        throw new TypeError('Vault index embedding is invalid');
       }
       const hash = pathHash(path);
       const transaction = new sql.Transaction(pool);
@@ -552,10 +693,10 @@ export function createVaultIndexStore(pool: sql.ConnectionPool): VaultIndexStore
           .input('blobSha', sql.Char(40), blobSha)
           .input('chunks', sql.NVarChar(sql.MAX), JSON.stringify(chunks))
           .input('links', sql.NVarChar(sql.MAX), JSON.stringify(links));
-        const embeddingColumn = vectorSearchAvailable ? ', embedding' : '';
+        const embeddingColumn = vectorSearchAvailable ? ', embedding' : jsonEmbeddingAvailable ? ', embedding_json' : '';
         const embeddingValue = vectorSearchAvailable
           ? ', CASE WHEN chunk.embedding IS NULL THEN NULL ELSE CAST(chunk.embedding AS vector(1536)) END'
-          : '';
+          : jsonEmbeddingAvailable ? ', chunk.embedding' : '';
         const statement = `DELETE FROM dbo.vault_chunks WHERE path_hash = @pathHash;
           ${chunks.length === 0 ? '' : `INSERT INTO dbo.vault_chunks
             (path_hash, path, blob_sha, chunk_index, heading, content${embeddingColumn})
@@ -573,6 +714,7 @@ export function createVaultIndexStore(pool: sql.ConnectionPool): VaultIndexStore
         await execute(request, signal, () => request.query(`${statement} ${linkStatement}`));
         await transaction.commit();
         committed = true;
+        invalidateEmbeddingMatrix();
       } finally {
         if (!committed) await transaction.rollback();
       }
@@ -593,6 +735,7 @@ export function createVaultIndexStore(pool: sql.ConnectionPool): VaultIndexStore
           WHERE source_path_hash IN (SELECT CONVERT(binary(32), value, 2) FROM OPENJSON(@hashes));`));
         await transaction.commit();
         committed = true;
+        invalidateEmbeddingMatrix();
       } finally {
         if (!committed) await transaction.rollback();
       }
@@ -688,6 +831,10 @@ export function createVaultIndexStore(pool: sql.ConnectionPool): VaultIndexStore
         target_path: string;
         score: number;
       }> | undefined;
+      const embeddings = jsonEmbeddingAvailable
+        ? (await loadEmbeddingMatrix(signal)).flatMap(({ path, embedding }) =>
+          pathSet.has(path) ? [{ path, embedding }] : [])
+        : [];
       return {
         links: (links ?? []).flatMap(({ source_path_hash, target_path }) => {
           const sourcePath = pathsByHash.get(source_path_hash.toLowerCase());
@@ -699,15 +846,27 @@ export function createVaultIndexStore(pool: sql.ConnectionPool): VaultIndexStore
             ? [{ sourcePath: source_path, targetPath: target_path, score: Number(score) }]
             : [];
         }),
-        embeddings: [],
+        embeddings,
         contents: (contents ?? []).filter(({ path }) => pathSet.has(path)),
       };
     },
 
     async searchByVector(embedding, limit, signal) {
       ensureInitialized();
-      if (!vectorSearchAvailable || embedding.length !== vectorDimensions) {
+      if ((!vectorSearchAvailable && !jsonEmbeddingAvailable) ||
+          embedding.length !== vectorDimensions || !embedding.every(Number.isFinite)) {
         throw new VectorSearchUnavailableError();
+      }
+      if (jsonEmbeddingAvailable) {
+        const matrix = await loadEmbeddingMatrix(signal);
+        const ranking = matrix.flatMap((hit) => {
+          const score = cosineSimilarity(embedding, hit.embedding);
+          return score === undefined ? [] : [{ hit, score }];
+        }).sort((left, right) => right.score - left.score || left.hit.path.localeCompare(right.hit.path) ||
+          left.hit.chunkIndex - right.hit.chunkIndex).slice(0, limit);
+        return ranking.map(({ hit, score }) => ({
+          path: hit.path, heading: hit.heading, content: hit.content, score,
+        }));
       }
       const request = databaseReadRequest(pool)
         .input('take', sql.Int, limit)

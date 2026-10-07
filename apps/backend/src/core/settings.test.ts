@@ -394,6 +394,8 @@ describe('settings API', () => {
       awayMode: true,
       mode: 'on_the_move',
       changedAt: '2026-10-06T12:30:00.000Z',
+      jarvisRepository: 'DanAakesen/jarvis',
+      projects: [],
     });
   });
 

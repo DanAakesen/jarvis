@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { projectContext, type ProjectContextEntry } from '../factory/project-context.js';
 import websocket from '@fastify/websocket';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import WebSocket, { type RawData } from 'ws';
@@ -311,6 +312,7 @@ function registerVoiceRoute(
     let responseDone = false;
     let presence: AwayModeState = defaultAwayModeState;
     let awayMode = false;
+    let projects: ProjectContextEntry[] = [];
     let personality = defaultSettings.personality;
     let responseCreateActive = false;
     let pendingResponseCreate: Record<string, unknown> | undefined;
@@ -1102,7 +1104,7 @@ function registerVoiceRoute(
       void (async () => {
         presence = await app.awayModeStore!.read();
         if (app.settingsStore) personality = (await readSettings(app.settingsStore)).personality;
-        sendUpstream(createRealtimeSessionUpdate(app.jarvisTools, personality, presence, language));
+        sendUpstream(createRealtimeSessionUpdate(app.jarvisTools, personality, presence, language, projects));
       })().catch(() => request.log.warn('voice.presence_mode_update_failed'));
     });
 
@@ -1407,9 +1409,10 @@ function registerVoiceRoute(
             request.log.warn('voice.away_mode_settings_unavailable');
           }
         }
+        projects = await projectContext(app);
         upstream = connect(token, controller.signal);
         upstream.once('open', () => {
-          if (english) sendUpstream(createRealtimeSessionUpdate(app.jarvisTools, personality, presence, language), flushQueued);
+          if (english) sendUpstream(createRealtimeSessionUpdate(app.jarvisTools, personality, presence, language, projects), flushQueued);
           else flushQueued();
         });
         const upstreamEventTypes = new Set<string>();

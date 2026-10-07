@@ -95,6 +95,8 @@ class ModelSettings:
     mode: str = "present"
     changed_at: str | None = None
     mode_instructions: dict[str, str] = field(default_factory=dict)
+    jarvis_repository: str = "DanAakesen/jarvis"
+    projects: tuple[tuple[str, str, str], ...] = ()
 
     @property
     def away_mode(self) -> bool:

@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { isBackgroundJob, type BackgroundJob, type BackgroundJobKind } from '@jarvis/contracts';
 import type { JarvisActivityHub } from './activity.js';
+import { ToolRefusal, type JarvisTool } from './tool-registry.js';
 
 const maxJobs = 20;
 const finishedRetentionMs = 10 * 60_000;
@@ -138,3 +139,78 @@ export function registerJobRoutes(app: FastifyInstance): void {
     return reply.code(202).send({ status: 'cancelled' });
   });
 }
+
+function describeJob(job: BackgroundJob, now: number): Record<string, unknown> {
+  const ageSeconds = Math.max(0, Math.round((now - Date.parse(job.startedAt)) / 1000));
+  return {
+    jobId: job.jobId,
+    kind: job.kind,
+    title: job.title,
+    status: job.status,
+    progress: `${job.step}/${job.steps}`,
+    ...(job.detail ? { detail: job.detail } : {}),
+    ...(job.viewId ? { resultWindow: job.viewId } : {}),
+    startedSecondsAgo: ageSeconds,
+  };
+}
+
+/** Lets Jarvis answer "how is the research going?" from the same state the shell's job tabs show. */
+export const listJobsTool: JarvisTool = {
+  name: 'list_jobs',
+  description: 'List Jarvis background jobs (research, images, HTML apps) shown in the job tabs: running jobs with ' +
+    'progress and current step, and jobs finished in the last 10 minutes (done with their result window, failed with ' +
+    'the reason, or cancelled). Use it whenever Dan asks about a running or recent background task.',
+  inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+  reflexSafe: true,
+  execute: async (_input, request) => {
+    const now = Date.now();
+    const jobs = request.server.backgroundJobs.list();
+    return {
+      running: jobs.filter((job) => job.status === 'running').map((job) => describeJob(job, now)),
+      finished: jobs.filter((job) => job.status !== 'running').map((job) => describeJob(job, now)),
+    };
+  },
+};
+
+function matchingJobs(jobs: readonly BackgroundJob[], query: string): BackgroundJob[] {
+  const words = query.toLowerCase().split(/\s+/u).filter((word) => word.length > 1 && word !== 'research');
+  if (words.length === 0) return [...jobs];
+  return jobs.filter((job) => {
+    const title = job.title.toLowerCase();
+    return words.every((word) => title.includes(word));
+  });
+}
+
+/** Cancels a running job by id or by words from its title ("stop the Ignite research"). */
+export const cancelJobTool: JarvisTool = {
+  name: 'cancel_job',
+  description: 'Cancel a running background job. Pass jobId from list_jobs, or query with words from its title ' +
+    '(for example "Ignite"). Cancelling only stops the work; nothing else is changed, so no confirmation is needed. ' +
+    'If several running jobs match, ask Dan which one.',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      jobId: { type: 'string', pattern: '^[0-9a-fA-F-]{36}$' },
+      query: { type: 'string', minLength: 1, maxLength: 120 },
+    },
+    additionalProperties: false,
+  },
+  execute: async (input, request) => {
+    const { jobId, query } = (input ?? {}) as { jobId?: string; query?: string };
+    const running = request.server.backgroundJobs.list().filter((job) => job.status === 'running');
+    let target: BackgroundJob | undefined;
+    if (jobId) {
+      target = running.find((job) => job.jobId.toLowerCase() === jobId.toLowerCase());
+    } else {
+      const matches = matchingJobs(running, query ?? '');
+      if (matches.length > 1) {
+        throw new ToolRefusal(`Several running jobs match: ${matches.map((job) => job.title).join('; ')}. Ask Dan which one.`);
+      }
+      target = matches[0];
+    }
+    if (!target) throw new ToolRefusal('No running background job matches that.');
+    const result = request.server.backgroundJobs.cancel(target.jobId);
+    if (result !== 'cancelled') throw new ToolRefusal(`"${target.title}" cannot be cancelled (${result}).`);
+    return { cancelled: target.title, confirmation: `Cancelled ${target.title}.` };
+  },
+};

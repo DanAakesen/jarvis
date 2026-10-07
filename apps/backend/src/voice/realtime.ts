@@ -1,4 +1,5 @@
 import type { FastifyRequest } from 'fastify';
+import { projectAwarenessInstructions, type ProjectContextEntry } from '../factory/project-context.js';
 import { confirmToolCall, type ToolCallOutcome } from '../core/tool-calls.js';
 import { ToolFailure, ToolRefusal, type ToolRegistry } from '../core/tool-registry.js';
 import { defaultSettings, type Settings } from '../core/settings.js';
@@ -53,6 +54,7 @@ it up first. Use set_jarvis_model to change Jarvis for the next session, and set
 the agent or verified model options of a Ready task. If a task is already running, explain that the
 change was refused and the task remains unchanged. Vary acknowledgements and do not announce routine
 actions. Use set_presence_mode for heading out (away), driving (on_the_move), or coming back (present).
+Use list_jobs when Dan asks about research or other background work, and cancel_job to stop one.
 This reversible change needs no confirmation; announce it. Current mode and its instruction are included below.
 When Dan is not present, send task updates and confirmations through Teams and keep spoken replies to one short sentence unless clarity requires more.
 When present, task updates go to the browser.
@@ -102,8 +104,14 @@ function modeContext(presence: AwayModeState): string {
   return `Dan's current mode: ${modeLabel(presence.mode)} since ${presence.changedAt ?? 'an unknown time'}.`;
 }
 
-function englishPersonalityInstructions(personality: Settings['personality'], presence: AwayModeState): string {
+function englishPersonalityInstructions(
+  personality: Settings['personality'],
+  presence: AwayModeState,
+  projects: readonly ProjectContextEntry[] = [],
+): string {
   return `${ENGLISH_REALTIME_INSTRUCTIONS}
+
+${projectAwarenessInstructions(projects)}
 
 ${modeContext(presence)}
 
@@ -127,8 +135,12 @@ const DANISH_PHRASE_LIST = [
 ];
 
 // Danish speech in Danish; tool, memory and safety rules are shared with English.
-function danishInstructions(personality: Settings['personality'], presence: AwayModeState): string {
-  const rules = englishPersonalityInstructions(personality, presence)
+function danishInstructions(
+  personality: Settings['personality'],
+  presence: AwayModeState,
+  projects: readonly ProjectContextEntry[] = [],
+): string {
+  const rules = englishPersonalityInstructions(personality, presence, projects)
     .split('\n\n').slice(1).join('\n\n')
     .replace(/\n\nResearch:\n[\s\S]*?(?=\n\n(?:Memory|Long-term knowledge):)/u, '')
     .replace('Preserve English as the selected language', 'Preserve Danish as the selected language');
@@ -170,14 +182,15 @@ export function createRealtimeSessionUpdate(
   personality: Settings['personality'] = defaultSettings.personality,
   presence: AwayModeState = defaultAwayModeState,
   language: 'da' | 'en' = 'en',
+  projects: readonly ProjectContextEntry[] = [],
 ) {
   const danish = language === 'da';
   return {
     type: 'session.update',
     session: {
       instructions: danish
-        ? danishInstructions(personality, presence)
-        : englishPersonalityInstructions(personality, presence),
+        ? danishInstructions(personality, presence, projects)
+        : englishPersonalityInstructions(personality, presence, projects),
       modalities: ['text', 'audio'],
       input_audio_sampling_rate: 24_000,
       input_audio_noise_reduction: { type: 'azure_deep_noise_suppression' },
