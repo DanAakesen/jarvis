@@ -366,6 +366,54 @@ function meanVectors(rows: VaultGraphData['embeddings']): Map<string, number[]> 
     [path, values.map((value) => value / count)]));
 }
 
+const textSimilarityThreshold = 0.12;
+const stopWords = new Set(('the and for are but not you all any can had her was one our out has have this that with from they will ' +
+  'what when which their there been were into more than then them these those your about would could should also just ' +
+  'like some such only over very after before here where while each other most much many make made being does done ' +
+  'og det den der som til med for har ikke var jeg vil kan skal fra men eller hvis ved paa').split(' '));
+
+/** TF-IDF vectors of note text: the similarity fallback when the database stores no embeddings. */
+function textVectors(contents: NonNullable<VaultGraphData['contents']>): Map<string, Map<string, number>> {
+  const counts = new Map<string, Map<string, number>>();
+  for (const { path, content } of contents) {
+    const terms = counts.get(path) ?? new Map<string, number>();
+    const text = content.toLowerCase().replace(/\[\[[^\]]*\]\]|\]\([^)]*\)|https?:\/\/\S+/gu, ' ');
+    for (const word of text.match(/\p{L}[\p{L}\p{N}]{2,}/gu) ?? []) {
+      if (!stopWords.has(word)) terms.set(word, (terms.get(word) ?? 0) + 1);
+    }
+    counts.set(path, terms);
+  }
+  const documentFrequency = new Map<string, number>();
+  for (const terms of counts.values()) {
+    for (const term of terms.keys()) documentFrequency.set(term, (documentFrequency.get(term) ?? 0) + 1);
+  }
+  const notes = counts.size;
+  const vectors = new Map<string, Map<string, number>>();
+  for (const [path, terms] of counts) {
+    const weighted = new Map<string, number>();
+    let norm = 0;
+    for (const [term, count] of terms) {
+      const frequency = documentFrequency.get(term)!;
+      if (frequency < 2 || frequency > notes * 0.5) continue;
+      const weight = (1 + Math.log(count)) * Math.log(notes / frequency);
+      weighted.set(term, weight);
+      norm += weight * weight;
+    }
+    if (norm === 0) continue;
+    const length = Math.sqrt(norm);
+    for (const [term, weight] of weighted) weighted.set(term, weight / length);
+    vectors.set(path, weighted);
+  }
+  return vectors;
+}
+
+function sparseCosine(left: ReadonlyMap<string, number>, right: ReadonlyMap<string, number>): number {
+  const [small, large] = left.size <= right.size ? [left, right] : [right, left];
+  let dot = 0;
+  for (const [term, weight] of small) dot += weight * (large.get(term) ?? 0);
+  return dot;
+}
+
 function cosineSimilarity(left: readonly number[], right: readonly number[]): number | undefined {
   if (left.length === 0 || left.length !== right.length) return undefined;
   let dot = 0;
@@ -591,6 +639,27 @@ export function createVaultModule(options: {
           type: 'similar',
           score: Math.max(-1, Math.min(1, edge.score)),
         });
+      }
+    } else if (vectors.size === 0) {
+      const textual = textVectors(graphData.contents ?? []);
+      for (const source of paths) {
+        const sourceVector = textual.get(source);
+        if (!sourceVector) continue;
+        const neighbours = paths.flatMap((target) => {
+          const targetVector = target === source ? undefined : textual.get(target);
+          if (!targetVector) return [];
+          const score = sparseCosine(sourceVector, targetVector);
+          return score > textSimilarityThreshold ? [{ target, score }] : [];
+        }).sort((left, right) => right.score - left.score || left.target.localeCompare(right.target))
+          .slice(0, 3);
+        for (const neighbour of neighbours) {
+          similarities.push({
+            source: ids.get(source)!,
+            target: ids.get(neighbour.target)!,
+            type: 'similar',
+            score: Math.round(neighbour.score * 1000) / 1000,
+          });
+        }
       }
     } else {
       for (const source of paths) {
