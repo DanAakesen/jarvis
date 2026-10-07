@@ -58,6 +58,7 @@ export type VoiceConnectionFactory = (
   token: string,
   signal: AbortSignal,
   agentSessionId?: string,
+  model?: string,
 ) => WebSocket;
 
 interface VoiceReflexLedgerEntry {
@@ -197,7 +198,7 @@ function closeSocket(socket: WebSocket, code: number, reason: string): void {
   else if (socket.readyState === WebSocket.CONNECTING) socket.terminate();
 }
 
-export function normalizeVoiceLiveEndpoint(endpoint: string): string {
+export function normalizeVoiceLiveEndpoint(endpoint: string, model = ENGLISH_REALTIME_MODEL): string {
   let url: URL;
   try {
     url = new URL(endpoint);
@@ -213,18 +214,19 @@ export function normalizeVoiceLiveEndpoint(endpoint: string): string {
   if (url.protocol !== 'wss:' || url.port || includesCredential ||
       !(url.hostname.endsWith('.services.ai.azure.com') || url.hostname.endsWith('.cognitiveservices.azure.com')) ||
       url.pathname !== '/voice-live/realtime' || url.username || url.password || url.hash ||
-      modelParameters.length > 1 || (modelParameters.length === 1 && modelParameters[0] !== ENGLISH_REALTIME_MODEL)) {
+      modelParameters.length > 1 || (modelParameters.length === 1 && modelParameters[0] !== ENGLISH_REALTIME_MODEL) ||
+      !/^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/u.test(model)) {
     throw new TypeError('Voice Live endpoint must be a secure Azure Voice Live WebSocket URL');
   }
-  url.searchParams.set('model', ENGLISH_REALTIME_MODEL);
+  url.searchParams.set('model', model);
   return url.href;
 }
 
 export function createVoiceLiveConnector(endpoint: string): VoiceConnectionFactory {
-  const target = normalizeVoiceLiveEndpoint(endpoint);
-  return (token, signal) => {
+  normalizeVoiceLiveEndpoint(endpoint);
+  return (token, signal, _agentSessionId, model = ENGLISH_REALTIME_MODEL) => {
     const authorization = ['Bearer', token].join(' ');
-    return new WebSocket(target, {
+    return new WebSocket(normalizeVoiceLiveEndpoint(endpoint, model), {
       headers: { Authorization: authorization },
       handshakeTimeout: CONNECTION_TIMEOUT_MS,
       maxPayload: MAX_MESSAGE_BYTES,
@@ -314,6 +316,8 @@ function registerVoiceRoute(
     let awayMode = false;
     let projects: ProjectContextEntry[] = [];
     let personality = defaultSettings.personality;
+    let voiceModel = ENGLISH_REALTIME_MODEL;
+    let transcriptionModel = 'mai-transcribe';
     let responseCreateActive = false;
     let pendingResponseCreate: Record<string, unknown> | undefined;
     const queuedToolOutputs: Record<string, unknown>[] = [];
@@ -931,7 +935,7 @@ function registerVoiceRoute(
             sessionId: sessionId!,
             role,
             text: text.trim(),
-            model: role === 'jarvis' && english ? ENGLISH_REALTIME_MODEL : null,
+            model: role === 'jarvis' && english ? voiceModel : null,
             ...(sourceItemId ? { sourceItemId } : {}),
           });
         if (!message) throw new Error('Voice transcript was not stored');
@@ -1104,7 +1108,9 @@ function registerVoiceRoute(
       void (async () => {
         presence = await app.awayModeStore!.read();
         if (app.settingsStore) personality = (await readSettings(app.settingsStore)).personality;
-        sendUpstream(createRealtimeSessionUpdate(app.jarvisTools, personality, presence, language, projects));
+        sendUpstream(createRealtimeSessionUpdate(
+          app.jarvisTools, personality, presence, language, projects, transcriptionModel,
+        ));
       })().catch(() => request.log.warn('voice.presence_mode_update_failed'));
     });
 
@@ -1396,7 +1402,10 @@ function registerVoiceRoute(
         if (controller.signal.aborted || browser.readyState !== WebSocket.OPEN) return;
         if (english && app.settingsStore) {
           try {
-            personality = (await readSettings(app.settingsStore)).personality;
+            const settings = await readSettings(app.settingsStore, await app.modelCatalogue.read());
+            personality = settings.personality;
+            voiceModel = settings.roles.voice.model;
+            transcriptionModel = settings.roles.transcription.model;
           } catch {
             request.log.warn('voice.personality_settings_unavailable');
           }
@@ -1410,9 +1419,12 @@ function registerVoiceRoute(
           }
         }
         projects = await projectContext(app);
-        upstream = connect(token, controller.signal);
+        upstream = connect(token, controller.signal, undefined, voiceModel);
         upstream.once('open', () => {
-          if (english) sendUpstream(createRealtimeSessionUpdate(app.jarvisTools, personality, presence, language, projects), flushQueued);
+          if (english) sendUpstream(
+            createRealtimeSessionUpdate(app.jarvisTools, personality, presence, language, projects, transcriptionModel),
+            flushQueued,
+          );
           else flushQueued();
         });
         const upstreamEventTypes = new Set<string>();

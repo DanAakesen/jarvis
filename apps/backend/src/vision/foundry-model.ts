@@ -77,7 +77,7 @@ export function createFoundryScreenVisionModel(
   endpoint.searchParams.set('api-version', '2024-05-01-preview');
 
   return {
-    async describe({ image, model, signal, watch }): Promise<ScreenVisionResult> {
+    async describe({ image, model, reasoningEffort = 'none', signal, watch }): Promise<ScreenVisionResult> {
       if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u.test(model)) {
         throw new Error('Invalid screen model');
       }
@@ -120,7 +120,7 @@ export function createFoundryScreenVisionModel(
           ...(watch ? { response_format: { type: 'json_object' } } : {}),
           // These models reject max_tokens with HTTP 400, so screen inspection never worked (L112).
           max_completion_tokens: 500,
-          reasoning_effort: 'none',
+          reasoning_effort: reasoningEffort,
         }),
         signal: requestSignal,
       });

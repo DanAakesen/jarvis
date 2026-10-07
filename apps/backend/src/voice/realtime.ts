@@ -183,6 +183,7 @@ export function createRealtimeSessionUpdate(
   presence: AwayModeState = defaultAwayModeState,
   language: 'da' | 'en' = 'en',
   projects: readonly ProjectContextEntry[] = [],
+  transcriptionModel = 'mai-transcribe',
 ) {
   const danish = language === 'da';
   return {
@@ -207,8 +208,8 @@ export function createRealtimeSessionUpdate(
           speech_duration_ms: 300, remove_filler_words: true, create_response: false,
         },
       input_audio_transcription: danish
-        ? { model: 'mai-transcribe', language: 'da', phrase_list: DANISH_PHRASE_LIST }
-        : { model: 'mai-transcribe' },
+        ? { model: transcriptionModel, language: 'da', phrase_list: DANISH_PHRASE_LIST }
+        : { model: transcriptionModel },
       voice: { name: danish ? DANISH_REALTIME_VOICE : ENGLISH_REALTIME_VOICE, type: 'azure-standard' },
       tools: tools.list().map(({ name, description, inputSchema }) => ({
         type: 'function',
