@@ -76,6 +76,26 @@ def test_personalized_instructions_include_mode_instructions_and_brief_speech() 
     assert "Dan's current mode: Present since an unknown time." in present
 
 
+def test_personalized_instructions_know_the_jarvis_repository_and_added_projects() -> None:
+    text = personalize_instructions(
+        "base",
+        ModelSettings(
+            "gpt-5.6-luna", "none",
+            projects=(
+                ("2", "jarvis", "DanAakesen/jarvis"),
+                ("1", "target", "DanAakesen/jarvis-test-target"),
+            ),
+        ),
+    )
+
+    assert 'DanAakesen/jarvis, already added as project "jarvis" (project ID 2)' in text
+    assert "- target (DanAakesen/jarvis-test-target, project ID 1)" in text
+    assert "ask him to confirm before adding it" in text
+    assert "which is not added as a project yet" in personalize_instructions(
+        "base", ModelSettings("gpt-5.6-luna", "none")
+    )
+
+
 class FakeItem(SimpleNamespace):
     def model_dump(self, **_: Any) -> dict[str, Any]:
         return dict(vars(self))

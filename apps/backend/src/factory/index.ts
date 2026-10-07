@@ -59,7 +59,8 @@ export const factoryModule: BackendModule = {
   id: 'factory',
   tools: [...factoryTools, createProjectTool, {
     name: 'manage_repository',
-    description: 'Register an existing repository from the GitHub App installation using the New projects defaults.',
+    description: 'Register an existing repository from the GitHub App installation using the New projects defaults. ' +
+      'Only after Dan has confirmed adding it; check list_projects first. Returns alreadyAdded when it is already a project.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -72,7 +73,18 @@ export const factoryModule: BackendModule = {
       try {
         return await manageExistingRepository(request.server, (input as { repository: string }).repository, undefined, signal);
       } catch (error) {
-        if (error instanceof ProjectConflictError) throw new ToolRefusal('That repository is already managed by Jarvis.');
+        if (error instanceof ProjectConflictError) {
+          const repository = (input as { repository: string }).repository.toLowerCase();
+          const existing = (await request.server.projectStore?.list() ?? [])
+            .find((project) => project.repo.toLowerCase() === repository);
+          return {
+            alreadyAdded: true,
+            project: existing ? { id: String(existing.id), name: existing.name, repo: existing.repo } : null,
+            confirmation: existing
+              ? `${existing.repo} is already added as project "${existing.name}" (ID ${existing.id}); nothing was changed.`
+              : 'That repository is already managed by Jarvis; nothing was changed.',
+          };
+        }
         if (error instanceof RepositoryNotAvailableError) throw new ToolRefusal('That repository is not available in the GitHub App installation.');
         if (error instanceof GitHubRepositoryUnavailableError) throw error;
         throw error;

@@ -217,7 +217,35 @@ def _model_settings(value: Any) -> ModelSettings:
         mode=mode,
         changed_at=changed_at,
         mode_instructions=mode_instructions,
+        jarvis_repository=_jarvis_repository(value.get("jarvisRepository")),
+        projects=_projects(value.get("projects", [])),
     )
+
+
+_REPOSITORY = re.compile(r"^[A-Za-z0-9_.-]{1,39}/[A-Za-z0-9_.-]{1,100}$")
+
+
+def _jarvis_repository(value: Any) -> str:
+    return value if isinstance(value, str) and _REPOSITORY.fullmatch(value) else "DanAakesen/jarvis"
+
+
+def _projects(value: Any) -> tuple[tuple[str, str, str], ...]:
+    """Bounded (id, name, repo) entries of added projects; invalid entries are dropped."""
+    if not isinstance(value, list):
+        return ()
+    projects: list[tuple[str, str, str]] = []
+    for entry in value[:50]:
+        if not isinstance(entry, dict):
+            continue
+        project_id, name, repo = entry.get("id"), entry.get("name"), entry.get("repo")
+        if (
+            isinstance(project_id, str) and _MESSAGE_ID.fullmatch(project_id)
+            and isinstance(name, str) and 0 < len(name) <= 80
+            and not any(ord(character) < 32 or ord(character) == 127 for character in name)
+            and isinstance(repo, str) and _REPOSITORY.fullmatch(repo)
+        ):
+            projects.append((project_id, name, repo))
+    return tuple(projects)
 
 
 @dataclass(frozen=True, slots=True)
