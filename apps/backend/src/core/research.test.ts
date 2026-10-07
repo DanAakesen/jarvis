@@ -4,7 +4,7 @@ import { buildApp } from '../app.js';
 import { loadConfig } from '../config.js';
 import type { BackendModule } from '../modules.js';
 import { isHtmlArtifact, isHtmlArtifactFrame, type HtmlArtifact, type HtmlArtifactFrame, type WorkspaceCommand } from '@jarvis/contracts';
-import { createHtmlResearchModule, defaultReportFrame, reportFrame } from './research.js';
+import { createHtmlResearchModule, defaultReportFrame, reportFrame, researchWindowTitle } from './research.js';
 import { coreModule } from './index.js';
 import { WorkspaceCommandBroker } from './workspace-commands.js';
 import type { WebResearchClient } from './web-research.js';
@@ -147,6 +147,15 @@ async function startResearch(app: ReturnType<typeof buildApp>) {
 }
 
 describe('background interactive research', () => {
+  it('keeps window titles to a few words', () => {
+    expect(researchWindowTitle(undefined, 'Microsoft Foundry IQ: what it is, core architecture, and how it compares. Present the findings as a visual cited report with diagrams'))
+      .toBe('Research: Microsoft Foundry IQ');
+    expect(researchWindowTitle('Foundry IQ overview', 'anything')).toBe('Research: Foundry IQ overview');
+    expect(researchWindowTitle('Research Azure pricing', 'x')).toBe('Research Azure pricing');
+    expect(researchWindowTitle(undefined, 'one two three four five six seven eight')).toBe('Research: one two three four five six');
+    expect(researchWindowTitle(undefined, 'a'.repeat(120)).length).toBeLessThanOrEqual('Research: '.length + 48);
+  });
+
   it('falls back to a valid default frame until the web app reports its window', () => {
     expect(isHtmlArtifactFrame(defaultReportFrame)).toBe(true);
     expect(reportFrame(undefined)).toEqual(defaultReportFrame);
