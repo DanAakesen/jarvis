@@ -27,6 +27,18 @@ research or artifact side effects. Evidence: migration 0029 and focused lifecycl
 tests, with SQL persistence and schema coverage in Database CI. Cross-replica live
 acceptance remains unverified.
 
+P9-01 (7 October 2026): use the existing `dbo.settings` key/value store for
+per-role model and reasoning-effort preferences; do not add a migration.
+`jarvis.model` and `jarvis.reasoning` remain compatible aliases for `roles.chat`.
+Read live Foundry deployments from ARM using backend managed identity with a
+Foundry-account-scoped Reader grant, cache for five minutes, and identify
+configured defaults as `source: 'fallback'` when ARM is unavailable. Validate
+each role's model and effort against deployment capabilities; keep Codex and
+Copilot on their provider defaults until provider catalogues are verified.
+Offline route, settings, dispatcher, agent, research, vision and voice tests
+cover the implementation; live ARM permissions and deployment selection remain
+unverified.
+
 P6-22 (6 October 2026): Jarvis runs in Dan's personal tenant, without Microsoft
 365 or Teams. Keep away mode manual and do not read Graph presence. Route
 notifications and confirmations through the web app and active browser voice

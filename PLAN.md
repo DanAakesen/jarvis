@@ -38,6 +38,12 @@ Phase 1 delivers the Software Factory. Requirements and page specifications are 
 - **P7-07 (#205):** Implemented offline on the existing authenticated PC bridge. `pc_act` uses one Jev decision per fresh Windows UI Automation snapshot, allows only VS Code and File Explorer, and stops at 20 steps/30 seconds or cancellation. Sensitive values are blocked, typed text must be quoted by Dan, destructive actions use P7-03 approval, and step logs contain only action metadata. The 72 .NET core tests, 42 focused backend tests, backend lint/build, and Linux Windows-target build pass; Dan's live Windows, Jev, and approval checks remain pending. Website tasks stay on the existing Chrome-only browser path; no Foundry computer-use is used.
 - **P5-12 (#410):** Implemented offline. Reflex, browser, and PC planners return typed Jev failures and log only allowlisted failure reasons; confidence gates now use Jev's calibrated Choice confidence (0.9). Focused backend tests, lint, and build pass; live Jev behavior remains unverified.
 
+### P9 — Model catalogue and role settings
+
+| ID | Issue | Task | Acceptance criteria | Depends on | Status |
+| --- | --- | --- | --- | --- | --- |
+| P9-01 | [#495](https://github.com/DanAakesen/jarvis/issues/495) | Expose the live Foundry deployment catalogue to Dan through `GET /models`; validate model and reasoning effort settings for chat, vision, research, voice, transcription, embeddings, Codex and Copilot; preserve `jarvis.model`/`jarvis.reasoning` as chat aliases | ARM catalogue reads use backend managed identity with account-scoped Reader and a five-minute cache; unavailable ARM returns configured defaults with `source: 'fallback'`; PATCHing `gpt-6-luna`/`high` for chat affects the next chat session; `/agent/settings` exposes resolved role values; no `apps/web` changes | P1-11, P4-09, P2-11 | Complete offline; live ARM acceptance pending |
+
 - **Approved Software Factory layout (#369):** P8-34 is implemented offline on the merged P8-28/P8-31 foundations. The task lens retains all six states, filters, live updates and bounded results; its project-scoped release bar and closable contextual details pane reuse the existing authenticated contracts. Focused web checks and Chromium fixture verification pass; live Entra/backend/provider data and physical-device acceptance remain unverified. Fixture screenshots are in `docs/ui/screenshots/p8-34-fixture-*`.
 
 - **Accepted centred Jarvis stage (P8-28–P8-33, #361–#366):** The handoff and prerequisites are merged. P8-28's route-scoped Three.js room, mirror floor, orb lighting and theme palettes, and P8-31's shared glass styling, are implemented offline; focused web tests, lint and build pass. Chromium captures cover empty/typing/voice/window states at 1440×900, 1987×1122 and 390×844 in dark/light, with a three-frame motion sequence in `docs/ui/screenshots/`. Three Jarvis→Factory→Settings→Jarvis cycles left no stage off-route, lost each prior WebGL context, and returned to one canvas/one animation frame. Scratch Chromium used SwiftShader and logged expected 503s from its unconfigured Factory API fixture; hardware-GPU, physical-phone and live voice acceptance remain unverified. P8-30 owns reported transition-flicker verification; keep P8-29–P8-33 follow-ups and their existing contracts distinct; do not manually change Issue/Status columns.
@@ -173,6 +179,7 @@ flowchart LR
 | **P6** | Recovery, cost views, monitoring, operations | Trust it day to day |
 | **P7** | Browser voice confirmations, reflex layer, screen, camera, PC control, calendar, mail, notes | Use Jarvis away from the browser and on his PC |
 | **P8** | The complete Jarvis front end | Use every feature from one designed UI |
+| **P9** | Live model catalogue and per-role model/reasoning preferences | Choose the model and reasoning effort Jarvis uses for each job |
 
 ### Ground rules for every task
 

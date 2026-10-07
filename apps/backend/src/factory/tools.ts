@@ -4,6 +4,8 @@ import { taskStates, type TaskState } from './task-lifecycle.js';
 import type { Project } from './projects.js';
 import type { TaskDetail, TaskListFilters, TaskRecord } from './task-store.js';
 import { settingsOptions } from '../core/settings.js';
+import { modelsForRole, reasoningForModel } from '../core/model-catalog.js';
+import type { ModelCatalogue } from '@jarvis/contracts';
 import { createGitHubActionsRunClient } from '../github/actions-runs.js';
 
 const idSchema = { type: 'string', pattern: '^[1-9][0-9]{0,18}$', maxLength: 19 };
@@ -58,8 +60,8 @@ function optionsList(options: readonly string[]): string {
   return options.join(', ');
 }
 
-function taskModelOptions(agent: TaskRecord['agent']): readonly string[] {
-  return agent === 'codex' ? settingsOptions.codexModels : settingsOptions.copilotModels;
+function taskModelOptions(agent: TaskRecord['agent'], catalogue: ModelCatalogue): readonly string[] {
+  return modelsForRole(catalogue, agent);
 }
 
 function assertSqlBigInt(value: string): void {
@@ -288,15 +290,16 @@ export const factoryTools: readonly JarvisTool[] = [
       if (agent !== undefined && !isOption(agent, settingsOptions.projectAgents)) {
         throw new ToolRefusal(`Unsupported coding agent. Valid agents: ${optionsList(settingsOptions.projectAgents)}.`);
       }
+      const catalogue = await request.server.modelCatalogue.read();
       const modelOptions = agent
-        ? taskModelOptions(agent)
-        : [...new Set([...settingsOptions.codexModels, ...settingsOptions.copilotModels])];
+        ? taskModelOptions(agent, catalogue)
+        : [...new Set([...taskModelOptions('codex', catalogue), ...taskModelOptions('copilot', catalogue)])];
       if (model !== undefined && !isOption(model, modelOptions)) {
         throw new ToolRefusal(`Unsupported coding-agent model. Valid models: ${optionsList(modelOptions)}.`);
       }
-      if (reasoning !== undefined &&
-        (agent !== 'codex' || !isOption(reasoning, settingsOptions.codexReasoningEfforts))) {
-        throw new ToolRefusal(`Unsupported reasoning. Specify Codex and use one of the valid Codex reasoning levels: ${optionsList(settingsOptions.codexReasoningEfforts)}.`);
+      const codexEfforts = ['default', ...reasoningForModel(catalogue, 'codex', model ?? 'default')];
+      if (reasoning !== undefined && (agent !== 'codex' || !isOption(reasoning, codexEfforts))) {
+        throw new ToolRefusal(`Unsupported reasoning. Specify Codex and use one of the valid Codex reasoning levels: ${optionsList(codexEfforts)}.`);
       }
       const store = requireStore(request.server.taskStore, 'Task service');
       const task = await store.create({
@@ -342,13 +345,17 @@ export const factoryTools: readonly JarvisTool[] = [
       }
 
       const agent = (requestedAgent ?? current.agent) as TaskRecord['agent'];
-      const modelOptions = taskModelOptions(agent);
+      const catalogue = await request.server.modelCatalogue.read();
+      const modelOptions = taskModelOptions(agent, catalogue);
       if (model !== undefined && !isOption(model, modelOptions)) {
         throw new ToolRefusal(`Unsupported ${agent} model. Valid models: ${optionsList(modelOptions)}.`);
       }
-      if (reasoning !== undefined &&
-        (agent !== 'codex' || !isOption(reasoning, settingsOptions.codexReasoningEfforts))) {
-        throw new ToolRefusal(`Unsupported ${agent} reasoning. Valid Codex reasoning levels: ${optionsList(settingsOptions.codexReasoningEfforts)}.`);
+      const codexEfforts = [
+        'default',
+        ...reasoningForModel(catalogue, 'codex', model ?? current.modelOverride ?? 'default'),
+      ];
+      if (reasoning !== undefined && (agent !== 'codex' || !isOption(reasoning, codexEfforts))) {
+        throw new ToolRefusal(`Unsupported ${agent} reasoning. Valid Codex reasoning levels: ${optionsList(codexEfforts)}.`);
       }
 
       const changedAgent = agent !== current.agent;

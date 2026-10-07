@@ -135,6 +135,8 @@ export class VisionWatchService {
     readonly source: WatchSource;
     readonly image: Buffer;
     readonly limitUsd: number;
+    readonly model?: string;
+    readonly reasoningEffort?: string;
     readonly signal: AbortSignal;
     readonly log: (fields: { source: WatchSource; noteworthy: boolean; spoke: boolean; latencyMs: number; cost: number }) => void;
   }): Promise<VisionWatchResult> {
@@ -172,7 +174,8 @@ export class VisionWatchService {
         throw new ScreenVisionError(429, 'Please wait 2.5 seconds before watching another frame from this source.');
       }
       const result = await this.model.describe({
-        image: input.image, model: VISION_MODEL_DEPLOYMENT, signal: input.signal,
+        image: input.image, model: input.model ?? VISION_MODEL_DEPLOYMENT,
+        reasoningEffort: input.reasoningEffort ?? 'none', signal: input.signal,
         watch: { source: input.source, previousSummary: state[input.source].summary,
           instructions: [...state[input.source].instructions], latestQuestion: latestQuestion?.slice(0, 5_000) ?? null,
           recentComments: [...state.comments.values()].map((comment) => comment.text) },
@@ -307,9 +310,11 @@ export function createVisionWatchModule(service: VisionWatchService): BackendMod
         reply.raw.once('close', close);
         try {
           image = decodeFrame(frame);
-          const settings = await readSettings(app.settingsStore);
+          const settings = await readSettings(app.settingsStore, await app.modelCatalogue.read());
           return reply.send(await service.watch({
-            sessionId, source, image, limitUsd: settings.global.visionDailyBudgetUsd, signal: controller.signal,
+            sessionId, source, image, limitUsd: settings.global.visionDailyBudgetUsd,
+            model: settings.roles.vision.model, reasoningEffort: settings.roles.vision.reasoningEffort,
+            signal: controller.signal,
             log: (fields) => { request.log.info(fields, 'vision.watch'); },
           }));
         } catch (error) {
