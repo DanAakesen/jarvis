@@ -141,7 +141,7 @@ function ShellLayout({ signedIn, config, session, camera, screenShare }: {
   const navigate = useNavigate();
   const home = pathname === '/';
   const pathnameRef = useRef(pathname);
-  pathnameRef.current = pathname;
+  useLayoutEffect(() => { pathnameRef.current = pathname; }, [pathname]);
   const getAccessToken = session.getAccessToken;
   const { working, latestActivity } = useJarvisActivity();
   const activityText = activityLabel(latestActivity);
@@ -223,13 +223,12 @@ function ShellLayout({ signedIn, config, session, camera, screenShare }: {
     railOrb.current?.focus();
   }, []);
   // Task windows: open from any page, pinned to the tab bar when minimised, and restored as tabs after a reload.
-  const [taskWindows, setTaskWindows] = useState<TaskWindowEntry[]>(readTaskWindows);
-  const restoredTaskWindows = useRef(new Set(taskWindows.map(({ taskId }) => taskId)));
+  // Entries restored from the browser start pinned as tabs; windows opened in this session start visible.
+  const [taskWindows, setTaskWindows] = useState<(TaskWindowEntry & { restored?: boolean })[]>(() => readTaskWindows().map((entry) => ({ ...entry, restored: true })));
   const [focusTaskWindow, setFocusTaskWindow] = useState<{ taskId: string; seq: number } | null>(null);
-  useEffect(() => { saveTaskWindows(taskWindows); }, [taskWindows]);
+  useEffect(() => { saveTaskWindows(taskWindows.map(({ taskId, title }) => ({ taskId, title }))); }, [taskWindows]);
   const taskWindowsApi = useMemo(() => ({
     open: (taskId: string, title?: string) => {
-      restoredTaskWindows.current.delete(taskId);
       setTaskWindows((current) => current.some((entry) => entry.taskId === taskId)
         ? current
         : [...current, { taskId, title: title?.trim() || `Task ${taskId}` }].slice(-12));
@@ -267,11 +266,11 @@ function ShellLayout({ signedIn, config, session, camera, screenShare }: {
     }) ?? false,
   }), [conversationHost, conversationOpen]);
   const backendUrl = config.backendUrl;
-  const taskViews = useMemo<WorkspaceView[]>(() => taskWindows.map(({ taskId, title }) => ({
+  const taskViews = useMemo<WorkspaceView[]>(() => taskWindows.map(({ taskId, title, restored }) => ({
     id: taskWindowViewId(taskId),
     title,
     initialGeometry: { x: 0.12, y: 0.04, width: 0.76, height: 0.8, columns: 2 },
-    ...(restoredTaskWindows.current.has(taskId) ? { initiallyMinimised: true } : {}),
+    ...(restored ? { initiallyMinimised: true } : {}),
     onClose: () => setTaskWindows((current) => current.filter((entry) => entry.taskId !== taskId)),
     content: { status: 'ready', content: (
       <TaskDetailPage backendUrl={backendUrl} getAccessToken={getAccessToken} taskId={taskId}

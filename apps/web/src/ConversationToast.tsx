@@ -67,7 +67,7 @@ export function ConversationToast({ notification, onDismiss, voiceActive = false
     // Follow the real composer height, including multi-line drafts, and recalculate on mode changes.
     const position = () => {
       const bounds = controls.getBoundingClientRect();
-      if (bounds.height > 0) stack.style.bottom = `${Math.max(20, window.innerHeight - bounds.top + 12)}px`;
+      if (bounds.height > 0) toastStack().style.bottom = `${Math.max(20, window.innerHeight - bounds.top + 12)}px`;
     };
     position();
     const observer = typeof ResizeObserver === 'function' ? new ResizeObserver(position) : null;
@@ -77,8 +77,9 @@ export function ConversationToast({ notification, onDismiss, voiceActive = false
   }, [stack, voiceActive]);
 
   useEffect(() => () => {
-    if (!stack.childElementCount) stack.style.removeProperty('bottom');
-  }, [stack]);
+    const element = document.getElementById('jarvis-toast-stack');
+    if (element && !element.childElementCount) element.style.removeProperty('bottom');
+  }, []);
 
   if (!shown) return null;
   return createPortal(

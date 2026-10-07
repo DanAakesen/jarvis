@@ -137,7 +137,6 @@ export function MemorySettings({ backendUrl, getAccessToken }: { backendUrl: str
     if (debounced) params.set('query', debounced);
     if (folder) params.set('folder', folder);
     params.set('limit', '50');
-    setList((current) => current.status === 'ready' ? current : { status: 'loading' });
     void call(`/memory?${params}`).then(async (response) => {
       if (!response.ok) throw new Error(await errorMessage(response, 'Memories could not be loaded. Try again.'));
       const value = readList(await response.json());
@@ -151,10 +150,6 @@ export function MemorySettings({ backendUrl, getAccessToken }: { backendUrl: str
   useEffect(() => {
     let active = true;
     if (!selectedId) return () => { active = false; };
-    setDetail({ status: 'loading' });
-    setCommitUrl(null);
-    setNotice('');
-    setError('');
     void call(`/memory/${encodeURIComponent(selectedId)}`).then(async (response) => {
       if (!response.ok) throw new Error('This memory could not be opened.');
       const value = readDetail(await response.json());
@@ -174,6 +169,15 @@ export function MemorySettings({ backendUrl, getAccessToken }: { backendUrl: str
     if (!confirmForget && dialog.open) dialog.close();
   }, [confirmForget]);
 
+  // Opening an entry resets its pane here rather than in the fetch effect, so the effect only synchronises with the API.
+  const openMemory = (id: string) => {
+    if (id === selectedId) return;
+    setDetail({ status: 'loading' });
+    setCommitUrl(null);
+    setNotice('');
+    setError('');
+    setSelectedId(id);
+  };
   const current = detail?.status === 'ready' ? detail.value : null;
   // Durable memories are capped at 2,000 characters; vault notes can be much longer.
   const draftLimit = current?.kind === 'memory' ? maxDurableText : maxText;
@@ -266,7 +270,7 @@ export function MemorySettings({ backendUrl, getAccessToken }: { backendUrl: str
               {list.status === 'error' && (
                 <div className="settings-feedback" role="alert">
                   <p>{list.message}</p>
-                  <button className="secondary-button" type="button" onClick={() => setReload((value) => value + 1)}>Retry</button>
+                  <button className="secondary-button" type="button" onClick={() => { setList({ status: 'loading' }); setReload((value) => value + 1); }}>Retry</button>
                 </div>
               )}
               {list.status === 'ready' && list.value.length === 0 && (
@@ -276,7 +280,7 @@ export function MemorySettings({ backendUrl, getAccessToken }: { backendUrl: str
                 <ul className="memory-list" aria-label="Memories">
                   {list.value.map((item) => (
                     <li key={item.id}>
-                      <button type="button" className="memory-item" aria-pressed={selectedId === item.id} onClick={() => setSelectedId(item.id)}>
+                      <button type="button" className="memory-item" aria-pressed={selectedId === item.id} onClick={() => openMemory(item.id)}>
                         <span className="memory-item-title">{item.title}</span>
                         <span className="memory-item-meta">{item.folder}{item.updatedAt ? ` · ${formatDate(item.updatedAt)}` : ''}</span>
                         {item.text && <span className="memory-item-text">{item.text.slice(0, 160)}</span>}
