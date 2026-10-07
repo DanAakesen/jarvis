@@ -305,7 +305,10 @@ async function issueReadToken(request: FastifyRequest, repository: string, issue
 }
 
 const projectProperty = {
-  project: { type: 'string', minLength: 1, maxLength: 140 },
+  project: {
+    type: 'string', minLength: 1, maxLength: 140,
+    description: 'Omit for Jarvis\'s own code ("your code"). Otherwise an added project ID or owner/name.',
+  },
 };
 const objectSchema = (properties: Record<string, unknown>, required: string[] = []) => ({
   type: 'object', properties, ...(required.length ? { required } : {}), additionalProperties: false,
