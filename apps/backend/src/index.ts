@@ -4,7 +4,7 @@ import { CallAutomationClient } from '@azure/communication-call-automation';
 import { buildApp } from './app.js';
 import { BlobServiceClient } from '@azure/storage-blob';
 import { ConfigurationError, loadConfig } from './config.js';
-import { createLogger, createTelemetry } from './logging.js';
+import { createLogger, createTelemetry, safeErrorFields } from './logging.js';
 import { shutdown } from './shutdown.js';
 import { loadDatabaseConfig } from './database/config.js';
 import { createDatabase, registerDatabase } from './database/lifecycle.js';
@@ -15,6 +15,7 @@ import { createReleaseViewStore } from './database/release-view-store.js';
 import { createConversationStore } from './database/conversation-store.js';
 import { createPhoneSessionStore } from './database/phone-session-store.js';
 import { createTaskStore } from './database/task-store.js';
+import { createTaskStatusNotificationStore } from './database/task-status-notification-store.js';
 import { createDispatcherStore } from './database/dispatcher-store.js';
 import { createTaskRecoveryStore } from './database/recovery-store.js';
 import { createCredentialStatusStore } from './database/credential-status-store.js';
@@ -44,14 +45,15 @@ import {
 import { createArmContainerAppScaler } from './operations/container-app-scale.js';
 import { createSleepModule } from './operations/sleep.js';
 import { createFoundryInvocationConversationAgent } from './core/chat-agent.js';
-import { FoundryClient, FoundryClientError } from './foundry/client.js';
+import { FoundryClient } from './foundry/client.js';
 import { createJevPcActPlanner } from './pc-bridge/pc-act.js';
 import { createJevRecipePlanner } from './core/task-recipes.js';
 import { createRecipeModule } from './core/recipe-management.js';
 import { createRecipeStore } from './database/recipe-store.js';
 import { SandboxHeartbeat } from './factory/heartbeat.js';
 import { TaskDispatcher } from './factory/dispatcher.js';
-import { startDailyCodexRenewalJob } from './credentials/codex-renewal.js';
+import { runCodexRenewalOnce, startDailyCodexRenewalJob } from './credentials/codex-renewal.js';
+import { startDailyCopilotStatusJob } from './credentials/copilot-status.js';
 import { createNowFeedStore } from './database/now-feed-store.js';
 import { createGitHubAppRepositoryCatalog, createGitHubAppTokenIssuer } from './github-app.js';
 import { createRepoAdminRepositoryCreator } from './credentials/repo-admin.js';
@@ -70,11 +72,10 @@ import { createPcBridgeStatusStore } from './database/pc-bridge-status-store.js'
 import { createAlertNotifier, notifyAlert } from './alerts.js';
 import type { NowFeedUpdate } from './core/now.js';
 import { createAlertActivityStore } from './database/alert-store.js';
-import { createMemoryStore } from './database/memory-store.js';
-import { createMemoryModule } from './core/memory.js';
+import { createMemoryStore, createVaultIndexStore } from './database/memory-store.js';
 import { createFoundryMemoryEmbedder } from './core/memory-embeddings.js';
-import { createGraphClient } from './graph/client.js';
-import { createNotesModule } from './notes/index.js';
+import { createGitHubVaultClient, VAULT_BRANCH, VAULT_REPOSITORY } from './vault/github-client.js';
+import { createVaultModule } from './vault/index.js';
 import { createArmBudgetReader, startBudgetAlertMonitor } from './operations/budget-alert.js';
 import { createGoogleApiClient } from './google/api-client.js';
 import { createGoogleTokenProvider, type GoogleOAuthCredentials } from './google/oauth.js';
@@ -82,7 +83,10 @@ import { createGoogleModule } from './google/tools.js';
 import { createScreenFrameUsageStore } from './database/screen-usage-store.js';
 import { createFoundryScreenVisionModel } from './vision/foundry-model.js';
 import { createScreenVisionModule, ScreenVisionService } from './vision/screen.js';
+import { createVisionWatchModule, VisionWatchService } from './vision/watch.js';
 import { createWebResearchModule } from './core/web-research.js';
+import { createHtmlResearchModule } from './core/research.js';
+import { HtmlArtifactStore } from './database/html-artifact-store.js';
 import { createTeamsNotificationStore } from './database/teams-notification-store.js';
 import { createEphemeralAudioStore } from './teams/audio-store.js';
 import { createAzureSpeechSynthesizer } from './teams/speech.js';
@@ -90,11 +94,12 @@ import { createTeamsBotModule, createTeamsConnector } from './teams/bot.js';
 import { createTeamsNotificationService } from './teams/service.js';
 import { createAzureSpeechPartialRecognizerFactory } from './voice/speech-recognizer.js';
 import { createAwayModeStore } from './database/away-mode-store.js';
-import { startGraphPresenceMonitor } from './graph/presence-monitor.js';
 import { createPhoneCallModule } from './phone/calls.js';
 import { parsePhoneAllowlist } from './phone/caller.js';
 import { createImageGenerationModule } from './core/image-generation.js';
 import { WorkspaceArtifactStore } from './database/workspace-artifact-store.js';
+import { WorkspaceHtmlArtifactStore } from './database/workspace-html-artifact-store.js';
+import { createHtmlViewModule } from './core/html-view.js';
 
 try {
   const config = loadConfig();
@@ -115,32 +120,36 @@ try {
   const logger = createLogger(config, telemetry);
   const database = databaseConfig ? createDatabase(databaseConfig) : undefined;
   const memoryStore = database ? createMemoryStore(database.pool) : undefined;
+  const htmlArtifactStore = database ? new HtmlArtifactStore(database.pool) : undefined;
+  const vaultIndexStore = database ? createVaultIndexStore(database.pool) : undefined;
   const phoneSessionStore = database && config.phone
     ? createPhoneSessionStore(database.pool)
     : undefined;
   const eventHub: TaskEventHub = createEventHub<TaskEventMessage>();
   const nowEventHub = createEventHub<NowFeedUpdate>();
+  const nowFeedStore = database
+    ? createNowFeedStore(database.pool, () => nowEventHub.publish({ type: 'refresh' }))
+    : undefined;
   const alertActivityStore = database
     ? createAlertActivityStore(database.pool, () => nowEventHub.publish({ type: 'refresh' }))
     : undefined;
   const awayModeStore = database
-    ? createAwayModeStore(database.pool, (state) => nowEventHub.publish({ type: 'mode_changed', away: state.away }))
+    ? createAwayModeStore(database.pool, (state) => nowEventHub.publish({
+      type: 'mode_changed',
+      mode: state.mode,
+      away: state.mode !== 'present',
+    }))
     : undefined;
   const alertNotifier = createAlertNotifier(telemetry);
+  const credentialStatusStore = database ? createCredentialStatusStore(database.pool, {
+    alertNotifier,
+    onAlert: () => nowEventHub.publish({ type: 'refresh' }),
+  }) : undefined;
   const credential = archiveStorageAccount || config.keyVaultUri || config.voiceLiveEndpoint || config.foundryProjectEndpoint ||
     config.foundryEndpoints || config.githubAppId || config.googleTimeZone || config.teams || sleepResourceId
     ? new DefaultAzureCredential(managedIdentityClientId
       ? { managedIdentityClientId }
       : {})
-    : undefined;
-  const graphClient = credential
-    ? createGraphClient({
-      getToken: async (signal) => {
-        const token = await credential.getToken('https://graph.microsoft.com/.default', { abortSignal: signal });
-        if (!token) throw new Error('Microsoft Graph credentials are unavailable');
-        return token.token;
-      },
-    })
     : undefined;
   const projectRepositoryCreator = config.keyVaultUri && credential
     ? createRepoAdminRepositoryCreator(
@@ -190,8 +199,8 @@ try {
               link: null,
             } as const;
             if (await alertActivityStore.record(alert)) notifyAlert(alertNotifier, alert);
-          } catch {
-            logger.warn('google.refresh_token_expired_alert_persistence_failed');
+          } catch (error) {
+            logger.warn(safeErrorFields(error), 'google.refresh_token_expired_alert_persistence_failed');
           }
         },
       }),
@@ -203,16 +212,22 @@ try {
     if (!secret.value) throw new Error('GitHub App private key is unavailable');
     return secret.value;
   };
+  const onTokenMint = async (status: 'ok' | 'failed', checkedAt: string) => {
+    try { await credentialStatusStore?.updateGitHubAppStatus(status, checkedAt); }
+    catch { logger.warn('credentials.github_app_status_failed'); }
+  };
   const githubAppTokenIssuer = config.githubAppId && githubAppKeyVault
     ? createGitHubAppTokenIssuer({
       appId: config.githubAppId,
       getPrivateKey: getGitHubAppPrivateKey,
+      onTokenMint,
     })
     : undefined;
   const githubRepositoryCatalog = config.githubAppId && githubAppKeyVault
     ? createGitHubAppRepositoryCatalog({
       appId: config.githubAppId,
       getPrivateKey: getGitHubAppPrivateKey,
+      onTokenMint,
     })
     : undefined;
   const webhookSecretClient = config.keyVaultUri && credential
@@ -306,6 +321,16 @@ try {
       },
     })
     : undefined;
+  const vaultModule = memoryStore && vaultIndexStore && githubAppTokenIssuer
+    ? createVaultModule({
+      client: createGitHubVaultClient({ tokenIssuer: githubAppTokenIssuer }),
+      indexStore: vaultIndexStore,
+      memoryStore,
+      apiMemoryStore: memoryStore,
+      ...(memoryEmbedder ? { embedder: memoryEmbedder } : {}),
+      log: (event, fields) => logger.info({ msg: event, ...fields }, event),
+    })
+    : undefined;
   const foundryClients = new Map<string, FoundryClient>();
   const trackedRepositories = new Set<string>();
   const taskEventArchive = database && archiveStorageAccount && credential
@@ -351,21 +376,23 @@ try {
   const webResearchModule = database && credential && config.foundryEndpoints && config.foundryRunnerAgentName
     ? createWebResearchModule(() => clientFor(config.foundryRunnerAgentName!), config.codexToolModel)
     : undefined;
+  const htmlResearchModule = htmlArtifactStore && credential && config.foundryEndpoints && config.foundryRunnerAgentName
+    ? createHtmlResearchModule(
+      () => clientFor(config.foundryRunnerAgentName!),
+      config.codexToolModel,
+      htmlArtifactStore,
+    )
+    : undefined;
   const sandboxHeartbeat = database && config.foundryEndpoints
     ? new SandboxHeartbeat(createSandboxHeartbeatStore(database.pool, eventHub, alertNotifier), clientFor, {
       onDecision: (decision) => logger.info(decision, 'sandbox_heartbeat.decision'),
-      onError: (error) => {
-        const details = error instanceof FoundryClientError
-          ? { kind: error.kind, statusCode: error.statusCode, operation: error.operation }
-          : { kind: 'internal' };
-        logger.warn(details, 'sandbox_heartbeat.poll_failed');
-      },
+      onError: (error) => logger.warn(safeErrorFields(error), 'sandbox_heartbeat.poll_failed'),
     })
     : undefined;
   const taskEventArchiveJob = taskEventArchive
     ? createTaskEventArchiveJob(
       taskEventArchive,
-      () => logger.warn('task_event_archive.failed'),
+      (error) => logger.warn(safeErrorFields(error), 'task_event_archive.failed'),
       () => sandboxHeartbeat?.hasTrackedSessions() ?? false,
     )
     : undefined;
@@ -381,6 +408,7 @@ try {
     : null;
   const projectStore = database ? createProjectStore(database.pool, trackedRepositories) : undefined;
   const taskStore = database ? createTaskStore(database.pool, eventHub, taskEventArchive) : undefined;
+  const taskStatusNotificationStore = database ? createTaskStatusNotificationStore(database.pool) : undefined;
   const teamsAudioStore = config.teams ? createEphemeralAudioStore() : undefined;
   const teamsSpeech = config.teams && credential
     ? createAzureSpeechSynthesizer(
@@ -392,19 +420,23 @@ try {
       },
     )
     : undefined;
-  const teamsNotifications = config.teams && database && credential && teamsAudioStore
+  const teamsNotifications = database && nowFeedStore
     ? createTeamsNotificationService({
       ownerObjectId: config.auth.ownerObjectId,
       tenantId: config.auth.tenantId,
-      publicOrigin: config.teams.audioOrigin,
       store: createTeamsNotificationStore(database.pool),
-      connector: createTeamsConnector(config.teams.botAppId, config.teams.tenantId),
-      audioStore: teamsAudioStore,
-      isAway: async () => {
-        if (!awayModeStore) throw new Error('Away mode is unavailable');
-        return (await awayModeStore.read()).away;
+      ...(config.teams && credential && teamsAudioStore ? {
+        publicOrigin: config.teams.audioOrigin,
+        connector: createTeamsConnector(config.teams.botAppId, config.teams.tenantId),
+        audioStore: teamsAudioStore,
+      } : {}),
+      ...(awayModeStore ? { isAway: async () => (await awayModeStore.read()).mode !== 'present' } : {}),
+      onWebNotification: async (kind, text) => {
+        if (!nowFeedStore.recordNotification) throw new Error('Now feed notifications are unavailable');
+        await nowFeedStore.recordNotification(kind, text);
       },
       onConfirmationsChanged: () => nowEventHub.publish({ type: 'refresh' }),
+      onConfirmationPending: () => nowEventHub.publish({ type: 'status', kind: 'approval_pending' }),
       ...(teamsSpeech ? { speech: teamsSpeech } : {}),
     })
     : undefined;
@@ -421,7 +453,8 @@ try {
       ...(teamsNotifications ? {
         runConfirmed: (summary, action) => teamsNotifications.runConfirmed('merge', summary, action),
       } : {}),
-      onConfirmationError: () => logger.warn('project_policy.confirmation_failed'),
+      onConfirmationError: (error) => logger.warn(safeErrorFields(error), 'project_policy.confirmation_failed'),
+      onError: (error) => logger.warn(safeErrorFields(error), 'project_policy.recheck_failed'),
     })
     : undefined;
   const settingsStore = database ? createSettingsStore(database.pool) : undefined;
@@ -437,8 +470,9 @@ try {
       sandboxHeartbeat,
       eventHub,
       {
-        onError: () => logger.warn('dispatcher.operation_failed'),
+        onError: (error) => logger.warn(safeErrorFields(error), 'dispatcher.operation_failed'),
         onReconciliation: (decision) => logger.info(decision, 'task_reconciliation.decision'),
+        onStartFailure: (failure) => logger.warn(failure, 'dispatcher.start_failed'),
         recoveryStore: createTaskRecoveryStore(database.pool, eventHub),
         workspaceFor: async (task) => {
           if (!task.branch) return null;
@@ -476,26 +510,51 @@ try {
       settings: settingsStore,
       tasks: taskStore,
       controller: dispatcher,
-      onError: () => logger.warn('github.checks_loop_recovery_failed'),
+      onError: (error) => logger.warn(safeErrorFields(error), 'github.checks_loop_recovery_failed'),
+    })
+    : undefined;
+  const screenVisionModel = config.foundryProjectEndpoint && credential
+    ? createFoundryScreenVisionModel(config.foundryProjectEndpoint, async (scope, signal) => {
+      const token = await credential.getToken(scope, { abortSignal: signal });
+      if (!token) throw new Error('Foundry screen identity unavailable');
+      return token.token;
     })
     : undefined;
   const modules: BackendModule[] = [
     coreModule, conversationModule, factoryModule, createSleepModule(containerAppScaler),
     createRecipeModule(recipeStore),
+    ...(vaultModule ? [vaultModule] : []),
     ...(webResearchModule ? [webResearchModule] : []),
+    ...(htmlResearchModule ? [htmlResearchModule] : []),
     ...(googleModule ? [googleModule] : []),
     createGithubWebhookModule({
       deliveryStore: webhookDeliveryStore,
       getSecret: getWebhookSecret,
-      isTrackedRepository: (repository) => trackedRepositories.has(repository.toLowerCase()),
-      ...(checksLoop || projectPolicyEvaluator ? {
+      ...(githubAppTokenIssuer ? {
+        readWorkflowRun: createGitHubActionsLogClient(githubAppTokenIssuer).readWorkflowRun,
+      } : {}),
+      isTrackedRepository: (repository) => repository.toLowerCase() === VAULT_REPOSITORY.toLowerCase() ||
+        trackedRepositories.has(repository.toLowerCase()),
+      ...(checksLoop || projectPolicyEvaluator || vaultModule ? {
         onMapping: async (mapping) => {
+          if (mapping.kind === 'push' && mapping.repository.toLowerCase() === VAULT_REPOSITORY.toLowerCase() &&
+              mapping.ref === `refs/heads/${VAULT_BRANCH}` && vaultModule) {
+            void vaultModule.synchronize(AbortSignal.timeout(10 * 60_000)).catch(() => {
+              logger.warn({
+                msg: 'vault.index', outcome: 'error', added: 0, changed: 0, removed: 0,
+              }, 'vault.index');
+            });
+          }
           await checksLoop?.handleMapping(mapping);
           await projectPolicyEvaluator?.handle(mapping);
         },
       } : {}),
     }),
     createPcBridgeModule({
+      ...(screenVisionModel ? {
+        pcActVisionModel: screenVisionModel,
+        pcActVisionDeployment: 'gpt-5.6-luna',
+      } : {}),
       ...(pcActPlanner ? {
         pcActPlanner,
         ...(recipes ? { recipes } : {}),
@@ -508,7 +567,7 @@ try {
         runConfirmed: (summary, action, signal) =>
           teamsNotifications.runConfirmed('computer_use', summary, action, signal),
       } : {}),
-      onStatusError: () => logger.warn('pc_bridge.status_update_failed'),
+      onStatusError: (error) => logger.warn(safeErrorFields(error), 'pc_bridge.status_update_failed'),
     }),
   ];
   const phoneCallModule = config.phone && phoneSessionStore && phoneSecretClient && credential &&
@@ -537,31 +596,17 @@ try {
       model: config.codexImageModel,
     }));
   }
-  if (memoryStore) {
-    modules.push(createMemoryModule({
-      store: memoryStore,
-      ...(memoryEmbedder ? { embedder: memoryEmbedder } : {}),
-    }));
-  }
-  if (database && settingsStore && config.foundryProjectEndpoint && credential) {
-    modules.push(createScreenVisionModule(new ScreenVisionService(
-      createFoundryScreenVisionModel(config.foundryProjectEndpoint, async (scope, signal) => {
-        const token = await credential.getToken(scope, { abortSignal: signal });
-        if (!token) throw new Error('Foundry screen identity unavailable');
-        return token.token;
-      }),
-      createScreenFrameUsageStore(database.pool),
-    )));
-  }
-  if (graphClient) {
-    modules.push(createNotesModule({
-      graph: graphClient,
-      ownerObjectId: config.auth.ownerObjectId,
-      folderPath: config.notesFolderPath,
-    }));
+  if (database) modules.push(createHtmlViewModule(new WorkspaceHtmlArtifactStore(database.pool)));
+  let visionWatch: VisionWatchService | undefined;
+  if (database && settingsStore && screenVisionModel) {
+    const visionUsage = createScreenFrameUsageStore(database.pool);
+    modules.push(createScreenVisionModule(new ScreenVisionService(screenVisionModel, visionUsage)));
+    visionWatch = new VisionWatchService(screenVisionModel, visionUsage, createConversationStore(database.pool));
+    modules.push(createVisionWatchModule(visionWatch));
   }
   if ((config.voiceLiveEndpoint || config.foundryProjectEndpoint) && credential) {
     modules.push(createVoiceRelayModule({
+      ...(visionWatch ? { visionWatch } : {}),
       getToken: async (scope, signal) => {
         const token = await credential.getToken(scope, { abortSignal: signal });
         if (!token) throw new Error('Voice identity unavailable');
@@ -596,10 +641,6 @@ try {
       audioStore: teamsAudioStore,
     }));
   }
-  const credentialStatusStore = database ? createCredentialStatusStore(database.pool, {
-    alertNotifier,
-    onAlert: () => nowEventHub.publish({ type: 'refresh' }),
-  }) : undefined;
   const budgetAlertStore = alertActivityStore;
   const budgetReader = database && credential && config.monthlyBudgetResourceId
     ? createArmBudgetReader({
@@ -618,21 +659,31 @@ try {
     ...(database ? { databaseStatus: () => database.isWaking() } : {}),
     ...(releaseViewStore ? { releaseViewStore } : {}),
     ...(releaseGraphReader ? { releaseGraphReader } : {}),
-    ...(database && taskStore && settingsStore ? {
+    ...(database && taskStore && settingsStore && nowFeedStore ? {
       ...(projectStore ? { projectStore } : {}),
       ...(projectRepositoryCreator ? { projectRepositoryCreator } : {}),
       toolCallStore: createToolCallStore(database.pool),
       settingsStore: settingsStore,
       conversationStore: createConversationStore(database.pool),
+      ...(taskStatusNotificationStore ? { taskStatusNotificationStore } : {}),
+      ...(visionWatch ? { onConversationSessionEnded: (sessionId: string) => visionWatch?.forgetSession(sessionId) } : {}),
       taskStore,
       ...(githubAppTokenIssuer ? { githubAppTokenIssuer } : {}),
       ...(githubRepositoryCatalog ? { githubRepositoryCatalog } : {}),
       ...(dispatcher ? { taskController: dispatcher } : {}),
-      nowFeedStore: createNowFeedStore(database.pool),
+      nowFeedStore,
       usageStore: createUsageStore(database.pool),
     } : {}),
     ...(awayModeStore ? { awayModeStore } : {}),
     ...(credentialStatusStore ? { credentialStatusStore } : {}),
+    ...(credentialStatusStore && credential && config.foundryEndpoints && config.foundryRunnerAgentName ? {
+      renewCodexCredential: () => runCodexRenewalOnce(
+        credentialStatusStore,
+        clientFor(config.foundryRunnerAgentName!),
+        (details) => logger.warn(details, 'credentials.codex_renewal'),
+        true,
+      ),
+    } : {}),
     ...(sandboxHeartbeat ? { sandboxHeartbeat } : {}),
     eventHub,
     nowEventHub,
@@ -640,7 +691,12 @@ try {
     ...(teamsNotifications ? { teamsNotifications } : {}),
     ...(phoneSessionStore ? { phoneSessionStore } : {}),
   });
-  if (checksLoop) app.addHook('onClose', async () => { await checksLoop.stop(); });
+  if (checksLoop || projectPolicyEvaluator) {
+    app.addHook('onClose', async () => {
+      await checksLoop?.stop();
+      projectPolicyEvaluator?.stop();
+    });
+  }
   if (dispatcher) app.addHook('onClose', async () => { await dispatcher.stop(); });
   if (database) registerDatabase(app, database);
   else logger.info('database.not_configured');
@@ -651,20 +707,26 @@ try {
       stopBudgetMonitor = startBudgetAlertMonitor(
         budgetReader,
         budgetAlertStore,
-        () => logger.warn('budget_alert.check_failed'),
+        (error) => logger.warn(safeErrorFields(error), 'budget_alert.check_failed'),
       );
     });
   }
-  let stopPresenceMonitor: (() => Promise<void>) | undefined;
-  if (database && graphClient && awayModeStore) {
-    app.addHook('onClose', async () => { await stopPresenceMonitor?.(); });
+  if (credentialStatusStore && credential && config.keyVaultUri) {
+    const secrets = new SecretClient(config.keyVaultUri, credential);
+    let stopCopilotStatus: (() => void) | undefined;
+    app.addHook('onClose', async () => { stopCopilotStatus?.(); });
     app.addHook('onReady', async () => {
-      stopPresenceMonitor = startGraphPresenceMonitor(
-        graphClient,
-        config.auth.ownerObjectId,
-        awayModeStore,
-        () => logger.warn('away_mode.presence_poll_failed'),
-      );
+      stopCopilotStatus = startDailyCopilotStatusJob(credentialStatusStore, {
+        getSecret: async () => {
+          const secret = await secrets.getSecret('jarvis-copilot', { abortSignal: AbortSignal.timeout(10_000) });
+          if (!secret.value) throw new Error('Copilot credential unavailable');
+          return {
+            value: secret.value,
+            expiresAt: secret.properties.expiresOn?.toISOString() ?? null,
+            lastRenewedAt: secret.properties.updatedOn?.toISOString() ?? null,
+          };
+        },
+      }, () => logger.warn('credentials.copilot_check_failed'));
     });
   }
   if (database && credential && config.foundryEndpoints && config.foundryRunnerAgentName) {
@@ -675,7 +737,7 @@ try {
       stopCodexRenewal = startDailyCodexRenewalJob(
         app.credentialStatusStore!,
         client,
-        (outcome) => logger.info({ outcome }, 'credentials.codex_renewal'),
+        (outcome, details) => logger.info({ outcome, ...details }, 'credentials.codex_renewal'),
       );
     });
   }
@@ -690,7 +752,7 @@ try {
       await taskEventArchiveJob?.stop();
       await shutdown(app, telemetry);
     }
-    catch { logger.error('telemetry.close_failed'); process.exitCode = 1; }
+    catch (error) { logger.error(safeErrorFields(error), 'telemetry.close_failed'); process.exitCode = 1; }
     // Enforce the shutdown deadline even if an SDK/network handle remains open.
     process.exit(process.exitCode ?? 0);
   };
@@ -700,6 +762,7 @@ try {
     if (database) {
       await database.initialize();
       await memoryStore?.initialize();
+      await vaultIndexStore?.initialize();
       for (const project of await projectStore?.list() ?? []) {
         trackedRepositories.add(project.repo.toLowerCase());
       }
@@ -710,6 +773,13 @@ try {
       await sandboxHeartbeat?.start();
       dispatcher?.start();
       await app.listen({ port: config.port, host: '0.0.0.0' });
+      if (vaultModule) {
+        void vaultModule.synchronize(AbortSignal.timeout(10 * 60_000)).catch(() => {
+          logger.warn({
+            msg: 'vault.index', outcome: 'error', added: 0, changed: 0, removed: 0,
+          }, 'vault.index');
+        });
+      }
       void checksLoop?.start();
       taskEventArchiveJob?.start();
       logger.info({ port: config.port }, 'server.listening');

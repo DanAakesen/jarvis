@@ -314,6 +314,72 @@ async function rollback(transaction: sql.Transaction): Promise<void> {
   catch { /* The transaction may already have rolled back. */ }
 }
 
+async function taskSummaries(
+  executor: sql.ConnectionPool | sql.Transaction,
+  tasks: TaskRecord[],
+): Promise<TaskRecord[]> {
+  if (tasks.length === 0) return tasks;
+  const request = executor instanceof sql.Transaction ? new sql.Request(executor) : databaseReadRequest(executor);
+  const ids = tasks.map((task, index) => {
+    request.input(`id${index}`, sql.BigInt, BigInt(task.id));
+    return `@id${index}`;
+  });
+  const { recordset } = await request.query<{
+    id: string; repository: string; prNumber: number | null; prState: 'open' | 'closed' | 'merged' | null;
+    checks: 'pending' | 'passed' | 'failed' | null; checkConclusion: string | null;
+    prEvent: string | null; usageCount: number; inputTokens: number | null;
+    outputTokens: number | null; costDkk: number | null;
+  }>(`SELECT CAST(t.id AS varchar(19)) AS id, p.repo AS repository,
+      pr.number AS prNumber, pr.state AS prState, pr.checks,
+      COALESCE(run.conclusion, CASE pr.checks WHEN N'passed' THEN N'success'
+        WHEN N'failed' THEN N'failure' END) AS checkConclusion,
+      event.payload AS prEvent, usage.usageCount, usage.inputTokens, usage.outputTokens, usage.costDkk
+    FROM dbo.tasks AS t INNER JOIN dbo.projects AS p ON p.id = t.project_id
+    OUTER APPLY (
+      SELECT TOP (1) id, number, state, checks, head_sha
+      FROM dbo.pull_requests WHERE task_id = t.id ORDER BY opened_at DESC, id DESC
+    ) AS pr
+    OUTER APPLY (
+      SELECT TOP (1) conclusion FROM dbo.workflow_runs
+      WHERE pull_request_id = pr.id AND head_sha = pr.head_sha
+      ORDER BY COALESCE(completed_at, started_at) DESC, id DESC
+    ) AS run
+    OUTER APPLY (
+      SELECT TOP (1) payload FROM dbo.task_events
+      WHERE task_id = t.id AND type = N'pull_request_opened' AND source = N'backend'
+      ORDER BY at DESC, id DESC
+    ) AS event
+    CROSS APPLY (
+      SELECT COUNT_BIG(*) AS usageCount,
+        SUM(CASE WHEN metric = N'input_tokens' THEN quantity END) AS inputTokens,
+        SUM(CASE WHEN metric = N'output_tokens' THEN quantity END) AS outputTokens,
+        SUM(cost_dkk) AS costDkk FROM dbo.usage WHERE task_id = t.id
+    ) AS usage
+    WHERE t.id IN (${ids.join(', ')});`);
+  const summaries = new Map(recordset.map((row) => [row.id, row]));
+  return tasks.map((task) => {
+    const row = summaries.get(task.id);
+    if (!row) return task;
+    const opened = record(parsePayload(row.prEvent));
+    const eventNumber = opened?.pullRequest;
+    const number = row.prNumber ?? (typeof eventNumber === 'number' && Number.isSafeInteger(eventNumber) &&
+      eventNumber > 0 && eventNumber <= 2_147_483_647 ? eventNumber : null);
+    return {
+      ...task,
+      pullRequest: number === null ? null : {
+        number,
+        url: `https://github.com/${row.repository}/pull/${number}`,
+        state: row.prNumber === null ? null : row.prState,
+      },
+      checks: row.checks,
+      checkConclusion: row.checkConclusion,
+      usageSummary: row.usageCount > 0 ? {
+        inputTokens: row.inputTokens, outputTokens: row.outputTokens, costDkk: row.costDkk,
+      } : null,
+    };
+  });
+}
+
 async function acquireSleepSwitchLock(transaction: sql.Transaction, mode: 'Shared' | 'Exclusive'): Promise<void> {
   const { recordset } = await new sql.Request(transaction)
     .input('resource', sql.NVarChar(255), sleepSwitchLock)
@@ -485,8 +551,8 @@ export function createTaskStore(
       }
       const where = clauses.length > 0 ? `WHERE ${clauses.join(' AND ')}` : '';
       const { recordset } = await request.query<TaskRow>(`SELECT ${taskColumns} FROM dbo.tasks ${where}
-        ORDER BY created_at DESC, id DESC OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY;`);
-      return recordset.map(toTask);
+        ORDER BY created_at DESC, dbo.tasks.id DESC OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY;`);
+      return taskSummaries(pool, recordset.map(toTask));
     },
 
     async get(id: string, eventLimit: number, eventOffset: number): Promise<TaskDetail | null> {
@@ -504,10 +570,10 @@ export function createTaskStore(
             CASE WHEN DATALENGTH(payload) > 4096 THEN NULL ELSE payload END AS payload,
             CAST(CASE WHEN DATALENGTH(payload) > 4096 THEN 1 ELSE 0 END AS bit) AS payloadTruncated,
             source, at
-            FROM dbo.task_events WHERE task_id = @taskId
-            ORDER BY at ASC, id ASC OFFSET @eventOffset ROWS FETCH NEXT @eventLimit ROWS ONLY;`);
+            FROM dbo.task_events AS e WHERE task_id = @taskId
+            ORDER BY e.at ASC, e.id ASC OFFSET @eventOffset ROWS FETCH NEXT @eventLimit ROWS ONLY;`);
         return {
-          ...toTask(row),
+          ...(await taskSummaries(pool, [toTask(row)]))[0]!,
           usage: await taskUsage(pool, id),
           events: eventsResult.recordset.map((event) => ({
             ...event,
@@ -532,6 +598,7 @@ export function createTaskStore(
 
         const archivedPage = await eventArchive.prepareArchivedEvents(transaction, id, eventOffset, eventLimit);
         const usage = await taskUsage(transaction, id);
+        const task = (await taskSummaries(transaction, [toTask(row)]))[0]!;
         const remainingLimit = eventLimit - archivedPage.eventCount;
         let activeEvents: TaskEventRecord[] = [];
         if (remainingLimit > 0) {
@@ -544,8 +611,8 @@ export function createTaskStore(
               CASE WHEN DATALENGTH(payload) > 4096 THEN NULL ELSE payload END AS payload,
               CAST(CASE WHEN DATALENGTH(payload) > 4096 THEN 1 ELSE 0 END AS bit) AS payloadTruncated,
               source, at
-              FROM dbo.task_events WHERE task_id = @taskId
-              ORDER BY at ASC, id ASC OFFSET @eventOffset ROWS FETCH NEXT @eventLimit ROWS ONLY;`);
+              FROM dbo.task_events AS e WHERE task_id = @taskId
+              ORDER BY e.at ASC, e.id ASC OFFSET @eventOffset ROWS FETCH NEXT @eventLimit ROWS ONLY;`);
           activeEvents = eventsResult.recordset.map((event) => ({
             ...event,
             payload: parsePayload(event.payload),
@@ -554,7 +621,7 @@ export function createTaskStore(
         }
         await transaction.commit();
         const archivedEvents = await eventArchive.restoreArchivedEvents(archivedPage);
-        return { ...toTask(row), events: [...archivedEvents, ...activeEvents], usage };
+        return { ...task, events: [...archivedEvents, ...activeEvents], usage };
       } catch {
         await rollback(transaction);
         throw new Error('Task detail persistence failed');
@@ -584,8 +651,8 @@ export function createTaskStore(
           CASE WHEN DATALENGTH(payload) > 4096 THEN NULL ELSE payload END AS payload,
           CAST(CASE WHEN DATALENGTH(payload) > 4096 THEN 1 ELSE 0 END AS bit) AS payloadTruncated,
           source, at
-          FROM dbo.task_events WHERE task_id = @taskId AND id > @eventId
-          ORDER BY id ASC;`);
+          FROM dbo.task_events AS e WHERE task_id = @taskId AND e.id > @eventId
+          ORDER BY e.id ASC;`);
       return result.recordset.map((event) => ({
         ...event,
         taskId,
@@ -656,6 +723,60 @@ export function createTaskStore(
       };
     },
 
+    async retry(id: string): Promise<TaskTransitionResult> {
+      const transaction = new sql.Transaction(pool);
+      await transaction.begin();
+      try {
+        await acquireSleepSwitchLock(transaction, 'Shared');
+        const current = await new sql.Request(transaction)
+          .input('taskId', sql.BigInt, BigInt(id))
+          .query<{ state: TaskState; attemptCount: number; hasHistory: boolean; leased: boolean; startRefused: boolean }>(`
+            SELECT state, attempt_count AS attemptCount,
+              CAST(CASE WHEN EXISTS (SELECT 1 FROM dbo.sandbox_sessions WHERE task_id = @taskId)
+                OR EXISTS (SELECT 1 FROM dbo.task_event_archives WHERE task_id = @taskId)
+                OR EXISTS (SELECT 1 FROM dbo.task_events WHERE task_id = @taskId AND
+                  (source = N'runner' OR (type = N'state_changed' AND
+                    JSON_VALUE(payload, '$.reason') IN
+                      (N'session_persistence_failed', N'foundry_start_failed', N'dispatch_lease_expired'))))
+                THEN 1 ELSE 0 END AS bit) AS hasHistory,
+              CAST(CASE WHEN (SELECT TOP (1) JSON_VALUE(payload, '$.reason')
+                FROM dbo.task_events WHERE task_id = @taskId AND type = N'state_changed'
+                  AND source = N'backend' ORDER BY at DESC, id DESC)
+                IN (N'credential_unavailable', N'foundry_start_rejected')
+                THEN 1 ELSE 0 END AS bit) AS startRefused,
+              CAST(CASE WHEN lease_until > SYSUTCDATETIME() THEN 1 ELSE 0 END AS bit) AS leased
+            FROM dbo.tasks WITH (UPDLOCK, HOLDLOCK) WHERE id = @taskId;`);
+        const row = current.recordset[0];
+        if (!row || row.state !== 'NeedsAttention' || row.attemptCount === 0 ||
+          row.hasHistory || row.leased || !row.startRefused) {
+          await transaction.rollback();
+          return { kind: row ? 'invalid-transition' : 'not-found' };
+        }
+        const summary = 'Task queued for another sandbox start attempt';
+        const updated = await new sql.Request(transaction)
+          .input('taskId', sql.BigInt, BigInt(id))
+          .input('summary', sql.NVarChar(2000), summary)
+          .query<TaskRow>(`UPDATE dbo.tasks SET state = N'Ready', attempt_count = 0,
+            next_attempt_at = NULL, lease_owner = NULL, lease_until = NULL,
+            started_at = NULL, finished_at = NULL, activity = @summary
+            OUTPUT ${insertedTaskColumns} WHERE id = @taskId;`);
+        const task = updated.recordset[0];
+        if (!task) throw new Error('Task retry returned no row');
+        const event: RecordTaskEventInput = {
+          taskId: id, type: 'state_changed', source: 'dan', summary,
+          payload: { from: 'NeedsAttention', to: 'Ready', reason: 'start_retry',
+            previousAttemptCount: row.attemptCount, attemptCount: 0, nextAttemptAt: null },
+        };
+        const publishedEvent = await insertTaskEvent(transaction, event, validateEvent(event));
+        await transaction.commit();
+        eventHub.publish(publishedEvent);
+        return { kind: 'ok', task: toTask(task) };
+      } catch {
+        await rollback(transaction);
+        throw new Error('Task retry persistence failed');
+      }
+    },
+
     async transition(
       id: string,
       state: TaskState,
@@ -712,11 +833,25 @@ export function createTaskStore(
             WHERE id = @taskId;`);
         const task = updated.recordset[0];
         if (!task) throw new Error('Task update returned no row');
+        const pullRequest = ['Done', 'NeedsAttention', 'Cancelled'].includes(state)
+          ? await new sql.Request(transaction)
+            .input('taskId', sql.BigInt, BigInt(id))
+            .query<{ url: string | null }>(`SELECT TOP (1) JSON_VALUE(payload, N'$.url') AS url
+              FROM dbo.task_events
+              WHERE task_id = @taskId AND type = N'pull_request_opened'
+                AND source = N'backend' AND ISJSON(payload) = 1
+              ORDER BY id DESC;`)
+          : undefined;
         const event: RecordTaskEventInput = {
           taskId: id,
           type: 'state_changed',
           summary: eventSummary ?? 'Task state changed',
-          payload: { from: current, to: state, ...(eventReason ? { reason: eventReason } : {}) },
+          payload: {
+            from: current,
+            to: state,
+            ...(eventReason ? { reason: eventReason } : {}),
+            ...(pullRequest?.recordset[0]?.url ? { pullRequestUrl: pullRequest.recordset[0].url } : {}),
+          },
           source: 'backend',
         };
         const serializedPayload = validateEvent(event);
@@ -764,11 +899,23 @@ export function createTaskStore(
             .input('currentState', sql.NVarChar(32), currentState)
             .query(`UPDATE dbo.tasks SET state = N'NeedsAttention', lease_owner = NULL, lease_until = NULL
               WHERE id = @taskId AND state = @currentState;`);
+          const pullRequest = await new sql.Request(transaction)
+            .input('taskId', sql.BigInt, BigInt(event.taskId))
+            .query<{ url: string | null }>(`SELECT TOP (1) JSON_VALUE(payload, N'$.url') AS url
+              FROM dbo.task_events
+              WHERE task_id = @taskId AND type = N'pull_request_opened'
+                AND source = N'backend' AND ISJSON(payload) = 1
+              ORDER BY id DESC;`);
           const stateChanged: RecordTaskEventInput = {
             taskId: event.taskId,
             type: 'state_changed',
             summary: isQuestion ? 'Agent needs input; task needs attention' : 'Low sandbox disk; task needs attention',
-            payload: { from: currentState, to: 'NeedsAttention', reason: isQuestion ? 'session_question' : 'disk_low' },
+            payload: {
+              from: currentState,
+              to: 'NeedsAttention',
+              reason: isQuestion ? 'session_question' : 'disk_low',
+              ...(pullRequest.recordset[0]?.url ? { pullRequestUrl: pullRequest.recordset[0].url } : {}),
+            },
             source: 'backend',
           };
           stateChangedEvent = await insertTaskEvent(

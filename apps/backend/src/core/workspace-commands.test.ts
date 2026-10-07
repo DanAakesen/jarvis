@@ -72,12 +72,26 @@ describe('workspace command delivery', () => {
       sessionId: connection.sessionId,
       windows: [{ viewId: 'tasks', title: 'Tasks' }],
       contextPanelOpen: false,
+      frame: {
+        widthPx: 1280,
+        heightPx: 900,
+        device: 'desktop',
+        theme: 'dark',
+        reducedMotion: false,
+        density: 'comfortable',
+        designTokens: { '--text': '#ffffff' },
+        fonts: { body: 'system-ui', heading: 'system-ui', mono: 'monospace' },
+        layout: 'tiled',
+        pinned: false,
+      },
     };
     const publish = (body = payload, headers = userHeaders) => app.inject({
       method: 'POST', url: '/now/workspace/state', headers, payload: body,
     });
     expect((await publish()).statusCode).toBe(204);
     expect(broker.snapshot(ownerId)?.windows).toEqual(payload.windows);
+    expect(broker.snapshot(ownerId)?.frame).toEqual(payload.frame);
+    expect((await publish({ ...payload, frame: { ...payload.frame, widthPx: 0 } })).statusCode).toBe(400);
     expect((await publish(payload, agentHeaders)).statusCode).toBe(403);
     const create = await app.inject({
       method: 'POST', url: '/tools/workspace_command', headers: { ...userHeaders, 'x-jarvis-message-id': '101' },

@@ -126,8 +126,7 @@ Every task issue ends with the same "Before you start" and "Definition of done" 
 | Bootstrap IDs | [`infra/bootstrap.output.json`](../infra/bootstrap.output.json); also Actions variables in `DanAakesen/jarvis` |
 
 - `infra/main.bicep` deploys into the existing `rg-jarvis`; it does not create the group or bootstrap identities. Run `az bicep build --file infra/main.bicep` and `az bicep lint --file infra/main.bicep` in PRs; the build writes `infra/main.json`, which is generated output and must not be committed. These checks need no Azure access.
-- `infra/bootstrap.ps1` registers `Microsoft.BotService`; `Microsoft.CognitiveServices` is already registered there. When a backend image exists, Bicep provisions Azure Bot Service F0 with its Teams channel, plus Azure Speech F0 and a **Cognitive Services Speech User** assignment to `id-jarvis-backend`. The bot uses that user-assigned identity; no client secret, speech key, additional app registration, or new deployment secret is required.
-- Bicep sets backend `TEAMS_BOT_APP_ID`, `TEAMS_BOT_TENANT_ID`, `TEAMS_AUDIO_ORIGIN`, and `SPEECH_REGION` from the identity, subscription, Container Apps environment, and Speech resource. Speech is F0-only: if the free allowance is exhausted or synthesis fails, delivery remains text-only. Local build/lint and fake service tests do not prove the resource role, deployed endpoint, free allowance, Teams installation, or live phone approval.
+- The 6 October P6-22 decision reflects Dan's personal tenant: no Microsoft 365 or Teams. `infra/bootstrap.ps1` and Bicep no longer register or declare Bot Service, a Teams channel, or the separate Speech F0 resource. The optional backend Teams adapter remains unconfigured; approvals and notifications use the authenticated Now feed, and active English browser voice sessions announce pending approvals and task status. The normal Bicep deployment is incremental, so omission does not delete resources from prior deployments; any Azure cleanup requires separate authorization.
 - The Bicep deployment must supply `backendIdentityResourceId`, `sqlAdminGroupObjectId` and `foundryNameTimestamp`; `backendImage` is optional (empty skips the backend app, used only before the first backend image exists). The timestamp is fixed at `20261003200000` in `infra/main.parameters.json`, so every deploy updates the existing Foundry account and project in place. Change it only to recover from a deleted account, and then to a fresh value (L2).
 - Bicep sets `BACKEND_CONTAINER_APP_RESOURCE_ID` and grants `id-jarvis-backend` a custom role limited to Container App read/write on that app. The sleep API uses this fixed target and the existing `SQL_MANAGED_IDENTITY_CLIENT_ID` for ARM authentication. Local tests inject the scaler; a local app without an Azure managed identity cannot perform live scaling, and the Bicep build/lint checks do not verify the deployed role.
 - `sqlAdminGroupName` defaults to `jarvis-sql-admins`; the budget defaults to 300 in the subscription billing currency. Deploy requires the `JARVIS_BUDGET_CONTACT_EMAILS` GitHub secret, a comma-separated list including Dan's email. It passes the values through a mode-0600 temporary parameters file to the required Bicep `budgetContactEmails` parameter, then deletes the file. Do not commit email addresses. The first Azure deployment and real resource behavior are verified by Deploy, not by local Bicep build/lint.
@@ -137,8 +136,8 @@ Every task issue ends with the same "Before you start" and "Definition of done" 
 - **Google Calendar and Gmail setup (Dan only):** Create a Google Cloud project and select it in the project picker. Open **APIs & Services → Library**, search for **Gmail API**, open it and click **Enable**; repeat for **Google Calendar API**. Open **Google Auth Platform → Branding** and configure the app name and support contact; under **Audience**, choose **External** for Dan's personal account. Under **Data Access**, add `https://www.googleapis.com/auth/gmail.readonly`, `https://www.googleapis.com/auth/gmail.compose`, `https://www.googleapis.com/auth/gmail.send`, and `https://www.googleapis.com/auth/calendar.events`. Return to **Audience** and click **Publish app** so the publishing status is **In production**, not **Testing**; Testing-mode refresh tokens expire after seven days. Google may show an unverified-app warning or require OAuth verification for restricted Gmail scopes.
 - In Google Auth Platform, open **Clients → Create client**, choose **Desktop app**, create the client, and keep its client ID and secret ready to enter into the hidden prompts. Do not download or commit the client file. On Dan's Windows machine, sign in to the expected Azure subscription and GitHub repository with their CLIs, open **Windows PowerShell 5.1** (not PowerShell 7), change to the repository root, and run exactly `& .\infra\setup-google.ps1`. The script runs loopback OAuth with PKCE, validates consent state, stores `google-oauth-client-id`, `google-oauth-client-secret`, and `google-refresh-token` in the deployed Key Vault, and removes the temporary vault role assignment it creates. It sets only nonsecret `JARVIS_GOOGLE_TIME_ZONE` as a GitHub Actions variable. Dan needs permission to create/delete role assignments and write Key Vault secrets; no coding agent runs this script or accesses the tenant.
 - After setup, deploy from `main` to enable the configured backend module. Verify agenda and mail reads for `danaakesen@gmail.com`, test event creation/move only after exact later-message confirmation, test a Gmail reply draft (Dan sends it from Gmail), and test sending only to an explicitly approved test recipient. Wrong, expired, and same-turn confirmation codes must not cause writes. Live Google consent, deployment, and API behavior remain unverified until Dan performs these checks.
-- P7-10 deploys `JARVIS_NOTES_FOLDER_PATH` from the `notesFolderPath` Bicep parameter (default `/Jarvis/Notes`). After merge, the coordinator must review and approve the broad Graph `Files.Read.All` application permission before running `./infra/setup-notes-search.ps1` with an administrator-authorized Azure CLI session. The script is idempotent and assigns the permission to `id-jarvis-backend`; Graph Search does not support `Sites.Selected`. The backend fixes the user to Dan and scopes queries and returned links to the configured folder. Live tenant consent and a known-note search remain unverified.
-- P7-02 reads Dan's Teams presence with the backend managed identity and requires the Microsoft Graph `Presence.Read.All` application role. After merge, a tenant administrator must review/grant that permission and run `./infra/setup-away-presence.ps1` from an Azure CLI session for the expected subscription. The script is idempotent and targets `id-jarvis-backend`; no Bicep or SQL migration is needed. Browser return is signaled by authenticated active-app requests to `POST /now/present`, not passive feed refreshes. Live consent, presence detection, Teams installation, and phone delivery remain unverified.
+- **GitHub vault setup (Dan once):** install the existing Jarvis GitHub App on the private `DanAakesen/vault` repository with Contents read/write permission, preferably selecting only that repository for this installation. The backend uses a repository-scoped installation token; never create or use a personal access token. The App already subscribes to `push`; the backend indexes `master` at startup and after verified `master` pushes. If the App is not installed on the vault, search/write are unavailable and the backend reports the missing installation. No Graph or Azure permission is needed. Live installation and note access remain unverified; see [infrastructure setup](../infra/README.md#github-vault-setup).
+- Away mode is manual by decision P6-22; no Graph presence permission, monitor, or setup script is used. Active authenticated browser requests to `POST /now/present` mark Dan present; passive feed refreshes do not. The Now feed and browser approvals remain available in either away state. Live browser voice announcements and approval delivery remain unverified.
 - `az` runs through a `.cmd` file: avoid `&`, parentheses, and pipes inside arguments such as `--query` (L20); filter JSON in PowerShell instead.
 - Never reuse a deleted Foundry account or project name; generate timestamped names (L2).
 - `FOUNDRY_*` and `AGENT_*` environment variables are reserved in hosted agents (L18).
@@ -743,7 +742,7 @@ the coding agent must not access Azure or run live Codex acceptance.
 
 Production runner calls use the optional paired `FOUNDRY_RUNTIME_ENDPOINT` and
 `FOUNDRY_ADMIN_ENDPOINT`, plus `FOUNDRY_RUNNER_AGENT_NAME`. Bicep supplies the
-project URLs and `jarvis-runner-node-1x2`; these are non-secret settings. When
+project URLs and `jarvis-runner-base-1x2`; these are non-secret settings. When
 configured, the backend uses its shared `DefaultAzureCredential`, selected with
 `SQL_MANAGED_IDENTITY_CLIENT_ID`. The daily Codex renewal job requires database
 and Foundry runner configuration, and uses the SQL credential lease; the task
@@ -1021,6 +1020,47 @@ or tray interaction. Live Chrome, physical confirmation delivery, and Dan's
 acceptance remain coordinator checks. Do not include unrelated personal tabs or
 page contents in evidence.
 
+### Offline wake word (P7-39)
+
+The bridge detects "Wake up Jarvis" on Dan's PC with the Speech SDK
+`KeywordRecognizer` and a custom keyword model. Agents cannot create the model;
+the coordinator creates it in Dan's signed-in Speech Studio session:
+
+1. Open Speech Studio → **Custom keyword** (`https://speech.microsoft.com/portal/customkeyword`)
+   with the existing Jarvis Speech/AI Services resource. Select **Create a new
+   project**, name it `jarvis-wake-word`, and choose **English (United States)**
+   (one of the two supported languages).
+2. Open the project and select **Create a new model**. Enter the keyword
+   exactly as `Wake up Jarvis`, keep only the candidate pronunciations that match
+   Dan's speech, and select the **Basic** model type. Training can take several
+   hours. Wait for **Succeeded**.
+3. Under **Tune**, download the model `.zip` and extract it. Copy the `.table`
+   file to `%LOCALAPPDATA%\Jarvis\PcBridge\wake-up-jarvis.table` on Dan's PC.
+   Do not commit it.
+4. Add the absolute path to `%LOCALAPPDATA%\Jarvis\PcBridge\settings.json`,
+   escaping backslashes:
+
+   ```json
+   "WakeWordModelPath": "C:\\Users\\<user>\\AppData\\Local\\Jarvis\\PcBridge\\wake-up-jarvis.table"
+   ```
+
+   The installer keeps this field. Optional fields: `WakeWordEnabled` (missing
+   means on once the model exists) and `WebUrl` (Jarvis web origin; defaults to
+   the production Static Web App origin). Restart the bridge from the tray.
+
+Without a valid `.table` path, the tray's **Wake word** item is disabled and
+explains the missing model. With it, the item shows listening, paused during
+voice, or microphone unavailable, and toggling it is saved. Reload the unpacked
+Chrome extension after installing (extension 1.0.3 adds `focus_jarvis_tab`).
+
+Live acceptance (coordinator with Dan, after the page reacts to `voice-wake`):
+say "Wake up Jarvis" with the Jarvis tab in the background, then with no
+Jarvis tab open. Expect one chime, the existing Jarvis Chrome tab (or a new one,
+never Edge) in front, and voice starting. During the voice session the tray
+should show it is paused; after the session ends it should listen again. Turn
+the toggle off and confirm the phrase does nothing. Offline tests use a fake
+recognizer and do not prove microphone, model accuracy, or Chrome focus.
+
 ### Database access and migrations (#7)
 
 - Configure `SQL_SERVER=<host>.database.windows.net`, `SQL_DATABASE=jarvis` and
@@ -1294,7 +1334,7 @@ usage and billed cost remain unverified.
 - Every change reaches `main` through a PR merged by Dan or an explicitly authorized agent (see [Merge](#merge)). A merge runs the Deploy workflow, which deploys only the changed parts among infrastructure, backend, web, and the Jarvis agent; the backend applies migrations at startup. Redeploy everything with **Actions → Deploy → Run workflow** on `main` (`gh workflow run deploy.yml --ref main`).
 - After the first successful deploy only (P0-16): run `./infra/bootstrap.ps1 -WebRedirectUris 'https://<Static Web App host>/redirect.html'` so sign-in works there (the redirect URI is MSAL's redirect bridge page, L63) (existing URIs are kept), set `backendUrl` in `apps/web/config.json` to the backend URL so `npm run dev` signs in, and set the Actions variable `JARVIS_INFRA_DEPLOYMENT_NAME` to `jarvis-infra` (`gh variable set JARVIS_INFRA_DEPLOYMENT_NAME --body jarvis-infra`). The Deploy run summary lists both URLs.
 - No manual infrastructure portal changes.
-- **P7-03 coordinator check after merge:** wait for Deploy to finish, open the Azure Bot resource `bot-jarvis-{suffix}` and use its Teams/Open in Teams entry to install it for Dan. Send the first message in a personal chat from Dan's Novaro account so the backend can persist the conversation reference. Then use Teams on Dan's phone to verify a text notification, an optional voice note, Approve continues a test action, Reject does not, and a card left unanswered for five minutes cannot run its action. Do not enable a paid Speech tier.
+- **P6-22 coordinator check after merge:** wait for Deploy to finish; verify Teams settings are absent from the backend and Bicep does not provision Teams Bot or separate Speech F0 resources. In the signed-in Now panel, verify an away task update and a browser approval appear while away, Approve runs only the confirmed test action, Reject does not, and an unanswered approval expires after five minutes. If an English browser voice session is active, verify it announces the pending approval and task status. Any leftover Azure resources from prior deployments require separate cleanup authorization.
 - Managed-project workflow examples and Azure OIDC adoption steps are in [github-actions-templates.md](github-actions-templates.md). The templates assume npm/Node defaults that adopters must match or customize; no Azure access is available to verify an adopting project's federation or deployment.
 
 ## Documentation rules

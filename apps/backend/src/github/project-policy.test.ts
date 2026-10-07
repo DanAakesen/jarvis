@@ -29,6 +29,7 @@ function candidate(policy: PolicyPullRequest['policy'] = 'complete_without_deplo
     state: 'open',
     checks: 'passed',
     headSha,
+    openedAt: new Date().toISOString(),
   };
 }
 
@@ -117,7 +118,12 @@ function fixture(
   const recordEvent = vi.fn(async () => ({ id: '1' } as never));
   const tasks = { transition, recordEvent } as unknown as Pick<TaskStore, 'transition' | 'recordEvent'>;
   const issue = vi.fn(async () => 'installation-token');
-  const tokenIssuer: GitHubAppTokenIssuer = { issue };
+  const tokenIssuer: GitHubAppTokenIssuer = {
+    issue,
+    issueForActions: vi.fn(async () => 'actions-token'),
+    issueForContents: vi.fn(async () => 'contents-token'),
+    issueForContentsWrite: vi.fn(async () => 'contents-write-token'),
+  };
   const api = github(githubOptions, onBaseBranchRead);
   const runConfirmed = confirmationEnabled
     ? vi.fn(<T>(_summary: string, action: () => Promise<T>) => action())
@@ -161,6 +167,68 @@ describe('GitHub project completion policies', () => {
 
     expect(test.transition).toHaveBeenCalledWith('7', 'Done', true);
     expect(test.recordEvent).not.toHaveBeenCalled();
+  });
+
+  it('completes without CI only after the pull request check grace period', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-10-06T12:00:00.000Z'));
+    const test = fixture({
+      ...candidate('deliver_pr'),
+      checks: 'pending',
+      openedAt: new Date().toISOString(),
+    }, { checkRuns: [] });
+
+    try {
+      await test.evaluator.handle(mapping);
+      expect(test.transition).not.toHaveBeenCalled();
+
+      await vi.advanceTimersByTimeAsync(2 * 60_000 - 1);
+      expect(test.transition).not.toHaveBeenCalled();
+
+      await vi.advanceTimersByTimeAsync(1);
+      expect(test.transition).toHaveBeenCalledWith('7', 'Done', true);
+      expect(test.recordEvent).toHaveBeenCalledWith(expect.objectContaining({
+        type: 'project_policy_completed_without_checks',
+        summary: 'No CI configured; completed without checks',
+      }));
+    } finally {
+      test.evaluator.stop();
+      vi.useRealTimers();
+    }
+  });
+
+  it('keeps waiting when GitHub checks appear during the grace period', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-10-06T12:00:00.000Z'));
+    const checkRuns: Record<string, unknown>[] = [];
+    const test = fixture({
+      ...candidate('deliver_pr'),
+      checks: 'pending',
+      openedAt: new Date().toISOString(),
+    }, { checkRuns });
+
+    try {
+      await test.evaluator.handle(mapping);
+      await vi.advanceTimersByTimeAsync(30_000);
+      checkRuns.push({
+        id: 2,
+        name: 'CI',
+        app: { id: 12 },
+        status: 'in_progress',
+        conclusion: null,
+      });
+      await test.evaluator.handle(mapping);
+
+      await vi.advanceTimersByTimeAsync(90_000);
+
+      expect(test.transition).not.toHaveBeenCalled();
+      expect(test.recordEvent).toHaveBeenCalledWith(expect.objectContaining({
+        summary: expect.stringContaining('pending or failed'),
+      }));
+    } finally {
+      test.evaluator.stop();
+      vi.useRealTimers();
+    }
   });
 
   it('confirms eligible complete_without_deployment PR merges and waits for the merge webhook before Done', async () => {

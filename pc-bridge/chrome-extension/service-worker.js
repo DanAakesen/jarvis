@@ -134,6 +134,43 @@ async function handleRequest(request) {
       return;
     }
 
+    if (request.type === "focus_jarvis_tab") {
+      if (!hasOnlyKeys(request, ["id", "type", "url"]) ||
+          typeof request.url !== "string" || request.url.length > 2048 ||
+          /[\u0000-\u001f\u007f]/.test(request.url)) {
+        throw new Error("not_allowed");
+      }
+      let url;
+      try {
+        url = new URL(request.url);
+      } catch {
+        throw new Error("not_allowed");
+      }
+      const loopback = url.hostname === "localhost" || url.hostname === "127.0.0.1" || url.hostname === "[::1]";
+      if ((url.protocol !== "https:" && !(url.protocol === "http:" && loopback)) ||
+          url.username || url.password) {
+        throw new Error("not_allowed");
+      }
+      // Reuse Dan's open Jarvis tab (any page on the Jarvis origin); open one only if none exists.
+      const tabs = await chrome.tabs.query({});
+      const jarvisTabs = tabs.slice(0, MAX_TABS).filter((tab) => {
+        if (!Number.isSafeInteger(tab.id) || !Number.isSafeInteger(tab.windowId)) return false;
+        try {
+          return new URL(tab.url || "").origin === url.origin;
+        } catch {
+          return false;
+        }
+      });
+      const existing = jarvisTabs.find((tab) => tab.active) ?? jarvisTabs[0];
+      const tab = existing
+        ? await chrome.tabs.update(existing.id, { active: true })
+        : await chrome.tabs.create({ url: url.href, active: true });
+      if (!Number.isSafeInteger(tab.windowId)) throw new Error("failed");
+      await chrome.windows.update(tab.windowId, { focused: true, drawAttention: true });
+      post({ id: request.id, type: "result", result: { opened: !existing, focused: true } });
+      return;
+    }
+
     const tabId = extensionTabId(request.tabId);
     if (tabId === null) throw new Error("not_found");
 

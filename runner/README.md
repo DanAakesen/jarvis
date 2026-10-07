@@ -55,6 +55,7 @@ session as `agent_session_id` to resume, steer, or pause.
 | Credential probe | `{"agent":"copilot","probe":"key-vault"}` |
 | Codex renewal | `{"agent":"codex","mode":"renew-codex","min_days_left":3}` |
 | Codex web research | `{"agent":"codex","mode":"codex-tool","tool":"web_research","query":"...","model":"gpt-5.5"}` |
+| Codex HTML report | `{"agent":"codex","mode":"codex-tool","tool":"html_report","query":"<bounded JSON report request>","model":"gpt-5.5"}` |
 
 Start, steer and renewal return `invocation_id`, `session_id`, `status`,
 `agent`, and `mode`. Poll the invocation for bounded events, result, error, and
@@ -144,18 +145,20 @@ subscription login used by the runner. See the
 
 ### Codex tools (P7-14)
 
-The backend sends the bounded `web_research` query and configured model in
-`mode=codex-tool`; it does not send a repository, GitHub token, or API key. The
-runner accepts only the registered Codex tool name and a ChatGPT-supported
-model. It starts `codex --disable shell_tool exec --skip-git-repo-check -s
-read-only -c web_search=live` in a fresh temporary directory. Disabling
+The backend sends a bounded `web_research` query or JSON `html_report` request
+and configured model in `mode=codex-tool`; it does not send a repository,
+GitHub token, or API key. The runner accepts only the registered Codex tool name
+and a ChatGPT-supported model. It starts `codex --disable shell_tool exec
+--skip-git-repo-check -s read-only` in a fresh temporary directory. Live web
+search is enabled only for `web_research`; report generation receives the
+collected findings as untrusted JSON evidence. Disabling
 `shell_tool` is required: the read-only filesystem sandbox still permits reads,
 including of a file-backed `CODEX_HOME/auth.json`. The temporary Codex home
 contains only the authorized login file and minimal config; the workspace, home,
 and auth file are removed after the call. No repository is cloned.
 
-The query is passed as argument data (never through a shell) and the prompt
-treats retrieved pages as untrusted evidence. Each invocation is bounded by
+The query is passed as argument data (never through a shell) and prompts treat
+retrieved pages and research findings as untrusted evidence. Each invocation is bounded by
 `JARVIS_CODEX_TOOL_TIMEOUT_SECONDS` (1–600 seconds; default 300), stdout/stderr
 and the last-message file (256 KiB each); cancellation kills the Codex process.
 Only invocation status/mode/tool metadata persist, not the query or result. A

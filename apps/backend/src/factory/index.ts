@@ -194,6 +194,22 @@ export const factoryModule: BackendModule = {
       return sendBounded(reply, detail);
     });
 
+    app.post<{ Params: { id: string } }>('/factory/tasks/:id/retry', {
+      schema: {
+        params: { type: 'object', properties: { id: idSchema }, required: ['id'], additionalProperties: false },
+      },
+    }, async (request, reply) => {
+      const store = app.taskStore;
+      if (!store) return reply.code(503).send({ error: 'Task service unavailable' });
+      if (!isSqlBigInt(request.params.id)) return reply.code(400).send({ error: 'Invalid task ID' });
+      const result = await store.retry(request.params.id);
+      if (result.kind === 'not-found') return reply.code(404).send({ error: 'Task not found' });
+      if (result.kind !== 'ok') {
+        return reply.code(409).send({ error: 'Only failed start attempts without sandbox history can be retried; use Recover for tasks that ran' });
+      }
+      return sendBounded(reply, result.task);
+    });
+
     app.post<{ Params: { id: string }; Body: { action: string; message?: string } }>('/factory/tasks/:id/controls', {
       schema: {
         params: { type: 'object', properties: { id: idSchema }, required: ['id'], additionalProperties: false },
@@ -313,7 +329,7 @@ export const factoryModule: BackendModule = {
         }
         eventDelivery = eventDelivery.then(async () => {
           try {
-            if ((await app.awayModeStore?.read())?.away) return;
+            if (((await app.awayModeStore?.read())?.mode ?? 'present') !== 'present') return;
             if (closed) return;
             writeEvent(event);
           } catch {
@@ -349,7 +365,7 @@ export const factoryModule: BackendModule = {
         }
         if (closed) return;
         while (pending.length) {
-          const away = (await app.awayModeStore?.read())?.away ?? false;
+          const away = ((await app.awayModeStore?.read())?.mode ?? 'present') !== 'present';
           const buffered = pending.sort((left, right) =>
             BigInt(left.id) < BigInt(right.id) ? -1 : BigInt(left.id) > BigInt(right.id) ? 1 : 0);
           pending = [];

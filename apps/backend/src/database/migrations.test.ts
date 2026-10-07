@@ -49,7 +49,12 @@ describe('committed SQL manifest', () => {
       '0010_idle_expired_sessions.sql', '0011_alert_deduplication.sql', '0014_teams_notifications.sql',
       '0015_screen_frame_usage.sql', '0016_long_term_memory.sql', '0017_phone_call_sessions.sql',
       '0018_tool_call_refused_outcome.sql', '0019_workspace_artifacts.sql',
-      '0020_chat_message_steering.sql',
+      '0020_chat_message_steering.sql', '0021_vault_memory_index.sql',
+      '0022_task_notification_deduplication.sql',
+      '0023_github_app_credential_health.sql',
+      '0024_dismiss_board_deployment_failures.sql',
+      '0025_workspace_html_artifacts.sql',
+      '0026_workspace_html_artifact_history.sql',
     ]);
     for (const migration of migrations) await expect(readDownMigration(migration.name)).resolves.toMatchObject({ name: migration.name });
   });

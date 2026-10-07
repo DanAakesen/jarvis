@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { FastifyRequest } from 'fastify';
 import websocket from '@fastify/websocket';
 import WebSocket, { type RawData } from 'ws';
+import type { JarvisActivityEvent, JarvisVoiceWakeEvent } from '@jarvis/contracts';
 import { ToolRefusal } from '../core/tool-registry.js';
 import type { BackendModule } from '../modules.js';
 import {
@@ -12,16 +13,24 @@ import {
 import {
   runPcAct,
   type PcActOptions,
+  type PcActOperation,
   type PcActPlanner,
+  type PcActVisionModel,
 } from './pc-act.js';
 
 const MAX_MESSAGE_BYTES = 64 * 1024;
+const MAX_CAPTURE_RESPONSE_BYTES = 1_050_000;
 const DEFAULT_TIMEOUT_MS = 15_000;
 export const PC_BRIDGE_SUBPROTOCOL = 'jarvis.pc.v1';
 const idPattern = /^[\da-f]{8}-[\da-f]{4}-4[\da-f]{3}-[89ab][\da-f]{3}-[\da-f]{12}$/iu;
 const controlActions = new Set<PcCommand['name']>([
   'open_url', 'open_app', 'close_app', 'open_folder', 'focus_window', 'uia_act', 'browser_act', 'media',
+  'window_capture', 'click_point', 'scroll_point', 'open_file',
 ]);
+// Voice session states that mean Dan is talking to Jarvis; `ended` and `failed` end the session.
+const activeVoiceStates = new Set<JarvisActivityEvent['type']>(['listening', 'thinking', 'speaking', 'reconnecting']);
+const maxTrackedVoiceSessions = 64;
+const wakeWordTimestampPattern = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u;
 const mediaActions = ['play_pause', 'next', 'previous', 'volume_up', 'volume_down', 'mute'] as const;
 
 type PcCommand =
@@ -30,6 +39,7 @@ type PcCommand =
   | { name: 'close_app'; arguments: { app: string } }
   | { name: 'media'; arguments: { action: typeof mediaActions[number] } }
   | { name: 'open_folder'; arguments: { relativePath: string } }
+  | { name: 'open_file'; arguments: { relativePath: string } }
   | { name: 'active_window'; arguments: Record<string, never> }
   | { name: 'focus_window'; arguments: { title: string } }
   | { name: 'uia_snapshot'; arguments: Record<string, never> }
@@ -55,6 +65,15 @@ type PcCommand =
         action: 'type_focused';
         text: string;
       };
+  }
+  | { name: 'window_capture'; arguments: Record<string, never> }
+  | {
+    name: 'click_point';
+    arguments: { snapshotId: string; x: number; y: number; confirmed: boolean };
+  }
+  | {
+    name: 'scroll_point';
+    arguments: { snapshotId: string; x: number; y: number; direction: 'up' | 'down' };
   }
 
   | { name: 'browser_tabs'; arguments: { offset?: number } }
@@ -157,11 +176,13 @@ type BrowserActionRequest =
 export interface PcBridgeConnectionOptions {
   readonly timeoutMs?: number;
   readonly onStatusChange?: (online: boolean, controlPaused?: boolean) => void | Promise<void>;
-  readonly onStatusError?: () => void;
+  readonly onStatusError?: (error: unknown) => void;
 }
 
 export interface PcBridgeModuleOptions extends PcBridgeConnectionOptions {
   readonly pcActPlanner?: PcActPlanner;
+  readonly pcActVisionModel?: PcActVisionModel;
+  readonly pcActVisionDeployment?: string;
   readonly recipes?: PcActOptions['recipes'];
   readonly onPcActStep?: PcActOptions['onStep'];
   readonly runConfirmed?: <T>(
@@ -178,6 +199,9 @@ export class PcBridgeConnection {
   private readonly pending = new Map<string, PendingCommand>();
   private status: boolean | undefined;
   private controlPaused = false;
+  private wakeWordListening = false;
+  private onWakeWord: ((at: string) => void) | undefined;
+  private readonly activeVoiceSessions = new Set<string>();
   private statusUpdate = Promise.resolve();
   private readonly timeoutMs: number;
 
@@ -189,17 +213,34 @@ export class PcBridgeConnection {
     this.setStatus(false);
   }
 
-  attach(socket: WebSocket): void {
+  attach(socket: WebSocket, onWakeWord?: (at: string) => void): void {
     if (this.socket?.readyState === WebSocket.OPEN || this.socket?.readyState === WebSocket.CONNECTING) {
       socket.close(1008, 'Bridge already connected');
       return;
     }
 
     this.socket = socket;
+    this.onWakeWord = onWakeWord;
+    this.wakeWordListening = false;
     socket.on('message', (data, isBinary) => this.receive(socket, data, isBinary));
     socket.once('close', () => this.detach(socket));
     socket.once('error', () => this.detach(socket));
     this.setStatus(true);
+  }
+
+  // The bridge pauses its wake-word listener while any Jarvis voice session is active.
+  observeActivity(event: JarvisActivityEvent | JarvisVoiceWakeEvent): void {
+    if (event.type === 'voice.wake' || event.source !== 'voice') return;
+    const wasActive = this.activeVoiceSessions.size > 0;
+    if (event.type === 'ended' || event.type === 'failed') {
+      this.activeVoiceSessions.delete(event.activityId);
+    } else if (activeVoiceStates.has(event.type) && !this.activeVoiceSessions.has(event.activityId)) {
+      if (this.activeVoiceSessions.size >= maxTrackedVoiceSessions) {
+        this.activeVoiceSessions.delete(this.activeVoiceSessions.values().next().value as string);
+      }
+      this.activeVoiceSessions.add(event.activityId);
+    }
+    if (wasActive !== this.activeVoiceSessions.size > 0) this.sendVoiceState();
   }
 
   async close(): Promise<void> {
@@ -270,7 +311,7 @@ export class PcBridgeConnection {
   private receive(socket: WebSocket, data: RawData, isBinary: boolean): void {
     if (socket !== this.socket) return;
     const payload = Array.isArray(data) ? Buffer.concat(data) : Buffer.isBuffer(data) ? data : Buffer.from(data);
-    if (isBinary || payload.byteLength > MAX_MESSAGE_BYTES) {
+    if (isBinary || payload.byteLength > MAX_CAPTURE_RESPONSE_BYTES) {
       socket.close(1009, 'Invalid bridge response');
       this.detach(socket);
       return;
@@ -285,12 +326,26 @@ export class PcBridgeConnection {
       return;
     }
     if (isRecord(response) && response.type === 'status') {
-      if (Object.keys(response).length !== 2 || typeof response.controlPaused !== 'boolean') {
+      const keys = Object.keys(response).length;
+      if (typeof response.controlPaused !== 'boolean' ||
+          !(keys === 2 || (keys === 3 && typeof response.wakeWord === 'boolean'))) {
         socket.close(1007, 'Invalid bridge status');
         this.detach(socket);
         return;
       }
+      this.wakeWordListening = response.wakeWord === true;
       this.setStatus(true, response.controlPaused);
+      this.sendVoiceState();
+      return;
+    }
+    if (isRecord(response) && response.type === 'wake_word') {
+      const at = Object.keys(response).length === 2 ? wakeWordTimestamp(response.at) : undefined;
+      if (at === undefined) {
+        socket.close(1007, 'Invalid bridge event');
+        this.detach(socket);
+        return;
+      }
+      this.onWakeWord?.(at);
       return;
     }
     if (!isRecord(response) || typeof response.id !== 'string' || !idPattern.test(response.id)) {
@@ -301,6 +356,11 @@ export class PcBridgeConnection {
 
     const pending = this.pending.get(response.id);
     if (!pending) return;
+    if (payload.byteLength > MAX_MESSAGE_BYTES && pending.command !== 'window_capture') {
+      socket.close(1009, 'Invalid bridge response');
+      this.detach(socket);
+      return;
+    }
     if (response.type === 'error') {
       const error = response.error;
       if (error === 'not_allowed') this.finish(response.id, new ToolRefusal('The PC bridge refused that action.'));
@@ -311,10 +371,12 @@ export class PcBridgeConnection {
       else if (error === 'blocked') this.finish(response.id, new ToolRefusal(
         pending.command === 'uia_act'
           ? 'That Windows control is sensitive or unsupported; no action was performed.'
-          : 'Typing into a password, payment-card, one-time-code, or other sensitive field is blocked.',
+          : pending.command === 'window_capture' || pending.command === 'click_point' || pending.command === 'scroll_point'
+            ? 'Screen capture or visual control is blocked while a sensitive field is focused.'
+            : 'Typing into a password, payment-card, one-time-code, or other sensitive field is blocked.',
       ));
       else if (error === 'stale') this.finish(response.id, new ToolRefusal(
-        pending.command.startsWith('uia_')
+        pending.command.startsWith('uia_') || pending.command === 'click_point' || pending.command === 'scroll_point'
           ? 'That Windows control is stale. Take a new snapshot before acting.'
           : 'That browser element is stale. Take a new snapshot before acting.',
       ));
@@ -329,7 +391,9 @@ export class PcBridgeConnection {
         this.finish(response.id, new ToolRefusal('No installed app matched that name; nothing was launched.'));
       }
       else if (error === 'not_found') this.finish(response.id, new ToolRefusal(
-        pending.command.startsWith('uia_')
+        pending.command === 'window_capture'
+          ? 'The foreground Windows window is unavailable.'
+          : pending.command.startsWith('uia_')
           ? 'The foreground Windows app or requested control was not found.'
           : 'The requested app, folder, or window was not found.',
       ));
@@ -357,9 +421,17 @@ export class PcBridgeConnection {
     else pending.resolve(result!);
   }
 
+  private sendVoiceState(): void {
+    const socket = this.socket;
+    if (!this.wakeWordListening || !socket || socket.readyState !== WebSocket.OPEN) return;
+    socket.send(JSON.stringify({ type: 'voice_state', active: this.activeVoiceSessions.size > 0 }), () => {});
+  }
+
   private detach(socket: WebSocket): void {
     if (this.socket !== socket) return;
     this.socket = undefined;
+    this.onWakeWord = undefined;
+    this.wakeWordListening = false;
     this.rejectPending(new Error('PC bridge disconnected'));
     this.setStatus(false);
   }
@@ -376,12 +448,12 @@ export class PcBridgeConnection {
     try {
       const update = this.options.onStatusChange?.(online, paused);
       if (update) {
-        this.statusUpdate = Promise.all([this.statusUpdate, update]).then(() => {}).catch(() => {
-          this.options.onStatusError?.();
+        this.statusUpdate = Promise.all([this.statusUpdate, update]).then(() => {}).catch((error: unknown) => {
+          this.options.onStatusError?.(error);
         });
       }
-    } catch {
-      this.options.onStatusError?.();
+    } catch (error) {
+      this.options.onStatusError?.(error);
     }
   }
 }
@@ -393,11 +465,11 @@ export function createPcBridgeModule(options: PcBridgeModuleOptions = {}): Backe
     tools: [
       {
         name: 'pc_open',
-        description: 'Open a website (target url with the full https address; it always opens in Dan’s Chrome, never Edge), any installed app by name (target app, e.g. spotify), a repo folder or a window on Dan’s PC. Use browser_do for work on a website.',
+        description: 'Open a website (target url with the full https address; it always opens in Dan’s Chrome, never Edge), any installed app by name (target app, e.g. spotify), a folder or file under C:\\Repo in VS Code, or a window on Dan’s PC. Use browser_do for work on a website.',
         inputSchema: {
           type: 'object',
           properties: {
-            target: { type: 'string', enum: ['url', 'app', 'folder', 'window'] },
+            target: { type: 'string', enum: ['url', 'app', 'folder', 'file', 'window'] },
             value: { type: 'string', minLength: 1, maxLength: 2048 },
           },
           required: ['target', 'value'],
@@ -407,6 +479,7 @@ export function createPcBridgeModule(options: PcBridgeModuleOptions = {}): Backe
           }],
           additionalProperties: false,
         },
+        sensitive: true,
         execute: (input, request, signal) => runPcOpen(bridge, input, signal, request.log),
       },
       {
@@ -526,7 +599,7 @@ export function createPcBridgeModule(options: PcBridgeModuleOptions = {}): Backe
       },
       ...(options.pcActPlanner ? [{
         name: 'pc_act',
-        description: 'Control any foreground Windows app with one Jev decision per fresh UI Automation snapshot. Website tasks use Chrome through browser_do, never Edge. Types only explicit quoted, non-sensitive values. Confirm irreversible actions only.',
+        description: 'Control any foreground Windows app with one Jev decision per fresh snapshot. Sparse UI Automation trees use transient visual targets for clicks or scrolling, never typing; UI Automation typing is limited to explicit quoted, non-sensitive values. Website tasks use Chrome through browser_do, never Edge. Confirm irreversible actions only.',
         inputSchema: {
           type: 'object',
           properties: { goal: { type: 'string', minLength: 1, maxLength: 4_000 } },
@@ -542,23 +615,66 @@ export function createPcBridgeModule(options: PcBridgeModuleOptions = {}): Backe
               commandSignal,
               request.log,
             ),
+            capture: (commandSignal) => bridge.execute(
+              { name: 'window_capture', arguments: {} },
+              commandSignal,
+              request.log,
+            ),
             act: (action, commandSignal) => bridge.execute(
               { name: 'uia_act', arguments: action },
               commandSignal,
               request.log,
             ),
+            actPoint: (action, commandSignal) => bridge.execute(
+              action.action === 'click'
+                ? {
+                  name: 'click_point',
+                  arguments: {
+                    snapshotId: action.snapshotId,
+                    x: action.x,
+                    y: action.y,
+                    confirmed: action.confirmed ?? false,
+                  },
+                }
+                : {
+                  name: 'scroll_point',
+                  arguments: {
+                    snapshotId: action.snapshotId,
+                    x: action.x,
+                    y: action.y,
+                    direction: action.action === 'scroll_up' ? 'up' : 'down',
+                  },
+                },
+              commandSignal,
+              request.log,
+            ),
           }, {
             planner: options.pcActPlanner!,
+            ...(options.pcActVisionModel ? { visionModel: options.pcActVisionModel } : {}),
+            ...(options.pcActVisionDeployment ? { visionDeployment: options.pcActVisionDeployment } : {}),
             ...(options.recipes ? { recipes: options.recipes } : {}),
             ...(options.runConfirmed ? { runConfirmed: options.runConfirmed } : {}),
             ...(options.onPcActStep ? { onStep: options.onPcActStep } : {}),
           }),
       }] : []),
+      ...(options.pcActPlanner ? [{
+        name: 'codex_prompt',
+        description: 'Open the installed Codex desktop app, enter the exact non-sensitive prompt, and submit it through the existing PC control flow. Only irreversible submissions require confirmation.',
+        inputSchema: {
+          type: 'object',
+          properties: { prompt: { type: 'string', minLength: 1, maxLength: 3_000 } },
+          required: ['prompt'],
+          additionalProperties: false,
+        },
+        sensitive: true,
+        execute: (input: unknown, request: FastifyRequest, signal: AbortSignal) =>
+          runCodexPrompt(bridge, input, request, signal, options),
+      }] : []),
     ],
     registerRoutes: async (app) => {
       await app.register(websocket, {
         options: {
-          maxPayload: MAX_MESSAGE_BYTES,
+          maxPayload: MAX_CAPTURE_RESPONSE_BYTES,
           perMessageDeflate: false,
           handleProtocols: (protocols) => protocols.has(PC_BRIDGE_SUBPROTOCOL) ? PC_BRIDGE_SUBPROTOCOL : false,
         },
@@ -571,10 +687,20 @@ export function createPcBridgeModule(options: PcBridgeModuleOptions = {}): Backe
           socket.close(1008, 'Unauthorized');
           return;
         }
-        bridge.attach(socket);
+        bridge.attach(socket, (at) => {
+          app.jarvisActivityHub.publish({ type: 'voice.wake', at });
+          request.log.info('pc_bridge.wake_word');
+        });
       });
-      app.addHook('onReady', async () => bridge.initialize());
-      app.addHook('onClose', async () => bridge.close());
+      let unsubscribeActivity: (() => void) | undefined;
+      app.addHook('onReady', async () => {
+        bridge.initialize();
+        unsubscribeActivity = app.jarvisActivityHub.subscribe((event) => bridge.observeActivity(event));
+      });
+      app.addHook('onClose', async () => {
+        unsubscribeActivity?.();
+        await bridge.close();
+      });
     },
   };
 }
@@ -780,6 +906,12 @@ async function runPcOpen(
       command = { name: 'open_url', arguments: { url } };
       break;
     }
+    case 'file': {
+      const relativePath = validateRepoPath(input.value);
+      if (!relativePath) throw new ToolRefusal('Choose a file under C:\\Repo using a relative path.');
+      command = { name: 'open_file', arguments: { relativePath } };
+      break;
+    }
     case 'app':
       if (!input.value.trim() || input.value.length > 128 || hasControlCharacters(input.value)) {
         throw new ToolRefusal('Provide an installed app name between 1 and 128 characters.');
@@ -802,6 +934,57 @@ async function runPcOpen(
   }
 
   return bridge.execute(command, signal, logger);
+}
+
+async function runCodexPrompt(
+  bridge: PcBridgeConnection,
+  input: unknown,
+  request: FastifyRequest,
+  signal: AbortSignal,
+  options: PcBridgeModuleOptions,
+): Promise<Record<string, unknown>> {
+  if (!isRecord(input) || Object.keys(input).length !== 1 ||
+      typeof input.prompt !== 'string' || !input.prompt.trim() ||
+      input.prompt.length > 3_000 || hasControlCharacters(input.prompt)) {
+    throw new ToolRefusal('Provide one non-empty Codex prompt of at most 3,000 characters without control characters.');
+  }
+
+  try {
+    await runPcOpen(bridge, { target: 'app', value: 'Codex' }, signal, request.log);
+  } catch (error) {
+    if (error instanceof ToolRefusal && error.message === 'No installed app matched that name; nothing was launched.') {
+      throw new ToolRefusal('The Codex desktop app is not installed or could not be found; no prompt was entered.');
+    }
+    throw error;
+  }
+
+  const goal = `In the Codex desktop app, enter the exact prompt ${JSON.stringify(input.prompt)} in the prompt field and submit it.`;
+  if (goal.length > 4_000) throw new ToolRefusal('That Codex prompt is too long to enter safely.');
+  const completedActions = new Set<PcActOperation>();
+  const result = await runPcAct({ goal }, request, signal, {
+    observe: (commandSignal) => bridge.execute(
+      { name: 'uia_snapshot', arguments: {} },
+      commandSignal,
+      request.log,
+    ),
+    act: (action, commandSignal) => bridge.execute(
+      { name: 'uia_act', arguments: action },
+      commandSignal,
+      request.log,
+    ),
+  }, {
+    planner: options.pcActPlanner!,
+    confirmOverwrites: false,
+    ...(options.runConfirmed ? { runConfirmed: options.runConfirmed } : {}),
+    onStep: (activity) => {
+      if (activity.outcome === 'completed') completedActions.add(activity.action);
+      options.onPcActStep?.(activity);
+    },
+  });
+  if (!completedActions.has('type') || !completedActions.has('click')) {
+    throw new ToolRefusal('Codex did not confirm that the prompt was entered and submitted.');
+  }
+  return result;
 }
 
 function isEdgeAppName(value: string): boolean {
@@ -923,7 +1106,7 @@ function validResult(command: PcCommand['name'], value: unknown): value is Recor
     return Object.keys(value).length === 2 && value.closing === true &&
       Number.isInteger(value.windows) && (value.windows as number) >= 1 && (value.windows as number) <= 10;
   }
-  if (['open_url', 'open_app', 'open_folder'].includes(command)) {
+  if (['open_url', 'open_app', 'open_folder', 'open_file'].includes(command)) {
     return Object.keys(value).length === 1 && value.opened === true;
   }
   if (command === 'active_window') {
@@ -932,12 +1115,32 @@ function validResult(command: PcCommand['name'], value: unknown): value is Recor
   if (command === 'focus_window') return Object.keys(value).length === 1 && value.activated === true;
   if (command === 'uia_snapshot') return validUiAutomationSnapshot(value);
   if (command === 'uia_act') return validUiAutomationAction(value);
+  if (command === 'window_capture') return validWindowCapture(value);
+  if (command === 'click_point') return validPointActionResult(value, 'click');
+  if (command === 'scroll_point') return validPointActionResult(value, 'scroll');
   if (command === 'browser_tabs') return validBrowserTabs(value);
   if (command === 'browser_snapshot') return validBrowserSnapshot(value);
   if (command === 'browser_act') {
     return validBrowserActionResult(value) || isConfirmationRequired(value);
   }
   return false;
+}
+
+function validWindowCapture(value: Record<string, unknown>): boolean {
+  return Object.keys(value).length === 5 &&
+    typeof value.snapshotId === 'string' &&
+    /^[\da-f]{8}-[\da-f]{4}-[1-5][\da-f]{3}-[89ab][\da-f]{3}-[\da-f]{12}$/iu.test(value.snapshotId) &&
+    typeof value.application === 'string' && /^[\p{L}\p{N}_.-]{1,128}$/u.test(value.application) &&
+    Number.isInteger(value.width) && (value.width as number) >= 1 && (value.width as number) <= 1280 &&
+    Number.isInteger(value.height) && (value.height as number) >= 1 && (value.height as number) <= 720 &&
+    typeof value.png === 'string' && value.png.length >= 12 && value.png.length <= 1_000_000 &&
+    value.png.length % 4 === 0 &&
+    /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/u.test(value.png);
+}
+
+function validPointActionResult(value: Record<string, unknown>, action: 'click' | 'scroll'): boolean {
+  return Object.keys(value).length === 2 && value.acted === true &&
+    (action === 'click' ? value.action === 'click' : ['scroll_up', 'scroll_down'].includes(String(value.action)));
 }
 
 function validUiAutomationSnapshot(value: Record<string, unknown>): boolean {
@@ -962,6 +1165,12 @@ function validUiAutomationAction(value: Record<string, unknown>): boolean {
 function validBrowserActionResult(value: Record<string, unknown>): boolean {
   return Object.keys(value).length === 2 && value.acted === true &&
   ['click', 'type', 'type_focused', 'keys', 'select', 'scroll', 'wait'].includes(String(value.action));
+}
+
+function wakeWordTimestamp(value: unknown): string | undefined {
+  if (typeof value !== 'string' || !wakeWordTimestampPattern.test(value)) return undefined;
+  const time = Date.parse(value);
+  return Number.isFinite(time) && new Date(time).toISOString() === value ? value : undefined;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

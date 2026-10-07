@@ -30,7 +30,7 @@ export async function executePhoneTool<T>({
 
   return withPhoneConfirmationSession(sessionId, async () => {
     if (tool.publicAllowedOnPhone !== true) {
-      if (!notifications) throw new ToolRefusal('Teams approvals are unavailable.');
+      if (!notifications) throw new ToolRefusal('Jarvis approvals are unavailable.');
       await notifications.requestConfirmation(
         'other',
         `Allow ${tool.name} for this phone call?`,
