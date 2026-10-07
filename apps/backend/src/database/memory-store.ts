@@ -77,14 +77,34 @@ export interface VaultSearchHit {
   readonly path: string;
   readonly heading: string;
   readonly content: string;
+  readonly score?: number;
+}
+
+export interface VaultGraphFile {
+  readonly path: string;
+  readonly title: string;
+  readonly updatedAt: Date;
+}
+
+export interface VaultGraphData {
+  readonly links: readonly { readonly sourcePath: string; readonly targetPath: string }[];
+  readonly embeddings: readonly { readonly path: string; readonly embedding: readonly number[] }[];
 }
 
 export interface VaultIndexStore {
   initialize(): Promise<void>;
   supportsVectorSearch(): boolean;
   files(signal: AbortSignal): Promise<VaultIndexedFile[]>;
-  replaceFile(path: string, blobSha: string, chunks: readonly VaultIndexedChunk[], signal: AbortSignal): Promise<void>;
+  replaceFile(
+    path: string,
+    blobSha: string,
+    chunks: readonly VaultIndexedChunk[],
+    links: readonly string[],
+    signal: AbortSignal,
+  ): Promise<void>;
   deleteFiles(paths: readonly string[], signal: AbortSignal): Promise<void>;
+  graphFiles(signal: AbortSignal): Promise<VaultGraphFile[]>;
+  graphData(paths: readonly string[], signal: AbortSignal): Promise<VaultGraphData>;
   searchByVector(embedding: readonly number[], limit: number, signal: AbortSignal): Promise<VaultSearchHit[]>;
   searchByTerms(terms: readonly string[], limit: number, signal: AbortSignal): Promise<VaultSearchHit[]>;
 }
@@ -506,9 +526,9 @@ export function createVaultIndexStore(pool: sql.ConnectionPool): VaultIndexStore
       return result.recordset.map(({ path, blob_sha }) => ({ path, blobSha: blob_sha.trim() }));
     },
 
-    async replaceFile(path, blobSha, chunks, signal) {
+    async replaceFile(path, blobSha, chunks, links, signal) {
       ensureInitialized();
-      if (!/^[\da-f]{40}$/u.test(blobSha) || chunks.length > 512) {
+      if (!/^[\da-f]{40}$/u.test(blobSha) || chunks.length > 512 || links.length > 512) {
         throw new TypeError('Vault index entry is invalid');
       }
       const hash = pathHash(path);
@@ -520,7 +540,8 @@ export function createVaultIndexStore(pool: sql.ConnectionPool): VaultIndexStore
           .input('pathHash', sql.VarBinary(32), hash)
           .input('path', sql.NVarChar(1024), path)
           .input('blobSha', sql.Char(40), blobSha)
-          .input('chunks', sql.NVarChar(sql.MAX), JSON.stringify(chunks));
+          .input('chunks', sql.NVarChar(sql.MAX), JSON.stringify(chunks))
+          .input('links', sql.NVarChar(sql.MAX), JSON.stringify(links));
         const embeddingColumn = vectorSearchAvailable ? ', embedding' : '';
         const embeddingValue = vectorSearchAvailable
           ? ', CASE WHEN chunk.embedding IS NULL THEN NULL ELSE CAST(chunk.embedding AS vector(1536)) END'
@@ -535,7 +556,11 @@ export function createVaultIndexStore(pool: sql.ConnectionPool): VaultIndexStore
               content nvarchar(max) '$.content',
               embedding nvarchar(max) '$.embedding' AS JSON
             ) AS chunk;`}`;
-        await execute(request, signal, () => request.query(statement));
+        const linkStatement = `DELETE FROM dbo.vault_links WHERE source_path_hash = @pathHash;
+          ${links.length === 0 ? '' : `INSERT INTO dbo.vault_links (source_path_hash, source_path, target_path)
+            SELECT @pathHash, @path, link.target_path
+            FROM OPENJSON(@links) WITH (target_path nvarchar(1024) '$') AS link;`}`;
+        await execute(request, signal, () => request.query(`${statement} ${linkStatement}`));
         await transaction.commit();
         committed = true;
       } finally {
@@ -549,7 +574,71 @@ export function createVaultIndexStore(pool: sql.ConnectionPool): VaultIndexStore
       const hashes = [...new Set(paths)].map((path) => pathHash(path).toString('hex'));
       const request = databaseReadRequest(pool).input('hashes', sql.NVarChar(sql.MAX), JSON.stringify(hashes));
       await execute(request, signal, () => request.query(`DELETE FROM dbo.vault_chunks
-        WHERE path_hash IN (SELECT CONVERT(binary(32), value, 2) FROM OPENJSON(@hashes));`));
+        WHERE path_hash IN (SELECT CONVERT(binary(32), value, 2) FROM OPENJSON(@hashes));
+        DELETE FROM dbo.vault_links
+        WHERE source_path_hash IN (SELECT CONVERT(binary(32), value, 2) FROM OPENJSON(@hashes));`));
+    },
+
+    async graphFiles(signal) {
+      ensureInitialized();
+      const request = databaseReadRequest(pool).input('take', sql.Int, 10_000);
+      const result = await execute(request, signal, () => request.query<{
+        path: string;
+        title: string | null;
+        updated_at: Date;
+      }>(`SELECT TOP (@take) path,
+          MAX(CASE WHEN chunk_index = 0 THEN heading END) AS title,
+          MAX(indexed_at) AS updated_at
+        FROM dbo.vault_chunks
+        WHERE path LIKE N'People/%' OR path LIKE N'Work/%'
+          OR path LIKE N'Personal/%' OR path LIKE N'General/%'
+        GROUP BY path ORDER BY path;`));
+      return result.recordset.map(({ path, title, updated_at }) => ({
+        path,
+        title: title ?? '',
+        updatedAt: updated_at,
+      }));
+    },
+
+    async graphData(paths, signal) {
+      ensureInitialized();
+      if (paths.length === 0) return { links: [], embeddings: [] };
+      const request = databaseReadRequest(pool)
+        .input('paths', sql.NVarChar(sql.MAX), JSON.stringify(paths))
+        .input('linkTake', sql.Int, 8_001);
+      const embeddingQuery = vectorSearchAvailable
+        ? `SELECT chunk.path, CAST(chunk.embedding AS nvarchar(max)) AS embedding
+            FROM dbo.vault_chunks AS chunk
+            INNER JOIN OPENJSON(@paths) AS selected ON selected.value = chunk.path
+            WHERE chunk.embedding IS NOT NULL ORDER BY chunk.path, chunk.chunk_index;`
+        : `SELECT CAST(NULL AS nvarchar(1024)) AS path, CAST(NULL AS nvarchar(max)) AS embedding WHERE 1 = 0;`;
+      const result = await execute(request, signal, () => request.query<{
+        source_path: string;
+        target_path: string;
+      }>(`SELECT TOP (@linkTake) source_path, target_path
+          FROM dbo.vault_links
+          WHERE source_path IN (SELECT value FROM OPENJSON(@paths))
+          ORDER BY source_path, target_path;
+        ${embeddingQuery}`));
+      const links = result.recordsets[0] as Array<{ source_path: string; target_path: string }> | undefined;
+      const embeddings = result.recordsets[1] as Array<{ path: string; embedding: string }> | undefined;
+      return {
+        links: (links ?? []).map(({ source_path, target_path }) => ({
+          sourcePath: source_path,
+          targetPath: target_path,
+        })),
+        embeddings: (embeddings ?? []).flatMap(({ path, embedding }) => {
+          try {
+            const vector: unknown = JSON.parse(embedding);
+            return Array.isArray(vector) && vector.length === vectorDimensions &&
+              vector.every((value) => typeof value === 'number' && Number.isFinite(value))
+              ? [{ path, embedding: vector as number[] }]
+              : [];
+          } catch {
+            return [];
+          }
+        }),
+      };
     },
 
     async searchByVector(embedding, limit, signal) {
@@ -565,10 +654,13 @@ export function createVaultIndexStore(pool: sql.ConnectionPool): VaultIndexStore
           path: string;
           heading: string;
           content: string;
-        }>(`SELECT TOP (@take) path, heading, content FROM dbo.vault_chunks
+          score: number;
+        }>(`SELECT TOP (@take) path, heading, content,
+            1.0 - VECTOR_DISTANCE('cosine', embedding, CAST(@embedding AS vector(1536))) AS score
+          FROM dbo.vault_chunks
           WHERE embedding IS NOT NULL
           ORDER BY VECTOR_DISTANCE('cosine', embedding, CAST(@embedding AS vector(1536))), path, chunk_index;`));
-        return result.recordset;
+        return result.recordset.map((hit) => ({ ...hit, score: Number(hit.score) }));
       } catch (error) {
         const number = (error as { number?: unknown } | null)?.number;
         if (number === 195 || number === 206) throw new VectorSearchUnavailableError();
@@ -581,13 +673,16 @@ export function createVaultIndexStore(pool: sql.ConnectionPool): VaultIndexStore
       if (terms.length === 0) return [];
       const request = databaseReadRequest(pool)
         .input('take', sql.Int, limit)
+        .input('termCount', sql.Int, terms.length)
         .input('terms', sql.NVarChar(2000), JSON.stringify(terms));
       const result = await execute(request, signal, () => request.query<{
         path: string;
         heading: string;
         content: string;
+        score: number;
       }>(`SELECT TOP (@take) chunk.path, chunk.heading, chunk.content
-        FROM dbo.vault_chunks AS chunk
+        , CAST(ranked.matches AS float) / @termCount AS score
+      FROM dbo.vault_chunks AS chunk
         CROSS APPLY (
           SELECT COUNT(*) AS matches FROM OPENJSON(@terms) AS term
           WHERE chunk.content LIKE N'%' + term.value + N'%'
@@ -596,7 +691,7 @@ export function createVaultIndexStore(pool: sql.ConnectionPool): VaultIndexStore
         ) AS ranked
         WHERE ranked.matches > 0
         ORDER BY ranked.matches DESC, chunk.path, chunk.chunk_index;`));
-      return result.recordset;
+      return result.recordset.map((hit) => ({ ...hit, score: Number(hit.score) }));
     },
   };
 }

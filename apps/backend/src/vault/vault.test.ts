@@ -1,6 +1,15 @@
 import type { FastifyRequest } from 'fastify';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { MemoryRecord, MemoryStore, MemoryVersion, VaultIndexStore, VaultIndexedChunk, VaultSearchHit } from '../database/memory-store.js';
+import type {
+  MemoryRecord,
+  MemoryStore,
+  MemoryVersion,
+  VaultGraphData,
+  VaultGraphFile,
+  VaultIndexStore,
+  VaultIndexedChunk,
+  VaultSearchHit,
+} from '../database/memory-store.js';
 import type { MemoryEmbedder } from '../core/memory-embeddings.js';
 import { createGitHubVaultClient, VAULT_BRANCH, VAULT_REPOSITORY } from './github-client.js';
 import { createVaultModule } from './index.js';
@@ -88,7 +97,11 @@ function fakeGitHub(initial: Record<string, RemoteFile> = {}, conflicts = 0) {
 }
 
 class FakeIndexStore implements VaultIndexStore {
-  private readonly indexed = new Map<string, { blobSha: string; chunks: VaultIndexedChunk[] }>();
+  private readonly indexed = new Map<string, {
+    blobSha: string;
+    chunks: VaultIndexedChunk[];
+    links: string[];
+  }>();
   vectorSearch = vi.fn(async (_embedding: readonly number[], limit: number) =>
     [...this.indexed.entries()].flatMap(([path, file]) => file.chunks.map((chunk) => ({
       path, heading: chunk.heading, content: chunk.content,
@@ -104,8 +117,8 @@ class FakeIndexStore implements VaultIndexStore {
   async files() {
     return [...this.indexed.entries()].map(([path, file]) => ({ path, blobSha: file.blobSha }));
   }
-  async replaceFile(path: string, blobSha: string, chunks: readonly VaultIndexedChunk[]) {
-    this.indexed.set(path, { blobSha, chunks: [...chunks] });
+  async replaceFile(path: string, blobSha: string, chunks: readonly VaultIndexedChunk[], links: readonly string[]) {
+    this.indexed.set(path, { blobSha, chunks: [...chunks], links: [...links] });
   }
   async deleteFiles(paths: readonly string[]) {
     for (const path of paths) this.indexed.delete(path);
@@ -115,6 +128,23 @@ class FakeIndexStore implements VaultIndexStore {
   }
   searchByTerms(terms: readonly string[], limit: number) {
     return this.termSearch(terms, limit);
+  }
+  async graphFiles(): Promise<VaultGraphFile[]> {
+    return [...this.indexed.entries()].map(([path, file]) => ({
+      path,
+      title: file.chunks[0]?.heading ?? '',
+      updatedAt: new Date('2026-10-07T12:00:00.000Z'),
+    }));
+  }
+  async graphData(paths: readonly string[]): Promise<VaultGraphData> {
+    const selected = new Set(paths);
+    return {
+      links: [...this.indexed.entries()].flatMap(([sourcePath, file]) =>
+        selected.has(sourcePath) ? file.links.map((targetPath) => ({ sourcePath, targetPath })) : []),
+      embeddings: [...this.indexed.entries()].flatMap(([path, file]) =>
+        selected.has(path) ? file.chunks.flatMap((chunk) =>
+          chunk.embedding ? [{ path, embedding: chunk.embedding }] : []) : []),
+    };
   }
   entry(path: string) { return this.indexed.get(path); }
   setRankedHits(hits: readonly VaultSearchHit[]) {
@@ -251,7 +281,9 @@ describe('GitHub vault', () => {
     expect(indexStore.entry('People/Alex.md')?.blobSha).toBe(sha('f'));
     expect(indexStore.entry('General/old.md')).toBeUndefined();
     expect(indexStore.entry('General/new.md')).toBeDefined();
-    expect(module.tools.map(({ name }) => name)).toEqual(['vault_search', 'vault_read', 'vault_write']);
+    expect(module.tools.map(({ name }) => name)).toEqual([
+      'vault_search', 'show_knowledge', 'vault_read', 'vault_write',
+    ]);
   });
 
   it('returns semantic results in index ranking order with a bounded snippet and source URL', async () => {

@@ -1,6 +1,7 @@
 export const generatedViewVersion = 1;
 export const generatedViewRenderers = Object.freeze([
   'table', 'list', 'detail', 'text', 'timeline', 'chart', 'task-card', 'status', 'image', 'html-app',
+  'knowledge-graph',
 ]);
 export const generatedViewActionTypes = Object.freeze(['open-route', 'open-link', 'call-tool', 'window']);
 
@@ -73,7 +74,7 @@ const listItem = object({
   action: { oneOf: [routeActionSchema, externalLinkActionSchema] },
 }, ['title']);
 const sourceSchema = object({
-  id: { type: 'string', enum: ['now', 'factory.tasks', 'factory.projects', 'usage', 'image_generation', 'html_generation', 'research'] },
+  id: { type: 'string', enum: ['now', 'factory.tasks', 'factory.projects', 'usage', 'image_generation', 'html_generation', 'research', 'knowledge_graph'] },
   status: { type: 'string', enum: ['complete', 'partial', 'unavailable'] },
   updatedAt: dateTime,
   reason: string(500),
@@ -171,6 +172,13 @@ const dataSchemas = {
       type: 'string',
       pattern: '^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$',
     },
+  }),
+  'knowledge-graph': object({
+    query: { ...string(500, 1), pattern: '\\S' },
+    highlight: array({
+      type: 'string',
+      pattern: '^[0-9a-f]{64}$',
+    }, 50),
   }),
 };
 
@@ -301,7 +309,9 @@ function validAction(value, registeredTools) {
 }
 
 function validSource(source) {
-  if (!isObject(source) || !['now', 'factory.tasks', 'factory.projects', 'usage', 'image_generation', 'html_generation', 'research'].includes(source.id) ||
+  if (!isObject(source) || ![
+    'now', 'factory.tasks', 'factory.projects', 'usage', 'image_generation', 'html_generation', 'research', 'knowledge_graph',
+  ].includes(source.id) ||
     !['complete', 'partial', 'unavailable'].includes(source.status) ||
     Object.keys(source).some((key) => !['id', 'status', 'updatedAt', 'reason', 'page'].includes(key))) return false;
   if (source.updatedAt !== undefined && (typeof source.updatedAt !== 'string' || Number.isNaN(Date.parse(source.updatedAt)))) return false;
@@ -393,6 +403,12 @@ function validData(renderer, data, trustedBlobHost) {
       return Object.keys(data).length === 1 &&
         typeof data.artifactId === 'string' &&
         /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(data.artifactId);
+    case 'knowledge-graph':
+      return Object.keys(data).every((key) => ['query', 'highlight'].includes(key)) &&
+        boundedString(data.query, 500, 1) && /\S/u.test(data.query) &&
+        Array.isArray(data.highlight) && data.highlight.length <= 50 &&
+        data.highlight.every((id) => typeof id === 'string' && /^[0-9a-f]{64}$/u.test(id)) &&
+        new Set(data.highlight).size === data.highlight.length;
     default:
       return false;
   }
