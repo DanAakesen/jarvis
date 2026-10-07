@@ -37,6 +37,15 @@ research or artifact side effects. Evidence: migration 0029 and focused lifecycl
 tests, with SQL persistence and schema coverage in Database CI. Cross-replica live
 acceptance remains unverified.
 
+P9-24 (7 October 2026): search the existing conversation message store instead of
+creating a second transcript index or changing retention. Use SQL full-text search
+when available, with an optional startup setup batch and a substring fallback;
+index message timestamps for date-filtered reads. Expose one bounded result
+contract to the owner-authenticated API and shared `conversation_search` tool,
+and redact tool queries/results from the durable tool-call audit. Offline
+route/store tests cover filters, date boundaries, result limits, the fallback,
+and the full-text query path; production SQL indexing remains unverified.
+
 P9-01 (7 October 2026): use the existing `dbo.settings` key/value store for
 per-role model and reasoning-effort preferences; do not add a migration.
 `jarvis.model` and `jarvis.reasoning` remain compatible aliases for `roles.chat`.
