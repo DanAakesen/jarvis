@@ -81,6 +81,7 @@ import { createGoogleApiClient } from './google/api-client.js';
 import { createGoogleTokenProvider, type GoogleOAuthCredentials } from './google/oauth.js';
 import { createGoogleModule } from './google/tools.js';
 import { createScreenFrameUsageStore } from './database/screen-usage-store.js';
+import { createBackgroundJobStore } from './database/background-job-store.js';
 import { createFoundryScreenVisionModel } from './vision/foundry-model.js';
 import { createScreenVisionModule, ScreenVisionService } from './vision/screen.js';
 import { createVisionWatchModule, VisionWatchService } from './vision/watch.js';
@@ -675,6 +676,7 @@ try {
       nowFeedStore,
       usageStore: createUsageStore(database.pool),
     } : {}),
+    ...(database ? { backgroundJobStore: createBackgroundJobStore(database.pool) } : {}),
     ...(awayModeStore ? { awayModeStore } : {}),
     ...(credentialStatusStore ? { credentialStatusStore } : {}),
     ...(credentialStatusStore && credential && config.foundryEndpoints && config.foundryRunnerAgentName ? {

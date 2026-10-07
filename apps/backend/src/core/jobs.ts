@@ -3,9 +3,9 @@ import type { FastifyInstance } from 'fastify';
 import { isBackgroundJob, type BackgroundJob, type BackgroundJobKind } from '@jarvis/contracts';
 import type { JarvisActivityHub } from './activity.js';
 import { ToolRefusal, type JarvisTool } from './tool-registry.js';
+import type { BackgroundJobStore } from '../database/background-job-store.js';
 
-const maxJobs = 20;
-const finishedRetentionMs = 10 * 60_000;
+const retentionMs = 30 * 24 * 60 * 60_000;
 
 function bounded(text: string, maximum: number): string {
   const clean = Array.from(text.trim()).filter((character) => {
@@ -17,86 +17,109 @@ function bounded(text: string, maximum: number): string {
 
 export interface BackgroundJobHandle {
   readonly jobId: string;
-  progress(step: number, detail?: string): void;
-  done(viewId: string, detail?: string): void;
-  fail(detail: string): void;
+  progress(step: number, detail?: string): Promise<void>;
+  done(viewId: string, detail?: string): Promise<void>;
+  fail(detail: string): Promise<void>;
 }
 
 interface TrackedJob {
   job: BackgroundJob;
   cancel?: () => void;
   finishedAt?: number;
+  pending: Promise<void>;
 }
 
-/** In-memory registry of slow Jarvis work; every change is published to the shell's job chip. */
+/** Tracks local cancellation while SQL owns the durable job state and history. */
 export class BackgroundJobRegistry {
   private readonly jobs = new Map<string, TrackedJob>();
 
-  constructor(private readonly hub: JarvisActivityHub, private readonly now: () => number = Date.now) {}
+  constructor(
+    private readonly hub: JarvisActivityHub,
+    private readonly now: () => number = Date.now,
+    private readonly store?: BackgroundJobStore,
+  ) {}
 
-  start(kind: BackgroundJobKind, title: string, steps: number, cancel?: () => void, detail?: string): BackgroundJobHandle {
-    this.prune();
+  async initialize(): Promise<void> {
+    for (const job of await this.store?.reconcileInterrupted() ?? []) this.publish(job);
+  }
+
+  async start(kind: BackgroundJobKind, title: string, steps: number, cancel?: () => void, detail?: string): Promise<BackgroundJobHandle> {
     const at = new Date(this.now()).toISOString();
     const jobId = randomUUID();
-    const tracked: TrackedJob = {
-      job: {
-        jobId,
-        kind,
-        title: bounded(title, 80) || 'Background task',
-        status: 'running',
-        step: 0,
-        steps: Math.min(Math.max(Math.trunc(steps), 1), 20),
-        ...(detail ? { detail: bounded(detail, 120) } : {}),
-        startedAt: at,
-        updatedAt: at,
-      },
-      ...(cancel ? { cancel } : {}),
+    const job: BackgroundJob = {
+      jobId,
+      kind,
+      title: bounded(title, 80) || 'Background task',
+      status: 'running',
+      step: 0,
+      steps: Math.min(Math.max(Math.trunc(steps), 1), 20),
+      ...(detail ? { detail: bounded(detail, 120) } : {}),
+      startedAt: at,
+      updatedAt: at,
     };
+    await this.store?.create(job);
+    const tracked: TrackedJob = { job, ...(cancel ? { cancel } : {}), pending: Promise.resolve() };
     this.jobs.set(jobId, tracked);
     this.publish(tracked.job);
-    const update = (change: Partial<BackgroundJob>) => {
-      const current = this.jobs.get(jobId);
-      if (!current || current.job.status !== 'running') return;
-      const { detail: nextDetail, ...rest } = change;
-      const job: BackgroundJob = { ...current.job, ...rest, updatedAt: new Date(this.now()).toISOString() };
-      if (nextDetail === undefined) delete job.detail;
-      else job.detail = bounded(nextDetail, 120);
-      if (job.status !== 'running') current.finishedAt = this.now();
-      current.job = job;
-      this.publish(job);
-    };
     return {
       jobId,
-      progress: (step, stepDetail) => update({
-        step: Math.min(Math.max(Math.trunc(step), 0), tracked.job.steps),
-        ...(stepDetail ? { detail: stepDetail } : {}),
-      }),
-      done: (viewId, doneDetail) => update({
-        status: 'done',
-        step: tracked.job.steps,
-        viewId,
-        ...(doneDetail ? { detail: doneDetail } : {}),
-      }),
-      fail: (failDetail) => update({ status: 'failed', detail: failDetail }),
+      progress: async (step, stepDetail) => {
+        await this.update(tracked, {
+          step: Math.min(Math.max(Math.trunc(step), 0), tracked.job.steps),
+          ...(stepDetail ? { detail: stepDetail } : {}),
+        });
+      },
+      done: async (viewId, doneDetail) => {
+        await this.update(tracked, {
+          status: 'done',
+          step: tracked.job.steps,
+          viewId,
+          ...(doneDetail ? { detail: doneDetail } : {}),
+        });
+      },
+      fail: async (failDetail) => { await this.update(tracked, { status: 'failed', detail: failDetail }); },
     };
   }
 
-  list(): BackgroundJob[] {
+  async list(): Promise<BackgroundJob[]> {
     this.prune();
-    return [...this.jobs.values()].map(({ job }) => job)
+    const jobs = await this.store?.list() ?? [...this.jobs.values()].map(({ job }) => job)
       .sort((left, right) => right.startedAt.localeCompare(left.startedAt));
+    for (const job of jobs) {
+      const tracked = this.jobs.get(job.jobId);
+      if (tracked && Date.parse(job.updatedAt) > Date.parse(tracked.job.updatedAt)) tracked.job = job;
+    }
+    return jobs;
   }
 
-  cancel(jobId: string): 'cancelled' | 'not-found' | 'finished' | 'not-cancellable' {
+  async cancel(jobId: string): Promise<'cancelled' | 'not-found' | 'finished' | 'not-cancellable'> {
+    const job = (await this.list()).find((candidate) => candidate.jobId === jobId);
+    if (!job) return 'not-found';
+    if (job.status !== 'running') return 'finished';
     const tracked = this.jobs.get(jobId);
-    if (!tracked) return 'not-found';
-    if (tracked.job.status !== 'running') return 'finished';
-    if (!tracked.cancel) return 'not-cancellable';
-    tracked.job = { ...tracked.job, status: 'cancelled', updatedAt: new Date(this.now()).toISOString() };
-    tracked.finishedAt = this.now();
-    this.publish(tracked.job);
+    if (!tracked?.cancel) return 'not-cancellable';
+    const changed = await this.update(tracked, { status: 'cancelled' });
+    if (!changed) return 'finished';
     tracked.cancel();
     return 'cancelled';
+  }
+
+  private update(tracked: TrackedJob, change: Partial<BackgroundJob>): Promise<boolean> {
+    let changed = false;
+    tracked.pending = tracked.pending.then(async () => {
+      if (tracked.job.status !== 'running') return;
+      const { detail: nextDetail, ...rest } = change;
+      const next: BackgroundJob = { ...tracked.job, ...rest, updatedAt: new Date(this.now()).toISOString() };
+      if (nextDetail === undefined) delete next.detail;
+      else next.detail = bounded(nextDetail, 120);
+      const job = await this.store?.update(next) ?? (this.store ? null : next);
+      if (!job) return;
+      tracked.job = job;
+      if (job.status !== 'running') tracked.finishedAt = this.now();
+      changed = true;
+      this.publish(job);
+    });
+    return tracked.pending.then(() => changed);
   }
 
   private publish(job: BackgroundJob): void {
@@ -104,14 +127,9 @@ export class BackgroundJobRegistry {
   }
 
   private prune(): void {
-    const cutoff = this.now() - finishedRetentionMs;
+    const cutoff = this.now() - retentionMs;
     for (const [jobId, tracked] of this.jobs) {
       if (tracked.finishedAt !== undefined && tracked.finishedAt < cutoff) this.jobs.delete(jobId);
-    }
-    while (this.jobs.size >= maxJobs) {
-      const oldestFinished = [...this.jobs].find(([, tracked]) => tracked.job.status !== 'running')?.[0];
-      if (!oldestFinished) break;
-      this.jobs.delete(oldestFinished);
     }
   }
 }
@@ -125,14 +143,14 @@ export function registerJobRoutes(app: FastifyInstance): void {
   app.get('/jobs', async (request, reply) => {
     if (!isOwner(request.principal?.objectId)) return reply.code(403).send({ error: 'Forbidden' });
     reply.header('Cache-Control', 'no-store');
-    return { jobs: app.backgroundJobs.list() };
+    return { jobs: await app.backgroundJobs.list() };
   });
 
   app.post<{ Params: { jobId: string } }>('/jobs/:jobId/cancel', {
     schema: { params: { type: 'object', properties: { jobId: jobIdSchema }, required: ['jobId'] } },
   }, async (request, reply) => {
     if (!isOwner(request.principal?.objectId)) return reply.code(403).send({ error: 'Forbidden' });
-    const result = app.backgroundJobs.cancel(request.params.jobId);
+    const result = await app.backgroundJobs.cancel(request.params.jobId);
     if (result === 'not-found') return reply.code(404).send({ error: 'Job not found' });
     if (result === 'finished') return reply.code(409).send({ error: 'Job already finished' });
     if (result === 'not-cancellable') return reply.code(409).send({ error: 'Job cannot be cancelled' });
@@ -164,7 +182,7 @@ export const listJobsTool: JarvisTool = {
   reflexSafe: true,
   execute: async (_input, request) => {
     const now = Date.now();
-    const jobs = request.server.backgroundJobs.list();
+    const jobs = await request.server.backgroundJobs.list();
     return {
       running: jobs.filter((job) => job.status === 'running').map((job) => describeJob(job, now)),
       finished: jobs.filter((job) => job.status !== 'running').map((job) => describeJob(job, now)),
@@ -197,7 +215,7 @@ export const cancelJobTool: JarvisTool = {
   },
   execute: async (input, request) => {
     const { jobId, query } = (input ?? {}) as { jobId?: string; query?: string };
-    const running = request.server.backgroundJobs.list().filter((job) => job.status === 'running');
+    const running = (await request.server.backgroundJobs.list()).filter((job) => job.status === 'running');
     let target: BackgroundJob | undefined;
     if (jobId) {
       target = running.find((job) => job.jobId.toLowerCase() === jobId.toLowerCase());
@@ -209,7 +227,7 @@ export const cancelJobTool: JarvisTool = {
       target = matches[0];
     }
     if (!target) throw new ToolRefusal('No running background job matches that.');
-    const result = request.server.backgroundJobs.cancel(target.jobId);
+    const result = await request.server.backgroundJobs.cancel(target.jobId);
     if (result !== 'cancelled') throw new ToolRefusal(`"${target.title}" cannot be cancelled (${result}).`);
     return { cancelled: target.title, confirmation: `Cancelled ${target.title}.` };
   },

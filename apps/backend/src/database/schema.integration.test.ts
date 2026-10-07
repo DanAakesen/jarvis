@@ -16,6 +16,7 @@ import { createDispatcherStore } from './dispatcher-store.js';
 import { createConversationStore } from './conversation-store.js';
 import { createMemoryStore, createVaultIndexStore } from './memory-store.js';
 import { createTaskStatusNotificationStore } from './task-status-notification-store.js';
+import { createBackgroundJobStore } from './background-job-store.js';
 import {
   createTaskEventArchive,
   type TaskEventArchiveBlobStore,
@@ -34,7 +35,8 @@ const administrator = new sql.ConnectionPool({ ...configuration, database: 'mast
 const pool = new sql.ConnectionPool({ ...configuration, database });
 const core = '0001_core_tables.sql';
 const tablesInSchema = [
-  'activity', 'artifacts', 'credential_status', 'deployment_failure_receipts', 'deployments', 'jarvis_sessions', 'memories',
+  'activity', 'artifacts', 'background_job_steps', 'background_jobs', 'credential_status',
+  'deployment_failure_receipts', 'deployments', 'jarvis_sessions', 'memories',
   'memory_deletions', 'memory_history', 'messages', 'phone_sessions', 'projects', 'pull_requests', 'releases',
   'sandbox_sessions', 'sandbox_turns', 'settings', 'task_event_archives', 'task_events', 'task_status_notifications',
   'tasks', 'teams_confirmations', 'teams_conversations', 'tool_calls', 'usage', 'vault_chunks', 'vault_links',
@@ -134,6 +136,51 @@ describe('committed domain schema (groups 1-8)', () => {
       'IX_task_events_task_id_at', 'IX_tasks_state_next_attempt_at', 'IX_workflow_runs_project_head_sha',
       'UX_activity_alert_key',
     ]);
+  });
+
+  it('persists background-job steps, marks interrupted work failed, and prunes after 30 days', async () => {
+    const store = createBackgroundJobStore(pool);
+    const jobId = randomUUID();
+    const startedAt = new Date();
+    const running = {
+      jobId,
+      kind: 'research' as const,
+      title: 'Research: SQL persistence',
+      status: 'running' as const,
+      step: 0,
+      steps: 2,
+      detail: 'Starting research',
+      startedAt: startedAt.toISOString(),
+      updatedAt: startedAt.toISOString(),
+    };
+    await store.create(running);
+    const progressed = {
+      ...running,
+      step: 1,
+      detail: 'Searching: migration',
+      updatedAt: new Date(startedAt.getTime() + 1_000).toISOString(),
+    };
+    await expect(store.update(progressed)).resolves.toMatchObject(progressed);
+    expect(await store.list()).toContainEqual(progressed);
+
+    const history = await pool.request().input('jobId', sql.UniqueIdentifier, jobId)
+      .query<{ status: string; step: number }>(`SELECT status, step FROM dbo.background_job_steps
+        WHERE job_id = @jobId ORDER BY id;`);
+    expect(history.recordset).toEqual([
+      { status: 'running', step: 0 },
+      { status: 'running', step: 1 },
+    ]);
+
+    const interrupted = await store.reconcileInterrupted();
+    expect(interrupted).toContainEqual(expect.objectContaining({
+      jobId, status: 'failed', detail: 'interrupted by restart',
+    }));
+    expect(await store.update({ ...progressed, status: 'done', step: 2, viewId: 'research-result' })).toBeNull();
+    await pool.request().input('jobId', sql.UniqueIdentifier, jobId).query(`UPDATE dbo.background_jobs
+      SET started_at = DATEADD(day, -31, SYSUTCDATETIME()) WHERE job_id = @jobId;`);
+    expect(await store.list()).not.toContainEqual(expect.objectContaining({ jobId }));
+    expect((await pool.request().input('jobId', sql.UniqueIdentifier, jobId)
+      .query('SELECT COUNT(1) AS count FROM dbo.background_job_steps WHERE job_id = @jobId')).recordset[0]?.count).toBe(0);
   });
 
   it('persists one notification claim per task and state across store recreation', async () => {

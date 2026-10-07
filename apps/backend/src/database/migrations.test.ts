@@ -57,6 +57,7 @@ describe('committed SQL manifest', () => {
       '0026_workspace_html_artifact_history.sql',
       '0027_vault_knowledge_graph.sql',
       '0028_json_embeddings_without_vector.sql',
+      '0029_background_jobs.sql',
     ]);
     for (const migration of migrations) await expect(readDownMigration(migration.name)).resolves.toMatchObject({ name: migration.name });
   });
@@ -67,6 +68,15 @@ describe('committed SQL manifest', () => {
     expect(migration?.sql).toContain("ALTER TABLE dbo.vault_chunks ADD embedding_json nvarchar(max) NULL");
     await expect(readDownMigration('0028_json_embeddings_without_vector.sql')).resolves.toMatchObject({
       sql: expect.stringContaining('DROP COLUMN embedding_json'),
+    });
+  });
+  it('stores background jobs and their step history with cascading retention', async () => {
+    const migration = (await readMigrations()).at(-1);
+    expect(migration?.sql).toContain('CREATE TABLE dbo.background_jobs');
+    expect(migration?.sql).toContain('CREATE TABLE dbo.background_job_steps');
+    expect(migration?.sql).toContain('ON DELETE CASCADE');
+    await expect(readDownMigration('0029_background_jobs.sql')).resolves.toMatchObject({
+      sql: expect.stringContaining('DROP TABLE dbo.background_job_steps'),
     });
   });
   it('reads down scripts from down/ without treating them as forward migrations', async () => {
