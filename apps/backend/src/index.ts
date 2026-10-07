@@ -556,7 +556,6 @@ try {
     createPcBridgeModule({
       ...(screenVisionModel ? {
         pcActVisionModel: screenVisionModel,
-        pcActVisionDeployment: 'gpt-5.6-luna',
       } : {}),
       ...(pcActPlanner ? {
         pcActPlanner,

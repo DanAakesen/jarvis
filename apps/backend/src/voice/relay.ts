@@ -3,6 +3,7 @@ import { projectContext, type ProjectContextEntry } from '../factory/project-con
 import websocket from '@fastify/websocket';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import WebSocket, { type RawData } from 'ws';
+import { voiceLiveModels } from '../core/model-catalog.js';
 import {
   createRealtimeSessionUpdate,
   ENGLISH_REALTIME_MODEL,
@@ -214,7 +215,9 @@ export function normalizeVoiceLiveEndpoint(endpoint: string, model = ENGLISH_REA
   if (url.protocol !== 'wss:' || url.port || includesCredential ||
       !(url.hostname.endsWith('.services.ai.azure.com') || url.hostname.endsWith('.cognitiveservices.azure.com')) ||
       url.pathname !== '/voice-live/realtime' || url.username || url.password || url.hash ||
-      modelParameters.length > 1 || (modelParameters.length === 1 && modelParameters[0] !== ENGLISH_REALTIME_MODEL) ||
+      modelParameters.length > 1 ||
+      (modelParameters.length === 1 && !voiceLiveModels.includes(modelParameters[0] as typeof voiceLiveModels[number])) ||
+      !voiceLiveModels.includes(model as typeof voiceLiveModels[number]) ||
       !/^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/u.test(model)) {
     throw new TypeError('Voice Live endpoint must be a secure Azure Voice Live WebSocket URL');
   }
@@ -317,7 +320,7 @@ function registerVoiceRoute(
     let projects: ProjectContextEntry[] = [];
     let personality = defaultSettings.personality;
     let voiceModel = ENGLISH_REALTIME_MODEL;
-    let transcriptionModel = 'mai-transcribe';
+    let transcriptionModel = defaultSettings.roles.transcription.model;
     let responseCreateActive = false;
     let pendingResponseCreate: Record<string, unknown> | undefined;
     const queuedToolOutputs: Record<string, unknown>[] = [];

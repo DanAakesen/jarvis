@@ -73,9 +73,15 @@ export async function runCodexToolResult<T>(
   timeoutMs: number,
   pollInterval: number,
   parse: (value: unknown) => T,
+  options: { reasoningEffort?: string } = {},
 ): Promise<T> {
   const name = tool === 'web_research' ? 'Web research' : 'HTML report generation';
-  const accepted = await client.startCodexTool(tool, query, model, { signal });
+  const accepted = await client.startCodexTool(tool, query, model, {
+    signal,
+    ...(options.reasoningEffort && options.reasoningEffort !== 'none'
+      ? { reasoning: options.reasoningEffort }
+      : {}),
+  });
   const deadline = Date.now() + timeoutMs;
   let terminal = false;
   try {
@@ -124,14 +130,15 @@ export function createWebResearchModule(
           throw new ToolFailure('A valid web research query is required.');
         }
         try {
-          const selectedModel = request.server?.settingsStore && request.server.modelCatalogue
+          const selected = request.server?.settingsStore && request.server.modelCatalogue
             ? (await readSettings(
               request.server.settingsStore,
               await request.server.modelCatalogue.read(),
-            )).roles.research.model
-            : model;
+            )).roles.research
+            : undefined;
           return await runCodexToolResult(
-            clientFor(), 'web_research', input.query, selectedModel, signal, timeoutMs, pollInterval, resultFrom,
+            clientFor(), 'web_research', input.query, selected?.model ?? model, signal, timeoutMs, pollInterval,
+            resultFrom, { reasoningEffort: selected?.reasoningEffort ?? 'none' },
           );
         } catch (error) {
           if (error instanceof ToolFailure || error instanceof ToolRefusal) throw error;

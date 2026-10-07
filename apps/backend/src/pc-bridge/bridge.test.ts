@@ -7,6 +7,8 @@ import { loadConfig } from '../config.js';
 import { coreModule } from '../core/index.js';
 import { createLogger } from '../logging.js';
 import type { BackendModule } from '../modules.js';
+import { fallbackModelCatalogue, type ModelCatalogueReader } from '../core/model-catalog.js';
+import type { SettingsStore } from '../core/settings.js';
 import { createPcBridgeModule, PC_BRIDGE_SUBPROTOCOL } from './bridge.js';
 import type { PcActOptions, PcActPlanner, PcActVisionModel } from './pc-act.js';
 
@@ -39,6 +41,8 @@ function fixture(options: {
   onStatusChange?: (online: boolean) => void;
   pcActPlanner?: PcActPlanner;
   pcActVisionModel?: PcActVisionModel;
+  settingsStore?: SettingsStore;
+  modelCatalogue?: ModelCatalogueReader;
   onPcActStep?: PcActOptions['onStep'];
   runConfirmed?: <T>(summary: string, action: () => Promise<T>, signal: AbortSignal) => Promise<T>;
 } = {}) {
@@ -63,6 +67,8 @@ function fixture(options: {
     auth,
     modules: [coreModule, module],
     toolCallStore: { record },
+    ...(options.settingsStore ? { settingsStore: options.settingsStore } : {}),
+    ...(options.modelCatalogue ? { modelCatalogue: options.modelCatalogue } : {}),
   });
   apps.push(app);
   return { app, record, records };
@@ -762,11 +768,29 @@ describe('authenticated PC bridge protocol', () => {
       name: 'Play',
       bounds: { x: 0.25, y: 0.25, width: 0.5, height: 0.5 },
     }]);
+    const fallback = fallbackModelCatalogue();
+    const modelCatalogue: ModelCatalogueReader = {
+      read: async () => ({
+        ...fallback,
+        deployments: fallback.deployments.map((deployment) => deployment.name === 'gpt-5.6-luna'
+          ? { ...deployment, capabilities: [...deployment.capabilities, 'image'] }
+          : deployment),
+      }),
+    };
+    const settingsStore: SettingsStore = {
+      read: async () => ({
+        'roles.vision.model': JSON.stringify('gpt-5.6-luna'),
+        'roles.vision.reasoning_effort': JSON.stringify('none'),
+      }),
+      write: async () => {},
+    };
     const steps: Parameters<NonNullable<PcActOptions['onStep']>>[0][] = [];
     const { app, record, records } = fixture({
       logLevel: 'info',
       pcActPlanner: planner,
       pcActVisionModel: { locateElements },
+      modelCatalogue,
+      settingsStore,
       onPcActStep: (activity) => { steps.push(activity); },
     });
     const url = await listen(app);
@@ -821,6 +845,9 @@ describe('authenticated PC bridge protocol', () => {
     ]);
     expect(JSON.stringify(commands)).not.toContain('image');
     expect(locateElements).toHaveBeenCalledOnce();
+    expect(locateElements).toHaveBeenCalledWith(
+      expect.objectContaining({ model: 'gpt-5.6-luna' }),
+    );
     expect(record).toHaveBeenCalledWith(expect.objectContaining({
       arguments: { redacted: true },
       result: { redacted: true },
