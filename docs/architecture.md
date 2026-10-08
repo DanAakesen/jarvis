@@ -378,6 +378,15 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   in process while pending and is not resumed after a backend restart. The
   implementation reuses the existing settings/catalogue contracts and adds no
   database migration.
+  P9-12 adds `get_settings` and `update_settings` to the same backend tool
+  registry used by chat and voice. Both operate only on validated settings keys;
+  reads return effective settings without credential records, and generic tool
+  audits redact setting arguments and results. Role-model/reasoning changes and
+  daily vision-budget changes run through the existing one-time Now confirmation
+  service before the settings store is written. `set_jarvis_model` remains a
+  compatibility alias for the chat role and shares the same confirmation and
+  validation path. These tools reuse the existing settings store and contracts;
+  no migration or web change is required.
 - `ci.yml` (P0-10) is the aggregate CI on every PR, `main` push and
   `workflow_dispatch`. It calls the reusable `web-ci.yml`, `backend-ci.yml`
   (including the container smoke), `database-ci.yml` (isolated SQL Server migrations), `foundry-contract.yml`, `runner-ci.yml`
