@@ -164,7 +164,7 @@ describe('committed domain schema (groups 1-8)', () => {
     expect(await store.list()).toContainEqual(progressed);
     await expect(store.get(jobId)).resolves.toMatchObject({
       details: {
-        job: running,
+        job: progressed,
         steps: [
           { status: 'running', step: 0, detail: 'Starting research' },
           { status: 'running', step: 1, detail: 'Searching: migration' },
