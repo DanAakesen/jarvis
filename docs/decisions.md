@@ -41,11 +41,19 @@ sanitized failures; production provider health and UI acceptance remain pending.
 
 P9-14 (7 October 2026): persist each background-job state and step transition in
 SQL, and publish job events only after the state transaction commits. Keep jobs and
-step history for 30 days. No current job is resumable, so startup marks running
-jobs `failed` with `interrupted by restart`; do not attempt to repeat external
-research or artifact side effects. Evidence: migration 0029 and focused lifecycle
-tests, with SQL persistence and schema coverage in Database CI. Cross-replica live
-acceptance remains unverified.
+step history for 30 days. Jobs are not resumed automatically: startup marks running
+jobs `failed` with `interrupted by restart`; do not repeat external research or
+artifact side effects without a user request. Evidence: migration 0029 and focused
+lifecycle tests, with SQL persistence and schema coverage in Database CI.
+Cross-replica live acceptance remains unverified.
+
+P9-30 (8 October 2026): expose bounded persisted job details through `get_job` and
+allow `retry_job` only for failed research jobs with saved topic and selected depth.
+Store that input for the same 30-day retention, redact it from tool-call audit
+records, and create each retry as a new job. A transaction claims at most one retry
+from a failed attempt, preventing duplicate research work across replicas.
+Evidence: migration 0034 and focused contract, retry, and store tests; live
+SQL Server and cross-replica behavior remain unverified.
 
 P9-24 (7 October 2026): search the existing conversation message store instead of
 creating a second transcript index or changing retention. Use SQL full-text search

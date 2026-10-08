@@ -1,6 +1,6 @@
 # Data model
 
-Version 1, updated 7 October 2026 for P6-22, P7-01, P7-02, P7-03, P7-08, P7-13, P7-15, P7-22, P7-37, P7-40 and P7-44. Scope: the Jarvis core, Software Factory, Teams calling, notification and browser-confirmation state, Google Calendar/Gmail tools, the GitHub vault's derived search index, long-term memory, image metadata and generated HTML report artifacts. Azure SQL is the source of truth for operational records; Dan's private GitHub vault is the source of truth for durable knowledge. Blob Storage holds large files referenced from SQL. Requirements: [PRODUCT.md](../PRODUCT.md); system: [architecture.md](architecture.md).
+Version 1, updated 8 October 2026 for P6-22, P7-01, P7-02, P7-03, P7-08, P7-13, P7-15, P7-22, P7-37, P7-40, P7-44 and P9-30. Scope: the Jarvis core, background jobs, Software Factory, Teams calling, notification and browser-confirmation state, Google Calendar/Gmail tools, the GitHub vault's derived search index, long-term memory, image metadata and generated HTML report artifacts. Azure SQL is the source of truth for operational records; Dan's private GitHub vault is the source of truth for durable knowledge. Blob Storage holds large files referenced from SQL. Requirements: [PRODUCT.md](../PRODUCT.md); system: [architecture.md](architecture.md).
 
 ## Migration infrastructure
 
@@ -88,6 +88,14 @@ P8-14 generated views are versioned JSON contracts in the shared
 `@jarvis/contracts` workspace. A view carries bounded source/page metadata but
 is not stored in SQL or Blob; source records retain their existing storage and
 retention. P8-14 adds no tables or migrations.
+
+P9-14 creates `background_jobs` and append-only `background_job_steps` in
+`0029_background_jobs.sql`. P9-30 adds nullable `retry_input` and `retry_job_id`
+columns in `0034_research_job_retry.sql`: the former stores only the original
+research topic and selected depth for 30 days; the latter atomically links a
+failed attempt to its one retry. Existing jobs without retry input are not
+retryable, and reverting migration 0034 drops both retry columns and their
+metadata.
 
 ## Overview
 

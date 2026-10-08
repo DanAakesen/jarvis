@@ -364,6 +364,20 @@ export interface BackgroundJob {
   startedAt: string;
   updatedAt: string;
 }
+export interface BackgroundJobStep {
+  status: BackgroundJobStatus;
+  step: number;
+  detail?: string;
+  viewId?: string;
+  updatedAt: string;
+}
+export interface BackgroundJobDetails {
+  job: BackgroundJob;
+  steps: BackgroundJobStep[];
+  error?: string;
+  resultWindow?: string;
+  retryable: boolean;
+}
 export interface BackgroundJobEvent {
   type: 'job';
   job: BackgroundJob;
@@ -371,6 +385,8 @@ export interface BackgroundJobEvent {
 export const backgroundJobKinds: readonly BackgroundJobKind[];
 export const backgroundJobStatuses: readonly BackgroundJobStatus[];
 export function isBackgroundJob(value: unknown): value is BackgroundJob;
+export function isBackgroundJobStep(value: unknown): value is BackgroundJobStep;
+export function isBackgroundJobDetails(value: unknown): value is BackgroundJobDetails;
 export function isBackgroundJobEvent(value: unknown): value is BackgroundJobEvent;
 
 export const nowSseEventNames: readonly [

@@ -62,6 +62,7 @@ describe('committed SQL manifest', () => {
       '0031_embedding_model_identity.sql',
       '0032_conversation_search.sql',
       '0033_project_description.sql',
+      '0034_research_job_retry.sql',
     ]);
     for (const migration of migrations) await expect(readDownMigration(migration.name)).resolves.toMatchObject({ name: migration.name });
   });
@@ -99,6 +100,14 @@ describe('committed SQL manifest', () => {
     expect(migration?.sql).toContain("N'embedding'");
     await expect(readDownMigration('0031_embedding_model_identity.sql')).resolves.toMatchObject({
       sql: expect.stringContaining('DROP COLUMN embedding_model'),
+    });
+  });
+  it('stores retry inputs and one retry claim per research job', async () => {
+    const migration = (await readMigrations()).find(({ name }) => name === '0034_research_job_retry.sql');
+    expect(migration?.sql).toContain('retry_input nvarchar(max) NULL');
+    expect(migration?.sql).toContain('retry_job_id nvarchar(36)');
+    await expect(readDownMigration('0034_research_job_retry.sql')).resolves.toMatchObject({
+      sql: expect.stringContaining('DROP COLUMN retry_input, retry_job_id'),
     });
   });
   it('indexes conversation message dates for bounded search', async () => {

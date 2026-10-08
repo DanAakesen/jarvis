@@ -4,7 +4,7 @@ import { buildApp } from '../app.js';
 import { loadConfig } from '../config.js';
 import type { TokenVerifier } from '../auth/verify.js';
 import { createEventHub } from './event-hub.js';
-import { BackgroundJobRegistry, cancelJobTool, listJobsTool } from './jobs.js';
+import { BackgroundJobRegistry, cancelJobTool, getJobTool, listJobsTool } from './jobs.js';
 import type { FastifyRequest } from 'fastify';
 import { ToolRefusal } from './tool-registry.js';
 import type { JarvisActivityHub } from './activity.js';
@@ -87,6 +87,8 @@ describe('background jobs', () => {
     await ignite.progress(1, 'Searching: Key findings');
     const foundry = await app.backgroundJobs.start('research', 'Research: Foundry IQ', 3, vi.fn());
     await foundry.done('research-foundry', 'Report ready');
+    const failed = await app.backgroundJobs.start('research', 'Research: Failed safely', 2);
+    await failed.fail('Research could not be completed.');
 
     const listed = await listJobsTool.execute({}, request, signal) as {
       running: Array<Record<string, unknown>>; finished: Array<Record<string, unknown>>;
@@ -94,9 +96,23 @@ describe('background jobs', () => {
     expect(listed.running).toEqual([expect.objectContaining({
       title: 'Research: Microsoft Ignite 2026', status: 'running', progress: '1/3', detail: 'Searching: Key findings',
     })]);
-    expect(listed.finished).toEqual([expect.objectContaining({
-      title: 'Research: Foundry IQ', status: 'done', resultWindow: 'research-foundry',
-    })]);
+    expect(listed.finished).toEqual(expect.arrayContaining([
+      expect.objectContaining({ title: 'Research: Foundry IQ', status: 'done', resultWindow: 'research-foundry' }),
+      expect.objectContaining({ title: 'Research: Failed safely', status: 'failed' }),
+    ]));
+    await expect(getJobTool.execute({ jobId: foundry.jobId }, request, signal)).resolves.toMatchObject({
+      job: { title: 'Research: Foundry IQ', status: 'done', viewId: 'research-foundry' },
+      steps: [{ status: 'running', step: 0 }, { status: 'done', step: 3, viewId: 'research-foundry' }],
+      resultWindow: 'research-foundry',
+      retryable: false,
+    });
+    await expect(getJobTool.execute({ jobId: failed.jobId }, request, signal)).resolves.toMatchObject({
+      error: 'Research could not be completed.',
+      steps: [{ status: 'running' }, { status: 'failed', detail: 'Research could not be completed.' }],
+    });
+    await expect(getJobTool.execute({ jobId: '00000000-0000-4000-8000-000000000099' }, request, signal))
+      .rejects.toBeInstanceOf(ToolRefusal);
+    await expect(getJobTool.execute({ jobId: 'invalid' }, request, signal)).rejects.toBeInstanceOf(ToolRefusal);
 
     await expect(cancelJobTool.execute({ query: 'Foundry' }, request, signal)).rejects.toBeInstanceOf(ToolRefusal);
     await expect(cancelJobTool.execute({ query: 'ignite research' }, request, signal))
@@ -135,9 +151,27 @@ describe('background jobs', () => {
       },
     ];
     const store: BackgroundJobStore = {
-      create: vi.fn(async () => {}),
+      create: vi.fn(async () => true),
       update: vi.fn(async (job) => job),
       list: vi.fn(async () => jobs),
+      get: vi.fn(async (jobId) => {
+        const job = jobs.find((candidate) => candidate.jobId === jobId);
+        return job ? {
+          details: {
+            job,
+            steps: [{
+              status: job.status,
+              step: job.step,
+              ...(job.detail ? { detail: job.detail } : {}),
+              ...(job.viewId ? { viewId: job.viewId } : {}),
+              updatedAt: job.updatedAt,
+            }],
+            ...(job.status === 'failed' && job.detail ? { error: job.detail } : {}),
+            ...(job.viewId ? { resultWindow: job.viewId } : {}),
+            retryable: false,
+          },
+        } : null;
+      }),
       reconcileInterrupted: vi.fn(async () => {
         const interrupted = jobs.filter((job) => job.status === 'running').map((job) => ({
           ...job, status: 'failed' as const, detail: 'interrupted by restart',
@@ -176,11 +210,12 @@ describe('background jobs', () => {
     const events: BackgroundJob[] = [];
     hub.subscribe((event) => { if (event.type === 'job') events.push(event.job); });
     const store: BackgroundJobStore = {
-      create: vi.fn(async () => {}),
+      create: vi.fn(async () => true),
       update: vi.fn()
         .mockRejectedValueOnce(new Error('database unavailable'))
         .mockImplementation(async (job: BackgroundJob) => job),
       list: vi.fn(async () => []),
+      get: vi.fn(async () => null),
       reconcileInterrupted: vi.fn(async () => []),
       prune: vi.fn(async () => {}),
     };
