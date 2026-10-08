@@ -667,7 +667,7 @@ export function createGoogleModule(
     },
     {
       name: 'calendar_create_event',
-      description: 'Prepare a Google Calendar event. No change is made until Dan approves it with the exact confirmation phrase returned.',
+      description: 'Prepare a Google Calendar event. No change is made until Dan approves it in a later message using the returned approval instructions.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -717,7 +717,7 @@ export function createGoogleModule(
     },
     {
       name: 'calendar_update_event',
-      description: 'Prepare to update one of Dan’s Google Calendar events. No change is made until Dan approves it with the exact confirmation phrase returned.',
+      description: 'Prepare to update one of Dan’s Google Calendar events. No change is made until Dan approves it in a later message using the returned approval instructions.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -792,7 +792,7 @@ export function createGoogleModule(
     },
     {
       name: 'calendar_move_event',
-      description: 'Prepare to move one of Dan’s Google Calendar events. No change is made until Dan approves it with the exact confirmation phrase returned.',
+      description: 'Prepare to move one of Dan’s Google Calendar events. No change is made until Dan approves it in a later message using the returned approval instructions.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -838,7 +838,7 @@ export function createGoogleModule(
     },
     {
       name: 'calendar_delete_event',
-      description: 'Prepare to delete one of Dan’s Google Calendar events. No change is made until Dan approves it with the exact confirmation phrase returned.',
+      description: 'Prepare to delete one of Dan’s Google Calendar events. No change is made until Dan approves it in a later message using the returned approval instructions.',
       inputSchema: {
         type: 'object',
         properties: { eventId: { type: 'string', minLength: 1, maxLength: 512 } },
@@ -868,7 +868,7 @@ export function createGoogleModule(
     },
     {
       name: 'calendar_confirm_change',
-      description: 'Complete a pending calendar change only when Dan’s latest message exactly says “confirm” followed by its eight-digit code.',
+      description: 'Complete a pending calendar change using its returned code only after Dan’s latest message says “approve” (one pending calendar change) or “confirm” followed by that code (select a specific change). Never infer approval from the initial request or other text.',
       inputSchema: confirmationSchema,
       sensitive: true,
       execute: (input, request, signal) => confirmationResult(

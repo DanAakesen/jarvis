@@ -18,6 +18,7 @@ interface PendingAction {
 
 export class PendingGoogleActions {
   private readonly actions = new Map<string, PendingAction>();
+  private lastCalendarApprovalMessageId = 0n;
 
   constructor(private readonly now: () => number = Date.now) {}
 
@@ -40,7 +41,9 @@ export class PendingGoogleActions {
       status: 'awaiting_confirmation',
       summary: input.summary,
       confirmationCode: code,
-      instruction: `Nothing has changed. To approve, say exactly "confirm ${code}".`,
+      instruction: input.scope === 'calendar'
+        ? `Nothing has changed. Review this change, then reply "approve". If more than one calendar change is pending, reply "confirm ${code}" to select this change. Approval expires in ten minutes.`
+        : `Nothing has changed. To approve, say exactly "confirm ${code}".`,
     };
   }
 
@@ -52,15 +55,25 @@ export class PendingGoogleActions {
   ): Promise<unknown> {
     this.removeExpired();
     const action = this.actions.get(code);
+    const text = message?.text.trim().toLowerCase();
+    const explicitApproval = text === `confirm ${code}`;
+    const shortCalendarApproval = scope === 'calendar' && text === 'approve' &&
+      [...this.actions.values()].filter((pending) => pending.scope === 'calendar').length === 1;
     if (!action || action.scope !== scope || !message || message.role !== 'dan' ||
         !/^[1-9]\d{0,18}$/u.test(message.id) ||
         !/^[1-9]\d{0,18}$/u.test(action.sourceMessageId) ||
         message.id === action.sourceMessageId ||
         BigInt(message.id) <= BigInt(action.sourceMessageId) ||
+        !Number.isFinite(message.at.getTime()) ||
         message.at.getTime() <= action.createdAt ||
-        message.text.trim().toLowerCase() !== `confirm ${code}`) {
-      throw new ToolRefusal('No Google change was made. Dan must send the exact confirmation phrase in a new message.');
+        (scope === 'calendar' && BigInt(message.id) <= this.lastCalendarApprovalMessageId) ||
+        signal.aborted ||
+        !(explicitApproval || shortCalendarApproval)) {
+      throw new ToolRefusal(scope === 'calendar'
+        ? 'No calendar change was made. Dan must approve in a new message. Reply "approve" for a single pending change, or "confirm" followed by its code to select a change.'
+        : 'No Google change was made. Dan must send the exact confirmation phrase in a new message.');
     }
+    if (scope === 'calendar') this.lastCalendarApprovalMessageId = BigInt(message.id);
     this.actions.delete(code);
     return action.execute(signal);
   }
