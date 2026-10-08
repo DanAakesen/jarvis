@@ -18,7 +18,6 @@ import { cancelJobTool, getJobTool, listJobsTool, registerJobRoutes } from './jo
 import { findChatReflexReplay } from './reflex.js';
 import { executePhoneTool } from '../phone/approval.js';
 import { systemStatusResponseSchema } from '../system-status.js';
-import { weatherTool } from './weather.js';
 
 const readOnlyToolsWithoutMessage = new Set(['memory_search', 'vault_search', 'vault_read']);
 
@@ -51,7 +50,7 @@ function isObject(value: unknown): value is Record<string, unknown> {
 
 export const coreModule: BackendModule = {
   id: 'core',
-  tools: [setThemeTool, getSettingsTool, updateSettingsTool, setJarvisModelTool, manageModelDeploymentTool, setPresenceModeTool, setAwayModeTool, getStatusSummaryTool, workspaceCommandTool, listJobsTool, getJobTool, cancelJobTool, getUsageTool, weatherTool],
+  tools: [setThemeTool, getSettingsTool, updateSettingsTool, setJarvisModelTool, manageModelDeploymentTool, setPresenceModeTool, setAwayModeTool, getStatusSummaryTool, workspaceCommandTool, listJobsTool, getJobTool, cancelJobTool, getUsageTool],
   registerRoutes: async (app) => {
     await registerSettingsRoutes(app);
     registerModelDeploymentRoutes(app);
