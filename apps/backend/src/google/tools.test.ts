@@ -312,7 +312,7 @@ describe('Google Calendar and Gmail tools', () => {
     ]);
   });
 
-  it('creates a calendar event only after a later exact confirmation and redacts persisted data', async () => {
+  it('creates a calendar event only after later approval and redacts persisted data', async () => {
     const request = vi.fn(async () => ({}));
     const { app, records, setLatest } = appFor(request);
     const staged = await app.inject({
@@ -335,7 +335,16 @@ describe('Google Calendar and Gmail tools', () => {
       result: { redacted: true },
     });
 
-    confirmMessage(setLatest, code);
+    const attempt = () => app.inject({
+      method: 'POST', url: '/tools/calendar_confirm_change', headers: confirmHeaders('43'),
+      payload: { confirmationCode: code },
+    });
+    expect((await attempt()).json()).toMatchObject({ outcome: 'refused' });
+    setLatest(conversationMessage('43', 'yes', new Date(Date.now() + 10_000)));
+    expect((await attempt()).json()).toMatchObject({ outcome: 'refused' });
+    expect(request).not.toHaveBeenCalled();
+    setLatest(conversationMessage('43', 'approve', new Date(Date.now() + 10_000)));
+
     const confirmed = await app.inject({
       method: 'POST',
       url: '/tools/calendar_confirm_change',
