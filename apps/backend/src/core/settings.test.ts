@@ -650,6 +650,7 @@ describe('settings API', () => {
     const { store } = createStore();
     await store.write({
       jarvis: { model: 'gpt-5.6-luna', reasoning: 'high' },
+      memory: { automaticCapture: false },
       research: { timeoutSeconds: 280 },
       timeouts: {
         toolTimeoutSeconds: 45,
@@ -694,9 +695,12 @@ describe('settings API', () => {
         similarityThreshold: 0.35,
         searchTopK: 5,
         graphTextSimilarityThreshold: 0.12,
-        automaticCapture: true,
+        automaticCapture: false,
       },
       research: { timeoutSeconds: 280 },
+      capabilityInstructions: expect.stringContaining(
+        'Do not proactively save memories; save only when Dan directly asks you to write to the vault.',
+      ),
       timeouts: {
         toolTimeoutSeconds: 45,
         longToolTimeoutSeconds: 300,

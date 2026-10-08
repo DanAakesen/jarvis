@@ -101,6 +101,7 @@ class ModelSettings:
     long_tool_timeout_seconds: int = 320
     backend_http_timeout_seconds: int = 10
     research_timeout_seconds: int = 305
+    capability_instructions: str = ""
 
     @property
     def away_mode(self) -> bool:
