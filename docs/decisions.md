@@ -946,3 +946,7 @@ Offline validation: 55 focused pending-action, Google-tool and capability-instru
 tests pass, along with backend lint and build. Unit and fake-provider HTTP checks
 cover approval, cancellation, expiry, identity/turn checks, supersession and Gmail
 regression; live acceptance is pending.
+
+## P9-09 (8 October 2026) — Appearance colours can be reset
+
+`PATCH /settings` accepts `null` for `appearance.accent`, `appearance.accent-secondary` and `appearance.surface-tint`, meaning "remove the override". The store keeps JSON `null`, which the read path already ignores, so GET omits the key and the theme's light and dark defaults apply. No migration or store change was needed. Other settings still reject `null`. Status: accepted (requested by the UI session for #503's "Use Jarvis colours").
