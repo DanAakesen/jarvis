@@ -451,6 +451,9 @@ export const workspaceSettingsSections = Object.freeze([
   'appearance', 'jarvis', 'personality', 'voice', 'presence', 'memory',
   'coding', 'projects', 'routines', 'credentials', 'backend',
 ]);
+const workspaceWindowRegions = ['left', 'right', 'top', 'bottom', 'centre', 'full'];
+const workspaceWindowPlacements = ['auto', 'region', 'manual'];
+const workspaceArrangeLayouts = ['auto', 'side-by-side', 'grid', 'cascade'];
 const workspaceLocationProperties = {
   page: { type: 'string', enum: [...workspaceNavigationPages] },
   section: { type: 'string', enum: [...workspaceSettingsSections] },
@@ -485,9 +488,16 @@ export function isWorkspaceSnapshot(value) {
     Object.keys(value).every((key) => ['windows', 'contextPanelOpen', 'frame', 'view'].includes(key)) &&
     Array.isArray(value.windows) && value.windows.length <= 32 &&
     value.windows.every((window) => isObject(window) &&
-      Object.keys(window).every((key) => ['viewId', 'title'].includes(key)) &&
+      Object.keys(window).every((key) =>
+        ['viewId', 'title', 'state', 'placement', 'region', 'pinned', 'front'].includes(key)) &&
       typeof window.viewId === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(window.viewId) &&
-      boundedString(window.title, 200, 1)) &&
+      boundedString(window.title, 200, 1) &&
+      (window.state === undefined || ['open', 'minimised'].includes(window.state)) &&
+      (window.placement === undefined || workspaceWindowPlacements.includes(window.placement)) &&
+      (!Object.hasOwn(window, 'region') ||
+        window.placement === 'region' && workspaceWindowRegions.includes(window.region)) &&
+      (window.pinned === undefined || typeof window.pinned === 'boolean') &&
+      (window.front === undefined || typeof window.front === 'boolean')) &&
     typeof value.contextPanelOpen === 'boolean' &&
     (value.frame === undefined || isHtmlArtifactFrame(value.frame)) &&
     (value.view === undefined || isWorkspaceView(value.view));
@@ -497,12 +507,15 @@ export const workspaceCommandSchema = Object.freeze({
   type: 'object',
   properties: {
     commandId: workspaceCommandId,
-    operation: { type: 'string', enum: ['create', 'update', 'show', 'close', 'minimise', 'restore', 'focus', 'move', 'resize', 'layout', 'context-panel', 'navigate', 'conversation'] },
+    operation: { type: 'string', enum: ['create', 'update', 'show', 'close', 'minimise', 'restore', 'focus', 'move', 'resize', 'layout', 'context-panel', 'navigate', 'conversation', 'place', 'arrange', 'minimise-all', 'restore-all', 'close-all', 'pin', 'unpin'] },
     page: { type: 'string', enum: [...workspaceNavigationPages] },
     section: { type: 'string', enum: [...workspaceSettingsSections] },
     taskId: { type: 'string', pattern: '^[1-9][0-9]{0,18}$', maxLength: 19 },
     issueNumber: { type: 'integer', minimum: 1, maximum: Number.MAX_SAFE_INTEGER },
     viewId: workspaceViewId,
+    region: { enum: workspaceWindowRegions },
+    layout: { enum: workspaceArrangeLayouts },
+    viewIds: { type: 'array', minItems: 1, maxItems: 8, items: workspaceViewId, uniqueItems: true },
     view: generatedViewSchema,
     x: { type: 'number', minimum: 0, maximum: 1 },
     y: { type: 'number', minimum: 0, maximum: 1 },
@@ -906,6 +919,25 @@ export function isWorkspaceCommand(value, options = {}) {
     case 'minimise':
     case 'restore':
     case 'focus':
+      return hasOnly('viewId') &&
+        typeof value.viewId === 'string' && /^[A-Za-z][A-Za-z0-9_-]{0,63}$/.test(value.viewId);
+    case 'place':
+      return hasOnly('viewId', 'region') &&
+        typeof value.viewId === 'string' && /^[A-Za-z][A-Za-z0-9_-]{0,63}$/.test(value.viewId) &&
+        workspaceWindowRegions.includes(value.region);
+    case 'arrange':
+      return hasOnly('layout', 'viewIds') && workspaceArrangeLayouts.includes(value.layout) &&
+        (value.viewIds === undefined || Array.isArray(value.viewIds) && value.viewIds.length >= 1 &&
+          value.viewIds.length <= 8 &&
+          value.viewIds.every((viewId) => typeof viewId === 'string' &&
+            /^[A-Za-z][A-Za-z0-9_-]{0,63}$/.test(viewId)) &&
+          new Set(value.viewIds).size === value.viewIds.length);
+    case 'minimise-all':
+    case 'restore-all':
+    case 'close-all':
+      return hasOnly();
+    case 'pin':
+    case 'unpin':
       return hasOnly('viewId') &&
         typeof value.viewId === 'string' && /^[A-Za-z][A-Za-z0-9_-]{0,63}$/.test(value.viewId);
     case 'move':

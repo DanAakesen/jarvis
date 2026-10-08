@@ -290,6 +290,11 @@ export function registerWorkspaceCommandRoutes(app: FastifyInstance): void {
               properties: {
                 viewId: { type: 'string', pattern: '^[A-Za-z0-9_-]{1,128}$' },
                 title: { type: 'string', minLength: 1, maxLength: 200 },
+                state: { type: 'string', enum: ['open', 'minimised'] },
+                placement: { type: 'string', enum: ['auto', 'region', 'manual'] },
+                region: { type: 'string', enum: ['left', 'right', 'top', 'bottom', 'centre', 'full'] },
+                pinned: { type: 'boolean' },
+                front: { type: 'boolean' },
               },
               required: ['viewId', 'title'], additionalProperties: false,
             },
@@ -360,7 +365,8 @@ export function registerWorkspaceCommandRoutes(app: FastifyInstance): void {
 }
 
 export function isWorkspaceReflexOperation(args: Readonly<Record<string, unknown>>): boolean {
-  return ['show', 'focus', 'minimise', 'restore', 'close', 'resize'].includes(String(args.operation)) ||
+  return ['show', 'focus', 'minimise', 'restore', 'close', 'resize', 'place', 'arrange', 'minimise-all',
+    'restore-all', 'close-all', 'pin', 'unpin'].includes(String(args.operation)) ||
     args.operation === 'conversation' && ['show', 'hide'].includes(String(args.action)) ||
     args.operation === 'layout' ||
     args.operation === 'context-panel' && (args.action === 'close' ||
