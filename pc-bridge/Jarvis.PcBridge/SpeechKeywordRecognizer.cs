@@ -23,11 +23,11 @@ public sealed class SpeechKeywordRecognizer(string modelPath) : IKeywordRecogniz
         {
             result = await recognizing.ConfigureAwait(false);
         }
-        if (Volatile.Read(ref stopping) is { } stop)
-        {
-            try { await stop.ConfigureAwait(false); }
-            catch { }
-        }
+        // Stop before disposal: disposing a KeywordRecognizer whose session is still open blocks
+        // for about 10 seconds, which delayed the chime and voice start after each detection (L128).
+        var stop = Volatile.Read(ref stopping) ?? recognizer.StopRecognitionAsync();
+        try { await stop.ConfigureAwait(false); }
+        catch { }
         cancellationToken.ThrowIfCancellationRequested();
         return result.Reason == ResultReason.RecognizedKeyword;
     }
