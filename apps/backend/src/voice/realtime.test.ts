@@ -59,7 +59,7 @@ describe('English realtime session', () => {
     }]);
     expect(session.instructions).toContain('use vault_search or vault_read');
     expect(session.instructions).toContain('Use show_knowledge');
-    expect(session.instructions).toContain('vault writes');
+    expect(session.instructions).toContain('using vault_write');
     expect(session.instructions).toContain('Never save secrets or credentials');
   });
 

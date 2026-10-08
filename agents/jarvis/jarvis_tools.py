@@ -258,7 +258,10 @@ def _model_settings(value: Any) -> ModelSettings:
         )
         or not isinstance(capability_instructions, str)
         or len(capability_instructions) > 10_000
-        or any(ord(character) < 32 and character not in "\n\r\t" for character in capability_instructions)
+        or any(
+            ord(character) < 32 and character not in "\n\r\t"
+            for character in capability_instructions
+        )
     ):
         raise ValueError("invalid Jarvis settings")
     return ModelSettings(

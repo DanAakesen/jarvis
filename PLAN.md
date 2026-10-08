@@ -505,6 +505,7 @@ P8-02 allocated P8-04 through P8-13 to frontend work in PR #233. Backend tasks t
 | ID | Issue | Task | Acceptance criteria | Depends on | Status |
 | --- | --- | --- | --- | --- | --- |
 | P9-26 | [#520](https://github.com/DanAakesen/jarvis/issues/520) | Add backend Calendar event updates for title, paired start/end times, location, attendees, and description, and event deletion; keep the web app unchanged | PATCH only supplied fields; allow clearing location, description, and attendees; encode event IDs; stage update/delete through the existing exact later-message confirmation; redact sensitive audits and cover fake Google requests and invalid partial times | P7-22, P7-28 | Complete |
+| P9-36 | [#530](https://github.com/DanAakesen/jarvis/issues/530) | Use one backend-owned capability and safety prompt for realtime voice and chat, with chat loading it through `/agent/settings` | Share PC/browser, research, background-job, knowledge, and safety guidance; reflect the existing memory-capture setting; preserve the shared tool registry and confirmation behavior; make no web or database changes | P9-01, P9-05, P9-06, P9-10, P9-11, P9-14, P9-30 | In progress |
 
 ### Confirm before P0
 
