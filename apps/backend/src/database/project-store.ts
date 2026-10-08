@@ -4,9 +4,9 @@ import { ProjectConflictError, type CreateProject, type Project, type ProjectSto
 
 type ProjectRow = Omit<Project, 'id'> & { id: string };
 
-const columns = `CONVERT(varchar(20), id) AS id, name, repo, default_branch, default_agent, policy,
+const columns = `CONVERT(varchar(20), id) AS id, name, description, repo, default_branch, default_agent, policy,
   merge_rules, sandbox_size, tech, max_parallel_tasks, active`;
-const insertedColumns = `CONVERT(varchar(20), INSERTED.id) AS id, INSERTED.name, INSERTED.repo,
+const insertedColumns = `CONVERT(varchar(20), INSERTED.id) AS id, INSERTED.name, INSERTED.description, INSERTED.repo,
   INSERTED.default_branch, INSERTED.default_agent, INSERTED.policy, INSERTED.merge_rules,
   INSERTED.sandbox_size, INSERTED.tech, INSERTED.max_parallel_tasks, INSERTED.active`;
 
@@ -27,6 +27,7 @@ export function createProjectStore(pool: sql.ConnectionPool, trackedRepositories
     async create(project: CreateProject) {
       const request = pool.request()
         .input('name', sql.NVarChar(100), project.name)
+        .input('description', sql.NVarChar(2000), project.description ?? null)
         .input('repo', sql.NVarChar(140), project.repo)
         .input('defaultBranch', sql.NVarChar(255), project.default_branch)
         .input('defaultAgent', sql.NVarChar(16), project.default_agent)
@@ -37,9 +38,9 @@ export function createProjectStore(pool: sql.ConnectionPool, trackedRepositories
         .input('maxParallelTasks', sql.Int, project.max_parallel_tasks ?? 1);
       try {
         const { recordset } = await request.query<ProjectRow>(`INSERT INTO dbo.projects
-          (name, repo, default_branch, default_agent, policy, merge_rules, sandbox_size, tech, max_parallel_tasks)
+          (name, description, repo, default_branch, default_agent, policy, merge_rules, sandbox_size, tech, max_parallel_tasks)
           OUTPUT ${insertedColumns}
-          VALUES (@name, @repo, @defaultBranch, @defaultAgent, @policy, @mergeRules,
+          VALUES (@name, @description, @repo, @defaultBranch, @defaultAgent, @policy, @mergeRules,
             @sandboxSize, @tech, @maxParallelTasks);`);
         const project = recordset[0]!;
         trackedRepositories?.add(repositoryKey(project.repo));
@@ -53,6 +54,7 @@ export function createProjectStore(pool: sql.ConnectionPool, trackedRepositories
       const request = pool.request().input('id', sql.BigInt, BigInt(id));
       const assignments: string[] = [];
       if (project.name !== undefined) { request.input('name', sql.NVarChar(100), project.name); assignments.push('name = @name'); }
+      if (project.description !== undefined) { request.input('description', sql.NVarChar(2000), project.description); assignments.push('description = @description'); }
       if (project.repo !== undefined) { request.input('repo', sql.NVarChar(140), project.repo); assignments.push('repo = @repo'); }
       if (project.default_branch !== undefined) { request.input('defaultBranch', sql.NVarChar(255), project.default_branch); assignments.push('default_branch = @defaultBranch'); }
       if (project.default_agent !== undefined) { request.input('defaultAgent', sql.NVarChar(16), project.default_agent); assignments.push('default_agent = @defaultAgent'); }
@@ -81,7 +83,7 @@ export function createProjectStore(pool: sql.ConnectionPool, trackedRepositories
     },
     async archive(id: string) {
       const result = await pool.request().input('id', sql.BigInt, BigInt(id))
-        .query<{ repo: string }>('UPDATE dbo.projects SET active = 0 OUTPUT DELETED.repo AS repo WHERE id = @id;');
+        .query<{ repo: string }>('UPDATE dbo.projects SET active = 0 OUTPUT DELETED.repo AS repo WHERE id = @id AND active = 1;');
       const { rowsAffected, recordset } = result;
       const archivedRepository = recordset[0]?.repo;
       if (archivedRepository) trackedRepositories?.delete(repositoryKey(archivedRepository));

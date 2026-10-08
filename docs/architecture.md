@@ -574,12 +574,24 @@ The factory registers authenticated `GET /factory/projects`,
 `DELETE /factory/projects/:id` routes. The project
 store uses the process-owned SQL pool and parameterized queries; list returns
 active rows, archive sets `active = 0`, and duplicate repositories return 409.
-Request schemas validate required settings and the database's policy, sandbox,
-tech, repository, and concurrency constraints. When SQL is not configured,
+P9-28 adds a nullable, 2,000-character project description in migration 0033;
+existing rows remain null, and projects created without a description default it
+to null. `create_project` stores its supplied description. PATCH validates project
+settings and updates only supplied fields, including description and defaults.
+DELETE archives only an active row. Request schemas validate required settings
+and the database's policy, sandbox, tech, repository, description, and concurrency
+constraints. When SQL is not configured,
 project requests return 503 rather than claiming success. Route and query-binding
 contracts are covered offline, and SQL Server-container tests execute project
 CRUD and archive queries. Real Azure identity and project CRUD remain unverified
 without Azure access.
+
+The shared Factory tool registry exposes `update_project` and `archive_project`.
+Updates reuse the active-project store and return a bounded summary without
+private merge rules. Archiving stages a one-time eight-digit code for ten minutes;
+`confirm_project_archive` accepts it only when Dan's later message exactly says
+`confirm <code>`. Pending confirmations are process-local and disappear on
+restart, so restarts fail closed rather than archiving without fresh approval.
 
 With backend-only `APPLICATIONINSIGHTS_CONNECTION_STRING` (P0-11 Key Vault
 reference), an isolated SDK client exports these events as manual traces. No
