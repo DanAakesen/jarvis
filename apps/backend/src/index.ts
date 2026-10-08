@@ -871,7 +871,8 @@ try {
     },
     google: async () => {
       if (!googleApiClient) return { status: 'down', details: { configured: false } };
-      await googleApiClient.request('calendar', '/users/me/calendarList?maxResults=1', {
+      // Jarvis holds calendar.events only; calendarList needs a broader scope and always 403s (L125).
+      await googleApiClient.request('calendar', '/calendars/primary/events?maxResults=1&singleEvents=true', {
         signal: AbortSignal.timeout(5_000),
       });
       return { status: 'ok', details: { configured: true, check: 'calendar_read' } };
