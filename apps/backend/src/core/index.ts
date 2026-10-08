@@ -19,6 +19,7 @@ import { findChatReflexReplay } from './reflex.js';
 import { executePhoneTool } from '../phone/approval.js';
 import { systemSmokeResponseSchema, systemStatusResponseSchema } from '../system-status.js';
 import { toolArgumentRefusal, unexpectedToolArgument } from './tool-arguments.js';
+import { startWorkPresentation } from './work-presentation.js';
 
 const readOnlyToolsWithoutMessage = new Set(['memory_search', 'vault_search', 'vault_read']);
 
@@ -200,6 +201,8 @@ export const coreModule: BackendModule = {
         };
         request.raw.once('aborted', abortOnRequest);
         reply.raw.once('close', abortOnClose);
+        const presentation = startWorkPresentation(tool.name, request.body, request, activityId,
+          messageId ?? (typeof voiceItemHeader === 'string' ? voiceItemHeader : activityId), controller.signal);
         let outcome: ToolCallOutcome = 'ok';
         let result: unknown;
         try {
@@ -236,6 +239,7 @@ export const coreModule: BackendModule = {
             result = { error: 'Tool execution failed' };
           }
         } finally {
+          presentation.finish(result, outcome === 'ok');
           request.raw.removeListener('aborted', abortOnRequest);
           reply.raw.removeListener('close', abortOnClose);
         }
