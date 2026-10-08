@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { Readable } from 'node:stream';
 import type { FastifyRequest } from 'fastify';
+import type { ConversationSearchPage } from '@jarvis/contracts';
 import type { BackendModule } from '../modules.js';
 import type {
   ConversationChannel,
@@ -8,6 +9,7 @@ import type {
   ConversationRole,
   ConversationSteeringMessage,
 } from './conversation-store.js';
+import { ToolRefusal, type JarvisTool } from './tool-registry.js';
 import {
   executeReflexAction,
   registerChatReflex,
@@ -28,6 +30,95 @@ const errorResponse = {
   properties: { error: { type: 'string' } },
   required: ['error'],
   additionalProperties: false,
+};
+const searchDatePattern = '^\\d{4}-\\d{2}-\\d{2}$';
+const searchSourceValues = ['chat', 'voice', 'phone'] as const;
+const conversationSearchResponseSchema = {
+  type: 'object',
+  properties: {
+    results: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          messageId: idSchema,
+          sessionId: idSchema,
+          source: { type: 'string', enum: searchSourceValues },
+          role: { type: 'string', enum: ['dan', 'jarvis'] },
+          at: { type: 'string', format: 'date-time' },
+          snippet: { type: 'string', maxLength: 240 },
+        },
+        required: ['messageId', 'sessionId', 'source', 'role', 'at', 'snippet'],
+        additionalProperties: false,
+      },
+    },
+    hasMore: { type: 'boolean' },
+  },
+  required: ['results', 'hasMore'],
+  additionalProperties: false,
+};
+
+interface ConversationSearchArgs {
+  readonly query: string;
+  readonly from?: string;
+  readonly to?: string;
+  readonly source?: ConversationChannel;
+  readonly limit?: number;
+}
+
+function searchDate(value: string | undefined): Date | undefined {
+  if (value === undefined || value.startsWith('0000-') || !new RegExp(searchDatePattern, 'u').test(value)) return undefined;
+  const date = new Date(`${value}T00:00:00.000Z`);
+  return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value ? date : undefined;
+}
+
+function searchDateRange(fromValue?: string, toValue?: string): {
+  readonly from?: Date;
+  readonly toExclusive?: Date;
+} | null {
+  const from = searchDate(fromValue);
+  const to = searchDate(toValue);
+  if ((fromValue !== undefined && !from) || (toValue !== undefined && !to) ||
+      (from && to && from.getTime() > to.getTime())) return null;
+  const toExclusive = to && to.toISOString().startsWith('9999-12-31')
+    ? undefined
+    : to ? new Date(to.getTime() + 86_400_000) : undefined;
+  return {
+    ...(from === undefined ? {} : { from }),
+    ...(toExclusive === undefined ? {} : { toExclusive }),
+  };
+}
+
+const conversationSearchTool: JarvisTool = {
+  name: 'conversation_search',
+  description: 'Search saved chat, voice and phone messages for keywords. Use UTC date-only bounds and the source filter when known. Use the returned message IDs and excerpts as evidence for past decisions.',
+  sensitive: true,
+  inputSchema: {
+    type: 'object',
+    properties: {
+      query: { type: 'string', minLength: 1, maxLength: 500 },
+      from: { type: 'string', pattern: searchDatePattern },
+      to: { type: 'string', pattern: searchDatePattern },
+      source: { type: 'string', enum: searchSourceValues },
+      limit: { type: 'integer', minimum: 1, maximum: 10 },
+    },
+    required: ['query'],
+    additionalProperties: false,
+  },
+  async execute(value, request, signal) {
+    const input = value as ConversationSearchArgs;
+    if (!input.query.trim()) throw new ToolRefusal('Enter one or more search keywords.');
+    const dateRange = searchDateRange(input.from, input.to);
+    if (!dateRange) throw new ToolRefusal('Use valid UTC dates with the start date no later than the end date.');
+    const store = request.server.conversationStore;
+    if (!store?.searchMessages) throw new ToolRefusal('Conversation search is unavailable.');
+    return store.searchMessages({
+      query: input.query,
+      ...dateRange,
+      ...(input.source === undefined ? {} : { source: input.source }),
+      limit: input.limit ?? 8,
+    }, AbortSignal.any([signal, AbortSignal.timeout(10_000)]));
+  },
 };
 const steeringMessagesSchema = {
   type: 'object',
@@ -207,7 +298,7 @@ async function runChatReflex(
 
 export const conversationModule: BackendModule = {
   id: 'conversation',
-  tools: [],
+  tools: [conversationSearchTool],
   registerRoutes: async (app) => {
     const activeTurns = new Map<string, ActiveChatTurn>();
     app.post<{
@@ -658,6 +749,59 @@ export const conversationModule: BackendModule = {
       const { before, limit = 50 } = request.query;
       if (before !== undefined && !validId(before)) return reply.code(400).send({ error: 'Invalid history cursor' });
       return app.conversationStore.getHistory({ limit, ...(before === undefined ? {} : { before }) });
+    });
+
+    app.get<{
+      Querystring: {
+        q: string;
+        from?: string;
+        to?: string;
+        source?: ConversationChannel;
+        limit?: number;
+      };
+    }>('/conversation/search', {
+      schema: {
+        querystring: {
+          type: 'object',
+          properties: {
+            q: { type: 'string', minLength: 1, maxLength: 500 },
+            from: { type: 'string', pattern: searchDatePattern },
+            to: { type: 'string', pattern: searchDatePattern },
+            source: { type: 'string', enum: searchSourceValues },
+            limit: { type: 'integer', minimum: 1, maximum: 50 },
+          },
+          required: ['q'],
+          additionalProperties: false,
+        },
+        response: {
+          200: conversationSearchResponseSchema,
+          400: errorResponse,
+          503: errorResponse,
+        },
+      },
+    }, async (request, reply) => {
+      const store = app.conversationStore;
+      if (!store?.searchMessages) return reply.code(503).send({ error: 'Conversation search unavailable' });
+      const dateRange = searchDateRange(request.query.from, request.query.to);
+      if (!dateRange) return reply.code(400).send({ error: 'Invalid conversation search date range' });
+      if (!request.query.q.trim()) return reply.code(400).send({ error: 'Enter one or more search keywords' });
+      const controller = new AbortController();
+      const abortOnRequest = () => controller.abort();
+      const abortOnClose = () => { if (!reply.raw.writableEnded) controller.abort(); };
+      request.raw.once('aborted', abortOnRequest);
+      reply.raw.once('close', abortOnClose);
+      try {
+        const result: ConversationSearchPage = await store.searchMessages({
+          query: request.query.q,
+          ...dateRange,
+          ...(request.query.source === undefined ? {} : { source: request.query.source }),
+          limit: request.query.limit ?? 20,
+        }, AbortSignal.any([controller.signal, AbortSignal.timeout(10_000)]));
+        return result;
+      } finally {
+        request.raw.removeListener('aborted', abortOnRequest);
+        reply.raw.removeListener('close', abortOnClose);
+      }
     });
   },
 };

@@ -36,6 +36,8 @@ memories and vault chunks only when SQL Server does not expose the `vector` type
 estimates to usage rows; migration 0029 is reserved for P9-14.
 `0031_embedding_model_identity.sql` records the deployment name for memory and
 vault embeddings and permits durable embedding-reindex background jobs.
+`0032_conversation_search.sql` indexes conversation message timestamps for
+date-bounded search; its setup batch adds an optional full-text message index.
 
 Every migration has a reverse batch with the same name in `down/`, under the
 same format rules. Startup never reads `down/`. Down scripts drop data: only

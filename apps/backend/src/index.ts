@@ -126,6 +126,7 @@ try {
   const telemetry = await createTelemetry(config.applicationInsightsConnectionString);
   const logger = createLogger(config, telemetry);
   const database = databaseConfig ? createDatabase(databaseConfig) : undefined;
+  const conversationStore = database ? createConversationStore(database.pool) : undefined;
   const usageStore = database ? createUsageStore(database.pool) : undefined;
   const memoryStore = database ? createMemoryStore(database.pool) : undefined;
   const settingsStore = database ? createSettingsStore(database.pool) : undefined;
@@ -837,7 +838,7 @@ try {
       ...(projectRepositoryCreator ? { projectRepositoryCreator } : {}),
       toolCallStore: createToolCallStore(database.pool),
       settingsStore: settingsStore,
-      conversationStore: createConversationStore(database.pool),
+      ...(conversationStore ? { conversationStore } : {}),
       ...(taskStatusNotificationStore ? { taskStatusNotificationStore } : {}),
       ...(visionWatch ? { onConversationSessionEnded: (sessionId: string) => visionWatch?.forgetSession(sessionId) } : {}),
       taskStore,
@@ -965,6 +966,7 @@ try {
     if (database) {
       await database.initialize();
       await memoryStore?.initialize();
+      await conversationStore?.initialize?.();
       await vaultIndexStore?.initialize();
       for (const project of await projectStore?.list() ?? []) {
         trackedRepositories.add(project.repo.toLowerCase());
