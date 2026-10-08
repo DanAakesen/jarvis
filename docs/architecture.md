@@ -2179,13 +2179,17 @@ The background job has bounded concurrency, shutdown cancellation and visible
 terminal failures; voice announces a short findings summary or fixed failure
 update without invoking tools again.
 
-P8-41 (#429) remains open and owns the iframe renderer and validated host bridge.
-The accepted boundary is `sandbox="allow-scripts"` only and `srcdoc` with the
-restrictive CSP in `ui.md`; no same-origin access, cookies, tokens, host DOM,
-network, forms, popups or top navigation. The host acts only on HTTPS
-`open_url`, bounded `ask`, `pin`/`unpin`, and bounded `resize` messages; all
-other messages are ignored. Renderer integration and browser acceptance remain
-pending that dependency.
+The web `html-app` renderer (`HtmlAppView`, 8 October) reads the artifact from
+owner-only `GET /factory/workspace-artifacts/html/:id`, validates it with
+`isHtmlArtifact` (ids compared case-insensitively; SQL returns upper case) and loads
+it through `srcdoc` into `sandbox="allow-scripts"`. The host injects, straight after
+the doctype and before any app content, the CSP meta tag (`default-src 'none'`,
+inline script/style, `img-src data: https:`, `connect-src 'none'`), theme variables
+(`--jarvis-*`) and the `jarvis` bridge. The host accepts only messages from that frame's
+window with origin `null`, validated by `readHtmlAppMessage`: `resize` (clamped
+160–20,000 px), and `ask` (at most 2,000 characters, sent as a chat message), HTTPS
+`open_url` (`window.open`, falling back to `POST .../html/open-url`), and `pin`/`unpin`,
+which act only with transient user activation.
 
 ### Folio (P9-25)
 
