@@ -1226,7 +1226,12 @@ People/, Work/, Personal/ and General/ note folders. Writes are limited to
 require Dan's explicit “remember” for banking or health details. Contents API
 SHA concurrency retries once; successful changes commit directly to `master`
 as `jarvis: <reason>` with a `Co-authored-by: Jarvis` trailer. The tool result
-includes the commit URL for Jarvis to relay in chat.
+includes the commit URL for Jarvis to relay in chat. `vault_delete` is available
+only for explicit requests and requires a Now confirmation that names the exact
+note path. It rechecks the GitHub Contents SHA after approval, commits the
+deletion through the same App contents-write token, removes the indexed chunks
+and links, and invalidates the cached graph; a changed note is refused rather
+than deleting the newer version.
 
 Index/write logs contain bounded counts and top-level folders only, never paths
 or note contents. Fake GitHub tests cover add/change/delete indexing, ranking,
