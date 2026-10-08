@@ -46,6 +46,9 @@ import { KnowledgeBackendContext } from './knowledge/knowledge-context';
 import { PresenceChip, PresenceSettings } from './Presence';
 import { MemorySettings } from './MemorySettings';
 
+/** Interim research progress: unning from P9-46 (#613) on; older backends sent partial for it. */
+const researchInProgress = (status: string) => status === 'running' || status === 'partial';
+
 const sidebarLimits = { min: 160, max: 420 };
 const contextLimits = { min: 220, max: 560 };
 
@@ -228,7 +231,7 @@ function ShellLayout({ signedIn, config, session, camera, screenShare }: {
       const applied = workspaceController.current?.dispatch(command, trustedBlobHost) ?? false;
       // While the jobs chip tracks research, its progress window starts as a tab instead of covering the page.
       if (applied && command.operation === 'create' && command.view.source.id === 'research' &&
-          command.view.source.status === 'partial' && hasRunningJob('research')) {
+          researchInProgress(command.view.source.status) && hasRunningJob('research')) {
         workspaceController.current?.dispatch({ commandId: `${command.commandId}-park`, operation: 'minimise', viewId: command.viewId });
       }
       return applied;
@@ -313,7 +316,7 @@ function ShellLayout({ signedIn, config, session, camera, screenShare }: {
   const researchRunning = backgroundJobs.some((job) => job.kind === 'research' && job.status === 'running');
   // The conversation never needs a tab: the chat bar's orb and handle bring it back.
   const hideResearchProgressTab = useCallback((view: WorkspaceView) => view.presentation === 'conversation' || researchRunning && view.content.status === 'generated' &&
-    view.content.view.source.id === 'research' && view.content.view.source.status === 'partial', [researchRunning]);
+    view.content.view.source.id === 'research' && researchInProgress(view.content.view.source.status), [researchRunning]);
   const openJobResult = useCallback((viewId: string, mode: 'open' | 'park') => {
     const controller = workspaceController.current;
     if (!controller) return false;
