@@ -24,6 +24,7 @@ import {
   createJarvisIssue,
   IssueCreationPartialError,
   IssueDraftValidationError,
+  IssueWriteUncertainError,
   startIssueTask,
 } from './issues.js';
 import { registerFactoryBoardRoute } from './board.js';
@@ -144,6 +145,9 @@ export const factoryModule: BackendModule = {
         },
       },
       async (request, reply) => {
+        if (!app.projectStore || !app.githubIssueClient) {
+          return reply.code(503).send({ error: 'GitHub issue service unavailable' });
+        }
         try {
           const issue = await createJarvisIssue({
             ...request.body,
@@ -159,10 +163,16 @@ export const factoryModule: BackendModule = {
           if (error instanceof IssueCreationPartialError) {
             request.log.warn('factory.issue_executor_handoff_failed');
             return reply.code(502).send({
-              error: 'The issue was created but its executor handoff did not complete',
+              error: 'The issue was created but its executor handoff could not be confirmed; check the issue before retrying',
               number: error.issue.number,
               url: error.issue.url,
               taskCode: error.taskCode,
+            });
+          }
+          if (error instanceof IssueWriteUncertainError) {
+            request.log.warn('factory.issue_create_outcome_uncertain');
+            return reply.code(502).send({
+              error: 'Could not confirm issue creation; check the repository before retrying',
             });
           }
           request.log.warn('factory.issue_create_failed');

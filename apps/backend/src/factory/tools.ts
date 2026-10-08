@@ -15,6 +15,7 @@ import {
   createLinkedTaskFromPrompt,
   IssueCreationPartialError,
   IssueTaskCodeConflictError,
+  IssueWriteUncertainError,
   LinkedIssueTaskCreationError,
   previewP11TaskCode,
   startIssueTask,
@@ -274,6 +275,7 @@ async function stageIssueCreation(
     repository: preview.repository,
     taskCode: preview.taskCode,
     title: `${preview.taskCode}: ${input.title.trim()}`,
+    body: input.body.trim(),
     executor,
     confirmationCode,
     instruction: `Nothing has been created. To approve, say exactly "confirm ${confirmationCode}" in a new message.`,
@@ -318,7 +320,10 @@ async function confirmIssueCreation(
       throw new ToolRefusal(`${action.taskCode} was taken before confirmation; nothing was created. Draft the issue again to review the next available code.`);
     }
     if (error instanceof IssueCreationPartialError) {
-      throw new ToolFailure(`Issue ${error.issue.url} was created as ${error.taskCode}, but the ${error.executor} handoff did not complete. Check the issue before retrying.`);
+      throw new ToolFailure(`Issue ${error.issue.url} was created as ${error.taskCode}, but its ${error.executor} handoff could not be confirmed. Check the issue before retrying.`);
+    }
+    if (error instanceof IssueWriteUncertainError) {
+      throw new ToolFailure('Could not confirm whether the issue was created. Check the repository before retrying.');
     }
     throw new ToolFailure('The GitHub issue could not be created.');
   }
@@ -631,7 +636,7 @@ export const factoryTools: readonly JarvisTool[] = [
   },
   {
     name: 'create_task',
-    description: 'Create a GitHub issue and a linked Ready Factory task in an active project from Dan’s prompt.',
+    description: 'Create a linked GitHub issue and Ready Factory task for confirmed non-code work. For project-code changes, use create_issue so P11 allocation and executor handoff run.',
     inputSchema: {
       type: 'object',
       properties: {

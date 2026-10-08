@@ -180,7 +180,13 @@ describe('Software Factory Jarvis tools', () => {
     });
     expect(draft.json()).toMatchObject({
       outcome: 'ok',
-      result: { status: 'awaiting_confirmation', taskCode: 'P11-01', executor: 'jarvis' },
+      result: {
+        status: 'awaiting_confirmation',
+        taskCode: 'P11-01',
+        title: 'P11-01: Fix retries',
+        body: 'Problem: retries fail.\nAcceptance: retry succeeds.',
+        executor: 'jarvis',
+      },
     });
     const confirmationCode = draft.json().result.confirmationCode as string;
     expect(confirmationCode).toMatch(/^\d{8}$/u);

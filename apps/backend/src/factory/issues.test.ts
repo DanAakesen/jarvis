@@ -61,6 +61,7 @@ const issue: GitHubIssue = {
 
 function fixture() {
   const projects = { list: vi.fn(async () => [project]) } as unknown as ProjectStore;
+  const issueTitles: string[] = [];
   const tasks = {
     create: vi.fn(async () => task),
     findActiveByIssue: vi.fn(async () => null),
@@ -73,8 +74,11 @@ function fixture() {
       { author: 'someone-else', body: 'Do something else.' },
     ]),
     readAgentRules: vi.fn(async () => 'Repository rule: run backend tests.'),
-    listIssueTitles: vi.fn(async () => []),
-    createIssue: vi.fn(async () => ({ number: 9, url: 'https://github.com/DanAakesen/jarvis/issues/9' })),
+    listIssueTitles: vi.fn(async () => [...issueTitles]),
+    createIssue: vi.fn(async (_repository: string, title: string) => {
+      issueTitles.push(title);
+      return { number: 9, url: 'https://github.com/DanAakesen/jarvis/issues/9' };
+    }),
     createComment: vi.fn(async () => {}),
     addLabels: vi.fn(async () => {}),
     removeLabel: vi.fn(async () => {}),
@@ -90,6 +94,20 @@ describe('Factory issue tasks', () => {
       'A mention of P11-04 in another title',
     ])).toBe('P11-02');
     expect(allocateP11TaskCode(['P11-01: Existing issue'])).toBe('P11-02');
+  });
+
+  it('serializes concurrent issue creation to distinct task codes', async () => {
+    const { projects, github } = fixture();
+    const [first, second] = await Promise.all([
+      createJarvisIssue({
+        project: '7', title: 'First issue', body: 'Problem and acceptance.', projects, github,
+      }),
+      createJarvisIssue({
+        project: '7', title: 'Second issue', body: 'Problem and acceptance.', projects, github,
+      }),
+    ]);
+
+    expect([first.taskCode, second.taskCode].sort()).toEqual(['P11-01', 'P11-02']);
   });
 
   it('creates a Jarvis issue with phase/type labels and applies the trigger label after opening', async () => {

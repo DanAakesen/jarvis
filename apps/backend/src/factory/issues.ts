@@ -1,7 +1,7 @@
 import { JARVIS_REPOSITORY } from './project-context.js';
 import type { Project, ProjectStore } from './projects.js';
 import type { TaskRecord, TaskStore } from './task-store.js';
-import type { GitHubIssue, GitHubIssueClient } from '../github/issues.js';
+import { GitHubIssueRequestError, type GitHubIssue, type GitHubIssueClient } from '../github/issues.js';
 import { resolveRepository } from './project-context.js';
 
 const maxPromptBytes = 50_000;
@@ -29,6 +29,12 @@ export class IssueCreationPartialError extends Error {
     readonly executor: IssueExecutor,
   ) {
     super('The GitHub issue was created but its executor handoff was incomplete');
+  }
+}
+
+export class IssueWriteUncertainError extends Error {
+  constructor() {
+    super('The GitHub issue creation outcome is uncertain');
   }
 }
 
@@ -64,7 +70,7 @@ export function allocateP11TaskCode(issueTitles: readonly string[]): string {
 }
 
 function containsLikelySecret(value: string): boolean {
-  return /-----BEGIN [A-Z ]*PRIVATE KEY-----|(?:gh[pousr]_[A-Za-z0-9_]{20,}|github_pat_[A-Za-z0-9_]{20,}|AKIA[0-9A-Z]{16})|(?:api[_-]?key|access[_-]?token|client[_-]?secret|password)\s*[:=]\s*["']?\S{8,}|(?:eyJ[A-Za-z0-9_-]{10,}\.){2}[A-Za-z0-9_-]{10,}/iu.test(value);
+  return /-----BEGIN [A-Z ]*PRIVATE KEY-----|(?:gh[pousr]_[A-Za-z0-9_]{20,}|github_pat_[A-Za-z0-9_]{20,}|AKIA[0-9A-Z]{16}|sk_(?:live|test)_[A-Za-z0-9]{16,}|sk-[A-Za-z0-9_-]{20,}|xox[baprs]-[A-Za-z0-9-]{16,}|AIza[0-9A-Za-z_-]{35})|(?:api[_-]?key|access[_-]?token|client[_-]?secret|password|secret|credential|private[_-]?key|authorization|bearer|account[_-]?key|sig)\s*[:=]\s*["']?\S{8,}|https?:\/\/[^/\s:@]+:[^/\s@]+@|(?:eyJ[A-Za-z0-9_-]{10,}\.){2}[A-Za-z0-9_-]{10,}/iu.test(value);
 }
 
 export function validateIssueDraft(title: string, body: string): void {
@@ -116,10 +122,18 @@ export async function createJarvisIssue(input: {
     const title = `${taskCode}: ${input.title.trim()}`;
     const labels = ['P11', issueKindLabel(input.title)];
     if (executor === 'copilot') labels.push('Copilot');
-    const issue = await input.github!.createIssue(repository, title, input.body.trim(), {
-      labels,
-      ...(executor === 'copilot' ? { assignees: ['copilot'] } : {}),
-    });
+    let issue: { number: number; url: string };
+    try {
+      issue = await input.github!.createIssue(repository, title, input.body.trim(), {
+        labels,
+        ...(executor === 'copilot' ? { assignees: ['copilot'] } : {}),
+      });
+    } catch (error) {
+      if (!(error instanceof GitHubIssueRequestError) || error.status >= 500) {
+        throw new IssueWriteUncertainError();
+      }
+      throw error;
+    }
     if (executor === 'jarvis') {
       try {
         await input.github!.addLabels(repository, issue.number, ['Jarvis']);

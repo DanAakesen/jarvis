@@ -4,6 +4,7 @@ import { loadConfig } from '../config.js';
 import type { ProjectStore } from './projects.js';
 import type { TaskRecord, TaskStore } from './task-store.js';
 import type { GitHubIssueClient } from '../github/issues.js';
+import type { TokenVerifier } from '../auth/verify.js';
 
 const config = { ...loadConfig({}), logLevel: 'silent' as const };
 const headers = { authorization: ['Bearer', ['e30', 'e30', 'sig'].join('.')].join(' ') };
@@ -21,7 +22,9 @@ const task: TaskRecord = {
   startedAt: null, finishedAt: null,
 };
 
-function fixture() {
+function fixture(auth: TokenVerifier = async () => ({
+  objectId: config.auth.ownerObjectId, tenantId: config.auth.tenantId, displayName: 'Dan',
+})) {
   const taskStore = {
     create: vi.fn(async () => task),
     findActiveByIssue: vi.fn(async () => null),
@@ -46,9 +49,7 @@ function fixture() {
     taskStore,
     projectStore,
     githubIssueClient,
-    auth: async () => ({
-      objectId: config.auth.ownerObjectId, tenantId: config.auth.tenantId, displayName: 'Dan',
-    }),
+    auth,
   });
   apps.push(app);
   return { app, taskStore, githubIssueClient };
@@ -124,6 +125,20 @@ describe('Factory issue start route', () => {
       { labels: ['P11', 'enhancement'] },
     );
     expect(githubIssueClient.addLabels).toHaveBeenCalledWith(project.repo, 575, ['Jarvis']);
+  });
+
+  it('does not allow the Jarvis agent to create issues through the Dan-only route', async () => {
+    const { app, githubIssueClient } = fixture(async () => ({
+      kind: 'jarvis-agent',
+      objectId: config.auth.ownerObjectId,
+      tenantId: config.auth.tenantId,
+    }));
+    const response = await app.inject({
+      method: 'POST', url: '/factory/issues', headers,
+      payload: { project: '7', title: 'Fix retries', body: 'Problem and acceptance.' },
+    });
+    expect(response.statusCode).toBe(403);
+    expect(githubIssueClient.createIssue).not.toHaveBeenCalled();
   });
 
   it('assigns Copilot and refuses invalid issue drafts before creating them', async () => {

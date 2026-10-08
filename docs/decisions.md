@@ -53,6 +53,19 @@ remain readable. Migration 0037 follows the 0036 Folio migration and L120.
 Offline fake-backed route, tool, webhook, delivery and progress tests cover
 behavior; live GitHub issue access awaits P10-01's App permissions.
 
+P10-03 (8 October 2026): create new code-change issues through the shared GitHub
+App issue client, with no new persistence migration. The tool stages the draft
+and requires an exact confirmation from a later Dan message; the authenticated
+Factory endpoint creates directly for Dan. Allocate the lowest available
+`P11-NN` in the target repository by reading its existing issue titles and
+rechecking when confirmed. Use `enhancement` by default and `bug` only for
+titles explicitly prefixed `[Bug]`, `Bug:`, or `Regression:`. Add the Jarvis
+worker label only after opening the issue so P10-02 receives the label event;
+assign Copilot and post a bounded scope comment when selected. Reject likely
+secrets before sending content to GitHub. Focused fake-backed tests cover
+allocation, confirmation, labels, assignment and route authorization; live
+GitHub writes remain pending P10-01.
+
 P9-10 (7 October 2026): store memory retrieval settings in the existing global
 `dbo.settings` store and expose their shared bounded contract through Settings.
 Keep defaults at the existing similarity thresholds (`0.35` embedding and
