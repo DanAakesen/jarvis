@@ -312,7 +312,7 @@ describe('Google Calendar and Gmail tools', () => {
     ]);
   });
 
-  it('creates a calendar event only after a later exact confirmation and redacts persisted data', async () => {
+  it('creates a calendar event only after a later short approval and redacts persisted data', async () => {
     const request = vi.fn(async () => ({}));
     const { app, records, setLatest } = appFor(request);
     const staged = await app.inject({
@@ -335,7 +335,7 @@ describe('Google Calendar and Gmail tools', () => {
       result: { redacted: true },
     });
 
-    confirmMessage(setLatest, code);
+    setLatest(conversationMessage('43', 'yes', new Date(Date.now() + 10_000)));
     const confirmed = await app.inject({
       method: 'POST',
       url: '/tools/calendar_confirm_change',
@@ -380,7 +380,7 @@ describe('Google Calendar and Gmail tools', () => {
     expect(request).toHaveBeenCalledOnce();
     expect(request.mock.calls[0]?.[2]).not.toHaveProperty('method');
 
-    confirmMessage(setLatest, code);
+    setLatest(conversationMessage('43', 'yes', new Date(Date.now() + 10_000)));
     const confirmed = await app.inject({
       method: 'POST',
       url: '/tools/calendar_confirm_change',
@@ -434,7 +434,7 @@ describe('Google Calendar and Gmail tools', () => {
     });
     expect(JSON.stringify(records)).not.toContain('PRIVATE CALENDAR DESCRIPTION');
 
-    confirmMessage(setLatest, code);
+    setLatest(conversationMessage('43', 'yes', new Date(Date.now() + 10_000)));
     const confirmed = await app.inject({
       method: 'POST',
       url: '/tools/calendar_confirm_change',
@@ -477,7 +477,7 @@ describe('Google Calendar and Gmail tools', () => {
     const code = staged.json().result.confirmationCode as string;
     expect(staged.json()).toMatchObject({ outcome: 'ok', result: { status: 'awaiting_confirmation' } });
     expect(request).toHaveBeenCalledOnce();
-    confirmMessage(setLatest, code);
+    setLatest(conversationMessage('43', 'yes', new Date(Date.now() + 10_000)));
     const confirmed = await app.inject({
       method: 'POST',
       url: '/tools/calendar_confirm_change',
@@ -532,7 +532,7 @@ describe('Google Calendar and Gmail tools', () => {
       result: { redacted: true },
     });
 
-    confirmMessage(setLatest, code);
+    setLatest(conversationMessage('43', 'yes', new Date(Date.now() + 10_000)));
     const confirmed = await app.inject({
       method: 'POST',
       url: '/tools/calendar_confirm_change',
