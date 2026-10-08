@@ -2941,3 +2941,26 @@ a.task-chip:hover { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--glass-e
 }
 :root[data-motion="reduced"] .loader-block .loader-core { animation: none; }
 @media (prefers-reduced-motion: reduce) { .loader-block .loader-core { animation: none; } }
+/* Code view (P9-41): the file Jarvis is reading, read-only. Highlighted ranges are tinted cyan with a brighter line
+   number; query matches are marked amber. Switching files fades the body in. */
+.code-view { display: flex; flex-direction: column; height: 100%; min-height: 0; margin: 0; }
+.code-view-header { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; padding: 0 0 10px; font-size: var(--type-small); }
+.code-view-path { flex: 1 1 220px; min-width: 0; overflow: hidden; color: var(--text-muted); font-family: var(--font-mono); font-size: 12.5px; text-overflow: ellipsis; white-space: nowrap; }
+.code-view-path strong { color: var(--text); font-weight: 650; }
+.code-view-chip { padding: 2px 8px; border-radius: 999px; background: color-mix(in srgb, var(--text) 7%, transparent); color: var(--text-muted); font-family: var(--font-mono); font-size: 11.5px; }
+.code-view-link { color: var(--glass-edge-cool); font-size: var(--type-caption); font-weight: 600; text-decoration: none; }
+.code-view-link:hover { text-decoration: underline; }
+.code-view-body { flex: 1; min-height: 0; overflow: auto; border-radius: 12px; background: color-mix(in srgb, var(--code-surface) 70%, transparent);
+  box-shadow: inset 0 0 0 1px var(--rule); overscroll-behavior: contain; animation: code-view-in 360ms var(--ease-enter) both; }
+.code-view-body:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.code-view pre { margin: 0; padding: 10px 0; font-family: var(--font-mono); font-size: 12.5px; line-height: 1.6; tab-size: 2; }
+.code-view code { display: block; min-width: max-content; }
+.code-line { display: inline-block; width: 100%; padding-right: 16px; transition: background-color var(--motion-state) var(--ease-standard); }
+.code-line-number { display: inline-block; width: 4.5ch; margin-right: 14px; padding-right: 10px; color: color-mix(in srgb, var(--text-muted) 70%, transparent); text-align: right; user-select: none; }
+.code-line-text { white-space: pre; color: var(--text); }
+.code-line[data-highlighted] { background: color-mix(in srgb, var(--glass-edge-cool) 14%, transparent); }
+.code-line[data-highlighted] .code-line-number { color: var(--glass-edge-cool); font-weight: 650; }
+.code-match { border-radius: 3px; background: color-mix(in srgb, var(--glass-glow-warm) 32%, transparent); color: var(--text); box-shadow: 0 0 0 1px color-mix(in srgb, var(--glass-glow-warm) 45%, transparent); }
+@keyframes code-view-in { from { opacity: 0; translate: 0 6px; } }
+:root[data-motion="reduced"] .code-view-body { animation: none; }
+@media (prefers-reduced-motion: reduce) { .code-view-body { animation: none; } }

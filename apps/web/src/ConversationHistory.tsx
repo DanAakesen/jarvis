@@ -171,7 +171,7 @@ export function ConversationHistory({
   const [reload, setReload] = useState(0);
   const [language, setLanguage] = useState<'da' | 'en'>('en');
   const [session, setSession] = useState<ChatSession | null>(null);
-  const { latestActivity } = useJarvisActivity();
+  const { latestActivity, workText } = useJarvisActivity();
   // Tools used in the current chat turn, collected from runtime activity as they start and finish.
   const [liveTools, setLiveTools] = useState<{ id: string; tool: string; state: ToolState }[]>([]);
   const [seenActivity, setSeenActivity] = useState(latestActivity);
@@ -714,7 +714,7 @@ export function ConversationHistory({
               <p className="live-turn-status">
                 <WorkingCore />
                 <LivePhrase key={liveTools.some((tool) => tool.state === 'running') ? 'working' : liveTools.length ? 'composing' : 'thinking'}
-                  phase={liveTools.some((tool) => tool.state === 'running') ? 'working' : liveTools.length ? 'composing' : 'thinking'} />
+                  phase={liveTools.some((tool) => tool.state === 'running') ? 'working' : liveTools.length ? 'composing' : 'thinking'} text={workText} />
                 <span className="visually-hidden" role="status" aria-live="polite">Jarvis is thinking…</span>
               </p>
             )}

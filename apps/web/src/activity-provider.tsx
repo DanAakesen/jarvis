@@ -3,7 +3,7 @@ import type { JarvisActivityEvent } from '@jarvis/contracts';
 import { JarvisActivityContext } from './activity-context';
 
 function isWorkingEvent(event: JarvisActivityEvent): boolean {
-  return event.type === 'thinking' || event.type === 'speaking' || event.type === 'tool-call-started';
+  return event.type === 'thinking' || event.type === 'speaking' || event.type === 'tool-call-started' || event.type === 'work-started';
 }
 
 export function JarvisActivityProvider({ children }: { children: ReactNode }) {
@@ -24,7 +24,7 @@ export function JarvisActivityProvider({ children }: { children: ReactNode }) {
       setVoiceActivity(event.type === 'ended' ? null : event);
     }
     if (event.type === 'ended' || event.type === 'interrupted' || event.type === 'failed' ||
-        event.type === 'tool-call-finished') {
+        event.type === 'tool-call-finished' || event.type === 'work-finished') {
       activityTimer.current = setTimeout(() => {
         activityTimer.current = null;
         setLatestActivity((current) => current === event ? null : current);
@@ -44,13 +44,19 @@ export function JarvisActivityProvider({ children }: { children: ReactNode }) {
   useEffect(() => () => {
     if (activityTimer.current) clearTimeout(activityTimer.current);
   }, []);
+  // What Jarvis says it is doing right now (P9-41), from the newest unfinished work detail.
+  const workText = useMemo(() => {
+    const latest = [...runtimeOperations.values()].reverse().find((event) => event.type === 'work-started');
+    return latest?.type === 'work-started' ? latest.text : null;
+  }, [runtimeOperations]);
   const value = useMemo(() => ({
     working: [...runtimeOperations.values()].some(isWorkingEvent),
+    workText,
     voiceActivity,
     latestActivity,
     applyRuntimeActivity,
     clearRuntimeActivities,
-  }), [runtimeOperations, voiceActivity, latestActivity,
+  }), [runtimeOperations, workText, voiceActivity, latestActivity,
     applyRuntimeActivity, clearRuntimeActivities]);
 
   return <JarvisActivityContext.Provider value={value}>{children}</JarvisActivityContext.Provider>;
