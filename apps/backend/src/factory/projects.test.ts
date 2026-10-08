@@ -13,7 +13,7 @@ const apps: ReturnType<typeof buildApp>[] = [];
 afterEach(async () => { await Promise.all(apps.splice(0).map((app) => app.close())); });
 
 const project: Project = {
-  id: '42', name: 'Jarvis', repo: 'DanAakesen/jarvis', default_branch: 'main', default_agent: 'copilot',
+  id: '42', name: 'Jarvis', description: null, repo: 'DanAakesen/jarvis', default_branch: 'main', default_agent: 'copilot',
   policy: 'deliver_pr', merge_rules: null, sandbox_size: '1x2', tech: 'node', max_parallel_tasks: 1, active: true,
 };
 
@@ -247,15 +247,22 @@ describe('projects API', () => {
   it('updates only provided project settings and rejects invalid updates', async () => {
     const app = fixture();
     const response = await app.inject({
-      method: 'PATCH', url: '/factory/projects/42', headers, payload: { max_parallel_tasks: 4 },
+      method: 'PATCH', url: '/factory/projects/42', headers,
+      payload: { description: 'Project summary', max_parallel_tasks: 4 },
     });
     expect(response.statusCode).toBe(200);
-    expect(response.json()).toEqual({ ...project, max_parallel_tasks: 4 });
+    expect(response.json()).toEqual({ ...project, description: 'Project summary', max_parallel_tasks: 4 });
+    expect((await app.inject({
+      method: 'PATCH', url: '/factory/projects/42', headers, payload: { description: null },
+    })).json()).toEqual(project);
     expect((await app.inject({
       method: 'PATCH', url: '/factory/projects/42', headers, payload: { tech: 'Invalid Tech' },
     })).statusCode).toBe(400);
     expect((await app.inject({
       method: 'PATCH', url: '/factory/projects/42', headers, payload: {},
+    })).statusCode).toBe(400);
+    expect((await app.inject({
+      method: 'PATCH', url: '/factory/projects/42', headers, payload: { description: 'x'.repeat(2001) },
     })).statusCode).toBe(400);
   });
 

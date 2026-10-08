@@ -95,6 +95,7 @@ export const createProjectTool: JarvisTool = {
 
     const projectInput: CreateProject = {
       name: cleanName,
+      description: cleanDescription,
       repo,
       default_branch: defaults.defaultBranch,
       default_agent: defaults.defaultAgent,
