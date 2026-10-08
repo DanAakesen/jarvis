@@ -187,7 +187,8 @@ describe('weather tool', () => {
       outcome: 'refused',
       result: { refused: expect.stringContaining('Set a home city') },
     });
-    expect(invalid.statusCode).toBe(400);
+    expect(invalid.statusCode).toBe(200);
+    expect(invalid.json()).toMatchObject({ outcome: 'refused', result: { refused: expect.stringContaining('Invalid arguments:') } });
     expect(fetcher).not.toHaveBeenCalled();
   });
 

@@ -19,6 +19,20 @@ The nine design areas and where each stands. **Confirmed** = Dan's requirement o
 
 ## Decision log
 
+P9-42 (8 October 2026): return invalid tool arguments as safe `refused` tool
+results, not generic execution failures. HTTP body-schema refusals use status
+200 because the existing hosted chat client discards non-200 bodies; other HTTP
+errors keep their existing status. Share the validation formatter with direct
+voice execution and guide retries through the existing capability prompt.
+Refuse unknown root fields before Fastify strips them; never execute or audit
+invalid input. Emit only the tool name, validator keyword and bounded property
+identifier as `tool.invalid_arguments`. Keep tool schemas plain root objects.
+`repo_search` aliases use the existing active-project resolver; conflicting
+selectors refuse rather than searching an unintended repository. Incomplete or
+empty searches suggest `repo_list`/`repo_read`. No migration, new dependency,
+workspace broker or web change is needed; live model/provider acceptance is
+pending.
+
 P9-10 (7 October 2026): store memory retrieval settings in the existing global
 `dbo.settings` store and expose their shared bounded contract through Settings.
 Keep defaults at the existing similarity thresholds (`0.35` embedding and

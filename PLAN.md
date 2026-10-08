@@ -482,6 +482,7 @@ Declined in the audit (do not file): verbosity and max-output-token settings, no
 | P9-37 | [#531](https://github.com/DanAakesen/jarvis/issues/531) | Tool parity and stale-tool tests | Backend | — | Not started |
 | P9-38 | [#532](https://github.com/DanAakesen/jarvis/issues/532) | Clean up features.md, add a verified-live column | Backend | — | Not started |
 | P9-39 | [#533](https://github.com/DanAakesen/jarvis/issues/533) | After every Deploy, run and record read-only Google, GitHub, vault, embeddings, research dry-run, and PC-bridge checks through authenticated `GET /status/smoke` | Backend + deploy workflow | P9-20 | In progress |
+| P9-42 | [#569](https://github.com/DanAakesen/jarvis/issues/569) | Safe, retryable tool argument refusals in voice/chat, content-free validation telemetry, and repo_search aliases plus incomplete/empty-result guidance; offline checks pass, live acceptance pending | Backend | P7-45, P9-36 | In progress |
 
 ### Out of scope for phase 1
 

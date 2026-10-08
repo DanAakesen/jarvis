@@ -766,16 +766,10 @@ describe('authenticated PC bridge protocol', () => {
         action: 'click',
         selector: '#delete',
       });
-      expect(malformed.json()).toMatchObject({ outcome: 'refused' });
-      expect(commands).toHaveLength(1);
-      expect(commands[0]!.arguments).toEqual({
-        tabId: 'tab_1',
-        snapshotId: '1730aa51-f380-4df9-a345-1feb862cb1c4',
-        elementIndex: 0,
-        action: 'click',
-        confirmed: false,
+      expect(malformed.json()).toMatchObject({
+        outcome: 'refused', result: { refused: expect.stringContaining("unexpected property 'selector'") },
       });
-      expect(JSON.stringify(commands[0])).not.toContain('#delete');
+      expect(commands).toHaveLength(0);
 
       const refused = await callTool(app, 'pc_browser_act', {
         tabId: 'tab_1',
@@ -787,8 +781,15 @@ describe('authenticated PC bridge protocol', () => {
         outcome: 'refused',
         result: { refused: 'Dan’s confirmation service is unavailable; the browser action was not performed.' },
       });
-      expect(commands).toHaveLength(2);
-      expect((commands[1]!.arguments as Record<string, unknown>).confirmed).toBe(false);
+      expect(commands).toHaveLength(1);
+      expect(commands[0]!.arguments).toEqual({
+        tabId: 'tab_1',
+        snapshotId: '1730aa51-f380-4df9-a345-1feb862cb1c4',
+        elementIndex: 0,
+        action: 'click',
+        confirmed: false,
+      });
+      expect(JSON.stringify(commands[0])).not.toContain('#delete');
     });
 
     it('returns safe refusals for stale or covered browser targets', async () => {
@@ -832,11 +833,11 @@ describe('authenticated PC bridge protocol', () => {
       result: { refused: 'Choose a folder under C:\\Repo using a relative path.' },
     });
     const invalidApp = await callTool(app, 'pc_open', { target: 'app', value: 'x'.repeat(129) });
-    expect(invalidApp.statusCode).toBe(400);
-    expect(invalidApp.json()).toMatchObject({ error: 'Invalid request' });
+    expect(invalidApp.statusCode).toBe(200);
+    expect(invalidApp.json()).toMatchObject({ outcome: 'refused', result: { refused: expect.stringContaining('Invalid arguments:') } });
     const invalidMedia = await callTool(app, 'pc_media', { action: 'execute' });
-    expect(invalidMedia.statusCode).toBe(400);
-    expect(invalidMedia.json()).toMatchObject({ error: 'Invalid request' });
+    expect(invalidMedia.statusCode).toBe(200);
+    expect(invalidMedia.json()).toMatchObject({ outcome: 'refused', result: { refused: expect.stringContaining('Invalid arguments:') } });
   });
 
   it('transfers a transient capture above the command limit and returns only redacted pc_act activity', async () => {

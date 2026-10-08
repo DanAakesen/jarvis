@@ -56,6 +56,7 @@ const events = new Set([
   'conversation.reply_failed', 'voice.connection_failed', 'voice.upstream_closed', 'voice.upstream_error',
   'voice.upstream_event_error', 'voice.turn_timing', 'pc_bridge.command_timing', 'pc_bridge.wake_word',
   'credentials.codex_renewal', 'dispatcher.start_failed',
+  'tool.invalid_arguments',
 ]);
 
 // Apply an allowlist before either stdout or Application Insights sees a record.
@@ -94,6 +95,20 @@ const reflexReasons = new Set([
 ]);
 
 function safeFields(input: Record<string, unknown>): Record<string, unknown> {
+  if (input.msg === 'tool.invalid_arguments') {
+    const fields: Record<string, unknown> = {};
+    if (typeof input.tool === 'string' && /^[A-Za-z0-9_-]{1,64}$/u.test(input.tool)) fields.tool = input.tool;
+    if (['additionalProperties', 'required', 'type', 'enum', 'const', 'minLength', 'maxLength',
+      'minimum', 'maximum', 'exclusiveMinimum', 'exclusiveMaximum', 'pattern', 'format',
+      'minItems', 'maxItems', 'uniqueItems', 'minProperties', 'maxProperties',
+      'anyOf', 'oneOf', 'allOf', 'not', 'if', 'schema', 'json'].includes(String(input.keyword))) {
+      fields.keyword = input.keyword;
+    }
+    if (typeof input.property === 'string' && /^[A-Za-z_][A-Za-z0-9_-]{0,63}$/u.test(input.property)) {
+      fields.property = input.property;
+    }
+    return fields;
+  }
   if (typeof input.msg === 'string' && failureEvents.has(input.msg)) {
     const fields: Record<string, unknown> = {};
     if (typeof input.kind === 'string' && errorKinds.has(input.kind)) fields.kind = input.kind;
