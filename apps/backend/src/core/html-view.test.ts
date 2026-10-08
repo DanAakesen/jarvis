@@ -76,6 +76,17 @@ afterEach(async () => {
 });
 
 describe('HTML workspace app routes and tool', () => {
+  it('describes bounded, self-contained visual apps for the sandbox CSP', () => {
+    const fixture = appFor();
+    const description = fixture.app.jarvisTools.get('create_html_view')?.description ?? '';
+    expect(description).toContain('within 512 KB');
+    expect(description).toContain('up to 50 HTTPS sources');
+    expect(description).toContain('inline scripts and styles');
+    expect(description).toContain("connect-src 'none'");
+    expect(description).toContain('do not use external libraries, scripts, stylesheets or fetches');
+    expect(description).toContain('hand-written inline SVG or canvas');
+  });
+
   it('creates an artifact and opens only its reference through the workspace command path', async () => {
     const fixture = appFor();
     const payload = { title: artifact.title, html, sources: artifact.sources };
