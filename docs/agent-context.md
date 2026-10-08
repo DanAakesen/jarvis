@@ -1437,3 +1437,7 @@ at 1440×1000 and 390×844 verified shared minimise/restore, maximise/restore,
 close/reopen, draft continuity across voice, capture/inspection, denial feedback,
 cleanup and reduced motion. Captures/report: `docs/ui/screenshots/p8-37-integration-*`.
 These use scratch authentication/API/socket and fake media, not live providers.
+
+## Calendar approval validation (2026-10-08)
+
+`npm test --workspace @jarvis/backend -- src/google` passed all 49 tests. Backend lint/build and Python syntax/instruction assertions passed. The full backend suite encountered sandbox `listen EPERM` failures; permission-enabled retries (including two workers) stalled and were stopped, so full-suite validation is incomplete. Agent pytest checks could not start because pytest is unavailable in this runner. No live Google calls were made.

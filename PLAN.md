@@ -545,4 +545,4 @@ Proposals only; an idea enters a phase only when Dan accepts it into scope.
 
 ### Calendar approval follow-up (2026-10-08)
 
-Backend implementation and regression tests added for short, unambiguous calendar approval, code selection, replay prevention, and refusal conditions. Validation is pending dependency installation; live Google acceptance remains unverified. No web changes or migration.
+Backend implementation and regression tests added for short, unambiguous calendar approval, code selection, replay prevention, and refusal conditions. Validation: all 49 Google tests, backend lint/build, and Python syntax/instruction assertions passed. Full backend suite did not complete: sandbox loopback failures occurred, and permission-enabled retries stalled and were stopped. Python pytest is unavailable; live Google acceptance remains unverified. No web changes or migration.
