@@ -63,6 +63,7 @@ describe('committed SQL manifest', () => {
       '0032_conversation_search.sql',
       '0033_project_description.sql',
       '0034_research_job_retry.sql',
+      '0035_folio.sql',
     ]);
     for (const migration of migrations) await expect(readDownMigration(migration.name)).resolves.toMatchObject({ name: migration.name });
   });
@@ -100,6 +101,16 @@ describe('committed SQL manifest', () => {
     expect(migration?.sql).toContain("N'embedding'");
     await expect(readDownMigration('0031_embedding_model_identity.sql')).resolves.toMatchObject({
       sql: expect.stringContaining('DROP COLUMN embedding_model'),
+    });
+  });
+  it('indexes workspace HTML artifacts and images in Folio with reversible storage', async () => {
+    const migration = (await readMigrations()).find(({ name }) => name === '0035_folio.sql');
+    expect(migration?.sql).toContain('CREATE TABLE dbo.folio_items');
+    expect(migration?.sql).toContain("N'html_app'");
+    expect(migration?.sql).toContain('FROM dbo.workspace_html_artifacts AS artifact');
+    expect(migration?.sql).toContain('FROM dbo.workspace_artifacts AS artifact');
+    await expect(readDownMigration('0035_folio.sql')).resolves.toMatchObject({
+      sql: expect.stringContaining('DROP TABLE dbo.folio_items'),
     });
   });
   it('stores retry inputs and one retry claim per research job', async () => {
