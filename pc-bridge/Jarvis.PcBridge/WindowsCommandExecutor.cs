@@ -5,6 +5,7 @@ using System.Drawing.Imaging;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
+using System.Windows.Forms;
 using Jarvis.PcBridge.Core;
 
 namespace Jarvis.PcBridge;
@@ -18,11 +19,13 @@ public sealed class WindowsCommandExecutor : IWindowCaptureProvider
     private readonly UiAutomationExecutor _uiAutomation = new(new WindowsUiAutomationProvider());
     private readonly WindowCaptureExecutor _windowCapture;
     private readonly KeyboardExecutor _keyboard;
+    private readonly Control? _clipboardDispatcher;
 
-    public WindowsCommandExecutor(KeyboardExecutor? keyboard = null)
+    public WindowsCommandExecutor(KeyboardExecutor? keyboard = null, Control? clipboardDispatcher = null)
     {
         _windowCapture = new WindowCaptureExecutor(this);
         _keyboard = keyboard ?? new KeyboardExecutor(new WindowsKeyboardProvider());
+        _clipboardDispatcher = clipboardDispatcher;
     }
 
     public Task<object> ExecuteAsync(BridgeCommand command, CancellationToken cancellationToken)
@@ -46,9 +49,47 @@ public sealed class WindowsCommandExecutor : IWindowCaptureProvider
             "window_capture" => _windowCapture.Capture(cancellationToken),
             "click_point" => ActOnPoint(command.Command, command.Arguments, cancellationToken),
             "scroll_point" => ActOnPoint(command.Command, command.Arguments, cancellationToken),
+            "clipboard_read" => ReadClipboard(cancellationToken),
+            "clipboard_write" => WriteClipboard(command.Arguments.GetProperty("text").GetString()!, cancellationToken),
             _ => throw new CommandRefusedException("not_allowed"),
         };
         return Task.FromResult(result);
+    }
+
+    private object ReadClipboard(CancellationToken cancellationToken)
+    {
+        var text = InvokeClipboard(() =>
+            Clipboard.ContainsText(TextDataFormat.UnicodeText)
+                ? Clipboard.GetText(TextDataFormat.UnicodeText)
+                : string.Empty,
+            cancellationToken);
+        if (!CommandPolicy.IsValidClipboardText(text)) throw new CommandRefusedException("too_large");
+        return new { text };
+    }
+
+    private object WriteClipboard(string text, CancellationToken cancellationToken)
+    {
+        InvokeClipboard(() =>
+        {
+            if (text.Length == 0) Clipboard.Clear();
+            else Clipboard.SetText(text, TextDataFormat.UnicodeText);
+            return true;
+        }, cancellationToken);
+        return new { written = true };
+    }
+
+    private T InvokeClipboard<T>(Func<T> action, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var dispatcher = _clipboardDispatcher;
+        if (dispatcher is null || dispatcher.IsDisposed || !dispatcher.IsHandleCreated)
+            throw new InvalidOperationException("Clipboard dispatcher is unavailable.");
+        T InvokeAction()
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return action();
+        }
+        return dispatcher.InvokeRequired ? (T)dispatcher.Invoke((Func<T>)InvokeAction)! : InvokeAction();
     }
 
     public WindowCaptureFrame? Capture(CancellationToken cancellationToken)

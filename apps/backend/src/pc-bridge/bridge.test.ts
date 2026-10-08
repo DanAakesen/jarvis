@@ -95,7 +95,7 @@ async function connectBridge(url: string, token = bridgeToken): Promise<WebSocke
 
 async function callTool(
   app: ReturnType<typeof buildApp>,
-  tool: 'pc_open' | 'codex_prompt' | 'pc_close' | 'pc_media' | 'pc_active_window' | 'pc_browser_tabs' | 'pc_browser_snapshot' | 'pc_browser_act' | 'pc_act',
+  tool: 'pc_open' | 'codex_prompt' | 'pc_close' | 'pc_media' | 'pc_active_window' | 'pc_clipboard_read' | 'pc_clipboard_write' | 'pc_browser_tabs' | 'pc_browser_snapshot' | 'pc_browser_act' | 'pc_act',
   payload: Record<string, unknown>,
 ) {
   return app.inject({
@@ -107,6 +107,89 @@ async function callTool(
 }
 
 describe('authenticated PC bridge protocol', () => {
+  it('reads clipboard text only through a sensitive current-message tool and redacts secrets', async () => {
+    const { app, record, records } = fixture({ logLevel: 'info' });
+    const url = await listen(app);
+    const bridge = await connectBridge(url);
+    const withoutCurrentMessage = await app.inject({
+      method: 'POST',
+      url: '/tools/pc_clipboard_read',
+      headers: { authorization: ['Bearer', agentToken].join(' ') },
+      payload: {},
+    });
+    const clipboardText = [
+      ['pass', 'word=demo-password-value'].join(''),
+      'api_key="secret key"',
+      'key=demo-key-value',
+      ['Bearer', 'demo-token-value'].join(' '),
+      'sk-proj-12345678901234567890',
+      'ordinary clipboard text',
+    ].join('\n');
+    bridge.on('message', (data) => {
+      const command = JSON.parse(data.toString()) as Record<string, unknown>;
+      expect(command).toMatchObject({ command: 'clipboard_read', arguments: {} });
+      bridge.send(JSON.stringify({ id: command.id, type: 'result', result: { text: clipboardText } }));
+    });
+
+    const response = await callTool(app, 'pc_clipboard_read', {});
+
+    expect(withoutCurrentMessage.statusCode).toBe(400);
+    expect(response.json()).toMatchObject({
+      outcome: 'ok',
+      result: {
+        text: [
+          ['pass', 'word=[REDACTED]'].join(''),
+          'api_key=[REDACTED]',
+          'key=[REDACTED]',
+          '[REDACTED]',
+          '[REDACTED]',
+          'ordinary clipboard text',
+        ].join('\n'),
+      },
+    });
+    expect(app.jarvisTools.get('pc_clipboard_read')).toMatchObject({ sensitive: true });
+    expect(app.jarvisTools.get('pc_clipboard_read')?.reflexSafe).not.toBe(true);
+    expect(record).toHaveBeenCalledWith(expect.objectContaining({
+      tool: 'pc_clipboard_read',
+      arguments: { redacted: true },
+      result: { redacted: true },
+    }));
+    expect(records.join('')).not.toContain(clipboardText);
+    expect(record.mock.calls.map(([call]) => JSON.stringify(call)).join('')).not.toContain('demo-password-value');
+    expect(record.mock.calls.map(([call]) => JSON.stringify(call)).join('')).not.toContain('secret key');
+    expect(record.mock.calls.map(([call]) => JSON.stringify(call)).join('')).not.toContain('demo-key-value');
+    expect(record.mock.calls.map(([call]) => JSON.stringify(call)).join('')).not.toContain('demo-token-value');
+  });
+
+  it('writes only bounded clipboard text and does not echo the clipboard contents', async () => {
+    const { app, record } = fixture();
+    const url = await listen(app);
+    const bridge = await connectBridge(url);
+    const commands: Array<Record<string, unknown>> = [];
+    bridge.on('message', (data) => {
+      const command = JSON.parse(data.toString()) as Record<string, unknown>;
+      commands.push(command);
+      bridge.send(JSON.stringify({ id: command.id, type: 'result', result: { written: true } }));
+    });
+
+    const exactText = 'x'.repeat(20 * 1024);
+    const written = await callTool(app, 'pc_clipboard_write', { text: exactText });
+    const tooLarge = await callTool(app, 'pc_clipboard_write', { text: 'é'.repeat(10_241) });
+
+    expect(written.json()).toMatchObject({ outcome: 'ok', result: { written: true } });
+    expect(tooLarge.json()).toMatchObject({ outcome: 'refused' });
+    expect(commands).toHaveLength(1);
+    expect(commands[0]).toMatchObject({ command: 'clipboard_write', arguments: { text: exactText } });
+    expect(record.mock.calls.map(([call]) => call.arguments)).toEqual([
+      { redacted: true },
+      { redacted: true },
+    ]);
+    expect(record.mock.calls.map(([call]) => call.result)).toEqual([
+      { redacted: true },
+      { redacted: true },
+    ]);
+  });
+
   it('logs the outcome and monotonic round-trip time for every bridge command', async () => {
     vi.useFakeTimers({ toFake: ['performance'] });
     const { app, records } = fixture({ logLevel: 'info' });

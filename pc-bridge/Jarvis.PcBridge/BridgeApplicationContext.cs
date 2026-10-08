@@ -89,7 +89,7 @@ public sealed class BridgeApplicationContext : ApplicationContext
                 WindowsCommandExecutor.ReadActiveWindowTitle,
                 extensionPort: _extensionPort,
                 keyboardExecutor: keyboardExecutor);
-            _commandExecutor = new WindowsCommandExecutor(keyboardExecutor);
+            _commandExecutor = new WindowsCommandExecutor(keyboardExecutor, _dispatcher);
             StartWakeWord(settings);
             _tokenProvider = await BridgeTokenProvider.CreateAsync(settings, _stopping.Token);
             var client = new BridgeClient(
