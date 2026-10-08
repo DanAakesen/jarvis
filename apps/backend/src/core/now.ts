@@ -1,10 +1,16 @@
 import type { FastifyReply } from 'fastify';
 import type { FastifyInstance } from 'fastify';
-import { isNowSseEvent, type NowSseEvent } from '@jarvis/contracts';
+import {
+  isNowSseEvent,
+  presenceStateSchema,
+  presenceUpdateSchema,
+  type NowSseEvent,
+  type PresenceUpdate,
+} from '@jarvis/contracts';
 import type { EventHub } from './event-hub.js';
 import type { JarvisActivityHub } from './activity.js';
 import { defaultAwayModeState } from './away-mode.js';
-import { presenceModes, type PresenceMode } from './away-mode.js';
+import { type PresenceMode } from './away-mode.js';
 import type { BrowserConfirmation } from '../teams/service.js';
 import { generatedViewValidationOptions } from './generated-view-validation.js';
 import { formatSseEvent, writeSseEvent } from './sse.js';
@@ -93,21 +99,17 @@ export function registerNowRoutes(app: FastifyInstance) {
     return app.awayModeStore.read();
   });
 
-  app.put<{ Body: { mode: PresenceMode } }>('/presence', {
+  app.put<{ Body: PresenceUpdate }>('/presence', {
     schema: {
-      body: {
-        type: 'object',
-        properties: { mode: { type: 'string', enum: [...presenceModes] } },
-        required: ['mode'],
-        additionalProperties: false,
-      },
+      body: presenceUpdateSchema,
+      response: { 200: presenceStateSchema },
     },
   }, async (request, reply) => {
     if (!request.principal || request.principal.objectId.toLowerCase() !== app.ownerObjectId.toLowerCase()) {
       return reply.code(403).send({ error: 'Forbidden' });
     }
     if (!app.awayModeStore) return reply.code(503).send({ error: 'Presence mode unavailable' });
-    return app.awayModeStore.set(request.body.mode, 'manual');
+    return app.awayModeStore.set(request.body.mode, request.body.source ?? 'manual');
   });
 
   app.post('/now/present', async (request, reply) => {

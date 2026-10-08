@@ -253,6 +253,12 @@ Jarvis changes are announced and require no confirmation. Preserve the derived
 Evidence: API, tool, settings, state migration, and agent-awareness regression
 tests; live Voice Live and UI integration remain unverified.
 
+P9-44 (8 October 2026): allow device-originated `/presence` updates, but ignore
+them for two hours after a manual change. Voice/chat presence tools are manual;
+manual same-mode updates refresh the precedence window. The existing persisted
+source and timestamp are sufficient, and ignored updates do not publish or
+announce a change.
+
 P6-21 (6 October 2026): project task summaries from existing PR, workflow,
 usage and PR-opened event records without live GitHub reads or a schema change.
 Unknown state, token metrics and costs stay null; recorded costs can be partial.

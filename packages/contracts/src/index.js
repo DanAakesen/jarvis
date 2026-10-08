@@ -173,6 +173,26 @@ const object = (properties, required = Object.keys(properties)) => ({
 const array = (items, maxItems, minItems = 0) => ({
   type: 'array', items, maxItems, ...(minItems ? { minItems } : {}),
 });
+export const presenceModes = Object.freeze(['present', 'away', 'on_the_move']);
+export const presenceSources = Object.freeze(['manual', 'device', 'jarvis', 'browser']);
+export const presenceUpdateSchema = Object.freeze(object({
+  mode: { type: 'string', enum: [...presenceModes] },
+  source: { type: 'string', enum: ['manual', 'device'] },
+}, ['mode']));
+export const presenceStateSchema = Object.freeze(object({
+  mode: { type: 'string', enum: [...presenceModes] },
+  source: { type: 'string', enum: [...presenceSources] },
+  changedAt: { anyOf: [dateTime, { type: 'null' }] },
+  ignored: { const: 'recent_manual' },
+}, ['mode', 'source', 'changedAt']));
+export function isPresenceState(value) {
+  return isObject(value) &&
+    Object.keys(value).every((key) => ['mode', 'source', 'changedAt', 'ignored'].includes(key)) &&
+    presenceModes.includes(value.mode) &&
+    presenceSources.includes(value.source) &&
+    (value.changedAt === null || typeof value.changedAt === 'string' && Number.isFinite(Date.parse(value.changedAt))) &&
+    (value.ignored === undefined || value.ignored === 'recent_manual');
+}
 const codeLineSchema = { type: 'integer', minimum: 1, maximum: Number.MAX_SAFE_INTEGER };
 export const generatedCodeDataSchema = Object.freeze(object({
   repo: { ...string(200, 1), pattern: '\\S' },
