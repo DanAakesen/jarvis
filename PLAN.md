@@ -4,6 +4,8 @@ Phase 1 delivers the Software Factory. Requirements and page specifications are 
 
 ## Current focus
 
+- **P11-01:** Calendar-only short approval complete offline on the task branch: 55 focused tests, backend lint and build pass. Next: review and live account/voice acceptance after deployment. The supplied request has no issue number and GitHub searches did not resolve it; the PR closing reference remains open. Gmail and other confirmation flows are unchanged.
+
 - **P10 — GitHub backlog (8 October 2026):** GitHub issues become the single backlog; the Factory (label `Jarvis`, agent `codex`) and Copilot are executors, and the Factory board mirrors the GitHub Project columns. See [P10](#p10--github-backlog-as-source-of-truth).
 - **P9 — Control and reach (filed 7 October 2026):** 39 tasks ([#495](https://github.com/DanAakesen/jarvis/issues/495)–[#533](https://github.com/DanAakesen/jarvis/issues/533)) from Dan's gap audit: per-role model and reasoning control, the Folio, missing tools and unconnected features. See [P9](#p9--control-and-reach).
 - **Local UI session with Dan (branch `ui/shell-iteration`, 6 October 2026):** implemented locally:

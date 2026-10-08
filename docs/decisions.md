@@ -913,3 +913,17 @@ remain pending.
 ## P10-01 (8 October 2026) — GitHub App write permissions are live
 
 Dan granted the Jarvis GitHub App Issues write, Workflows read and write, and Repository creation, and accepted them on the installation. Issues write is required for P10's issue creation, progress comments and label changes. Workflows write lets Factory branches touch `.github/workflows` files, which GitHub otherwise rejects on push. Repository creation supports confirmed new-project runs. Evidence: the production installation reports `issues`, `workflows` and `repository_creation` as `write`, and an installation token requested with `issues: write` for `jarvis` minted with HTTP 201. Status: accepted.
+## P11-01 (8 October 2026) — Short Google Calendar approvals
+
+Calendar create, update, move and delete actions accept only a later verified Dan
+message containing yes, approve, go ahead or do it; no/cancel discards the action.
+Replies are case-insensitive with optional final period/exclamation mark. Combined
+requests and ambiguous replies are refused. The ten-minute expiry remains; staging
+a new Calendar action permanently invalidates the previous one. The returned code
+identifies the action for the tool, but Dan does not need to say it. Consumption
+occurs before execution to prevent replay. Gmail, project archive and issue creation
+retain their existing confirmation rules. No web change or migration is needed.
+Offline validation: 55 focused pending-action, Google-tool and capability-instruction
+tests pass, along with backend lint and build. Unit and fake-provider HTTP checks
+cover approval, cancellation, expiry, identity/turn checks, supersession and Gmail
+regression; live acceptance is pending.

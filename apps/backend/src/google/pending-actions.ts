@@ -31,6 +31,11 @@ export class PendingGoogleActions {
     if (this.actions.size >= MAX_PENDING_ACTIONS) {
       throw new Error('Too many pending Google actions');
     }
+    if (input.scope === 'calendar') {
+      for (const [code, action] of this.actions) {
+        if (action.scope === 'calendar') this.actions.delete(code);
+      }
+    }
     let code: string;
     do {
       code = String(randomInt(0, 100_000_000)).padStart(8, '0');
@@ -40,7 +45,9 @@ export class PendingGoogleActions {
       status: 'awaiting_confirmation',
       summary: input.summary,
       confirmationCode: code,
-      instruction: `Nothing has changed. To approve, say exactly "confirm ${code}".`,
+      instruction: input.scope === 'calendar'
+        ? 'Nothing has changed. Reply yes, approve, go ahead or do it to approve; no or cancel to decline, in a new message within ten minutes.'
+        : `Nothing has changed. To approve, say exactly "confirm ${code}".`,
     };
   }
 
@@ -52,16 +59,23 @@ export class PendingGoogleActions {
   ): Promise<unknown> {
     this.removeExpired();
     const action = this.actions.get(code);
+    const reply = message?.text.trim().toLowerCase();
+    const calendarReply = reply !== undefined && /^(?:yes|approve|go ahead|do it|no|cancel)[.!]?$/u.test(reply);
     if (!action || action.scope !== scope || !message || message.role !== 'dan' ||
         !/^[1-9]\d{0,18}$/u.test(message.id) ||
         !/^[1-9]\d{0,18}$/u.test(action.sourceMessageId) ||
         message.id === action.sourceMessageId ||
         BigInt(message.id) <= BigInt(action.sourceMessageId) ||
-        message.at.getTime() <= action.createdAt ||
-        message.text.trim().toLowerCase() !== `confirm ${code}`) {
-      throw new ToolRefusal('No Google change was made. Dan must send the exact confirmation phrase in a new message.');
+        !Number.isFinite(message.at.getTime()) || message.at.getTime() <= action.createdAt ||
+        (scope === 'calendar' ? !calendarReply : reply !== `confirm ${code}`)) {
+      throw new ToolRefusal(scope === 'calendar'
+        ? 'No calendar change was made. Dan must reply yes, approve, go ahead or do it (or no/cancel to decline) in a later message for the latest pending action within ten minutes. Otherwise stage the action again.'
+        : 'No Google change was made. Dan must send the exact confirmation phrase in a new message.');
     }
     this.actions.delete(code);
+    if (scope === 'calendar' && /^(?:no|cancel)[.!]?$/u.test(reply!)) {
+      return { status: 'cancelled', detail: 'The pending calendar change was discarded. No change was made.' };
+    }
     return action.execute(signal);
   }
 
