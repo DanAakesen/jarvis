@@ -1,11 +1,11 @@
 import { randomUUID } from 'node:crypto';
 import type { FastifyRequest } from 'fastify';
-import { isGeneratedView, type GeneratedView, type WorkspaceCommand } from '@jarvis/contracts';
+import { isGeneratedView, type GeneratedView, type WorkspaceCommand, type WorkspaceSnapshot } from '@jarvis/contracts';
 import { knowledgeGraphView } from '../vault/index.js';
 import { readSettings } from './settings.js';
 import type { WorkspaceCommandBroker } from './workspace-commands.js';
 
-const turns = new WeakMap<WorkspaceCommandBroker, Map<string, { at: number; views: Set<string> }>>();
+const turns = new WeakMap<WorkspaceCommandBroker, Map<string, { at: number; views: Map<string, WorkspaceSnapshot | undefined> }>>();
 const vaultTools = new Set(['vault_search', 'vault_read', 'memory_search']);
 const repoTools = new Set(['repo_overview', 'repo_list', 'repo_read', 'repo_search', 'repo_issues']);
 const taskTools = new Set(['create_task', 'steer_task', 'retry_task']);
@@ -17,9 +17,12 @@ function object(value: unknown): Record<string, unknown> {
 
 export function redactWorkContent(value: string): string {
   return value
-    .replace(/-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----[\s\S]*?(?:-----END (?:RSA |EC |OPENSSH )?PRIVATE KEY-----|$)/gu, '[REDACTED PRIVATE KEY]')
-    .replace(/(["']?\b(?:(?:[a-z0-9]+[_-])*(?:password|passwd|pwd|token|key|secret)|access[_ -]?token|refresh[_ -]?token|api[_ -]?key|access[_ -]?key|private[_ -]?key|client[_ -]?secret|accountkey|connectionstring|authorization)\b["']?\s*[:=]\s*)(?:"[^"]*"|'[^']*'|`[^`]*`|[^\s,;&]+)/giu, '$1[REDACTED]')
+    .replace(/(\b(?:proxy-)?authorization[ \t]*[:=][ \t]*)[^\r\n]*/giu, '$1[REDACTED]')
     .replace(/\bBearer\s+\S+/giu, '[REDACTED]')
+    .replace(/-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----[\s\S]*?(?:-----END (?:RSA |EC |OPENSSH )?PRIVATE KEY-----|$)/gu,
+      (match) => match.replace(/[^\r\n]+/gu, '[REDACTED PRIVATE KEY]'))
+    .replace(/(["']?\b(?:(?:[a-z0-9]+[_-])*(?:password|passwd|pwd|token|key|secret)|access[_ -]?token|refresh[_ -]?token|api[_ -]?key|access[_ -]?key|private[_ -]?key|client[_ -]?secret|accountkey|connectionstring|authorization)\b["']?\s*[:=]\s*)(?:"[^"]*"|'[^']*'|`[^`]*`|[^\s,;&]+)/giu,
+      (match, prefix: string) => prefix + match.slice(prefix.length).replace(/[^\r\n]+/gu, '[REDACTED]'))
     .replace(/\b(?:sk-(?:proj-)?[A-Za-z0-9_-]{16,}|gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|AKIA[A-Z0-9]{16}|eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,})\b/gu, '[REDACTED]')
     .replace(/(https?:\/\/)[^/\s@]+:[^/\s@]+@/giu, '$1[REDACTED]@');
 }
@@ -132,15 +135,19 @@ function beginWorkPresentation(tool: string, rawInput: unknown, request: Fastify
           let state = ownerTurns.get(turnId);
           if (!state) {
             if (ownerTurns.size >= 128) ownerTurns.delete(ownerTurns.keys().next().value!);
-            state = { at: Date.now(), views: new Set() };
+            state = { at: Date.now(), views: new Map() };
             ownerTurns.set(turnId, state);
           }
           const showView = (viewId: string, view: GeneratedView) => {
             if (!isGeneratedView(view)) return;
-            const existing = state.views.has(viewId) ||
-              (viewId === 'knowledge-graph' && [...ownerTurns.values()].some((turn) => turn.views.has(viewId))) ||
-              app.workspaceCommands.snapshot(app.ownerObjectId)?.windows.some((window) => window.viewId === viewId);
-            state.views.add(viewId);
+            const cached = state.views.has(viewId) ? state : viewId === 'knowledge-graph'
+              ? [...ownerTurns.values()].find((turn) => turn.views.has(viewId)) : undefined;
+            const snapshot = app.workspaceCommands.snapshot(app.ownerObjectId);
+            const existsInSnapshot = snapshot?.windows.some((window) => window.viewId === viewId);
+            const existing = snapshot && snapshot !== cached?.views.get(viewId)
+              ? existsInSnapshot : Boolean(cached) || existsInSnapshot;
+            for (const turn of ownerTurns.values()) turn.views.delete(viewId);
+            state.views.set(viewId, snapshot);
             void deliver({ commandId: randomUUID(), operation: existing ? 'update' : 'create', viewId, view }).then((applied) => {
               if (applied) void deliver({ commandId: randomUUID(), operation: 'focus', viewId });
               else state.views.delete(viewId);

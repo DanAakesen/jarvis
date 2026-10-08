@@ -120,6 +120,25 @@ describe('best-effort work presentation', () => {
     expect(JSON.stringify(commands)).not.toContain('private note body');
   });
 
+  it('recreates a graph closed in a newer workspace snapshot', async () => {
+    const { app, start, commands, connection } = fixture();
+    const snapshot = (windows: { viewId: string; title: string }[]) =>
+      app.workspaceCommands.updateSnapshot(app.ownerObjectId, connection.sessionId, { windows, contextPanelOpen: false });
+    snapshot([]);
+    start('vault_search', { query: 'first' }).finish({ results: [] }, true);
+    await settled();
+    snapshot([{ viewId: 'knowledge-graph', title: 'Knowledge graph' }]);
+    start('vault_search', { query: 'second' }, '102').finish({ results: [] }, true);
+    await settled();
+    snapshot([]);
+    start('vault_search', { query: 'third' }, '103').finish({ results: [] }, true);
+    await settled();
+    start('vault_search', { query: 'fourth' }, '104').finish({ results: [] }, true);
+    await settled();
+    expect(commands.filter((command) => command.operation === 'create' || command.operation === 'update')
+      .map((command) => command.operation)).toEqual(['create', 'update', 'create', 'update']);
+  });
+
   it.each(['create_task', 'steer_task', 'retry_task'])('focuses the task after %s succeeds', async (tool) => {
     const { start, commands } = fixture();
     start(tool, { taskId: '55' }).finish(tool === 'create_task' ? { id: '56' } : { status: 'ok' }, true);
@@ -182,8 +201,18 @@ describe('best-effort work presentation', () => {
   it('redacts credentials before truncation, including multiline keys and JSON values', () => {
     const url = ['https://', 'user', ':', 'pass', '@host/'].join('');
     expect(redactWorkContent(`"api_key": "private-value"\n${['Bearer', 'private-token'].join(' ')}\n${url}`)).not.toMatch(/private-value|private-token|user:pass/u);
-    expect(redactWorkContent('-----BEGIN PRIVATE KEY-----\nprivate-value\n-----END PRIVATE KEY-----')).toBe('[REDACTED PRIVATE KEY]');
+    expect(redactWorkContent('-----BEGIN PRIVATE KEY-----\nprivate-value\n-----END PRIVATE KEY-----'))
+      .toBe(Array(3).fill('[REDACTED PRIVATE KEY]').join('\n'));
+    expect(redactWorkContent('api_key = `private-value\nmore-private-value`\nconst safe = true;'))
+      .toBe('api_key = [REDACTED]\n[REDACTED]\nconst safe = true;');
     expect(defaultSettings.presentation.showWork).toBe(true);
+  });
+
+  it.each(['Basic', 'Bearer', 'Digest', 'Negotiate'])('redacts the entire unquoted %s authorization header', (scheme) => {
+    const header = ['Authorization:', scheme, 'private-credential'].join(' ');
+    const proxy = ['Proxy-Authorization:', scheme, 'private-credential'].join(' ');
+    expect(redactWorkContent(`${header}\n${proxy}`)).not.toContain('private-credential');
+    expect(redactWorkContent(`${header}\nconst safe = true;`)).toContain('const safe = true;');
   });
 
   it('presents direct reflex tool execution through the same lifecycle', async () => {
