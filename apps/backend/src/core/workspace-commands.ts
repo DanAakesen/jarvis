@@ -4,6 +4,7 @@ import {
   htmlArtifactFrameSchema,
   isWorkspaceCommand,
   workspaceCommandSchema,
+  type WorkspaceSseEvent,
   type WorkspaceCommand,
   type WorkspaceSnapshot,
 } from '@jarvis/contracts';
@@ -15,8 +16,16 @@ const commandTimeoutMs = 10_000;
 const maxPendingCommands = 8;
 const maxCachedCommands = 128;
 
-type WorkspaceEvent = 'workspace-command' | 'workspace-cancel';
-type WorkspaceEventSender = (event: WorkspaceEvent, data: unknown) => boolean;
+type WorkspaceEventArgs =
+  | [
+    event: 'workspace-command',
+    data: Extract<WorkspaceSseEvent, { event: 'workspace-command' }>['data'],
+  ]
+  | [
+    event: 'workspace-cancel',
+    data: Extract<WorkspaceSseEvent, { event: 'workspace-cancel' }>['data'],
+  ];
+type WorkspaceEventSender = (...args: WorkspaceEventArgs) => boolean;
 
 interface WorkspaceConnection {
   readonly sessionId: string;

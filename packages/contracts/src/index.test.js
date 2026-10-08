@@ -19,11 +19,16 @@ import {
   isValidHtmlArtifactHtml,
   isJarvisActivityEvent,
   isJarvisVoiceWakeEvent,
+  isNowSseEvent,
+  isTaskEventMessage,
+  isTaskEventRecord,
+  isTaskEventStreamEvent,
   isBackgroundJob,
   isBackgroundJobEvent,
   isWebResearchResult,
   isWorkspaceCommand,
   generatedViewVersion,
+  nowSseEventNames,
   workspaceCommandSchema,
   webResearchResultSchema,
 } from './index.js';
@@ -108,6 +113,70 @@ test('accepts only a bounded voice wake event with a canonical UTC timestamp', (
   assert.equal(isJarvisVoiceWakeEvent({ type: 'voice.wake', at: '2026-10-06T14:24:37.078Z', audio: 'x' }), false);
   assert.equal(isJarvisVoiceWakeEvent({ type: 'listening', at: '2026-10-06T14:24:37.078Z' }), false);
   assert.equal(isJarvisActivityEvent({ type: 'voice.wake', at: '2026-10-06T14:24:37.078Z' }), false);
+});
+
+test('Now SSE contracts guard every named event and its payload', () => {
+  const activityId = '12345678-1234-4234-8234-123456789abc';
+  const timestamp = '2026-10-07T12:00:00.000Z';
+  const job = {
+    jobId: '12345678-1234-4234-8234-123456789abc',
+    kind: 'research',
+    title: 'Research result',
+    status: 'running',
+    step: 1,
+    steps: 2,
+    startedAt: timestamp,
+    updatedAt: timestamp,
+  };
+  const events = [
+    { event: 'mode', data: {} },
+    { event: 'now', data: {} },
+    { event: 'voice-wake', data: { type: 'voice.wake', at: timestamp } },
+    { event: 'job', data: job },
+    { event: 'jarvis-activity', data: { type: 'listening', activityId, source: 'voice' } },
+    { event: 'workspace-ready', data: { sessionId: activityId, trustedBlobHost: 'jarvis.blob.core.windows.net' } },
+    {
+      event: 'workspace-command',
+      data: { command: { commandId: 'cmd_1', operation: 'show', viewId: 'report' }, expiresAt: 1_791_379_200_000 },
+    },
+    { event: 'workspace-cancel', data: { commandId: 'cmd_1' } },
+  ];
+
+  assert.deepEqual(nowSseEventNames, events.map(({ event }) => event));
+  for (const event of events) assert.equal(isNowSseEvent(event), true, event.event);
+  assert.equal(isNowSseEvent({ event: 'mode', data: { mode: 'away' } }), false);
+  assert.equal(isNowSseEvent({ event: 'job', data: { ...job, unexpected: true } }), false);
+  assert.equal(isNowSseEvent({
+    event: 'workspace-command',
+    data: { command: { commandId: 'cmd_1', operation: 'show', viewId: 'report' }, expiresAt: -1 },
+  }), false);
+  assert.equal(isNowSseEvent({ event: 'workspace-cancel', data: { commandId: 'cmd_1', extra: true } }), false);
+  assert.equal(isNowSseEvent({ event: 'unknown', data: {} }), false);
+});
+
+test('task-event and task stream contracts constrain persisted event identity and shape', () => {
+  const event = {
+    id: '42',
+    taskId: '7',
+    type: 'state_changed',
+    summary: null,
+    payload: { to: 'Running' },
+    payloadTruncated: false,
+    source: 'backend',
+    at: '2026-10-07T12:00:00.000Z',
+  };
+
+  assert.equal(isTaskEventRecord(Object.fromEntries(
+    Object.entries(event).filter(([key]) => key !== 'taskId'),
+  )), true);
+  assert.equal(isTaskEventMessage(event), true);
+  assert.equal(isTaskEventStreamEvent({ event: 'task', id: event.id, data: event }), true);
+  assert.equal(isTaskEventStreamEvent({ event: 'ready', data: {} }), true);
+  assert.equal(isTaskEventRecord({ ...event, id: '9223372036854775808' }), false);
+  assert.equal(isTaskEventMessage({ ...event, taskId: '0' }), false);
+  assert.equal(isTaskEventMessage({ ...event, at: 'October 7, 2026' }), false);
+  assert.equal(isTaskEventStreamEvent({ event: 'task', id: '43', data: event }), false);
+  assert.equal(isTaskEventStreamEvent({ event: 'ready', data: { replayed: true } }), false);
 });
 
 test('web research result schema and validator accept bounded source-linked results', () => {

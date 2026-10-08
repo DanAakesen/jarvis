@@ -3,6 +3,7 @@ import type { BackendModule } from '../modules.js';
 import { ToolRefusal } from '../core/tool-registry.js';
 import { readSettings } from '../core/settings.js';
 import { sseHeaders } from '../core/now.js';
+import { writeSseEvent } from '../core/sse.js';
 import {
   GitHubRepositoryUnavailableError,
   ProjectConflictError,
@@ -325,7 +326,7 @@ export const factoryModule: BackendModule = {
       const writeEvent = (event: TaskEventMessage) => {
         if (closed || BigInt(event.id) <= BigInt(afterEventId) || replayedIds.has(event.id)) return !closed;
         replayedIds.add(event.id);
-        if (!response.write(`id: ${event.id}\nevent: task\ndata: ${JSON.stringify(event)}\n\n`)) {
+        if (!writeSseEvent(response, { event: 'task', id: event.id, data: event })) {
           end();
           return false;
         }
@@ -391,7 +392,7 @@ export const factoryModule: BackendModule = {
           }
         }
         replaying = false;
-        if (!response.write('event: ready\ndata: {}\n\n')) end();
+        if (!writeSseEvent(response, { event: 'ready', data: {} })) end();
       };
       void replay().catch(end);
       return reply;
