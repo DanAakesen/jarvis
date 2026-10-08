@@ -187,6 +187,9 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   broker semantics. The UI session owns shell routing, settings-section
   selection, page transitions and applied/refused acknowledgements; this
   backend change does not implement those UI behaviors or claim live acceptance.
+  The web build currently reports TS2366 at `apps/web/src/Workspace.tsx:391`:
+  its exhaustive dispatcher must handle the new union member in the UI change
+  before the combined feature can merge or deploy.
 - P8-37 registers conversation history as the page-owned workspace view
   `conversation` from `App.tsx` once a conversation exists. The view content is
   an empty host element; `ConversationHistory` portals its transcript into it
