@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SettingsPage } from './SettingsPage';
@@ -65,6 +65,7 @@ const themePreference = {
   error: '',
   message: '',
   saveTheme: vi.fn<ThemePreference['saveTheme']>(async () => {}),
+  saveAppearance: vi.fn<NonNullable<ThemePreference['saveAppearance']>>(async () => true),
   refreshAppearance: vi.fn<ThemePreference['refreshAppearance']>(async () => {}),
   retry: vi.fn(),
 };
@@ -73,7 +74,7 @@ function response(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
 }
 
-function settingsResponse(current = settings, credentials: {
+function settingsResponse(current: typeof settings & { global: typeof settings.global & { maxCheckAttempts?: number; visionDailyBudgetUsd?: number } } = settings, credentials: {
   name: string;
   expiresAt: string | null;
   lastRenewedAt: string | null;
@@ -95,6 +96,7 @@ beforeEach(() => {
   fetchMock.mockReset();
   localStorage.clear();
   themePreference.saveTheme.mockClear();
+  themePreference.saveAppearance.mockClear();
   themePreference.refreshAppearance.mockClear();
   themePreference.retry.mockClear();
   vi.stubGlobal('fetch', (input: RequestInfo | URL, init?: RequestInit) =>
@@ -238,7 +240,7 @@ describe('SettingsPage', () => {
     expect(JSON.parse(String(request?.body))).toEqual({ settings: { personality: settings.personality } });
   });
 
-  it('offers light, dark, and system modes and keeps appearance variables Jarvis-directed', async () => {
+  it('offers light, dark, and system modes and saves appearance details at once', async () => {
     const user = userEvent.setup();
     fetchMock.mockResolvedValueOnce(response(settingsResponse()));
     renderSettingsPage();
@@ -248,10 +250,13 @@ describe('SettingsPage', () => {
     expect(screen.getByRole('radio', { name: 'Light' })).toHaveProperty('checked', true);
     expect(screen.getByRole('radio', { name: 'Dark' })).toHaveProperty('disabled', false);
     expect(screen.getByRole('radio', { name: 'System' })).toHaveProperty('disabled', false);
-    expect(screen.getByRole('button', {
-      name: 'Edit theme variables',
-      description: /Jarvis can update approved appearance variables/,
-    })).toHaveProperty('disabled', true);
+    expect(screen.queryByRole('button', { name: 'Edit theme variables' })).toBeNull();
+    await user.click(within(screen.getByRole('group', { name: 'Motion' })).getByRole('button', { name: 'Calm' }));
+    expect(themePreference.saveAppearance).toHaveBeenCalledWith({ motion: 'calm' });
+    await user.click(within(screen.getByRole('group', { name: 'Density' })).getByRole('button', { name: 'Compact' }));
+    expect(themePreference.saveAppearance).toHaveBeenCalledWith({ density: 'compact' });
+    // Without custom colours there is nothing to reset.
+    expect(screen.queryByRole('button', { name: 'Use Jarvis colours' })).toBeNull();
 
     await user.click(screen.getByRole('radio', { name: 'Dark' }));
     expect(themePreference.saveTheme).toHaveBeenCalledWith('dark');
@@ -499,5 +504,22 @@ describe('SettingsPage', () => {
     renderSettingsPage();
     expect(await screen.findByText('GitHub App')).not.toBeNull();
     expect(screen.getByText('future-token')).not.toBeNull();
+  });
+
+  it('saves the check repair attempts and the daily watch budget', async () => {
+    const user = userEvent.setup();
+    const withLimits = { ...settings, global: { ...settings.global, maxCheckAttempts: 3, visionDailyBudgetUsd: 1 } };
+    fetchMock.mockResolvedValueOnce(response(settingsResponse(withLimits)))
+      .mockResolvedValueOnce(response(settingsResponse({ ...withLimits, global: { ...withLimits.global, maxCheckAttempts: 5, visionDailyBudgetUsd: 2.5 } })));
+    renderSettingsPage();
+    const attempts = await screen.findByRole('spinbutton', { name: 'Check repair attempts' });
+    await user.clear(attempts);
+    await user.type(attempts, '5');
+    const budget = screen.getByRole('spinbutton', { name: 'Daily watch budget (USD)' });
+    await user.clear(budget);
+    await user.type(budget, '2.5');
+    await user.click(screen.getByRole('button', { name: 'Save settings' }));
+    await screen.findByText(/Saved\. These are defaults/);
+    expect(JSON.parse(String(fetchMock.mock.calls[1]![1]?.body))).toEqual({ settings: { global: { maxCheckAttempts: 5, visionDailyBudgetUsd: 2.5 } } });
   });
 });

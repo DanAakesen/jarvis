@@ -15,6 +15,11 @@ export interface AppearancePreferences {
   density?: 'compact' | 'comfortable';
 }
 
+/** A partial appearance update; colours may be null to clear an override. */
+export type AppearanceChange = Partial<Omit<AppearancePreferences, 'accent' | 'accent-secondary' | 'surface-tint'>> & {
+  accent?: string | null; 'accent-secondary'?: string | null; 'surface-tint'?: string | null;
+};
+
 export interface ThemePreference {
   theme: ThemeMode;
   resolvedTheme: ResolvedTheme;
@@ -24,6 +29,8 @@ export interface ThemePreference {
   error: string;
   message: string;
   saveTheme: (theme: ThemeMode) => Promise<void>;
+  /** Saves appearance details; null removes an override so the theme default applies. Resolves false if refused. */
+  saveAppearance?: (change: AppearanceChange) => Promise<boolean>;
   refreshAppearance: () => Promise<void>;
   retry: () => void;
 }
