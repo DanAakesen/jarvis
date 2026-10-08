@@ -176,6 +176,16 @@ settings or the daily vision budget; never return credential records. Keep
 or web change is needed. Offline tool and alias tests cover the behavior; live
 hosted-agent and Now integration remain unverified.
 
+P9-34 (8 October 2026): keep home city and nullable coordinates in the existing
+`dbo.settings` store and shared settings contract; leave them unset rather than
+guessing a home location. Use Open-Meteo's fixed HTTPS geocoding and forecast
+endpoints without an API key, with bounded requests and validated normalized
+results. Track weather retrieval with the existing persisted job registry, save
+a static escaped report through the workspace HTML artifact store, and open it
+through the command broker. No migration or web change is needed. Offline
+settings/provider/workspace tests cover the flow; live provider and signed-in
+workspace acceptance remain unverified.
+
 P6-22 (6 October 2026): Jarvis runs in Dan's personal tenant, without Microsoft
 365 or Teams. Keep away mode manual and do not read Graph presence. Route
 notifications and confirmations through the web app and active browser voice

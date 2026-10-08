@@ -387,6 +387,16 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   compatibility alias for the chat role and shares the same confirmation and
   validation path. These tools reuse the existing settings store and contracts;
   no migration or web change is required.
+  P9-34 adds a bounded home-location setting (`city`, latitude and longitude) to
+  that same store and registers `weather` through the shared tool registry.
+  Open-Meteo geocodes named places and returns a validated current observation
+  and up to seven forecast days. The tool records its work as an `html_app`
+  background job, stores a static escaped report in the existing workspace HTML
+  artifact tables, and opens it through the workspace command broker. Requests
+  use fixed Open-Meteo HTTPS hosts, an eight-second downstream deadline and
+  bounded JSON responses; no API key or migration is needed. Offline tests cover
+  settings, geocoding, forecast normalization, jobs and workspace delivery;
+  live provider and signed-in workspace acceptance remain unverified.
 - `ci.yml` (P0-10) is the aggregate CI on every PR, `main` push and
   `workflow_dispatch`. It calls the reusable `web-ci.yml`, `backend-ci.yml`
   (including the container smoke), `database-ci.yml` (isolated SQL Server migrations), `foundry-contract.yml`, `runner-ci.yml`
