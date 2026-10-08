@@ -163,7 +163,7 @@ export interface GeneratedViewPage {
 
 export interface GeneratedViewSource {
   id: 'now' | 'factory.tasks' | 'factory.projects' | 'usage' | 'image_generation' | 'html_generation' | 'research' | 'knowledge_graph';
-  status: 'complete' | 'partial' | 'unavailable';
+  status: 'running' | 'complete' | 'partial' | 'unavailable';
   updatedAt?: string;
   reason?: string;
   page?: GeneratedViewPage;
@@ -244,7 +244,8 @@ export type GeneratedView =
   | (GeneratedViewBase & { renderer: 'code'; data: GeneratedCodeData })
   | (GeneratedViewBase & {
     renderer: 'timeline';
-    data: { events: { at: string; title: string; description?: string }[] };
+    data: { events: (({ at: string; label?: string } | { at?: string; label: string }) &
+      { title: string; description?: string })[] };
   })
   | (GeneratedViewBase & {
     renderer: 'chart';
@@ -310,12 +311,49 @@ export interface HtmlArtifactFrame {
   pinned: boolean;
 }
 
+export type WorkspaceWindowRegion = 'left' | 'right' | 'top' | 'bottom' | 'centre' | 'full';
+export type WorkspaceWindowState = 'open' | 'minimised';
+export type WorkspaceWindowPlacement = 'auto' | 'region' | 'manual';
+export type WorkspaceArrangeLayout = 'auto' | 'side-by-side' | 'grid' | 'cascade';
+
+export interface WorkspaceSnapshotWindow {
+  viewId: string;
+  title: string;
+  state?: WorkspaceWindowState;
+  placement?: WorkspaceWindowPlacement;
+  region?: WorkspaceWindowRegion;
+  pinned?: boolean;
+  front?: boolean;
+}
+
 export interface WorkspaceSnapshot {
-  windows: readonly { viewId: string; title: string }[];
+  windows: readonly WorkspaceSnapshotWindow[];
   contextPanelOpen: boolean;
   frame?: HtmlArtifactFrame;
   view?: WorkspaceView;
 }
+
+export interface WorkspacePin {
+  viewId: string;
+  view: GeneratedView;
+  pinnedAt: string;
+}
+export interface WorkspacePinsResponse {
+  pins: WorkspacePin[];
+}
+export const workspaceViewIdSchema: Readonly<Record<string, unknown>>;
+export const workspacePinSchema: Readonly<Record<string, unknown>>;
+export const workspacePinPutSchema: Readonly<Record<string, unknown>>;
+export const workspacePinResponseSchema: Readonly<Record<string, unknown>>;
+export const workspacePinsResponseSchema: Readonly<Record<string, unknown>>;
+export function isWorkspacePin(
+  value: unknown,
+  options?: { trustedBlobHost?: string; registeredTools?: readonly string[] },
+): value is WorkspacePin;
+export function isWorkspacePinsResponse(
+  value: unknown,
+  options?: { trustedBlobHost?: string; registeredTools?: readonly string[] },
+): value is WorkspacePinsResponse;
 
 export interface WorkspaceViewLocation {
   page: WorkspaceNavigationPage;
@@ -352,6 +390,10 @@ export type WorkspaceCommand =
   | { commandId: string; operation: 'move'; viewId: string; x: number; y: number }
   | { commandId: string; operation: 'resize'; viewId: string; width: number; height: number; x?: number; y?: number }
   | { commandId: string; operation: 'layout'; arrangement: 'tiled' | 'layered' }
+  | { commandId: string; operation: 'place'; viewId: string; region: WorkspaceWindowRegion }
+  | { commandId: string; operation: 'arrange'; layout: WorkspaceArrangeLayout; viewIds?: string[] }
+  | { commandId: string; operation: 'minimise-all' | 'restore-all' | 'close-all' }
+  | { commandId: string; operation: 'pin' | 'unpin'; viewId: string }
   | { commandId: string; operation: 'context-panel'; action: 'open'; view?: GeneratedView }
   | { commandId: string; operation: 'context-panel'; action: 'close' | 'toggle' };
 

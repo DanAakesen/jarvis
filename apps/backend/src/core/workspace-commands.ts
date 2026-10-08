@@ -290,6 +290,11 @@ export function registerWorkspaceCommandRoutes(app: FastifyInstance): void {
               properties: {
                 viewId: { type: 'string', pattern: '^[A-Za-z0-9_-]{1,128}$' },
                 title: { type: 'string', minLength: 1, maxLength: 200 },
+                state: { type: 'string', enum: ['open', 'minimised'] },
+                placement: { type: 'string', enum: ['auto', 'region', 'manual'] },
+                region: { type: 'string', enum: ['left', 'right', 'top', 'bottom', 'centre', 'full'] },
+                pinned: { type: 'boolean' },
+                front: { type: 'boolean' },
               },
               required: ['viewId', 'title'], additionalProperties: false,
             },
@@ -360,7 +365,8 @@ export function registerWorkspaceCommandRoutes(app: FastifyInstance): void {
 }
 
 export function isWorkspaceReflexOperation(args: Readonly<Record<string, unknown>>): boolean {
-  return ['show', 'focus', 'minimise', 'restore', 'close', 'resize'].includes(String(args.operation)) ||
+  return ['show', 'focus', 'minimise', 'restore', 'close', 'resize', 'place', 'arrange', 'minimise-all',
+    'restore-all', 'close-all', 'pin', 'unpin'].includes(String(args.operation)) ||
     args.operation === 'conversation' && ['show', 'hide'].includes(String(args.action)) ||
     args.operation === 'layout' ||
     args.operation === 'context-panel' && (args.action === 'close' ||
@@ -369,7 +375,7 @@ export function isWorkspaceReflexOperation(args: Readonly<Record<string, unknown
 
 export const workspaceCommandTool: BackendModule['tools'][number] = {
   name: 'workspace_command',
-  description: 'Show or hide Dan’s conversation transcript, navigate his visible shell page (home, factory board or task/issue, settings section, usage, knowledge, folio, status), create, update, show, close, minimise, restore, focus, move, resize, or arrange a temporary workspace view, or change its context panel. Conversation visibility is reversible and needs no confirmation. Supply a unique commandId. Navigation section is settings-only; taskId and positive integer issueNumber are factory-only. Success requires a tab to acknowledge applying the command; relay its refusal reason.',
+  description: 'Show or hide Dan’s conversation transcript, navigate his visible shell page (home, factory board or task/issue, settings section, usage, knowledge, folio, status), create, update, show, close, minimise, restore, focus, move, resize, or arrange a temporary workspace view, or change its context panel. For visual "show me", "visualise", chart or timeline requests, create a view with renderer chart or timeline; chart data uses kind line, bar or area and 1–5 named series of x/y points, up to 1,000 points total. Timeline views use data.events in the given order; each event needs a title and at or label (or both), with optional description. Use label (1–40 characters) for seasons or periods such as "2009/10"; use at (RFC 3339 date-time or YYYY-MM-DD) for precise dates. Use an HTML view for richer visuals. Conversation visibility is reversible and needs no confirmation. Supply a unique commandId. Navigation section is settings-only; taskId and positive integer issueNumber are factory-only. Success requires a tab to acknowledge applying the command; relay its refusal reason.',
   inputSchema: workspaceCommandSchema,
   sensitive: true,
   async execute(input, request, signal) {

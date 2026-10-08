@@ -45,8 +45,14 @@ function deferred() {
   return { promise, resolve };
 }
 
-function makeRunner(report = reportHtml(), firstSearchGate?: Promise<void>) {
+function makeRunner(
+  report = reportHtml(),
+  firstSearchGate?: Promise<void>,
+  reportGate?: Promise<void>,
+  failedSearches: readonly number[] = [],
+) {
   let invocation = 0;
+  let searchInvocation = 0;
   const results = new Map<string, unknown>();
   const requests: { tool: string; query: string; model: string; reasoning?: string }[] = [];
   const accepted = (id: string): InvocationAccepted => ({
@@ -66,6 +72,10 @@ function makeRunner(report = reportHtml(), firstSearchGate?: Promise<void>) {
         ...(options?.reasoning ? { reasoning: options.reasoning } : {}),
       });
       if (invocation === 1 && firstSearchGate) await firstSearchGate;
+      if (tool === 'web_research' && failedSearches.includes(++searchInvocation)) {
+        throw new Error('Search failed.');
+      }
+      if (tool === 'html_report' && reportGate) await reportGate;
       results.set(id, tool === 'web_research'
         ? {
           answer: `Finding ${invocation} is supported by retrieved evidence.`,
@@ -179,7 +189,8 @@ describe('background interactive research', () => {
 
   it('returns after opening progress, then stores a valid report and replaces that view', async () => {
     const gate = deferred();
-    const runner = makeRunner(reportHtml(), gate.promise);
+    const reportGate = deferred();
+    const runner = makeRunner(reportHtml(), gate.promise, reportGate.promise);
     const settingsStore: SettingsStore = {
       read: async () => ({
         'roles.research.model': JSON.stringify('gpt-6-luna'),
@@ -201,9 +212,35 @@ describe('background interactive research', () => {
     expect(response.statusCode).toBe(200);
     expect(response.json()).toMatchObject({ outcome: 'ok', result: { message: expect.stringContaining('Research has started') } });
     expect(commands[0]).toMatchObject({ operation: 'create', view: { renderer: 'list', source: { id: 'research' } } });
+    expect(commands[0]?.view.source.status).toBe('running');
+    if (commands[0]?.view.renderer === 'list') {
+      expect(commands[0].view.data.items).not.toEqual(expect.arrayContaining([
+        expect.objectContaining({ title: expect.stringContaining('Report is ready') }),
+      ]));
+    }
     expect(runner.client.startCodexTool).toHaveBeenCalledTimes(1);
 
     gate.resolve();
+    await vi.waitFor(() => expect(runner.requests).toHaveLength(3));
+    await vi.waitFor(() => {
+      const writingView = commands.findLast(({ view }) => view.renderer === 'list' &&
+        view.data.items.some(({ title }) => title === 'Writing the report…'));
+      expect(writingView?.view.source.status).toBe('running');
+      if (writingView?.view.renderer === 'list') {
+        expect(writingView.view.data.items).not.toEqual(expect.arrayContaining([
+          expect.objectContaining({ title: expect.stringContaining('Report is ready') }),
+        ]));
+      }
+    });
+    for (const { view } of commands.filter(({ view }) => view.renderer === 'list')) {
+      expect(view.source.status).toBe('running');
+      if (view.renderer === 'list') {
+        expect(view.data.items).not.toEqual(expect.arrayContaining([
+          expect.objectContaining({ title: expect.stringContaining('Report is ready') }),
+        ]));
+      }
+    }
+    reportGate.resolve();
     await vi.waitFor(() => expect(commands.at(-1)?.view.renderer).toBe('html-app'));
 
     expect(runner.requests).toHaveLength(3);
@@ -221,7 +258,7 @@ describe('background interactive research', () => {
     expect(isHtmlArtifact(artifacts[0])).toBe(true);
     expect(commands.at(-1)).toMatchObject({
       operation: 'update',
-      view: { renderer: 'html-app', data: { artifactId: artifacts[0]!.id } },
+      view: { renderer: 'html-app', source: { status: 'complete' }, data: { artifactId: artifacts[0]!.id } },
     });
     expect(completion).toHaveBeenCalledWith({
       status: 'complete',
@@ -231,6 +268,18 @@ describe('background interactive research', () => {
     expect(jobEvents.every((job) => isBackgroundJob(job))).toBe(true);
     expect(jobEvents.at(-1)).toMatchObject({ status: 'done', step: 3, viewId: (commands.at(-1) as { viewId: string }).viewId });
     expect((await app.backgroundJobs.list())[0]).toMatchObject({ status: 'done' });
+  });
+
+  it('marks the finished report partial only when searches failed', async () => {
+    const runner = makeRunner(reportHtml('https://example.com/source-2'), undefined, undefined, [1]);
+    const { app, commands } = fixture(runner);
+
+    const response = await startResearch(app, 'quick');
+
+    expect(response.json()).toMatchObject({ outcome: 'ok' });
+    await vi.waitFor(() => expect(commands.at(-1)?.view.renderer).toBe('html-app'));
+    expect(commands.at(-1)?.view.source.status).toBe('partial');
+    expect(JSON.parse(runner.requests.at(-1)!.query)).toMatchObject({ partial: true });
   });
 
   it('uses the saved depth by default and bounds collected sources', async () => {

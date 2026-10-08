@@ -227,8 +227,8 @@ export async function executeRealtimeToolCall(
     const unexpected = unexpectedToolArgument(input, tool.inputSchema);
     if (unexpected) return toolOutput(call.name, 'refused', toolArgumentRefusal(tool, unexpected, request.log));
     if (!request.validateInput(input, tool.inputSchema, 'body')) {
-      const error = request.getValidationFunction(tool.inputSchema)?.errors?.[0];
-      return toolOutput(call.name, 'refused', toolArgumentRefusal(tool, error, request.log));
+      const errors = request.getValidationFunction(tool.inputSchema)?.errors ?? undefined;
+      return toolOutput(call.name, 'refused', toolArgumentRefusal(tool, errors, request.log));
     }
     await beforeExecute?.(tool, input, signal);
     result = await tool.execute(input, request, signal);

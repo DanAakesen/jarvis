@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import Fastify from 'fastify';
 import {
   generatedViewActionTypes,
   generatedViewRenderers,
@@ -49,6 +50,8 @@ import {
   isBackgroundJobStep,
   isWebResearchResult,
   isWorkspaceCommand,
+  isWorkspacePin,
+  isWorkspacePinsResponse,
   isWorkspaceSnapshot,
   isWorkspaceView,
   generatedViewVersion,
@@ -76,6 +79,20 @@ import {
 test('workspace snapshots accept old clients and validate optional current and previous views', () => {
   const snapshot = { windows: [{ viewId: 'report', title: 'Report' }], contextPanelOpen: false };
   assert.equal(isWorkspaceSnapshot(snapshot), true);
+  assert.equal(isWorkspaceSnapshot({
+    ...snapshot,
+    windows: [{
+      ...snapshot.windows[0], state: 'minimised', placement: 'region', region: 'left',
+      pinned: true, front: false,
+    }],
+  }), true);
+  assert.equal(isWorkspaceSnapshot({ ...snapshot, windows: [{ ...snapshot.windows[0], region: 'left' }] }), false);
+  assert.equal(isWorkspaceSnapshot({
+    ...snapshot, windows: [{ ...snapshot.windows[0], placement: 'manual', region: 'left' }],
+  }), false);
+  assert.equal(isWorkspaceSnapshot({
+    ...snapshot, windows: [{ ...snapshot.windows[0], state: 'closed' }],
+  }), false);
   for (const page of workspaceNavigationPages) {
     assert.equal(isWorkspaceSnapshot({ ...snapshot, view: { page } }), true);
   }
@@ -108,6 +125,49 @@ const listView = (overrides = {}) => ({
   source,
   data: { items: [{ title: 'Ship the contract', details: [{ label: 'Project', value: 'Jarvis' }] }] },
   ...overrides,
+});
+
+test('timeline schema and validator accept precise dates and ordered period labels', async () => {
+  const app = Fastify({ ajv: { customOptions: { removeAdditional: false, coerceTypes: false } } });
+  app.post('/', { schema: { body: generatedViewSchema } }, async () => ({}));
+  const validate = async (payload) => (await app.inject({ method: 'POST', url: '/', payload })).statusCode === 200;
+  try {
+    for (const event of [
+      { at: '1880-11-13' },
+      { at: '2026-09-29' },
+      { at: '2024-02-29' },
+      { at: '0001-01-01' },
+      { at: '2026-09-29T12:30:00Z' },
+      { at: '2026-09-29T12:30:00.123+02:00' },
+      { at: '2016-12-31T23:59:60Z' },
+      { label: '2009/10' },
+      { label: 'Sept 2026' },
+      { label: 'x'.repeat(40) },
+      { label: '🏆'.repeat(40) },
+      { at: '2026-09-29', label: 'Sept 2026' },
+    ]) {
+      const view = listView({ renderer: 'timeline', data: { events: [{ title: 'Milestone', ...event }] } });
+      assert.equal(await validate(view), true, JSON.stringify(event));
+      assert.equal(isGeneratedView(view), true, JSON.stringify(event));
+    }
+    for (const event of [
+      {}, { label: '' }, { label: 'x'.repeat(41) }, { label: 2009 }, { label: null },
+      { label: '🏆'.repeat(41) },
+      { at: null }, { at: '2009/10' }, { at: '29 September 2026' },
+      { at: '2026-02-29' }, { at: '2026-04-31' }, { at: '2026-9-29' },
+      { at: '2026-09-29T12:30:00' }, { at: '2026-09-29T24:00:00Z' },
+      { at: '2026-09-29T12:30:00+24:00' },
+      { at: '2026-09-29T12:30:00+02' }, { at: '2026-09-29T12:30:00+0200' },
+      { at: '2026-09-29', label: '' }, { at: 'invalid', label: '2009/10' },
+      { label: '2009/10', unknown: true },
+    ]) {
+      const view = listView({ renderer: 'timeline', data: { events: [{ title: 'Milestone', ...event }] } });
+      assert.equal(await validate(view), false, JSON.stringify(event));
+      assert.equal(isGeneratedView(view), false, JSON.stringify(event));
+    }
+  } finally {
+    await app.close();
+  }
 });
 
 test('Folio contracts use bounded searchable item metadata and closed item kinds', () => {
@@ -595,8 +655,9 @@ test('rejects malformed activity and any extra payload that could carry private 
   }), false);
 });
 
-test('accepts bounded declarative views from complete, partial and unavailable sources', () => {
+test('accepts bounded declarative views from running, complete, partial and unavailable sources', () => {
   assert.equal(isGeneratedView(listView()), true);
+  assert.equal(isGeneratedView(listView({ source: { id: 'research', status: 'running' } })), true);
   assert.equal(isGeneratedView(listView({
     source: { id: 'factory.tasks', status: 'partial', reason: 'More tasks are available.', page: {
       limit: 50, offset: 50, total: 140, nextOffset: 100,
@@ -729,6 +790,12 @@ test('defines and validates bounded workspace commands for the approved operatio
     { ...base, operation: 'move', viewId: 'research', x: 0.1, y: 0.2 },
     { ...base, operation: 'resize', viewId: 'research', width: 0.6, height: 0.5, x: 0.1, y: 0.2 },
     { ...base, operation: 'layout', arrangement: 'layered' },
+    { ...base, operation: 'place', viewId: 'research', region: 'centre' },
+    { ...base, operation: 'arrange', layout: 'side-by-side', viewIds: ['research', 'chart'] },
+    { ...base, operation: 'arrange', layout: 'auto' },
+    ...['minimise-all', 'restore-all', 'close-all'].map((operation) => ({ ...base, operation })),
+    { ...base, operation: 'pin', viewId: 'research' },
+    { ...base, operation: 'unpin', viewId: 'research' },
     { ...base, operation: 'context-panel', action: 'open', view: listView() },
     { ...base, operation: 'context-panel', action: 'open' },
     ...['close', 'toggle'].map((action) => ({ ...base, operation: 'context-panel', action })),
@@ -740,6 +807,43 @@ test('defines and validates bounded workspace commands for the approved operatio
     assert.equal(Object.hasOwn(workspaceCommandSchema, key), false, key);
   }
   for (const command of commands) assert.equal(isWorkspaceCommand(command), true, command.operation);
+});
+
+test('validates intent-based workspace commands and their exact fields', () => {
+  const base = { commandId: 'intent-1' };
+  const invalid = [
+    { operation: 'place', viewId: 'report' },
+    { operation: 'place', region: 'left' },
+    { operation: 'place', viewId: 'report', region: 'center' },
+    { operation: 'place', viewId: '../report', region: 'left' },
+    { operation: 'place', viewId: 'report', region: 'left', extra: true },
+    { operation: 'arrange' },
+    { operation: 'arrange', layout: 'stacked' },
+    { operation: 'arrange', layout: 'grid', viewIds: [] },
+    { operation: 'arrange', layout: 'grid', viewIds: ['report', 'report'] },
+    { operation: 'arrange', layout: 'grid', viewIds: Array.from({ length: 9 }, (_, index) => `view${index}`) },
+    { operation: 'arrange', layout: 'grid', viewIds: ['../report'] },
+    { operation: 'arrange', layout: 'grid', viewIds: ['report'], extra: true },
+    ...['minimise-all', 'restore-all', 'close-all'].map((operation) => ({ operation, viewId: 'report' })),
+    { operation: 'pin' },
+    { operation: 'pin', viewId: 'report', extra: true },
+    { operation: 'unpin' },
+    { operation: 'unpin', viewId: 'report', extra: true },
+  ];
+  for (const command of invalid) {
+    assert.equal(isWorkspaceCommand({ ...base, ...command }), false, JSON.stringify(command));
+  }
+  for (const operation of [
+    'place', 'arrange', 'minimise-all', 'restore-all', 'close-all', 'pin', 'unpin',
+  ]) {
+    assert.equal(workspaceCommandSchema.properties.operation.enum.includes(operation), true, operation);
+  }
+  assert.deepEqual(workspaceCommandSchema.properties.region.enum, ['left', 'right', 'top', 'bottom', 'centre', 'full']);
+  assert.deepEqual(workspaceCommandSchema.properties.layout.enum, ['auto', 'side-by-side', 'grid', 'cascade']);
+  assert.deepEqual(
+    workspaceCommandSchema.properties.viewIds,
+    { type: 'array', minItems: 1, maxItems: 8, items: workspaceCommandSchema.properties.viewId, uniqueItems: true },
+  );
 });
 
 test('validates conversation visibility actions without accepting unrelated fields', () => {
@@ -812,6 +916,24 @@ test('defines the presence request and response contracts', () => {
   assert.equal(isPresenceState({ ...state, ignored: 'recent_manual' }), true);
   assert.equal(isPresenceState({ ...state, ignored: 'other' }), false);
   assert.equal(isPresenceState({ ...state, source: 'teams_presence' }), false);
+});
+
+test('defines bounded workspace pin contracts and validates view IDs and timestamps', () => {
+  const pin = {
+    viewId: 'research-report',
+    view: listView(),
+    pinnedAt: '2026-10-08T10:00:00.000Z',
+  };
+  assert.equal(isWorkspacePin(pin), true);
+  assert.equal(isWorkspacePinsResponse({ pins: [pin] }), true);
+  for (const invalid of [
+    { ...pin, viewId: '1research' },
+    { ...pin, viewId: 'x'.repeat(65) },
+    { ...pin, pinnedAt: '2026-10-08T10:00:00Z' },
+    { ...pin, view: { ...pin.view, renderer: 'script' } },
+    { ...pin, extra: true },
+  ]) assert.equal(isWorkspacePin(invalid), false, JSON.stringify(invalid));
+  assert.equal(isWorkspacePinsResponse({ pins: Array(21).fill(pin) }), false);
 });
 
 test('rejects invalid workspace IDs, geometry, operations, and generated-view allowlists', () => {

@@ -66,6 +66,7 @@ describe('committed SQL manifest', () => {
       '0035_folio.sql',
       '0036_folio_lowercase_ids.sql',
       '0037_task_github_issues.sql',
+      '0038_workspace_pins.sql',
     ]);
     for (const migration of migrations) await expect(readDownMigration(migration.name)).resolves.toMatchObject({ name: migration.name });
   });
@@ -76,6 +77,17 @@ describe('committed SQL manifest', () => {
     expect(migration?.sql).toContain('state <> N\'\'Done\'\' AND state <> N\'\'Cancelled\'\'');
     await expect(readDownMigration('0037_task_github_issues.sql')).resolves.toMatchObject({
       sql: expect.stringContaining('DROP COLUMN issue_number'),
+    });
+  });
+  it('stores owner-scoped workspace pins with a reversible table', async () => {
+    const migration = (await readMigrations()).find(({ name }) => name === '0038_workspace_pins.sql');
+    expect(migration?.sql).toContain('CREATE TABLE dbo.workspace_pins');
+    expect(migration?.sql).toContain('view_id nvarchar(64) COLLATE Latin1_General_100_BIN2');
+    expect(migration?.sql).toContain('pinned_at datetime2(7)');
+    expect(migration?.sql).toContain('ISJSON(view_json) = 1');
+    expect(migration?.sql).toContain('IX_workspace_pins_owner_pinned_at');
+    await expect(readDownMigration('0038_workspace_pins.sql')).resolves.toMatchObject({
+      sql: expect.stringContaining('DROP TABLE dbo.workspace_pins'),
     });
   });
   it('stores JSON embeddings only when SQL vector support is unavailable', async () => {

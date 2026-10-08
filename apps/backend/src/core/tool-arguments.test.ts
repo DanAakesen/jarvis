@@ -6,13 +6,15 @@ import { createLogger } from '../logging.js';
 import { executeRealtimeToolCall } from '../voice/realtime.js';
 import { coreModule } from './index.js';
 import type { JarvisTool } from './tool-registry.js';
+import { workspaceCommandSchema } from '@jarvis/contracts';
+import { toolArgumentRefusal } from './tool-arguments.js';
 
 const config = { ...loadConfig({}), logLevel: 'silent' as const };
 const headers = { authorization: ['Bearer', ['e30', 'e30', 'sig'].join('.')].join(' '), 'x-jarvis-message-id': '42' };
 const apps: ReturnType<typeof buildApp>[] = [];
 afterEach(async () => { await Promise.all(apps.splice(0).map((app) => app.close())); });
 
-function fixture() {
+function fixture(inputSchema?: JarvisTool['inputSchema']) {
   const execute = vi.fn(async () => ({ completed: true }));
   const beforeExecute = vi.fn(async () => {});
   const record = vi.fn(async () => {});
@@ -23,7 +25,7 @@ function fixture() {
   }, new Writable({ write(chunk: Buffer, _encoding, done) { logs.push(chunk.toString()); done(); } }));
   const tool: JarvisTool = {
     name: 'argument_test', description: 'Test argument validation',
-    inputSchema: {
+    inputSchema: inputSchema ?? {
       type: 'object', properties: { query: { type: 'string', minLength: 1 }, action: { type: 'string', enum: ['read'] } },
       required: ['query'], additionalProperties: false,
     },
@@ -71,7 +73,12 @@ describe('safe tool argument feedback', () => {
     expect(execute).not.toHaveBeenCalled();
     expect(beforeExecute).not.toHaveBeenCalled();
     expect(record).not.toHaveBeenCalled();
-    const expected = { service: 'jarvis-backend', tool: 'argument_test', keyword, ...(property ? { property } : {}) };
+    const instancePath = ['additionalProperties', 'required'].includes(keyword)
+      ? '' : property ? `/${property}` : '';
+    const expected = {
+      service: 'jarvis-backend', tool: 'argument_test', keyword, instancePath,
+      ...(property && keyword !== 'additionalProperties' ? { property } : {}),
+    };
     const events = trackTrace.mock.calls.filter(([trace]) => trace.message === 'tool.invalid_arguments');
     expect(events).toHaveLength(2);
     expect(events.map(([trace]) => trace.properties)).toEqual([expected, expected]);
@@ -83,6 +90,60 @@ describe('safe tool argument feedback', () => {
     expect(retry.json().outcome).toBe('ok');
     expect(execute).toHaveBeenCalledOnce();
     expect(record).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    { at: 'private-invalid-date', keyword: 'pattern' },
+    { at: '2026-02-30T12:30:00Z', keyword: 'format' },
+    { at: '2026-09-29T12:30:00+02', keyword: 'pattern' },
+  ])('logs the deepest timeline failure in voice and chat without values ($keyword)', async ({ at, keyword }) => {
+    const { app, execute, trackTrace, logs } = fixture(workspaceCommandSchema);
+    const payload = {
+      commandId: 'timeline-test', operation: 'create', viewId: 'history',
+      view: {
+        version: 1, renderer: 'timeline', title: 'History',
+        source: { id: 'research', status: 'complete' },
+        data: { events: [{ title: 'Event', at }] },
+      },
+    };
+    for (const url of ['/tools/argument_test', '/test/voice']) {
+      const response = await app.inject({ method: 'POST', url, headers, payload });
+      expect(response.json().outcome).toBe('refused');
+    }
+    const events = trackTrace.mock.calls.filter(([trace]) => trace.message === 'tool.invalid_arguments');
+    expect(events).toHaveLength(2);
+    for (const [trace] of events) {
+      expect(trace.properties).toMatchObject({
+        keyword, instancePath: '/view/data/events/0/at',
+      });
+    }
+    expect(execute).not.toHaveBeenCalled();
+    expect(logs.join('') + JSON.stringify(trackTrace.mock.calls)).not.toContain(at);
+  });
+
+  it('does not log dynamic object keys as instance paths', () => {
+    const log = { info: vi.fn() };
+    toolArgumentRefusal({ name: 'argument_test', inputSchema: {} }, {
+      keyword: 'type', instancePath: '/metadata/private-key',
+      schemaPath: '#/properties/metadata/additionalProperties/type', params: {},
+    }, log);
+    expect(log.info.mock.calls[0]?.[0]).not.toHaveProperty('instancePath');
+  });
+
+  it('does not log unknown nested property names', () => {
+    const log = { info: vi.fn() };
+    toolArgumentRefusal({ name: 'workspace_command', inputSchema: workspaceCommandSchema }, [{
+      keyword: 'const', instancePath: '/view/renderer',
+      schemaPath: '#/properties/view/oneOf/0/properties/renderer/const', params: {},
+    }, {
+      keyword: 'additionalProperties', instancePath: '/view/data/events/0',
+      schemaPath: '#/properties/view/oneOf/4/properties/data/properties/events/items/additionalProperties',
+      params: { additionalProperty: 'private_unknown_key' },
+    }], log);
+    expect(log.info).toHaveBeenCalledWith({
+      tool: 'workspace_command', keyword: 'additionalProperties', instancePath: '/view/data/events/0',
+    }, 'tool.invalid_arguments');
+    expect(JSON.stringify(log.info.mock.calls)).not.toContain('private_unknown_key');
   });
 
   it('does not echo unsafe property names or argument values', async () => {

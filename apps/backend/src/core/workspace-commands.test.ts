@@ -3,7 +3,7 @@ import { buildApp } from '../app.js';
 import { loadConfig } from '../config.js';
 import { coreModule } from './index.js';
 import { ToolFailure, ToolRefusal } from './tool-registry.js';
-import { isWorkspaceReflexOperation, WorkspaceCommandBroker } from './workspace-commands.js';
+import { isWorkspaceReflexOperation, WorkspaceCommandBroker, workspaceCommandTool } from './workspace-commands.js';
 import { workspaceNavigationPages, type WorkspaceCommand } from '@jarvis/contracts';
 import { executeReflexAction, reflexTargets, registerChatReflex, undoPartialReflexAction } from './reflex.js';
 
@@ -41,6 +41,45 @@ function fixture() {
 }
 
 describe('workspace command delivery', () => {
+  it('describes ordered timeline events and dates or period labels to the model', () => {
+    expect(workspaceCommandTool.description).toContain('chart or timeline requests');
+    expect(workspaceCommandTool.description).toContain('chart data uses kind line, bar or area and 1–5 named series of x/y points, up to 1,000 points total');
+    expect(workspaceCommandTool.description).toContain('data.events in the given order');
+    expect(workspaceCommandTool.description).toContain('at or label (or both)');
+    expect(workspaceCommandTool.description).toContain('label (1–40 characters) for seasons or periods');
+    expect(workspaceCommandTool.description).toContain('at (RFC 3339 date-time or YYYY-MM-DD) for precise dates');
+    expect(workspaceCommandTool.description).toContain('Use an HTML view for richer visuals');
+  });
+
+  it('delivers mixed timeline dates and periods unchanged in the given order', async () => {
+    const { app, broker } = fixture();
+    const command = {
+      commandId: 'timeline-history', operation: 'create', viewId: 'history',
+      view: {
+        ...view, renderer: 'timeline',
+        data: { events: [
+          { at: '2026-09-29', label: 'Sept 2026', title: 'Today' },
+          { label: '2009/10', title: 'Season' },
+          { at: '1880-11-13', title: 'Founded' },
+        ] },
+      },
+    };
+    const delivered: WorkspaceCommand[] = [];
+    const connection = broker.connect(ownerId, (event, data) => {
+      if (event === 'workspace-command') {
+        delivered.push(data.command);
+        broker.acknowledge(ownerId, connection.sessionId, data.command.commandId, true);
+      }
+      return true;
+    });
+    const response = await app.inject({
+      method: 'POST', url: '/tools/workspace_command', headers: agentHeaders, payload: command,
+    });
+    expect(response.json()).toMatchObject({ outcome: 'ok', result: { type: 'generated-view', view: command.view } });
+    expect(delivered).toEqual([command]);
+    connection.close();
+  });
+
   it.each(['show', 'hide'])('shows or hides the conversation only after an applied acknowledgement (%s)', async (action) => {
     const { app, broker } = fixture();
     const command = { commandId: `conversation-${action}`, operation: 'conversation', action };
@@ -124,6 +163,35 @@ describe('workspace command delivery', () => {
     });
     expect(response.json()).toMatchObject({ outcome: 'ok', result: { applied: true, ...command } });
     expect(delivered).toEqual([command]);
+    connection.close();
+  });
+
+  it.each([
+    { commandId: 'place-intent', operation: 'place', viewId: 'report', region: 'left' },
+    { commandId: 'arrange-intent', operation: 'arrange', layout: 'grid', viewIds: ['report', 'chart'] },
+    { commandId: 'minimise-all-intent', operation: 'minimise-all' },
+    { commandId: 'restore-all-intent', operation: 'restore-all' },
+    { commandId: 'close-all-intent', operation: 'close-all' },
+    { commandId: 'pin-intent', operation: 'pin', viewId: 'report' },
+    { commandId: 'unpin-intent', operation: 'unpin', viewId: 'report' },
+  ] as const)('relays the $operation window intent unchanged', async (command) => {
+    const { app, broker } = fixture();
+    let delivered: WorkspaceCommand | undefined;
+    const connection = broker.connect(ownerId, (event, data) => {
+      if (event === 'workspace-command') {
+        delivered = data.command;
+        broker.acknowledge(ownerId, connection.sessionId, data.command.commandId, true);
+      }
+      return true;
+    });
+    const response = await app.inject({
+      method: 'POST', url: '/tools/workspace_command', headers: agentHeaders, payload: command,
+    });
+    expect(delivered).toEqual(command);
+    expect(isWorkspaceReflexOperation(command)).toBe(true);
+    expect(response.json()).toMatchObject({
+      outcome: 'ok', result: { applied: true, commandId: command.commandId, operation: command.operation },
+    });
     connection.close();
   });
 
@@ -306,7 +374,9 @@ describe('workspace command delivery', () => {
     const connection = broker.connect(ownerId, () => true);
     const payload = {
       sessionId: connection.sessionId,
-      windows: [{ viewId: 'tasks', title: 'Tasks' }],
+      windows: [{
+        viewId: 'tasks', title: 'Tasks', state: 'open', placement: 'region', region: 'left', pinned: true, front: true,
+      }],
       contextPanelOpen: false,
       frame: {
         widthPx: 1280,
@@ -328,6 +398,10 @@ describe('workspace command delivery', () => {
     expect(broker.snapshot(ownerId)?.windows).toEqual(payload.windows);
     expect(broker.snapshot(ownerId)?.frame).toEqual(payload.frame);
     expect((await publish({ ...payload, frame: { ...payload.frame, widthPx: 0 } })).statusCode).toBe(400);
+    expect((await publish({
+      ...payload,
+      windows: [{ viewId: 'tasks', title: 'Tasks', region: 'left' }],
+    })).statusCode).toBe(400);
     expect((await publish(payload, agentHeaders)).statusCode).toBe(403);
     const create = await app.inject({
       method: 'POST', url: '/tools/workspace_command', headers: { ...userHeaders, 'x-jarvis-message-id': '101' },

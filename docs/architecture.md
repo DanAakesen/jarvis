@@ -162,7 +162,8 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   an owner-authenticated acknowledgement to
   `POST /now/workspace/commands/:commandId/ack` after applying or refusing it.
   Timeouts, cancellation, disconnects, stale sessions and partial failures are
-  returned as refused/error results; no view or geometry rows are persisted.
+  returned as refused/error results; command-delivered views and geometry are not
+  persisted.
   On non-conversation signed-in routes, the shell keeps the command stream
   mounted in a hidden Now panel while the workspace controller remains active.
   Ordinary renderers use fixed React elements and declarative data. P8-41 adds
@@ -223,6 +224,15 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   actions use the shared P9-42 argument-refusal path. The reversible action needs
   no confirmation. The UI session owns applying it and hiding the transcript by
   default on phones; those behaviors and live acceptance remain pending.
+- P8-45 adds explicit owner-only `GET /workspace/pins`,
+  `PUT /workspace/pins/:viewId` and `DELETE /workspace/pins/:viewId` routes.
+  Migration 0038 stores only the pinned view ID, validated generated-view JSON
+  and first `pinned_at` in `dbo.workspace_pins`; it does not persist window
+  geometry or automatically save tool-created views. Only the page routes write,
+  with a transaction-owned owner lock enforcing the 20-pin limit. Listing is
+  oldest first, and updating an existing pin preserves its timestamp. The shared
+  contracts enforce the workspace view-ID format, view shape and bounded
+  response; the UI session owns calling these routes.
   The web dispatcher at `apps/web/src/Workspace.tsx:391` must handle the P9-40
   and P9-45 union members in the UI change before the combined feature can build
   or deploy.

@@ -269,7 +269,7 @@ function createProgressView(
   windowTitle: string,
   searches: readonly SearchProgress[],
   sources: readonly HtmlArtifactSource[],
-  status: 'complete' | 'partial' | 'unavailable',
+  status: 'running' | 'writing' | 'complete' | 'partial' | 'unavailable',
   reason?: string,
 ): GeneratedView {
   const items = searches.map((search) => ({
@@ -289,6 +289,8 @@ function createProgressView(
   }
   if (status === 'unavailable') {
     items.unshift({ title: 'Research could not be completed', description: reason ?? 'Try again shortly.' });
+  } else if (status === 'writing') {
+    items.unshift({ title: 'Writing the report…', description: 'Preparing the interactive report.' });
   } else if (status === 'complete' || status === 'partial') {
     items.unshift({
       title: status === 'complete' ? 'Report is ready' : 'Report is ready with partial findings',
@@ -301,7 +303,7 @@ function createProgressView(
     renderer: 'list',
     source: {
       id: 'research',
-      status,
+      status: status === 'writing' ? 'running' : status,
       updatedAt: new Date().toISOString(),
       ...(status === 'unavailable' ? { reason: reason ?? 'Research could not be completed.' } : {}),
     },
@@ -325,7 +327,7 @@ async function sendProgress(
   searches: readonly SearchProgress[],
   sources: readonly HtmlArtifactSource[],
   signal: AbortSignal,
-  status: 'complete' | 'partial' | 'unavailable' = 'partial',
+  status: 'running' | 'writing' | 'complete' | 'partial' | 'unavailable' = 'running',
   reason?: string,
 ): Promise<void> {
   const command = workspaceCommand(
@@ -395,7 +397,7 @@ export function createHtmlResearchModule(
           query: boundedQuery(topic, suffix),
           status: 'pending',
         }));
-        const initialView = createProgressView(windowTitle, searches, [], 'partial');
+        const initialView = createProgressView(windowTitle, searches, [], 'running');
         const initialCommand = workspaceCommand('create', viewId, initialView);
         if (!isWorkspaceCommand(initialCommand, generatedViewValidationOptions(request.server))) {
           throw new ToolFailure('Research progress did not pass workspace validation.');
@@ -423,7 +425,9 @@ export function createHtmlResearchModule(
           const sources = () => [...sourcesByUrl.values()].slice(0, settings.research.maxSources);
           try {
             // Progress windows are best effort: a tab that misses one update must not stop the research.
-            const progress = () => sendProgress(app, ownerId, viewId, windowTitle, searches, sources(), jobSignal)
+            const progress = (status: 'running' | 'writing' = 'running') => sendProgress(
+              app, ownerId, viewId, windowTitle, searches, sources(), jobSignal, status,
+            )
               .catch(() => { jobSignal.throwIfAborted(); });
             for (const [index, search] of searches.entries()) {
               jobSignal.throwIfAborted();
@@ -462,6 +466,7 @@ export function createHtmlResearchModule(
             const reportSources = sources().slice(0, maxReportSources);
             const partial = searches.some((search) => search.status === 'failed');
             await tracker.progress(searches.length, 'Writing the report');
+            await progress('writing');
             const result = await runCodexToolResult(
               clientFor(),
               'html_report',

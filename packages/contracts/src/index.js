@@ -371,7 +371,16 @@ const dataSchemas = {
   text: object({ format: { type: 'string', enum: ['plain', 'markdown'] }, content: string(10_000) }),
   code: generatedCodeDataSchema,
   timeline: object({
-    events: array(object({ at: dateTime, title: string(200, 1), description: string(2_000) }, ['at', 'title']), rowLimit),
+    events: array({
+      ...object({
+        at: { anyOf: [
+          { ...dateTime, pattern: '(?:[zZ]|[+-]\\d{2}:\\d{2})$' },
+          { type: 'string', format: 'date' },
+        ] },
+        label: string(40, 1), title: string(200, 1), description: string(2_000),
+      }, ['title']),
+      anyOf: [{ required: ['at'] }, { required: ['label'] }],
+    }, rowLimit),
   }),
   chart: object({
     kind: { type: 'string', enum: ['line', 'bar', 'area'] },
@@ -431,7 +440,7 @@ const workspaceCommandId = {
   ...string(128, 1),
   pattern: '^[A-Za-z0-9_-]{1,128}$',
 };
-const workspaceViewId = {
+export const workspaceViewIdSchema = {
   ...string(64, 1),
   pattern: '^[A-Za-z][A-Za-z0-9_-]{0,63}$',
 };
@@ -442,6 +451,9 @@ export const workspaceSettingsSections = Object.freeze([
   'appearance', 'jarvis', 'personality', 'voice', 'presence', 'memory',
   'coding', 'projects', 'routines', 'credentials', 'backend',
 ]);
+const workspaceWindowRegions = ['left', 'right', 'top', 'bottom', 'centre', 'full'];
+const workspaceWindowPlacements = ['auto', 'region', 'manual'];
+const workspaceArrangeLayouts = ['auto', 'side-by-side', 'grid', 'cascade'];
 const workspaceLocationProperties = {
   page: { type: 'string', enum: [...workspaceNavigationPages] },
   section: { type: 'string', enum: [...workspaceSettingsSections] },
@@ -476,9 +488,16 @@ export function isWorkspaceSnapshot(value) {
     Object.keys(value).every((key) => ['windows', 'contextPanelOpen', 'frame', 'view'].includes(key)) &&
     Array.isArray(value.windows) && value.windows.length <= 32 &&
     value.windows.every((window) => isObject(window) &&
-      Object.keys(window).every((key) => ['viewId', 'title'].includes(key)) &&
+      Object.keys(window).every((key) =>
+        ['viewId', 'title', 'state', 'placement', 'region', 'pinned', 'front'].includes(key)) &&
       typeof window.viewId === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(window.viewId) &&
-      boundedString(window.title, 200, 1)) &&
+      boundedString(window.title, 200, 1) &&
+      (window.state === undefined || ['open', 'minimised'].includes(window.state)) &&
+      (window.placement === undefined || workspaceWindowPlacements.includes(window.placement)) &&
+      (!Object.hasOwn(window, 'region') ||
+        window.placement === 'region' && workspaceWindowRegions.includes(window.region)) &&
+      (window.pinned === undefined || typeof window.pinned === 'boolean') &&
+      (window.front === undefined || typeof window.front === 'boolean')) &&
     typeof value.contextPanelOpen === 'boolean' &&
     (value.frame === undefined || isHtmlArtifactFrame(value.frame)) &&
     (value.view === undefined || isWorkspaceView(value.view));
@@ -488,12 +507,15 @@ export const workspaceCommandSchema = Object.freeze({
   type: 'object',
   properties: {
     commandId: workspaceCommandId,
-    operation: { type: 'string', enum: ['create', 'update', 'show', 'close', 'minimise', 'restore', 'focus', 'move', 'resize', 'layout', 'context-panel', 'navigate', 'conversation'] },
+    operation: { type: 'string', enum: ['create', 'update', 'show', 'close', 'minimise', 'restore', 'focus', 'move', 'resize', 'layout', 'context-panel', 'navigate', 'conversation', 'place', 'arrange', 'minimise-all', 'restore-all', 'close-all', 'pin', 'unpin'] },
     page: { type: 'string', enum: [...workspaceNavigationPages] },
     section: { type: 'string', enum: [...workspaceSettingsSections] },
     taskId: { type: 'string', pattern: '^[1-9][0-9]{0,18}$', maxLength: 19 },
     issueNumber: { type: 'integer', minimum: 1, maximum: Number.MAX_SAFE_INTEGER },
-    viewId: workspaceViewId,
+    viewId: workspaceViewIdSchema,
+    region: { enum: workspaceWindowRegions },
+    layout: { enum: workspaceArrangeLayouts },
+    viewIds: { type: 'array', minItems: 1, maxItems: 8, items: workspaceViewIdSchema, uniqueItems: true },
     view: generatedViewSchema,
     x: { type: 'number', minimum: 0, maximum: 1 },
     y: { type: 'number', minimum: 0, maximum: 1 },
@@ -589,11 +611,31 @@ function validAction(value, registeredTools) {
   }
 }
 
+function validTimelineDate(value) {
+  if (typeof value !== 'string') return false;
+  const match = /^(\d{4}-\d{2}-\d{2})(?:[tT ](\d{2}):(\d{2}):(\d{2}(?:\.\d+)?)([zZ]|([+-])(\d{2}):(\d{2})))?$/.exec(value);
+  if (!match) return false;
+  const date = new Date(`${match[1]}T00:00:00Z`);
+  if (!Number.isFinite(date.getTime()) || date.toISOString().slice(0, 10) !== match[1]) return false;
+  if (match[2] === undefined) return true;
+  const hour = Number(match[2]);
+  const minute = Number(match[3]);
+  const second = Number(match[4]);
+  const offsetHour = Number(match[7] ?? 0);
+  const offsetMinute = Number(match[8] ?? 0);
+  if (hour > 23 || minute > 59 || offsetHour > 23 || offsetMinute > 59) return false;
+  if (second < 60) return true;
+  const sign = match[6] === '-' ? -1 : 1;
+  const utcMinute = minute - offsetMinute * sign;
+  const utcHour = hour - offsetHour * sign - (utcMinute < 0 ? 1 : 0);
+  return second < 61 && (utcHour === 23 || utcHour === -1) && (utcMinute === 59 || utcMinute === -1);
+}
+
 function validSource(source) {
   if (!isObject(source) || ![
     'now', 'factory.tasks', 'factory.projects', 'usage', 'image_generation', 'html_generation', 'research', 'knowledge_graph',
   ].includes(source.id) ||
-    !['complete', 'partial', 'unavailable'].includes(source.status) ||
+    !['running', 'complete', 'partial', 'unavailable'].includes(source.status) ||
     Object.keys(source).some((key) => !['id', 'status', 'updatedAt', 'reason', 'page'].includes(key))) return false;
   if (source.updatedAt !== undefined && (typeof source.updatedAt !== 'string' || Number.isNaN(Date.parse(source.updatedAt)))) return false;
   if (source.reason !== undefined && !boundedString(source.reason, 500)) return false;
@@ -646,8 +688,11 @@ function validData(renderer, data, trustedBlobHost) {
     case 'timeline':
       return Object.keys(data).every((key) => key === 'events') && Array.isArray(data.events) &&
         data.events.length <= rowLimit && data.events.every((event) => isObject(event) &&
-          Object.keys(event).every((key) => ['at', 'title', 'description'].includes(key)) &&
-          typeof event.at === 'string' && !Number.isNaN(Date.parse(event.at)) &&
+          Object.keys(event).every((key) => ['at', 'label', 'title', 'description'].includes(key)) &&
+          (event.at !== undefined || event.label !== undefined) &&
+          (event.at === undefined || validTimelineDate(event.at)) &&
+          (event.label === undefined || typeof event.label === 'string' &&
+            event.label.length > 0 && Array.from(event.label).length <= 40) &&
           boundedString(event.title, 200, 1) &&
           (event.description === undefined || boundedString(event.description, 2_000)));
     case 'chart': {
@@ -850,6 +895,51 @@ export function isValidHtmlArtifactHtml(value) {
   return validHtml(value);
 }
 
+export const workspacePinSchema = Object.freeze({
+  type: 'object',
+  properties: Object.freeze({
+    viewId: workspaceViewIdSchema,
+    view: generatedViewSchema,
+    pinnedAt: dateTime,
+  }),
+  required: Object.freeze(['viewId', 'view', 'pinnedAt']),
+  additionalProperties: false,
+});
+
+export const workspacePinPutSchema = Object.freeze({
+  type: 'object',
+  properties: Object.freeze({ view: generatedViewSchema }),
+  required: Object.freeze(['view']),
+  additionalProperties: false,
+});
+
+export const workspacePinResponseSchema = Object.freeze({
+  type: 'object',
+  properties: Object.freeze({ pin: workspacePinSchema }),
+  required: Object.freeze(['pin']),
+  additionalProperties: false,
+});
+
+export const workspacePinsResponseSchema = Object.freeze({
+  type: 'object',
+  properties: Object.freeze({
+    pins: Object.freeze({ type: 'array', maxItems: 20, items: workspacePinSchema }),
+  }),
+  required: Object.freeze(['pins']),
+  additionalProperties: false,
+});
+
+export function isWorkspacePin(value, options = {}) {
+  return isObject(value) && Object.keys(value).length === 3 &&
+    typeof value.viewId === 'string' && /^[A-Za-z][A-Za-z0-9_-]{0,63}$/.test(value.viewId) &&
+    isGeneratedView(value.view, options) && validIsoDateTime(value.pinnedAt);
+}
+
+export function isWorkspacePinsResponse(value, options = {}) {
+  return isObject(value) && Object.keys(value).length === 1 &&
+    Array.isArray(value.pins) && value.pins.length <= 20 && value.pins.every((pin) => isWorkspacePin(pin, options));
+}
+
 export function isWorkspaceCommand(value, options = {}) {
   if (!isObject(value) ||
     typeof value.commandId !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/.test(value.commandId)) return false;
@@ -874,6 +964,25 @@ export function isWorkspaceCommand(value, options = {}) {
     case 'minimise':
     case 'restore':
     case 'focus':
+      return hasOnly('viewId') &&
+        typeof value.viewId === 'string' && /^[A-Za-z][A-Za-z0-9_-]{0,63}$/.test(value.viewId);
+    case 'place':
+      return hasOnly('viewId', 'region') &&
+        typeof value.viewId === 'string' && /^[A-Za-z][A-Za-z0-9_-]{0,63}$/.test(value.viewId) &&
+        workspaceWindowRegions.includes(value.region);
+    case 'arrange':
+      return hasOnly('layout', 'viewIds') && workspaceArrangeLayouts.includes(value.layout) &&
+        (value.viewIds === undefined || Array.isArray(value.viewIds) && value.viewIds.length >= 1 &&
+          value.viewIds.length <= 8 &&
+          value.viewIds.every((viewId) => typeof viewId === 'string' &&
+            /^[A-Za-z][A-Za-z0-9_-]{0,63}$/.test(viewId)) &&
+          new Set(value.viewIds).size === value.viewIds.length);
+    case 'minimise-all':
+    case 'restore-all':
+    case 'close-all':
+      return hasOnly();
+    case 'pin':
+    case 'unpin':
       return hasOnly('viewId') &&
         typeof value.viewId === 'string' && /^[A-Za-z][A-Za-z0-9_-]{0,63}$/.test(value.viewId);
     case 'move':
