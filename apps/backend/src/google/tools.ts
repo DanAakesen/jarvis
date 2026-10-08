@@ -1044,7 +1044,7 @@ export function createGoogleModule(
     },
     {
       name: 'mail_delete_draft',
-      description: 'Prepare to permanently delete one Gmail draft. No change is made until Dan replies yes, approve, go ahead or do it in a later message within ten minutes.',
+      description: 'Prepare to permanently delete one Gmail draft. No change is made until Dan approves it with the exact confirmation phrase returned.',
       inputSchema: {
         type: 'object',
         properties: { draftId: { type: 'string', minLength: 1, maxLength: 512 } },
