@@ -3,10 +3,11 @@ import { JARVIS_REPOSITORY, projectContext } from '../factory/project-context.js
 import {
   isModelCatalogue, modelRoles, reasoningEfforts, researchDepths, researchSettingsBounds,
   memorySettingsBounds, memorySettingsSchema, researchSettingsSchema,
-  voiceTuningSettingsBounds, voiceTuningSettingsSchema,
+  timeoutSettingsBounds, timeoutSettingsSchema, voiceTuningSettingsBounds, voiceTuningSettingsSchema,
 } from '@jarvis/contracts';
 import type {
-  MemorySettings, ModelCatalogue, ModelRole, ReasoningEffort, ResearchSettings, VoiceTuningSettings,
+  MemorySettings, ModelCatalogue, ModelRole, ReasoningEffort, ResearchSettings, TimeoutSettings,
+  VoiceTuningSettings,
 } from '@jarvis/contracts';
 import {
   defaultRoleModels, fallbackModelCatalogue, isRoleModelSupported, modelsForRole, reasoningForModel,
@@ -48,6 +49,7 @@ export interface Settings {
     minimizeWindowsOnVoiceStart: boolean;
   };
   research: ResearchSettings;
+  timeouts: TimeoutSettings;
   memory: MemorySettings;
   codex: {
     model: string;
@@ -112,6 +114,11 @@ export const defaultSettings: Settings = {
     maxSpokenReplyTokens: 4_096,
   },
   research: { depth: 'quick', maxSources: 50, timeoutSeconds: 305 },
+  timeouts: {
+    toolTimeoutSeconds: 30,
+    longToolTimeoutSeconds: 320,
+    backendHttpTimeoutSeconds: 10,
+  },
   memory: {
     similarityThreshold: 0.35,
     searchTopK: 5,
@@ -150,6 +157,7 @@ export const settingsOptions = {
   voiceTuning: voiceTuningSettingsBounds,
   researchDepths,
   researchSettings: researchSettingsBounds,
+  timeoutSettings: timeoutSettingsBounds,
   memorySettings: memorySettingsBounds,
   projectVisibilities: ['private', 'public'],
   projectAgents: ['codex', 'copilot'],
@@ -196,6 +204,11 @@ const settingKeys = {
     depth: 'research.depth',
     maxSources: 'research.max_sources',
     timeoutSeconds: 'research.timeout_seconds',
+  },
+  timeouts: {
+    toolTimeoutSeconds: 'timeouts.tool_timeout_seconds',
+    longToolTimeoutSeconds: 'timeouts.long_tool_timeout_seconds',
+    backendHttpTimeoutSeconds: 'timeouts.backend_http_timeout_seconds',
   },
   memory: {
     similarityThreshold: 'memory.similarity_threshold',
@@ -311,6 +324,12 @@ function validSetting(
         value >= researchSettingsBounds.timeoutSeconds.minimum &&
         value <= researchSettingsBounds.timeoutSeconds.maximum;
     }
+  }
+  if (area === 'timeouts') {
+    if (!Object.hasOwn(timeoutSettingsBounds, key)) return false;
+    const bounds = timeoutSettingsBounds[key as keyof TimeoutSettings];
+    return typeof value === 'number' && Number.isSafeInteger(value) &&
+      value >= bounds.minimum && value <= bounds.maximum;
   }
   if (area === 'memory') {
     if (key === 'similarityThreshold' || key === 'graphTextSimilarityThreshold') {
@@ -446,6 +465,10 @@ const settingsPatchSchema = {
         research: {
           type: 'object', minProperties: 1, additionalProperties: true,
           properties: researchSettingsSchema.properties,
+        },
+        timeouts: {
+          type: 'object', minProperties: 1, additionalProperties: true,
+          properties: timeoutSettingsSchema.properties,
         },
         memory: memorySettingsSchema,
         codex: {
@@ -819,6 +842,18 @@ export async function registerSettingsRoutes(app: import('fastify').FastifyInsta
               ...memorySettingsSchema,
               required: Object.keys(defaultSettings.memory),
             },
+            research: {
+              type: 'object',
+              properties: {
+                timeoutSeconds: researchSettingsSchema.properties.timeoutSeconds,
+              },
+              required: ['timeoutSeconds'],
+              additionalProperties: false,
+            },
+            timeouts: {
+              ...timeoutSettingsSchema,
+              required: Object.keys(defaultSettings.timeouts),
+            },
             personality: {
               type: 'object',
               properties: {
@@ -854,7 +889,10 @@ export async function registerSettingsRoutes(app: import('fastify').FastifyInsta
               },
             },
           },
-          required: ['model', 'reasoningEffort', 'roles', 'memory', 'personality', 'awayMode', 'mode', 'changedAt'],
+          required: [
+            'model', 'reasoningEffort', 'roles', 'memory', 'research', 'timeouts',
+            'personality', 'awayMode', 'mode', 'changedAt',
+          ],
           additionalProperties: false,
         },
         403: {
@@ -882,6 +920,8 @@ export async function registerSettingsRoutes(app: import('fastify').FastifyInsta
       reasoningEffort: settings.jarvis.reasoning,
       roles: settings.roles,
       memory: settings.memory,
+      research: { timeoutSeconds: settings.research.timeoutSeconds },
+      timeouts: settings.timeouts,
       personality: settings.personality,
       awayMode: presence.mode !== 'present',
       mode: presence.mode,
@@ -919,6 +959,14 @@ export async function registerSettingsRoutes(app: import('fastify').FastifyInsta
         if (numericSettings.some((key) => research[key] !== undefined && typeof research[key] !== 'number')) {
           return reply.code(400).send({ error: 'Invalid setting value' });
         }
+      }
+      const timeouts = (request.body as {
+        settings?: { timeouts?: Record<string, unknown> };
+      } | undefined)?.settings?.timeouts;
+      if (timeouts && typeof timeouts === 'object' && !Array.isArray(timeouts) &&
+          Object.keys(timeoutSettingsBounds).some((key) =>
+            timeouts[key] !== undefined && typeof timeouts[key] !== 'number')) {
+        return reply.code(400).send({ error: 'Invalid setting value' });
       }
       const memory = (request.body as {
         settings?: { memory?: Record<string, unknown> };

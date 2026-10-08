@@ -106,8 +106,7 @@ Long-term knowledge:
 # Nonsecret ID of the `jarvis-api` app from infra/bootstrap.output.json.
 DEFAULT_API_CLIENT_ID = "9f751b64-ea0f-484f-bf09-f08276a69e2f"
 REQUEST_TIMEOUT_SECONDS = 30.0
-# Tools that legitimately run longer than one request; each sits just above the backend's own limit.
-LONG_TOOL_TIMEOUT_SECONDS = {"web_research": 320.0}
+BACKEND_HTTP_TIMEOUT_SECONDS = 10.0
 CATALOGUE_TTL_SECONDS = 60.0
 MAX_RESPONSE_BYTES = 1024 * 1024
 MAX_TOOLS = 128
@@ -202,6 +201,30 @@ def _model_settings(value: Any) -> ModelSettings:
     mode_instructions = personality.get(
         "modeInstructions", {"present": "", "away": "", "on_the_move": ""}
     )
+    timeouts = value.get("timeouts", {})
+    if not isinstance(timeouts, dict) or any(
+        key not in {
+            "toolTimeoutSeconds", "longToolTimeoutSeconds", "backendHttpTimeoutSeconds",
+        }
+        for key in timeouts
+    ):
+        raise ValueError("invalid Jarvis settings")
+    timeout_values = {
+        "toolTimeoutSeconds": (30, 1, 120),
+        "longToolTimeoutSeconds": (320, 30, 320),
+        "backendHttpTimeoutSeconds": (10, 1, 60),
+    }
+    for key, (default, minimum, maximum) in timeout_values.items():
+        timeout = timeouts.get(key, default)
+        if type(timeout) is not int or not minimum <= timeout <= maximum:
+            raise ValueError("invalid Jarvis settings")
+        timeout_values[key] = (timeout, minimum, maximum)
+    research = value.get("research", {})
+    if not isinstance(research, dict) or any(key != "timeoutSeconds" for key in research):
+        raise ValueError("invalid Jarvis settings")
+    research_timeout = research.get("timeoutSeconds", 305)
+    if type(research_timeout) is not int or not 1 <= research_timeout <= 320:
+        raise ValueError("invalid Jarvis settings")
     if (
         not isinstance(model, str)
         or not model.strip()
@@ -245,6 +268,10 @@ def _model_settings(value: Any) -> ModelSettings:
         mode_instructions=mode_instructions,
         jarvis_repository=_jarvis_repository(value.get("jarvisRepository")),
         projects=_projects(value.get("projects", [])),
+        tool_timeout_seconds=timeout_values["toolTimeoutSeconds"][0],
+        long_tool_timeout_seconds=timeout_values["longToolTimeoutSeconds"][0],
+        backend_http_timeout_seconds=timeout_values["backendHttpTimeoutSeconds"][0],
+        research_timeout_seconds=research_timeout,
     )
 
 
@@ -363,6 +390,7 @@ class BackendToolClient:
             timeout=REQUEST_TIMEOUT_SECONDS, follow_redirects=False
         )
         self._clock = clock
+        self._settings = ModelSettings("gpt-5.6-luna", "none")
         self._catalogue: tuple[BackendTool, ...] | None = None
         self._loaded_at = 0.0
         self._lock = asyncio.Lock()
@@ -405,7 +433,9 @@ class BackendToolClient:
     async def model_settings(self) -> ModelSettings:
         """Read effective Jarvis settings to snapshot for one new session."""
         with latency_span("settings"):
-            return await self._model_settings()
+            settings = await self._model_settings()
+            self._settings = settings
+            return settings
 
     async def record_model_usage(
         self,
@@ -606,7 +636,11 @@ class BackendToolClient:
                 return _error(name, "This phone session is invalid; nothing was done.")
             headers["X-Jarvis-Phone-Session-ID"] = phone_session_id
         try:
-            read_timeout = LONG_TOOL_TIMEOUT_SECONDS.get(name, REQUEST_TIMEOUT_SECONDS)
+            read_timeout = (
+                self._settings.long_tool_timeout_seconds
+                if name == "web_research"
+                else self._settings.tool_timeout_seconds
+            )
             async with self._http.stream(
                 "POST",
                 f"{self._base_url}/tools/{name}",

@@ -40,6 +40,27 @@ export const researchSettingsSchema = Object.freeze({
     timeoutSeconds: Object.freeze({ type: 'integer', ...researchSettingsBounds.timeoutSeconds }),
   }),
 });
+export const timeoutSettingsBounds = Object.freeze({
+  toolTimeoutSeconds: Object.freeze({ minimum: 1, maximum: 120 }),
+  longToolTimeoutSeconds: Object.freeze({ minimum: 30, maximum: 320 }),
+  backendHttpTimeoutSeconds: Object.freeze({ minimum: 1, maximum: 60 }),
+});
+export const timeoutSettingsSchema = Object.freeze({
+  type: 'object',
+  minProperties: 1,
+  additionalProperties: false,
+  properties: Object.freeze({
+    toolTimeoutSeconds: Object.freeze({
+      type: 'integer', ...timeoutSettingsBounds.toolTimeoutSeconds,
+    }),
+    longToolTimeoutSeconds: Object.freeze({
+      type: 'integer', ...timeoutSettingsBounds.longToolTimeoutSeconds,
+    }),
+    backendHttpTimeoutSeconds: Object.freeze({
+      type: 'integer', ...timeoutSettingsBounds.backendHttpTimeoutSeconds,
+    }),
+  }),
+});
 export const memorySettingsBounds = Object.freeze({
   similarityThreshold: Object.freeze({ minimum: 0, maximum: 1 }),
   searchTopK: Object.freeze({ minimum: 1, maximum: 8 }),

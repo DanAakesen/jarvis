@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextvars
 import json
 import re
 import time
@@ -19,6 +20,7 @@ from starlette.responses import JSONResponse, StreamingResponse
 
 from chat_telemetry import latency_span, log_latency
 from jarvis_tools import (
+    BACKEND_HTTP_TIMEOUT_SECONDS,
     backend_settings_from_environment,
     current_chat_phase_setter,
     current_chat_session_id,
@@ -39,6 +41,21 @@ MAX_CONTEXT_TOOL_CALLS = 20
 MAX_OUTPUT_BYTES = 512 * 1024
 MESSAGE_ID = re.compile(r"^[1-9][0-9]{0,18}$")
 MAX_SQL_BIGINT = 9_223_372_036_854_775_807
+current_backend_http_timeout_seconds: contextvars.ContextVar[int] = contextvars.ContextVar(
+    "backend_http_timeout_seconds", default=int(BACKEND_HTTP_TIMEOUT_SECONDS)
+)
+
+
+def _backend_http_timeout(settings: Any) -> int:
+    timeouts = settings.get("timeouts") if isinstance(settings, dict) else None
+    timeout = (
+        timeouts.get("backendHttpTimeoutSeconds")
+        if isinstance(timeouts, dict)
+        else None
+    )
+    if type(timeout) is not int or not 1 <= timeout <= 60:
+        raise RuntimeError("Agent settings are invalid")
+    return timeout
 
 
 def _tool_outcome_summary(message: dict[str, Any]) -> str:
@@ -70,12 +87,25 @@ async def load_verified_history(
     backend_url, _ = backend_settings_from_environment()
     headers = {"Authorization": " ".join(("Bear" + "er", token))}
     with latency_span("chat_history_verification"):
-        async with httpx.AsyncClient(timeout=10.0, follow_redirects=False) as client:
+        async with httpx.AsyncClient(
+            timeout=BACKEND_HTTP_TIMEOUT_SECONDS, follow_redirects=False
+        ) as client:
+            settings_response = await client.get(
+                f"{backend_url}/agent/settings", headers=headers
+            )
+            if settings_response.status_code != 200 or len(settings_response.content) > 65_536:
+                raise RuntimeError("Agent settings are unavailable")
+            try:
+                configured_timeout = _backend_http_timeout(settings_response.json())
+            except (ValueError, TypeError):
+                raise RuntimeError("Agent settings are invalid") from None
+            current_backend_http_timeout_seconds.set(configured_timeout)
             profile, response = await asyncio.gather(
-                client.get(f"{backend_url}/me", headers=headers),
+                client.get(f"{backend_url}/me", headers=headers, timeout=configured_timeout),
                 client.get(
                     f"{backend_url}/conversation/history?limit={MAX_HISTORY_MESSAGES}",
                     headers=headers,
+                    timeout=configured_timeout,
                 ),
             )
         if profile.status_code != 200:
@@ -248,6 +278,8 @@ def register_chat_invocation(
                 {"error": "Unauthorized or unverified conversation message"},
                 status_code=401,
             )
+        backend_http_timeout = current_backend_http_timeout_seconds.get()
+        current_backend_http_timeout_seconds.set(int(BACKEND_HTTP_TIMEOUT_SECONDS))
 
         async def events():
             message_token = current_message_id.set(message_id)
@@ -269,7 +301,7 @@ def register_chat_invocation(
                         backend_url, _ = backend_settings_from_environment()
                         headers = {"Authorization": " ".join(("Bear" + "er", match.group(1)))}
                         async with httpx.AsyncClient(
-                            timeout=10.0, follow_redirects=False
+                            timeout=backend_http_timeout, follow_redirects=False
                         ) as client:
                             response = await client.get(
                                 f"{backend_url}/conversation/sessions/{chat_session_id}/turns/"
@@ -306,7 +338,7 @@ def register_chat_invocation(
                         backend_url, _ = backend_settings_from_environment()
                         headers = {"Authorization": " ".join(("Bear" + "er", match.group(1)))}
                         async with httpx.AsyncClient(
-                            timeout=10.0, follow_redirects=False
+                            timeout=backend_http_timeout, follow_redirects=False
                         ) as client:
                             response = await client.post(
                                 f"{backend_url}/conversation/sessions/{chat_session_id}/turns/"

@@ -58,6 +58,22 @@ export const researchSettingsSchema: Readonly<{
   additionalProperties: false;
   properties: Readonly<Record<keyof ResearchSettings, Readonly<Record<string, unknown>>>>;
 }>;
+export interface TimeoutSettings {
+  toolTimeoutSeconds: number;
+  longToolTimeoutSeconds: number;
+  backendHttpTimeoutSeconds: number;
+}
+export const timeoutSettingsBounds: Readonly<{
+  toolTimeoutSeconds: Readonly<{ minimum: 1; maximum: 120 }>;
+  longToolTimeoutSeconds: Readonly<{ minimum: 30; maximum: 320 }>;
+  backendHttpTimeoutSeconds: Readonly<{ minimum: 1; maximum: 60 }>;
+}>;
+export const timeoutSettingsSchema: Readonly<{
+  type: 'object';
+  minProperties: 1;
+  additionalProperties: false;
+  properties: Readonly<Record<keyof TimeoutSettings, Readonly<Record<string, unknown>>>>;
+}>;
 export interface ModelDeployment {
   name: string;
   model: string;

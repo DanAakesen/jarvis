@@ -18,6 +18,8 @@ import {
   researchDepths,
   researchSettingsBounds,
   researchSettingsSchema,
+  timeoutSettingsBounds,
+  timeoutSettingsSchema,
   voiceTuningSettingsBounds,
   voiceTuningSettingsSchema,
   isGeneratedView,
@@ -98,6 +100,19 @@ test('research settings contracts bound depth, source count, and invocation time
     depth: { type: 'string', enum: ['quick', 'standard', 'deep'] },
     maxSources: { type: 'integer', minimum: 1, maximum: 50 },
     timeoutSeconds: { type: 'integer', minimum: 1, maximum: 320 },
+  });
+});
+
+test('timeout settings contracts bound tool, long-tool and backend HTTP requests', () => {
+  assert.deepEqual(timeoutSettingsBounds, {
+    toolTimeoutSeconds: { minimum: 1, maximum: 120 },
+    longToolTimeoutSeconds: { minimum: 30, maximum: 320 },
+    backendHttpTimeoutSeconds: { minimum: 1, maximum: 60 },
+  });
+  assert.deepEqual(timeoutSettingsSchema.properties, {
+    toolTimeoutSeconds: { type: 'integer', minimum: 1, maximum: 120 },
+    longToolTimeoutSeconds: { type: 'integer', minimum: 30, maximum: 320 },
+    backendHttpTimeoutSeconds: { type: 'integer', minimum: 1, maximum: 60 },
   });
 });
 
