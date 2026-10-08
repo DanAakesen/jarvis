@@ -32,7 +32,7 @@ export default defineConfig(({ mode }) => {
     test: {
       environment: 'jsdom',
       setupFiles: ['./src/test/setup.ts'],
-      include: ['src/**/*.test.tsx', 'src/now-feed.test.ts', 'src/conversation-history.test.ts', 'src/auth.test.ts', 'config/**/*.test.ts'],
+      include: ['src/**/*.test.tsx', 'src/**/*.test.ts', 'config/**/*.test.ts'],
     },
   };
 });

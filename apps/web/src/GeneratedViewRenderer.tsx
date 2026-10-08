@@ -2,7 +2,9 @@ import { isGeneratedView, type GeneratedView } from '@jarvis/contracts';
 import { Fragment } from 'react';
 import { Link } from 'react-router-dom';
 import { KnowledgeGraphWindow } from './knowledge/KnowledgeGraphView';
+import { ChartView } from './ChartView';
 import { CodeView } from './CodeView';
+import { HtmlAppView } from './HtmlAppView';
 
 function ViewAction({ view, title }: { view: GeneratedView; title: string }) {
   const action = view.actions?.find((candidate) => candidate.type === 'open-route' || candidate.type === 'open-link');
@@ -11,8 +13,18 @@ function ViewAction({ view, title }: { view: GeneratedView; title: string }) {
   return <a className="activity-title" href={action.url} rel="noreferrer" target="_blank">{title}</a>;
 }
 
-export function GeneratedViewRenderer({
-  view,
+type TimelineEvent = { at?: string; label?: string; title: string; description?: string };
+
+function timelineDate(at: string) {
+  const dateOnly = /^\d{4}-\d{2}-\d{2}$/u.test(at);
+  const date = new Date(dateOnly ? `${at}T00:00:00Z` : at);
+  if (Number.isNaN(date.getTime())) return at;
+  return dateOnly
+    ? date.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })
+    : date.toLocaleString(undefined, { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
+export function GeneratedViewRenderer({  view,
   className,
   trustedBlobHost,
 }: {
@@ -25,6 +37,8 @@ export function GeneratedViewRenderer({
   }
 
   switch (view.renderer) {
+    case 'html-app':
+      return <HtmlAppView key={view.data.artifactId} artifactId={view.data.artifactId} title={view.title} />;
     case 'code':
       return <CodeView data={view.data} title={view.title} />;
     case 'knowledge-graph':
@@ -75,11 +89,14 @@ export function GeneratedViewRenderer({
     case 'text':
       return <p className="generated-view-text">{view.data.content}</p>;
     case 'timeline':
+      // Events keep Jarvis's order (P9-47): a label such as "2009/10" wins, otherwise the date; `at` may be date-only.
       return (
-        <ol className="generated-view-timeline">
-          {view.data.events.map((event, index) => (
-            <li key={`${event.at}-${index}`}>
-              <time dateTime={event.at}>{event.at}</time>
+        <ol className="generated-view-timeline" aria-label={view.title}>
+          {(view.data.events as TimelineEvent[]).map((event, index) => (
+            <li key={`${event.label ?? event.at ?? ''}-${index}`}>
+              <span className="timeline-marker">
+                {event.label ?? (event.at ? <time dateTime={event.at}>{timelineDate(event.at)}</time> : null)}
+              </span>
               <strong>{event.title}</strong>
               {event.description && <p>{event.description}</p>}
             </li>
@@ -87,21 +104,7 @@ export function GeneratedViewRenderer({
         </ol>
       );
     case 'chart':
-      return (
-        <div className="generated-view-table">
-          <table aria-label={`${view.title} ${view.data.kind} chart data`}>
-            <thead><tr><th scope="col">Series</th><th scope="col">Point</th><th scope="col">X</th><th scope="col">Y</th></tr></thead>
-            <tbody>
-              {view.data.series.flatMap((series) => series.points.map((point, index) => (
-                <tr key={`${series.name}-${index}`}>
-                  <th scope="row">{series.name}</th><td>{index + 1}</td><td>{point.x}</td><td>{point.y}</td>
-                </tr>
-              )))}
-            </tbody>
-          </table>
-          <p>Chart: {view.data.kind}. Values are shown as a table.</p>
-        </div>
-      );
+      return <ChartView kind={view.data.kind} series={view.data.series} title={view.title} />;
     case 'task-card':
       return (
         <dl className="generated-view-details">
