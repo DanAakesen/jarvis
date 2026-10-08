@@ -140,11 +140,24 @@ Dan never fills in a project form. He gives Jarvis, by voice or chat, a project 
 
 ### Settings
 
+P9-40 lets Dan ask Jarvis by voice or chat to switch the visible page: Jarvis
+home, the Software Factory Kanban board or a specific task/issue, Settings (including
+named sections), Usage, the knowledge graph, Folio or Status. “Kanban”, “board”,
+“factory” and “tasks” select the Factory board; “go home” and “back to Jarvis”
+select home. Navigation is reversible and needs no confirmation. The backend
+delivers it to all open signed-in tabs through the existing workspace broker
+and reports success only after an applied acknowledgement; refusals and failures
+remain visible. The navigation contract and backend are built offline; shell
+routing, the usual page transition and live acceptance remain the UI session's work.
+Factory task navigation opens the task window over the board and focuses its
+card; issue-number navigation focuses that issue's card. The UI refuses missing
+tasks/issues and Folio/Status until those pages exist, returning a reason.
+
 Global defaults on the settings page; a task can override the coding-agent model and reasoning. A changed setting applies to new sessions and tasks, never to running ones. Only models available in the Foundry account or Dan's subscriptions are offered. Light, dark, or system appearance and the optional voice-start window preference are persisted; system appearance follows the OS without replacing or restarting the live Jarvis room. Generated views and window arrangement remain temporary.
 
 Dan can also change Jarvis's model or reasoning by chat or voice for the next session, and change the agent or verified model options on a Ready coding task. Running-task model changes are refused with a reason; they never alter an active turn.
 
-Presence has three modes: Present (`present`, green), Away (`away`, yellow), and On the move (`on_the_move`, blue). Away and On the move suppress spoken status updates; the Now feed and browser approvals remain available in all modes. The Settings API keeps `personality.customInstructions` as the base instruction and adds one instruction for each mode, each limited to 2,000 characters. Jarvis can change modes from chat or voice without confirmation and announces the change.
+Presence has three modes: Present (`present`, cyan), Away (`away`, amber), and On the move (`on_the_move`, neutral). Away and On the move suppress spoken status updates; the Now feed and browser approvals remain available in all modes. The Settings API keeps `personality.customInstructions` as the base instruction and adds one instruction for each mode, each limited to 2,000 characters. Jarvis can change modes from chat or voice without confirmation and announces the change.
 
 | Area | Setting | Default |
 | --- | --- | --- |

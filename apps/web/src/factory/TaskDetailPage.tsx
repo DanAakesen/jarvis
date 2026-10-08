@@ -6,6 +6,7 @@ import { fetchReleaseView } from './release-data';
 import type { PullRequest, ReleaseView } from './release-data';
 import { TaskControls } from './TaskControls';
 import { TaskWindowLink } from '../TaskWindowLink';
+import { Loader } from '../Loader';
 
 type TaskState = 'Ready' | 'Running' | 'PauseRequested' | 'Paused' | 'NeedsAttention' | 'Done' | 'Cancelled';
 type TaskEventSource = 'runner' | 'backend' | 'github' | 'dan';
@@ -531,7 +532,7 @@ export function TaskDetailPage({ backendUrl, getAccessToken, taskId, compact = f
     const latestDisk = measurements.at(-1);
     return (
       <section className="task-detail task-window" data-task-state={task?.state} aria-label={`Task ${taskId}`}>
-        {result.status === 'loading' && <p className="task-window-loading" role="status">Loading task details…</p>}
+        {result.status === 'loading' && <Loader variant="panel" label="Loading task details…" />}
         {result.status === 'error' && (
           <div className="task-detail-error" role="alert">
             <p>{result.message}</p>
@@ -578,7 +579,7 @@ export function TaskDetailPage({ backendUrl, getAccessToken, taskId, compact = f
                   {task.originMessageId && (
                     <div className="task-origin">
                       {sourceMessageLoading
-                        ? <p role="status">Loading the conversation message…</p>
+                        ? <Loader variant="lines" label="Loading the conversation message…" />
                         : sourceMessage
                           ? <>
                             <blockquote className="task-origin-message">{sourceMessage.text}</blockquote>
@@ -634,7 +635,7 @@ export function TaskDetailPage({ backendUrl, getAccessToken, taskId, compact = f
                       )}
                   {hasMoreEvents && (
                     <button className="secondary-button timeline-more" type="button" onClick={() => void loadMoreEvents()} disabled={loadingEvents}>
-                      {loadingEvents ? 'Loading events…' : 'Load more events'}
+                      {loadingEvents ? <Loader variant="inline" announce={false} label="Loading events…" /> : 'Load more events'}
                     </button>
                   )}
                   {eventsError && <p className="chat-error" role="alert">{eventsError}</p>}
@@ -728,7 +729,7 @@ export function TaskDetailPage({ backendUrl, getAccessToken, taskId, compact = f
     >
       {!compact && <Link className="home-link" to="/factory/kanban">Back to Kanban</Link>}
       {!compact && <h1 id="task-heading">{task?.title ?? `Task ${taskId}`}</h1>}
-      {result.status === 'loading' && <p role="status">Loading task details…</p>}
+      {result.status === 'loading' && <Loader variant="panel" label="Loading task details…" />}
       {result.status === 'error' && (
         <div className="task-detail-error" role="alert">
           <p>{result.message}</p>
@@ -769,7 +770,7 @@ export function TaskDetailPage({ backendUrl, getAccessToken, taskId, compact = f
               <div>
                 <dt>Conversation message</dt>
                 <dd>{sourceMessageLoading
-                  ? <span role="status">Loading message…</span>
+                  ? <Loader variant="inline" label="Loading message…" />
                   : sourceMessage
                     ? <>
                       <blockquote className="task-origin-message">{sourceMessage.text}</blockquote>
@@ -935,7 +936,7 @@ export function TaskDetailPage({ backendUrl, getAccessToken, taskId, compact = f
                 )}
             {hasMoreEvents && (
               <button className="secondary-button timeline-more" type="button" onClick={() => void loadMoreEvents()} disabled={loadingEvents}>
-                {loadingEvents ? 'Loading events…' : 'Load more events'}
+                {loadingEvents ? <Loader variant="inline" announce={false} label="Loading events…" /> : 'Load more events'}
               </button>
             )}
             {eventsError && <p className="timeline-error" role="alert">{eventsError}</p>}

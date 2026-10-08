@@ -60,6 +60,20 @@ function JarvisWorkspaceRequest() {
 }
 
 describe('Workspace', () => {
+  it('floats shell windows without the Arrange menu and moves them from the title with arrow keys', () => {
+    const view: WorkspaceView = { id: 'notes', title: 'A very long research title', content: { status: 'ready', content: <p>Body</p> } };
+    render(<Workspace views={[view]} defaultArrangement="layered" arrangeMenu={false} />);
+
+    expect(screen.queryByRole('button', { name: 'Arrange A very long research title' })).toBeNull();
+    const title = screen.getByRole('heading', { name: 'A very long research title' });
+    expect(title.getAttribute('tabindex')).toBe('0');
+    const article = title.closest('article')!;
+    const before = Number(article.style.getPropertyValue('--workspace-y-n'));
+    fireEvent.keyDown(title, { key: 'ArrowDown' });
+    expect(Number(article.style.getPropertyValue('--workspace-y-n'))).toBeGreaterThan(before);
+    fireEvent.keyDown(title, { key: 'ArrowRight', altKey: true });
+    expect(article.style.getPropertyValue('--workspace-width')).not.toBe('72%');
+  });
   it('pins windows as tabs in the shell tab bar and lets their owner close them from the tab', () => {
     const host = document.createElement('div');
     document.body.appendChild(host);
@@ -593,7 +607,7 @@ describe('Workspace', () => {
     ]} />);
 
     expect(screen.getByText('This view has no content yet.')).not.toBeNull();
-    expect(screen.getByText('Loading view…').getAttribute('role')).toBe('status');
+    expect(screen.getByText('Loading view…').closest('[role="status"]')).not.toBeNull();
     expect(screen.getByText('The source is unavailable.').getAttribute('role')).toBe('alert');
     expect(screen.getByText('Partial result')).not.toBeNull();
 

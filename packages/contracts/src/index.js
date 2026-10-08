@@ -403,31 +403,22 @@ const workspaceViewId = {
   ...string(64, 1),
   pattern: '^[A-Za-z][A-Za-z0-9_-]{0,63}$',
 };
-const workspaceOperation = (operation, required = []) => ({
-  properties: { operation: { const: operation } },
-  required: ['operation', ...required],
-});
-const workspaceCommandVariants = [
-  ...['create', 'update'].map((operation) => workspaceOperation(operation, ['viewId', 'view'])),
-  ...['show', 'close', 'minimise', 'restore', 'focus'].map((operation) =>
-    workspaceOperation(operation, ['viewId'])),
-  workspaceOperation('move', ['viewId', 'x', 'y']),
-  workspaceOperation('resize', ['viewId', 'width', 'height']),
-  workspaceOperation('layout', ['arrangement']),
-  {
-    properties: { operation: { const: 'context-panel' }, action: { const: 'open' } },
-    required: ['operation', 'action'],
-  },
-  ...['close', 'toggle'].map((action) => ({
-    properties: { operation: { const: 'context-panel' }, action: { const: action } },
-    required: ['operation', 'action'],
-  })),
-];
+export const workspaceNavigationPages = Object.freeze([
+  'home', 'factory', 'settings', 'usage', 'knowledge', 'folio', 'status',
+]);
+export const workspaceSettingsSections = Object.freeze([
+  'appearance', 'jarvis', 'personality', 'voice', 'presence', 'memory',
+  'coding', 'projects', 'routines', 'credentials', 'backend',
+]);
 export const workspaceCommandSchema = Object.freeze({
   type: 'object',
   properties: {
     commandId: workspaceCommandId,
-    operation: { enum: ['create', 'update', 'show', 'close', 'minimise', 'restore', 'focus', 'move', 'resize', 'layout', 'context-panel'] },
+    operation: { type: 'string', enum: ['create', 'update', 'show', 'close', 'minimise', 'restore', 'focus', 'move', 'resize', 'layout', 'context-panel', 'navigate'] },
+    page: { type: 'string', enum: [...workspaceNavigationPages] },
+    section: { type: 'string', enum: [...workspaceSettingsSections] },
+    taskId: { type: 'string', pattern: '^[1-9][0-9]{0,18}$', maxLength: 19 },
+    issueNumber: { type: 'integer', minimum: 1, maximum: Number.MAX_SAFE_INTEGER },
     viewId: workspaceViewId,
     view: generatedViewSchema,
     x: { type: 'number', minimum: 0, maximum: 1 },
@@ -439,9 +430,6 @@ export const workspaceCommandSchema = Object.freeze({
   },
   required: ['commandId', 'operation'],
   additionalProperties: false,
-  oneOf: [
-    ...workspaceCommandVariants,
-  ],
 });
 
 const routePattern = /^\/(?:$|factory\/tasks\/[1-9]\d{0,18}|factory\/(?:projects|releases)\/[1-9]\d{0,15}|usage|settings)(?:\?[^#]*)?$/;
@@ -770,6 +758,13 @@ export function isWorkspaceCommand(value, options = {}) {
     typeof value.commandId !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/.test(value.commandId)) return false;
   const hasOnly = (...keys) => Object.keys(value).every((key) => ['commandId', 'operation', ...keys].includes(key));
   switch (value.operation) {
+    case 'navigate':
+      return hasOnly('page', 'section', 'taskId', 'issueNumber') && workspaceNavigationPages.includes(value.page) &&
+        (value.section === undefined ||
+          value.page === 'settings' && workspaceSettingsSections.includes(value.section)) &&
+        (value.taskId === undefined || value.page === 'factory' && isTaskEventId(value.taskId)) &&
+        (value.issueNumber === undefined ||
+          value.page === 'factory' && Number.isSafeInteger(value.issueNumber) && value.issueNumber > 0);
     case 'create':
     case 'update':
       return hasOnly('viewId', 'view') &&

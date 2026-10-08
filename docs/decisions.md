@@ -695,7 +695,9 @@ Mistakes made so far and the rule that prevents each one.
 | **L121** | One tool schema with a root `oneOf` broke every voice session | On 8 October voice failed right after start: Voice Live answered `session.update` with `invalid_function_parameters` for `manage_model_deployment` (P9-07, #544), whose input schema put `oneOf` at the root. Voice sends every registered tool at session start, so one invalid schema disables voice entirely; `toModelToolSchema` only strips untyped nested combinators (L103). The schema is now a flat object with `action` as an enum, and `execute` enforces the per-action fields. A test keeps core tool schemas free of root combinators. Lesson: tool input schemas must be a plain root object; express alternatives in code, not in the schema. |
 | **L122** | Clipboard reads are sensitive and turn-scoped | P9-32 adds only explicit current-message clipboard reads through the authenticated PC bridge. | Keep clipboard tools out of reflex execution, redact obvious secrets before returning read text, bound text to 20 KiB, and store only redacted metadata in the generic tool-call audit. |
 | **L123** | Chat called an agent-only route with Dan's token | From the 01:53 agent deploy on 8 October every chat message failed with `Chat agent unavailable (HTTP 503)`. P9-11 (#557) added a `GET /agent/settings` read to `load_verified_history`, but sent Dan's delegated token; that route only accepts the hosted agent's identity, so the backend answered 403 and the agent refused the turn. Mocked tests asserted the same wrong header, and nobody used chat overnight. The agent now reads its settings with its own managed identity and falls back to the default timeout if they are unavailable. Lesson: agent-only routes need the agent token, tests must assert which identity each call uses, and a deploy that touches the agent needs a live chat check (P9-39). |
+| **L126** | One huge ACP line hung a Factory task for an hour | Task 10 (8 October, the calendar-approval change Jarvis requested) went silent at 03:37 right after Codex ran `cat` on several large docs, and failed on the runner's 60-minute timeout. The runner spawned Codex with asyncio's default 64 KiB stream limit; the tool-output ACP message was one longer line, so `readline()` raised, the unobserved reader task died, nobody drained stdout and Codex blocked writing. The ACP pipe now allows 32 MiB lines, and an over-limit line is dropped with an `acp_message_dropped` event while reading continues. Lesson: stream readers on agent pipes must survive oversized messages; a dead reader must never look like a busy agent. |
 | **L124** | Folio ids came back upper case from SQL | After #564 deployed, `GET /folio` returned 503 for Dan: migration 0035 built `item_id` as `kind:` + `CONVERT(nvarchar(36), id)`, which SQL Server renders in upper case, while the store only accepts lower-case GUIDs, so every stored item failed validation. Same root cause as #536's job ids. Migration 0036 lower-cases existing ids and the store normalises ids on every read and write. Lesson: never build or compare GUID text from SQL Server without `LOWER()`; tests against the real database must assert the id shape round-trips. |
+| **L125** | The Google smoke probe used an endpoint Jarvis has no scope for | Every deploy after P9-39 (#562) failed its smoke gate with Google "down", while Dan's calendar tools worked. The probe read `/users/me/calendarList`, which needs `calendar.readonly`; Jarvis holds only `calendar.events` (infra/setup-google.ps1), so it always got 403. The probe now reads one primary-calendar event, the same endpoint and scope the calendar tools use. Lesson: a health probe must exercise the feature's own endpoint and scopes, and a new gate should be checked against a known-good system before it blocks deploys. |
 
 ## 5 October 2026 — Software Factory layout selected
 
@@ -741,6 +743,26 @@ confirmation results, and bounded settings response; do not add a migration or
 change the web app. Focused route, voice, settings-parser, and chat-prompt tests
 cover the offline behavior; live provider behavior remains unverified.
 
+## P9-40 (8 October 2026) — Backend-directed page navigation
+
+Extend the shared `workspace_command` with `navigate` rather than opening an
+external browser or generating another workspace view. Use canonical page and
+Settings-section IDs in `packages/contracts`; accept task IDs and positive
+safe-integer issue numbers only for Factory
+and a section only for Settings. Flatten the root schema to satisfy L121 and
+keep per-operation validation in the existing type guard. Reuse the authenticated
+all-tab broker and acknowledgement routes without a migration or new channel.
+Keep aliases in the shared capability prompt so voice and chat have the same
+guidance. Backend contract, route and prompt checks pass offline; the UI session
+must implement page transitions and application/refusal reporting before this
+is a working end-to-end feature. No `apps/web` changes are part of this task.
+The UI-session handoff fixes the page key to `knowledge` and Settings sections
+to `appearance`, `jarvis`, `personality`, `voice`, `presence`, `memory`, `coding`,
+`projects`, `routines`, `credentials`, `backend`. Aliases belong only in the
+shared capability prompt. The UI resolves task/issue selectors and refuses with
+a reason if they are missing or if Folio/Status is not implemented; sending a
+command never implies application.
+
 
 ## P9-37 (8 October 2026) — Keep voice, chat, and the backend tool catalogue aligned
 
@@ -779,6 +801,21 @@ Dan requested the hotfix after seeing inspection guidance overlay More and persi
 
 **Confirmed by Dan in a live local session (reference image supplied):** on the Jarvis page the rail, navigation and Context panels become translucent glass slabs angled back into the room, hinged at the outer screen edges. The message window and composer use more transparent glass with a rim and warm lower light. The composer orb is a living miniature of the stage orb's amber core. The stage orb stays fixed on desktop when windows open, which supersedes the move-left layout. Phones keep the flat stacked layout and the existing voice docking. The top-level Arrange menu is hidden on the Jarvis page. The "Activity, sharing and backend" disclosure is removed: the Now feed and backend sleep move to Settings, and screen sharing becomes a working top-bar toggle beside the camera. Pending confirmations therefore appear in Settings until a top-bar indicator exists. Scrollbars are thin glass. The conversation window docks onto the composer with a grab handle and an overshooting spring. Every workspace window shares one compact chrome and flies off to the top right when closed by Dan or Jarvis. Later the same day Dan asked for one room and one shell look on every page (the 3D stage now lives in the shell), a Kanban page that is first and default in Software Factory (a layout of the existing task data, not a new data source), a visual commit-trail release bar on Kanban, restyled Settings with a Back control and a restyled sign-in page, more transparent glass, and next-generation motion (pointer-lit glass and staged entrances). Chrome's styleable selects are used where available, with native fallback. Dan then made Kanban the only Software Factory page: the Tasks and Projects list pages are removed (old addresses redirect), Kanban gains Create task and Create project dialogs, and project management moves to Settings. Side panels float over content without moving it, and the navigation panel appears only for areas with more than one page. In the evening Dan asked for tasks to open as windows (not pages) that can be pinned, a tab bar under the top bar that minimised windows are thrown into, the chat bar parked as an orb in the rail off the home page and popped out on demand, a slimmer chat bar without the paperclip, an orb that wakes on hover, and an icon-only current-area mark in the rail. Pinned task windows persist in the browser only; server-side pinning of generated views (#430) is still open. Via the coordinator Dan also asked for presence-mode and memory designs in Settings (#468, #469); both are built against the merged APIs and fall back to an explicit "not available yet" state if a service is missing. This is UI-only work done directly by Dan and the UI session, outside agent issues.
 
+## 7 October 2026 — Sign-in layout and first-paint theme
+
+**Confirmed by Dan:** the sign-in page must not flash light before switching to dark. The theme is applied before first paint from the last theme used on the device, falling back to the OS theme (not light) when none is remembered. The sign-in card moves off the orb into a dense glass slab low over the floor, without its duplicate orb. UI-only.
+
+## 7 October 2026 — Windows, chat activity, jobs chip, knowledge graph
+
+**Confirmed by Dan in the local UI session:** window tabs move into the top bar and the breadcrumb is removed; windows float and drag freely and may overlap the docked conversation; the Arrange menu is removed. While Jarvis works its bubble shows the orb's amber core (not an animated J) with rotating, shuffled first-person phrases and tool lines; tool calls show on Jarvis's reply. Look-at-screen/camera menu items are removed (Dan asks Jarvis instead). The jobs chip (P8-43) follows the coordinator's proposal that Dan delegated. The knowledge graph (P7-43) is a 3D star cloud (Dan chose it over a flat constellation and folder islands despite the higher cost, with the performance limits in DESIGN.md). The room's amber accents match the chat orb's brighter amber and its orange lines are thinner. UI-only.
+
+## 7 October 2026 — Chat bubbles, glass transparency, loading and panel motion
+
+**Confirmed by Dan in the local UI session:** bubbles lose their fill; Dan's rim is cyan and Jarvis's amber, with a running rim light while Jarvis works and a soft breathing glow on the newest reply. The conversation has no tab, and every other window is a Chrome-style tab, as is every background job. Voice keeps the shell. Windows and shell slabs are more transparent (less blur and tint), with stronger rims on high-density screens. The signed-in page never scrolls or bounces. The amber core loader is kept for the app's first load only (Dan found it confusing everywhere); after that, frames appear at once and content loads lazily behind glass placeholders shaped like it. The palette is reduced to cyan and amber (red only for errors); presence modes, primary buttons, success and voice states follow it, while the knowledge graph keeps four folder colours. Side panels animate closed as well as open. The knowledge graph keeps a subtle idle life (slow turn, breathing stars, occasional link sparks), which means it renders continuously at 30 fps while visible. UI-only.
+
+## 8 October 2026 — Folio pane and Jarvis navigation in the UI
+
+**Coordinator-relayed from Dan:** the Folio (P9-25) is built as a pane in the left sidebar slot rather than a page, so reopening never moves Dan off what he is looking at; `navigate { page: 'folio' }` therefore opens the pane. Jarvis's `navigate` command (P9-40) is handled in the shell with the agreed page and Settings section keys; unknown targets and pages that do not exist yet are refused with a reason. UI-only.
 ## P10-04 (8 October 2026) — GitHub issues are the Factory board source
 
 GitHub issues remain the single backlog and source of truth; Factory and

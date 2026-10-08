@@ -1,8 +1,10 @@
-import { useCallback, useContext, useEffect, useLayoutEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
+import { Fragment, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import type { PublicClientApplication } from '@azure/msal-browser';
 import { useLocation } from 'react-router-dom';
 import { TaskWindowLink } from './TaskWindowLink';
+import { LivePhrase, ToolCallChip, WorkingCore, type ToolState } from './ToolCallChip';
+import { useJarvisActivity } from './activity-context';
 import type { PublicConfig } from '../config/public-config';
 import { sharedScreenContext, type CameraController, type ScreenShareController } from './screen-sharing';
 import { ConversationHandle } from './ConversationHandle';
@@ -14,6 +16,7 @@ import { WorkspaceCommandContext } from './workspace-command-state';
 import { conversationViewId, useConversationWindow } from './conversation-window-state';
 import { MarkdownContent } from './MarkdownContent';
 import { useConversationIntents } from './conversation-intents';
+import { Loader } from './Loader';
 import {
   createChatSession,
   loadImageArtifactUrl,
@@ -24,6 +27,7 @@ import {
   type ChatMessage,
   type ChatSession,
   type ConversationHistoryMessage,
+  type ConversationHistoryToolCall,
 } from './conversation-history';
 
 const maxTaskId = 9_223_372_036_854_775_807n;
@@ -119,7 +123,7 @@ function ConversationImageArtifact({
   }, [artifactId, client, config]);
 
   if (unavailable) return <span role="status">Generated image is unavailable.</span>;
-  if (!url) return <span role="status">Loading generated image…</span>;
+  if (!url) return <Loader variant="image" label="Loading generated image…" />;
   return (
     <figure className="message-artifact">
       <img src={url} alt="Generated image" loading="lazy" />
@@ -167,6 +171,23 @@ export function ConversationHistory({
   const [reload, setReload] = useState(0);
   const [language, setLanguage] = useState<'da' | 'en'>('en');
   const [session, setSession] = useState<ChatSession | null>(null);
+  const { latestActivity } = useJarvisActivity();
+  // Tools used in the current chat turn, collected from runtime activity as they start and finish.
+  const [liveTools, setLiveTools] = useState<{ id: string; tool: string; state: ToolState }[]>([]);
+  const [seenActivity, setSeenActivity] = useState(latestActivity);
+  if (latestActivity !== seenActivity) {
+    setSeenActivity(latestActivity);
+    if (latestActivity?.source === 'chat' &&
+        (latestActivity.type === 'tool-call-started' || latestActivity.type === 'tool-call-finished')) {
+      const event = latestActivity;
+      setLiveTools((current) => {
+        const state: ToolState = event.type === 'tool-call-started' ? 'running' : event.outcome;
+        return current.some((tool) => tool.id === event.activityId)
+          ? current.map((tool) => tool.id === event.activityId ? { ...tool, state } : tool)
+          : [...current, { id: event.activityId, tool: event.toolName, state }].slice(-12);
+      });
+    }
+  }
   const [draft, setDraft] = useState(readDraft);
   const [sending, setSending] = useState(false);
   const [queue, setQueue] = useState<QueuedMessage[]>([]);
@@ -418,6 +439,7 @@ export function ConversationHistory({
     turnSession.current = null;
     turnInFlight.current = true;
     setSending(true);
+    setLiveTools([]);
     setActiveMessage(queued);
     setHistoryError('');
     setStreamedText('');
@@ -547,46 +569,68 @@ export function ConversationHistory({
     );
   }
 
-  async function inspectVision(source: 'camera' | 'screen') {
-    const capture = source === 'camera' ? camera : screenShare;
-    if (!capture?.sharing || capture.inspecting) return;
-    setTurnError('');
-    try {
-      const activeSession = session?.language === language
-        ? session
-        : await createChatSession(client, config, language);
-      setSession(activeSession);
-      const context = await capture.inspect(activeSession.id);
-      setVisionContext({
-        sessionId: activeSession.id,
-        description: context.description,
-        ...(context.sharedWindowTitle ? { sharedWindowTitle: context.sharedWindowTitle } : {}),
-        source,
-      });
-    } catch (reason) {
-      setTurnError(reason instanceof Error ? reason.message : 'Jarvis could not inspect the visual frame.');
-    }
-  }
-
   const displayedVoiceUsage = new Set<string>();
-  const attachActions: MoreMenuAction[] = [
-    {
-      id: 'screen',
-      label: screenShare?.inspecting ? 'Looking at screen…' : 'Look at screen',
+  // Only Jarvis's newest reply carries the settled rim glow; while a turn runs, the live bubble has the running light.
+  const latestJarvisId = [...messages].reverse().find((message) => message.role === 'jarvis')?.id;
+  // Tool calls are recorded on Dan's turn, but they are Jarvis's work: show them on Jarvis's reply. A turn without a
+  // reply (yet) gets a small Jarvis-side row of its own.
+  const toolPlacement = (() => {
+    const reply = new Map<string, ConversationHistoryToolCall[]>();
+    const unanswered = new Map<string, ConversationHistoryToolCall[]>();
+    let pending: ConversationHistoryToolCall[] = [];
+    let pendingFrom: string | null = null;
+    for (const message of messages) {
+      if (message.role === 'dan') {
+        if (pending.length && pendingFrom) unanswered.set(pendingFrom, pending);
+        pending = [...message.toolCalls];
+        pendingFrom = message.id;
+      } else {
+        const calls = [...pending, ...message.toolCalls];
+        if (calls.length) reply.set(message.id, calls);
+        pending = [];
+        pendingFrom = null;
+      }
+    }
+    if (pending.length && pendingFrom) unanswered.set(pendingFrom, pending);
+    return { reply, unanswered };
+  })();
+  const renderToolCalls = (calls: ConversationHistoryToolCall[]) => (
+    <ul className="message-tools" aria-label="Tool calls">
+      {calls.map((call) => (
+        <li key={call.id}>
+          <ToolCallChip tool={call.tool} state={call.outcome === 'ok' || call.outcome === 'refused' ? call.outcome : 'error'} />
+          {validTaskId(call.taskId) && (
+            <TaskWindowLink className="task-reference" taskId={call.taskId}>
+              Task #{call.taskId}
+            </TaskWindowLink>
+          )}
+          {call.tool === 'image_generation' && call.outcome === 'ok' && call.artifactId && (
+            <ConversationImageArtifact client={client} config={config} artifactId={call.artifactId} />
+          )}
+        </li>
+      ))}
+    </ul>
+  );
+
+  // Sharing lives in the More menu (not the top bar); a live line above the composer shows what Jarvis can see.
+  const captureActions: MoreMenuAction[] = [
+    ...(screenShare ? [{
+      id: 'share-screen',
+      label: screenShare.sharing ? 'Stop sharing screen' : screenShare.starting ? 'Starting screen share…' : 'Share screen',
       icon: <ConversationIcon name="screen" />,
-      onSelect: () => void inspectVision('screen'),
-      disabled: !screenShare?.sharing || screenShare.inspecting,
-      ...(!screenShare?.sharing ? { description: 'Share your screen from the top bar first.' } : {}),
-    },
-    {
-      id: 'camera',
-      label: camera?.inspecting ? 'Looking at camera…' : 'Look at camera',
+      onSelect: () => { if (screenShare.sharing) screenShare.stop(); else void screenShare.start(); },
+      disabled: screenShare.starting,
+    }] : []),
+    ...(camera ? [{
+      id: 'share-camera',
+      label: camera.sharing ? 'Turn camera off' : camera.starting ? 'Starting camera…' : 'Turn camera on',
       icon: <ConversationIcon name="camera" />,
-      onSelect: () => void inspectVision('camera'),
-      disabled: !camera?.sharing || camera.inspecting,
-      ...(!camera?.sharing ? { description: 'Turn on the camera from the top bar before asking Jarvis to inspect a frame.' } : {}),
-    },
+      onSelect: () => { if (camera.sharing) camera.stop(); else void camera.start(); },
+      disabled: camera.starting,
+    }] : []),
   ];
+  // Sharing is the only visual control; to have Jarvis look, Dan simply asks in the conversation.
+  const attachActions: MoreMenuAction[] = captureActions;
 
   const latestButton = !atLatest && (
     <button className="conversation-latest" type="button" onClick={jumpToLatest}>
@@ -597,7 +641,7 @@ export function ConversationHistory({
   const transcriptContent = (
     <>
         {loading ? (
-          <p role="status" aria-live="polite">Loading conversation history…</p>
+          <Loader variant="core" label="Loading conversation history…" />
         ) : historyError && messages.length === 0 ? null : messages.length === 0 && !sending && queue.length === 0 && failedTurns.length === 0 ? (
           <div className="conversation-greeting">
             <h2>What’s on your mind?</h2>
@@ -607,7 +651,7 @@ export function ConversationHistory({
           <>
             {nextCursor && (
               <button className="history-button" type="button" onClick={() => void loadOlder()} disabled={loadingOlder}>
-                {loadingOlder ? 'Loading older history…' : 'Load older history'}
+                {loadingOlder ? <Loader variant="inline" announce={false} label="Loading older history…" /> : 'Load older history'}
               </button>
             )}
             <ol className="conversation-messages" aria-label="Messages between Dan and Jarvis">
@@ -618,38 +662,30 @@ export function ConversationHistory({
                   : '';
                 if (voiceUsageText) displayedVoiceUsage.add(message.sessionId);
                 return (
-                  <li className="conversation-message" data-speaker={message.role} key={message.id} tabIndex={0}>
+                  <Fragment key={message.id}>
+                  <li className="conversation-message" data-speaker={message.role} data-latest={message.id === latestJarvisId && !sending || undefined} tabIndex={0}>
                     <strong className="message-author visually-hidden">{message.role === 'dan' ? 'Dan' : 'Jarvis'}</strong>
                     {message.role === 'jarvis' && message.channel === 'chat'
                       ? <MarkdownContent source={message.text} />
                       : <p>{message.text}</p>}
                     {message.interrupted && <p className="interrupted-label">Interrupted</p>}
+                    {/* Only the time, tucked onto the bubble's top-right edge and shown on hover; voice usage is read out to screen readers. */}
                     <div className="message-metadata">
-                      <p className="message-language">
-                        {message.channel === 'voice' ? 'Voice' : 'Chat'} · {message.language === 'da' ? 'Danish' : 'English'}
-                        {voiceUsageText}
-                      </p>
-                      <time dateTime={message.at} title={new Date(message.at).toLocaleString()}>{relativeTime(message.at, now)}</time>
+                      <time dateTime={message.at} title={new Date(message.at).toLocaleString()}>
+                        {relativeTime(message.at, now)}
+                      </time>
+                      {voiceUsageText && <span className="visually-hidden">{`Voice${voiceUsageText}`}</span>}
                     </div>
-                    {message.toolCalls.length > 0 && (
-                      <ul className="message-tools" aria-label="Tool calls">
-                        {message.toolCalls.map((call) => (
-                          <li key={call.id}>
-                            <span className="tool-call">{call.tool} · {call.outcome}</span>
-                            {validTaskId(call.taskId) && (
-                              <TaskWindowLink className="task-reference" taskId={call.taskId}>
-                                Task #{call.taskId}
-                              </TaskWindowLink>
-                            )}
-                            {call.tool === 'image_generation' && call.outcome === 'ok' && call.artifactId && (
-                              <ConversationImageArtifact client={client} config={config} artifactId={call.artifactId} />
-                            )}
-                          </li>
-                        ))}
-                      </ul>
-                    )}
+                    {message.role === 'jarvis' && toolPlacement.reply.get(message.id) && renderToolCalls(toolPlacement.reply.get(message.id)!)}
                     {failedTurns.filter((turn) => turn.messageId === message.id).map(failedTurnFeedback)}
                   </li>
+                  {toolPlacement.unanswered.get(message.id) && (
+                    <li className="conversation-message conversation-tools-only" data-speaker="jarvis">
+                      <strong className="message-author visually-hidden">Jarvis</strong>
+                      {renderToolCalls(toolPlacement.unanswered.get(message.id)!)}
+                    </li>
+                  )}
+                  </Fragment>
                 );
               })}
             </ol>
@@ -669,20 +705,30 @@ export function ConversationHistory({
           <p className="queued-state">Sending · {activeMessage.language === 'da' ? 'Danish' : 'English'}</p>
         </div>}
         {sending && (
-          <div className="streaming-message">
-            {streamedText ? (
-              <>
-                <strong className="message-author visually-hidden">Jarvis</strong>
-                <div className="streaming-reply" aria-label="Jarvis reply in progress">
-                  <MarkdownContent source={streamedText} streaming />
-                  <span className="streaming-caret" aria-hidden="true" />
-                </div>
-              </>
-            ) : (
-              <p className="chat-thinking" role="status" aria-live="polite">
-                <span className="thinking-dot" aria-hidden="true" />
-                Jarvis is thinking…
+          // The live turn: Jarvis's bubble shows its working core while it thinks, each tool it uses as a line on a
+          // trail, and then the streamed answer in the same bubble.
+          <div className="conversation-message streaming-message live-turn" data-speaker="jarvis">
+            <strong className="message-author visually-hidden">Jarvis</strong>
+            {!streamedText && (
+              <p className="live-turn-status">
+                <WorkingCore />
+                <LivePhrase key={liveTools.some((tool) => tool.state === 'running') ? 'working' : liveTools.length ? 'composing' : 'thinking'}
+                  phase={liveTools.some((tool) => tool.state === 'running') ? 'working' : liveTools.length ? 'composing' : 'thinking'} />
+                <span className="visually-hidden" role="status" aria-live="polite">Jarvis is thinking…</span>
               </p>
+            )}
+            {liveTools.length > 0 && (
+              <ol className="live-turn-tools" aria-label="Tools Jarvis is using">
+                {liveTools.map((tool) => (
+                  <li key={tool.id} data-state={tool.state}><ToolCallChip tool={tool.tool} state={tool.state} /></li>
+                ))}
+              </ol>
+            )}
+            {streamedText && (
+              <div className="streaming-reply" aria-label="Jarvis reply in progress">
+                <MarkdownContent source={streamedText} streaming />
+                <span className="streaming-caret" aria-hidden="true" />
+              </div>
             )}
             {steering && <p className="chat-status" role="status" aria-live="polite">Steering…</p>}
           </div>
@@ -792,6 +838,16 @@ export function ConversationHistory({
         <p id="chat-guidance" className="visually-hidden">
           Enter to send or steer the active reply; Ctrl+Enter queues. Shift+Enter adds a new line.
         </p>
+        {(screenShare?.sharing || camera?.sharing) && (
+          <p className="composer-live" role="status">
+            <span className="composer-live-dot" aria-hidden="true" />
+            <span>{screenShare?.sharing && camera?.sharing ? 'Screen and camera shared with Jarvis' : screenShare?.sharing ? 'Screen shared with Jarvis' : 'Camera on for Jarvis'}</span>
+            {screenShare?.sharing && <button type="button" className="composer-live-stop" onClick={() => screenShare.stop()}>Stop screen</button>}
+            {camera?.sharing && <button type="button" className="composer-live-stop" onClick={() => camera.stop()}>Camera off</button>}
+          </p>
+        )}
+        {screenShare?.error && <p className="composer-status chat-error" role="alert">{screenShare.error}</p>}
+        {camera?.error && <p className="composer-status chat-error" role="alert">{camera.error}</p>}
         {(screenShare?.inspecting || camera?.inspecting) &&
           <p className="composer-status" role="status">{camera?.inspecting ? 'Looking at camera…' : 'Looking at screen…'}</p>}
         {visionContext && visionContext.sessionId === session?.id &&

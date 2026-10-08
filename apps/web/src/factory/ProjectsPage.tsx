@@ -1,7 +1,9 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { backendFetch } from '../backend-request';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
+import { Modal } from '../Modal';
 import { useConversationIntents } from '../conversation-intents';
+import { Loader } from '../Loader';
 
 interface Project {
   id: string;
@@ -328,7 +330,7 @@ export function ProjectsPage({ backendUrl, getAccessToken }: ProjectsPageProps) 
           <button className="secondary-button" type="button" onClick={retry}>Refresh projects and repositories</button>
         )}
       </div>
-      {visibleState === 'loading' && <p className="projects-feedback" role="status">Loading projects…</p>}
+      {visibleState === 'loading' && <Loader variant="rows" label="Loading projects…" />}
       {visibleState === 'error' && (
         <div className="projects-feedback" role="alert">
           <p>{visibleError}</p>
@@ -377,7 +379,7 @@ export function ProjectsPage({ backendUrl, getAccessToken }: ProjectsPageProps) 
             {repositoryFetchedAt && (
               <p className="repository-freshness">Repository list refreshed {repositoryDate(repositoryFetchedAt)}.</p>
             )}
-            {repositoryState === 'loading' && <p className="projects-feedback" role="status">Loading existing repositories…</p>}
+            {repositoryState === 'loading' && <Loader variant="rows" label="Loading existing repositories…" />}
             {repositoryState === 'error' && (
               <div className="projects-feedback" role="alert">
                 <p>{repositoryError}</p>
@@ -527,7 +529,7 @@ export function ProjectSettingsPage({ backendUrl, getAccessToken }: ProjectsPage
   const disabled = saving || archivePending;
 
   if (visibleState === 'loading') {
-    return <section aria-labelledby="project-settings-heading"><h1 id="project-settings-heading">Project settings</h1><p role="status">Loading project settings…</p></section>;
+    return <section aria-labelledby="project-settings-heading"><h1 id="project-settings-heading">Project settings</h1><Loader variant="panel" label="Loading project settings…" /></section>;
   }
 
   return (
@@ -710,37 +712,10 @@ export function CreateProjectDialog({ backendUrl, getAccessToken, onClose, onAdd
   };
 
   return (
-    <div className="task-dialog-backdrop">
-      <section
-        className="task-dialog project-dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="create-project-heading"
-        onKeyDown={(event) => {
-          if (event.key === 'Escape' && !managing) {
-            event.preventDefault();
-            onClose();
-            return;
-          }
-          if (event.key !== 'Tab') return;
-          const controls = event.currentTarget.querySelectorAll<HTMLElement>(
-            'button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), a[href]',
-          );
-          const first = controls[0];
-          const last = controls[controls.length - 1];
-          if (event.shiftKey && document.activeElement === first) {
-            event.preventDefault();
-            last?.focus();
-          } else if (!event.shiftKey && document.activeElement === last) {
-            event.preventDefault();
-            first?.focus();
-          }
-        }}
-      >
-        <h2 id="create-project-heading">Create project</h2>
+    <Modal title="Create project" titleId="create-project-heading" onClose={onClose} busy={!!managing} className="task-dialog project-dialog">
         <section className="project-dialog-part" aria-labelledby="project-existing-heading">
           <h3 id="project-existing-heading">From an existing repository</h3>
-          {state === 'loading' && <p role="status">Loading repositories…</p>}
+          {state === 'loading' && <Loader variant="rows" label="Loading repositories…" />}
           {state === 'error' && (
             <div className="tasks-feedback" role="alert">
               <p>{error}</p>
@@ -778,10 +753,8 @@ export function CreateProjectDialog({ backendUrl, getAccessToken, onClose, onAdd
           </p>
           <div className="task-dialog-actions">
             <button className="primary-button" type="submit" disabled={!idea.trim()}>Ask Jarvis to create it</button>
-            <button className="secondary-button" type="button" onClick={onClose} disabled={!!managing}>Close</button>
           </div>
         </form>
-      </section>
-    </div>
+    </Modal>
   );
 }

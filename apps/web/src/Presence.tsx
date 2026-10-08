@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState, type CSSProperties } from 'react';
 import { backendFetch } from './backend-request';
 import { presenceLabel, presenceModes, usePresence, type PresenceMode } from './presence-store';
+import { Loader } from './Loader';
 
 type ModeInstructions = Record<PresenceMode, string>;
 const maxInstruction = 2_000;
@@ -138,7 +139,7 @@ export function PresenceSettings({ backendUrl, getAccessToken }: { backendUrl: s
     <section className="settings-section presence-settings" id="presence" aria-labelledby={`${ids}-heading`}>
       <h2 id={`${ids}-heading`}>Presence</h2>
       <p className="settings-explanation">Jarvis adapts to where you are. You can switch here or in the top bar, and Jarvis can switch it too.</p>
-      {presence.status === 'loading' || presence.status === 'idle' ? <p className="settings-feedback" role="status">Loading presence…</p> : null}
+      {presence.status === 'loading' || presence.status === 'idle' ? <Loader variant="rows" label="Loading presence…" /> : null}
       {presence.status === 'unavailable' && (
         <p className="settings-unavailable" role="status">Presence modes are not available yet. They appear once the presence service is deployed.</p>
       )}
@@ -169,7 +170,7 @@ export function PresenceSettings({ backendUrl, getAccessToken }: { backendUrl: s
       )}
       <h3 className="presence-instructions-heading">Instructions per mode</h3>
       <p className="settings-explanation">Each mode adds its own instruction to the base instruction under Personality.</p>
-      {instructionsState === 'loading' && <p className="settings-feedback" role="status">Loading mode instructions…</p>}
+      {instructionsState === 'loading' && <Loader variant="lines" label="Loading mode instructions…" />}
       {instructionsState === 'unavailable' && (
         <p className="settings-unavailable" role="status">Instructions per mode are not available yet. They appear once the backend supports them.</p>
       )}

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { flushSync } from 'react-dom';
 import { Link, NavLink, Outlet, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
-import type { JarvisActivityEvent, WorkspaceCommand, WorkspaceSnapshot } from '@jarvis/contracts';
+import type { HtmlArtifactFrame, JarvisActivityEvent, WorkspaceCommand, WorkspaceSnapshot } from '@jarvis/contracts';
 import type { PublicConfig } from '../config/public-config';
 import { useJarvisActivity } from './activity-context';
 import { JarvisActivityProvider } from './activity-provider';
@@ -34,14 +34,20 @@ import { useGlassLight } from './glass-light';
 import { TaskDetailPage } from './factory/TaskDetailPage';
 import { InputOrbCore } from './InputOrbCore';
 import { TaskWindowsContext, readTaskWindows, saveTaskWindows, taskWindowViewId, type TaskWindowEntry } from './task-windows';
+import { readNavigateCommand, resolveNavigation, revealWhenReady, type NavigateRequest } from './page-navigation';
+import { FolioPane } from './Folio';
 import { flyChat } from './chat-flight';
+import { readWorkspaceFrame } from './workspace-frame';
+import { JobsChip } from './JobsChip';
+import { hasRunningJob, useJobs } from './jobs-store';
+import { KnowledgeBackendContext } from './knowledge/knowledge-context';
 import { PresenceChip, PresenceSettings } from './Presence';
 import { MemorySettings } from './MemorySettings';
 
 const sidebarLimits = { min: 160, max: 420 };
 const contextLimits = { min: 220, max: 560 };
 
-type ShellIconName = 'home' | 'factory' | 'usage' | 'navigation' | 'screen' | 'camera' | 'context' | 'settings' | 'close';
+type ShellIconName = 'home' | 'factory' | 'knowledge' | 'usage' | 'navigation' | 'screen' | 'camera' | 'context' | 'settings' | 'close' | 'folio';
 
 function activityLabel(event: JarvisActivityEvent | null): string {
   if (!event) return 'Jarvis is working';
@@ -65,6 +71,8 @@ function ShellIcon({ name }: { name: ShellIconName }) {
       return <svg {...common}><path d="m3 10 9-7 9 7" /><path d="M5 9v12h14V9M9 21v-7h6v7" /></svg>;
     case 'factory':
       return <svg {...common}><path d="M3 21V9l6 3V8l6 4V5h6v16Z" /><path d="M7 17h1m4 0h1m4 0h1m-10-4h1m4 0h1m4-8h1" /></svg>;
+    case 'knowledge':
+      return <svg {...common}><circle cx="6" cy="7" r="2.2" /><circle cx="17.5" cy="5.5" r="1.8" /><circle cx="12.5" cy="13" r="2.4" /><circle cx="5.5" cy="18" r="1.7" /><circle cx="18.5" cy="18.5" r="2" /><path d="m8 8.3 2.6 3M15.9 6.6l-2.4 4.3M10.4 14.4l-3.4 2.6M14.6 14.4l2.5 2.6M7.9 6.7l7.8-1" /></svg>;
     case 'usage':
       return <svg {...common}><path d="M4 20V11m5 9V5m5 15v-7m5 7V8" /><path d="M2 21h20" /></svg>;
     case 'navigation':
@@ -79,39 +87,9 @@ function ShellIcon({ name }: { name: ShellIconName }) {
       return <svg {...common}><circle cx="12" cy="12" r="3" /><path d="m19.4 15 .1.1a1.7 1.7 0 1 1-2.4 2.4l-.1-.1a1.7 1.7 0 0 0-2.9 1.2v.2a1.7 1.7 0 1 1-3.4 0v-.2A1.7 1.7 0 0 0 8 17.4l-.1.1a1.7 1.7 0 1 1-2.4-2.4l.1-.1A1.7 1.7 0 0 0 4.4 12H4.2a1.7 1.7 0 1 1 0-3.4h.2A1.7 1.7 0 0 0 5.6 5.7l-.1-.1a1.7 1.7 0 1 1 2.4-2.4l.1.1A1.7 1.7 0 0 0 11 2.1v-.2a1.7 1.7 0 1 1 3.4 0v.2a1.7 1.7 0 0 0 2.9 1.2l.1-.1a1.7 1.7 0 1 1 2.4 2.4l-.1.1a1.7 1.7 0 0 0 1.2 2.9h.2a1.7 1.7 0 1 1 0 3.4h-.2a1.7 1.7 0 0 0-1.5 3Z" /></svg>;
     case 'close':
       return <svg {...common}><path d="m6 6 12 12M18 6 6 18" /></svg>;
+    case 'folio':
+      return <svg {...common}><rect x="7" y="3" width="13" height="15" rx="2" /><path d="M4 7v12a2 2 0 0 0 2 2h10M11 8h5m-5 4h5" /></svg>;
   }
-}
-
-function CaptureControl({ controller, kind }: { controller: CameraController; kind: 'camera' | 'screen' }) {
-  const camera = kind === 'camera';
-  const label = controller.sharing ? (camera ? 'Turn camera off' : 'Stop sharing screen') : (camera ? 'Turn camera on' : 'Share screen');
-  const status = controller.sharing ? (camera ? 'Camera on' : 'Screen sharing on') : (camera ? 'Camera off' : 'Screen sharing off');
-  const statusId = camera ? 'camera-control-status' : 'screen-control-status';
-  return (
-    <div className="topbar-feature camera-control">
-      <button
-        className={`topbar-feature-button camera-control-button${camera ? '' : ' screen-control-button'}`}
-        type="button"
-        aria-label={`${status}. ${label}.`}
-        aria-pressed={controller.sharing}
-        aria-describedby={statusId}
-        title={`${status}. ${label}.`}
-        disabled={controller.starting}
-        onClick={() => controller.sharing ? controller.stop() : void controller.start()}
-      >
-        <ShellIcon name={kind} />
-        {(camera || controller.sharing || controller.starting) && (
-          <span className="camera-control-label">{controller.starting ? 'Starting…' : controller.sharing ? 'On' : 'Off'}</span>
-        )}
-      </button>
-      <span id={statusId} className="visually-hidden">
-        {camera
-          ? 'Camera turns off when this session ends and automatically after five minutes.'
-          : 'Jarvis only inspects a shared frame when you ask.'}
-      </span>
-      {controller.error && <span className="camera-control-error" role="alert">{controller.error}</span>}
-    </div>
-  );
 }
 
 function Shell({ signedIn, config, session, camera, screenShare }: {
@@ -154,11 +132,51 @@ function ShellLayout({ signedIn, config, session, camera, screenShare }: {
     setOpenWindows((current) => JSON.stringify(current) === JSON.stringify(windows) ? current : windows);
   }, []);
   const [voiceActive, setVoiceActive] = useState(false);
+  // The window Jarvis's generated reports and apps open in (size, theme, tokens), refreshed when any of it changes.
+  const [frame, setFrame] = useState<HtmlArtifactFrame | null>(null);
+  useEffect(() => {
+    if (!signedIn) return;
+    let timer = 0;
+    const refresh = () => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => {
+        const next = readWorkspaceFrame();
+        setFrame((current) => JSON.stringify(current) === JSON.stringify(next) ? current : next);
+      }, 400);
+    };
+    refresh();
+    window.addEventListener('resize', refresh);
+    const observer = typeof MutationObserver === 'function' ? new MutationObserver(refresh) : null;
+    observer?.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'data-motion', 'data-motion-preference', 'style'] });
+    return () => { window.clearTimeout(timer); window.removeEventListener('resize', refresh); observer?.disconnect(); };
+  }, [signedIn, pathname]);
   const [voiceHasWindows, setVoiceHasWindows] = useState(false);
   const [phone, setPhone] = useState(() => window.matchMedia?.(PHONE_LAYOUT_MEDIA_QUERY).matches ?? false);
+  // Jarvis switching the page Dan is looking at (P9-40): the route changes with the usual page transition, then the
+  // named Settings section or task card is scrolled into view and glows once its data has loaded.
+  // The Folio pane (P9-25) shares the left sidebar slot with area navigation; only one is open at a time.
+  const [folioOpen, setFolioOpen] = useState(false);
+  const openTaskRef = useRef<(taskId: string) => void>(() => {});
+  const cancelReveal = useRef<() => void>(() => {});
+  const navigateTo = useCallback((request: NavigateRequest) => {
+    const target = resolveNavigation(request);
+    if (!target.ok) return false;
+    if (target.pane === 'folio') { setFolioOpen(true); return true; }
+    if (pathnameRef.current !== target.path) navigate(target.path);
+    if (target.taskId) openTaskRef.current(target.taskId);
+    const reduced = document.documentElement.dataset.motion === 'reduced' ||
+      (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false);
+    const revealId = target.anchorId ?? (target.taskId ? `task-title-${target.taskId}` : null);
+    cancelReveal.current();
+    cancelReveal.current = revealId ? revealWhenReady(() => document.getElementById(revealId), reduced) : () => {};
+    return true;
+  }, [navigate]);
+  useEffect(() => () => cancelReveal.current(), []);
   const workspaceCommands = useMemo(() => ({
-    snapshot: { windows: openWindows, contextPanelOpen: contextPanel.isOpen },
+    snapshot: { windows: openWindows, contextPanelOpen: contextPanel.isOpen, ...(frame ? { frame } : {}) },
     dispatch: (command: Parameters<WorkspaceController['dispatch']>[0], trustedBlobHost?: string) => {
+      const navigateRequest = readNavigateCommand(command);
+      if (navigateRequest) return navigateTo(navigateRequest);
       if (command.operation === 'context-panel') {
         if (command.action === 'open') {
           contextPanel.show(command.view ? {
@@ -174,12 +192,18 @@ function ShellLayout({ signedIn, config, session, camera, screenShare }: {
         }
         return true;
       }
-      return workspaceController.current?.dispatch(command, trustedBlobHost) ?? false;
+      const applied = workspaceController.current?.dispatch(command, trustedBlobHost) ?? false;
+      // While the jobs chip tracks research, its progress window starts as a tab instead of covering the page.
+      if (applied && command.operation === 'create' && command.view.source.id === 'research' &&
+          command.view.source.status === 'partial' && hasRunningJob('research')) {
+        workspaceController.current?.dispatch({ commandId: `${command.commandId}-park`, operation: 'minimise', viewId: command.viewId });
+      }
+      return applied;
     },
     minimiseAll: () => workspaceController.current?.minimiseAll(),
     hasVisibleViews: () => workspaceController.current?.hasVisibleViews() ?? false,
     isViewVisible: (viewId: string) => workspaceController.current?.isViewVisible?.(viewId) ?? false,
-  }), [contextPanel, openWindows]);
+  }), [contextPanel, frame, navigateTo, openWindows]);
   const applyWorkspaceCommand = useCallback((command: WorkspaceCommand, trustedBlobHost?: string) => {
     let applied = false;
     flushSync(() => { applied = workspaceCommands.dispatch(command, trustedBlobHost); });
@@ -239,6 +263,7 @@ function ShellLayout({ signedIn, config, session, camera, screenShare }: {
         ? current.map((entry) => entry.taskId === taskId ? { ...entry, title } : entry)
         : current),
   }), []);
+  useEffect(() => { openTaskRef.current = (taskId) => taskWindowsApi.open(taskId); }, [taskWindowsApi]);
   useLayoutEffect(() => {
     if (!focusTaskWindow) return;
     const viewId = taskWindowViewId(focusTaskWindow.taskId);
@@ -247,6 +272,22 @@ function ShellLayout({ signedIn, config, session, camera, screenShare }: {
     controller?.dispatch({ commandId: `task-window-focus-${focusTaskWindow.seq}`, operation: 'focus', viewId });
   }, [focusTaskWindow]);
   const [tabsHost, setTabsHost] = useState<HTMLDivElement | null>(null);
+  const knowledgeBackend = useMemo(() => ({ backendUrl: config.backendUrl, getAccessToken }), [config.backendUrl, getAccessToken]);
+  // A finished background job brings its result window forward, or parks it as a tab while Dan is away.
+  // While a research job shows as a tab, its progress window's own tab would be a duplicate.
+  const { jobs: backgroundJobs } = useJobs(config.backendUrl, getAccessToken);
+  const researchRunning = backgroundJobs.some((job) => job.kind === 'research' && job.status === 'running');
+  // The conversation never needs a tab: the chat bar's orb and handle bring it back.
+  const hideResearchProgressTab = useCallback((view: WorkspaceView) => view.presentation === 'conversation' || researchRunning && view.content.status === 'generated' &&
+    view.content.view.source.id === 'research' && view.content.view.source.status === 'partial', [researchRunning]);
+  const openJobResult = useCallback((viewId: string, mode: 'open' | 'park') => {
+    const controller = workspaceController.current;
+    if (!controller) return false;
+    if (mode === 'park') return controller.dispatch({ commandId: `job-park-${viewId}`, operation: 'minimise', viewId });
+    if (!controller.dispatch({ commandId: `job-restore-${viewId}`, operation: 'restore', viewId })) return false;
+    controller.dispatch({ commandId: `job-focus-${viewId}`, operation: 'focus', viewId });
+    return true;
+  }, []);
   // The conversation history is a workspace view: the shared controller owns its tabs, geometry, focus and commands,
   // while ConversationHistory keeps the chat session, composer and voice controls and portals the transcript in.
   const [conversationAvailable, setConversationAvailable] = useState(false);
@@ -329,17 +370,10 @@ function ShellLayout({ signedIn, config, session, camera, screenShare }: {
   const activeArea = areas.find(({ path }) => pathname.startsWith(`/${path}`));
   const settingsActive = pathname.startsWith('/settings');
   const areaLabel = settingsActive ? 'Settings' : activeArea?.label ?? 'Jarvis';
-  const pageLabel = activeArea?.navigation
-    .filter(({ path }) => pathname === path || pathname.startsWith(`${path}/`))
-    .sort((left, right) => right.path.length - left.path.length)[0]?.label;
   const navigationItems = activeArea?.navigation ?? [{ label: 'Conversation', path: '/' }];
   // The navigation panel only exists for an area with more than one page; otherwise there is nothing to choose.
   const navigationAvailable = navigationItems.length > 1;
-  const navigationShown = navigationOpen && navigationAvailable;
-  const captureControls = <>
-    <CaptureControl controller={screenShare} kind="screen" />
-    <CaptureControl controller={camera} kind="camera" />
-  </>;
+  const navigationShown = navigationOpen && navigationAvailable && !folioOpen;
 
   useEffect(() => {
     const media = window.matchMedia?.(PHONE_LAYOUT_MEDIA_QUERY);
@@ -405,7 +439,7 @@ function ShellLayout({ signedIn, config, session, camera, screenShare }: {
 
   return (
     <TaskWindowsContext.Provider value={signedIn ? taskWindowsApi : null}>
-    <div className={`app app-shell${signedIn ? '' : ' app-signed-out'}`} data-navigation-open={signedIn && navigationShown}
+    <div className={`app app-shell${signedIn ? '' : ' app-signed-out'}`} data-navigation-open={signedIn && (navigationShown || folioOpen)} data-folio-open={signedIn && folioOpen}
       data-context-open={signedIn && contextPanel.isOpen} data-voice-active={voiceActive}
       data-voice-has-windows={voiceHasWindows} data-conversation-open={signedIn && conversationOpen} style={panelWidths}
       data-home={home} data-chat={chatPlace}>
@@ -420,7 +454,7 @@ function ShellLayout({ signedIn, config, session, camera, screenShare }: {
               aria-label={navigationShown ? 'Collapse area navigation' : 'Expand area navigation'}
               aria-expanded={navigationShown}
               aria-controls="area-navigation"
-              onClick={() => setNavigationOpen((open) => !open)}
+              onClick={() => { setFolioOpen(false); setNavigationOpen((open) => !open); }}
             >
               <ShellIcon name="navigation" />
             </button>
@@ -429,10 +463,14 @@ function ShellLayout({ signedIn, config, session, camera, screenShare }: {
             <ShellIcon name="home" /><span className="visually-hidden">Jarvis</span>
           </NavLink>
           {areas.map((area) => (
-            <NavLink key={area.id} className="rail-link" to={`/${area.path}`} aria-label={area.label} onClick={() => setNavigationOpen(area.navigation.length > 1)}>
-              <ShellIcon name={area.id === 'factory' ? 'factory' : 'usage'} /><span className="visually-hidden">{area.label}</span>
+            <NavLink key={area.id} className="rail-link" to={`/${area.path}`} aria-label={area.label} onClick={() => { setNavigationOpen(area.navigation.length > 1); if (area.navigation.length > 1) setFolioOpen(false); }}>
+              <ShellIcon name={area.id === 'factory' ? 'factory' : area.id === 'knowledge' ? 'knowledge' : 'usage'} /><span className="visually-hidden">{area.label}</span>
             </NavLink>
           ))}
+          <button className={`rail-link rail-folio${folioOpen ? ' active' : ''}`} type="button" aria-label="Folio" aria-pressed={folioOpen}
+            aria-controls="folio-pane" title="Folio" onClick={() => setFolioOpen((open) => !open)}>
+            <ShellIcon name="folio" /><span className="visually-hidden">Folio</span>
+          </button>
           {!home && (
             <button ref={railOrb} className="input-orb rail-chat-orb" type="button" aria-expanded={chatOut} aria-controls="conversation-composer"
               aria-label={chatOut ? 'Hide the chat bar' : 'Chat with Jarvis'} title={chatOut ? 'Hide the chat bar' : 'Chat with Jarvis'}
@@ -465,22 +503,18 @@ function ShellLayout({ signedIn, config, session, camera, screenShare }: {
             min={sidebarLimits.min} max={sidebarLimits.max} onChange={changeSidebarWidth} />}
         </aside>
       )}
+      {signedIn && <FolioPane backendUrl={config.backendUrl} getAccessToken={session.getAccessToken} open={folioOpen}
+        onClose={() => setFolioOpen(false)} refreshKey={openWindows.length} />}
       <header className="app-topbar">
         <div className="topbar-context">
           <Link className="brand" to="/" aria-label="Jarvis home">Jarvis</Link>
-          {signedIn && areaLabel !== 'Jarvis' && (
-            <>
-              <span className="topbar-separator" aria-hidden="true">/</span>
-              <span className="topbar-area-label">{areaLabel}</span>
-              {pageLabel && pageLabel !== areaLabel && (
-                <>
-                  <span className="topbar-separator" aria-hidden="true">/</span>
-                  <span className="topbar-page-label" aria-current="page">{pageLabel}</span>
-                </>
-              )}
-            </>
-          )}
         </div>
+        {/* Open windows live as tabs in the top bar, between the brand and the controls (no breadcrumb). */}
+        {signedIn && <div className="window-tabstrip">
+        <div ref={setTabsHost} className="window-tabbar" />
+        <JobsChip backendUrl={config.backendUrl} getAccessToken={session.getAccessToken} onResult={openJobResult} />
+        </div>}
+
         {signedIn && (
           <div className="topbar-actions">
             <PresenceChip backendUrl={config.backendUrl} getAccessToken={session.getAccessToken} />
@@ -494,18 +528,6 @@ function ShellLayout({ signedIn, config, session, camera, screenShare }: {
                 <span className="topbar-working-compact" aria-hidden="true">{working ? 'Working' : activityText}</span>
               </span>
             )}
-            {phone ? <details className="topbar-capture-menu" onKeyDown={(event) => {
-              if (event.key !== 'Escape') return;
-              event.preventDefault();
-              event.currentTarget.open = false;
-              event.currentTarget.querySelector('summary')?.focus();
-            }}>
-              <summary aria-label="Camera and sharing controls"><ShellIcon name="camera" /></summary>
-              <div className="topbar-capture-controls">
-                {captureControls}
-                <p className="topbar-capture-guidance">Jarvis only inspects shared frames when you ask. Camera turns off when the session ends.</p>
-              </div>
-            </details> : captureControls}
             <button
               id="context-panel-toggle"
               className="topbar-icon-button"
@@ -523,11 +545,11 @@ function ShellLayout({ signedIn, config, session, camera, screenShare }: {
           </div>
         )}
       </header>
-      {signedIn && <div ref={setTabsHost} className="window-tabbar" />}
       <main id="content" className="shell-main" tabIndex={-1}>
         {presenceError && <p className="browser-presence-error" role="alert">{presenceError}</p>}
         {/* One room behind every page (and sign-in), so navigation never swaps or reloads the scene. */}
         <JarvisStage theme={themePreference.resolvedTheme} appearance={themePreference.appearance}>
+        <KnowledgeBackendContext.Provider value={knowledgeBackend}>
         <WorkspaceCommandContext.Provider value={workspaceCommands}>
           <VoiceWorkspaceContext.Provider value={{ onVoiceActiveChange }}>
             <ConversationWindowContext.Provider value={conversationWindow}>
@@ -547,7 +569,8 @@ function ShellLayout({ signedIn, config, session, camera, screenShare }: {
             {signedIn && (
               <div className="workspace-shell-area">
                 <Workspace ref={workspaceController} views={workspaceViews} onVisibleViewsChange={setVoiceHasWindows} onOpenWindowsChange={onOpenWindowsChange}
-                  onVisibleViewIdsChange={onVisibleViewIdsChange} tabsHost={tabsHost} />
+                  onVisibleViewIdsChange={onVisibleViewIdsChange} tabsHost={tabsHost} defaultArrangement="layered" arrangeMenu={false}
+                  hideTab={hideResearchProgressTab} />
               </div>
             )}
             {/* Settings shows the Now feed itself; everywhere else one hidden instance keeps runtime activity flowing. */}
@@ -563,6 +586,7 @@ function ShellLayout({ signedIn, config, session, camera, screenShare }: {
             )}
           </VoiceWorkspaceContext.Provider>
         </WorkspaceCommandContext.Provider>
+        </KnowledgeBackendContext.Provider>
         </JarvisStage>
       </main>
       {signedIn && <ContextPanel closeIcon={<ShellIcon name="close" />} resizeHandle={phone ? undefined : (

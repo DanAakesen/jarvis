@@ -19,6 +19,8 @@ export function createJarvisStageOrb() {
     uSpeak: { value: 0 },
     uInput: { value: 0 },
     uColor: { value: new THREE.Color('#52dcfa') },
+    // The bright amber brain (Dan, 7 October): the same warm glow as the chat orb, read from --glass-glow-warm.
+    uWarm: { value: new THREE.Color('#ffb45c') },
   };
   const stateUniforms = `uniform float uIgnite;uniform float uWave;uniform float uWaveStrength;uniform float uSurge;
     uniform float uListen;uniform float uThink;uniform float uTool;uniform float uSpeak;uniform float uInput;`;
@@ -28,7 +30,7 @@ export function createJarvisStageOrb() {
   const shell = new THREE.Mesh(new THREE.SphereGeometry(1.12, 112, 80), new THREE.ShaderMaterial({
     uniforms, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
     vertexShader: vertex,
-    fragmentShader: `uniform float uTime;uniform float uEnergy;uniform float uAwake;uniform vec3 uColor;${stateUniforms}
+    fragmentShader: `uniform float uTime;uniform float uEnergy;uniform float uAwake;uniform vec3 uColor;uniform vec3 uWarm;${stateUniforms}
       varying vec3 vNormal;varying vec3 vPosition;varying vec3 vWorld;
       void main(){vec3 p=normalize(vPosition);vec3 eye=normalize(cameraPosition-vWorld);
         float rim=pow(1.-abs(dot(normalize(vNormal),eye)),2.7);
@@ -57,9 +59,9 @@ export function createJarvisStageOrb() {
         vec3 c=mix(uColor*.62,uColor,uAwake)*(rim*2.25+detail*1.4)*strength;
         c+=vec3(.48,.78,1.)*pow(rim,6.)*.55*strength;
         c+=uColor*thread*2.4;
-        c+=mix(vec3(1.,.6,.25),vec3(.62,.9,1.),smoothstep(.1,.7,uWave))*front*1.6;
+        c+=mix(uWarm,vec3(.62,.9,1.),smoothstep(.1,.7,uWave))*front*1.6;
         c+=uColor*(ripple+voiceRing)*(.35+rim*.8);
-        c+=mix(uColor,vec3(1.,.62,.28),.35)*inward*(1.-rim*.4);
+        c+=mix(uColor,uWarm,.35)*inward*(1.-rim*.4);
         c+=vec3(.75,.95,1.)*comet*2.2;
         float alpha=rim*.66+detail*.45+thread*.4+uEnergy*.03+.004+front*.5+(ripple+voiceRing+inward)*.22+comet*.6;
         gl_FragColor=vec4(c,clamp(alpha,0.,.86));}`,
@@ -135,7 +137,7 @@ export function createJarvisStageOrb() {
   const coreUniforms = { uTime: uniforms.uTime, uCoreFlow: uniforms.uCoreFlow, uAwake: uniforms.uAwake, uAudioLevel: uniforms.uEnergy,
     uIgnite: uniforms.uIgnite, uSurge: uniforms.uSurge, uThink: uniforms.uThink, uSpeak: uniforms.uSpeak,
     uListen: uniforms.uListen, uTool: uniforms.uTool, uInput: uniforms.uInput, uWave: uniforms.uWave,
-    uWaveStrength: uniforms.uWaveStrength };
+    uWaveStrength: uniforms.uWaveStrength, uWarm: uniforms.uWarm };
   const nodes: THREE.Vector3[] = [];
   for (let index = 0; index < 64; index += 1) {
     const angle = index * 2.39996;
@@ -184,10 +186,10 @@ export function createJarvisStageOrb() {
         p+=vec3(sin(p.y*17.+uCoreFlow),cos(p.z*13.-uCoreFlow*.8),sin(p.x*15.+uCoreFlow*.7))*stir;
         p*=1.-uThink*.07*(.5+.5*sin(uTime*3.1));
         gl_Position=projectionMatrix*modelViewMatrix*vec4(p,1.);}`,
-    fragmentShader: `uniform float uTime;uniform float uCoreFlow;uniform float uAwake;uniform float uAudioLevel;${stateUniforms}varying vec2 vUv;
+    fragmentShader: `uniform float uTime;uniform float uCoreFlow;uniform float uAwake;uniform float uAudioLevel;uniform vec3 uWarm;${stateUniforms}varying vec2 vUv;
       void main(){float pulse=pow(.5+.5*sin(vUv.x*8.-uCoreFlow*2.5),8.);
         float energy=mix(.34,.78,max(uAwake,uIgnite))*(.94+.06*sin(uTime*1.1))+uSurge*.25+uSpeak*uAudioLevel*.3+uThink*.12;
-        vec3 c=mix(vec3(1.,.31,.04),vec3(1.,.48,.13),pulse);
+        vec3 c=mix(uWarm*vec3(1.,.8,.7),uWarm,pulse);
         gl_FragColor=vec4(c*(1.2+pulse*.6),energy*(.64+pulse*.25));}`,
   });
   const connections = new THREE.Mesh(mergeGeometries(curves), coreMaterial);
@@ -229,9 +231,9 @@ export function createJarvisStageOrb() {
         float scale=length(modelMatrix[0].xyz);
         float pointScale=scale<1.?scale/2.3:1.;
         gl_PointSize=clamp(aSize*(48.+uAwake*65.)*pointScale/max(1.,-v.z),.8,11.);}`,
-    fragmentShader: `varying float vEnergy;void main(){float d=length(gl_PointCoord-.5)*2.;if(d>1.)discard;
+    fragmentShader: `uniform vec3 uWarm;varying float vEnergy;void main(){float d=length(gl_PointCoord-.5)*2.;if(d>1.)discard;
       float glow=exp(-d*d*7.)*.8+pow(1.-d,4.)*.6;
-      gl_FragColor=vec4(vec3(1.,.39,.09)*(1.6+pow(1.-d,5.)*1.2),glow*vEnergy);}`,
+      gl_FragColor=vec4(uWarm*(1.25+pow(1.-d,5.)*1.2),glow*vEnergy);}`,
   }));
   sparks.renderOrder = 2;
   core.add(sparks);

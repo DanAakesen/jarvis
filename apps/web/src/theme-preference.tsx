@@ -34,14 +34,15 @@ const lastThemeKey = 'jarvis.lastTheme';
 function readLastTheme(): ThemeMode {
   try {
     const value = localStorage.getItem(lastThemeKey);
-    return value === 'dark' || value === 'system' || value === 'light' ? value : 'light';
+    // With nothing remembered on this device, follow the OS theme (public/theme-boot.js does the same before paint).
+    return value === 'dark' || value === 'system' || value === 'light' ? value : 'system';
   } catch {
-    return 'light';
+    return 'system';
   }
 }
 
 function saveLastTheme(theme: ThemeMode) {
-  try { localStorage.setItem(lastThemeKey, theme); } catch { /* Signed-out pages then use the light default. */ }
+  try { localStorage.setItem(lastThemeKey, theme); } catch { /* Signed-out pages then follow the OS theme. */ }
 }
 
 function foregroundFor(hex: string): string {
@@ -59,6 +60,7 @@ function setStyleToken(property: string, value: string | number | undefined) {
 function applyAppearance(appearance: AppearancePreferences, resolvedTheme: ResolvedTheme) {
   const root = document.documentElement;
   root.dataset.theme = resolvedTheme;
+  root.style.colorScheme = resolvedTheme;
   if (appearance.background) root.dataset.background = appearance.background;
   else delete root.dataset.background;
   if (appearance.motion) root.dataset.motion = appearance.motion;
