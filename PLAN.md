@@ -460,7 +460,7 @@ Declined in the audit (do not file): verbosity and max-output-token settings, no
 | P9-10 | [#504](https://github.com/DanAakesen/jarvis/issues/504) | Persist bounded memory similarity, search top-k, graph text-similarity and automatic-capture settings; enforce capture preference through the shared vault tool | Backend | — | Complete |
 | P9-11 | [#505](https://github.com/DanAakesen/jarvis/issues/505) | Timeout and retry settings | Backend | — | Complete |
 | P9-12 | [#506](https://github.com/DanAakesen/jarvis/issues/506) | Shared `get_settings`/`update_settings` tools for allow-listed non-secret settings; Now confirmation for model-role and daily vision budget changes; retain `set_jarvis_model` as an alias | Backend | P9-01 | Complete |
-| P9-13 | [#507](https://github.com/DanAakesen/jarvis/issues/507) | Settings UI: Models, Voice, Research, Memory, Timeouts | UI session | P9-01, P9-05, P9-06, P9-10, P9-11 | Not started |
+| P9-13 | [#507](https://github.com/DanAakesen/jarvis/issues/507) | Settings UI: Models, Voice, Research, Memory, Timeouts | UI session | P9-01, P9-05, P9-06, P9-10, P9-11 | In progress |
 | P9-14 | [#508](https://github.com/DanAakesen/jarvis/issues/508) | Persist background jobs | Backend | — | Complete |
 | P9-15 | [#509](https://github.com/DanAakesen/jarvis/issues/509) | Ship the jobs chip | UI session | — | Complete |
 | P9-16 | [#510](https://github.com/DanAakesen/jarvis/issues/510) | Ship the knowledge graph page | UI session | — | Complete |
