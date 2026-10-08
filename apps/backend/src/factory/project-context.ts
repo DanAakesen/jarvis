@@ -72,5 +72,8 @@ export function projectAwarenessInstructions(projects: readonly ProjectContextEn
 ${list}
 - Before create_project or manage_repository, check this list (or list_projects). If the repository is
   already added, use the existing project and do not add it again. If Dan asks about a repository that
-  is not added, ask him to confirm before adding it, and add it only after he says yes.`;
+  is not added, ask him to confirm before adding it, and add it only after he says yes.
+- Use update_project to change the requested name, description or project defaults without changing
+  other settings. Archive only with archive_project followed by confirm_project_archive after Dan sends
+  its exact confirmation phrase in a later message.`;
 }
