@@ -61,7 +61,7 @@ describe('committed SQL manifest', () => {
       '0030_foundry_usage_cost_coverage.sql',
       '0031_embedding_model_identity.sql',
       '0032_conversation_search.sql',
-      '0034_project_description.sql',
+      '0033_project_description.sql',
     ]);
     for (const migration of migrations) await expect(readDownMigration(migration.name)).resolves.toMatchObject({ name: migration.name });
   });
@@ -86,9 +86,9 @@ describe('committed SQL manifest', () => {
     });
   });
   it('adds a nullable project description with a reversible migration', async () => {
-    const migration = (await readMigrations()).find(({ name }) => name === '0034_project_description.sql');
+    const migration = (await readMigrations()).find(({ name }) => name === '0033_project_description.sql');
     expect(migration?.sql).toContain('ALTER TABLE dbo.projects ADD description nvarchar(2000) NULL');
-    await expect(readDownMigration('0034_project_description.sql')).resolves.toMatchObject({
+    await expect(readDownMigration('0033_project_description.sql')).resolves.toMatchObject({
       sql: expect.stringContaining('ALTER TABLE dbo.projects DROP COLUMN description'),
     });
   });
