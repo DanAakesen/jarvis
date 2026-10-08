@@ -330,6 +330,7 @@ erDiagram
     projects {
         bigint id PK
         string name "Jarvis, Daily, ..."
+        string description "nullable, up to 2,000 characters"
         string repo "owner/name"
         string default_branch
         string default_agent "codex | copilot"
@@ -343,6 +344,7 @@ erDiagram
 ```
 
 - One row per repository. `tech` chooses the sandbox image (small images, L23).
+- P9-28 adds nullable `description` in migration 0033; legacy rows remain null.
 - P1-03's SQL-backed API returns active projects, updates only active rows, and
   archives by setting `active = 0`; archived rows remain to preserve task
   references and the unique repository constraint. Repositories stay reserved
