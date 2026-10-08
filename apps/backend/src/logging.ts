@@ -107,6 +107,10 @@ function safeFields(input: Record<string, unknown>): Record<string, unknown> {
     if (typeof input.property === 'string' && /^[A-Za-z_][A-Za-z0-9_-]{0,63}$/u.test(input.property)) {
       fields.property = input.property;
     }
+    if (typeof input.instancePath === 'string' && input.instancePath.length <= 512 &&
+        /^(?:\/(?:[A-Za-z_][A-Za-z0-9_-]{0,63}|\d{1,10}))*$/u.test(input.instancePath)) {
+      fields.instancePath = input.instancePath;
+    }
     return fields;
   }
   if (typeof input.msg === 'string' && failureEvents.has(input.msg)) {

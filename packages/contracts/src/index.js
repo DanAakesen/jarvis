@@ -371,7 +371,13 @@ const dataSchemas = {
   text: object({ format: { type: 'string', enum: ['plain', 'markdown'] }, content: string(10_000) }),
   code: generatedCodeDataSchema,
   timeline: object({
-    events: array(object({ at: dateTime, title: string(200, 1), description: string(2_000) }, ['at', 'title']), rowLimit),
+    events: array({
+      ...object({
+        at: { anyOf: [dateTime, { type: 'string', format: 'date' }] },
+        label: string(40, 1), title: string(200, 1), description: string(2_000),
+      }, ['title']),
+      anyOf: [{ required: ['at'] }, { required: ['label'] }],
+    }, rowLimit),
   }),
   chart: object({
     kind: { type: 'string', enum: ['line', 'bar', 'area'] },
@@ -589,6 +595,26 @@ function validAction(value, registeredTools) {
   }
 }
 
+function validTimelineDate(value) {
+  if (typeof value !== 'string') return false;
+  const match = /^(\d{4}-\d{2}-\d{2})(?:[tT ](\d{2}):(\d{2}):(\d{2}(?:\.\d+)?)([zZ]|([+-])(\d{2})(?::?(\d{2}))?))?$/.exec(value);
+  if (!match) return false;
+  const date = new Date(`${match[1]}T00:00:00Z`);
+  if (!Number.isFinite(date.getTime()) || date.toISOString().slice(0, 10) !== match[1]) return false;
+  if (match[2] === undefined) return true;
+  const hour = Number(match[2]);
+  const minute = Number(match[3]);
+  const second = Number(match[4]);
+  const offsetHour = Number(match[7] ?? 0);
+  const offsetMinute = Number(match[8] ?? 0);
+  if (hour > 23 || minute > 59 || offsetHour > 23 || offsetMinute > 59) return false;
+  if (second < 60) return true;
+  const sign = match[6] === '-' ? -1 : 1;
+  const utcMinute = minute - offsetMinute * sign;
+  const utcHour = hour - offsetHour * sign - (utcMinute < 0 ? 1 : 0);
+  return second < 61 && (utcHour === 23 || utcHour === -1) && (utcMinute === 59 || utcMinute === -1);
+}
+
 function validSource(source) {
   if (!isObject(source) || ![
     'now', 'factory.tasks', 'factory.projects', 'usage', 'image_generation', 'html_generation', 'research', 'knowledge_graph',
@@ -646,8 +672,11 @@ function validData(renderer, data, trustedBlobHost) {
     case 'timeline':
       return Object.keys(data).every((key) => key === 'events') && Array.isArray(data.events) &&
         data.events.length <= rowLimit && data.events.every((event) => isObject(event) &&
-          Object.keys(event).every((key) => ['at', 'title', 'description'].includes(key)) &&
-          typeof event.at === 'string' && !Number.isNaN(Date.parse(event.at)) &&
+          Object.keys(event).every((key) => ['at', 'label', 'title', 'description'].includes(key)) &&
+          (event.at !== undefined || event.label !== undefined) &&
+          (event.at === undefined || validTimelineDate(event.at)) &&
+          (event.label === undefined || typeof event.label === 'string' &&
+            event.label.length > 0 && Array.from(event.label).length <= 40) &&
           boundedString(event.title, 200, 1) &&
           (event.description === undefined || boundedString(event.description, 2_000)));
     case 'chart': {

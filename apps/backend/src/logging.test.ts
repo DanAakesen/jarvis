@@ -18,18 +18,18 @@ describe('structured log export', () => {
     const sink = { ...sdk, trackTrace: vi.fn() };
     const logger = createLogger({ logLevel: 'info' }, sink, output);
     logger.info({
-      tool: 'repo_search', keyword: 'additionalProperties', property: 'extra',
+      tool: 'repo_search', keyword: 'additionalProperties', property: 'extra', instancePath: '/view/data/events/0/at',
       arguments: { query: 'private-query' }, body: 'private-body', message: 'private-message',
       route: '/private', statusCode: 400, error: new Error('private-error'),
     }, 'tool.invalid_arguments');
-    const fields = { tool: 'repo_search', keyword: 'additionalProperties', property: 'extra' };
+    const fields = { tool: 'repo_search', keyword: 'additionalProperties', property: 'extra', instancePath: '/view/data/events/0/at' };
     expect(JSON.parse(records[0]!)).toEqual({
       level: 30, time: expect.any(Number), service: 'jarvis-backend', msg: 'tool.invalid_arguments', ...fields,
     });
     expect(sink.trackTrace).toHaveBeenCalledWith(expect.objectContaining({
       message: 'tool.invalid_arguments', properties: { service: 'jarvis-backend', ...fields },
     }));
-    logger.info({ tool: 'private/tool', keyword: 'private-keyword', property: 'private\nproperty' }, 'tool.invalid_arguments');
+    logger.info({ tool: 'private/tool', keyword: 'private-keyword', property: 'private\nproperty', instancePath: '/private\npath' }, 'tool.invalid_arguments');
     expect(sink.trackTrace).toHaveBeenLastCalledWith(expect.objectContaining({
       message: 'tool.invalid_arguments', properties: { service: 'jarvis-backend' },
     }));
