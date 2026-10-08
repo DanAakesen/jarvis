@@ -42,10 +42,13 @@ function fixture() {
 
 describe('workspace command delivery', () => {
   it('describes ordered timeline events and dates or period labels to the model', () => {
+    expect(workspaceCommandTool.description).toContain('chart or timeline requests');
+    expect(workspaceCommandTool.description).toContain('chart data uses kind line, bar or area and 1–5 named series of x/y points, up to 1,000 points total');
     expect(workspaceCommandTool.description).toContain('data.events in the given order');
     expect(workspaceCommandTool.description).toContain('at or label (or both)');
     expect(workspaceCommandTool.description).toContain('label (1–40 characters) for seasons or periods');
     expect(workspaceCommandTool.description).toContain('at (RFC 3339 date-time or YYYY-MM-DD) for precise dates');
+    expect(workspaceCommandTool.description).toContain('Use an HTML view for richer visuals');
   });
 
   it('delivers mixed timeline dates and periods unchanged in the given order', async () => {

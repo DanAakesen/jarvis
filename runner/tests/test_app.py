@@ -986,6 +986,11 @@ def test_codex_html_report_has_no_web_search_tool_and_treats_input_as_data():
     assert "use the supplied frame as presentation context" in prompt
     assert "honor reducedMotion" in prompt
     assert "including in spokenSummary" in prompt
+    assert "dated events or meaningful numeric values" in prompt
+    assert "include an inline SVG timeline or chart" in prompt
+    assert "no external stylesheets" in prompt
+    assert "not external libraries" in prompt
+    assert "connect-src 'none'" in prompt
     assert r"\ud800" in malformed_unicode
     assert "web_search=live" not in command
     assert "--disable" in command

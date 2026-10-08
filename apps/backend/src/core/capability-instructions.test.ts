@@ -28,5 +28,10 @@ describe('shared navigation capability instructions', () => {
     expect(instructions).toContain('The Folio is a pane');
     expect(instructions).toContain('The UI still refuses Status until its page exists');
     expect(instructions).not.toContain('refuses Folio and Status');
+    expect(instructions).toContain('For "show me", "visualise", chart or timeline requests');
+    expect(instructions).toContain('with the chart or timeline renderer');
+    expect(instructions).toContain('Charts support line, bar or area, with 1–5 named series of x/y points and up to 1,000 points total');
+    expect(instructions).toContain('Timelines use events in order');
+    expect(instructions).toContain('Use a self-contained HTML app view for richer visuals');
   });
 });
