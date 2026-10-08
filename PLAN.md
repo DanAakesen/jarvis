@@ -467,7 +467,7 @@ Declined in the audit (do not file): verbosity and max-output-token settings, no
 | P9-22 | [#516](https://github.com/DanAakesen/jarvis/issues/516) | Owner-authenticated `GET /phone/status` and bounded recent call history using existing contracts and storage; document the dormant Teams/ACS setup and activation path | History returns UTC start time, duration and outcome without caller IDs; tests cover auth, availability and failures; no web changes or migration. Production number, ACS resource and callbacks remain unverified and require Dan's Azure/Teams access. | — | Complete |
 | P9-23 | [#517](https://github.com/DanAakesen/jarvis/issues/517) | Complete cost coverage | Backend | — | Complete |
 | P9-24 | [#518](https://github.com/DanAakesen/jarvis/issues/518) | Conversation search | Backend | — | Complete |
-| P9-25 | [#519](https://github.com/DanAakesen/jarvis/issues/519) | Folio: everything Jarvis pulled up, findable again | Backend + UI session | — | Not started |
+| P9-25 | [#519](https://github.com/DanAakesen/jarvis/issues/519) | Folio: everything Jarvis pulled up, findable again | Backend + UI session | — | In progress |
 | P9-26 | [#520](https://github.com/DanAakesen/jarvis/issues/520) | Calendar update and delete | Backend | — | Complete |
 | P9-27 | [#521](https://github.com/DanAakesen/jarvis/issues/521) | Mail drafts and triage | Backend | — | Complete |
 | P9-28 | [#522](https://github.com/DanAakesen/jarvis/issues/522) | Project update and archive tools | Backend | — | Complete |
@@ -476,7 +476,7 @@ Declined in the audit (do not file): verbosity and max-output-token settings, no
 | P9-31 | [#525](https://github.com/DanAakesen/jarvis/issues/525) | Usage tool | Backend | P9-23 | Complete |
 | P9-32 | [#526](https://github.com/DanAakesen/jarvis/issues/526) | Clipboard read and write via the PC bridge | Backend | — | Complete |
 | P9-33 | [#527](https://github.com/DanAakesen/jarvis/issues/527) | Delete a vault note | Backend | — | Complete |
-| P9-34 | [#528](https://github.com/DanAakesen/jarvis/issues/528) | Weather and location | Backend | — | Not started |
+| P9-34 | [#528](https://github.com/DanAakesen/jarvis/issues/528) | Weather and location | Backend | — | In progress |
 | P9-35 | [#529](https://github.com/DanAakesen/jarvis/issues/529) | Rename Recipes to Routines, with edit and rename | Backend + UI session | — | Complete |
 | P9-36 | [#530](https://github.com/DanAakesen/jarvis/issues/530) | One capability prompt for voice and chat | Backend | — | In progress |
 | P9-37 | [#531](https://github.com/DanAakesen/jarvis/issues/531) | Tool parity and stale-tool tests | Backend | — | Not started |
