@@ -170,6 +170,32 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   HTML/JS executes only inside its restrictive sandboxed iframe, never in the
   host page. Workspace-command tests pass; live delivery and report browser
   acceptance remain unverified.
+- P9-40 extends that same registered tool and broker with `navigate`; no new
+  event channel, route or persistence is added. `packages/contracts` exports
+  `workspaceNavigationPages` (`home`, `factory`, `settings`, `usage`,
+  `knowledge`, `folio`, `status`) and `workspaceSettingsSections`
+  (`appearance`, `jarvis`, `personality`, `voice`, `presence`, `memory`,
+  `coding`, `projects`, `routines`, `credentials`, `backend`). The command requires
+  `commandId`, `operation: 'navigate'` and `page`; `section` is settings-only,
+  and a positive SQL-bigint decimal-string `taskId` or positive safe-integer
+  `issueNumber` is factory-only. Factory without a selector means the Kanban
+  board; `taskId` opens the task window over the board and focuses its card,
+  while `issueNumber` focuses the issue's card. The root tool schema is a plain object
+  (L121); the shared `isWorkspaceCommand` guard enforces per-operation fields
+  before delivery, including existing window operations. Voice and chat receive
+  the same navigation aliases from `core/capability-instructions.ts`.
+  Navigation returns `applied: true` and its destination only after a tab
+  acknowledges application; refusal, timeout and cancellation retain existing
+  broker semantics. Send is not an applied acknowledgement. The UI reports a
+  reason when a page/section is unknown, a task/issue is not found, or Folio/Status
+  is not yet implemented. The backend rejects unknown contract keys before
+  delivery and does not resolve task/issue existence on the UI's behalf.
+  The UI session owns shell routing, settings-section
+  selection, page transitions and applied/refused acknowledgements; this
+  backend change does not implement those UI behaviors or claim live acceptance.
+  The web build currently reports TS2366 at `apps/web/src/Workspace.tsx:391`:
+  its exhaustive dispatcher must handle the new union member in the UI change
+  before the combined feature can merge or deploy.
 - P8-37 registers conversation history as the page-owned workspace view
   `conversation` from `App.tsx` once a conversation exists. The view content is
   an empty host element; `ConversationHistory` portals its transcript into it
