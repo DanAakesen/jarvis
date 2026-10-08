@@ -62,7 +62,7 @@ export function toolArgumentRefusal(
   const allowed = Object.keys(properties ?? {}).filter((key) => safeProperty(key)).join(', ').slice(0, 180);
   const instancePath = error && schemaInstancePath(error);
   log.info({
-    tool: tool.name, keyword, ...(property ? { property } : {}),
+    tool: tool.name, keyword, ...(knownProperty ? { property: knownProperty } : {}),
     ...(instancePath !== undefined ? { instancePath } : {}),
   }, 'tool.invalid_arguments');
   return { refused: `Invalid arguments: ${detail}.${allowed ? ` Allowed: ${allowed}.` : ''} Retry with arguments matching the tool schema.` };

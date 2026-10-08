@@ -141,6 +141,7 @@ test('timeline schema and validator accept precise dates and ordered period labe
       { at: '2026-02-29' }, { at: '2026-04-31' }, { at: '2026-9-29' },
       { at: '2026-09-29T12:30:00' }, { at: '2026-09-29T24:00:00Z' },
       { at: '2026-09-29T12:30:00+24:00' },
+      { at: '2026-09-29T12:30:00+02' }, { at: '2026-09-29T12:30:00+0200' },
       { at: '2026-09-29', label: '' }, { at: 'invalid', label: '2009/10' },
       { label: '2009/10', unknown: true },
     ]) {

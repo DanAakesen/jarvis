@@ -373,7 +373,10 @@ const dataSchemas = {
   timeline: object({
     events: array({
       ...object({
-        at: { anyOf: [dateTime, { type: 'string', format: 'date' }] },
+        at: { anyOf: [
+          { ...dateTime, pattern: '(?:[zZ]|[+-]\\d{2}:\\d{2})$' },
+          { type: 'string', format: 'date' },
+        ] },
         label: string(40, 1), title: string(200, 1), description: string(2_000),
       }, ['title']),
       anyOf: [{ required: ['at'] }, { required: ['label'] }],
@@ -597,7 +600,7 @@ function validAction(value, registeredTools) {
 
 function validTimelineDate(value) {
   if (typeof value !== 'string') return false;
-  const match = /^(\d{4}-\d{2}-\d{2})(?:[tT ](\d{2}):(\d{2}):(\d{2}(?:\.\d+)?)([zZ]|([+-])(\d{2})(?::?(\d{2}))?))?$/.exec(value);
+  const match = /^(\d{4}-\d{2}-\d{2})(?:[tT ](\d{2}):(\d{2}):(\d{2}(?:\.\d+)?)([zZ]|([+-])(\d{2}):(\d{2})))?$/.exec(value);
   if (!match) return false;
   const date = new Date(`${match[1]}T00:00:00Z`);
   if (!Number.isFinite(date.getTime()) || date.toISOString().slice(0, 10) !== match[1]) return false;
