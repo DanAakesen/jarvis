@@ -1,4 +1,7 @@
 export const generatedViewVersion = 1;
+export const systemSmokeCheckIds = Object.freeze([
+  'google', 'github_app', 'vault', 'foundry.embeddings', 'research', 'pc_bridge',
+]);
 export const modelRoles = Object.freeze([
   'chat', 'vision', 'research', 'voice', 'transcription', 'embedding', 'codex', 'copilot',
 ]);
@@ -373,6 +376,23 @@ function isObject(value) {
 
 function boundedString(value, max, min = 0) {
   return typeof value === 'string' && value.length >= min && value.length <= max;
+}
+
+export function isSystemSmokeStatus(value) {
+  if (!isObject(value) || Object.keys(value).some((key) => !['checkedAt', 'entries'].includes(key)) ||
+      !Array.isArray(value.entries) || value.entries.length !== systemSmokeCheckIds.length) return false;
+  const validTime = (time) => {
+    if (!boundedString(time, 30, 20) || !Number.isFinite(Date.parse(time))) return false;
+    try { return new Date(time).toISOString() === time; } catch { return false; }
+  };
+  if (!validTime(value.checkedAt)) return false;
+  return value.entries.every((entry, index) =>
+    isObject(entry) &&
+    Object.keys(entry).every((key) => ['id', 'status', 'checkedAt'].includes(key)) &&
+    Object.keys(entry).length === 3 &&
+    entry.id === systemSmokeCheckIds[index] &&
+    ['ok', 'degraded', 'down', 'unknown'].includes(entry.status) &&
+    validTime(entry.checkedAt));
 }
 
 function safeHttpsUrl(value, hosts, trustedBlobHost) {

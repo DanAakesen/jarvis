@@ -44,6 +44,8 @@ import {
   isClipboardText,
   isClipboardReadResult,
   isClipboardWriteResult,
+  isSystemSmokeStatus,
+  systemSmokeCheckIds,
 } from './index.js';
 
 const source = { id: 'factory.tasks', status: 'complete' };
@@ -68,6 +70,23 @@ test('clipboard contracts bound UTF-8 text and keep read/write result shapes exa
   assert.equal(isClipboardReadResult({ text: '', extra: true }), false);
   assert.equal(isClipboardWriteResult({ written: true }), true);
   assert.equal(isClipboardWriteResult({ written: false }), false);
+});
+
+test('system smoke contract requires the six ordered allowlisted checks and sanitized values', () => {
+  const report = {
+    checkedAt: '2026-10-08T02:00:00.000Z',
+    entries: systemSmokeCheckIds.map((id) => ({
+      id, status: 'ok', checkedAt: '2026-10-08T02:00:00.000Z',
+    })),
+  };
+  assert.equal(isSystemSmokeStatus(report), true);
+  assert.equal(isSystemSmokeStatus({ ...report, entries: report.entries.slice(1) }), false);
+  assert.equal(isSystemSmokeStatus({
+    ...report, entries: [{ ...report.entries[0], id: 'provider-token' }, ...report.entries.slice(1)],
+  }), false);
+  assert.equal(isSystemSmokeStatus({
+    ...report, entries: [{ ...report.entries[0], detail: 'secret' }, ...report.entries.slice(1)],
+  }), false);
 });
 
 test('model catalogue contracts restrict roles, capabilities and reasoning efforts', () => {

@@ -49,6 +49,18 @@ prove runtime health, and leave bridge versions null until its protocol reports
 them. Focused offline tests cover caching, authorization, status details and
 sanitized failures; production provider health and UI acceptance remain pending.
 
+P9-39 (8 October 2026): use an authenticated, uncached `GET /status/smoke` to
+refresh the existing read-only probes and run bounded embedding and research
+checks. Permit Dan and only the configured deployment service principal, with
+the latter restricted to an Azure Resource Manager audience and this route.
+Return only allowlisted IDs, statuses and timestamps; keep the latest report in
+the existing in-memory status snapshot so the status page can display it without
+a migration. Research uses a temporary invocation with best-effort cleanup and
+does not persist its result. Deploy prints only the six status values, treats
+the disconnected PC bridge as informational, and fails on other degraded/down
+checks. Offline tests cover contract bounds, authentication, refresh, recording
+and secret sanitization; live provider behavior remains pending.
+
 P9-14 (7 October 2026): persist each background-job state and step transition in
 SQL, and publish job events only after the state transaction commits. Keep jobs and
 step history for 30 days. Jobs are not resumed automatically: startup marks running

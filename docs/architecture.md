@@ -832,6 +832,19 @@ template, timestamp and status code; exception text and credentials are never
 returned. Probe failures are reduced to fixed status details. No status table or
 migration is added.
 
+`GET /status/smoke` forces fresh read-only Google, GitHub App, vault repository
+tree-metadata, embedding, and PC-bridge checks and adds a bounded research dry
+run. It never reads note contents. Its response contains only each check ID,
+status, and timestamp. The latest report is kept in
+the backend's in-memory status snapshot and is returned as `smoke` by `GET /status`
+for the status page; it is lost when the backend restarts. The embedding vector is
+discarded, and the temporary research invocation is cleaned up without writing
+research output or other user data. Dan may call the endpoint with his normal
+token; the configured deployment service principal may call only this exact GET
+route using an Azure Resource Manager token. The Deploy workflow records the
+allowlisted statuses in its run summary and fails on degraded/down checks except
+for an offline PC bridge.
+
 ### Local PC bridge (P7-06)
 
 `pc-bridge/Jarvis.PcBridge` is a per-user .NET 10 WinForms tray app. It signs in
