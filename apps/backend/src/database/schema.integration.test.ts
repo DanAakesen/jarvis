@@ -128,10 +128,10 @@ describe('committed domain schema (groups 1-8)', () => {
         N'IX_sandbox_turns_sandbox_session_id_started_at', N'IX_artifacts_task_id_at',
         N'IX_task_event_archives_task_first_at', N'IX_pull_requests_project_head_sha',
         N'IX_workflow_runs_project_head_sha', N'IX_releases_project_created_at',
-        N'IX_deployments_release_id_at', N'UX_activity_alert_key') ORDER BY name`);
+        N'IX_deployments_release_id_at', N'IX_messages_at', N'UX_activity_alert_key') ORDER BY name`);
     expect(recordset.map((row) => row.name)).toEqual([
-      'IX_artifacts_task_id_at', 'IX_deployments_release_id_at', 'IX_pull_requests_project_head_sha',
-      'IX_releases_project_created_at', 'IX_sandbox_sessions_task_id_status',
+      'IX_artifacts_task_id_at', 'IX_deployments_release_id_at', 'IX_messages_at',
+      'IX_pull_requests_project_head_sha', 'IX_releases_project_created_at', 'IX_sandbox_sessions_task_id_status',
       'IX_sandbox_turns_sandbox_session_id_started_at', 'IX_task_event_archives_task_first_at',
       'IX_task_events_task_id_at', 'IX_tasks_state_next_attempt_at', 'IX_workflow_runs_project_head_sha',
       'UX_activity_alert_key',

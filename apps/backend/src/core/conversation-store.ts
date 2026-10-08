@@ -46,7 +46,16 @@ export interface ConversationHistoryPage {
   readonly nextCursor: string | null;
 }
 
+export interface ConversationSearchInput {
+  readonly query: string;
+  readonly from?: Date;
+  readonly toExclusive?: Date;
+  readonly source?: ConversationChannel;
+  readonly limit: number;
+}
+
 export interface ConversationStore {
+  initialize?(): Promise<void>;
   createSession(input: {
     readonly channel: ConversationChannel;
     readonly language: ConversationLanguage;
@@ -71,6 +80,10 @@ export interface ConversationStore {
     readonly limit: number;
     readonly before?: string;
   }): Promise<ConversationHistoryPage>;
+  searchMessages?(
+    input: ConversationSearchInput,
+    signal: AbortSignal,
+  ): Promise<import('@jarvis/contracts').ConversationSearchPage>;
   getDanMessagesAfter(input: {
     readonly sessionId: string;
     readonly after: string;

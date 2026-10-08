@@ -46,7 +46,7 @@ describe('workspace command delivery', () => {
     const commands: WorkspaceCommand[] = [];
     const connection = broker.connect(ownerId, (event, data) => {
       if (event === 'workspace-command') {
-        const command = (data as { command: WorkspaceCommand }).command;
+        const command = data.command;
         commands.push(command);
         broker.acknowledge(ownerId, connection.sessionId, command.commandId, true);
       }
@@ -117,7 +117,7 @@ describe('workspace command delivery', () => {
     const tab = (name: string) => {
       const connection = broker.connect(ownerId, (event, data) => {
         if (event === 'workspace-command') {
-          deliveries.push({ tab: name, commandId: (data as { command: WorkspaceCommand }).command.commandId });
+          deliveries.push({ tab: name, commandId: data.command.commandId });
         }
         return true;
       });
@@ -156,7 +156,7 @@ describe('workspace command delivery', () => {
     const delivered: WorkspaceCommand[] = [];
     const connection = broker.connect(ownerId, (event, data) => {
       if (event === 'workspace-command') {
-        const command = (data as { command: WorkspaceCommand }).command;
+        const command = data.command;
         delivered.push(command);
         broker.acknowledge(ownerId, connection.sessionId, command.commandId, true);
       }
@@ -218,7 +218,7 @@ describe('workspace command delivery', () => {
     const deliveredPromise = new Promise<void>((resolve) => { onDelivery = resolve; });
     const connection = broker.connect(ownerId, (event, data) => {
       if (event === 'workspace-command') {
-        delivered = data as typeof delivered;
+        delivered = data;
         onDelivery();
       }
       return true;

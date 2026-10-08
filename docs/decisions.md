@@ -37,6 +37,15 @@ research or artifact side effects. Evidence: migration 0029 and focused lifecycl
 tests, with SQL persistence and schema coverage in Database CI. Cross-replica live
 acceptance remains unverified.
 
+P9-24 (7 October 2026): search the existing conversation message store instead of
+creating a second transcript index or changing retention. Use SQL full-text search
+when available, with an optional startup setup batch and a substring fallback;
+index message timestamps for date-filtered reads. Expose one bounded result
+contract to the owner-authenticated API and shared `conversation_search` tool,
+and redact tool queries/results from the durable tool-call audit. Offline
+route/store tests cover filters, date boundaries, result limits, the fallback,
+and the full-text query path; production SQL indexing remains unverified.
+
 P9-01 (7 October 2026): use the existing `dbo.settings` key/value store for
 per-role model and reasoning-effort preferences; do not add a migration.
 `jarvis.model` and `jarvis.reasoning` remain compatible aliases for `roles.chat`.
@@ -155,6 +164,7 @@ Windows/Chrome/Jev speedup remains live acceptance.
 | Date | Decision | Rationale and evidence | Status |
 | --- | --- | --- | --- |
 | 2026-10-07 | P9-22 exposes owner-authenticated `/phone/status` and a 20-call history through the existing shared contracts and `phone_sessions` table. Keep phone calling dormant unless Dan provisions Teams/ACS and a Teams Phone number; status configuration is not a provider health check. Do not return caller or call IDs, and do not add a migration or web changes. | P6-22 keeps Teams unprovisioned in production; P7-01 records that no phone number was purchased. Backend tests cover owner auth, unavailable history, sanitized failure, bounded history and status mapping. No Azure CLI/live Azure access was available, so current number, ACS resource and callback delivery remain unverified. | Implemented offline; production setup and live callbacks unverified |
+| 2026-10-07 | P9-18 puts `/now/events` event names and payloads plus task-event stream messages in `@jarvis/contracts`, with strict type guards. Route both streams through one typed backend SSE formatter while preserving authentication, replay IDs, heartbeat behavior, and `sseHeaders`; do not add a migration or change the web client. | Existing shared activity, background-job, workspace-command, and task-store contracts supply the payload types. Contract tests cover all Now event names and task-event shapes, and backend tests cover frame formatting and existing stream behavior. | Implemented offline; UI parser migration remains separate |
 | 2026-10-07 | P9-29 reuses the existing Jarvis tool registry, task/release stores and contracts for retry and release lookup. Deployment status comes from the latest default-branch `deploy*.yml`/`deploy*.yaml` Actions run using a repository-scoped `actions:read` App token; do not add persistence or web UI. | Issue #523's gap audit requests backend-only tools. Existing retry lifecycle checks and webhook-backed release records remain authoritative; bounded fake-provider tests cover Actions run selection, input validation and sanitized failures. | Implemented offline; live GitHub access unverified |
 | 2026-10-06 | P6-16 treats zero GitHub check runs and zero commit statuses as no CI only after two minutes from PR creation; recheck through the project-policy evaluator and record no-CI completion as task activity. Any present pending or failed check still blocks. | Reuse the persisted PR open time, current GitHub check APIs and existing policy flow without a migration. Focused tests cover empty checks after grace, checks appearing during grace, and failed checks. | Implemented offline; live test-repository acceptance pending |
 | 2026-10-06 | P6-17 preserves background failure event names and exports only fixed error kinds and bounded HTTP statuses. Retain `ENTRA_JARVIS_AGENT_OBJECT_ID` in Bicep. | Callback errors now reach the logger without exporting messages or provider data; logging and monitor tests exercise the sanitized diagnostics. `apps/backend/src/auth/config.ts` still reads the agent object ID to authorize the hosted identity, so the setting is not unused. | Implemented offline; live failure identification awaits deployment |

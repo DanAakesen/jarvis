@@ -60,6 +60,7 @@ describe('committed SQL manifest', () => {
       '0029_background_jobs.sql',
       '0030_foundry_usage_cost_coverage.sql',
       '0031_embedding_model_identity.sql',
+      '0032_conversation_search.sql',
     ]);
     for (const migration of migrations) await expect(readDownMigration(migration.name)).resolves.toMatchObject({ name: migration.name });
   });
@@ -84,12 +85,19 @@ describe('committed SQL manifest', () => {
     });
   });
   it('stores the embedding model identity and permits embedding background jobs', async () => {
-    const migration = (await readMigrations()).at(-1);
+    const migration = (await readMigrations()).find(({ name }) => name === '0031_embedding_model_identity.sql');
     expect(migration?.sql).toContain('ALTER TABLE dbo.memories ADD embedding_model nvarchar(128) NULL');
     expect(migration?.sql).toContain('ALTER TABLE dbo.vault_chunks ADD embedding_model nvarchar(128) NULL');
     expect(migration?.sql).toContain("N'embedding'");
     await expect(readDownMigration('0031_embedding_model_identity.sql')).resolves.toMatchObject({
       sql: expect.stringContaining('DROP COLUMN embedding_model'),
+    });
+  });
+  it('indexes conversation message dates for bounded search', async () => {
+    const migration = (await readMigrations()).at(-1);
+    expect(migration?.sql).toContain('CREATE INDEX IX_messages_at ON dbo.messages (at DESC, id DESC)');
+    await expect(readDownMigration('0032_conversation_search.sql')).resolves.toMatchObject({
+      sql: expect.stringContaining('DROP INDEX IX_messages_at ON dbo.messages'),
     });
   });
   it('reads down scripts from down/ without treating them as forward migrations', async () => {
