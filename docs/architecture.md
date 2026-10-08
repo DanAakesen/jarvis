@@ -216,9 +216,16 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   The UI session owns shell routing, settings-section
   selection, page transitions and applied/refused acknowledgements; this
   backend change does not implement those UI behaviors or claim live acceptance.
-  The web build currently reports TS2366 at `apps/web/src/Workspace.tsx:391`:
-  its exhaustive dispatcher must handle the new union member in the UI change
-  before the combined feature can merge or deploy.
+- P9-45 adds `conversation` with `action: 'show' | 'hide'` to the same flat
+  `workspace_command` contract and guard. It reuses the owner-authenticated,
+  all-tab broker without a new event channel or persistence; the tool waits for
+  the UI's applied/refused acknowledgement and relays refusal reasons. Invalid
+  actions use the shared P9-42 argument-refusal path. The reversible action needs
+  no confirmation. The UI session owns applying it and hiding the transcript by
+  default on phones; those behaviors and live acceptance remain pending.
+  The web dispatcher at `apps/web/src/Workspace.tsx:391` must handle the P9-40
+  and P9-45 union members in the UI change before the combined feature can build
+  or deploy.
 - P8-37 registers conversation history as the page-owned workspace view
   `conversation` from `App.tsx` once a conversation exists. The view content is
   an empty host element; `ConversationHistory` portals its transcript into it
@@ -557,6 +564,32 @@ issue; cancellation also removes the `Jarvis` label. PRs use the issue's task ID
 in their title and include `Fixes #N`. Offline fake-backed tests cover these
 flows; live GitHub issue reads/writes await the P10-01 App permission change.
 
+P10-03 adds the sensitive `create_issue` and `confirm_create_issue` tools. The
+first stages a draft and the next creates it only after a later stored Dan
+message exactly confirms its eight-digit code. The Dan-only
+`POST /factory/issues` route uses the same draft validation and creation service
+for the board. It reads all issue-title pages in the selected active repository,
+allocates the lowest free `P11-NN` code (two digits minimum), then rechecks it
+immediately before creation. New issues receive `P11` and `enhancement` labels;
+titles explicitly marked `[Bug]`, `Bug:`, or `Regression:` receive `bug`.
+The default Jarvis executor creates the issue and then applies the `Jarvis`
+worker label so GitHub emits the `issues.labeled` event that P10-02 consumes.
+Copilot issues are assigned to `copilot`, carry the `Copilot` label, and receive
+a scope comment; `none` adds no executor label. Likely credentials are refused
+before issue creation. Drafted codes are checked again at confirmation, and
+creation requests are serialized within the single configured backend replica.
+These flows are covered by offline fakes; live issue writes and the
+`issues` webhook remain pending P10-01's App permission/subscription change.
+
+P10-05 adds Dan-only `POST /factory/tasks/backfill-issues`. It visits open
+unlinked tasks in numeric task-ID order, reuses the P11 title allocation,
+labels and secret validation path, and stores the issue number in the existing
+`tasks.issue_number` column. The task ID is included in the generated title so
+a retry can recover an issue created before a failed SQL link. The route adds
+the `Jarvis` trigger label only after the SQL link commits, allowing the
+existing issue webhook to find and reuse the original task. There is no new
+migration or UI; live writes wait for P10-01 and coordinator execution.
+
 Chat-created tasks retain their originating message ID. Committed Done,
 NeedsAttention, Cancelled, and backend `pull_request_opened` events route a short
 status message with the task ID, outcome, and validated GitHub PR link to that
@@ -806,11 +839,16 @@ Existing routing derives its boolean as `mode !== 'present'`.
 
 The modes and UI colour contract are Present (`present`, green), Away (`away`,
 yellow), and On the move (`on_the_move`, blue). `GET /presence` returns the
-current state; owner-only `PUT /presence` accepts `{ mode }` and records a manual
-change. The signed-in browser still uses `POST /now/present` only while visible
+current state; owner-only `PUT /presence` accepts `{ mode, source? }`, with
+`source` limited to `manual` or `device` and defaulting to `manual`. Device
+updates are ignored with `ignored: 'recent_manual'` while a manual change is
+less than two hours old. Manual same-mode updates refresh that window. The
+presence response contract preserves `source` and `changedAt`; the existing JSON
+settings row already stores both, so no migration is needed. The signed-in
+browser still uses `POST /now/present` only while visible
 and focused on startup, focus, tab visibility, or user input; passive
 API/feed requests do not return Dan to Present. The owner-authenticated
-`set_presence_mode` tool records Jarvis-originated changes without confirmation;
+`set_presence_mode` tool records manual voice/chat changes without confirmation;
 `set_away_mode` remains a compatibility alias for one release. `GET /agent/settings`
 provides the active mode and timestamp alongside the base
 `personality.customInstructions` and bounded per-mode instructions. Realtime
@@ -2198,7 +2236,7 @@ Azure sign-in from GitHub Actions uses OpenID Connect and stores no secret. The 
 
 ### GitHub App
 
-[`github-app-manifest.json`](github-app-manifest.json) prepares a private App with contents and pull-request write access, and issues, commit statuses, checks, Actions, environments and deployments read access. It subscribes to `check_run`, `deployment_status`, `pull_request`, `push`, and `workflow_run`. The permission set is limited to the operations in P3-02, P3-03 and P7-45; repository metadata read is GitHub's required baseline. P10-02 adds issue operations and the `issues` webhook handler; P10-01 must grant Issues write and enable the `issues` subscription before these paths work live.
+[`github-app-manifest.json`](github-app-manifest.json) prepares a private App with contents, pull-request, issues, workflows and repository-creation write access, and commit statuses, checks, Actions, environments and deployments read access. It subscribes to `check_run`, `deployment_status`, `issue_comment`, `issues`, `pull_request`, `push`, and `workflow_run`. The permission set is limited to the operations in P3-02, P3-03 and P7-45; repository metadata read is GitHub's required baseline. P10-02 adds issue operations and the `issues` webhook handler; P10-01 granted Issues write on 8 October 2026 and the `issues` subscription is enabled, so these paths can run live.
 
 The backend reads `github-app-private-key` from Key Vault with its managed identity
 and uses the configured `GITHUB_APP_ID` to mint one-hour installation tokens
@@ -2454,7 +2492,7 @@ call linkage remain the post-merge P4-09 acceptance check.
 - Dan signs in with Entra ID through `jarvis-web`. `jarvis-api` requires user assignment, and only Dan is assigned; the backend also checks Dan's object ID. The hosted Jarvis agent is assigned the application role `Jarvis.Tools` and may call only the tool routes.
 - Google Calendar and Gmail tools are registered only in the backend and use the official Google APIs over HTTPS. The backend reads `google-oauth-client-id`, `google-oauth-client-secret`, and `google-refresh-token` only from Key Vault, exchanges the refresh token for a short-lived access token, and caches only that access token in memory. The single OAuth grant is for `danaakesen@gmail.com` and uses `gmail.readonly`, `gmail.compose`, `gmail.send`, `gmail.modify`, and `calendar.events`; `gmail.modify` is the least-privilege scope for Gmail message labels and draft update/deletion. No Google credential or token is a deployment variable or client-bundle value. An `invalid_grant` records a deduplicated `credential_expiry` activity alert; tool calls return a visible reconnect message. Dan must add `gmail.modify` to Google Auth Platform's Data Access scopes and rerun `infra/setup-google.ps1` to re-consent and replace the Key Vault refresh token before using the new mail tools.
 - Calendar range reads interpret date-only `start`/`end` in `JARVIS_GOOGLE_TIME_ZONE` (inclusive dates and an exclusive next-midnight API boundary); timezone-aware date-times are queried as instants. `calendar_list_events` pages up to 100 events across no more than 62 days and maps optional `query` to Google's `q`; `calendar_next_event` searches up to 60 days and skips events where Dan's attendee response is declined. All-day start/end values remain date-only, including multi-day events, while timed events remain instants. Calendar agenda, range, and next-event reads are reflex-safe and sensitive results remain redacted from the durable tool-call audit.
-- Calendar creation, movement, updates to title/time/location/attendees/description, deletion, Gmail draft creation/replacement/deletion, message archive/label changes, and sending are staged in process memory for ten minutes. The backend executes only after a different, later persisted Dan message exactly matches the returned `confirm <8-digit-code>` phrase. Pending actions are one-shot and lost on restart; the Container App remains at one replica. Sensitive Google tool inputs/results are redacted from persistent tool-call records, and external Google error bodies are not returned or logged. Calendar updates PATCH only the supplied fields; empty location, description, and attendee values can clear those fields. Draft replacement requires recipients, subject, and plain-text body; it preserves reply threading and refuses drafts with attachments or CC/BCC recipients. Gmail draft listing is bounded to ten drafts and returns plain-text bodies; archiving removes `INBOX`, and label changes resolve exact Gmail label names or IDs. Confirmed replies create a Gmail draft; Dan sends it from Gmail.
+- Calendar creation, movement, updates to title/time/location/attendees/description, deletion, Gmail draft creation/replacement/deletion, message archive/label changes, and sending are staged in process memory for ten minutes. Calendar executes only after a different, later persisted Dan message contains solely yes, approve, go ahead or do it (case-insensitive, optional final period/exclamation mark); no/cancel discards it. A new calendar stage invalidates the previous calendar action, and the confirmation tool must identify the latest action with its returned code. Gmail retains the exact `confirm <8-digit-code>` phrase. Pending actions are one-shot and lost on restart; the Container App remains at one replica. Sensitive Google tool inputs/results are redacted from persistent tool-call records, and external Google error bodies are not returned or logged. Calendar updates PATCH only the supplied fields; empty location, description, and attendee values can clear those fields. Draft replacement requires recipients, subject, and plain-text body; it preserves reply threading and refuses drafts with attachments or CC/BCC recipients. Gmail draft listing is bounded to ten drafts and returns plain-text bodies; archiving removes `INBOX`, and label changes resolve exact Gmail label names or IDs. Confirmed replies create a Gmail draft; Dan sends it from Gmail.
 - [`infra/bootstrap.ps1`](../infra/bootstrap.ps1) creates what the deploy workflows can't create for themselves: the deploy identity (GitHub OIDC, main branch only, trusting both the name-based and the ID-based subject (L50); Contributor and Role Based Access Control Administrator on `rg-jarvis`), the sign-in apps, `id-jarvis-backend`, and `jarvis-sql-admins`. Its IDs are in `infra/bootstrap.output.json` and in the repository's Actions variables.
 - Managed identities between Azure services; GitHub Actions deploys with OpenID Connect.
 - The backend identity has `Foundry User` on the Foundry project for the Danish voice relay, `Cognitive Services User` on the Foundry AIServices account for parallel Azure Speech partial recognition, and account-scoped `Cognitive Services Contributor` for model deployment management. It also retains `Cognitive Services Speech User` on the separate F0 Speech resource used for Teams voice notes.

@@ -46,6 +46,7 @@ const withNoActiveTasks = vi.fn(async (operation: () => Promise<void>) => ready.
 const taskStore: TaskStore = {
   create: vi.fn(async () => task),
   list: vi.fn(async () => []),
+  linkIssueNumberIfUnlinked: vi.fn(async () => null),
   get: vi.fn(async () => detail),
   updateModelConfig: vi.fn(async () => ({ kind: 'not-found' as const })),
   getActiveRepository: vi.fn(async () => null),

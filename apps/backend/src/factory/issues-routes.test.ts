@@ -4,6 +4,7 @@ import { loadConfig } from '../config.js';
 import type { ProjectStore } from './projects.js';
 import type { TaskRecord, TaskStore } from './task-store.js';
 import type { GitHubIssueClient } from '../github/issues.js';
+import type { TokenVerifier } from '../auth/verify.js';
 
 const config = { ...loadConfig({}), logLevel: 'silent' as const };
 const headers = { authorization: ['Bearer', ['e30', 'e30', 'sig'].join('.')].join(' ') };
@@ -21,10 +22,14 @@ const task: TaskRecord = {
   startedAt: null, finishedAt: null,
 };
 
-function fixture() {
+function fixture(auth: TokenVerifier = async () => ({
+  objectId: config.auth.ownerObjectId, tenantId: config.auth.tenantId, displayName: 'Dan',
+})) {
   const taskStore = {
     create: vi.fn(async () => task),
     findActiveByIssue: vi.fn(async () => null),
+    list: vi.fn(async () => []),
+    linkIssueNumberIfUnlinked: vi.fn(async (_taskId: string, issueNumber: number) => issueNumber),
   } as unknown as TaskStore;
   const projectStore = { list: vi.fn(async () => [project]) } as unknown as ProjectStore;
   const githubIssueClient = {
@@ -34,14 +39,20 @@ function fixture() {
     })),
     readComments: vi.fn(async () => [{ author: 'DanAakesen', body: 'Please implement this.' }]),
     readAgentRules: vi.fn(async () => 'Read AGENTS.md.'),
+    listIssueTitles: vi.fn(async () => []),
+    findIssueByTitleSuffix: vi.fn(async () => null),
+    createIssue: vi.fn(async () => ({
+      number: 575, url: 'https://github.com/DanAakesen/jarvis/issues/575',
+    })),
+    createComment: vi.fn(async () => {}),
+    addLabels: vi.fn(async () => {}),
+    removeLabel: vi.fn(async () => {}),
   } as unknown as GitHubIssueClient;
   const app = buildApp(config, undefined, {
     taskStore,
     projectStore,
     githubIssueClient,
-    auth: async () => ({
-      objectId: config.auth.ownerObjectId, tenantId: config.auth.tenantId, displayName: 'Dan',
-    }),
+    auth,
   });
   apps.push(app);
   return { app, taskStore, githubIssueClient };
@@ -90,5 +101,115 @@ describe('Factory issue start route', () => {
     expect((await app.inject({
       method: 'POST', url: '/factory/issues/574/start', headers, payload: {},
     })).statusCode).toBe(404);
+  });
+
+  it('creates a P11 issue only for Dan and returns its task code', async () => {
+    const { app, githubIssueClient } = fixture();
+    expect((await app.inject({
+      method: 'POST', url: '/factory/issues', payload: {
+        project: '7', title: 'Fix retries', body: 'Problem and acceptance.',
+      },
+    })).statusCode).toBe(401);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/factory/issues',
+      headers,
+      payload: { project: '7', title: 'Fix retries', body: 'Problem and acceptance.' },
+    });
+    expect(response.statusCode).toBe(201);
+    expect(response.json()).toEqual({
+      number: 575,
+      url: 'https://github.com/DanAakesen/jarvis/issues/575',
+      taskCode: 'P11-01',
+    });
+    expect(githubIssueClient.createIssue).toHaveBeenCalledWith(
+      project.repo, 'P11-01: Fix retries', 'Problem and acceptance.',
+      { labels: ['P11', 'enhancement'] },
+    );
+    expect(githubIssueClient.addLabels).toHaveBeenCalledWith(project.repo, 575, ['Jarvis']);
+  });
+
+  it('backfills unlinked open tasks for Dan and does not create duplicate issues on retry', async () => {
+    const { app, taskStore, githubIssueClient } = fixture();
+    const unlinked = { ...task, id: '10', issueNumber: null, title: 'Old Factory task' };
+    vi.mocked(taskStore.list).mockImplementation(async ({ state }) =>
+      state === 'Ready' && unlinked.issueNumber === null ? [unlinked] : []);
+    vi.mocked(taskStore.linkIssueNumberIfUnlinked).mockImplementation(async (_taskId, issueNumber) => {
+      unlinked.issueNumber = issueNumber;
+      return issueNumber;
+    });
+
+    expect((await app.inject({ method: 'POST', url: '/factory/tasks/backfill-issues' })).statusCode).toBe(401);
+    const first = await app.inject({
+      method: 'POST', url: '/factory/tasks/backfill-issues', headers,
+    });
+    expect(first.statusCode).toBe(200);
+    expect(first.json()).toEqual({
+      processed: 1, linked: 1, failed: 0,
+      results: [{ taskId: '10', status: 'linked', issueNumber: 575 }],
+    });
+    expect(githubIssueClient.createIssue).toHaveBeenCalledWith(
+      project.repo,
+      'P11-01: Old Factory task [Factory task 10]',
+      task.request,
+      { labels: ['P11', 'enhancement'] },
+    );
+    expect(taskStore.linkIssueNumberIfUnlinked).toHaveBeenCalledWith('10', 575);
+    expect(githubIssueClient.addLabels).toHaveBeenCalledWith(project.repo, 575, ['Jarvis']);
+
+    const second = await app.inject({
+      method: 'POST', url: '/factory/tasks/backfill-issues', headers,
+    });
+    expect(second.json()).toMatchObject({ processed: 0, linked: 0, failed: 0, results: [] });
+    expect(githubIssueClient.createIssue).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not allow the Jarvis agent to create issues through the Dan-only route', async () => {
+    const { app, githubIssueClient } = fixture(async () => ({
+      kind: 'jarvis-agent',
+      objectId: config.auth.ownerObjectId,
+      tenantId: config.auth.tenantId,
+    }));
+    const response = await app.inject({
+      method: 'POST', url: '/factory/issues', headers,
+      payload: { project: '7', title: 'Fix retries', body: 'Problem and acceptance.' },
+    });
+    expect(response.statusCode).toBe(403);
+    expect(githubIssueClient.createIssue).not.toHaveBeenCalled();
+  });
+
+  it('assigns Copilot and refuses invalid issue drafts before creating them', async () => {
+    const { app, githubIssueClient } = fixture();
+    const copilot = await app.inject({
+      method: 'POST', url: '/factory/issues', headers,
+      payload: {
+        project: '7', title: '[Bug] Retry fails', body: 'Problem and acceptance.', executor: 'copilot',
+      },
+    });
+    expect(copilot.statusCode).toBe(201);
+    expect(githubIssueClient.createIssue).toHaveBeenCalledWith(
+      project.repo,
+      'P11-01: [Bug] Retry fails',
+      'Problem and acceptance.',
+      { labels: ['P11', 'bug', 'Copilot'], assignees: ['copilot'] },
+    );
+    expect(githubIssueClient.createComment).toHaveBeenCalledWith(
+      project.repo, 575, expect.stringContaining('acceptance criteria'),
+    );
+
+    const beforeSecret = vi.mocked(githubIssueClient.createIssue).mock.calls.length;
+    const secret = await app.inject({
+      method: 'POST', url: '/factory/issues', headers,
+      payload: { project: '7', title: 'Credentials', body: 'password: a-real-secret-value' },
+    });
+    expect(secret.statusCode).toBe(400);
+    expect(githubIssueClient.createIssue).toHaveBeenCalledTimes(beforeSecret);
+
+    const invalidExecutor = await app.inject({
+      method: 'POST', url: '/factory/issues', headers,
+      payload: { project: '7', title: 'Valid', body: 'Valid', executor: 'other' },
+    });
+    expect(invalidExecutor.statusCode).toBe(400);
   });
 });

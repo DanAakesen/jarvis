@@ -414,7 +414,7 @@ jobs:
           [[ -n "$token" ]] || { echo "::error::The deployment identity returned no token."; exit 1; }
           echo "::add-mask::$token"
           response="$RUNNER_TEMP/status-smoke.json"
-          if ! curl --fail --silent --show-error --max-time 35 \
+          if ! curl --fail --silent --show-error --max-time 60 \
             --oauth2-bearer "$token" \
             "https://$BACKEND_FQDN/status/smoke" --output "$response"; then
             unset token
@@ -438,6 +438,8 @@ jobs:
             echo
             echo "A disconnected PC bridge is recorded but does not block deployment acceptance."
           } >>"$GITHUB_STEP_SUMMARY"
+          # Ids and statuses only (no details), so a failed gate is diagnosable from the log.
+          jq -r '.entries[] | "smoke \(.id): \(.status)"' "$response"
           if ! jq -e '[.entries[] | select(.id != "pc_bridge" and (.status == "down" or .status == "degraded"))] | length == 0' "$response" >/dev/null; then
             echo "::error::A required backend smoke check is degraded or down."
             exit 1

@@ -15,6 +15,9 @@ const pullRequest = {
   created_at: '2026-10-04T20:06:00.000Z',
   head: { ref: workspace.branch, sha: 'a'.repeat(40), repo: { full_name: workspace.repository } },
   base: { ref: workspace.defaultBranch },
+  body: null,
+  draft: false,
+  node_id: 'PR_kwDOExample',
 };
 
 function tokenIssuer(): GitHubAppTokenIssuer {
@@ -35,15 +38,21 @@ function github(options: {
   aheadBy?: number;
   branchStatus?: number;
   pullRepository?: string;
+  pullBody?: string | null;
+  draft?: boolean;
 } = {}) {
-  const matchingPullRequest = {
+  let pullBody = options.pullBody ?? pullRequest.body;
+  let draft = options.draft ?? pullRequest.draft;
+  const matchingPullRequest = () => ({
     ...pullRequest,
+    body: pullBody,
+    draft,
     head: {
       ref: workspace.branch,
       sha: 'a'.repeat(40),
       repo: { full_name: options.pullRepository ?? workspace.repository },
     },
-  };
+  });
   const calls: { url: string; method: string; body?: string }[] = [];
   let created = options.existing ?? false;
   let createRequests = 0;
@@ -59,7 +68,7 @@ function github(options: {
         : jsonResponse({ name: workspace.branch });
     }
     if (parsed.pathname.endsWith('/pulls') && method === 'GET') {
-      return jsonResponse(created ? [matchingPullRequest] : []);
+      return jsonResponse(created ? [matchingPullRequest()] : []);
     }
     if (parsed.pathname.endsWith('/compare/main...jarvis%2Ftask-42')) {
       return jsonResponse({ ahead_by: options.aheadBy ?? 1 });
@@ -72,7 +81,15 @@ function github(options: {
       }
       createdPullRequests += 1;
       created = true;
-      return jsonResponse(matchingPullRequest, 201);
+      return jsonResponse(matchingPullRequest(), 201);
+    }
+    if (parsed.pathname.endsWith('/pulls/73') && method === 'PATCH') {
+      pullBody = JSON.parse(String(init?.body)).body as string;
+      return jsonResponse(matchingPullRequest());
+    }
+    if (parsed.pathname === '/graphql' && method === 'POST') {
+      draft = false;
+      return jsonResponse({ data: { markPullRequestReadyForReview: { pullRequest: { isDraft: false } } } });
     }
     throw new Error(`Unexpected GitHub request: ${url}`);
   });
@@ -86,6 +103,10 @@ function fixture(
   callbacks: {
     onPullRequest?: (mapping: PullRequestMapping) => Promise<void>;
     afterPullRequest?: (mapping: PullRequestMapping) => Promise<void>;
+    onPolicyError?: (failure: {
+      reason: 'http' | 'timeout' | 'aborted' | 'internal';
+      statusCode?: number;
+    }) => void;
   } = {},
 ) {
   const recordEvent = vi.fn(async () => ({ id: '1' } as never));
@@ -97,8 +118,9 @@ function fixture(
     fetch,
     recordPullRequest,
     callbacks.afterPullRequest,
+    callbacks.onPolicyError,
   );
-  return { handler, recordEvent, recordPullRequest };
+  return { handler, recordEvent, recordPullRequest, onPolicyError: callbacks.onPolicyError };
 }
 
 describe('GitHub task delivery', () => {
@@ -223,6 +245,44 @@ describe('GitHub task delivery', () => {
       openedAt: '2026-10-04T20:06:00.000Z',
       mergedAt: null,
     });
+  });
+
+  it('adds the issue link and marks a reused task-branch draft PR ready for review', async () => {
+    const api = github({ existing: true, pullBody: 'Changes from the task branch.', draft: true });
+    const afterPullRequest = vi.fn(async () => {});
+    const test = fixture(api.fetch, { afterPullRequest });
+
+    await expect(test.handler(workspace, { ...task, issueNumber: 601 })).resolves.toEqual({ kind: 'awaiting_policy' });
+
+    const patch = api.calls.find((call) => call.method === 'PATCH');
+    expect(patch?.url).toBe('https://api.github.com/repos/DanAakesen/jarvis-test-target/pulls/73');
+    expect(JSON.parse(patch?.body ?? '{}').body).toBe('Changes from the task branch.\n\nFixes #601');
+    const ready = api.calls.find((call) => call.url.endsWith('/graphql'));
+    expect(ready?.method).toBe('POST');
+    expect(JSON.parse(ready?.body ?? '{}').variables).toEqual({ pullRequestId: 'PR_kwDOExample' });
+    expect(test.recordEvent).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'pull_request_opened',
+      payload: expect.objectContaining({ pullRequest: 73, reused: true }),
+    }));
+    expect(afterPullRequest).toHaveBeenCalledOnce();
+  });
+
+  it('logs a sanitised policy callback failure before refusing delivery', async () => {
+    const api = github({ existing: true });
+    const onPolicyError = vi.fn();
+    const test = fixture(api.fetch, {
+      afterPullRequest: async () => { throw new Error('token=secret; body=private'); },
+      onPolicyError,
+    });
+
+    await expect(test.handler(workspace, task)).resolves.toEqual({
+      kind: 'refused',
+      reason: 'The pull request was recorded, but project policy could not be verified. Review the task before retrying.',
+    });
+
+    expect(onPolicyError).toHaveBeenCalledWith({ reason: 'internal' });
+    expect(JSON.stringify(onPolicyError.mock.calls)).not.toContain('secret');
+    expect(JSON.stringify(onPolicyError.mock.calls)).not.toContain('private');
   });
 
   it('accepts GitHub canonical repository casing in a PR response', async () => {

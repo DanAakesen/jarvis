@@ -3,7 +3,7 @@ import { buildApp } from '../app.js';
 import { loadConfig } from '../config.js';
 import { coreModule } from './index.js';
 import { ToolFailure, ToolRefusal } from './tool-registry.js';
-import { WorkspaceCommandBroker } from './workspace-commands.js';
+import { isWorkspaceReflexOperation, WorkspaceCommandBroker } from './workspace-commands.js';
 import { workspaceNavigationPages, type WorkspaceCommand } from '@jarvis/contracts';
 import { executeReflexAction, reflexTargets, registerChatReflex, undoPartialReflexAction } from './reflex.js';
 
@@ -41,6 +41,73 @@ function fixture() {
 }
 
 describe('workspace command delivery', () => {
+  it.each(['show', 'hide'])('shows or hides the conversation only after an applied acknowledgement (%s)', async (action) => {
+    const { app, broker } = fixture();
+    const command = { commandId: `conversation-${action}`, operation: 'conversation', action };
+    let delivered!: WorkspaceCommand;
+    const connection = broker.connect(ownerId, (event, data) => {
+      if (event === 'workspace-command') delivered = data.command;
+      return true;
+    });
+    let settled = false;
+    const pending = app.inject({
+      method: 'POST', url: '/tools/workspace_command', headers: agentHeaders, payload: command,
+    }).then((response) => { settled = true; return response; });
+    await vi.waitFor(() => expect(delivered).toEqual(command));
+    expect(settled).toBe(false);
+    expect(isWorkspaceReflexOperation(command)).toBe(true);
+    const ack = await app.inject({
+      method: 'POST', url: `/now/workspace/commands/${command.commandId}/ack`, headers: userHeaders,
+      payload: { sessionId: connection.sessionId, applied: true },
+    });
+    expect(ack.statusCode).toBe(204);
+    expect((await pending).json()).toMatchObject({ outcome: 'ok', result: { applied: true, ...command } });
+    connection.close();
+  });
+
+  it('relays a refusal when a client cannot change conversation visibility', async () => {
+    const { app, broker } = fixture();
+    const command = { commandId: 'conversation-refused', operation: 'conversation', action: 'hide' };
+    let delivered!: WorkspaceCommand;
+    const connection = broker.connect(ownerId, (event, data) => {
+      if (event === 'workspace-command') delivered = data.command;
+      return true;
+    });
+    const pending = app.inject({
+      method: 'POST', url: '/tools/workspace_command', headers: agentHeaders, payload: command,
+    });
+    await vi.waitFor(() => expect(delivered).toEqual(command));
+    const reason = 'The conversation is not available in this tab.';
+    const ack = await app.inject({
+      method: 'POST', url: `/now/workspace/commands/${command.commandId}/ack`, headers: userHeaders,
+      payload: { sessionId: connection.sessionId, applied: false, reason },
+    });
+    expect(ack.statusCode).toBe(204);
+    expect((await pending).json()).toMatchObject({
+      outcome: 'refused', result: { refused: reason }, confirmation: expect.stringContaining('Not done:'),
+    });
+    connection.close();
+  });
+
+  it.each(['open', 'close', 'toggle', 'shown', '', undefined])('refuses invalid conversation actions before delivery (%s)', async (action) => {
+    const { app, broker } = fixture();
+    const send = vi.fn(() => true);
+    broker.connect(ownerId, send);
+    const command = {
+      commandId: 'conversation-invalid', operation: 'conversation',
+      ...(action === undefined ? {} : { action }),
+    };
+    const response = await app.inject({
+      method: 'POST', url: '/tools/workspace_command', headers: agentHeaders,
+      payload: command,
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      outcome: 'refused', result: { refused: expect.stringContaining('Invalid arguments:') },
+    });
+    expect(send).not.toHaveBeenCalled();
+  });
+
   it.each(workspaceNavigationPages)('delivers navigation to %s through the shared tool', async (page) => {
     const { app, broker } = fixture();
     const command = { commandId: `navigate-${page}`, operation: 'navigate', page };

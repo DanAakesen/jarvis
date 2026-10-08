@@ -555,6 +555,7 @@ try {
               undefined,
               async (mapping) => { await webhookDeliveryStore?.recordPullRequest(mapping); },
               async (mapping) => { await projectPolicyEvaluator?.handle(mapping); },
+              (failure) => logger.warn(failure, 'github.delivery_policy_evaluation_failed'),
             ),
           }
           : {}),
@@ -805,8 +806,9 @@ try {
           'web_research',
           'Dry run only: answer with one short sentence and no sources; do not browse or save anything.',
           selected?.model ?? config.codexToolModel,
-          AbortSignal.timeout(20_000),
-          20_000,
+          // A Codex dry run routinely takes 15-25 s; 20 s made the gate flaky (L127).
+          AbortSignal.timeout(45_000),
+          45_000,
           1_000,
           (value) => {
             if (typeof value !== 'object' || value === null || Array.isArray(value) ||

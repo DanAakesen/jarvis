@@ -74,7 +74,8 @@ describe('repository Jarvis tools', () => {
     expect(result.tools.find(({ area }: { area: string }) => area === 'factory').tools)
       .toContainEqual(expect.objectContaining({ name: 'repo_read' }));
     expect(result.features.flatMap(({ features }: { features: { name: string; status: string }[] }) => features))
-      .toContainEqual(expect.objectContaining({ name: 'Repository tools for Jarvis', status: 'Built offline; live GitHub access pending' }));
+      // Reads the real docs/features.md, so only the row's presence is stable, not its status text.
+      .toContainEqual(expect.objectContaining({ name: 'Repository tools for Jarvis', status: expect.stringMatching(/\S/u) }));
     expect(record).toHaveBeenCalledWith(expect.objectContaining({
       tool: 'list_capabilities', arguments: { redacted: true }, result: { redacted: true },
     }));

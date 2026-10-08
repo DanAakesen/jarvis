@@ -5,6 +5,10 @@ import { capabilityInstructions } from './capability-instructions.js';
 describe('shared navigation capability instructions', () => {
   it.each([true, false])('includes canonical destinations and aliases with automatic capture %s', (automaticCapture) => {
     const instructions = capabilityInstructions({ automaticCapture });
+    expect(instructions).toContain('operation "conversation" and action "show"');
+    expect(instructions).toContain('hide the transcript, use action "hide"');
+    expect(instructions).toContain('This reversible view change needs no confirmation');
+    expect(instructions).toContain('Only report it applied after the tool succeeds');
     expect(instructions).toContain('workspace_command with operation "navigate"');
     for (const page of workspaceNavigationPages) expect(instructions).toContain(`"${page}"`);
     for (const section of workspaceSettingsSections) expect(instructions).toContain(`"${section}"`);

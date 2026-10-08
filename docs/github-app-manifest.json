@@ -5,15 +5,20 @@
   "default_permissions": {
     "contents": "write",
     "pull_requests": "write",
-    "issues": "read",
+    "issues": "write",
+    "workflows": "write",
+    "repository_creation": "write",
     "statuses": "read",
     "checks": "read",
     "actions": "read",
-    "deployments": "read"
+    "deployments": "read",
+    "environments": "read"
   },
   "default_events": [
     "check_run",
     "deployment_status",
+    "issue_comment",
+    "issues",
     "pull_request",
     "push",
     "workflow_run"

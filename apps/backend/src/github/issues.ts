@@ -4,6 +4,7 @@ const apiUrl = 'https://api.github.com';
 const maxResponseBytes = 1024 * 1024;
 const maxAgentRulesBytes = 64 * 1024;
 const maxIssueCommentPages = 10;
+const maxIssueTitlePages = 100;
 
 export interface GitHubIssue {
   readonly number: number;
@@ -25,12 +26,25 @@ export interface GitHubIssueReference {
   readonly url: string;
 }
 
+export interface GitHubIssueCreateOptions {
+  readonly labels?: readonly string[];
+  readonly assignees?: readonly string[];
+}
+
 export interface GitHubIssueClient {
   readIssue(repository: string, issue: number): Promise<GitHubIssue | null>;
   readComments(repository: string, issue: number): Promise<readonly GitHubIssueComment[]>;
   readAgentRules(repository: string): Promise<string>;
-  createIssue(repository: string, title: string, body: string): Promise<GitHubIssueReference>;
+  listIssueTitles(repository: string): Promise<readonly string[]>;
+  findIssueByTitleSuffix(repository: string, suffix: string): Promise<GitHubIssueReference | null>;
+  createIssue(
+    repository: string,
+    title: string,
+    body: string,
+    options?: GitHubIssueCreateOptions,
+  ): Promise<GitHubIssueReference>;
   createComment(repository: string, issue: number, body: string): Promise<void>;
+  addLabels(repository: string, issue: number, labels: readonly string[]): Promise<void>;
   removeLabel(repository: string, issue: number, label: string): Promise<void>;
 }
 
@@ -192,17 +206,85 @@ export function createGitHubIssueClient(
       if (rules.length > maxAgentRulesBytes) throw new Error('Repository agent rules are too large');
       return rules.toString('utf8');
     },
-    async createIssue(repository, title, body) {
+    async listIssueTitles(repository) {
       const path = repositoryPath(repository);
-      if (!title.trim() || title.length > 256 || body.length > 50_000) throw new Error('Invalid issue content');
+      const token = await tokenIssuer.issueForRepositoryRead(repository);
+      const titles: string[] = [];
+      for (let page = 1; page <= maxIssueTitlePages; page += 1) {
+        const response = await request(
+          fetchImpl,
+          token,
+          `/repos/${path}/issues?state=all&per_page=100&page=${page}`,
+        );
+        if (!Array.isArray(response) || response.length > 100 ||
+            response.some((issue) => !object(issue) || typeof issue.title !== 'string')) {
+          throw new Error('GitHub issue list is invalid');
+        }
+        titles.push(...response.map((issue) => (issue as { title: string }).title));
+        if (response.length < 100) return titles;
+      }
+      throw new Error('GitHub issue list is too large to allocate a task code safely');
+    },
+    async findIssueByTitleSuffix(repository, suffix) {
+      if (!suffix.trim() || suffix.length > 100) throw new Error('Invalid issue title suffix');
+      const path = repositoryPath(repository);
+      const token = await tokenIssuer.issueForRepositoryRead(repository);
+      let match: GitHubIssueReference | null = null;
+      for (let page = 1; page <= maxIssueTitlePages; page += 1) {
+        const response = await request(
+          fetchImpl,
+          token,
+          `/repos/${path}/issues?state=all&per_page=100&page=${page}`,
+        );
+        if (!Array.isArray(response) || response.length > 100 ||
+            response.some((issue) => !object(issue) || typeof issue.title !== 'string' ||
+              !Number.isSafeInteger(issue.number) || (issue.number as number) < 1)) {
+          throw new Error('GitHub issue list is invalid');
+        }
+        const found = response.find((issue) => {
+          if (!object(issue)) return false;
+          return !object(issue.pull_request) && typeof issue.title === 'string' &&
+            issue.title.endsWith(suffix);
+        });
+        if (found && object(found)) {
+          if (match) throw new Error('GitHub issue title suffix is ambiguous');
+          const number = found.number as number;
+          match = { number, url: `https://github.com/${repository}/issues/${number}` };
+        }
+        if (response.length < 100) return match;
+      }
+      throw new Error('GitHub issue list is too large to find a task marker safely');
+    },
+    async createIssue(repository, title, body, options) {
+      const path = repositoryPath(repository);
+      if (!title.trim() || title.length > 256 || Buffer.byteLength(body, 'utf8') > 50_000 ||
+          options?.labels?.some((label) => !label.trim() || label.length > 50) ||
+          options?.assignees?.some((assignee) => !/^[A-Za-z0-9-]{1,39}$/u.test(assignee))) {
+        throw new Error('Invalid issue content');
+      }
       const token = await tokenIssuer.issueForIssuesWrite(repository);
-      const created = await request(fetchImpl, token, `/repos/${path}/issues`, 'POST', { title, body });
+      const created = await request(fetchImpl, token, `/repos/${path}/issues`, 'POST', {
+        title,
+        body,
+        ...(options?.labels ? { labels: options.labels } : {}),
+        ...(options?.assignees ? { assignees: options.assignees } : {}),
+      });
       if (!object(created) || !Number.isSafeInteger(created.number) ||
         (created.number as number) < 1 || (created.number as number) > 2_147_483_647 ||
         created.html_url !== `https://github.com/${repository}/issues/${created.number}`) {
         throw new Error('GitHub issue response is invalid');
       }
       return { number: created.number as number, url: created.html_url };
+    },
+    async addLabels(repository, issue, labels) {
+      const path = repositoryPath(repository);
+      if (!Number.isSafeInteger(issue) || issue < 1 || issue > 2_147_483_647 ||
+          labels.length < 1 || labels.length > 10 ||
+          labels.some((label) => !label.trim() || label.length > 50)) {
+        throw new Error('Invalid issue labels');
+      }
+      const token = await tokenIssuer.issueForIssuesWrite(repository);
+      await request(fetchImpl, token, `/repos/${path}/issues/${issue}/labels`, 'POST', { labels });
     },
     async createComment(repository, issue, body) {
       const path = repositoryPath(repository);

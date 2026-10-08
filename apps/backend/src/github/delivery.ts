@@ -17,6 +17,9 @@ interface PullRequest {
   reused: boolean;
   headSha: string;
   openedAt: string;
+  body: string;
+  draft: boolean;
+  nodeId: string | null;
 }
 
 export type GitHubDeliveryResult =
@@ -34,8 +37,26 @@ class GitHubDeliveryRequestError extends Error {
   }
 }
 
+interface DeliveryFailure {
+  reason: 'http' | 'timeout' | 'aborted' | 'internal';
+  statusCode?: number;
+}
+
 function object(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function safeDeliveryFailure(error: unknown): DeliveryFailure {
+  if (error !== null && typeof error === 'object') {
+    const details = error as Record<string, unknown>;
+    if (details.name === 'TimeoutError') return { reason: 'timeout' };
+    if (details.name === 'AbortError') return { reason: 'aborted' };
+    const status = details.status;
+    if (typeof status === 'number' && Number.isInteger(status) && status >= 100 && status <= 599) {
+      return { reason: 'http', statusCode: status };
+    }
+  }
+  return { reason: 'internal' };
 }
 
 async function readJson(response: Response): Promise<unknown> {
@@ -75,9 +96,10 @@ async function request(
   token: string,
   body?: unknown,
   timeoutMs = 10_000,
+  method?: 'POST' | 'PATCH',
 ): Promise<unknown> {
   const response = await fetchImpl(`${apiUrl}${path}`, {
-    method: body === undefined ? 'GET' : 'POST',
+    method: body === undefined ? 'GET' : method ?? 'POST',
     headers: {
       Accept: 'application/vnd.github+json',
       Authorization: `${['Bear', 'er'].join('')} ${token}`,
@@ -105,13 +127,19 @@ function pullRequest(value: unknown, repository: string, branch: string, baseBra
   const headRepository = head.repo;
   const headSha = head.sha;
   const openedAt = response.created_at;
+  const body = response.body;
+  const draft = response.draft;
+  const nodeId = response.node_id;
   if (
     response.state !== 'open' || response.merged === true ||
     !Number.isSafeInteger(response.number) || (response.number as number) < 1 ||
     head.ref !== branch || typeof headRepository.full_name !== 'string' ||
     headRepository.full_name.toLowerCase() !== repository.toLowerCase() || base.ref !== baseBranch ||
     typeof headSha !== 'string' || !/^[\da-f]{40}$/iu.test(headSha) ||
-    typeof openedAt !== 'string' || !Number.isFinite(Date.parse(openedAt))) {
+    typeof openedAt !== 'string' || !Number.isFinite(Date.parse(openedAt)) ||
+    typeof draft !== 'boolean' || (body !== null && typeof body !== 'string') ||
+    (nodeId !== undefined && (typeof nodeId !== 'string' || nodeId.length === 0 || nodeId.length > 255)) ||
+    (draft && typeof nodeId !== 'string')) {
     return null;
   }
   return {
@@ -119,6 +147,9 @@ function pullRequest(value: unknown, repository: string, branch: string, baseBra
     reused: false,
     headSha: headSha.toLowerCase(),
     openedAt: new Date(openedAt).toISOString(),
+    body: typeof body === 'string' ? body : '',
+    draft,
+    nodeId: typeof nodeId === 'string' ? nodeId : null,
   };
 }
 
@@ -159,19 +190,22 @@ export function createGitHubDeliveryHandler(
   fetchImpl: typeof fetch = fetch,
   onPullRequest?: (mapping: Extract<GithubWebhookMapping, { kind: 'pull_request' }>) => Promise<void>,
   afterPullRequest?: (mapping: Extract<GithubWebhookMapping, { kind: 'pull_request' }>) => Promise<void>,
+  onPolicyError?: (failure: DeliveryFailure) => void,
 ): (workspace: TaskWorkspace, task: DeliveryTask, gate?: TaskCompletionGate) => Promise<GitHubDeliveryResult> {
   return async ({ repository, defaultBranch, branch }, task, gate) => {
     if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/u.test(repository) ||
       !defaultBranch || defaultBranch.length > 255 || !branch || branch.length > 255 ||
-      !/^[1-9][0-9]{0,18}$/u.test(task.id) || !task.title.trim()) {
+      !/^[1-9][0-9]{0,18}$/u.test(task.id) || !task.title.trim() ||
+      (task.issueNumber != null && (!Number.isSafeInteger(task.issueNumber) || task.issueNumber < 1))) {
       return { kind: 'refused', reason: 'The task repository, branch, or title could not be verified.' };
     }
     const [owner] = repository.split('/');
     const repositoryPath = repository.split('/').map(encodeURIComponent).join('/');
 
     let pull: PullRequest | null;
+    let token = '';
     try {
-      const token = await tokenIssuer.issue(repository);
+      token = await tokenIssuer.issue(repository);
       let branchBody: unknown;
       try {
         branchBody = await request(
@@ -232,6 +266,7 @@ export function createGitHubDeliveryHandler(
               fetchImpl, repositoryPath, repository, branch, defaultBranch, owner!, token, 3_000,
             );
             if (reconciled) {
+              await prepareReusedPullRequest(fetchImpl, repositoryPath, token, reconciled, task);
               const mapping = await recordOpenedPull(
                 tasks, task.id, reconciled, branch, defaultBranch, repository, onPullRequest,
               );
@@ -247,7 +282,8 @@ export function createGitHubDeliveryHandler(
         if (guardedCreate.value.kind === 'opened') {
           try {
             await afterPullRequest?.(guardedCreate.value.mapping);
-          } catch {
+          } catch (error) {
+            onPolicyError?.(safeDeliveryFailure(error));
             return {
               kind: 'refused',
               reason: 'The pull request was recorded, but project policy could not be verified. Review the task before retrying.',
@@ -273,23 +309,76 @@ export function createGitHubDeliveryHandler(
       };
     }
 
-    const recorded = gate
-      ? await gate(() => recordOpenedPull(tasks, task.id, pull, branch, defaultBranch, repository, onPullRequest))
-      : {
-        kind: 'ran' as const,
-        value: await recordOpenedPull(tasks, task.id, pull, branch, defaultBranch, repository, onPullRequest),
+    const prepareAndRecord = async () => {
+      if (pull!.reused) await prepareReusedPullRequest(fetchImpl, repositoryPath, token, pull!, task);
+      return recordOpenedPull(tasks, task.id, pull!, branch, defaultBranch, repository, onPullRequest);
+    };
+    let recorded: { kind: 'ran'; value: Awaited<ReturnType<typeof prepareAndRecord>> } | { kind: 'not_running' };
+    try {
+      recorded = gate
+        ? await gate(prepareAndRecord)
+        : {
+          kind: 'ran' as const,
+          value: await prepareAndRecord(),
+        };
+    } catch {
+      return {
+        kind: 'refused',
+        reason: 'GitHub could not verify or open the task pull request. Check repository access and retry the task.',
       };
+    }
     if (recorded.kind === 'not_running') return { kind: 'not_running' };
     try {
       await afterPullRequest?.(recorded.value);
       return { kind: 'awaiting_policy' };
-    } catch {
+    } catch (error) {
+      onPolicyError?.(safeDeliveryFailure(error));
       return {
         kind: 'refused',
         reason: 'The pull request was recorded, but project policy could not be verified. Review the task before retrying.',
       };
     }
   };
+}
+
+async function prepareReusedPullRequest(
+  fetchImpl: typeof fetch,
+  repositoryPath: string,
+  token: string,
+  pull: PullRequest,
+  task: DeliveryTask,
+): Promise<void> {
+  const issueNumber = task.issueNumber;
+  if (issueNumber != null && !new RegExp(`(?:^|\\n)Fixes #${issueNumber}(?:\\s|$)`, 'iu').test(pull.body)) {
+    const body = [pull.body.trimEnd(), `Fixes #${issueNumber}`].filter(Boolean).join('\n\n');
+    const updated = await request(
+      fetchImpl,
+      `/repos/${repositoryPath}/pulls/${pull.number}`,
+      token,
+      { body },
+      10_000,
+      'PATCH',
+    );
+    if (!object(updated) || typeof updated.body !== 'string' ||
+      !new RegExp(`(?:^|\\n)Fixes #${issueNumber}(?:\\s|$)`, 'iu').test(updated.body)) {
+      throw new Error('GitHub pull request body could not be updated');
+    }
+    pull.body = updated.body;
+  }
+
+  if (!pull.draft) return;
+  if (!pull.nodeId) throw new Error('GitHub pull request node ID is unavailable');
+  const result = await request(fetchImpl, '/graphql', token, {
+    query: 'mutation($pullRequestId: ID!) { markPullRequestReadyForReview(input: { pullRequestId: $pullRequestId }) { pullRequest { isDraft } } }',
+    variables: { pullRequestId: pull.nodeId },
+  });
+  const mutation = object(result) && object(result.data) ? result.data.markPullRequestReadyForReview : null;
+  const updatedPullRequest = object(mutation) ? mutation.pullRequest : null;
+  if ((object(result) && Array.isArray(result.errors)) || !object(updatedPullRequest) ||
+    updatedPullRequest.isDraft !== false) {
+    throw new Error('GitHub pull request could not be marked ready for review');
+  }
+  pull.draft = false;
 }
 
 async function recordOpenedPull(
