@@ -1259,6 +1259,17 @@ refuses marked automatic writes when capture is off, while direct requests remai
 available. Default thresholds, the vault-search result count and capture
 behavior match the existing values.
 
+P9-11 adds bounded `timeouts` settings to the existing global `dbo.settings`
+store and shared contracts; no migration or web change is needed. Defaults are
+30 seconds for ordinary tools, 320 seconds for long tools, and 10 seconds for
+agent-to-backend HTTP requests. Their respective bounds are 1–120, 30–320 and
+1–60 seconds. The existing research invocation timeout remains in `research`
+(1–320 seconds) and is also returned to the hosted agent. `/agent/settings`
+supplies the effective values; the agent validates them and applies them to tool
+calls and chat-runtime backend requests. Missing timeout fields on an older
+backend response use the bounded defaults. Timed-out tool actions are not
+automatically retried because their completion may be uncertain.
+
 ### Vault knowledge graph (P7-43)
 
 Migration `0027_vault_knowledge_graph.sql` stores wiki-link and Markdown-link

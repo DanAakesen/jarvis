@@ -22,7 +22,7 @@ The complete list of what Jarvis does or will do, for UI design and planning. Ea
 | **Phone** | Away from the browser: Teams app or phone |
 | **Background** | Runs without Dan; shows only its effects |
 
-Status as of 7 October 2026.
+Status as of 8 October 2026.
 
 ## Jarvis: conversation and voice
 
@@ -104,6 +104,7 @@ Status as of 7 October 2026.
 | --- | --- | --- | --- | --- | --- |
 | Settings | Jarvis, voice and coding-agent defaults; global limits; app-wide light/dark appearance | Screen | Settings | Built | P1-11, P8-13 |
 | Voice tuning | Configure bounded server-VAD threshold, prefix padding and silence duration, barge-in, and maximum spoken reply tokens | Backend API | `/settings`; realtime session configuration | Backend built offline; live Voice Live behavior and the hosted Danish agent's separate configuration remain unverified | P9-05 |
+| Timeout controls | Configure bounded ordinary-tool (1–120 seconds), long-tool (30–320 seconds), research (1–320 seconds) and agent-to-backend HTTP (1–60 seconds) timeouts | Backend API | `/settings`, `/agent/settings`; hosted agent tools and chat | Built offline; live agent setting propagation unverified | P9-11 |
 | Jarvis model per session | Model and reasoning for new Jarvis sessions | Both | Settings; by voice with P7-11 | Built | P4-07 |
 | Model catalogue and per-role settings | List live Foundry deployments and configure model/reasoning effort for chat, vision, research, voice, transcription, embeddings, Codex and Copilot; selected settings apply to the next relevant task, job, request or session | Backend API | Settings API and the corresponding chat, task, research, vision and voice jobs | Backend built offline; live ARM, provider/account availability and model-selection acceptance pending | P9-01, P9-02, P9-04 |
 | Embedding model changes | Select `text-embedding-3-small` or `text-embedding-3-large`; re-embed mismatched memory and vault vectors with background progress | Backend API + background | Settings API; memory and vault indexes | Backend built offline; live deployment and re-embedding acceptance pending | P9-03 |

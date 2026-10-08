@@ -541,7 +541,7 @@ def test_load_verified_history_checks_token_and_uses_stored_context(monkeypatch)
 @pytest.mark.parametrize(
     "settings",
     [
-        {},
+        {"timeouts": {}},
         {"timeouts": {"backendHttpTimeoutSeconds": 0}},
         {"timeouts": {"backendHttpTimeoutSeconds": 61}},
         {"timeouts": {"backendHttpTimeoutSeconds": True}},
@@ -550,6 +550,10 @@ def test_load_verified_history_checks_token_and_uses_stored_context(monkeypatch)
 def test_chat_rejects_unsafe_backend_http_timeouts(settings) -> None:
     with pytest.raises(RuntimeError, match="Agent settings are invalid"):
         chat_runtime._backend_http_timeout(settings)
+
+
+def test_chat_uses_the_bounded_default_when_older_backend_settings_omit_timeouts() -> None:
+    assert chat_runtime._backend_http_timeout({}) == 10
 
 
 def test_follow_up_keeps_cross_session_refusal_and_emits_content_free_context_telemetry(

@@ -47,7 +47,11 @@ current_backend_http_timeout_seconds: contextvars.ContextVar[int] = contextvars.
 
 
 def _backend_http_timeout(settings: Any) -> int:
-    timeouts = settings.get("timeouts") if isinstance(settings, dict) else None
+    if not isinstance(settings, dict):
+        raise RuntimeError("Agent settings are invalid")
+    timeouts = settings.get("timeouts")
+    if timeouts is None:
+        return int(BACKEND_HTTP_TIMEOUT_SECONDS)
     timeout = (
         timeouts.get("backendHttpTimeoutSeconds")
         if isinstance(timeouts, dict)
