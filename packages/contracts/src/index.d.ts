@@ -311,8 +311,23 @@ export interface HtmlArtifactFrame {
   pinned: boolean;
 }
 
+export type WorkspaceWindowRegion = 'left' | 'right' | 'top' | 'bottom' | 'centre' | 'full';
+export type WorkspaceWindowState = 'open' | 'minimised';
+export type WorkspaceWindowPlacement = 'auto' | 'region' | 'manual';
+export type WorkspaceArrangeLayout = 'auto' | 'side-by-side' | 'grid' | 'cascade';
+
+export interface WorkspaceSnapshotWindow {
+  viewId: string;
+  title: string;
+  state?: WorkspaceWindowState;
+  placement?: WorkspaceWindowPlacement;
+  region?: WorkspaceWindowRegion;
+  pinned?: boolean;
+  front?: boolean;
+}
+
 export interface WorkspaceSnapshot {
-  windows: readonly { viewId: string; title: string }[];
+  windows: readonly WorkspaceSnapshotWindow[];
   contextPanelOpen: boolean;
   frame?: HtmlArtifactFrame;
   view?: WorkspaceView;
@@ -375,6 +390,10 @@ export type WorkspaceCommand =
   | { commandId: string; operation: 'move'; viewId: string; x: number; y: number }
   | { commandId: string; operation: 'resize'; viewId: string; width: number; height: number; x?: number; y?: number }
   | { commandId: string; operation: 'layout'; arrangement: 'tiled' | 'layered' }
+  | { commandId: string; operation: 'place'; viewId: string; region: WorkspaceWindowRegion }
+  | { commandId: string; operation: 'arrange'; layout: WorkspaceArrangeLayout; viewIds?: string[] }
+  | { commandId: string; operation: 'minimise-all' | 'restore-all' | 'close-all' }
+  | { commandId: string; operation: 'pin' | 'unpin'; viewId: string }
   | { commandId: string; operation: 'context-panel'; action: 'open'; view?: GeneratedView }
   | { commandId: string; operation: 'context-panel'; action: 'close' | 'toggle' };
 

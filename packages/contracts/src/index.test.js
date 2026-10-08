@@ -79,6 +79,20 @@ import {
 test('workspace snapshots accept old clients and validate optional current and previous views', () => {
   const snapshot = { windows: [{ viewId: 'report', title: 'Report' }], contextPanelOpen: false };
   assert.equal(isWorkspaceSnapshot(snapshot), true);
+  assert.equal(isWorkspaceSnapshot({
+    ...snapshot,
+    windows: [{
+      ...snapshot.windows[0], state: 'minimised', placement: 'region', region: 'left',
+      pinned: true, front: false,
+    }],
+  }), true);
+  assert.equal(isWorkspaceSnapshot({ ...snapshot, windows: [{ ...snapshot.windows[0], region: 'left' }] }), false);
+  assert.equal(isWorkspaceSnapshot({
+    ...snapshot, windows: [{ ...snapshot.windows[0], placement: 'manual', region: 'left' }],
+  }), false);
+  assert.equal(isWorkspaceSnapshot({
+    ...snapshot, windows: [{ ...snapshot.windows[0], state: 'closed' }],
+  }), false);
   for (const page of workspaceNavigationPages) {
     assert.equal(isWorkspaceSnapshot({ ...snapshot, view: { page } }), true);
   }
@@ -776,6 +790,12 @@ test('defines and validates bounded workspace commands for the approved operatio
     { ...base, operation: 'move', viewId: 'research', x: 0.1, y: 0.2 },
     { ...base, operation: 'resize', viewId: 'research', width: 0.6, height: 0.5, x: 0.1, y: 0.2 },
     { ...base, operation: 'layout', arrangement: 'layered' },
+    { ...base, operation: 'place', viewId: 'research', region: 'centre' },
+    { ...base, operation: 'arrange', layout: 'side-by-side', viewIds: ['research', 'chart'] },
+    { ...base, operation: 'arrange', layout: 'auto' },
+    ...['minimise-all', 'restore-all', 'close-all'].map((operation) => ({ ...base, operation })),
+    { ...base, operation: 'pin', viewId: 'research' },
+    { ...base, operation: 'unpin', viewId: 'research' },
     { ...base, operation: 'context-panel', action: 'open', view: listView() },
     { ...base, operation: 'context-panel', action: 'open' },
     ...['close', 'toggle'].map((action) => ({ ...base, operation: 'context-panel', action })),
@@ -787,6 +807,43 @@ test('defines and validates bounded workspace commands for the approved operatio
     assert.equal(Object.hasOwn(workspaceCommandSchema, key), false, key);
   }
   for (const command of commands) assert.equal(isWorkspaceCommand(command), true, command.operation);
+});
+
+test('validates intent-based workspace commands and their exact fields', () => {
+  const base = { commandId: 'intent-1' };
+  const invalid = [
+    { operation: 'place', viewId: 'report' },
+    { operation: 'place', region: 'left' },
+    { operation: 'place', viewId: 'report', region: 'center' },
+    { operation: 'place', viewId: '../report', region: 'left' },
+    { operation: 'place', viewId: 'report', region: 'left', extra: true },
+    { operation: 'arrange' },
+    { operation: 'arrange', layout: 'stacked' },
+    { operation: 'arrange', layout: 'grid', viewIds: [] },
+    { operation: 'arrange', layout: 'grid', viewIds: ['report', 'report'] },
+    { operation: 'arrange', layout: 'grid', viewIds: Array.from({ length: 9 }, (_, index) => `view${index}`) },
+    { operation: 'arrange', layout: 'grid', viewIds: ['../report'] },
+    { operation: 'arrange', layout: 'grid', viewIds: ['report'], extra: true },
+    ...['minimise-all', 'restore-all', 'close-all'].map((operation) => ({ operation, viewId: 'report' })),
+    { operation: 'pin' },
+    { operation: 'pin', viewId: 'report', extra: true },
+    { operation: 'unpin' },
+    { operation: 'unpin', viewId: 'report', extra: true },
+  ];
+  for (const command of invalid) {
+    assert.equal(isWorkspaceCommand({ ...base, ...command }), false, JSON.stringify(command));
+  }
+  for (const operation of [
+    'place', 'arrange', 'minimise-all', 'restore-all', 'close-all', 'pin', 'unpin',
+  ]) {
+    assert.equal(workspaceCommandSchema.properties.operation.enum.includes(operation), true, operation);
+  }
+  assert.deepEqual(workspaceCommandSchema.properties.region.enum, ['left', 'right', 'top', 'bottom', 'centre', 'full']);
+  assert.deepEqual(workspaceCommandSchema.properties.layout.enum, ['auto', 'side-by-side', 'grid', 'cascade']);
+  assert.deepEqual(
+    workspaceCommandSchema.properties.viewIds,
+    { type: 'array', minItems: 1, maxItems: 8, items: workspaceCommandSchema.properties.viewId, uniqueItems: true },
+  );
 });
 
 test('validates conversation visibility actions without accepting unrelated fields', () => {
