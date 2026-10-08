@@ -4,6 +4,10 @@ import {
   generatedViewActionTypes,
   generatedViewRenderers,
   generatedViewSchema,
+  folioKinds,
+  folioItemSchema,
+  folioSearchResponseSchema,
+  isFolioItem,
   htmlArtifactByteLimit,
   htmlArtifactFrameSchema,
   htmlArtifactSchema,
@@ -57,6 +61,23 @@ const listView = (overrides = {}) => ({
   source,
   data: { items: [{ title: 'Ship the contract', details: [{ label: 'Project', value: 'Jarvis' }] }] },
   ...overrides,
+});
+
+test('Folio contracts use bounded searchable item metadata and closed item kinds', () => {
+  const item = {
+    id: 'research:56a2b0bd-af47-46b5-8e15-c6e9a718ae93',
+    title: 'Ignite report',
+    kind: 'research',
+    createdAt: '2026-10-06T10:00:00.000Z',
+    promptSummary: 'Research Ignite battery storage',
+    pinned: false,
+  };
+  assert.deepEqual(folioKinds, ['research', 'html_app', 'image', 'knowledge_graph']);
+  assert.equal(folioItemSchema.properties.promptSummary.maxLength, 500);
+  assert.equal(folioSearchResponseSchema.properties.items.maxItems, 100);
+  assert.equal(isFolioItem(item), true);
+  assert.equal(isFolioItem({ ...item, kind: 'conversation' }), false);
+  assert.equal(isFolioItem({ ...item, promptSummary: ' Research ' }), false);
 });
 
 test('clipboard contracts bound UTF-8 text and keep read/write result shapes exact', () => {

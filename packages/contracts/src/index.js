@@ -236,6 +236,47 @@ export const htmlArtifactSchema = Object.freeze(object({
   createdAt: dateTime,
   pinned: { type: 'boolean' },
 }));
+export const folioKinds = Object.freeze(['research', 'html_app', 'image', 'knowledge_graph']);
+const folioIdPattern = '^(?:research|html_app|image|knowledge_graph):[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$';
+export const folioItemSchema = Object.freeze(object({
+  id: { type: 'string', pattern: folioIdPattern },
+  title: string(200, 1),
+  kind: { enum: folioKinds },
+  createdAt: dateTime,
+  promptSummary: string(500, 1),
+  pinned: { type: 'boolean' },
+}));
+export const folioSearchSchema = Object.freeze(object({
+  q: string(120, 1),
+  kind: { enum: folioKinds },
+  before: dateTime,
+}, []));
+export const folioSearchResponseSchema = Object.freeze(object({
+  items: array(folioItemSchema, 100),
+}));
+export const folioPatchSchema = Object.freeze({
+  type: 'object',
+  properties: {
+    title: { ...string(200, 1), pattern: '\\S' },
+    pinned: { type: 'boolean' },
+  },
+  required: [],
+  minProperties: 1,
+  additionalProperties: false,
+});
+export const folioDeleteSchema = Object.freeze(object({
+  confirm: { const: true },
+}));
+export const folioSearchToolSchema = Object.freeze(object({
+  q: { ...string(120, 1), pattern: '\\S' },
+  kind: { enum: folioKinds },
+}, []));
+export const folioOpenToolSchema = Object.freeze({
+  oneOf: [
+    object({ id: { type: 'string', pattern: folioIdPattern } }),
+    object({ query: { ...string(120, 1), pattern: '\\S' } }),
+  ],
+});
 const htmlArtifactFrameSchemaValue = object({
   widthPx: { type: 'integer', minimum: 1, maximum: 8192 },
   heightPx: { type: 'integer', minimum: 1, maximum: 8192 },
@@ -617,6 +658,15 @@ function validHtml(value) {
 function validIsoDateTime(value) {
   return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(value) &&
     Number.isFinite(Date.parse(value)) && new Date(value).toISOString() === value;
+}
+
+export function isFolioItem(value) {
+  return isObject(value) && Object.keys(value).length === 6 &&
+    /^[a-z_]+:[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/.test(value.id) &&
+    folioKinds.includes(value.kind) && value.id.startsWith(`${value.kind}:`) &&
+    boundedString(value.title, 200, 1) && value.title === value.title.trim() &&
+    validIsoDateTime(value.createdAt) && boundedString(value.promptSummary, 500, 1) &&
+    value.promptSummary === value.promptSummary.trim() && typeof value.pinned === 'boolean';
 }
 
 export function isHtmlArtifact(value) {

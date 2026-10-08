@@ -14,6 +14,7 @@ import {
   workspaceImageSizeLimit,
   type WorkspaceArtifactStore,
 } from '../database/workspace-artifact-store.js';
+import type { FolioStore } from '../database/folio-store.js';
 import { generatedViewValidationOptions } from './generated-view-validation.js';
 import { ToolFailure, ToolRefusal } from './tool-registry.js';
 
@@ -43,6 +44,7 @@ export interface ImageGenerationOptions {
   readonly runner: CodexToolRunner;
   readonly artifacts: WorkspaceArtifactStore;
   readonly model: string;
+  readonly folio?: FolioStore;
   readonly timeoutMs?: number;
   readonly pollIntervalMs?: number;
   readonly wait?: (milliseconds: number, signal: AbortSignal) => Promise<void>;
@@ -192,6 +194,15 @@ function imageTool(options: ImageGenerationOptions): BackendModule['tools'][numb
         if (!validArtifactResult(completed.result, upload.artifactId)) {
           throw new ToolFailure('Codex did not return a valid saved image artifact.');
         }
+        const promptSummary = input.prompt.replace(/\s+/gu, ' ').trim();
+        await options.folio?.record(ownerObjectId, {
+          id: `image:${upload.artifactId}`,
+          kind: 'image',
+          sourceId: upload.artifactId,
+          title: Array.from(promptSummary).slice(0, 200).join('') || 'Generated image',
+          promptSummary: Array.from(promptSummary).slice(0, 500).join('') || 'Generated image',
+          createdAt: new Date().toISOString(),
+        }, signal);
         const url = await options.artifacts.readUrl(upload.artifactId, ownerObjectId, signal);
         const view = imageView(url, new Date().toISOString());
         const command: WorkspaceCommand = {
