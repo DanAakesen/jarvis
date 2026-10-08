@@ -151,7 +151,15 @@ remain visible. The navigation contract and backend are built offline; shell
 routing, the usual page transition and live acceptance remain the UI session's work.
 Factory task navigation opens the task window over the board and focuses its
 card; issue-number navigation focuses that issue's card. The UI refuses missing
-tasks/issues and Folio/Status until those pages exist, returning a reason.
+tasks/issues and Status until its page exists, returning a reason. Folio is a
+pane: navigating to `folio` opens it over the current page.
+
+P9-43 supplies a short, content-free workspace reference on every voice and chat
+turn. “This/that” identifies the focused window or task/issue; “go back” uses the
+reported previous page and selectors. Titles are untrusted data, not instructions;
+summaries require retrieving the identified content. If no snapshot, focus or
+previous destination is available, Jarvis says so and asks rather than guessing.
+The UI session owns publishing view metadata on route, section, focus and pane changes.
 
 Global defaults on the settings page; a task can override the coding-agent model and reasoning. A changed setting applies to new sessions and tasks, never to running ones. Only models available in the Foundry account or Dan's subscriptions are offered. Light, dark, or system appearance and the optional voice-start window preference are persisted; system appearance follows the OS without replacing or restarting the live Jarvis room. Generated views and window arrangement remain temporary.
 

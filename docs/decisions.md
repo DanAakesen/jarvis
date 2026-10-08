@@ -19,6 +19,16 @@ The nine design areas and where each stands. **Confirmed** = Dan's requirement o
 
 ## Decision log
 
+P9-43 (8 October 2026): reuse the workspace broker's latest connected-owner
+snapshot for per-turn model awareness; do not persist screen or view content.
+Keep `view` optional for old clients, validate current/previous destinations,
+and provide one bounded metadata line through the existing chat turn-context
+API and voice response instructions. Treat escaped window titles as untrusted
+data. Resolve “go back” from `view.previous`, asking when absent rather than
+guessing. Folio navigation opens a pane over the current page; Status remains
+unavailable until its page exists. Backend/contracts are validated offline;
+the UI session owns snapshot publication and live acceptance remains pending.
+
 P9-42 (8 October 2026): return invalid tool arguments as safe `refused` tool
 results, not generic execution failures. HTTP body-schema refusals use status
 200 because the existing hosted chat client discards non-200 bodies; other HTTP

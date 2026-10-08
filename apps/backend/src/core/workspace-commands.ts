@@ -3,7 +3,9 @@ import type { FastifyInstance } from 'fastify';
 import {
   htmlArtifactFrameSchema,
   isWorkspaceCommand,
+  isWorkspaceSnapshot,
   workspaceCommandSchema,
+  workspaceViewSchema,
   type WorkspaceSseEvent,
   type WorkspaceCommand,
   type WorkspaceSnapshot,
@@ -293,6 +295,7 @@ export function registerWorkspaceCommandRoutes(app: FastifyInstance): void {
           },
           contextPanelOpen: { type: 'boolean' },
           frame: htmlArtifactFrameSchema,
+          view: workspaceViewSchema,
         },
         required: ['sessionId', 'windows', 'contextPanelOpen'], additionalProperties: false,
       },
@@ -301,12 +304,11 @@ export function registerWorkspaceCommandRoutes(app: FastifyInstance): void {
     if (!request.principal || request.principal.objectId.toLowerCase() !== app.ownerObjectId.toLowerCase()) {
       return reply.code(403).send({ error: 'Forbidden' });
     }
-    const { sessionId, windows, contextPanelOpen, frame } = request.body;
-    if (!app.workspaceCommands.updateSnapshot(request.principal.objectId, sessionId, {
-      windows,
-      contextPanelOpen,
-      ...(frame ? { frame } : {}),
-    })) {
+    const { sessionId, ...snapshot } = request.body;
+    if (!isWorkspaceSnapshot(snapshot)) {
+      return reply.code(400).send({ error: 'Invalid workspace snapshot' });
+    }
+    if (!app.workspaceCommands.updateSnapshot(request.principal.objectId, sessionId, snapshot)) {
       return reply.code(409).send({ error: 'Workspace connection is stale' });
     }
     return reply.code(204).send();
