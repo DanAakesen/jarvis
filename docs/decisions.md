@@ -909,3 +909,7 @@ label, and rely on the existing active-issue lookup to prevent duplicate tasks.
 No schema change is needed. Offline route/service tests cover idempotent retries
 and secret rejection; P10-01 permission changes and the coordinator's live run
 remain pending.
+
+## P10-01 (8 October 2026) — GitHub App write permissions are live
+
+Dan granted the Jarvis GitHub App Issues write, Workflows read and write, and Repository creation, and accepted them on the installation. Issues write is required for P10's issue creation, progress comments and label changes. Workflows write lets Factory branches touch `.github/workflows` files, which GitHub otherwise rejects on push. Repository creation supports confirmed new-project runs. Evidence: the production installation reports `issues`, `workflows` and `repository_creation` as `write`, and an installation token requested with `issues: write` for `jarvis` minted with HTTP 201. Status: accepted.
