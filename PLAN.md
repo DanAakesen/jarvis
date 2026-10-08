@@ -505,6 +505,7 @@ P8-02 allocated P8-04 through P8-13 to frontend work in PR #233. Backend tasks t
 | ID | Issue | Task | Acceptance criteria | Depends on | Status |
 | --- | --- | --- | --- | --- | --- |
 | P9-26 | [#520](https://github.com/DanAakesen/jarvis/issues/520) | Add backend Calendar event updates for title, paired start/end times, location, attendees, and description, and event deletion; keep the web app unchanged | PATCH only supplied fields; allow clearing location, description, and attendees; encode event IDs; stage update/delete through the existing exact later-message confirmation; redact sensitive audits and cover fake Google requests and invalid partial times | P7-22, P7-28 | Complete |
+| P9-35 | [#529](https://github.com/DanAakesen/jarvis/issues/529) | Rename saved PC/browser recipes to Routines; add API/tool rename and retain one-release aliases; keep the web app unchanged | Use the shared routine contract, migrate legacy settings keys on write, validate names and Dan-only routes, preserve routine IDs and replay steps, and test canonical plus alias tools/routes | P7-35 | Complete |
 
 ### Confirm before P0
 
