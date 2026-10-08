@@ -52,3 +52,30 @@ describe('JarvisActivityProvider', () => {
     expect(screen.getByLabelText('Latest runtime activity').textContent).toBe('none');
   });
 });
+
+function WorkProbe() {
+  const activity = useJarvisActivity();
+  return (
+    <>
+      <output aria-label="Work text">{activity.workText ?? 'none'}</output>
+      <button type="button" onClick={() => activity.applyRuntimeActivity({
+        type: 'work-started', activityId: '33333333-3333-4333-8333-333333333333', source: 'chat',
+        kind: 'vault_search', text: 'Searching your vault for Ignite',
+      })}>Start work</button>
+      <button type="button" onClick={() => activity.applyRuntimeActivity({
+        type: 'work-finished', activityId: '33333333-3333-4333-8333-333333333333', source: 'chat',
+      })}>Finish work</button>
+    </>
+  );
+}
+
+describe('Jarvis work details', () => {
+  it('shows what Jarvis says it is doing until that work finishes', () => {
+    render(<JarvisActivityProvider><WorkProbe /></JarvisActivityProvider>);
+    expect(screen.getByLabelText('Work text').textContent).toBe('none');
+    act(() => { screen.getByRole('button', { name: 'Start work' }).click(); });
+    expect(screen.getByLabelText('Work text').textContent).toBe('Searching your vault for Ignite');
+    act(() => { screen.getByRole('button', { name: 'Finish work' }).click(); });
+    expect(screen.getByLabelText('Work text').textContent).toBe('none');
+  });
+});

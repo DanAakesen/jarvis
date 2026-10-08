@@ -80,7 +80,7 @@ function shuffled(phrases: readonly string[], avoidFirst?: string) {
 }
 
 /** The visible, rotating line beside the working core. Screen readers get one steady status from the caller instead. */
-export function LivePhrase({ phase }: { phase: keyof typeof livePhrases }) {
+export function LivePhrase({ phase, text }: { phase: keyof typeof livePhrases; text?: string | null }) {
   const [state, setState] = useState(() => ({ order: shuffled(livePhrases[phase]), index: 0 }));
   useEffect(() => {
     const timer = window.setInterval(() => setState((current) => {
@@ -92,6 +92,8 @@ export function LivePhrase({ phase }: { phase: keyof typeof livePhrases }) {
     }), 3200);
     return () => window.clearInterval(timer);
   }, []);
+  // When Jarvis reports what it is actually doing, that line replaces the canned phrases.
+  if (text) return <TypedPhrase key={`work-${text}`} text={text} />;
   return <TypedPhrase key={`${state.index}-${state.order[state.index]}`} text={state.order[state.index] ?? ''} />;
 }
 /** Writes a phrase in from the left, then two soft lights sweep across it (CSS). Reduced motion shows it whole. */
