@@ -174,6 +174,24 @@ describe('GitHub webhook receiver', () => {
     expect(deliveries.size).toBe(1);
   });
 
+  it.each(['issues', 'pull_request'])('invalidates cached Factory boards for signed %s events', async (event) => {
+    const { app } = fixture();
+    const board = {
+      projectId: '42', repository: repository.full_name, fetchedAt: timestamp, columns: [],
+    };
+    const load = vi.fn(async () => board);
+    await app.factoryBoardCache.get(repository.full_name, load);
+    const body = event === 'issues'
+      ? Buffer.from(JSON.stringify({ repository, action: 'opened', issue: { number: 7 } }))
+      : Buffer.from(JSON.stringify(payloadFor(event)));
+
+    const response = await deliver(app, `board-${event}`, event, body);
+
+    expect(response.statusCode).toBe(202);
+    await app.factoryBoardCache.get(repository.full_name, load);
+    expect(load).toHaveBeenCalledTimes(2);
+  });
+
   it('publishes a short status event only when a pull request is marked ready for review', async () => {
     const { app } = fixture();
     const events: unknown[] = [];

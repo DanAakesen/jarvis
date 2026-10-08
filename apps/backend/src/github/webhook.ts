@@ -43,6 +43,18 @@ function voiceStatusKind(event: string, payload: unknown, mapping: GithubWebhook
   return undefined;
 }
 
+function repositoryName(payload: unknown): string | undefined {
+  if (payload === null || typeof payload !== 'object' || Array.isArray(payload)) return undefined;
+  const repository = (payload as Record<string, unknown>).repository;
+  if (repository === null || typeof repository !== 'object' || Array.isArray(repository)) return undefined;
+  const name = (repository as Record<string, unknown>).full_name;
+  return typeof name === 'string' && /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/u.test(name) ? name : undefined;
+}
+
+function invalidatesFactoryBoard(event: string): boolean {
+  return event === 'issues' || event === 'pull_request' || event === 'check_run' || event === 'workflow_run';
+}
+
 export function createGithubWebhookModule(options: WebhookOptions): BackendModule {
   return {
     id: 'github-webhook',
@@ -84,8 +96,13 @@ export function createGithubWebhookModule(options: WebhookOptions): BackendModul
         } catch {
           return reply.code(400).send({ error: 'Invalid webhook payload' });
         }
+        const repository = repositoryName(payload);
+        const invalidatesBoard = invalidatesFactoryBoard(event);
+        const trackedBoardRepository = repository !== undefined &&
+          (!options.isTrackedRepository || options.isTrackedRepository(repository));
         let mapping = acceptedEvents.has(event) ? mapGithubWebhook(event, payload) : undefined;
         if (!mapping || (options.isTrackedRepository && !options.isTrackedRepository(mapping.repository))) {
+          if (invalidatesBoard && trackedBoardRepository) app.factoryBoardCache.invalidateAll();
           return reply.code(202).send({ status: 'ignored' });
         }
         if (mapping.kind === 'deployment_status' && mapping.status === 'failure' &&
@@ -108,7 +125,10 @@ export function createGithubWebhookModule(options: WebhookOptions): BackendModul
             outcome: 'ok',
             mapping,
           });
-          if (inserted) app.nowEventHub.publish({ type: 'refresh' });
+          if (inserted) {
+            app.nowEventHub.publish({ type: 'refresh' });
+            if (invalidatesBoard && trackedBoardRepository) app.factoryBoardCache.invalidateAll();
+          }
         } catch {
           request.log.error('github.webhook_delivery_store_failed');
           return reply.code(503).send({ error: 'Webhook storage unavailable' });

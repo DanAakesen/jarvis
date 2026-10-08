@@ -471,6 +471,40 @@ export type TaskEventStreamEvent =
   | { event: 'task'; id: string; data: TaskEventMessage }
   | { event: 'ready'; data: Record<string, never> };
 export type ServerSentEvent = NowSseEvent | TaskEventStreamEvent;
+
+export type FactoryBoardStatus = 'Backlog' | 'Needs Dan' | 'Ready' | 'In progress' | 'In review' | 'Done';
+export interface FactoryBoardPullRequest {
+  number: number;
+  url: string;
+  draft: boolean;
+  ready: boolean;
+  checks: 'pending' | 'passed' | 'failed' | null;
+}
+export interface FactoryBoardTaskOverlay {
+  state: 'Ready' | 'Running' | 'PauseRequested' | 'Paused' | 'NeedsAttention' | 'Done' | 'Cancelled';
+  agent: 'codex' | 'copilot';
+  sandbox: {
+    lastSessionEndReason: 'done' | 'cancelled' | 'crashed' | 'idle' | 'idle_expired' | null;
+  };
+}
+export interface FactoryBoardCard {
+  issueNumber: number;
+  taskId: string | null;
+  title: string;
+  labels: string[];
+  pullRequests: FactoryBoardPullRequest[];
+  task: FactoryBoardTaskOverlay | null;
+}
+export interface FactoryBoardColumn {
+  status: FactoryBoardStatus;
+  cards: FactoryBoardCard[];
+}
+export interface FactoryBoard {
+  projectId: string;
+  repository: string;
+  fetchedAt: string;
+  columns: FactoryBoardColumn[];
+}
 export function isTaskEventRecord(value: unknown): value is TaskEventRecord;
 export function isTaskEventMessage(value: unknown): value is TaskEventMessage;
 export function isNowSseEvent(
