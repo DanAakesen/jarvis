@@ -156,6 +156,13 @@ Incremental Bicep deployments: runtime-created deployments absent from the
 template remain untouched, while Bicep-declared deployments continue to be
 reconciled. Offline ARM/route/tool tests verify the contract; live role
 propagation and Foundry provisioning remain unverified.
+P9-12 (8 October 2026): expose the existing non-secret Settings model through
+the shared chat/voice tool registry, reusing its validation and persistence
+contracts. Require the existing Now confirmation before changing model-role
+settings or the daily vision budget; never return credential records. Keep
+`set_jarvis_model` as a compatibility alias for chat-role updates. No migration
+or web change is needed. Offline tool and alias tests cover the behavior; live
+hosted-agent and Now integration remain unverified.
 
 P6-22 (6 October 2026): Jarvis runs in Dan's personal tenant, without Microsoft
 365 or Teams. Keep away mode manual and do not read Graph presence. Route
