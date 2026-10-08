@@ -168,6 +168,7 @@ async function connectedPartialVoice(
   classifier: ReflexClassifier,
   records: string[] = [],
   services = taskReflexServices(),
+  path = '/voice',
 ) {
   const received: Record<string, unknown>[] = [];
   let upstream!: WebSocket;
@@ -197,7 +198,7 @@ async function connectedPartialVoice(
   );
   await app.listen({ host: '127.0.0.1', port: 0 });
   const address = app.server.address() as AddressInfo;
-  const browser = await openBrowser(`ws://127.0.0.1:${address.port}/voice`);
+  const browser = await openBrowser(`ws://127.0.0.1:${address.port}${path}`);
   await vi.waitFor(() => expect(received.some((event) => event.type === 'session.update')).toBe(true));
   return { app, browser, conversationStore, received, services, upstream };
 }
@@ -232,9 +233,9 @@ function sendTimedPartialTranscript(socket: WebSocket, itemId: string) {
 }
 
 describe('backend-relayed Voice Live WebSocket', () => {
-  it('refreshes workspace reference context before each voice response, including disconnects', async () => {
+  it.each(['/voice', '/voice/da'])('refreshes workspace reference context before each response on %s, including disconnects', async (path) => {
     const { app, browser, upstream, received } = await connectedPartialVoice(
-      partialSpeechHarness(), { classify: vi.fn(async () => null) },
+      partialSpeechHarness(), { classify: vi.fn(async () => null) }, undefined, undefined, path,
     );
     const contextLines = () => received.filter((event) => event.type === 'response.create')
       .map((event) => (event.response as { instructions: string }).instructions);
