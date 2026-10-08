@@ -374,8 +374,9 @@ describe('Google Calendar and Gmail tools', () => {
     const { app, setLatest } = appFor(request);
     const staged = await app.inject({
       method: 'POST', url: '/tools/calendar_create_event', headers: confirmHeaders('42'),
-      payload: { subject: 'Meeting', start: '2026-06-23T10:00:00+02:00', end: '2026-06-23T11:00:00+02:00' },
+      payload: { subject: 'Meeting', startDateTime: '2026-06-23T10:00:00+02:00', endDateTime: '2026-06-23T11:00:00+02:00' },
     });
+    expect(staged.json()).toMatchObject({ outcome: 'ok', result: { status: 'awaiting_confirmation' } });
     setLatest(conversationMessage('43', 'cancel', new Date(Date.now() + 10_000)));
     const response = await app.inject({
       method: 'POST', url: '/tools/calendar_confirm_change', headers: confirmHeaders('43'),
