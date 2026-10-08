@@ -276,9 +276,12 @@ describe('continuous vision watching', () => {
       { arguments: { redacted: true }, result: { redacted: true } },
       { arguments: { redacted: true }, result: { redacted: true } },
     ]);
-    expect((await f.app.inject({
+    const invalid = await f.app.inject({
       method: 'POST', url: '/tools/watch_for', headers: { ...headers, 'x-jarvis-message-id': '7' },
       payload: { what: 'x'.repeat(301) },
-    })).statusCode).toBe(400);
+    });
+    expect(invalid.statusCode).toBe(200);
+    expect(invalid.json()).toMatchObject({ outcome: 'refused', result: { refused: expect.stringContaining('Invalid arguments:') } });
+    expect(f.recordedTools).toHaveLength(2);
   });
 });

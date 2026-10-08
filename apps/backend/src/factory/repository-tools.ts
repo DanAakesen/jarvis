@@ -519,18 +519,24 @@ export const repositoryTools: readonly JarvisTool[] = [
     inputSchema: objectSchema({
       query: { type: 'string', minLength: 1, maxLength: 200 },
       ...projectProperty,
+      repository: { ...projectProperty.project, description: 'Alias of project; use only one repository selector.' },
+      repo: { ...projectProperty.project, description: 'Alias of project; use only one repository selector.' },
       path: { type: 'string', minLength: 1, maxLength: 1024 },
     }, ['query']),
     sensitive: true,
     reflexSafe: true,
     execute: async (rawInput, request, signal) => {
-      const input = rawInput as RepositoryToolInput & { query: string; path?: string };
+      const input = rawInput as RepositoryToolInput & { query: string; path?: string; repository?: string; repo?: string };
       if (!input.query.trim() || Array.from(input.query).some((character) => {
         const code = character.charCodeAt(0);
         return code < 32 || code === 127;
       })) throw new ToolRefusal('The search query is invalid.');
       const path = input.path === undefined ? undefined : validateRepositoryPath(input.path);
-      const repository = await resolveToolRepository(input, request);
+      const selectors = [input.project, input.repository, input.repo].filter((value) => value !== undefined);
+      if (new Set(selectors.map((value) => value.trim().toLowerCase())).size > 1) {
+        throw new ToolRefusal('Use only one repository selector: project, repository or repo, then retry.');
+      }
+      const repository = await resolveToolRepository(selectors[0] === undefined ? {} : { project: selectors[0] }, request);
       const token = await issueReadToken(request, repository);
       const metadata = await repositoryMetadata(fetch, repository, token, signal);
       const query = `${searchQuery(input.query)} repo:${repository}${path ? ` path:"${path.replaceAll('\\', '\\\\').replaceAll('"', '\\"')}"` : ''}`;
@@ -559,7 +565,20 @@ export const repositoryTools: readonly JarvisTool[] = [
           return null;
         }
       });
-      return { warning: untrustedWarning, repository, query: input.query, results: matches.filter(Boolean).slice(0, maxSearchResults) };
+      const results = matches.filter(Boolean).slice(0, maxSearchResults);
+      const incompleteResults = search.incomplete_results === true;
+      const messages = [
+        ...(incompleteResults ? ['GitHub code search returned incomplete results.'] : []),
+        ...(search.items.length === 0 ? ['GitHub code search returned no hits.']
+          : results.length === 0 ? ['No readable matching snippets were returned.'] : []),
+      ];
+      return {
+        warning: untrustedWarning, repository, query: input.query, results, incompleteResults,
+        ...(messages.length ? {
+          message: messages.join(' '),
+          suggestion: 'Use repo_list to locate files, then repo_read to inspect them; search results do not prove code is absent.',
+        } : {}),
+      };
     },
   },
   {

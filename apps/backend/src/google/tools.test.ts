@@ -589,7 +589,8 @@ describe('Google Calendar and Gmail tools', () => {
       headers: confirmHeaders('42'),
       payload: { to: ['first,second@example.com'], subject: 'Test', body: 'Message' },
     });
-    expect(response.json()).toMatchObject({ error: 'Invalid request' });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({ outcome: 'refused', result: { refused: expect.stringContaining('Invalid arguments:') } });
     expect(request).not.toHaveBeenCalled();
   });
 

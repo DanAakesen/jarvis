@@ -18,6 +18,7 @@ import { cancelJobTool, getJobTool, listJobsTool, registerJobRoutes } from './jo
 import { findChatReflexReplay } from './reflex.js';
 import { executePhoneTool } from '../phone/approval.js';
 import { systemSmokeResponseSchema, systemStatusResponseSchema } from '../system-status.js';
+import { toolArgumentRefusal, unexpectedToolArgument } from './tool-arguments.js';
 
 const readOnlyToolsWithoutMessage = new Set(['memory_search', 'vault_search', 'vault_read']);
 
@@ -125,6 +126,21 @@ export const coreModule: BackendModule = {
         config: { jarvisAgent: true },
         ...(tool.bodyLimit ? { bodyLimit: tool.bodyLimit } : {}),
         schema: { body: tool.inputSchema },
+        preValidation: async (request, reply) => {
+          // Fastify otherwise silently removes unknown root properties.
+          const error = unexpectedToolArgument(request.body, tool.inputSchema);
+          if (error) {
+            const result = toolArgumentRefusal(tool, error, request.log);
+            return reply.send({ tool: tool.name, outcome: 'refused', result, confirmation: confirmToolCall(tool.name, 'refused', result) });
+          }
+        },
+        errorHandler: (error, request, reply) => {
+          if (!error.validation || error.validationContext !== 'body') return reply.send(error);
+          const result = toolArgumentRefusal(tool, error.validation[0], request.log);
+          return reply.code(200).send({
+            tool: tool.name, outcome: 'refused', result, confirmation: confirmToolCall(tool.name, 'refused', result),
+          });
+        },
       }, async (request, reply) => {
         const messageHeader = request.headers['x-jarvis-message-id'];
         const voiceItemHeader = request.headers['x-jarvis-voice-item-id'];

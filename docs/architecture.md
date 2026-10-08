@@ -818,12 +818,28 @@ confirmed. Calls require
 tool routes accept Dan's delegated token and opt in to the Jarvis agent identity
 ([backend authentication](#backend-authentication)). Existing Foundry client, health/security/logging and
 process shutdown behavior are preserved.
+P9-42 returns body-schema failures as HTTP 200 tool envelopes with
+`outcome: refused`, a bounded validation hint and retry guidance, so the hosted chat client
+can pass them to the model. Voice's direct executor uses the same formatter.
+Unknown root arguments are refused before Fastify can silently strip them.
+Invalid inputs never execute tools or enter the generic tool-call audit; they
+emit `tool.invalid_arguments` to stdout and Application Insights with only the
+tool name, validation keyword and a bounded property identifier, never argument
+values or raw validator messages. Authentication and other HTTP errors remain
+unchanged. The shared capability prompt guides both voice and chat to correct
+arguments before retrying; workspace commands still use the existing broker and
+`packages/contracts` schemas.
 P7-45 adds `list_capabilities` and read-only `repo_*` tools to the shared Factory
 registry. They use only repository-scoped GitHub App installation tokens, default
 to `JARVIS_REPOSITORY` (`DanAakesen/jarvis`), and accept explicit project IDs or
 repositories only when they match an active project. File paths, encodings and
 response sizes are validated and bounded; overview responses are cached by commit
 SHA. Repository files and issue text are explicitly framed as untrusted input.
+P9-42 lets `repo_search` accept `repository` or `repo` as aliases of `project`,
+using the same active-project resolver and read-only token scope. Conflicting
+selectors are refused. Results include `incompleteResults`; incomplete searches,
+zero GitHub hits or missing readable snippets return an explanation and suggest
+`repo_list` followed by `repo_read`, without claiming the code is absent.
 The tools support Jarvis chat, voice and the hosted agent through the existing
 `GET /tools` and `POST /tools/{name}` routes.
 The [module guide](../apps/backend/src/modules.README.md) explains adding areas,
