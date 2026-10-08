@@ -6,6 +6,20 @@ export const reasoningEfforts = Object.freeze(['none', 'minimal', 'low', 'medium
 export const modelCapabilities = Object.freeze([
   'chat', 'responses', 'realtime', 'transcription', 'embeddings', 'image',
 ]);
+export const clipboardTextMaxBytes = 20 * 1024;
+
+export function isClipboardText(value) {
+  return typeof value === 'string' && !value.includes('\0') &&
+    new TextEncoder().encode(value).byteLength <= clipboardTextMaxBytes;
+}
+
+export function isClipboardReadResult(value) {
+  return isObject(value) && Object.keys(value).length === 1 && isClipboardText(value.text);
+}
+
+export function isClipboardWriteResult(value) {
+  return isObject(value) && Object.keys(value).length === 1 && value.written === true;
+}
 
 export const voiceTuningSettingsBounds = Object.freeze({
   serverVadThreshold: Object.freeze({ minimum: 0, maximum: 1 }),

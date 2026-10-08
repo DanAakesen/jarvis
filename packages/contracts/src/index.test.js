@@ -36,6 +36,10 @@ import {
   nowSseEventNames,
   workspaceCommandSchema,
   webResearchResultSchema,
+  clipboardTextMaxBytes,
+  isClipboardText,
+  isClipboardReadResult,
+  isClipboardWriteResult,
 } from './index.js';
 
 const source = { id: 'factory.tasks', status: 'complete' };
@@ -46,6 +50,19 @@ const listView = (overrides = {}) => ({
   source,
   data: { items: [{ title: 'Ship the contract', details: [{ label: 'Project', value: 'Jarvis' }] }] },
   ...overrides,
+});
+
+test('clipboard contracts bound UTF-8 text and keep read/write result shapes exact', () => {
+  assert.equal(clipboardTextMaxBytes, 20 * 1024);
+  assert.equal(isClipboardText('x'.repeat(clipboardTextMaxBytes)), true);
+  assert.equal(isClipboardText('é'.repeat(clipboardTextMaxBytes / 2)), true);
+  assert.equal(isClipboardText('é'.repeat(clipboardTextMaxBytes / 2 + 1)), false);
+  assert.equal(isClipboardText(null), false);
+  assert.equal(isClipboardReadResult({ text: 'clipboard text' }), true);
+  assert.equal(isClipboardReadResult({ text: 'x'.repeat(clipboardTextMaxBytes + 1) }), false);
+  assert.equal(isClipboardReadResult({ text: '', extra: true }), false);
+  assert.equal(isClipboardWriteResult({ written: true }), true);
+  assert.equal(isClipboardWriteResult({ written: false }), false);
 });
 
 test('model catalogue contracts restrict roles, capabilities and reasoning efforts', () => {

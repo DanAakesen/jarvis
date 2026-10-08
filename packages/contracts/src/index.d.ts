@@ -5,6 +5,16 @@ export const reasoningEfforts: readonly ['none', 'minimal', 'low', 'medium', 'hi
 export type ReasoningEffort = typeof reasoningEfforts[number];
 export const modelCapabilities: readonly ['chat', 'responses', 'realtime', 'transcription', 'embeddings', 'image'];
 export type ModelCapability = typeof modelCapabilities[number];
+export const clipboardTextMaxBytes: 20480;
+export interface ClipboardReadResult {
+  text: string;
+}
+export interface ClipboardWriteResult {
+  written: true;
+}
+export function isClipboardText(value: unknown): value is string;
+export function isClipboardReadResult(value: unknown): value is ClipboardReadResult;
+export function isClipboardWriteResult(value: unknown): value is ClipboardWriteResult;
 export interface VoiceTuningSettings {
   serverVadThreshold: number;
   prefixPaddingMs: number;
