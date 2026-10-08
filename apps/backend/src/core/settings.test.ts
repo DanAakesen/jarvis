@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { buildApp } from '../app.js';
 import { loadConfig } from '../config.js';
 import type { TokenVerifier } from '../auth/verify.js';
-import { flattenSettings, readSettings, settingsStoreKeys, type SettingsStore } from './settings.js';
+import { defaultSettings, flattenSettings, readSettings, settingsStoreKeys, type SettingsStore } from './settings.js';
 import type { CredentialStatusStore } from '../credentials/credential-status.js';
 import type { AwayModeStore } from './away-mode.js';
 
@@ -70,6 +70,12 @@ describe('settings API', () => {
           maxSpokenReplyTokens: 4_096,
         },
         research: { depth: 'quick', maxSources: 50, timeoutSeconds: 305 },
+        memory: {
+          similarityThreshold: 0.35,
+          searchTopK: 5,
+          graphTextSimilarityThreshold: 0.12,
+          automaticCapture: true,
+        },
         codex: { model: 'default' },
         copilot: { model: 'default' },
         global: { maxParallelTasks: 1, maxCheckAttempts: 3, screenShareDailyFrameCap: 300, visionDailyBudgetUsd: 1 },
@@ -95,6 +101,50 @@ describe('settings API', () => {
       maxSources: { minimum: 1, maximum: 50 },
       timeoutSeconds: { minimum: 1, maximum: 320 },
     });
+    expect(response.json().options.memorySettings).toEqual({
+      similarityThreshold: { minimum: 0, maximum: 1 },
+      searchTopK: { minimum: 1, maximum: 8 },
+      graphTextSimilarityThreshold: { minimum: 0, maximum: 1 },
+    });
+  });
+
+  it('persists bounded memory retrieval settings and rejects values outside their contract', async () => {
+    const { store, values } = createStore();
+    const app = fixture(store);
+    const settings = {
+      memory: {
+        similarityThreshold: 0.6,
+        searchTopK: 3,
+        graphTextSimilarityThreshold: 0.2,
+        automaticCapture: false,
+      },
+    };
+
+    const saved = await app.inject({
+      method: 'PATCH', url: '/settings', headers: authorization, payload: { settings },
+    });
+
+    expect(saved.statusCode).toBe(200);
+    expect(saved.json().settings.memory).toEqual(settings.memory);
+    expect(values).toMatchObject({
+      'memory.similarity_threshold': '0.6',
+      'memory.search_top_k': '3',
+      'memory.graph_text_similarity_threshold': '0.2',
+      'memory.automatic_capture': 'false',
+    });
+    for (const memory of [
+      { similarityThreshold: -0.1 },
+      { similarityThreshold: 1.1 },
+      { searchTopK: 0 },
+      { searchTopK: 9 },
+      { graphTextSimilarityThreshold: 2 },
+      { automaticCapture: 'false' },
+    ]) {
+      const response = await app.inject({
+        method: 'PATCH', url: '/settings', headers: authorization, payload: { settings: { memory } },
+      });
+      expect(response.statusCode).toBe(400);
+    }
   });
 
   it('persists bounded research depth, source count, and timeout settings', async () => {
@@ -167,6 +217,7 @@ describe('settings API', () => {
       model: 'gpt-6-luna',
       reasoningEffort: 'high',
       roles: { chat: { model: 'gpt-6-luna', reasoningEffort: 'high' } },
+      memory: defaultSettings.memory,
     });
   });
 
@@ -582,6 +633,12 @@ describe('settings API', () => {
         embedding: { model: 'text-embedding-3-small', reasoningEffort: 'none' },
         codex: { model: 'default', reasoningEffort: 'none' },
         copilot: { model: 'default', reasoningEffort: 'none' },
+      },
+      memory: {
+        similarityThreshold: 0.35,
+        searchTopK: 5,
+        graphTextSimilarityThreshold: 0.12,
+        automaticCapture: true,
       },
       personality: {
         tone: 'direct',

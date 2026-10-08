@@ -72,12 +72,11 @@ Research:
 Long-term knowledge:
 - Search Dan's GitHub vault when a preference, person, project, decision or unfinished task is
   relevant. Use returned paths, snippets and links as evidence; never invent missing facts.
-- Automatically save preferences, people, project facts, decisions and unfinished tasks Dan
-  clearly states. Do not infer them. Search for an existing note first, then use vault_write to
-  create, append or update it under People/, Work/, Personal/ or General/ according to the vault's
-  routing rules. Before writing, read AGENTS.md, .github/agent-state/routing.md and relevant
-  .github/instructions/*.instructions.md files through vault_read. Do not ask Dan to approve an
-  unambiguous durable fact.
+- Follow the memory-capture policy supplied for this voice session. Set automaticCapture true only
+for proactive memory capture and false for Dan-requested writes. Search for an existing note first,
+then use vault_write under People/, Work/, Personal/ or General/ according to the vault's routing
+rules. Before writing, read AGENTS.md, .github/agent-state/routing.md and relevant
+.github/instructions/*.instructions.md files through vault_read.
 - Never save secrets or credentials. Save banking or health details only when Dan's current stored
   message explicitly says "remember". Do not repeat sensitive memory content aloud.
 - A vault write requires the stored Dan message for this turn. After a successful vault_write,
@@ -111,8 +110,14 @@ function englishPersonalityInstructions(
   personality: Settings['personality'],
   presence: AwayModeState,
   projects: readonly ProjectContextEntry[] = [],
+  memory: Settings['memory'] = defaultSettings.memory,
 ): string {
   return `${ENGLISH_REALTIME_INSTRUCTIONS}
+
+Memory capture policy:
+${memory.automaticCapture
+    ? '- Automatically save clearly stated, durable facts without asking; do not infer them.'
+    : '- Do not proactively save memories. Save only when Dan directly asks you to write to the vault.'}
 
 ${projectAwarenessInstructions(projects)}
 
@@ -142,8 +147,9 @@ function danishInstructions(
   personality: Settings['personality'],
   presence: AwayModeState,
   projects: readonly ProjectContextEntry[] = [],
+  memory: Settings['memory'] = defaultSettings.memory,
 ): string {
-  const rules = englishPersonalityInstructions(personality, presence, projects)
+  const rules = englishPersonalityInstructions(personality, presence, projects, memory)
     .split('\n\n').slice(1).join('\n\n')
     .replace(/\n\nResearch:\n[\s\S]*?(?=\n\n(?:Memory|Long-term knowledge):)/u, '')
     .replace('Preserve English as the selected language', 'Preserve Danish as the selected language');
@@ -188,14 +194,15 @@ export function createRealtimeSessionUpdate(
   projects: readonly ProjectContextEntry[] = [],
   transcriptionModel = defaultSettings.roles.transcription.model,
   voiceTuning: VoiceTuningSettings = defaultSettings.voice,
+  memory: Settings['memory'] = defaultSettings.memory,
 ) {
   const danish = language === 'da';
   return {
     type: 'session.update',
     session: {
       instructions: danish
-        ? danishInstructions(personality, presence, projects)
-        : englishPersonalityInstructions(personality, presence, projects),
+        ? danishInstructions(personality, presence, projects, memory)
+        : englishPersonalityInstructions(personality, presence, projects, memory),
       modalities: ['text', 'audio'],
       input_audio_sampling_rate: 24_000,
       input_audio_noise_reduction: { type: 'azure_deep_noise_suppression' },

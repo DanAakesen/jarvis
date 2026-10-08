@@ -31,6 +31,23 @@ export interface ResearchSettings {
   maxSources: number;
   timeoutSeconds: number;
 }
+export interface MemorySettings {
+  similarityThreshold: number;
+  searchTopK: number;
+  graphTextSimilarityThreshold: number;
+  automaticCapture: boolean;
+}
+export const memorySettingsBounds: Readonly<{
+  similarityThreshold: Readonly<{ minimum: 0; maximum: 1 }>;
+  searchTopK: Readonly<{ minimum: 1; maximum: 8 }>;
+  graphTextSimilarityThreshold: Readonly<{ minimum: 0; maximum: 1 }>;
+}>;
+export const memorySettingsSchema: Readonly<{
+  type: 'object';
+  minProperties: 1;
+  additionalProperties: false;
+  properties: Readonly<Record<keyof MemorySettings, Readonly<Record<string, unknown>>>>;
+}>;
 export const researchSettingsBounds: Readonly<{
   maxSources: Readonly<{ minimum: 1; maximum: 50 }>;
   timeoutSeconds: Readonly<{ minimum: 1; maximum: 320 }>;
@@ -220,6 +237,7 @@ export interface WebResearchResult {
 
 export type UsageRole = 'chat' | 'voice' | 'vision' | 'research' | 'embeddings';
 export type UsageVerification = 'measured' | 'estimated' | 'unverified';
+export type UsagePeriod = 'today' | '7d' | '30d' | '90d' | 'all';
 export type UsageSource = 'sandbox' | 'jarvis_model' | 'voice' | 'codex' | 'copilot';
 export type UsageMetric = 'minutes' | 'input_tokens' | 'output_tokens' | 'turns' | 'premium_requests' | 'screen_frames';
 
@@ -263,7 +281,7 @@ export interface UsageRoleCoverage {
 }
 
 export interface UsageReport {
-  period: '7d' | '30d' | '90d' | 'all';
+  period: UsagePeriod;
   from: string | null;
   to: string;
   entries: UsageEntry[];

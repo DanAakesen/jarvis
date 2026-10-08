@@ -19,6 +19,16 @@ The nine design areas and where each stands. **Confirmed** = Dan's requirement o
 
 ## Decision log
 
+P9-10 (7 October 2026): store memory retrieval settings in the existing global
+`dbo.settings` store and expose their shared bounded contract through Settings.
+Keep defaults at the existing similarity thresholds (`0.35` embedding and
+`0.12` TF-IDF), five search results, and automatic capture enabled. The
+embedding threshold applies to application and SQL graph edges; top-k is capped
+at eight. Automatic captures are marked in the shared vault tool and refused
+server-side when disabled, while Dan-requested writes stay available. No
+migration or web change is needed; focused contract, settings, vault and voice
+tests cover the behavior.
+
 P9-20 (7 October 2026): expose one owner-authenticated, cached `/status`
 snapshot using the shared contracts; reuse it in `get_status_summary`. Keep
 status probes bounded and return only allowlisted metadata, never provider
@@ -181,6 +191,7 @@ Windows/Chrome/Jev speedup remains live acceptance.
 
 | Date | Decision | Rationale and evidence | Status |
 | --- | --- | --- | --- |
+| 2026-10-08 | P9-31 adds `get_usage` through the existing agent-only tool registry and usage store. Reuse the shared usage period/entry contracts, support the current UTC day, and group spend by role/source and model without hiding estimated or unverified costs. Redact the financial result from durable generic tool-call audit records; add no migration or web changes. | `UsageStore.list` already bounds and groups persisted usage, including active sandbox estimates and cost coverage. Backend tests cover today’s UTC interval, per-area/model aggregation, cost status, tool registration and sensitive audit redaction. | Implemented offline; live provider billing remains unverified |
 | 2026-10-07 | P9-22 exposes owner-authenticated `/phone/status` and a 20-call history through the existing shared contracts and `phone_sessions` table. Keep phone calling dormant unless Dan provisions Teams/ACS and a Teams Phone number; status configuration is not a provider health check. Do not return caller or call IDs, and do not add a migration or web changes. | P6-22 keeps Teams unprovisioned in production; P7-01 records that no phone number was purchased. Backend tests cover owner auth, unavailable history, sanitized failure, bounded history and status mapping. No Azure CLI/live Azure access was available, so current number, ACS resource and callback delivery remain unverified. | Implemented offline; production setup and live callbacks unverified |
 | 2026-10-07 | P9-18 puts `/now/events` event names and payloads plus task-event stream messages in `@jarvis/contracts`, with strict type guards. Route both streams through one typed backend SSE formatter while preserving authentication, replay IDs, heartbeat behavior, and `sseHeaders`; do not add a migration or change the web client. | Existing shared activity, background-job, workspace-command, and task-store contracts supply the payload types. Contract tests cover all Now event names and task-event shapes, and backend tests cover frame formatting and existing stream behavior. | Implemented offline; UI parser migration remains separate |
 | 2026-10-07 | P9-29 reuses the existing Jarvis tool registry, task/release stores and contracts for retry and release lookup. Deployment status comes from the latest default-branch `deploy*.yml`/`deploy*.yaml` Actions run using a repository-scoped `actions:read` App token; do not add persistence or web UI. | Issue #523's gap audit requests backend-only tools. Existing retry lifecycle checks and webhook-backed release records remain authoritative; bounded fake-provider tests cover Actions run selection, input validation and sanitized failures. | Implemented offline; live GitHub access unverified |

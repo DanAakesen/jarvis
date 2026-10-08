@@ -1252,6 +1252,18 @@ uncached, bounded, and redact credential-like text; no database migration is
 needed. Durable-memory edits are capped at 2,000 characters; vault-note edits
 are capped at 256 KiB, and note history is response-size bounded.
 
+P9-10 adds bounded `memory` settings to the existing global settings store; no
+migration is needed. `similarityThreshold` defaults to `0.35` and controls
+embedding-based knowledge-graph edges in both the application and SQL candidate
+query; `graphTextSimilarityThreshold` defaults to `0.12` for the TF-IDF fallback.
+`searchTopK` defaults to five and caps vault search and graph-search results at
+the configured value (1–8). `automaticCapture` defaults on and is included in
+`/agent/settings` and voice-session instructions. The shared `vault_write` tool
+marks automatic captures separately from Dan-requested writes; the backend
+refuses marked automatic writes when capture is off, while direct requests remain
+available. Default thresholds, the vault-search result count and capture
+behavior match the existing values.
+
 ### Vault knowledge graph (P7-43)
 
 Migration `0027_vault_knowledge_graph.sql` stores wiki-link and Markdown-link
@@ -1344,6 +1356,13 @@ totals plus research, web-research and image-generation tool-call counts. All-ti
 daily totals are bounded to the latest 90 days; monthly totals cover the selected
 period. Provider-reported chat/voice tokens, SQL collection and live billing have
 not been verified against a deployed service or invoice.
+
+P9-31 adds the agent-only `get_usage` tool to the shared registry. It uses the
+existing usage store and shared period/entry contracts to return USD and DKK
+spend grouped by role (or source where no role is recorded) and model, preserving
+estimated and unverified counts and surfacing unpriced tool calls and truncation.
+The `today` period uses UTC midnight. Sensitive tool-call audit records redact
+the arguments and result; no migration or web change is needed.
 
 P6-03's backend job checks for events older than 90 days hourly while a sandbox
 is active, in bounded SQL batches, and uploads deterministic per-task blobs

@@ -6,7 +6,7 @@ import { ToolFailure, ToolRefusal } from './tool-registry.js';
 import { registerSettingsRoutes } from './settings.js';
 import { setThemeTool } from './theme.js';
 import { registerNowRoutes } from './now.js';
-import { registerUsageRoutes } from './usage.js';
+import { getUsageTool, registerUsageRoutes } from './usage.js';
 import { setJarvisModelTool } from './model-tools.js';
 import { manageModelDeploymentTool, registerModelDeploymentRoutes } from './model-deployments.js';
 import { setAwayModeTool, setPresenceModeTool } from './away-mode.js';
@@ -49,7 +49,7 @@ function isObject(value: unknown): value is Record<string, unknown> {
 
 export const coreModule: BackendModule = {
   id: 'core',
-  tools: [setThemeTool, setJarvisModelTool, manageModelDeploymentTool, setPresenceModeTool, setAwayModeTool, getStatusSummaryTool, workspaceCommandTool, listJobsTool, getJobTool, cancelJobTool],
+  tools: [setThemeTool, setJarvisModelTool, manageModelDeploymentTool, setPresenceModeTool, setAwayModeTool, getStatusSummaryTool, workspaceCommandTool, listJobsTool, getJobTool, cancelJobTool, getUsageTool],
   registerRoutes: async (app) => {
     await registerSettingsRoutes(app);
     registerModelDeploymentRoutes(app);

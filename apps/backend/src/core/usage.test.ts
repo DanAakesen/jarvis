@@ -76,6 +76,74 @@ describe('usage report API', () => {
     expect(store.list).toHaveBeenCalledWith(from, to);
   });
 
+  it('returns usage for the current UTC day', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(to);
+    const store: UsageStore = { list: vi.fn(async () => ({ entries: [], totalEntries: '0' })) };
+
+    const response = await fixture(store).inject({ url: '/usage?period=today', headers });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({ period: 'today', from: '2026-10-04T00:00:00.000Z' });
+    expect(store.list).toHaveBeenCalledWith(new Date('2026-10-04T00:00:00.000Z'), to);
+  });
+
+  it('exposes sensitive period spend by area and model through the shared tool registry', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(to);
+    const entries: UsageEntry[] = [
+      { ...entry, role: 'chat', model: 'gpt-6.1-sol', costUsd: 0.01, costDkk: 0.065785, costStatus: 'estimated' },
+      { ...entry, role: 'chat', model: 'gpt-6.1-sol', costUsd: 0.02, costDkk: 0.13157, costStatus: 'estimated' },
+      { ...entry, role: 'voice', model: 'gpt-5.6-luna', costUsd: null, costDkk: null, costStatus: 'unverified' },
+    ];
+    const store: UsageStore = {
+      list: vi.fn(async () => ({ entries, totalEntries: String(entries.length) })),
+    };
+    const agentAuth: TokenVerifier = async () => ({
+      kind: 'jarvis-agent',
+      objectId: config.auth.ownerObjectId,
+      tenantId: config.auth.tenantId,
+    });
+    const toolCallStore: ToolCallStore = { record: vi.fn(async () => {}) };
+    const request = {
+      method: 'POST',
+      url: '/tools/get_usage',
+      headers: { ...headers, 'x-jarvis-message-id': '42' },
+      payload: { period: 'today' },
+    };
+
+    const app = fixture(store, agentAuth, toolCallStore);
+    const response = await app.inject(request);
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      tool: 'get_usage',
+      outcome: 'ok',
+      result: {
+        period: 'today',
+        from: '2026-10-04T00:00:00.000Z',
+        total: { usd: 0.03, dkk: 0.197355, estimatedEntries: 2, unverifiedEntries: 1, costStatus: 'unverified' },
+        areas: [
+          { area: 'chat', usd: 0.03, dkk: 0.197355, estimatedEntries: 2, costStatus: 'estimated' },
+          { area: 'voice', usd: 0, dkk: 0, unverifiedEntries: 1, costStatus: 'unverified' },
+        ],
+        models: [
+          { model: 'gpt-5.6-luna', usd: 0, unverifiedEntries: 1, costStatus: 'unverified' },
+          { model: 'gpt-6.1-sol', usd: 0.03, dkk: 0.197355, estimatedEntries: 2, costStatus: 'estimated' },
+        ],
+        truncated: false,
+      },
+    });
+    expect(store.list).toHaveBeenCalledWith(new Date('2026-10-04T00:00:00.000Z'), to);
+    expect(toolCallStore.record).toHaveBeenCalledWith({
+      messageId: '42',
+      tool: 'get_usage',
+      arguments: { redacted: true },
+      result: { redacted: true },
+      outcome: 'ok',
+    });
+  });
+
   it('returns per-tool Codex counts for the UTC day', async () => {
     vi.useFakeTimers();
     vi.setSystemTime(to);
