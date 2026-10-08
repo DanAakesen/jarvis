@@ -1,9 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties, type FormEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { TaskWindowLink } from '../TaskWindowLink';
 import { Modal } from '../Modal';
 import { backendFetch } from '../backend-request';
-import { useConversationIntents } from '../conversation-intents';
 import { streamTaskEvents } from '../task-events';
 import { useContextPanel } from '../context-panel-state';
 import { TaskDetailPage } from './TaskDetailPage';
@@ -249,9 +247,6 @@ export function TasksPage({ backendUrl, getAccessToken }: Props) {
   const [now, setNow] = useState(0);
   const [selectedTaskId, setSelectedTaskId] = useState('');
   const selectedTaskIdRef = useRef('');
-  const [conversationDraft, setConversationDraft] = useState('');
-  const conversationIntents = useConversationIntents();
-  const navigate = useNavigate();
   const contextPanel = useContextPanel();
   const closeContextPanel = contextPanel.close;
   const createButtonRef = useRef<HTMLButtonElement>(null);
@@ -447,54 +442,11 @@ export function TasksPage({ backendUrl, getAccessToken }: Props) {
     }
   };
 
-  const sendToJarvis = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const message = conversationDraft.trim();
-    if (!message || message.length > 20_000) return;
-    conversationIntents.sendMessage(message);
-    setConversationDraft('');
-    navigate('/');
-  };
-
-  const openVoiceStart = () => {
-    conversationIntents.focusVoiceStart();
-    navigate('/');
-  };
-
   const streamValues = taskIds.split(',').filter(Boolean).map((id) => liveStatuses[id] ?? 'connecting');
   const streamErrorCount = streamValues.filter((status) => status === 'error').length;
   const allConnected = streamValues.length > 0 && streamValues.every((status) => status === 'connected');
   const anyReconnecting = streamValues.some((status) => status === 'reconnecting');
 
-  const factoryComposer = (
-    <form className="factory-composer" onSubmit={sendToJarvis}>
-      <label className="visually-hidden" htmlFor="factory-ask-jarvis">Ask Jarvis</label>
-      <textarea
-        id="factory-ask-jarvis"
-        rows={1}
-        maxLength={20_000}
-        placeholder="Ask Jarvis"
-        value={conversationDraft}
-        onChange={(event) => setConversationDraft(event.target.value)}
-        onKeyDown={(event) => {
-          if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
-            event.preventDefault();
-            event.currentTarget.form?.requestSubmit();
-          }
-        }}
-        aria-describedby="factory-composer-guidance"
-      />
-      <button className="primary-button" type="submit" disabled={!conversationDraft.trim()}>
-        Send
-      </button>
-      <button className="secondary-button" type="button" onClick={openVoiceStart}>
-        Start voice in Jarvis
-      </button>
-      <p id="factory-composer-guidance">
-        Sending opens the conversation and uses its normal message queue. Voice opens Jarvis with its explicit Start voice control focused; your browser asks for microphone access only when you press it.
-      </p>
-    </form>
-  );
   const createDialog = dialogOpen && (
     <Modal title="Create task" titleId="create-task-heading" onClose={closeDialog} busy={creating} className="task-dialog">
         <p>Choose the project and agent, then describe the work.</p>
@@ -643,7 +595,7 @@ export function TasksPage({ backendUrl, getAccessToken }: Props) {
 
         <TaskReleaseBar backendUrl={backendUrl} getAccessToken={getAccessToken} projectId={appliedFilters.projectId} variant="trail" />
 
-        {visibleTaskState === 'loading' && <Loader variant="cards" label="Loading tasks…" />}
+        {visibleTaskState === 'loading' && <Loader variant="core" label="Loading tasks…" />}
         {visibleTaskState === 'error' && (
           <div className="tasks-feedback" role="alert">
             <p>{visibleTaskError}</p>
@@ -723,8 +675,6 @@ export function TasksPage({ backendUrl, getAccessToken }: Props) {
             </div>
           </>
         )}
-
-        {factoryComposer}
 
         {createDialog}
         {projectDialogOpen && (

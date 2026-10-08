@@ -4,6 +4,7 @@ import type { WorkspaceSnapshot } from '@jarvis/contracts';
 import { confirmToolCall, type ToolCallOutcome } from './tool-calls.js';
 import { ToolFailure, ToolRefusal, type RegisteredTool } from './tool-registry.js';
 import { isWorkspaceReflexOperation } from './workspace-commands.js';
+import { startWorkPresentation } from './work-presentation.js';
 import {
   jevChoiceConfidenceThreshold,
   jevFailureFromStatus,
@@ -415,6 +416,7 @@ export async function executeReflexAction(
   });
   let outcome: ToolCallOutcome = 'ok';
   let result: unknown;
+  const presentation = startWorkPresentation(target.tool.name, target.arguments, request, randomUUID(), messageId, signal);
   try {
     result = await target.tool.execute(target.arguments, request, signal);
     const serialized = JSON.stringify(result);
@@ -432,6 +434,8 @@ export async function executeReflexAction(
       outcome = 'error';
       result = { error: 'Tool execution failed' };
     }
+  } finally {
+    presentation.finish(result, outcome === 'ok');
   }
   try {
     await request.server.toolCallStore!.record({

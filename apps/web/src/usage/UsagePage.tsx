@@ -233,7 +233,7 @@ export function UsagePage({ backendUrl, getAccessToken }: AreaProps) {
         </div>
       </div>
 
-      {currentState.status === 'loading' && <Loader variant="rows" label={`Loading usage for ${periods.find(({ value }) => value === period)?.label.toLowerCase()}…`} />}
+      {currentState.status === 'loading' && <Loader variant="core" label={`Loading usage for ${periods.find(({ value }) => value === period)?.label.toLowerCase()}…`} />}
       {currentState.status === 'error' && (
         <div className="usage-feedback" role="alert">
           <p>{currentState.message}</p>

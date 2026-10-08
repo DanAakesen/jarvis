@@ -157,7 +157,7 @@ export function isModelCatalogue(value) {
 
 export const generatedViewRenderers = Object.freeze([
   'table', 'list', 'detail', 'text', 'timeline', 'chart', 'task-card', 'status', 'image', 'html-app',
-  'knowledge-graph',
+  'knowledge-graph', 'code',
 ]);
 export const generatedViewActionTypes = Object.freeze(['open-route', 'open-link', 'call-tool', 'window']);
 
@@ -173,6 +173,17 @@ const object = (properties, required = Object.keys(properties)) => ({
 const array = (items, maxItems, minItems = 0) => ({
   type: 'array', items, maxItems, ...(minItems ? { minItems } : {}),
 });
+const codeLineSchema = { type: 'integer', minimum: 1, maximum: Number.MAX_SAFE_INTEGER };
+export const generatedCodeDataSchema = Object.freeze(object({
+  repo: { ...string(200, 1), pattern: '\\S' },
+  path: { ...string(2_048, 1), pattern: '\\S' },
+  ref: { ...string(200, 1), pattern: '\\S' },
+  language: { ...string(64, 1), pattern: '\\S' },
+  content: { ...string(200_000), pattern: '^(?:[^\\r\\n]*(?:\\r\\n|\\r(?!\\n)|\\n)){0,399}[^\\r\\n]*$(?![\\s\\S])' },
+  startLine: codeLineSchema,
+  highlight: array(object({ from: codeLineSchema, to: codeLineSchema }), 400),
+  query: { ...string(500, 1), pattern: '\\S' },
+}, ['repo', 'path', 'content']));
 const routeActionSchema = object({
   type: { const: 'open-route' },
   route: {
@@ -338,6 +349,7 @@ const dataSchemas = {
     fields: array(object({ label: string(100, 1), value: string(2_000) }), 100),
   }),
   text: object({ format: { type: 'string', enum: ['plain', 'markdown'] }, content: string(10_000) }),
+  code: generatedCodeDataSchema,
   timeline: object({
     events: array(object({ at: dateTime, title: string(200, 1), description: string(2_000) }, ['at', 'title']), rowLimit),
   }),
@@ -658,9 +670,32 @@ function validData(renderer, data, trustedBlobHost) {
         Array.isArray(data.highlight) && data.highlight.length <= 50 &&
         data.highlight.every((id) => typeof id === 'string' && /^[0-9a-f]{64}$/u.test(id)) &&
         new Set(data.highlight).size === data.highlight.length;
+    case 'code':
+      return isGeneratedCodeData(data);
     default:
       return false;
   }
+}
+
+export function isGeneratedCodeData(value) {
+  if (!isObject(value) || Object.keys(value).some((key) =>
+    !['repo', 'path', 'ref', 'language', 'content', 'startLine', 'highlight', 'query'].includes(key)) ||
+    !boundedString(value.repo, 200, 1) || !/\S/u.test(value.repo) ||
+    !boundedString(value.path, 2_048, 1) || !/\S/u.test(value.path) ||
+    !boundedString(value.content, 200_000)) return false;
+  for (const [key, limit] of [['ref', 200], ['language', 64], ['query', 500]]) {
+    if (value[key] !== undefined && (!boundedString(value[key], limit, 1) || !/\S/u.test(value[key]))) return false;
+  }
+  const lineCount = value.content.split(/\r\n|\r|\n/u).length;
+  const startLine = value.startLine ?? 1;
+  const endLine = startLine + lineCount - 1;
+  if (lineCount > 400 || !Number.isSafeInteger(startLine) || startLine < 1 ||
+    !Number.isSafeInteger(endLine) || value.startLine === null) return false;
+  return value.highlight === undefined || (Array.isArray(value.highlight) && value.highlight.length <= 400 &&
+    value.highlight.every((range) => isObject(range) &&
+      Object.keys(range).every((key) => ['from', 'to'].includes(key)) &&
+      Number.isSafeInteger(range.from) && Number.isSafeInteger(range.to) &&
+      range.from >= startLine && range.to >= range.from && range.to <= endLine));
 }
 
 export function isGeneratedView(value, options = {}) {
@@ -847,8 +882,40 @@ const toolNamePattern = /^[A-Za-z0-9_-]{1,64}$/;
 const activityStateTypes = new Set([
   'listening', 'thinking', 'speaking', 'interrupted', 'reconnecting', 'failed', 'ended',
 ]);
+export const jarvisWorkActivityKinds = Object.freeze([
+  'vault_search', 'repo_read', 'repo_search', 'web_search', 'task', 'other',
+]);
+export const jarvisWorkActivityDetailSchema = Object.freeze(object({
+  activityId: { type: 'string', pattern: '^[0-9a-fA-F]{8}-(?:[0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}$' },
+  kind: { type: 'string', enum: [...jarvisWorkActivityKinds] },
+  text: { ...string(80, 1), pattern: '^[^\\u0000-\\u001f\\u007f]*$(?![\\s\\S])' },
+  target: object({ label: { ...string(200, 1), pattern: '\\S' } }),
+}, ['activityId', 'kind', 'text']));
+
+export function isJarvisWorkActivityDetail(value) {
+  return isObject(value) && Object.keys(value).every((key) =>
+    ['activityId', 'kind', 'text', 'target'].includes(key)) &&
+    typeof value.activityId === 'string' && activityIdPattern.test(value.activityId) &&
+    jarvisWorkActivityKinds.includes(value.kind) && boundedString(value.text, 80, 1) &&
+    !Array.from(value.text).some((character) => character.charCodeAt(0) < 0x20 || character.charCodeAt(0) === 0x7f) &&
+    (value.target === undefined || (isObject(value.target) && Object.keys(value.target).length === 1 &&
+      boundedString(value.target.label, 200, 1) && /\S/u.test(value.target.label)));
+}
 
 export function isJarvisActivityEvent(value) {
+  if (isObject(value) && ['work-started', 'work-finished'].includes(value.type)) {
+    if (value.source !== undefined && !['chat', 'voice'].includes(value.source)) return false;
+    if (value.type === 'work-finished') {
+      return Object.keys(value).every((key) => ['type', 'activityId', 'source'].includes(key)) &&
+        typeof value.activityId === 'string' && activityIdPattern.test(value.activityId);
+    }
+    return Object.keys(value).every((key) =>
+      ['type', 'source', 'activityId', 'kind', 'text', 'target'].includes(key)) &&
+      isJarvisWorkActivityDetail({
+        activityId: value.activityId, kind: value.kind, text: value.text,
+        ...(value.target === undefined ? {} : { target: value.target }),
+      });
+  }
   if (!isObject(value) || !activityIdPattern.test(value.activityId) ||
     !['chat', 'voice'].includes(value.source) || typeof value.type !== 'string') return false;
   if (activityStateTypes.has(value.type)) {

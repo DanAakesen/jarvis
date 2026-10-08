@@ -4,6 +4,11 @@ import {
   generatedViewActionTypes,
   generatedViewRenderers,
   generatedViewSchema,
+  generatedCodeDataSchema,
+  isGeneratedCodeData,
+  isJarvisWorkActivityDetail,
+  jarvisWorkActivityKinds,
+  jarvisWorkActivityDetailSchema,
   folioKinds,
   folioItemSchema,
   folioSearchResponseSchema,
@@ -260,6 +265,102 @@ test('renderer and action identifiers match the JSON schema allowlists', () => {
   assert.equal(new Set(generatedViewRenderers).size, generatedViewRenderers.length);
 });
 
+test('work activity detail and lifecycle accept bounded updates with the same activity ID', () => {
+  const detail = {
+    activityId: '12345678-1234-4234-8234-123456789abc',
+    kind: 'repo_read',
+    text: "I'm reading the settings module",
+    target: { label: 'jarvis/settings.ts' },
+  };
+  assert.equal(jarvisWorkActivityDetailSchema.properties.text.maxLength, 80);
+  assert.deepEqual(jarvisWorkActivityDetailSchema.properties.kind.enum, jarvisWorkActivityKinds);
+  for (const kind of jarvisWorkActivityKinds) {
+    assert.equal(isJarvisWorkActivityDetail({ ...detail, kind }), true, kind);
+    assert.equal(isJarvisActivityEvent({ ...detail, kind, type: 'work-started' }), true, kind);
+  }
+  assert.equal(isJarvisWorkActivityDetail({ ...detail, text: `I ${'x'.repeat(78)}` }), true);
+  for (const text of ['Searching your vault for Ignite', 'Reading settings', "I'm reading settings"]) {
+    assert.equal(isJarvisWorkActivityDetail({ ...detail, text }), true);
+    assert.equal(isJarvisActivityEvent({ ...detail, text, type: 'work-started' }), true);
+    assert.equal(new RegExp(jarvisWorkActivityDetailSchema.properties.text.pattern).test(text), true);
+  }
+  for (const source of [undefined, 'chat', 'voice']) {
+    const started = { ...detail, type: 'work-started', ...(source ? { source } : {}) };
+    const finished = { type: 'work-finished', activityId: detail.activityId, ...(source ? { source } : {}) };
+    assert.equal(isJarvisActivityEvent(started), true);
+    assert.equal(isJarvisActivityEvent(finished), true);
+    assert.equal(isNowSseEvent({ event: 'jarvis-activity', data: started }), true);
+    assert.equal(isNowSseEvent({ event: 'jarvis-activity', data: finished }), true);
+  }
+  for (const invalid of [
+    { activityId: 'not-a-uuid' }, { activityId: null }, { kind: 'reading' },
+    { text: '' }, { text: `I ${'x'.repeat(79)}` },
+    { text: 'I am\nreading' }, { text: 'I am\u0000reading' },
+    { target: null }, { target: { label: '' } }, { target: { label: ' ' } },
+    { target: { label: 'x'.repeat(201) } }, { target: { label: 'Repo', url: 'https://github.com' } },
+    { secret: 'must not travel' },
+  ]) {
+    assert.equal(isJarvisWorkActivityDetail({ ...detail, ...invalid }), false, JSON.stringify(invalid));
+    assert.equal(isJarvisActivityEvent({ ...detail, ...invalid, type: 'work-started' }), false);
+  }
+  assert.equal(isJarvisActivityEvent({ ...detail, type: 'work-started', source: 'agent' }), false);
+  for (const invalid of [
+    { activityId: 'invalid' }, { source: 'agent' }, { text: 'I finished' }, { outcome: 'ok' },
+  ]) {
+    assert.equal(isJarvisActivityEvent({ type: 'work-finished', activityId: detail.activityId, ...invalid }), false);
+  }
+});
+
+test('code views preserve plain-text content and bound code, line numbers and absolute highlights', () => {
+  const data = {
+    repo: 'DanAakesen/jarvis', path: 'apps/backend/src/core/settings.ts', ref: 'main',
+    language: 'typescript', content: 'const html = "<script>not executable</script>";\nexport { html };',
+    startLine: 121, highlight: [{ from: 121, to: 122 }], query: 'html',
+  };
+  assert.equal(generatedCodeDataSchema.properties.content.maxLength, 200_000);
+  assert.equal(generatedCodeDataSchema.properties.startLine.type, 'integer');
+  assert.equal(generatedCodeDataSchema.properties.highlight.items.additionalProperties, false);
+  assert.equal(isGeneratedCodeData(data), true);
+  assert.equal(isGeneratedView(listView({ renderer: 'code', data })), true);
+  assert.equal(isGeneratedView(listView({
+    renderer: 'code', source: { id: 'factory.projects', status: 'complete' },
+    data: {
+      repo: 'DanAakesen/jarvis', path: 'Search results', startLine: 1,
+      content: 'src/settings.ts:121 showWork: true\nsrc/activity.ts:42 work-started',
+      highlight: [{ from: 1, to: 1 }, { from: 2, to: 2 }],
+    },
+  })), true);
+  assert.equal(isWorkspaceCommand({
+    commandId: 'code-read', operation: 'create', viewId: 'code-read',
+    view: listView({ renderer: 'code', data }),
+  }), true);
+  assert.equal(isGeneratedCodeData({ repo: 'r', path: 'p', content: '' }), true);
+  assert.equal(isGeneratedCodeData({ repo: 'r', path: 'p', content: 'x'.repeat(200_000) }), true);
+  for (const separator of ['\n', '\r', '\r\n']) {
+    const content = Array(400).fill('line').join(separator);
+    assert.equal(isGeneratedCodeData({ ...data, content, highlight: [{ from: 121, to: 520 }] }), true);
+    assert.equal(isGeneratedCodeData({ ...data, content: `${content}${separator}line` }), false);
+    assert.equal(isGeneratedCodeData({ ...data, content: `${content}${separator}` }), false);
+    assert.equal(new RegExp(generatedCodeDataSchema.properties.content.pattern).test(content), true);
+    assert.equal(new RegExp(generatedCodeDataSchema.properties.content.pattern).test(`${content}${separator}line`), false);
+    assert.equal(new RegExp(generatedCodeDataSchema.properties.content.pattern).test(`${content}${separator}`), false);
+  }
+  for (const invalid of [
+    { repo: '' }, { path: ' ' }, { content: null }, { content: 'x'.repeat(200_001) },
+    { startLine: 0 }, { startLine: -1 }, { startLine: 1.5 }, { startLine: '121' },
+    { startLine: null }, { startLine: Number.MAX_SAFE_INTEGER }, { startLine: Infinity },
+    { ref: '' }, { language: null }, { query: ' ' }, { html: '<script>' },
+    { highlight: null }, { highlight: Array(401).fill({ from: 121, to: 122 }) },
+    { highlight: [{ from: 121 }] }, { highlight: [{ from: 122, to: 121 }] },
+    { highlight: [{ from: 120, to: 121 }] }, { highlight: [{ from: 121, to: 123 }] },
+    { highlight: [{ from: 121.5, to: 122 }] }, { highlight: [{ from: 121, to: '122' }] },
+    { highlight: [{ from: 121, to: 122, text: 'unexpected' }] },
+  ]) {
+    assert.equal(isGeneratedCodeData({ ...data, ...invalid }), false, JSON.stringify(invalid));
+    assert.equal(isGeneratedView(listView({ renderer: 'code', data: { ...data, ...invalid } })), false);
+  }
+});
+
 test('accepts only bounded Jarvis activity fields and known outcomes', () => {
   const activityId = '12345678-1234-4234-8234-123456789abc';
   assert.equal(isJarvisActivityEvent({ type: 'listening', activityId, source: 'voice' }), true);
@@ -508,6 +609,7 @@ test('accepts each allowlisted renderer and action without interpreting its cont
     { renderer: 'list', data: { items: [{ title: 'Task' }] } },
     { renderer: 'detail', data: { fields: [{ label: 'State', value: 'Running' }] } },
     { renderer: 'text', data: { format: 'markdown', content: '<script>not executed</script>' } },
+    { renderer: 'code', data: { repo: 'DanAakesen/jarvis', path: 'index.js', content: '<script>plain text</script>' } },
     { renderer: 'timeline', data: { events: [{ at: '2026-10-04T00:00:00Z', title: 'Started' }] } },
     { renderer: 'chart', data: { kind: 'line', series: [{ name: 'Usage', points: [{ x: 'today', y: 2 }] }] } },
     { renderer: 'task-card', data: { id: '42', title: 'Task', state: 'Running' } },
