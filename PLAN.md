@@ -511,7 +511,7 @@ Banking, health and fitness, and other areas;  a paid phone number for Jarvis; A
 
 ### P8 backend-enabling tasks
 
-P8-02 allocated P8-04 through P8-13 to frontend work in PR #233. Backend tasks therefore start at P8-14. The matching frontend consumers are blocked by their enabling contracts: P8-06 by P8-14 and P8-15; P8-07, P8-08 and P8-11 by P8-15; P8-09 and P8-11 by P8-16; and P8-13 by P8-17. P8-10 uses client state and the P5-04 runtime; P8-16 now supplies the transient activity contract consumed by the orb and shell. P8-41 (#429) owns the sandboxed HTML artifact renderer and host bridge required by P7-37; it remains open, so the research window's final browser acceptance is pending.
+P8-02 allocated P8-04 through P8-13 to frontend work in PR #233. Backend tasks therefore start at P8-14. The matching frontend consumers are blocked by their enabling contracts: P8-06 by P8-14 and P8-15; P8-07, P8-08 and P8-11 by P8-15; P8-09 and P8-11 by P8-16; and P8-13 by P8-17. P8-10 uses client state and the P5-04 runtime; P8-16 now supplies the transient activity contract consumed by the orb and shell. P8-41 (#429) owns the sandboxed HTML artifact renderer and host bridge required by P7-37. Its backend half shipped in #432; the web renderer and bridge followed on 8 October from the UI session, checked against Dan's live Man City report.
 
 | ID | Issue | Task | Acceptance criteria | Depends on | Status |
 | --- | --- | --- | --- | --- | --- |
