@@ -202,7 +202,11 @@ describe('workspace command delivery', () => {
       method: 'POST', url: '/tools/workspace_command', headers: agentHeaders,
       payload: { commandId: 'invalid-navigation', operation: 'navigate', ...fields },
     });
-    expect(response.statusCode).toBe(400);
+    // P9-42: invalid arguments come back as a recoverable refusal, not a bare 400.
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      outcome: 'refused', result: { refused: expect.stringContaining('Invalid arguments:') },
+    });
     expect(send).not.toHaveBeenCalled();
   });
 
