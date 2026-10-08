@@ -1159,7 +1159,7 @@ either key. No migration is needed: 0020 already belongs to chat steering and
 remains unchanged.
 
 On the first fresh snapshot, Jev makes one calibrated Choice among at most
-20 recipes for the exact process name or HTTP(S) origin plus `none`. Each replay
+20 routines for the exact process name or HTTP(S) origin plus `none`. Each replay
 step re-locates a unique role/name target and makes one typed replay/plan
 verification against the current observation. Missing/ambiguous targets or
 verification drift disable replay and resume normal planning; app/site changes
