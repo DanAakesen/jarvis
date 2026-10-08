@@ -1,7 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { BackendModule } from '../modules.js';
 import { readSettings } from '../core/settings.js';
-import { VISION_MODEL_DEPLOYMENT } from './foundry-model.js';
 
 export const MAX_SCREEN_FRAME_BYTES = 1_000_000;
 const MAX_SCREEN_FRAME_BASE64_BYTES = Math.ceil(MAX_SCREEN_FRAME_BYTES / 3) * 4;
@@ -13,12 +12,14 @@ export interface ScreenVisionResult {
   readonly inputTokens: number;
   readonly outputTokens: number;
   readonly costDkk?: number;
+  readonly costUsd?: number;
 }
 
 export interface ScreenVisionModel {
   describe(input: {
     readonly image: Buffer;
     readonly model: string;
+    readonly reasoningEffort?: string;
     readonly signal: AbortSignal;
     readonly watch?: {
       readonly source: 'screen' | 'camera';
@@ -43,6 +44,9 @@ export interface ScreenFrameUsageStore {
     readonly inputTokens: number;
     readonly outputTokens: number;
     readonly costDkk: number | null;
+    readonly costUsd: number | null;
+    readonly costStatus: 'estimated' | 'unverified';
+    readonly model: string;
     readonly at: Date;
   }): Promise<void>;
 }
@@ -68,6 +72,7 @@ export class ScreenVisionService {
     readonly sessionId: string;
     readonly image: Buffer;
     readonly model: string;
+    readonly reasoningEffort?: string;
     readonly dailyCap: number;
     readonly signal: AbortSignal;
   }): Promise<ScreenVisionResult> {
@@ -97,13 +102,16 @@ export class ScreenVisionService {
       const result = await this.model.describe({
         image: input.image,
         model: input.model,
+        ...(input.reasoningEffort === undefined ? {} : { reasoningEffort: input.reasoningEffort }),
         signal: input.signal,
       });
       if (!result.description.trim() || result.description.length > MAX_SCREEN_DESCRIPTION_CHARACTERS ||
           !Number.isSafeInteger(result.inputTokens) || result.inputTokens < 0 ||
           !Number.isSafeInteger(result.outputTokens) || result.outputTokens < 0 ||
           (result.costDkk !== undefined &&
-            (!Number.isFinite(result.costDkk) || result.costDkk < 0))) {
+            (!Number.isFinite(result.costDkk) || result.costDkk < 0)) ||
+          (result.costUsd !== undefined &&
+            (!Number.isFinite(result.costUsd) || result.costUsd < 0))) {
         throw new Error('Invalid screen description response');
       }
       await this.usage.recordTokens({
@@ -112,6 +120,9 @@ export class ScreenVisionService {
         inputTokens: result.inputTokens,
         outputTokens: result.outputTokens,
         costDkk: result.costDkk ?? null,
+        costUsd: result.costUsd ?? null,
+        costStatus: result.costDkk !== undefined && result.costUsd !== undefined ? 'estimated' : 'unverified',
+        model: input.model,
         at,
       });
       return {
@@ -205,11 +216,12 @@ export function createScreenVisionModule(service: ScreenVisionService): BackendM
         request.raw.once('aborted', abortOnRequest);
         reply.raw.once('close', abortOnClose);
         try {
-          const settings = await readSettings(app.settingsStore);
+          const settings = await readSettings(app.settingsStore, await app.modelCatalogue.read());
           const result = await service.describe({
             sessionId,
             image,
-            model: VISION_MODEL_DEPLOYMENT,
+            model: settings.roles.vision.model,
+            reasoningEffort: settings.roles.vision.reasoningEffort,
             dailyCap: settings.global.screenShareDailyFrameCap,
             signal: controller.signal,
           });

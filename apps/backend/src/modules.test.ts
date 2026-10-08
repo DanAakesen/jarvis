@@ -5,6 +5,7 @@ import { coreModule } from './core/index.js';
 import { factoryModule } from './factory/index.js';
 import { ToolFailure, ToolRefusal, type JarvisTool } from './core/tool-registry.js';
 import type { BackendModule } from './modules.js';
+import { createSystemStatusReader } from './system-status.js';
 
 const config = { ...loadConfig({}), logLevel: 'silent' as const };
 const headers = { authorization: 'Bearer a.b.c' };
@@ -31,6 +32,25 @@ function extension(id = 'extension', tools: readonly JarvisTool[] = []): Backend
 }
 
 describe('backend module composition', () => {
+  it('serves the cached system status privately to an authenticated owner', async () => {
+    const database = vi.fn(async () => ({ status: 'ok' as const }));
+    const app = buildApp(config, undefined, {
+      modules: [coreModule, factoryModule],
+      auth: async () => ({ objectId: config.auth.ownerObjectId, tenantId: config.auth.tenantId }),
+      systemStatusReader: createSystemStatusReader({ database }, undefined),
+    });
+    apps.push(app);
+
+    expect((await app.inject({ url: '/status' })).statusCode).toBe(401);
+    const response = await app.inject({ url: '/status', headers });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.headers['cache-control']).toBe('private, max-age=30');
+    expect(response.json().entries).toHaveLength(11);
+    expect((await app.inject({ url: '/status', headers })).json()).toEqual(response.json());
+    expect(database).toHaveBeenCalledOnce();
+  });
+
   it('lists tools from every module and executes them through their schema-validated routes', async () => {
     const execute = vi.fn(async (input: unknown) => input);
     const record = vi.fn(async () => {});
@@ -72,7 +92,10 @@ describe('backend module composition', () => {
       method: 'POST', url: '/tools/extension_echo', headers: { ...headers, 'x-jarvis-message-id': '42' },
       payload: {},
     });
-    expect(invalid.statusCode).toBe(400);
+    expect(invalid.statusCode).toBe(200);
+    expect(invalid.json()).toMatchObject({
+      outcome: 'refused', result: { refused: expect.stringContaining("missing property 'text'") },
+    });
     expect(execute).toHaveBeenCalledOnce();
     expect(record).toHaveBeenCalledOnce();
     expect((await app.inject({ method: 'POST', url: '/tools/missing', headers })).statusCode).toBe(404);

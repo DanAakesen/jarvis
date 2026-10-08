@@ -4,22 +4,59 @@ import {
   generatedViewActionTypes,
   generatedViewRenderers,
   generatedViewSchema,
+  folioKinds,
+  folioItemSchema,
+  folioSearchResponseSchema,
+  isFolioItem,
   htmlArtifactByteLimit,
   htmlArtifactFrameSchema,
   htmlArtifactSchema,
   isHtmlArtifact,
   isHtmlArtifactFrame,
+  isModelCatalogue,
+  modelCapabilities,
+  modelRoles,
+  homeLocationSettingsSchema,
+  memorySettingsBounds,
+  memorySettingsSchema,
+  reasoningEfforts,
+  researchDepths,
+  researchSettingsBounds,
+  researchSettingsSchema,
+  timeoutSettingsBounds,
+  timeoutSettingsSchema,
+  routineNameMaxLength,
+  routineNameSchema,
+  routineUpdateSchema,
+  voiceTuningSettingsBounds,
+  voiceTuningSettingsSchema,
   isGeneratedView,
   isValidHtmlArtifactHtml,
   isJarvisActivityEvent,
   isJarvisVoiceWakeEvent,
+  isNowSseEvent,
+  isTaskEventMessage,
+  isTaskEventRecord,
+  isTaskEventStreamEvent,
   isBackgroundJob,
+  isBackgroundJobDetails,
   isBackgroundJobEvent,
+  isBackgroundJobStep,
   isWebResearchResult,
   isWorkspaceCommand,
   generatedViewVersion,
+  nowSseEventNames,
   workspaceCommandSchema,
   webResearchResultSchema,
+  clipboardTextMaxBytes,
+  isClipboardText,
+  isClipboardReadResult,
+  isClipboardWriteResult,
+  isSystemSmokeStatus,
+  systemSmokeCheckIds,
+  factoryBoardColumnIds,
+  isFactoryBoard,
+  isFactoryBoardUpdate,
 } from './index.js';
 
 const source = { id: 'factory.tasks', status: 'complete' };
@@ -30,6 +67,160 @@ const listView = (overrides = {}) => ({
   source,
   data: { items: [{ title: 'Ship the contract', details: [{ label: 'Project', value: 'Jarvis' }] }] },
   ...overrides,
+});
+
+test('Folio contracts use bounded searchable item metadata and closed item kinds', () => {
+  const item = {
+    id: 'research:56a2b0bd-af47-46b5-8e15-c6e9a718ae93',
+    title: 'Ignite report',
+    kind: 'research',
+    createdAt: '2026-10-06T10:00:00.000Z',
+    promptSummary: 'Research Ignite battery storage',
+    pinned: false,
+  };
+  assert.deepEqual(folioKinds, ['research', 'html_app', 'image', 'knowledge_graph']);
+  assert.equal(folioItemSchema.properties.promptSummary.maxLength, 500);
+  assert.equal(folioSearchResponseSchema.properties.items.maxItems, 100);
+  assert.equal(isFolioItem(item), true);
+  assert.equal(isFolioItem({ ...item, kind: 'conversation' }), false);
+  assert.equal(isFolioItem({ ...item, promptSummary: ' Research ' }), false);
+});
+
+test('clipboard contracts bound UTF-8 text and keep read/write result shapes exact', () => {
+  assert.equal(clipboardTextMaxBytes, 20 * 1024);
+  assert.equal(isClipboardText('x'.repeat(clipboardTextMaxBytes)), true);
+  assert.equal(isClipboardText('é'.repeat(clipboardTextMaxBytes / 2)), true);
+  assert.equal(isClipboardText('é'.repeat(clipboardTextMaxBytes / 2 + 1)), false);
+  assert.equal(isClipboardText(null), false);
+  assert.equal(isClipboardText('\0'), false);
+  assert.equal(isClipboardReadResult({ text: 'clipboard text' }), true);
+  assert.equal(isClipboardReadResult({ text: 'x'.repeat(clipboardTextMaxBytes + 1) }), false);
+  assert.equal(isClipboardReadResult({ text: '', extra: true }), false);
+  assert.equal(isClipboardWriteResult({ written: true }), true);
+  assert.equal(isClipboardWriteResult({ written: false }), false);
+});
+
+test('system smoke contract requires the six ordered allowlisted checks and sanitized values', () => {
+  const report = {
+    checkedAt: '2026-10-08T02:00:00.000Z',
+    entries: systemSmokeCheckIds.map((id) => ({
+      id, status: 'ok', checkedAt: '2026-10-08T02:00:00.000Z',
+    })),
+  };
+  assert.equal(isSystemSmokeStatus(report), true);
+  assert.equal(isSystemSmokeStatus({ ...report, entries: report.entries.slice(1) }), false);
+  assert.equal(isSystemSmokeStatus({
+    ...report, entries: [{ ...report.entries[0], id: 'provider-token' }, ...report.entries.slice(1)],
+  }), false);
+  assert.equal(isSystemSmokeStatus({
+    ...report, entries: [{ ...report.entries[0], detail: 'secret' }, ...report.entries.slice(1)],
+  }), false);
+});
+
+test('model catalogue contracts restrict roles, capabilities and reasoning efforts', () => {
+  assert.deepEqual(modelRoles, ['chat', 'vision', 'research', 'voice', 'transcription', 'embedding', 'codex', 'copilot']);
+  assert.deepEqual(reasoningEfforts, ['none', 'minimal', 'low', 'medium', 'high', 'xhigh']);
+  assert.deepEqual(modelCapabilities, ['chat', 'responses', 'realtime', 'transcription', 'embeddings', 'image']);
+  const catalogue = {
+    source: 'arm',
+    deployments: [{
+      name: 'gpt-6-luna',
+      model: 'gpt-6-luna',
+      version: '2026-09-22',
+      sku: 'GlobalStandard',
+      capacity: 50,
+      capabilities: ['chat', 'responses', 'image'],
+      reasoningEfforts: ['none', 'minimal', 'low', 'medium', 'high', 'xhigh'],
+    }],
+  };
+  assert.equal(isModelCatalogue(catalogue), true);
+  assert.equal(isModelCatalogue({ ...catalogue, source: 'live' }), false);
+  assert.equal(isModelCatalogue({
+    ...catalogue,
+    deployments: [{ ...catalogue.deployments[0], reasoningEfforts: ['unbounded'] }],
+  }), false);
+});
+
+test('voice tuning contracts bound persisted VAD, interruption, and reply length settings', () => {
+  assert.deepEqual(voiceTuningSettingsBounds, {
+    serverVadThreshold: { minimum: 0, maximum: 1 },
+    prefixPaddingMs: { minimum: 0, maximum: 2_000 },
+    silenceDurationMs: { minimum: 100, maximum: 5_000 },
+    maxSpokenReplyTokens: { minimum: 1, maximum: 4_096 },
+  });
+  assert.deepEqual(voiceTuningSettingsSchema.properties, {
+    serverVadThreshold: { type: 'number', minimum: 0, maximum: 1 },
+    prefixPaddingMs: { type: 'integer', minimum: 0, maximum: 2_000 },
+    silenceDurationMs: { type: 'integer', minimum: 100, maximum: 5_000 },
+    bargeInEnabled: { type: 'boolean' },
+    maxSpokenReplyTokens: { type: 'integer', minimum: 1, maximum: 4_096 },
+  });
+});
+
+test('research settings contracts bound depth, source count, and invocation timeout', () => {
+  assert.deepEqual(researchDepths, ['quick', 'standard', 'deep']);
+  assert.deepEqual(researchSettingsBounds, {
+    maxSources: { minimum: 1, maximum: 50 },
+    timeoutSeconds: { minimum: 1, maximum: 320 },
+  });
+  assert.deepEqual(researchSettingsSchema.properties, {
+    depth: { type: 'string', enum: ['quick', 'standard', 'deep'] },
+    maxSources: { type: 'integer', minimum: 1, maximum: 50 },
+    timeoutSeconds: { type: 'integer', minimum: 1, maximum: 320 },
+  });
+});
+
+test('timeout settings contracts bound tool, long-tool and backend HTTP requests', () => {
+  assert.deepEqual(timeoutSettingsBounds, {
+    toolTimeoutSeconds: { minimum: 1, maximum: 120 },
+    longToolTimeoutSeconds: { minimum: 30, maximum: 320 },
+    backendHttpTimeoutSeconds: { minimum: 1, maximum: 60 },
+  });
+  assert.deepEqual(timeoutSettingsSchema.properties, {
+    toolTimeoutSeconds: { type: 'integer', minimum: 1, maximum: 120 },
+    longToolTimeoutSeconds: { type: 'integer', minimum: 30, maximum: 320 },
+    backendHttpTimeoutSeconds: { type: 'integer', minimum: 1, maximum: 60 },
+  });
+});
+
+test('routine rename contract bounds names and accepts only the name field', () => {
+  assert.equal(routineNameMaxLength, 80);
+  assert.deepEqual(routineNameSchema, {
+    type: 'string', minLength: 1, maxLength: 80, pattern: '\\S',
+  });
+  assert.deepEqual(routineUpdateSchema, {
+    type: 'object',
+    properties: { name: routineNameSchema },
+    required: ['name'],
+    additionalProperties: false,
+  });
+});
+
+test('memory settings contracts bound retrieval, graph threshold and automatic capture', () => {
+  assert.deepEqual(memorySettingsBounds, {
+    similarityThreshold: { minimum: 0, maximum: 1 },
+    searchTopK: { minimum: 1, maximum: 8 },
+    graphTextSimilarityThreshold: { minimum: 0, maximum: 1 },
+  });
+  assert.deepEqual(memorySettingsSchema.properties, {
+    similarityThreshold: { type: 'number', minimum: 0, maximum: 1 },
+    searchTopK: { type: 'integer', minimum: 1, maximum: 8 },
+    graphTextSimilarityThreshold: { type: 'number', minimum: 0, maximum: 1 },
+    automaticCapture: { type: 'boolean' },
+  });
+});
+
+test('home location settings contract bounds city and nullable coordinates', () => {
+  assert.deepEqual(homeLocationSettingsSchema, {
+    type: 'object',
+    minProperties: 1,
+    additionalProperties: false,
+    properties: {
+      city: { type: 'string', maxLength: 100 },
+      latitude: { anyOf: [{ type: 'number', minimum: -90, maximum: 90 }, { type: 'null' }] },
+      longitude: { anyOf: [{ type: 'number', minimum: -180, maximum: 180 }, { type: 'null' }] },
+    },
+  });
 });
 
 test('renderer and action identifiers match the JSON schema allowlists', () => {
@@ -62,6 +253,127 @@ test('accepts only a bounded voice wake event with a canonical UTC timestamp', (
   assert.equal(isJarvisVoiceWakeEvent({ type: 'voice.wake', at: '2026-10-06T14:24:37.078Z', audio: 'x' }), false);
   assert.equal(isJarvisVoiceWakeEvent({ type: 'listening', at: '2026-10-06T14:24:37.078Z' }), false);
   assert.equal(isJarvisActivityEvent({ type: 'voice.wake', at: '2026-10-06T14:24:37.078Z' }), false);
+});
+
+test('Now SSE contracts guard every named event and its payload', () => {
+  const activityId = '12345678-1234-4234-8234-123456789abc';
+  const timestamp = '2026-10-07T12:00:00.000Z';
+  const job = {
+    jobId: '12345678-1234-4234-8234-123456789abc',
+    kind: 'research',
+    title: 'Research result',
+    status: 'running',
+    step: 1,
+    steps: 2,
+    startedAt: timestamp,
+    updatedAt: timestamp,
+  };
+  const events = [
+    { event: 'mode', data: {} },
+    { event: 'now', data: {} },
+    { event: 'voice-wake', data: { type: 'voice.wake', at: timestamp } },
+    { event: 'job', data: job },
+    { event: 'jarvis-activity', data: { type: 'listening', activityId, source: 'voice' } },
+    { event: 'workspace-ready', data: { sessionId: activityId, trustedBlobHost: 'jarvis.blob.core.windows.net' } },
+    {
+      event: 'workspace-command',
+      data: { command: { commandId: 'cmd_1', operation: 'show', viewId: 'report' }, expiresAt: 1_791_379_200_000 },
+    },
+    { event: 'workspace-cancel', data: { commandId: 'cmd_1' } },
+    { event: 'board', data: { projectId: '42', version: 1 } },
+  ];
+
+  assert.deepEqual(nowSseEventNames, events.map(({ event }) => event));
+  for (const event of events) assert.equal(isNowSseEvent(event), true, event.event);
+  assert.equal(isNowSseEvent({ event: 'mode', data: { mode: 'away' } }), false);
+  assert.equal(isNowSseEvent({ event: 'board', data: { projectId: '0', version: 1 } }), false);
+  assert.equal(isNowSseEvent({ event: 'job', data: { ...job, unexpected: true } }), false);
+  assert.equal(isNowSseEvent({
+    event: 'workspace-command',
+    data: { command: { commandId: 'cmd_1', operation: 'show', viewId: 'report' }, expiresAt: -1 },
+  }), false);
+  assert.equal(isNowSseEvent({ event: 'workspace-cancel', data: { commandId: 'cmd_1', extra: true } }), false);
+  assert.equal(isNowSseEvent({ event: 'unknown', data: {} }), false);
+});
+
+test('Factory board contract validates the exact ordered board, cards, and task overlay', () => {
+  const timestamp = '2026-10-08T00:00:00.000Z';
+  const board = {
+    project: { id: '42', repo: 'DanAakesen/jarvis' },
+    fetchedAt: timestamp,
+    stale: false,
+    columns: factoryBoardColumnIds.map((id) => ({ id, cards: [] })),
+  };
+  board.columns[4].cards.push({
+    issue: {
+      number: 7,
+      url: 'https://github.com/DanAakesen/jarvis/issues/7',
+      title: 'P10-04: Match board',
+      taskCode: 'P10-04',
+      labels: ['Codex'],
+      worker: 'Codex',
+      state: 'open',
+      updatedAt: timestamp,
+      closedAt: null,
+      blockedBy: [],
+    },
+    pr: {
+      number: 70,
+      url: 'https://github.com/DanAakesen/jarvis/pull/70',
+      draft: false,
+      checks: 'passing',
+    },
+    task: {
+      id: '81',
+      state: 'Running',
+      activity: 'Running tests',
+      agent: 'codex',
+      attemptCount: 1,
+      branch: 'jarvis/task-81',
+      startedAt: timestamp,
+      latestSessionEndReason: null,
+    },
+  });
+
+  assert.equal(isFactoryBoard(board), true);
+  assert.equal(isFactoryBoardUpdate({ projectId: '42', version: 1 }), true);
+  assert.equal(isFactoryBoardUpdate({ projectId: '42', version: 0 }), false);
+  assert.equal(isFactoryBoard({ ...board, columns: [...board.columns].reverse() }), false);
+  assert.equal(isFactoryBoard({
+    ...board,
+    columns: board.columns.map((column, index) =>
+      index === 4 ? { ...column, cards: [{ ...column.cards[0], issue: { ...column.cards[0].issue, url: 'http://github.com/issues/7' } }] } : column),
+  }), false);
+  assert.equal(isFactoryBoard({
+    ...board,
+    columns: board.columns.map((column, index) =>
+      index === 4 ? { ...column, cards: [{ ...column.cards[0], task: { ...column.cards[0].task, unexpected: true } }] } : column),
+  }), false);
+});
+
+test('task-event and task stream contracts constrain persisted event identity and shape', () => {
+  const event = {
+    id: '42',
+    taskId: '7',
+    type: 'state_changed',
+    summary: null,
+    payload: { to: 'Running' },
+    payloadTruncated: false,
+    source: 'backend',
+    at: '2026-10-07T12:00:00.000Z',
+  };
+
+  assert.equal(isTaskEventRecord(Object.fromEntries(
+    Object.entries(event).filter(([key]) => key !== 'taskId'),
+  )), true);
+  assert.equal(isTaskEventMessage(event), true);
+  assert.equal(isTaskEventStreamEvent({ event: 'task', id: event.id, data: event }), true);
+  assert.equal(isTaskEventStreamEvent({ event: 'ready', data: {} }), true);
+  assert.equal(isTaskEventRecord({ ...event, id: '9223372036854775808' }), false);
+  assert.equal(isTaskEventMessage({ ...event, taskId: '0' }), false);
+  assert.equal(isTaskEventMessage({ ...event, at: 'October 7, 2026' }), false);
+  assert.equal(isTaskEventStreamEvent({ event: 'task', id: '43', data: event }), false);
+  assert.equal(isTaskEventStreamEvent({ event: 'ready', data: { replayed: true } }), false);
 });
 
 test('web research result schema and validator accept bounded source-linked results', () => {
@@ -328,6 +640,7 @@ test('background jobs are bounded and typed', () => {
     updatedAt: '2026-10-07T12:00:05.000Z',
   };
   assert.equal(isBackgroundJob(job), true);
+  assert.equal(isBackgroundJob({ ...job, kind: 'embedding' }), true);
   assert.equal(isBackgroundJob({ ...job, status: 'done', step: 3, viewId: 'research-abc' }), true);
   assert.equal(isBackgroundJob({ ...job, step: 4 }), false);
   assert.equal(isBackgroundJob({ ...job, title: 'x'.repeat(81) }), false);
@@ -336,4 +649,29 @@ test('background jobs are bounded and typed', () => {
   assert.equal(isBackgroundJob({ ...job, extra: true }), false);
   assert.equal(isBackgroundJobEvent({ type: 'job', job }), true);
   assert.equal(isBackgroundJobEvent({ type: 'job', job, more: 1 }), false);
+});
+
+test('validates bounded background job details and history steps', () => {
+  const job = {
+    jobId: '00000000-0000-4000-8000-000000000014',
+    kind: 'research',
+    title: 'Research: SQL persistence',
+    status: 'failed',
+    step: 1,
+    steps: 3,
+    detail: 'Research could not be completed.',
+    startedAt: '2026-10-07T12:00:00.000Z',
+    updatedAt: '2026-10-07T12:01:00.000Z',
+  };
+  const step = {
+    status: 'running',
+    step: 1,
+    detail: 'Searching: sources',
+    updatedAt: '2026-10-07T12:00:30.000Z',
+  };
+  assert.equal(isBackgroundJobStep(step), true);
+  assert.equal(isBackgroundJobDetails({ job, steps: [step], error: job.detail, retryable: true }), true);
+  assert.equal(isBackgroundJobDetails({ job, steps: Array(101).fill(step), retryable: true }), false);
+  assert.equal(isBackgroundJobDetails({ job, steps: [step], retryable: true, extra: true }), false);
+  assert.equal(isBackgroundJobDetails({ job: { ...job, status: 'done' }, steps: [step], retryable: true }), false);
 });

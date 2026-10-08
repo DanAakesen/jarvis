@@ -1,6 +1,7 @@
 import { isWebResearchResult, type WebResearchResult, type WebResearchSource } from '@jarvis/contracts';
 import type { CodexToolName, FoundryClient } from '../foundry/client.js';
 import type { BackendModule } from '../modules.js';
+import { readSettings } from './settings.js';
 import { ToolFailure, ToolRefusal } from './tool-registry.js';
 
 const inputSchema = Object.freeze({
@@ -72,9 +73,15 @@ export async function runCodexToolResult<T>(
   timeoutMs: number,
   pollInterval: number,
   parse: (value: unknown) => T,
+  options: { reasoningEffort?: string } = {},
 ): Promise<T> {
   const name = tool === 'web_research' ? 'Web research' : 'HTML report generation';
-  const accepted = await client.startCodexTool(tool, query, model, { signal });
+  const accepted = await client.startCodexTool(tool, query, model, {
+    signal,
+    ...(options.reasoningEffort && options.reasoningEffort !== 'none'
+      ? { reasoning: options.reasoningEffort }
+      : {}),
+  });
   const deadline = Date.now() + timeoutMs;
   let terminal = false;
   try {
@@ -117,14 +124,21 @@ export function createWebResearchModule(
       inputSchema,
       sensitive: true,
       publicAllowedOnPhone: true,
-      execute: async (input, _request, signal) => {
+      execute: async (input, request, signal) => {
         if (!isObject(input) || typeof input.query !== 'string' || !input.query.trim() ||
             input.query.length > 2_000) {
           throw new ToolFailure('A valid web research query is required.');
         }
         try {
+          const selected = request.server?.settingsStore && request.server.modelCatalogue
+            ? (await readSettings(
+              request.server.settingsStore,
+              await request.server.modelCatalogue.read(),
+            )).roles.research
+            : undefined;
           return await runCodexToolResult(
-            clientFor(), 'web_research', input.query, model, signal, timeoutMs, pollInterval, resultFrom,
+            clientFor(), 'web_research', input.query, selected?.model ?? model, signal, timeoutMs, pollInterval,
+            resultFrom, { reasoningEffort: selected?.reasoningEffort ?? 'none' },
           );
         } catch (error) {
           if (error instanceof ToolFailure || error instanceof ToolRefusal) throw error;

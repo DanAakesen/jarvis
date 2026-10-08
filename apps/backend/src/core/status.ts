@@ -1,6 +1,7 @@
 import type { FastifyRequest } from 'fastify';
 import type { NowFeedSnapshot } from './now.js';
 import { ToolRefusal, type JarvisTool } from './tool-registry.js';
+import { summarizeSystemStatus } from '../system-status.js';
 
 const inputSchema = {
   type: 'object',
@@ -32,7 +33,7 @@ function validInput(input: unknown): boolean {
 
 export const getStatusSummaryTool: JarvisTool = {
   name: 'get_status_summary',
-  description: 'Get a concise summary of current task and activity counts from the Now feed.',
+  description: 'Get a concise summary of subsystem health and current task and activity counts.',
   inputSchema,
   reflexSafe: true,
   execute: async (input: unknown, request: FastifyRequest) => {
@@ -42,6 +43,10 @@ export const getStatusSummaryTool: JarvisTool = {
     }
     const store = request.server.nowFeedStore;
     if (!store) throw new ToolRefusal('The Now feed is unavailable.');
-    return { summary: summarizeNowFeed(await store.read()) };
+    const [feed, status] = await Promise.all([
+      store.read(),
+      request.server.systemStatusReader.read(),
+    ]);
+    return { summary: `${summarizeSystemStatus(status)} ${summarizeNowFeed(feed)}` };
   },
 };

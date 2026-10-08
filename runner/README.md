@@ -49,13 +49,13 @@ session as `agent_session_id` to resume, steer, or pause.
 
 | Operation | JSON body |
 | --- | --- |
-| Start or resume | `{"agent":"copilot","task":"...","task_id":"42","repository":"owner/name","defaultBranch":"main","branch":"jarvis/task-42","model":"gpt-5.4"}` (or `codex` with optional `"reasoning":"high"`) |
+| Start or resume | `{"agent":"copilot","task":"...","task_id":"42","repository":"owner/name","defaultBranch":"main","branch":"jarvis/task-42","model":"gpt-5.4","reasoning":"high"}` (model and reasoning are optional for either provider) |
 | Steer | `{"agent":"copilot","mode":"steer","message":"...","task_id":"42"}` |
 | Pause | `{"mode":"pause"}` |
 | Credential probe | `{"agent":"copilot","probe":"key-vault"}` |
 | Codex renewal | `{"agent":"codex","mode":"renew-codex","min_days_left":3}` |
-| Codex web research | `{"agent":"codex","mode":"codex-tool","tool":"web_research","query":"...","model":"gpt-5.5"}` |
-| Codex HTML report | `{"agent":"codex","mode":"codex-tool","tool":"html_report","query":"<bounded JSON report request>","model":"gpt-5.5"}` |
+| Codex web research | `{"agent":"codex","mode":"codex-tool","tool":"web_research","query":"...","model":"gpt-5.5","reasoning":"high"}` (`reasoning` optional) |
+| Codex HTML report | `{"agent":"codex","mode":"codex-tool","tool":"html_report","query":"<bounded JSON report request>","model":"gpt-5.5","reasoning":"high"}` (`reasoning` optional) |
 
 Start, steer and renewal return `invocation_id`, `session_id`, `status`,
 `agent`, and `mode`. Poll the invocation for bounded events, result, error, and
@@ -63,12 +63,14 @@ timestamps. Renewal results contain only expiry/status metadata; those
 allowlisted dates may persist with invocation status, never prompts, secret
 values, or general task results. Pause uses ACP cancellation; a later turn
 reloads the persisted ACP session.
-The backend passes the effective model selected from the task override or
-settings default; `default` or an omitted value leaves the provider default
-unchanged. P2-05 owns dispatch-time settings resolution. Copilot receives `--model` when specified. Codex uses ACP config
-options `model` and `reasoning_effort`; the runner verifies the selected value
-and persists it with session metadata so resumed/steered turns keep the task's
-original choice. Reasoning is accepted only for Codex.
+The backend passes the effective model and reasoning selected from the task
+override or settings default; `default` or an omitted value leaves the provider
+setting unchanged. Codex `none` is passed as an explicit effort, while Copilot
+`none` omits the CLI flag. The dispatcher owns settings resolution. Copilot
+receives `--model` and `--reasoning-effort` when specified. Codex uses ACP
+config options `model` and `reasoning_effort`; the runner validates supported
+reasoning values and persists the choices with session metadata so
+resumed/steered turns keep the task's original configuration.
 When configured with `JARVIS_BACKEND_URL`, real task and steer invocations must
 include the positive SQL task ID as `task_id`. The runner obtains a token for
 `JARVIS_API_SCOPE`, sends each event in order to `/factory/sandbox-events`, and

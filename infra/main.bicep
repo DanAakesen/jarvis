@@ -52,6 +52,8 @@ var costManagementReaderRoleId = '72fafb9e-0641-4937-9268-a91bfd8191a3'
 var backendAppScaleRoleId = '985158cb-2c3c-5b9b-bd65-897ed9be3e36'
 var foundryUserRoleId = '53ca6127-db72-4b80-b1b0-d745d6d5456d'
 var cognitiveServicesUserRoleId = 'a97b65f3-24c7-4388-baec-2e87135dc908'
+var cognitiveServicesContributorRoleId = '25fbc0a9-bd7c-42a3-aa1a-3b75d497ee68'
+var foundryDeploymentReaderRoleId = 'acdd72a7-3385-48ef-bd42-f606fba81ae7'
 var foundryAccountName = 'jarvis-${foundryNameTimestamp}-${suffix}'
 var backendAppName = 'ca-jarvis-backend-${suffix}'
 var deployBackendApp = !empty(backendImage)
@@ -329,6 +331,26 @@ resource backendFoundrySpeechUserAssignment 'Microsoft.Authorization/roleAssignm
   }
 }
 
+resource backendFoundryDeploymentReaderAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(foundryAccount.id, backendIdentity.id, foundryDeploymentReaderRoleId)
+  scope: foundryAccount
+  properties: {
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', foundryDeploymentReaderRoleId)
+    principalId: backendIdentity.properties.principalId
+    principalType: 'ServicePrincipal'
+  }
+}
+
+resource backendFoundryDeploymentContributorAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(foundryAccount.id, backendIdentity.id, cognitiveServicesContributorRoleId)
+  scope: foundryAccount
+  properties: {
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', cognitiveServicesContributorRoleId)
+    principalId: backendIdentity.properties.principalId
+    principalType: 'ServicePrincipal'
+  }
+}
+
 resource foundryProject 'Microsoft.CognitiveServices/accounts/projects@2025-04-01-preview' = {
   parent: foundryAccount
   name: 'jarvis-${foundryNameTimestamp}'
@@ -394,16 +416,35 @@ resource gptRealtime21Deployment 'Microsoft.CognitiveServices/accounts/deploymen
   }
 }
 
-resource memoryEmbeddingDeployment 'Microsoft.CognitiveServices/accounts/deployments@2024-10-01' = {
+resource gptRealtime21MiniDeployment 'Microsoft.CognitiveServices/accounts/deployments@2024-10-01' = {
   parent: foundryAccount
-  name: 'text-embedding-3-small'
+  name: 'gpt-realtime-2.1-mini'
   dependsOn: [
     gptRealtime21Deployment
   ]
   sku: {
     name: 'GlobalStandard'
-    // Memory capture and search embed in bursts (L91).
-    capacity: 20
+    capacity: 10
+  }
+  properties: {
+    model: {
+      format: 'OpenAI'
+      name: 'gpt-realtime-2.1-mini'
+      version: '2026-07-07'
+    }
+  }
+}
+
+resource memoryEmbeddingDeployment 'Microsoft.CognitiveServices/accounts/deployments@2024-10-01' = {
+  parent: foundryAccount
+  name: 'text-embedding-3-small'
+  dependsOn: [
+    gptRealtime21MiniDeployment
+  ]
+  sku: {
+    name: 'GlobalStandard'
+    // Memory capture, search and vault backfills embed in bursts (L91, L119); billing is per token.
+    capacity: 150
   }
   properties: {
     model: {
@@ -414,12 +455,31 @@ resource memoryEmbeddingDeployment 'Microsoft.CognitiveServices/accounts/deploym
   }
 }
 
+resource memoryEmbeddingLargeDeployment 'Microsoft.CognitiveServices/accounts/deployments@2024-10-01' = {
+  parent: foundryAccount
+  name: 'text-embedding-3-large'
+  dependsOn: [
+    memoryEmbeddingDeployment
+  ]
+  sku: {
+    name: 'GlobalStandard'
+    capacity: 150
+  }
+  properties: {
+    model: {
+      format: 'OpenAI'
+      name: 'text-embedding-3-large'
+      version: '1'
+    }
+  }
+}
+
 // Continuous screen and camera vision (Dan's choice, 6 October): cheapest capable vision model.
 resource gpt6LunaVisionDeployment 'Microsoft.CognitiveServices/accounts/deployments@2024-10-01' = {
   parent: foundryAccount
   name: 'gpt-6-luna'
   dependsOn: [
-    memoryEmbeddingDeployment
+    memoryEmbeddingLargeDeployment
   ]
   sku: {
     name: 'GlobalStandard'
@@ -646,6 +706,10 @@ resource backendApp 'Microsoft.App/containerApps@2024-03-01' = if (deployBackend
               value: 'https://${foundryAccount.name}.cognitiveservices.azure.com/api/projects/${foundryProject.name}'
             }
             {
+              name: 'FOUNDRY_ACCOUNT_RESOURCE_ID'
+              value: foundryAccount.id
+            }
+            {
               name: 'SQL_SERVER'
               value: sqlServer.properties.fullyQualifiedDomainName
             }
@@ -767,6 +831,8 @@ resource backendApp 'Microsoft.App/containerApps@2024-03-01' = if (deployBackend
     blobUserDelegatorAssignment
     taskEventsContainer
     backendFoundrySpeechUserAssignment
+    backendFoundryDeploymentReaderAssignment
+    backendFoundryDeploymentContributorAssignment
   ]
 }
 

@@ -52,6 +52,7 @@ async function appFor({
     activate: vi.fn(async () => true),
     finish: vi.fn(async () => {}),
     active: vi.fn(async () => []),
+    recent: vi.fn(async () => []),
   };
   const client = {
     answerCall,

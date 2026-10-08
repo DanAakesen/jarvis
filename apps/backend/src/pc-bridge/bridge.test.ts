@@ -7,6 +7,8 @@ import { loadConfig } from '../config.js';
 import { coreModule } from '../core/index.js';
 import { createLogger } from '../logging.js';
 import type { BackendModule } from '../modules.js';
+import { fallbackModelCatalogue, type ModelCatalogueReader } from '../core/model-catalog.js';
+import type { SettingsStore } from '../core/settings.js';
 import { createPcBridgeModule, PC_BRIDGE_SUBPROTOCOL } from './bridge.js';
 import type { PcActOptions, PcActPlanner, PcActVisionModel } from './pc-act.js';
 
@@ -39,6 +41,8 @@ function fixture(options: {
   onStatusChange?: (online: boolean) => void;
   pcActPlanner?: PcActPlanner;
   pcActVisionModel?: PcActVisionModel;
+  settingsStore?: SettingsStore;
+  modelCatalogue?: ModelCatalogueReader;
   onPcActStep?: PcActOptions['onStep'];
   runConfirmed?: <T>(summary: string, action: () => Promise<T>, signal: AbortSignal) => Promise<T>;
 } = {}) {
@@ -63,6 +67,8 @@ function fixture(options: {
     auth,
     modules: [coreModule, module],
     toolCallStore: { record },
+    ...(options.settingsStore ? { settingsStore: options.settingsStore } : {}),
+    ...(options.modelCatalogue ? { modelCatalogue: options.modelCatalogue } : {}),
   });
   apps.push(app);
   return { app, record, records };
@@ -89,7 +95,7 @@ async function connectBridge(url: string, token = bridgeToken): Promise<WebSocke
 
 async function callTool(
   app: ReturnType<typeof buildApp>,
-  tool: 'pc_open' | 'codex_prompt' | 'pc_close' | 'pc_media' | 'pc_active_window' | 'pc_browser_tabs' | 'pc_browser_snapshot' | 'pc_browser_act' | 'pc_act',
+  tool: 'pc_open' | 'codex_prompt' | 'pc_close' | 'pc_media' | 'pc_active_window' | 'pc_clipboard_read' | 'pc_clipboard_write' | 'pc_browser_tabs' | 'pc_browser_snapshot' | 'pc_browser_act' | 'pc_act',
   payload: Record<string, unknown>,
 ) {
   return app.inject({
@@ -101,6 +107,89 @@ async function callTool(
 }
 
 describe('authenticated PC bridge protocol', () => {
+  it('reads clipboard text only through a sensitive current-message tool and redacts secrets', async () => {
+    const { app, record, records } = fixture({ logLevel: 'info' });
+    const url = await listen(app);
+    const bridge = await connectBridge(url);
+    const withoutCurrentMessage = await app.inject({
+      method: 'POST',
+      url: '/tools/pc_clipboard_read',
+      headers: { authorization: ['Bearer', agentToken].join(' ') },
+      payload: {},
+    });
+    const clipboardText = [
+      ['pass', 'word=demo-password-value'].join(''),
+      'api_key="secret key"',
+      'key=demo-key-value',
+      ['Bearer', 'demo-token-value'].join(' '),
+      'sk-proj-12345678901234567890',
+      'ordinary clipboard text',
+    ].join('\n');
+    bridge.on('message', (data) => {
+      const command = JSON.parse(data.toString()) as Record<string, unknown>;
+      expect(command).toMatchObject({ command: 'clipboard_read', arguments: {} });
+      bridge.send(JSON.stringify({ id: command.id, type: 'result', result: { text: clipboardText } }));
+    });
+
+    const response = await callTool(app, 'pc_clipboard_read', {});
+
+    expect(withoutCurrentMessage.statusCode).toBe(400);
+    expect(response.json()).toMatchObject({
+      outcome: 'ok',
+      result: {
+        text: [
+          ['pass', 'word=[REDACTED]'].join(''),
+          'api_key=[REDACTED]',
+          'key=[REDACTED]',
+          '[REDACTED]',
+          '[REDACTED]',
+          'ordinary clipboard text',
+        ].join('\n'),
+      },
+    });
+    expect(app.jarvisTools.get('pc_clipboard_read')).toMatchObject({ sensitive: true });
+    expect(app.jarvisTools.get('pc_clipboard_read')?.reflexSafe).not.toBe(true);
+    expect(record).toHaveBeenCalledWith(expect.objectContaining({
+      tool: 'pc_clipboard_read',
+      arguments: { redacted: true },
+      result: { redacted: true },
+    }));
+    expect(records.join('')).not.toContain(clipboardText);
+    expect(record.mock.calls.map(([call]) => JSON.stringify(call)).join('')).not.toContain('demo-password-value');
+    expect(record.mock.calls.map(([call]) => JSON.stringify(call)).join('')).not.toContain('secret key');
+    expect(record.mock.calls.map(([call]) => JSON.stringify(call)).join('')).not.toContain('demo-key-value');
+    expect(record.mock.calls.map(([call]) => JSON.stringify(call)).join('')).not.toContain('demo-token-value');
+  });
+
+  it('writes only bounded clipboard text and does not echo the clipboard contents', async () => {
+    const { app, record } = fixture();
+    const url = await listen(app);
+    const bridge = await connectBridge(url);
+    const commands: Array<Record<string, unknown>> = [];
+    bridge.on('message', (data) => {
+      const command = JSON.parse(data.toString()) as Record<string, unknown>;
+      commands.push(command);
+      bridge.send(JSON.stringify({ id: command.id, type: 'result', result: { written: true } }));
+    });
+
+    const exactText = 'x'.repeat(20 * 1024);
+    const written = await callTool(app, 'pc_clipboard_write', { text: exactText });
+    const tooLarge = await callTool(app, 'pc_clipboard_write', { text: 'é'.repeat(10_241) });
+
+    expect(written.json()).toMatchObject({ outcome: 'ok', result: { written: true } });
+    expect(tooLarge.json()).toMatchObject({ outcome: 'refused' });
+    expect(commands).toHaveLength(1);
+    expect(commands[0]).toMatchObject({ command: 'clipboard_write', arguments: { text: exactText } });
+    expect(record.mock.calls.map(([call]) => call.arguments)).toEqual([
+      { redacted: true },
+      { redacted: true },
+    ]);
+    expect(record.mock.calls.map(([call]) => call.result)).toEqual([
+      { redacted: true },
+      { redacted: true },
+    ]);
+  });
+
   it('logs the outcome and monotonic round-trip time for every bridge command', async () => {
     vi.useFakeTimers({ toFake: ['performance'] });
     const { app, records } = fixture({ logLevel: 'info' });
@@ -677,16 +766,10 @@ describe('authenticated PC bridge protocol', () => {
         action: 'click',
         selector: '#delete',
       });
-      expect(malformed.json()).toMatchObject({ outcome: 'refused' });
-      expect(commands).toHaveLength(1);
-      expect(commands[0]!.arguments).toEqual({
-        tabId: 'tab_1',
-        snapshotId: '1730aa51-f380-4df9-a345-1feb862cb1c4',
-        elementIndex: 0,
-        action: 'click',
-        confirmed: false,
+      expect(malformed.json()).toMatchObject({
+        outcome: 'refused', result: { refused: expect.stringContaining("unexpected property 'selector'") },
       });
-      expect(JSON.stringify(commands[0])).not.toContain('#delete');
+      expect(commands).toHaveLength(0);
 
       const refused = await callTool(app, 'pc_browser_act', {
         tabId: 'tab_1',
@@ -698,8 +781,15 @@ describe('authenticated PC bridge protocol', () => {
         outcome: 'refused',
         result: { refused: 'Dan’s confirmation service is unavailable; the browser action was not performed.' },
       });
-      expect(commands).toHaveLength(2);
-      expect((commands[1]!.arguments as Record<string, unknown>).confirmed).toBe(false);
+      expect(commands).toHaveLength(1);
+      expect(commands[0]!.arguments).toEqual({
+        tabId: 'tab_1',
+        snapshotId: '1730aa51-f380-4df9-a345-1feb862cb1c4',
+        elementIndex: 0,
+        action: 'click',
+        confirmed: false,
+      });
+      expect(JSON.stringify(commands[0])).not.toContain('#delete');
     });
 
     it('returns safe refusals for stale or covered browser targets', async () => {
@@ -743,11 +833,11 @@ describe('authenticated PC bridge protocol', () => {
       result: { refused: 'Choose a folder under C:\\Repo using a relative path.' },
     });
     const invalidApp = await callTool(app, 'pc_open', { target: 'app', value: 'x'.repeat(129) });
-    expect(invalidApp.statusCode).toBe(400);
-    expect(invalidApp.json()).toMatchObject({ error: 'Invalid request' });
+    expect(invalidApp.statusCode).toBe(200);
+    expect(invalidApp.json()).toMatchObject({ outcome: 'refused', result: { refused: expect.stringContaining('Invalid arguments:') } });
     const invalidMedia = await callTool(app, 'pc_media', { action: 'execute' });
-    expect(invalidMedia.statusCode).toBe(400);
-    expect(invalidMedia.json()).toMatchObject({ error: 'Invalid request' });
+    expect(invalidMedia.statusCode).toBe(200);
+    expect(invalidMedia.json()).toMatchObject({ outcome: 'refused', result: { refused: expect.stringContaining('Invalid arguments:') } });
   });
 
   it('transfers a transient capture above the command limit and returns only redacted pc_act activity', async () => {
@@ -762,11 +852,29 @@ describe('authenticated PC bridge protocol', () => {
       name: 'Play',
       bounds: { x: 0.25, y: 0.25, width: 0.5, height: 0.5 },
     }]);
+    const fallback = fallbackModelCatalogue();
+    const modelCatalogue: ModelCatalogueReader = {
+      read: async () => ({
+        ...fallback,
+        deployments: fallback.deployments.map((deployment) => deployment.name === 'gpt-5.6-luna'
+          ? { ...deployment, capabilities: [...deployment.capabilities, 'image'] }
+          : deployment),
+      }),
+    };
+    const settingsStore: SettingsStore = {
+      read: async () => ({
+        'roles.vision.model': JSON.stringify('gpt-5.6-luna'),
+        'roles.vision.reasoning_effort': JSON.stringify('none'),
+      }),
+      write: async () => {},
+    };
     const steps: Parameters<NonNullable<PcActOptions['onStep']>>[0][] = [];
     const { app, record, records } = fixture({
       logLevel: 'info',
       pcActPlanner: planner,
       pcActVisionModel: { locateElements },
+      modelCatalogue,
+      settingsStore,
       onPcActStep: (activity) => { steps.push(activity); },
     });
     const url = await listen(app);
@@ -821,6 +929,9 @@ describe('authenticated PC bridge protocol', () => {
     ]);
     expect(JSON.stringify(commands)).not.toContain('image');
     expect(locateElements).toHaveBeenCalledOnce();
+    expect(locateElements).toHaveBeenCalledWith(
+      expect.objectContaining({ model: 'gpt-5.6-luna' }),
+    );
     expect(record).toHaveBeenCalledWith(expect.objectContaining({
       arguments: { redacted: true },
       result: { redacted: true },

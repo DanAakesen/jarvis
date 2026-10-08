@@ -171,14 +171,19 @@ export function createScreenFrameUsageStore(pool: sql.ConnectionPool): ScreenFra
       }
     },
 
-    async recordTokens({ sessionId, eventId, inputTokens, outputTokens, costDkk, at }) {
+    async recordTokens({
+      sessionId, eventId, inputTokens, outputTokens, costDkk, costUsd, costStatus, model, at,
+    }) {
       const transaction = new sql.Transaction(pool);
       try {
         await transaction.begin();
         const frameUsage = await transaction.request()
           .input('sessionId', sql.BigInt, BigInt(sessionId))
           .input('eventId', sql.NVarChar(300), `screen:${eventId}`)
-          .input('costDkk', sql.Decimal(12, 4), costDkk)
+          .input('costDkk', sql.Decimal(19, 8), costDkk)
+          .input('costUsd', sql.Decimal(19, 8), costUsd)
+          .input('costStatus', sql.NVarChar(16), costStatus)
+          .input('model', sql.NVarChar(128), model)
           .query(`DECLARE @frameAt datetime2(7), @lockResource nvarchar(255), @lock_result int;
             SELECT @frameAt = at FROM dbo.usage WITH (READCOMMITTEDLOCK)
             WHERE jarvis_session_id = @sessionId AND source = N'jarvis_model'
@@ -190,7 +195,9 @@ export function createScreenFrameUsageStore(pool: sql.ConnectionPool): ScreenFra
               @LockOwner = 'Transaction', @LockTimeout = 5000;
             IF @lock_result < 0 THROW 51000, 'Screen usage lock unavailable', 1;
             UPDATE dbo.usage
-            SET cost_dkk = COALESCE(@costDkk, cost_dkk)
+            SET cost_dkk = COALESCE(@costDkk, cost_dkk),
+              cost_usd = COALESCE(@costUsd, cost_usd), cost_status = @costStatus,
+              role = N'vision', model = @model
             WHERE source = N'jarvis_model' AND metric = N'screen_frames'
               AND source_event_id = @eventId AND jarvis_session_id = @sessionId;`);
         if (frameUsage.rowsAffected.at(-1) !== 1) throw new Error('Screen frame reservation was not found');
@@ -203,11 +210,14 @@ export function createScreenFrameUsageStore(pool: sql.ConnectionPool): ScreenFra
             .input('sessionId', sql.BigInt, BigInt(sessionId))
             .input('metric', sql.NVarChar(32), metric)
             .input('quantity', sql.Decimal(19, 6), quantity)
+            .input('role', sql.NVarChar(24), 'vision')
+            .input('model', sql.NVarChar(128), model)
+            .input('costStatus', sql.NVarChar(16), costStatus)
             .input('eventId', sql.NVarChar(300), `screen:${eventId}`)
             .input('at', sql.DateTime2, at)
             .query(`INSERT INTO dbo.usage
-              (jarvis_session_id, source, metric, quantity, source_event_id, at)
-              VALUES (@sessionId, N'jarvis_model', @metric, @quantity, @eventId, @at);`);
+              (jarvis_session_id, source, metric, quantity, cost_status, role, model, source_event_id, at)
+              VALUES (@sessionId, N'jarvis_model', @metric, @quantity, @costStatus, @role, @model, @eventId, @at);`);
         }
         await transaction.commit();
       } catch {

@@ -252,6 +252,68 @@ describe('task dispatcher', () => {
     await Promise.all([first.dispatcher.stop(), second.dispatcher.stop()]);
   });
 
+  it('prefers the Codex role reasoning setting while retaining legacy task fallbacks', async () => {
+    const unconfiguredTask = { ...task, modelOverride: null, reasoningOverride: null };
+    let claimed = false;
+    const store: DispatcherStore = {
+      ...idleStore(),
+      claimNext: vi.fn(async () => {
+        if (claimed) return { kind: 'idle' as const, nextAttemptAt: null };
+        claimed = true;
+        return { kind: 'claimed' as const, task: unconfiguredTask };
+      }),
+    };
+    const test = harness(store);
+    vi.mocked(test.settings.read).mockResolvedValue({
+      'roles.codex.model': '"default"',
+      'roles.codex.reasoning_effort': '"high"',
+      'codex.model': '"gpt-5.5"',
+      'codex.reasoning_effort': '"medium"',
+    });
+    test.dispatcher.start();
+
+    await vi.waitFor(() => expect(test.startTask).toHaveBeenCalledOnce());
+    expect(test.startTask).toHaveBeenCalledWith(expect.objectContaining({
+      agent: 'codex',
+      reasoning: 'high',
+    }));
+
+    await test.dispatcher.stop();
+  });
+
+  it('passes the selected Copilot model and reasoning effort to the runner', async () => {
+    const copilotTask: DispatchClaim = {
+      ...task,
+      agent: 'copilot',
+      modelOverride: null,
+      reasoningOverride: null,
+    };
+    let claimed = false;
+    const store: DispatcherStore = {
+      ...idleStore(),
+      claimNext: vi.fn(async () => {
+        if (claimed) return { kind: 'idle' as const, nextAttemptAt: null };
+        claimed = true;
+        return { kind: 'claimed' as const, task: copilotTask };
+      }),
+    };
+    const test = harness(store);
+    vi.mocked(test.settings.read).mockResolvedValue({
+      'roles.copilot.model': '"claude-sonnet-4.6"',
+      'roles.copilot.reasoning_effort': '"high"',
+    });
+    test.dispatcher.start();
+
+    await vi.waitFor(() => expect(test.startTask).toHaveBeenCalledOnce());
+    expect(test.startTask).toHaveBeenCalledWith(expect.objectContaining({
+      agent: 'copilot',
+      model: 'claude-sonnet-4.6',
+      reasoning: 'high',
+    }));
+
+    await test.dispatcher.stop();
+  });
+
   it('does not query the store again while idle and ignores unrelated events', async () => {
     const store = idleStore();
     const { dispatcher, events } = harness(store);

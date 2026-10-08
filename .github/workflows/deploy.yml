@@ -117,7 +117,7 @@ jobs:
           } >>"$GITHUB_ENV"
       - name: Build the backend image in ACR
         run: |
-          az acr build --registry "$REGISTRY" --image "jarvis-backend:$IMAGE_TAG" --file apps/backend/Dockerfile --platform linux/amd64 --subscription "$SUBSCRIPTION_ID" --only-show-errors .
+          az acr build --registry "$REGISTRY" --image "jarvis-backend:$IMAGE_TAG" --file apps/backend/Dockerfile --platform linux/amd64 --subscription "$SUBSCRIPTION_ID" --build-arg "JARVIS_DEPLOYED_COMMIT=$GITHUB_SHA" --only-show-errors .
           digest=$(az acr manifest show-metadata --registry "$REGISTRY" --name "jarvis-backend:$IMAGE_TAG" --subscription "$SUBSCRIPTION_ID" --query digest --output tsv --only-show-errors)
           [[ "$digest" == sha256:* ]] || { echo "::error::ACR image has no manifest digest"; exit 1; }
           echo "IMAGE=$REGISTRY_HOST/jarvis-backend@$digest" >>"$GITHUB_ENV"
@@ -367,7 +367,7 @@ jobs:
   smoke:
     name: Smoke checks
     needs: [plan, infra, backend, web, agent]
-    if: ${{ !cancelled() && needs.plan.result == 'success' && (needs.plan.outputs.infra == 'true' || needs.plan.outputs.backend == 'true' || needs.plan.outputs.agent == 'true') && needs.infra.result != 'failure' && needs.backend.result != 'failure' && needs.web.result != 'failure' && needs.agent.result != 'failure' }}
+    if: ${{ !cancelled() && needs.plan.result == 'success' && (needs.plan.outputs.infra == 'true' || needs.plan.outputs.backend == 'true' || needs.plan.outputs.web == 'true' || needs.plan.outputs.agent == 'true') && needs.infra.result != 'failure' && needs.backend.result != 'failure' && needs.web.result != 'failure' && needs.agent.result != 'failure' }}
     runs-on: ubuntu-latest
     timeout-minutes: 75
     permissions:
@@ -404,6 +404,44 @@ jobs:
       - name: Foundry administration and runtime hosts answer for the project
         if: needs.plan.outputs.infra == 'true'
         run: python .github/scripts/deploy_smoke.py --subscription "$SUBSCRIPTION_ID" --resource-group "$RESOURCE_GROUP" --outputs "$RUNNER_TEMP/infra-outputs.json" --principal "$(jq -er .deploy.servicePrincipalId infra/bootstrap.output.json)"
+      - name: Run backend smoke checks
+        run: |
+          set -euo pipefail
+          if ! token=$(az account get-access-token --resource https://management.azure.com/ --subscription "$SUBSCRIPTION_ID" --query accessToken --output tsv --only-show-errors 2>"$RUNNER_TEMP/status-smoke-token.err"); then
+            echo "::error::Could not obtain the deployment identity token for backend smoke checks."
+            exit 1
+          fi
+          [[ -n "$token" ]] || { echo "::error::The deployment identity returned no token."; exit 1; }
+          echo "::add-mask::$token"
+          response="$RUNNER_TEMP/status-smoke.json"
+          if ! curl --fail --silent --show-error --max-time 35 \
+            --oauth2-bearer "$token" \
+            "https://$BACKEND_FQDN/status/smoke" --output "$response"; then
+            unset token
+            echo "::error::The backend smoke endpoint did not return a successful response."
+            exit 1
+          fi
+          unset token
+          if ! jq -e '
+            .entries as $entries |
+            ($entries | type == "array" and length == 6) and
+            ([$entries[].id] | sort == ["foundry.embeddings", "github_app", "google", "pc_bridge", "research", "vault"]) and
+            all($entries[]; .status == "ok" or .status == "degraded" or .status == "down" or .status == "unknown")
+          ' "$response" >/dev/null; then
+            echo "::error::The backend returned an invalid smoke report."
+            exit 1
+          fi
+          {
+            echo "### Backend smoke checks"
+            echo
+            jq -r '.entries[] | "- `\(.id)`: **\(.status)**"' "$response"
+            echo
+            echo "A disconnected PC bridge is recorded but does not block deployment acceptance."
+          } >>"$GITHUB_STEP_SUMMARY"
+          if ! jq -e '[.entries[] | select(.id != "pc_bridge" and (.status == "down" or .status == "degraded"))] | length == 0' "$response" >/dev/null; then
+            echo "::error::A required backend smoke check is degraded or down."
+            exit 1
+          fi
       - name: Summary
         if: always()
         run: |

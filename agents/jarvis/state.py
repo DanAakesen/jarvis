@@ -95,6 +95,13 @@ class ModelSettings:
     mode: str = "present"
     changed_at: str | None = None
     mode_instructions: dict[str, str] = field(default_factory=dict)
+    jarvis_repository: str = "DanAakesen/jarvis"
+    projects: tuple[tuple[str, str, str], ...] = ()
+    tool_timeout_seconds: int = 30
+    long_tool_timeout_seconds: int = 320
+    backend_http_timeout_seconds: int = 10
+    research_timeout_seconds: int = 305
+    capability_instructions: str = ""
 
     @property
     def away_mode(self) -> bool:

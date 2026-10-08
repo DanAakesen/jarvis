@@ -46,7 +46,7 @@ describe('workspace command delivery', () => {
     const commands: WorkspaceCommand[] = [];
     const connection = broker.connect(ownerId, (event, data) => {
       if (event === 'workspace-command') {
-        const command = (data as { command: WorkspaceCommand }).command;
+        const command = data.command;
         commands.push(command);
         broker.acknowledge(ownerId, connection.sessionId, command.commandId, true);
       }
@@ -117,7 +117,7 @@ describe('workspace command delivery', () => {
     const tab = (name: string) => {
       const connection = broker.connect(ownerId, (event, data) => {
         if (event === 'workspace-command') {
-          deliveries.push({ tab: name, commandId: (data as { command: WorkspaceCommand }).command.commandId });
+          deliveries.push({ tab: name, commandId: data.command.commandId });
         }
         return true;
       });
@@ -156,7 +156,7 @@ describe('workspace command delivery', () => {
     const delivered: WorkspaceCommand[] = [];
     const connection = broker.connect(ownerId, (event, data) => {
       if (event === 'workspace-command') {
-        const command = (data as { command: WorkspaceCommand }).command;
+        const command = data.command;
         delivered.push(command);
         broker.acknowledge(ownerId, connection.sessionId, command.commandId, true);
       }
@@ -202,8 +202,12 @@ describe('workspace command delivery', () => {
       method: 'POST', url: '/tools/workspace_command', headers: agentHeaders,
       payload: { commandId: 'bad-operation', operation: 'execute' },
     });
-    expect(invalidGeometry.statusCode).toBe(400);
-    expect(invalidOperation.statusCode).toBe(400);
+    for (const invalid of [invalidGeometry, invalidOperation]) {
+      expect(invalid.statusCode).toBe(200);
+      expect(invalid.json()).toMatchObject({
+        outcome: 'refused', result: { refused: expect.stringContaining('Invalid arguments:') },
+      });
+    }
     expect(records).toHaveLength(1);
     expect(records[0]).toMatchObject({
       arguments: { redacted: true },
@@ -218,7 +222,7 @@ describe('workspace command delivery', () => {
     const deliveredPromise = new Promise<void>((resolve) => { onDelivery = resolve; });
     const connection = broker.connect(ownerId, (event, data) => {
       if (event === 'workspace-command') {
-        delivered = data as typeof delivered;
+        delivered = data;
         onDelivery();
       }
       return true;

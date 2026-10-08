@@ -6,7 +6,7 @@ describe('Foundry screen vision model', () => {
     const fetcher = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
       const request = JSON.parse(String(init?.body));
       expect(request).toMatchObject({
-        model: 'gpt-6-luna', max_completion_tokens: 500, reasoning_effort: 'none',
+        model: 'gpt-6-luna', max_completion_tokens: 500, reasoning_effort: 'high',
         response_format: { type: 'json_object' },
       });
       expect(request.messages[0].role).toBe('system');
@@ -24,7 +24,8 @@ describe('Foundry screen vision model', () => {
     });
     const model = createFoundryScreenVisionModel('https://test.services.ai.azure.com/api/projects/jarvis', async () => 'identity-token', fetcher);
     await model.describe({
-      image: Buffer.from([0xff, 0xd8, 0xff, 0xd9]), model: 'gpt-6-luna', signal: new AbortController().signal,
+      image: Buffer.from([0xff, 0xd8, 0xff, 0xd9]), model: 'gpt-6-luna',
+      reasoningEffort: 'high', signal: new AbortController().signal,
       watch: { source: 'camera', previousSummary: 'Sitting upright.', instructions: ['Tell me if my posture slips'],
         latestQuestion: null, recentComments: [] },
     });
@@ -72,7 +73,8 @@ describe('Foundry screen vision model', () => {
       description: 'A browser window with a chart.',
       inputTokens: 1136,
       outputTokens: 26,
-      costDkk: 0.0008,
+      costDkk: 0.00083289,
+      costUsd: 0.00012661,
     });
     expect(getToken).toHaveBeenCalledOnce();
     expect(fetcher).toHaveBeenCalledOnce();

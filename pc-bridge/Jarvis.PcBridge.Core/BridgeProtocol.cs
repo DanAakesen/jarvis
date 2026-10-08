@@ -19,7 +19,7 @@ public sealed record BridgeResponse(
 public static class BridgeProtocol
 {
     public const string Subprotocol = "jarvis.pc.v1";
-    public const int MaxMessageBytes = 64 * 1024;
+    public const int MaxMessageBytes = 128 * 1024;
     public const int MaxResponseBytes = 1_050_000;
 
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);

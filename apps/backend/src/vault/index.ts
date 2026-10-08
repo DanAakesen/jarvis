@@ -12,7 +12,12 @@ import {
   type VaultSearchHit,
 } from '../database/memory-store.js';
 import { isGeneratedView, type WorkspaceCommand } from '@jarvis/contracts';
-import type { MemoryEmbedder } from '../core/memory-embeddings.js';
+import { setTimeout as sleep } from 'node:timers/promises';
+import { defaultSettings, readSettings, type SettingsStore } from '../core/settings.js';
+import {
+  embeddingFailureStatus, MemoryEmbeddingHttpError, type MemoryEmbedder,
+} from '../core/memory-embeddings.js';
+import type { UsageStore } from '../core/usage.js';
 import { ToolFailure, ToolRefusal } from '../core/tool-registry.js';
 import type { BackendModule } from '../modules.js';
 import type { TeamsNotificationService } from '../teams/service.js';
@@ -37,6 +42,10 @@ const maxMarkdownFiles = 10_000;
 const maxRoutingBytes = 512 * 1024;
 const maxInstructionFiles = 32;
 const maxVaultChunks = 512;
+const maxBackfillEmbeddingsPerSync = 4_096;
+const maxMemoryBackfillEmbeddingsPerJob = 4_096;
+const maxThrottledEmbeddingAttempts = 4;
+const maxThrottleDelayMs = 15_000;
 const maxMemoryApiResults = 50;
 const maxMemoryApiOffset = 10_000;
 const maxMemoryApiHistory = 10;
@@ -44,7 +53,6 @@ const maxMemoryApiHistoryBytes = 512 * 1024;
 const maxGraphNodes = 2_000;
 const maxGraphEdges = 8_000;
 const maxLinksPerNote = 512;
-const similarityThreshold = 0.75;
 const credentialPattern = /\b(?:password|passphrase|secret|api[ -]?key|access[ -]?token|credential|private[ -]?key|seed[ -]?phrase|recovery[ -]?phrase)\b/iu;
 const sensitivePattern = /\b(?:bank(?:ing)?|bank account|credit card|debit card|account number|iban|routing number|swift code|health|medical|diagnosis|medication|symptom|patient|clinic|therapy|prescription|social security|ssn)\b/iu;
 const secretPattern = /-----BEGIN [A-Z ]*PRIVATE KEY-----|\b(?:gh[pousr]_[A-Za-z0-9_]{20,}|github_pat_[A-Za-z0-9_]{20,}|AKIA[0-9A-Z]{16}|xox[baprs]-[A-Za-z0-9-]{20,})\b|(?:password|client[_ -]?secret|api[_ -]?key|access[_ -]?token)\s*[:=]\s*["']?[^\s"']{8,}/iu;
@@ -60,8 +68,24 @@ export interface VaultLogFields {
   readonly folders?: readonly string[];
 }
 
+export interface MemoryEmbeddingLogFields {
+  readonly outcome: 'ok' | 'fallback' | 'cancelled';
+  readonly durationMs: number;
+  readonly inputTokens?: number;
+  readonly httpStatus?: number;
+}
+
 export interface VaultModule extends BackendModule {
   synchronize(signal: AbortSignal): Promise<{ readonly added: number; readonly changed: number; readonly removed: number }>;
+  reembed(
+    signal: AbortSignal,
+    progress: (step: number, detail: string) => Promise<void>,
+  ): Promise<{
+    readonly memories: number;
+    readonly memoryPending: boolean;
+    readonly vaultFiles: number;
+    readonly vaultPending: number;
+  }>;
 }
 
 interface MemoryApiItem {
@@ -365,6 +389,53 @@ function meanVectors(rows: VaultGraphData['embeddings']): Map<string, number[]> 
     [path, values.map((value) => value / count)]));
 }
 
+const stopWords = new Set(('the and for are but not you all any can had her was one our out has have this that with from they will ' +
+  'what when which their there been were into more than then them these those your about would could should also just ' +
+  'like some such only over very after before here where while each other most much many make made being does done ' +
+  'og det den der som til med for har ikke var jeg vil kan skal fra men eller hvis ved paa').split(' '));
+
+/** TF-IDF vectors of note text: the similarity fallback when the database stores no embeddings. */
+function textVectors(contents: NonNullable<VaultGraphData['contents']>): Map<string, Map<string, number>> {
+  const counts = new Map<string, Map<string, number>>();
+  for (const { path, content } of contents) {
+    const terms = counts.get(path) ?? new Map<string, number>();
+    const text = content.toLowerCase().replace(/\[\[[^\]]*\]\]|\]\([^)]*\)|https?:\/\/\S+/gu, ' ');
+    for (const word of text.match(/\p{L}[\p{L}\p{N}]{2,}/gu) ?? []) {
+      if (!stopWords.has(word)) terms.set(word, (terms.get(word) ?? 0) + 1);
+    }
+    counts.set(path, terms);
+  }
+  const documentFrequency = new Map<string, number>();
+  for (const terms of counts.values()) {
+    for (const term of terms.keys()) documentFrequency.set(term, (documentFrequency.get(term) ?? 0) + 1);
+  }
+  const notes = counts.size;
+  const vectors = new Map<string, Map<string, number>>();
+  for (const [path, terms] of counts) {
+    const weighted = new Map<string, number>();
+    let norm = 0;
+    for (const [term, count] of terms) {
+      const frequency = documentFrequency.get(term)!;
+      if (frequency < 2 || frequency > notes * 0.5) continue;
+      const weight = (1 + Math.log(count)) * Math.log(notes / frequency);
+      weighted.set(term, weight);
+      norm += weight * weight;
+    }
+    if (norm === 0) continue;
+    const length = Math.sqrt(norm);
+    for (const [term, weight] of weighted) weighted.set(term, weight / length);
+    vectors.set(path, weighted);
+  }
+  return vectors;
+}
+
+function sparseCosine(left: ReadonlyMap<string, number>, right: ReadonlyMap<string, number>): number {
+  const [small, large] = left.size <= right.size ? [left, right] : [right, left];
+  let dot = 0;
+  for (const [term, weight] of small) dot += weight * (large.get(term) ?? 0);
+  return dot;
+}
+
 function cosineSimilarity(left: readonly number[], right: readonly number[]): number | undefined {
   if (left.length === 0 || left.length !== right.length) return undefined;
   let dot = 0;
@@ -378,6 +449,7 @@ function cosineSimilarity(left: readonly number[], right: readonly number[]): nu
     rightNorm += b * b;
   }
   if (leftNorm === 0 || rightNorm === 0) return undefined;
+  if (!Number.isFinite(dot) || !Number.isFinite(leftNorm) || !Number.isFinite(rightNorm)) return undefined;
   return Math.max(-1, Math.min(1, dot / Math.sqrt(leftNorm * rightNorm)));
 }
 
@@ -400,7 +472,19 @@ export function createVaultModule(options: {
   readonly memoryStore: Pick<MemoryStore, 'getSourceMessage'>;
   readonly apiMemoryStore?: MemoryStore;
   readonly embedder?: MemoryEmbedder;
+  readonly getEmbedder?: () => Promise<MemoryEmbedder | undefined>;
+  readonly getEmbeddingModel?: () => Promise<string>;
+  readonly embeddingModel?: string;
+  readonly usageStore?: Pick<UsageStore, 'recordFoundryUsage'>;
+  readonly settingsStore?: SettingsStore;
+  readonly recordFolioGraph?: (
+    query: string,
+    highlight: readonly string[],
+    createdAt: string,
+  ) => Promise<unknown>;
+  readonly onUsageRecordFailure?: () => void;
   readonly log?: (event: 'vault.index' | 'vault.write', fields: VaultLogFields) => void;
+  readonly logEmbedding?: (fields: MemoryEmbeddingLogFields) => void;
 }): VaultModule {
   const log = options.log ?? (() => {});
   let routingRules: Promise<{
@@ -413,7 +497,26 @@ export function createVaultModule(options: {
   let lastVaultSyncAt: string | null = null;
   let lastIndexOutcome: VaultIndexOutcome = { outcome: 'pending', at: new Date().toISOString() };
   const pendingVaultDeletions = new Set<string>();
-  let graphCache: Promise<KnowledgeGraph> | undefined;
+  let graphCache: { readonly key: string; readonly value: Promise<KnowledgeGraph> } | undefined;
+
+  async function memorySettings() {
+    return options.settingsStore
+      ? (await readSettings(options.settingsStore)).memory
+      : defaultSettings.memory;
+  }
+
+  async function activeEmbedder(): Promise<MemoryEmbedder | undefined> {
+    return options.getEmbedder ? options.getEmbedder() : options.embedder;
+  }
+
+  async function activeEmbeddingModel(embedder?: MemoryEmbedder): Promise<string> {
+    const model = embedder?.model ?? await options.getEmbeddingModel?.() ??
+      options.embeddingModel ?? 'text-embedding-3-small';
+    if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u.test(model)) {
+      throw new Error('Embedding model setting is invalid');
+    }
+    return model;
+  }
 
   async function loadRoutingRules(signal: AbortSignal): Promise<{
     readonly text: string;
@@ -451,37 +554,94 @@ export function createVaultModule(options: {
     return routingRules;
   }
 
-  async function makeChunks(file: VaultFile, signal: AbortSignal): Promise<VaultIndexedChunk[]> {
+  // Background indexing waits out Foundry throttling instead of storing a null vector.
+  async function embedThrottled(embedder: MemoryEmbedder, text: string, signal: AbortSignal) {
+    for (let attempt = 1; ; attempt += 1) {
+      try {
+        return embedder.embedWithUsage
+          ? await embedder.embedWithUsage(text, signal)
+          : { embedding: await embedder.embed(text, signal) };
+      } catch (error) {
+        if (!(error instanceof MemoryEmbeddingHttpError) || error.status !== 429 ||
+            attempt >= maxThrottledEmbeddingAttempts) {
+          throw error;
+        }
+        const delay = Math.min(error.retryAfterMs ?? 2_000 * attempt, maxThrottleDelayMs);
+        await sleep(delay, undefined, { signal });
+      }
+    }
+  }
+
+  async function makeChunks(
+    file: VaultFile,
+    signal: AbortSignal,
+    embedder: MemoryEmbedder | undefined,
+    embeddingModel: string,
+  ): Promise<VaultIndexedChunk[]> {
     const sections = chunkMarkdown(file.content);
     if (sections.length > maxVaultChunks) throw new Error('Vault note has too many index chunks');
     const chunks: VaultIndexedChunk[] = [];
     for (const [index, section] of sections.entries()) {
-      const embedding = options.embedder
-        ? await options.embedder.embed(`${section.heading}\n${section.content}`, signal).catch((error: unknown) => {
+      let embedding: readonly number[] | null = null;
+      if (embedder) {
+        const startedAt = performance.now();
+        try {
+          const embedded = await embedThrottled(embedder, `${section.heading}\n${section.content}`, signal);
+          embedding = embedded.embedding;
+          options.logEmbedding?.({
+            outcome: 'ok',
+            durationMs: Math.max(0, performance.now() - startedAt),
+            ...(embedded.inputTokens !== undefined ? { inputTokens: embedded.inputTokens } : {}),
+          });
+          if (embedded.inputTokens !== undefined &&
+              options.usageStore?.recordFoundryUsage) {
+            try {
+              await options.usageStore.recordFoundryUsage({
+                role: 'embeddings',
+                model: embeddingModel,
+                inputTokens: embedded.inputTokens,
+                outputTokens: 0,
+                eventId: randomUUID(),
+              });
+            } catch {
+              options.onUsageRecordFailure?.();
+            }
+          }
+        } catch (error) {
+          options.logEmbedding?.({
+            outcome: signal.aborted ? 'cancelled' : 'fallback',
+            durationMs: Math.max(0, performance.now() - startedAt),
+            ...embeddingFailureStatus(error),
+          });
           if (signal.aborted) throw error;
-          return null;
-        })
-        : null;
-      chunks.push({ index, ...section, embedding });
+        }
+      }
+      chunks.push({ index, ...section, embedding, embeddingModel: embedding ? embeddingModel : null });
     }
     return chunks;
   }
 
   async function performSynchronization(signal: AbortSignal) {
+    const embedder = await activeEmbedder();
+    const embeddingModel = await activeEmbeddingModel(embedder);
     const tree = await options.client.tree(signal);
     const markdown = tree.filter(({ path }) => eligibleMarkdown(path));
     if (markdown.length > maxMarkdownFiles) throw new Error('Vault has too many Markdown notes to index');
-    const indexed = await options.indexStore.files(signal);
+    const indexed = await options.indexStore.files(embedder ? embeddingModel : null, signal);
     if (indexed.length > maxMarkdownFiles) throw new Error('Vault index exceeds the supported size');
-    const oldByPath = new Map(indexed.map((file) => [file.path, file.blobSha]));
+    const oldByPath = new Map(indexed.map((file) => [file.path, file]));
     const newPaths = new Set(markdown.map(({ path }) => path));
     const remove = indexed.filter(({ path }) => !newPaths.has(path)).map(({ path }) => path);
     let added = 0;
     let changed = 0;
+    let remainingBackfillEmbeddings = maxBackfillEmbeddingsPerSync;
     const touchedFolders = new Set<string>();
 
     for (const file of markdown) {
-      if (oldByPath.get(file.path) === file.sha) continue;
+      const previous = oldByPath.get(file.path);
+      const unchanged = previous?.blobSha === file.sha;
+      const backfill = unchanged && previous?.embeddingMissing === true;
+      if (unchanged && (!backfill || !embedder)) continue;
       let note: VaultFile | null;
       try {
         note = await options.client.read(file.path, signal);
@@ -498,7 +658,10 @@ export function createVaultModule(options: {
         remove.push(file.path);
         continue;
       }
-      const chunks = await makeChunks(note, signal);
+      const sectionCount = chunkMarkdown(note.content).length;
+      if (backfill && sectionCount > remainingBackfillEmbeddings) continue;
+      if (backfill) remainingBackfillEmbeddings -= sectionCount;
+      const chunks = await makeChunks(note, signal, embedder, embeddingModel);
       await options.indexStore.replaceFile(note.path, note.sha, chunks, extractLinkTargets(note.content), signal);
       if (oldByPath.has(note.path)) changed += 1;
       else added += 1;
@@ -540,13 +703,65 @@ export function createVaultModule(options: {
     return synchronization;
   }
 
-  async function buildKnowledgeGraph(signal: AbortSignal): Promise<KnowledgeGraph> {
+  async function reembed(
+    signal: AbortSignal,
+    progress: (step: number, detail: string) => Promise<void>,
+  ) {
+    const embedder = await activeEmbedder();
+    if (!embedder) throw new Error('Embedding provider is unavailable');
+    const embeddingModel = await activeEmbeddingModel(embedder);
+    let memories = 0;
+    let processed = 0;
+    let afterId = '0';
+    await progress(0, 'Checking saved memory embeddings');
+    while (options.apiMemoryStore && processed < maxMemoryBackfillEmbeddingsPerJob) {
+      const batch = await options.apiMemoryStore.embeddingsToBackfill(
+        embeddingModel, afterId, Math.min(100, maxMemoryBackfillEmbeddingsPerJob - processed), signal,
+      );
+      if (batch.length === 0) break;
+      for (const memory of batch) {
+        signal.throwIfAborted();
+        const result = await embedThrottled(embedder, memory.content, signal);
+        const updated = await options.apiMemoryStore.updateEmbedding(
+          memory.id, memory.revision, embeddingModel, result.embedding, signal,
+        );
+        afterId = memory.id;
+        if (updated) memories += 1;
+        processed += 1;
+        if (processed % 100 === 0) {
+          await progress(0, `Processed ${processed} saved memories`);
+        }
+        if (processed >= maxMemoryBackfillEmbeddingsPerJob) break;
+      }
+    }
+    const memoryPending = options.apiMemoryStore
+      ? (await options.apiMemoryStore.embeddingsToBackfill(embeddingModel, '0', 1, signal)).length > 0
+      : false;
+    await progress(1, memoryPending
+      ? `Updated ${memories} memories; more remain`
+      : `Updated ${memories} memories`);
+    await progress(1, 'Re-indexing vault in paced batches');
+    await synchronize(signal);
+    const vaultFiles = await options.indexStore.files(embeddingModel, signal);
+    const vaultPending = vaultFiles.filter(({ embeddingMissing }) => embeddingMissing).length;
+    await progress(2, vaultPending
+      ? `Vault backfill paced; ${vaultPending} notes remain`
+      : 'Vault backfill complete');
+    return { memories, memoryPending, vaultFiles: vaultFiles.length, vaultPending };
+  }
+
+  async function buildKnowledgeGraph(
+    signal: AbortSignal,
+    similarityThreshold: number,
+    graphTextSimilarityThreshold: number,
+  ): Promise<KnowledgeGraph> {
+    const embeddingModel = await activeEmbeddingModel(await activeEmbedder());
     const files = (await options.indexStore.graphFiles(signal))
       .filter(({ path }) => isRoutedNotePath(path))
       .slice(0, maxGraphNodes);
     const paths = files.map(({ path }) => path);
     const pathSet = new Set(paths);
-    const graphData = await options.indexStore.graphData(paths, signal);
+    const graphData = await options.indexStore.graphData(paths, embeddingModel, signal, similarityThreshold);
     const ids = new Map(paths.map((path) => [path, graphNodeId(path)]));
     const nodes: KnowledgeGraphNode[] = files.flatMap((file) => {
       const folder = safeFolder(file.path);
@@ -565,7 +780,9 @@ export function createVaultModule(options: {
     });
     const links: KnowledgeGraphEdge[] = [];
     const seenLinks = new Set<string>();
-    for (const link of graphData.links) {
+    const contentLinks = (graphData.contents ?? []).flatMap(({ path, content }) =>
+      extractLinkTargets(content).map((targetPath) => ({ sourcePath: path, targetPath })));
+    for (const link of [...graphData.links, ...contentLinks]) {
       if (!pathSet.has(link.sourcePath)) continue;
       const target = resolveLinkTarget(link.sourcePath, link.targetPath, pathSet);
       if (!target || target === link.sourcePath) continue;
@@ -578,18 +795,7 @@ export function createVaultModule(options: {
     }
     const vectors = meanVectors(graphData.embeddings);
     const similarities: KnowledgeGraphEdge[] = [];
-    if (graphData.similarities.length > 0) {
-      for (const edge of graphData.similarities) {
-        if (!pathSet.has(edge.sourcePath) || !pathSet.has(edge.targetPath) ||
-            edge.sourcePath === edge.targetPath || edge.score <= similarityThreshold) continue;
-        similarities.push({
-          source: ids.get(edge.sourcePath)!,
-          target: ids.get(edge.targetPath)!,
-          type: 'similar',
-          score: Math.max(-1, Math.min(1, edge.score)),
-        });
-      }
-    } else {
+    if (vectors.size > 0) {
       for (const source of paths) {
         const sourceVector = vectors.get(source);
         if (!sourceVector) continue;
@@ -610,6 +816,39 @@ export function createVaultModule(options: {
           });
         }
       }
+    } else if (graphData.similarities.length > 0) {
+      for (const edge of graphData.similarities) {
+        if (!pathSet.has(edge.sourcePath) || !pathSet.has(edge.targetPath) ||
+            edge.sourcePath === edge.targetPath || edge.score <= similarityThreshold) continue;
+        similarities.push({
+          source: ids.get(edge.sourcePath)!,
+          target: ids.get(edge.targetPath)!,
+          type: 'similar',
+          score: Math.max(-1, Math.min(1, edge.score)),
+        });
+      }
+    } else {
+      // No vector support and no stored embeddings: fall back to TF-IDF over the note text.
+      const textual = textVectors(graphData.contents ?? []);
+      for (const source of paths) {
+        const sourceVector = textual.get(source);
+        if (!sourceVector) continue;
+        const neighbours = paths.flatMap((target) => {
+          const targetVector = target === source ? undefined : textual.get(target);
+          if (!targetVector) return [];
+          const score = sparseCosine(sourceVector, targetVector);
+          return score > graphTextSimilarityThreshold ? [{ target, score }] : [];
+        }).sort((left, right) => right.score - left.score || left.target.localeCompare(right.target))
+          .slice(0, 3);
+        for (const neighbour of neighbours) {
+          similarities.push({
+            source: ids.get(source)!,
+            target: ids.get(neighbour.target)!,
+            type: 'similar',
+            score: Math.round(neighbour.score * 1000) / 1000,
+          });
+        }
+      }
     }
     const edges = [...links.slice(0, 2_000), ...similarities.slice(0, maxGraphEdges - 2_000)];
     const degree = new Map<string, number>();
@@ -625,19 +864,23 @@ export function createVaultModule(options: {
   }
 
   async function knowledgeGraph(signal: AbortSignal): Promise<KnowledgeGraph> {
-    if (graphCache) return graphCache;
+    const settings = await memorySettings();
+    const key = `${settings.similarityThreshold}:${settings.graphTextSimilarityThreshold}`;
+    if (graphCache?.key === key) return graphCache.value;
     if (synchronization) await synchronization;
     if (indexStatus !== 'ready') {
       throw new ToolFailure(appMissing
         ? 'The GitHub App is not installed on DanAakesen/vault with Contents read/write access.'
         : 'The vault index is not ready. Please try again after synchronization finishes.');
     }
-    const pending = buildKnowledgeGraph(signal);
-    graphCache = pending;
+    const pending = buildKnowledgeGraph(
+      signal, settings.similarityThreshold, settings.graphTextSimilarityThreshold,
+    );
+    graphCache = { key, value: pending };
     try {
       return await pending;
     } catch (error) {
-      if (graphCache === pending) graphCache = undefined;
+      if (graphCache?.value === pending) graphCache = undefined;
       throw error;
     }
   }
@@ -650,16 +893,18 @@ export function createVaultModule(options: {
         : 'The vault index is not ready. Please try again after synchronization finishes.');
     }
     let hits: VaultSearchHit[] = [];
-    if (options.indexStore.supportsVectorSearch() && options.embedder) {
+    const embedder = await activeEmbedder();
+    const embeddingModel = await activeEmbeddingModel(embedder);
+    if (options.indexStore.supportsVectorSearch() && embedder) {
       let embedding: readonly number[] | undefined;
       try {
-        embedding = await options.embedder.embed(query, signal);
+        embedding = await embedder.embed(query, signal);
       } catch (error) {
         if (signal.aborted) throw error;
       }
       if (embedding) {
         try {
-          hits = await options.indexStore.searchByVector(embedding, limit, signal);
+          hits = await options.indexStore.searchByVector(embedding, embeddingModel, limit, signal);
         } catch (error) {
           if (!(error instanceof VectorSearchUnavailableError)) {
             if (signal.aborted) throw error;
@@ -720,6 +965,23 @@ export function createVaultModule(options: {
     throw new Error('Vault write did not complete');
   }
 
+  async function deleteNote(path: string, expectedSha: string, signal: AbortSignal): Promise<string> {
+    const latest = await options.client.read(path, signal);
+    if (!latest) throw new ToolRefusal('The vault note no longer exists. Nothing was deleted.');
+    if (latest.sha !== expectedSha) throw new VaultWriteConflictError();
+    const commit = await options.client.delete(
+      path,
+      latest.sha,
+      'jarvis: forget vault note\n\nCo-authored-by: Jarvis',
+      signal,
+    );
+    await options.indexStore.deleteFiles([path], signal);
+    graphCache = undefined;
+    const folder = safeFolder(path);
+    log('vault.write', { outcome: 'ok', ...(folder ? { folder } : {}) });
+    return commit;
+  }
+
   const tools = [
     {
       name: 'vault_search',
@@ -742,7 +1004,8 @@ export function createVaultModule(options: {
           throw new ToolRefusal('Vault search query or result count is invalid.');
         }
         const query = value.query.trim();
-        const limit = value.k === undefined ? 5 : Number(value.k);
+        const topK = (await memorySettings()).searchTopK;
+        const limit = Math.min(value.k === undefined ? topK : Number(value.k), topK);
         const hits = await searchVault(query, limit, signal);
         return {
           results: hits.map((hit) => ({
@@ -775,7 +1038,7 @@ export function createVaultModule(options: {
         }
         const query = value.query.trim();
         const graph = await knowledgeGraph(signal);
-        const hits = await searchVault(query, maxSearchResults, signal);
+        const hits = await searchVault(query, (await memorySettings()).searchTopK, signal);
         const byPath = new Map(graph.nodes.map((node) => [node.path, node]));
         const highlight = [...new Set(hits.flatMap((hit) => {
             const node = byPath.get(hit.path);
@@ -803,6 +1066,7 @@ export function createVaultModule(options: {
           operation: 'focus',
           viewId: 'knowledge-graph',
         }, signal);
+        await options.recordFolioGraph?.(query, highlight, new Date().toISOString());
         const summary = hits.length > 0
           ? `Found ${hits.length} vault match${hits.length === 1 ? '' : 'es'}; top hit: ${hits[0]!.path} — ${snippet(hits[0]!.content)}`
           : `No vault notes matched “${query}”.`;
@@ -842,7 +1106,7 @@ export function createVaultModule(options: {
     },
     {
       name: 'vault_write',
-      description: 'Create, append to, or update one vault Markdown note. Read and follow AGENTS.md, .github/agent-state/routing.md and relevant .github/instructions/*.instructions.md. Use People/, Work/, Personal/ or General/. Never store secrets or credentials. The write is committed to master.',
+      description: 'Create, append to, or update one vault Markdown note. Set automaticCapture true only for proactive memory capture and false for Dan-requested writes. Read and follow AGENTS.md, .github/agent-state/routing.md and relevant .github/instructions/*.instructions.md. Use People/, Work/, Personal/ or General/. Never store secrets or credentials. The write is committed to master.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -850,15 +1114,20 @@ export function createVaultModule(options: {
           content: { type: 'string', minLength: 1, maxLength: MAX_VAULT_FILE_BYTES },
           append: { type: 'string', minLength: 1, maxLength: MAX_VAULT_FILE_BYTES },
           reason: { type: 'string', minLength: 1, maxLength: maxReasonLength },
+          automaticCapture: { type: 'boolean' },
         },
-        required: ['path', 'reason'],
+        required: ['path', 'reason', 'automaticCapture'],
         additionalProperties: false,
       },
       sensitive: true,
       execute: async (value: unknown, request: FastifyRequest, signal: AbortSignal) => {
         if (!isRecord(value) || Object.keys(value).some((key) =>
-          !['path', 'content', 'append', 'reason'].includes(key))) {
+          !['path', 'content', 'append', 'reason', 'automaticCapture'].includes(key)) ||
+            typeof value.automaticCapture !== 'boolean') {
           throw new ToolRefusal('The vault write request is invalid. Nothing was written.');
+        }
+        if (value.automaticCapture && !(await memorySettings()).automaticCapture) {
+          throw new ToolRefusal('Automatic memory capture is turned off. Nothing was written.');
         }
         const path = validatePath(value.path);
         const folder = safeFolder(path);
@@ -907,12 +1176,94 @@ export function createVaultModule(options: {
         return { ...result, url, confirmation };
       },
     },
+    {
+      name: 'vault_delete',
+      description: 'Permanently delete one Markdown note from Dan’s GitHub vault. Use only when Dan explicitly asks to delete it; the exact path is shown in a Now confirmation before the commit.',
+      inputSchema: {
+        type: 'object',
+        properties: { path: { type: 'string', minLength: 1, maxLength: maxPathLength } },
+        required: ['path'],
+        additionalProperties: false,
+      },
+      sensitive: true,
+      execute: async (value: unknown, request: FastifyRequest, signal: AbortSignal) => {
+        if (!request.principal && !request.agentPrincipal) {
+          throw new ToolRefusal('Vault access is not authorized.');
+        }
+        if (!isRecord(value) || Object.keys(value).some((key) => key !== 'path')) {
+          throw new ToolRefusal('The vault deletion request is invalid.');
+        }
+        const path = validatePath(value.path);
+        if (!isRoutedNotePath(path)) {
+          throw new ToolRefusal('Use a Markdown path in People/, Work/, Personal/ or General/.');
+        }
+        const service: TeamsNotificationService | null = request.server.teamsNotifications;
+        if (!service) {
+          throw new ToolRefusal('Dan’s Now approval service is unavailable; the note was not deleted.');
+        }
+        try {
+          if (request.server.awayModeStore &&
+              (await request.server.awayModeStore.read()).mode !== 'present') {
+            throw new ToolRefusal('Vault deletion requires Dan’s browser confirmation while present.');
+          }
+        } catch (error) {
+          if (error instanceof ToolRefusal) throw error;
+          throw new ToolRefusal('Dan’s Now approval service is unavailable; the note was not deleted.');
+        }
+        if (pendingVaultDeletions.has(path)) {
+          throw new ToolRefusal('A deletion for this vault note is already awaiting approval.');
+        }
+        pendingVaultDeletions.add(path);
+        const operationSignal = AbortSignal.any([signal, AbortSignal.timeout(6 * 60_000)]);
+        const folder = safeFolder(path);
+        try {
+          let note: VaultFile | null;
+          try {
+            note = await options.client.read(path, operationSignal);
+          } catch (error) {
+            if (error instanceof VaultAppNotInstalledError) {
+              throw new ToolFailure('The GitHub App is not installed on DanAakesen/vault with Contents read/write access.');
+            }
+            throw new ToolFailure('Vault deletion is temporarily unavailable.');
+          }
+          if (!note) throw new ToolRefusal('That vault note does not exist.');
+          const commit = await service.runConfirmed(
+            'delete',
+            `Permanently delete vault note ${path}.`,
+            () => deleteNote(path, note!.sha, operationSignal),
+            operationSignal,
+          );
+          const url = commitUrl(commit);
+          return {
+            path,
+            commit,
+            url,
+            confirmation: `Deleted vault note: ${path} — ${url}`,
+          };
+        } catch (error) {
+          if (signal.aborted) signal.throwIfAborted();
+          const outcome = error instanceof ToolRefusal ? 'refused' : 'error';
+          log('vault.write', { outcome, ...(folder ? { folder } : {}) });
+          if (error instanceof ToolRefusal || error instanceof ToolFailure) throw error;
+          if (error instanceof VaultAppNotInstalledError) {
+            throw new ToolFailure('The GitHub App is not installed on DanAakesen/vault with Contents read/write access.');
+          }
+          if (error instanceof VaultWriteConflictError) {
+            throw new ToolFailure('The note changed while approval was pending. Nothing was deleted; retry the request.');
+          }
+          throw new ToolFailure('Vault deletion failed. The note was not reported as deleted.');
+        } finally {
+          pendingVaultDeletions.delete(path);
+        }
+      },
+    },
   ] as const;
 
   return {
     id: 'vault',
     tools,
     synchronize,
+    reembed,
     registerRoutes: async (app) => {
       const ownerOnly = (request: FastifyRequest, reply: import('fastify').FastifyReply): boolean => {
         if (!request.principal || request.principal.objectId.toLowerCase() !== app.ownerObjectId.toLowerCase()) {
@@ -1034,7 +1385,8 @@ export function createVaultModule(options: {
         try {
           const graph = await knowledgeGraph(signal);
           const nodeByPath = new Map(graph.nodes.map((node) => [node.path, node]));
-          const ranked = await searchVault(request.query.q.trim(), maxSearchResults, signal);
+          const topK = (await memorySettings()).searchTopK;
+          const ranked = await searchVault(request.query.q.trim(), topK, signal);
           const seen = new Set<string>();
           const hits = ranked.flatMap((hit, index) => {
             const node = nodeByPath.get(hit.path);
@@ -1044,7 +1396,7 @@ export function createVaultModule(options: {
               ? Math.max(-1, Math.min(1, hit.score!))
               : Math.max(0, 1 - index / maxSearchResults);
             return [{ nodeId: node.id, score, snippet: snippet(hit.content) }];
-          }).slice(0, maxSearchResults);
+          }).slice(0, topK);
           return { hits };
         } catch (error) {
           if (error instanceof ToolFailure) return reply.code(503).send({ error: error.message });
@@ -1055,7 +1407,9 @@ export function createVaultModule(options: {
       app.get('/memory/status', async (request, reply) => {
         if (!ownerOnly(request, reply) || !apiStore(reply)) return;
         const counts: Record<string, number> = Object.fromEntries([...folderNames].map((folder) => [folder, 0]));
-        for (const file of await options.indexStore.files(AbortSignal.timeout(10_000))) {
+        for (const file of await options.indexStore.files(
+          await activeEmbeddingModel(await activeEmbedder()), AbortSignal.timeout(10_000),
+        )) {
           const folder = isRoutedNotePath(file.path) ? safeFolder(file.path) : undefined;
           if (folder) counts[folder] = (counts[folder] ?? 0) + 1;
         }
@@ -1087,17 +1441,19 @@ export function createVaultModule(options: {
           const terms = memorySearchTerms(query);
           if (terms.length > 0) {
             let embedding: readonly number[] | undefined;
-            if (options.embedder &&
+            const embedder = await activeEmbedder();
+            const embeddingModel = await activeEmbeddingModel(embedder);
+            if (embedder &&
                 (store.supportsVectorSearch() || options.indexStore.supportsVectorSearch())) {
               try {
-                embedding = await options.embedder.embed(query, signal);
+                embedding = await embedder.embed(query, signal);
               } catch (error) {
                 if (signal.aborted) throw error;
               }
             }
             if (embedding) {
               try {
-                memories = await store.searchByVector(embedding, fetchLimit, signal);
+                memories = await store.searchByVector(embedding, embeddingModel, fetchLimit, signal);
                 if (memories.length > 0) searchMethod = 'vector';
               } catch (error) {
                 if (!(error instanceof VectorSearchUnavailableError)) throw error;
@@ -1113,7 +1469,7 @@ export function createVaultModule(options: {
             }
             if (embedding && options.indexStore.supportsVectorSearch()) {
               try {
-                vaultHits = await options.indexStore.searchByVector(embedding, fetchLimit, signal);
+                vaultHits = await options.indexStore.searchByVector(embedding, embeddingModel, fetchLimit, signal);
               } catch (error) {
                 if (!(error instanceof VectorSearchUnavailableError)) throw error;
               }
@@ -1125,7 +1481,9 @@ export function createVaultModule(options: {
         } else {
           const page = await store.list(fetchLimit, signal);
           memories = page.memories;
-          const noteFiles = await options.indexStore.files(signal);
+          const noteFiles = await options.indexStore.files(
+            await activeEmbeddingModel(await activeEmbedder()), signal,
+          );
           const notes = noteFiles.filter(({ path }) => isRoutedNotePath(path) &&
             (folder === undefined || safeFolder(path) === folder));
           const eligibleMemories = folder === undefined || folder === 'General' ? memories : [];
@@ -1262,8 +1620,10 @@ export function createVaultModule(options: {
           const versions = await options.apiMemoryStore!.history(id, 1, signal);
           const current = versions[0];
           if (!current) return reply.code(404).send({ error: 'Memory not found' });
-          const embedding = options.embedder && options.apiMemoryStore!.supportsVectorSearch()
-            ? await options.embedder.embed(text, signal).catch((error: unknown) => {
+          const embedder = await activeEmbedder();
+          const embeddingModel = await activeEmbeddingModel(embedder);
+          const embedding = embedder && options.apiMemoryStore!.supportsVectorSearch()
+            ? await embedder.embed(text, signal).catch((error: unknown) => {
               if (signal.aborted) throw error;
               return null;
             })
@@ -1274,6 +1634,7 @@ export function createVaultModule(options: {
             content: text,
             sourceMessageId: current.sourceMessageId,
             embedding,
+            embeddingModel: embedding ? embeddingModel : null,
           }, signal);
           return { item: memoryApiItem(corrected.memory), commitUrl: null };
         }
@@ -1332,22 +1693,7 @@ export function createVaultModule(options: {
         }
         pendingVaultDeletions.add(path);
         void service.runConfirmed('delete', `Permanently delete vault note ${path}.`, async () => {
-          const latest = await options.client.read(path, AbortSignal.timeout(15_000));
-          if (!latest) return;
-          if (latest.sha !== note.sha) throw new VaultWriteConflictError();
-          const commit = await options.client.delete(
-            path,
-            latest.sha,
-            'jarvis: forget vault note',
-            AbortSignal.timeout(15_000),
-          );
-          await options.indexStore.deleteFiles([path], AbortSignal.timeout(10_000));
-          const folder = safeFolder(path);
-          log('vault.write', {
-            outcome: 'ok',
-            ...(folder ? { folder } : {}),
-          });
-          return commit;
+          return deleteNote(path, note.sha, AbortSignal.timeout(30_000));
         }, AbortSignal.timeout(6 * 60_000)).catch(() => {
           app.log.warn('memory.vault_forget_failed');
         }).finally(() => { pendingVaultDeletions.delete(path); });

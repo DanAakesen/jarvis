@@ -1,9 +1,12 @@
+using System.Text;
 using System.Text.Json;
 
 namespace Jarvis.PcBridge.Core;
 
 public static class CommandPolicy
 {
+    public const int MaxClipboardTextBytes = 20 * 1024;
+
     public static bool IsValid(string command, JsonElement arguments)
     {
         if (arguments.ValueKind != JsonValueKind.Object) return false;
@@ -52,13 +55,23 @@ public static class CommandPolicy
             "window_capture" => !arguments.EnumerateObject().Any(),
             "click_point" => IsPointAction(arguments, "click"),
             "scroll_point" => IsPointAction(arguments, "scroll"),
+            "clipboard_read" => !arguments.EnumerateObject().Any(),
+            "clipboard_write" => HasOnly(arguments, "text") &&
+                arguments.TryGetProperty("text", out var clipboardText) &&
+                clipboardText.ValueKind == JsonValueKind.String &&
+                IsValidClipboardText(clipboardText.GetString()),
             _ => false,
         };
     }
 
     public static bool IsControlAction(string command) => command is
         "open_url" or "open_app" or "close_app" or "open_folder" or "open_file" or "focus_window" or "uia_act" or
-        "browser_act" or "media" or "window_capture" or "click_point" or "scroll_point";
+        "browser_act" or "media" or "window_capture" or "click_point" or "scroll_point" or "clipboard_write";
+
+    public static bool IsValidClipboardText(string? value) =>
+        value is not null &&
+        !value.Contains('\0') &&
+        Encoding.UTF8.GetByteCount(value) <= MaxClipboardTextBytes;
 
     private static bool IsPointAction(JsonElement arguments, string action)
     {

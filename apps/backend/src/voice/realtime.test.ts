@@ -3,13 +3,14 @@ import { describe, expect, it, vi } from 'vitest';
 import { ToolRefusal } from '../core/tool-registry.js';
 import type { RegisteredTool, ToolRegistry } from '../core/tool-registry.js';
 import { defaultAwayModeState } from '../core/away-mode.js';
+import { capabilityInstructions } from '../core/capability-instructions.js';
+import { defaultSettings } from '../core/settings.js';
 import {
   createEnglishSessionUpdate,
   createRealtimeSessionUpdate,
   DANISH_REALTIME_VOICE,
   executeRealtimeToolCall,
   toModelToolSchema,
-  ENGLISH_REALTIME_INSTRUCTIONS,
   ENGLISH_REALTIME_VOICE,
   type RealtimeFunctionCall,
 } from './realtime.js';
@@ -56,10 +57,112 @@ describe('English realtime session', () => {
       description: 'Echo a string.',
       parameters: tool.inputSchema,
     }]);
-    expect(ENGLISH_REALTIME_INSTRUCTIONS).toContain('use vault_search or vault_read');
-    expect(ENGLISH_REALTIME_INSTRUCTIONS).toContain('use show_knowledge');
-    expect(ENGLISH_REALTIME_INSTRUCTIONS).toContain('use vault_write');
-    expect(ENGLISH_REALTIME_INSTRUCTIONS).toContain('Never save secrets or credentials');
+    expect(session.instructions).toContain('use vault_search or vault_read');
+    expect(session.instructions).toContain('Use show_knowledge');
+    expect(session.instructions).toContain('using vault_write');
+    expect(session.instructions).toContain('vault_delete');
+    expect(session.instructions).toContain('Now approval naming the exact path');
+    expect(session.instructions).toContain('Never save secrets or credentials');
+    const capabilities = capabilityInstructions(defaultSettings.memory);
+    for (const instruction of [
+      'update_project',
+      'confirm_project_archive',
+      'later message from Dan',
+      'retry_task',
+      'list_releases',
+      'get_release',
+      'get_deployment_status',
+      'get_job',
+      'retry_job',
+      'get_usage',
+      'automaticCapture true only',
+    ]) {
+      expect(capabilities).toContain(instruction);
+    }
+    expect(session.instructions).toContain(capabilities);
+  });
+
+  it('uses the transcription role value in the session update', () => {
+    const session = createRealtimeSessionUpdate(
+      registry, undefined, defaultAwayModeState, 'en', [], 'mai-transcribe',
+    ).session;
+    expect(session.input_audio_transcription).toEqual({ model: 'mai-transcribe' });
+  });
+
+  it('includes the persisted automatic-capture policy in voice instructions', () => {
+    const memory = { ...defaultSettings.memory, automaticCapture: false };
+    const session = createRealtimeSessionUpdate(
+      registry,
+      undefined,
+      defaultAwayModeState,
+      'en',
+      [],
+      undefined,
+      undefined,
+      memory,
+    ).session;
+    const danish = createRealtimeSessionUpdate(
+      registry,
+      undefined,
+      defaultAwayModeState,
+      'da',
+      [],
+      undefined,
+      undefined,
+      memory,
+    ).session;
+
+    expect(session.instructions).toContain('Do not proactively save memories');
+    expect(danish.instructions).toContain('Do not proactively save memories');
+  });
+
+  it('keeps default VAD behavior and bounds spoken replies', () => {
+    const english = createEnglishSessionUpdate(registry).session;
+    const danish = createRealtimeSessionUpdate(registry, undefined, defaultAwayModeState, 'da').session;
+
+    expect(english.turn_detection).toMatchObject({
+      type: 'azure_semantic_vad_en',
+      threshold: 0.6,
+      prefix_padding_ms: 300,
+      silence_duration_ms: 500,
+      interrupt_response: true,
+    });
+    expect(danish.turn_detection).toMatchObject({
+      type: 'server_vad',
+      threshold: 0.7,
+      prefix_padding_ms: 300,
+      silence_duration_ms: 600,
+      interrupt_response: true,
+    });
+    expect(english.max_response_output_tokens).toBe(4_096);
+    expect(danish.max_response_output_tokens).toBe(4_096);
+  });
+
+  it('applies bounded voice tuning to server VAD, barge-in, and spoken reply length', () => {
+    const session = createRealtimeSessionUpdate(
+      registry,
+      undefined,
+      defaultAwayModeState,
+      'da',
+      [],
+      undefined,
+      {
+        serverVadThreshold: 0.9,
+        prefixPaddingMs: 800,
+        silenceDurationMs: 1_200,
+        bargeInEnabled: false,
+        maxSpokenReplyTokens: 256,
+      },
+    ).session;
+
+    expect(session.turn_detection).toMatchObject({
+      type: 'server_vad',
+      threshold: 0.9,
+      prefix_padding_ms: 800,
+      silence_duration_ms: 1_200,
+      interrupt_response: false,
+    });
+    expect(session.max_response_output_tokens).toBe(256);
   });
 
   it('removes untyped schema combinators that Voice Live rejects, keeping typed unions', () => {
@@ -117,19 +220,18 @@ describe('English realtime session', () => {
     const danish = createRealtimeSessionUpdate(registry, undefined, false, 'da').session.instructions;
 
     expect(english).toContain('use the research tool');
-    expect(english).toContain('one or two spoken sentences');
+    expect(english).toContain('say research has started');
     expect(english).toContain('untrusted evidence');
-    expect(danish).toContain('research-værktøjet');
-    expect(danish).toContain('én eller to talte sætninger');
-    expect(danish).toContain('upålidelige data');
-    expect(danish).not.toContain('- For research requests');
+    expect(danish).toContain(capabilityInstructions(defaultSettings.memory));
+    expect(english).toContain(capabilityInstructions(defaultSettings.memory));
   });
 
   it('explains installed-app, Chrome-only website and media controls in voice instructions', () => {
-    expect(ENGLISH_REALTIME_INSTRUCTIONS).toContain('open an installed Windows app by name');
-    expect(ENGLISH_REALTIME_INSTRUCTIONS).toContain('they always open');
-    expect(ENGLISH_REALTIME_INSTRUCTIONS).toContain('never launch Microsoft Edge');
-    expect(ENGLISH_REALTIME_INSTRUCTIONS).toContain('Use pc_media');
+    const instructions = createEnglishSessionUpdate(registry).session.instructions;
+    expect(instructions).toContain('open an installed Windows app');
+    expect(instructions).toContain('They open in Chrome');
+    expect(instructions).toContain('never launch Microsoft Edge');
+    expect(instructions).toContain('Use pc_media');
   });
 
   it('applies style preferences without replacing identity or truthful action rules', () => {
@@ -168,20 +270,22 @@ describe('English realtime session', () => {
   });
 
   it.each([
-    ['invalid JSON', call({ arguments: '{' }), true],
-    ['invalid schema', call({ arguments: '{"text":"hello"}' }), false],
-    ['unregistered tool', call({ name: 'missing' }), true],
-  ])('does not execute a tool with %s', async (_label, functionCall, valid) => {
-    const request = { validateInput: vi.fn(() => valid) } as unknown as FastifyRequest;
+    ['invalid JSON', call({ arguments: '{' }), true, 'Invalid arguments: expected a JSON object. Allowed: text. Retry with arguments matching the tool schema.'],
+    ['invalid schema', call({ arguments: '{"text":"hello"}' }), false, 'Invalid arguments: input does not match the tool schema. Allowed: text. Retry with arguments matching the tool schema.'],
+    ['unregistered tool', call({ name: 'missing' }), true, undefined],
+  ])('does not execute a tool with %s', async (_label, functionCall, valid, refused) => {
+    const request = {
+      validateInput: vi.fn(() => valid), getValidationFunction: vi.fn(() => undefined), log: { info: vi.fn() },
+    } as unknown as FastifyRequest;
     const execute = vi.mocked(tool.execute);
     execute.mockClear();
 
     await expect(executeRealtimeToolCall(functionCall, registry, request, new AbortController().signal))
       .resolves.toBe(JSON.stringify({
         tool: functionCall.name,
-        outcome: 'error',
-        result: { error: 'Tool execution failed' },
-        confirmation: `Not done: ${functionCall.name} failed.`,
+        outcome: refused ? 'refused' : 'error',
+        result: refused ? { refused } : { error: 'Tool execution failed' },
+        confirmation: refused ? `Not done: ${functionCall.name} was refused. ${refused}` : `Not done: ${functionCall.name} failed.`,
       }));
     expect(execute).not.toHaveBeenCalled();
   });

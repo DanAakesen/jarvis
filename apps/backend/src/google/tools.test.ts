@@ -398,6 +398,154 @@ describe('Google Calendar and Gmail tools', () => {
     });
   });
 
+  it('updates selected calendar event fields only after confirmation and redacts them', async () => {
+    const request = vi.fn(async (...args: [GoogleApi, string, GoogleApiRequest]) =>
+      args[2].method === undefined
+        ? {
+            id: 'event-1',
+            summary: 'Planning',
+            start: { dateTime: '2026-10-04T13:00:00Z' },
+            end: { dateTime: '2026-10-04T14:00:00Z' },
+          }
+        : {});
+    const { app, records, setLatest } = appFor(request);
+    const staged = await app.inject({
+      method: 'POST',
+      url: '/tools/calendar_update_event',
+      headers: confirmHeaders('42'),
+      payload: {
+        eventId: 'event-1',
+        title: 'Private project review',
+        startDateTime: '2026-10-05T15:00:00+02:00',
+        endDateTime: '2026-10-05T16:00:00+02:00',
+        location: 'Private room',
+        attendees: ['dan@example.com'],
+        description: 'PRIVATE CALENDAR DESCRIPTION',
+      },
+    });
+    const code = staged.json().result.confirmationCode as string;
+
+    expect(staged.json()).toMatchObject({ outcome: 'ok', result: { status: 'awaiting_confirmation' } });
+    expect(request).toHaveBeenCalledOnce();
+    expect(request.mock.calls[0]?.[2]).not.toHaveProperty('method');
+    expect(records[0]).toMatchObject({
+      arguments: { redacted: true },
+      result: { redacted: true },
+    });
+    expect(JSON.stringify(records)).not.toContain('PRIVATE CALENDAR DESCRIPTION');
+
+    confirmMessage(setLatest, code);
+    const confirmed = await app.inject({
+      method: 'POST',
+      url: '/tools/calendar_confirm_change',
+      headers: confirmHeaders('43'),
+      payload: { confirmationCode: code },
+    });
+
+    expect(confirmed.json()).toMatchObject({ outcome: 'ok', result: { status: 'completed' } });
+    expect(request).toHaveBeenCalledTimes(2);
+    expect(request.mock.calls[1]?.[2]).toMatchObject({
+      method: 'PATCH',
+      body: {
+        summary: 'Private project review',
+        start: { dateTime: '2026-10-05T13:00:00.000Z', timeZone: 'UTC' },
+        end: { dateTime: '2026-10-05T14:00:00.000Z', timeZone: 'UTC' },
+        location: 'Private room',
+        attendees: [{ email: 'dan@example.com' }],
+        description: 'PRIVATE CALENDAR DESCRIPTION',
+      },
+    });
+  });
+
+  it('allows clearing calendar location and attendees with empty values', async () => {
+    const request = vi.fn(async (...args: [GoogleApi, string, GoogleApiRequest]) =>
+      args[2].method === undefined
+        ? {
+            id: 'event-1',
+            summary: 'Planning',
+            start: { dateTime: '2026-10-04T13:00:00Z' },
+            end: { dateTime: '2026-10-04T14:00:00Z' },
+          }
+        : {});
+    const { app, records, setLatest } = appFor(request);
+    const staged = await app.inject({
+      method: 'POST',
+      url: '/tools/calendar_update_event',
+      headers: confirmHeaders('42'),
+      payload: { eventId: 'event-1', location: '', attendees: [] },
+    });
+    const code = staged.json().result.confirmationCode as string;
+    expect(staged.json()).toMatchObject({ outcome: 'ok', result: { status: 'awaiting_confirmation' } });
+    expect(request).toHaveBeenCalledOnce();
+    confirmMessage(setLatest, code);
+    const confirmed = await app.inject({
+      method: 'POST',
+      url: '/tools/calendar_confirm_change',
+      headers: confirmHeaders('43'),
+      payload: { confirmationCode: code },
+    });
+    expect(confirmed.json()).toMatchObject({ outcome: 'ok', result: { status: 'completed' } });
+    expect(request).toHaveBeenCalledTimes(2);
+    expect(request.mock.calls[1]?.[2]).toMatchObject({
+      method: 'PATCH',
+      body: { location: '', attendees: [] },
+    });
+    expect(records[0]).toMatchObject({
+      arguments: { redacted: true },
+      result: { redacted: true },
+    });
+  });
+
+  it('refuses calendar time updates unless both endpoints are supplied', async () => {
+    const request = vi.fn(async () => ({}));
+    const { app } = appFor(request);
+    const response = await app.inject({
+      method: 'POST',
+      url: '/tools/calendar_update_event',
+      headers: confirmHeaders('42'),
+      payload: { eventId: 'event-1', startDateTime: '2026-10-05T15:00:00Z' },
+    });
+    expect(response.json()).toMatchObject({
+      outcome: 'refused',
+      result: { refused: 'startDateTime and endDateTime must be provided together.' },
+    });
+    expect(request).not.toHaveBeenCalled();
+  });
+
+  it('deletes a calendar event only after confirmation', async () => {
+    const request = vi.fn(async (...args: [GoogleApi, string, GoogleApiRequest]) =>
+      args[2].method === undefined ? { id: 'event/1', summary: 'Planning' } : {});
+    const { app, records, setLatest } = appFor(request);
+    const staged = await app.inject({
+      method: 'POST',
+      url: '/tools/calendar_delete_event',
+      headers: confirmHeaders('42'),
+      payload: { eventId: 'event/1' },
+    });
+    const code = staged.json().result.confirmationCode as string;
+
+    expect(staged.json()).toMatchObject({ outcome: 'ok', result: { status: 'awaiting_confirmation' } });
+    expect(request).toHaveBeenCalledOnce();
+    expect(request.mock.calls[0]?.[1]).toBe('/calendars/primary/events/event%2F1');
+    expect(records[0]).toMatchObject({
+      arguments: { redacted: true },
+      result: { redacted: true },
+    });
+
+    confirmMessage(setLatest, code);
+    const confirmed = await app.inject({
+      method: 'POST',
+      url: '/tools/calendar_confirm_change',
+      headers: confirmHeaders('43'),
+      payload: { confirmationCode: code },
+    });
+
+    expect(confirmed.json()).toMatchObject({ outcome: 'ok', result: { status: 'completed' } });
+    expect(request).toHaveBeenCalledTimes(2);
+    expect(request.mock.calls[1]?.[1]).toBe('/calendars/primary/events/event%2F1');
+    expect(request.mock.calls[1]?.[2]).toMatchObject({ method: 'DELETE' });
+  });
+
   it('sends mail only after confirmation and never persists the message body', async () => {
     const request = vi.fn(async () => ({}));
     const { app, records, setLatest } = appFor(request);
@@ -441,7 +589,8 @@ describe('Google Calendar and Gmail tools', () => {
       headers: confirmHeaders('42'),
       payload: { to: ['first,second@example.com'], subject: 'Test', body: 'Message' },
     });
-    expect(response.json()).toMatchObject({ error: 'Invalid request' });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({ outcome: 'refused', result: { refused: expect.stringContaining('Invalid arguments:') } });
     expect(request).not.toHaveBeenCalled();
   });
 
@@ -480,6 +629,236 @@ describe('Google Calendar and Gmail tools', () => {
       result: { redacted: true },
     });
     expect(JSON.stringify(records)).not.toContain('PRIVATE GMAIL BODY');
+  });
+
+  it('lists bounded Gmail drafts with plain-text content', async () => {
+    const body = 'PRIVATE DRAFT BODY';
+    const request = vi.fn(async (...args: [GoogleApi, string, GoogleApiRequest]) =>
+      args[1] === '/users/me/drafts?maxResults=5'
+        ? { drafts: [{ id: 'draft-1', message: { id: 'message-1', threadId: 'thread-1' } }] }
+        : {
+            id: 'message-1',
+            payload: {
+              headers: [
+                { name: 'To', value: 'dan@example.com' },
+                { name: 'Subject', value: 'Private draft' },
+              ],
+              mimeType: 'text/plain',
+              body: { data: Buffer.from(body).toString('base64url') },
+            },
+          });
+    const { app, records } = appFor(request);
+    const response = await app.inject({
+      method: 'POST',
+      url: '/tools/mail_list_drafts',
+      headers: confirmHeaders('42'),
+      payload: {},
+    });
+
+    expect(response.json().result).toEqual({
+      drafts: [{
+        draftId: 'draft-1',
+        messageId: 'message-1',
+        threadId: 'thread-1',
+        to: 'dan@example.com',
+        subject: 'Private draft',
+        body,
+      }],
+      truncated: false,
+    });
+    expect(request).toHaveBeenCalledTimes(2);
+    expect(records[0]).toMatchObject({
+      arguments: { redacted: true },
+      result: { redacted: true },
+    });
+    expect(JSON.stringify(records)).not.toContain(body);
+  });
+
+  it('replaces a Gmail draft only after confirmation and preserves reply threading', async () => {
+    const request = vi.fn(async (...args: [GoogleApi, string, GoogleApiRequest]) =>
+      args[1] === '/users/me/drafts/draft-1?format=full'
+        ? {
+            id: 'draft-1',
+            message: {
+              id: 'message-1',
+              threadId: 'thread-1',
+              payload: { headers: [
+                { name: 'Subject', value: 'Old subject' },
+                { name: 'Message-ID', value: '<message@example.com>' },
+              ] },
+            },
+          }
+        : {});
+    const { app, records, setLatest } = appFor(request);
+    const staged = await app.inject({
+      method: 'POST',
+      url: '/tools/mail_update_draft',
+      headers: confirmHeaders('42'),
+      payload: {
+        draftId: 'draft-1',
+        to: ['dan@example.com'],
+        subject: 'Updated subject',
+        body: 'Updated draft text',
+      },
+    });
+    const code = staged.json().result.confirmationCode as string;
+
+    expect(staged.json()).toMatchObject({ outcome: 'ok', result: { status: 'awaiting_confirmation' } });
+    expect(request).toHaveBeenCalledOnce();
+    expect(records[0]).toMatchObject({
+      arguments: { redacted: true },
+      result: { redacted: true },
+    });
+    expect(JSON.stringify(records)).not.toContain('Updated draft text');
+
+    confirmMessage(setLatest, code);
+    const confirmed = await app.inject({
+      method: 'POST',
+      url: '/tools/mail_confirm_action',
+      headers: confirmHeaders('43'),
+      payload: { confirmationCode: code },
+    });
+
+    expect(confirmed.json()).toMatchObject({ outcome: 'ok', result: { status: 'completed' } });
+    expect(request).toHaveBeenCalledTimes(2);
+    expect(request.mock.calls[1]?.[1]).toBe('/users/me/drafts/draft-1');
+    expect(request.mock.calls[1]?.[2]).toMatchObject({
+      method: 'PUT',
+      body: { message: { threadId: 'thread-1' } },
+    });
+    const updateBody = request.mock.calls[1]?.[2]?.body as {
+      message: { raw: string };
+    };
+    expect(decodedMimeBody(updateBody.message.raw)).toContain('Updated draft text');
+  });
+
+  it('refuses to replace a Gmail draft that has attachments or CC/BCC recipients', async () => {
+    const request = vi.fn(async () => ({
+      id: 'draft-1',
+      message: {
+        id: 'message-1',
+        payload: {
+          headers: [{ name: 'Subject', value: 'With attachment' }],
+          parts: [{ filename: 'report.pdf', body: { attachmentId: 'attachment-1' } }],
+        },
+      },
+    }));
+    const { app } = appFor(request);
+    const response = await app.inject({
+      method: 'POST',
+      url: '/tools/mail_update_draft',
+      headers: confirmHeaders('42'),
+      payload: {
+        draftId: 'draft-1',
+        to: ['dan@example.com'],
+        subject: 'Updated subject',
+        body: 'Updated draft text',
+      },
+    });
+
+    expect(response.json()).toMatchObject({
+      outcome: 'refused',
+      result: { refused: 'This draft has CC, BCC, or attachments and cannot be safely replaced.' },
+    });
+    expect(request).toHaveBeenCalledOnce();
+  });
+
+  it('deletes a Gmail draft only after confirmation', async () => {
+    const request = vi.fn(async (...args: [GoogleApi, string, GoogleApiRequest]) =>
+      args[2].method === 'DELETE' ? {} : {
+        id: 'draft-1',
+        message: { id: 'message-1', payload: { headers: [{ name: 'Subject', value: 'Private draft' }] } },
+      });
+    const { app, records, setLatest } = appFor(request);
+    const staged = await app.inject({
+      method: 'POST',
+      url: '/tools/mail_delete_draft',
+      headers: confirmHeaders('42'),
+      payload: { draftId: 'draft-1' },
+    });
+    const code = staged.json().result.confirmationCode as string;
+
+    expect(staged.json()).toMatchObject({ outcome: 'ok', result: { status: 'awaiting_confirmation' } });
+    expect(request).toHaveBeenCalledOnce();
+    expect(records[0]).toMatchObject({
+      arguments: { redacted: true },
+      result: { redacted: true },
+    });
+
+    confirmMessage(setLatest, code);
+    const confirmed = await app.inject({
+      method: 'POST',
+      url: '/tools/mail_confirm_action',
+      headers: confirmHeaders('43'),
+      payload: { confirmationCode: code },
+    });
+
+    expect(confirmed.json()).toMatchObject({ outcome: 'ok', result: { status: 'completed' } });
+    expect(request).toHaveBeenCalledTimes(2);
+    expect(request.mock.calls[1]?.[1]).toBe('/users/me/drafts/draft-1');
+    expect(request.mock.calls[1]?.[2]).toMatchObject({ method: 'DELETE' });
+  });
+
+  it('archives a Gmail message only after confirmation', async () => {
+    const request = vi.fn(async () => ({}));
+    const { app, setLatest } = appFor(request);
+    const staged = await app.inject({
+      method: 'POST',
+      url: '/tools/mail_archive',
+      headers: confirmHeaders('42'),
+      payload: { messageId: 'message-1' },
+    });
+    const code = staged.json().result.confirmationCode as string;
+
+    expect(request).not.toHaveBeenCalled();
+    confirmMessage(setLatest, code);
+    const confirmed = await app.inject({
+      method: 'POST',
+      url: '/tools/mail_confirm_action',
+      headers: confirmHeaders('43'),
+      payload: { confirmationCode: code },
+    });
+
+    expect(confirmed.json()).toMatchObject({ outcome: 'ok', result: { status: 'completed' } });
+    expect(request).toHaveBeenCalledOnce();
+    expect(request.mock.calls[0]?.[1]).toBe('/users/me/messages/message-1/modify');
+    expect(request.mock.calls[0]?.[2]).toMatchObject({
+      method: 'POST',
+      body: { removeLabelIds: ['INBOX'] },
+    });
+  });
+
+  it('adds and removes named Gmail labels only after confirmation', async () => {
+    const request = vi.fn(async (...args: [GoogleApi, string, GoogleApiRequest]) =>
+      args[1] === '/users/me/labels'
+        ? { labels: [{ id: 'Label_1', name: 'Work' }, { id: 'Label_2', name: 'Later' }] }
+        : {});
+    const { app, setLatest } = appFor(request);
+    const staged = await app.inject({
+      method: 'POST',
+      url: '/tools/mail_label',
+      headers: confirmHeaders('42'),
+      payload: { messageId: 'message-1', add: ['Work'], remove: ['Later'] },
+    });
+    const code = staged.json().result.confirmationCode as string;
+
+    expect(staged.json()).toMatchObject({ outcome: 'ok', result: { status: 'awaiting_confirmation' } });
+    expect(request).toHaveBeenCalledOnce();
+    confirmMessage(setLatest, code);
+    const confirmed = await app.inject({
+      method: 'POST',
+      url: '/tools/mail_confirm_action',
+      headers: confirmHeaders('43'),
+      payload: { confirmationCode: code },
+    });
+
+    expect(confirmed.json()).toMatchObject({ outcome: 'ok', result: { status: 'completed' } });
+    expect(request).toHaveBeenCalledTimes(2);
+    expect(request.mock.calls[1]?.[1]).toBe('/users/me/messages/message-1/modify');
+    expect(request.mock.calls[1]?.[2]).toMatchObject({
+      method: 'POST',
+      body: { addLabelIds: ['Label_1'], removeLabelIds: ['Label_2'] },
+    });
   });
 
   it('creates a Gmail reply draft only after confirmation', async () => {

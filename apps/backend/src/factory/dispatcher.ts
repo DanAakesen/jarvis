@@ -696,7 +696,23 @@ export class TaskDispatcher implements TaskController {
       ? defaultSettings.codex
       : defaultSettings.copilot;
     const model = task.modelOverride ??
-      configuredValue(stored[`${task.agent}.model`], providerSettings.model, maxSettingsModelLength);
+      configuredValue(
+        stored[`roles.${task.agent}.model`],
+        configuredValue(stored[`${task.agent}.model`], providerSettings.model, maxSettingsModelLength),
+        maxSettingsModelLength,
+      );
+    const codexReasoning = configuredValue(
+      stored['roles.codex.reasoning_effort'],
+      configuredValue(stored['codex.reasoning_effort'], defaultSettings.codex.reasoning, maxSettingsReasoningLength),
+      maxSettingsReasoningLength,
+    );
+    const copilotReasoning = configuredValue(
+      stored['roles.copilot.reasoning_effort'],
+      'none',
+      maxSettingsReasoningLength,
+    );
+    const reasoning = task.agent === 'codex' ? task.reasoningOverride ?? codexReasoning :
+      task.reasoningOverride ?? copilotReasoning;
     const request: TaskRequest = task.agent === 'codex'
       ? {
         agent: 'codex',
@@ -706,11 +722,9 @@ export class TaskDispatcher implements TaskController {
         defaultBranch: task.defaultBranch,
         branch: task.branch,
         ...(model === 'default' ? {} : { model }),
-        ...((task.reasoningOverride ??
-          configuredValue(stored['codex.reasoning_effort'], defaultSettings.codex.reasoning, maxSettingsReasoningLength)) === 'default'
+        ...(reasoning === 'default'
           ? {}
-          : { reasoning: task.reasoningOverride ??
-            configuredValue(stored['codex.reasoning_effort'], defaultSettings.codex.reasoning, maxSettingsReasoningLength) }),
+          : { reasoning }),
       }
       : {
         agent: 'copilot',
@@ -720,6 +734,7 @@ export class TaskDispatcher implements TaskController {
         defaultBranch: task.defaultBranch,
         branch: task.branch,
         ...(model === 'default' ? {} : { model }),
+        ...(reasoning === 'none' || reasoning === 'default' ? {} : { reasoning }),
       };
     return request;
   }

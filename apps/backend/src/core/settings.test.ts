@@ -2,9 +2,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { buildApp } from '../app.js';
 import { loadConfig } from '../config.js';
 import type { TokenVerifier } from '../auth/verify.js';
-import { flattenSettings, readSettings, settingsStoreKeys, type SettingsStore } from './settings.js';
+import { defaultSettings, flattenSettings, readSettings, settingsStoreKeys, type SettingsStore } from './settings.js';
 import type { CredentialStatusStore } from '../credentials/credential-status.js';
 import type { AwayModeStore } from './away-mode.js';
+import { capabilityInstructions } from './capability-instructions.js';
 
 const config = { ...loadConfig({}), logLevel: 'silent' as const };
 const authorization = { authorization: `${['Bear', 'er'].join('')} ${['a', 'b', 'c'].join('.')}` };
@@ -23,16 +24,23 @@ function createStore(): { store: SettingsStore; values: Record<string, unknown> 
   return { store, values };
 }
 
-function fixture(settingsStore?: SettingsStore, auth: TokenVerifier = async () => ({
+function fixture(
+  settingsStore?: SettingsStore,
+  auth: TokenVerifier = async () => ({
   objectId: config.auth.ownerObjectId,
   tenantId: config.auth.tenantId,
   displayName: 'Dan',
-}), credentialStatusStore?: CredentialStatusStore, awayModeStore?: AwayModeStore) {
+  }),
+  credentialStatusStore?: CredentialStatusStore,
+  awayModeStore?: AwayModeStore,
+  onEmbeddingModelChanged?: () => Promise<void>,
+) {
   const app = buildApp(config, undefined, {
     auth,
     ...(settingsStore ? { settingsStore } : {}),
     ...(credentialStatusStore ? { credentialStatusStore } : {}),
     ...(awayModeStore ? { awayModeStore } : {}),
+    ...(onEmbeddingModelChanged ? { onEmbeddingModelChanged } : {}),
   });
   apps.push(app);
   return app;
@@ -53,7 +61,27 @@ describe('settings API', () => {
         appearance: { theme: 'light' },
         jarvis: { model: 'gpt-5.6-luna', reasoning: 'none' },
         personality: { tone: 'british_butler', responseStyle: 'concise', customInstructions: '' },
-        voice: { defaultLanguage: 'da', minimizeWindowsOnVoiceStart: false },
+        voice: {
+          defaultLanguage: 'da',
+          minimizeWindowsOnVoiceStart: false,
+          serverVadThreshold: 0.7,
+          prefixPaddingMs: 300,
+          silenceDurationMs: 600,
+          bargeInEnabled: true,
+          maxSpokenReplyTokens: 4_096,
+        },
+        research: { depth: 'quick', maxSources: 50, timeoutSeconds: 305 },
+        timeouts: {
+          toolTimeoutSeconds: 30,
+          longToolTimeoutSeconds: 320,
+          backendHttpTimeoutSeconds: 10,
+        },
+        memory: {
+          similarityThreshold: 0.35,
+          searchTopK: 5,
+          graphTextSimilarityThreshold: 0.12,
+          automaticCapture: true,
+        },
         codex: { model: 'default' },
         copilot: { model: 'default' },
         global: { maxParallelTasks: 1, maxCheckAttempts: 3, screenShareDailyFrameCap: 300, visionDailyBudgetUsd: 1 },
@@ -68,6 +96,255 @@ describe('settings API', () => {
         },
       },
     });
+    expect(response.json().options.voiceTuning).toEqual({
+      serverVadThreshold: { minimum: 0, maximum: 1 },
+      prefixPaddingMs: { minimum: 0, maximum: 2_000 },
+      silenceDurationMs: { minimum: 100, maximum: 5_000 },
+      maxSpokenReplyTokens: { minimum: 1, maximum: 4_096 },
+    });
+    expect(response.json().options.researchDepths).toEqual(['quick', 'standard', 'deep']);
+    expect(response.json().options.researchSettings).toEqual({
+      maxSources: { minimum: 1, maximum: 50 },
+      timeoutSeconds: { minimum: 1, maximum: 320 },
+    });
+    expect(response.json().options.timeoutSettings).toEqual({
+      toolTimeoutSeconds: { minimum: 1, maximum: 120 },
+      longToolTimeoutSeconds: { minimum: 30, maximum: 320 },
+      backendHttpTimeoutSeconds: { minimum: 1, maximum: 60 },
+    });
+    expect(response.json().options.memorySettings).toEqual({
+      similarityThreshold: { minimum: 0, maximum: 1 },
+      searchTopK: { minimum: 1, maximum: 8 },
+      graphTextSimilarityThreshold: { minimum: 0, maximum: 1 },
+    });
+  });
+
+  it('persists bounded memory retrieval settings and rejects values outside their contract', async () => {
+    const { store, values } = createStore();
+    const app = fixture(store);
+    const settings = {
+      memory: {
+        similarityThreshold: 0.6,
+        searchTopK: 3,
+        graphTextSimilarityThreshold: 0.2,
+        automaticCapture: false,
+      },
+    };
+
+    const saved = await app.inject({
+      method: 'PATCH', url: '/settings', headers: authorization, payload: { settings },
+    });
+
+    expect(saved.statusCode).toBe(200);
+    expect(saved.json().settings.memory).toEqual(settings.memory);
+    expect(values).toMatchObject({
+      'memory.similarity_threshold': '0.6',
+      'memory.search_top_k': '3',
+      'memory.graph_text_similarity_threshold': '0.2',
+      'memory.automatic_capture': 'false',
+    });
+    for (const memory of [
+      { similarityThreshold: -0.1 },
+      { similarityThreshold: 1.1 },
+      { searchTopK: 0 },
+      { searchTopK: 9 },
+      { graphTextSimilarityThreshold: 2 },
+      { automaticCapture: 'false' },
+    ]) {
+      const response = await app.inject({
+        method: 'PATCH', url: '/settings', headers: authorization, payload: { settings: { memory } },
+      });
+      expect(response.statusCode).toBe(400);
+    }
+  });
+
+  it('persists bounded research depth, source count, and timeout settings', async () => {
+    const { store, values } = createStore();
+    const app = fixture(store);
+    const settings = { research: { depth: 'standard', maxSources: 18, timeoutSeconds: 320 } };
+
+    const saved = await app.inject({
+      method: 'PATCH', url: '/settings', headers: authorization, payload: { settings },
+    });
+
+    expect(saved.statusCode).toBe(200);
+    expect(saved.json().settings.research).toEqual(settings.research);
+    expect(values).toMatchObject({
+      'research.depth': '"standard"',
+      'research.max_sources': '18',
+      'research.timeout_seconds': '320',
+    });
+  });
+
+  it.each([
+    { research: { depth: 'extreme' } },
+    { research: { maxSources: 0 } },
+    { research: { maxSources: 51 } },
+    { research: { timeoutSeconds: 0 } },
+    { research: { timeoutSeconds: 321 } },
+    { research: { timeoutSeconds: '320' } },
+  ])('rejects invalid research setting values: %j', async (settings) => {
+    const app = fixture(createStore().store);
+    const response = await app.inject({
+      method: 'PATCH', url: '/settings', headers: authorization, payload: { settings },
+    });
+    expect(response.statusCode).toBe(400);
+  });
+
+  it('persists bounded tool, long-tool, and backend HTTP timeouts', async () => {
+    const { store, values } = createStore();
+    const app = fixture(store);
+    const timeouts = {
+      toolTimeoutSeconds: 60,
+      longToolTimeoutSeconds: 300,
+      backendHttpTimeoutSeconds: 20,
+    };
+
+    const saved = await app.inject({
+      method: 'PATCH', url: '/settings', headers: authorization, payload: { settings: { timeouts } },
+    });
+
+    expect(saved.statusCode).toBe(200);
+    expect(saved.json().settings.timeouts).toEqual(timeouts);
+    expect(values).toMatchObject({
+      'timeouts.tool_timeout_seconds': '60',
+      'timeouts.long_tool_timeout_seconds': '300',
+      'timeouts.backend_http_timeout_seconds': '20',
+    });
+  });
+
+  it.each([
+    { toolTimeoutSeconds: 0 },
+    { toolTimeoutSeconds: 121 },
+    { longToolTimeoutSeconds: 29 },
+    { longToolTimeoutSeconds: 321 },
+    { backendHttpTimeoutSeconds: 0 },
+    { backendHttpTimeoutSeconds: 61 },
+    { toolTimeoutSeconds: true },
+  ])('rejects invalid timeout setting values: %j', async (timeouts) => {
+    const app = fixture(createStore().store);
+    const response = await app.inject({
+      method: 'PATCH', url: '/settings', headers: authorization, payload: { settings: { timeouts } },
+    });
+    expect(response.statusCode).toBe(400);
+  });
+
+  it('serves a Dan-only model catalogue and applies the selected chat model to agent settings', async () => {
+    const { store, values } = createStore();
+    const app = fixture(store);
+    const catalogue = await app.inject({ url: '/models', headers: authorization });
+
+    expect(catalogue.statusCode).toBe(200);
+    expect(catalogue.headers['cache-control']).toBe('private, max-age=300');
+    expect(catalogue.json()).toMatchObject({
+      source: 'fallback',
+      deployments: expect.arrayContaining([
+        expect.objectContaining({ name: 'gpt-6-luna', capabilities: expect.arrayContaining(['chat', 'image']) }),
+      ]),
+    });
+
+    const saved = await app.inject({
+      method: 'PATCH', url: '/settings', headers: authorization,
+      payload: { settings: { roles: { chat: { model: 'gpt-6-luna', reasoningEffort: 'high' } } } },
+    });
+    expect(saved.statusCode).toBe(200);
+    expect(saved.json().settings.roles.chat).toEqual({ model: 'gpt-6-luna', reasoningEffort: 'high' });
+    expect(saved.json().settings.jarvis).toEqual({ model: 'gpt-6-luna', reasoning: 'high' });
+    expect(values).toMatchObject({
+      'roles.chat.model': '"gpt-6-luna"',
+      'roles.chat.reasoning_effort': '"high"',
+    });
+
+    const agent = fixture(store, async () => ({
+      kind: 'jarvis-agent',
+      objectId: '00000000-0000-0000-0000-000000000001',
+      tenantId: config.auth.tenantId,
+    }));
+    const settings = await agent.inject({ url: '/agent/settings', headers: authorization });
+    expect(settings.statusCode).toBe(200);
+    expect(settings.json()).toMatchObject({
+      model: 'gpt-6-luna',
+      reasoningEffort: 'high',
+      roles: { chat: { model: 'gpt-6-luna', reasoningEffort: 'high' } },
+      memory: defaultSettings.memory,
+      research: { timeoutSeconds: 305 },
+      timeouts: defaultSettings.timeouts,
+    });
+  });
+
+  it('exposes and saves Codex and Copilot model-specific reasoning choices', async () => {
+    const { store } = createStore();
+    const app = fixture(store);
+    const initial = await app.inject({ url: '/settings', headers: authorization });
+
+    expect(initial.json().options.codexModels).toContain('gpt-5.3-codex');
+    expect(initial.json().options.copilotModels).toContain('claude-sonnet-4.6');
+    expect(initial.json().options.roles.codex.reasoningEffortsByModel['gpt-5.5'])
+      .toContain('xhigh');
+    expect(initial.json().options.roles.copilot.reasoningEffortsByModel['gpt-5.4'])
+      .toEqual(['none', 'low', 'medium', 'high']);
+
+    const saved = await app.inject({
+      method: 'PATCH', url: '/settings', headers: authorization,
+      payload: { settings: { roles: {
+        codex: { model: 'gpt-5.5', reasoningEffort: 'xhigh' },
+        copilot: { model: 'claude-sonnet-4.6', reasoningEffort: 'high' },
+      } } },
+    });
+
+    expect(saved.statusCode).toBe(200);
+    expect(saved.json().settings.roles).toMatchObject({
+      codex: { model: 'gpt-5.5', reasoningEffort: 'xhigh' },
+      copilot: { model: 'claude-sonnet-4.6', reasoningEffort: 'high' },
+    });
+  });
+
+  it('starts re-embedding only when the embedding role model changes', async () => {
+    const { store } = createStore();
+    const onEmbeddingModelChanged = vi.fn(async () => {});
+    const app = fixture(store, undefined, undefined, undefined, onEmbeddingModelChanged);
+    const patch = {
+      method: 'PATCH' as const,
+      url: '/settings',
+      headers: authorization,
+      payload: { settings: { roles: { embedding: { model: 'text-embedding-3-large' } } } },
+    };
+
+    expect((await app.inject(patch)).statusCode).toBe(200);
+    expect(onEmbeddingModelChanged).toHaveBeenCalledOnce();
+    expect((await app.inject(patch)).statusCode).toBe(200);
+    expect(onEmbeddingModelChanged).toHaveBeenCalledOnce();
+  });
+
+  it('denies the model catalogue to non-owner principals', async () => {
+    const app = fixture(createStore().store, async () => ({
+      objectId: '00000000-0000-0000-0000-000000000002',
+      tenantId: config.auth.tenantId,
+      displayName: 'Other user',
+    }));
+    expect((await app.inject({ url: '/models', headers: authorization })).statusCode).toBe(403);
+  });
+
+  it.each([
+    { settings: { roles: { chat: { model: 'text-embedding-3-small' } } } },
+    { settings: { roles: { chat: { model: 'gpt-5.6-luna', reasoningEffort: 'xhigh' } } } },
+  ])('rejects role models without the capability or supported effort: %j', async (payload) => {
+    const app = fixture(createStore().store);
+    const response = await app.inject({
+      method: 'PATCH', url: '/settings', headers: authorization, payload,
+    });
+    expect(response.statusCode).toBe(400);
+  });
+
+  it('resolves legacy stored Jarvis model keys into the chat role', async () => {
+    const { store, values } = createStore();
+    values['jarvis.model'] = '"gpt-6-luna"';
+    values['jarvis.reasoning_effort'] = '"high"';
+
+    const settings = await readSettings(store);
+
+    expect(settings.roles.chat).toEqual({ model: 'gpt-6-luna', reasoningEffort: 'high' });
+    expect(settings.jarvis).toEqual({ model: 'gpt-6-luna', reasoning: 'high' });
   });
 
   it('persists allowlisted appearance tokens and the default-off voice window preference', async () => {
@@ -85,7 +362,14 @@ describe('settings API', () => {
         radius: 24,
         density: 'comfortable',
       },
-      voice: { minimizeWindowsOnVoiceStart: true },
+      voice: {
+        minimizeWindowsOnVoiceStart: true,
+        serverVadThreshold: 0.85,
+        prefixPaddingMs: 600,
+        silenceDurationMs: 900,
+        bargeInEnabled: false,
+        maxSpokenReplyTokens: 800,
+      },
     };
 
     const saved = await app.inject({
@@ -105,6 +389,11 @@ describe('settings API', () => {
       'appearance.radius': '24',
       'appearance.density': '"comfortable"',
       'voice.minimize_windows_on_voice_start': 'true',
+      'voice.server_vad_threshold': '0.85',
+      'voice.prefix_padding_ms': '600',
+      'voice.silence_duration_ms': '900',
+      'voice.barge_in_enabled': 'false',
+      'voice.max_spoken_reply_tokens': '800',
     });
     const reloaded = await app.inject({ url: '/settings', headers: authorization });
     expect(reloaded.json().settings).toMatchObject(patch);
@@ -141,6 +430,7 @@ describe('settings API', () => {
     expect(values).toEqual({
       'appearance.theme': '"dark"',
       'jarvis.reasoning_effort': '"high"',
+      'roles.chat.reasoning_effort': '"high"',
       'voice.default_language': '"en"',
       'global.max_parallel_tasks': '4',
       'global.max_check_attempts': '2',
@@ -171,6 +461,41 @@ describe('settings API', () => {
       expect((await readSettings(store)).global.visionDailyBudgetUsd).toBe(1);
     },
   );
+
+  it('persists and reloads a validated home location without a migration', async () => {
+    const { store, values } = createStore();
+    const app = fixture(store);
+    const location = { city: 'Copenhagen', latitude: 55.6761, longitude: 12.5683 };
+    const response = await app.inject({
+      method: 'PATCH', url: '/settings', headers: authorization,
+      payload: { settings: { location } },
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json().settings.location).toEqual(location);
+    expect(values).toMatchObject({
+      'location.home_city': '"Copenhagen"',
+      'location.latitude': '55.6761',
+      'location.longitude': '12.5683',
+    });
+    expect(settingsStoreKeys).toEqual(expect.arrayContaining([
+      'location.home_city', 'location.latitude', 'location.longitude',
+    ]));
+    expect((await readSettings(store)).location).toEqual(location);
+  });
+
+  it.each([
+    { latitude: 90.1 },
+    { longitude: -180.1 },
+    { city: 'Invalid\nCity' },
+  ])('rejects an invalid home location update: %o', async (location) => {
+    const { store } = createStore();
+    const app = fixture(store);
+    const response = await app.inject({
+      method: 'PATCH', url: '/settings', headers: authorization,
+      payload: { settings: { location } },
+    });
+    expect(response.statusCode).toBe(400);
+  });
 
   it('persists bounded personality preferences and supports restoring their defaults', async () => {
     const { store, values } = createStore();
@@ -361,6 +686,13 @@ describe('settings API', () => {
     const { store } = createStore();
     await store.write({
       jarvis: { model: 'gpt-5.6-luna', reasoning: 'high' },
+      memory: { automaticCapture: false },
+      research: { timeoutSeconds: 280 },
+      timeouts: {
+        toolTimeoutSeconds: 45,
+        longToolTimeoutSeconds: 300,
+        backendHttpTimeoutSeconds: 20,
+      },
       personality: {
         tone: 'direct',
         responseStyle: 'balanced',
@@ -382,9 +714,37 @@ describe('settings API', () => {
     const response = await app.inject({ url: '/agent/settings', headers: authorization });
 
     expect(response.statusCode).toBe(200);
+    expect(response.json().capabilityInstructions).toBe(
+      capabilityInstructions({ ...defaultSettings.memory, automaticCapture: false }),
+    );
     expect(response.json()).toEqual({
       model: 'gpt-5.6-luna',
       reasoningEffort: 'high',
+      roles: {
+        chat: { model: 'gpt-5.6-luna', reasoningEffort: 'high' },
+        vision: { model: 'gpt-6-luna', reasoningEffort: 'none' },
+        research: { model: 'gpt-5.6-luna', reasoningEffort: 'none' },
+        voice: { model: 'gpt-realtime-2.1', reasoningEffort: 'none' },
+        transcription: { model: 'mai-transcribe', reasoningEffort: 'none' },
+        embedding: { model: 'text-embedding-3-small', reasoningEffort: 'none' },
+        codex: { model: 'default', reasoningEffort: 'none' },
+        copilot: { model: 'default', reasoningEffort: 'none' },
+      },
+      memory: {
+        similarityThreshold: 0.35,
+        searchTopK: 5,
+        graphTextSimilarityThreshold: 0.12,
+        automaticCapture: false,
+      },
+      research: { timeoutSeconds: 280 },
+      capabilityInstructions: expect.stringContaining(
+        'Do not proactively save memories; save only when Dan directly asks you to write to the vault.',
+      ),
+      timeouts: {
+        toolTimeoutSeconds: 45,
+        longToolTimeoutSeconds: 300,
+        backendHttpTimeoutSeconds: 20,
+      },
       personality: {
         tone: 'direct',
         responseStyle: 'balanced',
@@ -394,6 +754,8 @@ describe('settings API', () => {
       awayMode: true,
       mode: 'on_the_move',
       changedAt: '2026-10-06T12:30:00.000Z',
+      jarvisRepository: 'DanAakesen/jarvis',
+      projects: [],
     });
   });
 
@@ -426,6 +788,19 @@ describe('settings API', () => {
     { settings: { appearance: { density: 'spacious' } } },
     { settings: { appearance: { customToken: '#123456' } } },
     { settings: { voice: { minimizeWindowsOnVoiceStart: 'yes' } } },
+    { settings: { voice: { serverVadThreshold: -0.01 } } },
+    { settings: { voice: { serverVadThreshold: 1.01 } } },
+    { settings: { voice: { serverVadThreshold: '0.7' } } },
+    { settings: { voice: { prefixPaddingMs: -1 } } },
+    { settings: { voice: { prefixPaddingMs: 2_001 } } },
+    { settings: { voice: { prefixPaddingMs: 1.5 } } },
+    { settings: { voice: { silenceDurationMs: 99 } } },
+    { settings: { voice: { silenceDurationMs: 5_001 } } },
+    { settings: { voice: { silenceDurationMs: 1.5 } } },
+    { settings: { voice: { bargeInEnabled: 'yes' } } },
+    { settings: { voice: { maxSpokenReplyTokens: 0 } } },
+    { settings: { voice: { maxSpokenReplyTokens: 4_097 } } },
+    { settings: { voice: { maxSpokenReplyTokens: 1.5 } } },
     { settings: { jarvis: { model: 'not-available' } } },
     { settings: { jarvis: { reasoning: 'unsupported' } } },
     { settings: { personality: { tone: 'unbounded' } } },

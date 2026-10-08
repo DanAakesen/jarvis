@@ -3,6 +3,7 @@ import type { BackendModule } from '../modules.js';
 import { ToolRefusal } from '../core/tool-registry.js';
 import { readSettings } from '../core/settings.js';
 import { sseHeaders } from '../core/now.js';
+import { writeSseEvent } from '../core/sse.js';
 import {
   GitHubRepositoryUnavailableError,
   ProjectConflictError,
@@ -16,7 +17,9 @@ import type {
   CreateTaskInput, RecordTaskEventInput, TaskControlCommand, TaskEventMessage, TaskListFilters,
 } from './task-store.js';
 import { factoryTools } from './tools.js';
+import { repositoryTools } from './repository-tools.js';
 import { registerReleaseViewRoutes } from './release-view.js';
+import { registerFactoryBoardRoute } from './board.js';
 
 const maxSqlBigInt = 9_223_372_036_854_775_807n;
 const maxResponseBytes = 1024 * 1024;
@@ -57,9 +60,10 @@ function sendBounded(reply: FastifyReply, value: unknown) {
 
 export const factoryModule: BackendModule = {
   id: 'factory',
-  tools: [...factoryTools, createProjectTool, {
+  tools: [...factoryTools, ...repositoryTools, createProjectTool, {
     name: 'manage_repository',
-    description: 'Register an existing repository from the GitHub App installation using the New projects defaults.',
+    description: 'Register an existing repository from the GitHub App installation using the New projects defaults. ' +
+      'Only after Dan has confirmed adding it; check list_projects first. Returns alreadyAdded when it is already a project.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -72,7 +76,18 @@ export const factoryModule: BackendModule = {
       try {
         return await manageExistingRepository(request.server, (input as { repository: string }).repository, undefined, signal);
       } catch (error) {
-        if (error instanceof ProjectConflictError) throw new ToolRefusal('That repository is already managed by Jarvis.');
+        if (error instanceof ProjectConflictError) {
+          const repository = (input as { repository: string }).repository.toLowerCase();
+          const existing = (await request.server.projectStore?.list() ?? [])
+            .find((project) => project.repo.toLowerCase() === repository);
+          return {
+            alreadyAdded: true,
+            project: existing ? { id: String(existing.id), name: existing.name, repo: existing.repo } : null,
+            confirmation: existing
+              ? `${existing.repo} is already added as project "${existing.name}" (ID ${existing.id}); nothing was changed.`
+              : 'That repository is already managed by Jarvis; nothing was changed.',
+          };
+        }
         if (error instanceof RepositoryNotAvailableError) throw new ToolRefusal('That repository is not available in the GitHub App installation.');
         if (error instanceof GitHubRepositoryUnavailableError) throw error;
         throw error;
@@ -81,6 +96,7 @@ export const factoryModule: BackendModule = {
   }],
   registerRoutes: async (app) => {
     registerReleaseViewRoutes(app);
+    registerFactoryBoardRoute(app);
     app.get<{ Querystring: { refresh?: boolean } }>('/factory/repositories', {
       schema: {
         querystring: {
@@ -312,7 +328,7 @@ export const factoryModule: BackendModule = {
       const writeEvent = (event: TaskEventMessage) => {
         if (closed || BigInt(event.id) <= BigInt(afterEventId) || replayedIds.has(event.id)) return !closed;
         replayedIds.add(event.id);
-        if (!response.write(`id: ${event.id}\nevent: task\ndata: ${JSON.stringify(event)}\n\n`)) {
+        if (!writeSseEvent(response, { event: 'task', id: event.id, data: event })) {
           end();
           return false;
         }
@@ -378,7 +394,7 @@ export const factoryModule: BackendModule = {
           }
         }
         replaying = false;
-        if (!response.write('event: ready\ndata: {}\n\n')) end();
+        if (!writeSseEvent(response, { event: 'ready', data: {} })) end();
       };
       void replay().catch(end);
       return reply;

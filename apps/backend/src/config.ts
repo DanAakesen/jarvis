@@ -15,6 +15,7 @@ export interface BackendConfig {
     admin: string;
     runtime: string;
   };
+  foundryAccountResourceId?: string;
   foundryRunnerAgentName?: string;
   codexImageModel: string;
   foundryChatAgentName?: string;
@@ -69,6 +70,11 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BackendConfig 
   if (foundryAdminEndpoint !== undefined && foundryRuntimeEndpoint !== undefined) {
     validateFoundryEndpoint(foundryAdminEndpoint, '.services.ai.azure.com', 'FOUNDRY_ADMIN_ENDPOINT');
     validateFoundryEndpoint(foundryRuntimeEndpoint, '.cognitiveservices.azure.com', 'FOUNDRY_RUNTIME_ENDPOINT');
+  }
+  const foundryAccountResourceId = env.FOUNDRY_ACCOUNT_RESOURCE_ID;
+  if (foundryAccountResourceId !== undefined &&
+      !/^\/subscriptions\/[a-f\d-]+\/resourceGroups\/[a-z\d._()-]+\/providers\/Microsoft\.CognitiveServices\/accounts\/[a-z\d-]+$/iu.test(foundryAccountResourceId)) {
+    throw new ConfigurationError('FOUNDRY_ACCOUNT_RESOURCE_ID must identify a Foundry account');
   }
 
   const connectionString = env.APPLICATIONINSIGHTS_CONNECTION_STRING;
@@ -249,6 +255,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BackendConfig 
     ...(foundryAdminEndpoint === undefined || foundryRuntimeEndpoint === undefined ? {} : {
       foundryEndpoints: { admin: foundryAdminEndpoint, runtime: foundryRuntimeEndpoint },
     }),
+    ...(foundryAccountResourceId === undefined ? {} : { foundryAccountResourceId }),
     ...(foundryRunnerAgentName === undefined ? {} : { foundryRunnerAgentName }),
     ...(foundryChatAgentName === undefined ? {} : { foundryChatAgentName }),
     ...(foundryProjectEndpoint === undefined ? {} : { foundryProjectEndpoint }),

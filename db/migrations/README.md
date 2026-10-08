@@ -30,6 +30,14 @@ timestamps. Its down batch drops the receipts but never resurrects dismissals;
 restoring pre-cleanup visibility requires a reviewed backup restore.
 `0027_vault_knowledge_graph.sql` adds index timestamps to vault chunks and
 persists parsed note-link targets for the P7-43 knowledge graph.
+`0028_json_embeddings_without_vector.sql` stores nullable JSON embeddings for
+memories and vault chunks only when SQL Server does not expose the `vector` type.
+`0030_foundry_usage_cost_coverage.sql` adds model/role attribution and USD cost
+estimates to usage rows; migration 0029 is reserved for P9-14.
+`0031_embedding_model_identity.sql` records the deployment name for memory and
+vault embeddings and permits durable embedding-reindex background jobs.
+`0032_conversation_search.sql` indexes conversation message timestamps for
+date-bounded search; its setup batch adds an optional full-text message index.
 
 Every migration has a reverse batch with the same name in `down/`, under the
 same format rules. Startup never reads `down/`. Down scripts drop data: only
@@ -56,3 +64,5 @@ creates the optional full-text catalog/index when supported. This must run outsi
 the migration transaction because Azure SQL does not allow `CREATE FULLTEXT INDEX`
 inside an explicit user transaction. Reverting P7-13 drops the memory table and its
 index; the now-empty full-text catalog remains available for a later setup run.
+
+`0036_folio_lowercase_ids.sql` lower-cases Folio item ids that 0035 built from upper-case uniqueidentifier text (L124); its down script is a no-op.

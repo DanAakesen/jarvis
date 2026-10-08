@@ -1,11 +1,13 @@
 import type { FastifyReply } from 'fastify';
 import type { FastifyInstance } from 'fastify';
+import { isNowSseEvent, type NowSseEvent } from '@jarvis/contracts';
 import type { EventHub } from './event-hub.js';
 import type { JarvisActivityHub } from './activity.js';
 import { defaultAwayModeState } from './away-mode.js';
 import { presenceModes, type PresenceMode } from './away-mode.js';
 import type { BrowserConfirmation } from '../teams/service.js';
 import { generatedViewValidationOptions } from './generated-view-validation.js';
+import { formatSseEvent, writeSseEvent } from './sse.js';
 
 const maxSqlBigInt = 9_223_372_036_854_775_807n;
 const idSchema = { type: 'string', pattern: '^[1-9][0-9]{0,18}$', maxLength: 19 };
@@ -50,7 +52,8 @@ export type NowFeedStatusKind = 'pull_request_ready' | 'deployment_failed' | 'ap
 export type NowFeedUpdate =
   | { type: 'refresh' }
   | { type: 'mode_changed'; mode: PresenceMode; away: boolean }
-  | { type: 'status'; kind: NowFeedStatusKind };
+  | { type: 'status'; kind: NowFeedStatusKind }
+  | { type: 'board'; projectId: string; version: number };
 
 export type NowFeedEventHub = EventHub<NowFeedUpdate>;
 
@@ -198,19 +201,21 @@ export function registerNowRoutes(app: FastifyInstance) {
     };
     unsubscribe = app.nowEventHub.subscribe((event) => {
       if (closed) return;
-      const frame = event.type === 'mode_changed'
-        ? 'event: mode\ndata: {}\n\n'
-        : 'event: now\ndata: {}\n\n';
-      if (!response.write(frame)) end();
+      const frame: NowSseEvent = event.type === 'mode_changed'
+        ? { event: 'mode', data: {} }
+        : event.type === 'board'
+          ? { event: 'board', data: { projectId: event.projectId, version: event.version } }
+          : { event: 'now', data: {} };
+      if (!writeSseEvent(response, frame)) end();
     });
     unsubscribeActivity = app.jarvisActivityHub.subscribe((event) => {
       if (closed) return;
-      const frame = event.type === 'voice.wake'
-        ? `event: voice-wake\ndata: ${JSON.stringify(event)}\n\n`
+      const frame: NowSseEvent = event.type === 'voice.wake'
+        ? { event: 'voice-wake', data: event }
         : event.type === 'job'
-          ? `event: job\ndata: ${JSON.stringify(event.job)}\n\n`
-          : `event: jarvis-activity\ndata: ${JSON.stringify(event)}\n\n`;
-      if (!response.write(frame)) end();
+          ? { event: 'job', data: event.job }
+          : { event: 'jarvis-activity', data: event };
+      if (!writeSseEvent(response, frame)) end();
     });
     reply.hijack();
     const heartbeat = setInterval(() => {
@@ -227,18 +232,22 @@ export function registerNowRoutes(app: FastifyInstance) {
       'X-Accel-Buffering': 'no',
     });
     response.flushHeaders();
+    const viewValidation = generatedViewValidationOptions(app);
     const workspaceConnection = app.workspaceCommands.connect(principal.objectId, (event, data) => {
-      const frame = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+      const candidate = { event, data };
+      if (!isNowSseEvent(candidate, viewValidation)) return false;
+      const workspaceEvent: NowSseEvent = candidate;
+      const frame = formatSseEvent(workspaceEvent);
       if (response.writableLength + Buffer.byteLength(frame) > 1024 * 1024) return false;
-      return response.write(frame);
+      return writeSseEvent(response, workspaceEvent);
     });
     closeWorkspace = workspaceConnection.close;
-    const trustedBlobHost = generatedViewValidationOptions(app).trustedBlobHost;
+    const trustedBlobHost = viewValidation.trustedBlobHost;
     const ready = {
       sessionId: workspaceConnection.sessionId,
       ...(trustedBlobHost ? { trustedBlobHost } : {}),
     };
-    if (!response.write(`event: workspace-ready\ndata: ${JSON.stringify(ready)}\n\n`)) {
+    if (!writeSseEvent(response, { event: 'workspace-ready', data: ready })) {
       end();
     }
     return reply;

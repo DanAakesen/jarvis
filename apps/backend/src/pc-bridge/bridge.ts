@@ -2,7 +2,16 @@ import { randomUUID } from 'node:crypto';
 import type { FastifyRequest } from 'fastify';
 import websocket from '@fastify/websocket';
 import WebSocket, { type RawData } from 'ws';
-import type { BackgroundJobEvent, JarvisActivityEvent, JarvisVoiceWakeEvent } from '@jarvis/contracts';
+import {
+  isClipboardReadResult,
+  isClipboardText,
+  isClipboardWriteResult,
+  type BackgroundJobEvent,
+  type ClipboardReadResult,
+  type JarvisActivityEvent,
+  type JarvisVoiceWakeEvent,
+} from '@jarvis/contracts';
+import { defaultSettings, readSettings } from '../core/settings.js';
 import { ToolRefusal } from '../core/tool-registry.js';
 import type { BackendModule } from '../modules.js';
 import {
@@ -18,20 +27,35 @@ import {
   type PcActVisionModel,
 } from './pc-act.js';
 
-const MAX_MESSAGE_BYTES = 64 * 1024;
+const MAX_MESSAGE_BYTES = 128 * 1024;
 const MAX_CAPTURE_RESPONSE_BYTES = 1_050_000;
 const DEFAULT_TIMEOUT_MS = 15_000;
 export const PC_BRIDGE_SUBPROTOCOL = 'jarvis.pc.v1';
 const idPattern = /^[\da-f]{8}-[\da-f]{4}-4[\da-f]{3}-[89ab][\da-f]{3}-[\da-f]{12}$/iu;
 const controlActions = new Set<PcCommand['name']>([
   'open_url', 'open_app', 'close_app', 'open_folder', 'focus_window', 'uia_act', 'browser_act', 'media',
-  'window_capture', 'click_point', 'scroll_point', 'open_file',
+  'window_capture', 'click_point', 'scroll_point', 'open_file', 'clipboard_write',
 ]);
 // Voice session states that mean Dan is talking to Jarvis; `ended` and `failed` end the session.
 const activeVoiceStates = new Set<JarvisActivityEvent['type']>(['listening', 'thinking', 'speaking', 'reconnecting']);
 const maxTrackedVoiceSessions = 64;
 const wakeWordTimestampPattern = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u;
 const mediaActions = ['play_pause', 'next', 'previous', 'volume_up', 'volume_down', 'mute'] as const;
+const clipboardSecretAssignment =
+  /(\b(?:password|passwd|pwd|token|access[_ -]?token|refresh[_ -]?token|api[_ -]?key|access[_ -]?key|private[_ -]?key|key|secret|client[_ -]?secret|authorization)\b\s*[:=]\s*)(?:"[^"\r\n]*"|'[^'\r\n]*'|[^\s,;]+)/giu;
+const clipboardBearerToken = /\bBearer\s+\S+/giu;
+const clipboardKnownToken =
+  /\b(?:sk-(?:proj-)?[A-Za-z0-9_-]{16,}|gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|AKIA[A-Z0-9]{16}|eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,})\b/gu;
+const clipboardPrivateKey =
+  /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----[\s\S]*?-----END (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/gu;
+
+function redactClipboardSecrets(value: string): string {
+  return value
+    .replace(clipboardSecretAssignment, '$1[REDACTED]')
+    .replace(clipboardBearerToken, '[REDACTED]')
+    .replace(clipboardKnownToken, '[REDACTED]')
+    .replace(clipboardPrivateKey, '[REDACTED PRIVATE KEY]');
+}
 
 type PcCommand =
   | { name: 'open_url'; arguments: { url: string } }
@@ -53,6 +77,7 @@ type PcCommand =
       confirmed?: boolean;
       text?: string;
       }
+
       | {
         snapshotId: string;
         action: 'keys';
@@ -78,6 +103,8 @@ type PcCommand =
 
   | { name: 'browser_tabs'; arguments: { offset?: number } }
   | { name: 'browser_snapshot'; arguments: { tabId: string } }
+  | { name: 'clipboard_read'; arguments: Record<string, never> }
+  | { name: 'clipboard_write'; arguments: { text: string } }
   | {
     name: 'browser_act';
     arguments:
@@ -182,7 +209,6 @@ export interface PcBridgeConnectionOptions {
 export interface PcBridgeModuleOptions extends PcBridgeConnectionOptions {
   readonly pcActPlanner?: PcActPlanner;
   readonly pcActVisionModel?: PcActVisionModel;
-  readonly pcActVisionDeployment?: string;
   readonly recipes?: PcActOptions['recipes'];
   readonly onPcActStep?: PcActOptions['onStep'];
   readonly runConfirmed?: <T>(
@@ -190,6 +216,18 @@ export interface PcBridgeModuleOptions extends PcBridgeConnectionOptions {
     action: () => Promise<T>,
     signal: AbortSignal,
   ) => Promise<T>;
+}
+
+export interface PcBridgeStatus {
+  readonly connected: boolean;
+  readonly controlPaused: boolean | null;
+  readonly bridgeVersion: string | null;
+  readonly chromeExtensionVersion: string | null;
+  readonly wakeWordEnabled: boolean | null;
+}
+
+export interface PcBridgeModule extends BackendModule {
+  readonly connection: PcBridgeConnection;
 }
 
 type PcBridgeTimingLogger = Pick<FastifyRequest['log'], 'info'>;
@@ -200,6 +238,7 @@ export class PcBridgeConnection {
   private status: boolean | undefined;
   private controlPaused = false;
   private wakeWordListening = false;
+  private wakeWordEnabled: boolean | undefined;
   private onWakeWord: ((at: string) => void) | undefined;
   private readonly activeVoiceSessions = new Set<string>();
   private statusUpdate = Promise.resolve();
@@ -222,6 +261,7 @@ export class PcBridgeConnection {
     this.socket = socket;
     this.onWakeWord = onWakeWord;
     this.wakeWordListening = false;
+    this.wakeWordEnabled = undefined;
     socket.on('message', (data, isBinary) => this.receive(socket, data, isBinary));
     socket.once('close', () => this.detach(socket));
     socket.once('error', () => this.detach(socket));
@@ -250,6 +290,17 @@ export class PcBridgeConnection {
     this.rejectPending(new Error('PC bridge disconnected'));
     this.setStatus(false);
     await this.statusUpdate;
+  }
+
+  readStatus(): PcBridgeStatus {
+    const connected = this.socket?.readyState === WebSocket.OPEN;
+    return {
+      connected,
+      controlPaused: connected ? this.controlPaused : null,
+      bridgeVersion: null,
+      chromeExtensionVersion: null,
+      wakeWordEnabled: connected ? this.wakeWordEnabled ?? null : null,
+    };
   }
 
   async execute(
@@ -334,6 +385,7 @@ export class PcBridgeConnection {
         return;
       }
       this.wakeWordListening = response.wakeWord === true;
+      this.wakeWordEnabled = typeof response.wakeWord === 'boolean' ? response.wakeWord : undefined;
       this.setStatus(true, response.controlPaused);
       this.sendVoiceState();
       return;
@@ -367,6 +419,9 @@ export class PcBridgeConnection {
       else if (error === 'browser_off') this.finish(response.id, new ToolRefusal('Chrome browser automation is off in the PC bridge settings.'));
       else if (error === 'paused') this.finish(response.id, new ToolRefusal(
         'Jarvis control is paused in the PC bridge. Resume it from the tray menu to act on the PC.',
+      ));
+      else if (error === 'too_large' && pending.command === 'clipboard_read') this.finish(response.id, new ToolRefusal(
+        'The clipboard text exceeds the 20 KiB limit; no clipboard content was returned.',
       ));
       else if (error === 'blocked') this.finish(response.id, new ToolRefusal(
         pending.command === 'uia_act'
@@ -432,6 +487,7 @@ export class PcBridgeConnection {
     this.socket = undefined;
     this.onWakeWord = undefined;
     this.wakeWordListening = false;
+    this.wakeWordEnabled = undefined;
     this.rejectPending(new Error('PC bridge disconnected'));
     this.setStatus(false);
   }
@@ -458,10 +514,11 @@ export class PcBridgeConnection {
   }
 }
 
-export function createPcBridgeModule(options: PcBridgeModuleOptions = {}): BackendModule {
+export function createPcBridgeModule(options: PcBridgeModuleOptions = {}): PcBridgeModule {
   const bridge = new PcBridgeConnection(options);
   return {
     id: 'pc-bridge',
+    connection: bridge,
     tools: [
       {
         name: 'pc_open',
@@ -512,6 +569,45 @@ export function createPcBridgeModule(options: PcBridgeModuleOptions = {}): Backe
         execute: async (_input, request, signal) => {
           const result = await bridge.execute({ name: 'active_window', arguments: {} }, signal, request.log);
           return { title: result.title };
+        },
+      },
+      {
+        name: 'pc_clipboard_read',
+        description: 'Read text from Dan’s Windows clipboard only when Dan explicitly asks in the current message. Never read it proactively or based on an earlier turn. Obvious passwords, keys, and tokens are redacted before returning the text.',
+        inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+        sensitive: true,
+        execute: async (_input, request, signal) => {
+          const result = await bridge.execute(
+            { name: 'clipboard_read', arguments: {} },
+            signal,
+            request.log,
+          );
+          if (!isClipboardReadResult(result)) throw new Error('Invalid clipboard read response');
+          const readResult: ClipboardReadResult = { text: redactClipboardSecrets(result.text) };
+          return readResult;
+        },
+      },
+      {
+        name: 'pc_clipboard_write',
+        description: 'Write the exact text Dan provides in the current message to the Windows clipboard. Call only when he explicitly asks; never infer text from earlier context. Text is limited to 20 KiB. An empty string clears the clipboard.',
+        inputSchema: {
+          type: 'object',
+          properties: { text: { type: 'string', maxLength: 20 * 1024 } },
+          required: ['text'],
+          additionalProperties: false,
+        },
+        sensitive: true,
+        execute: async (input, request, signal) => {
+          if (!isRecord(input) || Object.keys(input).length !== 1 || !isClipboardText(input.text)) {
+            throw new ToolRefusal('Provide only clipboard text no larger than 20 KiB.');
+          }
+          const result = await bridge.execute(
+            { name: 'clipboard_write', arguments: { text: input.text } },
+            signal,
+            request.log,
+          );
+          if (!isClipboardWriteResult(result)) throw new Error('Invalid clipboard write response');
+          return result;
         },
       },
       {
@@ -608,8 +704,11 @@ export function createPcBridgeModule(options: PcBridgeModuleOptions = {}): Backe
         },
         reflexSafe: true,
         sensitive: true,
-        execute: (input: unknown, request: FastifyRequest, signal: AbortSignal) =>
-          runPcAct(input, request, signal, {
+        execute: async (input: unknown, request: FastifyRequest, signal: AbortSignal) => {
+          const settings = request.server.settingsStore
+            ? await readSettings(request.server.settingsStore, await request.server.modelCatalogue.read())
+            : defaultSettings;
+          return runPcAct(input, request, signal, {
             observe: (commandSignal) => bridge.execute(
               { name: 'uia_snapshot', arguments: {} },
               commandSignal,
@@ -651,11 +750,12 @@ export function createPcBridgeModule(options: PcBridgeModuleOptions = {}): Backe
           }, {
             planner: options.pcActPlanner!,
             ...(options.pcActVisionModel ? { visionModel: options.pcActVisionModel } : {}),
-            ...(options.pcActVisionDeployment ? { visionDeployment: options.pcActVisionDeployment } : {}),
+            visionDeployment: settings.roles.vision.model,
             ...(options.recipes ? { recipes: options.recipes } : {}),
             ...(options.runConfirmed ? { runConfirmed: options.runConfirmed } : {}),
             ...(options.onPcActStep ? { onStep: options.onPcActStep } : {}),
-          }),
+          });
+        },
       }] : []),
       ...(options.pcActPlanner ? [{
         name: 'codex_prompt',
@@ -1123,6 +1223,8 @@ function validResult(command: PcCommand['name'], value: unknown): value is Recor
   if (command === 'browser_act') {
     return validBrowserActionResult(value) || isConfirmationRequired(value);
   }
+  if (command === 'clipboard_read') return isClipboardReadResult(value);
+  if (command === 'clipboard_write') return isClipboardWriteResult(value);
   return false;
 }
 

@@ -9,14 +9,18 @@ import {
   type HtmlArtifact,
   type HtmlArtifactFrame,
   type HtmlArtifactSource,
+  researchDepths,
+  type ResearchDepth,
   type WebResearchResult,
 } from '@jarvis/contracts';
 import { parse } from 'parse5';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { BackendModule } from '../modules.js';
 import { generatedViewValidationOptions } from './generated-view-validation.js';
+import { defaultSettings, readSettings } from './settings.js';
 import { ToolFailure, ToolRefusal } from './tool-registry.js';
 import { runCodexToolResult, type WebResearchClient } from './web-research.js';
+import type { FolioStore } from '../database/folio-store.js';
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -31,9 +35,9 @@ const inputSchema = Object.freeze({
   properties: {
     topic: { type: 'string', minLength: 1, maxLength: 2_000 },
     title: { type: 'string', minLength: 1, maxLength: 80 },
-    depth: { enum: ['quick', 'deep'] },
+    depth: { enum: [...researchDepths] },
   },
-  required: ['topic', 'depth'],
+  required: ['topic'],
   additionalProperties: false,
 });
 const maxJobs = 8;
@@ -42,12 +46,16 @@ const maxReportBytes = 48 * 1024;
 const maxReportSources = 12;
 const maxFindingLength = 1_000;
 const defaultJobTimeoutMs = 15 * 60_000;
-const defaultInvocationTimeoutMs = 305_000;
 const defaultPollIntervalMs = 1_000;
 const plans = {
   quick: [
     ['Key findings and current evidence', 'Summarize the key findings and current evidence'],
     ['Important facts and primary sources', 'Find important facts and authoritative primary sources'],
+  ],
+  standard: [
+    ['Key findings and current evidence', 'Summarize the key findings and current evidence'],
+    ['Important facts and primary sources', 'Find important facts and authoritative primary sources'],
+    ['Limitations and counterpoints', 'Find important limitations, disagreements, and counterpoints'],
   ],
   deep: [
     ['Overview and key context', 'Explain the background and current state'],
@@ -131,6 +139,10 @@ function boundedQuery(topic: string, suffix: string): string {
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isResearchDepth(value: unknown): value is ResearchDepth {
+  return typeof value === 'string' && researchDepths.includes(value as ResearchDepth);
 }
 
 function hasControlCharacter(value: string): boolean {
@@ -329,7 +341,7 @@ async function sendProgress(
 
 function reportRequest(
   topic: string,
-  depth: 'quick' | 'deep',
+  depth: ResearchDepth,
   partial: boolean,
   frame: HtmlArtifactFrame,
   findings: { query: string; answer: string }[],
@@ -343,22 +355,14 @@ export function createHtmlResearchModule(
   model: string,
   artifacts: ResearchArtifactStore,
   options: ResearchOptions = {},
+  folio?: FolioStore,
 ): BackendModule {
   const jobTimeoutMs = options.jobTimeoutMs ?? defaultJobTimeoutMs;
-  const invocationTimeoutMs = options.invocationTimeoutMs ?? defaultInvocationTimeoutMs;
   const pollIntervalMs = options.pollIntervalMs ?? defaultPollIntervalMs;
   const jobs = new Map<string, ResearchJob>();
-  return {
-    id: 'html-research',
-    tools: [{
-      name: 'research',
-      description: 'Research a topic in the background and open an interactive cited HTML report in the workspace. ' +
-        'Set title to a short 3-6 word window title such as "Microsoft Foundry IQ"; put the full request in topic.',
-      inputSchema,
-      sensitive: true,
-      execute: async (input, request, signal) => {
-        if (!isObject(input) || !['quick', 'deep'].includes(input.depth as string)) {
-          throw new ToolFailure('Choose a research depth of quick or deep.');
+  const executeResearch = async (input: unknown, request: FastifyRequest, signal: AbortSignal, retryOf?: string) => {
+        if (!isObject(input) || (input.depth !== undefined && !isResearchDepth(input.depth))) {
+          throw new ToolFailure('Choose a research depth of quick, standard, or deep.');
         }
         const topic = safeTopic(input.topic);
         const windowTitle = researchWindowTitle(input.title, topic);
@@ -367,6 +371,14 @@ export function createHtmlResearchModule(
             request.principal?.objectId.toLowerCase() !== ownerId.toLowerCase()) {
           throw new ToolRefusal('Research requires an authenticated workspace owner.');
         }
+        const settings = request.server.settingsStore
+          ? await readSettings(request.server.settingsStore, await request.server.modelCatalogue.read())
+          : defaultSettings;
+        const researchSettings = request.server.settingsStore
+          ? settings.roles.research
+          : { model, reasoningEffort: 'none' as const };
+        const depth = isResearchDepth(input.depth) ? input.depth : settings.research.depth;
+        const invocationTimeoutMs = options.invocationTimeoutMs ?? settings.research.timeoutSeconds * 1_000;
         const announceCompletion = request.announceResearchCompletion;
         for (const [id, job] of jobs) {
           if (job.done) jobs.delete(id);
@@ -378,7 +390,7 @@ export function createHtmlResearchModule(
         }
         const jobId = randomUUID();
         const viewId = `research-${jobId.replaceAll('-', '')}`;
-        const searches: SearchProgress[] = plans[input.depth as 'quick' | 'deep'].map(([label, suffix]) => ({
+        const searches: SearchProgress[] = plans[depth].map(([label, suffix]) => ({
           label,
           query: boundedQuery(topic, suffix),
           status: 'pending',
@@ -388,21 +400,27 @@ export function createHtmlResearchModule(
         if (!isWorkspaceCommand(initialCommand, generatedViewValidationOptions(request.server))) {
           throw new ToolFailure('Research progress did not pass workspace validation.');
         }
-        await request.server.workspaceCommands.execute(ownerId, initialCommand, signal);
-
         const controller = new AbortController();
         const job: ResearchJob = { controller, promise: Promise.resolve(), done: false };
-        jobs.set(jobId, job);
-        const tracker = request.server.backgroundJobs.start(
+        const tracker = await request.server.backgroundJobs.start(
           'research', windowTitle, searches.length + 1, () => controller.abort(), 'Starting research',
+          { retryInput: { topic, depth }, ...(retryOf ? { retryOf } : {}) },
         );
+        try {
+          await request.server.workspaceCommands.execute(ownerId, initialCommand, signal);
+        } catch (error) {
+          job.done = true;
+          await tracker.fail('Research could not be started. Try again shortly.');
+          throw error;
+        }
+        jobs.set(jobId, job);
         job.promise = Promise.resolve().then(async () => {
           const timeoutSignal = AbortSignal.timeout(jobTimeoutMs);
           const jobSignal = AbortSignal.any([controller.signal, timeoutSignal]);
           const sourcesByUrl = new Map<string, HtmlArtifactSource>();
           const findings: { query: string; answer: string }[] = [];
           const app = request.server;
-          const sources = () => [...sourcesByUrl.values()].slice(0, 50);
+          const sources = () => [...sourcesByUrl.values()].slice(0, settings.research.maxSources);
           try {
             // Progress windows are best effort: a tab that misses one update must not stop the research.
             const progress = () => sendProgress(app, ownerId, viewId, windowTitle, searches, sources(), jobSignal)
@@ -410,31 +428,32 @@ export function createHtmlResearchModule(
             for (const [index, search] of searches.entries()) {
               jobSignal.throwIfAborted();
               search.status = 'searching';
-              tracker.progress(index, `Searching: ${search.label}`);
+              await tracker.progress(index, `Searching: ${search.label}`);
               await progress();
               try {
                 const result = await runCodexToolResult(
                   clientFor(),
                   'web_research',
                   search.query,
-                  model,
+                  researchSettings.model,
                   jobSignal,
                   invocationTimeoutMs,
                   pollIntervalMs,
                   (value) => parseWebResearchResult(value),
+                  { reasoningEffort: researchSettings.reasoningEffort },
                 );
                 search.status = 'complete';
                 search.answer = result.answer.slice(0, maxFindingLength);
                 findings.push({ query: search.query, answer: result.answer.slice(0, maxFindingLength) });
                 for (const source of result.sources) {
-                  if (sourcesByUrl.size >= 50) break;
+                  if (sourcesByUrl.size >= settings.research.maxSources) break;
                   sourcesByUrl.set(source.url, { title: source.title, url: source.url });
                 }
               } catch (error) {
                 if (jobSignal.aborted) throw error;
                 search.status = 'failed';
               }
-              tracker.progress(index + 1, search.status === 'failed' ? `Search failed: ${search.label}` : `Found: ${search.label}`);
+              await tracker.progress(index + 1, search.status === 'failed' ? `Search failed: ${search.label}` : `Found: ${search.label}`);
               await progress();
             }
             if (findings.length === 0) throw new ToolFailure('No research searches completed successfully.');
@@ -442,19 +461,28 @@ export function createHtmlResearchModule(
             const frame = reportFrame(snapshot);
             const reportSources = sources().slice(0, maxReportSources);
             const partial = searches.some((search) => search.status === 'failed');
-            tracker.progress(searches.length, 'Writing the report');
+            await tracker.progress(searches.length, 'Writing the report');
             const result = await runCodexToolResult(
               clientFor(),
               'html_report',
-              reportRequest(topic, input.depth as 'quick' | 'deep', partial, frame, findings, reportSources),
-              model,
+              reportRequest(topic, depth, partial, frame, findings, reportSources),
+              researchSettings.model,
               jobSignal,
               invocationTimeoutMs,
               pollIntervalMs,
               (value) => parseReport(value, reportSources),
+              { reasoningEffort: researchSettings.reasoningEffort },
             );
             const artifact = await artifacts.create(ownerId, result.title, result.html, sources(), jobSignal);
             if (!isHtmlArtifact(artifact)) throw new ToolFailure('The report failed artifact validation.');
+            await folio?.record(ownerId, {
+              id: `research:${artifact.id}`,
+              kind: 'research',
+              sourceId: artifact.id,
+              title: artifact.title,
+              promptSummary: topic.replace(/\s+/gu, ' ').slice(0, 500),
+              createdAt: artifact.createdAt,
+            }, jobSignal);
             const view: GeneratedView = {
               version: 1,
               title: windowTitle,
@@ -477,14 +505,14 @@ export function createHtmlResearchModule(
               if (!(error instanceof ToolRefusal)) throw error;
               await app.workspaceCommands.execute(ownerId, workspaceCommand('create', viewId, view), jobSignal);
             }
-            tracker.done(viewId, partial ? 'Ready with partial findings' : 'Report ready');
+            await tracker.done(viewId, partial ? 'Ready with partial findings' : 'Report ready');
             notifyCompletion(announceCompletion, { status: 'complete', summary: result.spokenSummary });
           } catch (error) {
             if (!controller.signal.aborted) {
               const reason = error instanceof ToolRefusal
                 ? 'Research was refused. Check workspace access and try again.'
                 : 'Research could not be completed. Try again shortly.';
-              tracker.fail(reason);
+              await tracker.fail(reason);
               await sendProgress(
                 app,
                 ownerId,
@@ -503,9 +531,49 @@ export function createHtmlResearchModule(
             job.done = true;
           }
         }).catch(() => undefined);
-        return { jobId, message: 'Research has started. The workspace window will show progress and the completed report.' };
+        return { jobId: tracker.jobId, message: 'Research has started. The workspace window will show progress and the completed report.' };
+  };
+  return {
+    id: 'html-research',
+    tools: [
+      {
+        name: 'research',
+        description: 'Research a topic in the background and open an interactive cited HTML report in the workspace. ' +
+          'Choose quick, standard, or deep depth; omit depth to use the saved research default. ' +
+          'Set title to a short 3-6 word window title such as "Microsoft Foundry IQ"; put the full request in topic.',
+        inputSchema,
+        sensitive: true,
+        execute: (input, request, signal) => executeResearch(input, request, signal),
       },
-    }],
+      {
+        name: 'retry_job',
+        description: 'Retry a failed research job by its jobId. The saved topic and research depth are reused.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            jobId: { type: 'string', pattern: '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$' },
+          },
+          required: ['jobId'],
+          additionalProperties: false,
+        },
+        sensitive: true,
+        execute: async (input, request, signal) => {
+          if (!isObject(input) || typeof input.jobId !== 'string' ||
+              !/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/u.test(input.jobId)) {
+            throw new ToolFailure('A valid background job ID is required.');
+          }
+          const stored = await request.server.backgroundJobs.details(input.jobId);
+          if (!stored?.details.retryable || !stored.retryInput) {
+            throw new ToolRefusal('No failed research job can be retried with that ID.');
+          }
+          return executeResearch({
+            topic: stored.retryInput.topic,
+            title: stored.details.job.title,
+            depth: stored.retryInput.depth,
+          }, request, signal, input.jobId);
+        },
+      },
+    ],
     registerRoutes: async (app) => {
       app.addHook('onClose', async () => {
         for (const job of jobs.values()) job.controller.abort();

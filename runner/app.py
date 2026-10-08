@@ -591,6 +591,20 @@ def _optional_config(payload: dict[str, Any], key: str, max_length: int) -> str 
     return None if value == "default" else value
 
 
+def _optional_reasoning(payload: dict[str, Any], agent: str) -> str | None:
+    reasoning = _optional_config(payload, "reasoning", 32)
+    if reasoning is None:
+        return None
+    supported = (
+        {"none", "minimal", "low", "medium", "high", "xhigh"}
+        if agent == "codex"
+        else {"none", "low", "medium", "high"}
+    )
+    if reasoning not in supported:
+        raise ValueError("'reasoning' is not supported for this agent")
+    return reasoning
+
+
 def _workspace_config(payload: dict[str, Any]) -> dict[str, str]:
     if not isinstance(payload, dict):
         raise ValueError("Workspace configuration must be an object")
@@ -953,6 +967,14 @@ def _codex_tool_model(value: Any) -> str:
     return model
 
 
+def _codex_tool_reasoning(value: Any) -> str | None:
+    if value is None:
+        return None
+    if value not in {"minimal", "low", "medium", "high", "xhigh"}:
+        raise ValueError("Codex tool reasoning effort is invalid")
+    return value
+
+
 def _codex_tool_timeout() -> int:
     value = os.environ.get("JARVIS_CODEX_TOOL_TIMEOUT_SECONDS", str(DEFAULT_CODEX_TOOL_TIMEOUT_SECONDS))
     try:
@@ -1003,13 +1025,15 @@ def _codex_html_report_prompt(report_request: str) -> str:
 
 
 def _codex_tool_command(
-    model: str, output_path: Path, prompt: str, *, live_search: bool = True
+    model: str, output_path: Path, prompt: str, *, live_search: bool = True, reasoning: str | None = None
 ) -> list[str]:
     command = [
         "codex", "--disable", "shell_tool", "exec", "--skip-git-repo-check", "-s", "read-only",
     ]
     if live_search:
         command.extend(["-c", "web_search=live"])
+    if reasoning is not None:
+        command.extend(["-c", f"model_reasoning_effort={reasoning}"])
     command.extend(["-m", model, "--output-last-message", str(output_path), prompt])
     return command
 
@@ -1085,7 +1109,7 @@ async def _run_codex_tool(state: TaskState, tool: str, query: str) -> None:
             prompt = _codex_html_report_prompt(query) if report else _codex_research_prompt(query)
             process = await asyncio.create_subprocess_exec(
                 *_codex_tool_command(
-                    model, workspace / "result.json", prompt, live_search=not report,
+                    model, workspace / "result.json", prompt, live_search=not report, reasoning=state.reasoning,
                 ),
                 cwd=str(workspace),
                 env=env,
@@ -1485,10 +1509,13 @@ class ACPClient:
             await asyncio.gather(self._reader_task, return_exceptions=True)
 
 
-def _agent_command(agent: str, model: str | None = None) -> list[str]:
+def _agent_command(agent: str, model: str | None = None, reasoning: str | None = None) -> list[str]:
     command = ["copilot", "--acp", "--stdio", "--allow-all"] if agent == "copilot" else ["codex-acp"]
-    if agent == "copilot" and model is not None:
-        command.extend(["--model", model])
+    if agent == "copilot":
+        if model is not None:
+            command.extend(["--model", model])
+        if reasoning is not None and reasoning != "none":
+            command.extend(["--reasoning-effort", reasoning])
     return command
 
 
@@ -1708,7 +1735,7 @@ async def _run_task(
                 state.model = persisted_session["model"]
                 state.reasoning = persisted_session["reasoning"]
             client = ACPClient(
-                _agent_command(state.agent, state.model),
+                _agent_command(state.agent, state.model, state.reasoning),
                 project,
                 state,
                 env,
@@ -1978,6 +2005,7 @@ async def invoke(request: Request) -> Response:
                 prompt = None
                 upload_key = None
             model = _codex_tool_model(payload.get("model"))
+            reasoning = _codex_tool_reasoning(payload.get("reasoning"))
         except ValueError as exc:
             return JSONResponse({"error": str(exc)}, status_code=400)
         state = TaskState(
@@ -1988,6 +2016,7 @@ async def invoke(request: Request) -> Response:
             mode=mode,
             tool=tool,
             model=model,
+            reasoning=reasoning,
         )
         async with tasks_lock:
             tasks[invocation_id] = state
@@ -2032,9 +2061,7 @@ async def invoke(request: Request) -> Response:
         return JSONResponse({"error": str(exc)}, status_code=400)
     try:
         model = _optional_config(payload, "model", 100)
-        reasoning = _optional_config(payload, "reasoning", 32)
-        if agent == "copilot" and reasoning is not None:
-            raise ValueError("'reasoning' is only supported for Codex")
+        reasoning = _optional_reasoning(payload, agent)
         workspace = _session_workspace(session_id, payload)
     except ValueError as exc:
         return JSONResponse({"error": str(exc)}, status_code=400)

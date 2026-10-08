@@ -8,6 +8,44 @@ import {
 } from './github-app.js';
 
 describe('GitHub App installation tokens', () => {
+  it('reads validated installation permission levels without creating or exposing an installation token', async () => {
+    const now = Date.parse('2026-10-07T12:00:00.000Z');
+    const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValueOnce(new Response(JSON.stringify({
+      id: 123,
+      permissions: { contents: 'write', issues: 'read', pull_requests: 'write' },
+    })));
+    const issuer = createGitHubAppTokenIssuer({
+      appId: '123',
+      getPrivateKey: async () => privateKey.export({ type: 'pkcs8', format: 'pem' }).toString(),
+      fetch: fetchImpl,
+      now: () => now,
+    });
+
+    await expect(issuer.readInstallationPermissions('DanAakesen/jarvis')).resolves.toEqual({
+      contents: 'write', issues: 'read', pull_requests: 'write',
+    });
+    expect(fetchImpl).toHaveBeenCalledOnce();
+    expect(String(fetchImpl.mock.calls[0]?.[0])).toBe(
+      'https://api.github.com/repos/DanAakesen/jarvis/installation',
+    );
+  });
+
+  it('rejects malformed installation permission data', async () => {
+    const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
+    const issuer = createGitHubAppTokenIssuer({
+      appId: '123',
+      getPrivateKey: async () => privateKey.export({ type: 'pkcs8', format: 'pem' }).toString(),
+      fetch: vi.fn<typeof fetch>().mockResolvedValueOnce(new Response(JSON.stringify({
+        id: 123, permissions: { contents: 'secret' },
+      }))),
+    });
+
+    await expect(issuer.readInstallationPermissions('DanAakesen/jarvis')).rejects.toThrow(
+      'GitHub installation permissions are invalid',
+    );
+  });
+
   it('signs a short-lived App JWT and requests a one-hour token scoped to one repository', async () => {
     const now = Date.parse('2026-10-04T09:00:00.000Z');
     const { privateKey, publicKey } = generateKeyPairSync('rsa', {
@@ -308,6 +346,31 @@ describe('GitHub App installation tokens', () => {
     expect(JSON.parse(String(tokenOptions?.body))).toEqual({
       repositories: ['repo'],
       permissions: { contents: 'read' },
+    });
+  });
+
+  it('issues a read-only contents, issues, and pull-requests token for repository discussions', async () => {
+    const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
+    const now = Date.parse('2026-10-04T09:00:00.000Z');
+    const fetchImpl = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ id: 123 }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        token: 'ghs_repository-read-token',
+        expires_at: new Date(now + 60 * 60 * 1000).toISOString(),
+      }), { status: 201 }));
+    const issuer = createGitHubAppTokenIssuer({
+      appId: '123456',
+      getPrivateKey: async () => privateKey.export({ type: 'pkcs8', format: 'pem' }).toString(),
+      fetch: fetchImpl,
+      now: () => now,
+    });
+
+    await issuer.issueForRepositoryRead('DanAakesen/repo');
+
+    const [, tokenOptions] = fetchImpl.mock.calls[1]!;
+    expect(JSON.parse(String(tokenOptions?.body))).toEqual({
+      repositories: ['repo'],
+      permissions: { contents: 'read', issues: 'read', pull_requests: 'read' },
     });
   });
 

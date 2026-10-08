@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import Fastify, { LogController } from 'fastify';
 import cors from '@fastify/cors';
 import type { Logger } from 'pino';
+import type { SystemSmokeCheckId } from '@jarvis/contracts';
 import type { BackgroundJobEvent, JarvisActivityEvent, JarvisVoiceWakeEvent } from '@jarvis/contracts';
 import { localWebOrigin, type BackendConfig } from './config.js';
 import { createLogger } from './logging.js';
@@ -19,16 +20,19 @@ import type { ReflexClassifier } from './core/reflex.js';
 import type { BrowserAgent } from './core/browser-agent.js';
 import { factoryModule } from './factory/index.js';
 import type { TaskController, TaskEventHub, TaskEventMessage, TaskStore } from './factory/task-store.js';
+import { createGitHubFactoryBoardReader, FactoryBoardCache, type FactoryBoardReader } from './factory/board.js';
 import type { GitHubAppTokenIssuer, GitHubRepositoryCatalog } from './github-app.js';
 import type { ProjectStore } from './factory/projects.js';
 import type { ReleaseGraphReader, ReleaseViewStore } from './factory/release-view.js';
 import type { RepositoryCreator } from './factory/new-project.js';
 import { registerModules, type BackendModule } from './modules.js';
 import type { SettingsStore } from './core/settings.js';
+import { fallbackModelCatalogue, type ModelCatalogueReader } from './core/model-catalog.js';
 import type { NowFeedEventHub, NowFeedStore, NowFeedUpdate } from './core/now.js';
 import type { CredentialStatusStore } from './credentials/credential-status.js';
 import type { runCodexRenewalOnce } from './credentials/codex-renewal.js';
 import type { UsageStore } from './core/usage.js';
+import type { BackgroundJobStore } from './database/background-job-store.js';
 import type { SandboxHeartbeat } from './factory/heartbeat.js';
 import type { ContainerAppScaler } from './operations/container-app-scale.js';
 import { createSleepModule } from './operations/sleep.js';
@@ -38,6 +42,11 @@ import type { PhoneSessionStore } from './database/phone-session-store.js';
 import type { TaskStatusNotificationStore } from './database/task-status-notification-store.js';
 import { WorkspaceCommandBroker } from './core/workspace-commands.js';
 import { createTaskStatusNotificationHandler } from './factory/task-status-notifications.js';
+import type { ModelDeploymentWorkflow } from './core/model-deployments.js';
+import {
+  createSystemSmokeReader, createSystemStatusReader, type SystemSmokeReader, type SystemStatusProbe,
+  type SystemStatusReader,
+} from './system-status.js';
 
 export interface BuildAppOptions {
   readonly databaseStatus?: () => boolean;
@@ -50,13 +59,18 @@ export interface BuildAppOptions {
   readonly toolCallStore?: ToolCallStore;
   readonly taskStore?: TaskStore;
   readonly githubAppTokenIssuer?: GitHubAppTokenIssuer;
+  readonly factoryBoardReader?: FactoryBoardReader;
   readonly githubRepositoryCatalog?: GitHubRepositoryCatalog;
   readonly taskController?: TaskController;
   readonly eventHub?: TaskEventHub;
   readonly settingsStore?: SettingsStore;
+  readonly modelCatalogue?: ModelCatalogueReader;
+  readonly modelDeploymentWorkflow?: ModelDeploymentWorkflow | null;
   readonly credentialStatusStore?: CredentialStatusStore;
   readonly renewCodexCredential?: () => ReturnType<typeof runCodexRenewalOnce>;
   readonly usageStore?: UsageStore;
+  readonly backgroundJobStore?: BackgroundJobStore;
+  readonly onEmbeddingModelChanged?: (jobs: BackgroundJobRegistry) => Promise<void>;
   readonly nowFeedStore?: NowFeedStore;
   readonly nowEventHub?: NowFeedEventHub;
   readonly jarvisActivityHub?: JarvisActivityHub;
@@ -72,6 +86,8 @@ export interface BuildAppOptions {
   readonly phoneSessionStore?: PhoneSessionStore | null;
   readonly taskStatusNotificationStore?: TaskStatusNotificationStore | null;
   readonly workspaceCommands?: WorkspaceCommandBroker;
+  readonly systemStatusReader?: SystemStatusReader;
+  readonly systemSmokeProbes?: Partial<Record<SystemSmokeCheckId, SystemStatusProbe>>;
 }
 
 declare module 'fastify' {
@@ -85,10 +101,15 @@ declare module 'fastify' {
     toolCallStore: ToolCallStore | null;
     taskStore: TaskStore | null;
     githubAppTokenIssuer: GitHubAppTokenIssuer | null;
+    factoryBoardReader: FactoryBoardReader;
+    factoryBoardCache: FactoryBoardCache;
+    publishFactoryBoardChange(projectId: string): void;
     githubRepositoryCatalog: GitHubRepositoryCatalog | null;
     taskController: TaskController | null;
     eventHub: TaskEventHub;
     settingsStore: SettingsStore | null;
+    modelCatalogue: ModelCatalogueReader;
+    modelDeploymentWorkflow: ModelDeploymentWorkflow | null;
     credentialStatusStore: CredentialStatusStore | null;
     renewCodexCredential: (() => ReturnType<typeof runCodexRenewalOnce>) | null;
     usageStore: UsageStore | null;
@@ -107,6 +128,9 @@ declare module 'fastify' {
     taskStatusNotificationStore: TaskStatusNotificationStore | null;
     workspaceCommands: WorkspaceCommandBroker;
     backgroundJobs: BackgroundJobRegistry;
+    onEmbeddingModelChanged: ((jobs: BackgroundJobRegistry) => Promise<void>) | null;
+    systemStatusReader: SystemStatusReader;
+    systemSmokeReader: SystemSmokeReader;
   }
 }
 
@@ -149,9 +173,17 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
       responseTime: reply.elapsedTime,
     }, 'request.completed');
   });
+  const systemStatusReader = options.systemStatusReader ??
+    createSystemStatusReader({}, process.env.JARVIS_DEPLOYED_COMMIT);
+  app.decorate('systemStatusReader', systemStatusReader);
+  app.decorate('systemSmokeReader', createSystemSmokeReader(
+    systemStatusReader,
+    options.systemSmokeProbes ?? {},
+  ));
   app.setErrorHandler((error, request, reply) => {
     const candidate = (error as { statusCode?: number }).statusCode;
     const statusCode = candidate && Number.isInteger(candidate) && candidate >= 400 && candidate < 500 ? candidate : 500;
+    systemStatusReader.recordError(request.routeOptions.url, statusCode);
     request.log.error({ statusCode }, 'request.failed');
     reply.code(statusCode).send({ error: statusCode < 500 ? 'Invalid request' : 'Internal server error' });
   });
@@ -167,16 +199,37 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
   app.decorate('githubRepositoryCatalog', options.githubRepositoryCatalog ?? null);
   app.decorate('taskController', options.taskController ?? null);
   app.decorate('eventHub', options.eventHub ?? createEventHub<TaskEventMessage>());
+  app.decorate('factoryBoardReader', options.factoryBoardReader ?? createGitHubFactoryBoardReader());
+  app.decorate('factoryBoardCache', new FactoryBoardCache());
   app.decorate('nowFeedStore', options.nowFeedStore ?? null);
   app.decorate('nowEventHub', options.nowEventHub ?? createEventHub<NowFeedUpdate>());
+  const factoryBoardVersions = new Map<string, number>();
+  app.decorate('publishFactoryBoardChange', (projectId: string) => {
+    const version = (factoryBoardVersions.get(projectId) ?? 0) + 1;
+    factoryBoardVersions.set(projectId, version);
+    app.factoryBoardCache.invalidateAll();
+    app.nowEventHub.publish({ type: 'board', projectId, version });
+  });
+  const unsubscribeFactoryBoardEvents = app.eventHub.subscribe((event) => {
+    app.factoryBoardCache.invalidateAll();
+    void app.taskStore?.get(event.taskId, 0, 0).then((task) => {
+      if (task) app.publishFactoryBoardChange(task.projectId);
+    }).catch(() => app.log.warn('factory.board_task_event_failed'));
+  });
+  app.addHook('onClose', async () => { unsubscribeFactoryBoardEvents(); });
   app.decorate('jarvisActivityHub', options.jarvisActivityHub ??
     createEventHub<JarvisActivityEvent | JarvisVoiceWakeEvent | BackgroundJobEvent>());
-  app.decorate('backgroundJobs', new BackgroundJobRegistry(app.jarvisActivityHub));
+  const backgroundJobs = new BackgroundJobRegistry(app.jarvisActivityHub, Date.now, options.backgroundJobStore);
+  app.decorate('backgroundJobs', backgroundJobs);
+  app.decorate('onEmbeddingModelChanged', options.onEmbeddingModelChanged ?? null);
+  app.addHook('onReady', async () => { await backgroundJobs.initialize(); });
   app.decorate('onConversationSessionEnded', options.onConversationSessionEnded ?? (() => {}));
   const workspaceCommands = options.workspaceCommands ?? new WorkspaceCommandBroker();
   app.decorate('workspaceCommands', workspaceCommands);
   app.addHook('onClose', async () => { workspaceCommands.dispose(); });
   app.decorate('settingsStore', options.settingsStore ?? null);
+  app.decorate('modelCatalogue', options.modelCatalogue ?? { read: async () => fallbackModelCatalogue() });
+  app.decorate('modelDeploymentWorkflow', options.modelDeploymentWorkflow ?? null);
   app.decorate('credentialStatusStore', options.credentialStatusStore ?? null);
   app.decorate('renewCodexCredential', options.renewCodexCredential ?? null);
   app.decorate('usageStore', options.usageStore ?? null);

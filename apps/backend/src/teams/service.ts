@@ -34,6 +34,7 @@ export const confirmationActionKinds = [
   'create_repository',
   'computer_use',
   'spend_money',
+  'model_deployment',
   'other',
 ] as const;
 

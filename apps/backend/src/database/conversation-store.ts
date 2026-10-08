@@ -1,9 +1,12 @@
 import sql from 'mssql';
+import { readFile } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
 import { databaseReadRequest } from './wake-retry.js';
 import type {
   ConversationChannel,
   ConversationHistoryMessage,
   ConversationHistoryPage,
+  ConversationSearchInput,
   ConversationLanguage,
   ConversationMessage,
   ConversationSteeringMessage,
@@ -12,6 +15,26 @@ import type {
   ConversationStore,
   ConversationToolCall,
 } from '../core/conversation-store.js';
+
+const conversationSearchSetupPath = fileURLToPath(
+  new URL('../../../../db/migrations/setup/0032_conversation_search.sql', import.meta.url),
+);
+const execute = async <T>(request: sql.Request, signal: AbortSignal, work: () => Promise<T>): Promise<T> => {
+  signal.throwIfAborted();
+  const cancel = () => { request.cancel(); };
+  signal.addEventListener('abort', cancel, { once: true });
+  try {
+    const result = await work();
+    signal.throwIfAborted();
+    return result;
+  } finally {
+    signal.removeEventListener('abort', cancel);
+  }
+};
+
+function searchTerms(query: string): string[] {
+  return [...new Set(query.match(/[\p{L}\p{N}]{2,}/gu)?.map((term) => term.toLowerCase().slice(0, 64)) ?? [])].slice(0, 8);
+}
 
 interface SessionRow {
   id: string;
@@ -72,7 +95,21 @@ function messageFromRow(row: MessageRow): ConversationMessage {
 }
 
 export function createConversationStore(pool: sql.ConnectionPool): ConversationStore {
+  let initialized = false;
+  let fullTextSearchAvailable = false;
   return {
+    async initialize() {
+      if (initialized) return;
+      const setup = await readFile(conversationSearchSetupPath, 'utf8');
+      await pool.request().query(setup);
+      const result = await pool.request().query<{ fulltext_search: boolean }>(
+        `SELECT CONVERT(bit, CASE WHEN EXISTS (
+          SELECT 1 FROM sys.fulltext_indexes WHERE object_id = OBJECT_ID(N'dbo.messages')
+        ) THEN 1 ELSE 0 END) AS fulltext_search;`);
+      fullTextSearchAvailable = result.recordset[0]?.fulltext_search === true;
+      initialized = true;
+    },
+
     async createSession(input) {
       const result = await pool.request()
         .input('channel', sql.NVarChar(16), input.channel)
@@ -271,6 +308,78 @@ export function createConversationStore(pool: sql.ConnectionPool): ConversationS
         messages,
         nextCursor: hasMore ? messages[0]?.id ?? null : null,
       } satisfies ConversationHistoryPage;
+    },
+
+    async searchMessages(input: ConversationSearchInput, signal: AbortSignal) {
+      const query = input.query.trim();
+      if (!query || query.length > 500 || !Number.isInteger(input.limit) || input.limit < 1 || input.limit > 50 ||
+          (input.from && !Number.isFinite(input.from.getTime())) ||
+          (input.toExclusive && !Number.isFinite(input.toExclusive.getTime()))) {
+        throw new TypeError('Conversation search request is invalid');
+      }
+      const terms = searchTerms(query);
+      if (terms.length === 0) return { results: [], hasMore: false };
+
+      const request = databaseReadRequest(pool)
+        .input('take', sql.Int, input.limit + 1)
+        .input('source', sql.NVarChar(16), input.source ?? null)
+        .input('from', sql.DateTime2(7), input.from ?? null)
+        .input('toExclusive', sql.DateTime2(7), input.toExclusive ?? null);
+      terms.forEach((term, index) => request.input(`term${index}`, sql.NVarChar(64), term));
+      if (fullTextSearchAvailable) {
+        request.input('condition', sql.NVarChar(4000), terms.map((term) => `"${term}"`).join(' OR '));
+      }
+
+      const snippetPosition = terms.map((_term, index) =>
+        `NULLIF(CHARINDEX(@term${index}, m.text COLLATE Latin1_General_100_CI_AI), 0)`,
+      ).join(', ');
+      const matching = fullTextSearchAvailable
+        ? `FROM CONTAINSTABLE(dbo.messages, text, @condition) AS matches
+          INNER JOIN dbo.messages AS m ON m.id = matches.[KEY]
+          INNER JOIN dbo.jarvis_sessions AS s ON s.id = m.jarvis_session_id`
+        : `FROM dbo.messages AS m
+          INNER JOIN dbo.jarvis_sessions AS s ON s.id = m.jarvis_session_id`;
+      const fallbackTerms = fullTextSearchAvailable
+        ? ''
+        : `AND (${terms.map((_term, index) => `m.text LIKE N'%' + @term${index} + N'%'`).join(' OR ')})`;
+      const rank = fullTextSearchAvailable ? 'matches.[RANK]' : '0';
+      const result = await execute(request, signal, () => request.query<{
+        message_id: string;
+        session_id: string;
+        source: ConversationChannel;
+        role: ConversationRole;
+        at: Date;
+        snippet: string;
+      }>(`WITH candidates AS (
+          SELECT TOP (@take) m.id, m.jarvis_session_id, s.channel, m.role, m.at, m.text, ${rank} AS search_rank
+          ${matching}
+          WHERE (@source IS NULL OR s.channel = @source)
+            AND (@from IS NULL OR m.at >= @from)
+            AND (@toExclusive IS NULL OR m.at < @toExclusive)
+            ${fallbackTerms}
+          ORDER BY search_rank DESC, m.at DESC, m.id DESC
+        )
+        SELECT CONVERT(varchar(20), m.id) AS message_id,
+          CONVERT(varchar(20), m.jarvis_session_id) AS session_id,
+          m.channel AS source, m.role, m.at,
+          CASE WHEN position.match_at = 0 THEN LEFT(m.text, 240)
+            ELSE SUBSTRING(m.text, CASE WHEN position.match_at > 80 THEN position.match_at - 80 ELSE 1 END, 240)
+          END AS snippet
+        FROM candidates AS m
+        CROSS APPLY (SELECT COALESCE(${snippetPosition}, 0) AS match_at) AS position
+        ORDER BY m.search_rank DESC, m.at DESC, m.id DESC;`));
+      const hasMore = result.recordset.length > input.limit;
+      return {
+        results: result.recordset.slice(0, input.limit).map((row) => ({
+          messageId: row.message_id,
+          sessionId: row.session_id,
+          source: row.source,
+          role: row.role,
+          at: row.at.toISOString(),
+          snippet: row.snippet,
+        })),
+        hasMore,
+      };
     },
 
     async getDanMessagesAfter({ sessionId, after, limit }) {

@@ -6,6 +6,8 @@
 !db/
 !db/migrations/
 !db/migrations/**
+!docs/
+!docs/features.md
 !apps/
 !apps/backend/
 !apps/backend/package.json

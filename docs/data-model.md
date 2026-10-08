@@ -1,6 +1,6 @@
 # Data model
 
-Version 1, updated 6 October 2026 for P6-22, P7-01, P7-02, P7-03, P7-08, P7-13, P7-15, P7-22, P7-37 and P7-40. Scope: the Jarvis core, Software Factory, Teams calling, notification and browser-confirmation state, Google Calendar/Gmail tools, the GitHub vault's derived search index, long-term memory, image metadata and generated HTML report artifacts. Azure SQL is the source of truth for operational records; Dan's private GitHub vault is the source of truth for durable knowledge. Blob Storage holds large files referenced from SQL. Requirements: [PRODUCT.md](../PRODUCT.md); system: [architecture.md](architecture.md).
+Version 1, updated 8 October 2026 for P6-22, P7-01, P7-02, P7-03, P7-08, P7-13, P7-15, P7-22, P7-37, P7-40, P7-44 and P9-30. Scope: the Jarvis core, background jobs, Software Factory, Teams calling, notification and browser-confirmation state, Google Calendar/Gmail tools, the GitHub vault's derived search index, long-term memory, image metadata and generated HTML report artifacts. Azure SQL is the source of truth for operational records; Dan's private GitHub vault is the source of truth for durable knowledge. Blob Storage holds large files referenced from SQL. Requirements: [PRODUCT.md](../PRODUCT.md); system: [architecture.md](architecture.md).
 
 ## Migration infrastructure
 
@@ -67,8 +67,13 @@ the Usage page includes in its daily per-tool count. Its down migration refuses
 to restore the old constraint while refused rows exist.
 P7-40 adds group 11 in `0021_vault_memory_index.sql`: heading chunks indexed by
 vault path and blob SHA, with an optional `vector(1536)` column when available.
-The table is a derived cache of the private GitHub vault, not an authoritative
-store; the paired down migration removes only this index table.
+P7-44 adds nullable `embedding_json` to `memories` and `vault_chunks` in
+`0028_json_embeddings_without_vector.sql` only when SQL Server has no `vector`
+type. The backend stores and ranks those JSON vectors in code, then retains
+full-text/term search as fallback; vault embedding matrices are cached until
+index changes. A bounded 4,096-embedding-per-sync backfill resumes from notes whose
+embeddings remain null. `vault_chunks` remains only a derived cache of the
+private GitHub vault; its paired down migration removes that index table.
 
 P7-37 adds `dbo.workspace_html_artifacts` in
 `0025_workspace_html_artifacts.sql`, separate from the image artifact table. It
@@ -83,6 +88,14 @@ P8-14 generated views are versioned JSON contracts in the shared
 `@jarvis/contracts` workspace. A view carries bounded source/page metadata but
 is not stored in SQL or Blob; source records retain their existing storage and
 retention. P8-14 adds no tables or migrations.
+
+P9-14 creates `background_jobs` and append-only `background_job_steps` in
+`0029_background_jobs.sql`. P9-30 adds nullable `retry_input` and `retry_job_id`
+columns in `0034_research_job_retry.sql`: the former stores only the original
+research topic and selected depth for 30 days; the latter atomically links a
+failed attempt to its one retry. Existing jobs without retry input are not
+retryable, and reverting migration 0034 drops both retry columns and their
+metadata.
 
 ## Overview
 
@@ -317,6 +330,7 @@ erDiagram
     projects {
         bigint id PK
         string name "Jarvis, Daily, ..."
+        string description "nullable, up to 2,000 characters"
         string repo "owner/name"
         string default_branch
         string default_agent "codex | copilot"
@@ -330,6 +344,7 @@ erDiagram
 ```
 
 - One row per repository. `tech` chooses the sandbox image (small images, L23).
+- P9-28 adds nullable `description` in migration 0033; legacy rows remain null.
 - P1-03's SQL-backed API returns active projects, updates only active rows, and
   archives by setting `active = 0`; archived rows remain to preserve task
   references and the unique repository constraint. Repositories stay reserved
@@ -667,7 +682,7 @@ approval is atomically consumed before the backend invokes its action.
 | `messages` | `model` and token counts are nullable (Dan's messages have none); token counts ≥ 0 |
 | `tool_calls` | `result` nullable; current outcome vocabulary is `ok`, `refused` or `error` (`0001` originally permitted only `ok`/`error`, expanded by `0018_tool_call_refused_outcome.sql`); `task_id` nullable |
 | Foreign keys | No cascades. Projects are archived (`active = 0`), not deleted |
-| Indexes | Dispatcher `IX_tasks_state_next_attempt_at`; timeline `IX_task_events_task_id_at`; plus one per foreign key: `IX_messages_jarvis_session_id_at`, `IX_tasks_project_id_state` (also the per-project running count), filtered `IX_tasks_origin_message_id`, `IX_tool_calls_message_id`, filtered `IX_tool_calls_task_id` |
+| Indexes | Dispatcher `IX_tasks_state_next_attempt_at`; timeline `IX_task_events_task_id_at`; conversation search `IX_messages_at` plus the optional full-text index; and one per foreign key: `IX_messages_jarvis_session_id_at`, `IX_tasks_project_id_state` (also the per-project running count), filtered `IX_tasks_origin_message_id`, `IX_tool_calls_message_id`, filtered `IX_tool_calls_task_id` |
 
 P6-03's `0005_task_event_archives.sql` adds the archive index table without changing
 the `task_events` producer schema. The API still validates every field (P1-03,

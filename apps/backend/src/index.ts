@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { DefaultAzureCredential } from '@azure/identity';
 import { SecretClient } from '@azure/keyvault-secrets';
 import { CallAutomationClient } from '@azure/communication-call-automation';
@@ -14,6 +15,7 @@ import { createProjectStore } from './database/project-store.js';
 import { createReleaseViewStore } from './database/release-view-store.js';
 import { createConversationStore } from './database/conversation-store.js';
 import { createPhoneSessionStore } from './database/phone-session-store.js';
+import { createPhoneStatusModule } from './phone/status.js';
 import { createTaskStore } from './database/task-store.js';
 import { createTaskStatusNotificationStore } from './database/task-status-notification-store.js';
 import { createDispatcherStore } from './database/dispatcher-store.js';
@@ -43,6 +45,8 @@ import {
   createVoiceRelayModule,
 } from './voice/relay.js';
 import { createArmContainerAppScaler } from './operations/container-app-scale.js';
+import { createArmModelCatalogueReader, fallbackModelCatalogue } from './core/model-catalog.js';
+import { createArmModelDeploymentClient, createModelDeploymentWorkflow } from './core/model-deployments.js';
 import { createSleepModule } from './operations/sleep.js';
 import { createFoundryInvocationConversationAgent } from './core/chat-agent.js';
 import { FoundryClient } from './foundry/client.js';
@@ -73,7 +77,9 @@ import { createAlertNotifier, notifyAlert } from './alerts.js';
 import type { NowFeedUpdate } from './core/now.js';
 import { createAlertActivityStore } from './database/alert-store.js';
 import { createMemoryStore, createVaultIndexStore } from './database/memory-store.js';
-import { createFoundryMemoryEmbedder } from './core/memory-embeddings.js';
+import { createFoundryMemoryEmbedder, MEMORY_EMBEDDING_DIMENSIONS } from './core/memory-embeddings.js';
+import type { MemoryEmbedder } from './core/memory-embeddings.js';
+import { readSettings } from './core/settings.js';
 import { createGitHubVaultClient, VAULT_BRANCH, VAULT_REPOSITORY } from './vault/github-client.js';
 import { createVaultModule } from './vault/index.js';
 import { createArmBudgetReader, startBudgetAlertMonitor } from './operations/budget-alert.js';
@@ -81,10 +87,11 @@ import { createGoogleApiClient } from './google/api-client.js';
 import { createGoogleTokenProvider, type GoogleOAuthCredentials } from './google/oauth.js';
 import { createGoogleModule } from './google/tools.js';
 import { createScreenFrameUsageStore } from './database/screen-usage-store.js';
+import { createBackgroundJobStore } from './database/background-job-store.js';
 import { createFoundryScreenVisionModel } from './vision/foundry-model.js';
 import { createScreenVisionModule, ScreenVisionService } from './vision/screen.js';
 import { createVisionWatchModule, VisionWatchService } from './vision/watch.js';
-import { createWebResearchModule } from './core/web-research.js';
+import { createWebResearchModule, runCodexToolResult } from './core/web-research.js';
 import { createHtmlResearchModule } from './core/research.js';
 import { HtmlArtifactStore } from './database/html-artifact-store.js';
 import { createTeamsNotificationStore } from './database/teams-notification-store.js';
@@ -100,6 +107,10 @@ import { createImageGenerationModule } from './core/image-generation.js';
 import { WorkspaceArtifactStore } from './database/workspace-artifact-store.js';
 import { WorkspaceHtmlArtifactStore } from './database/workspace-html-artifact-store.js';
 import { createHtmlViewModule } from './core/html-view.js';
+import { createFolioModule } from './core/folio.js';
+import { FolioStore } from './database/folio-store.js';
+import { createWeatherModule } from './core/weather.js';
+import { createSystemStatusReader } from './system-status.js';
 
 try {
   const config = loadConfig();
@@ -119,10 +130,15 @@ try {
   const telemetry = await createTelemetry(config.applicationInsightsConnectionString);
   const logger = createLogger(config, telemetry);
   const database = databaseConfig ? createDatabase(databaseConfig) : undefined;
+  const conversationStore = database ? createConversationStore(database.pool) : undefined;
+  const usageStore = database ? createUsageStore(database.pool) : undefined;
   const memoryStore = database ? createMemoryStore(database.pool) : undefined;
+  const settingsStore = database ? createSettingsStore(database.pool) : undefined;
   const htmlArtifactStore = database ? new HtmlArtifactStore(database.pool) : undefined;
+  const workspaceHtmlArtifactStore = database ? new WorkspaceHtmlArtifactStore(database.pool) : undefined;
+  const folioStore = database ? new FolioStore(database.pool) : undefined;
   const vaultIndexStore = database ? createVaultIndexStore(database.pool) : undefined;
-  const phoneSessionStore = database && config.phone
+  const phoneSessionStore = database
     ? createPhoneSessionStore(database.pool)
     : undefined;
   const eventHub: TaskEventHub = createEventHub<TaskEventMessage>();
@@ -146,7 +162,7 @@ try {
     onAlert: () => nowEventHub.publish({ type: 'refresh' }),
   }) : undefined;
   const credential = archiveStorageAccount || config.keyVaultUri || config.voiceLiveEndpoint || config.foundryProjectEndpoint ||
-    config.foundryEndpoints || config.githubAppId || config.googleTimeZone || config.teams || sleepResourceId
+    config.foundryEndpoints || config.foundryAccountResourceId || config.githubAppId || config.googleTimeZone || config.teams || sleepResourceId
     ? new DefaultAzureCredential(managedIdentityClientId
       ? { managedIdentityClientId }
       : {})
@@ -167,8 +183,8 @@ try {
   const googleSecretClient = config.googleTimeZone && config.keyVaultUri && credential
     ? new SecretClient(config.keyVaultUri, credential)
     : undefined;
-  const googleModule = config.googleTimeZone && googleSecretClient
-    ? createGoogleModule(createGoogleApiClient({
+  const googleApiClient = config.googleTimeZone && googleSecretClient
+    ? createGoogleApiClient({
       tokens: createGoogleTokenProvider({
         getCredentials: async (): Promise<GoogleOAuthCredentials> => {
           const [clientId, clientSecret, refreshToken] = await Promise.all([
@@ -204,7 +220,10 @@ try {
           }
         },
       }),
-    }), { timeZone: config.googleTimeZone })
+    })
+    : undefined;
+  const googleModule = googleApiClient
+    ? createGoogleModule(googleApiClient, { timeZone: config.googleTimeZone! })
     : undefined;
   const getGitHubAppPrivateKey = async () => {
     if (!githubAppKeyVault) throw new Error('GitHub App private key is unavailable');
@@ -298,6 +317,38 @@ try {
       .finally(() => { webhookSecretRequest = undefined; });
     return webhookSecretRequest;
   };
+  const modelCatalogue = config.foundryAccountResourceId && credential
+    ? createArmModelCatalogueReader({
+      resourceId: config.foundryAccountResourceId,
+      getToken: async (scope, signal) => {
+        const token = await credential.getToken(scope, { abortSignal: signal });
+        if (!token) throw new Error('Foundry catalogue identity unavailable');
+        return token.token;
+      },
+    })
+    : { read: async () => fallbackModelCatalogue() };
+  const embeddingModel = async () => settingsStore
+    ? (await readSettings(settingsStore, await modelCatalogue.read())).roles.embedding.model
+    : config.foundryMemoryEmbeddingDeploymentName ?? 'text-embedding-3-small';
+  const embeddingClients = new Map<string, MemoryEmbedder>();
+  const getMemoryEmbedder = async (): Promise<MemoryEmbedder | undefined> => {
+    if (!config.foundryProjectEndpoint || !credential) return undefined;
+    const model = await embeddingModel();
+    let embedder = embeddingClients.get(model);
+    if (!embedder) {
+      embedder = createFoundryMemoryEmbedder({
+        projectEndpoint: config.foundryProjectEndpoint,
+        deploymentName: model,
+        getToken: async (scope, signal) => {
+          const token = await credential.getToken(scope, { abortSignal: signal });
+          if (!token) throw new Error('Foundry memory embedding identity unavailable');
+          return token.token;
+        },
+      });
+      embeddingClients.set(model, embedder);
+    }
+    return embedder;
+  };
   const conversationAgent = config.foundryProjectEndpoint && config.foundryChatAgentName && credential
     ? createFoundryInvocationConversationAgent(
       config.foundryProjectEndpoint,
@@ -309,26 +360,34 @@ try {
       },
     )
     : undefined;
-  const memoryEmbedder = config.foundryProjectEndpoint &&
-    config.foundryMemoryEmbeddingDeploymentName && credential
-    ? createFoundryMemoryEmbedder({
-      projectEndpoint: config.foundryProjectEndpoint,
-      deploymentName: config.foundryMemoryEmbeddingDeploymentName,
-      getToken: async (scope, signal) => {
-        const token = await credential.getToken(scope, { abortSignal: signal });
-        if (!token) throw new Error('Foundry memory embedding identity unavailable');
-        return token.token;
-      },
-    })
+  const vaultClient = githubAppTokenIssuer
+    ? createGitHubVaultClient({ tokenIssuer: githubAppTokenIssuer })
     : undefined;
-  const vaultModule = memoryStore && vaultIndexStore && githubAppTokenIssuer
+  const vaultModule = memoryStore && vaultIndexStore && vaultClient
     ? createVaultModule({
-      client: createGitHubVaultClient({ tokenIssuer: githubAppTokenIssuer }),
+      client: vaultClient,
       indexStore: vaultIndexStore,
       memoryStore,
       apiMemoryStore: memoryStore,
-      ...(memoryEmbedder ? { embedder: memoryEmbedder } : {}),
+      ...(folioStore ? { recordFolioGraph: (query: string, highlight: readonly string[], createdAt: string) => {
+        const id = randomUUID();
+        return folioStore.record(config.auth.ownerObjectId, {
+          id: `knowledge_graph:${id}`,
+          kind: 'knowledge_graph',
+          sourceId: id,
+          title: 'Knowledge graph',
+          promptSummary: query,
+          createdAt,
+          payload: { query, highlight },
+        }, AbortSignal.timeout(10_000));
+      } } : {}),
+      ...(settingsStore ? { settingsStore } : {}),
+      getEmbedder: getMemoryEmbedder,
+      getEmbeddingModel: embeddingModel,
+      ...(usageStore ? { usageStore } : {}),
+      onUsageRecordFailure: () => logger.warn('usage.embedding_tokens_unavailable'),
       log: (event, fields) => logger.info({ msg: event, ...fields }, event),
+      logEmbedding: (fields) => logger.info({ msg: 'memory.embedding', ...fields }, 'memory.embedding'),
     })
     : undefined;
   const foundryClients = new Map<string, FoundryClient>();
@@ -381,6 +440,8 @@ try {
       () => clientFor(config.foundryRunnerAgentName!),
       config.codexToolModel,
       htmlArtifactStore,
+      {},
+      folioStore,
     )
     : undefined;
   const sandboxHeartbeat = database && config.foundryEndpoints
@@ -457,7 +518,6 @@ try {
       onError: (error) => logger.warn(safeErrorFields(error), 'project_policy.recheck_failed'),
     })
     : undefined;
-  const settingsStore = database ? createSettingsStore(database.pool) : undefined;
   const pcBridgeStatusStore = database
     ? createPcBridgeStatusStore(database.pool, () => nowEventHub.publish({ type: 'refresh' }))
     : undefined;
@@ -520,6 +580,22 @@ try {
       return token.token;
     })
     : undefined;
+  const pcBridgeModule = createPcBridgeModule({
+    ...(screenVisionModel ? { pcActVisionModel: screenVisionModel } : {}),
+    ...(pcActPlanner ? {
+      pcActPlanner,
+      ...(recipes ? { recipes } : {}),
+      onPcActStep: (activity) => logger.info(activity, 'pc_act.step'),
+    } : {}),
+    ...(pcBridgeStatusStore ? {
+      onStatusChange: (online, controlPaused) => pcBridgeStatusStore.setStatus(online, controlPaused),
+    } : {}),
+    ...(teamsNotifications ? {
+      runConfirmed: (summary, action, signal) =>
+        teamsNotifications.runConfirmed('computer_use', summary, action, signal),
+    } : {}),
+    onStatusError: (error) => logger.warn(safeErrorFields(error), 'pc_bridge.status_update_failed'),
+  });
   const modules: BackendModule[] = [
     coreModule, conversationModule, factoryModule, createSleepModule(containerAppScaler),
     createRecipeModule(recipeStore),
@@ -550,25 +626,7 @@ try {
         },
       } : {}),
     }),
-    createPcBridgeModule({
-      ...(screenVisionModel ? {
-        pcActVisionModel: screenVisionModel,
-        pcActVisionDeployment: 'gpt-5.6-luna',
-      } : {}),
-      ...(pcActPlanner ? {
-        pcActPlanner,
-        ...(recipes ? { recipes } : {}),
-        onPcActStep: (activity) => logger.info(activity, 'pc_act.step'),
-      } : {}),
-      ...(pcBridgeStatusStore ? {
-        onStatusChange: (online, controlPaused) => pcBridgeStatusStore.setStatus(online, controlPaused),
-      } : {}),
-      ...(teamsNotifications ? {
-        runConfirmed: (summary, action, signal) =>
-          teamsNotifications.runConfirmed('computer_use', summary, action, signal),
-      } : {}),
-      onStatusError: (error) => logger.warn(safeErrorFields(error), 'pc_bridge.status_update_failed'),
-    }),
+    pcBridgeModule,
   ];
   const phoneCallModule = config.phone && phoneSessionStore && phoneSecretClient && credential &&
     config.teams && config.foundryProjectEndpoint
@@ -588,15 +646,26 @@ try {
     })
     : undefined;
   if (phoneCallModule) modules.push(phoneCallModule);
+  modules.push(createPhoneStatusModule({
+    configured: phoneCallModule !== undefined,
+    store: phoneSessionStore ?? null,
+  }));
   if (browserAgent) modules.push(createBrowserAgentModule(browserAgent));
   if (workspaceArtifacts && config.foundryEndpoints && config.foundryRunnerAgentName) {
     modules.push(createImageGenerationModule({
       runner: clientFor(config.foundryRunnerAgentName),
       artifacts: workspaceArtifacts,
       model: config.codexImageModel,
+      ...(folioStore ? { folio: folioStore } : {}),
     }));
   }
-  if (database) modules.push(createHtmlViewModule(new WorkspaceHtmlArtifactStore(database.pool)));
+  if (database && workspaceHtmlArtifactStore) {
+    modules.push(createHtmlViewModule(workspaceHtmlArtifactStore, folioStore));
+    modules.push(createWeatherModule(workspaceHtmlArtifactStore));
+  }
+  if (database && folioStore && workspaceHtmlArtifactStore) {
+    modules.push(createFolioModule(folioStore, workspaceHtmlArtifactStore, workspaceArtifacts));
+  }
   let visionWatch: VisionWatchService | undefined;
   if (database && settingsStore && screenVisionModel) {
     const visionUsage = createScreenFrameUsageStore(database.pool);
@@ -652,8 +721,192 @@ try {
       },
     })
     : undefined;
+  const modelDeploymentWorkflow = config.foundryAccountResourceId && credential && settingsStore && teamsNotifications
+    ? createModelDeploymentWorkflow({
+      catalogue: modelCatalogue,
+      settings: settingsStore,
+      client: createArmModelDeploymentClient({
+        resourceId: config.foundryAccountResourceId,
+        getToken: async (scope, signal) => {
+          const token = await credential.getToken(scope, { abortSignal: signal });
+          if (!token) throw new Error('Foundry deployment identity unavailable');
+          return token.token;
+        },
+      }),
+      confirm: (actionKind, summary, action, signal) =>
+        teamsNotifications.runConfirmed(actionKind, summary, action, signal),
+      onChanged: () => nowEventHub.publish({ type: 'refresh' }),
+    })
+    : undefined;
+  let activeEmbeddingReindex: { readonly controller: AbortController; readonly pending: Promise<void> } | undefined;
+  const foundryCapabilityStatus = async (
+    configured: boolean,
+    capability: 'chat' | 'realtime' | 'embeddings',
+  ) => {
+    if (!configured) return { status: 'down' as const, details: { configured: false } };
+    try {
+      const catalogue = await modelCatalogue.read();
+      const deploymentAvailable = catalogue.deployments.some(({ capabilities }) => capabilities.includes(capability));
+      if (catalogue.source !== 'arm') {
+        return { status: 'degraded' as const, details: { configured: true, deploymentAvailable, catalogue: 'fallback' } };
+      }
+      return {
+        status: deploymentAvailable ? 'unknown' as const : 'degraded' as const,
+        details: { configured: true, deploymentAvailable, catalogue: 'live' },
+      };
+    } catch {
+      return { status: 'degraded' as const, details: { configured: true, deploymentAvailable: false } };
+    }
+  };
+  const systemSmokeProbes = {
+    vault: async () => {
+      if (!vaultClient) return { status: 'down' as const, details: { configured: false } };
+      await vaultClient.tree(AbortSignal.timeout(10_000));
+      return { status: 'ok' as const, details: { configured: true } };
+    },
+    'foundry.embeddings': async () => {
+      const embedder = await getMemoryEmbedder();
+      if (!embedder) return { status: 'down' as const, details: { configured: false } };
+      const vector = await embedder.embed('Jarvis post-deploy smoke check', AbortSignal.timeout(12_000));
+      return {
+        status: vector.length === MEMORY_EMBEDDING_DIMENSIONS ? 'ok' as const : 'down' as const,
+        details: { configured: true },
+      };
+    },
+    research: async () => {
+      if (!webResearchModule || !config.foundryRunnerAgentName) {
+        return { status: 'down' as const, details: { configured: false } };
+      }
+      try {
+        const selected = settingsStore
+          ? (await readSettings(settingsStore, await modelCatalogue.read())).roles.research
+          : undefined;
+        await runCodexToolResult(
+          clientFor(config.foundryRunnerAgentName),
+          'web_research',
+          'Dry run only: answer with one short sentence and no sources; do not browse or save anything.',
+          selected?.model ?? config.codexToolModel,
+          AbortSignal.timeout(20_000),
+          20_000,
+          1_000,
+          (value) => {
+            if (typeof value !== 'object' || value === null || Array.isArray(value) ||
+                typeof (value as Record<string, unknown>).answer !== 'string' ||
+                !Array.isArray((value as Record<string, unknown>).sources)) {
+              throw new Error('Research smoke response is invalid');
+            }
+            return true;
+          },
+          { reasoningEffort: selected?.reasoningEffort ?? 'none' },
+        );
+        return { status: 'ok' as const, details: { configured: true } };
+      } catch {
+        return { status: 'down' as const, details: { configured: true } };
+      }
+    },
+  };
+  const deployedCommit = process.env.JARVIS_DEPLOYED_COMMIT;
+  const systemStatusReader = createSystemStatusReader({
+    database: async () => {
+      if (!database) return { status: 'down', details: { configured: false } };
+      if (!database.pool.connected) return { status: 'down', details: { configured: true } };
+      const request = database.pool.request();
+      const timer = setTimeout(() => request.cancel(), 2_000);
+      timer.unref();
+      try {
+        await request.query('SELECT 1 AS ready;');
+        return { status: 'ok', details: { configured: true } };
+      } finally {
+        clearTimeout(timer);
+      }
+    },
+    'foundry.chat': () => foundryCapabilityStatus(Boolean(conversationAgent), 'chat'),
+    'foundry.voice': () => foundryCapabilityStatus(
+      Boolean(credential && (config.voiceLiveEndpoint || config.foundryProjectEndpoint)),
+      'realtime',
+    ),
+    'foundry.embeddings': () => foundryCapabilityStatus(
+      Boolean(config.foundryProjectEndpoint && credential),
+      'embeddings',
+    ),
+    vault_index: async () => {
+      if (!vaultIndexStore || !config.foundryProjectEndpoint || !credential) {
+        return { status: 'down', details: { configured: false } };
+      }
+      const model = await embeddingModel();
+      const summary = await vaultIndexStore.summary(model, AbortSignal.timeout(2_000));
+      const latestIndexedAt = summary.latestIndexedAt?.toISOString() ?? null;
+      const stale = !summary.latestIndexedAt ||
+        Date.now() - summary.latestIndexedAt.getTime() > 24 * 60 * 60_000;
+      const coveragePercent = summary.chunks === 0
+        ? null
+        : Math.round(summary.embeddedChunks / summary.chunks * 100);
+      return {
+        status: summary.chunks === 0
+          ? 'unknown'
+          : stale || summary.embeddedChunks < summary.chunks ? 'degraded' : 'ok',
+        details: {
+          notes: summary.notes,
+          chunks: summary.chunks,
+          embeddedChunks: summary.embeddedChunks,
+          embeddingCoveragePercent: coveragePercent,
+          latestIndexedAt,
+        },
+      };
+    },
+    github_app: async () => {
+      if (!githubAppTokenIssuer) return { status: 'down', details: { configured: false } };
+      if (!githubAppTokenIssuer.readInstallationPermissions) {
+        return { status: 'unknown', details: { configured: true, permissions: 'unavailable' } };
+      }
+      const permissions = await githubAppTokenIssuer.readInstallationPermissions('DanAakesen/jarvis');
+      return {
+        status: 'ok',
+        details: {
+          configured: true,
+          permissions: Object.entries(permissions).sort(([left], [right]) => left.localeCompare(right))
+            .map(([permission, access]) => `${permission}:${access}`).join(','),
+        },
+      };
+    },
+    google: async () => {
+      if (!googleApiClient) return { status: 'down', details: { configured: false } };
+      await googleApiClient.request('calendar', '/users/me/calendarList?maxResults=1', {
+        signal: AbortSignal.timeout(5_000),
+      });
+      return { status: 'ok', details: { configured: true, check: 'calendar_read' } };
+    },
+    pc_bridge: async () => {
+      const bridge = pcBridgeModule.connection.readStatus();
+      return {
+        status: bridge.connected ? 'ok' : 'down',
+        details: {
+          connected: bridge.connected,
+          controlPaused: bridge.controlPaused,
+          bridgeVersion: bridge.bridgeVersion,
+          chromeExtensionVersion: bridge.chromeExtensionVersion,
+          wakeWordEnabled: bridge.wakeWordEnabled,
+        },
+      };
+    },
+    runner: async () => {
+      const configured = Boolean(database && config.foundryEndpoints && config.foundryRunnerAgentName);
+      return {
+        status: configured ? 'unknown' : 'down',
+        details: {
+          configured,
+          activeSessions: sandboxHeartbeat?.trackedSessionCount() ?? 0,
+          healthProbe: 'not_run',
+        },
+      };
+    },
+  }, deployedCommit && /^[\da-f]{7,64}$/iu.test(deployedCommit) ? deployedCommit.toLowerCase() : undefined);
   const app = buildApp(config, logger, {
     modules,
+    systemStatusReader,
+    systemSmokeProbes,
+    modelCatalogue,
+    ...(modelDeploymentWorkflow ? { modelDeploymentWorkflow } : {}),
     ...(jevSecretClient ? { reflexClassifier } : {}),
     ...(browserAgent ? { browserAgent } : {}),
     ...(database ? { databaseStatus: () => database.isWaking() } : {}),
@@ -664,7 +917,7 @@ try {
       ...(projectRepositoryCreator ? { projectRepositoryCreator } : {}),
       toolCallStore: createToolCallStore(database.pool),
       settingsStore: settingsStore,
-      conversationStore: createConversationStore(database.pool),
+      ...(conversationStore ? { conversationStore } : {}),
       ...(taskStatusNotificationStore ? { taskStatusNotificationStore } : {}),
       ...(visionWatch ? { onConversationSessionEnded: (sessionId: string) => visionWatch?.forgetSession(sessionId) } : {}),
       taskStore,
@@ -672,7 +925,37 @@ try {
       ...(githubRepositoryCatalog ? { githubRepositoryCatalog } : {}),
       ...(dispatcher ? { taskController: dispatcher } : {}),
       nowFeedStore,
-      usageStore: createUsageStore(database.pool),
+      ...(usageStore ? { usageStore } : {}),
+    } : {}),
+    ...(database ? { backgroundJobStore: createBackgroundJobStore(database.pool) } : {}),
+    ...(vaultModule && config.foundryProjectEndpoint && credential ? {
+      onEmbeddingModelChanged: async (jobs) => {
+        if (activeEmbeddingReindex) {
+          activeEmbeddingReindex.controller.abort();
+          await activeEmbeddingReindex.pending;
+        }
+        const controller = new AbortController();
+        const job = await jobs.start(
+          'embedding', 'Re-embed memory and vault', 2, () => controller.abort(), 'Re-embedding saved memories',
+        );
+        const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(60 * 60_000)]);
+        const pending = vaultModule.reembed(signal, (step, detail) => job.progress(step, detail))
+          .then(async ({ memoryPending, vaultPending }) => {
+            const pending = memoryPending || vaultPending > 0;
+            await job.done('embedding-backfill', pending
+              ? 'Batch complete; remaining vectors await the next paced sync'
+              : 'Memory and vault embeddings are current');
+          })
+          .catch(async (error: unknown) => {
+            await job.fail('Re-embedding failed').catch(() => undefined);
+            logger.warn(safeErrorFields(error), 'memory.embedding_backfill_failed');
+          });
+        activeEmbeddingReindex = { controller, pending };
+        const clearActive = () => {
+          if (activeEmbeddingReindex?.controller === controller) activeEmbeddingReindex = undefined;
+        };
+        void pending.then(clearActive, clearActive);
+      },
     } : {}),
     ...(awayModeStore ? { awayModeStore } : {}),
     ...(credentialStatusStore ? { credentialStatusStore } : {}),
@@ -762,6 +1045,7 @@ try {
     if (database) {
       await database.initialize();
       await memoryStore?.initialize();
+      await conversationStore?.initialize?.();
       await vaultIndexStore?.initialize();
       for (const project of await projectStore?.list() ?? []) {
         trackedRepositories.add(project.repo.toLowerCase());
@@ -774,11 +1058,23 @@ try {
       dispatcher?.start();
       await app.listen({ port: config.port, host: '0.0.0.0' });
       if (vaultModule) {
-        void vaultModule.synchronize(AbortSignal.timeout(10 * 60_000)).catch(() => {
-          logger.warn({
-            msg: 'vault.index', outcome: 'error', added: 0, changed: 0, removed: 0,
-          }, 'vault.index');
-        });
+        const signal = AbortSignal.timeout(10 * 60_000);
+        const model = await embeddingModel();
+        const memoryNeedsBackfill = memoryStore
+          ? (await memoryStore.embeddingsToBackfill(model, '0', 1, signal)).length > 0
+          : false;
+        const vaultNeedsBackfill = vaultIndexStore
+          ? (await vaultIndexStore.files(model, signal)).some(({ embeddingMissing }) => embeddingMissing)
+          : false;
+        if ((memoryNeedsBackfill || vaultNeedsBackfill) && app.onEmbeddingModelChanged) {
+          await app.onEmbeddingModelChanged(app.backgroundJobs);
+        } else {
+          void vaultModule.synchronize(signal).catch(() => {
+            logger.warn({
+              msg: 'vault.index', outcome: 'error', added: 0, changed: 0, removed: 0,
+            }, 'vault.index');
+          });
+        }
       }
       void checksLoop?.start();
       taskEventArchiveJob?.start();

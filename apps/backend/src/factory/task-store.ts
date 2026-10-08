@@ -1,5 +1,7 @@
 import type { EventHub } from '../core/event-hub.js';
+import type { TaskEventMessage, TaskEventRecord } from '@jarvis/contracts';
 import type { TaskState } from './task-lifecycle.js';
+export type { TaskEventMessage, TaskEventRecord } from '@jarvis/contracts';
 
 export interface TaskRecord {
   id: string;
@@ -25,20 +27,6 @@ export interface TaskRecord {
   createdAt: string;
   startedAt: string | null;
   finishedAt: string | null;
-}
-
-export interface TaskEventRecord {
-  id: string;
-  type: string;
-  summary: string | null;
-  payload: unknown;
-  payloadTruncated: boolean;
-  source: 'runner' | 'backend' | 'github' | 'dan';
-  at: string;
-}
-
-export interface TaskEventMessage extends TaskEventRecord {
-  taskId: string;
 }
 
 export interface TaskUsageRecord {

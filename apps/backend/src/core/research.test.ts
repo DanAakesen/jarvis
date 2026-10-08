@@ -8,6 +8,7 @@ import { createHtmlResearchModule, defaultReportFrame, reportFrame, researchWind
 import { coreModule } from './index.js';
 import { WorkspaceCommandBroker } from './workspace-commands.js';
 import type { WebResearchClient } from './web-research.js';
+import type { SettingsStore } from './settings.js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const config = { ...loadConfig({}), logLevel: 'silent' as const };
@@ -47,7 +48,7 @@ function deferred() {
 function makeRunner(report = reportHtml(), firstSearchGate?: Promise<void>) {
   let invocation = 0;
   const results = new Map<string, unknown>();
-  const requests: { tool: string; query: string }[] = [];
+  const requests: { tool: string; query: string; model: string; reasoning?: string }[] = [];
   const accepted = (id: string): InvocationAccepted => ({
     invocationId: id,
     sessionId: `session-${id}`,
@@ -55,10 +56,15 @@ function makeRunner(report = reportHtml(), firstSearchGate?: Promise<void>) {
     agent: 'codex',
   });
   const client: WebResearchClient = {
-    startCodexTool: vi.fn(async (tool, query) => {
+    startCodexTool: vi.fn(async (tool, query, model, options) => {
       invocation += 1;
       const id = `invocation-${invocation}`;
-      requests.push({ tool, query });
+      requests.push({
+        tool,
+        query,
+        model,
+        ...(options?.reasoning ? { reasoning: options.reasoning } : {}),
+      });
       if (invocation === 1 && firstSearchGate) await firstSearchGate;
       results.set(id, tool === 'web_research'
         ? {
@@ -83,7 +89,11 @@ function makeRunner(report = reportHtml(), firstSearchGate?: Promise<void>) {
   return { client, requests };
 }
 
-function fixture(runner: ReturnType<typeof makeRunner>) {
+function fixture(
+  runner: ReturnType<typeof makeRunner>,
+  settingsStore?: SettingsStore,
+  invocationTimeoutMs: number | undefined = 100,
+) {
   const broker = new WorkspaceCommandBroker();
   const commands: WorkspaceCommand[] = [];
   const artifacts: HtmlArtifact[] = [];
@@ -107,7 +117,7 @@ function fixture(runner: ReturnType<typeof makeRunner>) {
     () => runner.client,
     'gpt-5.5',
     artifactStore,
-    { invocationTimeoutMs: 100, pollIntervalMs: 1 },
+    { ...(invocationTimeoutMs === undefined ? {} : { invocationTimeoutMs }), pollIntervalMs: 1 },
   );
   const module: BackendModule = researchModule;
   const app = buildApp(config, undefined, {
@@ -119,6 +129,7 @@ function fixture(runner: ReturnType<typeof makeRunner>) {
     }),
     toolCallStore: { record: async () => {} },
     workspaceCommands: broker,
+    ...(settingsStore ? { settingsStore } : {}),
   });
   apps.push(app);
   const connection = broker.connect(ownerId, (event, data) => {
@@ -137,12 +148,15 @@ function fixture(runner: ReturnType<typeof makeRunner>) {
   return { app, broker, commands, artifacts, artifactStore, runner: runner.client };
 }
 
-async function startResearch(app: ReturnType<typeof buildApp>) {
+async function startResearch(
+  app: ReturnType<typeof buildApp>,
+  depth?: 'quick' | 'standard' | 'deep',
+) {
   return app.inject({
     method: 'POST',
     url: '/tools/research',
     headers: agentHeaders,
-    payload: { topic: 'Evidence-based research', depth: 'quick' },
+    payload: { topic: 'Evidence-based research', ...(depth ? { depth } : {}) },
   });
 }
 
@@ -166,7 +180,15 @@ describe('background interactive research', () => {
   it('returns after opening progress, then stores a valid report and replaces that view', async () => {
     const gate = deferred();
     const runner = makeRunner(reportHtml(), gate.promise);
-    const { app, commands, artifacts, artifactStore } = fixture(runner);
+    const settingsStore: SettingsStore = {
+      read: async () => ({
+        'roles.research.model': JSON.stringify('gpt-6-luna'),
+        'roles.research.reasoning_effort': JSON.stringify('high'),
+        'research.depth': JSON.stringify('deep'),
+      }),
+      write: async () => {},
+    };
+    const { app, commands, artifacts, artifactStore } = fixture(runner, settingsStore);
     const completion = vi.fn();
     const jobEvents: BackgroundJob[] = [];
     app.jarvisActivityHub.subscribe((event) => { if (event.type === 'job') jobEvents.push(event.job); });
@@ -174,7 +196,7 @@ describe('background interactive research', () => {
       request.announceResearchCompletion = completion;
       done();
     });
-    const response = await startResearch(app);
+    const response = await startResearch(app, 'quick');
 
     expect(response.statusCode).toBe(200);
     expect(response.json()).toMatchObject({ outcome: 'ok', result: { message: expect.stringContaining('Research has started') } });
@@ -186,6 +208,11 @@ describe('background interactive research', () => {
 
     expect(runner.requests).toHaveLength(3);
     expect(runner.requests.map(({ tool }) => tool)).toEqual(['web_research', 'web_research', 'html_report']);
+    expect(runner.requests.map(({ model, reasoning }) => [model, reasoning])).toEqual([
+      ['gpt-6-luna', 'high'],
+      ['gpt-6-luna', 'high'],
+      ['gpt-6-luna', 'high'],
+    ]);
     expect(JSON.parse(runner.requests[2]!.query)).toMatchObject({
       frame: { widthPx: 390, device: 'phone', theme: 'dark', reducedMotion: true, layout: 'layered' },
     });
@@ -203,7 +230,114 @@ describe('background interactive research', () => {
     expect(jobEvents[0]).toMatchObject({ kind: 'research', status: 'running', step: 0, steps: 3 });
     expect(jobEvents.every((job) => isBackgroundJob(job))).toBe(true);
     expect(jobEvents.at(-1)).toMatchObject({ status: 'done', step: 3, viewId: (commands.at(-1) as { viewId: string }).viewId });
-    expect(app.backgroundJobs.list()[0]).toMatchObject({ status: 'done' });
+    expect((await app.backgroundJobs.list())[0]).toMatchObject({ status: 'done' });
+  });
+
+  it('uses the saved depth by default and bounds collected sources', async () => {
+    const runner = makeRunner();
+    const settingsStore: SettingsStore = {
+      read: async () => ({
+        'research.depth': JSON.stringify('standard'),
+        'research.max_sources': JSON.stringify(1),
+      }),
+      write: async () => {},
+    };
+    const { app, artifacts } = fixture(runner, settingsStore);
+    const response = await startResearch(app, undefined);
+
+    expect(response.statusCode).toBe(200);
+    await vi.waitFor(() => expect(runner.requests).toHaveLength(4));
+
+    expect(runner.requests.map(({ tool }) => tool)).toEqual([
+      'web_research', 'web_research', 'web_research', 'html_report',
+    ]);
+    expect(JSON.parse(runner.requests[3]!.query)).toMatchObject({
+      depth: 'standard',
+      sources: [{ title: 'Source 1', url: 'https://example.com/source-1' }],
+    });
+    expect(artifacts[0]?.sources).toEqual([{ title: 'Source 1', url: 'https://example.com/source-1' }]);
+  });
+
+  it('retries a failed research job from its stored topic once', async () => {
+    const runner = makeRunner();
+    const { app, commands } = fixture(runner);
+    const original = await app.backgroundJobs.start(
+      'research',
+      'Research: Stored retry topic',
+      3,
+      undefined,
+      'Starting research',
+      { retryInput: { topic: 'Stored original research topic', depth: 'quick' } },
+    );
+    await original.fail('Research could not be completed. Try again shortly.');
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/tools/retry_job',
+      headers: agentHeaders,
+      payload: { jobId: original.jobId },
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      outcome: 'ok',
+      result: { jobId: expect.any(String), message: expect.stringContaining('Research has started') },
+    });
+    const duplicate = await app.inject({
+      method: 'POST',
+      url: '/tools/retry_job',
+      headers: agentHeaders,
+      payload: { jobId: original.jobId },
+    });
+    expect(duplicate.json()).toMatchObject({ outcome: 'refused' });
+
+    await vi.waitFor(() => expect(runner.requests).toHaveLength(3));
+    expect(runner.requests[0]?.query).toContain('Stored original research topic');
+    expect(commands.at(-1)?.view.renderer).toBe('html-app');
+    await expect(app.backgroundJobs.details(original.jobId)).resolves.toMatchObject({
+      details: { retryable: false },
+    });
+  });
+
+  it('refuses to retry a failed job without persisted research input', async () => {
+    const { app } = fixture(makeRunner());
+    const job = await app.backgroundJobs.start('research', 'Research: No saved input', 2);
+    await job.fail('Research could not be completed.');
+    const response = await app.inject({
+      method: 'POST',
+      url: '/tools/retry_job',
+      headers: agentHeaders,
+      payload: { jobId: job.jobId },
+    });
+    expect(response.json()).toMatchObject({ outcome: 'refused' });
+  });
+
+  it('uses the configured timeout for each runner invocation', async () => {
+    const runner = makeRunner();
+    runner.client.status = vi.fn(async () => ({
+      ...{
+        invocationId: 'invocation-1',
+        sessionId: 'session-invocation-1',
+        status: 'queued' as const,
+        agent: 'codex' as const,
+      },
+      startedAt: 0,
+      finishedAt: null,
+      events: [],
+      result: null,
+      error: null,
+      status: 'running',
+    }));
+    const settingsStore: SettingsStore = {
+      read: async () => ({ 'research.timeout_seconds': JSON.stringify(1) }),
+      write: async () => {},
+    };
+    const { app } = fixture(runner, settingsStore, undefined);
+
+    const response = await startResearch(app);
+
+    expect(response.statusCode).toBe(200);
+    await vi.waitFor(() => expect(runner.client.cancel).toHaveBeenCalledOnce(), { timeout: 2_000 });
+    expect(runner.client.deleteSession).toHaveBeenCalledOnce();
   });
 
   it('rejects unsafe generated citations and updates the progress window with failure', async () => {

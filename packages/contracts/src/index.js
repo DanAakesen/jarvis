@@ -1,4 +1,160 @@
 export const generatedViewVersion = 1;
+export const systemSmokeCheckIds = Object.freeze([
+  'google', 'github_app', 'vault', 'foundry.embeddings', 'research', 'pc_bridge',
+]);
+export const modelRoles = Object.freeze([
+  'chat', 'vision', 'research', 'voice', 'transcription', 'embedding', 'codex', 'copilot',
+]);
+export const reasoningEfforts = Object.freeze(['none', 'minimal', 'low', 'medium', 'high', 'xhigh']);
+export const modelCapabilities = Object.freeze([
+  'chat', 'responses', 'realtime', 'transcription', 'embeddings', 'image',
+]);
+export const clipboardTextMaxBytes = 20 * 1024;
+
+export function isClipboardText(value) {
+  return typeof value === 'string' && !value.includes('\0') &&
+    new TextEncoder().encode(value).byteLength <= clipboardTextMaxBytes;
+}
+
+export function isClipboardReadResult(value) {
+  return isObject(value) && Object.keys(value).length === 1 && isClipboardText(value.text);
+}
+
+export function isClipboardWriteResult(value) {
+  return isObject(value) && Object.keys(value).length === 1 && value.written === true;
+}
+
+export const voiceTuningSettingsBounds = Object.freeze({
+  serverVadThreshold: Object.freeze({ minimum: 0, maximum: 1 }),
+  prefixPaddingMs: Object.freeze({ minimum: 0, maximum: 2_000 }),
+  silenceDurationMs: Object.freeze({ minimum: 100, maximum: 5_000 }),
+  maxSpokenReplyTokens: Object.freeze({ minimum: 1, maximum: 4_096 }),
+});
+export const voiceTuningSettingsSchema = Object.freeze({
+  type: 'object',
+  minProperties: 1,
+  additionalProperties: false,
+  properties: Object.freeze({
+    serverVadThreshold: Object.freeze({ type: 'number', ...voiceTuningSettingsBounds.serverVadThreshold }),
+    prefixPaddingMs: Object.freeze({ type: 'integer', ...voiceTuningSettingsBounds.prefixPaddingMs }),
+    silenceDurationMs: Object.freeze({ type: 'integer', ...voiceTuningSettingsBounds.silenceDurationMs }),
+    bargeInEnabled: Object.freeze({ type: 'boolean' }),
+    maxSpokenReplyTokens: Object.freeze({ type: 'integer', ...voiceTuningSettingsBounds.maxSpokenReplyTokens }),
+  }),
+});
+export const researchDepths = Object.freeze(['quick', 'standard', 'deep']);
+export const researchSettingsBounds = Object.freeze({
+  maxSources: Object.freeze({ minimum: 1, maximum: 50 }),
+  timeoutSeconds: Object.freeze({ minimum: 1, maximum: 320 }),
+});
+export const researchSettingsSchema = Object.freeze({
+  type: 'object',
+  minProperties: 1,
+  additionalProperties: false,
+  properties: Object.freeze({
+    depth: Object.freeze({ type: 'string', enum: [...researchDepths] }),
+    maxSources: Object.freeze({ type: 'integer', ...researchSettingsBounds.maxSources }),
+    timeoutSeconds: Object.freeze({ type: 'integer', ...researchSettingsBounds.timeoutSeconds }),
+  }),
+});
+export const timeoutSettingsBounds = Object.freeze({
+  toolTimeoutSeconds: Object.freeze({ minimum: 1, maximum: 120 }),
+  longToolTimeoutSeconds: Object.freeze({ minimum: 30, maximum: 320 }),
+  backendHttpTimeoutSeconds: Object.freeze({ minimum: 1, maximum: 60 }),
+});
+export const timeoutSettingsSchema = Object.freeze({
+  type: 'object',
+  minProperties: 1,
+  additionalProperties: false,
+  properties: Object.freeze({
+    toolTimeoutSeconds: Object.freeze({
+      type: 'integer', ...timeoutSettingsBounds.toolTimeoutSeconds,
+    }),
+    longToolTimeoutSeconds: Object.freeze({
+      type: 'integer', ...timeoutSettingsBounds.longToolTimeoutSeconds,
+    }),
+    backendHttpTimeoutSeconds: Object.freeze({
+      type: 'integer', ...timeoutSettingsBounds.backendHttpTimeoutSeconds,
+    }),
+  }),
+});
+export const routineNameMaxLength = 80;
+export const routineNameSchema = Object.freeze({
+  type: 'string',
+  minLength: 1,
+  maxLength: routineNameMaxLength,
+  pattern: '\\S',
+});
+export const routineUpdateSchema = Object.freeze({
+  type: 'object',
+  properties: Object.freeze({ name: routineNameSchema }),
+  required: Object.freeze(['name']),
+  additionalProperties: false,
+});
+export const memorySettingsBounds = Object.freeze({
+  similarityThreshold: Object.freeze({ minimum: 0, maximum: 1 }),
+  searchTopK: Object.freeze({ minimum: 1, maximum: 8 }),
+  graphTextSimilarityThreshold: Object.freeze({ minimum: 0, maximum: 1 }),
+});
+export const memorySettingsSchema = Object.freeze({
+  type: 'object',
+  minProperties: 1,
+  additionalProperties: false,
+  properties: Object.freeze({
+    similarityThreshold: Object.freeze({ type: 'number', ...memorySettingsBounds.similarityThreshold }),
+    searchTopK: Object.freeze({ type: 'integer', ...memorySettingsBounds.searchTopK }),
+    graphTextSimilarityThreshold: Object.freeze({
+      type: 'number', ...memorySettingsBounds.graphTextSimilarityThreshold,
+    }),
+    automaticCapture: Object.freeze({ type: 'boolean' }),
+  }),
+});
+export const homeLocationSettingsSchema = Object.freeze({
+  type: 'object',
+  minProperties: 1,
+  additionalProperties: false,
+  properties: Object.freeze({
+    city: Object.freeze({ type: 'string', maxLength: 100 }),
+    latitude: Object.freeze({
+      anyOf: Object.freeze([
+        Object.freeze({ type: 'number', minimum: -90, maximum: 90 }),
+        Object.freeze({ type: 'null' }),
+      ]),
+    }),
+    longitude: Object.freeze({
+      anyOf: Object.freeze([
+        Object.freeze({ type: 'number', minimum: -180, maximum: 180 }),
+        Object.freeze({ type: 'null' }),
+      ]),
+    }),
+  }),
+});
+export function isModelCatalogue(value) {
+  if (!isObject(value) || !['arm', 'fallback'].includes(value.source) ||
+      !Array.isArray(value.deployments) || value.deployments.length > 1_000 ||
+      Object.keys(value).some((key) => !['source', 'deployments', 'reason'].includes(key)) ||
+      (value.reason !== undefined && !boundedText(value.reason, 500))) return false;
+  const names = new Set();
+  return value.deployments.every((deployment) => {
+    if (!isObject(deployment) ||
+        Object.keys(deployment).some((key) =>
+          !['name', 'model', 'version', 'sku', 'capacity', 'capabilities', 'reasoningEfforts'].includes(key)) ||
+        !boundedText(deployment.name, 128) || names.has(deployment.name) ||
+        !boundedText(deployment.model, 128) || !boundedText(deployment.version, 128) ||
+        !boundedText(deployment.sku, 64) ||
+        !Number.isSafeInteger(deployment.capacity) || deployment.capacity < 0 ||
+        !Array.isArray(deployment.capabilities) ||
+        !deployment.capabilities.every((capability) => modelCapabilities.includes(capability)) ||
+        new Set(deployment.capabilities).size !== deployment.capabilities.length ||
+        !Array.isArray(deployment.reasoningEfforts) ||
+        deployment.reasoningEfforts.length === 0 ||
+        !deployment.reasoningEfforts.every((effort) => reasoningEfforts.includes(effort)) ||
+        new Set(deployment.reasoningEfforts).size !== deployment.reasoningEfforts.length) return false;
+    names.add(deployment.name);
+    return true;
+  });
+}
+
 export const generatedViewRenderers = Object.freeze([
   'table', 'list', 'detail', 'text', 'timeline', 'chart', 'task-card', 'status', 'image', 'html-app',
   'knowledge-graph',
@@ -103,6 +259,52 @@ export const htmlArtifactSchema = Object.freeze(object({
   createdAt: dateTime,
   pinned: { type: 'boolean' },
 }));
+export const folioKinds = Object.freeze(['research', 'html_app', 'image', 'knowledge_graph']);
+const folioIdPattern = '^(?:research|html_app|image|knowledge_graph):[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$';
+export const folioItemSchema = Object.freeze(object({
+  id: { type: 'string', pattern: folioIdPattern },
+  title: string(200, 1),
+  kind: { enum: folioKinds },
+  createdAt: dateTime,
+  promptSummary: string(500, 1),
+  pinned: { type: 'boolean' },
+}));
+export const folioSearchSchema = Object.freeze(object({
+  q: string(120, 1),
+  kind: { enum: folioKinds },
+  before: dateTime,
+}, []));
+export const folioSearchResponseSchema = Object.freeze(object({
+  items: array(folioItemSchema, 100),
+}));
+export const folioPatchSchema = Object.freeze({
+  type: 'object',
+  properties: {
+    title: { ...string(200, 1), pattern: '\\S' },
+    pinned: { type: 'boolean' },
+  },
+  required: [],
+  minProperties: 1,
+  additionalProperties: false,
+});
+export const folioDeleteSchema = Object.freeze(object({
+  confirm: { const: true },
+}));
+export const folioSearchToolSchema = Object.freeze(object({
+  q: { ...string(120, 1), pattern: '\\S' },
+  kind: { enum: folioKinds },
+}, []));
+export const folioOpenToolSchema = Object.freeze({
+  type: 'object',
+  properties: {
+    id: { type: 'string', pattern: folioIdPattern },
+    query: { ...string(120, 1), pattern: '\\S' },
+  },
+  required: [],
+  minProperties: 1,
+  maxProperties: 1,
+  additionalProperties: false,
+});
 const htmlArtifactFrameSchemaValue = object({
   widthPx: { type: 'integer', minimum: 1, maximum: 8192 },
   heightPx: { type: 'integer', minimum: 1, maximum: 8192 },
@@ -253,6 +455,23 @@ function isObject(value) {
 
 function boundedString(value, max, min = 0) {
   return typeof value === 'string' && value.length >= min && value.length <= max;
+}
+
+export function isSystemSmokeStatus(value) {
+  if (!isObject(value) || Object.keys(value).some((key) => !['checkedAt', 'entries'].includes(key)) ||
+      !Array.isArray(value.entries) || value.entries.length !== systemSmokeCheckIds.length) return false;
+  const validTime = (time) => {
+    if (!boundedString(time, 30, 20) || !Number.isFinite(Date.parse(time))) return false;
+    try { return new Date(time).toISOString() === time; } catch { return false; }
+  };
+  if (!validTime(value.checkedAt)) return false;
+  return value.entries.every((entry, index) =>
+    isObject(entry) &&
+    Object.keys(entry).every((key) => ['id', 'status', 'checkedAt'].includes(key)) &&
+    Object.keys(entry).length === 3 &&
+    entry.id === systemSmokeCheckIds[index] &&
+    ['ok', 'degraded', 'down', 'unknown'].includes(entry.status) &&
+    validTime(entry.checkedAt));
 }
 
 function safeHttpsUrl(value, hosts, trustedBlobHost) {
@@ -486,6 +705,15 @@ function validIsoDateTime(value) {
     Number.isFinite(Date.parse(value)) && new Date(value).toISOString() === value;
 }
 
+export function isFolioItem(value) {
+  return isObject(value) && Object.keys(value).length === 6 &&
+    /^[a-z_]+:[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/.test(value.id) &&
+    folioKinds.includes(value.kind) && value.id.startsWith(`${value.kind}:`) &&
+    boundedString(value.title, 200, 1) && value.title === value.title.trim() &&
+    validIsoDateTime(value.createdAt) && boundedString(value.promptSummary, 500, 1) &&
+    value.promptSummary === value.promptSummary.trim() && typeof value.pinned === 'boolean';
+}
+
 export function isHtmlArtifact(value) {
   if (!isObject(value) || Object.keys(value).some((key) =>
     !['id', 'kind', 'title', 'html', 'sources', 'createdAt', 'pinned'].includes(key)) ||
@@ -606,7 +834,7 @@ export function isJarvisVoiceWakeEvent(value) {
     Number.isFinite(Date.parse(value.at)) && new Date(value.at).toISOString() === value.at;
 }
 
-export const backgroundJobKinds = Object.freeze(['research', 'image', 'html_app']);
+export const backgroundJobKinds = Object.freeze(['research', 'image', 'html_app', 'embedding']);
 export const backgroundJobStatuses = Object.freeze(['running', 'done', 'failed', 'cancelled']);
 const jobIdPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const viewIdPattern = /^[A-Za-z0-9_-]{1,64}$/;
@@ -635,6 +863,209 @@ export function isBackgroundJob(value) {
     isTimestamp(value.startedAt) && isTimestamp(value.updatedAt);
 }
 
+export function isBackgroundJobStep(value) {
+  return isObject(value) &&
+    Object.keys(value).every((key) => ['status', 'step', 'detail', 'viewId', 'updatedAt'].includes(key)) &&
+    backgroundJobStatuses.includes(value.status) &&
+    Number.isSafeInteger(value.step) && value.step >= 0 && value.step <= 20 &&
+    (value.detail === undefined || boundedText(value.detail, 120)) &&
+    (value.viewId === undefined || (typeof value.viewId === 'string' && viewIdPattern.test(value.viewId))) &&
+    isTimestamp(value.updatedAt);
+}
+
+export function isBackgroundJobDetails(value) {
+  return isObject(value) &&
+    Object.keys(value).every((key) => ['job', 'steps', 'error', 'resultWindow', 'retryable'].includes(key)) &&
+    isBackgroundJob(value.job) &&
+    Array.isArray(value.steps) && value.steps.length <= 100 &&
+    value.steps.every((step) => isBackgroundJobStep(step) && step.step <= value.job.steps) &&
+    (value.error === undefined || (value.job.status === 'failed' &&
+      value.error === value.job.detail && boundedText(value.error, 120))) &&
+    (value.resultWindow === undefined ||
+      (value.job.viewId === value.resultWindow && typeof value.resultWindow === 'string' && viewIdPattern.test(value.resultWindow))) &&
+    typeof value.retryable === 'boolean' &&
+    (!value.retryable || (value.job.kind === 'research' && value.job.status === 'failed'));
+}
+
 export function isBackgroundJobEvent(value) {
   return isObject(value) && Object.keys(value).length === 2 && value.type === 'job' && isBackgroundJob(value.job);
+}
+
+export const nowSseEventNames = Object.freeze([
+  'mode', 'now', 'voice-wake', 'job', 'jarvis-activity', 'workspace-ready', 'workspace-command',
+  'workspace-cancel', 'board',
+]);
+export const factoryBoardColumnIds = Object.freeze([
+  'backlog', 'needs_dan', 'ready', 'in_progress', 'in_review', 'done',
+]);
+
+const taskEventSources = Object.freeze(['runner', 'backend', 'github', 'dan']);
+const taskEventIdPattern = /^[1-9][0-9]{0,18}$/;
+const workspaceSessionIdPattern = /^[\da-f]{8}-(?:[\da-f]{4}-){3}[\da-f]{12}$/i;
+
+function isTaskEventId(value) {
+  return typeof value === 'string' && taskEventIdPattern.test(value) && BigInt(value) <= maxSqlBigInt;
+}
+
+function isEmptyObject(value) {
+  return isObject(value) && Object.keys(value).length === 0;
+}
+
+export function isTaskEventRecord(value) {
+  return isObject(value) &&
+    Object.keys(value).length === 7 &&
+    Object.keys(value).every((key) => ['id', 'type', 'summary', 'payload', 'payloadTruncated', 'source', 'at'].includes(key)) &&
+    isTaskEventId(value.id) &&
+    boundedText(value.type, 64) &&
+    (value.summary === null || typeof value.summary === 'string' && value.summary.length <= 2_000) &&
+    typeof value.payloadTruncated === 'boolean' &&
+    taskEventSources.includes(value.source) &&
+    isTimestamp(value.at);
+}
+
+export function isTaskEventMessage(value) {
+  return isObject(value) &&
+    Object.keys(value).length === 8 &&
+    Object.keys(value).every((key) =>
+      ['id', 'type', 'summary', 'payload', 'payloadTruncated', 'source', 'at', 'taskId'].includes(key)) &&
+    isTaskEventRecord(Object.fromEntries(
+      Object.entries(value).filter(([key]) => key !== 'taskId'),
+    )) &&
+    isTaskEventId(value.taskId);
+}
+
+const boardWorkers = ['Jarvis', 'Copilot', 'Codex', 'Dan'];
+const boardTaskStates = ['Ready', 'Running', 'PauseRequested', 'Paused', 'NeedsAttention', 'Done', 'Cancelled'];
+const sandboxEndReasons = ['done', 'cancelled', 'crashed', 'idle', 'idle_expired'];
+const githubHosts = new Set(['github.com']);
+
+function isBoardCardIssue(value) {
+  return isObject(value) &&
+    Object.keys(value).length === 10 &&
+    Object.keys(value).every((key) =>
+      ['number', 'url', 'title', 'taskCode', 'labels', 'worker', 'state', 'updatedAt', 'closedAt', 'blockedBy'].includes(key)) &&
+    Number.isSafeInteger(value.number) && value.number > 0 &&
+    safeHttpsUrl(value.url, githubHosts) &&
+    boundedString(value.title, 500, 1) &&
+    (value.taskCode === null || typeof value.taskCode === 'string' && /^P\d{1,2}-\d{2,3}$/.test(value.taskCode)) &&
+    Array.isArray(value.labels) && value.labels.length <= 100 &&
+    value.labels.every((label) => boundedString(label, 100, 1)) &&
+    new Set(value.labels).size === value.labels.length &&
+    (value.worker === null || boardWorkers.includes(value.worker)) &&
+    ['open', 'closed'].includes(value.state) &&
+    validIsoDateTime(value.updatedAt) &&
+    (value.closedAt === null || validIsoDateTime(value.closedAt)) &&
+    Array.isArray(value.blockedBy) && value.blockedBy.length <= 100 &&
+    value.blockedBy.every((number) => Number.isSafeInteger(number) && number > 0) &&
+    new Set(value.blockedBy).size === value.blockedBy.length;
+}
+
+function isFactoryBoardTask(value) {
+  return isObject(value) &&
+    Object.keys(value).length === 8 &&
+    Object.keys(value).every((key) => [
+      'id', 'state', 'activity', 'agent', 'attemptCount', 'branch', 'startedAt', 'latestSessionEndReason',
+    ].includes(key)) &&
+    isTaskEventId(value.id) &&
+    boardTaskStates.includes(value.state) &&
+    (value.activity === null || boundedString(value.activity, 2_000)) &&
+    ['codex', 'copilot'].includes(value.agent) &&
+    Number.isSafeInteger(value.attemptCount) && value.attemptCount >= 0 &&
+    (value.branch === null || boundedString(value.branch, 255)) &&
+    (value.startedAt === null || validIsoDateTime(value.startedAt)) &&
+    (value.latestSessionEndReason === null || sandboxEndReasons.includes(value.latestSessionEndReason));
+}
+
+function isBoardCard(value) {
+  return isObject(value) &&
+    Object.keys(value).length === 3 &&
+    Object.keys(value).every((key) => ['issue', 'pr', 'task'].includes(key)) &&
+    isBoardCardIssue(value.issue) &&
+    (value.pr === null || isObject(value.pr) &&
+      Object.keys(value.pr).length === 4 &&
+      Object.keys(value.pr).every((key) => ['number', 'url', 'draft', 'checks'].includes(key)) &&
+      Number.isSafeInteger(value.pr.number) && value.pr.number > 0 &&
+      safeHttpsUrl(value.pr.url, githubHosts) &&
+      typeof value.pr.draft === 'boolean' &&
+      ['none', 'pending', 'passing', 'failing'].includes(value.pr.checks)) &&
+    (value.task === null || isFactoryBoardTask(value.task));
+}
+
+export function isFactoryBoard(value) {
+  if (!isObject(value) || Object.keys(value).length !== 4 ||
+      Object.keys(value).some((key) => !['project', 'fetchedAt', 'stale', 'columns'].includes(key)) ||
+      !isObject(value.project) || Object.keys(value.project).length !== 2 ||
+      Object.keys(value.project).some((key) => !['id', 'repo'].includes(key)) ||
+      !isTaskEventId(value.project.id) ||
+      !boundedString(value.project.repo, 140, 3) ||
+      !/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(value.project.repo) ||
+      !validIsoDateTime(value.fetchedAt) ||
+      typeof value.stale !== 'boolean' ||
+      !Array.isArray(value.columns) || value.columns.length !== factoryBoardColumnIds.length) return false;
+  let cardCount = 0;
+  return value.columns.every((column, index) => {
+    if (!isObject(column) || Object.keys(column).length !== 2 ||
+        Object.keys(column).some((key) => !['id', 'cards'].includes(key)) ||
+        column.id !== factoryBoardColumnIds[index] ||
+        !Array.isArray(column.cards) || column.cards.length > 2_000) return false;
+    cardCount += column.cards.length;
+    return cardCount <= 2_000 && column.cards.every(isBoardCard);
+  });
+}
+
+export function isFactoryBoardUpdate(value) {
+  return isObject(value) &&
+    Object.keys(value).length === 2 &&
+    Object.keys(value).every((key) => ['projectId', 'version'].includes(key)) &&
+    isTaskEventId(value.projectId) &&
+    Number.isSafeInteger(value.version) && value.version > 0;
+}
+
+export function isNowSseEvent(value, options = {}) {
+  if (!isObject(value) || Object.keys(value).length !== 2 ||
+    !Object.keys(value).every((key) => ['event', 'data'].includes(key)) ||
+    !nowSseEventNames.includes(value.event)) return false;
+  switch (value.event) {
+    case 'mode':
+    case 'now':
+      return isEmptyObject(value.data);
+    case 'board':
+      return isFactoryBoardUpdate(value.data);
+    case 'voice-wake':
+      return isJarvisVoiceWakeEvent(value.data);
+    case 'job':
+      return isBackgroundJob(value.data);
+    case 'jarvis-activity':
+      return isJarvisActivityEvent(value.data);
+    case 'workspace-ready':
+      return isObject(value.data) &&
+        Object.keys(value.data).every((key) => ['sessionId', 'trustedBlobHost'].includes(key)) &&
+        Object.keys(value.data).includes('sessionId') &&
+        typeof value.data.sessionId === 'string' && workspaceSessionIdPattern.test(value.data.sessionId) &&
+        (value.data.trustedBlobHost === undefined ||
+          boundedText(value.data.trustedBlobHost, 253));
+    case 'workspace-command':
+      return isObject(value.data) && Object.keys(value.data).length === 2 &&
+        Object.keys(value.data).every((key) => ['command', 'expiresAt'].includes(key)) &&
+        isWorkspaceCommand(value.data.command, options) &&
+        Number.isSafeInteger(value.data.expiresAt) && value.data.expiresAt > 0;
+    case 'workspace-cancel':
+      return isObject(value.data) && Object.keys(value.data).length === 1 &&
+        typeof value.data.commandId === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(value.data.commandId);
+    default:
+      return false;
+  }
+}
+
+export function isTaskEventStreamEvent(value) {
+  if (!isObject(value) || typeof value.event !== 'string') return false;
+  if (value.event === 'ready') {
+    return Object.keys(value).length === 2 &&
+      Object.keys(value).every((key) => ['event', 'data'].includes(key)) &&
+      isEmptyObject(value.data);
+  }
+  return value.event === 'task' &&
+    Object.keys(value).length === 3 &&
+    Object.keys(value).every((key) => ['event', 'id', 'data'].includes(key)) &&
+    isTaskEventMessage(value.data) && value.id === value.data.id;
 }

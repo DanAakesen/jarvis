@@ -22,7 +22,8 @@ COPY packages/contracts/package.json packages/contracts/package.json
 RUN npm ci --omit=dev --workspace @jarvis/backend --include-workspace-root=false
 
 FROM node:22.23.3-bookworm-slim AS runtime
-ENV NODE_ENV=production PORT=3000
+ARG JARVIS_DEPLOYED_COMMIT
+ENV NODE_ENV=production PORT=3000 JARVIS_DEPLOYED_COMMIT=${JARVIS_DEPLOYED_COMMIT}
 WORKDIR /app
 COPY --from=production-dependencies /app/node_modules ./node_modules
 COPY --from=production-dependencies /app/apps/backend ./apps/backend
@@ -30,6 +31,7 @@ COPY --from=build /app/packages/contracts/package.json ./packages/contracts/pack
 COPY --from=build /app/packages/contracts/src/index.js ./packages/contracts/src/index.js
 COPY --from=build /app/apps/backend/dist ./apps/backend/dist
 COPY db/migrations ./db/migrations
+COPY docs/features.md ./apps/backend/feature-index.md
 USER node
 EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 CMD ["node", "-e", "fetch('http://127.0.0.1:3000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]

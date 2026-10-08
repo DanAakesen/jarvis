@@ -23,8 +23,8 @@ Jarvis is one backend with a shared core and one module per area, a static web a
 | Monitoring | Pino 10.4.0 JSON logs, Application Insights SDK 3.16.0 manual traces + Log Analytics workspace in the resource group (L8); allowlisted voice-turn and PC bridge timings; stateful Azure Monitor email alerts and 300 DKK budget thresholds | Timing fields are content-free and allowlisted; alert contracts, deduplication and Bicep compile offline; SQL Server integration, live ingestion, budget reads and email delivery remain unverified |
 | Infrastructure as code | Bicep, deployed by GitHub Actions with OpenID Connect | Bicep provisions no Teams Bot or separate Speech F0 resources; local Bicep checks pass, live Azure setup remains pending |
 | Sign-in | Entra ID: tenant-specific MSAL Browser requests the delegated `jarvis-api` scope; backend verifies bearer tokens with jose 6.2.12 and Dan's object ID. `/me` returns only the validated display name. The hosted Jarvis agent's app-only token (`Jarvis.Tools`), runner identity, and P7-06 device-code bridge identity are restricted to explicitly opted-in routes; the bridge also requires its client ID, Dan's object ID, tenant and delegated API scope | Browser, agent, runner and bridge auth contracts are checked offline; live Dan sign-in, deployed chat invocation and the bridge's live Windows sign-in remain unverified |
-| Board updates | Authenticated server-sent events (SSE) over `fetch`, so the bearer token can be sent. Reconnects resume from `Last-Event-ID`; persisted task events replay before buffered live hub events, with duplicate IDs suppressed. A comment heartbeat is sent every 25 seconds. | Implemented and tested offline; SQL Server integration and deployed streaming remain unverified |
-| Jarvis agent and runner | Python 3.12 (Foundry hosted agents support Python or C#). `agents/jarvis` (P4-01): Python 3.12.14 image, `azure-ai-agentserver-invocations` 1.2.0 voice host, `openai` 3.24.0 Responses API, `azure-identity` 1.26.0, `httpx` 0.28.1; hash-locked `requirements.txt` | Agent ported and checked offline and as a local container in P4-01; Foundry deployment completed in P4-08; P4-09 registers chat through the public Invocations handler |
+| Board updates | Authenticated server-sent events (SSE) over `fetch`, so the bearer token can be sent. Shared contracts type task-event records and stream messages; reconnects resume from `Last-Event-ID`, persisted task events replay before buffered live hub events, and duplicate IDs are suppressed. A typed backend formatter emits task frames and 25-second comment heartbeats. | Implemented and tested offline; SQL Server integration and deployed streaming remain unverified |
+| Jarvis agent and runner | Python 3.12 (Foundry hosted agents support Python or C#). `agents/jarvis` (P4-01): Python 3.12.14 image, `azure-ai-agentserver-invocations` 1.2.0 voice host, `openai` 3.24.0 Responses API, `anthropic` 1.12.0 Foundry Messages API, `azure-identity` 1.26.0, `httpx` 0.28.1; hash-locked `requirements.txt` | Agent ported and checked offline and as a local container in P4-01; Foundry deployment completed in P4-08; P4-09 registers chat through the public Invocations handler |
 | Coding sandbox | Foundry Hosted Agents, Invocations protocol, one session per task; Container Apps Jobs as fallback | Proven |
 | Agent protocol | ACP for both agents: Copilot CLI `--acp` (preview); Codex via `codex-acp`; CLI versions pinned (L13) | Proven |
 | Voice | Danish: Voice Live voice bridge, MAI Transcribe, Harper. English: `gpt-realtime-2.1` speech to speech, Ryan HD. Browser traffic uses an authenticated backend WebSocket relay; provider credentials stay server-side. | Relay design selected; local mock spike verified, Azure interoperability unverified |
@@ -178,17 +178,27 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   window therefore uses the shared tabs, geometry, focus, snapshot and Jarvis
   commands. Voice entry minimises it, voice exit restores it, and sending or
   Conversation navigation restores it after Close.
-- Background jobs (7 October): slow work that ends in a workspace window (research
-  today; images and HTML apps next) registers with the in-memory
-  `BackgroundJobRegistry` (`apps/backend/src/core/jobs.ts`). Every change publishes a
-  contract-valid `BackgroundJob` (`packages/contracts`: `jobId`, `kind`, a 3-6 word
-  `title`, `status` running/done/failed/cancelled, `step`/`steps`, optional `detail`,
-  and `viewId` once done) as `event: job` on `/now/events`. `GET /jobs` lists current
-  and recently finished jobs (kept 10 minutes, at most 20) so a reloaded tab can
-  rebuild its job chip, and `POST /jobs/:jobId/cancel` (owner only) aborts a running
-  job. Research progress windows are best effort, so a missed update no longer stops
-  the job, and the final report falls back to `create` when no open tab still has the
-  progress window.- P7-27 publishes a bounded `WorkspaceSnapshot` (at most 32 open-window titles
+- Background jobs (P9-14, 7 October): slow work that ends in a workspace window
+  (research today; images and HTML apps next) registers with
+  `BackgroundJobRegistry` (`apps/backend/src/core/jobs.ts`). Migration 0029 stores
+  each current job in `background_jobs` and every committed state/step in
+  `background_job_steps`; migration 0034 adds the bounded research topic/depth
+  needed for a user-requested retry. A job still running at startup becomes
+  failed with `interrupted by restart`; jobs and their history are retained
+  for 30 days.
+  Every change is committed before its contract-valid `BackgroundJob` is published
+  as `event: job` on `/now/events`. `GET /jobs` and Jarvis's `list_jobs` tool read
+  the SQL store, so reloads and requests served by another replica see the same
+  current state and result-window link. `POST /jobs/:jobId/cancel` (owner only)
+  aborts locally tracked work; Jarvis can also cancel by id or title words with
+  `cancel_job`. The shared `get_job` tool returns the job, up to 100 persisted
+  transitions, a failure reason and result-window ID. `retry_job` accepts only a
+  failed research job with saved input and atomically allows one new attempt from
+  each failed attempt; it never resumes work automatically. Research progress
+  windows are best effort, so a missed update no longer stops the job, and the
+  final report falls back to `create` when no open tab still has the progress
+  window.
+- P7-27 publishes a bounded `WorkspaceSnapshot` (at most 32 open-window titles
   and IDs, including minimised windows, plus context-panel visibility) through
   owner-authenticated `POST /now/workspace/state`. The broker keeps one snapshot per
   open `/now/events` session, uses the most recently reported one, and drops a
@@ -298,7 +308,7 @@ Jarvis is one backend with a shared core and one module per area, a static web a
 - `GET /settings` and `PATCH /settings` inherit the same Dan-only delegated
   authentication. The backend returns effective defaults with the validated
   model catalog, rejects unknown keys and unsupported values, and writes a
-  partial update transactionally to whitelisted `global` rows in `dbo.settings`.
+  partial update transactionally to whitelisted `dbo.settings` rows.
   The `appearance.theme` value accepts only `light` or `dark` and reuses the
   global `dbo.settings` key/value table without a migration. The `newProjects`
   settings area validates owner, visibility, templates
@@ -318,14 +328,75 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   already-open client without reload depends on the P8-13 consumer and remains
   unverified.
   The SQL adapter is injected only when database configuration exists; the API
-  returns 503 without it. The model catalog offers deployed Jarvis models and
-  only provider defaults for Codex and Copilot because their available-model
-  catalog values have not been verified. The agent-only `GET /agent/settings`
-  route returns only the effective Jarvis model and reasoning effort to the
-  `Jarvis.Tools` principal. The hosted agent reads it before acknowledging a new
-  session and holds that snapshot for the session; if the read is unavailable,
-  it logs a warning and uses the defaults. Future task creation reads these
-  defaults; existing sessions and tasks are not updated.
+  returns 503 without it. Dan-only `GET /models` reads Foundry deployments
+  through ARM with the backend managed identity's account-scoped Reader role.
+  It caches results for five minutes and returns configured defaults with
+  `source: 'fallback'` when ARM cannot be reached. Entries include deployment
+  name, model, version, SKU, capacity, inferred capabilities and supported
+  reasoning efforts. Settings persist `roles.<role>.model` and
+  `roles.<role>.reasoning_effort` in the existing key/value table; no migration
+  is needed. The eight roles are chat, vision, research, voice, transcription,
+  embedding, Codex and Copilot. Legacy `jarvis.model`/`jarvis.reasoning` values
+  resolve to the chat role and remain available through the previous settings
+  keys. `GET /agent/settings` returns the resolved role settings to the
+  `Jarvis.Tools` principal. The hosted agent reads chat model/effort before
+  acknowledging a new session and keeps that snapshot for the session.
+  Dispatcher task starts, web research, screen/camera vision, browser text
+  reasoning, PC-act visual targeting, and new English voice sessions resolve
+  their corresponding role settings. Research snapshots its model and reasoning
+  effort when the job starts; voice snapshots its model and transcription model
+  when the session starts. Updates apply to the next turn or session. Vision
+  role options are limited to models with known cost rates; Voice Live choices
+  are `gpt-realtime-2.1` and `gpt-realtime-2.1-mini`, and input transcription
+  uses the Voice Live-supported `mai-transcribe` model. Codex and Copilot retain
+  their provider `default` option until their provider model catalogues are
+  available. Embedding defaults to `text-embedding-3-small`; Bicep deploys both
+  supported embedding deployments. Requests explicitly ask for 1,536 dimensions,
+  including when `text-embedding-3-large` is selected. ARM/live Azure selection
+  remains unverified.
+  uses the Voice Live-supported `mai-transcribe` model. Codex and Copilot expose
+  provider-specific model and reasoning allowlists through the same settings
+  options. Factory task starts prefer per-task model/reasoning overrides to the
+  corresponding role settings, then pass the effective choices to the runner.
+  Codex applies both through ACP config options; Copilot receives its model and
+  reasoning effort as CLI arguments. `default` omits the setting; Codex's
+  `none` effort is passed through, while Copilot's `none` omits its CLI flag.
+  The runner persists effective options with the ACP session for resumed turns.
+  `JARVIS_CODEX_TOOL_MODEL` remains specific to isolated Codex
+  research and image-generation tools. Provider/account availability and live
+  Azure selection remain unverified.
+  available. ARM/live Azure selection remains unverified.
+  P9-07 adds Dan-only `POST /models/deployments` and
+  `DELETE /models/deployments/:name`, backed by the same Foundry account
+  catalogue and ARM API. Creation accepts only a model already present in the
+  live catalogue and derives the deployment name from model plus version.
+  Deletion checks the resolved settings for every model role both before and
+  after approval, and refuses any deployment in use. Both routes return 202
+  while the existing Now confirmation is pending; `manage_model_deployment`
+  uses that same one-time confirmation in chat and voice. ARM catalogue cache
+  is invalidated after a successful request. The browser/API operation remains
+  in process while pending and is not resumed after a backend restart. The
+  implementation reuses the existing settings/catalogue contracts and adds no
+  database migration.
+  P9-12 adds `get_settings` and `update_settings` to the same backend tool
+  registry used by chat and voice. Both operate only on validated settings keys;
+  reads return effective settings without credential records, and generic tool
+  audits redact setting arguments and results. Role-model/reasoning changes and
+  daily vision-budget changes run through the existing one-time Now confirmation
+  service before the settings store is written. `set_jarvis_model` remains a
+  compatibility alias for the chat role and shares the same confirmation and
+  validation path. These tools reuse the existing settings store and contracts;
+  no migration or web change is required.
+  P9-34 adds a bounded home-location setting (`city`, latitude and longitude) to
+  that same store and registers `weather` through the shared tool registry.
+  Open-Meteo geocodes named places and returns a validated current observation
+  and up to seven forecast days. The tool records its work as an `html_app`
+  background job, stores a static escaped report in the existing workspace HTML
+  artifact tables, and opens it through the workspace command broker. Requests
+  use fixed Open-Meteo HTTPS hosts, an eight-second downstream deadline and
+  bounded JSON responses; no API key or migration is needed. Offline tests cover
+  settings, geocoding, forecast normalization, jobs and workspace delivery;
+  live provider and signed-in workspace acceptance remain unverified.
 - `ci.yml` (P0-10) is the aggregate CI on every PR, `main` push and
   `workflow_dispatch`. It calls the reusable `web-ci.yml`, `backend-ci.yml`
   (including the container smoke), `database-ci.yml` (isolated SQL Server migrations), `foundry-contract.yml`, `runner-ci.yml`
@@ -394,6 +465,23 @@ confirms completion. The browser and hosted agent service identities do not rece
 a task-state bypass. Responses are capped at 1 MiB, and event payloads above 4 KiB
 are omitted with an explicit truncation flag.
 
+`GET /factory/board?project=<id>` returns `{ project, fetchedAt, stale, columns }`
+in the shared `FactoryBoard` contract, with all six ordered columns:
+Backlog, Needs Dan, Ready, In progress, In review, and Done. Each card contains
+an issue, its linked pull request (including draft/readiness and checks), and
+the existing Factory task overlay when linked. Issues carry their task code,
+label names, worker, state, timestamps, and exact blocked issue numbers. The
+endpoint uses the repository-scoped GitHub App read token to load open issues,
+issues closed in the last 14 days, and open pull requests. Its status precedence
+matches `.github/scripts/project_board.py`; both test suites read the same
+status fixtures. Done cards sort by close time, and other columns by update
+time. The in-memory project snapshot is cached for one minute and invalidated
+by signed issue, pull-request, check, and workflow webhooks and committed task
+events. `/now/events` emits a typed `board` event with the affected project ID
+and monotonically increasing in-process version. No migration or GitHub
+Project write is needed; live GitHub reads require the App's issue read
+permission.
+
 Chat-created tasks retain their originating message ID. Committed Done,
 NeedsAttention, Cancelled, and backend `pull_request_opened` events route a short
 status message with the task ID, outcome, and validated GitHub PR link to that
@@ -433,6 +521,9 @@ without a session row. Final auth/HTTP 4xx refusals (except HTTP 408) now retain
 `foundry_start_rejected` rather than the ambiguous failure reason.
 Use Recover for tasks with sandbox history; ambiguous or archived outcomes need
 reconciliation before another sandbox can safely start.
+The shared `/tools` registry exposes this same lifecycle operation as
+`retry_task`; it validates the task ID and returns a safe refusal for missing or
+ineligible tasks rather than bypassing the store's retry guards.
 The transaction takes the shared sleep-switch lock and locks the task, resets
 the attempt count, retry deadline, lease and start/finish timestamps, and preserves
 the task request, configuration and branch. It records a Dan-sourced
@@ -525,12 +616,24 @@ The factory registers authenticated `GET /factory/projects`,
 `DELETE /factory/projects/:id` routes. The project
 store uses the process-owned SQL pool and parameterized queries; list returns
 active rows, archive sets `active = 0`, and duplicate repositories return 409.
-Request schemas validate required settings and the database's policy, sandbox,
-tech, repository, and concurrency constraints. When SQL is not configured,
+P9-28 adds a nullable, 2,000-character project description in migration 0033;
+existing rows remain null, and projects created without a description default it
+to null. `create_project` stores its supplied description. PATCH validates project
+settings and updates only supplied fields, including description and defaults.
+DELETE archives only an active row. Request schemas validate required settings
+and the database's policy, sandbox, tech, repository, description, and concurrency
+constraints. When SQL is not configured,
 project requests return 503 rather than claiming success. Route and query-binding
 contracts are covered offline, and SQL Server-container tests execute project
 CRUD and archive queries. Real Azure identity and project CRUD remain unverified
 without Azure access.
+
+The shared Factory tool registry exposes `update_project` and `archive_project`.
+Updates reuse the active-project store and return a bounded summary without
+private merge rules. Archiving stages a one-time eight-digit code for ten minutes;
+`confirm_project_archive` accepts it only when Dan's later message exactly says
+`confirm <code>`. Pending confirmations are process-local and disappear on
+restart, so restarts fail closed rather than archiving without fresh approval.
 
 With backend-only `APPLICATIONINSIGHTS_CONNECTION_STRING` (P0-11 Key Vault
 reference), an isolated SDK client exports these events as manual traces. No
@@ -732,8 +835,67 @@ confirmed. Calls require
 tool routes accept Dan's delegated token and opt in to the Jarvis agent identity
 ([backend authentication](#backend-authentication)). Existing Foundry client, health/security/logging and
 process shutdown behavior are preserved.
+P9-42 returns body-schema failures as HTTP 200 tool envelopes with
+`outcome: refused`, a bounded validation hint and retry guidance, so the hosted chat client
+can pass them to the model. Voice's direct executor uses the same formatter.
+Unknown root arguments are refused before Fastify can silently strip them.
+Invalid inputs never execute tools or enter the generic tool-call audit; they
+emit `tool.invalid_arguments` to stdout and Application Insights with only the
+tool name, validation keyword and a bounded property identifier, never argument
+values or raw validator messages. Authentication and other HTTP errors remain
+unchanged. The shared capability prompt guides both voice and chat to correct
+arguments before retrying; workspace commands still use the existing broker and
+`packages/contracts` schemas.
+P7-45 adds `list_capabilities` and read-only `repo_*` tools to the shared Factory
+registry. They use only repository-scoped GitHub App installation tokens, default
+to `JARVIS_REPOSITORY` (`DanAakesen/jarvis`), and accept explicit project IDs or
+repositories only when they match an active project. File paths, encodings and
+response sizes are validated and bounded; overview responses are cached by commit
+SHA. Repository files and issue text are explicitly framed as untrusted input.
+P9-42 lets `repo_search` accept `repository` or `repo` as aliases of `project`,
+using the same active-project resolver and read-only token scope. Conflicting
+selectors are refused. Results include `incompleteResults`; incomplete searches,
+zero GitHub hits or missing readable snippets return an explanation and suggest
+`repo_list` followed by `repo_read`, without claiming the code is absent.
+The tools support Jarvis chat, voice and the hosted agent through the existing
+`GET /tools` and `POST /tools/{name}` routes.
 The [module guide](../apps/backend/src/modules.README.md) explains adding areas,
 resource lifetimes and the verified offline extension contract.
+
+### System status (P9-20)
+
+Dan-only `GET /status` returns the shared `SystemStatus` contract with one
+`checkedAt` per subsystem. The backend caches the snapshot for 60 seconds and
+sets a private 30-second HTTP cache. `get_status_summary` reads the same snapshot
+and combines health counts with the existing Now-feed counts.
+
+The database check runs a bounded `SELECT 1`; Foundry chat, voice and embedding
+entries compare configuration and the cached ARM catalogue, without claiming a
+successful model invocation. Vault status aggregates note/chunk counts, latest
+`indexed_at`, and embedding coverage without reading note text. GitHub App
+permissions come from the repository's installation metadata; Google uses a
+bounded Calendar list read. PC bridge state is live in process and reports
+connection, pause and wake-word state. Its current protocol does not provide
+bridge or Chrome extension versions, so those fields are `null`. Runner status
+reports configuration and tracked-session count but remains `unknown` because
+there is no runner health endpoint. Deploy embeds the source commit in the
+backend image. `last_error` records only the latest uncaught HTTP 5xx route
+template, timestamp and status code; exception text and credentials are never
+returned. Probe failures are reduced to fixed status details. No status table or
+migration is added.
+
+`GET /status/smoke` forces fresh read-only Google, GitHub App, vault repository
+tree-metadata, embedding, and PC-bridge checks and adds a bounded research dry
+run. It never reads note contents. Its response contains only each check ID,
+status, and timestamp. The latest report is kept in
+the backend's in-memory status snapshot and is returned as `smoke` by `GET /status`
+for the status page; it is lost when the backend restarts. The embedding vector is
+discarded, and the temporary research invocation is cleaned up without writing
+research output or other user data. Dan may call the endpoint with his normal
+token; the configured deployment service principal may call only this exact GET
+route using an Azure Resource Manager token. The Deploy workflow records the
+allowlisted statuses in its run summary and fails on degraded/down checks except
+for an offline PC bridge.
 
 ### Local PC bridge (P7-06)
 
@@ -745,7 +907,7 @@ firewall port and retries after disconnect. Entra app-only identities, other
 delegated apps, and users other than Dan are rejected at the route boundary.
 
 The backend registers `pc_open`, `pc_media`, and `pc_active_window` in its
-existing tool registry. Protocol messages are bounded to 64 KiB, correlate UUID
+existing tool registry. Protocol messages are bounded to 128 KiB, correlate UUID
 command IDs, cap in-flight work, and time out after 15 seconds. Both backend
 validation and the companion's portable core bound app names and validate the
 fixed command shapes. App lookup searches the current user's and common
@@ -774,6 +936,26 @@ titles, or message content.
 The backend logs each WebSocket command's safe command name, normalized outcome
 and monotonic round-trip milliseconds as `pc_bridge.command_timing`; request
 arguments and returned data are excluded by the logger allowlist.
+
+### Clipboard tools (P9-32)
+
+The existing PC bridge tool module registers `pc_clipboard_read` and
+`pc_clipboard_write` in the shared tool registry and sends only
+`clipboard_read`/`clipboard_write` through the authenticated bridge protocol.
+Both tools require a current message ID, are marked sensitive so the generic
+tool-call audit stores neither arguments nor results, and are not reflex-safe.
+The read tool is described for use only when Dan asks in the current message;
+it does not read in the background or from earlier turns. The backend redacts
+obvious password, token, API-key, bearer-token, and private-key values before
+returning clipboard text. Clipboard text is bounded to 20 KiB of UTF-8, and the
+bridge envelope is bounded to 128 KiB to allow JSON escaping without unbounded
+messages. Clipboard reads return text only; writes replace the clipboard with
+the exact provided text (an empty string clears it). The tray's control pause
+blocks writes while read-only inspection remains available. This uses shared
+contracts and adds no route, persistence, or migration. Content is excluded
+from bridge timing logs and tool-call audit records. Offline contract, policy,
+and backend protocol tests cover bounds, redaction and audit behavior; use of
+the Windows clipboard on Dan's PC remains unverified.
 
 `pc_open` accepts repo-relative folder and file targets under `C:\Repo` and
 opens them in VS Code. The portable `RepoPathResolver` checks the requested
@@ -1024,7 +1206,7 @@ offline median fake step was 0.07 ms excluding page loads. Live Jev/Foundry,
 Dan's signed-in Chrome, browser approval delivery and end-to-end voice/browser
 behavior remain unverified.
 
-### Task recipes (P7-35)
+### Routines (P7-35, P9-35)
 
 The backend captures only completed `pc_act` / `browser_do` runs, including
 independently verified browser completion. `core/task-recipes.ts` stores normalized
@@ -1034,13 +1216,15 @@ generated text is regenerated for the new goal. Sensitive, value-echoing or
 unstable target labels make the run ineligible for storage.
 
 `database/recipe-store.ts` uses existing `dbo.settings` rows at scope `global`,
-key `recipe.<sha256(kind,key,goal)>`, separate from validated settings preferences.
-Recipes are capped at 100 records, 20 steps and 32 KiB each; a transaction-owned
-application lock serializes bounded upserts. No migration is needed: 0020 already
-belongs to chat steering and remains unchanged.
+key `routine.<sha256(kind,key,goal)>`, separate from validated settings preferences.
+Routines are capped at 100 records, 20 steps and 32 KiB each; a transaction-owned
+application lock serializes bounded upserts. Existing `recipe.<hash>` rows are
+read on list and migrated to the routine key on write or rename; delete removes
+either key. No migration is needed: 0020 already belongs to chat steering and
+remains unchanged.
 
 On the first fresh snapshot, Jev makes one calibrated Choice among at most
-20 recipes for the exact process name or HTTP(S) origin plus `none`. Each replay
+20 routines for the exact process name or HTTP(S) origin plus `none`. Each replay
 step re-locates a unique role/name target and makes one typed replay/plan
 verification against the current observation. Missing/ambiguous targets or
 verification drift disable replay and resume normal planning; app/site changes
@@ -1048,9 +1232,12 @@ also prevent saving a cross-context sequence. Confidence below 0.9 asks Dan.
 Replay still executes through the existing PC bridge policy/Windows executor,
 Chrome transport, pause switch and irreversible-only `runConfirmed` gates.
 
-Dan-only `GET /recipes` and `DELETE /recipes/:id` support the Settings section.
-The sensitive `task_recipes` list/delete tool uses the existing authenticated
-tool dispatcher and redacted audit. P5-14 `chat.latency` adds content-free
+Dan-only `GET /routines`, `PATCH /routines/:id` and `DELETE /routines/:id`
+support routine management. PATCH changes only the bounded safe display name;
+the content-derived ID and replay sequence remain stable. `/recipes` routes and
+the sensitive `task_recipes` list/delete tool remain compatibility aliases for
+one release; `task_routines` is canonical. Both tools use the authenticated
+dispatcher and redacted audit. P5-14 `chat.latency` adds content-free
 `recipe_select`, `recipe_verify`, `recipe_plan` and `recipe_run` durations.
 Offline timing fixtures compare whole runs including selection; live provider
 and Windows/Chrome timing remains unverified. Controlled `recipe_run` timings
@@ -1107,11 +1294,23 @@ scoped to that repository with Contents write permission (which includes read);
 the backend never uses a personal token. A signed `push` webhook for `master`
 and a startup sync read the recursive Git tree. Sync fetches changed Markdown
 notes by blob SHA, skips `.obsidian/`, `.github/`, `.codex/`, `.vscode/` and
-non-text/binary files, chunks notes by heading, embeds them with the existing
-`text-embedding-3-small` deployment when available, and removes deleted notes.
+non-text/binary files, chunks notes by heading, embeds them with the selected
+embedding role deployment when available, and removes deleted notes.
 `dbo.vault_chunks` in migration `0021_vault_memory_index.sql` is only a derived
-index/cache keyed by path and blob SHA; semantic search falls back to bounded
-term matching when vectors are unavailable.
+index/cache keyed by path and blob SHA. Migration `0028_json_embeddings_without_vector.sql`
+stores nullable JSON vectors for both vault chunks and legacy SQL memories when
+SQL Server has no `vector` type. Migration `0031_embedding_model_identity.sql`
+stores the deployment name beside every memory and vault vector. Vector search
+and graph similarity use only rows from the active model; vectors with another
+or unknown model are treated as missing. JSON mode ranks the matching vectors
+with cosine similarity in code and caches the bounded vault matrix until index
+changes; full-text/term search remains the fallback. A sync backfills missing
+vault embeddings with a 4,096-call limit. Changing the embedding role starts a
+cancellable, persisted background job that re-embeds up to 4,096 memories and
+runs the paced vault synchronization. Startup detects remaining mismatched
+vectors and resumes the job; job detail reports when another bounded pass
+remains. Embedding telemetry records provider input tokens when the response
+supplies them.
 
 The backend exposes `vault_search` (up to eight ranked snippets with heading,
 path and GitHub note URL), `vault_read` (one Markdown note, at most 256 KiB),
@@ -1123,7 +1322,12 @@ People/, Work/, Personal/ and General/ note folders. Writes are limited to
 require Dan's explicit “remember” for banking or health details. Contents API
 SHA concurrency retries once; successful changes commit directly to `master`
 as `jarvis: <reason>` with a `Co-authored-by: Jarvis` trailer. The tool result
-includes the commit URL for Jarvis to relay in chat.
+includes the commit URL for Jarvis to relay in chat. `vault_delete` is available
+only for explicit requests and requires a Now confirmation that names the exact
+note path. It rechecks the GitHub Contents SHA after approval, commits the
+deletion through the same App contents-write token, removes the indexed chunks
+and links, and invalidates the cached graph; a changed note is refused rather
+than deleting the newer version.
 
 Index/write logs contain bounded counts and top-level folders only, never paths
 or note contents. Fake GitHub tests cover add/change/delete indexing, ranking,
@@ -1156,6 +1360,29 @@ uncached, bounded, and redact credential-like text; no database migration is
 needed. Durable-memory edits are capped at 2,000 characters; vault-note edits
 are capped at 256 KiB, and note history is response-size bounded.
 
+P9-10 adds bounded `memory` settings to the existing global settings store; no
+migration is needed. `similarityThreshold` defaults to `0.35` and controls
+embedding-based knowledge-graph edges in both the application and SQL candidate
+query; `graphTextSimilarityThreshold` defaults to `0.12` for the TF-IDF fallback.
+`searchTopK` defaults to five and caps vault search and graph-search results at
+the configured value (1–8). `automaticCapture` defaults on and is included in
+`/agent/settings` and voice-session instructions. The shared `vault_write` tool
+marks automatic captures separately from Dan-requested writes; the backend
+refuses marked automatic writes when capture is off, while direct requests remain
+available. Default thresholds, the vault-search result count and capture
+behavior match the existing values.
+
+P9-11 adds bounded `timeouts` settings to the existing global `dbo.settings`
+store and shared contracts; no migration or web change is needed. Defaults are
+30 seconds for ordinary tools, 320 seconds for long tools, and 10 seconds for
+agent-to-backend HTTP requests. Their respective bounds are 1–120, 30–320 and
+1–60 seconds. The existing research invocation timeout remains in `research`
+(1–320 seconds) and is also returned to the hosted agent. `/agent/settings`
+supplies the effective values; the agent validates them and applies them to tool
+calls and chat-runtime backend requests. Missing timeout fields on an older
+backend response use the bounded defaults. Timed-out tool actions are not
+automatically retried because their completion may be uncertain.
+
 ### Vault knowledge graph (P7-43)
 
 Migration `0027_vault_knowledge_graph.sql` stores wiki-link and Markdown-link
@@ -1169,8 +1396,9 @@ notes added later can resolve without rewriting their source.
 IDs are lowercase SHA-256 hashes of vault paths. Nodes include the note path,
 title, one of the four routed folders, the last index timestamp for that note,
 and its degree. Link edges represent resolved wiki/Markdown links; similarity
-edges use the mean of a note's existing chunk embeddings, retain the three
-highest cosine scores above `0.75` per note, and include the score. The response
+edges prefer application cosine scores over the mean of each note's chunk
+embeddings, retaining the three highest scores above `0.35` per note. SQL vector
+similarities remain the fallback when application embeddings are unavailable. The response
 is limited to 2,000 path-sorted nodes and 8,000 edges, and the assembled graph is
 cached until a successful vault sync. The top-level `updatedAt` is the last
 successful vault sync time; note timestamps are SQL index timestamps, not Git
@@ -1235,6 +1463,26 @@ when present; P5-06 remains the writer. Route/store/web contract tests pass, but
 Chromium inspection at 390/1280 px verifies local mocked interactions.
 Live Azure SQL and provider/voice report data remain unverified.
 
+P9-23 adds an agent-only `POST /usage/foundry` ingestion route for token counts
+reported on completed Foundry chat and voice model responses. Screen vision
+records its provider-reported token counts and model; successful memory and vault
+embeddings record only the provider's input-token count, not the text. Migration
+`0030_foundry_usage_cost_coverage.sql` adds model, role, USD, DKK and cost-status
+fields. Known Foundry list rates are estimates converted using 6.5785 DKK/USD;
+unknown deployment rates and subscription-backed research/image-generation costs
+remain explicitly unverified. `/usage` returns daily UTC and monthly UTC cost
+totals plus research, web-research and image-generation tool-call counts. All-time
+daily totals are bounded to the latest 90 days; monthly totals cover the selected
+period. Provider-reported chat/voice tokens, SQL collection and live billing have
+not been verified against a deployed service or invoice.
+
+P9-31 adds the agent-only `get_usage` tool to the shared registry. It uses the
+existing usage store and shared period/entry contracts to return USD and DKK
+spend grouped by role (or source where no role is recorded) and model, preserving
+estimated and unverified counts and surfacing unpriced tool calls and truncation.
+The `today` period uses UTC midnight. Sensitive tool-call audit records redact
+the arguments and result; no migration or web change is needed.
+
 P6-03's backend job checks for events older than 90 days hourly while a sandbox
 is active, in bounded SQL batches, and uploads deterministic per-task blobs
 before deleting each batch in the same SQL transaction. While idle, it skips
@@ -1262,6 +1510,14 @@ in pages of 50 (maximum 100), ordered oldest-to-newest within each page and
 continued with a message-ID cursor. Each entry includes its session's chat/voice
 channel and language. It returns tool-call names, outcomes and task IDs, not the
 stored arguments or results.
+P9-24 adds owner-authenticated `GET /conversation/search?q&from&to&source&limit`
+and the `conversation_search` tool through the shared registry. Search dates are
+inclusive UTC calendar days; `source` filters the stored session channel. Results
+contain message/session IDs, source, role, timestamp and a 240-character snippet,
+with a `hasMore` flag and a maximum of 50 rows. Migration 0032 adds a timestamp
+index; startup creates an optional SQL full-text index outside the migration
+transaction when supported, otherwise the store uses a bounded substring query.
+Tool arguments and results are redacted from the persistent tool-call audit.
 
 P8-26/P8-35 keep chat draft, turn state and a removable FIFO queue in
 `ConversationHistory`. Each submission captures text and language and clears
@@ -1492,8 +1748,8 @@ These boxes are responsibilities; they do not each need a separate service.
 | Stale task reconciliation | At dispatcher startup, scan at most five Running tasks whose latest sandbox heartbeat is at least five minutes old. While a sandbox is tracked, repeat at five-minute intervals. Query the recorded Foundry invocation with a 15-second timeout. A live invocation refreshes its heartbeat; a completed invocation uses the normal GitHub delivery and project-policy path, persisting a discovered PR through the P3-04 mapping first. Failed, unavailable, mismatched, or otherwise unverifiable states move to NeedsAttention with a user-visible reason; Done requires the existing verified completion path. Each outcome logs an allowlisted `task_reconciliation.decision` with task/session/invocation IDs and bounded status/decision fields only. This bounded scan is the recovery path for lost completion/webhook events, not a substitute for webhook delivery. |
 | Recovery and completion | Recover atomically claims a NeedsAttention task after an actual crash; Continue after `idle_expired` uses the same branch-recovery path. Both start a fresh Foundry session from the existing task branch with the original request, bounded steering history, and event summary. A completed invocation is correlated to its active task session; the backend accepts Done only after a repository-scoped GitHub App check confirms both the branch and a pull request. Missing evidence returns the task to NeedsAttention; API failures do not produce false success. Migration `0010_idle_expired_sessions.sql` extends the session end-reason vocabulary. Offline fake tests cover both heartbeat outcomes and continuation; SQL Server CI, live runner, Foundry, and GitHub behavior remain unverified. |
 | Live progress | The runner posts task-scoped events to `POST /factory/sandbox-events` with its managed identity; the backend records each through P1-05's transaction and publishes only after commit. The dispatcher sends `task_id` in every start and resume invocation; a runner deployed with `JARVIS_BACKEND_URL` rejects task invocations without one (L59). Browser streaming is P1-06. |
-| Build and release status | GitHub App webhooks: `pull_request`, `check_run`, `workflow_run`, `deployment_status`, and `push`. No polling. |
-| Board updates | `GET /factory/tasks/:id/events` authenticates the bearer token, replays `task_events` after `Last-Event-ID`, then streams committed hub events and a 25-second heartbeat. The fetch client reconnects with its last delivered ID and ignores repeats. |
+| Build and release status | GitHub App webhooks: `pull_request`, `check_run`, `workflow_run`, `deployment_status`, and `push`. No polling. Signed `issues`, `pull_request`, `check_run` and `workflow_run` events also invalidate Factory board snapshots for tracked repositories; issue payloads are not persisted. |
+| Board updates | `GET /factory/tasks/:id/events` authenticates the bearer token, replays typed `task_events` after `Last-Event-ID`, then streams committed hub events and a 25-second heartbeat. Shared contracts define the task frame; one typed backend helper serializes it. The fetch client reconnects with its last delivered ID and ignores repeats. |
 | Factory task view | P1-08 loads up to 100 tasks from the filtered task API, opens task-scoped SSE streams for nonterminal cards, and refreshes the snapshot after updates. P2-14 exposes the latest session end reason so an expired completed invocation offers Continue rather than Recover. P6-21 supplies recorded PR/check/usage summaries and a Dan-only retry API for failed starts without sandbox history; UI rendering and retry controls are owned separately. |
 | Idle | The dispatcher subscribes to committed task events and schedules the next retry deadline. It performs one startup stale-task scan, then schedules five-minute scans only while a sandbox is tracked. The event-archive timer also skips SQL until active sandbox work exists. |
 | Always on | The backend normally runs with a minimum of 1 replica, so timers remain alive. The main-page sleep switch sets the minimum to 0 (it wakes on the next request) and is refused while a task is Ready, Running, or PauseRequested. SQL can pause between genuine accesses; the daily Codex renewal lease check and request-driven endpoints remain deliberate exceptions. |
@@ -1782,14 +2038,25 @@ deployed Azure acceptance remain unverified.
 
 ### Interactive research reports (P7-37)
 
-P7-37 registers `research` with `quick` and `deep` depth. After the active
-workspace acknowledges creation of the progress window, the tool returns so
-voice can continue promptly. A bounded detached job reuses the Foundry runner's
-subscription-backed `codex-tool` web-search path, publishes observed
-query/source progress, and asks Codex for one self-contained cited HTML report.
+P7-37 registers `research` with `quick`, `standard` and `deep` depth. Quick runs
+two focused searches, standard runs three, and deep runs five; each depth then
+uses one report-generation pass. After the active workspace acknowledges
+creation of the progress window, the tool returns so voice can continue
+promptly. A bounded detached job reuses the Foundry runner's subscription-backed
+`codex-tool` web-search path and publishes observed query/source progress.
 Research and page text are untrusted evidence; validation bounds UTF-8 size and
 source count, requires a complete parseable document, rejects unsafe elements
 and links, and permits citations only to collected HTTPS sources.
+
+P9-06 stores `research.depth`, `research.max_sources` and
+`research.timeout_seconds` in the existing `dbo.settings` key/value store and
+exposes them through the shared contracts and owner-authenticated `/settings`;
+no migration is needed. The saved depth is the default when a request omits
+depth, while a supplied quick/standard/deep depth takes precedence. The default
+source ceiling is 50, matching the existing collection and artifact bound;
+report generation still receives at most 12 sources. Each runner invocation
+defaults to 305 seconds and can be tuned up to 320 seconds, the configured long
+tool read timeout. The overall job remains bounded at 15 minutes.
 
 The report is persisted in owner-scoped SQL metadata in
 `dbo.workspace_html_artifacts` (migrations 0026/0027), then the same workspace
@@ -1807,6 +2074,28 @@ network, forms, popups or top navigation. The host acts only on HTTPS
 other messages are ignored. Renderer integration and browser acceptance remain
 pending that dependency.
 
+### Folio (P9-25)
+
+Migration `0035_folio.sql` adds an owner-scoped `dbo.folio_items` index over
+research reports, HTML apps, generated images and knowledge-graph views. New
+reports record their topic summary, HTML apps their title, generated images
+their prompt summary, and graph views their query and highlighted node IDs.
+Migration 0035 backfills existing HTML artifacts and images; legacy HTML
+artifacts do not retain their originating job, so they are indexed as
+`html_app`. Graph snapshots are recorded from now on; older transient graph
+views cannot be recovered.
+
+Owner-only `GET /folio?q=&kind=&before=` returns at most 100 items, pinned
+first and then newest, matching the item title, prompt summary, or historical
+HTML version title. `POST /folio/:id/open` validates source ownership and
+recreates or updates the saved view through the workspace command broker,
+then focuses it. `PATCH /folio/:id` pins or renames an item. Confirmed
+`DELETE /folio/:id` removes only its Folio index entry; the original artifact
+and its history remain available. The shared sensitive tools `folio_search`
+and `folio_open` provide the same owner-scoped search and broker-backed reopen
+behavior to Jarvis without retaining search arguments or results in tool audit.
+The Folio rail and pane are a separate UI task.
+
 ### Sandbox credentials
 
 The agent can read everything in its sandbox, including environment variables, so each token is limited to what the task needs.
@@ -1823,7 +2112,7 @@ Every GitHub credential Jarvis uses, checked with Dan on 4 October 2026. Each to
 
 | Credential | Type and scope | Stored in | Used by | Lifetime |
 | --- | --- | --- | --- | --- |
-| Jarvis Software Factory | GitHub App, installed on all of Dan's repositories. Repository permissions: Contents and Pull requests read/write; Actions, Checks and Deployments read; Metadata read; nothing else | Private key as Key Vault `github-app-private-key` (backend only) | Backend: one-hour, single-repository installation tokens (P3-02 to P3-06 and P3-14) | Permanent; rotate the key if exposed |
+| Jarvis Software Factory | GitHub App, installed on all of Dan's repositories. Repository permissions: Contents and Pull requests read/write; Issues, Actions, Checks and Deployments read; Metadata read; nothing else | Private key as Key Vault `github-app-private-key` (backend only) | Backend: one-hour, single-repository installation tokens (P3-02 to P3-06, P3-14 and P7-45) | Permanent; rotate the key if exposed |
 | `jarvis-github` | Fine-grained token: Contents and Pull requests read/write on all repositories | Key Vault `jarvis-github` | Legacy sandbox Git credential path while App-token mode is disabled | Keep until the post-merge App-token push check succeeds; then revoke/remove in a follow-up |
 | `jarvis-copilot` | Fine-grained token: only the Copilot Requests account permission; no repository access | Key Vault `jarvis-copilot` | Copilot CLI sign-in inside the sandbox | Until revoked |
 | `jarvis-repo-admin` | Fine-grained token: Administration read/write on all repositories (creates repositories) | Key Vault `jarvis-repo-admin` | Backend only, when creating a new project repository | Until revoked |
@@ -1834,7 +2123,7 @@ Azure sign-in from GitHub Actions uses OpenID Connect and stores no secret. The 
 
 ### GitHub App
 
-[`github-app-manifest.json`](github-app-manifest.json) prepares a private App with contents and pull-request write access, and checks, Actions, and deployments read access. It subscribes to `check_run`, `deployment_status`, `pull_request`, `push`, and `workflow_run`. The permission set is limited to the operations in P3-02 and P3-03; repository metadata read is GitHub's required baseline.
+[`github-app-manifest.json`](github-app-manifest.json) prepares a private App with contents and pull-request write access, and issues, commit statuses, checks, Actions, environments and deployments read access. It subscribes to `check_run`, `deployment_status`, `pull_request`, `push`, and `workflow_run`. The permission set is limited to the operations in P3-02, P3-03 and P7-45; repository metadata read is GitHub's required baseline.
 
 The backend reads `github-app-private-key` from Key Vault with its managed identity
 and uses the configured `GITHUB_APP_ID` to mint one-hour installation tokens
@@ -1850,6 +2139,17 @@ call the backend for a fresh token and match the returned repository to the
 GitHub host and path before returning credentials. The runner retries a 404
 session lookup with bounded delays to cover the interval before the backend
 persists the newly started Foundry session.
+
+P7-45 uses a one-hour installation token scoped to one selected repository. File
+reads and code search request only `contents: read`; issue/PR summaries request
+`contents: read`, `issues: read` and `pull_requests: read`, so issues in private
+registered repositories are readable too. Neither token nor
+provider response metadata is returned to Jarvis. The tools cap list/search/read
+results, reject traversal, oversized files and binary content, and return links
+alongside content framed as untrusted. `repo_overview` caches by repository and
+resolved commit SHA. Explicit `project` values resolve only against active rows in
+the Factory project store; the default repository uses `JARVIS_REPOSITORY` or
+`DanAakesen/jarvis`.
 
 P3-13 adds a backend-only `GitHubRepositoryCatalog` alongside the task token
 issuer. It finds the active App installation matching `new_projects.owner`,
@@ -1943,6 +2243,7 @@ flowchart LR
 - One release per merge to `main`; no tags.
 - Commits are not stored; the release view fetches them from GitHub on demand.
 - Authenticated `GET /factory/projects/:id/releases` returns the active project's bounded persisted release, PR, workflow-run, and deployment records together with an on-demand graph. Refresh fetches the graph again; a GitHub graph failure leaves the persisted records available with `graph: null`. `GET /factory/releases/:id` resolves an existing release activity link to its project.
+- The shared `/tools` registry exposes `list_releases` and `get_release` over those same persisted records, scoped to active managed projects. `get_deployment_status` reads the latest run on the project's default branch whose workflow file is `deploy*.yml` or `deploy*.yaml`; it uses a repository-scoped installation token with `actions:read`, not the webhook cache. The Actions response is limited to 100 runs/1 MiB with a 10-second request deadline. No matching run returns `null`; provider failures are sanitized and the token is never returned.
 - The graph reader uses a repository-scoped installation token with `contents:read`, at most 20 branches and 30 commits per branch, and a 25-second overall deadline; it does not persist GitHub commit data. The UI exposes keyboard-focusable, 44-pixel commit links and keeps a wide graph in its own horizontal scroll region.
 - Copy-ready managed-project examples live in [`templates/github-actions/`](../templates/github-actions/), with Azure OIDC setup and customization steps in [github-actions-templates.md](github-actions-templates.md). PR checks have read-only permissions; the release build and tests precede an artifact upload, and only the `main`-gated deploy job receives `id-token: write`. Azure federation and deployment in an adopting project remain unverified.
 
@@ -1954,13 +2255,13 @@ Proven 2 October 2026 in a separate prototype ([voice report](reference/voice-pr
 | --- | --- | --- |
 | Browser connection | The composer orb explicitly connects to the selected authenticated `/voice` or `/voice/da` WebSocket using its delegated API token in the WebSocket subprotocol. Readiness never opens capture: a separate Enable microphone action captures and sends mono 24 kHz PCM. Explicit active/muted protocol events start/stop parallel Speech recognition; reconnect returns to microphone-off readiness. Provider credentials never enter the browser or URL. | Browser-client tests cover relay selection, warm-up ordering, explicit activation, mute signaling, permission denial, interruption, stop during activation, and reconnect. Real microphone/audio-device behavior and Azure interoperability remain unverified. |
 | Danish path | Browser → authenticated backend `/voice/da` WebSocket → provisioned Voice Live voice agent → Foundry hosted Jarvis agent over the voice bridge (preview) → backend tools | Every hosted `jarvis` version carries `voiceLiveCompatible: "true"` metadata and declares both `invocations` (chat) and `invocations_ws` (voice bridge); without them Foundry rejects the wrapper. The client connects to the voice wrapper (`/endpoint/protocols/voice`), waits for `session.created`, and then waits for explicit microphone activation. The wrapper owns its session configuration and greeting; the Bridge Protocol `session.start`/`/diag` warm-up applies only to direct hosted-agent connections. The hash-locked provisioner configures MAI Transcribe (`mai-transcribe`, `da`, phrase list) and Harper (`da-DK`); the backend uses `da-DK` Azure Speech interim hypotheses in parallel while unmuted. The Voice Live final message remains authoritative and reconciles the existing P7-20 ledger. Project names from bounded running-task context augment the default phrase hints. P7-20 briefly switched Danish to `gpt-4o-mini-transcribe`, which broke live Danish sessions on 5 October (L92); Voice Live now uses MAI for both final-transcript paths. Live voice provisioning, Azure interoperability, and browser round-trip remain unverified; the hosted Jarvis agent is deployed by P4-08. |
-| English session | The backend configures `gpt-realtime-2.1`, `mai-transcribe` input transcription, Ryan HD (`en-GB-Ryan:DragonHDLatestNeural`), British butler defaults, PCM audio, and the composed tool schemas. Parallel Azure Speech uses `en-GB` interim hypotheses while unmuted. New relays snapshot saved tone, response style, and bounded custom instructions from Settings; the browser cannot replace session configuration or submit tool results. | Local mock tests verify server-owned session settings, saved personality preferences, and client event handling; real browser audio and live Voice Live behavior remain unverified. |
+| English session | At session start, the backend reads the `voice` role and places the selected deployment (`gpt-realtime-2.1` or `gpt-realtime-2.1-mini`) in the Voice Live URL; it reads the `transcription` role for `input_audio_transcription.model`. It also configures Ryan HD (`en-GB-Ryan:DragonHDLatestNeural`), British butler defaults, PCM audio, and the composed tool schemas. New relays snapshot saved personality and voice settings; `createRealtimeSessionUpdate` applies barge-in and maximum spoken tokens to both session types and bounded server-VAD threshold/padding/silence values to its server-VAD configuration. English keeps `azure_semantic_vad_en` at threshold 0.6, 300 ms prefix padding and 500 ms silence. The live Danish hosted agent owns a separate provisioned configuration. The browser cannot replace session configuration or submit tool results. | Local mock tests verify role selection, server-owned session settings, saved voice tuning and client event handling; real browser audio and live Voice Live behavior remain unverified. |
 | Reflex (P7-04) | Chat turns and completed English Voice Live transcripts pass through the backend Jev client (`POST https://api.typesafe.ai/v1/systemone`, `jev-latest`) before the main responder. The client has a 1.2 s timeout, one 429 retry only when `Retry-After` is at most 500 ms, and a 256 KiB response cap. Calibrated Choice confidence gates actions at 0.9; address and complete-command Noul values also use 0.9, while confirmation-required uses 0.5. The minimum of intent and route Choice confidence is the action confidence; there is no self-rated Score question. Billing (402), auth (401/403), rate-limit (429), timeout, other HTTP status, invalid-answer, and network failures are typed and logged in `reflex.decision`; logs never contain the key or transcript. The backend reads `jev-api-key` from Key Vault using its managed identity. A direct call requires Dan's authenticated request, an addressed high-confidence action, no confirmation flag, a registered `reflexSafe` tool, validated arguments, and available audit storage. Safe tool results become trusted handoff instructions so the main model acknowledges but does not repeat the action. | Fake-provider backend tests cover classification, confidence gating, typed failures, safe target filtering, fallback, retry, handoff, and final-transcript sequencing. Live Jev/Key Vault, Danish voice routing, and Azure Voice Live remain unverified. |
 | Streaming clause reflex (P7-20/P7-24) | Voice Live deltas and parallel Azure Speech full interim hypotheses (Foundry AIServices custom subdomain; Entra managed identity; 24 kHz mono PCM) enter the same bounded stable-clause and per-turn Jev path (up to eight requests per turn), with prior executions attached. Speech recognition runs only while the mic is active and unmuted; `da-DK`/`en-GB` use fixed phrase hints plus up to 20 running-project names. Only high-confidence, complete partial actions (currently pause, allow-listed Edge launch, and HTTP(S) open/navigation) execute early. Unsafe and confirmation-requiring actions wait for the Voice Live final. That final remains the source of truth: it replaces an early message, reconciles the in-memory ledger and attempts supported undo on contradiction. No audio or interim hypotheses are stored; Speech failure logs `voice.partials_unavailable` and leaves final-transcript reflexes working. Browser launch/navigation uses the existing PC bridge `pc_open` executor pending P7-17. | Fake-recognizer and fake-stream tests cover action-before-final, duplicate suppression, confirmation gating, contradiction undo, final message replacement, Speech failure fallback and mute stop. `voice.reflex_metrics` records Voice Live delta count, Speech hypothesis count, stable-clause count, first-action latency, speech-stopped-to-first-transcript-word, and speech-stopped-to-first-output-audio. `voice.turn_timing` logs one content-free event per turn with speech-stopped-relative transcript, Jev, tool, first-audio and response-done timings. These are offline fake timings, not live acoustic measurements. Live account RBAC, Speech delivery, Jev latency, first spoken-word timing and Danish/English PC action timing remain coordinator acceptance. |
 | Live partial Speech STT (P7-24) | Azure Speech continuous recognition reuses the Foundry AIServices account's custom subdomain and backend managed identity. Voice phrases are Jarvis, Google, København, Chrome, GitHub, Copilot, Codex and Teams, plus bounded running-project names. Recognition ends on mute, voice end or disconnect; no key or audio is stored. | Fake recognizer lifecycle tests and local backend/web checks pass. Azure retail price API reference dated 5 October 2026: Azure Speech-to-text S1 is $1.00 per audio hour; this is a list-price reference, not a verified account meter. Live Danish/English recognition and managed-identity authorization remain unverified. |
-| English end-of-turn detection (P7-04) | Voice Live uses `azure_semantic_vad_en`, threshold `0.5`, 300 ms prefix padding, 700 ms silence duration, and `create_response: false`; after the final transcription, the relay reconciles the turn ledger and explicitly requests the voice response. | Relay tests verify semantic VAD settings and response ordering. Live Voice Live support/latency remains unverified. |
+| English end-of-turn detection (P7-04) | Voice Live uses `azure_semantic_vad_en`, threshold `0.6`, 300 ms prefix padding, 500 ms silence duration, and `create_response: false`; after the final transcription, the relay reconciles the turn ledger and explicitly requests the voice response. The server-VAD settings in `/settings` do not alter this English semantic detector. | Relay tests verify semantic VAD settings and response ordering. Live Voice Live support/latency remains unverified. |
 | English tools | The backend intercepts realtime function-call events, validates arguments against the registered tool schema, executes the tool, returns its result and P4-05 confirmation to Voice Live, and requests the spoken continuation. | Local mock round-trip verifies execution and result delivery. Completed voice transcripts are persisted as messages; voice tool calls are not stored as `tool_calls`. |
-| Runtime activity (P8-16) | The backend publishes transient, typed activity over owner-authenticated `/now/events`; the voice orb, top bar and workspace consume events from the same stream. Listening follows relay readiness and observed microphone audio; tool calls expose only name and normalized outcome. Speaking follows observed output audio, including P7-12 announcements, with no duplicate announcement. | Contract, mocked chat/voice protocol, authenticated SSE and web tests cover event validation, observed transitions, cancellation/disconnect and payload privacy. The local browser acceptance check covers the voice workspace; live Entra/Foundry and physical audio remain unverified. |
+| Runtime activity (P8-16, P9-18) | Shared contracts define the `mode`, `now`, `voice-wake`, `job`, `jarvis-activity`, `workspace-ready`, `workspace-command`, and `workspace-cancel` payloads on owner-authenticated `/now/events`. The typed backend SSE helper emits those frames; `sseHeaders` carries Fastify/CORS headers across the hijacked stream. The voice orb, top bar and workspace consume the same stream. | Contract guards and authenticated SSE tests cover event payloads and framing. Existing activity transitions, cancellation/disconnect behavior and payload privacy remain unchanged; live Entra/Foundry and physical audio remain unverified. |
 | English status updates (P7-12) | The relay subscribes to committed task transitions and typed status kinds emitted after verified GitHub webhook processing for ready-for-review pull requests and failed deployments. It merges duplicate kinds over 500 ms, then speaks fixed wording only when Dan and Jarvis are idle and no tool call is active; a queued update is retried when Dan stops speaking. `get_status_summary` exposes bounded Now-feed counts, applies Away-mode visibility, and never returns activity text or logs. | Fake event-hub, webhook receiver, tool-route and relay tests cover filtering, duplicate deliveries, redaction and deferral. Live voice audio and production webhook delivery remain unverified. |
 | Voice persistence | The authenticated relay creates one `jarvis_sessions` row, stores completed user/assistant transcript events in `messages`, and ends the session with its connected duration recorded as `voice`/`minutes` usage. Stop waits for the final usage write before refreshing history. | Focused backend/web tests cover transcript extraction, duplicate transcript IDs, usage persistence, end acknowledgement and history refresh. SQL Server and live Voice Live verification remain unverified. |
 | Visual inspection (P7-05/P7-08) | The browser captures a JPEG from the explicitly selected `getDisplayMedia` stream or, after Dan turns the camera on and grants permission, `getUserMedia`. A frame is captured only for an explicit chat/voice request. Authenticated `POST /screen/frames` checks Dan's identity, active `jarvis_sessions` row, JPEG/1 MiB limit, 3-second interval and shared `global.screen_share_daily_frame_cap` (default 300, range 1–300). It reserves the frame in `dbo.usage`, calls the configured vision deployment using the backend managed identity, then sends only the bounded description to chat context or Voice Live response instructions. P7-19 also carries the selected display label alongside the description for shared-tab resolution; both remain transient and untrusted. No image is persisted or logged; chat messages, voice transcripts and task events do not contain the synthetic context. | Backend/web/agent contract tests exercise a fake camera stream/model and transient context. Screen and camera share `screen_frames` reservations and token/cost recording; estimated DKK uses the documented short-context Global Standard rates. Live deployment SKU, model image acceptance and billed cost remain to verify. Voice/session end and page teardown stop media; camera also stops after five minutes. |
@@ -1975,6 +2276,16 @@ Proven 2 October 2026 in a separate prototype ([voice report](reference/voice-pr
 P5-03 pins the English model and Ryan HD in the backend. P5-04 implements browser PCM capture/playback, stops playback when speech starts, reconnects after a relay drop, and exposes language selection for the next session. P5-02 provides Danish voice provisioning; P5-05 owns the language toggle and voice settings. P5-06 persists completed transcripts and voice minutes without a migration; voice minutes measure connected relay duration, not speaking time.
 
 The Danish backend connector uses the Foundry project endpoint from `FOUNDRY_PROJECT_ENDPOINT` and a server-side Azure Identity token. Bicep grants the backend managed identity the `Foundry User` role on the project. After a successful `Deploy`, its smoke step grants the workflow's deploy identity `Foundry User`; the `Danish voice agent` workflow then creates/updates `jarvis-voice-mai` when provisioning inputs change, or by manual dispatch. It uses a hash-locked SDK to wrap the hosted agent `jarvis`. The P5-04 client is implemented and locally tested; live browser audio remains unverified.
+
+P7-05, P7-08 and P7-38 reuse that Foundry endpoint, backend managed identity and `Foundry User` assignment; camera adds no provider key or Azure resource. Screen/camera inspection, browser text reasoning, and PC-act visual targeting use the `vision` role, not `jarvis.model`; the selectable vision catalog is limited to deployments covered by the price table. Requests use `/models/chat/completions`, image detail `auto`, `max_completion_tokens: 500`, and the role's `reasoning_effort`. The current `gpt-6-luna` estimate is 0.6579 DKK per million input tokens and 3.2893 per million output tokens, converted at 6.5785 DKK/USD. The signed-in browser never receives a provider credential. These are estimates, not billed usage; live deployment pricing and useful-comment acceptance remain to verify.
+
+### Phone calling (P7-01, P9-22)
+
+`createPhoneStatusModule` always registers owner-authenticated `GET /phone/status`. The shared `PhoneStatus` contract reports whether the ACS call module was constructed, whether SQL history is available, and at most 20 recent calls. Each call contains its UTC `startedAt`, elapsed `durationSeconds`, and `in_progress`, `ended`, or `failed` outcome; caller identifiers and call IDs are not returned. `configured` is configuration/readiness for module construction, not a live ACS health check. Call history reuses `dbo.phone_sessions` (`started_at`, `ended_at`, `status` from migration 0017); no migration is needed. If SQL is not configured, the endpoint returns `historyAvailable: false` and an empty list; a history query failure returns 503.
+
+When enabled, incoming Event Grid deliveries go to `/phone/events`; Call Automation posts to `/phone/callback`, and bidirectional audio uses the `/phone/media` WebSocket. The call and media callback URLs use `TEAMS_AUDIO_ORIGIN`. Configuration requires `JARVIS_PHONE_ACS_ENDPOINT`, `JARVIS_PHONE_ACS_RESOURCE_ID`, `JARVIS_PHONE_TEAMS_RESOURCE_ACCOUNT_OBJECT_ID`, `TEAMS_AUDIO_ORIGIN`, Key Vault/Foundry/Teams settings, and the `jarvis-phone-allowlist` secret. Dan can call only by calling the number assigned to that Teams resource account from his Teams identity; both the called resource-account ID and Dan's Entra user ID are checked. A phone number alone is not caller authentication.
+
+Production calling is dormant: P6-22 decided not to provision Teams in Dan's personal tenant, and the P7-01 decision records that no number was purchased. No phone number or deployed ACS resource ID is present in the repository; Azure CLI/live Azure access was unavailable during P9-22, so the current number, resource assignment, Event Grid subscription, and callback delivery could not be verified. Do not treat this feature as callable until Dan provisions and verifies those external resources.
 
 P7-05, P7-08 and P7-38 reuse that Foundry endpoint, backend managed identity and `Foundry User` assignment; camera adds no provider key or Azure resource. Vision uses the dedicated `VISION_MODEL_DEPLOYMENT` (`gpt-6-luna`), not `jarvis.model`, through `/models/chat/completions` with image detail `auto`, `max_completion_tokens: 500`, and `reasoning_effort: none`. Estimated rates are 0.6579 DKK per million input tokens and 3.2893 per million output tokens, converted at 6.5785 DKK/USD. The signed-in browser never receives a provider credential. These are estimates, not billed usage; live deployment pricing and useful-comment acceptance remain to verify.
 
@@ -1992,7 +2303,8 @@ Watch frames replace the 300-frame cap with `global.vision_daily_budget_usd` (de
 
 `agents/jarvis` (P4-01) is the ported voice-prototype agent: the Voice Live Bridge
 runtime, response coordinator, strict action rules for spoken Danish replies and
-a per-session model tool loop over the Responses API. At voice session start and
+a per-session model tool loop over the Responses API, with Claude chat routed through
+the Anthropic Messages API. At voice session start and
 for each new chat invocation, it reads effective model, reasoning, and personality
 settings from the agent-only `GET /agent/settings` route. The voice runtime keeps
 that immutable snapshot for the session; chat uses a per-invocation snapshot.
@@ -2000,10 +2312,32 @@ Tone, response style, and JSON-quoted custom instructions modify presentation
 only, with identity, backend tool permissions, and truthful action outcomes
 remaining fixed. It defines no tools itself. Each turn loads the backend catalogue from `GET /tools`
 (cached for 60 seconds) and sends each model tool call to `POST /tools/{name}`.
+The backend builds one bounded capability and safety instruction block from the
+existing memory-capture setting. Realtime voice uses it directly; the agent-only
+`GET /agent/settings` route returns the same block for chat, which adds it to its
+language-specific prompt after loading that settings snapshot. Both surfaces
+continue to use the backend tool registry and confirmation results.
 The agent gets a token for `api://<jarvis-api>/.default`
-from its platform identity through `DefaultAzureCredential`; the same credential
-reaches the model when no API key is set. The backend result is passed back to the
-model unchanged. Only `outcome: "ok"` counts as done.
+from its platform identity through `DefaultAzureCredential`; OpenAI uses the same
+credential when no API key is set. Claude requests use
+`https://{resource}.services.ai.azure.com/anthropic/v1/messages` and a bearer token for
+`https://ai.azure.com/.default`.
+
+For chat only, an effective deployment name beginning with `claude-` selects
+`AsyncAnthropicFoundry`; other chat models and the separate voice role stay on
+Responses. The adapter converts registered tool schemas to Anthropic's
+`input_schema`, streams text deltas, preserves assistant content (including signed
+thinking blocks), and returns tool-use results through the same backend tool
+dispatcher and bounded round loop. `none` disables extended thinking; the shared
+reasoning efforts map to budgets from 1,024 (`minimal`) through 16,384 (`xhigh`)
+tokens, with the output allowance added to `max_tokens`. Provider-reported token
+usage remains recorded by role and deployment. Provider failures become a
+content-free error event at the chat boundary.
+
+The endpoint and managed-identity integration are covered offline. This coding-agent
+worker had no `FOUNDRY_PROJECT_ENDPOINT` and could not acquire an Azure token, so a
+live Claude request from the deployed hosted agent remains unverified. The backend
+result is passed back to the model unchanged. Only `outcome: "ok"` counts as done.
 
 Failures come back to the model as `outcome: "error"`. They say whether nothing was
 done (the request never left the agent), or whether a timeout or broken
@@ -2012,6 +2346,11 @@ rejected arguments, refused identity, unavailable persistence and an unreachable
 backend. An unavailable catalogue fails the turn before the model is called.
 Responses are capped at 1 MiB, catalogues at 128 tools.
 `JARVIS_BACKEND_URL` must be an HTTPS origin, or HTTP only for localhost.
+The backend catalogue includes read-only repository tools and `list_capabilities`;
+the agent uses `repo_overview` before `repo_search` or `repo_read`, treats returned
+files and issues as untrusted data, and suggests changes conversationally. It
+proposes `create_task` on the Jarvis project and waits for Dan's confirmation
+before creating a task.
 
 Each model turn fetches `GET /factory/context` using the same agent identity.
 The backend reads at most 20 running tasks and each task's three latest events
@@ -2033,12 +2372,12 @@ call linkage remain the post-merge P4-09 acceptance check.
 ## Identity and security
 
 - Dan signs in with Entra ID through `jarvis-web`. `jarvis-api` requires user assignment, and only Dan is assigned; the backend also checks Dan's object ID. The hosted Jarvis agent is assigned the application role `Jarvis.Tools` and may call only the tool routes.
-- Google Calendar and Gmail tools are registered only in the backend and use the official Google APIs over HTTPS. The backend reads `google-oauth-client-id`, `google-oauth-client-secret`, and `google-refresh-token` only from Key Vault, exchanges the refresh token for a short-lived access token, and caches only that access token in memory. The single OAuth grant is for `danaakesen@gmail.com` and uses `gmail.readonly`, `gmail.compose`, `gmail.send`, and `calendar.events`; no Google credential or token is a deployment variable or client-bundle value. An `invalid_grant` records a deduplicated `credential_expiry` activity alert; tool calls return a visible reconnect message.
+- Google Calendar and Gmail tools are registered only in the backend and use the official Google APIs over HTTPS. The backend reads `google-oauth-client-id`, `google-oauth-client-secret`, and `google-refresh-token` only from Key Vault, exchanges the refresh token for a short-lived access token, and caches only that access token in memory. The single OAuth grant is for `danaakesen@gmail.com` and uses `gmail.readonly`, `gmail.compose`, `gmail.send`, `gmail.modify`, and `calendar.events`; `gmail.modify` is the least-privilege scope for Gmail message labels and draft update/deletion. No Google credential or token is a deployment variable or client-bundle value. An `invalid_grant` records a deduplicated `credential_expiry` activity alert; tool calls return a visible reconnect message. Dan must add `gmail.modify` to Google Auth Platform's Data Access scopes and rerun `infra/setup-google.ps1` to re-consent and replace the Key Vault refresh token before using the new mail tools.
 - Calendar range reads interpret date-only `start`/`end` in `JARVIS_GOOGLE_TIME_ZONE` (inclusive dates and an exclusive next-midnight API boundary); timezone-aware date-times are queried as instants. `calendar_list_events` pages up to 100 events across no more than 62 days and maps optional `query` to Google's `q`; `calendar_next_event` searches up to 60 days and skips events where Dan's attendee response is declined. All-day start/end values remain date-only, including multi-day events, while timed events remain instants. Calendar agenda, range, and next-event reads are reflex-safe and sensitive results remain redacted from the durable tool-call audit.
-- Calendar changes, reply drafts, and sending are staged in process memory for ten minutes. The backend executes only after a different, later persisted Dan message exactly matches the returned `confirm <8-digit-code>` phrase. Pending actions are one-shot and lost on restart; the Container App remains at one replica. Sensitive Google tool inputs/results are redacted from persistent tool-call records, and external Google error bodies are not returned or logged. Confirmed replies create a Gmail draft; Dan sends it from Gmail.
+- Calendar creation, movement, updates to title/time/location/attendees/description, deletion, Gmail draft creation/replacement/deletion, message archive/label changes, and sending are staged in process memory for ten minutes. The backend executes only after a different, later persisted Dan message exactly matches the returned `confirm <8-digit-code>` phrase. Pending actions are one-shot and lost on restart; the Container App remains at one replica. Sensitive Google tool inputs/results are redacted from persistent tool-call records, and external Google error bodies are not returned or logged. Calendar updates PATCH only the supplied fields; empty location, description, and attendee values can clear those fields. Draft replacement requires recipients, subject, and plain-text body; it preserves reply threading and refuses drafts with attachments or CC/BCC recipients. Gmail draft listing is bounded to ten drafts and returns plain-text bodies; archiving removes `INBOX`, and label changes resolve exact Gmail label names or IDs. Confirmed replies create a Gmail draft; Dan sends it from Gmail.
 - [`infra/bootstrap.ps1`](../infra/bootstrap.ps1) creates what the deploy workflows can't create for themselves: the deploy identity (GitHub OIDC, main branch only, trusting both the name-based and the ID-based subject (L50); Contributor and Role Based Access Control Administrator on `rg-jarvis`), the sign-in apps, `id-jarvis-backend`, and `jarvis-sql-admins`. Its IDs are in `infra/bootstrap.output.json` and in the repository's Actions variables.
 - Managed identities between Azure services; GitHub Actions deploys with OpenID Connect.
-- The backend identity has `Foundry User` on the Foundry project for the Danish voice relay and `Cognitive Services User` on the Foundry AIServices account for parallel Azure Speech partial recognition. It also retains `Cognitive Services Speech User` on the separate F0 Speech resource used for Teams voice notes.
+- The backend identity has `Foundry User` on the Foundry project for the Danish voice relay, `Cognitive Services User` on the Foundry AIServices account for parallel Azure Speech partial recognition, and account-scoped `Cognitive Services Contributor` for model deployment management. It also retains `Cognitive Services Speech User` on the separate F0 Speech resource used for Teams voice notes.
 - P7-10's Microsoft Graph `Files.Read.All` app role is assigned separately by an administrator; Graph Search does not support `Sites.Selected`. The notes tool uses Dan's fixed object ID and the configured folder path, and validates result links before returning snippets.
 - Secrets only in Key Vault; none in code, images, environment variables, or logs.
 
@@ -2069,13 +2408,15 @@ The backend uses the existing `id-jarvis-backend` identity. Bicep assigns it **A
 
 Required deployment parameters are `backendIdentityResourceId`, `sqlAdminGroupObjectId`, `foundryNameTimestamp`, and `budgetContactEmails`; the comma-separated email list comes from protected GitHub secret `JARVIS_BUDGET_CONTACT_EMAILS`. `backendImage` and `jarvisAgentObjectId` are optional. `JARVIS_GOOGLE_TIME_ZONE` is an optional GitHub variable set by [`infra/setup-google.ps1`](../infra/setup-google.ps1); when set, Bicep enables the Google tools. The OAuth client ID, client secret and refresh token are never deployment variables and stay in Key Vault. An empty `backendImage` skips the backend app, which the Deploy workflow uses only before the registry holds the first backend image; the `backendAppName` and `backendFqdn` outputs are then empty. `jarvisAgentObjectId` is populated from the nonsecret `ENTRA_JARVIS_AGENT_OBJECT_ID` Actions variable after bootstrap assigns the hosted agent's role. The Foundry timestamp is a 14-digit UTC value (`yyyyMMddHHmmss`). P0-11 fixes it at `20261003200000` in [`infra/main.parameters.json`](../infra/main.parameters.json), and every deploy passes that file. The account name is `jarvis-{timestamp}-{suffix}` and the project name is `jarvis-{timestamp}`; regenerating the timestamp would create new resources instead of updating those already deployed. `pcBridgeClientId` is optional: Main Deploy passes it from the nonsecret Actions variable `JARVIS_PC_BRIDGE_CLIENT_ID`, and Bicep omits `ENTRA_PC_BRIDGE_CLIENT_ID` until it is provisioned.
 
-PR #79 adds the Foundry account, project, model deployments and ACR/Application Insights connections. The deployments started at Global Standard capacity 1. Dan's first live chat on 5 October hit `rate_limit_exceeded` (capacity 1 = 1,000 tokens and 1 request per minute), so `gpt-5.6-luna` now uses capacity 100, `gpt-realtime-2.1` 10 (the regional quota maximum) and `text-embedding-3-small` 20. Global Standard bills per token, so capacity changes the rate limit only, not the cost (L91). Exact model-specific limits and regional quota availability remain to be verified in P0-16. Normal deployment does not delete the account or project. The fresh-name rule in L2 applies only to recovery after deletion.
+PR #79 adds the Foundry account, project, model deployments and ACR/Application Insights connections. The deployments started at Global Standard capacity 1. Dan's first live chat on 5 October hit `rate_limit_exceeded` (capacity 1 = 1,000 tokens and 1 request per minute), so `gpt-5.6-luna` now uses capacity 100, `gpt-realtime-2.1` and `gpt-realtime-2.1-mini` use capacity 10 each, and `text-embedding-3-small` uses 20. Global Standard bills per token, so capacity changes the rate limit only, not the cost (L91). Exact model-specific limits and regional quota availability remain to be verified in P0-16. Normal deployment does not delete the account or project. The fresh-name rule in L2 applies only to recovery after deletion.
 
 P7-13 added a sequential Global Standard `text-embedding-3-small` deployment after
 `gpt-realtime-2.1`, with the backend deployment name supplied to the Container App
 by Bicep. Its current capacity is 20. It is used for conversation and vault-index
 embeddings; a model or vector capability failure falls back to lexical retrieval.
 Normal Bicep deployment is idempotent and does not require a portal step.
+
+The deploy script explicitly uses ARM **Incremental** mode. In that mode, resources omitted from a deployment template are left unchanged, so runtime-created Foundry deployments not declared in Bicep are preserved. Bicep continues to reconcile its explicitly declared model deployments.
 
 `sqlAdminGroupName` defaults to `jarvis-sql-admins`, `monthlyBudgetAmount` to `300`, and `budgetStartDate` to `2026-10-01T00:00:00Z`. Budget notification emails are required through `budgetContactEmails`; actual cost is interpreted in the subscription billing currency, which remains to be confirmed as DKK.
 

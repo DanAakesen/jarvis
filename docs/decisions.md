@@ -19,6 +19,187 @@ The nine design areas and where each stands. **Confirmed** = Dan's requirement o
 
 ## Decision log
 
+P9-42 (8 October 2026): return invalid tool arguments as safe `refused` tool
+results, not generic execution failures. HTTP body-schema refusals use status
+200 because the existing hosted chat client discards non-200 bodies; other HTTP
+errors keep their existing status. Share the validation formatter with direct
+voice execution and guide retries through the existing capability prompt.
+Refuse unknown root fields before Fastify strips them; never execute or audit
+invalid input. Emit only the tool name, validator keyword and bounded property
+identifier as `tool.invalid_arguments`. Keep tool schemas plain root objects.
+`repo_search` aliases use the existing active-project resolver; conflicting
+selectors refuse rather than searching an unintended repository. Incomplete or
+empty searches suggest `repo_list`/`repo_read`. No migration, new dependency,
+workspace broker or web change is needed; live model/provider acceptance is
+pending.
+
+P9-10 (7 October 2026): store memory retrieval settings in the existing global
+`dbo.settings` store and expose their shared bounded contract through Settings.
+Keep defaults at the existing similarity thresholds (`0.35` embedding and
+`0.12` TF-IDF), five search results, and automatic capture enabled. The
+embedding threshold applies to application and SQL graph edges; top-k is capped
+at eight. Automatic captures are marked in the shared vault tool and refused
+server-side when disabled, while Dan-requested writes stay available. No
+migration or web change is needed; focused contract, settings, vault and voice
+tests cover the behavior.
+
+P9-11 (8 October 2026): store timeout controls in the existing global settings
+store and expose them through the shared contract and agent-only settings route.
+Keep defaults at 30 seconds for ordinary tools, 320 for long tools and 10 for
+agent HTTP, bounded respectively to 1–120, 30–320 and 1–60 seconds. Reuse the
+existing bounded research timeout setting and add no migration or web change.
+Use safe defaults when an older backend omits timeout fields. Do not add
+automatic retries for timed-out tool actions because completion may be
+uncertain. Contract, settings, and agent tests cover the bounds and use; live
+propagation remains unverified.
+
+P9-35 (8 October 2026): call saved PC/browser action sequences Routines and
+expose a safe display-name rename without changing their content-derived IDs or
+replay steps. Write new records under `routine.<hash>` while reading, migrating
+and deleting legacy `recipe.<hash>` records in the existing settings store; no
+database migration is needed. Expose `task_routines` and `/routines`, retaining
+`task_recipes` and `/recipes` as one-release aliases. The web UI remains outside
+this backend change.
+
+P9-20 (7 October 2026): expose one owner-authenticated, cached `/status`
+snapshot using the shared contracts; reuse it in `get_status_summary`. Keep
+status probes bounded and return only allowlisted metadata, never provider
+errors, tokens, or vault content. Use existing database index timestamps for
+vault freshness/coverage and the built image's commit metadata; add no migration
+or web changes. Report unknown where the existing Foundry/runner signals do not
+prove runtime health, and leave bridge versions null until its protocol reports
+them. Focused offline tests cover caching, authorization, status details and
+sanitized failures; production provider health and UI acceptance remain pending.
+
+P9-39 (8 October 2026): use an authenticated, uncached `GET /status/smoke` to
+refresh the existing read-only probes and run bounded embedding and research
+checks. Permit Dan and only the configured deployment service principal, with
+the latter restricted to an Azure Resource Manager audience and this route.
+Return only allowlisted IDs, statuses and timestamps; keep the latest report in
+the existing in-memory status snapshot so the status page can display it without
+a migration. Research uses a temporary invocation with best-effort cleanup and
+does not persist its result. Deploy prints only the six status values, treats
+the disconnected PC bridge as informational, and fails on other degraded/down
+checks. Offline tests cover contract bounds, authentication, refresh, recording
+and secret sanitization; live provider behavior remains pending.
+
+P9-14 (7 October 2026): persist each background-job state and step transition in
+SQL, and publish job events only after the state transaction commits. Keep jobs and
+step history for 30 days. Jobs are not resumed automatically: startup marks running
+jobs `failed` with `interrupted by restart`; do not repeat external research or
+artifact side effects without a user request. Evidence: migration 0029 and focused
+lifecycle tests, with SQL persistence and schema coverage in Database CI.
+Cross-replica live acceptance remains unverified.
+
+P9-30 (8 October 2026): expose bounded persisted job details through `get_job` and
+allow `retry_job` only for failed research jobs with saved topic and selected depth.
+Store that input for the same 30-day retention, redact it from tool-call audit
+records, and create each retry as a new job. A transaction claims at most one retry
+from a failed attempt, preventing duplicate research work across replicas.
+Evidence: migration 0034 and focused contract, retry, and store tests; live
+SQL Server and cross-replica behavior remain unverified.
+
+P9-24 (7 October 2026): search the existing conversation message store instead of
+creating a second transcript index or changing retention. Use SQL full-text search
+when available, with an optional startup setup batch and a substring fallback;
+index message timestamps for date-filtered reads. Expose one bounded result
+contract to the owner-authenticated API and shared `conversation_search` tool,
+and redact tool queries/results from the durable tool-call audit. Offline
+route/store tests cover filters, date boundaries, result limits, the fallback,
+and the full-text query path; production SQL indexing remains unverified.
+
+P9-01 (7 October 2026): use the existing `dbo.settings` key/value store for
+per-role model and reasoning-effort preferences; do not add a migration.
+`jarvis.model` and `jarvis.reasoning` remain compatible aliases for `roles.chat`.
+Read live Foundry deployments from ARM using backend managed identity with a
+Foundry-account-scoped Reader grant, cache for five minutes, and identify
+configured defaults as `source: 'fallback'` when ARM is unavailable. Validate
+each role's model and effort against deployment capabilities; keep Codex and
+Copilot on their provider defaults until provider catalogues are verified.
+Offline route, settings, dispatcher, agent, research, vision and voice tests
+cover the implementation; live ARM permissions and deployment selection remain
+unverified.
+
+P9-02 (7 October 2026): apply role settings at the next relevant turn or session.
+Use the vision role for screen/camera, browser text reasoning, and PC-act vision;
+offer only image deployments with known cost rates. Snapshot research model and
+reasoning effort at job start and pass both through the existing Codex runner.
+Build the English Voice Live URL with the selected realtime deployment at
+session start; allow `gpt-realtime-2.1` and `gpt-realtime-2.1-mini`, and expose
+only Voice Live-supported `mai-transcribe` for transcription. Add the mini model
+to the existing Bicep deployment chain without a settings migration. Offline
+runtime and runner tests cover these paths; deployed Azure interoperability and
+billed cost remain unverified.
+
+P9-03 (7 October 2026): persist the deployment name with each memory and vault
+embedding and never compare vectors unless their model names match. Keep vector
+dimensions at 1,536 by setting the embeddings request `dimensions` field, so
+the existing SQL vector schema supports both small and large deployments.
+Treat legacy or different-model vectors as missing; on a role change, a
+cancellable durable background job re-embeds bounded memory batches and invokes
+the existing paced vault synchronization. Startup checks for remaining missing
+vectors and resumes the job. Evidence: migration `0031_embedding_model_identity.sql`,
+model-filtered SQL/JSON search, and focused model-switch/backfill tests. Live
+Foundry and SQL Server acceptance remains unverified.
+P9-04 (7 October 2026): give Codex and Copilot provider-specific model and
+reasoning allowlists in the settings options, and apply the selected role
+defaults when a Factory task starts. A per-task model or reasoning override
+continues to take precedence; the runner applies Codex choices through ACP
+configuration and Copilot choices through CLI arguments, then persists them
+with the ACP session for resumed turns. Reuse the existing settings and task
+columns without a migration. Keep `JARVIS_CODEX_TOOL_MODEL` scoped to isolated
+Codex tools. Offline catalogue, dispatch and runner tests cover the path; live
+provider/account availability remains unverified.
+P9-05 (7 October 2026): persist bounded voice tuning in the existing global
+settings store and expose its limits through the shared contracts and
+`/settings`; no migration is needed. Preserve the current server-VAD defaults
+(threshold 0.7, 300 ms prefix padding, 600 ms silence), enable barge-in by
+default, and cap replies at the existing provider default of 4,096 output
+tokens. Apply settings when building a realtime session; keep English semantic
+VAD's existing 0.6/300/500 ms configuration. The live Danish hosted agent has
+separately provisioned turn detection and is not changed by this session
+settings API. Offline contract, settings, relay and session tests cover the
+backend behavior; live Voice Live behavior remains unverified.
+P9-06 (7 October 2026): persist the default research depth, maximum collected
+sources and per-runner-invocation timeout in the existing settings store and
+shared contracts; add no migration or web changes. Preserve the current quick
+and deep plans (two and five searches), add standard with three, and keep one
+report-generation pass. Default to quick, 50 collected sources and a 305-second
+invocation timeout; explicit request depth overrides the saved default, report
+generation remains capped at 12 sources, and configured timeouts are bounded at
+320 seconds to fit the long-tool timeout. Focused contract, settings and
+background research tests cover validation and use; live Codex/Foundry behavior
+remains unverified.
+P9-07 (7 October 2026): manage model deployments only from models present in the
+live Foundry account catalogue. Generate deployment names from model and version;
+require the existing one-time `model_deployment` Now confirmation for both
+create and delete, including the chat/voice tool. Recheck every resolved role
+setting after approval before deletion and refuse deployments still in use.
+Return 202 from Dan-only deployment routes while confirmation is pending. Grant
+the backend identity Cognitive Services Contributor scoped to the Foundry
+account. Keep deployment state in ARM without a migration. Use explicit
+Incremental Bicep deployments: runtime-created deployments absent from the
+template remain untouched, while Bicep-declared deployments continue to be
+reconciled. Offline ARM/route/tool tests verify the contract; live role
+propagation and Foundry provisioning remain unverified.
+P9-12 (8 October 2026): expose the existing non-secret Settings model through
+the shared chat/voice tool registry, reusing its validation and persistence
+contracts. Require the existing Now confirmation before changing model-role
+settings or the daily vision budget; never return credential records. Keep
+`set_jarvis_model` as a compatibility alias for chat-role updates. No migration
+or web change is needed. Offline tool and alias tests cover the behavior; live
+hosted-agent and Now integration remain unverified.
+
+P9-34 (8 October 2026): keep home city and nullable coordinates in the existing
+`dbo.settings` store and shared settings contract; leave them unset rather than
+guessing a home location. Use Open-Meteo's fixed HTTPS geocoding and forecast
+endpoints without an API key, with bounded requests and validated normalized
+results. Track weather retrieval with the existing persisted job registry, save
+a static escaped report through the workspace HTML artifact store, and open it
+through the command broker. No migration or web change is needed. Offline
+settings/provider/workspace tests cover the flow; live provider and signed-in
+workspace acceptance remain unverified.
+
 P6-22 (6 October 2026): Jarvis runs in Dan's personal tenant, without Microsoft
 365 or Teams. Keep away mode manual and do not read Graph presence. Route
 notifications and confirmations through the web app and active browser voice
@@ -62,7 +243,7 @@ idempotent even before a release exists. Evidence: webhook mapping and SQL schem
 regression tests.
 
 P7-35 (6 October 2026): reuse the existing global JSON settings store for bounded,
-value-free task recipes rather than add a table or rewrite occupied migration
+value-free task routines rather than add a table or rewrite occupied migration
 0020. Jev selects by app/site, verifies each fresh stable target, and falls back
 on drift; low confidence asks Dan. Dan's any-app access and irreversible-only
 confirmation decision also applies during replay. Deletion is available through
@@ -71,6 +252,11 @@ Windows/Chrome/Jev speedup remains live acceptance.
 
 | Date | Decision | Rationale and evidence | Status |
 | --- | --- | --- | --- |
+| 2026-10-08 | P9-33 exposes explicit vault-note deletion through the shared sensitive tool registry. Reuse the GitHub App Contents-write client and require a present-mode Now confirmation naming the exact path; recheck the note SHA after approval, then remove its index rows and invalidate the graph cache. | Existing Contents API SHA protection, `TeamsNotificationService.runConfirmed`, and `VaultIndexStore.deleteFiles` cover the provider, approval and cleanup boundaries. No migration or web change is needed; focused fake-GitHub tests cover approval gating, concurrent edits, commit metadata, index removal and graph invalidation. | Implemented offline; live GitHub App access remains unverified |
+| 2026-10-08 | P9-31 adds `get_usage` through the existing agent-only tool registry and usage store. Reuse the shared usage period/entry contracts, support the current UTC day, and group spend by role/source and model without hiding estimated or unverified costs. Redact the financial result from durable generic tool-call audit records; add no migration or web changes. | `UsageStore.list` already bounds and groups persisted usage, including active sandbox estimates and cost coverage. Backend tests cover today’s UTC interval, per-area/model aggregation, cost status, tool registration and sensitive audit redaction. | Implemented offline; live provider billing remains unverified |
+| 2026-10-07 | P9-22 exposes owner-authenticated `/phone/status` and a 20-call history through the existing shared contracts and `phone_sessions` table. Keep phone calling dormant unless Dan provisions Teams/ACS and a Teams Phone number; status configuration is not a provider health check. Do not return caller or call IDs, and do not add a migration or web changes. | P6-22 keeps Teams unprovisioned in production; P7-01 records that no phone number was purchased. Backend tests cover owner auth, unavailable history, sanitized failure, bounded history and status mapping. No Azure CLI/live Azure access was available, so current number, ACS resource and callback delivery remain unverified. | Implemented offline; production setup and live callbacks unverified |
+| 2026-10-07 | P9-18 puts `/now/events` event names and payloads plus task-event stream messages in `@jarvis/contracts`, with strict type guards. Route both streams through one typed backend SSE formatter while preserving authentication, replay IDs, heartbeat behavior, and `sseHeaders`; do not add a migration or change the web client. | Existing shared activity, background-job, workspace-command, and task-store contracts supply the payload types. Contract tests cover all Now event names and task-event shapes, and backend tests cover frame formatting and existing stream behavior. | Implemented offline; UI parser migration remains separate |
+| 2026-10-07 | P9-29 reuses the existing Jarvis tool registry, task/release stores and contracts for retry and release lookup. Deployment status comes from the latest default-branch `deploy*.yml`/`deploy*.yaml` Actions run using a repository-scoped `actions:read` App token; do not add persistence or web UI. | Issue #523's gap audit requests backend-only tools. Existing retry lifecycle checks and webhook-backed release records remain authoritative; bounded fake-provider tests cover Actions run selection, input validation and sanitized failures. | Implemented offline; live GitHub access unverified |
 | 2026-10-06 | P6-16 treats zero GitHub check runs and zero commit statuses as no CI only after two minutes from PR creation; recheck through the project-policy evaluator and record no-CI completion as task activity. Any present pending or failed check still blocks. | Reuse the persisted PR open time, current GitHub check APIs and existing policy flow without a migration. Focused tests cover empty checks after grace, checks appearing during grace, and failed checks. | Implemented offline; live test-repository acceptance pending |
 | 2026-10-06 | P6-17 preserves background failure event names and exports only fixed error kinds and bounded HTTP statuses. Retain `ENTRA_JARVIS_AGENT_OBJECT_ID` in Bicep. | Callback errors now reach the logger without exporting messages or provider data; logging and monitor tests exercise the sanitized diagnostics. `apps/backend/src/auth/config.ts` still reads the agent object ID to authorize the hosted identity, so the setting is not unused. | Implemented offline; live failure identification awaits deployment |
 | 2026-10-06 | P7-38 continuously watches only the screen/camera Dan independently shares and speaks only for useful observations. Reuse transient frame handling, the dedicated `gpt-6-luna` deployment, existing usage rows and the voice status announcer; default to a shared USD 1 UTC-day budget. Watch instructions/summaries remain session-local in memory, image text is untrusted, and no sensitive-content pause or web edit is added. | Dan's decisions and API contract in #440 supersede request-only inspection for the new watch path. SQL admission reserves a conservative pending cost to bound concurrent spend; unknown-cost failures keep it until UTC rollover. Fake model, route, store, logger and voice tests cover quiet/noteworthy frames, refusal, dedupe, and delivery; the existing on-demand route remains available. | Backend implemented offline; separate UI, live SQL/model/billing and useful-comment acceptance pending |
@@ -238,6 +424,9 @@ Windows/Chrome/Jev speedup remains live acceptance.
 | 2026-10-04 | P7-09 originally used app-only Microsoft Graph and Exchange mailbox-scoped RBAC. | Superseded by the 2026-10-05 provider decision in P7-22: Dan does not use Outlook; Jarvis uses Gmail and Google Calendar only. | Superseded |
 | 2026-10-05 | Jarvis uses official Gmail API v1 and Google Calendar API v3 over HTTPS with OAuth for Dan's personal `danaakesen@gmail.com` account. Store OAuth client ID, client secret, and refresh token only in Key Vault; use `gmail.readonly`, `gmail.compose`, `gmail.send`, and `calendar.events`. Preserve the existing mail/calendar tools and later-message confirmation. Confirmed replies create drafts for Dan to send himself; explicitly confirmed `mail_send` sends through Gmail. | Dan's decision on issue #321 supersedes the Outlook provider. Gmail draft creation requires `gmail.compose`; Google does not offer a draft-only scope, so this is necessary to preserve `mail_draft_reply`. `gmail.send` remains scoped to the separately confirmed send tool. The backend caches short-lived access tokens in memory and records a P6-02 credential-expiry alert on `invalid_grant`. | Implemented offline; Dan's OAuth setup and live Google API acceptance pending |
 | 2026-10-05 | P7-28 adds reflex-safe, redacted calendar range and next-event reads while retaining `calendar_today_agenda`. Date-only range endpoints use Dan's configured time zone and include both dates; explicit date-times use an exclusive end. Listing is capped at 100 events/62 days; next-event lookup searches 60 days and skips Dan-declined events. All-day dates stay date-only. | This extends the confirmed P7-22 Google provider without changing its OAuth or write-confirmation boundary. Fake Google client tests cover local-week paging, next event on a later day, empty and over-limit ranges, and multi-day all-day events; live account behavior still requires coordinator acceptance. | Implemented offline; live "this week" and next-appointment acceptance pending |
+| 2026-10-07 | P9-26 adds `calendar_update_event` for supplied title, time, location, attendees, and description fields, plus `calendar_delete_event`; both use the existing `calendar_confirm_change` exact later-message approval. | PATCH requests contain only supplied fields, and empty location, description, or attendee values clear those fields. The existing in-memory ten-minute confirmation state and `calendar.events` grant are sufficient, so no migration or contract change is needed. Fake-client tests cover confirmation, validation, redaction, and Google API DELETE handling; live Calendar acceptance remains pending. | Implemented offline; live update/delete acceptance pending |
+| 2026-10-07 | P9-27 adds bounded Gmail draft listing, full replacement of simple plain-text drafts, confirmed draft deletion, archive, label add/remove, and retains exact confirmation for sending. All mail mutations use the existing ten-minute, later-message confirmation state. | Draft replacement requires the full recipient/subject/body and refuses attachments or CC/BCC to avoid silently losing data. `gmail.modify` is the least-privilege additional scope for drafts and labels; Dan must add it in Google Auth Platform and rerun `infra/setup-google.ps1` to replace the Key Vault refresh token. No migration or contracts change is needed; fake-client tests cover tool requests, confirmation, redaction and refusal. | Implemented offline; Dan's re-consent and live Gmail acceptance pending |
+| 2026-10-08 | P9-28 adds nullable project descriptions and registers `update_project`, `archive_project`, and `confirm_project_archive` over the existing project store and shared tool registry. Archive requires a one-time exact confirmation from a later Dan message; updates change only fields supplied. | Migration 0033 preserves existing rows with null descriptions, and `create_project` saves its supplied description. Reusing the active-project store keeps tool writes consistent with the `/factory/projects` routes. Confirmation codes are process-local, bounded, and expire after ten minutes; restart or failed confirmation leaves the project active. Focused backend tests cover the contracts; SQL integration and live Azure SQL/tool acceptance remain unverified. | Implemented offline; live acceptance pending |
 | 2026-10-04 | P7-09 keeps pending calendar/mail confirmations in process memory rather than adding SQL state. | Bicep keeps the backend at one replica. Pending codes expire after ten minutes and are lost on restart, which fails closed; scaling out requires moving this state to shared durable storage before changing the replica limit. | Implemented; scaling constraint documented |
 | 2026-10-04 | P7-03: use Azure Bot Service F0 with its Teams channel and the backend's user-assigned managed identity; send Dan-only personal chat notifications and five-minute, single-use Adaptive Card confirmations. Speech voice notes use Azure Speech F0 only and fall back to text when unavailable or exhausted. Always gate merge, delete, mail, calendar changes, repository creation, computer use outside the browser, and spending money on Dan's explicit approval. | The identity and confirmation decision comes from Dan's issue comment. SQL stores only a validated conversation reference and confirmation state; fakes cover approve/reject, replay, unknown identity, expiry, audio links and action gating. The Teams SDK's incompatible internal JWT declaration types require `skipLibCheck`; backend source remains typechecked. Bicep build/lint and offline tests do not verify Azure deployment, role ID, F0 quota, Teams installation or a phone round trip. | Implemented offline; coordinator's live Azure/Teams check pending |
 | 2026-10-06 | P6-19 posts committed Done, NeedsAttention, Cancelled, and PR-opened updates into the task's originating conversation. Persist one claim per task/state; include the verified PR URL when available, speak through the active voice status announcer, and use the existing Teams route while away. | `create_task` now records its source message. A dedicated SQL key avoids mixing notification deduplication with user-visible activity; event subscribers run after task-event commits. Focused tests cover conversation routing, voice wording, away routing and claim survival across store recreation. Live voice and Teams delivery remain unverified. | Implemented offline; live acceptance pending |
@@ -245,6 +434,12 @@ Windows/Chrome/Jev speedup remains live acceptance.
 | 2026-10-06 | Dan's private `DanAakesen/vault` GitHub repository on `master` is the source of truth for durable knowledge. Jarvis automatically captures clearly stated preferences, people, project facts, decisions and unfinished tasks; SQL is an index/cache, not a second memory. Writes commit directly to `master` with a reason and Jarvis co-author trailer. | Reuses the existing GitHub App with Contents read/write on the vault, signed push webhooks, existing embedding deployment and SQL memory infrastructure. Writes verify stored Dan messages, enforce routing and size bounds, refuse secrets/credentials, and require the literal “remember” for banking/health details. Fake API tests cover indexing, search, retry, refusals and webhook signatures; App installation/live access remain unverified. | Implemented offline; Dan must install the existing App on the private vault before live acceptance |
 | 2026-10-06 | P7-42 exposes the existing durable memories and GitHub vault notes through a Dan-only Settings API; no web UI changes or migration. Vault-note corrections commit to `master`; irreversible forget requests require the existing browser confirmation while Jarvis is present. | Issue #469 authorizes read/correct/forget for Settings, reuses the SQL history and vault index, and preserves GitHub App access. Bounded API tests cover pagination, source links, correction commits, browser approval gating and status. | Implemented offline; live GitHub and browser acceptance pending |
 | 2026-10-07 | P7-43 adds a Dan-only graph/search API over the vault index and a `show_knowledge` workspace tool. Persist parsed link targets and per-note index timestamps in migration 0027; derive similarity from mean chunk embeddings with a 0.75 cosine threshold and cache the bounded graph until a successful sync. | Reuses the vault's indexed content and embeddings, keeps note IDs stable as SHA-256 path hashes, and caps responses at 2,000 nodes/8,000 edges. The shared renderer contract is backend-only here; browser rendering remains a separate UI task. | Implemented and tested offline; live vault and renderer acceptance pending |
+| 2026-10-07 | P7-44 stores embeddings as JSON when SQL Server has no `vector` type, ranks them with application cosine similarity, and keeps lexical search as fallback. Backfill missing vault vectors in resumable sync batches. | Azure SQL's missing vector support must not disable semantic retrieval. Bound each sync to 4,096 embedding requests, persist complete note replacements, and log Foundry input-token usage without note content. | Implemented offline; production schema and Foundry billing remain unverified |
+| 2026-10-07 | P9-23 records provider-reported Foundry chat/voice tokens, vision input/output tokens and memory-embedding input tokens by model and role. Add USD and DKK estimates only for known Foundry list rates; keep unknown rates, Codex research/image-generation charges and unsupported meters visibly unverified. Report daily UTC and monthly UTC totals, and count research/image calls from the existing tool-call audit. | Migration 0030 extends `dbo.usage`; migration 0029 is reserved by P9-14. Usage events contain no prompt, image, embedding text or tool arguments. The fixed 6.5785 DKK/USD conversion matches the existing vision estimate; values are not invoices. Offline tests cover route authorization, store idempotency, provider usage capture, embedding counts and period totals. Deployed Foundry/SQL data and billed amounts remain unverified. | Implemented offline; UI integration and live billing validation pending |
+| 2026-10-07 | P7-45 adds Dan-only read access to Jarvis's own registered tools, feature list, repository files, code search, and issues/PRs. Use repository-scoped GitHub App installation tokens, default to `DanAakesen/jarvis`, and resolve any explicit project only from active registered projects. Treat all returned repository and issue content as untrusted; never expose tokens or persist tool arguments/results. | Reuses the shared tool registry and App issuer; bounds file/list/search/issue results and caches overviews by repository commit. No write capability or user PAT is added. | Implemented; Dan granted Issues read on 7 October, so issue summaries request it |
+| 2026-10-07 | P9 ([#495](https://github.com/DanAakesen/jarvis/issues/495)–[#533](https://github.com/DanAakesen/jarvis/issues/533)): Dan approved a 39-task backlog from a gap audit. Models are chosen per role from the live Foundry catalogue with per-role reasoning effort; runtime deployment management and Claude as the chat model are in scope. | Dan wants full control of models and every tunable in Settings, and Jarvis must reach what it already has. The board runs at most four Copilot tasks at once to limit conflicts in shared settings code. | Planned |
+| 2026-10-07 | The place where generated reports, apps, images and graph views are kept and reopened is called the **Folio**; task recipes are renamed **Routines**. | Dan asked for better names than "windows", "research" and "recipes". Old recipe tool and route names stay as aliases for one release. | Folio remains with #519; P9-35 implements the routine names and aliases offline ([#529](https://github.com/DanAakesen/jarvis/issues/529)) |
+| 2026-10-07 | Declined from the audit: verbosity and max-token settings, notification preferences, an effective-config view, settings history, arbitrary local-folder and browser-history access, and outbound notifications. | Dan's choice on 7 October. Do not file these again without a new request. | Declined |
 | 2026-10-04 | Autopilot decisions by the coordinator at Dan's request ("take decisions as you think I would"; only truly Dan-only items stay in Needs Dan). P8-12: Escape ends voice and a labelled End voice control sits by the orb (DESIGN.md). P8-18: initial renderer, action and theme-token allowlists (ui.md); no generated code runs. P3-08 waits for the new shell and visual system | Unblocks the UI track; recorded on each issue for Dan's review | Decided on autopilot; Dan to review |
 | 2026-10-04 | P8-14 keeps the version-1 generated-view JSON Schema, TypeScript union, and runtime validator together in `@jarvis/contracts`. The authorized tool route validates tagged view results before returning or recording them; the signed-in Now panel uses the same contract for its bounded list fixture. Views and their source metadata stay transient; renderers receive data as React text/approved links, never executable markup. | One shared package prevents backend and browser allowlists from drifting. The 256 KiB envelope, per-renderer bounds, source/page status, registered-tool references, and configured Blob host are checked offline; no persistence or new data integration is needed. | Contract, backend route, and signed-in UI tests pass; live Entra and Azure source behavior remain unverified |
 | 2026-10-04 | Autopilot decisions for P7 (Microsoft paths first): away mode by voice plus Teams presence (Graph); Teams bot confirmations with Speech F0 and a fixed confirmation list (merge, delete, send mail, calendar changes, repository creation, computer use outside the browser, spending money); screen/camera vision on the existing Foundry account with a 300-frame daily cap; .NET 10 tray PC bridge with an allow-list; Windows UI Automation for computer use; Google Gmail and Calendar APIs using OAuth for Dan's personal account; notes folder and SQL memory were initial implementations. | Each choice is on its issue. Vision and embeddings are pay-as-you-go Foundry usage like chat, with caps. P7-14's separate provider decision is recorded above; it uses the existing subscription, not a new API service. | Google mail/calendar confirmed in P7-22; P7-40 supersedes notes-folder search and SQL as the durable knowledge source |
@@ -280,6 +475,8 @@ Windows/Chrome/Jev speedup remains live acceptance.
 | 2026-10-05 | P8-35 supersedes the busy-control and Stop behavior of P8-25/P8-26: Enter/Send steers the current turn, Ctrl+Enter queues, and Send, language and voice controls remain available during replies. No Stop reply button; steering replaces it (Dan, 5 Oct). | Streaming steering preserves the partial reply and continues in the same turn. Tool rounds are not cancelled; new Dan messages are consumed at the next round boundary, with existing confirmation gates intact. The per-conversation in-flight registry is process-local; cross-replica coordination is not provided. Offline regression tests cover the interaction and no-parallel-turn behavior; Chromium captured desktop/phone streaming states in both themes using scratch fixtures. Live Entra/Foundry remains unverified. | Implemented offline; live acceptance pending |
 | 2026-10-06 | P8-36 replaces the voice orb/status disc and DA/EN buttons with Dan's selected Luminous Glass bar: More (•••), a state glyph with runtime label, and End voice. A shared More menu with a Language flyout (Danish/English, checked choice) serves the voice bar and the composer. Mute, Look at screen and Look at camera move into More; Enable microphone stays an explicit bar action. | Status precedence is truthful: the transport owns connecting, reconnecting, stopping and failure over runtime activity, and listening is shown only with the microphone open. Changing language mid-session applies to chat and the next voice session, and the bar states the language the current session continues in; no live switch is implied. Escape closes the flyout, then the menu, before ending voice. Glass edges reuse stage cyan/amber tokens on the shared `.luminous-glass` surface. Web tests, lint and build pass; scratch Chromium fixtures cover desktop/phone/320px in both themes and reduced motion. Handoff in draft PR #400. | Implemented offline; live voice/device acceptance pending |
 | 2026-10-06 | P8-37 implements the Architectural Glass shell, composer and message window in one PR. The paperclip maps to the existing screen/camera visual-context actions (no file upload exists, so none is invented), reusing `ConversationMoreMenu` without its Language row. After review, history is not a separate window: it is registered as the shared workspace view `conversation`, and the transcript is portalled into that window, so tabs, geometry, focus, the snapshot and Jarvis commands reuse WorkspaceController. ConversationHistory keeps the chat session, composer and voice controls mounted outside it. Voice entry minimises the view and voice exit restores it; Close hides it until the next send or Conversation navigation. Author names stay as visually hidden text. Selection uses complete `--glass-selected` surfaces with a full glow ring. | Issue #398 acceptance criteria; approved references in `docs/ui/shell-styling/` and `docs/ui/chat-voice/`; `docs/ui/screenshots/p8-37-*` fixture captures | Implemented |
+| 2026-10-07 | P9-08 routes chat deployments whose selected model name begins with `claude-` through the Anthropic Messages API on Foundry. Authenticate with the hosted agent's `DefaultAzureCredential` and `https://ai.azure.com/.default`; translate the existing backend tools and tool results, and map shared reasoning effort to a bounded extended-thinking budget. Keep voice and non-Claude chat on Responses. | The provider adapter reuses the existing project resource, identity and backend tool dispatcher; it adds no public contract, UI or database change. Offline tests cover endpoint resource resolution, managed-identity token scope, tool conversion, streamed chat/tool rounds, usage and sanitized provider errors. This coding-agent worker had no `FOUNDRY_PROJECT_ENDPOINT` and could not acquire an Azure token, so the live endpoint/auth spike remains pending. | Implemented offline; deployed Foundry auth and model acceptance pending |
+| 2026-10-08 | GitHub issues are the single backlog and source of truth for all work. The Software Factory and Copilot are executors: an issue labelled `Jarvis` is started by the Factory with the `codex` agent (Dan's default for Jarvis-raised work), an issue labelled `Copilot` by Copilot. The Factory's SQL task row stays the execution record and links to its issue; PRs use the issue's task ID in the title and `Fixes #N`. The Factory board shows the GitHub Project columns (Backlog, Needs Dan, Ready, In progress, In review, Done). Jarvis-raised issues use the rolling `P11-NN` phase. | Task 10 (8 October) showed Factory tasks living only in SQL: invisible to the backlog, PLAN and the merge gate, without traceability or conflict awareness. One backlog keeps every executor, the board and the gate aligned. | Decided; P10 in progress |
 
 ### P7-23 latency evidence
 
@@ -492,6 +689,13 @@ Mistakes made so far and the rule that prevents each one.
 | **L115** | One missing brace unstyled the whole app | On 7 October the overnight UI deploy (#473) rendered without styles on desktop. The last `@media (max-width: 700px), (max-height: 500px) and (pointer: coarse)` block in `ConversationHistory.css` was never closed. Vite concatenates stylesheets into one bundle, so everything after it (all of `styles.css`) landed inside a mobile-only query. Lint, unit tests, build and the deploy check all passed; only a signed-in look caught it. `src/stylesheets.test.tsx` now fails on any unbalanced stylesheet. |
 | **L116** | The Chrome native host crashed 400 times a day | The UI session found 405 `Jarvis.PcBridge.exe` crashes in 24 hours (6–7 October): unhandled `OperationCanceledException` from `NamedPipeClientStream.ConnectAsync`, each writing a Windows Error Reporting dump. The bridge pipe accepts one client, and the extension's 30-second keep-alive alarm launched a new host regardless of back-off. Any extra host (a second Chrome profile, a stale worker, or a stopped bridge) timed out after 10 seconds and crashed. The host now exits with code 0 and tells the extension `host_unavailable`; the extension then waits 5 minutes, and the alarm respects the back-off. A likely contributor to Dan's freezes. |
 | **L117** | Hijacked event streams lost their CORS header | On 7 October research was always refused with "no workspace connected". `/now/events` (and the factory task-event stream) call `reply.hijack()` and write headers straight to the raw response, which drops the `Access-Control-Allow-Origin` header that `@fastify/cors` put on the Fastify reply. The browser (cross-origin from both the Static Web App and localhost) blocked the stream after about 65 ms, so the workspace never connected. Every tool that opens a window was refused. Hijacked streams now copy `reply.getHeaders()`. Research also uses a default report frame until the web app sends its own. |
+| **L118** | Embeddings used the project-scoped URL, which returns 404 | After #486 the vault re-index made about 4,800 `memory.embedding` calls, all `fallback`, so no vectors were stored. A probe from the backend container showed `https://<account>.services.ai.azure.com/api/projects/<project>/openai/v1/embeddings` returns 404 while `https://<account>.services.ai.azure.com/openai/v1/embeddings` returns 200 with the same managed identity. The embedder now posts to the account origin, and fallback logs carry `httpStatus` so a silent failure is diagnosable. Lesson: probe a new Foundry endpoint from the deployed identity before trusting a mocked test, and never log a fallback without its reason. |
+| **L119** | Vault backfill throttled at 20K TPM | Once embeddings worked (L118), the first backfill made 639 successful calls and 1,244 HTTP 429s in a minute: the `text-embedding-3-small` deployment had capacity 20 (20 requests per 10 s). Capacity is now 150 (GlobalStandard bills per token, quota 1,000), and background vault indexing waits out a 429 using `Retry-After` (at most 15 s, four attempts) instead of storing a null vector. Interactive memory search still fails fast. Lesson: size a background backfill against the deployment rate limit before enabling it. |
+| **L120** | SQL Server migrations: same-batch columns and column type changes | P9-23's first migration failed twice in Database CI. Each migration file runs as one batch, so an `UPDATE` or `CHECK` that references a column added earlier in the file fails to compile ("Invalid column name"); wrap those statements in `EXEC(N'...')`, as 0016, 0020 and 0021 already do. `ALTER COLUMN` also fails while a constraint or index references the column; drop and recreate them around the change, in the down script too. Lesson: read the existing migrations before writing a new one. |
+| **L121** | One tool schema with a root `oneOf` broke every voice session | On 8 October voice failed right after start: Voice Live answered `session.update` with `invalid_function_parameters` for `manage_model_deployment` (P9-07, #544), whose input schema put `oneOf` at the root. Voice sends every registered tool at session start, so one invalid schema disables voice entirely; `toModelToolSchema` only strips untyped nested combinators (L103). The schema is now a flat object with `action` as an enum, and `execute` enforces the per-action fields. A test keeps core tool schemas free of root combinators. Lesson: tool input schemas must be a plain root object; express alternatives in code, not in the schema. |
+| **L122** | Clipboard reads are sensitive and turn-scoped | P9-32 adds only explicit current-message clipboard reads through the authenticated PC bridge. | Keep clipboard tools out of reflex execution, redact obvious secrets before returning read text, bound text to 20 KiB, and store only redacted metadata in the generic tool-call audit. |
+| **L123** | Chat called an agent-only route with Dan's token | From the 01:53 agent deploy on 8 October every chat message failed with `Chat agent unavailable (HTTP 503)`. P9-11 (#557) added a `GET /agent/settings` read to `load_verified_history`, but sent Dan's delegated token; that route only accepts the hosted agent's identity, so the backend answered 403 and the agent refused the turn. Mocked tests asserted the same wrong header, and nobody used chat overnight. The agent now reads its settings with its own managed identity and falls back to the default timeout if they are unavailable. Lesson: agent-only routes need the agent token, tests must assert which identity each call uses, and a deploy that touches the agent needs a live chat check (P9-39). |
+| **L124** | Folio ids came back upper case from SQL | After #564 deployed, `GET /folio` returned 503 for Dan: migration 0035 built `item_id` as `kind:` + `CONVERT(nvarchar(36), id)`, which SQL Server renders in upper case, while the store only accepts lower-case GUIDs, so every stored item failed validation. Same root cause as #536's job ids. Migration 0036 lower-cases existing ids and the store normalises ids on every read and write. Lesson: never build or compare GUID text from SQL Server without `LOWER()`; tests against the real database must assert the id shape round-trips. |
 
 ## 5 October 2026 — Software Factory layout selected
 
@@ -526,6 +730,16 @@ All changes belong in [#417](https://github.com/DanAakesen/jarvis/issues/417), P
 PR #419 uses one reconciled voice presentation for the under-orb HTML feedback and scene state. The controls retain only More and End voice; current/next language feedback stays in the Language flyout. Explicit Start voice requests microphone permission and prepares audio, then attaches the granted stream after the authenticated handshake. Reconnect preserves mute; ending disposes late grants and audio resources. This replaces the separate-enable lifecycle recorded for P8-05/P8-36.
 
 The same orb uses phased core ignition, outward wave and settling, with distinct listening/thinking/tool motion and actual playback-driven speech energy. Camera, room and platform remain fixed. Reduced motion uses steady forms. The focused tests and prior PR CI passed; Copilot reported browser fixtures and low-rate software-WebGL motion frames. Live microphone/provider, physical devices and normal hardware-GPU motion remain unverified. No new provider protocol or persistence is introduced.
+
+## P9-36 (8 October 2026) — One capability and safety prompt for voice and chat
+
+Keep shared tool-use and safety guidance in the backend, where the existing
+memory automatic-capture setting can shape its knowledge rules. Realtime voice
+uses the generated block directly; the agent-only `/agent/settings` response
+delivers the same block to chat. Preserve the existing tool registry,
+confirmation results, and bounded settings response; do not add a migration or
+change the web app. Focused route, voice, settings-parser, and chat-prompt tests
+cover the offline behavior; live provider behavior remains unverified.
 
 
 ## 6 October 2026 — Credential health and repair (#457)
@@ -571,3 +785,18 @@ Dan requested the hotfix after seeing inspection guidance overlay More and persi
 ## 8 October 2026 — Folio pane and Jarvis navigation in the UI
 
 **Coordinator-relayed from Dan:** the Folio (P9-25) is built as a pane in the left sidebar slot rather than a page, so reopening never moves Dan off what he is looking at; `navigate { page: 'folio' }` therefore opens the pane. Jarvis's `navigate` command (P9-40) is handled in the shell with the agreed page and Settings section keys; unknown targets and pages that do not exist yet are refused with a reason. UI-only.
+## P10-04 (8 October 2026) — GitHub issues are the Factory board source
+
+GitHub issues remain the single backlog and source of truth; Factory and
+Copilot execute the work. Codex is the default executor for Jarvis-raised work,
+identified by the `Codex` issue label. The backend board reads registered
+repositories and uses the same six status columns and precedence as
+`project_board.py`, with shared fixtures guarding parity. Recently closed
+issues remain visible as Done for 14 days. Cached snapshots are invalidated by
+signed issue, PR, check, and workflow webhooks and committed task events; no
+GitHub Project write or database migration is added. The response is the
+typed `{ project, fetchedAt, stale, columns }` contract, with issue, linked PR,
+and existing Factory task details; `/now/events` emits a typed project-scoped
+board update. The response contract is backend-owned; the UI session separately
+consumes it. Offline fake-provider tests do not establish live GitHub App
+permissions.

@@ -5,7 +5,11 @@ export interface GitHubAppTokenIssuer {
   issue(repository: string): Promise<string>;
   issueForActions(repository: string): Promise<string>;
   issueForContents(repository: string): Promise<string>;
+  issueForRepositoryRead(repository: string): Promise<string>;
   issueForContentsWrite(repository: string): Promise<string>;
+  readInstallationPermissions?(
+    repository: string,
+  ): Promise<Readonly<Record<string, 'read' | 'write' | 'admin'>>>;
 }
 
 export interface GitHubRepository {
@@ -296,11 +300,45 @@ export function createGitHubAppTokenIssuer({
     }, now, onTokenMint);
   };
 
+  const readInstallationPermissions = async (
+    repository: string,
+  ): Promise<Readonly<Record<string, 'read' | 'write' | 'admin'>>> => {
+    if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/u.test(repository)) {
+      throw new Error('GitHub repository is invalid');
+    }
+    const [owner, name] = repository.split('/');
+    if (!owner || !name) throw new Error('GitHub repository is invalid');
+    const appToken = await createAppJwt(appId, await getPrivateKey(), now);
+    const installation = object(await requestJson(
+      fetchImpl,
+      `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/installation`,
+      appToken,
+    ));
+    const rawPermissions = object(installation?.permissions);
+    if (!installationId(installation?.id) || !rawPermissions ||
+        Object.keys(rawPermissions).length === 0 || Object.keys(rawPermissions).length > 64) {
+      throw new Error('GitHub installation permissions are unavailable');
+    }
+    const permissions: Record<string, 'read' | 'write' | 'admin'> = {};
+    for (const [permission, access] of Object.entries(rawPermissions)) {
+      if (!/^[a-z][a-z_]{0,63}$/u.test(permission) ||
+          (access !== 'read' && access !== 'write' && access !== 'admin')) {
+        throw new Error('GitHub installation permissions are invalid');
+      }
+      permissions[permission] = access;
+    }
+    return Object.freeze(permissions);
+  };
+
   return {
     issue: (repository) => issue(repository, { contents: 'write', pull_requests: 'write' }),
     issueForActions: (repository) => issue(repository, { actions: 'read' }),
     issueForContents: (repository) => issue(repository, { contents: 'read' }),
+    issueForRepositoryRead: (repository) => issue(repository, {
+      contents: 'read', issues: 'read', pull_requests: 'read',
+    }),
     issueForContentsWrite: (repository) => issue(repository, { contents: 'write' }),
+    readInstallationPermissions,
   };
 }
 

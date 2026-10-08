@@ -6,29 +6,36 @@ export interface AgentPrincipal { kind: 'jarvis-agent'; objectId: string; tenant
 export interface RunnerPrincipal { kind: 'jarvis-runner'; objectId: string; tenantId: string }
 export interface PcBridgePrincipal { kind: 'jarvis-pc-bridge'; objectId: string; tenantId: string }
 export interface PhoneEventGridPrincipal { kind: 'jarvis-phone-event-grid'; objectId: string; tenantId: string }
+export interface DeployPrincipal { kind: 'jarvis-deploy'; objectId: string; tenantId: string }
 export type TokenVerifier = (token: string) =>
-  Promise<UserPrincipal | AgentPrincipal | RunnerPrincipal | PcBridgePrincipal | PhoneEventGridPrincipal>;
+  Promise<UserPrincipal | AgentPrincipal | RunnerPrincipal | PcBridgePrincipal | PhoneEventGridPrincipal | DeployPrincipal>;
 export const agentToolsRole = 'Jarvis.Tools';
 export const runnerEventsRole = 'Jarvis.Runner.Events';
+const azureManagementAudience = 'https://management.azure.com/';
 export function isAgentPrincipal(
-  principal: UserPrincipal | AgentPrincipal | RunnerPrincipal | PcBridgePrincipal | PhoneEventGridPrincipal,
+  principal: UserPrincipal | AgentPrincipal | RunnerPrincipal | PcBridgePrincipal | PhoneEventGridPrincipal | DeployPrincipal,
 ): principal is AgentPrincipal {
   return 'kind' in principal && principal.kind === 'jarvis-agent';
 }
 export function isRunnerPrincipal(
-  principal: UserPrincipal | AgentPrincipal | RunnerPrincipal | PcBridgePrincipal | PhoneEventGridPrincipal,
+  principal: UserPrincipal | AgentPrincipal | RunnerPrincipal | PcBridgePrincipal | PhoneEventGridPrincipal | DeployPrincipal,
 ): principal is RunnerPrincipal {
   return 'kind' in principal && principal.kind === 'jarvis-runner';
 }
 export function isPcBridgePrincipal(
-  principal: UserPrincipal | AgentPrincipal | RunnerPrincipal | PcBridgePrincipal | PhoneEventGridPrincipal,
+  principal: UserPrincipal | AgentPrincipal | RunnerPrincipal | PcBridgePrincipal | PhoneEventGridPrincipal | DeployPrincipal,
 ): principal is PcBridgePrincipal {
   return 'kind' in principal && principal.kind === 'jarvis-pc-bridge';
 }
 export function isPhoneEventGridPrincipal(
-  principal: UserPrincipal | AgentPrincipal | RunnerPrincipal | PcBridgePrincipal | PhoneEventGridPrincipal,
+  principal: UserPrincipal | AgentPrincipal | RunnerPrincipal | PcBridgePrincipal | PhoneEventGridPrincipal | DeployPrincipal,
 ): principal is PhoneEventGridPrincipal {
   return 'kind' in principal && principal.kind === 'jarvis-phone-event-grid';
+}
+export function isDeployPrincipal(
+  principal: UserPrincipal | AgentPrincipal | RunnerPrincipal | PcBridgePrincipal | PhoneEventGridPrincipal | DeployPrincipal,
+): principal is DeployPrincipal {
+  return 'kind' in principal && principal.kind === 'jarvis-deploy';
 }
 export class AuthenticationDenied extends Error {
   constructor(public readonly statusCode: 401 | 403) { super('Authentication denied'); }
@@ -36,6 +43,7 @@ export class AuthenticationDenied extends Error {
 
 export function createTokenVerifier(config: AuthConfig, keys?: JWTVerifyGetKey): TokenVerifier {
   const issuer = `https://login.microsoftonline.com/${config.tenantId}/v2.0`;
+  const v1Issuer = `https://sts.windows.net/${config.tenantId}/`;
   const jwks = keys ?? createRemoteJWKSet(new URL(`https://login.microsoftonline.com/${config.tenantId}/discovery/v2.0/keys`), {
     timeoutDuration: 5000,
     cooldownDuration: 30_000,
@@ -45,16 +53,30 @@ export function createTokenVerifier(config: AuthConfig, keys?: JWTVerifyGetKey):
     let payload;
     try {
       ({ payload } = await jwtVerify(token, jwks, {
-        algorithms: ['RS256'], issuer, audience: config.apiClientId,
+        algorithms: ['RS256'], issuer: [issuer, v1Issuer], audience: [config.apiClientId, azureManagementAudience],
         requiredClaims: ['exp', 'nbf', 'iat', 'tid', 'ver', 'oid'],
         clockTolerance: 5,
       }));
     } catch { throw new AuthenticationDenied(401); }
-    if (payload.ver !== '2.0' || payload.tid !== config.tenantId || typeof payload.oid !== 'string' ||
+    const managementToken = payload.aud === azureManagementAudience;
+    const validVersion = managementToken
+      ? (payload.iss === issuer && payload.ver === '2.0') || (payload.iss === v1Issuer && payload.ver === '1.0')
+      : payload.iss === issuer && payload.ver === '2.0';
+    if (!validVersion || payload.tid !== config.tenantId || typeof payload.oid !== 'string' ||
       !/^[\da-f]{8}(-[\da-f]{4}){3}-[\da-f]{12}$/i.test(payload.oid)) {
       throw new AuthenticationDenied(401);
     }
     const objectId = payload.oid.toLowerCase();
+    if (managementToken) {
+      if (objectId !== config.deployObjectId || payload.scp !== undefined ||
+          (payload.idtyp !== undefined && payload.idtyp !== 'app')) {
+        throw new AuthenticationDenied(403);
+      }
+      return { kind: 'jarvis-deploy', objectId, tenantId: config.tenantId };
+    }
+    if (payload.aud !== config.apiClientId || payload.iss !== issuer || payload.ver !== '2.0') {
+      throw new AuthenticationDenied(401);
+    }
     if (config.pcBridgeClientId !== undefined && payload.azp === config.pcBridgeClientId) {
       if (objectId !== config.ownerObjectId || typeof payload.scp !== 'string' ||
           !payload.scp.split(' ').includes('access_as_user') ||

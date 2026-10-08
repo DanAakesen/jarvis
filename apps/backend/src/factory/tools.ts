@@ -1,9 +1,15 @@
+import { randomInt } from 'node:crypto';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { JarvisTool } from '../core/tool-registry.js';
-import { ToolRefusal } from '../core/tool-registry.js';
+import { ToolFailure, ToolRefusal } from '../core/tool-registry.js';
+import type { ConversationMessage } from '../core/conversation-store.js';
 import { taskStates, type TaskState } from './task-lifecycle.js';
-import type { Project } from './projects.js';
+import { projectFields, type Project, type UpdateProject } from './projects.js';
 import type { TaskDetail, TaskListFilters, TaskRecord } from './task-store.js';
 import { settingsOptions } from '../core/settings.js';
+import { modelsForRole, reasoningForModel } from '../core/model-catalog.js';
+import type { ModelCatalogue } from '@jarvis/contracts';
+import { createGitHubActionsRunClient } from '../github/actions-runs.js';
 
 const idSchema = { type: 'string', pattern: '^[1-9][0-9]{0,18}$', maxLength: 19 };
 const maxSqlBigInt = 9_223_372_036_854_775_807n;
@@ -17,6 +23,28 @@ const taskFiltersSchema = {
   limit: { type: 'integer', minimum: 1, maximum: 100 },
   offset: { type: 'integer', minimum: 0, maximum: 10_000 },
 };
+const projectUpdateFields = Object.fromEntries(
+  Object.entries(projectFields).filter(([key]) => key !== 'repo'),
+);
+const projectUpdateWidths: Readonly<Record<string, number>> = {
+  name: 100, description: 2000, default_branch: 255, merge_rules: 4000, tech: 32,
+};
+interface PendingProjectArchive {
+  projectId: string;
+  name: string;
+  repo: string;
+  sourceMessageId: string;
+  createdAt: number;
+}
+const pendingProjectArchives = new WeakMap<FastifyInstance, Map<string, PendingProjectArchive>>();
+const projectArchiveTtlMs = 10 * 60_000;
+const maxPendingProjectArchives = 50;
+
+declare module 'fastify' {
+  interface FastifyRequest {
+    jarvisConversationMessage?: ConversationMessage;
+  }
+}
 
 interface TaskListInput {
   projectId?: string;
@@ -57,8 +85,16 @@ function optionsList(options: readonly string[]): string {
   return options.join(', ');
 }
 
-function taskModelOptions(agent: TaskRecord['agent']): readonly string[] {
-  return agent === 'codex' ? settingsOptions.codexModels : settingsOptions.copilotModels;
+function taskModelOptions(agent: TaskRecord['agent'], catalogue: ModelCatalogue): readonly string[] {
+  return modelsForRole(catalogue, agent);
+}
+
+function taskReasoningOptions(
+  agent: TaskRecord['agent'],
+  model: string,
+  catalogue: ModelCatalogue,
+): readonly string[] {
+  return [...(agent === 'codex' ? ['default'] : []), ...reasoningForModel(catalogue, agent, model)];
 }
 
 function assertSqlBigInt(value: string): void {
@@ -86,11 +122,106 @@ function projectSummary(project: Project) {
   };
 }
 
+async function currentDanMessage(request: FastifyRequest): Promise<ConversationMessage> {
+  const voiceMessage = request.jarvisConversationMessage;
+  if (voiceMessage) {
+    if (request.principal === null || voiceMessage.role !== 'dan') {
+      throw new ToolRefusal('A verified Dan message is required to confirm this project archive.');
+    }
+    return voiceMessage;
+  }
+  const id = request.headers['x-jarvis-message-id'];
+  if (typeof id !== 'string' || !/^[1-9]\d{0,18}$/u.test(id) ||
+      BigInt(id) > maxSqlBigInt || !request.agentPrincipal || !request.server.conversationStore) {
+    throw new ToolRefusal('A verified Dan message is required to confirm this project archive.');
+  }
+  const page = await request.server.conversationStore.getHistory({ limit: 1 });
+  const message = page.messages[0];
+  if (!message || message.id !== id || message.role !== 'dan') {
+    throw new ToolRefusal('A verified Dan message is required to confirm this project archive.');
+  }
+  return message;
+}
+
+function cleanPendingArchives(actions: Map<string, PendingProjectArchive>, now = Date.now()): void {
+  const cutoff = now - projectArchiveTtlMs;
+  for (const [code, action] of actions) {
+    if (action.createdAt <= cutoff) actions.delete(code);
+  }
+}
+
+function stageProjectArchive(
+  server: FastifyInstance,
+  project: Project,
+  source: ConversationMessage,
+) {
+  if (!/^[1-9]\d{0,18}$/u.test(source.id) || BigInt(source.id) > maxSqlBigInt) {
+    throw new ToolRefusal('A verified Dan message is required to confirm this project archive.');
+  }
+  let actions = pendingProjectArchives.get(server);
+  if (!actions) {
+    actions = new Map();
+    pendingProjectArchives.set(server, actions);
+  }
+  cleanPendingArchives(actions);
+  if (actions.size >= maxPendingProjectArchives) throw new Error('Too many pending project archives');
+  let confirmationCode: string;
+  do {
+    confirmationCode = String(randomInt(0, 100_000_000)).padStart(8, '0');
+  } while (actions.has(confirmationCode));
+  actions.set(confirmationCode, {
+    projectId: project.id,
+    name: project.name,
+    repo: project.repo,
+    sourceMessageId: source.id,
+    createdAt: Date.now(),
+  });
+  return {
+    status: 'awaiting_confirmation',
+    projectId: project.id,
+    name: project.name,
+    repo: project.repo,
+    confirmationCode,
+    instruction: `Nothing has been archived. To approve, say exactly "confirm ${confirmationCode}" in a new message.`,
+  };
+}
+
+async function confirmProjectArchive(
+  request: FastifyRequest,
+  confirmationCode: string,
+  signal: AbortSignal,
+) {
+  const message = await currentDanMessage(request);
+  const actions = pendingProjectArchives.get(request.server);
+  if (actions) cleanPendingArchives(actions);
+  const action = actions?.get(confirmationCode);
+  if (!actions || !action || message.role !== 'dan' ||
+      !/^[1-9]\d{0,18}$/u.test(message.id) || BigInt(message.id) > maxSqlBigInt ||
+      BigInt(message.id) <= BigInt(action.sourceMessageId) ||
+      !Number.isFinite(message.at.getTime()) || message.at.getTime() <= action.createdAt ||
+      message.text.trim().toLowerCase() !== `confirm ${confirmationCode}`) {
+    throw new ToolRefusal('No project was archived. Dan must send the exact confirmation phrase in a new message.');
+  }
+  actions.delete(confirmationCode);
+  signal.throwIfAborted();
+  const store = requireStore(request.server.projectStore, 'Project service');
+  if (!await store.archive(action.projectId)) throw new ToolRefusal('The active project was not found; nothing was archived.');
+  return { status: 'archived', projectId: action.projectId, name: action.name, repo: action.repo };
+}
+
 function taskDetailSummary(detail: TaskDetail) {
   return {
     ...detail,
     events: detail.events.map(({ id, type, summary, source, at }) => ({ id, type, summary, source, at })),
   };
+}
+
+async function activeProject(projectId: string, request: import('fastify').FastifyRequest): Promise<Project> {
+  assertSqlBigInt(projectId);
+  const store = requireStore(request.server.projectStore, 'Project service');
+  const project = (await store.list()).find(({ id }) => id === projectId);
+  if (!project) throw new ToolRefusal('Active project not found.');
+  return project;
 }
 
 function taskListFilters(input: TaskListInput): TaskListFilters {
@@ -141,6 +272,61 @@ export const factoryTools: readonly JarvisTool[] = [
     },
   },
   {
+    name: 'update_project',
+    description: 'Update the name, description, or defaults of an active Software Factory project. Only supplied fields change.',
+    inputSchema: {
+      type: 'object',
+      properties: { projectId: idSchema, ...projectUpdateFields },
+      required: ['projectId'],
+      anyOf: Object.keys(projectUpdateFields).map((field) => ({ required: [field] })),
+      additionalProperties: false,
+    },
+    sensitive: true,
+    execute: async (input, request) => {
+      const { projectId, ...fields } = input as { projectId: string } & UpdateProject;
+      assertSqlBigInt(projectId);
+      if (Object.entries(fields).some(([key, value]) =>
+        typeof value === 'string' && value.length > (projectUpdateWidths[key] ?? Number.POSITIVE_INFINITY))) {
+        throw new ToolRefusal('One or more project settings exceed their allowed length.');
+      }
+      const store = requireStore(request.server.projectStore, 'Project service');
+      await activeProject(projectId, request);
+      const project = await store.update(projectId, fields);
+      if (!project) throw new ToolRefusal('Active project not found.');
+      return { ...projectSummary(project), description: project.description };
+    },
+  },
+  {
+    name: 'archive_project',
+    description: 'Prepare to archive an active Software Factory project. Nothing changes until Dan confirms with the exact phrase returned in a later message.',
+    inputSchema: {
+      type: 'object',
+      properties: { projectId: idSchema },
+      required: ['projectId'],
+      additionalProperties: false,
+    },
+    sensitive: true,
+    execute: async (input, request) => {
+      const { projectId } = input as { projectId: string };
+      const project = await activeProject(projectId, request);
+      return stageProjectArchive(request.server, project, await currentDanMessage(request));
+    },
+  },
+  {
+    name: 'confirm_project_archive',
+    description: 'Archive a project only when Dan’s latest message exactly says “confirm” followed by its eight-digit code.',
+    inputSchema: {
+      type: 'object',
+      properties: { confirmationCode: { type: 'string', pattern: '^[0-9]{8}$' } },
+      required: ['confirmationCode'],
+      additionalProperties: false,
+    },
+    sensitive: true,
+    execute: (input, request, signal) => confirmProjectArchive(
+      request, (input as { confirmationCode: string }).confirmationCode, signal,
+    ),
+  },
+  {
     name: 'list_tasks',
     description: 'List Software Factory tasks using the same bounded filters as the Tasks API.',
     inputSchema: { type: 'object', properties: taskFiltersSchema, additionalProperties: false },
@@ -177,6 +363,80 @@ export const factoryTools: readonly JarvisTool[] = [
     },
   },
   {
+    name: 'list_releases',
+    description: 'List the recorded releases for an active Software Factory project.',
+    inputSchema: {
+      type: 'object',
+      properties: { projectId: idSchema },
+      required: ['projectId'],
+      additionalProperties: false,
+    },
+    reflexSafe: true,
+    execute: async (input, request) => {
+      const project = await activeProject((input as { projectId: string }).projectId, request);
+      const store = requireStore(request.server.releaseViewStore, 'Release service');
+      const records = await store.read(project.id);
+      return {
+        project: { id: project.id, name: project.name, repo: project.repo },
+        releases: records.releases,
+      };
+    },
+  },
+  {
+    name: 'get_release',
+    description: 'Get a recorded release and its linked workflow and deployment status.',
+    inputSchema: {
+      type: 'object',
+      properties: { releaseId: idSchema },
+      required: ['releaseId'],
+      additionalProperties: false,
+    },
+    reflexSafe: true,
+    execute: async (input, request) => {
+      const { releaseId } = input as { releaseId: string };
+      assertSqlBigInt(releaseId);
+      const store = requireStore(request.server.releaseViewStore, 'Release service');
+      const projectId = await store.projectForRelease(releaseId);
+      if (!projectId) throw new ToolRefusal('Release not found.');
+      const project = await activeProject(projectId, request);
+      const records = await store.read(project.id);
+      const release = records.releases.find(({ id }) => id === releaseId);
+      if (!release) throw new ToolRefusal('Release not found.');
+      return {
+        project: { id: project.id, name: project.name, repo: project.repo },
+        release,
+        workflowRuns: records.workflowRuns.filter(({ releaseId: linkedReleaseId }) => linkedReleaseId === release.id),
+        deployments: records.deployments.filter(({ releaseId: linkedReleaseId }) => linkedReleaseId === release.id),
+      };
+    },
+  },
+  {
+    name: 'get_deployment_status',
+    description: 'Check the latest deploy workflow run on an active project’s default branch.',
+    inputSchema: {
+      type: 'object',
+      properties: { projectId: idSchema },
+      required: ['projectId'],
+      additionalProperties: false,
+    },
+    reflexSafe: true,
+    execute: async (input, request, signal) => {
+      const project = await activeProject((input as { projectId: string }).projectId, request);
+      const tokenIssuer = request.server.githubAppTokenIssuer;
+      if (!tokenIssuer) throw new ToolFailure('GitHub deployment status is unavailable.');
+      try {
+        const deployment = await createGitHubActionsRunClient(tokenIssuer)
+          .latestDeployment(project.repo, project.default_branch, signal);
+        return {
+          project: { id: project.id, name: project.name, repo: project.repo },
+          deployment,
+        };
+      } catch {
+        throw new ToolFailure('GitHub deployment status could not be read.');
+      }
+    },
+  },
+  {
     name: 'create_task',
     description: 'Create a Ready task in an active project from Dan’s prompt.',
     inputSchema: {
@@ -205,15 +465,20 @@ export const factoryTools: readonly JarvisTool[] = [
       if (agent !== undefined && !isOption(agent, settingsOptions.projectAgents)) {
         throw new ToolRefusal(`Unsupported coding agent. Valid agents: ${optionsList(settingsOptions.projectAgents)}.`);
       }
+      const catalogue = await request.server.modelCatalogue.read();
       const modelOptions = agent
-        ? taskModelOptions(agent)
-        : [...new Set([...settingsOptions.codexModels, ...settingsOptions.copilotModels])];
+        ? taskModelOptions(agent, catalogue)
+        : [...new Set([...taskModelOptions('codex', catalogue), ...taskModelOptions('copilot', catalogue)])];
       if (model !== undefined && !isOption(model, modelOptions)) {
         throw new ToolRefusal(`Unsupported coding-agent model. Valid models: ${optionsList(modelOptions)}.`);
       }
-      if (reasoning !== undefined &&
-        (agent !== 'codex' || !isOption(reasoning, settingsOptions.codexReasoningEfforts))) {
-        throw new ToolRefusal(`Unsupported reasoning. Specify Codex and use one of the valid Codex reasoning levels: ${optionsList(settingsOptions.codexReasoningEfforts)}.`);
+      const reasoningOptions = agent
+        ? taskReasoningOptions(agent, model ?? 'default', catalogue)
+        : taskReasoningOptions('codex', model ?? 'default', catalogue);
+      if (reasoning !== undefined && (
+        agent === undefined || !isOption(reasoning, reasoningOptions)
+      )) {
+        throw new ToolRefusal(`Unsupported reasoning. Specify a coding agent and use one of its valid reasoning levels: ${optionsList(reasoningOptions)}.`);
       }
       const store = requireStore(request.server.taskStore, 'Task service');
       const task = await store.create({
@@ -259,13 +524,14 @@ export const factoryTools: readonly JarvisTool[] = [
       }
 
       const agent = (requestedAgent ?? current.agent) as TaskRecord['agent'];
-      const modelOptions = taskModelOptions(agent);
+      const catalogue = await request.server.modelCatalogue.read();
+      const modelOptions = taskModelOptions(agent, catalogue);
       if (model !== undefined && !isOption(model, modelOptions)) {
         throw new ToolRefusal(`Unsupported ${agent} model. Valid models: ${optionsList(modelOptions)}.`);
       }
-      if (reasoning !== undefined &&
-        (agent !== 'codex' || !isOption(reasoning, settingsOptions.codexReasoningEfforts))) {
-        throw new ToolRefusal(`Unsupported ${agent} reasoning. Valid Codex reasoning levels: ${optionsList(settingsOptions.codexReasoningEfforts)}.`);
+      const reasoningOptions = taskReasoningOptions(agent, model ?? current.modelOverride ?? 'default', catalogue);
+      if (reasoning !== undefined && !isOption(reasoning, reasoningOptions)) {
+        throw new ToolRefusal(`Unsupported ${agent} reasoning. Valid ${agent} reasoning levels: ${optionsList(reasoningOptions)}.`);
       }
 
       const changedAgent = agent !== current.agent;
@@ -285,6 +551,37 @@ export const factoryTools: readonly JarvisTool[] = [
         model: result.task.modelOverride,
         reasoning: result.task.reasoningOverride,
         applies: 'next task turn',
+      };
+    },
+  },
+  {
+    name: 'retry_task',
+    description: 'Retry an eligible task that failed before sandbox work began; use Recover for tasks that ran.',
+    inputSchema: {
+      type: 'object',
+      properties: { taskId: idSchema },
+      required: ['taskId'],
+      additionalProperties: false,
+    },
+    execute: async (input, request) => {
+      const { taskId } = input as { taskId: string };
+      assertSqlBigInt(taskId);
+      const store = requireStore(request.server.taskStore, 'Task service');
+      const result = await store.retry(taskId);
+      if (result.kind === 'not-found') throw new ToolRefusal('Task not found.');
+      if (result.kind === 'invalid-transition') {
+        throw new ToolRefusal('Only eligible failed starts without sandbox history can be retried; use Recover for tasks that ran.');
+      }
+      if (result.kind === 'credential-unavailable') {
+        throw new ToolRefusal('Retry is unavailable while the task credentials are unavailable.');
+      }
+      if (result.kind === 'renewal-active') {
+        throw new ToolRefusal('Retry is unavailable while Codex credential renewal is active.');
+      }
+      return {
+        id: result.task.id,
+        state: result.task.state,
+        attemptCount: result.task.attemptCount,
       };
     },
   },

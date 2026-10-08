@@ -6,15 +6,19 @@ import { ToolFailure, ToolRefusal } from './tool-registry.js';
 import { registerSettingsRoutes } from './settings.js';
 import { setThemeTool } from './theme.js';
 import { registerNowRoutes } from './now.js';
-import { registerUsageRoutes } from './usage.js';
+import { getUsageTool, registerUsageRoutes } from './usage.js';
 import { setJarvisModelTool } from './model-tools.js';
+import { getSettingsTool, updateSettingsTool } from './settings-tools.js';
+import { manageModelDeploymentTool, registerModelDeploymentRoutes } from './model-deployments.js';
 import { setAwayModeTool, setPresenceModeTool } from './away-mode.js';
 import { getStatusSummaryTool } from './status.js';
 import { generatedViewValidationOptions } from './generated-view-validation.js';
 import { registerWorkspaceCommandRoutes, workspaceCommandTool } from './workspace-commands.js';
-import { registerJobRoutes } from './jobs.js';
+import { cancelJobTool, getJobTool, listJobsTool, registerJobRoutes } from './jobs.js';
 import { findChatReflexReplay } from './reflex.js';
 import { executePhoneTool } from '../phone/approval.js';
+import { systemSmokeResponseSchema, systemStatusResponseSchema } from '../system-status.js';
+import { toolArgumentRefusal, unexpectedToolArgument } from './tool-arguments.js';
 
 const readOnlyToolsWithoutMessage = new Set(['memory_search', 'vault_search', 'vault_read']);
 
@@ -47,9 +51,10 @@ function isObject(value: unknown): value is Record<string, unknown> {
 
 export const coreModule: BackendModule = {
   id: 'core',
-  tools: [setThemeTool, setJarvisModelTool, setPresenceModeTool, setAwayModeTool, getStatusSummaryTool, workspaceCommandTool],
+  tools: [setThemeTool, getSettingsTool, updateSettingsTool, setJarvisModelTool, manageModelDeploymentTool, setPresenceModeTool, setAwayModeTool, getStatusSummaryTool, workspaceCommandTool, listJobsTool, getJobTool, cancelJobTool, getUsageTool],
   registerRoutes: async (app) => {
     await registerSettingsRoutes(app);
+    registerModelDeploymentRoutes(app);
     registerNowRoutes(app);
     await registerUsageRoutes(app);
     registerWorkspaceCommandRoutes(app);
@@ -59,6 +64,35 @@ export const coreModule: BackendModule = {
     }, async (_request, reply) => {
       reply.header('Cache-Control', 'no-store');
       return { waking: app.databaseStatus() };
+    });
+    app.get('/status', { schema: { response: {
+      200: systemStatusResponseSchema,
+      401: {
+        type: 'object',
+        properties: { error: { type: 'string', const: 'Unauthorized' } },
+        required: ['error'],
+        additionalProperties: false,
+      },
+    } } }, async (request, reply) => {
+      if (!request.principal) return reply.code(401).send({ error: 'Unauthorized' });
+      reply.header('Cache-Control', 'private, max-age=30');
+      return app.systemStatusReader.read();
+    });
+    app.get('/status/smoke', {
+      config: { jarvisDeploySmoke: true },
+      schema: { response: {
+        200: systemSmokeResponseSchema,
+        401: {
+          type: 'object',
+          properties: { error: { type: 'string', const: 'Unauthorized' } },
+          required: ['error'],
+          additionalProperties: false,
+        },
+      } },
+    }, async (request, reply) => {
+      if (!request.principal && !request.deployPrincipal) return reply.code(401).send({ error: 'Unauthorized' });
+      reply.header('Cache-Control', 'no-store');
+      return app.systemSmokeReader.run();
     });
     app.get('/health', {
       schema: { response: { 200: { type: 'object', properties: { status: { type: 'string', const: 'ok' } }, required: ['status'], additionalProperties: false } } },
@@ -92,6 +126,21 @@ export const coreModule: BackendModule = {
         config: { jarvisAgent: true },
         ...(tool.bodyLimit ? { bodyLimit: tool.bodyLimit } : {}),
         schema: { body: tool.inputSchema },
+        preValidation: async (request, reply) => {
+          // Fastify otherwise silently removes unknown root properties.
+          const error = unexpectedToolArgument(request.body, tool.inputSchema);
+          if (error) {
+            const result = toolArgumentRefusal(tool, error, request.log);
+            return reply.send({ tool: tool.name, outcome: 'refused', result, confirmation: confirmToolCall(tool.name, 'refused', result) });
+          }
+        },
+        errorHandler: (error, request, reply) => {
+          if (!error.validation || error.validationContext !== 'body') return reply.send(error);
+          const result = toolArgumentRefusal(tool, error.validation[0], request.log);
+          return reply.code(200).send({
+            tool: tool.name, outcome: 'refused', result, confirmation: confirmToolCall(tool.name, 'refused', result),
+          });
+        },
       }, async (request, reply) => {
         const messageHeader = request.headers['x-jarvis-message-id'];
         const voiceItemHeader = request.headers['x-jarvis-voice-item-id'];

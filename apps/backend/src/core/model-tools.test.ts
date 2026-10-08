@@ -4,6 +4,7 @@ import { loadConfig } from '../config.js';
 import type { ToolCallRecord } from './tool-calls.js';
 import { flattenSettings, type SettingsStore } from './settings.js';
 import { coreModule } from './index.js';
+import type { TeamsNotificationService } from '../teams/service.js';
 
 const config = { ...loadConfig({}), logLevel: 'silent' as const };
 const headers = {
@@ -21,6 +22,7 @@ function fixture() {
     }),
   };
   const record = vi.fn<(call: ToolCallRecord) => Promise<void>>(async () => {});
+  const runConfirmed = vi.fn(async (_kind: string, _summary: string, action: () => Promise<unknown>) => action());
   const app = buildApp(config, undefined, {
     modules: [coreModule],
     auth: async () => ({
@@ -30,9 +32,10 @@ function fixture() {
     }),
     settingsStore,
     toolCallStore: { record },
+    teamsNotifications: { runConfirmed } as unknown as TeamsNotificationService,
   });
   apps.push(app);
-  return { app, settingsStore, values, record };
+  return { app, settingsStore, values, record, runConfirmed };
 }
 
 afterEach(async () => {
@@ -41,7 +44,7 @@ afterEach(async () => {
 
 describe('Jarvis model tool', () => {
   it('registers a schema-backed tool and applies supported settings to the next session', async () => {
-    const { app, settingsStore, values } = fixture();
+    const { app, settingsStore, values, runConfirmed } = fixture();
     const discovery = await app.inject({ url: '/tools', headers });
     expect(discovery.json()).toContainEqual(expect.objectContaining({
       name: 'set_jarvis_model',
@@ -61,16 +64,22 @@ describe('Jarvis model tool', () => {
       result: { model: 'gpt-5.6-luna', reasoning: 'high', applies: 'next session' },
     });
     expect(settingsStore.write).toHaveBeenCalledWith({
-      jarvis: { model: 'gpt-5.6-luna', reasoning: 'high' },
+      roles: { chat: { model: 'gpt-5.6-luna', reasoningEffort: 'high' } },
     });
+    expect(runConfirmed).toHaveBeenCalledWith(
+      'other',
+      'Change chat model settings in Jarvis settings.',
+      expect.any(Function),
+      expect.any(AbortSignal),
+    );
     expect(values).toEqual({
-      'jarvis.model': '"gpt-5.6-luna"',
-      'jarvis.reasoning_effort': '"high"',
+      'roles.chat.model': '"gpt-5.6-luna"',
+      'roles.chat.reasoning_effort': '"high"',
     });
   });
 
   it.each([
-    ['model', { model: 'not-verified' }, 'Unsupported Jarvis model. Valid models: gpt-5.6-luna.'],
+    ['model', { model: 'not-verified' }, 'Unsupported Jarvis model. Valid models: gpt-5.6-luna, gpt-6-luna.'],
     ['reasoning', { reasoning: 'extreme' }, 'Unsupported Jarvis reasoning. Valid reasoning levels: none, low, medium, high.'],
   ])('refuses an unknown %s and lists verified options', async (_name, payload, reason) => {
     const { app, settingsStore, record } = fixture();
@@ -92,7 +101,8 @@ describe('Jarvis model tool', () => {
       method: 'POST', url: '/tools/set_jarvis_model', headers, payload: {},
     });
 
-    expect(response.statusCode).toBe(400);
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({ outcome: 'refused', result: { refused: expect.stringContaining('Invalid arguments:') } });
     expect(settingsStore.write).not.toHaveBeenCalled();
     expect(record).not.toHaveBeenCalled();
   });

@@ -14,8 +14,9 @@ import { createAlertActivityStore } from './alert-store.js';
 import { createAwayModeStore } from './away-mode-store.js';
 import { createDispatcherStore } from './dispatcher-store.js';
 import { createConversationStore } from './conversation-store.js';
-import { createMemoryStore } from './memory-store.js';
+import { createMemoryStore, createVaultIndexStore } from './memory-store.js';
 import { createTaskStatusNotificationStore } from './task-status-notification-store.js';
+import { createBackgroundJobStore } from './background-job-store.js';
 import {
   createTaskEventArchive,
   type TaskEventArchiveBlobStore,
@@ -34,7 +35,8 @@ const administrator = new sql.ConnectionPool({ ...configuration, database: 'mast
 const pool = new sql.ConnectionPool({ ...configuration, database });
 const core = '0001_core_tables.sql';
 const tablesInSchema = [
-  'activity', 'artifacts', 'credential_status', 'deployment_failure_receipts', 'deployments', 'jarvis_sessions', 'memories',
+  'activity', 'artifacts', 'background_job_steps', 'background_jobs', 'credential_status',
+  'deployment_failure_receipts', 'deployments', 'folio_items', 'jarvis_sessions', 'memories',
   'memory_deletions', 'memory_history', 'messages', 'phone_sessions', 'projects', 'pull_requests', 'releases',
   'sandbox_sessions', 'sandbox_turns', 'settings', 'task_event_archives', 'task_events', 'task_status_notifications',
   'tasks', 'teams_confirmations', 'teams_conversations', 'tool_calls', 'usage', 'vault_chunks', 'vault_links',
@@ -98,6 +100,22 @@ describe('committed domain schema (groups 1-8)', () => {
     expect(await applyMigrations(pool, committed)).toEqual([]);
     expect(await ledger()).toEqual(committed.map((migration) => migration.name));
     expect(await tables()).toEqual(tablesInSchema);
+    const embeddings = await pool.request().query<{ vector_type: number | null; table_name: string; column_name: string }>(
+      `SELECT TYPE_ID(N'vector') AS vector_type, tables.name AS table_name, columns.name AS column_name
+        FROM sys.tables AS tables
+        INNER JOIN sys.columns AS columns ON columns.object_id = tables.object_id
+        WHERE tables.name IN (N'memories', N'vault_chunks')
+          AND columns.name IN (N'embedding', N'embedding_json')
+        ORDER BY tables.name, columns.name;`);
+    if (embeddings.recordset[0]?.vector_type === null) {
+      expect(embeddings.recordset.map(({ table_name, column_name }) => `${table_name}.${column_name}`)).toEqual([
+        'memories.embedding_json', 'vault_chunks.embedding_json',
+      ]);
+    } else {
+      expect(embeddings.recordset.map(({ table_name, column_name }) => `${table_name}.${column_name}`)).toEqual([
+        'memories.embedding', 'vault_chunks.embedding',
+      ]);
+    }
     const credentials = await pool.request().query<{ name: string; status: string }>(
       `SELECT name, status FROM dbo.credential_status WHERE name IN (N'codex-login', N'copilot-token') ORDER BY name;`);
     expect(credentials.recordset).toEqual([
@@ -110,14 +128,95 @@ describe('committed domain schema (groups 1-8)', () => {
         N'IX_sandbox_turns_sandbox_session_id_started_at', N'IX_artifacts_task_id_at',
         N'IX_task_event_archives_task_first_at', N'IX_pull_requests_project_head_sha',
         N'IX_workflow_runs_project_head_sha', N'IX_releases_project_created_at',
-        N'IX_deployments_release_id_at', N'UX_activity_alert_key') ORDER BY name`);
+        N'IX_deployments_release_id_at', N'IX_messages_at', N'UX_activity_alert_key') ORDER BY name`);
     expect(recordset.map((row) => row.name)).toEqual([
-      'IX_artifacts_task_id_at', 'IX_deployments_release_id_at', 'IX_pull_requests_project_head_sha',
-      'IX_releases_project_created_at', 'IX_sandbox_sessions_task_id_status',
+      'IX_artifacts_task_id_at', 'IX_deployments_release_id_at', 'IX_messages_at',
+      'IX_pull_requests_project_head_sha', 'IX_releases_project_created_at', 'IX_sandbox_sessions_task_id_status',
       'IX_sandbox_turns_sandbox_session_id_started_at', 'IX_task_event_archives_task_first_at',
       'IX_task_events_task_id_at', 'IX_tasks_state_next_attempt_at', 'IX_workflow_runs_project_head_sha',
       'UX_activity_alert_key',
     ]);
+  });
+
+  it('persists background-job steps, marks interrupted work failed, and prunes after 30 days', async () => {
+    const store = createBackgroundJobStore(pool);
+    const jobId = randomUUID();
+    const startedAt = new Date();
+    const running = {
+      jobId,
+      kind: 'research' as const,
+      title: 'Research: SQL persistence',
+      status: 'running' as const,
+      step: 0,
+      steps: 2,
+      detail: 'Starting research',
+      startedAt: startedAt.toISOString(),
+      updatedAt: startedAt.toISOString(),
+    };
+    await store.create(running, { topic: 'SQL persistence topic', depth: 'quick' });
+    const progressed = {
+      ...running,
+      step: 1,
+      detail: 'Searching: migration',
+      updatedAt: new Date(startedAt.getTime() + 1_000).toISOString(),
+    };
+    await expect(store.update(progressed)).resolves.toMatchObject(progressed);
+    expect(await store.list()).toContainEqual(progressed);
+    await expect(store.get(jobId)).resolves.toMatchObject({
+      details: {
+        job: progressed,
+        steps: [
+          { status: 'running', step: 0, detail: 'Starting research' },
+          { status: 'running', step: 1, detail: 'Searching: migration' },
+        ],
+        retryable: false,
+      },
+      retryInput: { topic: 'SQL persistence topic', depth: 'quick' },
+    });
+
+    const history = await pool.request().input('jobId', sql.NVarChar(36), jobId.toLowerCase())
+      .query<{ status: string; step: number }>(`SELECT status, step FROM dbo.background_job_steps
+        WHERE job_id = @jobId ORDER BY id;`);
+    expect(history.recordset).toEqual([
+      { status: 'running', step: 0 },
+      { status: 'running', step: 1 },
+    ]);
+
+    const interrupted = await store.reconcileInterrupted();
+    expect(interrupted).toContainEqual(expect.objectContaining({
+      jobId, status: 'failed', detail: 'interrupted by restart',
+    }));
+    expect(await store.update({ ...progressed, status: 'done', step: 2, viewId: 'research-result' })).toBeNull();
+    const failed = await store.get(jobId);
+    expect(failed?.details).toMatchObject({
+      error: 'interrupted by restart',
+      retryable: true,
+    });
+    expect(failed?.details.steps.at(-1)).toMatchObject({
+      status: 'failed', step: 1, detail: 'interrupted by restart',
+    });
+    const retryCandidates = [randomUUID(), randomUUID()].map((candidateId) => ({
+      ...running,
+      jobId: candidateId,
+      status: 'running' as const,
+      step: 0,
+      detail: 'Starting research',
+      startedAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }));
+    const retryResults = await Promise.all(retryCandidates.map((candidate) =>
+      store.create(candidate, { topic: 'ignored changed topic', depth: 'deep' }, jobId)));
+    expect(retryResults.filter(Boolean)).toHaveLength(1);
+    const retriedJob = retryCandidates[retryResults.findIndex(Boolean)]!;
+    await expect(store.get(retriedJob.jobId)).resolves.toMatchObject({
+      retryInput: { topic: 'SQL persistence topic', depth: 'quick' },
+    });
+    await expect(store.get(jobId)).resolves.toMatchObject({ details: { retryable: false } });
+    await pool.request().input('jobId', sql.NVarChar(36), jobId.toLowerCase()).query(`UPDATE dbo.background_jobs
+      SET started_at = DATEADD(day, -31, SYSUTCDATETIME()) WHERE job_id = @jobId;`);
+    expect(await store.list()).not.toContainEqual(expect.objectContaining({ jobId }));
+    expect((await pool.request().input('jobId', sql.NVarChar(36), jobId.toLowerCase())
+      .query('SELECT COUNT(1) AS count FROM dbo.background_job_steps WHERE job_id = @jobId')).recordset[0]?.count).toBe(0);
   });
 
   it('persists one notification claim per task and state across store recreation', async () => {
@@ -186,6 +285,7 @@ describe('committed domain schema (groups 1-8)', () => {
 
     const firstStore = createMemoryStore(pool);
     await firstStore.initialize();
+    const vector = Array.from({ length: 1536 }, (_, index) => index === 0 ? 1 : 0);
     const searchSetup = await pool.request().query<{
       fulltext_installed: boolean;
       fulltext_indexed: boolean;
@@ -209,14 +309,28 @@ describe('committed domain schema (groups 1-8)', () => {
       key: 'language',
       content: 'Dan prefers English for Jarvis.',
       sourceMessageId: firstSource.id,
-      embedding: null,
+      embedding: vector,
+      embeddingModel: 'text-embedding-3-small',
     }, new AbortController().signal);
+    if (firstStore.supportsVectorSearch()) {
+      await expect(firstStore.searchByVector(vector, 'text-embedding-3-small', 5, new AbortController().signal))
+        .resolves.toEqual([initial.memory]);
+      const type = await pool.request().query<{ vector_type: number | null }>(
+        `SELECT TYPE_ID(N'vector') AS vector_type;`);
+      if (type.recordset[0]?.vector_type === null) {
+        const storage = await pool.request().input('memoryId', sql.BigInt, BigInt(initial.memory.id))
+          .query<{ embedding_json: string | null }>(
+            `SELECT embedding_json FROM dbo.memories WHERE id = @memoryId;`);
+        expect(JSON.parse(storage.recordset[0]!.embedding_json!)).toEqual(vector);
+      }
+    }
     const repeated = await firstStore.save({
       category: 'preference',
       key: 'language',
       content: 'Dan prefers English for Jarvis.',
       sourceMessageId: firstSource.id,
       embedding: null,
+      embeddingModel: null,
     }, new AbortController().signal);
     const changed = await firstStore.save({
       category: 'preference',
@@ -224,6 +338,7 @@ describe('committed domain schema (groups 1-8)', () => {
       content: 'Dan prefers Danish for Jarvis voice.',
       sourceMessageId: secondSource.id,
       embedding: null,
+      embeddingModel: null,
     }, new AbortController().signal);
 
     expect(initial).toMatchObject({ created: true, changed: true, memory: { revision: 1 } });
@@ -264,6 +379,33 @@ describe('committed domain schema (groups 1-8)', () => {
     const deletionLog = await pool.request().input('memoryId', sql.BigInt, BigInt(initial.memory.id))
       .query('SELECT COUNT(*) AS count FROM dbo.memory_deletions WHERE memory_id = @memoryId;');
     expect(deletionLog.recordset[0]?.count).toBe(1);
+  });
+
+  it('persists and ranks vault JSON embeddings on SQL Server without vector support', async () => {
+    const store = createVaultIndexStore(pool);
+    await store.initialize();
+    const queryVector = Array.from({ length: 1536 }, (_, index) => index === 0 ? 1 : 0);
+    const otherVector = Array.from({ length: 1536 }, (_, index) => index === 1 ? 1 : 0);
+    await store.replaceFile('People/Embedding ranking.md', 'a'.repeat(40), [
+      {
+        index: 0, heading: 'Orthogonal', content: 'Other vector',
+        embedding: otherVector, embeddingModel: 'text-embedding-3-small',
+      },
+      {
+        index: 1, heading: 'Nearest', content: 'Matching vector',
+        embedding: queryVector, embeddingModel: 'text-embedding-3-small',
+      },
+    ], [], new AbortController().signal);
+
+    if (store.supportsVectorSearch()) {
+      await expect(store.searchByVector(queryVector, 'text-embedding-3-small', 1, new AbortController().signal)).resolves.toMatchObject([
+        { path: 'People/Embedding ranking.md', heading: 'Nearest', content: 'Matching vector' },
+      ]);
+      const graph = await store.graphData(['People/Embedding ranking.md'], 'text-embedding-3-small', new AbortController().signal);
+      const type = await pool.request().query<{ vector_type: number | null }>(
+        `SELECT TYPE_ID(N'vector') AS vector_type;`);
+      if (type.recordset[0]?.vector_type === null) expect(graph.embeddings).toHaveLength(2);
+    }
   });
 
   it('ignores a concurrently repeated webhook delivery ID', async () => {
@@ -1611,16 +1753,17 @@ describe('committed domain schema (groups 1-8)', () => {
     const store = createProjectStore(pool);
     const repo = `${database}/project`;
     const project = await store.create({
-      name: 'Project store', repo, default_branch: 'main', default_agent: 'copilot',
+      name: 'Project store', description: 'Project description', repo, default_branch: 'main', default_agent: 'copilot',
       policy: 'deliver_pr', sandbox_size: '1x2', tech: 'node',
     });
-    expect(project).toMatchObject({ repo, max_parallel_tasks: 1, merge_rules: null, active: true });
+    expect(project).toMatchObject({ repo, description: 'Project description', max_parallel_tasks: 1, merge_rules: null, active: true });
     expect(await store.list()).toContainEqual(project);
-    expect(await store.update(project.id, { max_parallel_tasks: 3 })).toMatchObject({ max_parallel_tasks: 3 });
+    expect(await store.update(project.id, { description: null, max_parallel_tasks: 3 }))
+      .toMatchObject({ description: null, max_parallel_tasks: 3 });
     expect(await store.archive(project.id)).toBe(true);
     expect(await store.list()).not.toContainEqual(expect.objectContaining({ id: project.id }));
     expect(await store.update(project.id, { name: 'Archived' })).toBeNull();
-    expect(await store.archive(project.id)).toBe(true);
+    expect(await store.archive(project.id)).toBe(false);
     await expect(store.create({
       name: 'Replacement', repo, default_branch: 'main', default_agent: 'copilot',
       policy: 'deliver_pr', sandbox_size: '1x2', tech: 'node',

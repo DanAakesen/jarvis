@@ -1,6 +1,12 @@
+import json
 import unittest
+from pathlib import Path
 
 from project_board import desired_status, items_to_mark_done, linked_issue_numbers
+
+SHARED_CASES = json.loads(
+    (Path(__file__).parent / "fixtures" / "project_board_cases.json").read_text()
+)
 
 
 def issue(number=7, labels=(), blocked_by=0):
@@ -17,6 +23,18 @@ def pull(body, draft=False):
 
 
 class ProjectBoardTests(unittest.TestCase):
+    def test_shared_status_cases(self):
+        for case in SHARED_CASES:
+            with self.subTest(case=case["name"]):
+                status_issue = case["issue"]
+                issue_value = issue(
+                    number=status_issue["number"],
+                    labels=status_issue["labels"],
+                    blocked_by=status_issue["blockedBy"],
+                )
+                pulls = [pull(value["body"], value["draft"]) for value in case["pulls"]]
+                self.assertEqual(desired_status(issue_value, pulls), case["status"])
+
     def test_unblocked_unclaimed_issue_is_ready(self):
         self.assertEqual(desired_status(issue(), []), "Ready")
 

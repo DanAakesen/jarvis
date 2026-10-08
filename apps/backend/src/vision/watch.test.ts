@@ -6,7 +6,7 @@ import { conversationModule } from '../core/conversation.js';
 import type { ConversationStore } from '../core/conversation-store.js';
 import type { TokenVerifier } from '../auth/verify.js';
 import { executeRealtimeToolCall } from '../voice/realtime.js';
-import { DKK_PER_USD } from './foundry-model.js';
+import { DKK_PER_USD } from '../core/usage-pricing.js';
 import type { ScreenVisionModel } from './screen.js';
 import { createVisionWatchModule, VisionWatchService, type VisionWatchUsageStore } from './watch.js';
 
@@ -50,6 +50,7 @@ function fixture(options: {
     describe: vi.fn(options.describe ?? (async () => ({
       description: JSON.stringify(options.observation ?? { summary: 'Build failed.', noteworthy: true, speak: 'The build failed.' }),
       inputTokens: 100, outputTokens: 20, costDkk: options.cost ?? 0.0009,
+      costUsd: (options.cost ?? 0.0009) / DKK_PER_USD,
     }))),
   };
   const service = new VisionWatchService(model, usage, conversations, () => now);
@@ -275,9 +276,12 @@ describe('continuous vision watching', () => {
       { arguments: { redacted: true }, result: { redacted: true } },
       { arguments: { redacted: true }, result: { redacted: true } },
     ]);
-    expect((await f.app.inject({
+    const invalid = await f.app.inject({
       method: 'POST', url: '/tools/watch_for', headers: { ...headers, 'x-jarvis-message-id': '7' },
       payload: { what: 'x'.repeat(301) },
-    })).statusCode).toBe(400);
+    });
+    expect(invalid.statusCode).toBe(200);
+    expect(invalid.json()).toMatchObject({ outcome: 'refused', result: { refused: expect.stringContaining('Invalid arguments:') } });
+    expect(f.recordedTools).toHaveLength(2);
   });
 });
