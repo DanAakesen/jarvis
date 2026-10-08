@@ -17,22 +17,15 @@ CREATE INDEX IX_folio_items_owner_created
   ON dbo.folio_items (owner_object_id, pinned DESC, created_at DESC, item_id);
 
 INSERT dbo.folio_items (item_id, owner_object_id, kind, source_id, title, prompt_summary, created_at, pinned)
-SELECT CASE WHEN jobs.job_id IS NULL THEN N'html_app:' ELSE N'research:' END + CONVERT(nvarchar(36), artifact.id),
+SELECT N'html_app:' + CONVERT(nvarchar(36), artifact.id),
   artifact.owner_object_id,
-  CASE WHEN jobs.job_id IS NULL THEN N'html_app' ELSE N'research' END,
+  N'html_app',
   artifact.id,
-  COALESCE(jobs.title, artifact.title),
-  COALESCE(JSON_VALUE(jobs.retry_input, '$.topic'), jobs.title, artifact.title),
+  artifact.title,
+  LEFT(artifact.title, 500),
   artifact.created_at,
   artifact.pinned
-FROM dbo.workspace_html_artifacts AS artifact
-OUTER APPLY (
-  SELECT TOP (1) job_id, title, retry_input
-  FROM dbo.background_jobs
-  WHERE kind = N'research'
-    AND view_id = N'html-' + REPLACE(CONVERT(nvarchar(36), artifact.id), N'-', N'')
-  ORDER BY started_at DESC
-) AS jobs;
+FROM dbo.workspace_html_artifacts AS artifact;
 
 INSERT dbo.folio_items (item_id, owner_object_id, kind, source_id, title, prompt_summary, created_at)
 SELECT N'image:' + CONVERT(nvarchar(36), artifact.id),

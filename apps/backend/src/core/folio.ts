@@ -14,7 +14,7 @@ import {
   type FolioSearch,
 } from '@jarvis/contracts';
 import type { BackendModule } from '../modules.js';
-import { FolioItemNotFound, FolioStore } from '../database/folio-store.js';
+import { FolioItemNotFound, type FolioStore } from '../database/folio-store.js';
 import type { WorkspaceArtifactStore } from '../database/workspace-artifact-store.js';
 import { WorkspaceArtifactNotFound } from '../database/workspace-artifact-store.js';
 import {
@@ -188,7 +188,7 @@ export function createFolioModule(
         try {
           reply.header('Cache-Control', 'private, no-store');
           return { items: await store.search(app.ownerObjectId, request.query, lifecycle.signal) };
-        } catch (error) {
+        } catch {
           if (lifecycle.signal.aborted) return reply.code(499).send({ error: 'Request cancelled' });
           request.log.warn('folio.search_failed');
           return reply.code(503).send({ error: 'Folio is unavailable' });
@@ -279,11 +279,3 @@ export function createFolioModule(
     },
   };
 }
-
-export const folioSchemas = {
-  item: folioItemSchema,
-  search: folioSearchSchema,
-  searchResponse: folioSearchResponseSchema,
-  patch: folioPatchSchema,
-  delete: folioDeleteSchema,
-};

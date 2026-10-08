@@ -63,6 +63,13 @@ function escapedLike(value: string): string {
   return value.replace(/[\\%_[\]]/gu, (character) => `\\${character}`);
 }
 
+function oneLine(value: string): string {
+  return Array.from(value, (character) => {
+    const code = character.charCodeAt(0);
+    return code < 32 || code === 127 ? ' ' : character;
+  }).join('').replace(/\s+/gu, ' ').trim();
+}
+
 async function query<T>(request: sql.Request, statement: string, signal: AbortSignal) {
   signal.throwIfAborted();
   const cancel = () => { request.cancel(); };
@@ -79,11 +86,11 @@ export class FolioStore {
 
   async record(ownerObjectId: string, record: FolioRecord, signal: AbortSignal): Promise<FolioItem> {
     const parts = itemParts(record.id);
+    const title = typeof record.title === 'string' ? oneLine(record.title) : '';
+    const promptSummary = typeof record.promptSummary === 'string' ? oneLine(record.promptSummary) : '';
     if (!ownerIdPattern.test(ownerObjectId) || parts.kind !== record.kind ||
-        parts.sourceId !== record.sourceId || !ownerIdPattern.test(record.sourceId) || typeof record.title !== 'string' ||
-        !record.title.trim() || record.title.trim().length > 200 ||
-        typeof record.promptSummary !== 'string' || !record.promptSummary.trim() ||
-        record.promptSummary.replace(/[\u0000-\u001f\u007f]/gu, ' ').replace(/\s+/gu, ' ').trim().length > 500 ||
+        parts.sourceId !== record.sourceId || !ownerIdPattern.test(record.sourceId) ||
+        !title || title.length > 200 || !promptSummary || promptSummary.length > 500 ||
         !Number.isFinite(Date.parse(record.createdAt)) || new Date(record.createdAt).toISOString() !== record.createdAt ||
         (record.kind === 'knowledge_graph') !== (record.payload !== undefined) ||
         (record.payload && (typeof record.payload.query !== 'string' ||
@@ -92,13 +99,12 @@ export class FolioStore {
           record.payload.highlight.some((id) => !/^[0-9a-f]{64}$/u.test(id))))) {
       throw new TypeError('Invalid Folio record');
     }
-    const promptSummary = record.promptSummary.replace(/[\u0000-\u001f\u007f]/gu, ' ').replace(/\s+/gu, ' ').trim();
     const request = this.pool.request()
       .input('id', sql.NVarChar(80), record.id)
       .input('owner', sql.UniqueIdentifier, ownerObjectId.toLowerCase())
       .input('kind', sql.NVarChar(20), record.kind)
       .input('source', sql.UniqueIdentifier, record.sourceId)
-      .input('title', sql.NVarChar(200), record.title.trim())
+      .input('title', sql.NVarChar(200), title)
       .input('summary', sql.NVarChar(500), promptSummary)
       .input('createdAt', sql.DateTime2(7), new Date(record.createdAt))
       .input('pinned', sql.Bit, record.pinned ?? false)

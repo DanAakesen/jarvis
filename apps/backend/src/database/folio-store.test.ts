@@ -37,12 +37,13 @@ describe('Folio store', () => {
       id: itemId,
       kind: 'research',
       sourceId,
-      title: 'Ignite report',
-      promptSummary: 'Research Ignite battery storage',
+      title: '  Ignite\nreport ',
+      promptSummary: 'Research\tIgnite battery storage',
       createdAt: createdAt.toISOString(),
     }, new AbortController().signal);
 
     expect(item).toMatchObject({ id: itemId, kind: 'research', pinned: false });
+    expect(data.input).toHaveBeenCalledWith('title', sql.NVarChar(200), 'Ignite report');
     expect(data.input).toHaveBeenCalledWith('summary', sql.NVarChar(500), 'Research Ignite battery storage');
     expect(data.query.mock.calls[0]?.[0]).toContain('INSERT dbo.folio_items');
     await expect(data.store.record(ownerId, {
@@ -67,7 +68,8 @@ describe('Folio store', () => {
     expect(data.input).toHaveBeenCalledWith('owner', sql.UniqueIdentifier, ownerId);
     expect(data.input).toHaveBeenCalledWith('kind', sql.NVarChar(20), 'research');
     expect(data.input).toHaveBeenCalledWith('before', sql.DateTime2(7), new Date('2026-10-07T00:00:00.000Z'));
-    expect(data.input).toHaveBeenCalledWith('query', sql.NVarChar(250), '%Ignite 50\\%%');
+    expect(data.input).toHaveBeenCalledWith('term0', sql.NVarChar(250), '%Ignite%');
+    expect(data.input).toHaveBeenCalledWith('term1', sql.NVarChar(250), '%50\\%%');
     expect(data.query.mock.calls[0]?.[0]).toContain('ORDER BY pinned DESC, created_at DESC');
   });
 

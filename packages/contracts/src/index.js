@@ -272,10 +272,15 @@ export const folioSearchToolSchema = Object.freeze(object({
   kind: { enum: folioKinds },
 }, []));
 export const folioOpenToolSchema = Object.freeze({
-  oneOf: [
-    object({ id: { type: 'string', pattern: folioIdPattern } }),
-    object({ query: { ...string(120, 1), pattern: '\\S' } }),
-  ],
+  type: 'object',
+  properties: {
+    id: { type: 'string', pattern: folioIdPattern },
+    query: { ...string(120, 1), pattern: '\\S' },
+  },
+  required: [],
+  minProperties: 1,
+  maxProperties: 1,
+  additionalProperties: false,
 });
 const htmlArtifactFrameSchemaValue = object({
   widthPx: { type: 'integer', minimum: 1, maximum: 8192 },
