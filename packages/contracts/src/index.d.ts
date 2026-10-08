@@ -128,7 +128,7 @@ export interface ModelCatalogue {
 export function isModelCatalogue(value: unknown): value is ModelCatalogue;
 export const generatedViewRenderers: readonly [
   'table', 'list', 'detail', 'text', 'timeline', 'chart', 'task-card', 'status', 'image', 'html-app',
-  'knowledge-graph',
+  'knowledge-graph', 'code',
 ];
 export const htmlArtifactByteLimit: 524288;
 export const generatedViewActionTypes: readonly ['open-route', 'open-link', 'call-tool', 'window'];
@@ -196,6 +196,18 @@ export interface GeneratedKnowledgeGraphData {
   highlight: string[];
 }
 
+export interface GeneratedCodeData {
+  repo: string;
+  path: string;
+  ref?: string;
+  language?: string;
+  content: string;
+  startLine?: number;
+  /** Absolute, inclusive line ranges within the displayed content. */
+  highlight?: { from: number; to: number }[];
+  query?: string;
+}
+
 interface GeneratedViewBase {
   version: 1;
   title: string;
@@ -211,6 +223,7 @@ export type GeneratedView =
   | (GeneratedViewBase & { renderer: 'list'; data: GeneratedViewListData })
   | (GeneratedViewBase & { renderer: 'detail'; data: { fields: { label: string; value: string }[] } })
   | (GeneratedViewBase & { renderer: 'text'; data: { format: 'plain' | 'markdown'; content: string } })
+  | (GeneratedViewBase & { renderer: 'code'; data: GeneratedCodeData })
   | (GeneratedViewBase & {
     renderer: 'timeline';
     data: { events: { at: string; title: string; description?: string }[] };
@@ -380,7 +393,21 @@ export interface UsageReport {
 
 export type JarvisActivitySource = 'chat' | 'voice';
 export type JarvisActivityOutcome = 'ok' | 'refused' | 'error';
+export const jarvisWorkActivityKinds: readonly [
+  'vault_search', 'repo_read', 'repo_search', 'web_search', 'task', 'other',
+];
+export type JarvisWorkActivityKind = typeof jarvisWorkActivityKinds[number];
+export interface JarvisWorkActivityDetail {
+  activityId: string;
+  kind: JarvisWorkActivityKind;
+  text: string;
+  target?: { label: string };
+}
+export const jarvisWorkActivityDetailSchema: Readonly<Record<string, unknown>>;
+export function isJarvisWorkActivityDetail(value: unknown): value is JarvisWorkActivityDetail;
 export type JarvisActivityEvent =
+  | (JarvisWorkActivityDetail & { type: 'work-started'; source?: JarvisActivitySource })
+  | { type: 'work-finished'; activityId: string; source?: JarvisActivitySource }
   | {
     type: 'listening' | 'thinking' | 'speaking' | 'interrupted' | 'reconnecting' | 'failed' | 'ended';
     activityId: string;
@@ -411,6 +438,8 @@ export interface JarvisVoiceWakeEvent {
 export function isJarvisVoiceWakeEvent(value: unknown): value is JarvisVoiceWakeEvent;
 
 export const generatedViewSchema: Readonly<Record<string, unknown>>;
+export const generatedCodeDataSchema: Readonly<Record<string, unknown>>;
+export function isGeneratedCodeData(value: unknown): value is GeneratedCodeData;
 export const htmlArtifactSchema: Readonly<Record<string, unknown>>;
 export const folioKinds: readonly FolioKind[];
 export const folioItemSchema: Readonly<Record<string, unknown>>;

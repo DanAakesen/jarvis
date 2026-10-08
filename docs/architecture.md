@@ -170,6 +170,28 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   HTML/JS executes only inside its restrictive sandboxed iframe, never in the
   host page. Workspace-command tests pass; live delivery and report browser
   acceptance remain unverified.
+- P9-41 adds best-effort work presentation to the shared `/tools/*` dispatcher
+  and direct reflex execution. The existing owner-authenticated `jarvis-activity`
+  SSE channel carries typed `work-started` details (`activityId`, `kind`, bounded
+  `text`, optional `target.label`) and a matching `work-finished`, including
+  refused/failed/cancelled tools. No arguments, transcripts, or result bodies
+  enter the status line. Selected query/path/task subjects are redacted.
+  `presentation.showWork` defaults to true, persists as `presentation.show_work`,
+  and is suppressed in `on_the_move`. Settings/presence reads are bounded to
+  250 ms and fail closed for presentation only; tools never wait for those reads
+  or workspace acknowledgements.
+  Successful vault tools reuse `show_knowledge`'s graph payload builder and
+  hash returned note paths into highlights; searches of SQL memories open the
+  query without inventing vault nodes. Graph searches update the stable
+  `knowledge-graph` view. Repository results create/update `code-<messageId>`
+  with the typed `code` renderer (at most 400 lines, bounded escaped text,
+  server-side credential redaction, read/match highlights). Task create/steer/retry
+  deliver Factory navigation with the returned/existing task ID. Google tools
+  present bounded plain-text results or staged summaries, omitting confirmation
+  codes and preserving the existing confirmation gate. Automatic views are
+  transient, not persisted in Folio. Backend tests exercise delivery, lifecycle,
+  cancellation, suppression, refusal, and failure isolation; UI rendering and
+  live acceptance remain the UI session's responsibility.
 - P9-40 extends that same registered tool and broker with `navigate`; no new
   event channel, route or persistence is added. `packages/contracts` exports
   `workspaceNavigationPages` (`home`, `factory`, `settings`, `usage`,

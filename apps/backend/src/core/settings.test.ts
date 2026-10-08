@@ -2,7 +2,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { buildApp } from '../app.js';
 import { loadConfig } from '../config.js';
 import type { TokenVerifier } from '../auth/verify.js';
-import { defaultSettings, flattenSettings, readSettings, settingsStoreKeys, type SettingsStore } from './settings.js';
+import {
+  defaultSettings, flattenSettings, readSettings, settingsStoreKeys, validateSettingsPatch, type SettingsStore,
+} from './settings.js';
 import type { CredentialStatusStore } from '../credentials/credential-status.js';
 import type { AwayModeStore } from './away-mode.js';
 import { capabilityInstructions } from './capability-instructions.js';
@@ -47,6 +49,49 @@ function fixture(
 }
 
 describe('settings API', () => {
+  it('defaults work presentation on and persists either boolean without changing appearance', async () => {
+    const { store, values } = createStore();
+    const app = fixture(store);
+    expect(settingsStoreKeys).toContain('presentation.show_work');
+    expect((await readSettings(store)).presentation).toEqual({ showWork: true });
+    for (const showWork of [false, true]) {
+      const settings = { presentation: { showWork } };
+      expect(validateSettingsPatch(settings)).toEqual(settings);
+      const saved = await app.inject({
+        method: 'PATCH', url: '/settings', headers: authorization, payload: { settings },
+      });
+      expect(saved.statusCode).toBe(200);
+      expect(saved.json().settings.presentation).toEqual(settings.presentation);
+      expect(saved.json().settings.appearance).toEqual(defaultSettings.appearance);
+      expect(values['presentation.show_work']).toBe(JSON.stringify(showWork));
+      expect((await app.inject({ url: '/settings', headers: authorization })).json().settings.presentation)
+        .toEqual(settings.presentation);
+    }
+  });
+
+  it.each([
+    {}, null, [], true, { showWork: null }, { showWork: 'false' }, { showWork: 'true' },
+    { showWork: 0 }, { showWork: 1 }, { showWork: false, unknown: true },
+  ])('rejects malformed work presentation patches without coercion: %j', async (presentation) => {
+    const { store, values } = createStore();
+    const app = fixture(store);
+    expect(validateSettingsPatch({ presentation })).toBeNull();
+    const response = await app.inject({
+      method: 'PATCH', url: '/settings', headers: authorization,
+      payload: { settings: { presentation } },
+    });
+    expect(response.statusCode).toBe(400);
+    expect(values).toEqual({});
+  });
+
+  it.each(['null', '"false"', '0', '{}', 'invalid'])(
+    'ignores invalid stored work presentation values: %s', async (stored) => {
+      const { store, values } = createStore();
+      values['presentation.show_work'] = stored;
+      expect((await readSettings(store)).presentation).toEqual({ showWork: true });
+    },
+  );
+
   it('requires authentication and reports unavailable persistence', async () => {
     const denied = fixture();
     expect((await denied.inject({ url: '/settings' })).statusCode).toBe(401);
@@ -58,6 +103,7 @@ describe('settings API', () => {
     expect(response.statusCode).toBe(200);
     expect(response.json()).toMatchObject({
       settings: {
+        presentation: { showWork: true },
         appearance: { theme: 'light' },
         jarvis: { model: 'gpt-5.6-luna', reasoning: 'none' },
         personality: { tone: 'british_butler', responseStyle: 'concise', customInstructions: '' },

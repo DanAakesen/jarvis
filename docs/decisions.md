@@ -807,6 +807,21 @@ Dan requested the hotfix after seeing inspection guidance overlay More and persi
 ## 8 October 2026 — Folio pane and Jarvis navigation in the UI
 
 **Coordinator-relayed from Dan:** the Folio (P9-25) is built as a pane in the left sidebar slot rather than a page, so reopening never moves Dan off what he is looking at; `navigate { page: 'folio' }` therefore opens the pane. Jarvis's `navigate` command (P9-40) is handled in the shell with the agreed page and Settings section keys; unknown targets and pages that do not exist yet are refused with a reason. UI-only.
+## P9-41 (8 October 2026) — Best-effort work presentation
+
+**Confirmed by Dan in #568:** selected tool work is visible through the existing
+workspace broker and activity stream, with the UI session owning rendering.
+Automatic presentation does not await acknowledgements or change tool outcomes.
+Settings/presence lookups have a 250 ms presentation-only deadline and suppress
+presentation on failure; `on_the_move` overrides the default-on `showWork` setting.
+Reuse the graph payload builder without a second vault search, and keep one
+Code view per stored turn. Escape and redact bounded repository content before
+publication; show Google staged summaries without confirmation codes or a new
+approval path. Automatic views remain transient rather than adding Folio writes.
+Evidence: `core/work-presentation.ts`, the shared tool/reflex dispatchers, and
+contract/presentation tests. Backend implementation is offline; live UI acceptance
+is pending.
+
 ## P10-04 (8 October 2026) — GitHub issues are the Factory board source
 
 GitHub issues remain the single backlog and source of truth; Factory and
