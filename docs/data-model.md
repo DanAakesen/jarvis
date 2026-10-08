@@ -289,7 +289,9 @@ erDiagram
   `voice.minimize_windows_on_voice_start` (boolean, default false). Theme
   tokens are validated as JSON scalars: colors are `#RRGGBB`, backgrounds are
   `living-aurora` or `daylight-studio`, glow is 0–1, motion is full/calm/reduced,
-  radius is 0–24, and density is compact/comfortable. Optional keys are in the
+  radius is 0–24, and density is compact/comfortable. PATCH accepts `null` for
+  the three colour keys: it stores JSON `null`, GET omits the key, and the UI
+  falls back to the theme's own colours. Optional keys are in the
   SQL read whitelist even before they have a stored value.
   Page-setting values are JSON scalars; the internal `away.mode.state` value is
   a validated JSON object and is not exposed as an editable Settings field.

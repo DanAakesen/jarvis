@@ -88,8 +88,16 @@ export type SettingsPatch = {
     }
     : Area extends 'roles'
       ? Partial<Record<ModelRole, Partial<RoleModelSettings>>>
+    : Area extends 'appearance'
+      ? { [Key in keyof Settings['appearance']]?: Key extends ClearableAppearanceKey
+        ? Settings['appearance'][Key] | null
+        : Settings['appearance'][Key] }
     : Partial<Settings[Area]>;
 };
+
+// A null patch value removes the override so the theme's own colour applies.
+const clearableAppearanceKeys = ['accent', 'accent-secondary', 'surface-tint'] as const;
+type ClearableAppearanceKey = typeof clearableAppearanceKeys[number];
 
 export interface SettingsStore {
   read(): Promise<Record<string, unknown>>;
@@ -445,9 +453,9 @@ const settingsPatchSchema = {
           type: 'object', minProperties: 1, additionalProperties: true,
           properties: {
             theme: selectSchema(settingsOptions.themes),
-            accent: { type: 'string', pattern: '^#[0-9a-fA-F]{6}$', maxLength: 7 },
-            'accent-secondary': { type: 'string', pattern: '^#[0-9a-fA-F]{6}$', maxLength: 7 },
-            'surface-tint': { type: 'string', pattern: '^#[0-9a-fA-F]{6}$', maxLength: 7 },
+            accent: { type: ['string', 'null'], pattern: '^#[0-9a-fA-F]{6}$', maxLength: 7 },
+            'accent-secondary': { type: ['string', 'null'], pattern: '^#[0-9a-fA-F]{6}$', maxLength: 7 },
+            'surface-tint': { type: ['string', 'null'], pattern: '^#[0-9a-fA-F]{6}$', maxLength: 7 },
             background: selectSchema(settingsOptions.backgrounds),
             glow: { type: 'number', minimum: 0, maximum: 1 },
             motion: selectSchema(settingsOptions.themeMotions),
@@ -587,6 +595,8 @@ function isSettingsPatch(
     for (const key of keys) {
       if (!Object.hasOwn(settingKeys[area as keyof Settings], key)) return false;
       const setting = (values as Record<string, unknown>)[key];
+      if (area === 'appearance' && setting === null &&
+          (clearableAppearanceKeys as readonly string[]).includes(key)) continue;
       if (!validSetting(area as keyof Settings, key, setting, catalogue)) return false;
     }
   }
