@@ -60,6 +60,13 @@ const livePhrases = {
     'Polishing the reply…', 'Almost ready…', 'Drafting it now…', 'Lining it all up…', 'Adding the finishing touches…',
     'Wrapping it up…', 'Just a moment more…',
   ],
+  // Under the amber core while a page loads (Dan, 8 October).
+  loading: [
+    'Warming up…', 'Fetching your things…', 'Dusting off the archives…', 'Lighting the lamps…', 'Opening the ledgers…',
+    'Gathering the papers…', 'Rounding everything up…', 'Laying it all out…', 'Checking the records…',
+    'Unrolling the maps…', 'Calling it up…', 'Straightening the shelves…', 'Bringing it in…', 'One moment, sir…',
+    'Polishing the glass…', 'Nearly there…', 'Putting the kettle on…', 'Sorting the post…',
+  ],
 } as const;
 
 function shuffled(phrases: readonly string[], avoidFirst?: string) {

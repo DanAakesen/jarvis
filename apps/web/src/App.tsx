@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { flushSync } from 'react-dom';
 import { Link, NavLink, Outlet, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
-import type { HtmlArtifactFrame, JarvisActivityEvent, WorkspaceCommand, WorkspaceSnapshot } from '@jarvis/contracts';
+import type { HtmlArtifactFrame, JarvisActivityEvent, WorkspaceCommand, WorkspaceSnapshot, WorkspaceView as LookingAtView, WorkspaceViewLocation } from '@jarvis/contracts';
 import type { PublicConfig } from '../config/public-config';
 import { useJarvisActivity } from './activity-context';
 import { JarvisActivityProvider } from './activity-provider';
@@ -34,7 +34,7 @@ import { useGlassLight } from './glass-light';
 import { TaskDetailPage } from './factory/TaskDetailPage';
 import { InputOrbCore } from './InputOrbCore';
 import { TaskWindowsContext, readTaskWindows, saveTaskWindows, taskWindowViewId, type TaskWindowEntry } from './task-windows';
-import { readNavigateCommand, resolveNavigation, revealWhenReady, type NavigateRequest } from './page-navigation';
+import { pageForPath, readNavigateCommand, resolveNavigation, revealWhenReady, useVisibleSettingsSection, type NavigateRequest } from './page-navigation';
 import { FolioPane } from './Folio';
 import { flyChat } from './chat-flight';
 import { readWorkspaceFrame } from './workspace-frame';
@@ -61,6 +61,11 @@ function activityLabel(event: JarvisActivityEvent | null): string {
     case 'reconnecting': return 'Reconnecting voice';
     case 'failed': return 'Jarvis activity failed';
     case 'ended': return 'Jarvis activity ended';
+    default: {
+      // Newer activity kinds (P9-41 work details carry their own first-person text); anything unknown stays generic.
+      const detail = event as { type: string; text?: unknown };
+      return detail.type === 'work-started' && typeof detail.text === 'string' && detail.text.trim() ? detail.text.trim() : 'Jarvis is working';
+    }
   }
 }
 
@@ -172,8 +177,26 @@ function ShellLayout({ signedIn, config, session, camera, screenShare }: {
     return true;
   }, [navigate]);
   useEffect(() => () => cancelReveal.current(), []);
+  // What Dan is looking at (P9-43), sent with the snapshot so Jarvis can say "this page" or "that task" correctly.
+  const [frontViewId, setFrontViewId] = useState<string | null>(null);
+  const viewPage = pageForPath(pathname);
+  const viewSection = useVisibleSettingsSection(signedIn && viewPage === 'settings');
+  const viewTaskId = frontViewId?.startsWith('task-') ? frontViewId.slice(5) : undefined;
+  const location: WorkspaceViewLocation = useMemo(() => ({
+    page: viewPage,
+    ...(viewSection ? { section: viewSection } : {}),
+    ...(viewTaskId ? { taskId: viewTaskId } : {}),
+  }), [viewPage, viewSection, viewTaskId]);
+  const [viewHistory, setViewHistory] = useState<{ current: WorkspaceViewLocation; previous?: WorkspaceViewLocation }>({ current: location });
+  if (JSON.stringify(viewHistory.current) !== JSON.stringify(location)) setViewHistory({ current: location, previous: viewHistory.current });
+  const view: LookingAtView = useMemo(() => ({
+    ...location,
+    folioOpen,
+    ...(frontViewId ? { focusedViewId: frontViewId } : {}),
+    ...(viewHistory.previous ? { previous: viewHistory.previous } : {}),
+  }), [folioOpen, frontViewId, location, viewHistory.previous]);
   const workspaceCommands = useMemo(() => ({
-    snapshot: { windows: openWindows, contextPanelOpen: contextPanel.isOpen, ...(frame ? { frame } : {}) },
+    snapshot: { windows: openWindows, contextPanelOpen: contextPanel.isOpen, ...(frame ? { frame } : {}), ...(signedIn ? { view } : {}) },
     dispatch: (command: Parameters<WorkspaceController['dispatch']>[0], trustedBlobHost?: string) => {
       const navigateRequest = readNavigateCommand(command);
       if (navigateRequest) return navigateTo(navigateRequest);
@@ -203,7 +226,7 @@ function ShellLayout({ signedIn, config, session, camera, screenShare }: {
     minimiseAll: () => workspaceController.current?.minimiseAll(),
     hasVisibleViews: () => workspaceController.current?.hasVisibleViews() ?? false,
     isViewVisible: (viewId: string) => workspaceController.current?.isViewVisible?.(viewId) ?? false,
-  }), [contextPanel, frame, navigateTo, openWindows]);
+  }), [contextPanel, frame, navigateTo, openWindows, signedIn, view]);
   const applyWorkspaceCommand = useCallback((command: WorkspaceCommand, trustedBlobHost?: string) => {
     let applied = false;
     flushSync(() => { applied = workspaceCommands.dispatch(command, trustedBlobHost); });
@@ -568,7 +591,7 @@ function ShellLayout({ signedIn, config, session, camera, screenShare }: {
             </ConversationWindowContext.Provider>
             {signedIn && (
               <div className="workspace-shell-area">
-                <Workspace ref={workspaceController} views={workspaceViews} onVisibleViewsChange={setVoiceHasWindows} onOpenWindowsChange={onOpenWindowsChange}
+                <Workspace ref={workspaceController} views={workspaceViews} onVisibleViewsChange={setVoiceHasWindows} onOpenWindowsChange={onOpenWindowsChange} onFrontViewChange={setFrontViewId}
                   onVisibleViewIdsChange={onVisibleViewIdsChange} tabsHost={tabsHost} defaultArrangement="layered" arrangeMenu={false}
                   hideTab={hideResearchProgressTab} />
               </div>

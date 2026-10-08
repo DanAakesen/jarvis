@@ -643,7 +643,8 @@ export function ConversationHistory({
         {loading ? (
           <Loader variant="core" label="Loading conversation history…" />
         ) : historyError && messages.length === 0 ? null : messages.length === 0 && !sending && queue.length === 0 && failedTurns.length === 0 ? (
-          <div className="conversation-greeting">
+          <div className="conversation-greeting visually-hidden">
+            {/* Dan, 8 October: no greeting card; screen readers still hear that the conversation is empty. */}
             <h2>What’s on your mind?</h2>
             <p>Make a plan, explore an idea, or pick up where you left off.</p>
           </div>

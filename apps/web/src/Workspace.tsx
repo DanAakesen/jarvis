@@ -89,6 +89,8 @@ export const Workspace = forwardRef<WorkspaceController, {
   onOpenWindowsChange?: (windows: WorkspaceSnapshot['windows']) => void;
   /** Ids of views currently shown (not minimised or closed; on phones only the foreground view). */
   onVisibleViewIdsChange?: (ids: readonly string[]) => void;
+  /** The window in front (what Dan is looking at), or null when none is visible. */
+  onFrontViewChange?: (viewId: string | null) => void;
   /** The shell's tab bar under the top bar; minimised windows become tabs there. */
   tabsHost?: HTMLElement | null;
   /** The shell floats windows freely (drag to move) instead of tiling them. */
@@ -97,7 +99,7 @@ export const Workspace = forwardRef<WorkspaceController, {
   arrangeMenu?: boolean;
   /** Leaves a window out of the tab bar (for example a progress window already shown as a job tab). */
   hideTab?: (view: WorkspaceView) => boolean;
-}>(function Workspace({ views, onVisibleViewsChange, onOpenWindowsChange, onVisibleViewIdsChange, tabsHost, defaultArrangement = 'tiled', arrangeMenu = true, hideTab }, ref) {
+}>(function Workspace({ views, onVisibleViewsChange, onOpenWindowsChange, onVisibleViewIdsChange, onFrontViewChange, tabsHost, defaultArrangement = 'tiled', arrangeMenu = true, hideTab }, ref) {
   const workspaceId = useId();
   const [agentViews, setAgentViews] = useState<WorkspaceView[]>([]);
   const closedAgentViews = useRef(new Map<string, { view: WorkspaceView; geometry: Geometry | undefined }>());
@@ -201,6 +203,8 @@ export const Workspace = forwardRef<WorkspaceController, {
   useEffect(() => {
     onOpenWindowsChange?.(openViews.slice(0, 32).map(({ id, title }) => ({ viewId: id, title })));
   }, [onOpenWindowsChange, openViews]);
+  const frontId = (phone ? foreground?.id : visibleViews.at(-1)?.id) ?? null;
+  useEffect(() => { onFrontViewChange?.(frontId); }, [frontId, onFrontViewChange]);
 
   useLayoutEffect(() => {
     onVisibleViewsChange?.(visibleViews.length > 0);

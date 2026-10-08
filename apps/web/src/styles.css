@@ -1302,38 +1302,6 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
     grid-template-areas: "project statuses" "commits actions";
   }
 }
-.factory-composer {
-  position: static;
-  bottom: 0;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
-  align-items: center;
-  gap: 8px;
-  max-width: 760px;
-  margin: 24px auto 0;
-  padding: 8px 12px;
-  border: 1px solid var(--rule);
-  border-radius: var(--radius-window);
-  background: var(--surface-translucent);
-  box-shadow: var(--panel-shadow);
-  backdrop-filter: blur(var(--surface-blur));
-}
-.factory-composer textarea {
-  width: 100%;
-  min-width: 0;
-  min-height: 44px;
-  max-height: 160px;
-  padding: 10px 8px;
-  border: 0;
-  border-radius: var(--radius-control);
-  background: transparent;
-  color: var(--text);
-  font: inherit;
-  resize: vertical;
-}
-.factory-composer textarea:focus-visible { outline: 3px solid var(--focus); outline-offset: 1px; }
-.factory-composer .primary-button, .factory-composer .secondary-button { margin: 0; }
-.factory-composer > p { grid-column: 1 / -1; margin: 0; color: var(--text-muted); font-size: 12px; }
 .task-card-title {
   max-width: 100%;
   padding: 0;
@@ -1693,11 +1661,6 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
   .task-release-statuses { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
   .task-release-commits li:not(:first-child) { display: grid; }
   .task-release-actions { align-items: flex-start; justify-content: flex-start; flex-wrap: wrap; }
-  .factory-composer { grid-template-columns: minmax(0, 1fr) auto; }
-  .factory-composer textarea { grid-column: 1 / -1; grid-row: 1; }
-  .factory-composer > p { grid-row: 3; }
-  .factory-composer .primary-button { grid-column: 1; }
-  .factory-composer .secondary-button { grid-column: 2; }
 }
 
 @media (max-width: 700px), (max-height: 500px) and (pointer: coarse) {
@@ -1981,7 +1944,7 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
    --------------------------------------------------------------------------------------------- */
 :is(.workspace-window, .kanban-column, .kanban-card, .settings-section, .settings-activity .panel, .signin-card, .area-sidebar,
   .context-panel, .app-topbar, .area-rail, .conversation-input.luminous-glass, .task-release-bar)[data-lit] {
-  background-image: radial-gradient(circle 260px at var(--light-x, 50%) var(--light-y, 50%),
+  background-image: radial-gradient(circle 140px at var(--light-x, 50%) var(--light-y, 50%),
     color-mix(in srgb, var(--glass-rim-light) 26%, transparent), transparent 72%);
 }
 .shell-main > :not(.jarvis-page, .jarvis-stage, .jarvis-stage-fallback, .workspace-shell-area, .browser-presence-error, [hidden]) {
@@ -2013,14 +1976,6 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
 :root[data-motion="reduced"] :is(.signin-card, .signin-orb, .shell-main > *, .kanban-column, .settings-page form > .settings-section,
   .workspace-window.workspace-window-jarvis-updating) { animation: none !important; }
 /* The Factory composer uses the same clear glass and warm lower light as the Jarvis chat bar. */
-.factory-composer {
-  border-color: transparent;
-  border-radius: 36px;
-  background: var(--stage-glass);
-  backdrop-filter: blur(var(--glass-blur-window)) saturate(1.35);
-  box-shadow: 0 26px 60px -18px rgb(0 0 0 / 55%), 0 14px 40px -22px var(--glass-glow-warm), inset 0 1px 0 var(--glass-rim-light);
-}
-.factory-composer .primary-button, .factory-composer .secondary-button { min-height: 40px; border-radius: var(--radius-pill); }
 /* ---------------------------------------------------------------------------------------------
    Dropdowns: where the browser allows it (Chrome), every select opens a glass list with lit choices.
    --------------------------------------------------------------------------------------------- */
@@ -2970,3 +2925,19 @@ a.task-chip:hover { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--glass-e
 }
 :root[data-motion="reduced"] :is(.folio-group, .folio-item[data-opened] .folio-open) { animation: none; }
 @media (prefers-reduced-motion: reduce) { :is(.folio-group, .folio-item[data-opened] .folio-open) { animation: none; } }
+
+/* Dan, 8 October: the Folio search must stay readable over a busy room. */
+.folio-search { background: color-mix(in srgb, var(--surface) 72%, transparent); backdrop-filter: blur(10px) saturate(1.2); }
+.folio-search input::placeholder { color: var(--text-muted); opacity: 1; }
+/* Page loading (Dan, 8 October): the amber core lights up from the dark, then breathes, with a rotating phrase under it. */
+.loader-block { min-height: 220px; gap: 14px; align-content: center; }
+.loader-block .loader-core { width: 64px; height: 64px; animation: loader-ignite 1.1s var(--ease-enter) 140ms both, loader-breathe 2.4s var(--ease-standard) 1.25s infinite; }
+.loader-phrase { min-height: 1.4em; color: var(--text-muted); font-size: var(--type-small); text-align: center; }
+.knowledge-loader .loader-core { width: 72px; height: 72px; }
+@keyframes loader-ignite {
+  0% { opacity: 0; scale: .7; filter: brightness(.3) saturate(.6); }
+  55% { opacity: 1; filter: brightness(1.5) saturate(1.2); }
+  100% { opacity: 1; scale: 1; filter: none; }
+}
+:root[data-motion="reduced"] .loader-block .loader-core { animation: none; }
+@media (prefers-reduced-motion: reduce) { .loader-block .loader-core { animation: none; } }
