@@ -40,7 +40,7 @@ const tablesInSchema = [
   'memory_deletions', 'memory_history', 'messages', 'phone_sessions', 'projects', 'pull_requests', 'releases',
   'sandbox_sessions', 'sandbox_turns', 'settings', 'task_event_archives', 'task_events', 'task_status_notifications',
   'tasks', 'teams_confirmations', 'teams_conversations', 'tool_calls', 'usage', 'vault_chunks', 'vault_links',
-  'webhook_deliveries', 'workflow_runs', 'workspace_artifacts',
+  'webhook_deliveries', 'workflow_runs', 'workspace_artifacts', 'workspace_pins',
   'workspace_html_artifact_versions', 'workspace_html_artifacts',
 ];
 

@@ -318,6 +318,28 @@ export interface WorkspaceSnapshot {
   view?: WorkspaceView;
 }
 
+export interface WorkspacePin {
+  viewId: string;
+  view: GeneratedView;
+  pinnedAt: string;
+}
+export interface WorkspacePinsResponse {
+  pins: WorkspacePin[];
+}
+export const workspaceViewIdSchema: Readonly<Record<string, unknown>>;
+export const workspacePinSchema: Readonly<Record<string, unknown>>;
+export const workspacePinPutSchema: Readonly<Record<string, unknown>>;
+export const workspacePinResponseSchema: Readonly<Record<string, unknown>>;
+export const workspacePinsResponseSchema: Readonly<Record<string, unknown>>;
+export function isWorkspacePin(
+  value: unknown,
+  options?: { trustedBlobHost?: string; registeredTools?: readonly string[] },
+): value is WorkspacePin;
+export function isWorkspacePinsResponse(
+  value: unknown,
+  options?: { trustedBlobHost?: string; registeredTools?: readonly string[] },
+): value is WorkspacePinsResponse;
+
 export interface WorkspaceViewLocation {
   page: WorkspaceNavigationPage;
   section?: WorkspaceSettingsSection;

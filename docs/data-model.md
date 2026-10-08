@@ -1,6 +1,6 @@
 # Data model
 
-Version 1, updated 8 October 2026 for P6-22, P7-01, P7-02, P7-03, P7-08, P7-13, P7-15, P7-22, P7-37, P7-40, P7-44 and P9-30. Scope: the Jarvis core, background jobs, Software Factory, Teams calling, notification and browser-confirmation state, Google Calendar/Gmail tools, the GitHub vault's derived search index, long-term memory, image metadata and generated HTML report artifacts. Azure SQL is the source of truth for operational records; Dan's private GitHub vault is the source of truth for durable knowledge. Blob Storage holds large files referenced from SQL. Requirements: [PRODUCT.md](../PRODUCT.md); system: [architecture.md](architecture.md).
+Version 1, updated 8 October 2026 for P6-22, P7-01, P7-02, P7-03, P7-08, P7-13, P7-15, P7-22, P7-37, P7-40, P7-44, P8-45 and P9-30. Scope: the Jarvis core, background jobs, Software Factory, Teams calling, notification and browser-confirmation state, Google Calendar/Gmail tools, the GitHub vault's derived search index, long-term memory, image metadata, generated HTML report artifacts and explicitly pinned workspace views. Azure SQL is the source of truth for operational records; Dan's private GitHub vault is the source of truth for durable knowledge. Blob Storage holds large files referenced from SQL. Requirements: [PRODUCT.md](../PRODUCT.md); system: [architecture.md](architecture.md).
 
 ## Migration infrastructure
 
@@ -85,9 +85,13 @@ version numbers, a repair-attempt flag and version history. Artifacts do not
 reference a conversation or task; workspace windows remain memory-only.
 
 P8-14 generated views are versioned JSON contracts in the shared
-`@jarvis/contracts` workspace. A view carries bounded source/page metadata but
-is not stored in SQL or Blob; source records retain their existing storage and
-retention. P8-14 adds no tables or migrations.
+`@jarvis/contracts` workspace. A view carries bounded source/page metadata and,
+by default, is not stored in SQL or Blob; source records retain their existing
+storage and retention. P8-45 adds `dbo.workspace_pins` in migration 0038 for views explicitly
+pinned by the signed-in page. It stores the contract view ID, bounded view JSON
+and the original UTC pin timestamp under Dan's Entra object ID. Re-pinning
+updates only the view; the page can list at most 20 pins oldest first or remove
+one. Temporary windows and their arrangement remain memory-only.
 
 P9-14 creates `background_jobs` and append-only `background_job_steps` in
 `0029_background_jobs.sql`. P9-30 adds nullable `retry_input` and `retry_job_id`
@@ -151,6 +155,7 @@ flowchart LR
     end
     subgraph WORKSPACE["10 · Workspace artifacts"]
         workspace_artifacts
+        workspace_pins
     end
     tool_calls --> tasks
     tasks --> projects
@@ -177,7 +182,7 @@ flowchart LR
 | 7 | Usage and cost | Transparency per task/project and current UTC-day web-research calls; the latter reuses group-one `tool_calls` | `usage` |
 | 8 | Phone, notifications and confirmations | Phone-call sessions plus expiring browser approvals; `teams_conversations` remains dormant optional-integration storage, not used in production | `phone_sessions`, `teams_conversations`, `teams_confirmations` |
 | 9 | Legacy SQL memory | Historical source-linked memory rows, retained for compatibility but superseded as the durable knowledge source | `memories`, `memory_history`, `memory_deletions` |
-| 10 | Workspace artifacts | Owner-scoped image metadata for generated workspace/chat previews; image bytes are private Blob objects | `workspace_artifacts` |
+| 10 | Workspace artifacts | Owner-scoped image metadata and explicitly pinned workspace views; image bytes are private Blob objects | `workspace_artifacts`, `workspace_pins` |
 | 11 | GitHub vault index | Derived heading chunks and optional vectors keyed by vault path and blob SHA; vault content remains authoritative in GitHub | `vault_chunks` |
 
 Repository task statuses and their GitHub issues are workflow metadata managed from `PLAN.md`; they are not stored in the Jarvis SQL model.

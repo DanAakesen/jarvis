@@ -50,6 +50,8 @@ import {
   isBackgroundJobStep,
   isWebResearchResult,
   isWorkspaceCommand,
+  isWorkspacePin,
+  isWorkspacePinsResponse,
   isWorkspaceSnapshot,
   isWorkspaceView,
   generatedViewVersion,
@@ -857,6 +859,24 @@ test('defines the presence request and response contracts', () => {
   assert.equal(isPresenceState({ ...state, ignored: 'recent_manual' }), true);
   assert.equal(isPresenceState({ ...state, ignored: 'other' }), false);
   assert.equal(isPresenceState({ ...state, source: 'teams_presence' }), false);
+});
+
+test('defines bounded workspace pin contracts and validates view IDs and timestamps', () => {
+  const pin = {
+    viewId: 'research-report',
+    view: listView(),
+    pinnedAt: '2026-10-08T10:00:00.000Z',
+  };
+  assert.equal(isWorkspacePin(pin), true);
+  assert.equal(isWorkspacePinsResponse({ pins: [pin] }), true);
+  for (const invalid of [
+    { ...pin, viewId: '1research' },
+    { ...pin, viewId: 'x'.repeat(65) },
+    { ...pin, pinnedAt: '2026-10-08T10:00:00Z' },
+    { ...pin, view: { ...pin.view, renderer: 'script' } },
+    { ...pin, extra: true },
+  ]) assert.equal(isWorkspacePin(invalid), false, JSON.stringify(invalid));
+  assert.equal(isWorkspacePinsResponse({ pins: Array(21).fill(pin) }), false);
 });
 
 test('rejects invalid workspace IDs, geometry, operations, and generated-view allowlists', () => {

@@ -663,6 +663,15 @@ controls remain available there. The shell exposes the typed workspace command
 controller to page consumers; authenticated Jarvis delivery remains P8-15.
 Tab motion uses the P8-20 tokens and becomes static under reduced motion.
 
+## Workspace pins (P8-45)
+
+Pinning is explicit and page-owned: the signed-in page writes a validated
+generated view through the owner-only backend API. Keep at most 20 pins and show
+them oldest first; re-pinning updates the saved view without changing its
+original pin time. Persist neither window geometry nor temporary views merely
+because Jarvis created or displayed them. The backend and contracts provide the
+storage boundary; the UI session owns the controls and API calls.
+
 ## Accepted capability surfaces
 
 Editable personality lives in **Settings → Jarvis → Personality**, reached
