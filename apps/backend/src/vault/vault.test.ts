@@ -358,7 +358,7 @@ describe('GitHub vault', () => {
     expect(indexStore.entry('General/old.md')).toBeUndefined();
     expect(indexStore.entry('General/new.md')).toBeDefined();
     expect(module.tools.map(({ name }) => name)).toEqual([
-      'vault_search', 'show_knowledge', 'vault_read', 'vault_write',
+      'vault_search', 'show_knowledge', 'vault_read', 'vault_write', 'vault_delete',
     ]);
   });
 
@@ -843,6 +843,95 @@ describe('GitHub vault', () => {
     expect(tokenIssuer.issueForContentsWrite).toHaveBeenCalledOnce();
     expect(github.calls.filter(({ url }) => new URL(url).pathname === `/repos/${VAULT_REPOSITORY}/git/trees/${VAULT_BRANCH}`))
       .toHaveLength(1);
+  });
+
+  it('deletes a vault note only after Now approval and removes it from the index and graph', async () => {
+    const path = 'People/Alex.md';
+    const { github, indexStore, module } = moduleFor({
+      remote: { [path]: { sha: sha('a'), content: '# Alex\n\nEngineer.' } },
+    });
+    await module.synchronize(signal());
+    let approve: (() => Promise<unknown>) | undefined;
+    const runConfirmed = vi.fn((_kind: unknown, _summary: unknown, action: () => Promise<unknown>) =>
+      new Promise<unknown>((resolve, reject) => {
+        approve = async () => {
+          try { resolve(await action()); } catch (error) { reject(error); }
+        };
+      }));
+    const app = memoryApiApp(module, {
+      teamsNotifications: { runConfirmed } as unknown as TeamsNotificationService,
+    });
+    const graphBefore = await app.inject({ url: '/knowledge/graph', headers: apiAuthorization });
+    expect(graphBefore.json().nodes).toHaveLength(1);
+
+    const deleting = tool(module, 'vault_delete').execute(
+      { path },
+      { ...request, server: app } as FastifyRequest,
+      signal(),
+    );
+    await vi.waitFor(() => expect(runConfirmed).toHaveBeenCalledOnce());
+    expect(runConfirmed).toHaveBeenCalledWith(
+      'delete',
+      `Permanently delete vault note ${path}.`,
+      expect.any(Function),
+      expect.any(AbortSignal),
+    );
+    expect(github.calls.some(({ method }) => method === 'DELETE')).toBe(false);
+
+    await approve!();
+    await expect(deleting).resolves.toEqual({
+      path,
+      commit: sha('d'),
+      url: `https://github.com/${VAULT_REPOSITORY}/commit/${sha('d')}`,
+      confirmation: `Deleted vault note: ${path} — https://github.com/${VAULT_REPOSITORY}/commit/${sha('d')}`,
+    });
+    expect(github.calls.find(({ method }) => method === 'DELETE')?.body).toEqual({
+      message: 'jarvis: forget vault note\n\nCo-authored-by: Jarvis',
+      sha: sha('a'),
+      branch: VAULT_BRANCH,
+    });
+    expect(github.files.has(path)).toBe(false);
+    expect(indexStore.entry(path)).toBeUndefined();
+    const graphAfter = await app.inject({ url: '/knowledge/graph', headers: apiAuthorization });
+    expect(graphAfter.json().nodes).toEqual([]);
+  });
+
+  it('refuses vault deletion when the note changed during approval', async () => {
+    const path = 'General/decision.md';
+    const { github, indexStore, module } = moduleFor({
+      remote: { [path]: { sha: sha('a'), content: '# Decision\n\nCurrent.' } },
+    });
+    await module.synchronize(signal());
+    const runConfirmed = vi.fn(async (_kind: unknown, _summary: unknown, action: () => Promise<unknown>) => {
+      github.set(path, { sha: sha('b'), content: '# Decision\n\nChanged.' });
+      return action();
+    });
+    const toolRequest = {
+      ...request,
+      server: {
+        teamsNotifications: { runConfirmed },
+        awayModeStore: null,
+      },
+    } as unknown as FastifyRequest;
+
+    await expect(tool(module, 'vault_delete').execute({ path }, toolRequest, signal()))
+      .rejects.toThrow('changed while approval was pending');
+    expect(github.calls.some(({ method }) => method === 'DELETE')).toBe(false);
+    expect(indexStore.entry(path)).toBeDefined();
+  });
+
+  it('refuses invalid paths and unavailable Now approval before reading a note', async () => {
+    const { github, module } = moduleFor();
+    const toolRequest = {
+      ...request,
+      server: { teamsNotifications: null, awayModeStore: null },
+    } as unknown as FastifyRequest;
+
+    await expect(tool(module, 'vault_delete').execute({ path: '../General/note.md' }, toolRequest, signal()))
+      .rejects.toThrow('Markdown path');
+    await expect(tool(module, 'vault_delete').execute({ path: 'General/note.md' }, toolRequest, signal()))
+      .rejects.toThrow('Now approval service is unavailable');
+    expect(github.calls).toHaveLength(0);
   });
 
   it('refuses sensitive captures without explicit remember and always refuses actual credentials', async () => {
