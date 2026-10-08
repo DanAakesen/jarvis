@@ -73,6 +73,22 @@ export interface TimeoutSettings {
   longToolTimeoutSeconds: number;
   backendHttpTimeoutSeconds: number;
 }
+export interface Routine {
+  readonly id: string;
+  readonly name?: string;
+  readonly kind: 'pc' | 'browser';
+  readonly key: string;
+  readonly goal: string;
+  readonly steps: readonly {
+    readonly operation: 'click' | 'type' | 'type_focused' | 'keys' | 'select' | 'scroll_up' | 'scroll_down' | 'wait' | 'done';
+    readonly target?: { readonly role: string; readonly name: string };
+    readonly valueSlot?: number;
+    readonly keys?: readonly string[];
+  }[];
+}
+export const routineNameMaxLength: 80;
+export const routineNameSchema: Readonly<Record<string, unknown>>;
+export const routineUpdateSchema: Readonly<Record<string, unknown>>;
 export const timeoutSettingsBounds: Readonly<{
   toolTimeoutSeconds: Readonly<{ minimum: 1; maximum: 120 }>;
   longToolTimeoutSeconds: Readonly<{ minimum: 30; maximum: 320 }>;

@@ -378,6 +378,15 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   in process while pending and is not resumed after a backend restart. The
   implementation reuses the existing settings/catalogue contracts and adds no
   database migration.
+  P9-12 adds `get_settings` and `update_settings` to the same backend tool
+  registry used by chat and voice. Both operate only on validated settings keys;
+  reads return effective settings without credential records, and generic tool
+  audits redact setting arguments and results. Role-model/reasoning changes and
+  daily vision-budget changes run through the existing one-time Now confirmation
+  service before the settings store is written. `set_jarvis_model` remains a
+  compatibility alias for the chat role and shares the same confirmation and
+  validation path. These tools reuse the existing settings store and contracts;
+  no migration or web change is required.
 - `ci.yml` (P0-10) is the aggregate CI on every PR, `main` push and
   `workflow_dispatch`. It calls the reusable `web-ci.yml`, `backend-ci.yml`
   (including the container smoke), `database-ci.yml` (isolated SQL Server migrations), `foundry-contract.yml`, `runner-ci.yml`
@@ -1154,7 +1163,7 @@ offline median fake step was 0.07 ms excluding page loads. Live Jev/Foundry,
 Dan's signed-in Chrome, browser approval delivery and end-to-end voice/browser
 behavior remain unverified.
 
-### Task recipes (P7-35)
+### Routines (P7-35, P9-35)
 
 The backend captures only completed `pc_act` / `browser_do` runs, including
 independently verified browser completion. `core/task-recipes.ts` stores normalized
@@ -1164,13 +1173,15 @@ generated text is regenerated for the new goal. Sensitive, value-echoing or
 unstable target labels make the run ineligible for storage.
 
 `database/recipe-store.ts` uses existing `dbo.settings` rows at scope `global`,
-key `recipe.<sha256(kind,key,goal)>`, separate from validated settings preferences.
-Recipes are capped at 100 records, 20 steps and 32 KiB each; a transaction-owned
-application lock serializes bounded upserts. No migration is needed: 0020 already
-belongs to chat steering and remains unchanged.
+key `routine.<sha256(kind,key,goal)>`, separate from validated settings preferences.
+Routines are capped at 100 records, 20 steps and 32 KiB each; a transaction-owned
+application lock serializes bounded upserts. Existing `recipe.<hash>` rows are
+read on list and migrated to the routine key on write or rename; delete removes
+either key. No migration is needed: 0020 already belongs to chat steering and
+remains unchanged.
 
 On the first fresh snapshot, Jev makes one calibrated Choice among at most
-20 recipes for the exact process name or HTTP(S) origin plus `none`. Each replay
+20 routines for the exact process name or HTTP(S) origin plus `none`. Each replay
 step re-locates a unique role/name target and makes one typed replay/plan
 verification against the current observation. Missing/ambiguous targets or
 verification drift disable replay and resume normal planning; app/site changes
@@ -1178,9 +1189,12 @@ also prevent saving a cross-context sequence. Confidence below 0.9 asks Dan.
 Replay still executes through the existing PC bridge policy/Windows executor,
 Chrome transport, pause switch and irreversible-only `runConfirmed` gates.
 
-Dan-only `GET /recipes` and `DELETE /recipes/:id` support the Settings section.
-The sensitive `task_recipes` list/delete tool uses the existing authenticated
-tool dispatcher and redacted audit. P5-14 `chat.latency` adds content-free
+Dan-only `GET /routines`, `PATCH /routines/:id` and `DELETE /routines/:id`
+support routine management. PATCH changes only the bounded safe display name;
+the content-derived ID and replay sequence remain stable. `/recipes` routes and
+the sensitive `task_recipes` list/delete tool remain compatibility aliases for
+one release; `task_routines` is canonical. Both tools use the authenticated
+dispatcher and redacted audit. P5-14 `chat.latency` adds content-free
 `recipe_select`, `recipe_verify`, `recipe_plan` and `recipe_run` durations.
 Offline timing fixtures compare whole runs including selection; live provider
 and Windows/Chrome timing remains unverified. Controlled `recipe_run` timings

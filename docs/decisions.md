@@ -39,6 +39,14 @@ automatic retries for timed-out tool actions because completion may be
 uncertain. Contract, settings, and agent tests cover the bounds and use; live
 propagation remains unverified.
 
+P9-35 (8 October 2026): call saved PC/browser action sequences Routines and
+expose a safe display-name rename without changing their content-derived IDs or
+replay steps. Write new records under `routine.<hash>` while reading, migrating
+and deleting legacy `recipe.<hash>` records in the existing settings store; no
+database migration is needed. Expose `task_routines` and `/routines`, retaining
+`task_recipes` and `/recipes` as one-release aliases. The web UI remains outside
+this backend change.
+
 P9-20 (7 October 2026): expose one owner-authenticated, cached `/status`
 snapshot using the shared contracts; reuse it in `get_status_summary`. Keep
 status probes bounded and return only allowlisted metadata, never provider
@@ -160,6 +168,13 @@ Incremental Bicep deployments: runtime-created deployments absent from the
 template remain untouched, while Bicep-declared deployments continue to be
 reconciled. Offline ARM/route/tool tests verify the contract; live role
 propagation and Foundry provisioning remain unverified.
+P9-12 (8 October 2026): expose the existing non-secret Settings model through
+the shared chat/voice tool registry, reusing its validation and persistence
+contracts. Require the existing Now confirmation before changing model-role
+settings or the daily vision budget; never return credential records. Keep
+`set_jarvis_model` as a compatibility alias for chat-role updates. No migration
+or web change is needed. Offline tool and alias tests cover the behavior; live
+hosted-agent and Now integration remain unverified.
 
 P6-22 (6 October 2026): Jarvis runs in Dan's personal tenant, without Microsoft
 365 or Teams. Keep away mode manual and do not read Graph presence. Route
@@ -204,7 +219,7 @@ idempotent even before a release exists. Evidence: webhook mapping and SQL schem
 regression tests.
 
 P7-35 (6 October 2026): reuse the existing global JSON settings store for bounded,
-value-free task recipes rather than add a table or rewrite occupied migration
+value-free task routines rather than add a table or rewrite occupied migration
 0020. Jev selects by app/site, verifies each fresh stable target, and falls back
 on drift; low confidence asks Dan. Dan's any-app access and irreversible-only
 confirmation decision also applies during replay. Deletion is available through
@@ -399,7 +414,7 @@ Windows/Chrome/Jev speedup remains live acceptance.
 | 2026-10-07 | P9-23 records provider-reported Foundry chat/voice tokens, vision input/output tokens and memory-embedding input tokens by model and role. Add USD and DKK estimates only for known Foundry list rates; keep unknown rates, Codex research/image-generation charges and unsupported meters visibly unverified. Report daily UTC and monthly UTC totals, and count research/image calls from the existing tool-call audit. | Migration 0030 extends `dbo.usage`; migration 0029 is reserved by P9-14. Usage events contain no prompt, image, embedding text or tool arguments. The fixed 6.5785 DKK/USD conversion matches the existing vision estimate; values are not invoices. Offline tests cover route authorization, store idempotency, provider usage capture, embedding counts and period totals. Deployed Foundry/SQL data and billed amounts remain unverified. | Implemented offline; UI integration and live billing validation pending |
 | 2026-10-07 | P7-45 adds Dan-only read access to Jarvis's own registered tools, feature list, repository files, code search, and issues/PRs. Use repository-scoped GitHub App installation tokens, default to `DanAakesen/jarvis`, and resolve any explicit project only from active registered projects. Treat all returned repository and issue content as untrusted; never expose tokens or persist tool arguments/results. | Reuses the shared tool registry and App issuer; bounds file/list/search/issue results and caches overviews by repository commit. No write capability or user PAT is added. | Implemented; Dan granted Issues read on 7 October, so issue summaries request it |
 | 2026-10-07 | P9 ([#495](https://github.com/DanAakesen/jarvis/issues/495)–[#533](https://github.com/DanAakesen/jarvis/issues/533)): Dan approved a 39-task backlog from a gap audit. Models are chosen per role from the live Foundry catalogue with per-role reasoning effort; runtime deployment management and Claude as the chat model are in scope. | Dan wants full control of models and every tunable in Settings, and Jarvis must reach what it already has. The board runs at most four Copilot tasks at once to limit conflicts in shared settings code. | Planned |
-| 2026-10-07 | The place where generated reports, apps, images and graph views are kept and reopened is called the **Folio**; task recipes are renamed **Routines**. | Dan asked for better names than "windows", "research" and "recipes". Old recipe tool and route names stay as aliases for one release. | Planned ([#519](https://github.com/DanAakesen/jarvis/issues/519), [#529](https://github.com/DanAakesen/jarvis/issues/529)) |
+| 2026-10-07 | The place where generated reports, apps, images and graph views are kept and reopened is called the **Folio**; task recipes are renamed **Routines**. | Dan asked for better names than "windows", "research" and "recipes". Old recipe tool and route names stay as aliases for one release. | Folio remains with #519; P9-35 implements the routine names and aliases offline ([#529](https://github.com/DanAakesen/jarvis/issues/529)) |
 | 2026-10-07 | Declined from the audit: verbosity and max-token settings, notification preferences, an effective-config view, settings history, arbitrary local-folder and browser-history access, and outbound notifications. | Dan's choice on 7 October. Do not file these again without a new request. | Declined |
 | 2026-10-04 | Autopilot decisions by the coordinator at Dan's request ("take decisions as you think I would"; only truly Dan-only items stay in Needs Dan). P8-12: Escape ends voice and a labelled End voice control sits by the orb (DESIGN.md). P8-18: initial renderer, action and theme-token allowlists (ui.md); no generated code runs. P3-08 waits for the new shell and visual system | Unblocks the UI track; recorded on each issue for Dan's review | Decided on autopilot; Dan to review |
 | 2026-10-04 | P8-14 keeps the version-1 generated-view JSON Schema, TypeScript union, and runtime validator together in `@jarvis/contracts`. The authorized tool route validates tagged view results before returning or recording them; the signed-in Now panel uses the same contract for its bounded list fixture. Views and their source metadata stay transient; renderers receive data as React text/approved links, never executable markup. | One shared package prevents backend and browser allowlists from drifting. The 256 KiB envelope, per-renderer bounds, source/page status, registered-tool references, and configured Blob host are checked offline; no persistence or new data integration is needed. | Contract, backend route, and signed-in UI tests pass; live Entra and Azure source behavior remain unverified |
@@ -652,7 +667,9 @@ Mistakes made so far and the rule that prevents each one.
 | **L118** | Embeddings used the project-scoped URL, which returns 404 | After #486 the vault re-index made about 4,800 `memory.embedding` calls, all `fallback`, so no vectors were stored. A probe from the backend container showed `https://<account>.services.ai.azure.com/api/projects/<project>/openai/v1/embeddings` returns 404 while `https://<account>.services.ai.azure.com/openai/v1/embeddings` returns 200 with the same managed identity. The embedder now posts to the account origin, and fallback logs carry `httpStatus` so a silent failure is diagnosable. Lesson: probe a new Foundry endpoint from the deployed identity before trusting a mocked test, and never log a fallback without its reason. |
 | **L119** | Vault backfill throttled at 20K TPM | Once embeddings worked (L118), the first backfill made 639 successful calls and 1,244 HTTP 429s in a minute: the `text-embedding-3-small` deployment had capacity 20 (20 requests per 10 s). Capacity is now 150 (GlobalStandard bills per token, quota 1,000), and background vault indexing waits out a 429 using `Retry-After` (at most 15 s, four attempts) instead of storing a null vector. Interactive memory search still fails fast. Lesson: size a background backfill against the deployment rate limit before enabling it. |
 | **L120** | SQL Server migrations: same-batch columns and column type changes | P9-23's first migration failed twice in Database CI. Each migration file runs as one batch, so an `UPDATE` or `CHECK` that references a column added earlier in the file fails to compile ("Invalid column name"); wrap those statements in `EXEC(N'...')`, as 0016, 0020 and 0021 already do. `ALTER COLUMN` also fails while a constraint or index references the column; drop and recreate them around the change, in the down script too. Lesson: read the existing migrations before writing a new one. |
-| **L121** | Clipboard reads are sensitive and turn-scoped | P9-32 adds only explicit current-message clipboard reads through the authenticated PC bridge. | Keep clipboard tools out of reflex execution, redact obvious secrets before returning read text, bound text to 20 KiB, and store only redacted metadata in the generic tool-call audit. |
+| **L121** | One tool schema with a root `oneOf` broke every voice session | On 8 October voice failed right after start: Voice Live answered `session.update` with `invalid_function_parameters` for `manage_model_deployment` (P9-07, #544), whose input schema put `oneOf` at the root. Voice sends every registered tool at session start, so one invalid schema disables voice entirely; `toModelToolSchema` only strips untyped nested combinators (L103). The schema is now a flat object with `action` as an enum, and `execute` enforces the per-action fields. A test keeps core tool schemas free of root combinators. Lesson: tool input schemas must be a plain root object; express alternatives in code, not in the schema. |
+| **L122** | Clipboard reads are sensitive and turn-scoped | P9-32 adds only explicit current-message clipboard reads through the authenticated PC bridge. | Keep clipboard tools out of reflex execution, redact obvious secrets before returning read text, bound text to 20 KiB, and store only redacted metadata in the generic tool-call audit. |
+| **L123** | Chat called an agent-only route with Dan's token | From the 01:53 agent deploy on 8 October every chat message failed with `Chat agent unavailable (HTTP 503)`. P9-11 (#557) added a `GET /agent/settings` read to `load_verified_history`, but sent Dan's delegated token; that route only accepts the hosted agent's identity, so the backend answered 403 and the agent refused the turn. Mocked tests asserted the same wrong header, and nobody used chat overnight. The agent now reads its settings with its own managed identity and falls back to the default timeout if they are unavailable. Lesson: agent-only routes need the agent token, tests must assert which identity each call uses, and a deploy that touches the agent needs a live chat check (P9-39). |
 
 ## 5 October 2026 — Software Factory layout selected
 

@@ -78,6 +78,19 @@ export const timeoutSettingsSchema = Object.freeze({
     }),
   }),
 });
+export const routineNameMaxLength = 80;
+export const routineNameSchema = Object.freeze({
+  type: 'string',
+  minLength: 1,
+  maxLength: routineNameMaxLength,
+  pattern: '\\S',
+});
+export const routineUpdateSchema = Object.freeze({
+  type: 'object',
+  properties: Object.freeze({ name: routineNameSchema }),
+  required: Object.freeze(['name']),
+  additionalProperties: false,
+});
 export const memorySettingsBounds = Object.freeze({
   similarityThreshold: Object.freeze({ minimum: 0, maximum: 1 }),
   searchTopK: Object.freeze({ minimum: 1, maximum: 8 }),
