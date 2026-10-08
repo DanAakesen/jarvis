@@ -65,8 +65,18 @@ describe('committed SQL manifest', () => {
       '0034_research_job_retry.sql',
       '0035_folio.sql',
       '0036_folio_lowercase_ids.sql',
+      '0037_task_github_issues.sql',
     ]);
     for (const migration of migrations) await expect(readDownMigration(migration.name)).resolves.toMatchObject({ name: migration.name });
+  });
+  it('adds a nullable task issue link with an active-issue uniqueness constraint', async () => {
+    const migration = (await readMigrations()).find(({ name }) => name === '0037_task_github_issues.sql');
+    expect(migration?.sql).toContain('ALTER TABLE dbo.tasks ADD issue_number int NULL');
+    expect(migration?.sql).toContain('EXEC(N\'CREATE UNIQUE INDEX UX_tasks_active_project_issue');
+    expect(migration?.sql).toContain('state <> N\'\'Done\'\' AND state <> N\'\'Cancelled\'\'');
+    await expect(readDownMigration('0037_task_github_issues.sql')).resolves.toMatchObject({
+      sql: expect.stringContaining('DROP COLUMN issue_number'),
+    });
   });
   it('stores JSON embeddings only when SQL vector support is unavailable', async () => {
     const migration = (await readMigrations()).find(({ name }) => name === '0028_json_embeddings_without_vector.sql');

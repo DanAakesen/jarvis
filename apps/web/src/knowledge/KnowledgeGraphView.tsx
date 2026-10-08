@@ -145,7 +145,7 @@ export function KnowledgeGraphView({ backendUrl, getAccessToken, initialQuery = 
   return (
     <section className="knowledge" data-compact={compact || undefined} data-nodes={graph?.nodes.length} data-edges={graph?.edges.length} data-links={graph?.edges.filter((edge) => edge.type === 'link').length} data-similar={graph?.edges.filter((edge) => edge.type === 'similar').length} aria-label="Knowledge graph">
       <div ref={host} className="knowledge-stage" aria-hidden="true" />
-      {load.status === 'loading' && <Loader variant="stars" className="knowledge-loader" label="Mapping your knowledge…" />}
+      {load.status === 'loading' && <Loader variant="core" className="knowledge-loader" label="Mapping your knowledge…" />}
       {load.status === 'error' && (
         <div className="knowledge-status" role="alert">
           <p>{load.message}</p>

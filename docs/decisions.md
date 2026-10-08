@@ -19,6 +19,16 @@ The nine design areas and where each stands. **Confirmed** = Dan's requirement o
 
 ## Decision log
 
+P9-43 (8 October 2026): reuse the workspace broker's latest connected-owner
+snapshot for per-turn model awareness; do not persist screen or view content.
+Keep `view` optional for old clients, validate current/previous destinations,
+and provide one bounded metadata line through the existing chat turn-context
+API and voice response instructions. Treat escaped window titles as untrusted
+data. Resolve “go back” from `view.previous`, asking when absent rather than
+guessing. Folio navigation opens a pane over the current page; Status remains
+unavailable until its page exists. Backend/contracts are validated offline;
+the UI session owns snapshot publication and live acceptance remains pending.
+
 P9-42 (8 October 2026): return invalid tool arguments as safe `refused` tool
 results, not generic execution failures. HTTP body-schema refusals use status
 200 because the existing hosted chat client discards non-200 bodies; other HTTP
@@ -32,6 +42,16 @@ selectors refuse rather than searching an unintended repository. Incomplete or
 empty searches suggest `repo_list`/`repo_read`. No migration, new dependency,
 workspace broker or web change is needed; live model/provider acceptance is
 pending.
+
+P10-02 (8 October 2026): use GitHub issues as Jarvis's single backlog and source
+of truth, with the Software Factory/Codex as the default executor. An active
+Factory task links to at most one issue per project; a duplicate issue start
+reuses that task. Treat issue content and Dan's comments as untrusted request
+data, include the repository's own agent rules, and publish only content-free
+progress comments. `create_task` creates a linked issue; old unlinked task rows
+remain readable. Migration 0037 follows the 0036 Folio migration and L120.
+Offline fake-backed route, tool, webhook, delivery and progress tests cover
+behavior; live GitHub issue access awaits P10-01's App permissions.
 
 P9-10 (7 October 2026): store memory retrieval settings in the existing global
 `dbo.settings` store and expose their shared bounded contract through Settings.

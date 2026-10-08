@@ -532,7 +532,7 @@ export function TaskDetailPage({ backendUrl, getAccessToken, taskId, compact = f
     const latestDisk = measurements.at(-1);
     return (
       <section className="task-detail task-window" data-task-state={task?.state} aria-label={`Task ${taskId}`}>
-        {result.status === 'loading' && <Loader variant="panel" label="Loading task details…" />}
+        {result.status === 'loading' && <Loader variant="core" label="Loading task details…" />}
         {result.status === 'error' && (
           <div className="task-detail-error" role="alert">
             <p>{result.message}</p>
@@ -729,7 +729,7 @@ export function TaskDetailPage({ backendUrl, getAccessToken, taskId, compact = f
     >
       {!compact && <Link className="home-link" to="/factory/kanban">Back to Kanban</Link>}
       {!compact && <h1 id="task-heading">{task?.title ?? `Task ${taskId}`}</h1>}
-      {result.status === 'loading' && <Loader variant="panel" label="Loading task details…" />}
+      {result.status === 'loading' && <Loader variant="core" label="Loading task details…" />}
       {result.status === 'error' && (
         <div className="task-detail-error" role="alert">
           <p>{result.message}</p>

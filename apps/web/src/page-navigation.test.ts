@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { readNavigateCommand, resolveNavigation } from './page-navigation';
+import { isWorkspaceSnapshot } from '@jarvis/contracts';
+import { pageForPath, readNavigateCommand, resolveNavigation } from './page-navigation';
 
 describe('page navigation', () => {
   it('reads only navigate commands', () => {
@@ -26,5 +27,14 @@ describe('page navigation', () => {
       expect(result.ok).toBe(false);
       if (!result.ok) expect(result.reason.length).toBeGreaterThan(0);
     }
+  });
+
+  it('names the page Dan is looking at and builds a valid snapshot view', () => {
+    expect(['/', '/factory/kanban', '/factory/tasks/42', '/settings', '/usage', '/knowledge', '/nowhere'].map(pageForPath))
+      .toEqual(['home', 'factory', 'factory', 'settings', 'usage', 'knowledge', 'home']);
+    expect(isWorkspaceSnapshot({
+      windows: [{ viewId: 'task-42', title: 'Task 42' }], contextPanelOpen: false,
+      view: { page: 'factory', taskId: '42', folioOpen: false, focusedViewId: 'task-42', previous: { page: 'settings', section: 'voice' } },
+    })).toBe(true);
   });
 });

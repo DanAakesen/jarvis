@@ -1,3 +1,5 @@
+import { useEffect, useState } from 'react';
+import type { WorkspaceNavigationPage, WorkspaceSettingsSection } from '@jarvis/contracts';
 import { isTaskId } from './task-windows';
 
 /**
@@ -86,4 +88,49 @@ export function revealWhenReady(find: () => Element | null, reducedMotion: boole
   };
   timer = window.setTimeout(attempt, 60);
   return () => { cancelled = true; window.clearTimeout(timer); };
+}
+
+const pagePrefixes: readonly [string, WorkspaceNavigationPage][] = [
+  ['/factory', 'factory'], ['/settings', 'settings'], ['/usage', 'usage'], ['/knowledge', 'knowledge'],
+];
+
+/** The shell page for a route, for the `view` Dan is looking at (P9-43). */
+export function pageForPath(pathname: string): WorkspaceNavigationPage {
+  return pagePrefixes.find(([prefix]) => pathname === prefix || pathname.startsWith(`${prefix}/`))?.[1] ?? 'home';
+}
+
+/**
+ * The Settings section Dan is reading: the last section whose top has passed 35% of the viewport height. It is
+ * measured on scroll (throttled) and shortly after Settings opens, while its data loads.
+ */
+export function useVisibleSettingsSection(active: boolean): WorkspaceSettingsSection | undefined {
+  const [section, setSection] = useState<WorkspaceSettingsSection | undefined>();
+  useEffect(() => {
+    if (!active) return;
+    let timer = 0;
+    const measure = () => {
+      timer = 0;
+      const line = window.innerHeight * 0.35;
+      let current: WorkspaceSettingsSection | undefined;
+      let currentTop = -Infinity;
+      for (const [key, anchorId] of Object.entries(settingsAnchors)) {
+        const anchor = document.getElementById(anchorId);
+        const top = (anchor?.closest('section') ?? anchor)?.getBoundingClientRect().top;
+        if (top !== undefined && top <= line && top > currentTop) {
+          current = key as WorkspaceSettingsSection;
+          currentTop = top;
+        }
+      }
+      setSection(current);
+    };
+    const schedule = () => { if (!timer) timer = window.setTimeout(measure, 200); };
+    const settle = [400, 1500, 4000].map((delay) => window.setTimeout(measure, delay));
+    document.addEventListener('scroll', schedule, { capture: true, passive: true });
+    return () => {
+      window.clearTimeout(timer);
+      settle.forEach((id) => window.clearTimeout(id));
+      document.removeEventListener('scroll', schedule, { capture: true });
+    };
+  }, [active]);
+  return active ? section : undefined;
 }

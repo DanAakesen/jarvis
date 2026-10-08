@@ -209,8 +209,9 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   Navigation returns `applied: true` and its destination only after a tab
   acknowledges application; refusal, timeout and cancellation retain existing
   broker semantics. Send is not an applied acknowledgement. The UI reports a
-  reason when a page/section is unknown, a task/issue is not found, or Folio/Status
-  is not yet implemented. The backend rejects unknown contract keys before
+  reason when a page/section is unknown, a task/issue is not found, or Status
+  is not yet implemented. Folio navigation opens a pane over the current page.
+  The backend rejects unknown contract keys before
   delivery and does not resolve task/issue existence on the UI's behalf.
   The UI session owns shell routing, settings-section
   selection, page transitions and applied/refused acknowledgements; this
@@ -250,8 +251,19 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   and IDs, including minimised windows, plus context-panel visibility) through
   owner-authenticated `POST /now/workspace/state`. The broker keeps one snapshot per
   open `/now/events` session, uses the most recently reported one, and drops a
-  tab's snapshot when that tab disconnects;
-  no view content or workspace state is persisted. Jev selects fixed
+  tab's snapshot when that tab disconnects.
+  P9-43 adds optional `view` metadata for page, Settings section, Factory
+  task/issue, focused window, Folio pane and previous destination. Shared guards
+  and the owner route validate it while accepting older snapshots. The existing
+  agent-loaded `/factory/context` includes `workspaceContext` on every turn;
+  the hosted client retains this field in its reference JSON. The voice relay
+  refreshes the same line in every `response.create` instruction, preserving
+  existing session or response instructions. It quotes/escapes and caps titles
+  at 80 characters, includes at most eight windows (focused first), and includes
+  no view content or frame tokens. Missing snapshots and previous destinations
+  produce explicit no-guessing guidance. UI publication and live model acceptance
+  remain separate.
+  No view content or workspace state is persisted. Jev selects fixed
   `workspace_command` targets for show/focus/minimise/restore/close, a large
   resize, tiled/layered layout and context-panel visibility. A context-panel
   `open` command without a view opens existing content idempotently; an `open`
@@ -481,7 +493,10 @@ when projects are created, renamed, or archived. Signed unsupported and
 untracked events are acknowledged as ignored without SQL. Tracked mappings and
 the delivery ID are committed together in one serializable transaction; duplicate
 deliveries cannot replay state writes. Only delivery metadata and allowlisted
-mapping fields are stored; P3-04 and P3-07 update project records.
+mapping fields are stored; P3-04 and P3-07 update project records. The `issues`
+event maps only a `labeled` action for the `Jarvis` label on a tracked repository;
+the Factory fetches the issue and Dan's comments through the existing
+repository-scoped GitHub App token issuer before creating a task.
 `KEY_VAULT_URI` is supplied by Bicep, and the backend managed identity reads and
 caches the secret after its first successful Key Vault lookup. Missing Key Vault
 configuration or secret fails webhook requests with 503, not an unsigned fallback.
@@ -529,6 +544,18 @@ events. `/now/events` emits a typed `board` event with the affected project ID
 and monotonically increasing in-process version. No migration or GitHub
 Project write is needed; live GitHub reads require the App's issue read
 permission.
+
+Migration `0037_task_github_issues` adds nullable `tasks.issue_number` and a
+filtered unique index that permits one active task per project and issue while
+retaining old unlinked rows. `POST /factory/issues/:number/start` is available
+only to Dan; the shared `start_issue` tool accepts an optional active project and
+defaults to Codex. `create_task` creates a GitHub issue before queuing its linked
+task. Issue title, body and Dan-authored comments are encoded as untrusted JSON
+in the task prompt alongside the repository's root `AGENTS.md`. Task events
+publish content-free started, PR, attention, done and cancelled comments to the
+issue; cancellation also removes the `Jarvis` label. PRs use the issue's task ID
+in their title and include `Fixes #N`. Offline fake-backed tests cover these
+flows; live GitHub issue reads/writes await the P10-01 App permission change.
 
 Chat-created tasks retain their originating message ID. Committed Done,
 NeedsAttention, Cancelled, and backend `pull_request_opened` events route a short
@@ -2171,7 +2198,7 @@ Azure sign-in from GitHub Actions uses OpenID Connect and stores no secret. The 
 
 ### GitHub App
 
-[`github-app-manifest.json`](github-app-manifest.json) prepares a private App with contents and pull-request write access, and issues, commit statuses, checks, Actions, environments and deployments read access. It subscribes to `check_run`, `deployment_status`, `pull_request`, `push`, and `workflow_run`. The permission set is limited to the operations in P3-02, P3-03 and P7-45; repository metadata read is GitHub's required baseline.
+[`github-app-manifest.json`](github-app-manifest.json) prepares a private App with contents and pull-request write access, and issues, commit statuses, checks, Actions, environments and deployments read access. It subscribes to `check_run`, `deployment_status`, `pull_request`, `push`, and `workflow_run`. The permission set is limited to the operations in P3-02, P3-03 and P7-45; repository metadata read is GitHub's required baseline. P10-02 adds issue operations and the `issues` webhook handler; P10-01 must grant Issues write and enable the `issues` subscription before these paths work live.
 
 The backend reads `github-app-private-key` from Key Vault with its managed identity
 and uses the configured `GITHUB_APP_ID` to mint one-hour installation tokens
