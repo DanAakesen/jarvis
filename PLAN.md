@@ -454,7 +454,7 @@ Declined in the audit (do not file): verbosity and max-output-token settings, no
 | P9-09 | [#503](https://github.com/DanAakesen/jarvis/issues/503) | Settings: expose hidden settings | UI session | — | In progress |
 | P9-10 | [#504](https://github.com/DanAakesen/jarvis/issues/504) | Persist bounded memory similarity, search top-k, graph text-similarity and automatic-capture settings; enforce capture preference through the shared vault tool | Backend | — | Complete |
 | P9-11 | [#505](https://github.com/DanAakesen/jarvis/issues/505) | Timeout and retry settings | Backend | — | Complete |
-| P9-12 | [#506](https://github.com/DanAakesen/jarvis/issues/506) | `get_settings`/`update_settings` tools | Backend | P9-01 | In progress |
+| P9-12 | [#506](https://github.com/DanAakesen/jarvis/issues/506) | Shared `get_settings`/`update_settings` tools for allow-listed non-secret settings; Now confirmation for model-role and daily vision budget changes; retain `set_jarvis_model` as an alias | Backend | P9-01 | Complete |
 | P9-13 | [#507](https://github.com/DanAakesen/jarvis/issues/507) | Settings UI: Models, Voice, Research, Memory, Timeouts | UI session | P9-01, P9-05, P9-06, P9-10, P9-11 | In progress |
 | P9-14 | [#508](https://github.com/DanAakesen/jarvis/issues/508) | Persist background jobs | Backend | — | Complete |
 | P9-15 | [#509](https://github.com/DanAakesen/jarvis/issues/509) | Ship the jobs chip | UI session | — | In progress |
@@ -477,7 +477,7 @@ Declined in the audit (do not file): verbosity and max-output-token settings, no
 | P9-32 | [#526](https://github.com/DanAakesen/jarvis/issues/526) | Clipboard read and write via the PC bridge | Backend | — | Complete |
 | P9-33 | [#527](https://github.com/DanAakesen/jarvis/issues/527) | Delete a vault note | Backend | — | Complete |
 | P9-34 | [#528](https://github.com/DanAakesen/jarvis/issues/528) | Weather and location | Backend | — | Not started |
-| P9-35 | [#529](https://github.com/DanAakesen/jarvis/issues/529) | Rename Recipes to Routines, with edit and rename | Backend + UI session | — | In progress |
+| P9-35 | [#529](https://github.com/DanAakesen/jarvis/issues/529) | Rename Recipes to Routines, with edit and rename | Backend + UI session | — | Complete |
 | P9-36 | [#530](https://github.com/DanAakesen/jarvis/issues/530) | One capability prompt for voice and chat | Backend | — | In progress |
 | P9-37 | [#531](https://github.com/DanAakesen/jarvis/issues/531) | Tool parity and stale-tool tests | Backend | — | Not started |
 | P9-38 | [#532](https://github.com/DanAakesen/jarvis/issues/532) | Clean up features.md, add a verified-live column | Backend | — | Not started |
@@ -505,6 +505,7 @@ P8-02 allocated P8-04 through P8-13 to frontend work in PR #233. Backend tasks t
 | ID | Issue | Task | Acceptance criteria | Depends on | Status |
 | --- | --- | --- | --- | --- | --- |
 | P9-26 | [#520](https://github.com/DanAakesen/jarvis/issues/520) | Add backend Calendar event updates for title, paired start/end times, location, attendees, and description, and event deletion; keep the web app unchanged | PATCH only supplied fields; allow clearing location, description, and attendees; encode event IDs; stage update/delete through the existing exact later-message confirmation; redact sensitive audits and cover fake Google requests and invalid partial times | P7-22, P7-28 | Complete |
+| P9-35 | [#529](https://github.com/DanAakesen/jarvis/issues/529) | Rename saved PC/browser recipes to Routines; add API/tool rename and retain one-release aliases; keep the web app unchanged | Use the shared routine contract, migrate legacy settings keys on write, validate names and Dan-only routes, preserve routine IDs and replay steps, and test canonical plus alias tools/routes | P7-35 | Complete |
 | P9-36 | [#530](https://github.com/DanAakesen/jarvis/issues/530) | Use one backend-owned capability and safety prompt for realtime voice and chat, with chat loading it through `/agent/settings` | Share PC/browser, research, background-job, knowledge, and safety guidance; reflect the existing memory-capture setting; preserve the shared tool registry and confirmation behavior; make no web or database changes | P9-01, P9-05, P9-06, P9-10, P9-11, P9-14, P9-30 | In progress |
 
 ### Confirm before P0

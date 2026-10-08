@@ -742,6 +742,16 @@ function withRoleSettings(settings: SettingsPatch): SettingsPatch {
   return { ...settings, ...(Object.keys(roles).length === 0 ? {} : { roles }) };
 }
 
+export function validateSettingsPatch(
+  value: unknown,
+  catalogue: ModelCatalogue = fallbackModelCatalogue(),
+  current: Settings = defaultSettings,
+): SettingsPatch | null {
+  if (!isSettingsPatch(value, catalogue, current)) return null;
+  const patch = withRoleSettings(value);
+  return isSettingsPatch(patch, catalogue, current) ? patch : null;
+}
+
 export function settingsOptionsForCatalogue(catalogue: ModelCatalogue) {
   const roles = Object.fromEntries(modelRoles.map((role) => {
     const models = modelsForRole(catalogue, role);
@@ -986,11 +996,8 @@ export async function registerSettingsRoutes(app: import('fastify').FastifyInsta
     const body = request.body as { settings: unknown };
     const catalogue = await app.modelCatalogue.read();
     const current = await readSettings(app.settingsStore, catalogue);
-    if (!isSettingsPatch(body.settings, catalogue, current)) {
-      return reply.code(400).send({ error: 'Invalid setting value' });
-    }
-    const patch = withRoleSettings(body.settings);
-    if (!isSettingsPatch(patch, catalogue, current)) return reply.code(400).send({ error: 'Invalid setting value' });
+    const patch = validateSettingsPatch(body.settings, catalogue, current);
+    if (!patch) return reply.code(400).send({ error: 'Invalid setting value' });
     const embeddingModelChanged = patch.roles?.embedding?.model !== undefined &&
       patch.roles.embedding.model !== current.roles.embedding.model;
     await app.settingsStore.write(patch);

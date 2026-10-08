@@ -4,6 +4,7 @@ import { loadConfig } from '../config.js';
 import type { ToolCallRecord } from './tool-calls.js';
 import { flattenSettings, type SettingsStore } from './settings.js';
 import { coreModule } from './index.js';
+import type { TeamsNotificationService } from '../teams/service.js';
 
 const config = { ...loadConfig({}), logLevel: 'silent' as const };
 const headers = {
@@ -21,6 +22,7 @@ function fixture() {
     }),
   };
   const record = vi.fn<(call: ToolCallRecord) => Promise<void>>(async () => {});
+  const runConfirmed = vi.fn(async (_kind: string, _summary: string, action: () => Promise<unknown>) => action());
   const app = buildApp(config, undefined, {
     modules: [coreModule],
     auth: async () => ({
@@ -30,9 +32,10 @@ function fixture() {
     }),
     settingsStore,
     toolCallStore: { record },
+    teamsNotifications: { runConfirmed } as unknown as TeamsNotificationService,
   });
   apps.push(app);
-  return { app, settingsStore, values, record };
+  return { app, settingsStore, values, record, runConfirmed };
 }
 
 afterEach(async () => {
@@ -41,7 +44,7 @@ afterEach(async () => {
 
 describe('Jarvis model tool', () => {
   it('registers a schema-backed tool and applies supported settings to the next session', async () => {
-    const { app, settingsStore, values } = fixture();
+    const { app, settingsStore, values, runConfirmed } = fixture();
     const discovery = await app.inject({ url: '/tools', headers });
     expect(discovery.json()).toContainEqual(expect.objectContaining({
       name: 'set_jarvis_model',
@@ -63,6 +66,12 @@ describe('Jarvis model tool', () => {
     expect(settingsStore.write).toHaveBeenCalledWith({
       roles: { chat: { model: 'gpt-5.6-luna', reasoningEffort: 'high' } },
     });
+    expect(runConfirmed).toHaveBeenCalledWith(
+      'other',
+      'Change chat model settings in Jarvis settings.',
+      expect.any(Function),
+      expect.any(AbortSignal),
+    );
     expect(values).toEqual({
       'roles.chat.model': '"gpt-5.6-luna"',
       'roles.chat.reasoning_effort': '"high"',

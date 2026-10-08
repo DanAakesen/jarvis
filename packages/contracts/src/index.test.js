@@ -20,6 +20,9 @@ import {
   researchSettingsSchema,
   timeoutSettingsBounds,
   timeoutSettingsSchema,
+  routineNameMaxLength,
+  routineNameSchema,
+  routineUpdateSchema,
   voiceTuningSettingsBounds,
   voiceTuningSettingsSchema,
   isGeneratedView,
@@ -133,6 +136,19 @@ test('timeout settings contracts bound tool, long-tool and backend HTTP requests
     toolTimeoutSeconds: { type: 'integer', minimum: 1, maximum: 120 },
     longToolTimeoutSeconds: { type: 'integer', minimum: 30, maximum: 320 },
     backendHttpTimeoutSeconds: { type: 'integer', minimum: 1, maximum: 60 },
+  });
+});
+
+test('routine rename contract bounds names and accepts only the name field', () => {
+  assert.equal(routineNameMaxLength, 80);
+  assert.deepEqual(routineNameSchema, {
+    type: 'string', minLength: 1, maxLength: 80, pattern: '\\S',
+  });
+  assert.deepEqual(routineUpdateSchema, {
+    type: 'object',
+    properties: { name: routineNameSchema },
+    required: ['name'],
+    additionalProperties: false,
   });
 });
 
