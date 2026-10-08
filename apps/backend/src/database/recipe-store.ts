@@ -1,4 +1,5 @@
 import sql from 'mssql';
+import { routineNameMaxLength } from '@jarvis/contracts';
 import { databaseReadRequest } from './wake-retry.js';
 import {
   normalizeRoutineName, recipeId, validRecipe, type RecipeStore, type TaskRecipe,
@@ -102,7 +103,7 @@ export function createRecipeStore(pool: sql.ConnectionPool): RecipeStore {
           .input('id', sql.NVarChar(64), id)
           .input('key', sql.NVarChar(128), prefix + id)
           .input('legacyKey', sql.NVarChar(128), legacyPrefix + id)
-          .input('name', sql.NVarChar(80), normalizedName)
+          .input('name', sql.NVarChar(routineNameMaxLength * 2), normalizedName)
           .query(`
             DECLARE @lock int;
             EXEC @lock = sys.sp_getapplock @Resource=N'jarvis.task-recipes',

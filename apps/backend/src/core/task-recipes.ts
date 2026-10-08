@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import type { FastifyRequest } from 'fastify';
-import type { Routine } from '@jarvis/contracts';
+import { routineNameMaxLength, type Routine } from '@jarvis/contracts';
 import {
   isJevFailure, jevChoiceConfidenceThreshold, jevFailureFromStatus,
   logJevFailure, reflexSourceForRequest, type JevFailure,
@@ -112,7 +112,7 @@ export function recipeId(recipe: Pick<RecipeDraft, 'kind' | 'key' | 'goal'>): st
 export function normalizeRoutineName(value: unknown): string | undefined {
   if (typeof value !== 'string') return undefined;
   const name = value.trim();
-  return name && name.length <= 80 && !unsafeMetadata(name) ? name : undefined;
+  return name && Array.from(name).length <= routineNameMaxLength && !unsafeMetadata(name) ? name : undefined;
 }
 
 export function validRecipe(value: unknown): value is TaskRecipe {

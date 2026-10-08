@@ -1,4 +1,4 @@
-import { routineNameSchema, routineUpdateSchema } from '@jarvis/contracts';
+import { routineNameMaxLength, routineNameSchema, routineUpdateSchema } from '@jarvis/contracts';
 import type { BackendModule } from '../modules.js';
 import { ToolRefusal, type JarvisTool } from './tool-registry.js';
 import { normalizeRoutineName, type RecipeStore } from './task-recipes.js';
@@ -32,7 +32,7 @@ function createManagementTool(name: string, legacy: boolean, store: RecipeStore 
       if ((args.action === 'rename' || args.action === 'update') &&
           args.id && /^[a-f0-9]{64}$/u.test(args.id) && args.name !== undefined) {
         const normalizedName = normalizeRoutineName(args.name);
-        if (!normalizedName) throw new ToolRefusal('Choose a safe routine name of at most 80 characters.');
+        if (!normalizedName) throw new ToolRefusal(`Choose a safe routine name of at most ${routineNameMaxLength} characters.`);
         return { updated: await store.rename(args.id, normalizedName) };
       }
       throw new ToolRefusal('Choose list, delete with a routine ID, or rename with a routine ID and name.');

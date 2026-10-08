@@ -155,6 +155,8 @@ describe('task recipes', () => {
     expect(validRecipe(recipe)).toBe(true);
     expect(validRecipe({ ...recipe, name: 'Find search' })).toBe(true);
     expect(validRecipe({ ...recipe, name: 'private token' })).toBe(false);
+    expect(validRecipe({ ...recipe, name: '🔎'.repeat(80) })).toBe(true);
+    expect(validRecipe({ ...recipe, name: '🔎'.repeat(81) })).toBe(false);
     expect(recipeId({ ...draft, name: 'Find search' })).toBe(recipe.id);
     expect(validRecipe({ ...recipe, text: 'private' })).toBe(false);
     expect(validRecipe({ ...recipe, steps: [{ operation: 'click', target, text: 'private' }, { operation: 'done' }] })).toBe(false);
