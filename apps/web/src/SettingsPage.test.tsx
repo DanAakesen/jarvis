@@ -74,7 +74,7 @@ function response(body: unknown, status = 200) {
 }
 
 function settingsResponse(current = settings, credentials: {
-  name: 'codex-login' | 'copilot-token';
+  name: string;
   expiresAt: string | null;
   lastRenewedAt: string | null;
   status: 'ok' | 'renew_soon' | 'failed' | 'unknown';
@@ -425,5 +425,79 @@ describe('SettingsPage', () => {
     expect((await screen.findByRole('alert')).textContent).toMatch(/backend is deployed/);
     expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull();
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('edits models per role, tuning, research, retrieval and timeouts, and requests a deployment removal', async () => {
+    const user = userEvent.setup();
+    const role = (model: string) => ({ model, reasoningEffort: 'none' });
+    const advanced = {
+      ...settings,
+      voice: { ...settings.voice, serverVadThreshold: 0.7, prefixPaddingMs: 300, silenceDurationMs: 600, bargeInEnabled: true, maxSpokenReplyTokens: 4096 },
+      research: { depth: 'quick', maxSources: 50, timeoutSeconds: 305 },
+      timeouts: { toolTimeoutSeconds: 30, longToolTimeoutSeconds: 320, backendHttpTimeoutSeconds: 10 },
+      memory: { similarityThreshold: 0.35, searchTopK: 5, graphTextSimilarityThreshold: 0.12, automaticCapture: true },
+      roles: { chat: role('gpt-5.6-luna'), vision: role('gpt-6-luna'), research: role('gpt-5.6-luna'), voice: role('gpt-realtime-2.1'),
+        transcription: role('mai-transcribe'), embedding: role('text-embedding-3-small'), codex: role('default'), copilot: role('default') },
+    };
+    const roleOptions = (models: string[], efforts: string[]) => ({ models, reasoningEffortsByModel: Object.fromEntries(models.map((model) => [model, efforts])) });
+    const advancedOptions = { ...options, roles: {
+      chat: { models: ['gpt-5.6-luna', 'gpt-6-luna'], reasoningEffortsByModel: { 'gpt-5.6-luna': ['none', 'low'], 'gpt-6-luna': ['none', 'minimal', 'xhigh'] } },
+      vision: roleOptions(['gpt-6-luna'], ['none']), research: roleOptions(['gpt-5.6-luna'], ['none']), voice: roleOptions(['gpt-realtime-2.1'], ['none']),
+      transcription: roleOptions(['mai-transcribe'], ['none']), embedding: roleOptions(['text-embedding-3-small'], ['none']),
+      codex: roleOptions(['default'], ['none', 'high']), copilot: roleOptions(['default'], ['none']),
+    } };
+    const catalogue = { source: 'arm', deployments: [{ name: 'gpt-6-luna', model: 'gpt-6-luna', version: '1', sku: 'GlobalStandard', capacity: 50,
+      capabilities: ['chat', 'image'], reasoningEfforts: ['none'] }] };
+    fetchMock.mockImplementation(async (input, init) => {
+      const url = String(input);
+      if (url.endsWith('/models')) return response(catalogue);
+      if (url.endsWith('/models/deployments/gpt-6-luna') && init?.method === 'DELETE') return response({ status: 'approval_pending', name: 'gpt-6-luna' }, 202);
+      if (url.endsWith('/settings') && init?.method === 'PATCH') return response({ settings: advanced, options: advancedOptions, credentials: [] });
+      return response({ settings: advanced, options: advancedOptions, credentials: [] });
+    });
+    renderSettingsPage();
+
+    await screen.findByRole('heading', { name: 'Models', level: 2 });
+    // The older Jarvis model section gives way to Models when the backend sends roles.
+    expect(screen.queryByRole('heading', { name: 'Jarvis', level: 2 })).toBeNull();
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Chat model' }), 'gpt-6-luna');
+    const chatEffort = screen.getByRole('combobox', { name: 'Chat reasoning' });
+    expect([...chatEffort.querySelectorAll('option')].map((option) => option.value)).toEqual(['none', 'minimal', 'xhigh']);
+    await user.selectOptions(chatEffort, 'xhigh');
+    await user.click(screen.getByRole('switch', { name: /Interrupt Jarvis by speaking/ }));
+    await user.click(screen.getByRole('button', { name: 'Deep' }));
+
+    await user.clear(screen.getByRole('spinbutton', { name: 'Tools' }));
+    await user.type(screen.getByRole('spinbutton', { name: 'Tools' }), '500');
+    expect(screen.getByText('Use 1–120 (whole number).')).not.toBeNull();
+    expect(screen.getByRole('button', { name: 'Save settings' })).toHaveProperty('disabled', true);
+    await user.clear(screen.getByRole('spinbutton', { name: 'Tools' }));
+    await user.type(screen.getByRole('spinbutton', { name: 'Tools' }), '45');
+    await user.click(screen.getByRole('button', { name: 'Save settings' }));
+
+    expect(await screen.findByText(/Saved\. These are defaults/)).not.toBeNull();
+    const patch = fetchMock.mock.calls.find(([, request]) => request?.method === 'PATCH')!;
+    expect(JSON.parse(String(patch[1]?.body))).toEqual({ settings: {
+      roles: { chat: { model: 'gpt-6-luna', reasoningEffort: 'xhigh' } },
+      voice: { bargeInEnabled: false },
+      research: { depth: 'deep' },
+      timeouts: { toolTimeoutSeconds: 45 },
+    } });
+
+    expect((await screen.findAllByText('Image')).length).toBeGreaterThan(0);
+    await user.click(screen.getByRole('button', { name: 'Remove gpt-6-luna' }));
+    await user.click(screen.getByRole('button', { name: 'Remove' }));
+    expect(await screen.findByText(/Removal of gpt-6-luna requested\. Approve it in Teams\./)).not.toBeNull();
+  });
+
+  it('still loads when the backend reports a credential this page does not know yet', async () => {
+    fetchMock.mockResolvedValueOnce(response(settingsResponse(settings, [
+      { name: 'codex-login', expiresAt: null, lastRenewedAt: null, status: 'ok' },
+      { name: 'github-app', expiresAt: null, lastRenewedAt: '2026-10-08T14:31:54.120Z', status: 'ok' },
+      { name: 'future-token', expiresAt: null, lastRenewedAt: null, status: 'unknown' },
+    ])));
+    renderSettingsPage();
+    expect(await screen.findByText('GitHub App')).not.toBeNull();
+    expect(screen.getByText('future-token')).not.toBeNull();
   });
 });

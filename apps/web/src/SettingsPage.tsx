@@ -5,6 +5,11 @@ import { saveVoiceWorkspacePreference } from './voice-workspace-preference';
 import { TaskRecipesSettings } from './TaskRecipesSettings';
 import { Loader } from './Loader';
 import { CollapsibleSection } from './CollapsibleSection';
+import { ModelsSection, ResearchSection, RetrievalSection, TimeoutsSection, VoiceTuningFields } from './SettingsAdvanced';
+import {
+  advancedProblems, isRoleOptions, isRoleSettings,
+  type MemorySettings, type ModelRole, type ResearchSettings, type RoleSettings, type TimeoutSettings, type VoiceTuningSettings,
+} from './settings-advanced-data';
 
 interface Settings {
   appearance: { theme: 'light' | 'dark' | 'system' };
@@ -21,7 +26,12 @@ interface Settings {
     danishVoice: string;
     defaultLanguage: 'da' | 'en';
     minimizeWindowsOnVoiceStart: boolean;
-  };
+  } & Partial<VoiceTuningSettings>;
+  /** Present on backends with role-based models and tuning (P9-13); older backends omit them. */
+  roles?: RoleSettings;
+  research?: ResearchSettings;
+  memory?: MemorySettings;
+  timeouts?: TimeoutSettings;
   codex: { model: string; reasoning: string };
   copilot: { model: string };
   global: { maxParallelTasks: number; screenShareDailyFrameCap: number };
@@ -55,10 +65,12 @@ interface SettingsOptions {
   projectVisibilities: string[];
   projectAgents: string[];
   projectPolicies: string[];
+  roles?: unknown;
 }
 
 interface CredentialStatus {
-  name: 'codex-login' | 'copilot-token';
+  /** Known names get friendly labels; new credentials the backend adds still show, under their own name. */
+  name: string;
   expiresAt: string | null;
   lastRenewedAt: string | null;
   status: 'ok' | 'renew_soon' | 'failed' | 'unknown';
@@ -135,7 +147,7 @@ function isSettingsResponse(value: unknown): value is SettingsResponse {
   const validOptions = optionKeys.every((key) =>
     Array.isArray(options[key]) && (options[key] as unknown[]).every((item) => typeof item === 'string'));
   const validCredentials = Array.isArray(credentials) && credentials.every((item) =>
-    isObject(item) && (item.name === 'codex-login' || item.name === 'copilot-token') &&
+    isObject(item) && typeof item.name === 'string' && /^[a-z0-9][a-z0-9-]{0,63}$/u.test(item.name) &&
     (item.status === 'ok' || item.status === 'renew_soon' || item.status === 'failed' || item.status === 'unknown') &&
     (item.expiresAt === null || (typeof item.expiresAt === 'string' && Number.isFinite(Date.parse(item.expiresAt)))) &&
     (item.lastRenewedAt === null || (typeof item.lastRenewedAt === 'string' && Number.isFinite(Date.parse(item.lastRenewedAt)))));
@@ -175,9 +187,10 @@ function isSettingsResponse(value: unknown): value is SettingsResponse {
     typeof settings.newProjects.defaultBranch === 'string';
 }
 
-const credentialNames: Record<CredentialStatus['name'], string> = {
+const credentialNames: Record<string, string> = {
   'codex-login': 'Codex login',
   'copilot-token': 'Copilot token (jarvis-copilot)',
+  'github-app': 'GitHub App',
 };
 const credentialStatusLabels: Record<CredentialStatus['status'], string> = {
   ok: 'OK',
@@ -195,11 +208,13 @@ function formatCredentialDate(value: string | null): string {
 
 function changedSettings(before: Settings, after: Settings): SettingsPatch {
   const patch: Record<string, Record<string, unknown>> = {};
-  for (const area of Object.keys(after) as (keyof Settings)[]) {
-    for (const key of Object.keys(after[area]) as (keyof Settings[typeof area])[]) {
-      if (before[area][key] !== after[area][key]) {
-        (patch[area] ??= {})[key as string] = after[area][key];
-      }
+  const areas = after as unknown as Record<string, Record<string, unknown> | undefined>;
+  const previous = before as unknown as Record<string, Record<string, unknown> | undefined>;
+  for (const area of Object.keys(areas)) {
+    const next = areas[area];
+    if (!next || typeof next !== 'object') continue;
+    for (const key of Object.keys(next)) {
+      if (previous[area]?.[key] !== next[key]) (patch[area] ??= {})[key] = next[key];
     }
   }
   return patch as SettingsPatch;
@@ -335,6 +350,12 @@ export function SettingsPage({ backendUrl, getAccessToken, activity, presence, p
     setMessage('');
   };
 
+  // Optional areas (roles, research, memory, timeouts) only exist on newer backends, so they update separately.
+  const updateArea = (area: 'roles' | 'research' | 'memory' | 'timeouts', key: string, value: unknown) => {
+    setSettings((current) => current && current[area] ? ({ ...current, [area]: { ...current[area], [key]: value } }) : current);
+    setMessage('');
+  };
+
   const resetPersonality = async () => {
     if (!settings || !savedSettings || !backendUrl || saving || personalityIsDefault) return;
     setSaving(true);
@@ -388,6 +409,11 @@ export function SettingsPage({ backendUrl, getAccessToken, activity, presence, p
   const personalityInstructionsValid = settings !== null &&
     settings.personality.customInstructions.length <= 2_000 &&
     !hasUnsupportedControlCharacters(settings.personality.customInstructions);
+  // Role-based models replace the older per-area model menus when the backend provides them.
+  const roleModels = settings && options && isRoleSettings(settings.roles) && isRoleOptions(options.roles) ? options.roles : null;
+  const hasVoiceTuning = settings !== null && typeof settings.voice.serverVadThreshold === 'number';
+  const problems = settings ? advancedProblems(settings) : {};
+  const advancedValid = Object.keys(problems).length === 0;
   const personalityIsDefault = settings !== null &&
     settings.personality.tone === defaultPersonality.tone &&
     settings.personality.responseStyle === defaultPersonality.responseStyle &&
@@ -461,6 +487,7 @@ export function SettingsPage({ backendUrl, getAccessToken, activity, presence, p
             </p>
           </CollapsibleSection>
 
+          {!roleModels && (
           <CollapsibleSection storageKey="settings.jarvis" headingId="jarvis-settings-heading" title="Jarvis" summary={<>{settings.jarvis.model}</>}>
             <div className="settings-grid">
               <SelectField id="jarvis-model" label="Chat and Danish voice model" value={settings.jarvis.model}
@@ -472,6 +499,10 @@ export function SettingsPage({ backendUrl, getAccessToken, activity, presence, p
             </div>
             <p className="settings-explanation">Model choices are limited to deployments currently configured for Jarvis.</p>
           </CollapsibleSection>
+          )}
+          {roleModels && settings.roles && <ModelsSection roles={settings.roles} options={roleModels} disabled={saving}
+            backendUrl={backendUrl} getAccessToken={getAccessToken}
+            onChange={(role: ModelRole, value) => updateArea('roles', role, value)} />}
 
           <CollapsibleSection storageKey="settings.personality" headingId="personality-settings-heading" title="Jarvis Personality">
             <p className="settings-explanation" id="personality-session-help">
@@ -525,12 +556,14 @@ export function SettingsPage({ backendUrl, getAccessToken, activity, presence, p
 
           <CollapsibleSection storageKey="settings.voice" headingId="voice-settings-heading" title="Voice">
             <div className="settings-grid">
+              {!roleModels && <>
               <SelectField id="speech-model" label="Speech-to-text model" value={settings.voice.speechToTextModel}
                 options={options.speechToTextModels} disabled={saving}
                 onChange={(value) => update('voice', 'speechToTextModel', value)} />
               <SelectField id="english-voice-model" label="English speech-to-speech model" value={settings.voice.englishModel}
                 options={options.englishModels} disabled={saving}
                 onChange={(value) => update('voice', 'englishModel', value)} />
+              </>}
               <SelectField id="english-voice" label="English voice" value={settings.voice.englishVoice}
                 options={options.englishVoices} disabled={saving}
                 onChange={(value) => update('voice', 'englishVoice', value)} />
@@ -557,8 +590,18 @@ export function SettingsPage({ backendUrl, getAccessToken, activity, presence, p
               <button className="secondary-button" type="button" disabled aria-describedby="voice-sample-help">Play English sample</button>
               <button className="secondary-button" type="button" disabled aria-describedby="voice-sample-help">Play Danish sample</button>
             </div>
+            {hasVoiceTuning && <VoiceTuningFields voice={settings.voice as VoiceTuningSettings} problems={problems} disabled={saving}
+              onChange={(key, value) => update('voice', key, value as never)} />}
           </CollapsibleSection>
 
+          {settings.research && <ResearchSection research={settings.research} problems={problems} disabled={saving}
+            onChange={(key, value) => updateArea('research', key, value)} />}
+          {settings.memory && <RetrievalSection memory={settings.memory} problems={problems} disabled={saving}
+            onChange={(key, value) => updateArea('memory', key, value)} />}
+          {settings.timeouts && <TimeoutsSection timeouts={settings.timeouts} problems={problems} disabled={saving}
+            onChange={(key, value) => updateArea('timeouts', key, value)} />}
+
+          {!roleModels && (
           <CollapsibleSection storageKey="settings.coding" headingId="coding-settings-heading" title="Coding agents">
             <div className="settings-grid">
               <SelectField id="codex-model" label="Codex model" value={settings.codex.model}
@@ -573,6 +616,7 @@ export function SettingsPage({ backendUrl, getAccessToken, activity, presence, p
             </div>
             <p className="settings-explanation">Only verified provider choices are offered. Additional agent model choices depend on provider support verification.</p>
           </CollapsibleSection>
+          )}
 
           <CollapsibleSection storageKey="settings.global" headingId="global-settings-heading" title="Global" summary={<>{`Up to ${settings.global.maxParallelTasks} parallel tasks`}</>}>
             <div className="settings-field settings-number-field">
@@ -641,7 +685,7 @@ export function SettingsPage({ backendUrl, getAccessToken, activity, presence, p
                 <div className="settings-grid">
                   {credentials.map((credential) => (
                     <div className="settings-field" key={credential.name}>
-                      <strong>{credentialNames[credential.name]}</strong>
+                      <strong>{credentialNames[credential.name] ?? credential.name}</strong>
                       <span>Status: {credentialStatusLabels[credential.status]}</span>
                       <span>Expires: {formatCredentialDate(credential.expiresAt)}</span>
                       <span>Last renewed: {formatCredentialDate(credential.lastRenewedAt)}</span>
@@ -657,7 +701,7 @@ export function SettingsPage({ backendUrl, getAccessToken, activity, presence, p
 
           <div className="settings-save">
             <button className="primary-button" type="submit"
-              disabled={!dirty || !maxTasksValid || !newProjectMaxTasksValid || !personalityInstructionsValid || saving}>
+              disabled={!dirty || !advancedValid || !maxTasksValid || !newProjectMaxTasksValid || !personalityInstructionsValid || saving}>
               {saving && !resettingPersonality ? 'Saving…' : 'Save settings'}
             </button>
             <p className="settings-feedback" role={error ? 'alert' : 'status'} aria-live="polite">
