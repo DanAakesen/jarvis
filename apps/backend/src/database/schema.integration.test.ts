@@ -41,7 +41,7 @@ const tablesInSchema = [
   'sandbox_sessions', 'sandbox_turns', 'settings', 'task_event_archives', 'task_events', 'task_status_notifications',
   'tasks', 'teams_confirmations', 'teams_conversations', 'tool_calls', 'usage', 'vault_chunks', 'vault_links',
   'webhook_deliveries', 'workflow_runs', 'workspace_artifacts',
-  'workspace_html_artifact_versions', 'workspace_html_artifacts',
+  'workspace_html_artifact_versions', 'workspace_html_artifacts', 'workspace_pins',
 ];
 
 async function tables(): Promise<string[]> {

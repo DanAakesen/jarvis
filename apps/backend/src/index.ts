@@ -111,6 +111,8 @@ import { WorkspaceHtmlArtifactStore } from './database/workspace-html-artifact-s
 import { createHtmlViewModule } from './core/html-view.js';
 import { createFolioModule } from './core/folio.js';
 import { FolioStore } from './database/folio-store.js';
+import { createWorkspacePinsModule } from './core/workspace-pins.js';
+import { WorkspacePinStore } from './database/workspace-pin-store.js';
 import { createWeatherModule } from './core/weather.js';
 import { createSystemStatusReader } from './system-status.js';
 
@@ -139,6 +141,7 @@ try {
   const htmlArtifactStore = database ? new HtmlArtifactStore(database.pool) : undefined;
   const workspaceHtmlArtifactStore = database ? new WorkspaceHtmlArtifactStore(database.pool) : undefined;
   const folioStore = database ? new FolioStore(database.pool) : undefined;
+  const workspacePinStore = database ? new WorkspacePinStore(database.pool) : undefined;
   const vaultIndexStore = database ? createVaultIndexStore(database.pool) : undefined;
   const phoneSessionStore = database
     ? createPhoneSessionStore(database.pool)
@@ -686,6 +689,7 @@ try {
   if (database && folioStore && workspaceHtmlArtifactStore) {
     modules.push(createFolioModule(folioStore, workspaceHtmlArtifactStore, workspaceArtifacts));
   }
+  if (workspacePinStore) modules.push(createWorkspacePinsModule(workspacePinStore));
   let visionWatch: VisionWatchService | undefined;
   if (database && settingsStore && screenVisionModel) {
     const visionUsage = createScreenFrameUsageStore(database.pool);

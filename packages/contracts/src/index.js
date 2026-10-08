@@ -440,7 +440,7 @@ const workspaceCommandId = {
   ...string(128, 1),
   pattern: '^[A-Za-z0-9_-]{1,128}$',
 };
-const workspaceViewId = {
+export const workspaceViewIdSchema = {
   ...string(64, 1),
   pattern: '^[A-Za-z][A-Za-z0-9_-]{0,63}$',
 };
@@ -512,10 +512,10 @@ export const workspaceCommandSchema = Object.freeze({
     section: { type: 'string', enum: [...workspaceSettingsSections] },
     taskId: { type: 'string', pattern: '^[1-9][0-9]{0,18}$', maxLength: 19 },
     issueNumber: { type: 'integer', minimum: 1, maximum: Number.MAX_SAFE_INTEGER },
-    viewId: workspaceViewId,
+    viewId: workspaceViewIdSchema,
     region: { enum: workspaceWindowRegions },
     layout: { enum: workspaceArrangeLayouts },
-    viewIds: { type: 'array', minItems: 1, maxItems: 8, items: workspaceViewId, uniqueItems: true },
+    viewIds: { type: 'array', minItems: 1, maxItems: 8, items: workspaceViewIdSchema, uniqueItems: true },
     view: generatedViewSchema,
     x: { type: 'number', minimum: 0, maximum: 1 },
     y: { type: 'number', minimum: 0, maximum: 1 },
@@ -893,6 +893,51 @@ export function isHtmlArtifactFrame(value) {
 
 export function isValidHtmlArtifactHtml(value) {
   return validHtml(value);
+}
+
+export const workspacePinSchema = Object.freeze({
+  type: 'object',
+  properties: Object.freeze({
+    viewId: workspaceViewIdSchema,
+    view: generatedViewSchema,
+    pinnedAt: dateTime,
+  }),
+  required: Object.freeze(['viewId', 'view', 'pinnedAt']),
+  additionalProperties: false,
+});
+
+export const workspacePinPutSchema = Object.freeze({
+  type: 'object',
+  properties: Object.freeze({ view: generatedViewSchema }),
+  required: Object.freeze(['view']),
+  additionalProperties: false,
+});
+
+export const workspacePinResponseSchema = Object.freeze({
+  type: 'object',
+  properties: Object.freeze({ pin: workspacePinSchema }),
+  required: Object.freeze(['pin']),
+  additionalProperties: false,
+});
+
+export const workspacePinsResponseSchema = Object.freeze({
+  type: 'object',
+  properties: Object.freeze({
+    pins: Object.freeze({ type: 'array', maxItems: 20, items: workspacePinSchema }),
+  }),
+  required: Object.freeze(['pins']),
+  additionalProperties: false,
+});
+
+export function isWorkspacePin(value, options = {}) {
+  return isObject(value) && Object.keys(value).length === 3 &&
+    typeof value.viewId === 'string' && /^[A-Za-z][A-Za-z0-9_-]{0,63}$/.test(value.viewId) &&
+    isGeneratedView(value.view, options) && validIsoDateTime(value.pinnedAt);
+}
+
+export function isWorkspacePinsResponse(value, options = {}) {
+  return isObject(value) && Object.keys(value).length === 1 &&
+    Array.isArray(value.pins) && value.pins.length <= 20 && value.pins.every((pin) => isWorkspacePin(pin, options));
 }
 
 export function isWorkspaceCommand(value, options = {}) {
