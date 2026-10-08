@@ -369,7 +369,7 @@ export function isWorkspaceReflexOperation(args: Readonly<Record<string, unknown
 
 export const workspaceCommandTool: BackendModule['tools'][number] = {
   name: 'workspace_command',
-  description: 'Show or hide Dan’s conversation transcript, navigate his visible shell page (home, factory board or task/issue, settings section, usage, knowledge, folio, status), create, update, show, close, minimise, restore, focus, move, resize, or arrange a temporary workspace view, or change its context panel. Conversation visibility is reversible and needs no confirmation. Supply a unique commandId. Navigation section is settings-only; taskId and positive integer issueNumber are factory-only. Success requires a tab to acknowledge applying the command; relay its refusal reason.',
+  description: 'Show or hide Dan’s conversation transcript, navigate his visible shell page (home, factory board or task/issue, settings section, usage, knowledge, folio, status), create, update, show, close, minimise, restore, focus, move, resize, or arrange a temporary workspace view, or change its context panel. Conversation visibility is reversible and needs no confirmation. Supply a unique commandId. Navigation section is settings-only; taskId and positive integer issueNumber are factory-only. Timeline views use data.events in the given order; each event needs title and at or label (or both), with optional description. Use label (1–40 characters) for seasons or periods such as "2009/10"; use at (RFC 3339 date-time or YYYY-MM-DD) for precise dates. Success requires a tab to acknowledge applying the command; relay its refusal reason.',
   inputSchema: workspaceCommandSchema,
   sensitive: true,
   async execute(input, request, signal) {

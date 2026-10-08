@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import Fastify from 'fastify';
 import {
   generatedViewActionTypes,
   generatedViewRenderers,
@@ -108,6 +109,49 @@ const listView = (overrides = {}) => ({
   source,
   data: { items: [{ title: 'Ship the contract', details: [{ label: 'Project', value: 'Jarvis' }] }] },
   ...overrides,
+});
+
+test('timeline schema and validator accept precise dates and ordered period labels', async () => {
+  const app = Fastify({ ajv: { customOptions: { removeAdditional: false, coerceTypes: false } } });
+  app.post('/', { schema: { body: generatedViewSchema } }, async () => ({}));
+  const validate = async (payload) => (await app.inject({ method: 'POST', url: '/', payload })).statusCode === 200;
+  try {
+    for (const event of [
+      { at: '1880-11-13' },
+      { at: '2026-09-29' },
+      { at: '2024-02-29' },
+      { at: '0001-01-01' },
+      { at: '2026-09-29T12:30:00Z' },
+      { at: '2026-09-29T12:30:00.123+02:00' },
+      { at: '2016-12-31T23:59:60Z' },
+      { label: '2009/10' },
+      { label: 'Sept 2026' },
+      { label: 'x'.repeat(40) },
+      { label: '🏆'.repeat(40) },
+      { at: '2026-09-29', label: 'Sept 2026' },
+    ]) {
+      const view = listView({ renderer: 'timeline', data: { events: [{ title: 'Milestone', ...event }] } });
+      assert.equal(await validate(view), true, JSON.stringify(event));
+      assert.equal(isGeneratedView(view), true, JSON.stringify(event));
+    }
+    for (const event of [
+      {}, { label: '' }, { label: 'x'.repeat(41) }, { label: 2009 }, { label: null },
+      { label: '🏆'.repeat(41) },
+      { at: null }, { at: '2009/10' }, { at: '29 September 2026' },
+      { at: '2026-02-29' }, { at: '2026-04-31' }, { at: '2026-9-29' },
+      { at: '2026-09-29T12:30:00' }, { at: '2026-09-29T24:00:00Z' },
+      { at: '2026-09-29T12:30:00+24:00' },
+      { at: '2026-09-29T12:30:00+02' }, { at: '2026-09-29T12:30:00+0200' },
+      { at: '2026-09-29', label: '' }, { at: 'invalid', label: '2009/10' },
+      { label: '2009/10', unknown: true },
+    ]) {
+      const view = listView({ renderer: 'timeline', data: { events: [{ title: 'Milestone', ...event }] } });
+      assert.equal(await validate(view), false, JSON.stringify(event));
+      assert.equal(isGeneratedView(view), false, JSON.stringify(event));
+    }
+  } finally {
+    await app.close();
+  }
 });
 
 test('Folio contracts use bounded searchable item metadata and closed item kinds', () => {

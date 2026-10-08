@@ -244,7 +244,8 @@ export type GeneratedView =
   | (GeneratedViewBase & { renderer: 'code'; data: GeneratedCodeData })
   | (GeneratedViewBase & {
     renderer: 'timeline';
-    data: { events: { at: string; title: string; description?: string }[] };
+    data: { events: (({ at: string; label?: string } | { at?: string; label: string }) &
+      { title: string; description?: string })[] };
   })
   | (GeneratedViewBase & {
     renderer: 'chart';

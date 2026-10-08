@@ -137,7 +137,7 @@ export const coreModule: BackendModule = {
         },
         errorHandler: (error, request, reply) => {
           if (!error.validation || error.validationContext !== 'body') return reply.send(error);
-          const result = toolArgumentRefusal(tool, error.validation[0], request.log);
+          const result = toolArgumentRefusal(tool, error.validation, request.log);
           return reply.code(200).send({
             tool: tool.name, outcome: 'refused', result, confirmation: confirmToolCall(tool.name, 'refused', result),
           });
