@@ -465,18 +465,22 @@ confirms completion. The browser and hosted agent service identities do not rece
 a task-state bypass. Responses are capped at 1 MiB, and event payloads above 4 KiB
 are omitted with an explicit truncation flag.
 
-`GET /factory/board?project=<id>` returns the registered project's GitHub issues
-in the shared `FactoryBoard` contract: Backlog, Needs Dan, Ready, In progress,
-In review, and Done. It uses the repository-scoped GitHub App read token to load
-open issues, issues closed in the last 14 days, and open pull requests. Its
-status precedence matches `.github/scripts/project_board.py`; both test suites
-read the same status fixtures. Linked pull requests include draft/readiness and
-recorded checks. A task overlay is joined only through the persisted
-pull-request-to-task link and includes task state, agent, and latest sandbox end
-reason. The in-memory project snapshot is cached for one minute and invalidated
+`GET /factory/board?project=<id>` returns `{ project, fetchedAt, stale, columns }`
+in the shared `FactoryBoard` contract, with all six ordered columns:
+Backlog, Needs Dan, Ready, In progress, In review, and Done. Each card contains
+an issue, its linked pull request (including draft/readiness and checks), and
+the existing Factory task overlay when linked. Issues carry their task code,
+label names, worker, state, timestamps, and exact blocked issue numbers. The
+endpoint uses the repository-scoped GitHub App read token to load open issues,
+issues closed in the last 14 days, and open pull requests. Its status precedence
+matches `.github/scripts/project_board.py`; both test suites read the same
+status fixtures. Done cards sort by close time, and other columns by update
+time. The in-memory project snapshot is cached for one minute and invalidated
 by signed issue, pull-request, check, and workflow webhooks and committed task
-events. No migration or GitHub Project write is needed; live GitHub reads
-require the App's issue read permission.
+events. `/now/events` emits a typed `board` event with the affected project ID
+and monotonically increasing in-process version. No migration or GitHub
+Project write is needed; live GitHub reads require the App's issue read
+permission.
 
 Chat-created tasks retain their originating message ID. Committed Done,
 NeedsAttention, Cancelled, and backend `pull_request_opened` events route a short

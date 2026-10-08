@@ -764,6 +764,9 @@ repositories and uses the same six status columns and precedence as
 `project_board.py`, with shared fixtures guarding parity. Recently closed
 issues remain visible as Done for 14 days. Cached snapshots are invalidated by
 signed issue, PR, check, and workflow webhooks and committed task events; no
-GitHub Project write or database migration is added. The response contract is
-backend-owned; the UI session separately consumes it. Offline fake-provider
-tests do not establish live GitHub App permissions.
+GitHub Project write or database migration is added. The response is the
+typed `{ project, fetchedAt, stale, columns }` contract, with issue, linked PR,
+and existing Factory task details; `/now/events` emits a typed project-scoped
+board update. The response contract is backend-owned; the UI session separately
+consumes it. Offline fake-provider tests do not establish live GitHub App
+permissions.

@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { FactoryBoardStatus } from '@jarvis/contracts';
+import { isFactoryBoard } from '@jarvis/contracts';
 import { buildApp } from '../app.js';
 import { loadConfig } from '../config.js';
 import type { GitHubAppTokenIssuer } from '../github-app.js';
@@ -8,6 +8,7 @@ import type { BackendModule } from '../modules.js';
 import { factoryModule } from './index.js';
 import type { Project, ProjectStore } from './projects.js';
 import {
+  FactoryBoardCache,
   createFactoryBoard,
   createGitHubFactoryBoardReader,
   desiredFactoryBoardStatus,
@@ -28,8 +29,9 @@ const project: Project = {
   max_parallel_tasks: 1, active: true,
 };
 const sourceIssue: FactoryBoardIssue = {
-  number: 7, title: 'Implement board', labels: ['Codex', 'P1'], state: 'open',
-  closedAt: null, blockedBy: 0, body: null,
+  number: 7, url: 'https://github.com/DanAakesen/jarvis/issues/7', title: 'P10-04: Implement board',
+  taskCode: 'P10-04', labels: ['Codex', 'P1'], worker: 'Codex', state: 'open',
+  updatedAt: timestamp, closedAt: null, blockedBy: [], blockedByCount: 0, body: null,
 };
 const source: FactoryBoardSource = {
   issues: [sourceIssue],
@@ -49,14 +51,17 @@ const cases = JSON.parse(readFileSync(
   name: string;
   issue: { number: number; labels: string[]; blockedBy: number };
   pulls: { body: string; draft: boolean }[];
-  status: Exclude<FactoryBoardStatus, 'Done'>;
+  status: string;
 }[];
 const apps: ReturnType<typeof buildApp>[] = [];
 afterEach(async () => { await Promise.all(apps.splice(0).map((app) => app.close())); });
 
 function fixture(reader: ReturnType<typeof vi.fn>, options: { modules?: readonly BackendModule[] } = {}) {
   const projectStore = { list: vi.fn(async () => [project]) } as unknown as ProjectStore;
-  const taskStore = { list: vi.fn(async () => [task]) } as unknown as TaskStore;
+  const taskStore = {
+    list: vi.fn(async () => [task]),
+    get: vi.fn(async () => ({ ...task, events: [], usage: [] })),
+  } as unknown as TaskStore;
   const releaseViewStore = {
     read: vi.fn(async () => ({
       releases: [],
@@ -107,28 +112,41 @@ describe('Factory board', () => {
       [{ number: 70, checks: 'passed', taskId: task.id }],
     );
 
-    expect(board.columns.map(({ status }) => status)).toEqual([
-      'Backlog', 'Needs Dan', 'Ready', 'In progress', 'In review', 'Done',
+    expect(board.columns.map(({ id }) => id)).toEqual([
+      'backlog', 'needs_dan', 'ready', 'in_progress', 'in_review', 'done',
     ]);
     expect(board.columns[4]?.cards[0]).toEqual({
-      issueNumber: 7,
-      taskId: task.id,
-      title: sourceIssue.title,
-      labels: sourceIssue.labels,
-      pullRequests: [{
+      issue: {
+        number: 7,
+        url: sourceIssue.url,
+        title: sourceIssue.title,
+        taskCode: 'P10-04',
+        labels: sourceIssue.labels,
+        worker: 'Codex',
+        state: 'open',
+        updatedAt: timestamp,
+        closedAt: null,
+        blockedBy: [],
+      },
+      pr: {
         number: 70,
         url: 'https://github.com/DanAakesen/jarvis/pull/70',
         draft: false,
-        ready: true,
-        checks: 'passed',
-      }],
+        checks: 'passing',
+      },
       task: {
+        id: task.id,
         state: 'Running',
         agent: 'codex',
-        sandbox: { lastSessionEndReason: null },
+        activity: 'Working',
+        attemptCount: 1,
+        branch: 'jarvis/task-81',
+        startedAt: timestamp,
+        latestSessionEndReason: null,
       },
     });
-    expect(board.columns[5]?.cards.map(({ issueNumber }) => issueNumber)).toEqual([8]);
+    expect(board.columns[5]?.cards.map(({ issue: { number } }) => number)).toEqual([8]);
+    expect(isFactoryBoard(board)).toBe(true);
   });
 
   it('serves cached board snapshots and invalidates them after committed task events', async () => {
@@ -146,12 +164,16 @@ describe('Factory board', () => {
     expect(taskStore.list).toHaveBeenCalledWith({ projectId: project.id, limit: 1000, offset: 0 });
     expect(releaseViewStore.read).toHaveBeenCalledWith(project.id);
 
+    const updates: unknown[] = [];
+    const unsubscribe = app.nowEventHub.subscribe((update) => updates.push(update));
     app.eventHub.publish({
       id: '1', taskId: task.id, type: 'state_changed', summary: 'Task paused',
       payload: { to: 'Paused' }, payloadTruncated: false, source: 'backend', at: timestamp,
     } satisfies TaskEventMessage);
+    await vi.waitFor(() => expect(updates).toContainEqual({ type: 'board', projectId: project.id, version: 1 }));
     expect((await app.inject({ url: '/factory/board?project=42', headers })).statusCode).toBe(200);
     expect(reader).toHaveBeenCalledTimes(2);
+    unsubscribe();
   });
 
   it('rejects missing projects and limits GitHub reads to the configured repository', async () => {
@@ -175,6 +197,8 @@ describe('Factory board', () => {
       requests.push({ url, authorization: new Headers(init?.headers).get('authorization') });
       const issue = (number: number, closedAt: string | null) => ({
         number, title: `Issue ${number}`, body: null, state: closedAt ? 'closed' : 'open', closed_at: closedAt,
+        html_url: `https://github.com/DanAakesen/jarvis/issues/${number}`,
+        updated_at: timestamp,
         labels: [], issue_dependencies_summary: { blocked_by: 0 },
       });
       if (url.includes('state=closed')) {
@@ -198,5 +222,43 @@ describe('Factory board', () => {
       expect.stringContaining('/issues?state=closed&since='),
       expect.stringContaining('/pulls?state=open'),
     ]));
+  });
+
+  it('loads exact blocked issue numbers through the GitHub dependency API', async () => {
+    const reader = createGitHubFactoryBoardReader(async (input) => {
+      const url = String(input);
+      if (url.includes('/dependencies/blocked_by')) {
+        return new Response(JSON.stringify([{ number: 3 }, { number: 5 }]));
+      }
+      if (url.includes('/pulls?')) return new Response('[]');
+      if (url.includes('state=closed')) return new Response('[]');
+      return new Response(JSON.stringify([{
+        number: 7,
+        title: 'Blocked work',
+        html_url: 'https://github.com/DanAakesen/jarvis/issues/7',
+        body: null,
+        state: 'open',
+        updated_at: timestamp,
+        closed_at: null,
+        labels: [],
+        issue_dependencies_summary: { blocked_by: 2 },
+      }]));
+    });
+
+    await expect(reader.read(project.repo, 'reader-token', timestamp)).resolves.toMatchObject({
+      issues: [{ number: 7, blockedBy: [3, 5], blockedByCount: 2 }],
+    });
+  });
+
+  it('marks an expired cached board stale when GitHub refresh fails', async () => {
+    let now = 1_000;
+    const cache = new FactoryBoardCache(() => now, 10);
+    const snapshot = createFactoryBoard(project.id, project.repo, source, [task], [], now);
+    await expect(cache.get(project.id, async () => snapshot)).resolves.toEqual({ board: snapshot, stale: false });
+    now += 11;
+    await expect(cache.get(project.id, async () => { throw new Error('GitHub unavailable'); })).resolves.toEqual({
+      board: snapshot,
+      stale: true,
+    });
   });
 });

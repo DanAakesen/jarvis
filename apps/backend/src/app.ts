@@ -103,6 +103,7 @@ declare module 'fastify' {
     githubAppTokenIssuer: GitHubAppTokenIssuer | null;
     factoryBoardReader: FactoryBoardReader;
     factoryBoardCache: FactoryBoardCache;
+    publishFactoryBoardChange(projectId: string): void;
     githubRepositoryCatalog: GitHubRepositoryCatalog | null;
     taskController: TaskController | null;
     eventHub: TaskEventHub;
@@ -200,10 +201,22 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
   app.decorate('eventHub', options.eventHub ?? createEventHub<TaskEventMessage>());
   app.decorate('factoryBoardReader', options.factoryBoardReader ?? createGitHubFactoryBoardReader());
   app.decorate('factoryBoardCache', new FactoryBoardCache());
-  const unsubscribeFactoryBoardEvents = app.eventHub.subscribe(() => app.factoryBoardCache.invalidateAll());
-  app.addHook('onClose', async () => { unsubscribeFactoryBoardEvents(); });
   app.decorate('nowFeedStore', options.nowFeedStore ?? null);
   app.decorate('nowEventHub', options.nowEventHub ?? createEventHub<NowFeedUpdate>());
+  const factoryBoardVersions = new Map<string, number>();
+  app.decorate('publishFactoryBoardChange', (projectId: string) => {
+    const version = (factoryBoardVersions.get(projectId) ?? 0) + 1;
+    factoryBoardVersions.set(projectId, version);
+    app.factoryBoardCache.invalidateAll();
+    app.nowEventHub.publish({ type: 'board', projectId, version });
+  });
+  const unsubscribeFactoryBoardEvents = app.eventHub.subscribe((event) => {
+    app.factoryBoardCache.invalidateAll();
+    void app.taskStore?.get(event.taskId, 0, 0).then((task) => {
+      if (task) app.publishFactoryBoardChange(task.projectId);
+    }).catch(() => app.log.warn('factory.board_task_event_failed'));
+  });
+  app.addHook('onClose', async () => { unsubscribeFactoryBoardEvents(); });
   app.decorate('jarvisActivityHub', options.jarvisActivityHub ??
     createEventHub<JarvisActivityEvent | JarvisVoiceWakeEvent | BackgroundJobEvent>());
   const backgroundJobs = new BackgroundJobRegistry(app.jarvisActivityHub, Date.now, options.backgroundJobStore);

@@ -5,6 +5,7 @@ import { loadConfig } from '../config.js';
 import type { BackendModule } from '../modules.js';
 import { createGithubWebhookModule } from './webhook.js';
 import type { WebhookDeliveryInput } from './webhook-delivery.js';
+import type { ProjectStore } from '../factory/projects.js';
 
 const secret = 'webhook-test-secret';
 const sha = 'a'.repeat(40);
@@ -66,7 +67,12 @@ function fixture(
     },
   });
   const config = loadConfig({ STATIC_WEB_APP_ORIGIN: 'https://fixture.azurestaticapps.net' });
-  const app = buildApp(config, undefined, { modules: [module] });
+  const projectStore = {
+    list: async () => [{
+      id: '42', repo: repository.full_name, active: true,
+    }],
+  } as unknown as ProjectStore;
+  const app = buildApp(config, undefined, { modules: [module], projectStore });
   apps.push(app);
   return { app, deliveries };
 }
@@ -207,6 +213,7 @@ describe('GitHub webhook receiver', () => {
     expect(duplicate.json()).toEqual({ status: 'duplicate' });
     expect(events).toEqual([
       { type: 'refresh' },
+      { type: 'board', projectId: '42', version: 1 },
       { type: 'status', kind: 'pull_request_ready' },
     ]);
     unsubscribe();

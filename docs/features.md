@@ -66,7 +66,7 @@ Status as of 8 October 2026.
 | Feature | What Dan can do | Surface | Where | Status | Tasks |
 | --- | --- | --- | --- | --- | --- |
 | Task board | See tasks in columns by state with live updates; filter and search | Screen | Task view | Built | P1-08 |
-| GitHub issue board API | Load registered-project GitHub issues into the six Project Jarvis status columns with linked PR details and Factory task overlays | Backend API | `GET /factory/board?project=<id>` | Built offline; live GitHub read permission pending | P10-04 |
+| GitHub issue board API | Load GitHub-backed issue cards into the six Project Jarvis columns, with linked PR checks, Factory task overlays, and board SSE updates | Backend API | `GET /factory/board?project=<id>`; `/now/events` | Built offline; live GitHub read permission pending | P10-04 |
 | Factory release bar and task lens | Approved task-board composition with selected-project release/commit context and a closable right task-details pane; reuse existing controls and source data | Screen | Factory task view; contextual right panel | Built offline; live integrations unverified | P8-34 |
 | Create task | Create a task (project, agent, text, optional model/reasoning) | Both | Task view; by voice once P4-10 lands | Built (screen) | P1-04, P1-08, P4-10 |
 | Task detail | See header, full event timeline, sandbox sessions, disk readings, usage | Screen | Task detail | Built | P1-09 |

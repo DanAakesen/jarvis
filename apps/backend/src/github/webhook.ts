@@ -100,9 +100,31 @@ export function createGithubWebhookModule(options: WebhookOptions): BackendModul
         const invalidatesBoard = invalidatesFactoryBoard(event);
         const trackedBoardRepository = repository !== undefined &&
           (!options.isTrackedRepository || options.isTrackedRepository(repository));
+        const publishBoardUpdate = async (repo: string) => {
+          try {
+            const project = (await app.projectStore?.list())?.find((candidate) =>
+              candidate.active && candidate.repo.toLowerCase() === repo.toLowerCase());
+            if (project) app.publishFactoryBoardChange(project.id);
+          } catch {
+            request.log.warn('factory.board_webhook_update_failed');
+          }
+        };
+        if (event === 'issues' && repository && trackedBoardRepository) {
+          let inserted: boolean;
+          try {
+            inserted = await options.deliveryStore.record({
+              deliveryId, event, outcome: 'ignored',
+            });
+          } catch {
+            request.log.error('github.webhook_delivery_store_failed');
+            return reply.code(503).send({ error: 'Webhook storage unavailable' });
+          }
+          if (inserted) await publishBoardUpdate(repository);
+          return reply.code(202).send({ status: inserted ? 'accepted' : 'duplicate' });
+        }
         let mapping = acceptedEvents.has(event) ? mapGithubWebhook(event, payload) : undefined;
         if (!mapping || (options.isTrackedRepository && !options.isTrackedRepository(mapping.repository))) {
-          if (invalidatesBoard && trackedBoardRepository) app.factoryBoardCache.invalidateAll();
+          if (invalidatesBoard && trackedBoardRepository && repository) await publishBoardUpdate(repository);
           return reply.code(202).send({ status: 'ignored' });
         }
         if (mapping.kind === 'deployment_status' && mapping.status === 'failure' &&
@@ -127,11 +149,13 @@ export function createGithubWebhookModule(options: WebhookOptions): BackendModul
           });
           if (inserted) {
             app.nowEventHub.publish({ type: 'refresh' });
-            if (invalidatesBoard && trackedBoardRepository) app.factoryBoardCache.invalidateAll();
           }
         } catch {
           request.log.error('github.webhook_delivery_store_failed');
           return reply.code(503).send({ error: 'Webhook storage unavailable' });
+        }
+        if (inserted && invalidatesBoard && trackedBoardRepository) {
+          await publishBoardUpdate(mapping.repository);
         }
         try {
           await options.onMapping?.(mapping);

@@ -1,5 +1,5 @@
 import type {
-  FactoryBoard, FactoryBoardCard, FactoryBoardStatus, FactoryBoardTaskOverlay,
+  BoardCard, FactoryBoard, FactoryBoardColumn, FactoryBoardColumnId, FactoryBoardTask,
 } from '@jarvis/contracts';
 import type { FastifyInstance } from 'fastify';
 import type { GitHubAppTokenIssuer } from '../github-app.js';
@@ -10,10 +10,15 @@ const repositoryPattern = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/u;
 const maxResponseBytes = 1024 * 1024;
 const maxPages = 10;
 const pageSize = 100;
-const boardStatuses: readonly FactoryBoardStatus[] = [
-  'Backlog', 'Needs Dan', 'Ready', 'In progress', 'In review', 'Done',
+const boardColumns: readonly { id: FactoryBoardColumnId; label: string }[] = [
+  { id: 'backlog', label: 'Backlog' },
+  { id: 'needs_dan', label: 'Needs Dan' },
+  { id: 'ready', label: 'Ready' },
+  { id: 'in_progress', label: 'In progress' },
+  { id: 'in_review', label: 'In review' },
+  { id: 'done', label: 'Done' },
 ];
-const workerLabels = new Set(['Codex', 'Copilot', 'Dan', 'Jarvis']);
+const workerLabels = ['Jarvis', 'Copilot', 'Codex', 'Dan'] as const;
 const linkedIssuePattern = /\b(?:fixes|closes|resolves)\s+#(\d+)\b/giu;
 const decisionLabel = 'needs-decision';
 const deferredLabel = 'deferred';
@@ -21,11 +26,16 @@ const closedIssueWindowMs = 14 * 24 * 60 * 60 * 1000;
 
 export interface FactoryBoardIssue {
   readonly number: number;
+  readonly url: string;
   readonly title: string;
+  readonly taskCode: string | null;
   readonly labels: readonly string[];
+  readonly worker: typeof workerLabels[number] | null;
   readonly state: 'open' | 'closed';
+  readonly updatedAt: string;
   readonly closedAt: string | null;
-  readonly blockedBy: number;
+  readonly blockedBy: readonly number[];
+  readonly blockedByCount: number;
   readonly body: string | null;
 }
 
@@ -58,17 +68,21 @@ function issueFromGitHub(value: unknown): FactoryBoardIssue | null {
   const dependency = record(issue.issue_dependencies_summary);
   const number = issue.number;
   const closedAt = issue.closed_at;
+  const updatedAt = issue.updated_at;
   const body = issue.body;
   if (!Number.isSafeInteger(number) || (number as number) < 1 ||
       typeof issue.title !== 'string' || issue.title.length > 500 ||
+      typeof issue.html_url !== 'string' ||
       !Array.isArray(labels) || labels.length > 100 ||
       (issue.state !== 'open' && issue.state !== 'closed') ||
       (closedAt !== null && (typeof closedAt !== 'string' || !Number.isFinite(Date.parse(closedAt)))) ||
+      typeof updatedAt !== 'string' || !Number.isFinite(Date.parse(updatedAt)) ||
       (body !== null && typeof body !== 'string') ||
       (dependency?.blocked_by !== undefined &&
         (!Number.isSafeInteger(dependency.blocked_by) || (dependency.blocked_by as number) < 0))) {
     throw new Error('GitHub board response is invalid');
   }
+  const url = githubUrl(issue.html_url);
   const labelNames = labels.map((label) => {
     const name = record(label)?.name;
     if (typeof name !== 'string' || name.length > 100) throw new Error('GitHub board response is invalid');
@@ -76,13 +90,32 @@ function issueFromGitHub(value: unknown): FactoryBoardIssue | null {
   });
   return {
     number: number as number,
+    url,
     title: issue.title,
+    taskCode: /\bP\d{1,2}-\d{2,3}\b/u.exec(issue.title)?.[0] ?? null,
     labels: labelNames,
+    worker: workerLabels.find((worker) => labelNames.includes(worker)) ?? null,
     state: issue.state,
+    updatedAt: new Date(updatedAt).toISOString(),
     closedAt: closedAt as string | null,
-    blockedBy: (dependency?.blocked_by as number | undefined) ?? 0,
+    blockedBy: [],
+    blockedByCount: (dependency?.blocked_by as number | undefined) ?? 0,
     body: body as string | null,
   };
+}
+
+function githubUrl(value: unknown): string {
+  if (typeof value !== 'string') throw new Error('GitHub board response is invalid');
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new Error('GitHub board response is invalid');
+  }
+  if (url.protocol !== 'https:' || url.hostname !== 'github.com' || url.username || url.password || url.port) {
+    throw new Error('GitHub board response is invalid');
+  }
+  return url.toString();
 }
 
 function pullRequestFromGitHub(value: unknown): FactoryBoardPullRequestSource {
@@ -92,19 +125,10 @@ function pullRequestFromGitHub(value: unknown): FactoryBoardPullRequestSource {
       typeof pullRequest.draft !== 'boolean' || typeof pullRequest.html_url !== 'string') {
     throw new Error('GitHub board response is invalid');
   }
-  let url: URL;
-  try {
-    url = new URL(pullRequest.html_url);
-  } catch {
-    throw new Error('GitHub board response is invalid');
-  }
-  if (url.protocol !== 'https:' || url.hostname !== 'github.com' || url.username || url.password) {
-    throw new Error('GitHub board response is invalid');
-  }
   return {
     number: pullRequest.number as number,
     body: pullRequest.body as string | null,
-    url: url.toString(),
+    url: githubUrl(pullRequest.html_url),
     draft: pullRequest.draft,
   };
 }
@@ -142,9 +166,9 @@ async function readPages(
   fetchImpl: typeof fetch,
   path: string,
   token: string,
+  signal: AbortSignal,
 ): Promise<unknown[]> {
   const items: unknown[] = [];
-  const signal = AbortSignal.timeout(20_000);
   for (let page = 1; page <= maxPages; page += 1) {
     const url = `${githubApi}${path}${path.includes('?') ? '&' : '?'}per_page=${pageSize}&page=${page}`;
     const response = await fetchImpl(url, {
@@ -173,17 +197,41 @@ export function createGitHubFactoryBoardReader(fetchImpl: typeof fetch = fetch):
       }
       const [owner, name] = repository.split('/');
       const root = `/repos/${encodeURIComponent(owner!)}/${encodeURIComponent(name!)}`;
+      const signal = AbortSignal.timeout(25_000);
       const [openIssues, recentlyUpdatedClosedIssues, openPulls] = await Promise.all([
-        readPages(fetchImpl, `${root}/issues?state=open`, token),
-        readPages(fetchImpl, `${root}/issues?state=closed&since=${encodeURIComponent(closedSince)}`, token),
-        readPages(fetchImpl, `${root}/pulls?state=open`, token),
+        readPages(fetchImpl, `${root}/issues?state=open`, token, signal),
+        readPages(fetchImpl, `${root}/issues?state=closed&since=${encodeURIComponent(closedSince)}`, token, signal),
+        readPages(fetchImpl, `${root}/pulls?state=open`, token, signal),
       ]);
       const cutoff = Date.parse(closedSince);
-      const issues = [...openIssues, ...recentlyUpdatedClosedIssues]
+      const candidates = [...openIssues, ...recentlyUpdatedClosedIssues]
         .map(issueFromGitHub)
         .filter((issue): issue is FactoryBoardIssue => issue !== null)
         .filter((issue) => issue.state === 'open' ||
           (issue.closedAt !== null && Date.parse(issue.closedAt) >= cutoff));
+      const issues: FactoryBoardIssue[] = [];
+      for (let offset = 0; offset < candidates.length; offset += 8) {
+        const batch = candidates.slice(offset, offset + 8);
+        issues.push(...await Promise.all(batch.map(async (issue) => {
+          if (issue.blockedByCount === 0) return issue;
+          const dependencies = await readPages(
+            fetchImpl,
+            `${root}/issues/${issue.number}/dependencies/blocked_by`,
+            token,
+            signal,
+          );
+          const blockedBy = dependencies.map((dependency) => {
+            const blockedIssue = record(dependency);
+            if (!blockedIssue || !Number.isSafeInteger(blockedIssue.number) ||
+                (blockedIssue.number as number) < 1) {
+              throw new Error('GitHub board response is invalid');
+            }
+            return blockedIssue.number as number;
+          });
+          if (blockedBy.length !== issue.blockedByCount) throw new Error('GitHub board response is incomplete');
+          return { ...issue, blockedBy };
+        })));
+      }
       return { issues, pullRequests: openPulls.map(pullRequestFromGitHub) };
     },
   };
@@ -196,17 +244,21 @@ export class FactoryBoardCache {
 
   constructor(private readonly now: () => number = Date.now, private readonly ttlMs = 60_000) {}
 
-  async get(repository: string, load: () => Promise<FactoryBoard>): Promise<FactoryBoard> {
-    const key = repository.toLowerCase();
+  async get(projectId: string, load: () => Promise<FactoryBoard>): Promise<{ board: FactoryBoard; stale: boolean }> {
+    const key = projectId;
     const cached = this.entries.get(key);
     if (cached && cached.expiresAt > this.now()) {
       this.entries.delete(key);
       this.entries.set(key, cached);
-      return cached.board;
+      return { board: cached.board, stale: false };
     }
-    if (cached) this.entries.delete(key);
     const pending = this.pending.get(key);
-    if (pending?.generation === this.generation) return pending.promise;
+    if (pending?.generation === this.generation) {
+      return pending.promise.then((board) => ({ board, stale: false }), () => {
+        if (cached) return { board: cached.board, stale: true };
+        throw new Error('Factory board is unavailable');
+      });
+    }
 
     const generation = this.generation;
     const promise = load().then((board) => {
@@ -219,7 +271,12 @@ export class FactoryBoardCache {
       if (this.pending.get(key)?.promise === promise) this.pending.delete(key);
     });
     this.pending.set(key, { generation, promise });
-    return promise;
+    try {
+      return { board: await promise, stale: false };
+    } catch {
+      if (cached) return { board: cached.board, stale: true };
+      throw new Error('Factory board is unavailable');
+    }
   }
 
   invalidateAll(): void {
@@ -233,23 +290,31 @@ export function linkedIssueNumbers(body: string | null): Set<number> {
 }
 
 export function desiredFactoryBoardStatus(
-  issue: Pick<FactoryBoardIssue, 'number' | 'labels' | 'blockedBy'>,
+  issue: Pick<FactoryBoardIssue, 'number' | 'labels'> & { blockedBy: number | readonly number[] },
   linkedPullRequests: readonly Pick<FactoryBoardPullRequestSource, 'body' | 'draft'>[],
-): Exclude<FactoryBoardStatus, 'Done'> {
+): 'Backlog' | 'Needs Dan' | 'Ready' | 'In progress' | 'In review' {
   const linked = linkedPullRequests.filter((pullRequest) => linkedIssueNumbers(pullRequest.body).has(issue.number));
   if (linked.some((pullRequest) => !pullRequest.draft)) return 'In review';
   const labels = new Set(issue.labels);
-  if (linked.length > 0 || issue.labels.some((label) => workerLabels.has(label))) return 'In progress';
+  if (linked.length > 0 ||
+      issue.labels.some((label) => workerLabels.includes(label as typeof workerLabels[number]))) return 'In progress';
   if (labels.has(decisionLabel)) return 'Needs Dan';
-  if (labels.has(deferredLabel) || issue.blockedBy > 0) return 'Backlog';
+  if (labels.has(deferredLabel) ||
+      (typeof issue.blockedBy !== 'number' && issue.blockedBy.length > 0) ||
+      typeof issue.blockedBy === 'number' && issue.blockedBy > 0) return 'Backlog';
   return 'Ready';
 }
 
-function taskOverlay(task: TaskRecord): FactoryBoardTaskOverlay {
+function taskOverlay(task: TaskRecord): FactoryBoardTask {
   return {
+    id: task.id,
     state: task.state,
     agent: task.agent,
-    sandbox: { lastSessionEndReason: task.latestSessionEndReason ?? null },
+    activity: task.activity,
+    attemptCount: task.attemptCount,
+    branch: task.branch,
+    startedAt: task.startedAt,
+    latestSessionEndReason: task.latestSessionEndReason ?? null,
   };
 }
 
@@ -264,6 +329,7 @@ export function createFactoryBoard(
     readonly taskId: string | null;
   }[],
   now = Date.now(),
+  stale = false,
 ): FactoryBoard {
   const cutoff = now - closedIssueWindowMs;
   const tasks = new Map(taskRecords.map((task) => [task.id, task]));
@@ -272,25 +338,57 @@ export function createFactoryBoard(
     checks: pullRequestRecords.find((record) => record.number === pullRequest.number)?.checks ?? null,
     taskId: pullRequestRecords.find((record) => record.number === pullRequest.number)?.taskId ?? null,
   }));
-  const columns = boardStatuses.map((status) => ({ status, cards: [] as FactoryBoardCard[] }));
+  const columns: FactoryBoardColumn[] = boardColumns.map(({ id }) => ({ id, cards: [] }));
   for (const issue of source.issues) {
-    if (issue.state === 'closed' && (!issue.closedAt || Date.parse(issue.closedAt) < cutoff)) continue;
+    if (issue.state === 'closed' && (!issue.closedAt || Date.parse(issue.closedAt) < cutoff ||
+        Date.parse(issue.closedAt) > now)) continue;
     const linked = pullRequests.filter((pullRequest) => linkedIssueNumbers(pullRequest.body).has(issue.number));
-    const status = issue.state === 'closed' ? 'Done' : desiredFactoryBoardStatus(issue, linked);
-    const taskId = linked.map(({ taskId }) => taskId).find((id): id is string => id !== null && tasks.has(id)) ?? null;
-    const task = taskId ? tasks.get(taskId) : undefined;
-    const column = columns.find((candidate) => candidate.status === status)!;
-    column.cards.push({
-      issueNumber: issue.number,
-      taskId,
-      title: issue.title,
-      labels: [...issue.labels],
-      pullRequests: linked.map(({ number, url, draft, checks }) => ({ number, url, draft, ready: !draft, checks })),
+    const status = issue.state === 'closed' ? 'done' : boardColumns.find(({ label }) =>
+      label === desiredFactoryBoardStatus(issue, linked))!.id;
+    const linkedPullRequests = linked.map((pullRequest) => ({
+      ...pullRequest,
+      record: pullRequestRecords.find((record) => record.number === pullRequest.number),
+    }));
+    const linkedTask = linkedPullRequests.find(({ record }) => record?.taskId && tasks.has(record.taskId));
+    const task = linkedTask?.record?.taskId ? tasks.get(linkedTask.record.taskId) : undefined;
+    const primaryPullRequest = linkedTask ?? linkedPullRequests[0];
+    const checks = primaryPullRequest?.record?.checks;
+    const card: BoardCard = {
+      issue: {
+        number: issue.number,
+        url: issue.url,
+        title: issue.title,
+        taskCode: issue.taskCode,
+        labels: [...issue.labels],
+        worker: issue.worker,
+        state: issue.state,
+        updatedAt: issue.updatedAt,
+        closedAt: issue.closedAt,
+        blockedBy: [...issue.blockedBy],
+      },
+      pr: primaryPullRequest ? {
+        number: primaryPullRequest.number,
+        url: primaryPullRequest.url,
+        draft: primaryPullRequest.draft,
+        checks: checks === 'passed' ? 'passing' : checks === 'failed' ? 'failing' : checks === 'pending' ? 'pending' : 'none',
+      } : null,
       task: task ? taskOverlay(task) : null,
-    });
+    };
+    columns.find(({ id }) => id === status)!.cards.push(card);
   }
-  for (const column of columns) column.cards.sort((left, right) => left.issueNumber - right.issueNumber);
-  return { projectId, repository, fetchedAt: new Date(now).toISOString(), columns };
+  for (const column of columns) {
+    column.cards.sort((left, right) => column.id === 'done'
+      ? Date.parse(right.issue.closedAt!) - Date.parse(left.issue.closedAt!) ||
+        right.issue.number - left.issue.number
+      : Date.parse(right.issue.updatedAt) - Date.parse(left.issue.updatedAt) ||
+        right.issue.number - left.issue.number);
+  }
+  return {
+    project: { id: projectId, repo: repository },
+    fetchedAt: new Date(now).toISOString(),
+    stale,
+    columns,
+  };
 }
 
 function isSqlBigInt(value: string): boolean {
@@ -326,7 +424,7 @@ export function registerFactoryBoardRoute(app: FastifyInstance): void {
     if (!project) return reply.code(404).send({ error: 'Project not found' });
 
     try {
-      const board = await app.factoryBoardCache.get(`${project.id}:${project.repo}`, async () => {
+      const { board, stale } = await app.factoryBoardCache.get(project.id, async () => {
         const now = Date.now();
         const closedSince = new Date(now - closedIssueWindowMs).toISOString();
         const token = await tokenIssuer.issueForRepositoryRead(project.repo);
@@ -344,11 +442,12 @@ export function registerFactoryBoardRoute(app: FastifyInstance): void {
           now,
         );
       });
-      const serialized = JSON.stringify(board);
+      const response = { ...board, stale };
+      const serialized = JSON.stringify(response);
       if (Buffer.byteLength(serialized) > 1024 * 1024) {
         return reply.code(413).send({ error: 'Factory board response too large' });
       }
-      return reply.header('Cache-Control', 'no-store').send(board);
+      return reply.header('Cache-Control', 'no-store').send(response);
     } catch {
       request.log.warn('factory.board_read_failed');
       return reply.code(502).send({ error: 'Factory board unavailable' });
