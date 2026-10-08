@@ -58,6 +58,7 @@ test('clipboard contracts bound UTF-8 text and keep read/write result shapes exa
   assert.equal(isClipboardText('é'.repeat(clipboardTextMaxBytes / 2)), true);
   assert.equal(isClipboardText('é'.repeat(clipboardTextMaxBytes / 2 + 1)), false);
   assert.equal(isClipboardText(null), false);
+  assert.equal(isClipboardText('\0'), false);
   assert.equal(isClipboardReadResult({ text: 'clipboard text' }), true);
   assert.equal(isClipboardReadResult({ text: 'x'.repeat(clipboardTextMaxBytes + 1) }), false);
   assert.equal(isClipboardReadResult({ text: '', extra: true }), false);

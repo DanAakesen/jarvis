@@ -111,9 +111,16 @@ describe('authenticated PC bridge protocol', () => {
     const { app, record, records } = fixture({ logLevel: 'info' });
     const url = await listen(app);
     const bridge = await connectBridge(url);
+    const withoutCurrentMessage = await app.inject({
+      method: 'POST',
+      url: '/tools/pc_clipboard_read',
+      headers: { authorization: ['Bearer', agentToken].join(' ') },
+      payload: {},
+    });
     const clipboardText = [
       ['pass', 'word=demo-password-value'].join(''),
       'api_key="secret key"',
+      'key=demo-key-value',
       ['Bearer', 'demo-token-value'].join(' '),
       'sk-proj-12345678901234567890',
       'ordinary clipboard text',
@@ -126,12 +133,14 @@ describe('authenticated PC bridge protocol', () => {
 
     const response = await callTool(app, 'pc_clipboard_read', {});
 
+    expect(withoutCurrentMessage.statusCode).toBe(400);
     expect(response.json()).toMatchObject({
       outcome: 'ok',
       result: {
         text: [
           ['pass', 'word=[REDACTED]'].join(''),
           'api_key=[REDACTED]',
+          'key=[REDACTED]',
           '[REDACTED]',
           '[REDACTED]',
           'ordinary clipboard text',
@@ -148,6 +157,7 @@ describe('authenticated PC bridge protocol', () => {
     expect(records.join('')).not.toContain(clipboardText);
     expect(record.mock.calls.map(([call]) => JSON.stringify(call)).join('')).not.toContain('demo-password-value');
     expect(record.mock.calls.map(([call]) => JSON.stringify(call)).join('')).not.toContain('secret key');
+    expect(record.mock.calls.map(([call]) => JSON.stringify(call)).join('')).not.toContain('demo-key-value');
     expect(record.mock.calls.map(([call]) => JSON.stringify(call)).join('')).not.toContain('demo-token-value');
   });
 

@@ -84,7 +84,12 @@ public sealed class WindowsCommandExecutor : IWindowCaptureProvider
         var dispatcher = _clipboardDispatcher;
         if (dispatcher is null || dispatcher.IsDisposed || !dispatcher.IsHandleCreated)
             throw new InvalidOperationException("Clipboard dispatcher is unavailable.");
-        return dispatcher.InvokeRequired ? (T)dispatcher.Invoke(action)! : action();
+        T InvokeAction()
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return action();
+        }
+        return dispatcher.InvokeRequired ? (T)dispatcher.Invoke((Func<T>)InvokeAction)! : InvokeAction();
     }
 
     public WindowCaptureFrame? Capture(CancellationToken cancellationToken)

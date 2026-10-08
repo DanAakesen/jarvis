@@ -160,6 +160,25 @@ public sealed class CommandPolicyTests
     }
 
     [Fact]
+    public void Maximum_clipboard_text_fits_the_bounded_bridge_envelope_when_json_escaped()
+    {
+        const string id = "1730aa51-f380-4df9-a345-1feb862cb1c4";
+        var text = new string('\u0001', CommandPolicy.MaxClipboardTextBytes);
+        var command = JsonSerializer.SerializeToUtf8Bytes(new
+        {
+            id,
+            type = "command",
+            command = "clipboard_write",
+            arguments = new { text },
+        });
+        var response = BridgeProtocol.Success(id, new { text });
+
+        Assert.True(command.Length <= BridgeProtocol.MaxMessageBytes);
+        Assert.True(response.Length <= BridgeProtocol.MaxMessageBytes);
+        Assert.True(BridgeProtocol.TryReadCommand(command, out _));
+    }
+
+    [Fact]
     public void Reads_only_bounded_well_formed_commands()
     {
         var valid = Encoding.UTF8.GetBytes(
