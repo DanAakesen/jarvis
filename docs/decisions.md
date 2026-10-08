@@ -774,6 +774,15 @@ a reason if they are missing or if Folio/Status is not implemented; sending a
 command never implies application.
 
 
+## P9-37 (8 October 2026) — Keep voice, chat, and the backend tool catalogue aligned
+
+Treat `GET /tools` as the source catalogue for both model clients. Offline backend
+tests compare voice tool names with that endpoint, check tool identifiers in the
+shared capability instructions against the registered tools, and require plain
+object roots for the model-facing chat and voice schemas. Provider behavior
+remains unverified.
+
+
 ## 6 October 2026 — Credential health and repair (#457)
 
 P6-18 keeps the existing `renew_soon` status vocabulary and Codex renewal lease.
