@@ -54,6 +54,9 @@ import {
   isClipboardWriteResult,
   isSystemSmokeStatus,
   systemSmokeCheckIds,
+  factoryBoardColumnIds,
+  isFactoryBoard,
+  isFactoryBoardUpdate,
 } from './index.js';
 
 const source = { id: 'factory.tasks', status: 'complete' };
@@ -277,11 +280,13 @@ test('Now SSE contracts guard every named event and its payload', () => {
       data: { command: { commandId: 'cmd_1', operation: 'show', viewId: 'report' }, expiresAt: 1_791_379_200_000 },
     },
     { event: 'workspace-cancel', data: { commandId: 'cmd_1' } },
+    { event: 'board', data: { projectId: '42', version: 1 } },
   ];
 
   assert.deepEqual(nowSseEventNames, events.map(({ event }) => event));
   for (const event of events) assert.equal(isNowSseEvent(event), true, event.event);
   assert.equal(isNowSseEvent({ event: 'mode', data: { mode: 'away' } }), false);
+  assert.equal(isNowSseEvent({ event: 'board', data: { projectId: '0', version: 1 } }), false);
   assert.equal(isNowSseEvent({ event: 'job', data: { ...job, unexpected: true } }), false);
   assert.equal(isNowSseEvent({
     event: 'workspace-command',
@@ -289,6 +294,61 @@ test('Now SSE contracts guard every named event and its payload', () => {
   }), false);
   assert.equal(isNowSseEvent({ event: 'workspace-cancel', data: { commandId: 'cmd_1', extra: true } }), false);
   assert.equal(isNowSseEvent({ event: 'unknown', data: {} }), false);
+});
+
+test('Factory board contract validates the exact ordered board, cards, and task overlay', () => {
+  const timestamp = '2026-10-08T00:00:00.000Z';
+  const board = {
+    project: { id: '42', repo: 'DanAakesen/jarvis' },
+    fetchedAt: timestamp,
+    stale: false,
+    columns: factoryBoardColumnIds.map((id) => ({ id, cards: [] })),
+  };
+  board.columns[4].cards.push({
+    issue: {
+      number: 7,
+      url: 'https://github.com/DanAakesen/jarvis/issues/7',
+      title: 'P10-04: Match board',
+      taskCode: 'P10-04',
+      labels: ['Codex'],
+      worker: 'Codex',
+      state: 'open',
+      updatedAt: timestamp,
+      closedAt: null,
+      blockedBy: [],
+    },
+    pr: {
+      number: 70,
+      url: 'https://github.com/DanAakesen/jarvis/pull/70',
+      draft: false,
+      checks: 'passing',
+    },
+    task: {
+      id: '81',
+      state: 'Running',
+      activity: 'Running tests',
+      agent: 'codex',
+      attemptCount: 1,
+      branch: 'jarvis/task-81',
+      startedAt: timestamp,
+      latestSessionEndReason: null,
+    },
+  });
+
+  assert.equal(isFactoryBoard(board), true);
+  assert.equal(isFactoryBoardUpdate({ projectId: '42', version: 1 }), true);
+  assert.equal(isFactoryBoardUpdate({ projectId: '42', version: 0 }), false);
+  assert.equal(isFactoryBoard({ ...board, columns: [...board.columns].reverse() }), false);
+  assert.equal(isFactoryBoard({
+    ...board,
+    columns: board.columns.map((column, index) =>
+      index === 4 ? { ...column, cards: [{ ...column.cards[0], issue: { ...column.cards[0].issue, url: 'http://github.com/issues/7' } }] } : column),
+  }), false);
+  assert.equal(isFactoryBoard({
+    ...board,
+    columns: board.columns.map((column, index) =>
+      index === 4 ? { ...column, cards: [{ ...column.cards[0], task: { ...column.cards[0].task, unexpected: true } }] } : column),
+  }), false);
 });
 
 test('task-event and task stream contracts constrain persisted event identity and shape', () => {

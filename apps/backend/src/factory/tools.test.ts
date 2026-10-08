@@ -232,7 +232,10 @@ describe('Software Factory Jarvis tools', () => {
       const response = await app.inject({
         method: 'POST', url: `/tools/${name}`, headers, payload,
       });
-      expect(response.statusCode, name).toBe(400);
+      expect(response.statusCode, name).toBe(200);
+      expect(response.json()).toMatchObject({
+        outcome: 'refused', result: { refused: expect.stringContaining('Invalid arguments:') },
+      });
     }
     expect(record).not.toHaveBeenCalled();
     expect(projectStore.list).not.toHaveBeenCalled();

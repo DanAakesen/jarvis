@@ -52,7 +52,8 @@ export type NowFeedStatusKind = 'pull_request_ready' | 'deployment_failed' | 'ap
 export type NowFeedUpdate =
   | { type: 'refresh' }
   | { type: 'mode_changed'; mode: PresenceMode; away: boolean }
-  | { type: 'status'; kind: NowFeedStatusKind };
+  | { type: 'status'; kind: NowFeedStatusKind }
+  | { type: 'board'; projectId: string; version: number };
 
 export type NowFeedEventHub = EventHub<NowFeedUpdate>;
 
@@ -202,7 +203,9 @@ export function registerNowRoutes(app: FastifyInstance) {
       if (closed) return;
       const frame: NowSseEvent = event.type === 'mode_changed'
         ? { event: 'mode', data: {} }
-        : { event: 'now', data: {} };
+        : event.type === 'board'
+          ? { event: 'board', data: { projectId: event.projectId, version: event.version } }
+          : { event: 'now', data: {} };
       if (!writeSseEvent(response, frame)) end();
     });
     unsubscribeActivity = app.jarvisActivityHub.subscribe((event) => {

@@ -42,7 +42,8 @@ export class FolioItemNotFound extends Error {
 
 function mapItem(row: FolioRow): FolioItem {
   const item: FolioItem = {
-    id: row.item_id as FolioItem['id'],
+    // SQL Server returns uniqueidentifier text in upper case; Folio ids are lower case (L124).
+    id: row.item_id.toLowerCase() as FolioItem['id'],
     kind: row.kind,
     title: row.title,
     promptSummary: row.prompt_summary,
@@ -54,7 +55,7 @@ function mapItem(row: FolioRow): FolioItem {
 }
 
 function itemParts(id: string): { kind: FolioKind; sourceId: string } {
-  const match = itemIdPattern.exec(id);
+  const match = itemIdPattern.exec(id.toLowerCase());
   if (!match) throw new FolioItemNotFound();
   return { kind: match[1] as FolioKind, sourceId: match[2]! };
 }
@@ -84,7 +85,8 @@ async function query<T>(request: sql.Request, statement: string, signal: AbortSi
 export class FolioStore {
   constructor(private readonly pool: sql.ConnectionPool) {}
 
-  async record(ownerObjectId: string, record: FolioRecord, signal: AbortSignal): Promise<FolioItem> {
+  async record(ownerObjectId: string, input: FolioRecord, signal: AbortSignal): Promise<FolioItem> {
+    const record: FolioRecord = { ...input, id: input.id.toLowerCase(), sourceId: input.sourceId.toLowerCase() };
     const parts = itemParts(record.id);
     const title = typeof record.title === 'string' ? oneLine(record.title) : '';
     const promptSummary = typeof record.promptSummary === 'string' ? oneLine(record.promptSummary) : '';
@@ -163,7 +165,7 @@ export class FolioStore {
     const { kind, sourceId } = itemParts(id);
     if (!ownerIdPattern.test(ownerObjectId)) throw new FolioItemNotFound();
     const request = databaseReadRequest(this.pool)
-      .input('id', sql.NVarChar(80), id)
+      .input('id', sql.NVarChar(80), id.toLowerCase())
       .input('owner', sql.UniqueIdentifier, ownerObjectId.toLowerCase());
     const { recordset } = await query<FolioRow>(request, `SELECT item_id, kind, source_id, title,
         prompt_summary, created_at, pinned, payload_json
@@ -197,7 +199,7 @@ export class FolioStore {
       throw new TypeError('Invalid Folio update');
     }
     const request = this.pool.request()
-      .input('id', sql.NVarChar(80), id)
+      .input('id', sql.NVarChar(80), id.toLowerCase())
       .input('owner', sql.UniqueIdentifier, ownerObjectId.toLowerCase())
       .input('title', sql.NVarChar(200), patch.title?.trim() ?? null)
       .input('pinned', sql.Bit, patch.pinned ?? null);
@@ -214,7 +216,7 @@ export class FolioStore {
     itemParts(id);
     if (!ownerIdPattern.test(ownerObjectId)) throw new FolioItemNotFound();
     const request = this.pool.request()
-      .input('id', sql.NVarChar(80), id)
+      .input('id', sql.NVarChar(80), id.toLowerCase())
       .input('owner', sql.UniqueIdentifier, ownerObjectId.toLowerCase());
     const { rowsAffected } = await query<{ item_id: string }>(request, `DELETE dbo.folio_items
       OUTPUT deleted.item_id WHERE item_id = @id AND owner_object_id = @owner;`, signal);

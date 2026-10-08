@@ -469,7 +469,8 @@ export function isBackgroundJobDetails(value: unknown): value is BackgroundJobDe
 export function isBackgroundJobEvent(value: unknown): value is BackgroundJobEvent;
 
 export const nowSseEventNames: readonly [
-  'mode', 'now', 'voice-wake', 'job', 'jarvis-activity', 'workspace-ready', 'workspace-command', 'workspace-cancel',
+  'mode', 'now', 'voice-wake', 'job', 'jarvis-activity', 'workspace-ready', 'workspace-command',
+  'workspace-cancel', 'board',
 ];
 export interface TaskEventRecord {
   id: string;
@@ -486,6 +487,7 @@ export interface TaskEventMessage extends TaskEventRecord {
 export type NowSseEvent =
   | { event: 'mode'; data: Record<string, never> }
   | { event: 'now'; data: Record<string, never> }
+  | { event: 'board'; data: FactoryBoardUpdate }
   | { event: 'voice-wake'; data: JarvisVoiceWakeEvent }
   | { event: 'job'; data: BackgroundJob }
   | { event: 'jarvis-activity'; data: JarvisActivityEvent }
@@ -497,6 +499,60 @@ export type TaskEventStreamEvent =
   | { event: 'task'; id: string; data: TaskEventMessage }
   | { event: 'ready'; data: Record<string, never> };
 export type ServerSentEvent = NowSseEvent | TaskEventStreamEvent;
+
+export const factoryBoardColumnIds: readonly [
+  'backlog', 'needs_dan', 'ready', 'in_progress', 'in_review', 'done',
+];
+export type FactoryBoardColumnId = typeof factoryBoardColumnIds[number];
+export interface BoardCardIssue {
+  number: number;
+  url: string;
+  title: string;
+  taskCode: string | null;
+  labels: string[];
+  worker: 'Jarvis' | 'Copilot' | 'Codex' | 'Dan' | null;
+  state: 'open' | 'closed';
+  updatedAt: string;
+  closedAt: string | null;
+  blockedBy: number[];
+}
+export interface BoardCardPullRequest {
+  number: number;
+  url: string;
+  draft: boolean;
+  checks: 'none' | 'pending' | 'passing' | 'failing';
+}
+export interface FactoryBoardTask {
+  id: string;
+  state: 'Ready' | 'Running' | 'PauseRequested' | 'Paused' | 'NeedsAttention' | 'Done' | 'Cancelled';
+  agent: 'codex' | 'copilot';
+  activity: string | null;
+  attemptCount: number;
+  branch: string | null;
+  startedAt: string | null;
+  latestSessionEndReason: 'done' | 'cancelled' | 'crashed' | 'idle' | 'idle_expired' | null;
+}
+export interface BoardCard {
+  issue: BoardCardIssue;
+  pr: BoardCardPullRequest | null;
+  task: FactoryBoardTask | null;
+}
+export interface FactoryBoardColumn {
+  id: FactoryBoardColumnId;
+  cards: BoardCard[];
+}
+export interface FactoryBoard {
+  project: { id: string; repo: string };
+  fetchedAt: string;
+  stale: boolean;
+  columns: FactoryBoardColumn[];
+}
+export interface FactoryBoardUpdate {
+  projectId: string;
+  version: number;
+}
+export function isFactoryBoard(value: unknown): value is FactoryBoard;
+export function isFactoryBoardUpdate(value: unknown): value is FactoryBoardUpdate;
 export function isTaskEventRecord(value: unknown): value is TaskEventRecord;
 export function isTaskEventMessage(value: unknown): value is TaskEventMessage;
 export function isNowSseEvent(

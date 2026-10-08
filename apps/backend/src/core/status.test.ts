@@ -92,7 +92,8 @@ describe('get_status_summary', () => {
     });
 
     expect(unavailable.json()).toMatchObject({ outcome: 'refused', result: { refused: 'The Now feed is unavailable.' } });
-    expect(invalid.statusCode).toBe(400);
+    expect(invalid.statusCode).toBe(200);
+    expect(invalid.json()).toMatchObject({ outcome: 'refused', result: { refused: expect.stringContaining('Invalid arguments:') } });
   });
 
   it('summarizes the full feed while away', async () => {

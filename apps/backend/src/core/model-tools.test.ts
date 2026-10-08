@@ -101,7 +101,8 @@ describe('Jarvis model tool', () => {
       method: 'POST', url: '/tools/set_jarvis_model', headers, payload: {},
     });
 
-    expect(response.statusCode).toBe(400);
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({ outcome: 'refused', result: { refused: expect.stringContaining('Invalid arguments:') } });
     expect(settingsStore.write).not.toHaveBeenCalled();
     expect(record).not.toHaveBeenCalled();
   });
