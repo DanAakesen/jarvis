@@ -227,111 +227,6 @@ describe('repository Jarvis tools', () => {
           labels: [], repository_url: 'https://api.github.com/repos/DanAakesen/other',
         }],
       });
-
-      it.each(['project', 'repository', 'repo'])('accepts the %s search selector and scopes its token and query', async (selector) => {
-        const fetchImpl = vi.fn<typeof fetch>(async (input) => {
-          const url = new URL(String(input));
-          if (url.pathname === '/repos/DanAakesen/added') return jsonResponse({ default_branch: 'main' });
-          expect(url.pathname).toBe('/search/code');
-          expect(url.searchParams.get('q')).toContain('repo:DanAakesen/added');
-          return jsonResponse({ items: [], incomplete_results: false });
-        });
-
-        it('advertises search aliases in a plain root object schema', async () => {
-          const { app } = fixture();
-          const response = await app.inject({ url: '/tools', headers });
-          const search = response.json().find(({ name }: { name: string }) => name === 'repo_search');
-          expect(search.inputSchema).toMatchObject({
-            type: 'object', required: ['query'], additionalProperties: false,
-            properties: {
-              project: { type: 'string' }, repository: { type: 'string' }, repo: { type: 'string' },
-            },
-          });
-          for (const keyword of ['anyOf', 'oneOf', 'allOf', 'not']) {
-            expect(search.inputSchema).not.toHaveProperty(keyword);
-          }
-        });
-        const { app, githubAppTokenIssuer } = fixture(fetchImpl);
-        for (const value of ['7', 'DanAakesen/added']) {
-          const response = await callTool(app, 'repo_search', { query: 'needle', [selector]: value });
-          expect(response.json()).toMatchObject({
-            outcome: 'ok', result: { repository: 'DanAakesen/added', results: [], incompleteResults: false },
-          });
-        }
-        expect(githubAppTokenIssuer.issueForContents).toHaveBeenCalledWith('DanAakesen/added');
-      });
-
-      it('preserves readable matches when GitHub marks search incomplete', async () => {
-        const fetchImpl = vi.fn<typeof fetch>(async (input) => {
-          const url = new URL(String(input));
-          if (url.pathname === '/repos/DanAakesen/jarvis') return jsonResponse({ default_branch: 'main' });
-          if (url.pathname === '/search/code') return jsonResponse({
-            incomplete_results: true,
-            items: [{
-              path: 'src/tool.ts', html_url: 'https://github.com/DanAakesen/jarvis/blob/main/src/tool.ts',
-              repository: { full_name: 'DanAakesen/jarvis' },
-            }],
-          });
-          return fileResponse('src/tool.ts', 'needle is here');
-        });
-        const { app } = fixture(fetchImpl);
-        const response = await callTool(app, 'repo_search', { query: 'needle' });
-        expect(response.json().result).toMatchObject({
-          incompleteResults: true, results: [{ path: 'src/tool.ts', line: 1, snippet: 'needle is here' }],
-          message: 'GitHub code search returned incomplete results.',
-          suggestion: expect.stringContaining('repo_read'),
-        });
-      });
-
-      it.each(['repository', 'repo'])('does not let the %s alias bypass managed repository access', async (selector) => {
-        const { app, githubAppTokenIssuer, fetchImpl } = fixture();
-        const response = await callTool(app, 'repo_search', { query: 'needle', [selector]: 'DanAakesen/other' });
-        expect(response.json().outcome).toBe('refused');
-        expect(githubAppTokenIssuer.issueForContents).not.toHaveBeenCalled();
-        expect(fetchImpl).not.toHaveBeenCalled();
-      });
-
-      it('refuses conflicting search selectors before accessing GitHub', async () => {
-        const { app, githubAppTokenIssuer } = fixture();
-        const response = await callTool(app, 'repo_search', {
-          query: 'needle', project: '7', repo: 'DanAakesen/jarvis',
-        });
-        expect(response.json()).toMatchObject({
-          outcome: 'refused', result: { refused: expect.stringContaining('Use only one repository selector') },
-        });
-        expect(githubAppTokenIssuer.issueForContents).not.toHaveBeenCalled();
-      });
-
-      it.each([
-        [false, false, 'no hits'],
-        [true, false, 'incomplete results'],
-        [true, true, 'incomplete results'],
-        [false, true, 'No readable matching snippets'],
-      ])('reports incomplete=%s and hits=%s with repository-read fallback guidance', async (incomplete, hits, message) => {
-        const fetchImpl = vi.fn<typeof fetch>(async (input) => {
-          const url = new URL(String(input));
-          if (url.pathname === '/repos/DanAakesen/jarvis') return jsonResponse({ default_branch: 'main' });
-          if (url.pathname === '/search/code') return jsonResponse({
-            incomplete_results: incomplete,
-            items: hits ? [{
-              path: 'src/tool.ts', html_url: 'https://github.com/DanAakesen/jarvis/blob/main/src/tool.ts',
-              repository: { full_name: 'DanAakesen/jarvis' },
-            }] : [],
-          });
-          return fileResponse('src/tool.ts', 'no matching snippet');
-        });
-        const { app } = fixture(fetchImpl);
-        const response = await callTool(app, 'repo_search', { query: 'needle' });
-        expect(response.json()).toMatchObject({
-          outcome: 'ok',
-          result: {
-            incompleteResults: incomplete, results: [],
-            message: expect.stringContaining(message),
-            suggestion: expect.stringContaining('repo_list'),
-          },
-        });
-        expect(response.json().result.suggestion).toContain('repo_read');
-      });
     });
     const { app, githubAppTokenIssuer } = fixture(fetchImpl);
     const response = await callTool(app, 'repo_issues', { state: 'open', query: 'repository', kind: 'issue' });
@@ -340,6 +235,111 @@ describe('repository Jarvis tools', () => {
       results: [{ number: 488, title: 'Repository discussion', labels: ['P7'] }],
     });
     expect(githubAppTokenIssuer.issueForRepositoryRead).toHaveBeenCalledWith('DanAakesen/jarvis');
+  });
+
+  it.each(['project', 'repository', 'repo'])('accepts the %s search selector and scopes its token and query', async (selector) => {
+    const fetchImpl = vi.fn<typeof fetch>(async (input) => {
+      const url = new URL(String(input));
+      if (url.pathname === '/repos/DanAakesen/added') return jsonResponse({ default_branch: 'main' });
+      expect(url.pathname).toBe('/search/code');
+      expect(url.searchParams.get('q')).toContain('repo:DanAakesen/added');
+      return jsonResponse({ items: [], incomplete_results: false });
+    });
+    const { app, githubAppTokenIssuer } = fixture(fetchImpl);
+    for (const value of ['7', 'DanAakesen/added']) {
+      const response = await callTool(app, 'repo_search', { query: 'needle', [selector]: value });
+      expect(response.json()).toMatchObject({
+        outcome: 'ok', result: { repository: 'DanAakesen/added', results: [], incompleteResults: false },
+      });
+    }
+    expect(githubAppTokenIssuer.issueForContents).toHaveBeenCalledWith('DanAakesen/added');
+  });
+
+  it('advertises search aliases in a plain root object schema', async () => {
+    const { app } = fixture();
+    const response = await app.inject({ url: '/tools', headers });
+    const search = response.json().find(({ name }: { name: string }) => name === 'repo_search');
+    expect(search.inputSchema).toMatchObject({
+      type: 'object', required: ['query'], additionalProperties: false,
+      properties: {
+        project: { type: 'string' }, repository: { type: 'string' }, repo: { type: 'string' },
+      },
+    });
+    for (const keyword of ['anyOf', 'oneOf', 'allOf', 'not']) {
+      expect(search.inputSchema).not.toHaveProperty(keyword);
+    }
+  });
+
+  it('preserves readable matches when GitHub marks search incomplete', async () => {
+    const fetchImpl = vi.fn<typeof fetch>(async (input) => {
+      const url = new URL(String(input));
+      if (url.pathname === '/repos/DanAakesen/jarvis') return jsonResponse({ default_branch: 'main' });
+      if (url.pathname === '/search/code') return jsonResponse({
+        incomplete_results: true,
+        items: [{
+          path: 'src/tool.ts', html_url: 'https://github.com/DanAakesen/jarvis/blob/main/src/tool.ts',
+          repository: { full_name: 'DanAakesen/jarvis' },
+        }],
+      });
+      return fileResponse('src/tool.ts', 'needle is here');
+    });
+    const { app } = fixture(fetchImpl);
+    const response = await callTool(app, 'repo_search', { query: 'needle' });
+    expect(response.json().result).toMatchObject({
+      incompleteResults: true, results: [{ path: 'src/tool.ts', line: 1, snippet: 'needle is here' }],
+      message: 'GitHub code search returned incomplete results.',
+      suggestion: expect.stringContaining('repo_read'),
+    });
+  });
+
+  it.each(['repository', 'repo'])('does not let the %s alias bypass managed repository access', async (selector) => {
+    const { app, githubAppTokenIssuer, fetchImpl } = fixture();
+    const response = await callTool(app, 'repo_search', { query: 'needle', [selector]: 'DanAakesen/other' });
+    expect(response.json().outcome).toBe('refused');
+    expect(githubAppTokenIssuer.issueForContents).not.toHaveBeenCalled();
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it('refuses conflicting search selectors before accessing GitHub', async () => {
+    const { app, githubAppTokenIssuer } = fixture();
+    const response = await callTool(app, 'repo_search', {
+      query: 'needle', project: '7', repo: 'DanAakesen/jarvis',
+    });
+    expect(response.json()).toMatchObject({
+      outcome: 'refused', result: { refused: expect.stringContaining('Use only one repository selector') },
+    });
+    expect(githubAppTokenIssuer.issueForContents).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [false, false, 'no hits'],
+    [true, false, 'incomplete results'],
+    [true, true, 'incomplete results'],
+    [false, true, 'No readable matching snippets'],
+  ])('reports incomplete=%s and hits=%s with repository-read fallback guidance', async (incomplete, hits, message) => {
+    const fetchImpl = vi.fn<typeof fetch>(async (input) => {
+      const url = new URL(String(input));
+      if (url.pathname === '/repos/DanAakesen/jarvis') return jsonResponse({ default_branch: 'main' });
+      if (url.pathname === '/search/code') return jsonResponse({
+        incomplete_results: incomplete,
+        items: hits ? [{
+          path: 'src/tool.ts', html_url: 'https://github.com/DanAakesen/jarvis/blob/main/src/tool.ts',
+          repository: { full_name: 'DanAakesen/jarvis' },
+        }] : [],
+      });
+      return fileResponse('src/tool.ts', 'no matching snippet');
+    });
+    const { app } = fixture(fetchImpl);
+    const response = await callTool(app, 'repo_search', { query: 'needle' });
+    expect(response.json()).toMatchObject({
+      outcome: 'ok',
+      result: {
+        incompleteResults: incomplete, results: [],
+        message: expect.stringContaining(message),
+        suggestion: expect.stringContaining('repo_list'),
+      },
+    });
+    expect(response.json().result.suggestion).toContain('repo_read');
   });
 
   it('returns documentation headings and caches repository overviews by commit', async () => {
