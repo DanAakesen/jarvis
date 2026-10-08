@@ -96,6 +96,41 @@ describe('Entra bearer authentication at the server boundary', () => {
     }
     expect(jwksRequests - before).toBe(1);
   });
+  it('accepts the configured Azure deployment identity only on the smoke route', async () => {
+    const { app } = fixture();
+    const authorization = bearer(await token({
+      aud: 'https://management.azure.com/',
+      iss: `https://sts.windows.net/${config.auth.tenantId}/`,
+      ver: '1.0',
+      oid: config.auth.deployObjectId,
+      scp: undefined,
+      idtyp: 'app',
+    }));
+
+    const accepted = await app.inject({ url: '/status/smoke', headers: { authorization } });
+    const forbidden = await app.inject({ url: '/protected', headers: { authorization } });
+
+    expect(accepted.statusCode).toBe(200);
+    expect(accepted.json().entries).toHaveLength(6);
+    expect(forbidden.statusCode).toBe(403);
+  });
+  it.each([
+    ['another service principal', { oid: '00000000-0000-0000-0000-000000000000' }],
+    ['a delegated token', { scp: 'access_as_user' }],
+    ['a user token', { idtyp: 'user' }],
+  ])('rejects %s from the smoke route', async (_name, claims) => {
+    const { app } = fixture();
+    const authorization = bearer(await token({
+      aud: 'https://management.azure.com/',
+      iss: `https://sts.windows.net/${config.auth.tenantId}/`,
+      ver: '1.0',
+      oid: config.auth.deployObjectId,
+      scp: undefined,
+      idtyp: 'app',
+      ...claims,
+    }));
+    expect((await app.inject({ url: '/status/smoke', headers: { authorization } })).statusCode).toBe(403);
+  });
   it.each([
     ['wrong audience', { aud: '00000000-0000-0000-0000-000000000000' }],
     ['resource URI instead of v2 API audience', { aud: `api://${config.auth.apiClientId}` }],
@@ -403,10 +438,25 @@ describe('auth configuration', () => {
   it('matches the nonsecret bootstrapped Entra identities', async () => {
     const { readFile } = await import('node:fs/promises');
     const bootstrap = JSON.parse(await readFile(new URL('../../../../infra/bootstrap.output.json', import.meta.url), 'utf8'));
-    expect(loadAuthConfig({})).toEqual({ tenantId: bootstrap.tenantId, apiClientId: bootstrap.api.appId, ownerObjectId: bootstrap.ownerObjectId });
+    expect(loadAuthConfig({})).toEqual({
+      tenantId: bootstrap.tenantId,
+      apiClientId: bootstrap.api.appId,
+      ownerObjectId: bootstrap.ownerObjectId,
+      deployObjectId: bootstrap.deploy.servicePrincipalId,
+    });
   });
   it.each(['ENTRA_TENANT_ID', 'ENTRA_API_CLIENT_ID', 'ENTRA_OWNER_OBJECT_ID'])('validates %s without echoing values', (name) => {
     for (const value of ['', 'secret', 'https://evil.example', '00000000-0000-0000-0000-000000000000/path']) expect(() => loadConfig({ [name]: value })).toThrow(`${name} must be a UUID`);
+  });
+  it('allows only a separate configured deployment principal', () => {
+    expect(loadAuthConfig({ ENTRA_DEPLOY_OBJECT_ID: '' })).toEqual(loadAuthConfig({}));
+    expect(loadAuthConfig({ ENTRA_DEPLOY_OBJECT_ID: config.auth.deployObjectId.toUpperCase() }).deployObjectId)
+      .toBe(config.auth.deployObjectId);
+    for (const value of ['secret', 'https://evil.example', '00000000-0000-0000-0000-000000000000/path']) {
+      expect(() => loadConfig({ ENTRA_DEPLOY_OBJECT_ID: value })).toThrow(/^ENTRA_DEPLOY_OBJECT_ID must be a UUID$/);
+    }
+    expect(() => loadConfig({ ENTRA_DEPLOY_OBJECT_ID: config.auth.ownerObjectId }))
+      .toThrow('ENTRA_DEPLOY_OBJECT_ID must identify a separate service principal');
   });
   it('reads the optional Jarvis agent object ID', () => {
     expect(loadAuthConfig({ ENTRA_JARVIS_AGENT_OBJECT_ID: '' })).toEqual(loadAuthConfig({}));

@@ -17,7 +17,7 @@ import { registerWorkspaceCommandRoutes, workspaceCommandTool } from './workspac
 import { cancelJobTool, getJobTool, listJobsTool, registerJobRoutes } from './jobs.js';
 import { findChatReflexReplay } from './reflex.js';
 import { executePhoneTool } from '../phone/approval.js';
-import { systemStatusResponseSchema } from '../system-status.js';
+import { systemSmokeResponseSchema, systemStatusResponseSchema } from '../system-status.js';
 
 const readOnlyToolsWithoutMessage = new Set(['memory_search', 'vault_search', 'vault_read']);
 
@@ -76,6 +76,22 @@ export const coreModule: BackendModule = {
       if (!request.principal) return reply.code(401).send({ error: 'Unauthorized' });
       reply.header('Cache-Control', 'private, max-age=30');
       return app.systemStatusReader.read();
+    });
+    app.get('/status/smoke', {
+      config: { jarvisDeploySmoke: true },
+      schema: { response: {
+        200: systemSmokeResponseSchema,
+        401: {
+          type: 'object',
+          properties: { error: { type: 'string', const: 'Unauthorized' } },
+          required: ['error'],
+          additionalProperties: false,
+        },
+      } },
+    }, async (request, reply) => {
+      if (!request.principal && !request.deployPrincipal) return reply.code(401).send({ error: 'Unauthorized' });
+      reply.header('Cache-Control', 'no-store');
+      return app.systemSmokeReader.run();
     });
     app.get('/health', {
       schema: { response: { 200: { type: 'object', properties: { status: { type: 'string', const: 'ok' } }, required: ['status'], additionalProperties: false } } },

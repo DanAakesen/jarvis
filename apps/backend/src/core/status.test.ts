@@ -129,6 +129,70 @@ describe('get_status_summary', () => {
     expect(JSON.stringify(first.json())).not.toMatch(/token|secret|private/iu);
   });
 
+  it('runs fresh read-only smoke probes and includes their sanitized results in GET /status', async () => {
+    const google = vi.fn(async () => ({ status: 'ok' as const, details: { configured: true } }));
+    const vault = vi.fn(async () => ({ status: 'ok' as const }));
+    const embeddings = vi.fn(async () => ({ status: 'ok' as const }));
+    const research = vi.fn(async () => ({ status: 'ok' as const }));
+    const reader = createSystemStatusReader({ google }, undefined);
+    const app = buildApp(config, undefined, {
+      modules: [coreModule],
+      auth: async () => ({ objectId: config.auth.ownerObjectId, tenantId: config.auth.tenantId }),
+      systemStatusReader: reader,
+      systemSmokeProbes: { vault, 'foundry.embeddings': embeddings, research },
+    });
+    apps.push(app);
+    await reader.read();
+
+    const smoke = await app.inject({ url: '/status/smoke', headers });
+    const status = await app.inject({ url: '/status', headers });
+
+    expect(smoke.statusCode).toBe(200);
+    expect(smoke.headers['cache-control']).toBe('no-store');
+    expect(smoke.json().entries).toHaveLength(6);
+    expect(smoke.json().entries).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'google', status: 'ok' }),
+      expect.objectContaining({ id: 'vault', status: 'ok' }),
+      expect.objectContaining({ id: 'foundry.embeddings', status: 'ok' }),
+      expect.objectContaining({ id: 'research', status: 'ok' }),
+    ]));
+    expect(status.json().smoke).toEqual(smoke.json());
+    expect(google).toHaveBeenCalledTimes(2);
+    expect(vault).toHaveBeenCalledOnce();
+    expect(embeddings).toHaveBeenCalledOnce();
+    expect(research).toHaveBeenCalledOnce();
+    expect(JSON.stringify(smoke.json())).not.toMatch(/token|secret|private|configured/iu);
+  });
+
+  it('requires Dan or the deployment principal for GET /status/smoke', async () => {
+    const app = buildApp(config, undefined, { modules: [coreModule] });
+    apps.push(app);
+    const unauthenticated = await app.inject({ url: '/status/smoke' });
+
+    expect(unauthenticated.statusCode).toBe(401);
+    expect(unauthenticated.json()).toEqual({ error: 'Unauthorized' });
+  });
+
+  it('records a failed research dry run without returning provider error text', async () => {
+    const app = buildApp(config, undefined, {
+      modules: [coreModule],
+      auth: async () => ({ objectId: config.auth.ownerObjectId, tenantId: config.auth.tenantId }),
+      systemSmokeProbes: {
+        research: async () => { throw new Error('provider response contains private data'); },
+      },
+    });
+    apps.push(app);
+
+    const response = await app.inject({ url: '/status/smoke', headers });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().entries).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'research', status: 'down' }),
+    ]));
+    expect(response.body).not.toContain('provider response contains private data');
+    expect((await app.inject({ url: '/status', headers })).json().smoke).toEqual(response.json());
+  });
+
   it('keeps GET /status unavailable to unauthenticated and agent-only identities', async () => {
     const noAuth = buildApp(config, undefined, { modules: [coreModule] });
     apps.push(noAuth);
@@ -141,5 +205,6 @@ describe('get_status_summary', () => {
     apps.push(agent);
     const response = await agent.inject({ url: '/status', headers });
     expect(response.statusCode).toBe(403);
+    expect((await agent.inject({ url: '/status/smoke', headers })).statusCode).toBe(403);
   });
 });

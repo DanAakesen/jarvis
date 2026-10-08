@@ -76,7 +76,7 @@ import { createAlertNotifier, notifyAlert } from './alerts.js';
 import type { NowFeedUpdate } from './core/now.js';
 import { createAlertActivityStore } from './database/alert-store.js';
 import { createMemoryStore, createVaultIndexStore } from './database/memory-store.js';
-import { createFoundryMemoryEmbedder } from './core/memory-embeddings.js';
+import { createFoundryMemoryEmbedder, MEMORY_EMBEDDING_DIMENSIONS } from './core/memory-embeddings.js';
 import type { MemoryEmbedder } from './core/memory-embeddings.js';
 import { readSettings } from './core/settings.js';
 import { createGitHubVaultClient, VAULT_BRANCH, VAULT_REPOSITORY } from './vault/github-client.js';
@@ -90,7 +90,7 @@ import { createBackgroundJobStore } from './database/background-job-store.js';
 import { createFoundryScreenVisionModel } from './vision/foundry-model.js';
 import { createScreenVisionModule, ScreenVisionService } from './vision/screen.js';
 import { createVisionWatchModule, VisionWatchService } from './vision/watch.js';
-import { createWebResearchModule } from './core/web-research.js';
+import { createWebResearchModule, runCodexToolResult } from './core/web-research.js';
 import { createHtmlResearchModule } from './core/research.js';
 import { HtmlArtifactStore } from './database/html-artifact-store.js';
 import { createTeamsNotificationStore } from './database/teams-notification-store.js';
@@ -354,9 +354,12 @@ try {
       },
     )
     : undefined;
-  const vaultModule = memoryStore && vaultIndexStore && githubAppTokenIssuer
+  const vaultClient = githubAppTokenIssuer
+    ? createGitHubVaultClient({ tokenIssuer: githubAppTokenIssuer })
+    : undefined;
+  const vaultModule = memoryStore && vaultIndexStore && vaultClient
     ? createVaultModule({
-      client: createGitHubVaultClient({ tokenIssuer: githubAppTokenIssuer }),
+      client: vaultClient,
       indexStore: vaultIndexStore,
       memoryStore,
       apiMemoryStore: memoryStore,
@@ -728,6 +731,53 @@ try {
       return { status: 'degraded' as const, details: { configured: true, deploymentAvailable: false } };
     }
   };
+  const systemSmokeProbes = {
+    vault: async () => {
+      if (!vaultClient) return { status: 'down' as const, details: { configured: false } };
+      await vaultClient.tree(AbortSignal.timeout(10_000));
+      return { status: 'ok' as const, details: { configured: true } };
+    },
+    'foundry.embeddings': async () => {
+      const embedder = await getMemoryEmbedder();
+      if (!embedder) return { status: 'down' as const, details: { configured: false } };
+      const vector = await embedder.embed('Jarvis post-deploy smoke check', AbortSignal.timeout(12_000));
+      return {
+        status: vector.length === MEMORY_EMBEDDING_DIMENSIONS ? 'ok' as const : 'down' as const,
+        details: { configured: true },
+      };
+    },
+    research: async () => {
+      if (!webResearchModule || !config.foundryRunnerAgentName) {
+        return { status: 'down' as const, details: { configured: false } };
+      }
+      try {
+        const selected = settingsStore
+          ? (await readSettings(settingsStore, await modelCatalogue.read())).roles.research
+          : undefined;
+        await runCodexToolResult(
+          clientFor(config.foundryRunnerAgentName),
+          'web_research',
+          'Dry run only: answer with one short sentence and no sources; do not browse or save anything.',
+          selected?.model ?? config.codexToolModel,
+          AbortSignal.timeout(20_000),
+          20_000,
+          1_000,
+          (value) => {
+            if (typeof value !== 'object' || value === null || Array.isArray(value) ||
+                typeof (value as Record<string, unknown>).answer !== 'string' ||
+                !Array.isArray((value as Record<string, unknown>).sources)) {
+              throw new Error('Research smoke response is invalid');
+            }
+            return true;
+          },
+          { reasoningEffort: selected?.reasoningEffort ?? 'none' },
+        );
+        return { status: 'ok' as const, details: { configured: true } };
+      } catch {
+        return { status: 'down' as const, details: { configured: true } };
+      }
+    },
+  };
   const deployedCommit = process.env.JARVIS_DEPLOYED_COMMIT;
   const systemStatusReader = createSystemStatusReader({
     database: async () => {
@@ -827,6 +877,7 @@ try {
   const app = buildApp(config, logger, {
     modules,
     systemStatusReader,
+    systemSmokeProbes,
     modelCatalogue,
     ...(modelDeploymentWorkflow ? { modelDeploymentWorkflow } : {}),
     ...(jevSecretClient ? { reflexClassifier } : {}),

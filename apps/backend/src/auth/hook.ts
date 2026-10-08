@@ -3,8 +3,8 @@ import type { FastifyBaseLogger, FastifyInstance, FastifyRequest } from 'fastify
 import { localWebOrigin, type BackendConfig } from '../config.js';
 import {
   AuthenticationDenied, createTokenVerifier, isAgentPrincipal, isRunnerPrincipal,
-  isPcBridgePrincipal, isPhoneEventGridPrincipal,
-  type AgentPrincipal, type PcBridgePrincipal, type PhoneEventGridPrincipal, type RunnerPrincipal,
+  isPcBridgePrincipal, isPhoneEventGridPrincipal, isDeployPrincipal,
+  type AgentPrincipal, type DeployPrincipal, type PcBridgePrincipal, type PhoneEventGridPrincipal, type RunnerPrincipal,
   type TokenVerifier, type UserPrincipal,
 } from './verify.js';
 
@@ -15,6 +15,7 @@ declare module 'fastify' {
     runnerPrincipal: RunnerPrincipal | null;
     pcBridgePrincipal: PcBridgePrincipal | null;
     phoneEventGridPrincipal: PhoneEventGridPrincipal | null;
+    deployPrincipal: DeployPrincipal | null;
   }
   // Service identities may call only the routes that explicitly opt in.
   interface FastifyContextConfig {
@@ -27,6 +28,7 @@ declare module 'fastify' {
     jarvisPhoneEvents?: boolean;
     jarvisPhoneMedia?: boolean;
     jarvisPhoneCallback?: boolean;
+    jarvisDeploySmoke?: boolean;
   }
 }
 
@@ -55,6 +57,7 @@ export function installAuthentication<Logger extends FastifyBaseLogger>(app: Fas
   app.decorateRequest('runnerPrincipal', null);
   app.decorateRequest('pcBridgePrincipal', null);
   app.decorateRequest('phoneEventGridPrincipal', null);
+  app.decorateRequest('deployPrincipal', null);
   app.addHook('onRequest', async (request, reply) => {
     if (request.routeOptions.url === '/health' && ['GET', 'HEAD'].includes(request.method)) return;
     if (request.routeOptions.config?.githubWebhook === true) return;
@@ -96,6 +99,12 @@ export function installAuthentication<Logger extends FastifyBaseLogger>(app: Fas
           throw new AuthenticationDenied(403);
         }
         request.phoneEventGridPrincipal = principal;
+      } else if (isDeployPrincipal(principal)) {
+        if (request.method !== 'GET' || request.routeOptions.url !== '/status/smoke' ||
+            request.routeOptions.config?.jarvisDeploySmoke !== true) {
+          throw new AuthenticationDenied(403);
+        }
+        request.deployPrincipal = principal;
       } else {
         if (request.routeOptions.config?.jarvisRunner === true ||
             request.routeOptions.config?.jarvisPcBridge === true ||

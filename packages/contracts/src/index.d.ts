@@ -493,6 +493,21 @@ export interface PhoneStatus {
   recentCalls: readonly PhoneCallHistoryEntry[];
 }
 
+export const systemSmokeCheckIds: readonly [
+  'google', 'github_app', 'vault', 'foundry.embeddings', 'research', 'pc_bridge',
+];
+export type SystemSmokeCheckId = typeof systemSmokeCheckIds[number];
+export interface SystemSmokeEntry {
+  id: SystemSmokeCheckId;
+  status: SystemStatusValue;
+  checkedAt: string;
+}
+export interface SystemSmokeStatus {
+  checkedAt: string;
+  entries: readonly SystemSmokeEntry[];
+}
+export function isSystemSmokeStatus(value: unknown): value is SystemSmokeStatus;
+
 export type SystemStatusValue = 'ok' | 'degraded' | 'down' | 'unknown';
 export type SystemStatusSubsystem =
   | 'database'
@@ -515,4 +530,5 @@ export interface SystemStatusEntry {
 export interface SystemStatus {
   checkedAt: string;
   entries: readonly SystemStatusEntry[];
+  smoke?: SystemSmokeStatus;
 }
