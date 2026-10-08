@@ -416,7 +416,6 @@ export function createTaskStore(
         await acquireSleepSwitchLock(transaction, 'Shared');
         const project = await new sql.Request(transaction)
           .input('projectId', sql.BigInt, BigInt(input.projectId))
-          .input('issueNumber', sql.Int, input.issueNumber ?? null)
           .query<{ defaultAgent: 'codex' | 'copilot' }>(
             'SELECT default_agent AS defaultAgent FROM dbo.projects WITH (UPDLOCK, HOLDLOCK) WHERE id = @projectId AND active = 1');
         const defaultAgent = project.recordset[0]?.defaultAgent;
@@ -434,6 +433,7 @@ export function createTaskStore(
           .input('modelOverride', sql.NVarChar(100), input.modelOverride ?? null)
           .input('reasoningOverride', sql.NVarChar(32), input.reasoningOverride ?? null)
           .input('priority', sql.Int, input.priority ?? 0)
+          .input('issueNumber', sql.Int, input.issueNumber ?? null)
           .query<TaskRow>(`INSERT INTO dbo.tasks
             (project_id, issue_number, origin_message_id, title, request, source, agent, model_override, reasoning_override, priority)
             OUTPUT ${insertedTaskColumns}
