@@ -163,7 +163,7 @@ export interface GeneratedViewPage {
 
 export interface GeneratedViewSource {
   id: 'now' | 'factory.tasks' | 'factory.projects' | 'usage' | 'image_generation' | 'html_generation' | 'research' | 'knowledge_graph';
-  status: 'complete' | 'partial' | 'unavailable';
+  status: 'running' | 'complete' | 'partial' | 'unavailable';
   updatedAt?: string;
   reason?: string;
   page?: GeneratedViewPage;
