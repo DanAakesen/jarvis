@@ -144,7 +144,7 @@ Global defaults on the settings page; a task can override the coding-agent model
 
 Dan can also change Jarvis's model or reasoning by chat or voice for the next session, and change the agent or verified model options on a Ready coding task. Running-task model changes are refused with a reason; they never alter an active turn.
 
-Presence has three modes: Present (`present`, green), Away (`away`, yellow), and On the move (`on_the_move`, blue). Away and On the move suppress spoken status updates; the Now feed and browser approvals remain available in all modes. The Settings API keeps `personality.customInstructions` as the base instruction and adds one instruction for each mode, each limited to 2,000 characters. Jarvis can change modes from chat or voice without confirmation and announces the change.
+Presence has three modes: Present (`present`, cyan), Away (`away`, amber), and On the move (`on_the_move`, neutral). Away and On the move suppress spoken status updates; the Now feed and browser approvals remain available in all modes. The Settings API keeps `personality.customInstructions` as the base instruction and adds one instruction for each mode, each limited to 2,000 characters. Jarvis can change modes from chat or voice without confirmation and announces the change.
 
 | Area | Setting | Default |
 | --- | --- | --- |

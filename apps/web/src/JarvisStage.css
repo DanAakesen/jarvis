@@ -71,3 +71,15 @@
   .jarvis-stage[data-failed="true"]::after { width: clamp(140px, 36vw, 240px); }
   .jarvis-stage-fallback { padding: 8px 10px; }
 }
+
+/* A calmer room behind glass (Dan, 7 October): while a window or the conversation is open, a soft veil settles over
+   the room so the glass reads clean instead of busy. It is a plain overlay, not a filter on the 3D canvas, so it costs
+   nothing per frame. Voice keeps the room vivid. */
+.jarvis-stage:not([data-failed="true"])::after {
+  position: absolute; inset: 0; content: ""; pointer-events: none; opacity: 0;
+  background: radial-gradient(ellipse at 50% 58%, rgb(4 8 14 / 12%), rgb(4 8 14 / 30%));
+  transition: opacity 600ms ease;
+}
+:root[data-theme="light"] .jarvis-stage:not([data-failed="true"])::after { background: radial-gradient(ellipse at 50% 58%, rgb(240 245 247 / 12%), rgb(240 245 247 / 26%)); }
+.app-shell:is([data-voice-has-windows="true"], [data-conversation-open="true"]):not([data-voice-active="true"]) .jarvis-stage:not([data-failed="true"])::after { opacity: 1; }
+@media (prefers-reduced-motion: reduce) { .jarvis-stage::after { transition: none; } }

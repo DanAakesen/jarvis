@@ -3,6 +3,7 @@ import { backendFetch } from './backend-request';
 import { useThemePreference } from './theme-preference-context';
 import { saveVoiceWorkspacePreference } from './voice-workspace-preference';
 import { TaskRecipesSettings } from './TaskRecipesSettings';
+import { Loader } from './Loader';
 
 interface Settings {
   appearance: { theme: 'light' | 'dark' | 'system' };
@@ -406,7 +407,7 @@ export function SettingsPage({ backendUrl, getAccessToken, activity, presence, p
       </header>
       {activity && <div className="settings-activity">{activity}</div>}
       {presence}
-      {state === 'loading' && <p role="status">Loading settings…</p>}
+      {state === 'loading' && <Loader variant="lines" label="Loading settings…" />}
       {state === 'error' && (
         <div className="settings-feedback" role="alert">
           <p>{error}</p>
@@ -440,7 +441,7 @@ export function SettingsPage({ backendUrl, getAccessToken, activity, presence, p
                 System
               </label>
             </fieldset>
-            {themePreference.state === 'loading' && <p className="settings-feedback" role="status">Loading saved theme…</p>}
+            {themePreference.state === 'loading' && <Loader variant="inline" label="Loading saved theme…" />}
             {themePreference.state === 'error' && (
               <div className="settings-feedback" role="alert">
                 <p>{themePreference.error}</p>

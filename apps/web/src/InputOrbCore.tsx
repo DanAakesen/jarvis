@@ -38,15 +38,20 @@ function buildCore() {
 const core = buildCore();
 
 /** A living miniature of the stage orb for the composer's voice button. Decorative; the button carries the name. */
-export function InputOrbCore() {
+/**
+ * `orb` is the chat bar's miniature orb (cyan shell and amber core). `core` is the amber brain alone, used as the
+ * live "Jarvis is working" mark in the chat; `active` keeps it at full energy.
+ */
+export function InputOrbCore({ variant = 'orb', active = false }: { variant?: 'orb' | 'core'; active?: boolean } = {}) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const { working } = useJarvisActivity();
-  const workingRef = useRef(working);
+  const workingRef = useRef(working || active);
+  const coreOnly = variant === 'core';
   const wake = useRef<() => void>(() => {});
   useEffect(() => {
-    workingRef.current = working;
+    workingRef.current = working || active;
     wake.current();
-  }, [working]);
+  }, [working, active]);
 
   useEffect(() => {
     const element = canvas.current;
@@ -55,20 +60,41 @@ export function InputOrbCore() {
     const motionQuery = window.matchMedia?.('(prefers-reduced-motion: reduce)');
     const reduced = () => (motionQuery?.matches ?? false) || document.documentElement.dataset.motion === 'reduced';
     let frame = 0;
+    let idleTimer = 0;
     let last = performance.now();
     let flow = 0;
     let energy = 0;
+    let onScreen = true;
+    // Theme colours are read once and again only when the theme changes, not on every frame.
+    let cool = '#52dcfa';
+    let warm = '#ffb45c';
+    const readColours = () => {
+      const styles = getComputedStyle(element);
+      cool = styles.getPropertyValue('--stage-orb').trim() || '#52dcfa';
+      warm = styles.getPropertyValue('--glass-glow-warm').trim() || '#ffb45c';
+    };
+    readColours();
+    // Hidden orbs (the parked chat bar, a closed menu, off-screen) draw nothing; they look again twice a second.
+    const visible = () => onScreen && document.visibilityState !== 'hidden' &&
+      (typeof element.checkVisibility !== 'function' || element.checkVisibility({ visibilityProperty: true, opacityProperty: false }));
+    const schedule = () => {
+      if (visible()) frame = requestAnimationFrame(draw);
+      else idleTimer = window.setTimeout(() => { idleTimer = 0; schedule(); }, 500);
+    };
 
     const draw = (time: number) => {
+      frame = 0;
+      // A small ambient orb needs no more than 30 fps.
+      if (!reduced() && time - last < 1000 / 30 - 4) {
+        frame = requestAnimationFrame(draw);
+        return;
+      }
       const size = element.clientWidth || 42;
-      const ratio = Math.min(window.devicePixelRatio || 1, 3);
+      const ratio = Math.min(window.devicePixelRatio || 1, 2);
       if (element.width !== Math.round(size * ratio)) {
         element.width = Math.round(size * ratio);
         element.height = Math.round(size * ratio);
       }
-      const styles = getComputedStyle(element);
-      const cool = styles.getPropertyValue('--stage-orb').trim() || '#52dcfa';
-      const warm = styles.getPropertyValue('--glass-glow-warm').trim() || '#ffb45c';
       const delta = Math.min(0.1, (time - last) / 1000);
       last = time;
       const still = reduced();
@@ -79,11 +105,12 @@ export function InputOrbCore() {
       if (!still) flow += delta * (0.35 + energy * 1.3);
 
       const half = size / 2;
-      const scale = half * 0.62;
+      const scale = half * (coreOnly ? 0.86 : 0.62);
       context.setTransform(ratio, 0, 0, ratio, 0, 0);
       context.clearRect(0, 0, size, size);
 
-      // Faint rotating meridians on the cyan glass shell.
+      // Faint rotating meridians on the cyan glass shell (the orb only).
+      if (!coreOnly) {
       context.save();
       context.beginPath();
       context.arc(half, half, half - 1.5, 0, Math.PI * 2);
@@ -103,6 +130,7 @@ export function InputOrbCore() {
       context.ellipse(half, half, half - 2, (half - 2) * 0.32, 0, 0, Math.PI * 2);
       context.stroke();
       context.restore();
+      }
 
       // Amber core: filaments and sparks rotating together, brighter while Jarvis works.
       const rotateY = flow * 0.32;
@@ -152,28 +180,35 @@ export function InputOrbCore() {
       context.globalCompositeOperation = 'source-over';
       context.globalAlpha = 1;
 
-      if (!still && document.visibilityState !== 'hidden') frame = requestAnimationFrame(draw);
-      else frame = 0;
+      if (!still && document.visibilityState !== 'hidden') schedule();
     };
     const resume = () => {
-      if (frame || document.visibilityState === 'hidden') return;
-      last = performance.now();
-      frame = requestAnimationFrame(draw);
+      if (frame || idleTimer || document.visibilityState === 'hidden') return;
+      last = performance.now() - 1000;
+      schedule();
     };
-    frame = requestAnimationFrame(draw);
+    last = performance.now() - 1000;
+    schedule();
     wake.current = resume;
     motionQuery?.addEventListener?.('change', resume);
-    const observer = typeof MutationObserver === 'function' ? new MutationObserver(resume) : null;
-    observer?.observe(document.documentElement, { attributes: true, attributeFilter: ['data-motion'] });
+    const observer = typeof MutationObserver === 'function' ? new MutationObserver(() => { readColours(); resume(); }) : null;
+    observer?.observe(document.documentElement, { attributes: true, attributeFilter: ['data-motion', 'data-theme', 'style'] });
+    const intersection = typeof IntersectionObserver === 'function' ? new IntersectionObserver((entries) => {
+      onScreen = entries.some((entry) => entry.isIntersecting);
+      if (onScreen) resume();
+    }) : null;
+    intersection?.observe(element);
     document.addEventListener('visibilitychange', resume);
     return () => {
       wake.current = () => {};
       cancelAnimationFrame(frame);
+      window.clearTimeout(idleTimer);
+      intersection?.disconnect();
       document.removeEventListener('visibilitychange', resume);
       motionQuery?.removeEventListener?.('change', resume);
       observer?.disconnect();
     };
-  }, []);
+  }, [coreOnly]);
 
   return <canvas ref={canvas} className="input-orb-core" aria-hidden="true" />;
 }

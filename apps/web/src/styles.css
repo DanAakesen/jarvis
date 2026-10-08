@@ -22,7 +22,7 @@
   --surface-translucent: rgb(240 245 247 / 92%);
   --text-muted: #5c564f;
   --rule: #d8cfc2;
-  --focus: #276d6f;
+  --focus: #14768d;
   --text: #17202a;
   --control-rule: #65747a;
   --disabled-surface: #e9e2d7;
@@ -30,37 +30,37 @@
   --error: #a4262c;
   --warning-surface: #f6dfc7;
   --warning-text: #593a16;
-  --success-wash: #dfeddf;
+  --success-wash: #dcedf1;
   --error-wash: #f6e0dc;
-  --primary-action: var(--theme-accent, #276d6f);
-  --primary-action-hover: var(--theme-accent, #1d585a);
+  --primary-action: var(--theme-accent, #14768d);
+  --primary-action-hover: var(--theme-accent, #0f5f72);
   --primary-action-text: var(--theme-accent-foreground, #ffffff);
-  --primary-action-disabled: #5e675f;
+  --primary-action-disabled: #66757c;
   --primary-action-disabled-text: #ffffff;
-  --success: #276136;
-  --state-listening: #276d6f;
-  --state-thinking: #315d80;
-  --state-speaking: #93452f;
-  --state-reconnecting: #526d24;
+  --success: #1a7f99;
+  --state-listening: #14768d;
+  --state-thinking: #8a5a1c;
+  --state-speaking: #8a5a1c;
+  --state-reconnecting: #8a5a1c;
   --state-unavailable: #a4262c;
   --orb-shadow: rgb(13 26 32 / 16%);
   --orb-highlight: var(--theme-accent-secondary, rgb(255 255 255 / 22%));
   --code-surface: #f0e9df;
-  --feedback-sheen: rgb(39 109 111 / 10%);
+  --feedback-sheen: rgb(20 118 141 / 10%);
   --ambient-field:
-    radial-gradient(ellipse at 16% 16%, rgb(39 109 111 / 9%), transparent 34%),
-    radial-gradient(ellipse at 86% 14%, rgb(213 142 108 / 12%), transparent 34%),
+    radial-gradient(ellipse at 16% 16%, rgb(20 118 141 / 9%), transparent 34%),
+    radial-gradient(ellipse at 86% 14%, rgb(201 138 58 / 11%), transparent 34%),
     radial-gradient(ellipse at 60% 86%, rgb(93 135 153 / 7%), transparent 42%);
   --ambient-opacity: 1;
   --surface-blur: 16px;
   --soft-shadow: 0 2px 8px rgb(32 37 44 / 6%), 0 20px 50px rgb(32 37 44 / 4%);
   --panel-shadow: 0 1px 2px rgb(32 37 44 / 5%), 0 18px 48px rgb(32 37 44 / 5%);
   --dialog-shadow: 0 20px 64px rgb(32 37 44 / 22%);
-  --success-surface: #e7f4ea;
+  --success-surface: #e3f2f5;
   --warning: #835000;
   --warning-surface: #fff3cd;
-  --pending: #1959ac;
-  --pending-surface: #e8f0fb;
+  --pending: #14768d;
+  --pending-surface: #e3f2f5;
   --error-surface: #fbe9e9;
   --overlay: rgb(32 37 44 / 52%);
   --stage-background: #e7edef;
@@ -96,10 +96,10 @@
   --message-dan-tint: color-mix(in srgb, var(--glass-edge-warm) 18%, transparent);
   --message-jarvis-tint: color-mix(in srgb, var(--glass-edge-cool) 12%, transparent);
   /* Stage glass: the Jarvis room shows through angled side slabs, the message window and the composer. */
-  --stage-slab: rgb(240 245 247 / 48%);
-  --shell-slab: rgb(240 245 247 / 38%);
+  --stage-slab: rgb(240 245 247 / 28%);
+  --shell-slab: rgb(240 245 247 / 18%);
   --board-slab: rgb(240 245 247 / 56%);
-  --stage-glass: rgb(240 245 247 / 30%);
+  --stage-glass: rgb(240 245 247 / 14%);
   --glass-glow-warm: #c98a3a;
   --glass-rim-light: rgb(255 255 255 / 70%);
   --slab-shadow: 0 30px 80px rgb(32 37 44 / 18%);
@@ -132,9 +132,9 @@
   --surface: rgb(16 23 33 / 90%);
   --surface-muted: rgb(8 15 22 / 92%);
   --surface-translucent: rgb(9 16 23 / 90%);
-  --text-muted: #c0d0cd;
-  --rule: rgb(226 255 246 / 16%);
-  --focus: #a5f2dc;
+  --text-muted: #c0ccd2;
+  --rule: rgb(226 246 255 / 16%);
+  --focus: #8be9ff;
   --text: #f3fff9;
   --control-rule: #74878a;
   --disabled-surface: #202a34;
@@ -142,36 +142,36 @@
   --error: #ff9690;
   --warning-surface: #483929;
   --warning-text: #ffe1bd;
-  --success-wash: #18372a;
+  --success-wash: #12303a;
   --error-wash: #47292c;
-  --primary-action: var(--theme-accent, #79ffd7);
-  --primary-action-hover: var(--theme-accent, #a1ffe3);
-  --primary-action-disabled: #46514f;
-  --primary-action-text: var(--theme-accent-foreground, #071b18);
-  --primary-action-disabled-text: #e3eeeb;
-  --success: #a0e6b2;
-  --state-listening: #79ffd7;
-  --state-thinking: #80c7ff;
-  --state-speaking: #ff9d80;
-  --state-reconnecting: #c8e985;
+  --primary-action: var(--theme-accent, #52dcfa);
+  --primary-action-hover: var(--theme-accent, #8be9ff);
+  --primary-action-disabled: #3f4c55;
+  --primary-action-text: var(--theme-accent-foreground, #04161d);
+  --primary-action-disabled-text: #e3ecef;
+  --success: #a8eefc;
+  --state-listening: #52dcfa;
+  --state-thinking: #ffb45c;
+  --state-speaking: #ffb45c;
+  --state-reconnecting: #ffb45c;
   --state-unavailable: #ff8791;
   --orb-shadow: rgb(0 0 0 / 46%);
   --orb-highlight: var(--theme-accent-secondary, rgb(255 255 255 / 18%));
   --code-surface: #101720;
   --feedback-sheen: rgb(255 230 206 / 9%);
   --ambient-field:
-    radial-gradient(ellipse at 20% 18%, rgb(121 255 215 / 17%), transparent 34%),
-    radial-gradient(ellipse at 78% 15%, rgb(255 157 128 / 15%), transparent 36%),
-    radial-gradient(ellipse at 52% 88%, rgb(128 199 255 / 8%), transparent 42%);
+    radial-gradient(ellipse at 20% 18%, rgb(82 220 250 / 13%), transparent 34%),
+    radial-gradient(ellipse at 78% 15%, rgb(255 180 92 / 11%), transparent 36%),
+    radial-gradient(ellipse at 52% 88%, rgb(82 220 250 / 6%), transparent 42%);
   --ambient-opacity: .84;
   --surface-blur: 24px;
   --soft-shadow: 0 22px 70px rgb(0 0 0 / 30%), inset 0 1px 0 rgb(255 255 255 / 4%);
   --panel-shadow: 0 16px 46px rgb(0 0 0 / 26%), inset 0 1px 0 rgb(255 255 255 / 4%);
   --dialog-shadow: 0 20px 64px rgb(0 0 0 / 62%);
-  --success-surface: #193521;
-  --warning: #f5cc72;
-  --pending: #9bc2ff;
-  --pending-surface: #24354c;
+  --success-surface: #14323d;
+  --warning: #ffc27a;
+  --pending: #8be9ff;
+  --pending-surface: #17303d;
   --error-surface: #3b2023;
   --overlay: rgb(0 0 0 / 72%);
   --stage-background: #030b13;
@@ -188,10 +188,10 @@
   --stage-orb: var(--theme-accent, #52dcfa);
   --stage-reflector: #526b80;
   --stage-exposure: 1;
-  --stage-slab: rgb(9 16 24 / 40%);
-  --shell-slab: rgb(9 16 24 / 30%);
+  --stage-slab: rgb(9 16 24 / 18%);
+  --shell-slab: rgb(9 16 24 / 12%);
   --board-slab: rgb(9 16 24 / 48%);
-  --stage-glass: rgb(9 16 24 / 18%);
+  --stage-glass: rgb(9 16 24 / 6%);
   --glass-glow-warm: #ffb45c;
   --glass-rim-light: rgb(255 255 255 / 34%);
   --slab-shadow: 0 30px 80px rgb(0 0 0 / 50%);
@@ -752,7 +752,7 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
 .conversation-input.luminous-glass {
   border-color: transparent;
   background: var(--stage-slab);
-  backdrop-filter: blur(24px) saturate(1.3);
+  backdrop-filter: blur(var(--glass-blur-window)) saturate(1.35);
   box-shadow:
     0 26px 60px -18px rgb(0 0 0 / 55%),
     0 14px 40px -22px var(--glass-glow-warm),
@@ -859,7 +859,7 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
 .app-topbar {
   border-bottom: 0;
   background: linear-gradient(180deg, var(--stage-slab), color-mix(in srgb, var(--stage-slab) 55%, transparent));
-  backdrop-filter: blur(20px) saturate(1.3);
+  backdrop-filter: blur(var(--glass-blur-shell)) saturate(1.4);
   box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--glass-rim-light) 35%, transparent);
 }
 .brand { font-size: 19px; letter-spacing: -0.01em; }
@@ -897,7 +897,7 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
     padding-inline: var(--space-3) var(--space-2);
     border-radius: var(--radius-panel);
     background: var(--shell-slab);
-    backdrop-filter: blur(14px) saturate(1.35);
+    backdrop-filter: blur(var(--glass-blur-shell)) saturate(1.4);
     box-shadow: var(--slab-shadow), inset 0 1px 0 var(--glass-rim-light);
   }
   .app-shell:not(.app-signed-out) .app-topbar::before {
@@ -1038,7 +1038,7 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
     border: 0;
     border-radius: var(--radius-panel);
     background: var(--shell-slab);
-    backdrop-filter: blur(14px) saturate(1.35);
+    backdrop-filter: blur(var(--glass-blur-shell)) saturate(1.4);
     box-shadow: var(--slab-shadow), inset 0 1px 0 var(--glass-rim-light);
     transition: transform var(--motion-panel) var(--ease-enter), opacity var(--motion-panel) var(--ease-standard);
   }
@@ -1916,7 +1916,7 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
   padding: var(--space-2) var(--space-2) var(--space-2) var(--space-4);
   border-radius: var(--radius-pill);
   background: var(--stage-slab);
-  backdrop-filter: blur(24px) saturate(1.3);
+  backdrop-filter: blur(var(--glass-blur-window)) saturate(1.35);
   box-shadow: var(--slab-shadow), inset 0 1px 0 var(--glass-rim-light);
 }
 .settings-save .primary-button { order: 2; border-radius: var(--radius-pill); }
@@ -2017,7 +2017,7 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
   border-color: transparent;
   border-radius: 36px;
   background: var(--stage-glass);
-  backdrop-filter: blur(24px) saturate(1.3);
+  backdrop-filter: blur(var(--glass-blur-window)) saturate(1.35);
   box-shadow: 0 26px 60px -18px rgb(0 0 0 / 55%), 0 14px 40px -22px var(--glass-glow-warm), inset 0 1px 0 var(--glass-rim-light);
 }
 .factory-composer .primary-button, .factory-composer .secondary-button { min-height: 40px; border-radius: var(--radius-pill); }
@@ -2035,7 +2035,7 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
     border: 1px solid color-mix(in srgb, var(--glass-rim-light) 35%, transparent);
     border-radius: var(--radius-panel);
     background: var(--surface);
-    backdrop-filter: blur(24px) saturate(1.3);
+    backdrop-filter: blur(var(--glass-blur-window)) saturate(1.35);
     box-shadow: var(--dialog-shadow), inset 0 1px 0 var(--glass-rim-light);
     color: var(--text);
     opacity: 0;
@@ -2307,7 +2307,6 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
 /* Tab bar under the top bar: minimised windows are thrown up here as glass tabs (window-fly-away.ts) and come back
    with a click. It takes no space when empty; pages keep a constant top gutter for it so nothing moves. */
 .window-tabbar { position: fixed; z-index: 35; top: calc(var(--rail-size) + 4px); right: 18px; left: calc(var(--rail-size) + 22px); display: flex; height: 34px; pointer-events: none; }
-.window-tabbar:empty { display: none; }
 .window-tabbar .workspace-tabs { display: flex; min-width: 0; gap: 6px; margin: 0; padding: 2px 4px; overflow-x: auto; scrollbar-width: none; pointer-events: auto; }
 .window-tabbar .workspace-tabs::-webkit-scrollbar { display: none; }
 .workspace-tab-item {
@@ -2316,7 +2315,6 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
   box-shadow: inset 0 1px 0 var(--glass-rim-light), inset 0 0 0 1px color-mix(in srgb, var(--glass-rim-light) 26%, transparent), 0 10px 22px -14px rgb(0 0 0 / 70%);
   animation: tab-arrive var(--motion-state) var(--ease-enter);
 }
-.app-shell[data-voice-active="false"] .workspace-tab-item[data-view-id="conversation"] { display: none; }
 .window-tabbar .workspace-tab { display: inline-flex; min-height: 30px; align-items: center; gap: 7px; margin: 0; padding: 0 4px 0 11px; border: 0; border-radius: var(--radius-pill) 0 0 var(--radius-pill); background: transparent; box-shadow: none; color: var(--text); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
 .window-tabbar .workspace-tab svg { width: 15px; height: 15px; color: var(--glass-edge-cool); }
 .window-tabbar .workspace-tab span { max-width: min(26vw, 220px); }
@@ -2331,7 +2329,7 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
 @media (prefers-reduced-motion: reduce) { .workspace-tab-item { animation: none; } }
 :root[data-motion="reduced"] .workspace-tab-item { animation: none; }
 @media (min-width: 701px) and (not ((max-height: 500px) and (pointer: coarse))) {
-  .app-shell:not(.app-signed-out):not([data-home="true"]) .shell-main { padding-top: 46px; }
+
 }
 @media (max-width: 700px), (max-height: 500px) and (pointer: coarse) {
   .window-tabbar { top: calc(var(--rail-size) + 2px); right: 8px; left: calc(var(--rail-size) + 8px); }
@@ -2411,9 +2409,9 @@ a.task-chip:hover { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--glass-e
 .app-shell[data-home="false"] .workspace-canvas-tiled .workspace-window:not(.workspace-window-conversation, .workspace-window-maximized) { justify-self: center; width: min(1180px, 100%); }/* Over a busy page the conversation sheet needs the denser slab to stay readable. */
 .app-shell[data-home="false"] .workspace-window-conversation.luminous-glass { background: var(--stage-slab); }
 
-/* Presence modes: Present is green, Away is yellow, On the move is blue (Dan, #468). */
-:root, :root[data-theme="dark"] { --presence-present: #3ddc97; --presence-away: #f5c542; --presence-move: #4aa8ff; }
-:root[data-theme="light"] { --presence-present: #17885a; --presence-away: #a87400; --presence-move: #1f6fd1; }
+/* Presence modes in the app's two accents (Dan, 7 October): Present cyan, Away amber, On the move neutral. */
+:root, :root[data-theme="dark"] { --presence-present: #52dcfa; --presence-away: #ffb45c; --presence-move: #e6eef2; }
+:root[data-theme="light"] { --presence-present: #14768d; --presence-away: #a8670f; --presence-move: #5d6b72; }
 .presence-dot { width: 9px; height: 9px; flex: 0 0 auto; border-radius: 50%; background: var(--tone); box-shadow: 0 0 10px color-mix(in srgb, var(--tone) 70%, transparent); }
 .presence-chip { position: relative; display: inline-flex; }
 .presence-chip-trigger { display: inline-flex; min-height: 34px; align-items: center; gap: 8px; padding: 0 12px; border: 0; border-radius: var(--radius-pill);
@@ -2477,3 +2475,498 @@ a.task-chip:hover { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--glass-e
 .memory-forget-dialog::backdrop { background: rgb(0 0 0 / 45%); backdrop-filter: blur(4px); }
 .memory-forget-dialog h3 { margin: 0 0 8px; }
 @media (max-width: 900px) { .memory-browser { grid-template-columns: minmax(0, 1fr); } .memory-toolbar { grid-template-columns: minmax(0, 1fr); } }.memory-status li.memory-status-warning { background: color-mix(in srgb, var(--warning) 18%, transparent); color: var(--text); }
+
+/* Sign-in v2 (Dan, 7 October): the room's orb is the hero and stays clear. A dense glass slab sits low over the
+   floor with the headline, the Microsoft button and the status; the top bar floats as the same slab as when signed in. */
+.app-signed-out .shell-main { align-items: end; padding: var(--space-5) var(--space-4) clamp(28px, 9vh, 96px); }
+.app-signed-out .signin { display: block; width: min(760px, 100%); min-height: 0; margin: auto auto clamp(28px, 9vh, 96px); align-self: center; }
+.signin-card {
+  display: grid;
+  width: min(760px, 100%);
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  justify-items: stretch;
+  gap: var(--space-2) var(--space-5);
+  padding: var(--space-5) var(--space-5) var(--space-4) var(--space-6);
+  border: 0;
+  background: var(--stage-slab);
+  backdrop-filter: blur(30px) saturate(1.45);
+  text-align: left;
+}
+:root[data-theme="light"] .signin-card { background: color-mix(in srgb, var(--surface) 74%, transparent); }
+.signin-card::before {
+  position: absolute; inset: 0; z-index: -1; padding: 1.5px; border-radius: inherit; content: ""; pointer-events: none;
+  background: radial-gradient(55% 80% at 50% 100%, var(--glass-glow-warm), transparent 75%),
+    linear-gradient(180deg, var(--glass-rim-light), color-mix(in srgb, var(--glass-rim-light) 20%, transparent) 45%, color-mix(in srgb, var(--glass-edge-cool) 60%, transparent));
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+}
+.signin-copy { display: grid; gap: var(--space-2); min-width: 0; }
+.signin-card h1 { margin: 0; font-size: clamp(26px, 2.6vw, 34px); line-height: 1.1; }
+.signin-card p { max-width: 44ch; margin: 0; color: var(--text-muted); }
+.signin-card .signin-button { margin: 0; justify-self: end; }
+.signin-card .sign-in-status { grid-column: 1 / -1; min-height: 1.3em; margin: 0; color: var(--text-muted); font-size: var(--type-caption); }
+.app-signed-out .signin-orb { display: none; }
+@media (max-width: 700px) {
+  .signin-card { grid-template-columns: minmax(0, 1fr); padding: var(--space-5) var(--space-4) var(--space-4); text-align: center; }
+  .signin-card p { margin-inline: auto; }
+  .signin-card .signin-button { justify-self: stretch; }
+  .app-signed-out .signin { margin-bottom: 14px; }
+}
+@media (min-width: 701px) {
+  .app-shell.app-signed-out .app-topbar {
+    position: relative; isolation: isolate;
+    height: calc(var(--rail-size) - var(--slab-gap)); min-height: calc(var(--rail-size) - var(--slab-gap));
+    margin: var(--slab-gap) var(--slab-gap) 0; padding-inline: var(--space-3);
+    border: 0; border-radius: var(--radius-panel);
+    background: var(--shell-slab); backdrop-filter: blur(var(--glass-blur-shell)) saturate(1.4);
+    box-shadow: var(--slab-shadow), inset 0 1px 0 var(--glass-rim-light);
+  }
+}
+/* Tab bar v2 (Dan, 7 October): always present under the top bar and listing every open window. The window in front
+   is lit, minimised windows are dimmed, and an empty bar says where windows will appear. */
+.app-shell.app-signed-out .window-tabbar { display: none; }
+.window-tabbar .workspace-tabs { align-items: center; }
+.workspace-tab-item[data-state="minimised"] { opacity: .72; }
+.workspace-tab-item[data-state="minimised"] .workspace-tab span { font-weight: 500; }
+.workspace-tab-item[data-state="front"] {
+  background: color-mix(in srgb, var(--glass-edge-cool) 14%, var(--stage-glass));
+  box-shadow: inset 0 1px 0 var(--glass-rim-light), inset 0 0 0 1px color-mix(in srgb, var(--glass-edge-cool) 60%, transparent), 0 0 16px -6px var(--glass-edge-cool);
+}
+.workspace-tab-item[data-state="front"] .workspace-tab svg { filter: drop-shadow(0 0 4px var(--glass-edge-cool)); }
+/* Modal (Modal.tsx): rendered at the document root, near the top of the viewport, over a dimmed and blurred room.
+   Close with the X, Escape or a click outside. */
+.modal-backdrop {
+  position: fixed; z-index: 3000; inset: 0; display: grid; align-items: start; justify-items: center;
+  overflow-y: auto; padding: clamp(56px, 10vh, 120px) 16px 32px;
+  background: color-mix(in srgb, var(--stage-background) 45%, transparent); backdrop-filter: blur(6px);
+  animation: modal-fade var(--motion-state) var(--ease-standard);
+}
+.modal {
+  position: relative; width: min(100%, 620px); max-height: calc(100vh - clamp(56px, 10vh, 120px) - 32px); margin: 0;
+  overflow-y: auto; padding: 14px 16px 20px 22px; border: 0; border-radius: var(--radius-window); background: var(--stage-slab);
+  animation: modal-rise calc(var(--motion-state) * 1.4) var(--ease-enter);
+}
+.modal.project-dialog { width: min(100%, 640px); }
+.modal:focus { outline: none; }
+.modal-heading { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); margin: 0 0 var(--space-3); }
+.modal-heading h2 { margin: 0; font-size: 20px; }
+.modal-close {
+  display: grid; width: 34px; height: 34px; flex: 0 0 auto; place-items: center; padding: 0; border: 0; border-radius: 50%;
+  background: transparent; color: var(--text-muted); cursor: pointer;
+  transition: background-color var(--motion-press) var(--ease-standard), color var(--motion-press) var(--ease-standard), transform var(--motion-press) var(--ease-standard);
+}
+.modal-close svg { width: 17px; height: 17px; }
+.modal-close:hover:not(:disabled) { background: var(--error-wash); color: var(--text); }
+.modal-close:active:not(:disabled) { transform: scale(.92); }
+.modal-close:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.modal-close:disabled { cursor: wait; opacity: .5; }
+@keyframes modal-fade { from { opacity: 0; } }
+@keyframes modal-rise { from { opacity: 0; transform: translateY(-14px) scale(.98); } }
+@media (pointer: coarse) { .modal-close { width: 44px; height: 44px; } }
+@media (prefers-reduced-motion: reduce) { .modal-backdrop, .modal { animation: none; } }
+:root[data-motion="reduced"] :is(.modal-backdrop, .modal) { animation: none; }
+/* The working core: the orb's amber brain, alive while Jarvis thinks or a tool runs (replaces the assembling J). */
+.working-core { position: relative; display: inline-block; width: 18px; height: 18px; flex: 0 0 auto; border-radius: 50%;
+  background: radial-gradient(circle, color-mix(in srgb, var(--glass-glow-warm) 22%, transparent), transparent 70%); }
+.working-core .input-orb-core { position: absolute; inset: -3px; width: calc(100% + 6px); height: calc(100% + 6px); }
+.live-turn-status .working-core { width: 24px; height: 24px; }
+/* Floating windows (Dan, 7 October): in the shell windows float and are dragged by their title bar. They stay inside
+   the window area and above the docked conversation, whose height is reserved as --reserve-bottom. */
+.workspace-canvas-layered .workspace-window:not(.workspace-window-conversation, .workspace-window-maximized) {
+  top: calc((100% - var(--reserve-bottom, 0px)) * var(--workspace-y-n, 0));
+  height: calc((100% - var(--reserve-bottom, 0px)) * var(--workspace-height-n, .72));
+  z-index: calc(10 + var(--workspace-depth, 1));
+}
+.workspace-window-heading h3 { min-width: 0; flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.workspace-window .workspace-title-drag { cursor: grab; user-select: none; }
+.workspace-window-dragging .workspace-title-drag { cursor: grabbing; }
+.workspace-window .workspace-title-drag:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 6px; }
+.workspace-window-dragging { box-shadow: 0 34px 80px -20px rgb(0 0 0 / 65%), 0 0 0 1px color-mix(in srgb, var(--glass-edge-cool) 45%, transparent) !important; }/* On the home page the window area starts below the tab bar, so windows never slide under it. */
+@media (min-width: 701px) and (not ((max-height: 500px) and (pointer: coarse))) {
+
+}
+/* Tabs in the top bar (Dan, 7 October): open windows sit between the brand and the controls; no breadcrumb.
+   Tabs use the shared glass hover of every icon button and window control; the front window uses the selected surface. */
+.app-topbar .window-tabbar { position: static; z-index: auto; display: flex; flex: 1 1 auto; min-width: 0; height: 34px; margin: 0 var(--space-3); align-items: center; pointer-events: auto; }
+.app-topbar .window-tabbar .workspace-tabs { padding: 2px; }
+.workspace-tab-item, .workspace-tab-item[data-state] {
+  background: transparent; backdrop-filter: none; box-shadow: none;
+  transition: background-color var(--motion-press) var(--ease-standard), box-shadow var(--motion-press) var(--ease-standard), opacity var(--motion-press) var(--ease-standard);
+}
+.workspace-tab-item:hover, .workspace-tab-item:has(.workspace-tab:hover), .workspace-tab-item:focus-within {
+  background: var(--glass-hover);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--glass-rim-light) 40%, transparent), 0 0 14px color-mix(in srgb, var(--glass-edge-cool) 14%, transparent);
+}
+.workspace-tab-item[data-state="front"] { background: var(--glass-selected); box-shadow: var(--glass-selected-glow); }
+.workspace-tab-item[data-state="front"] .workspace-tab svg { filter: none; }
+.workspace-tab-close { width: 24px; height: 24px; color: var(--text-muted); }
+.workspace-tab-close:hover { background: var(--error-wash); color: var(--text); }
+.workspace-tab-close:active { background: var(--glass-pressed); transform: scale(.94); }
+/* The window area off the home page now starts just under the top bar. */
+.app-shell.app-shell[data-home="false"]:not(.app-signed-out) .workspace-shell-area { top: calc(var(--rail-size) + 12px); }
+@media (max-width: 700px), (max-height: 500px) and (pointer: coarse) {
+  .app-topbar .window-tabbar { margin: 0 6px; }
+  .app-topbar .window-tabbar .workspace-tab span { max-width: 22vw; }
+  .app-shell.app-shell[data-home="false"]:not(.app-signed-out) .workspace-shell-area { top: calc(var(--rail-size) + 8px); }
+}
+/* Floating windows may sit over the docked conversation (Dan, 7 October): no reserved strip, and they stack above it.
+   Long titles wrap to two lines before trimming; the full title shows on hover. */
+.workspace-canvas-layered { --reserve-bottom: 0px; }
+.workspace-window-heading h3 { display: -webkit-box; white-space: normal; overflow-wrap: anywhere; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; }
+.workspace-window-heading { align-items: flex-start; }
+.workspace-window-heading .workspace-window-actions { flex: 0 0 auto; }
+/* Jobs chip (P8-43): background work in the top bar. Cyan ring while running, a ✓ pulse when ready, amber when it
+   failed. Click for a small peek with the step, elapsed time and actions. */
+.jobs-chip { position: relative; display: inline-flex; min-width: 0; }
+.jobs-chip-trigger {
+  display: inline-flex; max-width: min(34vw, 360px); min-height: 34px; align-items: center; gap: 8px; padding: 0 12px 0 9px;
+  border: 0; border-radius: var(--radius-pill); background: var(--glass-hover); color: var(--text); font: inherit; font-size: 13px; font-weight: 650; cursor: pointer;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--glass-rim-light) 30%, transparent);
+  transition: background-color var(--motion-press) var(--ease-standard), box-shadow var(--motion-press) var(--ease-standard), transform var(--motion-press) var(--ease-standard);
+}
+.jobs-chip-trigger:hover { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--glass-rim-light) 40%, transparent), 0 0 14px color-mix(in srgb, var(--glass-edge-cool) 14%, transparent); }
+.jobs-chip-trigger:active { transform: scale(.96); }
+.jobs-chip-trigger:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.jobs-chip-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.jobs-chip[data-tone="running"] .jobs-chip-trigger { background: color-mix(in srgb, var(--glass-edge-cool) 12%, var(--glass-hover)); }
+.jobs-chip[data-tone="failed"] .jobs-chip-trigger { background: color-mix(in srgb, var(--warning) 18%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--warning) 55%, transparent); }
+.jobs-chip[data-tone="done"] .jobs-chip-trigger { background: color-mix(in srgb, var(--success) 16%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--success) 55%, transparent); animation: jobs-ready 1.4s var(--ease-enter) 2; }
+@keyframes jobs-ready { 0%, 100% { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--success) 55%, transparent); } 40% { box-shadow: inset 0 0 0 1px var(--success), 0 0 22px color-mix(in srgb, var(--success) 70%, transparent); } }
+.jobs-ring { width: 18px; height: 18px; flex: 0 0 auto; rotate: -90deg; }
+.jobs-ring circle { fill: none; stroke-width: 2.4; }
+.jobs-ring-track { stroke: color-mix(in srgb, var(--glass-edge-cool) 22%, transparent); }
+.jobs-ring-value { stroke: var(--glass-edge-cool); stroke-linecap: round; filter: drop-shadow(0 0 3px var(--glass-edge-cool)); transition: stroke-dashoffset 600ms var(--ease-standard); }
+.jobs-mark { width: 16px; height: 16px; flex: 0 0 auto; --tone: var(--text-muted); }
+.jobs-mark circle { fill: color-mix(in srgb, var(--tone) 18%, transparent); stroke: color-mix(in srgb, var(--tone) 70%, transparent); stroke-width: 1.2; }
+.jobs-mark path { fill: none; stroke: var(--tone); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.jobs-mark[data-status="done"] { --tone: var(--success); }
+.jobs-mark[data-status="failed"] { --tone: var(--warning); }
+.jobs-popover { position: absolute; z-index: 1200; top: calc(100% + 8px); right: 0; width: min(380px, calc(100vw - 24px)); padding: 6px; border-radius: 16px; animation: tab-arrive var(--motion-state) var(--ease-enter); }
+.jobs-list { display: grid; gap: 2px; margin: 0; padding: 0; list-style: none; }
+.jobs-item { display: grid; grid-template-columns: 24px minmax(0, 1fr) auto; align-items: start; gap: 10px; padding: 10px; border-radius: 12px; }
+.jobs-item + .jobs-item { box-shadow: 0 -1px 0 color-mix(in srgb, var(--glass-rim-light) 14%, transparent); }
+.jobs-item-icon { display: grid; place-items: center; padding-top: 1px; }
+.jobs-item-icon .working-core { width: 22px; height: 22px; }
+.jobs-item-body { display: grid; gap: 2px; min-width: 0; }
+.jobs-item-title { font-size: 14px; font-weight: 650; overflow-wrap: anywhere; }
+.jobs-item-meta, .jobs-item-detail { color: var(--text-muted); font-size: 12.5px; }
+.jobs-item-detail { color: var(--text); }
+.jobs-item[data-status="failed"] .jobs-item-detail { color: var(--warning-text); }
+.jobs-item-error { color: var(--error); font-size: 12.5px; }
+.jobs-item-actions { display: flex; flex-direction: column; gap: 4px; }
+.jobs-action { min-height: 28px; padding: 0 12px; border: 0; border-radius: var(--radius-pill); background: var(--glass-hover); color: var(--text); font: inherit; font-size: 12.5px; font-weight: 650; cursor: pointer; white-space: nowrap; }
+.jobs-action:hover { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--glass-rim-light) 40%, transparent), 0 0 14px color-mix(in srgb, var(--glass-edge-cool) 14%, transparent); }
+.jobs-action:active { transform: scale(.96); }
+.jobs-action:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.jobs-action-primary { background: var(--glass-selected); box-shadow: var(--glass-selected-glow); }
+@media (max-width: 700px) { .jobs-chip-label { display: none; } .jobs-chip-trigger { padding: 0 9px; } }
+@media (prefers-reduced-motion: reduce) { .jobs-chip[data-tone="done"] .jobs-chip-trigger, .jobs-popover { animation: none; } .jobs-ring-value { transition: none; } }
+:root[data-motion="reduced"] :is(.jobs-chip[data-tone="done"] .jobs-chip-trigger, .jobs-popover) { animation: none; }
+/* Knowledge graph (P7-43): Dan's vault as a 3D star cloud. Folder colours are shared by stars, lines, labels and legend. */
+:root, :root[data-theme="dark"] { --graph-people: #4aa8ff; --graph-work: #ffb45c; --graph-personal: #3ddc97; --graph-general: #b69cff; }
+:root[data-theme="light"] { --graph-people: #1f6fd1; --graph-work: #c36f00; --graph-personal: #17885a; --graph-general: #6f4fd6; }
+[data-folder="People"] { --folder: var(--graph-people); }
+[data-folder="Work"] { --folder: var(--graph-work); }
+[data-folder="Personal"] { --folder: var(--graph-personal); }
+[data-folder="General"] { --folder: var(--graph-general); }
+.shell-main:has(> .jarvis-stage > .knowledge-page, > .knowledge-page), .app-shell .shell-main:has(.knowledge-page) { padding: 0; overflow: hidden; }
+.knowledge-page { position: relative; height: 100%; min-height: 420px; }
+.knowledge { position: relative; height: 100%; min-height: inherit; overflow: hidden; isolation: isolate; }
+.knowledge[data-compact] { min-height: 360px; }
+.knowledge-stage { position: absolute; inset: 0; background: radial-gradient(ellipse at 50% 45%, color-mix(in srgb, var(--stage-background) 30%, transparent), color-mix(in srgb, var(--stage-background) 70%, transparent)); }
+.knowledge-canvas { display: block; width: 100%; height: 100%; cursor: grab; touch-action: none; }
+.knowledge-canvas:active { cursor: grabbing; }
+.knowledge-status { position: absolute; z-index: 2; top: 50%; left: 50%; display: grid; max-width: min(420px, 90%); justify-items: center; gap: 12px; margin: 0; color: var(--text-muted); text-align: center; translate: -50% -50%; }
+.knowledge-status p { margin: 0; }
+.knowledge-search {
+  position: absolute; z-index: 3; top: 16px; left: 50%; display: flex; width: min(560px, calc(100% - 32px)); min-height: 44px; align-items: center; gap: 8px;
+  padding: 4px 6px 4px 14px; border-radius: var(--radius-pill); translate: -50% 0;
+}
+.knowledge-search svg { width: 18px; height: 18px; flex: 0 0 auto; color: var(--text-muted); }
+.knowledge-search input { flex: 1 1 auto; min-width: 0; height: 36px; padding: 0 4px; border: 0; background: transparent; color: var(--text); font: inherit; font-size: 15px; }
+.knowledge-search input:focus-visible { outline: none; }
+.knowledge-search:has(input:focus-visible) { box-shadow: 0 0 0 2px var(--focus); }
+.knowledge-count { flex: 0 0 auto; color: var(--text-muted); font-size: 12.5px; white-space: nowrap; }
+.knowledge-reset { flex: 0 0 auto; min-height: 30px; padding: 0 12px; border: 0; border-radius: var(--radius-pill); background: var(--glass-hover); color: var(--text); font: inherit; font-size: 12.5px; font-weight: 650; cursor: pointer; }
+.knowledge-reset:hover { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--glass-rim-light) 40%, transparent), 0 0 14px color-mix(in srgb, var(--glass-edge-cool) 14%, transparent); }
+.knowledge-reset:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.knowledge-results { position: absolute; z-index: 3; top: 70px; left: 50%; display: grid; width: min(560px, calc(100% - 32px)); max-height: 40%; gap: 2px; margin: 0; padding: 6px; overflow-y: auto; border-radius: 16px; list-style: none; translate: -50% 0; }
+.knowledge-results button, .knowledge-neighbours button {
+  display: flex; width: 100%; min-height: 32px; align-items: center; gap: 8px; padding: 0 10px; border: 0; border-radius: 10px;
+  background: transparent; color: var(--text); font: inherit; font-size: 13.5px; text-align: left; cursor: pointer;
+}
+.knowledge-results button:hover, .knowledge-neighbours button:hover { background: var(--glass-hover); }
+.knowledge-results button[aria-pressed="true"] { background: var(--glass-selected); box-shadow: var(--glass-selected-glow); }
+.knowledge-results button:focus-visible, .knowledge-neighbours button:focus-visible { outline: 3px solid var(--focus); outline-offset: 1px; }
+.knowledge-dot { width: 8px; height: 8px; flex: 0 0 auto; border-radius: 50%; background: var(--folder, var(--text-muted)); box-shadow: 0 0 8px var(--folder, transparent); }
+.knowledge-legend { position: absolute; z-index: 3; bottom: 16px; left: 16px; display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.knowledge-legend li { display: inline-flex; min-height: 28px; align-items: center; gap: 7px; padding: 0 10px; border-radius: var(--radius-pill); background: var(--stage-glass); backdrop-filter: blur(12px); color: var(--text); font-size: 12.5px; font-weight: 600; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--glass-rim-light) 22%, transparent); }
+.knowledge-legend-count { color: var(--text-muted); font-weight: 500; }
+.knowledge-legend .knowledge-sample { background: color-mix(in srgb, var(--warning) 22%, transparent); }
+.knowledge-label {
+  position: absolute; z-index: 2; top: 0; left: 0; max-width: 220px; margin: 10px 0 0 10px; padding: 2px 8px; overflow: hidden;
+  border-radius: var(--radius-pill); background: color-mix(in srgb, var(--stage-background) 70%, transparent); color: var(--text);
+  font-size: 12px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; pointer-events: none;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--folder, var(--glass-edge-cool)) 55%, transparent);
+}
+.knowledge-label[data-selected] { box-shadow: inset 0 0 0 1.5px var(--folder, var(--glass-edge-cool)), 0 0 14px color-mix(in srgb, var(--folder, var(--glass-edge-cool)) 50%, transparent); }
+.knowledge-label-hover { z-index: 4; }
+.knowledge-note {
+  position: absolute; z-index: 3; top: 16px; right: 16px; bottom: 16px; display: flex; width: min(380px, calc(100% - 32px)); flex-direction: column;
+  padding: 12px 12px 14px 16px; border-radius: var(--radius-window); animation: modal-rise calc(var(--motion-state) * 1.4) var(--ease-enter);
+}
+.knowledge-note-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.knowledge-note-heading h3 { display: flex; align-items: center; gap: 8px; margin: 4px 0 0; font-size: 17px; overflow-wrap: anywhere; }
+.knowledge-note-meta { margin: 4px 0 10px; color: var(--text-muted); font-size: 12px; overflow-wrap: anywhere; }
+.knowledge-note-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding-right: 4px; font-size: 14px; }
+.knowledge-note-link { margin-top: 10px; font-size: 13px; font-weight: 600; }
+.knowledge-note-subheading { margin: 14px 0 4px; font-size: 13px; }
+.knowledge-neighbours { display: grid; max-height: 30%; gap: 2px; margin: 0; padding: 0; overflow-y: auto; list-style: none; }
+@media (max-width: 700px) {
+  .knowledge-note { top: auto; left: 8px; right: 8px; width: auto; max-height: 60%; }
+  .knowledge-legend { bottom: 8px; left: 8px; }
+}
+@media (prefers-reduced-motion: reduce) { .knowledge-note { animation: none; } }
+:root[data-motion="reduced"] .knowledge-note { animation: none; }/* Knowledge v2 (Dan, 7 October): a darker backdrop so the stars read, and the legend doubles as folder filters. */
+.knowledge-stage { background: radial-gradient(ellipse at 50% 45%, color-mix(in srgb, var(--stage-background) 72%, transparent), color-mix(in srgb, var(--stage-background) 92%, transparent)); }
+.knowledge-legend li:has(> button) { padding: 0; }
+.knowledge-legend button { display: inline-flex; min-height: 28px; align-items: center; gap: 7px; padding: 0 10px; border: 0; border-radius: inherit; background: transparent; color: inherit; font: inherit; cursor: pointer; }
+.knowledge-legend li:has(> button:hover) { background: var(--glass-hover); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--glass-rim-light) 40%, transparent), 0 0 14px color-mix(in srgb, var(--glass-edge-cool) 14%, transparent); }
+.knowledge-legend li:has(> button[aria-pressed="true"]) { background: color-mix(in srgb, var(--folder) 22%, var(--stage-glass)); box-shadow: inset 0 0 0 1.5px var(--folder), 0 0 14px color-mix(in srgb, var(--folder) 45%, transparent); }
+.knowledge-legend button:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }/* Shell windows float at every desktop width (Dan, 7 October): the old ≤900 px stacking is for the classic workspace only. */
+@media (min-width: 701px) and (max-width: 900px) and (not ((max-height: 500px) and (pointer: coarse))) {
+  .app-shell:not(.app-signed-out) .workspace-canvas-layered { display: block; height: auto; min-height: 0; overflow: visible; }
+  .app-shell:not(.app-signed-out) .workspace-canvas-layered .workspace-window { position: absolute; min-height: 0; }
+  .app-shell:not(.app-signed-out) .workspace-canvas-layered .workspace-window:not(.workspace-window-conversation, .workspace-window-maximized) {
+    left: var(--workspace-x); width: var(--workspace-width);
+  }
+}
+/* Chrome-style tab strip (Dan, 7 October): every window is a tab, then one tab per background job. Tabs share the
+   room and shrink to a minimum before trimming their titles, so the strip never overflows into the controls. */
+.app-topbar .window-tabstrip { position: relative; display: flex; flex: 1 1 auto; min-width: 0; height: 34px; margin: 0 var(--space-3); align-items: center; gap: 6px; }
+.app-topbar .window-tabstrip .window-tabbar { flex: 0 1 auto; min-width: 0; margin: 0; }
+.app-topbar .window-tabbar .workspace-tabs { flex-wrap: nowrap; min-width: 0; overflow: hidden; }
+.window-tabstrip .workspace-tab-item { flex: 0 1 210px; min-width: 76px; max-width: 210px; }
+.window-tabstrip .workspace-tab { flex: 1 1 auto; min-width: 0; }
+.window-tabstrip .workspace-tab span { min-width: 0; max-width: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.job-tabs { position: relative; display: flex; flex: 0 1 auto; min-width: 0; gap: 6px; }
+.job-tab .workspace-tab { padding-right: 12px; border-radius: var(--radius-pill); }
+.job-tab .jobs-ring, .job-tab .jobs-mark { width: 16px; height: 16px; }
+.job-tab[data-tone="running"] { background: color-mix(in srgb, var(--glass-edge-cool) 12%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--glass-edge-cool) 40%, transparent); }
+.job-tab[data-tone="failed"] { background: color-mix(in srgb, var(--warning) 18%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--warning) 55%, transparent); }
+.job-tab[data-tone="done"] { background: color-mix(in srgb, var(--success) 16%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--success) 55%, transparent); animation: jobs-ready 1.4s var(--ease-enter) 2; }
+.job-tabs .jobs-popover { left: 0; right: auto; }
+@media (prefers-reduced-motion: reduce) { .job-tab[data-tone="done"] { animation: none; } }
+
+/* Sharp screens (Dan's 1.9× display, 7 October): hairline rims are drawn finer there, so they get more light and
+   bubble rims a quarter-pixel more width to keep the crisp look. */
+@media (min-resolution: 1.5dppx) {
+  :root[data-theme="dark"] { --glass-rim-light: rgb(255 255 255 / 50%); }
+  :root[data-theme="light"] { --glass-rim-light: rgb(255 255 255 / 85%); }
+}
+/* Clearer glass (Dan, 7 October): light blur so the room reads through every surface; tints stay low. */
+:root { --glass-blur-window: 8px; --glass-blur-shell: 6px; }
+
+/* No page bounce (Dan, 7 October): signed in, the shell owns every scroll area, so the document itself never scrolls,
+   wobbles or rubber-bands; inner lists stop their scroll at their own edges instead of passing it to the page. */
+:root:has(.app-shell:not(.app-signed-out)), :root:has(.app-shell:not(.app-signed-out)) body { height: 100%; overflow: hidden; overscroll-behavior: none; }
+.app-shell:not(.app-signed-out) { overscroll-behavior: none; }
+.app-shell:not(.app-signed-out) :is(.shell-main, .conversation-transcript, .workspace-view-content, .context-panel-body, .area-sidebar > nav, .knowledge-results, .knowledge-note-body, .jobs-popover, .modal-backdrop) { overscroll-behavior: contain; }
+/* Loading (Dan, 7 October). The amber core is Jarvis's own and appears on the app's first load only. Everything after
+   that loads lazily: the frame is already there and the content shows a glass placeholder in its own shape with one
+   slow light passing over it. Both wait 140 ms before appearing so a fast answer never flashes them. */
+.loader { display: grid; place-items: center; animation: loader-in 420ms var(--ease-standard) 140ms both; }
+.loader-block { min-height: 140px; width: 100%; padding: var(--space-3) 0; }
+.loader-inline { display: inline-grid; vertical-align: middle; }
+.loader-core { position: relative; display: block; width: 46px; height: 46px; border-radius: 50%;
+  background: radial-gradient(circle, color-mix(in srgb, var(--glass-glow-warm) 26%, transparent), transparent 68%);
+  animation: loader-breathe 2.4s var(--ease-standard) infinite; }
+.loader-inline .loader-core { width: 20px; height: 20px; }
+.loader-core .input-orb-core { position: absolute; inset: -6px; width: calc(100% + 12px); height: calc(100% + 12px); }
+.loader-inline .loader-core .input-orb-core { inset: -3px; width: calc(100% + 6px); height: calc(100% + 6px); }
+.loader-core::before, .loader-core::after { position: absolute; inset: 0; border: 1px solid color-mix(in srgb, var(--glass-glow-warm) 70%, transparent);
+  border-radius: 50%; content: ""; opacity: 0; animation: loader-ring 2.4s cubic-bezier(.2, .7, .3, 1) infinite; pointer-events: none; }
+.loader-core::after { animation-delay: 1.2s; }
+.loader-inline .loader-core::before, .loader-inline .loader-core::after { border-width: .75px; }
+@keyframes loader-in { from { opacity: 0; scale: .85; } }
+@keyframes loader-breathe { 0%, 100% { scale: .94; } 50% { scale: 1.06; } }
+@keyframes loader-ring { 0% { opacity: .75; scale: .8; } 100% { opacity: 0; scale: 2.1; } }
+
+.skeleton {
+  --skeleton-fill: color-mix(in srgb, var(--text) 8%, transparent);
+  --skeleton-shine: color-mix(in srgb, var(--glass-rim-light) 70%, transparent);
+  --skeleton-tile: color-mix(in srgb, var(--text) 3%, transparent);
+  --skeleton-edge: inset 0 1px 0 color-mix(in srgb, var(--glass-rim-light) 35%, transparent);
+  display: grid;
+  gap: 12px;
+  width: 100%;
+  padding: var(--space-2) 0;
+  animation: skeleton-in 420ms var(--ease-standard) 140ms both;
+}
+.skeleton-bar, .skeleton-slab {
+  display: block;
+  border-radius: 999px;
+  background: linear-gradient(100deg, transparent 35%, var(--skeleton-shine) 50%, transparent 65%) var(--skeleton-fill);
+  background-size: 260% 100%;
+  background-repeat: no-repeat;
+  animation: skeleton-sweep 2.2s var(--ease-standard) calc(var(--i, 0) * 110ms) infinite;
+}
+.skeleton-bar { width: var(--w, 100%); height: 10px; }
+.skeleton-bar-head { height: 14px; --skeleton-fill: color-mix(in srgb, var(--text) 12%, transparent); }
+.skeleton-slab { height: 120px; border-radius: 14px; --skeleton-fill: color-mix(in srgb, var(--text) 5%, transparent); box-shadow: var(--skeleton-edge); }
+.skeleton-row { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 14px; background: var(--skeleton-tile); box-shadow: var(--skeleton-edge); }
+.skeleton-dot { flex: none; width: 22px; height: 22px; border-radius: 50%; background: var(--skeleton-fill); }
+.skeleton-cards { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+.skeleton-column { display: grid; align-content: start; gap: 10px; }
+.skeleton-card { display: grid; gap: 9px; padding: 14px; border-radius: 14px; background: var(--skeleton-tile); box-shadow: var(--skeleton-edge); }
+.skeleton-panel { gap: 16px; }
+.skeleton-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 24px; }
+.skeleton-image { width: min(320px, 100%); }
+.skeleton-image .skeleton-slab { height: auto; aspect-ratio: 4 / 3; }
+.skeleton-inline { display: inline-grid; width: 6em; padding: 0; vertical-align: middle; }
+.skeleton-inline .skeleton-bar { height: .7em; }
+/* The graph's placeholder: faint stars twinkling in turn where the cloud will form. */
+.skeleton-stars { position: relative; min-height: 220px; padding: 0; }
+.skeleton-star { position: absolute; left: var(--x); top: var(--y); width: var(--s); height: var(--s); border-radius: 50%;
+  background: color-mix(in srgb, var(--text) 45%, transparent); opacity: .15;
+  animation: skeleton-twinkle 2.6s var(--ease-standard) calc(var(--i, 0) * 97ms) infinite; }
+.knowledge-loader { position: absolute; z-index: 2; inset: 0; }
+@keyframes skeleton-in { from { opacity: 0; translate: 0 6px; } }
+@keyframes skeleton-sweep { 0% { background-position: 130% 0; } 70%, 100% { background-position: -30% 0; } }
+@keyframes skeleton-twinkle { 0%, 100% { opacity: .12; scale: .8; } 45% { opacity: .85; scale: 1.15; box-shadow: 0 0 10px var(--glass-rim-light); } }
+@media (max-width: 980px) { .skeleton-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } .skeleton-column:nth-child(n + 3) { display: none; } }
+@media (max-width: 700px) { .skeleton-cards { grid-template-columns: minmax(0, 1fr); } .skeleton-column:nth-child(n + 2) { display: none; } }
+:root[data-motion="reduced"] :is(.loader, .loader-core, .loader-core::before, .loader-core::after, .skeleton, .skeleton-bar, .skeleton-slab, .skeleton-star) { animation: none; }
+@media (prefers-reduced-motion: reduce) { :is(.loader, .loader-core, .loader-core::before, .loader-core::after, .skeleton, .skeleton-bar, .skeleton-slab, .skeleton-star) { animation: none; } }
+/* Data arrival: what replaces the loader rises gently into place instead of popping in. */
+:is(.task-window, .task-detail, .memory-results, .settings-page, .usage-page, .projects-page, .release-page, .workspace-view-content) > :not(.loader, .skeleton) {
+  transition: opacity 380ms var(--ease-standard), translate 480ms var(--ease-enter);
+}
+@starting-style {
+  :is(.task-window, .task-detail, .memory-results, .settings-page, .usage-page, .projects-page, .release-page, .workspace-view-content) > :not(.loader, .skeleton) { opacity: 0; translate: 0 8px; }
+}
+
+/* Side panels: the grid column eases open and shut instead of jumping, the slab swings back to its hinge when it
+   closes (not only when it opens), and its contents settle in just after the glass arrives. */
+@property --sidebar-size { syntax: "<length>"; inherits: true; initial-value: 0px; }
+@property --context-size { syntax: "<length>"; inherits: true; initial-value: 0px; }
+.app-shell { --sidebar-open: var(--sidebar-width, 220px); --context-open: var(--context-width, 280px); }
+@media (max-width: 980px) and (min-width: 701px) { .app-shell { --sidebar-open: var(--sidebar-width, 190px); --context-open: var(--context-width, 240px); } }
+@media (min-width: 701px) and (not ((max-height: 500px) and (pointer: coarse))) {
+  .app-shell:not(.app-signed-out) { transition: --sidebar-size var(--motion-panel) var(--ease-enter), --context-size var(--motion-panel) var(--ease-enter); }
+  :root[data-panel-resizing] .app-shell { transition: none; }
+  /* Fixed widths while the column moves, so the text inside never re-wraps mid-animation. */
+  .app-shell:not(.app-signed-out) .area-sidebar { min-width: calc(var(--sidebar-open) - var(--slab-gap)); }
+  .app-shell:not(.app-signed-out):not([data-voice-active="true"]) .context-panel { width: calc(var(--context-open) - var(--slab-gap)); justify-self: end; }
+  .app-shell:not(.app-signed-out) :is(.area-sidebar, .context-panel) {
+    transition: transform var(--motion-panel) var(--ease-enter), opacity calc(var(--motion-panel) * .8) var(--ease-standard),
+      filter var(--motion-panel) var(--ease-standard), display var(--motion-panel) allow-discrete;
+  }
+  .app-shell:not(.app-signed-out) .area-sidebar[hidden] { opacity: 0; filter: blur(6px); transform: perspective(var(--shell-perspective)) rotateY(60deg); }
+  .app-shell:not(.app-signed-out) .context-panel[hidden] { opacity: 0; filter: blur(6px); transform: perspective(var(--shell-perspective)) rotateY(-60deg); }
+  @starting-style {
+    .app-shell:not(.app-signed-out) .area-sidebar:not([hidden]) { filter: blur(6px); }
+    .app-shell:not(.app-signed-out) .context-panel:not([hidden]) { filter: blur(6px); }
+  }
+  .app-shell:not(.app-signed-out) :is(.area-sidebar, .context-panel):not([hidden]) > * {
+    transition: opacity 360ms var(--ease-standard) 140ms, translate 460ms var(--ease-enter) 140ms;
+  }
+  .app-shell:not(.app-signed-out) :is(.area-sidebar, .context-panel):not([hidden]) > * + * { transition-delay: 210ms; }
+  @starting-style {
+    .app-shell:not(.app-signed-out) :is(.area-sidebar, .context-panel):not([hidden]) > * { opacity: 0; translate: 0 8px; }
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .app-shell:not(.app-signed-out) { transition: none; }
+  .app-shell:not(.app-signed-out) :is(.area-sidebar, .context-panel) { filter: none; }
+}
+:root[data-motion="reduced"] .app-shell:not(.app-signed-out) { transition: none; }
+:root[data-motion="reduced"] .app-shell:not(.app-signed-out) :is(.area-sidebar, .context-panel) { filter: none; }
+/* Jarvis navigated here (P9-40): the named Settings section or task card glows once in cyan, then settles. */
+[data-navigated] { animation: navigated-glow 2.8s var(--ease-standard) both; }
+@keyframes navigated-glow {
+  0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--glass-edge-cool) 0%, transparent); }
+  18% { box-shadow: 0 0 0 2px color-mix(in srgb, var(--glass-edge-cool) 70%, transparent), 0 0 28px color-mix(in srgb, var(--glass-edge-cool) 35%, transparent); }
+  100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--glass-edge-cool) 0%, transparent); }
+}
+:root[data-motion="reduced"] [data-navigated] { animation: none; box-shadow: 0 0 0 2px var(--focus); }
+@media (prefers-reduced-motion: reduce) { [data-navigated] { animation: none; box-shadow: 0 0 0 2px var(--focus); } }
+/* Folio (P9-25): everything Jarvis pulled up, reopened from the left pane. It shares the sidebar slot and its hinge. */
+.app-shell[data-folio-open="true"] { --sidebar-size: 320px; --sidebar-open: 320px; }
+@media (max-width: 980px) and (min-width: 701px) { .app-shell[data-folio-open="true"] { --sidebar-size: 270px; --sidebar-open: 270px; } }
+.rail-folio[aria-pressed="true"] { color: var(--text); }
+.rail-folio[aria-pressed="true"] svg {
+  color: color-mix(in srgb, var(--glass-edge-cool) 70%, var(--text));
+  scale: 1.14;
+  stroke-width: 2.1;
+  filter: drop-shadow(0 0 5px color-mix(in srgb, var(--glass-edge-cool) 75%, transparent));
+}
+.folio-pane { display: flex; flex-direction: column; }
+.folio-body { display: flex; flex: 1; flex-direction: column; min-height: 0; gap: 10px; }
+.folio-search { display: flex; align-items: center; gap: 8px; min-height: 40px; padding: 0 12px; border-radius: 999px;
+  background: color-mix(in srgb, var(--text) 5%, transparent); box-shadow: inset 0 0 0 1px var(--rule); color: var(--text-muted);
+  transition: box-shadow var(--motion-press) var(--ease-standard); }
+.folio-search:focus-within { box-shadow: inset 0 0 0 1px var(--glass-edge-cool), 0 0 0 3px color-mix(in srgb, var(--focus) 28%, transparent); }
+.app-shell .folio-search svg { width: 16px; height: 16px; flex: none; }
+.folio-search input { flex: 1; min-width: 0; border: 0; background: transparent; color: var(--text); font: inherit; font-size: var(--type-small); outline: none; }
+.folio-kinds { display: flex; flex-wrap: wrap; gap: 6px; }
+.folio-kind { display: inline-flex; align-items: center; min-height: 32px; padding: 0 11px; border: 0; border-radius: 999px;
+  background: color-mix(in srgb, var(--text) 5%, transparent); color: var(--text-muted); font: inherit; font-size: var(--type-caption); font-weight: 600; cursor: pointer;
+  transition: background-color var(--motion-press) var(--ease-standard), color var(--motion-press) var(--ease-standard), box-shadow var(--motion-press) var(--ease-standard); }
+.app-shell .folio-kind svg { width: 15px; height: 15px; }
+.folio-kind:hover { background: var(--glass-hover); color: var(--text); }
+.folio-kind:active { background: var(--glass-pressed); }
+.folio-kind[aria-pressed="true"] { background: var(--glass-selected); color: var(--text); box-shadow: var(--glass-selected-glow); }
+.folio-results { flex: 1; min-height: 0; margin: 0 -6px; padding: 0 6px 12px; overflow-y: auto; overscroll-behavior: contain; }
+.folio-group { animation: page-enter calc(var(--motion-panel) * 1.1) var(--ease-enter) both; }
+.folio-group + .folio-group { animation-delay: 60ms; }
+.folio-group h3 { margin: 14px 8px 6px; color: var(--text-muted); font-size: var(--type-caption); font-weight: 650; }
+.folio-group ul { display: grid; gap: 2px; margin: 0; padding: 0; list-style: none; }
+.folio-item { position: relative; border-radius: 12px; }
+.folio-open { display: grid; width: 100%; min-height: 48px; padding: 8px 10px; grid-template-columns: 28px minmax(0, 1fr) auto;
+  grid-template-areas: "icon title time" "icon summary summary"; align-items: center; column-gap: 10px; border: 0; border-radius: 12px;
+  background: transparent; color: var(--text); font: inherit; text-align: left; cursor: pointer;
+  transition: background-color var(--motion-press) var(--ease-standard), opacity var(--motion-press) var(--ease-standard); }
+.folio-open:hover, .folio-item:focus-within .folio-open { background: var(--glass-hover); }
+.folio-open:active { background: var(--glass-pressed); }
+.folio-kind-icon { display: grid; width: 28px; height: 28px; grid-area: icon; place-items: center; border-radius: 8px;
+  background: color-mix(in srgb, var(--text) 6%, transparent); color: var(--text-muted); }
+.app-shell .folio-kind-icon svg { width: 16px; height: 16px; }
+.folio-title { grid-area: title; overflow: hidden; font-size: var(--type-small); font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.folio-time { grid-area: time; color: var(--text-muted); font-size: var(--type-caption); font-variant-numeric: tabular-nums; transition: opacity var(--motion-press) var(--ease-standard); }
+.folio-summary { grid-area: summary; max-height: 0; overflow: hidden; color: var(--text-muted); font-size: var(--type-caption); text-overflow: ellipsis; white-space: nowrap; opacity: 0;
+  transition: max-height var(--motion-state) var(--ease-enter), opacity var(--motion-state) var(--ease-standard); }
+.folio-open:hover .folio-summary, .folio-open:focus-visible .folio-summary { max-height: 1.6em; opacity: 1; }
+.folio-actions { position: absolute; top: 6px; right: 6px; display: flex; gap: 2px; opacity: 0; pointer-events: none; transition: opacity var(--motion-press) var(--ease-standard); }
+.folio-item:hover .folio-actions, .folio-item:focus-within .folio-actions { opacity: 1; pointer-events: auto; }
+.folio-item:hover .folio-time, .folio-item:focus-within .folio-time { opacity: 0; }
+/* Room for the three actions so they never sit on the title. */
+@media (hover: hover) { .folio-item:hover .folio-title, .folio-item:focus-within .folio-title { margin-right: 52px; } }
+.folio-action { display: grid; width: 28px; height: 28px; padding: 0; place-items: center; border: 0; border-radius: 8px;
+  background: color-mix(in srgb, var(--surface) 70%, transparent); color: var(--text-muted); cursor: pointer; backdrop-filter: blur(6px); }
+.app-shell .folio-action svg { width: 15px; height: 15px; }
+.folio-action:hover { background: var(--glass-hover); color: var(--text); }
+.folio-action[aria-pressed="true"] { color: color-mix(in srgb, var(--glass-edge-cool) 80%, var(--text)); }
+.folio-item[data-busy] .folio-open { opacity: .6; cursor: progress; }
+.folio-item[data-opened] .folio-open { animation: folio-opened 1.4s var(--ease-standard); }
+@keyframes folio-opened {
+  0% { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--glass-edge-cool) 70%, transparent), 0 0 18px color-mix(in srgb, var(--glass-edge-cool) 30%, transparent); }
+  100% { box-shadow: none; }
+}
+.folio-rename, .folio-confirm { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 8px 10px; }
+.folio-rename input { flex: 1; min-width: 0; min-height: 36px; padding: 0 10px; border: 1px solid var(--control-rule); border-radius: 10px; background: transparent; color: var(--text); font: inherit; font-size: var(--type-small); }
+.folio-confirm span { flex: 1 1 100%; font-size: var(--type-small); }
+.folio-danger { color: var(--error); }
+.folio-notice { margin: 2px 10px 6px; color: var(--text-muted); font-size: var(--type-caption); }
+.folio-notice[data-tone="error"] { color: var(--error); }
+.folio-state { display: grid; gap: 10px; justify-items: start; padding: 16px 8px; color: var(--text-muted); font-size: var(--type-small); }
+.folio-state p { margin: 0; }
+.folio-more { margin: 10px 6px 0; }
+@media (hover: none) {
+  .folio-actions { position: static; justify-content: flex-end; padding: 0 6px 6px; opacity: 1; pointer-events: auto; }
+  .folio-item .folio-time { opacity: 1; }
+}
+:root[data-motion="reduced"] :is(.folio-group, .folio-item[data-opened] .folio-open) { animation: none; }
+@media (prefers-reduced-motion: reduce) { :is(.folio-group, .folio-item[data-opened] .folio-open) { animation: none; } }

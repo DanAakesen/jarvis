@@ -28,6 +28,8 @@ export interface NowFeedStreamOptions {
   onActivity?: (event: JarvisActivityEvent) => void;
   /** Receives the raw mode from mode_changed events; the presence store validates it. */
   onPresenceMode?: (mode: string) => void;
+  /** Receives raw job event payloads for the jobs chip. */
+  onJob?: (job: unknown) => void;
   signal: AbortSignal;
 }
 
@@ -269,6 +271,15 @@ async function readNowEvents(body: ReadableStream<Uint8Array>, signal: AbortSign
           }
         }
         options.onUpdate();
+      } else if (event === 'job') {
+        // Background job updates (P8-43); the jobs store validates them with isBackgroundJob.
+        let value: unknown;
+        try {
+          value = JSON.parse(data.join('\n'));
+        } catch {
+          value = undefined;
+        }
+        if (value !== undefined) options.onJob?.(value);
       } else if (event === 'jarvis-activity') {
         let value: unknown;
         try {

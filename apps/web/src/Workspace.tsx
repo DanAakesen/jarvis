@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom';
 import { isWorkspaceCommand, type GeneratedView, type WorkspaceCommand, type WorkspaceSnapshot } from '@jarvis/contracts';
 import { GeneratedViewRenderer } from './GeneratedViewRenderer';
 import { flyWindowAway, flyWindowToTab } from './window-fly-away';
+import { Loader } from './Loader';
 export type { WorkspaceCommand } from '@jarvis/contracts';
 
 export type WorkspaceViewContent =
@@ -90,7 +91,13 @@ export const Workspace = forwardRef<WorkspaceController, {
   onVisibleViewIdsChange?: (ids: readonly string[]) => void;
   /** The shell's tab bar under the top bar; minimised windows become tabs there. */
   tabsHost?: HTMLElement | null;
-}>(function Workspace({ views, onVisibleViewsChange, onOpenWindowsChange, onVisibleViewIdsChange, tabsHost }, ref) {
+  /** The shell floats windows freely (drag to move) instead of tiling them. */
+  defaultArrangement?: Arrangement;
+  /** The per-window Arrange menu; the shell drops it in favour of dragging and title-bar arrow keys. */
+  arrangeMenu?: boolean;
+  /** Leaves a window out of the tab bar (for example a progress window already shown as a job tab). */
+  hideTab?: (view: WorkspaceView) => boolean;
+}>(function Workspace({ views, onVisibleViewsChange, onOpenWindowsChange, onVisibleViewIdsChange, tabsHost, defaultArrangement = 'tiled', arrangeMenu = true, hideTab }, ref) {
   const workspaceId = useId();
   const [agentViews, setAgentViews] = useState<WorkspaceView[]>([]);
   const closedAgentViews = useRef(new Map<string, { view: WorkspaceView; geometry: Geometry | undefined }>());
@@ -98,7 +105,8 @@ export const Workspace = forwardRef<WorkspaceController, {
     ...views,
     ...agentViews.filter((agentView) => !views.some((view) => view.id === agentView.id)),
   ], [agentViews, views]);
-  const [arrangement, setArrangement] = useState<Arrangement>('tiled');
+  const [arrangement, setArrangement] = useState<Arrangement>(defaultArrangement);
+
   const [order, setOrder] = useState<string[]>([]);
   const [geometry, setGeometry] = useState<Record<string, Geometry>>({});
   const [minimizedViewIdsState, setMinimizedViewIds] = useState<ReadonlySet<string>>(new Set());
@@ -114,9 +122,11 @@ export const Workspace = forwardRef<WorkspaceController, {
   const [pendingActions, setPendingActions] = useState<ReadonlySet<string>>(new Set());
   const [jarvisUpdatingIds, setJarvisUpdatingIds] = useState<ReadonlySet<string>>(new Set());
   const [activeGestureId, setActiveGestureId] = useState<string | null>(null);
-  const [narrow, setNarrow] = useState(() => (
+  const [narrowScreen, setNarrow] = useState(() => (
     typeof window.matchMedia === 'function' && window.matchMedia('(max-width: 900px)').matches
   ));
+  // The shell's floating windows keep floating on narrower desktops; only the classic workspace stacks them.
+  const narrow = arrangeMenu && narrowScreen;
   const canvas = useRef<HTMLDivElement>(null);
   const gestures = useRef(new Map<number, Gesture>());
   const pendingActionsRef = useRef(new Set<string>());
@@ -478,13 +488,22 @@ export const Workspace = forwardRef<WorkspaceController, {
         return true;
       }
       case 'layout':
+        // The shell always floats its windows; a layout request is acknowledged without tiling them.
+        if (!arrangeMenu) {
+          setAnnouncement('Windows float freely in this workspace.');
+          return true;
+        }
         setArrangement(command.arrangement);
         setAnnouncement(`Workspace arranged in ${command.arrangement} layout.`);
         return true;
       case 'context-panel':
         return false;
+      default:
+        // Operations the window manager does not handle (for example `navigate`, which the shell applies) are refused
+        // here, so a new contract operation never breaks the build or silently counts as applied.
+        return false;
     }
-  }, [agentViews, closeView, closedViewIds, focusView, geometry, initialGeometry, isViewOpen, jarvisUpdateTimers, minimiseView,
+  }, [agentViews, arrangeMenu, closeView, closedViewIds, focusView, geometry, initialGeometry, isViewOpen, jarvisUpdateTimers, minimiseView,
     orderedViews, restoreView, workspaceViews]);
 
   const minimiseAll = useCallback(() => {
@@ -700,6 +719,10 @@ export const Workspace = forwardRef<WorkspaceController, {
   }
 
   const maybePortal = (node: ReactNode) => tabsHost ? createPortal(node, tabsHost) : node;
+  // In the shell the tab bar lists every open window, the conversation included;
+  // without a shell host it lists only minimised views.
+  const tabViews = (tabsHost ? openViews : minimizedViews).filter((view) => !hideTab?.(view));
+  const frontViewId = phone ? foreground?.id : [...orderedViews].reverse().find((view) => visibleViews.includes(view))?.id;
 
   return (
     <section ref={workspaceSection} className="workspace" data-phone={phone} aria-labelledby={`${workspaceId}-heading`}>
@@ -756,10 +779,11 @@ export const Workspace = forwardRef<WorkspaceController, {
           ))}
         </nav>
       )}
-      {minimizedViews.length > 0 && maybePortal(
-        <nav className="workspace-tabs" aria-label="Minimised views">
-          {minimizedViews.map((view) => (
-            <span className="workspace-tab-item" key={view.id} data-view-id={view.id}>
+      {tabViews.length > 0 && maybePortal(
+        <nav className="workspace-tabs" aria-label={tabsHost ? 'Open windows' : 'Minimised views'}>
+          {tabViews.map((view) => (
+            <span className="workspace-tab-item" key={view.id} data-view-id={view.id}
+              data-state={minimizedViewIds.has(view.id) ? 'minimised' : view.id === frontViewId ? 'front' : 'open'}>
               <button
                 className="workspace-tab"
                 data-view-id={view.id}
@@ -768,9 +792,10 @@ export const Workspace = forwardRef<WorkspaceController, {
                   else tabElements.current.delete(view.id);
                 }}
                 type="button"
-                aria-label={`Restore ${view.title}`}
+                aria-label={minimizedViewIds.has(view.id) ? `Restore ${view.title}` : `Show ${view.title}`}
+                aria-current={view.id === frontViewId ? 'true' : undefined}
                 title={view.title}
-                onClick={() => restoreView(view.id)}
+                onClick={() => { if (minimizedViewIds.has(view.id)) restoreView(view.id); else focusView(view.id); }}
               >
                 <WindowIcon name="view" />
                 <span>{view.title}</span>
@@ -789,6 +814,7 @@ export const Workspace = forwardRef<WorkspaceController, {
         role="region"
         aria-label="Temporary workspace views"
         data-arrangement={arrangement}
+
         onPointerDown={beginSwipe}
         onPointerUp={endSwipe}
         onPointerCancel={endSwipe}
@@ -807,6 +833,8 @@ export const Workspace = forwardRef<WorkspaceController, {
             '--workspace-columns': currentGeometry.columns,
             '--workspace-rows': currentGeometry.rows,
             '--workspace-depth': index + 1,
+            '--workspace-y-n': currentGeometry.y,
+            '--workspace-height-n': currentGeometry.height,
           } as CSSProperties;
           const actionPending = pendingActions.has(view.id);
           // The conversation is docked onto the composer: no free move/resize; the composer handle shows and hides it.
@@ -818,6 +846,7 @@ export const Workspace = forwardRef<WorkspaceController, {
             <article
               className={`workspace-window luminous-glass${view.presentation === 'conversation' ? ' workspace-window-conversation' : ''}${minimized ? ' workspace-window-minimized' : ''}${maximized ? ' workspace-window-maximized' : ''}${activeGestureId === view.id ? ' workspace-window-dragging' : ''}${jarvisUpdatingIds.has(view.id) ? ' workspace-window-jarvis-updating' : ''}`}
               key={view.id}
+              data-view-id={view.id}
               style={style}
               aria-labelledby={titleId}
               hidden={background}
@@ -837,9 +866,18 @@ export const Workspace = forwardRef<WorkspaceController, {
                     else windowHeadings.current.delete(view.id);
                   }}
                   id={titleId}
-                  tabIndex={-1}
+                  tabIndex={!arrangeMenu && !docked && !maximized && !phone ? 0 : -1}
                   className={docked ? 'workspace-title-docked' : maximized ? undefined : 'workspace-title-drag'}
                   {...(docked ? {} : {
+                    title: view.title,
+                    // Without the Arrange menu, the focused title takes the keyboard: arrows move, Alt+arrows resize.
+                    ...(!arrangeMenu && !maximized && !phone ? {
+                      'aria-description': 'Drag or use arrow keys to move. Alt with arrow keys resizes.',
+                      onKeyDown: (event: KeyboardEvent<HTMLHeadingElement>) => {
+                        if (event.altKey) resizeHandleKeyDown(event as unknown as KeyboardEvent<HTMLButtonElement>, view.id, index);
+                        else moveHandleKeyDown(event as unknown as KeyboardEvent<HTMLButtonElement>, view.id, index);
+                      },
+                    } : {}),
                     onPointerDown: (event: PointerEvent<HTMLElement>) => beginGesture(event, view.id, 'move', index),
                     onPointerMove: updateGesture,
                     onPointerUp: endGesture,
@@ -849,7 +887,7 @@ export const Workspace = forwardRef<WorkspaceController, {
                   {docked ? <span className="visually-hidden">{view.title}</span> : view.title}
                 </h3>
                 <div className="workspace-window-actions">
-                  {!maximized && !phone && !docked && <details className="workspace-arrange-menu" onKeyDown={arrangeKeyDown}>
+                  {arrangeMenu && !maximized && !phone && !docked && <details className="workspace-arrange-menu" onKeyDown={arrangeKeyDown}>
                     <summary className="workspace-arrange-trigger" role="button" aria-label={`Arrange ${view.title}`} title={`Arrange ${view.title}`}>
                       <WindowIcon name="more" />
                     </summary>
@@ -923,7 +961,7 @@ export const Workspace = forwardRef<WorkspaceController, {
                 </div>
               </header>
               <div className={view.presentation === 'conversation' ? 'workspace-conversation-content' : 'workspace-view-content'}>
-                {view.content.status === 'loading' && <p role="status">Loading view…</p>}
+                {view.content.status === 'loading' && <Loader variant="lines" label="Loading view…" />}
                 {view.content.status === 'empty' && <p>This view has no content yet.</p>}
                 {view.content.status === 'error' && (
                   <>
