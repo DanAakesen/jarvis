@@ -1717,16 +1717,17 @@ describe('committed domain schema (groups 1-8)', () => {
     const store = createProjectStore(pool);
     const repo = `${database}/project`;
     const project = await store.create({
-      name: 'Project store', repo, default_branch: 'main', default_agent: 'copilot',
+      name: 'Project store', description: 'Project description', repo, default_branch: 'main', default_agent: 'copilot',
       policy: 'deliver_pr', sandbox_size: '1x2', tech: 'node',
     });
-    expect(project).toMatchObject({ repo, max_parallel_tasks: 1, merge_rules: null, active: true });
+    expect(project).toMatchObject({ repo, description: 'Project description', max_parallel_tasks: 1, merge_rules: null, active: true });
     expect(await store.list()).toContainEqual(project);
-    expect(await store.update(project.id, { max_parallel_tasks: 3 })).toMatchObject({ max_parallel_tasks: 3 });
+    expect(await store.update(project.id, { description: null, max_parallel_tasks: 3 }))
+      .toMatchObject({ description: null, max_parallel_tasks: 3 });
     expect(await store.archive(project.id)).toBe(true);
     expect(await store.list()).not.toContainEqual(expect.objectContaining({ id: project.id }));
     expect(await store.update(project.id, { name: 'Archived' })).toBeNull();
-    expect(await store.archive(project.id)).toBe(true);
+    expect(await store.archive(project.id)).toBe(false);
     await expect(store.create({
       name: 'Replacement', repo, default_branch: 'main', default_agent: 'copilot',
       policy: 'deliver_pr', sandbox_size: '1x2', tech: 'node',

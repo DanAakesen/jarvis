@@ -5,6 +5,7 @@ import type { GitHubRepositoryCatalog, GitHubRepositoryListing } from '../github
 export interface Project {
   readonly id: string;
   readonly name: string;
+  readonly description: string | null;
   readonly repo: string;
   readonly default_branch: string;
   readonly default_agent: 'codex' | 'copilot';
@@ -17,8 +18,8 @@ export interface Project {
 }
 
 export type ProjectFields = Omit<Project, 'id' | 'active'>;
-export type CreateProject = Omit<ProjectFields, 'max_parallel_tasks' | 'merge_rules'> &
-  Partial<Pick<ProjectFields, 'max_parallel_tasks' | 'merge_rules'>>;
+export type CreateProject = Omit<ProjectFields, 'description' | 'max_parallel_tasks' | 'merge_rules'> &
+  Partial<Pick<ProjectFields, 'description' | 'max_parallel_tasks' | 'merge_rules'>>;
 export type UpdateProject = Partial<ProjectFields>;
 
 export interface ProjectStore {
@@ -81,8 +82,9 @@ export async function manageExistingRepository(
   });
 }
 
-const projectFields = {
+export const projectFields = {
   name: { type: 'string', minLength: 1, maxLength: 100, pattern: '\\S' },
+  description: { type: ['string', 'null'], maxLength: 2000 },
   repo: { type: 'string', minLength: 3, maxLength: 140, pattern: '^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$(?![\\s\\S])' },
   default_branch: { type: 'string', minLength: 1, maxLength: 255, pattern: '\\S' },
   default_agent: { type: 'string', enum: ['codex', 'copilot'] },
@@ -132,7 +134,7 @@ function validateBodyProperties(allowed: readonly string[], widths: Readonly<Rec
   };
 }
 
-const stringWidths = { name: 100, repo: 140, default_branch: 255, merge_rules: 4000, tech: 32 };
+const stringWidths = { name: 100, description: 2000, repo: 140, default_branch: 255, merge_rules: 4000, tech: 32 };
 
 function storeOrUnavailable(store: ProjectStore | null, reply: { code(statusCode: number): { send(payload: unknown): unknown } }): ProjectStore | null {
   if (!store) {

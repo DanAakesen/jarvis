@@ -7,6 +7,8 @@ import type { ToolCallRecord } from '../core/tool-calls.js';
 import { ENGLISH_REALTIME_INSTRUCTIONS } from '../voice/realtime.js';
 import type { TaskController, TaskDetail, TaskRecord, TaskStore } from './task-store.js';
 import { factoryModule } from './index.js';
+import type { ConversationMessage, ConversationStore } from '../core/conversation-store.js';
+import type { TokenVerifier } from '../auth/verify.js';
 
 const config = { ...loadConfig({}), logLevel: 'silent' as const };
 const headers = {
@@ -18,6 +20,7 @@ const apps: ReturnType<typeof buildApp>[] = [];
 const project = {
   id: '7',
   name: 'Jarvis',
+  description: null,
   repo: 'DanAakesen/jarvis',
   default_branch: 'main',
   default_agent: 'codex' as const,
@@ -65,7 +68,11 @@ const detail: TaskDetail = {
 };
 
 function fixture() {
-  const projectStore = { list: vi.fn(async () => [project]) } as unknown as ProjectStore;
+  const projectStore = {
+    list: vi.fn(async () => [project]),
+    update: vi.fn(async (id: string, fields: Partial<typeof project>) => id === project.id ? { ...project, ...fields } : null),
+    archive: vi.fn(async (id: string) => id === project.id),
+  } as unknown as ProjectStore;
   const taskStore = {
     create: vi.fn(async () => task),
     list: vi.fn(async () => [task]),
@@ -102,7 +109,8 @@ afterEach(async () => {
 describe('Software Factory Jarvis tools', () => {
   it('registers every project and task tool for discovery and English voice', async () => {
     const names = [
-      'list_projects', 'list_tasks', 'get_task', 'list_releases', 'get_release', 'get_deployment_status',
+      'list_projects', 'update_project', 'archive_project', 'confirm_project_archive',
+      'list_tasks', 'get_task', 'list_releases', 'get_release', 'get_deployment_status',
       'create_task', 'set_task_model', 'retry_task', 'steer_task', 'pause_task', 'resume_task', 'cancel_task',
       'list_capabilities', 'repo_overview', 'repo_list', 'repo_read', 'repo_search', 'repo_issues',
       'create_project', 'manage_repository',
@@ -133,6 +141,7 @@ describe('Software Factory Jarvis tools', () => {
     const { app, projectStore, taskStore, taskController, record } = fixture();
     const calls: [string, Record<string, unknown>][] = [
       ['list_projects', {}],
+      ['update_project', { projectId: '7', name: 'Jarvis updated', description: 'The project description', default_agent: 'copilot' }],
       ['list_tasks', { projectId: '7', agent: 'codex', state: 'Ready', limit: 10, offset: 2 }],
       ['get_task', { taskId: '42', eventLimit: 20, eventOffset: 1 }],
       ['create_task', {
@@ -160,7 +169,12 @@ describe('Software Factory Jarvis tools', () => {
       });
     }
 
-    expect(projectStore.list).toHaveBeenCalledOnce();
+    expect(projectStore.list).toHaveBeenCalledTimes(2);
+    expect(projectStore.update).toHaveBeenCalledWith('7', {
+      name: 'Jarvis updated', description: 'The project description', default_agent: 'copilot',
+    });
+    expect(record.mock.calls.find(([call]) => call.tool === 'update_project')?.[0])
+      .toMatchObject({ arguments: { redacted: true }, result: { redacted: true } });
     expect(taskStore.list).toHaveBeenCalledWith({
       projectId: '7', agent: 'codex', state: 'Ready', limit: 10, offset: 2,
     });
@@ -170,7 +184,7 @@ describe('Software Factory Jarvis tools', () => {
       title: 'Fix the bug',
       request: 'Fix the bug\nMore details',
       source: 'chat',
-      originMessageId: '45',
+      originMessageId: '46',
       agent: 'codex',
       modelOverride: 'default',
       reasoningOverride: 'default',
@@ -203,6 +217,8 @@ describe('Software Factory Jarvis tools', () => {
       ['list_tasks', { state: 'running' }],
       ['get_task', { taskId: '0' }],
       ['create_task', { projectId: '7', prompt: '' }],
+      ['update_project', { projectId: '7' }],
+      ['update_project', { projectId: '7', description: 'x'.repeat(2001) }],
       ['set_task_model', { taskId: '42' }],
       ['steer_task', { taskId: '42', message: '   ' }],
       ['pause_task', {}],
@@ -259,6 +275,84 @@ describe('Software Factory Jarvis tools', () => {
     });
     expect(taskController.control).toHaveBeenCalledWith('42', { action: 'pause' });
     expect(record.mock.calls.map(([call]) => call.outcome)).toEqual(['refused', 'refused', 'refused']);
+  });
+
+  it('archives a project only after an exact confirmation in a later Dan message', async () => {
+    const record = vi.fn<(call: ToolCallRecord) => Promise<void>>(async () => {});
+    let latestMessage: ConversationMessage = {
+      id: '42',
+      sessionId: 'session',
+      role: 'dan',
+      text: 'Archive the project',
+      model: null,
+      at: new Date(Date.now() - 1_000),
+    };
+    const conversationStore = {
+      getHistory: vi.fn(async () => ({ messages: [latestMessage], nextCursor: null })),
+    } as unknown as ConversationStore;
+    const projectStore = {
+      list: vi.fn(async () => [project]),
+      update: vi.fn(async () => project),
+      archive: vi.fn(async (id: string) => id === project.id),
+    } as unknown as ProjectStore;
+    const app = buildApp(config, undefined, {
+      modules: [coreModule, factoryModule],
+      auth: (async () => ({
+        kind: 'jarvis-agent',
+        objectId: '00000000-0000-0000-0000-000000000001',
+        tenantId: config.auth.tenantId,
+      })) as TokenVerifier,
+      conversationStore,
+      projectStore,
+      toolCallStore: { record },
+    });
+    apps.push(app);
+
+    const staged = await app.inject({
+      method: 'POST', url: '/tools/archive_project', headers, payload: { projectId: '7' },
+    });
+    expect(staged.json()).toMatchObject({
+      outcome: 'ok',
+      result: { status: 'awaiting_confirmation', projectId: '7', repo: project.repo },
+    });
+    const confirmationCode = staged.json().result.confirmationCode as string;
+    expect(confirmationCode).toMatch(/^\d{8}$/u);
+    expect(projectStore.archive).not.toHaveBeenCalled();
+
+    latestMessage = { ...latestMessage, text: `confirm ${confirmationCode}`, at: new Date(Date.now() + 1_000) };
+    const sameMessage = await app.inject({
+      method: 'POST',
+      url: '/tools/confirm_project_archive',
+      headers,
+      payload: { confirmationCode },
+    });
+    expect(sameMessage.json()).toMatchObject({ outcome: 'refused' });
+    expect(projectStore.archive).not.toHaveBeenCalled();
+
+    latestMessage = {
+      ...latestMessage, id: '43', text: `confirm ${confirmationCode} extra`, at: new Date(Date.now() + 2_000),
+    };
+    const refused = await app.inject({
+      method: 'POST',
+      url: '/tools/confirm_project_archive',
+      headers: { ...headers, 'x-jarvis-message-id': '43' },
+      payload: { confirmationCode },
+    });
+    expect(refused.json()).toMatchObject({ outcome: 'refused' });
+    expect(projectStore.archive).not.toHaveBeenCalled();
+
+    latestMessage = { ...latestMessage, id: '44', text: `confirm ${confirmationCode}`, at: new Date(Date.now() + 3_000) };
+    const confirmed = await app.inject({
+      method: 'POST',
+      url: '/tools/confirm_project_archive',
+      headers: { ...headers, 'x-jarvis-message-id': '44' },
+      payload: { confirmationCode },
+    });
+    expect(confirmed.json()).toMatchObject({
+      outcome: 'ok',
+      result: { status: 'archived', projectId: '7', repo: project.repo },
+    });
+    expect(projectStore.archive).toHaveBeenCalledOnce();
   });
 
   it('refuses unverified task models and running-task changes with valid options', async () => {

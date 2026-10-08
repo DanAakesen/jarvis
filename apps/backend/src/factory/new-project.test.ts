@@ -84,6 +84,7 @@ it('uses configured defaults and keeps the repository secret out of task and rec
   const createdProject: Project = {
     id: '73',
     name: 'bright-app',
+    description: null,
     repo: 'DanAakesen/bright-app',
     default_branch: 'develop',
     default_agent: 'codex',
@@ -159,6 +160,7 @@ it('uses configured defaults and keeps the repository secret out of task and rec
     },
   });
   expect(projectInput).toHaveBeenCalledWith(expect.objectContaining({
+    description: 'A bright new application',
     default_branch: 'develop',
     default_agent: 'codex',
     policy: 'complete_without_deployment',
