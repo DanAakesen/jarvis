@@ -832,11 +832,16 @@ Existing routing derives its boolean as `mode !== 'present'`.
 
 The modes and UI colour contract are Present (`present`, green), Away (`away`,
 yellow), and On the move (`on_the_move`, blue). `GET /presence` returns the
-current state; owner-only `PUT /presence` accepts `{ mode }` and records a manual
-change. The signed-in browser still uses `POST /now/present` only while visible
+current state; owner-only `PUT /presence` accepts `{ mode, source? }`, with
+`source` limited to `manual` or `device` and defaulting to `manual`. Device
+updates are ignored with `ignored: 'recent_manual'` while a manual change is
+less than two hours old. Manual same-mode updates refresh that window. The
+presence response contract preserves `source` and `changedAt`; the existing JSON
+settings row already stores both, so no migration is needed. The signed-in
+browser still uses `POST /now/present` only while visible
 and focused on startup, focus, tab visibility, or user input; passive
 API/feed requests do not return Dan to Present. The owner-authenticated
-`set_presence_mode` tool records Jarvis-originated changes without confirmation;
+`set_presence_mode` tool records manual voice/chat changes without confirmation;
 `set_away_mode` remains a compatibility alias for one release. `GET /agent/settings`
 provides the active mode and timestamp alongside the base
 `personality.customInstructions` and bounded per-mode instructions. Realtime

@@ -66,6 +66,11 @@ import {
   factoryBoardColumnIds,
   isFactoryBoard,
   isFactoryBoardUpdate,
+  isPresenceState,
+  presenceModes,
+  presenceSources,
+  presenceStateSchema,
+  presenceUpdateSchema,
 } from './index.js';
 
 test('workspace snapshots accept old clients and validate optional current and previous views', () => {
@@ -782,6 +787,19 @@ test('validates exact navigation keys, settings sections and bounded factory tas
   ]) {
     assert.equal(isWorkspaceCommand({ ...command, ...invalid }), false, JSON.stringify(invalid));
   }
+});
+
+test('defines the presence request and response contracts', () => {
+  assert.deepEqual(presenceModes, ['present', 'away', 'on_the_move']);
+  assert.deepEqual(presenceSources, ['manual', 'device', 'jarvis', 'browser']);
+  assert.deepEqual(presenceUpdateSchema.properties.source.enum, ['manual', 'device']);
+  assert.deepEqual(presenceStateSchema.properties.ignored, { const: 'recent_manual' });
+
+  const state = { mode: 'on_the_move', source: 'device', changedAt: '2026-10-08T08:00:00.000Z' };
+  assert.equal(isPresenceState(state), true);
+  assert.equal(isPresenceState({ ...state, ignored: 'recent_manual' }), true);
+  assert.equal(isPresenceState({ ...state, ignored: 'other' }), false);
+  assert.equal(isPresenceState({ ...state, source: 'teams_presence' }), false);
 });
 
 test('rejects invalid workspace IDs, geometry, operations, and generated-view allowlists', () => {

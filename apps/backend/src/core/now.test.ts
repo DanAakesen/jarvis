@@ -55,12 +55,16 @@ afterEach(async () => {
 
 describe('Now feed API', () => {
   it('returns and updates the owner presence mode', async () => {
-    let state = { mode: 'present' as const, source: 'browser' as const, changedAt: null };
+    let state: {
+      mode: 'present' | 'away' | 'on_the_move';
+      source: 'manual' | 'device' | 'browser' | 'jarvis';
+      changedAt: string | null;
+    } = { mode: 'present', source: 'browser', changedAt: null };
     const awayModeStore: AwayModeStore = {
       read: vi.fn(async () => state),
       set: vi.fn(async (mode, source = 'manual') => {
         state = { mode, source, changedAt: '2026-10-06T12:00:00.000Z' };
-        return state;
+        return source === 'device' ? { ...state, ignored: 'recent_manual' } : state;
       }),
       markPresent: vi.fn(),
     };
@@ -84,8 +88,25 @@ describe('Now feed API', () => {
       changedAt: '2026-10-06T12:00:00.000Z',
     });
     expect(awayModeStore.set).toHaveBeenCalledWith('on_the_move', 'manual');
+    const deviceChanged = await app.inject({
+      method: 'PUT',
+      url: '/presence',
+      headers,
+      payload: { mode: 'on_the_move', source: 'device' },
+    });
+    expect(deviceChanged.statusCode).toBe(200);
+    expect(deviceChanged.json()).toEqual({
+      mode: 'on_the_move',
+      source: 'device',
+      changedAt: '2026-10-06T12:00:00.000Z',
+      ignored: 'recent_manual',
+    });
+    expect(awayModeStore.set).toHaveBeenLastCalledWith('on_the_move', 'device');
     expect((await app.inject({
       method: 'PUT', url: '/presence', headers, payload: { mode: 'driving' },
+    })).statusCode).toBe(400);
+    expect((await app.inject({
+      method: 'PUT', url: '/presence', headers, payload: { mode: 'present', source: 'browser' },
     })).statusCode).toBe(400);
 
     const otherUser = fixture(undefined, async () => ({

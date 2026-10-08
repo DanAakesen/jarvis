@@ -5,6 +5,7 @@ import {
   isLegacyAwayModeState,
   parseAwayModeState,
   setPresenceMode,
+  updatePresenceMode,
   type AwayModeSource,
   type AwayModeState,
   type AwayModeStore,
@@ -94,8 +95,14 @@ export function createAwayModeStore(
         throw new Error('Away mode is unavailable');
       }
     },
-    set(mode: PresenceMode, source: AwayModeSource = 'manual', at = new Date()) {
-      return update((state) => setPresenceMode(state, mode, source, at));
+    async set(mode: PresenceMode, source: AwayModeSource = 'manual', at = new Date()) {
+      let ignored: 'recent_manual' | undefined;
+      const state = await update((previous) => {
+        const result = updatePresenceMode(previous, mode, source, at);
+        ignored = result.ignored;
+        return result.state;
+      });
+      return ignored ? { ...state, ignored } : state;
     },
     markPresent(at = new Date()) {
       return update((state) => setPresenceMode(state, 'present', 'browser', at));

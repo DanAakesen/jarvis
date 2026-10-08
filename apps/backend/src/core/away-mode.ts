@@ -1,9 +1,10 @@
 import type { FastifyRequest } from 'fastify';
+import { presenceModes, type PresenceMode, type PresenceSource } from '@jarvis/contracts';
 import { ToolRefusal, type JarvisTool } from './tool-registry.js';
 
-export const presenceModes = ['present', 'away', 'on_the_move'] as const;
-export type PresenceMode = typeof presenceModes[number];
-export type AwayModeSource = 'manual' | 'jarvis' | 'browser';
+export { presenceModes };
+export type { PresenceMode };
+export type AwayModeSource = PresenceSource;
 
 export interface AwayModeState {
   mode: PresenceMode;
@@ -11,9 +12,11 @@ export interface AwayModeState {
   changedAt: string | null;
 }
 
+export type AwayModeSetResult = AwayModeState & { ignored?: 'recent_manual' };
+
 export interface AwayModeStore {
   read(): Promise<AwayModeState>;
-  set(mode: PresenceMode, source?: AwayModeSource, at?: Date): Promise<AwayModeState>;
+  set(mode: PresenceMode, source?: AwayModeSource, at?: Date): Promise<AwayModeSetResult>;
   markPresent(at?: Date): Promise<AwayModeState>;
 }
 
@@ -32,7 +35,7 @@ function isPresenceMode(value: unknown): value is PresenceMode {
 }
 
 function isAwayModeSource(value: unknown): value is AwayModeSource {
-  return value === 'manual' || value === 'jarvis' || value === 'browser';
+  return value === 'manual' || value === 'device' || value === 'jarvis' || value === 'browser';
 }
 
 export function parseAwayModeState(value: unknown): AwayModeState {
@@ -71,11 +74,28 @@ export function setPresenceMode(
 ): AwayModeState {
   if (!isPresenceMode(mode)) throw new TypeError('Presence mode is invalid');
   const changed = previous.mode !== mode;
+  const refreshSource = source === 'manual' || source === 'device';
   return {
     mode,
-    source: changed ? source : previous.source,
-    changedAt: changed ? iso(at) : previous.changedAt,
+    source: changed || refreshSource ? source : previous.source,
+    changedAt: changed || refreshSource ? iso(at) : previous.changedAt,
   };
+}
+
+export function updatePresenceMode(
+  previous: AwayModeState,
+  mode: PresenceMode,
+  source: AwayModeSource,
+  at: Date,
+): { state: AwayModeState; ignored?: 'recent_manual' } {
+  const manualChangedAt = previous.source === 'manual' && previous.changedAt !== null
+    ? Date.parse(previous.changedAt)
+    : Number.NaN;
+  if (source === 'device' && Number.isFinite(manualChangedAt) &&
+      at.getTime() - manualChangedAt < 2 * 60 * 60 * 1000) {
+    return { state: previous, ignored: 'recent_manual' };
+  }
+  return { state: setPresenceMode(previous, mode, source, at) };
 }
 
 interface SetPresenceModeInput {
@@ -123,7 +143,7 @@ function presenceModeTool(name: string, legacy = false): JarvisTool {
       const mode = legacy
         ? (input as SetAwayModeInput).mode === 'on' ? 'away' : 'present'
         : (input as SetPresenceModeInput).mode;
-      const state = await store.set(mode, request.agentPrincipal ? 'jarvis' : 'manual');
+      const state = await store.set(mode, 'manual');
       const label = mode === 'on_the_move' ? 'On the move' : mode === 'present' ? 'Present' : 'Away';
       return {
         mode: state.mode,
