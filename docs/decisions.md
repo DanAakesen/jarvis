@@ -53,6 +53,19 @@ remain readable. Migration 0037 follows the 0036 Folio migration and L120.
 Offline fake-backed route, tool, webhook, delivery and progress tests cover
 behavior; live GitHub issue access awaits P10-01's App permissions.
 
+P10-03 (8 October 2026): create new code-change issues through the shared GitHub
+App issue client, with no new persistence migration. The tool stages the draft
+and requires an exact confirmation from a later Dan message; the authenticated
+Factory endpoint creates directly for Dan. Allocate the lowest available
+`P11-NN` in the target repository by reading its existing issue titles and
+rechecking when confirmed. Use `enhancement` by default and `bug` only for
+titles explicitly prefixed `[Bug]`, `Bug:`, or `Regression:`. Add the Jarvis
+worker label only after opening the issue so P10-02 receives the label event;
+assign Copilot and post a bounded scope comment when selected. Reject likely
+secrets before sending content to GitHub. Focused fake-backed tests cover
+allocation, confirmation, labels, assignment and route authorization; live
+GitHub writes remain pending P10-01.
+
 P9-10 (7 October 2026): store memory retrieval settings in the existing global
 `dbo.settings` store and expose their shared bounded contract through Settings.
 Keep defaults at the existing similarity thresholds (`0.35` embedding and
@@ -716,6 +729,7 @@ Mistakes made so far and the rule that prevents each one.
 | **L122** | Clipboard reads are sensitive and turn-scoped | P9-32 adds only explicit current-message clipboard reads through the authenticated PC bridge. | Keep clipboard tools out of reflex execution, redact obvious secrets before returning read text, bound text to 20 KiB, and store only redacted metadata in the generic tool-call audit. |
 | **L123** | Chat called an agent-only route with Dan's token | From the 01:53 agent deploy on 8 October every chat message failed with `Chat agent unavailable (HTTP 503)`. P9-11 (#557) added a `GET /agent/settings` read to `load_verified_history`, but sent Dan's delegated token; that route only accepts the hosted agent's identity, so the backend answered 403 and the agent refused the turn. Mocked tests asserted the same wrong header, and nobody used chat overnight. The agent now reads its settings with its own managed identity and falls back to the default timeout if they are unavailable. Lesson: agent-only routes need the agent token, tests must assert which identity each call uses, and a deploy that touches the agent needs a live chat check (P9-39). |
 | **L126** | One huge ACP line hung a Factory task for an hour | Task 10 (8 October, the calendar-approval change Jarvis requested) went silent at 03:37 right after Codex ran `cat` on several large docs, and failed on the runner's 60-minute timeout. The runner spawned Codex with asyncio's default 64 KiB stream limit; the tool-output ACP message was one longer line, so `readline()` raised, the unobserved reader task died, nobody drained stdout and Codex blocked writing. The ACP pipe now allows 32 MiB lines, and an over-limit line is dropped with an `acp_message_dropped` event while reading continues. Lesson: stream readers on agent pipes must survive oversized messages; a dead reader must never look like a busy agent. |
+| **L127** | The research smoke probe timed out at random | After L125, the deploy for #591 still failed its smoke gate: the research dry run (a real Codex call through the runner) was cancelled at its 20-second budget, while a normal call takes 15-25 s (it passed in 21 s at 04:29). The probe now has 45 s, the gate's request 60 s, and the workflow prints each check's id and status to the log so a failed gate names its check. Lesson: size a probe's timeout from observed latency with headroom, and make a gate say which check failed. |
 | **L124** | Folio ids came back upper case from SQL | After #564 deployed, `GET /folio` returned 503 for Dan: migration 0035 built `item_id` as `kind:` + `CONVERT(nvarchar(36), id)`, which SQL Server renders in upper case, while the store only accepts lower-case GUIDs, so every stored item failed validation. Same root cause as #536's job ids. Migration 0036 lower-cases existing ids and the store normalises ids on every read and write. Lesson: never build or compare GUID text from SQL Server without `LOWER()`; tests against the real database must assert the id shape round-trips. |
 | **L125** | The Google smoke probe used an endpoint Jarvis has no scope for | Every deploy after P9-39 (#562) failed its smoke gate with Google "down", while Dan's calendar tools worked. The probe read `/users/me/calendarList`, which needs `calendar.readonly`; Jarvis holds only `calendar.events` (infra/setup-google.ps1), so it always got 403. The probe now reads one primary-calendar event, the same endpoint and scope the calendar tools use. Lesson: a health probe must exercise the feature's own endpoint and scopes, and a new gate should be checked against a known-good system before it blocks deploys. |
 
