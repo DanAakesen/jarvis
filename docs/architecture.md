@@ -2057,6 +2057,28 @@ network, forms, popups or top navigation. The host acts only on HTTPS
 other messages are ignored. Renderer integration and browser acceptance remain
 pending that dependency.
 
+### Folio (P9-25)
+
+Migration `0035_folio.sql` adds an owner-scoped `dbo.folio_items` index over
+research reports, HTML apps, generated images and knowledge-graph views. New
+reports record their topic summary, HTML apps their title, generated images
+their prompt summary, and graph views their query and highlighted node IDs.
+Migration 0035 backfills existing HTML artifacts and images; legacy HTML
+artifacts do not retain their originating job, so they are indexed as
+`html_app`. Graph snapshots are recorded from now on; older transient graph
+views cannot be recovered.
+
+Owner-only `GET /folio?q=&kind=&before=` returns at most 100 items, pinned
+first and then newest, matching the item title, prompt summary, or historical
+HTML version title. `POST /folio/:id/open` validates source ownership and
+recreates or updates the saved view through the workspace command broker,
+then focuses it. `PATCH /folio/:id` pins or renames an item. Confirmed
+`DELETE /folio/:id` removes only its Folio index entry; the original artifact
+and its history remain available. The shared sensitive tools `folio_search`
+and `folio_open` provide the same owner-scoped search and broker-backed reopen
+behavior to Jarvis without retaining search arguments or results in tool audit.
+The Folio rail and pane are a separate UI task.
+
 ### Sandbox credentials
 
 The agent can read everything in its sandbox, including environment variables, so each token is limited to what the task needs.
