@@ -8,7 +8,7 @@ import { WorkingCore } from './ToolCallChip';
 /** Opens (or just reveals) a job's result window; returns false while the window does not exist yet. */
 export type ResultWindowAction = (viewId: string, mode: 'open' | 'park') => boolean;
 
-const kindLabel: Record<BackgroundJob['kind'], string> = { research: 'Research', image: 'Image', html_app: 'App' };
+const kindLabel: Record<BackgroundJob['kind'], string> = { research: 'Research', image: 'Image', html_app: 'App', embedding: 'Indexing' };
 
 function elapsed(from: string, now: number) {
   const seconds = Math.max(0, Math.round((now - Date.parse(from)) / 1000));
