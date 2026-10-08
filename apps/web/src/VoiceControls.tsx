@@ -12,13 +12,16 @@ import { languageName } from './voice-language';
 import { voicePresentation } from './voice-presentation';
 import { VoiceStageContext } from './voice-stage-context';
 import type { CameraController, ScreenShareController } from './screen-sharing';
-import './VoiceControls.css';
+import { phoneDeviceQuery } from './presence-store';
+import { onVoiceWake, reportWakeOutcome } from './wake-store';import './VoiceControls.css';
 
 const initialMessage = 'Start voice with the input orb. Your browser asks for microphone access when voice starts; Jarvis only hears you after the voice session is connected.';
 const cameraGuidance = 'Choose Turn on camera in More options, then ask Jarvis to look.';
 const screenGuidance = 'Choose Share screen in More options, then ask Jarvis to look.';
 const sessionPendingGuidance = 'Available once the voice session is connected.';
-
+const wakeNeedsClick = 'Heard “Wake up Jarvis”. Click the orb once to start: the browser only plays sound after you have used this page.';
+/** How long a wake waits for the bridge to bring the Jarvis tab forward. */
+const wakeVisibleWait = 4_000;
 function MenuGlyph({ name }: { name: 'microphone' | 'microphone-off' | 'screen' | 'camera' }) {
   const common = { 'aria-hidden': true as const, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
   switch (name) {
@@ -201,6 +204,8 @@ export function VoiceControls({
         setClientMessage(nextMessage);
         if (nextStatus === 'stopped' || nextStatus === 'error') {
           if (nextStatus === 'error') notify(nextMessage, true);
+          if (nextStatus === 'error' && wakeSession.current) reportWakeOutcome(wakeSession.current, 'error', nextMessage);
+          wakeSession.current = null;
           client.current = null;
           stage.setSignals(null);
           setSessionLanguage(null);
@@ -252,6 +257,64 @@ export function VoiceControls({
     }
   };
 
+  // Wake word (P9-17): a detection starts voice here, on the computer the bridge brought forward. Phones ignore it,
+  // a hidden tab waits briefly to be focused, and a page the browser will not let play sound asks for one click.
+  const wakeSession = useRef<string | null>(null);
+  const startRef = useRef(start);
+  const disabledRef = useRef(disabled);
+  useEffect(() => {
+    startRef.current = start;
+    disabledRef.current = disabled;
+  });
+  useEffect(() => {
+    const pending = new Set<() => void>();
+    const unsubscribe = onVoiceWake((at) => {
+      if (window.matchMedia?.(phoneDeviceQuery).matches) {
+        reportWakeOutcome(at, 'ignored', 'Ignored on the phone; the wake word starts voice on the computer.');
+        return;
+      }
+      const begin = () => {
+        if (client.current) {
+          reportWakeOutcome(at, 'already-active', 'Voice was already on.');
+        } else if (disabledRef.current) {
+          notify('Heard “Wake up Jarvis”, but voice is unavailable right now.', true);
+          reportWakeOutcome(at, 'unavailable', 'Voice was unavailable.');
+        } else if (navigator.userActivation && !navigator.userActivation.hasBeenActive) {
+          notify(wakeNeedsClick, true);
+          reportWakeOutcome(at, 'needs-click', 'Needed one click on the page before the browser allows sound.');
+        } else {
+          startRef.current();
+          wakeSession.current = at;
+          notify('Heard “Wake up Jarvis”.');
+          reportWakeOutcome(at, 'started', 'Voice started.');
+        }
+      };
+      if (document.visibilityState === 'visible') {
+        begin();
+        return;
+      }
+      const done = () => {
+        window.clearTimeout(timer);
+        document.removeEventListener('visibilitychange', onVisible);
+        pending.delete(done);
+      };
+      const onVisible = () => {
+        if (document.visibilityState !== 'visible') return;
+        done();
+        begin();
+      };
+      const timer = window.setTimeout(() => {
+        done();
+        reportWakeOutcome(at, 'unavailable', 'Not started: Jarvis stayed in the background.');
+      }, wakeVisibleWait);
+      document.addEventListener('visibilitychange', onVisible);
+      pending.add(done);
+    });
+    return () => {
+      unsubscribe();
+      for (const done of pending) done();
+    };
+  }, [notify]);
   const stop = () => {
     client.current?.stop();
   };

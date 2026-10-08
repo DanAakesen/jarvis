@@ -98,7 +98,7 @@ export function resetPresenceForTests() {
 
 // Phones are where Dan is on the move (Dan, 8 October, P9-44): a touch device with a phone-sized screen. A narrow
 // desktop window is not a phone, so the pointer decides as well as the size.
-const phoneDeviceQuery = '(pointer: coarse) and (max-width: 900px), (pointer: coarse) and (max-height: 500px)';
+export const phoneDeviceQuery = '(pointer: coarse) and (max-width: 900px), (pointer: coarse) and (max-height: 500px)';
 const manualHold = 2 * 60 * 60 * 1000;
 const deviceResync = 10 * 60 * 1000;
 let lastDeviceSync = 0;

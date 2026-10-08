@@ -14,44 +14,40 @@ describe('memory settings', () => {
     expect(await screen.findByText(/Memory is not available yet/)).not.toBeNull();
   });
 
-  it('searches, opens, corrects and asks Jarvis to forget a vault note', async () => {
-    const note = { id: 'vault_UGVvcGxlL0FubmEubWQ', type: 'vault_note', path: 'People/Anna.md', folder: 'People', title: 'Anna', snippet: 'Anna likes tea.',
-      updatedAt: '2026-10-05T10:00:00.000Z', source: { type: 'github', url: 'https://github.com/DanAakesen/vault/blob/master/People/Anna.md' } };
-    let deleteStatus = 202;
+  it('shows only what Jarvis remembers from conversations, then corrects and forgets it', async () => {
+    const memory = { id: '42', type: 'memory', folder: 'General', key: 'tea', content: 'Dan takes his tea with milk.', updatedAt: '2026-10-05T10:00:00.000Z' };
+    const note = { id: 'vault_UGVvcGxlL0FubmEubWQ', type: 'vault_note', path: 'General/Anna.md', folder: 'General', title: 'Anna', snippet: 'Anna likes tea.' };
+    let deleteStatus = 503;
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = new URL(String(input));
-      if (url.pathname === '/memory/status') return json({ lastVaultSyncAt: '2026-10-06T18:00:00.000Z', notesByFolder: { People: 2, Work: 5, Personal: 0, General: 1 }, lastIndexOutcome: { outcome: 'ok' } });
-      if (url.pathname === '/memory') return json({ items: [note], count: 1, limit: 50, offset: 0, hasMore: false });
-      if (url.pathname === `/memory/${note.id}` && init?.method === 'PATCH') return json({ item: { ...note, snippet: 'Anna likes coffee.' }, commitUrl: 'https://github.com/DanAakesen/vault/commit/abc123' });
-      if (url.pathname === `/memory/${note.id}` && init?.method === 'DELETE') return deleteStatus === 202
-        ? json({ status: 'approval_pending', message: 'approval pending in Jarvis' }, 202)
-        : json({ error: 'Web approval is unavailable while Jarvis is away' }, 409);
-      if (url.pathname === `/memory/${note.id}`) return json({ ...note, content: 'Anna likes tea.', history: [{ updatedAt: '2026-10-01T09:00:00.000Z', message: 'Created from a meeting note', url: 'https://github.com/DanAakesen/vault/commit/def456', content: 'Anna likes tea.' }], mayHaveMore: false });
+      if (url.pathname === '/memory') return json({ items: [memory, note], count: 2, limit: 50, offset: 0, hasMore: false });
+      if (url.pathname === '/memory/42' && init?.method === 'PATCH') return json({ item: { ...memory, content: 'Dan takes his tea black.' } });
+      if (url.pathname === '/memory/42' && init?.method === 'DELETE') return deleteStatus === 200 ? json({ deleted: true }) : json({ error: 'unavailable' }, 503);
+      if (url.pathname === '/memory/42') return json({ ...memory, history: [] });
       return json({}, 500);
     });
     vi.stubGlobal('fetch', fetchMock);
     render(<MemorySettings backendUrl="https://api.example.com" getAccessToken={getAccessToken} />);
 
-    expect(await screen.findByText('People', { selector: 'li' })).not.toBeNull();
-    fireEvent.change(screen.getByLabelText('Search memory'), { target: { value: 'anna' } });
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('https://api.example.com/memory?query=anna&limit=50', expect.anything()));
-    fireEvent.click(await screen.findByRole('button', { name: /Anna/ }));
-    expect(await screen.findByRole('link', { name: 'Created from a meeting note' })).not.toBeNull();
+    fireEvent.click(await screen.findByRole('button', { name: /tea with milk/ }));
+    expect(screen.queryByRole('button', { name: /Anna/ })).toBeNull();
+    expect(fetchMock).toHaveBeenCalledWith('https://api.example.com/memory?folder=General&limit=50', expect.anything());
+    fireEvent.change(screen.getByLabelText('Search memory'), { target: { value: 'tea' } });
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('https://api.example.com/memory?query=tea&folder=General&limit=50', expect.anything()));
 
-    fireEvent.change(screen.getByLabelText('Memory text'), { target: { value: 'Anna likes coffee.' } });
+    fireEvent.change(await screen.findByLabelText('Memory text'), { target: { value: 'Dan takes his tea black.' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save correction' }));
-    expect(await screen.findByText(/Correction committed to your vault/)).not.toBeNull();
-    expect(screen.getByRole('link', { name: 'View commit' }).getAttribute('href')).toBe('https://github.com/DanAakesen/vault/commit/abc123');
-    expect(fetchMock).toHaveBeenCalledWith(`https://api.example.com/memory/${note.id}`, expect.objectContaining({ method: 'PATCH', body: JSON.stringify({ text: 'Anna likes coffee.' }) }));
+    expect(await screen.findByText(/Correction saved/)).not.toBeNull();
+    expect(fetchMock).toHaveBeenCalledWith('https://api.example.com/memory/42', expect.objectContaining({ method: 'PATCH', body: JSON.stringify({ text: 'Dan takes his tea black.' }) }));
 
-    deleteStatus = 409;
     fireEvent.click(screen.getByRole('button', { name: 'Forget…' }));
     fireEvent.click(screen.getByRole('button', { name: 'Forget memory', hidden: true }));
-    expect(await screen.findByText(/Jarvis is away/)).not.toBeNull();
+    expect(await screen.findByText(/nothing was deleted/)).not.toBeNull();
 
-    deleteStatus = 202;
+    deleteStatus = 200;
     fireEvent.click(screen.getByRole('button', { name: 'Forget…' }));
     fireEvent.click(screen.getByRole('button', { name: 'Forget memory', hidden: true }));
-    expect(await screen.findByText(/Approval pending in Jarvis/)).not.toBeNull();
+    expect(await screen.findByText('Memory forgotten.')).not.toBeNull();
+    expect(screen.queryByRole('button', { name: /tea/ })).toBeNull();
   });
 });

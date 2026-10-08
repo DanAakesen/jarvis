@@ -950,3 +950,10 @@ regression; live acceptance is pending.
 ## P9-09 (8 October 2026) — Appearance colours can be reset
 
 `PATCH /settings` accepts `null` for `appearance.accent`, `appearance.accent-secondary` and `appearance.surface-tint`, meaning "remove the override". The store keeps JSON `null`, which the read path already ignores, so GET omits the key and the theme's light and dark defaults apply. No migration or store change was needed. Other settings still reject `null`. Status: accepted (requested by the UI session for #503's "Use Jarvis colours").
+
+## 2026-10-08: Settings Memory shows only conversation memories
+
+- **Decision (Dan):** Settings → Memory lists only what Jarvis remembered about Dan from conversations (durable memories), merged with the retrieval settings in one card. Vault notes are browsed in Knowledge, not Settings.
+- **Rationale:** the old panel duplicated the knowledge graph and added no settings value.
+- **Evidence:** `GET /memory` lists durable memories (folder General) before vault notes, so the UI requests `folder=General` and keeps `type: memory` items. A server-side type filter would remove the reliance on that ordering if more than 50 memories accumulate.
+- **Status:** implemented on `ui/shell-iteration`.

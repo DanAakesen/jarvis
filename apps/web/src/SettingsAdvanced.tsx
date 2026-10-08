@@ -285,13 +285,19 @@ export function ResearchSection({ research, problems, disabled, onChange }: {
   );
 }
 
-export function RetrievalSection({ memory, problems, disabled, onChange }: {
+/** Memory (Dan, 8 October): what Jarvis remembers about Dan, then how it recalls. The memory browser arrives as children. */
+export function RetrievalSection({ memory, problems, disabled, onChange, children }: {
   memory: MemorySettings; problems: Problems; disabled: boolean;
   onChange: <Key extends keyof MemorySettings>(key: Key, value: MemorySettings[Key]) => void;
+  children?: ReactNode;
 }) {
   return (
-    <Section storageKey="settings.retrieval" headingId="retrieval-settings-heading" title="Memory and retrieval"
-      summary={`Top ${memory.searchTopK} · ${memory.automaticCapture ? 'remembers automatically' : 'remembers on request'}`}>
+    <CollapsibleSection storageKey="settings.memory" id="memory" headingId="memory-settings-heading" title="Memory"
+      summary={memory.automaticCapture ? 'Remembers automatically' : 'Remembers on request'}>
+      <Toggle id="memory-capture" label="Remember things automatically" hint="Jarvis saves useful facts about you from conversations"
+        checked={memory.automaticCapture} disabled={disabled} onChange={(value) => onChange('automaticCapture', value)} />
+      {children}
+      <h3 className="settings-subheading">How Jarvis recalls</h3>
       <RangeField id="memory-similarity" label="How close a memory must match" value={memory.similarityThreshold} min={0} max={1} step={0.01}
         disabled={disabled} onChange={(value) => onChange('similarityThreshold', value)} low="Loose" high="Strict" />
       <RangeField id="memory-graph-similarity" label="Knowledge graph links" value={memory.graphTextSimilarityThreshold} min={0} max={1} step={0.01}
@@ -301,12 +307,9 @@ export function RetrievalSection({ memory, problems, disabled, onChange }: {
           min={bounds.memory.searchTopK.minimum} max={bounds.memory.searchTopK.maximum}
           problem={problems['memory.searchTopK']} disabled={disabled} onChange={(value) => onChange('searchTopK', value)} />
       </div>
-      <Toggle id="memory-capture" label="Remember things automatically" hint="Jarvis saves useful facts from conversations"
-        checked={memory.automaticCapture} disabled={disabled} onChange={(value) => onChange('automaticCapture', value)} />
-    </Section>
+    </CollapsibleSection>
   );
 }
-
 export function TimeoutsSection({ timeouts, problems, disabled, onChange }: {
   timeouts: TimeoutSettings; problems: Problems; disabled: boolean;
   onChange: <Key extends keyof TimeoutSettings>(key: Key, value: TimeoutSettings[Key]) => void;

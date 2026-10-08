@@ -1,5 +1,6 @@
 import { publishPresenceMode } from './presence-store';
 import { publishJob } from './jobs-store';
+import { publishVoiceWake } from './wake-store';
 import { useContext, useEffect, useRef, useState } from 'react';
 import type { PublicClientApplication } from '@azure/msal-browser';
 import { useJarvisActivity } from './activity-context';
@@ -97,6 +98,7 @@ export function NowFeedPanel({
         onActivity: applyRuntimeActivity,
         onPresenceMode: publishPresenceMode,
         onJob: publishJob,
+        onVoiceWake: publishVoiceWake,
         onWorkspaceReady: (sessionId, blobHost) => {
           workspaceSessionId = sessionId;
           setWorkspaceSession(sessionId);

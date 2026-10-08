@@ -1,3 +1,4 @@
+import { readVoiceWake } from './wake-store';
 import type { ActivityItem, NowFeed, ConfirmationActionKind } from './activity';
 import { backendFetch } from './backend-request';
 import {
@@ -28,6 +29,8 @@ export interface NowFeedStreamOptions {
   onActivity?: (event: JarvisActivityEvent) => void;
   /** Receives the raw mode from mode_changed events; the presence store validates it. */
   onPresenceMode?: (mode: string) => void;
+  /** The PC bridge heard the wake word (P9-17); receives the detection time. */
+  onVoiceWake?: (at: string) => void;
   /** Receives raw job event payloads for the jobs chip. */
   onJob?: (job: unknown) => void;
   signal: AbortSignal;
@@ -280,6 +283,15 @@ async function readNowEvents(body: ReadableStream<Uint8Array>, signal: AbortSign
           value = undefined;
         }
         if (value !== undefined) options.onJob?.(value);
+      } else if (event === 'voice-wake') {
+        let value: unknown;
+        try {
+          value = JSON.parse(data.join('\n'));
+        } catch {
+          value = undefined;
+        }
+        const at = readVoiceWake(value);
+        if (at) options.onVoiceWake?.(at);
       } else if (event === 'jarvis-activity') {
         let value: unknown;
         try {

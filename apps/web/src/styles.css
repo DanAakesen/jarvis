@@ -3278,3 +3278,45 @@ a.task-chip:hover { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--glass-e
 .advanced-colour input[type="color"]::-webkit-color-swatch { border: 1px solid var(--rule); border-radius: 10px; }
 @media (max-width: 700px) { .advanced-colours { grid-template-columns: minmax(0, 1fr); } }
 .advanced-field .advanced-segmented { width: fit-content; max-width: 100%; }
+
+/* Credentials (P9-19): a card per credential, status in words with a tone dot, Renew where the backend supports it. */
+.credential-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px; margin: 12px 0 0; padding: 0; list-style: none; }
+.credential-card { --tone: var(--text-muted); display: grid; align-content: start; gap: 4px; padding: 12px 14px; border-radius: 14px; background: color-mix(in srgb, var(--text) 3%, transparent);
+  color: var(--text-muted); font-size: var(--type-small); }
+.credential-card[data-status="ok"] { --tone: var(--glass-edge-cool); }
+.credential-card[data-status="renew_soon"] { --tone: var(--glass-glow-warm); }
+.credential-card[data-status="failed"] { --tone: var(--error); }
+.credential-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px; color: var(--text); }
+.credential-status { display: inline-flex; align-items: center; gap: 6px; color: var(--text); font-size: var(--type-caption); font-weight: 600; }
+.credential-status::before { width: 8px; height: 8px; border-radius: 50%; background: var(--tone); box-shadow: 0 0 8px var(--tone); content: ""; }
+.credential-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 6px; }
+.credential-result { font-size: var(--type-caption); color: var(--text); }
+.credential-result[data-tone="error"] { color: var(--error); }
+/* Settings polish (Dan, 8 October). Section headers no longer paint a slab on hover: the title brightens and the chevron
+   turns cyan and nudges. Save is a plain row at the end of the page, with no floating glass pill around the button. */
+.collapsible-toggle:hover, .collapsible-toggle:active { background: transparent; }
+.collapsible-toggle .collapsible-title { transition: color var(--motion-press) var(--ease-standard), text-shadow var(--motion-press) var(--ease-standard); }
+.collapsible-toggle:hover .collapsible-title { color: var(--text); text-shadow: 0 0 14px color-mix(in srgb, var(--glass-edge-cool) 45%, transparent); }
+.app-shell .collapsible-toggle .collapsible-chevron { transition: rotate var(--motion-state) var(--ease-enter), translate var(--motion-press) var(--ease-standard), color var(--motion-press) var(--ease-standard); }
+.app-shell .collapsible-toggle:hover .collapsible-chevron { color: var(--glass-edge-cool); translate: 2px 0; }
+.app-shell .collapsible-section[data-open="true"] .collapsible-toggle:hover .collapsible-chevron { translate: 0 2px; }
+.collapsible-toggle:active .collapsible-title { color: var(--text-muted); }
+.settings-page > .settings-save { position: static; width: auto; max-width: none; margin: 16px 0 0; padding: 0; border-radius: 0; background: none; backdrop-filter: none; box-shadow: none;
+  justify-content: flex-end; }
+.settings-page > .settings-save .settings-feedback { order: 1; margin: 0; }
+.settings-page > .settings-save .primary-button { order: 2; }
+/* Memory: what Jarvis remembers, between the capture switch and recall tuning. The detail opens only once a memory is chosen. */
+.settings-subheading { margin: 22px 0 10px; color: var(--text); font-size: var(--type-body); font-weight: 650; }
+.memory-settings .memory-search { margin: 0 0 10px; }
+.memory-settings .memory-search input { width: 100%; margin: 0; }
+.memory-settings .memory-browser { grid-template-columns: minmax(0, 1fr); }
+.memory-settings .memory-browser:has(.memory-detail) { grid-template-columns: minmax(220px, 1fr) minmax(0, 1.3fr); }
+.memory-settings .memory-results { max-height: 360px; }
+.memory-settings .memory-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.memory-settings .memory-actions .primary-button { margin-top: 0; }
+@media (max-width: 900px) { .memory-settings .memory-browser:has(.memory-detail) { grid-template-columns: minmax(0, 1fr); } }
+/* Wake word status (P9-17): the last detection and what happened, in words; a red tone only when it did not start. */
+.wake-status { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; margin: 14px 0 0; padding: 10px 14px; border-radius: 12px;
+  background: color-mix(in srgb, var(--text) 3%, transparent); color: var(--text-muted); font-size: var(--type-small); }
+.wake-status strong { color: var(--text); }
+.wake-status:is([data-outcome="error"], [data-outcome="needs-click"], [data-outcome="unavailable"]) span { color: var(--error); }
