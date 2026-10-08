@@ -3,10 +3,13 @@ import type { Project, ProjectStore } from './projects.js';
 import type { TaskRecord, TaskStore } from './task-store.js';
 import { GitHubIssueRequestError, type GitHubIssue, type GitHubIssueClient } from '../github/issues.js';
 import { resolveRepository } from './project-context.js';
+import { taskStates } from './task-lifecycle.js';
 
 const maxPromptBytes = 50_000;
 const danLogin = JARVIS_REPOSITORY.split('/')[0] ?? 'DanAakesen';
 const maxP11Code = 999_999;
+const taskListPageSize = 100;
+const issueBackfillQueues = new Map<string, Promise<void>>();
 
 export type IssueExecutor = 'jarvis' | 'copilot' | 'none';
 
@@ -52,6 +55,21 @@ async function withIssueCreationLock<T>(repository: string, work: () => Promise<
   } finally {
     release();
     if (issueCreationQueues.get(key) === current) issueCreationQueues.delete(key);
+  }
+}
+
+async function withIssueBackfillLock<T>(work: () => Promise<T>): Promise<T> {
+  const key = 'factory-issue-backfill';
+  const previous = issueBackfillQueues.get(key) ?? Promise.resolve();
+  let release = () => {};
+  const current = new Promise<void>((resolve) => { release = resolve; });
+  issueBackfillQueues.set(key, current);
+  await previous;
+  try {
+    return await work();
+  } finally {
+    release();
+    if (issueBackfillQueues.get(key) === current) issueBackfillQueues.delete(key);
   }
 }
 
@@ -152,6 +170,72 @@ export async function createJarvisIssue(input: {
       }
     }
     return { ...issue, taskCode };
+  });
+}
+
+export type BackfillIssueTaskResult =
+  | { taskId: string; status: 'linked'; issueNumber: number }
+  | { taskId: string; status: 'label-failed'; issueNumber: number }
+  | { taskId: string; status: 'unsafe-content' }
+  | { taskId: string; status: 'failed' };
+
+export async function backfillFactoryTaskIssues(input: {
+  projects: ProjectStore | null;
+  tasks: TaskStore | null;
+  github: GitHubIssueClient | null;
+}): Promise<BackfillIssueTaskResult[]> {
+  if (!input.projects || !input.tasks || !input.github?.findIssueByTitleSuffix ||
+    !input.github.listIssueTitles || !input.github.createIssue || !input.github.addLabels) {
+    throw new Error('Issue task service unavailable');
+  }
+
+  return withIssueBackfillLock(async () => {
+    const unlinked = new Map<string, TaskRecord>();
+    const openStates = taskStates.filter((state) => state !== 'Done' && state !== 'Cancelled');
+    for (const state of openStates) {
+      for (let offset = 0; ; offset += taskListPageSize) {
+        const page = await input.tasks!.list({ state, limit: taskListPageSize, offset });
+        for (const task of page) {
+          if (task.issueNumber == null) unlinked.set(task.id, task);
+        }
+        if (page.length < taskListPageSize) break;
+      }
+    }
+
+    const results: BackfillIssueTaskResult[] = [];
+    const orderedTasks = [...unlinked.values()].sort((left, right) =>
+      BigInt(left.id) < BigInt(right.id) ? -1 : BigInt(left.id) > BigInt(right.id) ? 1 : 0);
+    for (const task of orderedTasks) {
+      let linkedIssueNumber: number | undefined;
+      try {
+        const project = (await input.projects!.list()).find(({ id }) => id === task.projectId);
+        if (!project) throw new Error('Project unavailable');
+        const suffix = ` [Factory task ${task.id}]`;
+        const title = `${task.title.slice(0, 200 - suffix.length)}${suffix}`;
+        const existing = await input.github!.findIssueByTitleSuffix(project.repo, suffix);
+        const issue = existing ?? await createJarvisIssue({
+          project: project.id,
+          title,
+          body: task.request,
+          executor: 'none',
+          projects: input.projects,
+          github: input.github,
+        });
+        const storedIssueNumber = await input.tasks!.linkIssueNumberIfUnlinked(task.id, issue.number);
+        if (storedIssueNumber !== issue.number) throw new Error('Task issue link could not be persisted');
+        linkedIssueNumber = issue.number;
+        await input.github!.addLabels(project.repo, issue.number, ['Jarvis']);
+        results.push({ taskId: task.id, status: 'linked', issueNumber: issue.number });
+      } catch (error) {
+        results.push(linkedIssueNumber === undefined
+          ? {
+            taskId: task.id,
+            status: error instanceof IssueDraftValidationError ? 'unsafe-content' : 'failed',
+          }
+          : { taskId: task.id, status: 'label-failed', issueNumber: linkedIssueNumber });
+      }
+    }
+    return results;
   });
 }
 

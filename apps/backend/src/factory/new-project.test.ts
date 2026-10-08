@@ -73,6 +73,7 @@ it('uses configured defaults and keeps the repository secret out of task and rec
       return task;
     },
     list: vi.fn(async () => []),
+    linkIssueNumberIfUnlinked: vi.fn(async () => null),
     get: vi.fn(async () => null),
     updateModelConfig: vi.fn(async () => ({ kind: 'not-found' as const })),
     getEventsAfter: vi.fn(async () => []),

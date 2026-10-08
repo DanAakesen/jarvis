@@ -470,6 +470,23 @@ export function createTaskStore(
       return recordset[0] ? toTask(recordset[0]) : null;
     },
 
+    async linkIssueNumberIfUnlinked(taskId, issueNumber) {
+      if (!/^[1-9][0-9]{0,18}$/u.test(taskId) || BigInt(taskId) > maxSqlBigInt ||
+        !Number.isSafeInteger(issueNumber) || issueNumber < 1 || issueNumber > 2_147_483_647) {
+        throw new Error('Invalid task issue link');
+      }
+      await databaseReadRequest(pool)
+        .input('taskId', sql.BigInt, BigInt(taskId))
+        .input('issueNumber', sql.Int, issueNumber)
+        .query(`UPDATE dbo.tasks SET issue_number = @issueNumber
+          WHERE id = @taskId AND issue_number IS NULL;`);
+      const { recordset } = await databaseReadRequest(pool)
+        .input('taskId', sql.BigInt, BigInt(taskId))
+        .query<{ issueNumber: number | null }>(
+          'SELECT issue_number AS issueNumber FROM dbo.tasks WHERE id = @taskId;');
+      return recordset[0]?.issueNumber ?? null;
+    },
+
     async updateModelConfig(id: string, config: TaskModelConfig): Promise<TaskModelUpdateResult> {
       const transaction = new sql.Transaction(pool);
       await transaction.begin();

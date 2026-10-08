@@ -113,6 +113,21 @@ describe('GitHub issue client', () => {
     expect(requestedPages).toEqual(['1', '2']);
   });
 
+  it('finds a task-marker title suffix in the repository issue list without matching pull requests', async () => {
+    const client = createGitHubIssueClient({
+      issueForRepositoryRead: vi.fn(async () => 'token'),
+    } as unknown as GitHubAppTokenIssuer, async () => Response.json([
+      { number: 20, title: 'P11-02: Factory task 10', pull_request: {} },
+      { number: 21, title: 'P11-01: Factory task 10 [Factory task 10]' },
+    ]));
+
+    await expect(client.findIssueByTitleSuffix('DanAakesen/jarvis', ' [Factory task 10]'))
+      .resolves.toEqual({
+        number: 21,
+        url: 'https://github.com/DanAakesen/jarvis/issues/21',
+      });
+  });
+
   it('includes labels and assignees in the issue creation request', async () => {
     const test = fixture();
     await test.client.createIssue('DanAakesen/jarvis', 'P11-01: Fix', 'Problem and acceptance', {

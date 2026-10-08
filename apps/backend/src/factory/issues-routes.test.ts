@@ -28,6 +28,8 @@ function fixture(auth: TokenVerifier = async () => ({
   const taskStore = {
     create: vi.fn(async () => task),
     findActiveByIssue: vi.fn(async () => null),
+    list: vi.fn(async () => []),
+    linkIssueNumberIfUnlinked: vi.fn(async (_taskId: string, issueNumber: number) => issueNumber),
   } as unknown as TaskStore;
   const projectStore = { list: vi.fn(async () => [project]) } as unknown as ProjectStore;
   const githubIssueClient = {
@@ -38,6 +40,7 @@ function fixture(auth: TokenVerifier = async () => ({
     readComments: vi.fn(async () => [{ author: 'DanAakesen', body: 'Please implement this.' }]),
     readAgentRules: vi.fn(async () => 'Read AGENTS.md.'),
     listIssueTitles: vi.fn(async () => []),
+    findIssueByTitleSuffix: vi.fn(async () => null),
     createIssue: vi.fn(async () => ({
       number: 575, url: 'https://github.com/DanAakesen/jarvis/issues/575',
     })),
@@ -125,6 +128,41 @@ describe('Factory issue start route', () => {
       { labels: ['P11', 'enhancement'] },
     );
     expect(githubIssueClient.addLabels).toHaveBeenCalledWith(project.repo, 575, ['Jarvis']);
+  });
+
+  it('backfills unlinked open tasks for Dan and does not create duplicate issues on retry', async () => {
+    const { app, taskStore, githubIssueClient } = fixture();
+    const unlinked = { ...task, id: '10', issueNumber: null, title: 'Old Factory task' };
+    vi.mocked(taskStore.list).mockImplementation(async ({ state }) =>
+      state === 'Ready' && unlinked.issueNumber === null ? [unlinked] : []);
+    vi.mocked(taskStore.linkIssueNumberIfUnlinked).mockImplementation(async (_taskId, issueNumber) => {
+      unlinked.issueNumber = issueNumber;
+      return issueNumber;
+    });
+
+    expect((await app.inject({ method: 'POST', url: '/factory/tasks/backfill-issues' })).statusCode).toBe(401);
+    const first = await app.inject({
+      method: 'POST', url: '/factory/tasks/backfill-issues', headers,
+    });
+    expect(first.statusCode).toBe(200);
+    expect(first.json()).toEqual({
+      processed: 1, linked: 1, failed: 0,
+      results: [{ taskId: '10', status: 'linked', issueNumber: 575 }],
+    });
+    expect(githubIssueClient.createIssue).toHaveBeenCalledWith(
+      project.repo,
+      'P11-01: Old Factory task [Factory task 10]',
+      task.request,
+      { labels: ['P11', 'enhancement'] },
+    );
+    expect(taskStore.linkIssueNumberIfUnlinked).toHaveBeenCalledWith('10', 575);
+    expect(githubIssueClient.addLabels).toHaveBeenCalledWith(project.repo, 575, ['Jarvis']);
+
+    const second = await app.inject({
+      method: 'POST', url: '/factory/tasks/backfill-issues', headers,
+    });
+    expect(second.json()).toMatchObject({ processed: 0, linked: 0, failed: 0, results: [] });
+    expect(githubIssueClient.createIssue).toHaveBeenCalledTimes(1);
   });
 
   it('does not allow the Jarvis agent to create issues through the Dan-only route', async () => {

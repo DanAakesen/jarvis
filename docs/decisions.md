@@ -880,3 +880,15 @@ and existing Factory task details; `/now/events` emits a typed project-scoped
 board update. The response contract is backend-owned; the UI session separately
 consumes it. Offline fake-provider tests do not establish live GitHub App
 permissions.
+
+## P10-05 (8 October 2026) — Backfill issues for existing Factory tasks
+
+Use the Dan-only `POST /factory/tasks/backfill-issues` route to create P11 issues
+for open unlinked tasks in ascending task-ID order. Reuse the P10-03 issue
+creation service so task codes, issue labels, and secret redaction stay
+consistent. Include a stable task-ID title suffix to recover an issue after a
+partial failure, persist its number before adding the `Jarvis` webhook trigger
+label, and rely on the existing active-issue lookup to prevent duplicate tasks.
+No schema change is needed. Offline route/service tests cover idempotent retries
+and secret rejection; P10-01 permission changes and the coordinator's live run
+remain pending.
