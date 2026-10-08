@@ -64,3 +64,5 @@ creates the optional full-text catalog/index when supported. This must run outsi
 the migration transaction because Azure SQL does not allow `CREATE FULLTEXT INDEX`
 inside an explicit user transaction. Reverting P7-13 drops the memory table and its
 index; the now-empty full-text catalog remains available for a later setup run.
+
+`0036_folio_lowercase_ids.sql` lower-cases Folio item ids that 0035 built from upper-case uniqueidentifier text (L124); its down script is a no-op.

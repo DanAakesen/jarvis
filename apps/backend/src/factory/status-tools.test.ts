@@ -184,7 +184,8 @@ describe('Software Factory status tools', () => {
       headers: { ...headers, 'x-jarvis-message-id': '44' },
       payload: { taskId: '0' },
     });
-    expect(invalid.statusCode).toBe(400);
+    expect(invalid.statusCode).toBe(200);
+    expect(invalid.json()).toMatchObject({ outcome: 'refused', result: { refused: expect.stringContaining('Invalid arguments:') } });
     expect(retry).toHaveBeenCalledTimes(2);
   });
 

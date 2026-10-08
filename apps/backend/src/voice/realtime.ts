@@ -6,6 +6,7 @@ import { capabilityInstructions } from '../core/capability-instructions.js';
 import { defaultSettings, type Settings } from '../core/settings.js';
 import { defaultAwayModeState, type AwayModeState, type PresenceMode } from '../core/away-mode.js';
 import type { VoiceTuningSettings } from '@jarvis/contracts';
+import { toolArgumentRefusal, unexpectedToolArgument } from '../core/tool-arguments.js';
 
 export const ENGLISH_REALTIME_MODEL = defaultSettings.roles.voice.model;
 export const ENGLISH_REALTIME_VOICE = 'en-GB-Ryan:DragonHDLatestNeural';
@@ -215,8 +216,20 @@ export async function executeRealtimeToolCall(
   let outcome: ToolCallOutcome = 'ok';
   let result: unknown;
   try {
-    const input: unknown = JSON.parse(call.arguments);
-    if (!request.validateInput(input, tool.inputSchema, 'body')) return toolFailure(call.name);
+    let input: unknown;
+    try {
+      input = JSON.parse(call.arguments);
+    } catch {
+      return toolOutput(call.name, 'refused', toolArgumentRefusal(tool, {
+        keyword: 'json', instancePath: '', schemaPath: '', params: {},
+      }, request.log));
+    }
+    const unexpected = unexpectedToolArgument(input, tool.inputSchema);
+    if (unexpected) return toolOutput(call.name, 'refused', toolArgumentRefusal(tool, unexpected, request.log));
+    if (!request.validateInput(input, tool.inputSchema, 'body')) {
+      const error = request.getValidationFunction(tool.inputSchema)?.errors?.[0];
+      return toolOutput(call.name, 'refused', toolArgumentRefusal(tool, error, request.log));
+    }
     await beforeExecute?.(tool, input, signal);
     result = await tool.execute(input, request, signal);
     const serializedResult = JSON.stringify(result);

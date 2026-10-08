@@ -491,6 +491,23 @@ confirms completion. The browser and hosted agent service identities do not rece
 a task-state bypass. Responses are capped at 1 MiB, and event payloads above 4 KiB
 are omitted with an explicit truncation flag.
 
+`GET /factory/board?project=<id>` returns `{ project, fetchedAt, stale, columns }`
+in the shared `FactoryBoard` contract, with all six ordered columns:
+Backlog, Needs Dan, Ready, In progress, In review, and Done. Each card contains
+an issue, its linked pull request (including draft/readiness and checks), and
+the existing Factory task overlay when linked. Issues carry their task code,
+label names, worker, state, timestamps, and exact blocked issue numbers. The
+endpoint uses the repository-scoped GitHub App read token to load open issues,
+issues closed in the last 14 days, and open pull requests. Its status precedence
+matches `.github/scripts/project_board.py`; both test suites read the same
+status fixtures. Done cards sort by close time, and other columns by update
+time. The in-memory project snapshot is cached for one minute and invalidated
+by signed issue, pull-request, check, and workflow webhooks and committed task
+events. `/now/events` emits a typed `board` event with the affected project ID
+and monotonically increasing in-process version. No migration or GitHub
+Project write is needed; live GitHub reads require the App's issue read
+permission.
+
 Chat-created tasks retain their originating message ID. Committed Done,
 NeedsAttention, Cancelled, and backend `pull_request_opened` events route a short
 status message with the task ID, outcome, and validated GitHub PR link to that
@@ -844,12 +861,28 @@ confirmed. Calls require
 tool routes accept Dan's delegated token and opt in to the Jarvis agent identity
 ([backend authentication](#backend-authentication)). Existing Foundry client, health/security/logging and
 process shutdown behavior are preserved.
+P9-42 returns body-schema failures as HTTP 200 tool envelopes with
+`outcome: refused`, a bounded validation hint and retry guidance, so the hosted chat client
+can pass them to the model. Voice's direct executor uses the same formatter.
+Unknown root arguments are refused before Fastify can silently strip them.
+Invalid inputs never execute tools or enter the generic tool-call audit; they
+emit `tool.invalid_arguments` to stdout and Application Insights with only the
+tool name, validation keyword and a bounded property identifier, never argument
+values or raw validator messages. Authentication and other HTTP errors remain
+unchanged. The shared capability prompt guides both voice and chat to correct
+arguments before retrying; workspace commands still use the existing broker and
+`packages/contracts` schemas.
 P7-45 adds `list_capabilities` and read-only `repo_*` tools to the shared Factory
 registry. They use only repository-scoped GitHub App installation tokens, default
 to `JARVIS_REPOSITORY` (`DanAakesen/jarvis`), and accept explicit project IDs or
 repositories only when they match an active project. File paths, encodings and
 response sizes are validated and bounded; overview responses are cached by commit
 SHA. Repository files and issue text are explicitly framed as untrusted input.
+P9-42 lets `repo_search` accept `repository` or `repo` as aliases of `project`,
+using the same active-project resolver and read-only token scope. Conflicting
+selectors are refused. Results include `incompleteResults`; incomplete searches,
+zero GitHub hits or missing readable snippets return an explanation and suggest
+`repo_list` followed by `repo_read`, without claiming the code is absent.
 The tools support Jarvis chat, voice and the hosted agent through the existing
 `GET /tools` and `POST /tools/{name}` routes.
 The [module guide](../apps/backend/src/modules.README.md) explains adding areas,
@@ -1741,7 +1774,7 @@ These boxes are responsibilities; they do not each need a separate service.
 | Stale task reconciliation | At dispatcher startup, scan at most five Running tasks whose latest sandbox heartbeat is at least five minutes old. While a sandbox is tracked, repeat at five-minute intervals. Query the recorded Foundry invocation with a 15-second timeout. A live invocation refreshes its heartbeat; a completed invocation uses the normal GitHub delivery and project-policy path, persisting a discovered PR through the P3-04 mapping first. Failed, unavailable, mismatched, or otherwise unverifiable states move to NeedsAttention with a user-visible reason; Done requires the existing verified completion path. Each outcome logs an allowlisted `task_reconciliation.decision` with task/session/invocation IDs and bounded status/decision fields only. This bounded scan is the recovery path for lost completion/webhook events, not a substitute for webhook delivery. |
 | Recovery and completion | Recover atomically claims a NeedsAttention task after an actual crash; Continue after `idle_expired` uses the same branch-recovery path. Both start a fresh Foundry session from the existing task branch with the original request, bounded steering history, and event summary. A completed invocation is correlated to its active task session; the backend accepts Done only after a repository-scoped GitHub App check confirms both the branch and a pull request. Missing evidence returns the task to NeedsAttention; API failures do not produce false success. Migration `0010_idle_expired_sessions.sql` extends the session end-reason vocabulary. Offline fake tests cover both heartbeat outcomes and continuation; SQL Server CI, live runner, Foundry, and GitHub behavior remain unverified. |
 | Live progress | The runner posts task-scoped events to `POST /factory/sandbox-events` with its managed identity; the backend records each through P1-05's transaction and publishes only after commit. The dispatcher sends `task_id` in every start and resume invocation; a runner deployed with `JARVIS_BACKEND_URL` rejects task invocations without one (L59). Browser streaming is P1-06. |
-| Build and release status | GitHub App webhooks: `pull_request`, `check_run`, `workflow_run`, `deployment_status`, and `push`. No polling. |
+| Build and release status | GitHub App webhooks: `pull_request`, `check_run`, `workflow_run`, `deployment_status`, and `push`. No polling. Signed `issues`, `pull_request`, `check_run` and `workflow_run` events also invalidate Factory board snapshots for tracked repositories; issue payloads are not persisted. |
 | Board updates | `GET /factory/tasks/:id/events` authenticates the bearer token, replays typed `task_events` after `Last-Event-ID`, then streams committed hub events and a 25-second heartbeat. Shared contracts define the task frame; one typed backend helper serializes it. The fetch client reconnects with its last delivered ID and ignores repeats. |
 | Factory task view | P1-08 loads up to 100 tasks from the filtered task API, opens task-scoped SSE streams for nonterminal cards, and refreshes the snapshot after updates. P2-14 exposes the latest session end reason so an expired completed invocation offers Continue rather than Recover. P6-21 supplies recorded PR/check/usage summaries and a Dan-only retry API for failed starts without sandbox history; UI rendering and retry controls are owned separately. |
 | Idle | The dispatcher subscribes to committed task events and schedules the next retry deadline. It performs one startup stale-task scan, then schedules five-minute scans only while a sandbox is tracked. The event-archive timer also skips SQL until active sandbox work exists. |

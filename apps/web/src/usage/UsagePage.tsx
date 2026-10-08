@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { backendFetch } from '../backend-request';
 import { TaskWindowLink } from '../TaskWindowLink';
 import type { AreaProps } from '../areas';
+import { Loader } from '../Loader';
 
 type UsagePeriod = '7d' | '30d' | '90d' | 'all';
 type UsageGroupBy = 'project' | 'agent' | 'source';
@@ -232,7 +233,7 @@ export function UsagePage({ backendUrl, getAccessToken }: AreaProps) {
         </div>
       </div>
 
-      {currentState.status === 'loading' && <p className="usage-feedback" role="status">Loading usage for {periods.find(({ value }) => value === period)?.label.toLowerCase()}…</p>}
+      {currentState.status === 'loading' && <Loader variant="rows" label={`Loading usage for ${periods.find(({ value }) => value === period)?.label.toLowerCase()}…`} />}
       {currentState.status === 'error' && (
         <div className="usage-feedback" role="alert">
           <p>{currentState.message}</p>
