@@ -2,6 +2,7 @@ import type { FastifyReply } from 'fastify';
 import type { BackendModule } from '../modules.js';
 import { ToolRefusal } from '../core/tool-registry.js';
 import { readSettings } from '../core/settings.js';
+import { workspaceContext } from '../core/workspace-context.js';
 import { sseHeaders } from '../core/now.js';
 import { writeSseEvent } from '../core/sse.js';
 import {
@@ -404,7 +405,10 @@ export const factoryModule: BackendModule = {
     app.get('/factory/context', { config: { jarvisAgent: true } }, async (_request, reply) => {
       const store = app.taskStore;
       if (!store) return reply.code(503).send({ error: 'Task service unavailable' });
-      return sendBounded(reply, await store.getRunningContext());
+      return sendBounded(reply, {
+        ...await store.getRunningContext(),
+        workspaceContext: workspaceContext(app.workspaceCommands.snapshot(app.ownerObjectId)),
+      });
     });
 
     app.post<{ Params: { number: string }; Body: { project?: string } }>('/factory/issues/:number/start', {

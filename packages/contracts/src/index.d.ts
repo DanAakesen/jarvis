@@ -283,7 +283,23 @@ export interface WorkspaceSnapshot {
   windows: readonly { viewId: string; title: string }[];
   contextPanelOpen: boolean;
   frame?: HtmlArtifactFrame;
+  view?: WorkspaceView;
 }
+
+export interface WorkspaceViewLocation {
+  page: WorkspaceNavigationPage;
+  section?: WorkspaceSettingsSection;
+  taskId?: string;
+  issueNumber?: number;
+}
+export interface WorkspaceView extends WorkspaceViewLocation {
+  folioOpen?: boolean;
+  focusedViewId?: string;
+  previous?: WorkspaceViewLocation;
+}
+export const workspaceViewSchema: Readonly<Record<string, unknown>>;
+export function isWorkspaceView(value: unknown): value is WorkspaceView;
+export function isWorkspaceSnapshot(value: unknown): value is WorkspaceSnapshot;
 
 export const workspaceNavigationPages: readonly [
   'home', 'factory', 'settings', 'usage', 'knowledge', 'folio', 'status',

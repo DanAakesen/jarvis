@@ -410,6 +410,48 @@ export const workspaceSettingsSections = Object.freeze([
   'appearance', 'jarvis', 'personality', 'voice', 'presence', 'memory',
   'coding', 'projects', 'routines', 'credentials', 'backend',
 ]);
+const workspaceLocationProperties = {
+  page: { type: 'string', enum: [...workspaceNavigationPages] },
+  section: { type: 'string', enum: [...workspaceSettingsSections] },
+  taskId: { type: 'string', pattern: '^[1-9][0-9]{0,18}$', maxLength: 19 },
+  issueNumber: { type: 'integer', minimum: 1, maximum: Number.MAX_SAFE_INTEGER },
+};
+export const workspaceViewSchema = Object.freeze(object({
+  ...workspaceLocationProperties,
+  folioOpen: { type: 'boolean' },
+  focusedViewId: { type: 'string', pattern: '^[A-Za-z0-9_-]{1,128}$', maxLength: 128 },
+  previous: object(workspaceLocationProperties, ['page']),
+}, ['page']));
+
+function isWorkspaceLocation(value, extraKeys = []) {
+  return isObject(value) &&
+    Object.keys(value).every((key) => ['page', 'section', 'taskId', 'issueNumber', ...extraKeys].includes(key)) &&
+    workspaceNavigationPages.includes(value.page) &&
+    (value.section === undefined || value.page === 'settings' && workspaceSettingsSections.includes(value.section)) &&
+    (value.taskId === undefined || value.page === 'factory' && typeof value.taskId === 'string' && /^[1-9][0-9]{0,18}$/.test(value.taskId)) &&
+    (value.issueNumber === undefined || value.page === 'factory' && Number.isSafeInteger(value.issueNumber) && value.issueNumber > 0);
+}
+
+export function isWorkspaceView(value) {
+  return isWorkspaceLocation(value, ['folioOpen', 'focusedViewId', 'previous']) &&
+    (value.folioOpen === undefined || typeof value.folioOpen === 'boolean') &&
+    (value.focusedViewId === undefined || typeof value.focusedViewId === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(value.focusedViewId)) &&
+    (value.previous === undefined || isWorkspaceLocation(value.previous));
+}
+
+export function isWorkspaceSnapshot(value) {
+  return isObject(value) &&
+    Object.keys(value).every((key) => ['windows', 'contextPanelOpen', 'frame', 'view'].includes(key)) &&
+    Array.isArray(value.windows) && value.windows.length <= 32 &&
+    value.windows.every((window) => isObject(window) &&
+      Object.keys(window).every((key) => ['viewId', 'title'].includes(key)) &&
+      typeof window.viewId === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(window.viewId) &&
+      boundedString(window.title, 200, 1)) &&
+    typeof value.contextPanelOpen === 'boolean' &&
+    (value.frame === undefined || isHtmlArtifactFrame(value.frame)) &&
+    (value.view === undefined || isWorkspaceView(value.view));
+}
+
 export const workspaceCommandSchema = Object.freeze({
   type: 'object',
   properties: {

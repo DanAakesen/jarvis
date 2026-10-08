@@ -44,6 +44,8 @@ import {
   isBackgroundJobStep,
   isWebResearchResult,
   isWorkspaceCommand,
+  isWorkspaceSnapshot,
+  isWorkspaceView,
   generatedViewVersion,
   nowSseEventNames,
   workspaceCommandSchema,
@@ -60,6 +62,33 @@ import {
   isFactoryBoard,
   isFactoryBoardUpdate,
 } from './index.js';
+
+test('workspace snapshots accept old clients and validate optional current and previous views', () => {
+  const snapshot = { windows: [{ viewId: 'report', title: 'Report' }], contextPanelOpen: false };
+  assert.equal(isWorkspaceSnapshot(snapshot), true);
+  for (const page of workspaceNavigationPages) {
+    assert.equal(isWorkspaceSnapshot({ ...snapshot, view: { page } }), true);
+  }
+  const view = {
+    page: 'factory', taskId: '10', issueNumber: 587, focusedViewId: 'report', folioOpen: true,
+    previous: { page: 'settings', section: 'voice' },
+  };
+  assert.equal(isWorkspaceSnapshot({ ...snapshot, view }), true);
+  for (const invalid of [
+    { page: 'unknown' }, { page: 'home', section: 'voice' },
+    { page: 'settings', section: 'unknown' }, { page: 'home', taskId: '10' },
+    { page: 'factory', taskId: '../10' }, { page: 'factory', issueNumber: 0 },
+    { page: 'factory', issueNumber: Number.MAX_SAFE_INTEGER + 1 },
+    { page: 'home', folioOpen: 'true' }, { page: 'home', focusedViewId: '../report' },
+    { page: 'home', previous: { page: 'home', previous: { page: 'factory' } } },
+    { page: 'home', previous: { page: 'factory', issueNumber: -1 } },
+  ]) {
+    assert.equal(isWorkspaceView(invalid), false, JSON.stringify(invalid));
+    assert.equal(isWorkspaceSnapshot({ ...snapshot, view: invalid }), false);
+  }
+  assert.equal(isWorkspaceSnapshot({ ...snapshot, windows: Array(33).fill(snapshot.windows[0]) }), false);
+  assert.equal(isWorkspaceSnapshot({ ...snapshot, frame: {} }), false);
+});
 
 const source = { id: 'factory.tasks', status: 'complete' };
 const listView = (overrides = {}) => ({

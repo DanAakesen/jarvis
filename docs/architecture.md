@@ -187,8 +187,9 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   Navigation returns `applied: true` and its destination only after a tab
   acknowledges application; refusal, timeout and cancellation retain existing
   broker semantics. Send is not an applied acknowledgement. The UI reports a
-  reason when a page/section is unknown, a task/issue is not found, or Folio/Status
-  is not yet implemented. The backend rejects unknown contract keys before
+  reason when a page/section is unknown, a task/issue is not found, or Status
+  is not yet implemented. Folio navigation opens a pane over the current page.
+  The backend rejects unknown contract keys before
   delivery and does not resolve task/issue existence on the UI's behalf.
   The UI session owns shell routing, settings-section
   selection, page transitions and applied/refused acknowledgements; this
@@ -228,8 +229,19 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   and IDs, including minimised windows, plus context-panel visibility) through
   owner-authenticated `POST /now/workspace/state`. The broker keeps one snapshot per
   open `/now/events` session, uses the most recently reported one, and drops a
-  tab's snapshot when that tab disconnects;
-  no view content or workspace state is persisted. Jev selects fixed
+  tab's snapshot when that tab disconnects.
+  P9-43 adds optional `view` metadata for page, Settings section, Factory
+  task/issue, focused window, Folio pane and previous destination. Shared guards
+  and the owner route validate it while accepting older snapshots. The existing
+  agent-loaded `/factory/context` includes `workspaceContext` on every turn;
+  the hosted client retains this field in its reference JSON. The voice relay
+  refreshes the same line in every `response.create` instruction, preserving
+  existing session or response instructions. It quotes/escapes and caps titles
+  at 80 characters, includes at most eight windows (focused first), and includes
+  no view content or frame tokens. Missing snapshots and previous destinations
+  produce explicit no-guessing guidance. UI publication and live model acceptance
+  remain separate.
+  No view content or workspace state is persisted. Jev selects fixed
   `workspace_command` targets for show/focus/minimise/restore/close, a large
   resize, tiled/layered layout and context-panel visibility. A context-panel
   `open` command without a view opens existing content idempotently; an `open`

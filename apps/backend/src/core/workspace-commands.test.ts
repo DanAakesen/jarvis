@@ -280,6 +280,30 @@ describe('workspace command delivery', () => {
     expect((await publish()).statusCode).toBe(409);
   });
 
+  it('retains current and previous view metadata and refuses invalid locations', async () => {
+    const { app, broker } = fixture();
+    const connection = broker.connect(ownerId, () => true);
+    const view = {
+      page: 'factory', taskId: '10', issueNumber: 587, focusedViewId: 'report', folioOpen: true,
+      previous: { page: 'settings', section: 'voice' },
+    };
+    const publish = (currentView: unknown) => app.inject({
+      method: 'POST', url: '/now/workspace/state', headers: userHeaders,
+      payload: { sessionId: connection.sessionId, windows: [], contextPanelOpen: false, view: currentView },
+    });
+    expect((await publish(view)).statusCode).toBe(204);
+    expect(broker.snapshot(ownerId)?.view).toEqual(view);
+    for (const invalid of [
+      { page: 'missing' }, { page: 'home', section: 'voice' },
+      { page: 'factory', taskId: '0' }, { page: 'factory', issueNumber: 1.5 },
+      { page: 'home', previous: { page: 'home', taskId: '10' } },
+      { page: 'home', folioOpen: 'yes' }, { page: 'home', focusedViewId: '../report' },
+    ]) {
+      expect((await publish(invalid)).statusCode).toBe(400);
+      expect(broker.snapshot(ownerId)?.view).toEqual(view);
+    }
+  });
+
   it('delivers every command to all open tabs and refuses only when every tab refuses', async () => {
     const broker = new WorkspaceCommandBroker();
     const deliveries: Array<{ tab: string; commandId: string }> = [];

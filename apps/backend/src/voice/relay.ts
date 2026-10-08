@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { workspaceContext } from '../core/workspace-context.js';
 import { projectContext, type ProjectContextEntry } from '../factory/project-context.js';
 import websocket from '@fastify/websocket';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
@@ -1012,7 +1013,19 @@ function registerVoiceRoute(
       pendingResponseCreate = undefined;
       responseCreateActive = true;
       assistantResponding = true;
-      sendUpstream(next);
+      const response = next.response as Record<string, unknown> | undefined;
+      const instructions = typeof response?.instructions === 'string' ? response.instructions :
+        createRealtimeSessionUpdate(
+          app.jarvisTools, personality, presence, language, projects, transcriptionModel, voiceTuning,
+          memorySettings,
+        ).session.instructions;
+      sendUpstream({
+        ...next,
+        response: {
+          ...response,
+          instructions: `${instructions}\n${workspaceContext(app.workspaceCommands.snapshot(app.ownerObjectId))}`,
+        },
+      });
     };
 
     const flushPendingResponseCreate = () => {
