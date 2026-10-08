@@ -91,10 +91,10 @@ retention. P8-14 adds no tables or migrations.
 
 P9-14 creates `background_jobs` and append-only `background_job_steps` in
 `0029_background_jobs.sql`. P9-30 adds nullable `retry_input` and `retry_job_id`
-columns in `0033_research_job_retry.sql`: the former stores only the original
+columns in `0034_research_job_retry.sql`: the former stores only the original
 research topic and selected depth for 30 days; the latter atomically links a
 failed attempt to its one retry. Existing jobs without retry input are not
-retryable, and reverting migration 0033 drops both retry columns and their
+retryable, and reverting migration 0034 drops both retry columns and their
 metadata.
 
 ## Overview

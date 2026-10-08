@@ -52,7 +52,7 @@ allow `retry_job` only for failed research jobs with saved topic and selected de
 Store that input for the same 30-day retention, redact it from tool-call audit
 records, and create each retry as a new job. A transaction claims at most one retry
 from a failed attempt, preventing duplicate research work across replicas.
-Evidence: migration 0033 and focused contract, retry, and store tests; live
+Evidence: migration 0034 and focused contract, retry, and store tests; live
 SQL Server and cross-replica behavior remain unverified.
 
 P9-24 (7 October 2026): search the existing conversation message store instead of

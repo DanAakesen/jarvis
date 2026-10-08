@@ -180,11 +180,12 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   Conversation navigation restores it after Close.
 - Background jobs (P9-14, 7 October): slow work that ends in a workspace window
   (research today; images and HTML apps next) registers with
-  `BackgroundJobRegistry` (`apps/backend/src/core/jobs.ts`). Migrations 0029 and
-  0033 store each current job in `background_jobs`, every committed state/step in
-  `background_job_steps`, and the bounded research topic/depth needed for a
-  user-requested retry. A job still running at startup becomes failed with
-  `interrupted by restart`; jobs and their history are retained for 30 days.
+  `BackgroundJobRegistry` (`apps/backend/src/core/jobs.ts`). Migration 0029 stores
+  each current job in `background_jobs` and every committed state/step in
+  `background_job_steps`; migration 0034 adds the bounded research topic/depth
+  needed for a user-requested retry. A job still running at startup becomes
+  failed with `interrupted by restart`; jobs and their history are retained
+  for 30 days.
   Every change is committed before its contract-valid `BackgroundJob` is published
   as `event: job` on `/now/events`. `GET /jobs` and Jarvis's `list_jobs` tool read
   the SQL store, so reloads and requests served by another replica see the same
