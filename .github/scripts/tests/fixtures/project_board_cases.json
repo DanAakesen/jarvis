@@ -1,0 +1,56 @@
+[
+  {
+    "name": "unblocked unclaimed issue is ready",
+    "issue": { "number": 7, "labels": [], "blockedBy": 0 },
+    "pulls": [],
+    "status": "Ready"
+  },
+  {
+    "name": "blocked issue is backlog",
+    "issue": { "number": 7, "labels": [], "blockedBy": 2 },
+    "pulls": [],
+    "status": "Backlog"
+  },
+  {
+    "name": "worker label wins over blocked",
+    "issue": { "number": 7, "labels": ["Codex"], "blockedBy": 1 },
+    "pulls": [],
+    "status": "In progress"
+  },
+  {
+    "name": "needs decision wins over blocked",
+    "issue": { "number": 7, "labels": ["needs-decision"], "blockedBy": 1 },
+    "pulls": [],
+    "status": "Needs Dan"
+  },
+  {
+    "name": "worker label wins over needs decision",
+    "issue": { "number": 7, "labels": ["needs-decision", "Dan"], "blockedBy": 0 },
+    "pulls": [],
+    "status": "In progress"
+  },
+  {
+    "name": "deferred issue is backlog",
+    "issue": { "number": 7, "labels": ["deferred"], "blockedBy": 0 },
+    "pulls": [],
+    "status": "Backlog"
+  },
+  {
+    "name": "draft linked pull request is in progress",
+    "issue": { "number": 7, "labels": [], "blockedBy": 0 },
+    "pulls": [{ "body": "Fixes #7", "draft": true }],
+    "status": "In progress"
+  },
+  {
+    "name": "ready linked pull request is in review",
+    "issue": { "number": 7, "labels": ["Codex"], "blockedBy": 0 },
+    "pulls": [{ "body": "Closes #7", "draft": false }],
+    "status": "In review"
+  },
+  {
+    "name": "unrelated issue reference does not link",
+    "issue": { "number": 7, "labels": [], "blockedBy": 0 },
+    "pulls": [{ "body": "Fixes #70 and refs #7", "draft": false }],
+    "status": "Ready"
+  }
+]

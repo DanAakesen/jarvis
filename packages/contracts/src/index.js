@@ -892,7 +892,11 @@ export function isBackgroundJobEvent(value) {
 }
 
 export const nowSseEventNames = Object.freeze([
-  'mode', 'now', 'voice-wake', 'job', 'jarvis-activity', 'workspace-ready', 'workspace-command', 'workspace-cancel',
+  'mode', 'now', 'voice-wake', 'job', 'jarvis-activity', 'workspace-ready', 'workspace-command',
+  'workspace-cancel', 'board',
+]);
+export const factoryBoardColumnIds = Object.freeze([
+  'backlog', 'needs_dan', 'ready', 'in_progress', 'in_review', 'done',
 ]);
 
 const taskEventSources = Object.freeze(['runner', 'backend', 'github', 'dan']);
@@ -930,6 +934,93 @@ export function isTaskEventMessage(value) {
     isTaskEventId(value.taskId);
 }
 
+const boardWorkers = ['Jarvis', 'Copilot', 'Codex', 'Dan'];
+const boardTaskStates = ['Ready', 'Running', 'PauseRequested', 'Paused', 'NeedsAttention', 'Done', 'Cancelled'];
+const sandboxEndReasons = ['done', 'cancelled', 'crashed', 'idle', 'idle_expired'];
+const githubHosts = new Set(['github.com']);
+
+function isBoardCardIssue(value) {
+  return isObject(value) &&
+    Object.keys(value).length === 10 &&
+    Object.keys(value).every((key) =>
+      ['number', 'url', 'title', 'taskCode', 'labels', 'worker', 'state', 'updatedAt', 'closedAt', 'blockedBy'].includes(key)) &&
+    Number.isSafeInteger(value.number) && value.number > 0 &&
+    safeHttpsUrl(value.url, githubHosts) &&
+    boundedString(value.title, 500, 1) &&
+    (value.taskCode === null || typeof value.taskCode === 'string' && /^P\d{1,2}-\d{2,3}$/.test(value.taskCode)) &&
+    Array.isArray(value.labels) && value.labels.length <= 100 &&
+    value.labels.every((label) => boundedString(label, 100, 1)) &&
+    new Set(value.labels).size === value.labels.length &&
+    (value.worker === null || boardWorkers.includes(value.worker)) &&
+    ['open', 'closed'].includes(value.state) &&
+    validIsoDateTime(value.updatedAt) &&
+    (value.closedAt === null || validIsoDateTime(value.closedAt)) &&
+    Array.isArray(value.blockedBy) && value.blockedBy.length <= 100 &&
+    value.blockedBy.every((number) => Number.isSafeInteger(number) && number > 0) &&
+    new Set(value.blockedBy).size === value.blockedBy.length;
+}
+
+function isFactoryBoardTask(value) {
+  return isObject(value) &&
+    Object.keys(value).length === 8 &&
+    Object.keys(value).every((key) => [
+      'id', 'state', 'activity', 'agent', 'attemptCount', 'branch', 'startedAt', 'latestSessionEndReason',
+    ].includes(key)) &&
+    isTaskEventId(value.id) &&
+    boardTaskStates.includes(value.state) &&
+    (value.activity === null || boundedString(value.activity, 2_000)) &&
+    ['codex', 'copilot'].includes(value.agent) &&
+    Number.isSafeInteger(value.attemptCount) && value.attemptCount >= 0 &&
+    (value.branch === null || boundedString(value.branch, 255)) &&
+    (value.startedAt === null || validIsoDateTime(value.startedAt)) &&
+    (value.latestSessionEndReason === null || sandboxEndReasons.includes(value.latestSessionEndReason));
+}
+
+function isBoardCard(value) {
+  return isObject(value) &&
+    Object.keys(value).length === 3 &&
+    Object.keys(value).every((key) => ['issue', 'pr', 'task'].includes(key)) &&
+    isBoardCardIssue(value.issue) &&
+    (value.pr === null || isObject(value.pr) &&
+      Object.keys(value.pr).length === 4 &&
+      Object.keys(value.pr).every((key) => ['number', 'url', 'draft', 'checks'].includes(key)) &&
+      Number.isSafeInteger(value.pr.number) && value.pr.number > 0 &&
+      safeHttpsUrl(value.pr.url, githubHosts) &&
+      typeof value.pr.draft === 'boolean' &&
+      ['none', 'pending', 'passing', 'failing'].includes(value.pr.checks)) &&
+    (value.task === null || isFactoryBoardTask(value.task));
+}
+
+export function isFactoryBoard(value) {
+  if (!isObject(value) || Object.keys(value).length !== 4 ||
+      Object.keys(value).some((key) => !['project', 'fetchedAt', 'stale', 'columns'].includes(key)) ||
+      !isObject(value.project) || Object.keys(value.project).length !== 2 ||
+      Object.keys(value.project).some((key) => !['id', 'repo'].includes(key)) ||
+      !isTaskEventId(value.project.id) ||
+      !boundedString(value.project.repo, 140, 3) ||
+      !/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(value.project.repo) ||
+      !validIsoDateTime(value.fetchedAt) ||
+      typeof value.stale !== 'boolean' ||
+      !Array.isArray(value.columns) || value.columns.length !== factoryBoardColumnIds.length) return false;
+  let cardCount = 0;
+  return value.columns.every((column, index) => {
+    if (!isObject(column) || Object.keys(column).length !== 2 ||
+        Object.keys(column).some((key) => !['id', 'cards'].includes(key)) ||
+        column.id !== factoryBoardColumnIds[index] ||
+        !Array.isArray(column.cards) || column.cards.length > 2_000) return false;
+    cardCount += column.cards.length;
+    return cardCount <= 2_000 && column.cards.every(isBoardCard);
+  });
+}
+
+export function isFactoryBoardUpdate(value) {
+  return isObject(value) &&
+    Object.keys(value).length === 2 &&
+    Object.keys(value).every((key) => ['projectId', 'version'].includes(key)) &&
+    isTaskEventId(value.projectId) &&
+    Number.isSafeInteger(value.version) && value.version > 0;
+}
+
 export function isNowSseEvent(value, options = {}) {
   if (!isObject(value) || Object.keys(value).length !== 2 ||
     !Object.keys(value).every((key) => ['event', 'data'].includes(key)) ||
@@ -938,6 +1029,8 @@ export function isNowSseEvent(value, options = {}) {
     case 'mode':
     case 'now':
       return isEmptyObject(value.data);
+    case 'board':
+      return isFactoryBoardUpdate(value.data);
     case 'voice-wake':
       return isJarvisVoiceWakeEvent(value.data);
     case 'job':
