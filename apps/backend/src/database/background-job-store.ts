@@ -164,7 +164,7 @@ export function createBackgroundJobStore(pool: sql.ConnectionPool): BackgroundJo
         }
         await addJobInputs(new sql.Request(transaction), job, persistedRetryInput).query(`INSERT dbo.background_jobs
           (job_id, kind, title, status, step, steps, detail, view_id, started_at, updated_at, retry_input)
-          VALUES (@jobId, @kind, @title, @status, @step, @steps, @detail, @viewId, @startedAt, @updatedAt, @retryInput);`)
+          VALUES (@jobId, @kind, @title, @status, @step, @steps, @detail, @viewId, @startedAt, @updatedAt, @retryInput);`);
         await insertStep(transaction, job);
         await transaction.commit();
         return true;

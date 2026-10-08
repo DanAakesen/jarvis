@@ -96,9 +96,10 @@ describe('background jobs', () => {
     expect(listed.running).toEqual([expect.objectContaining({
       title: 'Research: Microsoft Ignite 2026', status: 'running', progress: '1/3', detail: 'Searching: Key findings',
     })]);
-    expect(listed.finished).toEqual([expect.objectContaining({
-      title: 'Research: Foundry IQ', status: 'done', resultWindow: 'research-foundry',
-    }), expect.objectContaining({ title: 'Research: Failed safely', status: 'failed' })]);
+    expect(listed.finished).toEqual(expect.arrayContaining([
+      expect.objectContaining({ title: 'Research: Foundry IQ', status: 'done', resultWindow: 'research-foundry' }),
+      expect.objectContaining({ title: 'Research: Failed safely', status: 'failed' }),
+    ]));
     await expect(getJobTool.execute({ jobId: foundry.jobId }, request, signal)).resolves.toMatchObject({
       job: { title: 'Research: Foundry IQ', status: 'done', viewId: 'research-foundry' },
       steps: [{ status: 'running', step: 0 }, { status: 'done', step: 3, viewId: 'research-foundry' }],

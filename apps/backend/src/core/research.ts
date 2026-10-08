@@ -398,14 +398,19 @@ export function createHtmlResearchModule(
         if (!isWorkspaceCommand(initialCommand, generatedViewValidationOptions(request.server))) {
           throw new ToolFailure('Research progress did not pass workspace validation.');
         }
-        await request.server.workspaceCommands.execute(ownerId, initialCommand, signal);
-
         const controller = new AbortController();
         const job: ResearchJob = { controller, promise: Promise.resolve(), done: false };
         const tracker = await request.server.backgroundJobs.start(
           'research', windowTitle, searches.length + 1, () => controller.abort(), 'Starting research',
           { retryInput: { topic, depth }, ...(retryOf ? { retryOf } : {}) },
         );
+        try {
+          await request.server.workspaceCommands.execute(ownerId, initialCommand, signal);
+        } catch (error) {
+          job.done = true;
+          await tracker.fail('Research could not be started. Try again shortly.');
+          throw error;
+        }
         jobs.set(jobId, job);
         job.promise = Promise.resolve().then(async () => {
           const timeoutSignal = AbortSignal.timeout(jobTimeoutMs);
