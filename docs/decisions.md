@@ -693,6 +693,16 @@ PR #419 uses one reconciled voice presentation for the under-orb HTML feedback a
 
 The same orb uses phased core ignition, outward wave and settling, with distinct listening/thinking/tool motion and actual playback-driven speech energy. Camera, room and platform remain fixed. Reduced motion uses steady forms. The focused tests and prior PR CI passed; Copilot reported browser fixtures and low-rate software-WebGL motion frames. Live microphone/provider, physical devices and normal hardware-GPU motion remain unverified. No new provider protocol or persistence is introduced.
 
+## P9-36 (8 October 2026) — One capability and safety prompt for voice and chat
+
+Keep shared tool-use and safety guidance in the backend, where the existing
+memory automatic-capture setting can shape its knowledge rules. Realtime voice
+uses the generated block directly; the agent-only `/agent/settings` response
+delivers the same block to chat. Preserve the existing tool registry,
+confirmation results, and bounded settings response; do not add a migration or
+change the web app. Focused route, voice, settings-parser, and chat-prompt tests
+cover the offline behavior; live provider behavior remains unverified.
+
 
 ## 6 October 2026 — Credential health and repair (#457)
 

@@ -2234,6 +2234,11 @@ Tone, response style, and JSON-quoted custom instructions modify presentation
 only, with identity, backend tool permissions, and truthful action outcomes
 remaining fixed. It defines no tools itself. Each turn loads the backend catalogue from `GET /tools`
 (cached for 60 seconds) and sends each model tool call to `POST /tools/{name}`.
+The backend builds one bounded capability and safety instruction block from the
+existing memory-capture setting. Realtime voice uses it directly; the agent-only
+`GET /agent/settings` route returns the same block for chat, which adds it to its
+language-specific prompt after loading that settings snapshot. Both surfaces
+continue to use the backend tool registry and confirmation results.
 The agent gets a token for `api://<jarvis-api>/.default`
 from its platform identity through `DefaultAzureCredential`; OpenAI uses the same
 credential when no API key is set. Claude requests use

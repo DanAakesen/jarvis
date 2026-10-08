@@ -5,6 +5,7 @@ import type { TokenVerifier } from '../auth/verify.js';
 import { defaultSettings, flattenSettings, readSettings, settingsStoreKeys, type SettingsStore } from './settings.js';
 import type { CredentialStatusStore } from '../credentials/credential-status.js';
 import type { AwayModeStore } from './away-mode.js';
+import { capabilityInstructions } from './capability-instructions.js';
 
 const config = { ...loadConfig({}), logLevel: 'silent' as const };
 const authorization = { authorization: `${['Bear', 'er'].join('')} ${['a', 'b', 'c'].join('.')}` };
@@ -650,6 +651,7 @@ describe('settings API', () => {
     const { store } = createStore();
     await store.write({
       jarvis: { model: 'gpt-5.6-luna', reasoning: 'high' },
+      memory: { automaticCapture: false },
       research: { timeoutSeconds: 280 },
       timeouts: {
         toolTimeoutSeconds: 45,
@@ -677,6 +679,9 @@ describe('settings API', () => {
     const response = await app.inject({ url: '/agent/settings', headers: authorization });
 
     expect(response.statusCode).toBe(200);
+    expect(response.json().capabilityInstructions).toBe(
+      capabilityInstructions({ ...defaultSettings.memory, automaticCapture: false }),
+    );
     expect(response.json()).toEqual({
       model: 'gpt-5.6-luna',
       reasoningEffort: 'high',
@@ -694,9 +699,12 @@ describe('settings API', () => {
         similarityThreshold: 0.35,
         searchTopK: 5,
         graphTextSimilarityThreshold: 0.12,
-        automaticCapture: true,
+        automaticCapture: false,
       },
       research: { timeoutSeconds: 280 },
+      capabilityInstructions: expect.stringContaining(
+        'Do not proactively save memories; save only when Dan directly asks you to write to the vault.',
+      ),
       timeouts: {
         toolTimeoutSeconds: 45,
         longToolTimeoutSeconds: 300,

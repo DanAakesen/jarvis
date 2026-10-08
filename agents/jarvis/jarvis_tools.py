@@ -225,6 +225,7 @@ def _model_settings(value: Any) -> ModelSettings:
     research_timeout = research.get("timeoutSeconds", 305)
     if type(research_timeout) is not int or not 1 <= research_timeout <= 320:
         raise ValueError("invalid Jarvis settings")
+    capability_instructions = value.get("capabilityInstructions", "")
     if (
         not isinstance(model, str)
         or not model.strip()
@@ -255,6 +256,12 @@ def _model_settings(value: Any) -> ModelSettings:
             or any(ord(character) < 32 and character not in "\n\r\t" for character in instruction)
             for instruction in mode_instructions.values()
         )
+        or not isinstance(capability_instructions, str)
+        or len(capability_instructions) > 10_000
+        or any(
+            ord(character) < 32 and character not in "\n\r\t"
+            for character in capability_instructions
+        )
     ):
         raise ValueError("invalid Jarvis settings")
     return ModelSettings(
@@ -272,6 +279,7 @@ def _model_settings(value: Any) -> ModelSettings:
         long_tool_timeout_seconds=timeout_values["longToolTimeoutSeconds"][0],
         backend_http_timeout_seconds=timeout_values["backendHttpTimeoutSeconds"][0],
         research_timeout_seconds=research_timeout,
+        capability_instructions=capability_instructions,
     )
 
 

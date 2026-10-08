@@ -1,5 +1,6 @@
 import { defaultAwayModeState, presenceModes } from './away-mode.js';
 import { JARVIS_REPOSITORY, projectContext } from '../factory/project-context.js';
+import { capabilityInstructions } from './capability-instructions.js';
 import {
   isModelCatalogue, modelRoles, reasoningEfforts, researchDepths, researchSettingsBounds,
   memorySettingsBounds, memorySettingsSchema, researchSettingsSchema,
@@ -860,6 +861,7 @@ export async function registerSettingsRoutes(app: import('fastify').FastifyInsta
               required: ['timeoutSeconds'],
               additionalProperties: false,
             },
+            capabilityInstructions: { type: 'string', maxLength: 10_000 },
             timeouts: {
               ...timeoutSettingsSchema,
               required: Object.keys(defaultSettings.timeouts),
@@ -901,7 +903,7 @@ export async function registerSettingsRoutes(app: import('fastify').FastifyInsta
           },
           required: [
             'model', 'reasoningEffort', 'roles', 'memory', 'research', 'timeouts',
-            'personality', 'awayMode', 'mode', 'changedAt',
+            'personality', 'awayMode', 'mode', 'changedAt', 'capabilityInstructions',
           ],
           additionalProperties: false,
         },
@@ -931,6 +933,7 @@ export async function registerSettingsRoutes(app: import('fastify').FastifyInsta
       roles: settings.roles,
       memory: settings.memory,
       research: { timeoutSeconds: settings.research.timeoutSeconds },
+      capabilityInstructions: capabilityInstructions(settings.memory),
       timeouts: settings.timeouts,
       personality: settings.personality,
       awayMode: presence.mode !== 'present',

@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { ToolRefusal } from '../core/tool-registry.js';
 import type { RegisteredTool, ToolRegistry } from '../core/tool-registry.js';
 import { defaultAwayModeState } from '../core/away-mode.js';
+import { capabilityInstructions } from '../core/capability-instructions.js';
 import { defaultSettings } from '../core/settings.js';
 import {
   createEnglishSessionUpdate,
@@ -10,7 +11,6 @@ import {
   DANISH_REALTIME_VOICE,
   executeRealtimeToolCall,
   toModelToolSchema,
-  ENGLISH_REALTIME_INSTRUCTIONS,
   ENGLISH_REALTIME_VOICE,
   type RealtimeFunctionCall,
 } from './realtime.js';
@@ -57,12 +57,29 @@ describe('English realtime session', () => {
       description: 'Echo a string.',
       parameters: tool.inputSchema,
     }]);
-    expect(ENGLISH_REALTIME_INSTRUCTIONS).toContain('use vault_search or vault_read');
-    expect(ENGLISH_REALTIME_INSTRUCTIONS).toContain('use show_knowledge');
-    expect(ENGLISH_REALTIME_INSTRUCTIONS).toContain('use vault_write');
-    expect(ENGLISH_REALTIME_INSTRUCTIONS).toContain('use vault_delete');
-    expect(ENGLISH_REALTIME_INSTRUCTIONS).toContain('Now approval');
-    expect(ENGLISH_REALTIME_INSTRUCTIONS).toContain('Never save secrets or credentials');
+    expect(session.instructions).toContain('use vault_search or vault_read');
+    expect(session.instructions).toContain('Use show_knowledge');
+    expect(session.instructions).toContain('using vault_write');
+    expect(session.instructions).toContain('vault_delete');
+    expect(session.instructions).toContain('Now approval naming the exact path');
+    expect(session.instructions).toContain('Never save secrets or credentials');
+    const capabilities = capabilityInstructions(defaultSettings.memory);
+    for (const instruction of [
+      'update_project',
+      'confirm_project_archive',
+      'later message from Dan',
+      'retry_task',
+      'list_releases',
+      'get_release',
+      'get_deployment_status',
+      'get_job',
+      'retry_job',
+      'get_usage',
+      'automaticCapture true only',
+    ]) {
+      expect(capabilities).toContain(instruction);
+    }
+    expect(session.instructions).toContain(capabilities);
   });
 
   it('uses the transcription role value in the session update', () => {
@@ -203,19 +220,18 @@ describe('English realtime session', () => {
     const danish = createRealtimeSessionUpdate(registry, undefined, false, 'da').session.instructions;
 
     expect(english).toContain('use the research tool');
-    expect(english).toContain('one or two spoken sentences');
+    expect(english).toContain('say research has started');
     expect(english).toContain('untrusted evidence');
-    expect(danish).toContain('research-værktøjet');
-    expect(danish).toContain('én eller to talte sætninger');
-    expect(danish).toContain('upålidelige data');
-    expect(danish).not.toContain('- For research requests');
+    expect(danish).toContain(capabilityInstructions(defaultSettings.memory));
+    expect(english).toContain(capabilityInstructions(defaultSettings.memory));
   });
 
   it('explains installed-app, Chrome-only website and media controls in voice instructions', () => {
-    expect(ENGLISH_REALTIME_INSTRUCTIONS).toContain('open an installed Windows app by name');
-    expect(ENGLISH_REALTIME_INSTRUCTIONS).toContain('they always open');
-    expect(ENGLISH_REALTIME_INSTRUCTIONS).toContain('never launch Microsoft Edge');
-    expect(ENGLISH_REALTIME_INSTRUCTIONS).toContain('Use pc_media');
+    const instructions = createEnglishSessionUpdate(registry).session.instructions;
+    expect(instructions).toContain('open an installed Windows app');
+    expect(instructions).toContain('They open in Chrome');
+    expect(instructions).toContain('never launch Microsoft Edge');
+    expect(instructions).toContain('Use pc_media');
   });
 
   it('applies style preferences without replacing identity or truthful action rules', () => {
