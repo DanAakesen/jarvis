@@ -29,6 +29,16 @@ server-side when disabled, while Dan-requested writes stay available. No
 migration or web change is needed; focused contract, settings, vault and voice
 tests cover the behavior.
 
+P9-11 (8 October 2026): store timeout controls in the existing global settings
+store and expose them through the shared contract and agent-only settings route.
+Keep defaults at 30 seconds for ordinary tools, 320 for long tools and 10 for
+agent HTTP, bounded respectively to 1–120, 30–320 and 1–60 seconds. Reuse the
+existing bounded research timeout setting and add no migration or web change.
+Use safe defaults when an older backend omits timeout fields. Do not add
+automatic retries for timed-out tool actions because completion may be
+uncertain. Contract, settings, and agent tests cover the bounds and use; live
+propagation remains unverified.
+
 P9-20 (7 October 2026): expose one owner-authenticated, cached `/status`
 snapshot using the shared contracts; reuse it in `get_status_summary`. Keep
 status probes bounded and return only allowlisted metadata, never provider
