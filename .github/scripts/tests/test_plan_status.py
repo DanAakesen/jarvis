@@ -3,6 +3,7 @@ import unittest
 from pathlib import Path
 
 from plan_status import (
+    dependencies_from_text,
     flatten_pages,
     new_tasks,
     plan_tasks,
@@ -158,3 +159,14 @@ class PlanStatusTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+    def test_two_digit_phases_are_parsed(self):
+        plan = "\n".join([
+            "| ID | Issue | Task | Acceptance criteria | Depends on | Status |",
+            "| --- | --- | --- | --- | --- | --- |",
+            "| P10-02 | | Link tasks to issues | Tests | P10-01, P9-40 | Planned |",
+        ])
+        tasks = plan_tasks(plan)
+        self.assertEqual([task["id"] for task in tasks], ["P10-02"])
+        self.assertEqual(tasks[0]["dependencies"], ["P10-01", "P9-40"])
+        self.assertEqual(dependencies_from_text("P10-01–03"), ["P10-01", "P10-02", "P10-03"])
