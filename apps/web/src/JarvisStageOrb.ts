@@ -179,18 +179,22 @@ export function createJarvisStageOrb() {
   }
   const coreMaterial = new THREE.ShaderMaterial({
     uniforms: coreUniforms, transparent: true, depthWrite: false, blending: THREE.NormalBlending,
-    vertexShader: `uniform float uTime;uniform float uCoreFlow;uniform float uAwake;uniform float uThink;varying vec2 vUv;
+    vertexShader: `uniform float uTime;uniform float uCoreFlow;uniform float uAwake;uniform float uThink;uniform float uTool;varying vec2 vUv;
       void main(){vUv=uv;vec3 p=position;
         // A slowly stirring network in dormancy; stronger travelling deformation when awake.
-        float stir=.018+.025*uAwake;
+        float stir=.03+.028*uAwake+uTool*.02;
         p+=vec3(sin(p.y*17.+uCoreFlow),cos(p.z*13.-uCoreFlow*.8),sin(p.x*15.+uCoreFlow*.7))*stir;
-        p*=1.-uThink*.07*(.5+.5*sin(uTime*3.1));
+        p*=1.-uThink*.12*(.5+.5*sin(uTime*3.1));
         gl_Position=projectionMatrix*modelViewMatrix*vec4(p,1.);}`,
     fragmentShader: `uniform float uTime;uniform float uCoreFlow;uniform float uAwake;uniform float uAudioLevel;uniform vec3 uWarm;${stateUniforms}varying vec2 vUv;
       void main(){float pulse=pow(.5+.5*sin(vUv.x*8.-uCoreFlow*2.5),8.);
-        float energy=mix(.34,.78,max(uAwake,uIgnite))*(.94+.06*sin(uTime*1.1))+uSurge*.25+uSpeak*uAudioLevel*.3+uThink*.12;
-        vec3 c=mix(uWarm*vec3(1.,.8,.7),uWarm,pulse);
-        gl_FragColor=vec4(c*(1.2+pulse*.6),energy*(.64+pulse*.25));}`,
+        // Livelier (Dan, 8 October): a second, faster train of signals fires along the filaments, a slow heartbeat lifts
+        // the whole core in dormancy, and thinking, tools, listening and speech each push it visibly further.
+        float fire=pow(.5+.5*sin(vUv.x*15.+uTime*(1.6+uTool*4.+uThink*2.)),18.)*(.55+uTool*.9+uThink*.6);
+        float heart=pow(.5+.5*sin(uTime*1.25),3.);
+        float energy=mix(.5,.85,max(uAwake,uIgnite))*(.82+.3*heart)+uSurge*.3+uSpeak*uAudioLevel*.75+uThink*.38+uTool*.3+uListen*uInput*.55;
+        vec3 c=mix(uWarm*vec3(1.,.8,.7),uWarm,max(pulse,fire));
+        gl_FragColor=vec4(c*(1.25+pulse*.7+fire*1.1),min(1.,energy*(.66+pulse*.28+fire*.5)));}`,
   });
   const connections = new THREE.Mesh(mergeGeometries(curves), coreMaterial);
   curves.forEach((geometry) => geometry.dispose());
@@ -221,16 +225,16 @@ export function createJarvisStageOrb() {
     uniforms: coreUniforms, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
     vertexShader: `attribute float aSeed;attribute float aSize;uniform float uTime;uniform float uCoreFlow;uniform float uAwake;uniform float uAudioLevel;${stateUniforms}varying float vEnergy;
       void main(){vec3 p=position;
-        p+=vec3(sin(uCoreFlow+aSeed*12.),cos(uCoreFlow*.8+aSeed*17.),sin(uCoreFlow*.7-aSeed*9.))*(.016+.025*uAwake);
+        p+=vec3(sin(uCoreFlow+aSeed*12.),cos(uCoreFlow*.8+aSeed*17.),sin(uCoreFlow*.7-aSeed*9.))*(.026+.03*uAwake+uListen*uInput*.04);
         // Thinking draws sparks inward along the core; ignition and speech push them outward.
-        float inflow=fract(uTime*.55+aSeed);
-        p*=mix(1.,1.15-inflow*.75,uThink)*(1.+uSurge*.35+uSpeak*uAudioLevel*.22);
+        float inflow=fract(uTime*(.55+uThink*.5)+aSeed);
+        p*=mix(1.,1.2-inflow*.9,uThink)*(1.+uSurge*.35+uSpeak*uAudioLevel*.45+uTool*.08*sin(uTime*6.+aSeed*30.));
         float ignite=max(uAwake,uIgnite);
-        vEnergy=min(1.,(.34+.66*ignite+.35*uSurge+.3*uSpeak*uAudioLevel)*(.45+.55*pow(.5+.5*sin(uCoreFlow*1.6+aSeed*21.),4.)));
+        vEnergy=min(1.,(.5+.6*ignite+.35*uSurge+.6*uSpeak*uAudioLevel+.35*uThink+.3*uTool+.5*uListen*uInput)*(.4+.6*pow(.5+.5*sin(uCoreFlow*2.2+aSeed*21.),4.)));
         vec4 v=modelViewMatrix*vec4(p,1.);gl_Position=projectionMatrix*v;
         float scale=length(modelMatrix[0].xyz);
         float pointScale=scale<1.?scale/2.3:1.;
-        gl_PointSize=clamp(aSize*(48.+uAwake*65.)*pointScale/max(1.,-v.z),.8,11.);}`,
+        gl_PointSize=clamp(aSize*(60.+uAwake*70.+uSpeak*uAudioLevel*40.)*pointScale/max(1.,-v.z),.8,13.);}`,
     fragmentShader: `uniform vec3 uWarm;varying float vEnergy;void main(){float d=length(gl_PointCoord-.5)*2.;if(d>1.)discard;
       float glow=exp(-d*d*7.)*.8+pow(1.-d,4.)*.6;
       gl_FragColor=vec4(uWarm*(1.25+pow(1.-d,5.)*1.2),glow*vEnergy);}`,
@@ -282,7 +286,7 @@ export function createJarvisStageOrb() {
     uniforms.uSpeak.value = motion.speak;
     uniforms.uInput.value = motion.input;
     // Integrate the phase so waking and changing state cannot jump the core's pose.
-    coreFlow += delta * (0.22 + motion.awake * 0.65 + motion.think * 0.5 + motion.tool * 0.4 + motion.speech * 0.8);
+    coreFlow += delta * (0.42 + motion.awake * 0.7 + motion.think * 1.0 + motion.tool * 1.2 + motion.speech * 1.1 + motion.listen * motion.input * 0.8);
     uniforms.uCoreFlow.value = coreFlow;
     core.rotation.set(Math.sin(coreFlow * 0.55) * 0.2, coreFlow * 0.32, Math.cos(coreFlow * 0.4) * 0.12);
     // Tool work and the wake surge visibly spin up the ribbons; integrated so speed changes stay smooth.

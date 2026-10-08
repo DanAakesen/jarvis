@@ -1,4 +1,22 @@
 export const generatedViewVersion: 1;
+export const presenceModes: readonly ['present', 'away', 'on_the_move'];
+export type PresenceMode = typeof presenceModes[number];
+export const presenceSources: readonly ['manual', 'device', 'jarvis', 'browser'];
+export type PresenceSource = typeof presenceSources[number];
+export type PresenceUpdateSource = 'manual' | 'device';
+export interface PresenceUpdate {
+  mode: PresenceMode;
+  source?: PresenceUpdateSource;
+}
+export interface PresenceState {
+  mode: PresenceMode;
+  source: PresenceSource;
+  changedAt: string | null;
+  ignored?: 'recent_manual';
+}
+export const presenceUpdateSchema: Readonly<Record<string, unknown>>;
+export const presenceStateSchema: Readonly<Record<string, unknown>>;
+export function isPresenceState(value: unknown): value is PresenceState;
 export const modelRoles: readonly ['chat', 'vision', 'research', 'voice', 'transcription', 'embedding', 'codex', 'copilot'];
 export type ModelRole = typeof modelRoles[number];
 export const reasoningEfforts: readonly ['none', 'minimal', 'low', 'medium', 'high', 'xhigh'];
@@ -328,6 +346,7 @@ export type WorkspaceCommand =
   | { commandId: string; operation: 'navigate'; page: 'settings'; section?: WorkspaceSettingsSection }
   | { commandId: string; operation: 'navigate'; page: 'factory'; taskId?: string; issueNumber?: number }
   | { commandId: string; operation: 'navigate'; page: Exclude<WorkspaceNavigationPage, 'settings' | 'factory'> }
+  | { commandId: string; operation: 'conversation'; action: 'show' | 'hide' }
   | { commandId: string; operation: 'create' | 'update'; viewId: string; view: GeneratedView }
   | { commandId: string; operation: 'show' | 'close' | 'minimise' | 'restore' | 'focus'; viewId: string }
   | { commandId: string; operation: 'move'; viewId: string; x: number; y: number }

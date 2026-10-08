@@ -5,6 +5,7 @@ import { useLocation } from 'react-router-dom';
 import { TaskWindowLink } from './TaskWindowLink';
 import { LivePhrase, ToolCallChip, WorkingCore, type ToolState } from './ToolCallChip';
 import { useJarvisActivity } from './activity-context';
+import { PHONE_LAYOUT_MEDIA_QUERY } from './Workspace';
 import type { PublicConfig } from '../config/public-config';
 import { sharedScreenContext, type CameraController, type ScreenShareController } from './screen-sharing';
 import { ConversationHandle } from './ConversationHandle';
@@ -207,8 +208,10 @@ export function ConversationHistory({
   const [now, setNow] = useState(() => Date.now());
   const [atLatest, setAtLatest] = useState(true);
   const conversationWindow = useConversationWindow();
+  // The rotating invitation is for an empty start; once Dan has written, it stays away.
+  const [hasSent, setHasSent] = useState(false);
   const workspaceCommands = useContext(WorkspaceCommandContext);
-  const { key: locationKey } = useLocation();
+  const { key: locationKey, pathname: locationPath } = useLocation();
   const seenLocationKey = useRef(locationKey);
   const input = useRef<HTMLTextAreaElement>(null);
   const transcript = useRef<HTMLDivElement>(null);
@@ -283,6 +286,23 @@ export function ConversationHistory({
     setAtLatest(latest);
   }
 
+  // Typing, focusing the composer or opening the transcript brings the conversation to its latest message (Dan, 8 October).
+  const showLatest = useCallback(() => {
+    const element = transcript.current;
+    followLatest.current = true;
+    if (!element) return;
+    const reduced = document.documentElement.dataset.motion === 'reduced' ||
+      (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false);
+    if (typeof element.scrollTo === 'function') element.scrollTo({ top: element.scrollHeight, behavior: reduced ? 'auto' : 'smooth' });
+    else element.scrollTop = element.scrollHeight;
+  }, []);
+  const conversationShown = conversationWindow?.open ?? false;
+  useEffect(() => {
+    if (!conversationShown) return;
+    const frame = requestAnimationFrame(showLatest);
+    return () => cancelAnimationFrame(frame);
+  }, [conversationShown, showLatest]);
+
   function jumpToLatest() {
     const element = transcript.current;
     followLatest.current = true;
@@ -321,11 +341,13 @@ export function ConversationHistory({
   }, [failedTurns, revealHistory, turnError]);
 
   useEffect(() => {
-    // Choosing Conversation in the navigation brings a closed or minimised history back.
+    // Choosing Conversation (home) on a computer brings a closed or minimised history back. Other pages, and every
+    // page on a phone, leave it tucked away so the page Dan chose is not covered (Dan, 8 October).
     if (seenLocationKey.current === locationKey) return;
     seenLocationKey.current = locationKey;
-    revealHistory();
-  }, [locationKey, revealHistory]);
+    const phoneLayout = window.matchMedia?.(PHONE_LAYOUT_MEDIA_QUERY).matches ?? false;
+    if (locationPath === '/' && !phoneLayout) revealHistory();
+  }, [locationKey, locationPath, revealHistory]);
 
   useEffect(() => {
     const busy = voiceActive || sending;
@@ -388,6 +410,7 @@ export function ConversationHistory({
     draftValue.current = '';
     setDraft('');
     setTurnError('');
+    setHasSent(true);
     // A new message needs its reply visible: bring history back and follow the latest content.
     followLatest.current = true;
     setAtLatest(true);
@@ -614,7 +637,8 @@ export function ConversationHistory({
 
   // Sharing lives in the More menu (not the top bar); a live line above the composer shows what Jarvis can see.
   const captureActions: MoreMenuAction[] = [
-    ...(screenShare ? [{
+    // Phone browsers cannot share the screen at all, so the option only appears where the browser supports it.
+    ...(screenShare && typeof navigator.mediaDevices?.getDisplayMedia === 'function' ? [{
       id: 'share-screen',
       label: screenShare.sharing ? 'Stop sharing screen' : screenShare.starting ? 'Starting screen share…' : 'Share screen',
       icon: <ConversationIcon name="screen" />,
@@ -626,6 +650,13 @@ export function ConversationHistory({
       label: camera.sharing ? 'Turn camera off' : camera.starting ? 'Starting camera…' : 'Turn camera on',
       icon: <ConversationIcon name="camera" />,
       onSelect: () => { if (camera.sharing) camera.stop(); else void camera.start(); },
+      disabled: camera.starting,
+    }] : []),
+    ...(camera?.sharing && camera.switchCamera && navigator.maxTouchPoints > 0 ? [{
+      id: 'switch-camera',
+      label: camera.facing === 'environment' ? 'Use the front camera' : 'Use the back camera',
+      icon: <ConversationIcon name="camera" />,
+      onSelect: () => { void camera.switchCamera?.(); },
       disabled: camera.starting,
     }] : []),
   ];
@@ -816,9 +847,11 @@ export function ConversationHistory({
           maxLength={20_000}
           value={draft}
           onChange={(event) => {
+            if (!draftValue.current && event.target.value) showLatest();
             draftValue.current = event.target.value;
             setDraft(event.target.value);
           }}
+          onFocus={showLatest}
           onKeyDown={(event) => {
             if (event.key === 'Enter' && (event.ctrlKey || event.metaKey) && !event.nativeEvent.isComposing) {
               event.preventDefault();
@@ -832,6 +865,8 @@ export function ConversationHistory({
           }}
           aria-describedby="chat-guidance"
         />
+        {/* The visible invitation; the native placeholder stays for assistive technology but is drawn transparent. */}
+        {!draft && !hasSent && <span className="composer-prompt" aria-hidden="true"><LivePhrase phase="prompt" interval={9000} typeSpeed={70} /></span>}
         <ConversationMoreMenu className="composer-more" language={language} onLanguageChange={setLanguage} actions={attachActions} align="end" />
         <button className="composer-send" type="submit" disabled={!draft.trim()} aria-label="Send" title="Send message">
           <ConversationIcon name="send" />

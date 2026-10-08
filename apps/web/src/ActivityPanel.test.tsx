@@ -45,7 +45,8 @@ describe('activity panel', () => {
 
     expect(screen.getByText("Activity isn't available yet.")).not.toBeNull();
     expect(screen.queryByRole('list')).toBeNull();
-    expect(screen.queryByRole('button')).toBeNull();
+    // The only control is the section's own fold toggle; no item actions are invented.
+    expect(screen.getAllByRole('button').map((button) => button.getAttribute('aria-expanded'))).toEqual(['true']);
   });
 
   it('shows running tasks with project, agent, activity and duration', () => {
@@ -105,7 +106,7 @@ describe('activity panel', () => {
 
     confirm();
     expect(await screen.findByText('No tasks need attention.')).not.toBeNull();
-    expect(document.activeElement).toBe(screen.getByRole('heading', { name: 'Now' }));
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Now' }));
   });
 
   it('keeps an item and explains a failed dismissal', async () => {

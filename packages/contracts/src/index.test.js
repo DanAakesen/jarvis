@@ -66,6 +66,11 @@ import {
   factoryBoardColumnIds,
   isFactoryBoard,
   isFactoryBoardUpdate,
+  isPresenceState,
+  presenceModes,
+  presenceSources,
+  presenceStateSchema,
+  presenceUpdateSchema,
 } from './index.js';
 
 test('workspace snapshots accept old clients and validate optional current and previous views', () => {
@@ -727,6 +732,7 @@ test('defines and validates bounded workspace commands for the approved operatio
     { ...base, operation: 'context-panel', action: 'open', view: listView() },
     { ...base, operation: 'context-panel', action: 'open' },
     ...['close', 'toggle'].map((action) => ({ ...base, operation: 'context-panel', action })),
+    ...['show', 'hide'].map((action) => ({ ...base, operation: 'conversation', action })),
   ];
 
   assert.equal(workspaceCommandSchema.type, 'object');
@@ -734,6 +740,17 @@ test('defines and validates bounded workspace commands for the approved operatio
     assert.equal(Object.hasOwn(workspaceCommandSchema, key), false, key);
   }
   for (const command of commands) assert.equal(isWorkspaceCommand(command), true, command.operation);
+});
+
+test('validates conversation visibility actions without accepting unrelated fields', () => {
+  const command = { commandId: 'conversation-1', operation: 'conversation' };
+  for (const action of ['show', 'hide']) {
+    assert.equal(isWorkspaceCommand({ ...command, action }), true, action);
+  }
+  for (const action of ['open', 'close', 'toggle', 'shown', '', null]) {
+    assert.equal(isWorkspaceCommand({ ...command, action }), false, String(action));
+  }
+  assert.equal(isWorkspaceCommand({ ...command, action: 'show', viewId: 'conversation' }), false);
 });
 
 test('validates exact navigation keys, settings sections and bounded factory task/issue selectors', () => {
@@ -782,6 +799,19 @@ test('validates exact navigation keys, settings sections and bounded factory tas
   ]) {
     assert.equal(isWorkspaceCommand({ ...command, ...invalid }), false, JSON.stringify(invalid));
   }
+});
+
+test('defines the presence request and response contracts', () => {
+  assert.deepEqual(presenceModes, ['present', 'away', 'on_the_move']);
+  assert.deepEqual(presenceSources, ['manual', 'device', 'jarvis', 'browser']);
+  assert.deepEqual(presenceUpdateSchema.properties.source.enum, ['manual', 'device']);
+  assert.deepEqual(presenceStateSchema.properties.ignored, { const: 'recent_manual' });
+
+  const state = { mode: 'on_the_move', source: 'device', changedAt: '2026-10-08T08:00:00.000Z' };
+  assert.equal(isPresenceState(state), true);
+  assert.equal(isPresenceState({ ...state, ignored: 'recent_manual' }), true);
+  assert.equal(isPresenceState({ ...state, ignored: 'other' }), false);
+  assert.equal(isPresenceState({ ...state, source: 'teams_presence' }), false);
 });
 
 test('rejects invalid workspace IDs, geometry, operations, and generated-view allowlists', () => {

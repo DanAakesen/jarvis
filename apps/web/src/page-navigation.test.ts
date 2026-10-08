@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { isWorkspaceSnapshot } from '@jarvis/contracts';
-import { pageForPath, readNavigateCommand, resolveNavigation } from './page-navigation';
+import { pageForPath, readConversationCommand, readNavigateCommand, resolveNavigation } from './page-navigation';
 
 describe('page navigation', () => {
   it('reads only navigate commands', () => {
@@ -36,5 +36,12 @@ describe('page navigation', () => {
       windows: [{ viewId: 'task-42', title: 'Task 42' }], contextPanelOpen: false,
       view: { page: 'factory', taskId: '42', folioOpen: false, focusedViewId: 'task-42', previous: { page: 'settings', section: 'voice' } },
     })).toBe(true);
+  });
+
+  it('reads Jarvis showing or hiding the conversation', () => {
+    expect(readConversationCommand({ commandId: '1', operation: 'conversation', action: 'show' })).toBe('show');
+    expect(readConversationCommand({ commandId: '1', operation: 'conversation', action: 'hide' })).toBe('hide');
+    expect(readConversationCommand({ commandId: '1', operation: 'conversation', action: 'toggle' })).toBeNull();
+    expect(readConversationCommand({ commandId: '1', operation: 'focus', viewId: 'x' })).toBeNull();
   });
 });

@@ -173,6 +173,26 @@ const object = (properties, required = Object.keys(properties)) => ({
 const array = (items, maxItems, minItems = 0) => ({
   type: 'array', items, maxItems, ...(minItems ? { minItems } : {}),
 });
+export const presenceModes = Object.freeze(['present', 'away', 'on_the_move']);
+export const presenceSources = Object.freeze(['manual', 'device', 'jarvis', 'browser']);
+export const presenceUpdateSchema = Object.freeze(object({
+  mode: { type: 'string', enum: [...presenceModes] },
+  source: { type: 'string', enum: ['manual', 'device'] },
+}, ['mode']));
+export const presenceStateSchema = Object.freeze(object({
+  mode: { type: 'string', enum: [...presenceModes] },
+  source: { type: 'string', enum: [...presenceSources] },
+  changedAt: { anyOf: [dateTime, { type: 'null' }] },
+  ignored: { const: 'recent_manual' },
+}, ['mode', 'source', 'changedAt']));
+export function isPresenceState(value) {
+  return isObject(value) &&
+    Object.keys(value).every((key) => ['mode', 'source', 'changedAt', 'ignored'].includes(key)) &&
+    presenceModes.includes(value.mode) &&
+    presenceSources.includes(value.source) &&
+    (value.changedAt === null || typeof value.changedAt === 'string' && Number.isFinite(Date.parse(value.changedAt))) &&
+    (value.ignored === undefined || value.ignored === 'recent_manual');
+}
 const codeLineSchema = { type: 'integer', minimum: 1, maximum: Number.MAX_SAFE_INTEGER };
 export const generatedCodeDataSchema = Object.freeze(object({
   repo: { ...string(200, 1), pattern: '\\S' },
@@ -468,7 +488,7 @@ export const workspaceCommandSchema = Object.freeze({
   type: 'object',
   properties: {
     commandId: workspaceCommandId,
-    operation: { type: 'string', enum: ['create', 'update', 'show', 'close', 'minimise', 'restore', 'focus', 'move', 'resize', 'layout', 'context-panel', 'navigate'] },
+    operation: { type: 'string', enum: ['create', 'update', 'show', 'close', 'minimise', 'restore', 'focus', 'move', 'resize', 'layout', 'context-panel', 'navigate', 'conversation'] },
     page: { type: 'string', enum: [...workspaceNavigationPages] },
     section: { type: 'string', enum: [...workspaceSettingsSections] },
     taskId: { type: 'string', pattern: '^[1-9][0-9]{0,18}$', maxLength: 19 },
@@ -480,7 +500,7 @@ export const workspaceCommandSchema = Object.freeze({
     width: { type: 'number', minimum: 0.32, maximum: 0.92 },
     height: { type: 'number', minimum: 0.34, maximum: 0.92 },
     arrangement: { enum: ['tiled', 'layered'] },
-    action: { enum: ['open', 'close', 'toggle'] },
+    action: { enum: ['open', 'close', 'toggle', 'show', 'hide'] },
   },
   required: ['commandId', 'operation'],
   additionalProperties: false,
@@ -842,6 +862,8 @@ export function isWorkspaceCommand(value, options = {}) {
         (value.taskId === undefined || value.page === 'factory' && isTaskEventId(value.taskId)) &&
         (value.issueNumber === undefined ||
           value.page === 'factory' && Number.isSafeInteger(value.issueNumber) && value.issueNumber > 0);
+    case 'conversation':
+      return hasOnly('action') && ['show', 'hide'].includes(value.action);
     case 'create':
     case 'update':
       return hasOnly('viewId', 'view') &&

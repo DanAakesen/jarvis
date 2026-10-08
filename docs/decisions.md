@@ -866,3 +866,11 @@ and existing Factory task details; `/now/events` emits a typed project-scoped
 board update. The response contract is backend-owned; the UI session separately
 consumes it. Offline fake-provider tests do not establish live GitHub App
 permissions.
+
+## 8 October 2026 — Voice-first phone shell
+
+**Confirmed by Dan:** on phones Jarvis is primarily hands-free voice. The rail and side panels give way to a slim top bar, a bottom menu sheet and the chat bar as the dock; the transcript is hidden until swiped up or requested from Jarvis (P9-45, #596); Jarvis-opened windows are full-width sheets; presence switches to On the move on phones (P9-44, #595, a manual choice wins for two hours). Screen sharing is not offered on phones because no mobile browser supports it; the camera gets a front/back switch. UI plus the two backend issues named.
+
+## 8 October 2026 — Collapsible sections as the default for settings-like UI; visual Usage page
+
+**Confirmed by Dan:** Settings (web and phone) becomes a stack of collapsible sections, and this is the pattern for future settings, configuration and detail areas so pages save space and suit phones. The Usage page is redesigned to be visual and uncluttered: charts and figures first, tables folded away. Charts show only what the report contains (no invented time series). UI-only.

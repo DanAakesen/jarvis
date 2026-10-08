@@ -114,7 +114,7 @@ describe('camera frame capture', () => {
     });
     expect(screen.getByRole('status').textContent).toBe('Camera is on');
     expect(getUserMedia).toHaveBeenCalledWith({
-      video: { width: { ideal: 1280 }, height: { ideal: 720 } },
+      video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: { ideal: 'user' } },
       audio: false,
     });
 

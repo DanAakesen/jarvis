@@ -15,6 +15,7 @@ import {
 } from './activity';
 import { GeneratedViewRenderer } from './GeneratedViewRenderer';
 import { Loader } from './Loader';
+import { CollapsibleSection } from './CollapsibleSection';
 
 function confirmationLabel(kind: ConfirmationActionKind): string {
   const words = kind.replaceAll('_', ' ');
@@ -127,7 +128,7 @@ export function ActivityPanel({ feed, onDismiss, onResolveConfirmation, onRetry,
 }) {
   const ready = feed.status === 'ready';
   const now = useNow(ready && feed.running.length > 0);
-  const heading = useRef<HTMLHeadingElement>(null);
+  const heading = useRef<HTMLButtonElement>(null);
   const [dismissed, setDismissed] = useState<ReadonlySet<string>>(new Set());
   const [pending, setPending] = useState<ReadonlySet<string>>(new Set());
   const [failed, setFailed] = useState<ReadonlySet<string>>(new Set());
@@ -167,8 +168,7 @@ export function ActivityPanel({ feed, onDismiss, onResolveConfirmation, onRetry,
   }
 
   return (
-    <section className="panel now-panel" aria-labelledby="now-heading">
-      <h2 id="now-heading" ref={heading} tabIndex={-1}>Now</h2>
+    <CollapsibleSection storageKey="settings.now" className="panel now-panel" headingId="now-heading" title="Now" toggleRef={heading}>
       {feed.status === 'loading' ? <Loader variant="rows" label="Loading current activity…" /> : feed.status === 'unavailable' ? (
         <>
           <p>{feed.message}</p>
@@ -249,6 +249,6 @@ export function ActivityPanel({ feed, onDismiss, onResolveConfirmation, onRetry,
           })}
         </>
       )}
-    </section>
+    </CollapsibleSection>
   );
 }
