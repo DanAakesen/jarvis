@@ -555,6 +555,7 @@ try {
               undefined,
               async (mapping) => { await webhookDeliveryStore?.recordPullRequest(mapping); },
               async (mapping) => { await projectPolicyEvaluator?.handle(mapping); },
+              (failure) => logger.warn(failure, 'github.delivery_policy_evaluation_failed'),
             ),
           }
           : {}),

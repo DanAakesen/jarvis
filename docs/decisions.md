@@ -910,6 +910,18 @@ No schema change is needed. Offline route/service tests cover idempotent retries
 and secret rejection; P10-01 permission changes and the coordinator's live run
 remain pending.
 
+## P10-06 (8 October 2026) — Factory issue delivery owns pull requests
+
+Include the issue number and repository as trusted prompt metadata, and require
+the Factory agent to commit and push its branch without opening a pull request.
+Delivery adds a missing `Fixes #N` line to a reused task-branch PR and marks a
+reused draft ready for review using the existing GitHub App token permissions.
+An exception during post-delivery policy evaluation is logged with only a safe
+reason/status and does not turn an already recorded PR into a delivery refusal;
+later GitHub events can reevaluate policy. No new permission or migration is
+needed. Offline issue-prompt and delivery tests cover the behavior; live GitHub
+API acceptance remains unverified.
+
 ## P10-01 (8 October 2026) — GitHub App write permissions are live
 
 Dan granted the Jarvis GitHub App Issues write, Workflows read and write, and Repository creation, and accepted them on the installation. Issues write is required for P10's issue creation, progress comments and label changes. Workflows write lets Factory branches touch `.github/workflows` files, which GitHub otherwise rejects on push. Repository creation supports confirmed new-project runs. Evidence: the production installation reports `issues`, `workflows` and `repository_creation` as `write`, and an installation token requested with `issues: write` for `jarvis` minted with HTTP 201. Status: accepted.
