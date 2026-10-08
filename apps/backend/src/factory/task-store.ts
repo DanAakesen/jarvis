@@ -6,6 +6,7 @@ export type { TaskEventMessage, TaskEventRecord } from '@jarvis/contracts';
 export interface TaskRecord {
   id: string;
   projectId: string;
+  issueNumber?: number | null;
   originMessageId: string | null;
   title: string;
   request: string;
@@ -80,6 +81,7 @@ export interface CreateTaskInput {
   projectId: string;
   title: string;
   request: string;
+  issueNumber?: number;
   source?: 'board' | 'chat';
   originMessageId?: string;
   agent?: 'codex' | 'copilot';
@@ -123,6 +125,7 @@ export type TaskModelUpdateResult =
 
 export interface TaskStore {
   create(input: CreateTaskInput): Promise<TaskRecord | null>;
+  findActiveByIssue?(projectId: string, issueNumber: number): Promise<TaskRecord | null>;
   list(filters: TaskListFilters): Promise<TaskRecord[]>;
   get(id: string, eventLimit: number, eventOffset: number): Promise<TaskDetail | null>;
   updateModelConfig(id: string, config: TaskModelConfig): Promise<TaskModelUpdateResult>;

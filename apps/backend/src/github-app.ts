@@ -7,6 +7,7 @@ export interface GitHubAppTokenIssuer {
   issueForContents(repository: string): Promise<string>;
   issueForRepositoryRead(repository: string): Promise<string>;
   issueForContentsWrite(repository: string): Promise<string>;
+  issueForIssuesWrite(repository: string): Promise<string>;
   readInstallationPermissions?(
     repository: string,
   ): Promise<Readonly<Record<string, 'read' | 'write' | 'admin'>>>;
@@ -338,6 +339,7 @@ export function createGitHubAppTokenIssuer({
       contents: 'read', issues: 'read', pull_requests: 'read',
     }),
     issueForContentsWrite: (repository) => issue(repository, { contents: 'write' }),
+    issueForIssuesWrite: (repository) => issue(repository, { issues: 'write' }),
     readInstallationPermissions,
   };
 }

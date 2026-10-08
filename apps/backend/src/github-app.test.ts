@@ -398,4 +398,29 @@ describe('GitHub App installation tokens', () => {
       permissions: { contents: 'write' },
     });
   });
+
+  it('issues an issues-write-only token for issue operations', async () => {
+    const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
+    const now = Date.parse('2026-10-04T09:00:00.000Z');
+    const fetchImpl = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ id: 123 }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        token: 'ghs_issues-write-token',
+        expires_at: new Date(now + 60 * 60 * 1000).toISOString(),
+      }), { status: 201 }));
+    const issuer = createGitHubAppTokenIssuer({
+      appId: '123456',
+      getPrivateKey: async () => privateKey.export({ type: 'pkcs8', format: 'pem' }).toString(),
+      fetch: fetchImpl,
+      now: () => now,
+    });
+
+    await issuer.issueForIssuesWrite('DanAakesen/repo');
+
+    const [, tokenOptions] = fetchImpl.mock.calls[1]!;
+    expect(JSON.parse(String(tokenOptions?.body))).toEqual({
+      repositories: ['repo'],
+      permissions: { issues: 'write' },
+    });
+  });
 });

@@ -19,6 +19,7 @@ import type {
 import { factoryTools } from './tools.js';
 import { repositoryTools } from './repository-tools.js';
 import { registerReleaseViewRoutes } from './release-view.js';
+import { startIssueTask } from './issues.js';
 import { registerFactoryBoardRoute } from './board.js';
 
 const maxSqlBigInt = 9_223_372_036_854_775_807n;
@@ -404,6 +405,56 @@ export const factoryModule: BackendModule = {
       const store = app.taskStore;
       if (!store) return reply.code(503).send({ error: 'Task service unavailable' });
       return sendBounded(reply, await store.getRunningContext());
+    });
+
+    app.post<{ Params: { number: string }; Body: { project?: string } }>('/factory/issues/:number/start', {
+      schema: {
+        params: {
+          type: 'object',
+          properties: { number: idSchema },
+          required: ['number'],
+          additionalProperties: false,
+        },
+        body: {
+          type: 'object',
+          properties: { project: { type: 'string', minLength: 1, maxLength: 140 } },
+          additionalProperties: false,
+        },
+      },
+    }, async (request, reply) => {
+      const issueNumber = Number(request.params.number);
+      if (!Number.isSafeInteger(issueNumber) || issueNumber > 2_147_483_647) {
+        return reply.code(400).send({ error: 'Invalid issue number' });
+      }
+      try {
+        const result = await startIssueTask({
+          projects: app.projectStore,
+          tasks: app.taskStore,
+          github: app.githubIssueClient,
+          issue: issueNumber,
+          ...(request.body?.project ? { project: request.body.project } : {}),
+        });
+        if (result.kind === 'project-not-found' || result.kind === 'issue-not-found') {
+          return reply.code(404).send({ error: result.kind === 'project-not-found' ? 'Active project not found' : 'Issue not found' });
+        }
+        if (result.kind === 'issue-closed') return reply.code(409).send({ error: 'Closed issues cannot be started' });
+        if (result.kind === 'not-an-issue') return reply.code(400).send({ error: 'Pull requests cannot be started as issues' });
+        if (result.kind === 'prompt-too-large') return reply.code(413).send({ error: 'Issue task prompt is too large' });
+        return reply.code(result.kind === 'created' ? 201 : 200).send({
+          task: {
+            id: result.task.id,
+            title: result.task.title,
+            state: result.task.state,
+            agent: result.task.agent,
+            issueNumber,
+          },
+          issue: { number: issueNumber, url: `https://github.com/${result.repository}/issues/${issueNumber}` },
+        });
+      } catch {
+        request.log.warn('github.issue_start_failed');
+        return reply.code(app.githubIssueClient && app.taskStore && app.projectStore ? 502 : 503)
+          .send({ error: 'Issue task could not be started' });
+      }
     });
 
     app.post<{ Body: SandboxEventInput }>('/factory/sandbox-events', {

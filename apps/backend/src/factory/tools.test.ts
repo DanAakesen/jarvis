@@ -10,6 +10,7 @@ import type { TaskController, TaskDetail, TaskRecord, TaskStore } from './task-s
 import { factoryModule } from './index.js';
 import type { ConversationMessage, ConversationStore } from '../core/conversation-store.js';
 import type { TokenVerifier } from '../auth/verify.js';
+import type { GitHubIssueClient } from '../github/issues.js';
 
 const config = { ...loadConfig({}), logLevel: 'silent' as const };
 const headers = {
@@ -78,6 +79,7 @@ function fixture() {
     create: vi.fn(async () => task),
     list: vi.fn(async () => [task]),
     get: vi.fn(async () => detail),
+    findActiveByIssue: vi.fn(async () => null),
     updateModelConfig: vi.fn(async (_id, config) => ({
       kind: 'ok' as const,
       task: { ...task, ...config },
@@ -87,20 +89,41 @@ function fixture() {
     control: vi.fn(async () => ({ kind: 'ok' as const, task })),
   };
   const record = vi.fn<(call: ToolCallRecord) => Promise<void>>(async () => {});
+  const githubIssueClient = {
+    readIssue: vi.fn(async () => ({
+      number: 8, title: 'P10-02: Factory tasks', body: 'Issue request', state: 'open' as const,
+      url: 'https://github.com/DanAakesen/jarvis/issues/8', labels: ['Codex'], isPullRequest: false,
+    })),
+    readComments: vi.fn(async () => [{ author: 'DanAakesen', body: 'Please implement it.' }]),
+    readAgentRules: vi.fn(async () => 'Repository agent rules.'),
+    createIssue: vi.fn(async () => ({ number: 9, url: 'https://github.com/DanAakesen/jarvis/issues/9' })),
+    createComment: vi.fn(async () => {}),
+    removeLabel: vi.fn(async () => {}),
+  } satisfies GitHubIssueClient;
+  const conversationStore = {
+    getHistory: vi.fn(async () => ({
+      messages: [{
+        id: '42', sessionId: 'session', role: 'dan', text: 'Start issue 8', model: null, at: new Date(),
+      }],
+      nextCursor: null,
+    })),
+  } as unknown as ConversationStore;
   const app = buildApp(config, undefined, {
     modules: [coreModule, factoryModule],
-    auth: async () => ({
-      objectId: config.auth.ownerObjectId,
+    auth: (async () => ({
+      kind: 'jarvis-agent',
+      objectId: '00000000-0000-0000-0000-000000000001',
       tenantId: config.auth.tenantId,
-      displayName: 'Dan',
-    }),
+    })) as TokenVerifier,
     projectStore,
     taskStore,
+    githubIssueClient,
+    conversationStore,
     taskController,
     toolCallStore: { record },
   });
   apps.push(app);
-  return { app, projectStore, taskStore, taskController, record };
+  return { app, projectStore, taskStore, taskController, record, githubIssueClient };
 }
 
 afterEach(async () => {
@@ -110,6 +133,7 @@ afterEach(async () => {
 describe('Software Factory Jarvis tools', () => {
   it('registers every project and task tool for discovery and English voice', async () => {
     const names = [
+      'start_issue',
       'list_projects', 'update_project', 'archive_project', 'confirm_project_archive',
       'list_tasks', 'get_task', 'list_releases', 'get_release', 'get_deployment_status',
       'create_task', 'set_task_model', 'retry_task', 'steer_task', 'pause_task', 'resume_task', 'cancel_task',
@@ -171,7 +195,7 @@ describe('Software Factory Jarvis tools', () => {
       });
     }
 
-    expect(projectStore.list).toHaveBeenCalledTimes(2);
+    expect(projectStore.list).toHaveBeenCalledTimes(3);
     expect(projectStore.update).toHaveBeenCalledWith('7', {
       name: 'Jarvis updated', description: 'The project description', default_agent: 'copilot',
     });
@@ -183,6 +207,7 @@ describe('Software Factory Jarvis tools', () => {
     expect(taskStore.get).toHaveBeenCalledWith('42', 20, 1);
     expect(taskStore.create).toHaveBeenCalledWith({
       projectId: '7',
+      issueNumber: 9,
       title: 'Fix the bug',
       request: 'Fix the bug\nMore details',
       source: 'chat',
@@ -247,9 +272,9 @@ describe('Software Factory Jarvis tools', () => {
   });
 
   it('returns refused, reasoned outcomes for missing records and invalid lifecycle actions', async () => {
-    const { app, taskStore, taskController, record } = fixture();
+    const { app, taskStore, taskController, record, projectStore } = fixture();
     vi.mocked(taskStore.get).mockResolvedValue(null);
-    vi.mocked(taskStore.create).mockResolvedValue(null);
+    vi.mocked(projectStore.list).mockResolvedValue([]);
     vi.mocked(taskController.control).mockResolvedValue({ kind: 'invalid-transition' });
 
     const missingTask = await app.inject({
@@ -474,6 +499,35 @@ describe('Software Factory Jarvis tools', () => {
     expect(taskStore.create).toHaveBeenCalledWith(expect.objectContaining({
       agent: 'copilot', modelOverride: 'gpt-5.4', reasoningOverride: 'medium',
     }));
+  });
+
+  it('starts open issues as Codex tasks and refuses closed issues', async () => {
+    const { app, taskStore, githubIssueClient } = fixture();
+    const started = await app.inject({
+      method: 'POST', url: '/tools/start_issue', headers, payload: { issue: 8 },
+    });
+    expect(started.json()).toMatchObject({
+      outcome: 'ok',
+      result: {
+        task: { id: '42', agent: 'codex' },
+        issue: { number: 8, url: 'https://github.com/DanAakesen/jarvis/issues/8' },
+      },
+    });
+    expect(taskStore.create).toHaveBeenCalledWith(expect.objectContaining({
+      issueNumber: 8, agent: 'codex', projectId: '7',
+    }));
+
+    vi.mocked(githubIssueClient.readIssue).mockResolvedValue({
+      number: 8, title: 'P10-02: Factory tasks', body: '', state: 'closed',
+      url: 'https://github.com/DanAakesen/jarvis/issues/8', labels: [], isPullRequest: false,
+    });
+    const refused = await app.inject({
+      method: 'POST', url: '/tools/start_issue', headers, payload: { issue: 8 },
+    });
+    expect(refused.json()).toMatchObject({
+      outcome: 'refused',
+      result: { refused: 'Only open GitHub issues can be started.' },
+    });
   });
 
   it('associates a chat-created task with its originating message', async () => {

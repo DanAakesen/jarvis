@@ -33,6 +33,16 @@ empty searches suggest `repo_list`/`repo_read`. No migration, new dependency,
 workspace broker or web change is needed; live model/provider acceptance is
 pending.
 
+P10-02 (8 October 2026): use GitHub issues as Jarvis's single backlog and source
+of truth, with the Software Factory/Codex as the default executor. An active
+Factory task links to at most one issue per project; a duplicate issue start
+reuses that task. Treat issue content and Dan's comments as untrusted request
+data, include the repository's own agent rules, and publish only content-free
+progress comments. `create_task` creates a linked issue; old unlinked task rows
+remain readable. Migration 0037 follows the 0036 Folio migration and L120.
+Offline fake-backed route, tool, webhook, delivery and progress tests cover
+behavior; live GitHub issue access awaits P10-01's App permissions.
+
 P9-10 (7 October 2026): store memory retrieval settings in the existing global
 `dbo.settings` store and expose their shared bounded contract through Settings.
 Keep defaults at the existing similarity thresholds (`0.35` embedding and

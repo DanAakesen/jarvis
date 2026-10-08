@@ -40,6 +40,8 @@ import type { TeamsNotificationService } from './teams/service.js';
 import type { AwayModeStore } from './core/away-mode.js';
 import type { PhoneSessionStore } from './database/phone-session-store.js';
 import type { TaskStatusNotificationStore } from './database/task-status-notification-store.js';
+import type { GitHubIssueClient } from './github/issues.js';
+import { recordIssueTaskProgress } from './factory/issues.js';
 import { WorkspaceCommandBroker } from './core/workspace-commands.js';
 import { createTaskStatusNotificationHandler } from './factory/task-status-notifications.js';
 import type { ModelDeploymentWorkflow } from './core/model-deployments.js';
@@ -59,6 +61,8 @@ export interface BuildAppOptions {
   readonly toolCallStore?: ToolCallStore;
   readonly taskStore?: TaskStore;
   readonly githubAppTokenIssuer?: GitHubAppTokenIssuer;
+  readonly githubIssueClient?: GitHubIssueClient;
+  readonly issueProgressBoardUrl?: string;
   readonly factoryBoardReader?: FactoryBoardReader;
   readonly githubRepositoryCatalog?: GitHubRepositoryCatalog;
   readonly taskController?: TaskController;
@@ -101,6 +105,7 @@ declare module 'fastify' {
     toolCallStore: ToolCallStore | null;
     taskStore: TaskStore | null;
     githubAppTokenIssuer: GitHubAppTokenIssuer | null;
+    githubIssueClient: GitHubIssueClient | null;
     factoryBoardReader: FactoryBoardReader;
     factoryBoardCache: FactoryBoardCache;
     publishFactoryBoardChange(projectId: string): void;
@@ -196,6 +201,7 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
   app.decorate('toolCallStore', options.toolCallStore ?? null);
   app.decorate('taskStore', options.taskStore ?? null);
   app.decorate('githubAppTokenIssuer', options.githubAppTokenIssuer ?? null);
+  app.decorate('githubIssueClient', options.githubIssueClient ?? null);
   app.decorate('githubRepositoryCatalog', options.githubRepositoryCatalog ?? null);
   app.decorate('taskController', options.taskController ?? null);
   app.decorate('eventHub', options.eventHub ?? createEventHub<TaskEventMessage>());
@@ -255,7 +261,27 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
       onError: () => app.log.warn('task_status_notification.failed'),
     })
     : undefined;
+  const issueProgressQueues = new Map<string, Promise<void>>();
   const unsubscribeTaskEvents = app.eventHub.subscribe((event) => {
+    const tasks = app.taskStore;
+    const projects = app.projectStore;
+    const github = app.githubIssueClient;
+    if (github && tasks && projects &&
+      (event.type === 'created' || event.type === 'pull_request_opened' || event.type === 'state_changed')) {
+      const previous = issueProgressQueues.get(event.taskId) ?? Promise.resolve();
+      const pending = previous.then(() => recordIssueTaskProgress({
+          event,
+          tasks,
+          projects,
+          github,
+          ...(options.issueProgressBoardUrl ? { boardUrl: options.issueProgressBoardUrl } : {}),
+        }))
+        .catch(() => app.log.warn('github.issue_progress_failed'));
+      issueProgressQueues.set(event.taskId, pending);
+      void pending.finally(() => {
+        if (issueProgressQueues.get(event.taskId) === pending) issueProgressQueues.delete(event.taskId);
+      });
+    }
     void (async () => {
       let away: boolean;
       try {
@@ -283,7 +309,10 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
       }
     })();
   });
-  app.addHook('onClose', async () => { unsubscribeTaskEvents(); });
+  app.addHook('onClose', async () => {
+    unsubscribeTaskEvents();
+    issueProgressQueues.clear();
+  });
   registerModules(app, options.modules ?? [
     coreModule,
     conversationModule,
