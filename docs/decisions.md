@@ -742,6 +742,15 @@ change the web app. Focused route, voice, settings-parser, and chat-prompt tests
 cover the offline behavior; live provider behavior remains unverified.
 
 
+## P9-37 (8 October 2026) — Keep voice, chat, and the backend tool catalogue aligned
+
+Treat `GET /tools` as the source catalogue for both model clients. Offline backend
+tests compare voice tool names with that endpoint, check tool identifiers in the
+shared capability instructions against the registered tools, and require plain
+object roots for the model-facing chat and voice schemas. Provider behavior
+remains unverified.
+
+
 ## 6 October 2026 — Credential health and repair (#457)
 
 P6-18 keeps the existing `renew_soon` status vocabulary and Codex renewal lease.
