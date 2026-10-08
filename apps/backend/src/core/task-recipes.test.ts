@@ -153,6 +153,9 @@ describe('task recipes', () => {
 
   it('rejects oversized, corrupted, sensitive and unknown persisted fields', () => {
     expect(validRecipe(recipe)).toBe(true);
+    expect(validRecipe({ ...recipe, name: 'Find search' })).toBe(true);
+    expect(validRecipe({ ...recipe, name: 'private token' })).toBe(false);
+    expect(recipeId({ ...draft, name: 'Find search' })).toBe(recipe.id);
     expect(validRecipe({ ...recipe, text: 'private' })).toBe(false);
     expect(validRecipe({ ...recipe, steps: [{ operation: 'click', target, text: 'private' }, { operation: 'done' }] })).toBe(false);
     expect(validRecipe({ ...recipe, steps: Array(21).fill({ operation: 'wait' }) })).toBe(false);

@@ -50,11 +50,13 @@ describe('recipe management', () => {
     expect((await app.inject({ method: 'PATCH', url: `/routines/${recipe.id}` })).statusCode).toBe(401);
     expect((await app.inject({ method: 'PATCH', url: '/routines/invalid', headers, payload: { name: 'Search' } })).statusCode).toBe(400);
     expect((await app.inject({ method: 'PATCH', url: `/routines/${recipe.id}`, headers, payload: { name: '  ' } })).statusCode).toBe(400);
+    expect((await app.inject({ method: 'PATCH', url: `/routines/${recipe.id}`, headers, payload: { name: 'private token' } })).statusCode).toBe(400);
     const rename = await app.inject({ method: 'PATCH', url: `/routines/${recipe.id}`, headers, payload: { name: 'Search' } });
     expect(rename.statusCode).toBe(200);
     expect(rename.headers['cache-control']).toBe('no-store');
     expect(rename.json()).toEqual({ updated: true });
     expect(store.rename).toHaveBeenCalledWith(recipe.id, 'Search');
+    expect(store.rename).not.toHaveBeenCalledWith(recipe.id, 'private token');
     vi.mocked(store.rename).mockResolvedValue(false);
     expect((await app.inject({ method: 'PATCH', url: `/recipes/${recipe.id}`, headers, payload: { name: 'Search' } })).statusCode).toBe(404);
     expect(store.rename).toHaveBeenCalledTimes(2);

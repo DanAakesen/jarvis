@@ -32,6 +32,7 @@ describe('SQL recipe store', () => {
     const recipe = { ...draft, id: recipeId(draft) };
     request.query.mockResolvedValue({
       recordset: [
+        { value: JSON.stringify({ ...recipe, name: 'Find search' }) },
         { value: JSON.stringify(recipe) },
         { value: 'invalid' },
         { value: JSON.stringify({ ...recipe, text: 'private' }) },
@@ -39,7 +40,7 @@ describe('SQL recipe store', () => {
       ],
       rowsAffected: [],
     });
-    expect(await store.list({ kind: 'pc', key: 'sampleapp' })).toEqual([recipe]);
+    expect(await store.list({ kind: 'pc', key: 'sampleapp' })).toEqual([{ ...recipe, name: 'Find search' }]);
     expect(request.input).toHaveBeenCalledWith('appKey', expect.anything(), 'sampleapp');
     expect(request.input).toHaveBeenCalledWith('prefix', expect.anything(), 'routine.%');
     expect(request.input).toHaveBeenCalledWith('legacyPrefix', expect.anything(), 'recipe.%');

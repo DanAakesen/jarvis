@@ -1141,7 +1141,7 @@ offline median fake step was 0.07 ms excluding page loads. Live Jev/Foundry,
 Dan's signed-in Chrome, browser approval delivery and end-to-end voice/browser
 behavior remain unverified.
 
-### Task recipes (P7-35)
+### Routines (P7-35, P9-35)
 
 The backend captures only completed `pc_act` / `browser_do` runs, including
 independently verified browser completion. `core/task-recipes.ts` stores normalized
@@ -1151,10 +1151,12 @@ generated text is regenerated for the new goal. Sensitive, value-echoing or
 unstable target labels make the run ineligible for storage.
 
 `database/recipe-store.ts` uses existing `dbo.settings` rows at scope `global`,
-key `recipe.<sha256(kind,key,goal)>`, separate from validated settings preferences.
-Recipes are capped at 100 records, 20 steps and 32 KiB each; a transaction-owned
-application lock serializes bounded upserts. No migration is needed: 0020 already
-belongs to chat steering and remains unchanged.
+key `routine.<sha256(kind,key,goal)>`, separate from validated settings preferences.
+Routines are capped at 100 records, 20 steps and 32 KiB each; a transaction-owned
+application lock serializes bounded upserts. Existing `recipe.<hash>` rows are
+read on list and migrated to the routine key on write or rename; delete removes
+either key. No migration is needed: 0020 already belongs to chat steering and
+remains unchanged.
 
 On the first fresh snapshot, Jev makes one calibrated Choice among at most
 20 recipes for the exact process name or HTTP(S) origin plus `none`. Each replay
@@ -1165,9 +1167,12 @@ also prevent saving a cross-context sequence. Confidence below 0.9 asks Dan.
 Replay still executes through the existing PC bridge policy/Windows executor,
 Chrome transport, pause switch and irreversible-only `runConfirmed` gates.
 
-Dan-only `GET /recipes` and `DELETE /recipes/:id` support the Settings section.
-The sensitive `task_recipes` list/delete tool uses the existing authenticated
-tool dispatcher and redacted audit. P5-14 `chat.latency` adds content-free
+Dan-only `GET /routines`, `PATCH /routines/:id` and `DELETE /routines/:id`
+support routine management. PATCH changes only the bounded safe display name;
+the content-derived ID and replay sequence remain stable. `/recipes` routes and
+the sensitive `task_recipes` list/delete tool remain compatibility aliases for
+one release; `task_routines` is canonical. Both tools use the authenticated
+dispatcher and redacted audit. P5-14 `chat.latency` adds content-free
 `recipe_select`, `recipe_verify`, `recipe_plan` and `recipe_run` durations.
 Offline timing fixtures compare whole runs including selection; live provider
 and Windows/Chrome timing remains unverified. Controlled `recipe_run` timings
