@@ -490,13 +490,13 @@ Goal: GitHub issues are the single backlog. The Software Factory (worker label `
 | P10-01 | [#573](https://github.com/DanAakesen/jarvis/issues/573) | Grant the GitHub App Issues write and the Issues and Issue comment events | Installation token mints with `issues: write`; webhook receives `issues` events | — | In progress |
 | P10-02 | [#574](https://github.com/DanAakesen/jarvis/issues/574) | Factory tasks are backed by GitHub issues | `tasks.issue_number`; `Jarvis` label, route or `start_issue` starts one task per issue with the `codex` agent; PR title from the issue's task ID and `Fixes #N`; progress comments on the issue | P10-01 | In progress |
 | P10-03 | [#575](https://github.com/DanAakesen/jarvis/issues/575) | Jarvis raises GitHub issues and hands them to the Factory | `create_issue` allocates the next `P11-NN`, confirms with Dan, labels the executor; code changes go through an issue | P10-02 | Not started |
-| P10-04 | [#576](https://github.com/DanAakesen/jarvis/issues/576) | Factory board columns match the GitHub Project | `GET /factory/board` groups issues as Backlog, Needs Dan, Ready, In progress, In review, Done using the `project_board.py` rules, with the Factory task overlay; UI session switches the Kanban | — | In progress |
+| P10-04 | [#576](https://github.com/DanAakesen/jarvis/issues/576) | Factory board columns match the GitHub Project | `GET /factory/board` groups issues as Backlog, Needs Dan, Ready, In progress, In review, Done using the `project_board.py` rules, with the Factory task overlay; UI session switches the Kanban | — | Complete |
 | P10-05 | [#577](https://github.com/DanAakesen/jarvis/issues/577) | Backfill issues for existing Factory tasks | Every open Factory task has a linked issue, starting with task 10 | P10-02, P10-03 | Not started |
 ### P11 — Jarvis-raised fixes
 A rolling intake phase. When Dan asks Jarvis to change its own code or a project's code, Jarvis drafts the issue, confirms it with Dan and creates it as `P11-NN` (P10-03). Rows are added here as the issues are created.
 | ID | Issue | Task | Acceptance criteria | Depends on | Status |
 | --- | --- | --- | --- | --- | --- |
-| P9-42 | [#569](https://github.com/DanAakesen/jarvis/issues/569) | Safe, retryable tool argument refusals in voice/chat, content-free validation telemetry, and repo_search aliases plus incomplete/empty-result guidance; offline checks pass, live acceptance pending | Backend | P7-45, P9-36 | In progress |
+| P9-42 | [#569](https://github.com/DanAakesen/jarvis/issues/569) | Safe, retryable tool argument refusals in voice/chat, content-free validation telemetry, and repo_search aliases plus incomplete/empty-result guidance; offline checks pass, live acceptance pending | Backend | P7-45, P9-36 | Complete |
 
 ### Out of scope for phase 1
 
