@@ -58,6 +58,17 @@ export const memorySettingsSchema: Readonly<{
   additionalProperties: false;
   properties: Readonly<Record<keyof MemorySettings, Readonly<Record<string, unknown>>>>;
 }>;
+export interface HomeLocationSettings {
+  city: string;
+  latitude: number | null;
+  longitude: number | null;
+}
+export const homeLocationSettingsSchema: Readonly<{
+  type: 'object';
+  minProperties: 1;
+  additionalProperties: false;
+  properties: Readonly<Record<keyof HomeLocationSettings, Readonly<Record<string, unknown>>>>;
+}>;
 export const researchSettingsBounds: Readonly<{
   maxSources: Readonly<{ minimum: 1; maximum: 50 }>;
   timeoutSeconds: Readonly<{ minimum: 1; maximum: 320 }>;

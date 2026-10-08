@@ -461,6 +461,41 @@ describe('settings API', () => {
     },
   );
 
+  it('persists and reloads a validated home location without a migration', async () => {
+    const { store, values } = createStore();
+    const app = fixture(store);
+    const location = { city: 'Copenhagen', latitude: 55.6761, longitude: 12.5683 };
+    const response = await app.inject({
+      method: 'PATCH', url: '/settings', headers: authorization,
+      payload: { settings: { location } },
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json().settings.location).toEqual(location);
+    expect(values).toMatchObject({
+      'location.home_city': '"Copenhagen"',
+      'location.latitude': '55.6761',
+      'location.longitude': '12.5683',
+    });
+    expect(settingsStoreKeys).toEqual(expect.arrayContaining([
+      'location.home_city', 'location.latitude', 'location.longitude',
+    ]));
+    expect((await readSettings(store)).location).toEqual(location);
+  });
+
+  it.each([
+    { latitude: 90.1 },
+    { longitude: -180.1 },
+    { city: 'Invalid\nCity' },
+  ])('rejects an invalid home location update: %o', async (location) => {
+    const { store } = createStore();
+    const app = fixture(store);
+    const response = await app.inject({
+      method: 'PATCH', url: '/settings', headers: authorization,
+      payload: { settings: { location } },
+    });
+    expect(response.statusCode).toBe(400);
+  });
+
   it('persists bounded personality preferences and supports restoring their defaults', async () => {
     const { store, values } = createStore();
     const app = fixture(store);

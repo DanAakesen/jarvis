@@ -1,12 +1,12 @@
 import { defaultAwayModeState, presenceModes } from './away-mode.js';
 import { JARVIS_REPOSITORY, projectContext } from '../factory/project-context.js';
 import {
-  isModelCatalogue, modelRoles, reasoningEfforts, researchDepths, researchSettingsBounds,
+  homeLocationSettingsSchema, isModelCatalogue, modelRoles, reasoningEfforts, researchDepths, researchSettingsBounds,
   memorySettingsBounds, memorySettingsSchema, researchSettingsSchema,
   timeoutSettingsBounds, timeoutSettingsSchema, voiceTuningSettingsBounds, voiceTuningSettingsSchema,
 } from '@jarvis/contracts';
 import type {
-  MemorySettings, ModelCatalogue, ModelRole, ReasoningEffort, ResearchSettings, TimeoutSettings,
+  HomeLocationSettings, MemorySettings, ModelCatalogue, ModelRole, ReasoningEffort, ResearchSettings, TimeoutSettings,
   VoiceTuningSettings,
 } from '@jarvis/contracts';
 import {
@@ -51,6 +51,7 @@ export interface Settings {
   research: ResearchSettings;
   timeouts: TimeoutSettings;
   memory: MemorySettings;
+  location: HomeLocationSettings;
   codex: {
     model: string;
     reasoning: string;
@@ -125,6 +126,7 @@ export const defaultSettings: Settings = {
     graphTextSimilarityThreshold: 0.12,
     automaticCapture: true,
   },
+  location: { city: '', latitude: null, longitude: null },
   codex: { model: 'default', reasoning: 'default' },
   copilot: { model: 'default' },
   roles: Object.fromEntries(modelRoles.map((role) => [role, {
@@ -215,6 +217,11 @@ const settingKeys = {
     searchTopK: 'memory.search_top_k',
     graphTextSimilarityThreshold: 'memory.graph_text_similarity_threshold',
     automaticCapture: 'memory.automatic_capture',
+  },
+  location: {
+    city: 'location.home_city',
+    latitude: 'location.latitude',
+    longitude: 'location.longitude',
   },
   codex: { model: 'codex.model', reasoning: 'codex.reasoning_effort' },
   copilot: { model: 'copilot.model' },
@@ -344,6 +351,18 @@ function validSetting(
     }
     if (key === 'automaticCapture') return typeof value === 'boolean';
   }
+  if (area === 'location') {
+    if (key === 'city') {
+      return typeof value === 'string' && value.length <= 100 && value.trim() === value &&
+        ![...value].some((character) => character.charCodeAt(0) < 0x20);
+    }
+    if (key === 'latitude') {
+      return value === null || (typeof value === 'number' && Number.isFinite(value) && value >= -90 && value <= 90);
+    }
+    if (key === 'longitude') {
+      return value === null || (typeof value === 'number' && Number.isFinite(value) && value >= -180 && value <= 180);
+    }
+  }
   if (area === 'codex') {
     if (key === 'model') return typeof value === 'string' && modelsForRole(catalogue, 'codex').includes(value);
     if (key === 'reasoning') return isOption(value, ['default', ...reasoningEfforts]);
@@ -471,6 +490,7 @@ const settingsPatchSchema = {
           properties: timeoutSettingsSchema.properties,
         },
         memory: memorySettingsSchema,
+        location: homeLocationSettingsSchema,
         codex: {
           type: 'object', minProperties: 1, additionalProperties: true,
           properties: {

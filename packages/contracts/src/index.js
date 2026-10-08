@@ -106,6 +106,26 @@ export const memorySettingsSchema = Object.freeze({
     automaticCapture: Object.freeze({ type: 'boolean' }),
   }),
 });
+export const homeLocationSettingsSchema = Object.freeze({
+  type: 'object',
+  minProperties: 1,
+  additionalProperties: false,
+  properties: Object.freeze({
+    city: Object.freeze({ type: 'string', maxLength: 100 }),
+    latitude: Object.freeze({
+      anyOf: Object.freeze([
+        Object.freeze({ type: 'number', minimum: -90, maximum: 90 }),
+        Object.freeze({ type: 'null' }),
+      ]),
+    }),
+    longitude: Object.freeze({
+      anyOf: Object.freeze([
+        Object.freeze({ type: 'number', minimum: -180, maximum: 180 }),
+        Object.freeze({ type: 'null' }),
+      ]),
+    }),
+  }),
+});
 export function isModelCatalogue(value) {
   if (!isObject(value) || !['arm', 'fallback'].includes(value.source) ||
       !Array.isArray(value.deployments) || value.deployments.length > 1_000 ||

@@ -12,6 +12,7 @@ import {
   isModelCatalogue,
   modelCapabilities,
   modelRoles,
+  homeLocationSettingsSchema,
   memorySettingsBounds,
   memorySettingsSchema,
   reasoningEfforts,
@@ -163,6 +164,19 @@ test('memory settings contracts bound retrieval, graph threshold and automatic c
     searchTopK: { type: 'integer', minimum: 1, maximum: 8 },
     graphTextSimilarityThreshold: { type: 'number', minimum: 0, maximum: 1 },
     automaticCapture: { type: 'boolean' },
+  });
+});
+
+test('home location settings contract bounds city and nullable coordinates', () => {
+  assert.deepEqual(homeLocationSettingsSchema, {
+    type: 'object',
+    minProperties: 1,
+    additionalProperties: false,
+    properties: {
+      city: { type: 'string', maxLength: 100 },
+      latitude: { anyOf: [{ type: 'number', minimum: -90, maximum: 90 }, { type: 'null' }] },
+      longitude: { anyOf: [{ type: 'number', minimum: -180, maximum: 180 }, { type: 'null' }] },
+    },
   });
 });
 
