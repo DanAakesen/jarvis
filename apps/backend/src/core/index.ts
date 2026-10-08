@@ -13,7 +13,7 @@ import { setAwayModeTool, setPresenceModeTool } from './away-mode.js';
 import { getStatusSummaryTool } from './status.js';
 import { generatedViewValidationOptions } from './generated-view-validation.js';
 import { registerWorkspaceCommandRoutes, workspaceCommandTool } from './workspace-commands.js';
-import { cancelJobTool, listJobsTool, registerJobRoutes } from './jobs.js';
+import { cancelJobTool, getJobTool, listJobsTool, registerJobRoutes } from './jobs.js';
 import { findChatReflexReplay } from './reflex.js';
 import { executePhoneTool } from '../phone/approval.js';
 import { systemStatusResponseSchema } from '../system-status.js';
@@ -49,7 +49,7 @@ function isObject(value: unknown): value is Record<string, unknown> {
 
 export const coreModule: BackendModule = {
   id: 'core',
-  tools: [setThemeTool, setJarvisModelTool, manageModelDeploymentTool, setPresenceModeTool, setAwayModeTool, getStatusSummaryTool, workspaceCommandTool, listJobsTool, cancelJobTool],
+  tools: [setThemeTool, setJarvisModelTool, manageModelDeploymentTool, setPresenceModeTool, setAwayModeTool, getStatusSummaryTool, workspaceCommandTool, listJobsTool, getJobTool, cancelJobTool],
   registerRoutes: async (app) => {
     await registerSettingsRoutes(app);
     registerModelDeploymentRoutes(app);

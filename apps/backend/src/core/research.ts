@@ -358,16 +358,7 @@ export function createHtmlResearchModule(
   const jobTimeoutMs = options.jobTimeoutMs ?? defaultJobTimeoutMs;
   const pollIntervalMs = options.pollIntervalMs ?? defaultPollIntervalMs;
   const jobs = new Map<string, ResearchJob>();
-  return {
-    id: 'html-research',
-    tools: [{
-      name: 'research',
-      description: 'Research a topic in the background and open an interactive cited HTML report in the workspace. ' +
-        'Choose quick, standard, or deep depth; omit depth to use the saved research default. ' +
-        'Set title to a short 3-6 word window title such as "Microsoft Foundry IQ"; put the full request in topic.',
-      inputSchema,
-      sensitive: true,
-      execute: async (input, request, signal) => {
+  const executeResearch = async (input: unknown, request: FastifyRequest, signal: AbortSignal, retryOf?: string) => {
         if (!isObject(input) || (input.depth !== undefined && !isResearchDepth(input.depth))) {
           throw new ToolFailure('Choose a research depth of quick, standard, or deep.');
         }
@@ -411,10 +402,11 @@ export function createHtmlResearchModule(
 
         const controller = new AbortController();
         const job: ResearchJob = { controller, promise: Promise.resolve(), done: false };
-        jobs.set(jobId, job);
         const tracker = await request.server.backgroundJobs.start(
           'research', windowTitle, searches.length + 1, () => controller.abort(), 'Starting research',
+          { retryInput: { topic, depth }, ...(retryOf ? { retryOf } : {}) },
         );
+        jobs.set(jobId, job);
         job.promise = Promise.resolve().then(async () => {
           const timeoutSignal = AbortSignal.timeout(jobTimeoutMs);
           const jobSignal = AbortSignal.any([controller.signal, timeoutSignal]);
@@ -524,9 +516,49 @@ export function createHtmlResearchModule(
             job.done = true;
           }
         }).catch(() => undefined);
-        return { jobId, message: 'Research has started. The workspace window will show progress and the completed report.' };
+        return { jobId: tracker.jobId, message: 'Research has started. The workspace window will show progress and the completed report.' };
+  };
+  return {
+    id: 'html-research',
+    tools: [
+      {
+        name: 'research',
+        description: 'Research a topic in the background and open an interactive cited HTML report in the workspace. ' +
+          'Choose quick, standard, or deep depth; omit depth to use the saved research default. ' +
+          'Set title to a short 3-6 word window title such as "Microsoft Foundry IQ"; put the full request in topic.',
+        inputSchema,
+        sensitive: true,
+        execute: (input, request, signal) => executeResearch(input, request, signal),
       },
-    }],
+      {
+        name: 'retry_job',
+        description: 'Retry a failed research job by its jobId. The saved topic and research depth are reused.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            jobId: { type: 'string', pattern: '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$' },
+          },
+          required: ['jobId'],
+          additionalProperties: false,
+        },
+        sensitive: true,
+        execute: async (input, request, signal) => {
+          if (!isObject(input) || typeof input.jobId !== 'string' ||
+              !/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/u.test(input.jobId)) {
+            throw new ToolFailure('A valid background job ID is required.');
+          }
+          const stored = await request.server.backgroundJobs.details(input.jobId);
+          if (!stored?.details.retryable || !stored.retryInput) {
+            throw new ToolRefusal('No failed research job can be retried with that ID.');
+          }
+          return executeResearch({
+            topic: stored.retryInput.topic,
+            title: stored.details.job.title,
+            depth: stored.retryInput.depth,
+          }, request, signal, input.jobId);
+        },
+      },
+    ],
     registerRoutes: async (app) => {
       app.addHook('onClose', async () => {
         for (const job of jobs.values()) job.controller.abort();

@@ -27,7 +27,9 @@ import {
   isTaskEventRecord,
   isTaskEventStreamEvent,
   isBackgroundJob,
+  isBackgroundJobDetails,
   isBackgroundJobEvent,
+  isBackgroundJobStep,
   isWebResearchResult,
   isWorkspaceCommand,
   generatedViewVersion,
@@ -468,4 +470,29 @@ test('background jobs are bounded and typed', () => {
   assert.equal(isBackgroundJob({ ...job, extra: true }), false);
   assert.equal(isBackgroundJobEvent({ type: 'job', job }), true);
   assert.equal(isBackgroundJobEvent({ type: 'job', job, more: 1 }), false);
+});
+
+test('validates bounded background job details and history steps', () => {
+  const job = {
+    jobId: '00000000-0000-4000-8000-000000000014',
+    kind: 'research',
+    title: 'Research: SQL persistence',
+    status: 'failed',
+    step: 1,
+    steps: 3,
+    detail: 'Research could not be completed.',
+    startedAt: '2026-10-07T12:00:00.000Z',
+    updatedAt: '2026-10-07T12:01:00.000Z',
+  };
+  const step = {
+    status: 'running',
+    step: 1,
+    detail: 'Searching: sources',
+    updatedAt: '2026-10-07T12:00:30.000Z',
+  };
+  assert.equal(isBackgroundJobStep(step), true);
+  assert.equal(isBackgroundJobDetails({ job, steps: [step], error: job.detail, retryable: true }), true);
+  assert.equal(isBackgroundJobDetails({ job, steps: Array(101).fill(step), retryable: true }), false);
+  assert.equal(isBackgroundJobDetails({ job, steps: [step], retryable: true, extra: true }), false);
+  assert.equal(isBackgroundJobDetails({ job: { ...job, status: 'done' }, steps: [step], retryable: true }), false);
 });

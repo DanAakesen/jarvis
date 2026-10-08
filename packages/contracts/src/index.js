@@ -702,6 +702,30 @@ export function isBackgroundJob(value) {
     isTimestamp(value.startedAt) && isTimestamp(value.updatedAt);
 }
 
+export function isBackgroundJobStep(value) {
+  return isObject(value) &&
+    Object.keys(value).every((key) => ['status', 'step', 'detail', 'viewId', 'updatedAt'].includes(key)) &&
+    backgroundJobStatuses.includes(value.status) &&
+    Number.isSafeInteger(value.step) && value.step >= 0 && value.step <= 20 &&
+    (value.detail === undefined || boundedText(value.detail, 120)) &&
+    (value.viewId === undefined || (typeof value.viewId === 'string' && viewIdPattern.test(value.viewId))) &&
+    isTimestamp(value.updatedAt);
+}
+
+export function isBackgroundJobDetails(value) {
+  return isObject(value) &&
+    Object.keys(value).every((key) => ['job', 'steps', 'error', 'resultWindow', 'retryable'].includes(key)) &&
+    isBackgroundJob(value.job) &&
+    Array.isArray(value.steps) && value.steps.length <= 100 &&
+    value.steps.every((step) => isBackgroundJobStep(step) && step.step <= value.job.steps) &&
+    (value.error === undefined || (value.job.status === 'failed' &&
+      value.error === value.job.detail && boundedText(value.error, 120))) &&
+    (value.resultWindow === undefined ||
+      (value.job.viewId === value.resultWindow && typeof value.resultWindow === 'string' && viewIdPattern.test(value.resultWindow))) &&
+    typeof value.retryable === 'boolean' &&
+    (!value.retryable || (value.job.kind === 'research' && value.job.status === 'failed'));
+}
+
 export function isBackgroundJobEvent(value) {
   return isObject(value) && Object.keys(value).length === 2 && value.type === 'job' && isBackgroundJob(value.job);
 }

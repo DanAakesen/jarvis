@@ -61,6 +61,7 @@ describe('committed SQL manifest', () => {
       '0030_foundry_usage_cost_coverage.sql',
       '0031_embedding_model_identity.sql',
       '0032_conversation_search.sql',
+      '0033_research_job_retry.sql',
     ]);
     for (const migration of migrations) await expect(readDownMigration(migration.name)).resolves.toMatchObject({ name: migration.name });
   });
@@ -93,8 +94,16 @@ describe('committed SQL manifest', () => {
       sql: expect.stringContaining('DROP COLUMN embedding_model'),
     });
   });
+  it('stores retry inputs and one retry claim per research job', async () => {
+    const migration = (await readMigrations()).find(({ name }) => name === '0033_research_job_retry.sql');
+    expect(migration?.sql).toContain('retry_input nvarchar(max) NULL');
+    expect(migration?.sql).toContain('retry_job_id nvarchar(36)');
+    await expect(readDownMigration('0033_research_job_retry.sql')).resolves.toMatchObject({
+      sql: expect.stringContaining('Research retry metadata must be retained'),
+    });
+  });
   it('indexes conversation message dates for bounded search', async () => {
-    const migration = (await readMigrations()).at(-1);
+    const migration = (await readMigrations()).find(({ name }) => name === '0032_conversation_search.sql');
     expect(migration?.sql).toContain('CREATE INDEX IX_messages_at ON dbo.messages (at DESC, id DESC)');
     await expect(readDownMigration('0032_conversation_search.sql')).resolves.toMatchObject({
       sql: expect.stringContaining('DROP INDEX IX_messages_at ON dbo.messages'),
