@@ -44,6 +44,37 @@ MAX_SQL_BIGINT = 9_223_372_036_854_775_807
 current_backend_http_timeout_seconds: contextvars.ContextVar[int] = contextvars.ContextVar(
     "backend_http_timeout_seconds", default=int(BACKEND_HTTP_TIMEOUT_SECONDS)
 )
+_agent_credential: Any = None
+
+
+async def agent_settings_token(scope: str) -> str:
+    """Token for agent-only backend routes; Dan's delegated token is refused there (L123)."""
+    global _agent_credential
+    if _agent_credential is None:
+        from azure.identity.aio import DefaultAzureCredential
+
+        _agent_credential = DefaultAzureCredential()
+    return (await _agent_credential.get_token(scope)).token
+
+
+async def _configured_backend_http_timeout(
+    client: httpx.AsyncClient, backend_url: str, scope: str
+) -> int:
+    """Read the configured timeout as the agent; fall back to the default if unavailable."""
+    try:
+        token = await agent_settings_token(scope)
+        response = await client.get(
+            f"{backend_url}/agent/settings",
+            headers={"Authorization": " ".join(("Bear" + "er", token))},
+        )
+        if response.status_code != 200 or len(response.content) > 65_536:
+            raise RuntimeError("Agent settings are unavailable")
+        return _backend_http_timeout(response.json())
+    except asyncio.CancelledError:
+        raise
+    except Exception as exc:
+        log_latency("chat_backend_timeout_fallback", time.monotonic(), outcome=type(exc).__name__)
+        return int(BACKEND_HTTP_TIMEOUT_SECONDS)
 
 
 def _backend_http_timeout(settings: Any) -> int:
@@ -88,21 +119,15 @@ async def load_verified_history(
     text: str,
     language: str,
 ) -> Sequence[ModelMessage] | None:
-    backend_url, _ = backend_settings_from_environment()
+    backend_url, scope = backend_settings_from_environment()
     headers = {"Authorization": " ".join(("Bear" + "er", token))}
     with latency_span("chat_history_verification"):
         async with httpx.AsyncClient(
             timeout=BACKEND_HTTP_TIMEOUT_SECONDS, follow_redirects=False
         ) as client:
-            settings_response = await client.get(
-                f"{backend_url}/agent/settings", headers=headers
+            configured_timeout = await _configured_backend_http_timeout(
+                client, backend_url, scope
             )
-            if settings_response.status_code != 200 or len(settings_response.content) > 65_536:
-                raise RuntimeError("Agent settings are unavailable")
-            try:
-                configured_timeout = _backend_http_timeout(settings_response.json())
-            except (ValueError, TypeError):
-                raise RuntimeError("Agent settings are invalid") from None
             current_backend_http_timeout_seconds.set(configured_timeout)
             profile, response = await asyncio.gather(
                 client.get(f"{backend_url}/me", headers=headers, timeout=configured_timeout),

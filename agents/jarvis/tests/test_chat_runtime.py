@@ -152,9 +152,10 @@ def test_steered_invocation_uses_saved_language_and_authorized_round_boundary(mo
             return None
 
         async def get(self, url, headers, params=None, **kwargs):
-            assert headers["Authorization"] == AUTHORIZATION
             if url.endswith("/agent/settings"):
+                assert headers["Authorization"] == "Bearer agent-identity-token"
                 return Response(200, {"timeouts": {"backendHttpTimeoutSeconds": 15}})
+            assert headers["Authorization"] == AUTHORIZATION
             if url.endswith("/me"):
                 return Response(200)
             if "/conversation/history" in url:
@@ -193,6 +194,7 @@ def test_steered_invocation_uses_saved_language_and_authorized_round_boundary(mo
         chat_runtime, "backend_settings_from_environment",
         lambda: ("https://backend.example", "scope"),
     )
+    monkeypatch.setattr(chat_runtime, "agent_settings_token", _agent_token)
     def create_client(**kwargs):
         client_timeouts.append(kwargs["timeout"])
         return Client()
@@ -486,6 +488,11 @@ async def _context() -> list[ModelMessage]:
     return []
 
 
+async def _agent_token(scope: str) -> str:
+    assert scope == "scope"
+    return "agent-identity-token"
+
+
 def test_load_verified_history_checks_token_and_uses_stored_context(monkeypatch) -> None:
     history = {
         "messages": [
@@ -515,9 +522,11 @@ def test_load_verified_history_checks_token_and_uses_stored_context(monkeypatch)
             return None
 
         async def get(self, url, headers, **kwargs):
-            assert headers["Authorization"] == AUTHORIZATION
             if url.endswith("/agent/settings"):
+                # Agent-only route: the hosted agent's identity, never Dan's token (L123).
+                assert headers["Authorization"] == "Bearer agent-identity-token"
                 return Response(200, {"timeouts": {"backendHttpTimeoutSeconds": 17}})
+            assert headers["Authorization"] == AUTHORIZATION
             request_timeouts.append((url, kwargs.get("timeout")))
             return Response(200, history) if url.endswith("limit=100") else Response(200)
 
@@ -525,6 +534,7 @@ def test_load_verified_history_checks_token_and_uses_stored_context(monkeypatch)
         chat_runtime, "backend_settings_from_environment",
         lambda: ("https://backend.example", "scope"),
     )
+    monkeypatch.setattr(chat_runtime, "agent_settings_token", _agent_token)
     monkeypatch.setattr(httpx, "AsyncClient", lambda **_kwargs: Client())
 
     result = asyncio.run(
@@ -599,9 +609,11 @@ def test_follow_up_keeps_cross_session_refusal_and_emits_content_free_context_te
             return None
 
         async def get(self, url, headers, **kwargs):
-            assert headers["Authorization"] == AUTHORIZATION
             if url.endswith("/agent/settings"):
+                # Agent-only route: the hosted agent's identity, never Dan's token (L123).
+                assert headers["Authorization"] == "Bearer agent-identity-token"
                 return Response(200, {"timeouts": {"backendHttpTimeoutSeconds": 17}})
+            assert headers["Authorization"] == AUTHORIZATION
             return Response(200, history) if url.endswith("limit=100") else Response(200)
 
     class Span:
@@ -631,6 +643,7 @@ def test_follow_up_keeps_cross_session_refusal_and_emits_content_free_context_te
         chat_runtime, "backend_settings_from_environment",
         lambda: ("https://backend.example", "scope"),
     )
+    monkeypatch.setattr(chat_runtime, "agent_settings_token", _agent_token)
     monkeypatch.setattr(httpx, "AsyncClient", lambda **_kwargs: Client())
     monkeypatch.setattr(chat_telemetry, "_tracer", tracer)
 
@@ -675,9 +688,11 @@ def test_load_verified_history_requests_profile_and_history_concurrently(monkeyp
             return None
 
         async def get(self, url, headers, **kwargs):
-            assert headers["Authorization"] == AUTHORIZATION
             if url.endswith("/agent/settings"):
+                # Agent-only route: the hosted agent's identity, never Dan's token (L123).
+                assert headers["Authorization"] == "Bearer agent-identity-token"
                 return Response(200, {"timeouts": {"backendHttpTimeoutSeconds": 17}})
+            assert headers["Authorization"] == AUTHORIZATION
             if url.endswith("/me"):
                 await asyncio.wait_for(history_started.wait(), timeout=1)
                 return Response(200)
@@ -688,6 +703,7 @@ def test_load_verified_history_requests_profile_and_history_concurrently(monkeyp
         chat_runtime, "backend_settings_from_environment",
         lambda: ("https://backend.example", "scope"),
     )
+    monkeypatch.setattr(chat_runtime, "agent_settings_token", _agent_token)
     monkeypatch.setattr(httpx, "AsyncClient", lambda **_kwargs: Client())
 
     assert asyncio.run(
@@ -723,8 +739,49 @@ def test_load_verified_history_rejects_a_message_that_does_not_match_storage(mon
         chat_runtime, "backend_settings_from_environment",
         lambda: ("https://backend.example", "scope"),
     )
+    monkeypatch.setattr(chat_runtime, "agent_settings_token", _agent_token)
     monkeypatch.setattr(httpx, "AsyncClient", lambda **_kwargs: Client())
 
     assert asyncio.run(
         chat_runtime.load_verified_history(TOKEN, "42", "Hello", "en")
     ) is None
+
+
+def test_history_uses_the_default_timeout_when_agent_settings_are_refused(monkeypatch) -> None:
+    class Response:
+        def __init__(self, status_code: int, data=None) -> None:
+            self.status_code = status_code
+            self.content = b"{}"
+            self._data = data or {}
+
+        def json(self):
+            return self._data
+
+    timeouts: list[int | None] = []
+
+    class Client:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_args):
+            return None
+
+        async def get(self, url, headers, **kwargs):
+            if url.endswith("/agent/settings"):
+                return Response(403)
+            timeouts.append(kwargs.get("timeout"))
+            if url.endswith("limit=100"):
+                return Response(200, {"messages": [
+                    {"id": "42", "role": "dan", "text": "Hi", "channel": "chat", "language": "en"},
+                ], "nextCursor": None})
+            return Response(200)
+
+    monkeypatch.setattr(
+        chat_runtime, "backend_settings_from_environment",
+        lambda: ("https://backend.example", "scope"),
+    )
+    monkeypatch.setattr(chat_runtime, "agent_settings_token", _agent_token)
+    monkeypatch.setattr(httpx, "AsyncClient", lambda **_kwargs: Client())
+
+    assert asyncio.run(chat_runtime.load_verified_history(TOKEN, "42", "Hi", "en")) == []
+    assert timeouts == [10, 10]
