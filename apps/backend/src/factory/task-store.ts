@@ -126,6 +126,7 @@ export type TaskModelUpdateResult =
 export interface TaskStore {
   create(input: CreateTaskInput): Promise<TaskRecord | null>;
   findActiveByIssue?(projectId: string, issueNumber: number): Promise<TaskRecord | null>;
+  linkIssueNumberIfUnlinked(taskId: string, issueNumber: number): Promise<number | null>;
   list(filters: TaskListFilters): Promise<TaskRecord[]>;
   get(id: string, eventLimit: number, eventOffset: number): Promise<TaskDetail | null>;
   updateModelConfig(id: string, config: TaskModelConfig): Promise<TaskModelUpdateResult>;

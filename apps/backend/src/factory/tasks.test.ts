@@ -78,6 +78,7 @@ function fixture(
   const store: TaskStore = {
     create: vi.fn(async () => task),
     list: vi.fn(async () => [task]),
+    linkIssueNumberIfUnlinked: vi.fn(async () => null),
     get: vi.fn(async () => detail),
     updateModelConfig: vi.fn(async () => ({ kind: 'not-found' as const })),
     getActiveRepository: vi.fn(async () => 'DanAakesen/jarvis-test-target'),

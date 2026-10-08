@@ -4,6 +4,7 @@ import type { TaskDetail, TaskRecord, TaskStore } from './task-store.js';
 import type { GitHubIssue, GitHubIssueClient } from '../github/issues.js';
 import {
   allocateP11TaskCode,
+  backfillFactoryTaskIssues,
   createJarvisIssue,
   createLinkedTaskFromPrompt,
   IssueCreationPartialError,
@@ -62,6 +63,8 @@ const issue: GitHubIssue = {
 function fixture() {
   const projects = { list: vi.fn(async () => [project]) } as unknown as ProjectStore;
   const issueTitles: string[] = [];
+  const createdIssues: { number: number; title: string }[] = [];
+  let nextIssueNumber = 9;
   const tasks = {
     create: vi.fn(async () => task),
     findActiveByIssue: vi.fn(async () => null),
@@ -77,7 +80,15 @@ function fixture() {
     listIssueTitles: vi.fn(async () => [...issueTitles]),
     createIssue: vi.fn(async (_repository: string, title: string) => {
       issueTitles.push(title);
-      return { number: 9, url: 'https://github.com/DanAakesen/jarvis/issues/9' };
+      const number = nextIssueNumber++;
+      createdIssues.push({ number, title });
+      return { number, url: `https://github.com/DanAakesen/jarvis/issues/${number}` };
+    }),
+    findIssueByTitleSuffix: vi.fn(async (_repository: string, suffix: string) => {
+      const match = createdIssues.find(({ title }) => title.endsWith(suffix));
+      return match
+        ? { number: match.number, url: `https://github.com/DanAakesen/jarvis/issues/${match.number}` }
+        : null;
     }),
     createComment: vi.fn(async () => {}),
     addLabels: vi.fn(async () => {}),
@@ -186,6 +197,77 @@ describe('Factory issue tasks', () => {
       github,
     })).rejects.toBeInstanceOf(IssueTaskCodeConflictError);
     expect(github.createIssue).not.toHaveBeenCalled();
+  });
+
+  it('backfills open unlinked tasks in ID order and recovers cleanly on a repeated run', async () => {
+    const { projects, github } = fixture();
+    const pending = [
+      { ...task, id: '11', issueNumber: null, title: 'Task eleven' },
+      { ...task, id: '10', issueNumber: null, title: 'Task ten' },
+    ];
+    const tasks = {
+      list: vi.fn(async ({ state }: { state: string }) =>
+        state === 'Ready' ? pending.filter(({ issueNumber }) => issueNumber == null) : []),
+      linkIssueNumberIfUnlinked: vi.fn(async (id: string, issueNumber: number) => {
+        const record = pending.find(({ id: taskId }) => taskId === id);
+        if (!record) return null;
+        record.issueNumber ??= issueNumber;
+        return record.issueNumber;
+      }),
+    } as unknown as TaskStore;
+
+    await expect(backfillFactoryTaskIssues({ projects, tasks, github })).resolves.toEqual([
+      { taskId: '10', status: 'linked', issueNumber: 9 },
+      { taskId: '11', status: 'linked', issueNumber: 10 },
+    ]);
+    expect(github.createIssue.mock.calls.map(([, title]) => title)).toEqual([
+      'P11-01: Task ten [Factory task 10]',
+      'P11-02: Task eleven [Factory task 11]',
+    ]);
+    expect(github.addLabels.mock.invocationCallOrder[0])
+      .toBeGreaterThan(tasks.linkIssueNumberIfUnlinked.mock.invocationCallOrder[0] ?? 0);
+
+    await expect(backfillFactoryTaskIssues({ projects, tasks, github })).resolves.toEqual([]);
+    expect(github.createIssue).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not create a backfill issue when an existing task request contains a likely secret', async () => {
+    const { projects, github } = fixture();
+    const tasks = {
+      list: vi.fn(async ({ state }: { state: string }) =>
+        state === 'Ready' ? [{ ...task, id: '10', issueNumber: null, request: 'password: real-secret-value' }] : []),
+      linkIssueNumberIfUnlinked: vi.fn(),
+    } as unknown as TaskStore;
+
+    await expect(backfillFactoryTaskIssues({ projects, tasks, github })).resolves.toEqual([
+      { taskId: '10', status: 'unsafe-content' },
+    ]);
+    expect(github.createIssue).not.toHaveBeenCalled();
+  });
+
+  it('reuses the task-marked issue after creation succeeds but the SQL link fails', async () => {
+    const { projects, github } = fixture();
+    const pending = { ...task, id: '10', issueNumber: null, title: 'Task ten' };
+    let linkAttempts = 0;
+    const tasks = {
+      list: vi.fn(async ({ state }: { state: string }) =>
+        state === 'Ready' && pending.issueNumber === null ? [pending] : []),
+      linkIssueNumberIfUnlinked: vi.fn(async (_id: string, issueNumber: number) => {
+        linkAttempts += 1;
+        if (linkAttempts === 1) return null;
+        pending.issueNumber = issueNumber;
+        return issueNumber;
+      }),
+    } as unknown as TaskStore;
+
+    await expect(backfillFactoryTaskIssues({ projects, tasks, github })).resolves.toEqual([
+      { taskId: '10', status: 'failed' },
+    ]);
+    await expect(backfillFactoryTaskIssues({ projects, tasks, github })).resolves.toEqual([
+      { taskId: '10', status: 'linked', issueNumber: 9 },
+    ]);
+    expect(github.createIssue).toHaveBeenCalledTimes(1);
+    expect(github.findIssueByTitleSuffix).toHaveBeenCalledTimes(2);
   });
 
   it('reports partial executor failures with the created issue reference', async () => {

@@ -22,6 +22,7 @@ import { repositoryTools } from './repository-tools.js';
 import { registerReleaseViewRoutes } from './release-view.js';
 import {
   createJarvisIssue,
+  backfillFactoryTaskIssues,
   IssueCreationPartialError,
   IssueDraftValidationError,
   IssueWriteUncertainError,
@@ -181,6 +182,30 @@ export const factoryModule: BackendModule = {
         }
       },
     );
+
+    app.post('/factory/tasks/backfill-issues', async (request, reply) => {
+      if (!app.taskStore || !app.projectStore || !app.githubIssueClient) {
+        return reply.code(503).send({ error: 'Issue task service unavailable' });
+      }
+      try {
+        const results = await backfillFactoryTaskIssues({
+          tasks: app.taskStore,
+          projects: app.projectStore,
+          github: app.githubIssueClient,
+        });
+        const linked = results.filter(({ status }) => status === 'linked').length;
+        const failed = results.length - linked;
+        return sendBounded(reply, {
+          processed: results.length,
+          linked,
+          failed,
+          results,
+        });
+      } catch {
+        request.log.warn('factory.issue_backfill_failed');
+        return reply.code(502).send({ error: 'Factory issue backfill could not be completed' });
+      }
+    });
 
     app.post<{ Body: CreateTaskInput }>('/factory/tasks', {
       schema: {

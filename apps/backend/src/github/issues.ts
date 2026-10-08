@@ -36,6 +36,7 @@ export interface GitHubIssueClient {
   readComments(repository: string, issue: number): Promise<readonly GitHubIssueComment[]>;
   readAgentRules(repository: string): Promise<string>;
   listIssueTitles(repository: string): Promise<readonly string[]>;
+  findIssueByTitleSuffix(repository: string, suffix: string): Promise<GitHubIssueReference | null>;
   createIssue(
     repository: string,
     title: string,
@@ -223,6 +224,36 @@ export function createGitHubIssueClient(
         if (response.length < 100) return titles;
       }
       throw new Error('GitHub issue list is too large to allocate a task code safely');
+    },
+    async findIssueByTitleSuffix(repository, suffix) {
+      if (!suffix.trim() || suffix.length > 100) throw new Error('Invalid issue title suffix');
+      const path = repositoryPath(repository);
+      const token = await tokenIssuer.issueForRepositoryRead(repository);
+      let match: GitHubIssueReference | null = null;
+      for (let page = 1; page <= maxIssueTitlePages; page += 1) {
+        const response = await request(
+          fetchImpl,
+          token,
+          `/repos/${path}/issues?state=all&per_page=100&page=${page}`,
+        );
+        if (!Array.isArray(response) || response.length > 100 ||
+            response.some((issue) => !object(issue) || typeof issue.title !== 'string' ||
+              !Number.isSafeInteger(issue.number) || (issue.number as number) < 1)) {
+          throw new Error('GitHub issue list is invalid');
+        }
+        const found = response.find((issue) => {
+          if (!object(issue)) return false;
+          return !object(issue.pull_request) && typeof issue.title === 'string' &&
+            issue.title.endsWith(suffix);
+        });
+        if (found && object(found)) {
+          if (match) throw new Error('GitHub issue title suffix is ambiguous');
+          const number = found.number as number;
+          match = { number, url: `https://github.com/${repository}/issues/${number}` };
+        }
+        if (response.length < 100) return match;
+      }
+      throw new Error('GitHub issue list is too large to find a task marker safely');
     },
     async createIssue(repository, title, body, options) {
       const path = repositoryPath(repository);

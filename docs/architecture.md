@@ -574,6 +574,15 @@ creation requests are serialized within the single configured backend replica.
 These flows are covered by offline fakes; live issue writes and the
 `issues` webhook remain pending P10-01's App permission/subscription change.
 
+P10-05 adds Dan-only `POST /factory/tasks/backfill-issues`. It visits open
+unlinked tasks in numeric task-ID order, reuses the P11 title allocation,
+labels and secret validation path, and stores the issue number in the existing
+`tasks.issue_number` column. The task ID is included in the generated title so
+a retry can recover an issue created before a failed SQL link. The route adds
+the `Jarvis` trigger label only after the SQL link commits, allowing the
+existing issue webhook to find and reuse the original task. There is no new
+migration or UI; live writes wait for P10-01 and coordinator execution.
+
 Chat-created tasks retain their originating message ID. Committed Done,
 NeedsAttention, Cancelled, and backend `pull_request_opened` events route a short
 status message with the task ID, outcome, and validated GitHub PR link to that
