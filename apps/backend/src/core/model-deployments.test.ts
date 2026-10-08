@@ -99,6 +99,14 @@ afterEach(async () => {
 });
 
 describe('Foundry model deployment manager', () => {
+  it('keeps every core tool schema a plain object at the root for Voice Live and the Responses API', () => {
+    for (const tool of coreModule.tools) {
+      const schema = tool.inputSchema as Record<string, unknown>;
+      expect(schema.type, tool.name).toBe('object');
+      for (const key of ['oneOf', 'anyOf', 'allOf', 'not', 'enum']) expect(schema, tool.name).not.toHaveProperty(key);
+    }
+  });
+
   it('writes and deletes only the configured account deployment resources via ARM', async () => {
     const fetcher = vi.fn<typeof fetch>()
       .mockResolvedValueOnce(new Response('{}', { status: 202 }))
