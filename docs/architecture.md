@@ -182,16 +182,22 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   (research today; images and HTML apps next) registers with
   `BackgroundJobRegistry` (`apps/backend/src/core/jobs.ts`). Migration 0029 stores
   each current job in `background_jobs` and every committed state/step in
-  `background_job_steps`. A non-resumable job still running at startup becomes failed
-  with `interrupted by restart`; jobs and their history are retained for 30 days.
+  `background_job_steps`; migration 0034 adds the bounded research topic/depth
+  needed for a user-requested retry. A job still running at startup becomes
+  failed with `interrupted by restart`; jobs and their history are retained
+  for 30 days.
   Every change is committed before its contract-valid `BackgroundJob` is published
   as `event: job` on `/now/events`. `GET /jobs` and Jarvis's `list_jobs` tool read
   the SQL store, so reloads and requests served by another replica see the same
   current state and result-window link. `POST /jobs/:jobId/cancel` (owner only)
   aborts locally tracked work; Jarvis can also cancel by id or title words with
-  `cancel_job`. Research progress windows are best effort, so a missed update no
-  longer stops the job, and the final report falls back to `create` when no open
-  tab still has the progress window.
+  `cancel_job`. The shared `get_job` tool returns the job, up to 100 persisted
+  transitions, a failure reason and result-window ID. `retry_job` accepts only a
+  failed research job with saved input and atomically allows one new attempt from
+  each failed attempt; it never resumes work automatically. Research progress
+  windows are best effort, so a missed update no longer stops the job, and the
+  final report falls back to `create` when no open tab still has the progress
+  window.
 - P7-27 publishes a bounded `WorkspaceSnapshot` (at most 32 open-window titles
   and IDs, including minimised windows, plus context-panel visibility) through
   owner-authenticated `POST /now/workspace/state`. The broker keeps one snapshot per
@@ -836,7 +842,7 @@ firewall port and retries after disconnect. Entra app-only identities, other
 delegated apps, and users other than Dan are rejected at the route boundary.
 
 The backend registers `pc_open`, `pc_media`, and `pc_active_window` in its
-existing tool registry. Protocol messages are bounded to 64 KiB, correlate UUID
+existing tool registry. Protocol messages are bounded to 128 KiB, correlate UUID
 command IDs, cap in-flight work, and time out after 15 seconds. Both backend
 validation and the companion's portable core bound app names and validate the
 fixed command shapes. App lookup searches the current user's and common
@@ -865,6 +871,26 @@ titles, or message content.
 The backend logs each WebSocket command's safe command name, normalized outcome
 and monotonic round-trip milliseconds as `pc_bridge.command_timing`; request
 arguments and returned data are excluded by the logger allowlist.
+
+### Clipboard tools (P9-32)
+
+The existing PC bridge tool module registers `pc_clipboard_read` and
+`pc_clipboard_write` in the shared tool registry and sends only
+`clipboard_read`/`clipboard_write` through the authenticated bridge protocol.
+Both tools require a current message ID, are marked sensitive so the generic
+tool-call audit stores neither arguments nor results, and are not reflex-safe.
+The read tool is described for use only when Dan asks in the current message;
+it does not read in the background or from earlier turns. The backend redacts
+obvious password, token, API-key, bearer-token, and private-key values before
+returning clipboard text. Clipboard text is bounded to 20 KiB of UTF-8, and the
+bridge envelope is bounded to 128 KiB to allow JSON escaping without unbounded
+messages. Clipboard reads return text only; writes replace the clipboard with
+the exact provided text (an empty string clears it). The tray's control pause
+blocks writes while read-only inspection remains available. This uses shared
+contracts and adds no route, persistence, or migration. Content is excluded
+from bridge timing logs and tool-call audit records. Offline contract, policy,
+and backend protocol tests cover bounds, redaction and audit behavior; use of
+the Windows clipboard on Dan's PC remains unverified.
 
 `pc_open` accepts repo-relative folder and file targets under `C:\Repo` and
 opens them in VS Code. The portable `RepoPathResolver` checks the requested
@@ -1275,6 +1301,17 @@ marks automatic captures separately from Dan-requested writes; the backend
 refuses marked automatic writes when capture is off, while direct requests remain
 available. Default thresholds, the vault-search result count and capture
 behavior match the existing values.
+
+P9-11 adds bounded `timeouts` settings to the existing global `dbo.settings`
+store and shared contracts; no migration or web change is needed. Defaults are
+30 seconds for ordinary tools, 320 seconds for long tools, and 10 seconds for
+agent-to-backend HTTP requests. Their respective bounds are 1–120, 30–320 and
+1–60 seconds. The existing research invocation timeout remains in `research`
+(1–320 seconds) and is also returned to the hosted agent. `/agent/settings`
+supplies the effective values; the agent validates them and applies them to tool
+calls and chat-runtime backend requests. Missing timeout fields on an older
+backend response use the bounded defaults. Timed-out tool actions are not
+automatically retried because their completion may be uncertain.
 
 ### Vault knowledge graph (P7-43)
 

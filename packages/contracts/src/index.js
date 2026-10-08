@@ -6,6 +6,20 @@ export const reasoningEfforts = Object.freeze(['none', 'minimal', 'low', 'medium
 export const modelCapabilities = Object.freeze([
   'chat', 'responses', 'realtime', 'transcription', 'embeddings', 'image',
 ]);
+export const clipboardTextMaxBytes = 20 * 1024;
+
+export function isClipboardText(value) {
+  return typeof value === 'string' && !value.includes('\0') &&
+    new TextEncoder().encode(value).byteLength <= clipboardTextMaxBytes;
+}
+
+export function isClipboardReadResult(value) {
+  return isObject(value) && Object.keys(value).length === 1 && isClipboardText(value.text);
+}
+
+export function isClipboardWriteResult(value) {
+  return isObject(value) && Object.keys(value).length === 1 && value.written === true;
+}
 
 export const voiceTuningSettingsBounds = Object.freeze({
   serverVadThreshold: Object.freeze({ minimum: 0, maximum: 1 }),
@@ -38,6 +52,27 @@ export const researchSettingsSchema = Object.freeze({
     depth: Object.freeze({ type: 'string', enum: [...researchDepths] }),
     maxSources: Object.freeze({ type: 'integer', ...researchSettingsBounds.maxSources }),
     timeoutSeconds: Object.freeze({ type: 'integer', ...researchSettingsBounds.timeoutSeconds }),
+  }),
+});
+export const timeoutSettingsBounds = Object.freeze({
+  toolTimeoutSeconds: Object.freeze({ minimum: 1, maximum: 120 }),
+  longToolTimeoutSeconds: Object.freeze({ minimum: 30, maximum: 320 }),
+  backendHttpTimeoutSeconds: Object.freeze({ minimum: 1, maximum: 60 }),
+});
+export const timeoutSettingsSchema = Object.freeze({
+  type: 'object',
+  minProperties: 1,
+  additionalProperties: false,
+  properties: Object.freeze({
+    toolTimeoutSeconds: Object.freeze({
+      type: 'integer', ...timeoutSettingsBounds.toolTimeoutSeconds,
+    }),
+    longToolTimeoutSeconds: Object.freeze({
+      type: 'integer', ...timeoutSettingsBounds.longToolTimeoutSeconds,
+    }),
+    backendHttpTimeoutSeconds: Object.freeze({
+      type: 'integer', ...timeoutSettingsBounds.backendHttpTimeoutSeconds,
+    }),
   }),
 });
 export const memorySettingsBounds = Object.freeze({
@@ -718,6 +753,30 @@ export function isBackgroundJob(value) {
     (value.detail === undefined || boundedText(value.detail, 120)) &&
     (value.viewId === undefined || (typeof value.viewId === 'string' && viewIdPattern.test(value.viewId))) &&
     isTimestamp(value.startedAt) && isTimestamp(value.updatedAt);
+}
+
+export function isBackgroundJobStep(value) {
+  return isObject(value) &&
+    Object.keys(value).every((key) => ['status', 'step', 'detail', 'viewId', 'updatedAt'].includes(key)) &&
+    backgroundJobStatuses.includes(value.status) &&
+    Number.isSafeInteger(value.step) && value.step >= 0 && value.step <= 20 &&
+    (value.detail === undefined || boundedText(value.detail, 120)) &&
+    (value.viewId === undefined || (typeof value.viewId === 'string' && viewIdPattern.test(value.viewId))) &&
+    isTimestamp(value.updatedAt);
+}
+
+export function isBackgroundJobDetails(value) {
+  return isObject(value) &&
+    Object.keys(value).every((key) => ['job', 'steps', 'error', 'resultWindow', 'retryable'].includes(key)) &&
+    isBackgroundJob(value.job) &&
+    Array.isArray(value.steps) && value.steps.length <= 100 &&
+    value.steps.every((step) => isBackgroundJobStep(step) && step.step <= value.job.steps) &&
+    (value.error === undefined || (value.job.status === 'failed' &&
+      value.error === value.job.detail && boundedText(value.error, 120))) &&
+    (value.resultWindow === undefined ||
+      (value.job.viewId === value.resultWindow && typeof value.resultWindow === 'string' && viewIdPattern.test(value.resultWindow))) &&
+    typeof value.retryable === 'boolean' &&
+    (!value.retryable || (value.job.kind === 'research' && value.job.status === 'failed'));
 }
 
 export function isBackgroundJobEvent(value) {

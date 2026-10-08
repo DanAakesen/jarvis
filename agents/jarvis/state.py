@@ -97,6 +97,10 @@ class ModelSettings:
     mode_instructions: dict[str, str] = field(default_factory=dict)
     jarvis_repository: str = "DanAakesen/jarvis"
     projects: tuple[tuple[str, str, str], ...] = ()
+    tool_timeout_seconds: int = 30
+    long_tool_timeout_seconds: int = 320
+    backend_http_timeout_seconds: int = 10
+    research_timeout_seconds: int = 305
 
     @property
     def away_mode(self) -> bool:

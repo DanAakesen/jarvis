@@ -153,7 +153,7 @@ describe('committed domain schema (groups 1-8)', () => {
       startedAt: startedAt.toISOString(),
       updatedAt: startedAt.toISOString(),
     };
-    await store.create(running);
+    await store.create(running, { topic: 'SQL persistence topic', depth: 'quick' });
     const progressed = {
       ...running,
       step: 1,
@@ -162,6 +162,17 @@ describe('committed domain schema (groups 1-8)', () => {
     };
     await expect(store.update(progressed)).resolves.toMatchObject(progressed);
     expect(await store.list()).toContainEqual(progressed);
+    await expect(store.get(jobId)).resolves.toMatchObject({
+      details: {
+        job: progressed,
+        steps: [
+          { status: 'running', step: 0, detail: 'Starting research' },
+          { status: 'running', step: 1, detail: 'Searching: migration' },
+        ],
+        retryable: false,
+      },
+      retryInput: { topic: 'SQL persistence topic', depth: 'quick' },
+    });
 
     const history = await pool.request().input('jobId', sql.NVarChar(36), jobId.toLowerCase())
       .query<{ status: string; step: number }>(`SELECT status, step FROM dbo.background_job_steps
@@ -176,6 +187,31 @@ describe('committed domain schema (groups 1-8)', () => {
       jobId, status: 'failed', detail: 'interrupted by restart',
     }));
     expect(await store.update({ ...progressed, status: 'done', step: 2, viewId: 'research-result' })).toBeNull();
+    const failed = await store.get(jobId);
+    expect(failed?.details).toMatchObject({
+      error: 'interrupted by restart',
+      retryable: true,
+    });
+    expect(failed?.details.steps.at(-1)).toMatchObject({
+      status: 'failed', step: 1, detail: 'interrupted by restart',
+    });
+    const retryCandidates = [randomUUID(), randomUUID()].map((candidateId) => ({
+      ...running,
+      jobId: candidateId,
+      status: 'running' as const,
+      step: 0,
+      detail: 'Starting research',
+      startedAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }));
+    const retryResults = await Promise.all(retryCandidates.map((candidate) =>
+      store.create(candidate, { topic: 'ignored changed topic', depth: 'deep' }, jobId)));
+    expect(retryResults.filter(Boolean)).toHaveLength(1);
+    const retriedJob = retryCandidates[retryResults.findIndex(Boolean)]!;
+    await expect(store.get(retriedJob.jobId)).resolves.toMatchObject({
+      retryInput: { topic: 'SQL persistence topic', depth: 'quick' },
+    });
+    await expect(store.get(jobId)).resolves.toMatchObject({ details: { retryable: false } });
     await pool.request().input('jobId', sql.NVarChar(36), jobId.toLowerCase()).query(`UPDATE dbo.background_jobs
       SET started_at = DATEADD(day, -31, SYSUTCDATETIME()) WHERE job_id = @jobId;`);
     expect(await store.list()).not.toContainEqual(expect.objectContaining({ jobId }));

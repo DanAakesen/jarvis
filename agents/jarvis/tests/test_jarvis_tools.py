@@ -194,6 +194,12 @@ async def test_loads_effective_model_settings_for_a_new_session() -> None:
                 "on_the_move": "Keep it brief.",
             },
         },
+        "research": {"timeoutSeconds": 280},
+        "timeouts": {
+            "toolTimeoutSeconds": 45,
+            "longToolTimeoutSeconds": 300,
+            "backendHttpTimeoutSeconds": 20,
+        },
         "jarvisRepository": "DanAakesen/jarvis",
         "projects": [
             {"id": "2", "name": "jarvis", "repo": "DanAakesen/jarvis"},
@@ -219,6 +225,12 @@ async def test_loads_effective_model_settings_for_a_new_session() -> None:
     assert settings.away_mode
     assert settings.changed_at == "2026-10-06T12:00:00.000Z"
     assert settings.mode_instructions["on_the_move"] == "Keep it brief."
+    assert (
+        settings.tool_timeout_seconds,
+        settings.long_tool_timeout_seconds,
+        settings.backend_http_timeout_seconds,
+        settings.research_timeout_seconds,
+    ) == (45, 300, 20, 280)
 
 
 async def test_resolved_chat_role_settings_override_legacy_model_fields() -> None:
@@ -252,6 +264,22 @@ async def test_resolved_chat_role_settings_override_legacy_model_fields() -> Non
         {"model": "deployment", "reasoningEffort": "unsupported"},
         {"model": "deployment", "reasoningEffort": "none", "mode": "driving"},
         {"model": "deployment", "reasoningEffort": "none", "changedAt": 42},
+        {
+            "model": "deployment", "reasoningEffort": "none",
+            "timeouts": {"toolTimeoutSeconds": 0},
+        },
+        {
+            "model": "deployment", "reasoningEffort": "none",
+            "timeouts": {"longToolTimeoutSeconds": 321},
+        },
+        {
+            "model": "deployment", "reasoningEffort": "none",
+            "timeouts": {"backendHttpTimeoutSeconds": True},
+        },
+        {
+            "model": "deployment", "reasoningEffort": "none",
+            "research": {"timeoutSeconds": 321},
+        },
         {"model": "deployment", "reasoningEffort": "none", "personality": {"tone": "unknown"}},
         {
             "model": "deployment",
@@ -341,6 +369,45 @@ async def test_calls_a_tool_with_identity_and_message_id_and_relays_the_backend_
         "result": {"id": 7, "state": "Ready"},
         "confirmation": "Done: create_task succeeded.",
     }
+
+
+@pytest.mark.parametrize(
+    ("tool", "expected_timeout"),
+    [("create_task", 45.0), ("web_research", 240.0)],
+)
+async def test_tool_calls_use_the_configured_default_or_long_timeout(
+    tool: str, expected_timeout: float
+) -> None:
+    descriptor = {**CREATE_TASK, "name": tool}
+    backend = Backend(
+        catalogue=[descriptor],
+        settings={
+            "model": "gpt-5.6-luna",
+            "reasoningEffort": "none",
+            "timeouts": {
+                "toolTimeoutSeconds": 45,
+                "longToolTimeoutSeconds": 240,
+                "backendHttpTimeoutSeconds": 20,
+            },
+        },
+    )
+    client = make_client(backend)
+    configured_timeouts: list[httpx.Timeout] = []
+    stream = client._http.stream
+
+    def record_timeout(*args, **kwargs):
+        if "timeout" in kwargs:
+            configured_timeouts.append(kwargs["timeout"])
+        return stream(*args, **kwargs)
+
+    client._http.stream = record_timeout
+    await client.model_settings()
+    await client.tools()
+
+    await client.call(tool, "{}", "42")
+
+    assert configured_timeouts[-1].read == expected_timeout
+    await client.close()
 
 
 async def test_voice_turn_passes_its_stored_transcript_item_id_to_tools() -> None:

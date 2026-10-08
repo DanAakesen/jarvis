@@ -23,6 +23,8 @@ public sealed class CommandPolicyTests
     [InlineData("window_capture", true)]
     [InlineData("click_point", true)]
     [InlineData("scroll_point", true)]
+    [InlineData("clipboard_read", false)]
+    [InlineData("clipboard_write", true)]
     public void Identifies_actions_blocked_when_control_is_paused(string command, bool expected)
     {
         Assert.Equal(expected, CommandPolicy.IsControlAction(command));
@@ -86,6 +88,9 @@ public sealed class CommandPolicyTests
     [InlineData("uia_act", """{"snapshotId":"1730aa51-f380-4df9-a345-1feb862cb1c4","action":"type_focused","text":"search for Jarvis"}""")]
     [InlineData("browser_act", """{"tabId":"tab_1","snapshotId":"1730aa51-f380-4df9-a345-1feb862cb1c4","action":"keys","keys":["Ctrl+L"],"confirmed":false,"closeIntent":false}""")]
     [InlineData("browser_act", """{"tabId":"tab_1","snapshotId":"1730aa51-f380-4df9-a345-1feb862cb1c4","action":"type_focused","text":"Jarvis"}""")]
+    [InlineData("clipboard_read", "{}")]
+    [InlineData("clipboard_write", """{"text":"text to copy"}""")]
+    [InlineData("clipboard_write", """{"text":""}""")]
     public void Accepts_allow_list_commands(string name, string arguments)
     {
         using var document = JsonDocument.Parse(arguments);
@@ -134,11 +139,43 @@ public sealed class CommandPolicyTests
     [InlineData("uia_act", """{"snapshotId":"1730aa51-f380-4df9-a345-1feb862cb1c4","action":"keys","keys":["Ctrl+P","unknown"],"confirmed":false,"closeIntent":false}""")]
     [InlineData("uia_act", """{"snapshotId":"1730aa51-f380-4df9-a345-1feb862cb1c4","action":"type_focused","text":"123456"}""")]
     [InlineData("browser_act", """{"tabId":"tab_1","snapshotId":"1730aa51-f380-4df9-a345-1feb862cb1c4","action":"keys","keys":["Alt+F4"],"confirmed":false,"closeIntent":false}""")]
+    [InlineData("clipboard_read", """{"includeHistory":true}""")]
+    [InlineData("clipboard_write", """{"text":"text","confirmed":true}""")]
+    [InlineData("clipboard_write", """{"text":"\u0000"}""")]
     public void Rejects_commands_outside_the_policy(string name, string arguments)
     {
         using var document = JsonDocument.Parse(arguments);
 
         Assert.False(CommandPolicy.IsValid(name, document.RootElement));
+    }
+
+    [Fact]
+    public void Bounds_clipboard_text_by_utf8_bytes()
+    {
+        using var exact = JsonDocument.Parse(JsonSerializer.Serialize(new { text = new string('é', 10_240) }));
+        using var oversized = JsonDocument.Parse(JsonSerializer.Serialize(new { text = new string('é', 10_241) }));
+
+        Assert.True(CommandPolicy.IsValid("clipboard_write", exact.RootElement));
+        Assert.False(CommandPolicy.IsValid("clipboard_write", oversized.RootElement));
+    }
+
+    [Fact]
+    public void Maximum_clipboard_text_fits_the_bounded_bridge_envelope_when_json_escaped()
+    {
+        const string id = "1730aa51-f380-4df9-a345-1feb862cb1c4";
+        var text = new string('\u0001', CommandPolicy.MaxClipboardTextBytes);
+        var command = JsonSerializer.SerializeToUtf8Bytes(new
+        {
+            id,
+            type = "command",
+            command = "clipboard_write",
+            arguments = new { text },
+        });
+        var response = BridgeProtocol.Success(id, new { text });
+
+        Assert.True(command.Length <= BridgeProtocol.MaxMessageBytes);
+        Assert.True(response.Length <= BridgeProtocol.MaxMessageBytes);
+        Assert.True(BridgeProtocol.TryReadCommand(command, out _));
     }
 
     [Fact]

@@ -5,6 +5,16 @@ export const reasoningEfforts: readonly ['none', 'minimal', 'low', 'medium', 'hi
 export type ReasoningEffort = typeof reasoningEfforts[number];
 export const modelCapabilities: readonly ['chat', 'responses', 'realtime', 'transcription', 'embeddings', 'image'];
 export type ModelCapability = typeof modelCapabilities[number];
+export const clipboardTextMaxBytes: 20480;
+export interface ClipboardReadResult {
+  text: string;
+}
+export interface ClipboardWriteResult {
+  written: true;
+}
+export function isClipboardText(value: unknown): value is string;
+export function isClipboardReadResult(value: unknown): value is ClipboardReadResult;
+export function isClipboardWriteResult(value: unknown): value is ClipboardWriteResult;
 export interface VoiceTuningSettings {
   serverVadThreshold: number;
   prefixPaddingMs: number;
@@ -57,6 +67,22 @@ export const researchSettingsSchema: Readonly<{
   minProperties: 1;
   additionalProperties: false;
   properties: Readonly<Record<keyof ResearchSettings, Readonly<Record<string, unknown>>>>;
+}>;
+export interface TimeoutSettings {
+  toolTimeoutSeconds: number;
+  longToolTimeoutSeconds: number;
+  backendHttpTimeoutSeconds: number;
+}
+export const timeoutSettingsBounds: Readonly<{
+  toolTimeoutSeconds: Readonly<{ minimum: 1; maximum: 120 }>;
+  longToolTimeoutSeconds: Readonly<{ minimum: 30; maximum: 320 }>;
+  backendHttpTimeoutSeconds: Readonly<{ minimum: 1; maximum: 60 }>;
+}>;
+export const timeoutSettingsSchema: Readonly<{
+  type: 'object';
+  minProperties: 1;
+  additionalProperties: false;
+  properties: Readonly<Record<keyof TimeoutSettings, Readonly<Record<string, unknown>>>>;
 }>;
 export interface ModelDeployment {
   name: string;
@@ -364,6 +390,20 @@ export interface BackgroundJob {
   startedAt: string;
   updatedAt: string;
 }
+export interface BackgroundJobStep {
+  status: BackgroundJobStatus;
+  step: number;
+  detail?: string;
+  viewId?: string;
+  updatedAt: string;
+}
+export interface BackgroundJobDetails {
+  job: BackgroundJob;
+  steps: BackgroundJobStep[];
+  error?: string;
+  resultWindow?: string;
+  retryable: boolean;
+}
 export interface BackgroundJobEvent {
   type: 'job';
   job: BackgroundJob;
@@ -371,6 +411,8 @@ export interface BackgroundJobEvent {
 export const backgroundJobKinds: readonly BackgroundJobKind[];
 export const backgroundJobStatuses: readonly BackgroundJobStatus[];
 export function isBackgroundJob(value: unknown): value is BackgroundJob;
+export function isBackgroundJobStep(value: unknown): value is BackgroundJobStep;
+export function isBackgroundJobDetails(value: unknown): value is BackgroundJobDetails;
 export function isBackgroundJobEvent(value: unknown): value is BackgroundJobEvent;
 
 export const nowSseEventNames: readonly [

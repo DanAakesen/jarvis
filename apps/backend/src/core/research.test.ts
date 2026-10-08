@@ -258,6 +258,59 @@ describe('background interactive research', () => {
     expect(artifacts[0]?.sources).toEqual([{ title: 'Source 1', url: 'https://example.com/source-1' }]);
   });
 
+  it('retries a failed research job from its stored topic once', async () => {
+    const runner = makeRunner();
+    const { app, commands } = fixture(runner);
+    const original = await app.backgroundJobs.start(
+      'research',
+      'Research: Stored retry topic',
+      3,
+      undefined,
+      'Starting research',
+      { retryInput: { topic: 'Stored original research topic', depth: 'quick' } },
+    );
+    await original.fail('Research could not be completed. Try again shortly.');
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/tools/retry_job',
+      headers: agentHeaders,
+      payload: { jobId: original.jobId },
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      outcome: 'ok',
+      result: { jobId: expect.any(String), message: expect.stringContaining('Research has started') },
+    });
+    const duplicate = await app.inject({
+      method: 'POST',
+      url: '/tools/retry_job',
+      headers: agentHeaders,
+      payload: { jobId: original.jobId },
+    });
+    expect(duplicate.json()).toMatchObject({ outcome: 'refused' });
+
+    await vi.waitFor(() => expect(runner.requests).toHaveLength(3));
+    expect(runner.requests[0]?.query).toContain('Stored original research topic');
+    expect(commands.at(-1)?.view.renderer).toBe('html-app');
+    await expect(app.backgroundJobs.details(original.jobId)).resolves.toMatchObject({
+      details: { retryable: false },
+    });
+  });
+
+  it('refuses to retry a failed job without persisted research input', async () => {
+    const { app } = fixture(makeRunner());
+    const job = await app.backgroundJobs.start('research', 'Research: No saved input', 2);
+    await job.fail('Research could not be completed.');
+    const response = await app.inject({
+      method: 'POST',
+      url: '/tools/retry_job',
+      headers: agentHeaders,
+      payload: { jobId: job.jobId },
+    });
+    expect(response.json()).toMatchObject({ outcome: 'refused' });
+  });
+
   it('uses the configured timeout for each runner invocation', async () => {
     const runner = makeRunner();
     runner.client.status = vi.fn(async () => ({

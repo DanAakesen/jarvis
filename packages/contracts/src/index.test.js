@@ -18,6 +18,8 @@ import {
   researchDepths,
   researchSettingsBounds,
   researchSettingsSchema,
+  timeoutSettingsBounds,
+  timeoutSettingsSchema,
   voiceTuningSettingsBounds,
   voiceTuningSettingsSchema,
   isGeneratedView,
@@ -29,13 +31,19 @@ import {
   isTaskEventRecord,
   isTaskEventStreamEvent,
   isBackgroundJob,
+  isBackgroundJobDetails,
   isBackgroundJobEvent,
+  isBackgroundJobStep,
   isWebResearchResult,
   isWorkspaceCommand,
   generatedViewVersion,
   nowSseEventNames,
   workspaceCommandSchema,
   webResearchResultSchema,
+  clipboardTextMaxBytes,
+  isClipboardText,
+  isClipboardReadResult,
+  isClipboardWriteResult,
 } from './index.js';
 
 const source = { id: 'factory.tasks', status: 'complete' };
@@ -46,6 +54,20 @@ const listView = (overrides = {}) => ({
   source,
   data: { items: [{ title: 'Ship the contract', details: [{ label: 'Project', value: 'Jarvis' }] }] },
   ...overrides,
+});
+
+test('clipboard contracts bound UTF-8 text and keep read/write result shapes exact', () => {
+  assert.equal(clipboardTextMaxBytes, 20 * 1024);
+  assert.equal(isClipboardText('x'.repeat(clipboardTextMaxBytes)), true);
+  assert.equal(isClipboardText('é'.repeat(clipboardTextMaxBytes / 2)), true);
+  assert.equal(isClipboardText('é'.repeat(clipboardTextMaxBytes / 2 + 1)), false);
+  assert.equal(isClipboardText(null), false);
+  assert.equal(isClipboardText('\0'), false);
+  assert.equal(isClipboardReadResult({ text: 'clipboard text' }), true);
+  assert.equal(isClipboardReadResult({ text: 'x'.repeat(clipboardTextMaxBytes + 1) }), false);
+  assert.equal(isClipboardReadResult({ text: '', extra: true }), false);
+  assert.equal(isClipboardWriteResult({ written: true }), true);
+  assert.equal(isClipboardWriteResult({ written: false }), false);
 });
 
 test('model catalogue contracts restrict roles, capabilities and reasoning efforts', () => {
@@ -98,6 +120,19 @@ test('research settings contracts bound depth, source count, and invocation time
     depth: { type: 'string', enum: ['quick', 'standard', 'deep'] },
     maxSources: { type: 'integer', minimum: 1, maximum: 50 },
     timeoutSeconds: { type: 'integer', minimum: 1, maximum: 320 },
+  });
+});
+
+test('timeout settings contracts bound tool, long-tool and backend HTTP requests', () => {
+  assert.deepEqual(timeoutSettingsBounds, {
+    toolTimeoutSeconds: { minimum: 1, maximum: 120 },
+    longToolTimeoutSeconds: { minimum: 30, maximum: 320 },
+    backendHttpTimeoutSeconds: { minimum: 1, maximum: 60 },
+  });
+  assert.deepEqual(timeoutSettingsSchema.properties, {
+    toolTimeoutSeconds: { type: 'integer', minimum: 1, maximum: 120 },
+    longToolTimeoutSeconds: { type: 'integer', minimum: 30, maximum: 320 },
+    backendHttpTimeoutSeconds: { type: 'integer', minimum: 1, maximum: 60 },
   });
 });
 
@@ -484,4 +519,29 @@ test('background jobs are bounded and typed', () => {
   assert.equal(isBackgroundJob({ ...job, extra: true }), false);
   assert.equal(isBackgroundJobEvent({ type: 'job', job }), true);
   assert.equal(isBackgroundJobEvent({ type: 'job', job, more: 1 }), false);
+});
+
+test('validates bounded background job details and history steps', () => {
+  const job = {
+    jobId: '00000000-0000-4000-8000-000000000014',
+    kind: 'research',
+    title: 'Research: SQL persistence',
+    status: 'failed',
+    step: 1,
+    steps: 3,
+    detail: 'Research could not be completed.',
+    startedAt: '2026-10-07T12:00:00.000Z',
+    updatedAt: '2026-10-07T12:01:00.000Z',
+  };
+  const step = {
+    status: 'running',
+    step: 1,
+    detail: 'Searching: sources',
+    updatedAt: '2026-10-07T12:00:30.000Z',
+  };
+  assert.equal(isBackgroundJobStep(step), true);
+  assert.equal(isBackgroundJobDetails({ job, steps: [step], error: job.detail, retryable: true }), true);
+  assert.equal(isBackgroundJobDetails({ job, steps: Array(101).fill(step), retryable: true }), false);
+  assert.equal(isBackgroundJobDetails({ job, steps: [step], retryable: true, extra: true }), false);
+  assert.equal(isBackgroundJobDetails({ job: { ...job, status: 'done' }, steps: [step], retryable: true }), false);
 });

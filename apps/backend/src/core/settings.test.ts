@@ -70,6 +70,11 @@ describe('settings API', () => {
           maxSpokenReplyTokens: 4_096,
         },
         research: { depth: 'quick', maxSources: 50, timeoutSeconds: 305 },
+        timeouts: {
+          toolTimeoutSeconds: 30,
+          longToolTimeoutSeconds: 320,
+          backendHttpTimeoutSeconds: 10,
+        },
         memory: {
           similarityThreshold: 0.35,
           searchTopK: 5,
@@ -100,6 +105,11 @@ describe('settings API', () => {
     expect(response.json().options.researchSettings).toEqual({
       maxSources: { minimum: 1, maximum: 50 },
       timeoutSeconds: { minimum: 1, maximum: 320 },
+    });
+    expect(response.json().options.timeoutSettings).toEqual({
+      toolTimeoutSeconds: { minimum: 1, maximum: 120 },
+      longToolTimeoutSeconds: { minimum: 30, maximum: 320 },
+      backendHttpTimeoutSeconds: { minimum: 1, maximum: 60 },
     });
     expect(response.json().options.memorySettings).toEqual({
       similarityThreshold: { minimum: 0, maximum: 1 },
@@ -180,6 +190,44 @@ describe('settings API', () => {
     expect(response.statusCode).toBe(400);
   });
 
+  it('persists bounded tool, long-tool, and backend HTTP timeouts', async () => {
+    const { store, values } = createStore();
+    const app = fixture(store);
+    const timeouts = {
+      toolTimeoutSeconds: 60,
+      longToolTimeoutSeconds: 300,
+      backendHttpTimeoutSeconds: 20,
+    };
+
+    const saved = await app.inject({
+      method: 'PATCH', url: '/settings', headers: authorization, payload: { settings: { timeouts } },
+    });
+
+    expect(saved.statusCode).toBe(200);
+    expect(saved.json().settings.timeouts).toEqual(timeouts);
+    expect(values).toMatchObject({
+      'timeouts.tool_timeout_seconds': '60',
+      'timeouts.long_tool_timeout_seconds': '300',
+      'timeouts.backend_http_timeout_seconds': '20',
+    });
+  });
+
+  it.each([
+    { toolTimeoutSeconds: 0 },
+    { toolTimeoutSeconds: 121 },
+    { longToolTimeoutSeconds: 29 },
+    { longToolTimeoutSeconds: 321 },
+    { backendHttpTimeoutSeconds: 0 },
+    { backendHttpTimeoutSeconds: 61 },
+    { toolTimeoutSeconds: true },
+  ])('rejects invalid timeout setting values: %j', async (timeouts) => {
+    const app = fixture(createStore().store);
+    const response = await app.inject({
+      method: 'PATCH', url: '/settings', headers: authorization, payload: { settings: { timeouts } },
+    });
+    expect(response.statusCode).toBe(400);
+  });
+
   it('serves a Dan-only model catalogue and applies the selected chat model to agent settings', async () => {
     const { store, values } = createStore();
     const app = fixture(store);
@@ -218,6 +266,8 @@ describe('settings API', () => {
       reasoningEffort: 'high',
       roles: { chat: { model: 'gpt-6-luna', reasoningEffort: 'high' } },
       memory: defaultSettings.memory,
+      research: { timeoutSeconds: 305 },
+      timeouts: defaultSettings.timeouts,
     });
   });
 
@@ -600,6 +650,12 @@ describe('settings API', () => {
     const { store } = createStore();
     await store.write({
       jarvis: { model: 'gpt-5.6-luna', reasoning: 'high' },
+      research: { timeoutSeconds: 280 },
+      timeouts: {
+        toolTimeoutSeconds: 45,
+        longToolTimeoutSeconds: 300,
+        backendHttpTimeoutSeconds: 20,
+      },
       personality: {
         tone: 'direct',
         responseStyle: 'balanced',
@@ -639,6 +695,12 @@ describe('settings API', () => {
         searchTopK: 5,
         graphTextSimilarityThreshold: 0.12,
         automaticCapture: true,
+      },
+      research: { timeoutSeconds: 280 },
+      timeouts: {
+        toolTimeoutSeconds: 45,
+        longToolTimeoutSeconds: 300,
+        backendHttpTimeoutSeconds: 20,
       },
       personality: {
         tone: 'direct',

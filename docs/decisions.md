@@ -29,6 +29,16 @@ server-side when disabled, while Dan-requested writes stay available. No
 migration or web change is needed; focused contract, settings, vault and voice
 tests cover the behavior.
 
+P9-11 (8 October 2026): store timeout controls in the existing global settings
+store and expose them through the shared contract and agent-only settings route.
+Keep defaults at 30 seconds for ordinary tools, 320 for long tools and 10 for
+agent HTTP, bounded respectively to 1–120, 30–320 and 1–60 seconds. Reuse the
+existing bounded research timeout setting and add no migration or web change.
+Use safe defaults when an older backend omits timeout fields. Do not add
+automatic retries for timed-out tool actions because completion may be
+uncertain. Contract, settings, and agent tests cover the bounds and use; live
+propagation remains unverified.
+
 P9-20 (7 October 2026): expose one owner-authenticated, cached `/status`
 snapshot using the shared contracts; reuse it in `get_status_summary`. Keep
 status probes bounded and return only allowlisted metadata, never provider
@@ -41,11 +51,19 @@ sanitized failures; production provider health and UI acceptance remain pending.
 
 P9-14 (7 October 2026): persist each background-job state and step transition in
 SQL, and publish job events only after the state transaction commits. Keep jobs and
-step history for 30 days. No current job is resumable, so startup marks running
-jobs `failed` with `interrupted by restart`; do not attempt to repeat external
-research or artifact side effects. Evidence: migration 0029 and focused lifecycle
-tests, with SQL persistence and schema coverage in Database CI. Cross-replica live
-acceptance remains unverified.
+step history for 30 days. Jobs are not resumed automatically: startup marks running
+jobs `failed` with `interrupted by restart`; do not repeat external research or
+artifact side effects without a user request. Evidence: migration 0029 and focused
+lifecycle tests, with SQL persistence and schema coverage in Database CI.
+Cross-replica live acceptance remains unverified.
+
+P9-30 (8 October 2026): expose bounded persisted job details through `get_job` and
+allow `retry_job` only for failed research jobs with saved topic and selected depth.
+Store that input for the same 30-day retention, redact it from tool-call audit
+records, and create each retry as a new job. A transaction claims at most one retry
+from a failed attempt, preventing duplicate research work across replicas.
+Evidence: migration 0034 and focused contract, retry, and store tests; live
+SQL Server and cross-replica behavior remain unverified.
 
 P9-24 (7 October 2026): search the existing conversation message store instead of
 creating a second transcript index or changing retention. Use SQL full-text search
@@ -622,6 +640,7 @@ Mistakes made so far and the rule that prevents each one.
 | **L118** | Embeddings used the project-scoped URL, which returns 404 | After #486 the vault re-index made about 4,800 `memory.embedding` calls, all `fallback`, so no vectors were stored. A probe from the backend container showed `https://<account>.services.ai.azure.com/api/projects/<project>/openai/v1/embeddings` returns 404 while `https://<account>.services.ai.azure.com/openai/v1/embeddings` returns 200 with the same managed identity. The embedder now posts to the account origin, and fallback logs carry `httpStatus` so a silent failure is diagnosable. Lesson: probe a new Foundry endpoint from the deployed identity before trusting a mocked test, and never log a fallback without its reason. |
 | **L119** | Vault backfill throttled at 20K TPM | Once embeddings worked (L118), the first backfill made 639 successful calls and 1,244 HTTP 429s in a minute: the `text-embedding-3-small` deployment had capacity 20 (20 requests per 10 s). Capacity is now 150 (GlobalStandard bills per token, quota 1,000), and background vault indexing waits out a 429 using `Retry-After` (at most 15 s, four attempts) instead of storing a null vector. Interactive memory search still fails fast. Lesson: size a background backfill against the deployment rate limit before enabling it. |
 | **L120** | SQL Server migrations: same-batch columns and column type changes | P9-23's first migration failed twice in Database CI. Each migration file runs as one batch, so an `UPDATE` or `CHECK` that references a column added earlier in the file fails to compile ("Invalid column name"); wrap those statements in `EXEC(N'...')`, as 0016, 0020 and 0021 already do. `ALTER COLUMN` also fails while a constraint or index references the column; drop and recreate them around the change, in the down script too. Lesson: read the existing migrations before writing a new one. |
+| **L121** | Clipboard reads are sensitive and turn-scoped | P9-32 adds only explicit current-message clipboard reads through the authenticated PC bridge. | Keep clipboard tools out of reflex execution, redact obvious secrets before returning read text, bound text to 20 KiB, and store only redacted metadata in the generic tool-call audit. |
 
 ## 5 October 2026 — Software Factory layout selected
 
