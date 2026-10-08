@@ -43,6 +43,8 @@ import {
   generatedViewVersion,
   nowSseEventNames,
   workspaceCommandSchema,
+  workspaceNavigationPages,
+  workspaceSettingsSections,
   webResearchResultSchema,
   clipboardTextMaxBytes,
   isClipboardText,
@@ -515,8 +517,43 @@ test('defines and validates bounded workspace commands for the approved operatio
     ...['close', 'toggle'].map((action) => ({ ...base, operation: 'context-panel', action })),
   ];
 
-  assert.equal(workspaceCommandSchema.oneOf.length, 13);
+  assert.equal(workspaceCommandSchema.type, 'object');
+  for (const key of ['oneOf', 'anyOf', 'allOf', 'not']) {
+    assert.equal(Object.hasOwn(workspaceCommandSchema, key), false, key);
+  }
   for (const command of commands) assert.equal(isWorkspaceCommand(command), true, command.operation);
+});
+
+test('validates navigation destinations, settings sections and bounded factory task IDs', () => {
+  const command = { commandId: 'navigate-1', operation: 'navigate' };
+  assert.deepEqual(workspaceNavigationPages, [
+    'home', 'factory', 'settings', 'usage', 'knowledge-graph', 'folio', 'status',
+  ]);
+  assert.deepEqual(workspaceCommandSchema.properties.page.enum, workspaceNavigationPages);
+  assert.deepEqual(workspaceCommandSchema.properties.section.enum, workspaceSettingsSections);
+  for (const page of workspaceNavigationPages) {
+    const navigation = { ...command, page };
+    assert.equal(isWorkspaceCommand(navigation), true, page);
+    assert.equal(isNowSseEvent({
+      event: 'workspace-command', data: { command: navigation, expiresAt: 1_791_379_200_000 },
+    }), true, page);
+  }
+  for (const section of workspaceSettingsSections) {
+    assert.equal(isWorkspaceCommand({ ...command, page: 'settings', section }), true, section);
+  }
+  for (const taskId of ['1', '9223372036854775807']) {
+    assert.equal(isWorkspaceCommand({ ...command, page: 'factory', taskId }), true, taskId);
+  }
+  for (const invalid of [
+    {}, { page: 'kanban' }, { page: '/settings' }, { page: 'https://example.com' },
+    { page: 'settings', section: 'unknown' }, { page: 'settings', section: null },
+    { page: 'home', section: 'voice' }, { page: 'settings', taskId: '1' },
+    { page: 'factory', section: 'voice' }, { page: 'home', viewId: 'conversation' },
+    ...['0', '01', '-1', '1/../../settings', '9223372036854775808', '9'.repeat(20), 1, null]
+      .map((taskId) => ({ page: 'factory', taskId })),
+  ]) {
+    assert.equal(isWorkspaceCommand({ ...command, ...invalid }), false, JSON.stringify(invalid));
+  }
 });
 
 test('rejects invalid workspace IDs, geometry, operations, and generated-view allowlists', () => {

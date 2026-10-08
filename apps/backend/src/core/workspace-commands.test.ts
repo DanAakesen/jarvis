@@ -4,7 +4,7 @@ import { loadConfig } from '../config.js';
 import { coreModule } from './index.js';
 import { ToolFailure, ToolRefusal } from './tool-registry.js';
 import { WorkspaceCommandBroker } from './workspace-commands.js';
-import type { WorkspaceCommand } from '@jarvis/contracts';
+import { workspaceNavigationPages, type WorkspaceCommand } from '@jarvis/contracts';
 import { executeReflexAction, reflexTargets, registerChatReflex, undoPartialReflexAction } from './reflex.js';
 
 const config = { ...loadConfig({}), logLevel: 'silent' as const };
@@ -41,6 +41,135 @@ function fixture() {
 }
 
 describe('workspace command delivery', () => {
+  it.each(workspaceNavigationPages)('delivers navigation to %s through the shared tool', async (page) => {
+    const { app, broker } = fixture();
+    const command = { commandId: `navigate-${page}`, operation: 'navigate', page };
+    const delivered: WorkspaceCommand[] = [];
+    const connection = broker.connect(ownerId, (event, data) => {
+      if (event === 'workspace-command') {
+        delivered.push(data.command);
+        broker.acknowledge(ownerId, connection.sessionId, data.command.commandId, true);
+      }
+      return true;
+    });
+    const response = await app.inject({
+      method: 'POST', url: '/tools/workspace_command', headers: agentHeaders, payload: command,
+    });
+    expect(response.json()).toMatchObject({ outcome: 'ok', result: { applied: true, ...command } });
+    expect(delivered).toEqual([command]);
+    connection.close();
+  });
+
+  it('broadcasts navigation only to owner tabs and waits for an authenticated applied acknowledgement', async () => {
+    const { app, broker } = fixture();
+    const command = { commandId: 'navigate-settings', operation: 'navigate', page: 'settings', section: 'voice' };
+    const delivered: WorkspaceCommand[] = [];
+    let onDelivery!: () => void;
+    const delivery = new Promise<void>((resolve) => { onDelivery = resolve; });
+    const connect = () => broker.connect(ownerId, (event, data) => {
+      if (event === 'workspace-command') {
+        delivered.push(data.command);
+        if (delivered.length === 2) onDelivery();
+      }
+      return true;
+    });
+    const first = connect();
+    const second = connect();
+    const otherOwner = vi.fn(() => true);
+    broker.connect('other-owner', otherOwner);
+    let settled = false;
+    const pending = app.inject({
+      method: 'POST', url: '/tools/workspace_command', headers: agentHeaders, payload: command,
+    }).then((response) => { settled = true; return response; });
+    await delivery;
+    expect(settled).toBe(false);
+    expect(delivered).toEqual([command, command]);
+    expect(otherOwner).not.toHaveBeenCalled();
+    const ack = (sessionId: string, applied: boolean, headers = userHeaders) => app.inject({
+      method: 'POST', url: `/now/workspace/commands/${command.commandId}/ack`, headers,
+      payload: { sessionId, applied, ...(applied ? {} : { reason: 'Navigation is unavailable in this tab.' }) },
+    });
+    expect((await ack(first.sessionId, true, agentHeaders)).statusCode).toBe(403);
+    expect((await ack(first.sessionId, false)).statusCode).toBe(204);
+    expect(settled).toBe(false);
+    expect((await ack(second.sessionId, true)).statusCode).toBe(204);
+    expect((await pending).json()).toMatchObject({ outcome: 'ok', result: { applied: true, ...command } });
+    const replay = await app.inject({
+      method: 'POST', url: '/tools/workspace_command',
+      headers: { ...agentHeaders, 'x-jarvis-message-id': '102' }, payload: command,
+    });
+    expect(replay.json()).toMatchObject({ outcome: 'ok' });
+    expect(delivered).toHaveLength(2);
+    const reused = await app.inject({
+      method: 'POST', url: '/tools/workspace_command', headers: agentHeaders,
+      payload: { ...command, section: 'appearance' },
+    });
+    expect(reused.json()).toMatchObject({ outcome: 'refused' });
+  });
+
+  it('reports navigation refusal without claiming the page changed', async () => {
+    const { app, broker } = fixture();
+    const command = { commandId: 'navigate-task', operation: 'navigate', page: 'factory', taskId: '42' };
+    const connection = broker.connect(ownerId, (event, data) => {
+      if (event === 'workspace-command') {
+        expect(data.command).toEqual(command);
+        broker.acknowledge(ownerId, connection.sessionId, data.command.commandId, false, 'Task no longer exists.');
+      }
+      return true;
+    });
+    const response = await app.inject({
+      method: 'POST', url: '/tools/workspace_command', headers: agentHeaders, payload: command,
+    });
+    expect(response.json()).toMatchObject({
+      outcome: 'refused', result: { refused: 'Task no longer exists.' },
+      confirmation: expect.stringContaining('Not done:'),
+    });
+    connection.close();
+    const offline = await app.inject({
+      method: 'POST', url: '/tools/workspace_command', headers: agentHeaders,
+      payload: { ...command, commandId: 'navigate-offline' },
+    });
+    expect(offline.json()).toMatchObject({
+      outcome: 'refused', result: { refused: 'No active signed-in workspace is connected.' },
+    });
+  });
+
+  it.each([
+    { operation: 'navigate' },
+    { operation: 'navigate', page: 'factory', section: 'voice' },
+    { operation: 'navigate', page: 'settings', taskId: '42' },
+    { operation: 'navigate', page: 'factory', taskId: '9223372036854775808' },
+    { operation: 'create', viewId: 'research' },
+    { operation: 'move', viewId: 'research', x: 0.1 },
+    { operation: 'layout' },
+    { operation: 'context-panel' },
+  ])('refuses incomplete or mismatched operation fields without delivery: %j', async (fields) => {
+    const { app, broker } = fixture();
+    const send = vi.fn(() => true);
+    broker.connect(ownerId, send);
+    const response = await app.inject({
+      method: 'POST', url: '/tools/workspace_command', headers: agentHeaders,
+      payload: { commandId: 'invalid-fields', ...fields },
+    });
+    expect(response.json()).toMatchObject({ outcome: 'refused' });
+    expect(send).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    { page: '/settings' }, { page: 'kanban' }, { page: 'settings', section: 'unknown' },
+    { page: 'factory', taskId: '01' },
+  ])('rejects invalid navigation field schemas before execution: %j', async (fields) => {
+    const { app, broker } = fixture();
+    const send = vi.fn(() => true);
+    broker.connect(ownerId, send);
+    const response = await app.inject({
+      method: 'POST', url: '/tools/workspace_command', headers: agentHeaders,
+      payload: { commandId: 'invalid-navigation', operation: 'navigate', ...fields },
+    });
+    expect(response.statusCode).toBe(400);
+    expect(send).not.toHaveBeenCalled();
+  });
+
   it('undoes a contradicted partial window close using the same restore contract', async () => {
     const { app, broker } = fixture();
     const commands: WorkspaceCommand[] = [];

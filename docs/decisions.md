@@ -725,6 +725,19 @@ confirmation results, and bounded settings response; do not add a migration or
 change the web app. Focused route, voice, settings-parser, and chat-prompt tests
 cover the offline behavior; live provider behavior remains unverified.
 
+## P9-40 (8 October 2026) — Backend-directed page navigation
+
+Extend the shared `workspace_command` with `navigate` rather than opening an
+external browser or generating another workspace view. Use canonical page and
+Settings-section IDs in `packages/contracts`; accept a task ID only for Factory
+and a section only for Settings. Flatten the root schema to satisfy L121 and
+keep per-operation validation in the existing type guard. Reuse the authenticated
+all-tab broker and acknowledgement routes without a migration or new channel.
+Keep aliases in the shared capability prompt so voice and chat have the same
+guidance. Backend contract, route and prompt checks pass offline; the UI session
+must implement page transitions and application/refusal reporting before this
+is a working end-to-end feature. No `apps/web` changes are part of this task.
+
 
 ## 6 October 2026 — Credential health and repair (#457)
 
