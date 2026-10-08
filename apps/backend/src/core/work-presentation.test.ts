@@ -82,7 +82,8 @@ describe('best-effort work presentation', () => {
     expect(first && 'view' in first && isGeneratedView(first.view)).toBe(true);
     if (!first || !('view' in first) || first.view.renderer !== 'code') throw new Error('Missing Code view');
     expect(first.view.data.content).toContain('&lt;script&gt;');
-    expect(first.view.data.content).not.toMatch(/private-value|<script>/u);
+    expect(first.view.data.content).not.toContain('private-value');
+    expect(first.view.data.content).not.toContain('<script>');
     expect(first.view.data.content.split('\n')).toHaveLength(400);
     expect(first.view.data.highlight).toEqual([{ from: 15, to: 414 }]);
     expect(commands.filter((command) => command.operation === 'focus')).toHaveLength(2);
