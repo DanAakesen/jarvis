@@ -20,6 +20,9 @@ export interface RoleModelSettings {
 }
 
 export interface Settings {
+  presentation: {
+    showWork: boolean;
+  };
   appearance: {
     theme: 'light' | 'dark' | 'system';
     accent?: string;
@@ -94,6 +97,7 @@ export interface SettingsStore {
 }
 
 export const defaultSettings: Settings = {
+  presentation: { showWork: true },
   appearance: { theme: 'light' },
   jarvis: { model: 'gpt-5.6-luna', reasoning: 'none' },
   personality: {
@@ -168,6 +172,7 @@ export const settingsOptions = {
 } as const;
 
 const settingKeys = {
+  presentation: { showWork: 'presentation.show_work' },
   appearance: {
     theme: 'appearance.theme',
     accent: 'appearance.accent',
@@ -270,6 +275,7 @@ function validSetting(
   value: unknown,
   catalogue: ModelCatalogue = fallbackModelCatalogue(),
 ): boolean {
+  if (area === 'presentation') return key === 'showWork' && typeof value === 'boolean';
   if (area === 'appearance') {
     if (key === 'theme') return isOption(value, settingsOptions.themes);
     if (key === 'accent' || key === 'accent-secondary' || key === 'surface-tint') {
@@ -431,6 +437,10 @@ const settingsPatchSchema = {
       minProperties: 1,
       additionalProperties: true,
       properties: {
+        presentation: {
+          type: 'object', minProperties: 1, additionalProperties: true,
+          properties: { showWork: { type: 'boolean' } },
+        },
         appearance: {
           type: 'object', minProperties: 1, additionalProperties: true,
           properties: {
@@ -967,6 +977,13 @@ export async function registerSettingsRoutes(app: import('fastify').FastifyInsta
   app.patch('/settings', {
     schema: { body: settingsPatchSchema },
     preValidation: async (request, reply) => {
+      const presentation = (request.body as {
+        settings?: { presentation?: Record<string, unknown> };
+      } | undefined)?.settings?.presentation;
+      if (presentation && typeof presentation === 'object' && !Array.isArray(presentation) &&
+          presentation.showWork !== undefined && typeof presentation.showWork !== 'boolean') {
+        return reply.code(400).send({ error: 'Invalid setting value' });
+      }
       const budget = (request.body as {
         settings?: { global?: { visionDailyBudgetUsd?: unknown } };
       } | undefined)?.settings?.global?.visionDailyBudgetUsd;
