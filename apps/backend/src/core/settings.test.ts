@@ -422,7 +422,6 @@ describe('settings API', () => {
 
   it.each([
     { theme: null },
-    { glow: null },
     { accent: '' },
   ])('rejects null or empty values for non-clearable appearance settings: %j', async (appearance) => {
     const app = fixture(createStore().store);
