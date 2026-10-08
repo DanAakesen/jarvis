@@ -10,6 +10,7 @@ import { settingsOptions } from '../core/settings.js';
 import { modelsForRole, reasoningForModel } from '../core/model-catalog.js';
 import type { ModelCatalogue } from '@jarvis/contracts';
 import { createGitHubActionsRunClient } from '../github/actions-runs.js';
+import { createLinkedTaskFromPrompt, LinkedIssueTaskCreationError, startIssueTask } from './issues.js';
 
 const idSchema = { type: 'string', pattern: '^[1-9][0-9]{0,18}$', maxLength: 19 };
 const maxSqlBigInt = 9_223_372_036_854_775_807n;
@@ -65,6 +66,11 @@ interface CreateTaskToolInput {
   reasoning?: string;
 }
 
+interface StartIssueToolInput {
+  project?: string;
+  issue: number;
+}
+
 interface SetTaskModelInput {
   taskId: string;
   agent?: string;
@@ -101,11 +107,6 @@ function assertSqlBigInt(value: string): void {
   if (!/^[1-9][0-9]{0,18}$/.test(value) || BigInt(value) > maxSqlBigInt) {
     throw new Error('Invalid identifier');
   }
-}
-
-function taskTitle(prompt: string): string {
-  const firstLine = prompt.trim().split(/\r?\n/, 1)[0]?.trim() ?? '';
-  return (firstLine || 'New task').slice(0, 200);
 }
 
 function projectSummary(project: Project) {
@@ -261,6 +262,44 @@ async function controlTask(
 }
 
 export const factoryTools: readonly JarvisTool[] = [
+  {
+    name: 'start_issue',
+    description: 'Start an open GitHub issue as a Codex Factory task in an active project.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        project: { type: 'string', minLength: 1, maxLength: 140 },
+        issue: { type: 'integer', minimum: 1, maximum: 2_147_483_647 },
+      },
+      required: ['issue'],
+      additionalProperties: false,
+    },
+    execute: async (input, request) => {
+      await currentDanMessage(request);
+      const { project, issue } = input as StartIssueToolInput;
+      const result = await startIssueTask({
+        projects: request.server.projectStore,
+        tasks: request.server.taskStore,
+        github: request.server.githubIssueClient,
+        ...(project ? { project } : {}),
+        issue,
+      }).catch(() => {
+        throw new ToolFailure('GitHub issue task service is unavailable.');
+      });
+      if (result.kind === 'project-not-found') throw new ToolRefusal('That project is not available.');
+      if (result.kind === 'issue-not-found') throw new ToolRefusal('That GitHub issue was not found.');
+      if (result.kind === 'issue-closed') throw new ToolRefusal('Only open GitHub issues can be started.');
+      if (result.kind === 'not-an-issue') throw new ToolRefusal('A pull request cannot be started as an issue.');
+      if (result.kind === 'prompt-too-large') throw new ToolRefusal('The issue and repository instructions exceed the task prompt limit.');
+      return {
+        task: { id: result.task.id, title: result.task.title, state: result.task.state, agent: result.task.agent },
+        issue: { number: issue, url: `https://github.com/${result.repository}/issues/${issue}` },
+        confirmation: result.kind === 'created'
+          ? `Started Codex task ${result.task.id} from issue #${issue}.`
+          : `Issue #${issue} already has active Factory task ${result.task.id}.`,
+      };
+    },
+  },
   {
     name: 'list_projects',
     description: 'List active Software Factory projects and their IDs for selecting a project.',
@@ -438,7 +477,7 @@ export const factoryTools: readonly JarvisTool[] = [
   },
   {
     name: 'create_task',
-    description: 'Create a Ready task in an active project from Dan’s prompt.',
+    description: 'Create a GitHub issue and a linked Ready Factory task in an active project from Dan’s prompt.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -481,18 +520,30 @@ export const factoryTools: readonly JarvisTool[] = [
         throw new ToolRefusal(`Unsupported reasoning. Specify a coding agent and use one of its valid reasoning levels: ${optionsList(reasoningOptions)}.`);
       }
       const store = requireStore(request.server.taskStore, 'Task service');
-      const task = await store.create({
+      const linked = await createLinkedTaskFromPrompt({
         projectId,
-        title: taskTitle(prompt),
-        request: prompt,
-        source: 'chat',
+        prompt,
+        projects: request.server.projectStore,
+        tasks: store,
+        github: request.server.githubIssueClient,
         originMessageId,
         ...(agent ? { agent } : {}),
         ...(model ? { modelOverride: model } : {}),
         ...(reasoning ? { reasoningOverride: reasoning } : {}),
+      }).catch((error: unknown) => {
+        if (error instanceof LinkedIssueTaskCreationError) {
+          throw new ToolFailure(`GitHub issue #${error.issue.number} was created, but its Factory task could not be queued.`);
+        }
+        throw new ToolFailure('The GitHub issue or linked Factory task could not be created.');
       });
-      if (!task) throw new ToolRefusal('Active project not found.');
-      return task;
+      if (!linked) throw new ToolRefusal('Active project not found.');
+      if ('kind' in linked) {
+        throw new ToolFailure(`GitHub issue #${linked.issue.number} was created, but its Factory task could not be queued.`);
+      }
+      return {
+        task: { id: linked.task.id, title: linked.task.title, state: linked.task.state, agent: linked.task.agent },
+        issue: linked.issue,
+      };
     },
   },
   {

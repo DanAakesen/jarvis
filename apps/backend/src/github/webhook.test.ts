@@ -5,6 +5,10 @@ import { loadConfig } from '../config.js';
 import type { BackendModule } from '../modules.js';
 import { createGithubWebhookModule } from './webhook.js';
 import type { WebhookDeliveryInput } from './webhook-delivery.js';
+import { startIssueTask } from '../factory/issues.js';
+import type { ProjectStore } from '../factory/projects.js';
+import type { TaskRecord, TaskStore } from '../factory/task-store.js';
+import type { GitHubIssueClient } from './issues.js';
 
 const secret = 'webhook-test-secret';
 const sha = 'a'.repeat(40);
@@ -34,6 +38,12 @@ function payloadFor(event: string) {
     },
   };
   if (event === 'push') return { repository, ref: 'refs/heads/main', after: sha };
+  if (event === 'issues') return {
+    repository,
+    action: 'labeled',
+    issue: { number: 42, state: 'open', title: 'P10-02: Factory tasks' },
+    label: { name: 'Codex' },
+  };
   if (event === 'deployment_status') return {
     repository,
     deployment: { id: 1_900_000_000_002, sha, environment: 'production' },
@@ -97,6 +107,58 @@ async function deliver(
 }
 
 describe('GitHub webhook receiver', () => {
+  it('forwards signed Codex issue labels for idempotent task creation', async () => {
+    const issueTask: TaskRecord = {
+      id: '42', projectId: '7', issueNumber: 42, originMessageId: null,
+      title: 'P10-02: Factory tasks', request: 'prompt', source: 'board', agent: 'codex',
+      modelOverride: null, reasoningOverride: null, state: 'Ready', activity: null, priority: 0,
+      attemptCount: 0, nextAttemptAt: null, branch: null, createdAt: timestamp,
+      startedAt: null, finishedAt: null,
+    };
+    let active: TaskRecord | null = null;
+    const taskStore = {
+      create: vi.fn(async () => { active = issueTask; return issueTask; }),
+      findActiveByIssue: vi.fn(async () => active),
+    } as unknown as TaskStore;
+    const projectStore = {
+      list: vi.fn(async () => [{
+        id: '7', name: 'Target', description: null, repo: repository.full_name,
+        default_branch: 'main', default_agent: 'copilot', policy: 'deliver_pr', merge_rules: null,
+        sandbox_size: '1x2', tech: 'node', max_parallel_tasks: 1, active: true,
+      }]),
+    } as unknown as ProjectStore;
+    const github = {
+      readIssue: vi.fn(async () => ({
+        number: 42, title: issueTask.title, body: 'Issue request', state: 'open' as const,
+        url: `https://github.com/${repository.full_name}/issues/42`, labels: ['Codex'], isPullRequest: false,
+      })),
+      readComments: vi.fn(async () => [{ author: 'DanAakesen', body: 'Please do this.' }]),
+      readAgentRules: vi.fn(async () => 'AGENTS instructions'),
+    } as unknown as GitHubIssueClient;
+    const onMapping = vi.fn(async (mapping: NonNullable<WebhookDeliveryInput['mapping']>) => {
+      if (mapping.kind === 'issue_labeled') {
+        await startIssueTask({
+          projects: projectStore, tasks: taskStore, github,
+          repository: mapping.repository, issue: mapping.number,
+        });
+      }
+    });
+    const { app, deliveries } = fixture(undefined, onMapping, (name) =>
+      name.toLowerCase() === repository.full_name.toLowerCase());
+
+    expect((await deliver(app, 'issue-label-1', 'issues')).statusCode).toBe(202);
+    expect((await deliver(app, 'issue-label-1', 'issues')).json()).toEqual({ status: 'duplicate' });
+    expect(onMapping).toHaveBeenCalledTimes(2);
+    expect(taskStore.create).toHaveBeenCalledOnce();
+    expect(taskStore.findActiveByIssue).toHaveBeenCalledTimes(2);
+    expect(github.readIssue).toHaveBeenCalledOnce();
+    expect(deliveries.get('issue-label-1')?.mapping).toMatchObject({
+      kind: 'issue_labeled',
+      repository: repository.full_name,
+      number: 42,
+    });
+  });
+
   it.each([false, true])('resolves deployment workflow identity before persistence (cancelled=%s)', async (cancelled) => {
     const readWorkflowRun = vi.fn(async () => ({ workflowId: 42, cancelled }));
     const { app, deliveries } = fixture(undefined, undefined, undefined, readWorkflowRun);

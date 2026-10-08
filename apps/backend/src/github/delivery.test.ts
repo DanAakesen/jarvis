@@ -144,6 +144,23 @@ describe('GitHub task delivery', () => {
     }));
   });
 
+  it('uses the issue task ID in the PR title and closes the linked issue', async () => {
+    const api = github();
+    const test = fixture(api.fetch);
+
+    await expect(test.handler(workspace, {
+      id: '42',
+      title: 'P10-02:   Factory tasks are backed by GitHub issues',
+      issueNumber: 574,
+    })).resolves.toEqual({ kind: 'awaiting_policy' });
+
+    const create = api.calls.find((call) => call.method === 'POST');
+    expect(JSON.parse(create?.body ?? '{}')).toMatchObject({
+      title: 'P10-02: Factory tasks are backed by GitHub issues',
+      body: expect.stringMatching(/^Closes #574\n\n/u),
+    });
+  });
+
   it.each([false, true])('evaluates project policy after releasing the completion gate (existing PR: %s)', async (existing) => {
     const api = github({ existing });
     let gateHeld = false;

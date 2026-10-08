@@ -73,7 +73,7 @@ const maxPayloadBytes = 1024 * 1024;
 const maxPublishedPayloadBytes = 4096;
 
 const taskColumns = `CAST(id AS varchar(19)) AS id, CAST(project_id AS varchar(19)) AS projectId,
-  CAST(origin_message_id AS varchar(19)) AS originMessageId, title, request, source, agent,
+  issue_number AS issueNumber, CAST(origin_message_id AS varchar(19)) AS originMessageId, title, request, source, agent,
   model_override AS modelOverride, reasoning_override AS reasoningOverride, state, activity,
   priority, attempt_count AS attemptCount, next_attempt_at AS nextAttemptAt, branch,
   created_at AS createdAt, started_at AS startedAt, finished_at AS finishedAt,
@@ -82,6 +82,7 @@ const taskColumns = `CAST(id AS varchar(19)) AS id, CAST(project_id AS varchar(1
 
 const insertedTaskColumns = `CAST(inserted.id AS varchar(19)) AS id,
   CAST(inserted.project_id AS varchar(19)) AS projectId,
+  inserted.issue_number AS issueNumber,
   CAST(inserted.origin_message_id AS varchar(19)) AS originMessageId, inserted.title, inserted.request,
   inserted.source, inserted.agent, inserted.model_override AS modelOverride,
   inserted.reasoning_override AS reasoningOverride, inserted.state, inserted.activity,
@@ -403,6 +404,8 @@ export function createTaskStore(
       if ((source !== 'board' && source !== 'chat') ||
         (source === 'chat' && originMessageId === undefined) ||
         (source === 'board' && originMessageId !== undefined) ||
+        (input.issueNumber !== undefined &&
+          (!Number.isSafeInteger(input.issueNumber) || input.issueNumber < 1 || input.issueNumber > 2_147_483_647)) ||
         (originMessageId !== undefined &&
           (!/^[1-9][0-9]{0,18}$/.test(originMessageId) || BigInt(originMessageId) > maxSqlBigInt))) {
         throw new Error('Invalid task input');
@@ -413,6 +416,7 @@ export function createTaskStore(
         await acquireSleepSwitchLock(transaction, 'Shared');
         const project = await new sql.Request(transaction)
           .input('projectId', sql.BigInt, BigInt(input.projectId))
+          .input('issueNumber', sql.Int, input.issueNumber ?? null)
           .query<{ defaultAgent: 'codex' | 'copilot' }>(
             'SELECT default_agent AS defaultAgent FROM dbo.projects WITH (UPDLOCK, HOLDLOCK) WHERE id = @projectId AND active = 1');
         const defaultAgent = project.recordset[0]?.defaultAgent;
@@ -431,15 +435,17 @@ export function createTaskStore(
           .input('reasoningOverride', sql.NVarChar(32), input.reasoningOverride ?? null)
           .input('priority', sql.Int, input.priority ?? 0)
           .query<TaskRow>(`INSERT INTO dbo.tasks
-            (project_id, origin_message_id, title, request, source, agent, model_override, reasoning_override, priority)
+            (project_id, issue_number, origin_message_id, title, request, source, agent, model_override, reasoning_override, priority)
             OUTPUT ${insertedTaskColumns}
-            VALUES (@projectId, @originMessageId, @title, @request, @source, @agent, @modelOverride, @reasoningOverride, @priority);`);
+            VALUES (@projectId, @issueNumber, @originMessageId, @title, @request, @source, @agent, @modelOverride, @reasoningOverride, @priority);`);
         const task = inserted.recordset[0];
         if (!task) throw new Error('Task insert returned no row');
         const event: RecordTaskEventInput = {
           taskId: task.id,
           type: 'created',
-          summary: source === 'chat' ? 'Task created from chat' : 'Task created from the board',
+          summary: input.issueNumber !== undefined
+            ? `Task started from GitHub issue #${input.issueNumber}`
+            : source === 'chat' ? 'Task created from chat' : 'Task created from the board',
           payload: { state: 'Ready' },
           source: 'backend',
         };
@@ -452,6 +458,16 @@ export function createTaskStore(
         await rollback(transaction);
         throw new Error('Task persistence failed');
       }
+    },
+
+    async findActiveByIssue(projectId, issueNumber) {
+      const { recordset } = await databaseReadRequest(pool)
+        .input('projectId', sql.BigInt, BigInt(projectId))
+        .input('issueNumber', sql.Int, issueNumber)
+        .query<TaskRow>(`SELECT ${taskColumns} FROM dbo.tasks
+          WHERE project_id = @projectId AND issue_number = @issueNumber
+            AND state <> N'Done' AND state <> N'Cancelled';`);
+      return recordset[0] ? toTask(recordset[0]) : null;
     },
 
     async updateModelConfig(id: string, config: TaskModelConfig): Promise<TaskModelUpdateResult> {

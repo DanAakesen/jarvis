@@ -10,6 +10,7 @@ const acceptedEvents = new Set([
   'workflow_run',
   'deployment_status',
   'push',
+  'issues',
 ]);
 
 interface WebhookOptions {

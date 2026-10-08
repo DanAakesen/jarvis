@@ -66,7 +66,8 @@ Status as of 8 October 2026.
 | --- | --- | --- | --- | --- | --- |
 | Task board | See tasks in columns by state with live updates; filter and search | Screen | Task view | Built | P1-08 |
 | Factory release bar and task lens | Approved task-board composition with selected-project release/commit context and a closable right task-details pane; reuse existing controls and source data | Screen | Factory task view; contextual right panel | Built offline; live integrations unverified | P8-34 |
-| Create task | Create a task (project, agent, text, optional model/reasoning) | Both | Task view; by voice once P4-10 lands | Built (screen) | P1-04, P1-08, P4-10 |
+| Create task | Create a GitHub issue and linked task (project, agent, text, optional model/reasoning) | Both | Task view; by voice once P4-10 lands | Backend implemented offline; UI issue flow pending | P1-04, P1-08, P4-10, P10-02 |
+| Start issue | Start an open issue as a Codex task from the `Codex` label, authenticated endpoint, or `start_issue` tool; reuse the active task for duplicate starts | Background; voice/chat | — | Built offline; live issue permissions pending P10-01 | P10-02 |
 | Task detail | See header, full event timeline, sandbox sessions, disk readings, usage | Screen | Task detail | Built | P1-09 |
 | Task controls | Steer, pause, resume, cancel, and continue after a completed turn's session expires | Both | Board, task detail; by voice once P4-10 lands | Built (screen) | P2-07, P2-14, P4-10 |
 | Retry eligible task start | Retry a failed start only when no sandbox work began; use Recover for tasks with sandbox history | Voice/chat | — | Implemented offline; live backend acceptance pending | P9-29 |
@@ -90,7 +91,7 @@ Status as of 8 October 2026.
 | All repositories | See every repository and "Manage with Jarvis" | Both | Projects | In progress | P3-13 |
 | New project by voice | Give a name and description; Jarvis creates and scaffolds the repo from the templates | Voice/chat | — | In progress | P3-12 |
 | New projects defaults | Owner, visibility, templates, agent, policy, limits for new projects | Screen | Settings | Built | P3-11 |
-| Webhook receiver | Verify GitHub signatures; persist mapped events only for active managed repositories, acknowledging unsupported or untracked events without SQL | Background | — | Built offline; live webhook setup pending | P3-03, P5-13 |
+| Webhook receiver | Verify GitHub signatures; persist mapped events only for active managed repositories, including `Codex`-labeled issues, acknowledging unsupported or untracked events without SQL | Background | — | Built offline; live webhook setup pending | P3-03, P5-13, P10-02 |
 | PR, run, release and deploy records | Webhook events stored as pull requests, workflow runs, releases, deployments | Background | — | Built (live webhook setup pending) | P3-04 |
 | Checks loop | A failed task-PR check is stored in private Blob and sent to the same task; bounded repairs move to Needs attention when exhausted | Background | Task detail | Built | P3-05 |
 | Project policy and merge | On task completion, open or reuse an App-backed PR only when the task branch is ahead of the default branch; record refusals as Needs attention, then stop at a verified green PR (or a no-CI PR after a two-minute grace period) or squash-merge via the GitHub App when checks, branch freshness and protection rules pass | Background | Project settings; task detail | Built offline with fake GitHub coverage; coordinator live test-repository acceptance pending | P3-06, P3-14, P6-16 |

@@ -433,7 +433,10 @@ when projects are created, renamed, or archived. Signed unsupported and
 untracked events are acknowledged as ignored without SQL. Tracked mappings and
 the delivery ID are committed together in one serializable transaction; duplicate
 deliveries cannot replay state writes. Only delivery metadata and allowlisted
-mapping fields are stored; P3-04 and P3-07 update project records.
+mapping fields are stored; P3-04 and P3-07 update project records. The `issues`
+event maps only a `labeled` action for the `Codex` label on a tracked repository;
+the Factory fetches the issue and Dan's comments through the existing
+repository-scoped GitHub App token issuer before creating a task.
 `KEY_VAULT_URI` is supplied by Bicep, and the backend managed identity reads and
 caches the secret after its first successful Key Vault lookup. Missing Key Vault
 configuration or secret fails webhook requests with 503, not an unsigned fallback.
@@ -464,6 +467,18 @@ state events atomically. Completion can reach Done only through a trusted call t
 confirms completion. The browser and hosted agent service identities do not receive
 a task-state bypass. Responses are capped at 1 MiB, and event payloads above 4 KiB
 are omitted with an explicit truncation flag.
+
+Migration `0036_task_github_issues` adds nullable `tasks.issue_number` and a
+filtered unique index that permits one active task per project and issue while
+retaining old unlinked rows. `POST /factory/issues/:number/start` is available
+only to Dan; the shared `start_issue` tool accepts an optional active project and
+defaults to Codex. `create_task` creates a GitHub issue before queuing its linked
+task. Issue title, body and Dan-authored comments are encoded as untrusted JSON
+in the task prompt alongside the repository's root `AGENTS.md`. Task events
+publish content-free started, PR, attention, done and cancelled comments to the
+issue; cancellation also removes the `Codex` label. PRs use the issue's task ID
+in their title and include `Closes #N`. Offline fake-backed tests cover these
+flows; live issue reads/writes await the P10-01 GitHub App permission change.
 
 Chat-created tasks retain their originating message ID. Committed Done,
 NeedsAttention, Cancelled, and backend `pull_request_opened` events route a short
@@ -2068,7 +2083,7 @@ Azure sign-in from GitHub Actions uses OpenID Connect and stores no secret. The 
 
 ### GitHub App
 
-[`github-app-manifest.json`](github-app-manifest.json) prepares a private App with contents and pull-request write access, and issues, commit statuses, checks, Actions, environments and deployments read access. It subscribes to `check_run`, `deployment_status`, `pull_request`, `push`, and `workflow_run`. The permission set is limited to the operations in P3-02, P3-03 and P7-45; repository metadata read is GitHub's required baseline.
+[`github-app-manifest.json`](github-app-manifest.json) prepares a private App with contents and pull-request write access, and issues, commit statuses, checks, Actions, environments and deployments read access. It subscribes to `check_run`, `deployment_status`, `pull_request`, `push`, and `workflow_run`. The permission set is limited to the operations in P3-02, P3-03 and P7-45; repository metadata read is GitHub's required baseline. P10-02 adds issue operations and the `issues` webhook handler; P10-01 must grant Issues write and enable the `issues` subscription before these paths work live.
 
 The backend reads `github-app-private-key` from Key Vault with its managed identity
 and uses the configured `GITHUB_APP_ID` to mint one-hour installation tokens

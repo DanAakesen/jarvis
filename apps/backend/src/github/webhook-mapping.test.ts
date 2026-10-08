@@ -6,6 +6,27 @@ const repository = { full_name: 'DanAakesen/jarvis-test-target' };
 const timestamp = '2026-10-04T12:00:00.000Z';
 
 describe('GitHub webhook mapping', () => {
+  it('maps only issues labeled Codex to an allowlisted start event', () => {
+    const payload = {
+      repository,
+      action: 'labeled',
+      issue: { number: 42, title: 'not persisted', body: 'not persisted' },
+      label: { name: 'Codex' },
+    };
+    expect(mapGithubWebhook('issues', payload)).toEqual({
+      kind: 'issue_labeled',
+      repository: repository.full_name,
+      number: 42,
+      label: 'Codex',
+    });
+    expect(mapGithubWebhook('issues', { ...payload, action: 'unlabeled' })).toBeUndefined();
+    expect(mapGithubWebhook('issues', { ...payload, label: { name: 'Copilot' } })).toBeUndefined();
+    expect(mapGithubWebhook('issues', {
+      ...payload,
+      issue: { number: 42, pull_request: { url: 'https://api.github.com/repos/x/y/pulls/42' } },
+    })).toBeUndefined();
+  });
+
   it('copies only the allowlisted pull request fields', () => {
     expect(mapGithubWebhook('pull_request', {
       repository,
