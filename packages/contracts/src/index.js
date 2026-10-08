@@ -622,7 +622,7 @@ function validSource(source) {
   if (!isObject(source) || ![
     'now', 'factory.tasks', 'factory.projects', 'usage', 'image_generation', 'html_generation', 'research', 'knowledge_graph',
   ].includes(source.id) ||
-    !['complete', 'partial', 'unavailable'].includes(source.status) ||
+    !['running', 'complete', 'partial', 'unavailable'].includes(source.status) ||
     Object.keys(source).some((key) => !['id', 'status', 'updatedAt', 'reason', 'page'].includes(key))) return false;
   if (source.updatedAt !== undefined && (typeof source.updatedAt !== 'string' || Number.isNaN(Date.parse(source.updatedAt)))) return false;
   if (source.reason !== undefined && !boundedString(source.reason, 500)) return false;

@@ -639,8 +639,9 @@ test('rejects malformed activity and any extra payload that could carry private 
   }), false);
 });
 
-test('accepts bounded declarative views from complete, partial and unavailable sources', () => {
+test('accepts bounded declarative views from running, complete, partial and unavailable sources', () => {
   assert.equal(isGeneratedView(listView()), true);
+  assert.equal(isGeneratedView(listView({ source: { id: 'research', status: 'running' } })), true);
   assert.equal(isGeneratedView(listView({
     source: { id: 'factory.tasks', status: 'partial', reason: 'More tasks are available.', page: {
       limit: 50, offset: 50, total: 140, nextOffset: 100,
