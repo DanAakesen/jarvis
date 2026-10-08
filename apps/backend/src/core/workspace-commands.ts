@@ -365,7 +365,7 @@ export function isWorkspaceReflexOperation(args: Readonly<Record<string, unknown
 
 export const workspaceCommandTool: BackendModule['tools'][number] = {
   name: 'workspace_command',
-  description: 'Navigate Dan’s visible shell page (home, factory board or task, settings section, usage, knowledge-graph, folio, status), create, update, show, close, minimise, restore, focus, move, resize, or arrange a temporary workspace view, or change its context panel. Supply a unique commandId. Navigation section is settings-only; taskId is factory-only. Success requires a tab to acknowledge applying the command.',
+  description: 'Navigate Dan’s visible shell page (home, factory board or task/issue, settings section, usage, knowledge, folio, status), create, update, show, close, minimise, restore, focus, move, resize, or arrange a temporary workspace view, or change its context panel. Supply a unique commandId. Navigation section is settings-only; taskId and positive integer issueNumber are factory-only. Success requires a tab to acknowledge applying the command; relay its refusal reason for missing tasks/issues or unavailable pages.',
   inputSchema: workspaceCommandSchema,
   sensitive: true,
   async execute(input, request, signal) {

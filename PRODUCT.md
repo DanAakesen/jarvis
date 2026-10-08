@@ -140,7 +140,7 @@ Dan never fills in a project form. He gives Jarvis, by voice or chat, a project 
 ### Settings
 
 P9-40 lets Dan ask Jarvis by voice or chat to switch the visible page: Jarvis
-home, the Software Factory Kanban board or a specific task, Settings (including
+home, the Software Factory Kanban board or a specific task/issue, Settings (including
 named sections), Usage, the knowledge graph, Folio or Status. “Kanban”, “board”,
 “factory” and “tasks” select the Factory board; “go home” and “back to Jarvis”
 select home. Navigation is reversible and needs no confirmation. The backend
@@ -148,6 +148,9 @@ delivers it to all open signed-in tabs through the existing workspace broker
 and reports success only after an applied acknowledgement; refusals and failures
 remain visible. The navigation contract and backend are built offline; shell
 routing, the usual page transition and live acceptance remain the UI session's work.
+Factory task navigation opens the task window over the board and focuses its
+card; issue-number navigation focuses that issue's card. The UI refuses missing
+tasks/issues and Folio/Status until those pages exist, returning a reason.
 
 Global defaults on the settings page; a task can override the coding-agent model and reasoning. A changed setting applies to new sessions and tasks, never to running ones. Only models available in the Foundry account or Dan's subscriptions are offered. Light, dark, or system appearance and the optional voice-start window preference are persisted; system appearance follows the OS without replacing or restarting the live Jarvis room. Generated views and window arrangement remain temporary.
 

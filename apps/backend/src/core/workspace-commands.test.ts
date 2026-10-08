@@ -107,13 +107,18 @@ describe('workspace command delivery', () => {
     expect(reused.json()).toMatchObject({ outcome: 'refused' });
   });
 
-  it('reports navigation refusal without claiming the page changed', async () => {
+  it.each([
+    { page: 'factory', taskId: '42', reason: 'Task no longer exists.' },
+    { page: 'factory', issueNumber: 567, reason: 'Issue card was not found.' },
+    { page: 'folio', reason: 'Folio is not available yet.' },
+    { page: 'status', reason: 'Status is not available yet.' },
+  ])('reports UI navigation refusal with its reason: %j', async ({ reason, ...destination }) => {
     const { app, broker } = fixture();
-    const command = { commandId: 'navigate-task', operation: 'navigate', page: 'factory', taskId: '42' };
+    const command = { commandId: 'navigate-refused', operation: 'navigate', ...destination };
     const connection = broker.connect(ownerId, (event, data) => {
       if (event === 'workspace-command') {
         expect(data.command).toEqual(command);
-        broker.acknowledge(ownerId, connection.sessionId, data.command.commandId, false, 'Task no longer exists.');
+        broker.acknowledge(ownerId, connection.sessionId, data.command.commandId, false, reason);
       }
       return true;
     });
@@ -121,7 +126,7 @@ describe('workspace command delivery', () => {
       method: 'POST', url: '/tools/workspace_command', headers: agentHeaders, payload: command,
     });
     expect(response.json()).toMatchObject({
-      outcome: 'refused', result: { refused: 'Task no longer exists.' },
+      outcome: 'refused', result: { refused: reason },
       confirmation: expect.stringContaining('Not done:'),
     });
     connection.close();
@@ -134,10 +139,38 @@ describe('workspace command delivery', () => {
     });
   });
 
+  it.each([567, '567'])('delivers normalized Factory issue navigation (%s) and waits for the tab outcome', async (issueNumber) => {
+    const { app, broker } = fixture();
+    const command = { commandId: 'navigate-issue', operation: 'navigate', page: 'factory', issueNumber: 567 };
+    let onDelivery!: () => void;
+    const delivery = new Promise<void>((resolve) => { onDelivery = resolve; });
+    const connection = broker.connect(ownerId, (event, data) => {
+      if (event === 'workspace-command') {
+        expect(data.command).toEqual(command);
+        onDelivery();
+      }
+      return true;
+    });
+    let settled = false;
+    const pending = app.inject({
+      method: 'POST', url: '/tools/workspace_command', headers: agentHeaders, payload: { ...command, issueNumber },
+    }).then((response) => { settled = true; return response; });
+    await delivery;
+    expect(settled).toBe(false);
+    const ack = await app.inject({
+      method: 'POST', url: `/now/workspace/commands/${command.commandId}/ack`, headers: userHeaders,
+      payload: { sessionId: connection.sessionId, applied: true },
+    });
+    expect(ack.statusCode).toBe(204);
+    expect((await pending).json()).toMatchObject({ outcome: 'ok', result: { applied: true, ...command } });
+    connection.close();
+  });
+
   it.each([
     { operation: 'navigate' },
     { operation: 'navigate', page: 'factory', section: 'voice' },
     { operation: 'navigate', page: 'settings', taskId: '42' },
+    { operation: 'navigate', page: 'settings', issueNumber: 567 },
     { operation: 'navigate', page: 'factory', taskId: '9223372036854775808' },
     { operation: 'create', viewId: 'research' },
     { operation: 'move', viewId: 'research', x: 0.1 },
@@ -157,7 +190,10 @@ describe('workspace command delivery', () => {
 
   it.each([
     { page: '/settings' }, { page: 'kanban' }, { page: 'settings', section: 'unknown' },
-    { page: 'factory', taskId: '01' },
+    { page: 'factory', taskId: '01' }, { page: 'knowledge-graph' },
+    ...['global', 'new-projects', 'task-recipes'].map((section) => ({ page: 'settings', section })),
+    ...[0, -1, 1.5, Number.MAX_SAFE_INTEGER + 1, 'not-an-issue', null]
+      .map((issueNumber) => ({ page: 'factory', issueNumber })),
   ])('rejects invalid navigation field schemas before execution: %j', async (fields) => {
     const { app, broker } = fixture();
     const send = vi.fn(() => true);

@@ -358,11 +358,11 @@ const workspaceViewId = {
   pattern: '^[A-Za-z][A-Za-z0-9_-]{0,63}$',
 };
 export const workspaceNavigationPages = Object.freeze([
-  'home', 'factory', 'settings', 'usage', 'knowledge-graph', 'folio', 'status',
+  'home', 'factory', 'settings', 'usage', 'knowledge', 'folio', 'status',
 ]);
 export const workspaceSettingsSections = Object.freeze([
-  'appearance', 'jarvis', 'personality', 'voice', 'coding', 'global',
-  'new-projects', 'credentials', 'task-recipes',
+  'appearance', 'jarvis', 'personality', 'voice', 'presence', 'memory',
+  'coding', 'projects', 'routines', 'credentials', 'backend',
 ]);
 export const workspaceCommandSchema = Object.freeze({
   type: 'object',
@@ -372,6 +372,7 @@ export const workspaceCommandSchema = Object.freeze({
     page: { type: 'string', enum: [...workspaceNavigationPages] },
     section: { type: 'string', enum: [...workspaceSettingsSections] },
     taskId: { type: 'string', pattern: '^[1-9][0-9]{0,18}$', maxLength: 19 },
+    issueNumber: { type: 'integer', minimum: 1, maximum: Number.MAX_SAFE_INTEGER },
     viewId: workspaceViewId,
     view: generatedViewSchema,
     x: { type: 'number', minimum: 0, maximum: 1 },
@@ -703,10 +704,12 @@ export function isWorkspaceCommand(value, options = {}) {
   const hasOnly = (...keys) => Object.keys(value).every((key) => ['commandId', 'operation', ...keys].includes(key));
   switch (value.operation) {
     case 'navigate':
-      return hasOnly('page', 'section', 'taskId') && workspaceNavigationPages.includes(value.page) &&
+      return hasOnly('page', 'section', 'taskId', 'issueNumber') && workspaceNavigationPages.includes(value.page) &&
         (value.section === undefined ||
           value.page === 'settings' && workspaceSettingsSections.includes(value.section)) &&
-        (value.taskId === undefined || value.page === 'factory' && isTaskEventId(value.taskId));
+        (value.taskId === undefined || value.page === 'factory' && isTaskEventId(value.taskId)) &&
+        (value.issueNumber === undefined ||
+          value.page === 'factory' && Number.isSafeInteger(value.issueNumber) && value.issueNumber > 0);
     case 'create':
     case 'update':
       return hasOnly('viewId', 'view') &&

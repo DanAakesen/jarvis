@@ -269,18 +269,18 @@ export interface WorkspaceSnapshot {
 }
 
 export const workspaceNavigationPages: readonly [
-  'home', 'factory', 'settings', 'usage', 'knowledge-graph', 'folio', 'status',
+  'home', 'factory', 'settings', 'usage', 'knowledge', 'folio', 'status',
 ];
 export type WorkspaceNavigationPage = typeof workspaceNavigationPages[number];
 export const workspaceSettingsSections: readonly [
-  'appearance', 'jarvis', 'personality', 'voice', 'coding', 'global',
-  'new-projects', 'credentials', 'task-recipes',
+  'appearance', 'jarvis', 'personality', 'voice', 'presence', 'memory',
+  'coding', 'projects', 'routines', 'credentials', 'backend',
 ];
 export type WorkspaceSettingsSection = typeof workspaceSettingsSections[number];
 
 export type WorkspaceCommand =
   | { commandId: string; operation: 'navigate'; page: 'settings'; section?: WorkspaceSettingsSection }
-  | { commandId: string; operation: 'navigate'; page: 'factory'; taskId?: string }
+  | { commandId: string; operation: 'navigate'; page: 'factory'; taskId?: string; issueNumber?: number }
   | { commandId: string; operation: 'navigate'; page: Exclude<WorkspaceNavigationPage, 'settings' | 'factory'> }
   | { commandId: string; operation: 'create' | 'update'; viewId: string; view: GeneratedView }
   | { commandId: string; operation: 'show' | 'close' | 'minimise' | 'restore' | 'focus'; viewId: string }

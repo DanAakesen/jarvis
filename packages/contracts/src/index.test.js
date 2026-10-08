@@ -524,10 +524,14 @@ test('defines and validates bounded workspace commands for the approved operatio
   for (const command of commands) assert.equal(isWorkspaceCommand(command), true, command.operation);
 });
 
-test('validates navigation destinations, settings sections and bounded factory task IDs', () => {
+test('validates exact navigation keys, settings sections and bounded factory task/issue selectors', () => {
   const command = { commandId: 'navigate-1', operation: 'navigate' };
   assert.deepEqual(workspaceNavigationPages, [
-    'home', 'factory', 'settings', 'usage', 'knowledge-graph', 'folio', 'status',
+    'home', 'factory', 'settings', 'usage', 'knowledge', 'folio', 'status',
+  ]);
+  assert.deepEqual(workspaceSettingsSections, [
+    'appearance', 'jarvis', 'personality', 'voice', 'presence', 'memory',
+    'coding', 'projects', 'routines', 'credentials', 'backend',
   ]);
   assert.deepEqual(workspaceCommandSchema.properties.page.enum, workspaceNavigationPages);
   assert.deepEqual(workspaceCommandSchema.properties.section.enum, workspaceSettingsSections);
@@ -544,11 +548,23 @@ test('validates navigation destinations, settings sections and bounded factory t
   for (const taskId of ['1', '9223372036854775807']) {
     assert.equal(isWorkspaceCommand({ ...command, page: 'factory', taskId }), true, taskId);
   }
+  for (const issueNumber of [1, 567, Number.MAX_SAFE_INTEGER]) {
+    const navigation = { ...command, page: 'factory', issueNumber };
+    assert.equal(isWorkspaceCommand(navigation), true, String(issueNumber));
+    assert.equal(isWorkspaceCommand({ ...navigation, taskId: '42' }), true);
+    assert.equal(isNowSseEvent({
+      event: 'workspace-command', data: { command: navigation, expiresAt: 1_791_379_200_000 },
+    }), true);
+  }
   for (const invalid of [
-    {}, { page: 'kanban' }, { page: '/settings' }, { page: 'https://example.com' },
+    {}, { page: 'kanban' }, { page: 'knowledge-graph' }, { page: '/settings' }, { page: 'https://example.com' },
     { page: 'settings', section: 'unknown' }, { page: 'settings', section: null },
     { page: 'home', section: 'voice' }, { page: 'settings', taskId: '1' },
     { page: 'factory', section: 'voice' }, { page: 'home', viewId: 'conversation' },
+    { page: 'home', issueNumber: 567 }, { page: 'settings', issueNumber: 567 },
+    ...['global', 'new-projects', 'task-recipes'].map((section) => ({ page: 'settings', section })),
+    ...[0, -1, 1.5, Number.MAX_SAFE_INTEGER + 1, Number.NaN, Number.POSITIVE_INFINITY, '567', null]
+      .map((issueNumber) => ({ page: 'factory', issueNumber })),
     ...['0', '01', '-1', '1/../../settings', '9223372036854775808', '9'.repeat(20), 1, null]
       .map((taskId) => ({ page: 'factory', taskId })),
   ]) {
