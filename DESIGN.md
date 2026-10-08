@@ -80,8 +80,13 @@ decided on 6 October. The host loads `srcdoc` with `sandbox="allow-scripts"` onl
 and the restrictive artifact CSP; it validates bounded `open_url`, `ask`,
 `pin`/`unpin`, and `resize` bridge messages. The iframe has no access to
 same-origin data, tokens, cookies, Jarvis DOM, network, or top-level navigation.
-P7-37's backend/report flow is implemented offline; P8-41's renderer and bridge
-remain in its open implementation PR, so final browser acceptance is pending.
+The web renderer (8 October) fetches the artifact with Dan's token and shows it
+flush in the window body, which scrolls; the frame sizes itself to the content
+through the bridge. Links inside the report open in a new tab (or Chrome on the PC
+if the browser blocks it), and ask, open and pin act only after a real click inside
+the frame. Loading, missing (no retry) and temporary-failure (Retry) states are in
+words. Timelines from Jarvis use a quiet cyan rail with the label or date as an
+amber marker, in the order Jarvis gives.
 
 ## Interactions to design
 
@@ -790,6 +795,8 @@ Dan supplied a reference image and iterated live. Canonical values live in `styl
 - **Credential renewal (P9-19, 8 October):** Credentials are a card per credential: name, a status in words with a tone dot (cyan OK, amber renew soon, red action needed), expiry and last renewal. Cards the backend can renew on request (Codex login today) carry a Renew button that turns to 'Renewing…' while it runs; the result sits on the card (Renewed, busy with a task, or the backend's failure reason) and the card takes the returned status. The disabled renewal and re-seed buttons are gone.
 - **Settings tidy (Dan, 8 October):** One Memory card replaces both Memory and 'Memory and retrieval': the automatic-capture switch, then 'What Jarvis remembers about you' (only memories Jarvis kept from conversations; vault notes stay in Knowledge, so no folders or sync counts), searchable, with a detail pane that opens on selection to correct or forget, then 'How Jarvis recalls' (match, graph links, memories per answer). Global is renamed Limits. Save settings is a plain right-aligned row at the very end of the page, below Projects and Task recipes, with no floating glass pill. Section headers no longer paint a slab on hover: the title gains a faint cyan glow and the chevron turns cyan and nudges.
 - **Wake word (P9-17, 8 October):** When the PC bridge hears “Wake up Jarvis”, the open Jarvis page on the computer starts voice by itself and shows a short “Heard ‘Wake up Jarvis’” toast; the bridge's own chime is the sound. Phones ignore the wake word. A background tab waits up to 4 s for the bridge to bring it forward; if the browser will not play sound yet (no click on the page since it loaded), the toast asks for one click on the orb instead of failing silently. Settings → Voice shows a Wake word line with the last detection time and its outcome (started, already on, needs a click, background, error), in red only when voice did not start.
+- **Window rims (Dan, 8 October):** Content windows (reports, apps, views) wear a thin 1 px amber rim with a slow brighter glint travelling round it once every 16 s; focus brightens the rim instead of adding a thick cyan ring, and dragging shows a faint amber outline. Reduced motion holds the glint still. The conversation window keeps its own rim because it joins the composer.
+- **Charts and window titles (Dan, 8 October):** Generated `chart` views are drawn as SVG instead of a table: line (fitted to the data), bar and area (from zero), a hairline grid, cyan then amber series with softer variants for a third to fifth, a legend for two or more series, lines that draw in once (static under reduced motion), and the values under "Show values". The SVG is laid out at its real width, so axis text stays 11 px on a phone; x labels are the real values (years print as 2019), thinned evenly. Window titles are centred on the same line as the window buttons, with a little air above.
 - **Orb (8 October):** the room's orb stays in one place on every screen; windows and controls move around it. Its amber core is livelier: a slow heartbeat and a second train of signals firing along the filaments when dormant, a stronger inward pull and racing filaments while thinking or using tools, and in voice it follows the microphone while listening and pushes its sparks outward with speech.
 - **Presence on phones (P9-44):** a touch device with a phone-sized screen sets On the move, a computer sets Present (source `device`), once on opening and again after 10 minutes in the background; a manual choice from the last two hours is never overridden.
 - **Side panels:** the grid column eases open and shut with the slab, the slab swings back to its hinge with a slight blur when it closes (not only when it opens), and its contents settle in just after the glass. Fixed widths during the move keep text from re-wrapping; dragging a panel edge has no easing.

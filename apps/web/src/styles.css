@@ -3320,3 +3320,84 @@ a.task-chip:hover { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--glass-e
   background: color-mix(in srgb, var(--text) 3%, transparent); color: var(--text-muted); font-size: var(--type-small); }
 .wake-status strong { color: var(--text); }
 .wake-status:is([data-outcome="error"], [data-outcome="needs-click"], [data-outcome="unavailable"]) span { color: var(--error); }
+/* HTML apps and research reports (P8-41): the sandboxed frame sits flush in the window body, which scrolls; the frame
+   is transparent so the glass shows through wherever the app leaves its background unset. */
+.html-app { display: grid; gap: 8px; min-width: 0; }
+.html-app-frame { display: block; width: 100%; min-height: 160px; border: 0; border-radius: 12px; background: transparent; color-scheme: inherit; }
+.html-app-notice { margin: 0; color: var(--text-muted); font-size: var(--type-caption); }
+.html-app-state { display: grid; justify-items: start; gap: 10px; color: var(--text-muted); }
+.html-app-state p { margin: 0; }
+/* Timeline (P9-47): a quiet rail with a dot per event, the label or date as an amber marker, then title and summary. */
+.generated-view-timeline.generated-view-timeline { position: relative; display: grid; gap: 18px; margin: 4px 0; padding: 0 0 0 26px; list-style: none; }
+.generated-view-timeline::before { position: absolute; top: 8px; bottom: 8px; left: 6px; width: 2px; border-radius: 1px;
+  background: linear-gradient(color-mix(in srgb, var(--glass-edge-cool) 55%, transparent), color-mix(in srgb, var(--glass-edge-cool) 10%, transparent)); content: ""; }
+.generated-view-timeline > li { position: relative; display: grid; gap: 3px; }
+.generated-view-timeline > li::before { position: absolute; top: 5px; left: -25px; width: 10px; height: 10px; border-radius: 50%;
+  background: var(--glass-edge-cool); box-shadow: 0 0 10px color-mix(in srgb, var(--glass-edge-cool) 70%, transparent); content: ""; }
+.generated-view-timeline .timeline-marker { color: var(--glass-glow-warm); font-size: var(--type-caption); font-weight: 650; letter-spacing: 0.02em; }
+.generated-view-timeline .timeline-marker:empty { display: none; }
+.generated-view-timeline strong { margin: 0; color: var(--text); }
+.generated-view-timeline p { margin: 0; color: var(--text-muted); font-size: var(--type-small); }
+/* Window rims (Dan, 8 October): content windows wear a thin amber rim with a slow glint travelling round it, instead
+   of the bright white-to-cyan edge; focus brightens the rim rather than adding a thick cyan ring. The conversation
+   window keeps its own rim because it joins the composer. */
+@property --window-sweep { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
+.workspace-window.luminous-glass:not(.workspace-window-conversation) {
+  box-shadow:
+    0 26px 60px -18px rgb(0 0 0 / 55%),
+    0 14px 40px -22px var(--glass-glow-warm),
+    inset 0 1px 0 color-mix(in srgb, var(--glass-glow-warm) 18%, transparent),
+    inset 0 -22px 34px -30px var(--glass-glow-warm);
+}
+.workspace-window.luminous-glass:not(.workspace-window-conversation)::before {
+  --window-rim: color-mix(in srgb, var(--glass-glow-warm) 42%, transparent);
+  padding: 1px;
+  background: conic-gradient(from var(--window-sweep),
+    var(--window-rim) 0 66%,
+    color-mix(in srgb, var(--glass-glow-warm) 85%, transparent) 78%,
+    color-mix(in srgb, var(--glass-glow-warm) 70%, #fff 30%) 82%,
+    color-mix(in srgb, var(--glass-glow-warm) 85%, transparent) 86%,
+    var(--window-rim) 96%);
+  animation: window-rim 16s linear infinite;
+  transition: filter var(--motion-state) var(--ease-standard);
+}
+.workspace-window.luminous-glass:not(.workspace-window-conversation):focus-within {
+  box-shadow:
+    0 26px 60px -18px rgb(0 0 0 / 55%),
+    0 14px 44px -20px var(--glass-glow-warm),
+    inset 0 1px 0 color-mix(in srgb, var(--glass-glow-warm) 26%, transparent);
+}
+.workspace-window.luminous-glass:not(.workspace-window-conversation):focus-within::before { filter: brightness(1.35) saturate(1.1); }
+.workspace-window-dragging.workspace-window-dragging:not(.workspace-window-conversation) {
+  box-shadow: 0 34px 80px -20px rgb(0 0 0 / 65%), 0 0 0 1px color-mix(in srgb, var(--glass-glow-warm) 55%, transparent) !important;
+}
+@keyframes window-rim { to { --window-sweep: 360deg; } }
+:root[data-motion="reduced"] .workspace-window.luminous-glass::before { animation: none; }
+@media (prefers-reduced-motion: reduce) { .workspace-window.luminous-glass::before { animation: none; } }
+/* Window title (Dan, 8 October): the title's text is centred on the same line as the window buttons (it used to ride
+   at the top of its 32 px row), with a little air above; a long title still wraps to two lines. */
+.workspace-window .workspace-window-heading { margin-top: 4px; }
+.workspace-window .workspace-window-heading h3 { padding-block: 6px; line-height: 20px; }
+.workspace-window .workspace-window-heading .workspace-window-actions { align-self: flex-start; }
+/* Charts (8 October): generated `chart` views are drawn, not tabulated. Hairline grid, cyan then amber series, lines
+   draw in once; the values stay one click away under "Show values". */
+.generated-chart { display: grid; gap: 8px; margin: 0; min-width: 0; }
+.generated-chart svg { display: block; width: 100%; max-width: 100%; height: auto; overflow: visible; }
+.generated-chart .chart-grid line { stroke: color-mix(in srgb, var(--text) 10%, transparent); stroke-width: 1; }
+.generated-chart text { fill: var(--text-muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.generated-chart .chart-line { fill: none; stroke: currentColor; stroke-width: 2.25; stroke-linecap: round; stroke-linejoin: round;
+  filter: drop-shadow(0 0 6px color-mix(in srgb, currentColor 45%, transparent)); stroke-dasharray: 1; stroke-dashoffset: 1; animation: chart-draw 900ms var(--ease-enter) forwards; }
+.generated-chart .chart-area { fill: currentColor; opacity: .14; }
+.generated-chart .chart-series circle { fill: var(--stage-slab, #07090f); stroke: currentColor; stroke-width: 2; }
+.generated-chart .chart-bars rect { opacity: .88; transition: opacity var(--motion-press) var(--ease-standard); }
+.generated-chart .chart-bars rect:hover, .generated-chart .chart-series circle:hover { opacity: 1; stroke-width: 3; }
+.chart-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 0; padding: 0; list-style: none; font-size: var(--type-caption); }
+.chart-legend li { display: inline-flex; align-items: center; gap: 6px; }
+.chart-legend li::before { width: 10px; height: 10px; border-radius: 3px; background: currentColor; content: ""; }
+.chart-legend span { color: var(--text-muted); }
+.chart-values summary { width: fit-content; color: var(--text-muted); font-size: var(--type-caption); cursor: pointer; }
+.chart-values summary:hover { color: var(--text); }
+.chart-values[open] summary { margin-bottom: 8px; }
+@keyframes chart-draw { to { stroke-dashoffset: 0; } }
+:root[data-motion="reduced"] .generated-chart .chart-line { animation: none; stroke-dashoffset: 0; }
+@media (prefers-reduced-motion: reduce) { .generated-chart .chart-line { animation: none; stroke-dashoffset: 0; } }
