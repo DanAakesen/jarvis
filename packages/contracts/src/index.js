@@ -468,7 +468,7 @@ export const workspaceCommandSchema = Object.freeze({
   type: 'object',
   properties: {
     commandId: workspaceCommandId,
-    operation: { type: 'string', enum: ['create', 'update', 'show', 'close', 'minimise', 'restore', 'focus', 'move', 'resize', 'layout', 'context-panel', 'navigate'] },
+    operation: { type: 'string', enum: ['create', 'update', 'show', 'close', 'minimise', 'restore', 'focus', 'move', 'resize', 'layout', 'context-panel', 'navigate', 'conversation'] },
     page: { type: 'string', enum: [...workspaceNavigationPages] },
     section: { type: 'string', enum: [...workspaceSettingsSections] },
     taskId: { type: 'string', pattern: '^[1-9][0-9]{0,18}$', maxLength: 19 },
@@ -480,7 +480,7 @@ export const workspaceCommandSchema = Object.freeze({
     width: { type: 'number', minimum: 0.32, maximum: 0.92 },
     height: { type: 'number', minimum: 0.34, maximum: 0.92 },
     arrangement: { enum: ['tiled', 'layered'] },
-    action: { enum: ['open', 'close', 'toggle'] },
+    action: { enum: ['open', 'close', 'toggle', 'show', 'hide'] },
   },
   required: ['commandId', 'operation'],
   additionalProperties: false,
@@ -842,6 +842,8 @@ export function isWorkspaceCommand(value, options = {}) {
         (value.taskId === undefined || value.page === 'factory' && isTaskEventId(value.taskId)) &&
         (value.issueNumber === undefined ||
           value.page === 'factory' && Number.isSafeInteger(value.issueNumber) && value.issueNumber > 0);
+    case 'conversation':
+      return hasOnly('action') && ['show', 'hide'].includes(value.action);
     case 'create':
     case 'update':
       return hasOnly('viewId', 'view') &&
