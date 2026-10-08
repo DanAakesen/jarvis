@@ -360,6 +360,7 @@ try {
       indexStore: vaultIndexStore,
       memoryStore,
       apiMemoryStore: memoryStore,
+      ...(settingsStore ? { settingsStore } : {}),
       getEmbedder: getMemoryEmbedder,
       getEmbeddingModel: embeddingModel,
       ...(usageStore ? { usageStore } : {}),

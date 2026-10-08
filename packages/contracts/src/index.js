@@ -40,6 +40,24 @@ export const researchSettingsSchema = Object.freeze({
     timeoutSeconds: Object.freeze({ type: 'integer', ...researchSettingsBounds.timeoutSeconds }),
   }),
 });
+export const memorySettingsBounds = Object.freeze({
+  similarityThreshold: Object.freeze({ minimum: 0, maximum: 1 }),
+  searchTopK: Object.freeze({ minimum: 1, maximum: 8 }),
+  graphTextSimilarityThreshold: Object.freeze({ minimum: 0, maximum: 1 }),
+});
+export const memorySettingsSchema = Object.freeze({
+  type: 'object',
+  minProperties: 1,
+  additionalProperties: false,
+  properties: Object.freeze({
+    similarityThreshold: Object.freeze({ type: 'number', ...memorySettingsBounds.similarityThreshold }),
+    searchTopK: Object.freeze({ type: 'integer', ...memorySettingsBounds.searchTopK }),
+    graphTextSimilarityThreshold: Object.freeze({
+      type: 'number', ...memorySettingsBounds.graphTextSimilarityThreshold,
+    }),
+    automaticCapture: Object.freeze({ type: 'boolean' }),
+  }),
+});
 export function isModelCatalogue(value) {
   if (!isObject(value) || !['arm', 'fallback'].includes(value.source) ||
       !Array.isArray(value.deployments) || value.deployments.length > 1_000 ||

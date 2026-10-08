@@ -12,6 +12,8 @@ import {
   isModelCatalogue,
   modelCapabilities,
   modelRoles,
+  memorySettingsBounds,
+  memorySettingsSchema,
   reasoningEfforts,
   researchDepths,
   researchSettingsBounds,
@@ -96,6 +98,20 @@ test('research settings contracts bound depth, source count, and invocation time
     depth: { type: 'string', enum: ['quick', 'standard', 'deep'] },
     maxSources: { type: 'integer', minimum: 1, maximum: 50 },
     timeoutSeconds: { type: 'integer', minimum: 1, maximum: 320 },
+  });
+});
+
+test('memory settings contracts bound retrieval, graph threshold and automatic capture', () => {
+  assert.deepEqual(memorySettingsBounds, {
+    similarityThreshold: { minimum: 0, maximum: 1 },
+    searchTopK: { minimum: 1, maximum: 8 },
+    graphTextSimilarityThreshold: { minimum: 0, maximum: 1 },
+  });
+  assert.deepEqual(memorySettingsSchema.properties, {
+    similarityThreshold: { type: 'number', minimum: 0, maximum: 1 },
+    searchTopK: { type: 'integer', minimum: 1, maximum: 8 },
+    graphTextSimilarityThreshold: { type: 'number', minimum: 0, maximum: 1 },
+    automaticCapture: { type: 'boolean' },
   });
 });
 
