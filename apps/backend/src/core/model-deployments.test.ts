@@ -8,6 +8,7 @@ import {
 } from './model-deployments.js';
 import type { ModelDeploymentClient } from './model-deployments.js';
 import { fallbackModelCatalogue } from './model-catalog.js';
+import { toModelToolSchema } from '../voice/realtime.js';
 import type { ModelCatalogueReader } from './model-catalog.js';
 import type { TeamsNotificationService } from '../teams/service.js';
 
@@ -99,6 +100,14 @@ afterEach(async () => {
 });
 
 describe('Foundry model deployment manager', () => {
+  it('sends every core tool to the model as a plain object schema at the root (L121)', () => {
+    for (const tool of coreModule.tools) {
+      const schema = toModelToolSchema(tool.inputSchema) as Record<string, unknown>;
+      expect(schema.type, tool.name).toBe('object');
+      for (const key of ['oneOf', 'anyOf', 'allOf', 'not', 'enum']) expect(schema, tool.name).not.toHaveProperty(key);
+    }
+  });
+
   it('writes and deletes only the configured account deployment resources via ARM', async () => {
     const fetcher = vi.fn<typeof fetch>()
       .mockResolvedValueOnce(new Response('{}', { status: 202 }))

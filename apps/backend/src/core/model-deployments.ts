@@ -292,41 +292,47 @@ function reportPendingOperation(
 export const manageModelDeploymentTool: JarvisTool = {
   name: 'manage_model_deployment',
   description: 'Create or delete a Foundry model deployment after Dan confirms in Now.',
+  // Voice Live and the Responses API reject combinators on the root schema (L121); execute
+  // enforces the per-action requirements instead.
   inputSchema: {
     type: 'object',
-    oneOf: [
-      {
-        type: 'object',
-        properties: {
-          action: { type: 'string', const: 'create' },
-          model: { type: 'string', minLength: 1, maxLength: 128 },
-          version: { type: 'string', pattern: '^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$', maxLength: 128 },
-          sku: { type: 'string', pattern: '^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$', maxLength: 64 },
-          capacity: { type: 'integer', minimum: 1, maximum: 100_000 },
-        },
-        required: ['action', 'model', 'version', 'sku', 'capacity'],
-        additionalProperties: false,
+    properties: {
+      action: { type: 'string', enum: ['create', 'delete'] },
+      model: { type: 'string', minLength: 1, maxLength: 128, description: 'Model to deploy (create only).' },
+      version: {
+        type: 'string', pattern: '^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$', maxLength: 128,
+        description: 'Model version (create only).',
       },
-      {
-        type: 'object',
-        properties: {
-          action: { type: 'string', const: 'delete' },
-          name: deploymentNameSchema,
-        },
-        required: ['action', 'name'],
-        additionalProperties: false,
+      sku: {
+        type: 'string', pattern: '^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$', maxLength: 64,
+        description: 'Deployment SKU, for example GlobalStandard (create only).',
       },
-    ],
+      capacity: { type: 'integer', minimum: 1, maximum: 100_000, description: 'Capacity units (create only).' },
+      name: { ...deploymentNameSchema, description: 'Deployment to delete (delete only).' },
+    },
+    required: ['action'],
+    additionalProperties: false,
   },
   execute: async (input, request, signal) => {
     const workflow = request.server.modelDeploymentWorkflow;
     if (!workflow) throw new ToolRefusal('Model deployment management is unavailable.');
-    const value = input as { action: 'create'; model: string; version: string; sku: string; capacity: number } |
-      { action: 'delete'; name: string };
+    const value = input as { action: 'create' | 'delete'; model?: string; version?: string; sku?: string;
+      capacity?: number; name?: string };
+    const create = value.action === 'create';
+    if (create && (value.name !== undefined || value.model === undefined || value.version === undefined ||
+        value.sku === undefined || value.capacity === undefined)) {
+      throw new ToolRefusal('Creating a deployment needs model, version, sku and capacity, and no name.');
+    }
+    if (!create && (value.name === undefined || value.model !== undefined || value.version !== undefined ||
+        value.sku !== undefined || value.capacity !== undefined)) {
+      throw new ToolRefusal('Deleting a deployment needs only its name.');
+    }
     try {
-      return value.action === 'create'
-        ? await workflow.create(value, signal)
-        : await workflow.delete(value.name, signal);
+      return create
+        ? await workflow.create({
+          model: value.model!, version: value.version!, sku: value.sku!, capacity: value.capacity!,
+        }, signal)
+        : await workflow.delete(value.name!, signal);
     } catch (error) {
       if (error instanceof ToolRefusal) throw error;
       if (error instanceof ModelDeploymentError) throw new ToolRefusal(error.message);
