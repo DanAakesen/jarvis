@@ -393,6 +393,45 @@ describe('settings API', () => {
     expect(settings.jarvis).toEqual({ model: 'gpt-6-luna', reasoning: 'high' });
   });
 
+  it('clears custom appearance colours with null so the theme default applies', async () => {
+    const { store, values } = createStore();
+    const app = fixture(store);
+    const colours = { accent: '#a1b2c3', 'accent-secondary': '#123456', 'surface-tint': '#abcdef' };
+
+    const set = await app.inject({
+      method: 'PATCH', url: '/settings', headers: authorization, payload: { settings: { appearance: colours } },
+    });
+    expect(set.statusCode).toBe(200);
+    expect(set.json().settings.appearance).toMatchObject(colours);
+
+    const cleared = await app.inject({
+      method: 'PATCH', url: '/settings', headers: authorization,
+      payload: { settings: { appearance: { accent: null, 'accent-secondary': null, 'surface-tint': null } } },
+    });
+    expect(cleared.statusCode).toBe(200);
+    for (const key of Object.keys(colours)) {
+      expect(cleared.json().settings.appearance).not.toHaveProperty(key);
+    }
+    expect(values['appearance.accent']).toBe('null');
+
+    const read = await app.inject({ method: 'GET', url: '/settings', headers: authorization });
+    expect(read.statusCode).toBe(200);
+    expect(read.json().settings.appearance).not.toHaveProperty('accent');
+    expect(read.json().settings.appearance).not.toHaveProperty('surface-tint');
+  });
+
+  it.each([
+    { theme: null },
+    { glow: null },
+    { accent: '' },
+  ])('rejects null or empty values for non-clearable appearance settings: %j', async (appearance) => {
+    const app = fixture(createStore().store);
+    const response = await app.inject({
+      method: 'PATCH', url: '/settings', headers: authorization, payload: { settings: { appearance } },
+    });
+    expect(response.statusCode).toBe(400);
+  });
+
   it('persists allowlisted appearance tokens and the default-off voice window preference', async () => {
     const { store, values } = createStore();
     const app = fixture(store);
