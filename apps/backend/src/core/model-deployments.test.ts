@@ -8,6 +8,7 @@ import {
 } from './model-deployments.js';
 import type { ModelDeploymentClient } from './model-deployments.js';
 import { fallbackModelCatalogue } from './model-catalog.js';
+import { toModelToolSchema } from '../voice/realtime.js';
 import type { ModelCatalogueReader } from './model-catalog.js';
 import type { TeamsNotificationService } from '../teams/service.js';
 
@@ -99,9 +100,9 @@ afterEach(async () => {
 });
 
 describe('Foundry model deployment manager', () => {
-  it('keeps every core tool schema a plain object at the root for Voice Live and the Responses API', () => {
+  it('sends every core tool to the model as a plain object schema at the root (L121)', () => {
     for (const tool of coreModule.tools) {
-      const schema = tool.inputSchema as Record<string, unknown>;
+      const schema = toModelToolSchema(tool.inputSchema) as Record<string, unknown>;
       expect(schema.type, tool.name).toBe('object');
       for (const key of ['oneOf', 'anyOf', 'allOf', 'not', 'enum']) expect(schema, tool.name).not.toHaveProperty(key);
     }
