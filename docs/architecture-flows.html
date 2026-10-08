@@ -729,7 +729,7 @@ const FLOWS = [
   },
   {
     name: "Google Calendar and Gmail",
-    summary: "Backend calendar and mail tools use Google OAuth for Dan's personal account; writes wait for an exact confirmation from a later Dan message.",
+    summary: "Backend calendar and mail tools use Google OAuth for Dan's personal account; Calendar writes wait for a later standalone short approval for the latest pending action; no/cancel discards it. Gmail retains exact-phrase confirmation.",
     nodes: [
       { id: "ctx", lane: "user", col: 1, s: "context", t: "Dan asks about mail or calendar" },
       { id: "agent", lane: "jarvis", col: 2, s: "proven", t: "Call a registered tool", d: "Jarvis discovers the calendar and mail tools from the authenticated backend registry.", ev: "Registry discovery and dispatch contracts are covered by backend tests." },

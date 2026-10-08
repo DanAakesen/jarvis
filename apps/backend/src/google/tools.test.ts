@@ -356,6 +356,36 @@ describe('Google Calendar and Gmail tools', () => {
     });
   });
 
+  it.each(['yes', 'no', 'yes and move it later'])('returns a tool refusal for %s without a pending calendar action', async (reply) => {
+    const request = vi.fn<GoogleApiClient['request']>();
+    const { app, setLatest } = appFor(request);
+    setLatest(conversationMessage('43', reply, new Date(Date.now() + 10_000)));
+    const response = await app.inject({
+      method: 'POST', url: '/tools/calendar_confirm_change', headers: confirmHeaders('43'),
+      payload: { confirmationCode: '12345678' },
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({ outcome: 'refused', result: { refused: expect.stringContaining('No calendar change was made') } });
+    expect(request).not.toHaveBeenCalled();
+  });
+
+  it('cancels a staged calendar creation without writing to Google', async () => {
+    const request = vi.fn<GoogleApiClient['request']>();
+    const { app, setLatest } = appFor(request);
+    const staged = await app.inject({
+      method: 'POST', url: '/tools/calendar_create_event', headers: confirmHeaders('42'),
+      payload: { subject: 'Meeting', start: '2026-06-23T10:00:00+02:00', end: '2026-06-23T11:00:00+02:00' },
+    });
+    setLatest(conversationMessage('43', 'cancel', new Date(Date.now() + 10_000)));
+    const response = await app.inject({
+      method: 'POST', url: '/tools/calendar_confirm_change', headers: confirmHeaders('43'),
+      payload: { confirmationCode: staged.json().result.confirmationCode },
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({ outcome: 'ok', result: { status: 'cancelled' } });
+    expect(request).not.toHaveBeenCalled();
+  });
+
   it('moves a calendar event only after confirmation', async () => {
     const request = vi.fn(async (...args: [GoogleApi, string, GoogleApiRequest]) => args[1].includes('/events/event-1')
       ? {
