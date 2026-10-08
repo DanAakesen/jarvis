@@ -2,9 +2,12 @@ import { defaultAwayModeState, presenceModes } from './away-mode.js';
 import { JARVIS_REPOSITORY, projectContext } from '../factory/project-context.js';
 import {
   isModelCatalogue, modelRoles, reasoningEfforts, researchDepths, researchSettingsBounds,
-  researchSettingsSchema, voiceTuningSettingsBounds, voiceTuningSettingsSchema,
+  memorySettingsBounds, memorySettingsSchema, researchSettingsSchema,
+  voiceTuningSettingsBounds, voiceTuningSettingsSchema,
 } from '@jarvis/contracts';
-import type { ModelCatalogue, ModelRole, ReasoningEffort, ResearchSettings, VoiceTuningSettings } from '@jarvis/contracts';
+import type {
+  MemorySettings, ModelCatalogue, ModelRole, ReasoningEffort, ResearchSettings, VoiceTuningSettings,
+} from '@jarvis/contracts';
 import {
   defaultRoleModels, fallbackModelCatalogue, isRoleModelSupported, modelsForRole, reasoningForModel,
 } from './model-catalog.js';
@@ -45,6 +48,7 @@ export interface Settings {
     minimizeWindowsOnVoiceStart: boolean;
   };
   research: ResearchSettings;
+  memory: MemorySettings;
   codex: {
     model: string;
     reasoning: string;
@@ -108,6 +112,12 @@ export const defaultSettings: Settings = {
     maxSpokenReplyTokens: 4_096,
   },
   research: { depth: 'quick', maxSources: 50, timeoutSeconds: 305 },
+  memory: {
+    similarityThreshold: 0.35,
+    searchTopK: 5,
+    graphTextSimilarityThreshold: 0.12,
+    automaticCapture: true,
+  },
   codex: { model: 'default', reasoning: 'default' },
   copilot: { model: 'default' },
   roles: Object.fromEntries(modelRoles.map((role) => [role, {
@@ -140,6 +150,7 @@ export const settingsOptions = {
   voiceTuning: voiceTuningSettingsBounds,
   researchDepths,
   researchSettings: researchSettingsBounds,
+  memorySettings: memorySettingsBounds,
   projectVisibilities: ['private', 'public'],
   projectAgents: ['codex', 'copilot'],
   projectPolicies: ['deliver_pr', 'complete_without_deployment'],
@@ -185,6 +196,12 @@ const settingKeys = {
     depth: 'research.depth',
     maxSources: 'research.max_sources',
     timeoutSeconds: 'research.timeout_seconds',
+  },
+  memory: {
+    similarityThreshold: 'memory.similarity_threshold',
+    searchTopK: 'memory.search_top_k',
+    graphTextSimilarityThreshold: 'memory.graph_text_similarity_threshold',
+    automaticCapture: 'memory.automatic_capture',
   },
   codex: { model: 'codex.model', reasoning: 'codex.reasoning_effort' },
   copilot: { model: 'copilot.model' },
@@ -294,6 +311,19 @@ function validSetting(
         value >= researchSettingsBounds.timeoutSeconds.minimum &&
         value <= researchSettingsBounds.timeoutSeconds.maximum;
     }
+  }
+  if (area === 'memory') {
+    if (key === 'similarityThreshold' || key === 'graphTextSimilarityThreshold') {
+      const bounds = memorySettingsBounds[key];
+      return typeof value === 'number' && Number.isFinite(value) &&
+        value >= bounds.minimum && value <= bounds.maximum;
+    }
+    if (key === 'searchTopK') {
+      return typeof value === 'number' && Number.isSafeInteger(value) &&
+        value >= memorySettingsBounds.searchTopK.minimum &&
+        value <= memorySettingsBounds.searchTopK.maximum;
+    }
+    if (key === 'automaticCapture') return typeof value === 'boolean';
   }
   if (area === 'codex') {
     if (key === 'model') return typeof value === 'string' && modelsForRole(catalogue, 'codex').includes(value);
@@ -417,6 +447,7 @@ const settingsPatchSchema = {
           type: 'object', minProperties: 1, additionalProperties: true,
           properties: researchSettingsSchema.properties,
         },
+        memory: memorySettingsSchema,
         codex: {
           type: 'object', minProperties: 1, additionalProperties: true,
           properties: {
@@ -784,6 +815,10 @@ export async function registerSettingsRoutes(app: import('fastify').FastifyInsta
               required: [...modelRoles],
               additionalProperties: false,
             },
+            memory: {
+              ...memorySettingsSchema,
+              required: Object.keys(defaultSettings.memory),
+            },
             personality: {
               type: 'object',
               properties: {
@@ -819,7 +854,7 @@ export async function registerSettingsRoutes(app: import('fastify').FastifyInsta
               },
             },
           },
-          required: ['model', 'reasoningEffort', 'roles', 'personality', 'awayMode', 'mode', 'changedAt'],
+          required: ['model', 'reasoningEffort', 'roles', 'memory', 'personality', 'awayMode', 'mode', 'changedAt'],
           additionalProperties: false,
         },
         403: {
@@ -846,6 +881,7 @@ export async function registerSettingsRoutes(app: import('fastify').FastifyInsta
       model: settings.jarvis.model,
       reasoningEffort: settings.jarvis.reasoning,
       roles: settings.roles,
+      memory: settings.memory,
       personality: settings.personality,
       awayMode: presence.mode !== 'present',
       mode: presence.mode,
@@ -883,6 +919,15 @@ export async function registerSettingsRoutes(app: import('fastify').FastifyInsta
         if (numericSettings.some((key) => research[key] !== undefined && typeof research[key] !== 'number')) {
           return reply.code(400).send({ error: 'Invalid setting value' });
         }
+      }
+      const memory = (request.body as {
+        settings?: { memory?: Record<string, unknown> };
+      } | undefined)?.settings?.memory;
+      if (memory && typeof memory === 'object' && !Array.isArray(memory) &&
+          (['similarityThreshold', 'graphTextSimilarityThreshold', 'searchTopK'].some((key) =>
+            memory[key] !== undefined && typeof memory[key] !== 'number') ||
+           (memory.automaticCapture !== undefined && typeof memory.automaticCapture !== 'boolean'))) {
+        return reply.code(400).send({ error: 'Invalid setting value' });
       }
     },
   }, async (request, reply) => {

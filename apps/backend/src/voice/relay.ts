@@ -319,6 +319,7 @@ function registerVoiceRoute(
     let awayMode = false;
     let projects: ProjectContextEntry[] = [];
     let personality = defaultSettings.personality;
+    let memorySettings = defaultSettings.memory;
     let voiceTuning = defaultSettings.voice;
     let voiceModel = ENGLISH_REALTIME_MODEL;
     let transcriptionModel = defaultSettings.roles.transcription.model;
@@ -1111,9 +1112,13 @@ function registerVoiceRoute(
       if (!english || !app.awayModeStore) return;
       void (async () => {
         presence = await app.awayModeStore!.read();
-        if (app.settingsStore) personality = (await readSettings(app.settingsStore)).personality;
+        if (app.settingsStore) {
+          const settings = await readSettings(app.settingsStore);
+          personality = settings.personality;
+          memorySettings = settings.memory;
+        }
         sendUpstream(createRealtimeSessionUpdate(
-          app.jarvisTools, personality, presence, language, projects, transcriptionModel, voiceTuning,
+          app.jarvisTools, personality, presence, language, projects, transcriptionModel, voiceTuning, memorySettings,
         ));
       })().catch(() => request.log.warn('voice.presence_mode_update_failed'));
     });
@@ -1409,10 +1414,17 @@ function registerVoiceRoute(
             const settings = await readSettings(app.settingsStore, await app.modelCatalogue.read());
             personality = settings.personality;
             voiceTuning = settings.voice;
+            memorySettings = settings.memory;
             voiceModel = settings.roles.voice.model;
             transcriptionModel = settings.roles.transcription.model;
           } catch {
             request.log.warn('voice.personality_settings_unavailable');
+          }
+        } else if (app.settingsStore) {
+          try {
+            memorySettings = (await readSettings(app.settingsStore)).memory;
+          } catch {
+            request.log.warn('voice.memory_settings_unavailable');
           }
         }
         if (app.awayModeStore) {
@@ -1429,6 +1441,7 @@ function registerVoiceRoute(
           if (english) sendUpstream(
             createRealtimeSessionUpdate(
               app.jarvisTools, personality, presence, language, projects, transcriptionModel, voiceTuning,
+              memorySettings,
             ),
             flushQueued,
           );

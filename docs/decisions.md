@@ -19,6 +19,16 @@ The nine design areas and where each stands. **Confirmed** = Dan's requirement o
 
 ## Decision log
 
+P9-10 (7 October 2026): store memory retrieval settings in the existing global
+`dbo.settings` store and expose their shared bounded contract through Settings.
+Keep defaults at the existing similarity thresholds (`0.35` embedding and
+`0.12` TF-IDF), five search results, and automatic capture enabled. The
+embedding threshold applies to application and SQL graph edges; top-k is capped
+at eight. Automatic captures are marked in the shared vault tool and refused
+server-side when disabled, while Dan-requested writes stay available. No
+migration or web change is needed; focused contract, settings, vault and voice
+tests cover the behavior.
+
 P9-20 (7 October 2026): expose one owner-authenticated, cached `/status`
 snapshot using the shared contracts; reuse it in `get_status_summary`. Keep
 status probes bounded and return only allowlisted metadata, never provider

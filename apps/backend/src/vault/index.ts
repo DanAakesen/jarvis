@@ -8,12 +8,12 @@ import {
   type MemoryVersion,
   type VaultGraphData,
   type VaultIndexStore,
-  vaultSimilarityThreshold,
   type VaultIndexedChunk,
   type VaultSearchHit,
 } from '../database/memory-store.js';
 import { isGeneratedView, type WorkspaceCommand } from '@jarvis/contracts';
 import { setTimeout as sleep } from 'node:timers/promises';
+import { defaultSettings, readSettings, type SettingsStore } from '../core/settings.js';
 import {
   embeddingFailureStatus, MemoryEmbeddingHttpError, type MemoryEmbedder,
 } from '../core/memory-embeddings.js';
@@ -53,7 +53,6 @@ const maxMemoryApiHistoryBytes = 512 * 1024;
 const maxGraphNodes = 2_000;
 const maxGraphEdges = 8_000;
 const maxLinksPerNote = 512;
-const similarityThreshold = vaultSimilarityThreshold;
 const credentialPattern = /\b(?:password|passphrase|secret|api[ -]?key|access[ -]?token|credential|private[ -]?key|seed[ -]?phrase|recovery[ -]?phrase)\b/iu;
 const sensitivePattern = /\b(?:bank(?:ing)?|bank account|credit card|debit card|account number|iban|routing number|swift code|health|medical|diagnosis|medication|symptom|patient|clinic|therapy|prescription|social security|ssn)\b/iu;
 const secretPattern = /-----BEGIN [A-Z ]*PRIVATE KEY-----|\b(?:gh[pousr]_[A-Za-z0-9_]{20,}|github_pat_[A-Za-z0-9_]{20,}|AKIA[0-9A-Z]{16}|xox[baprs]-[A-Za-z0-9-]{20,})\b|(?:password|client[_ -]?secret|api[_ -]?key|access[_ -]?token)\s*[:=]\s*["']?[^\s"']{8,}/iu;
@@ -390,7 +389,6 @@ function meanVectors(rows: VaultGraphData['embeddings']): Map<string, number[]> 
     [path, values.map((value) => value / count)]));
 }
 
-const textSimilarityThreshold = 0.12;
 const stopWords = new Set(('the and for are but not you all any can had her was one our out has have this that with from they will ' +
   'what when which their there been were into more than then them these those your about would could should also just ' +
   'like some such only over very after before here where while each other most much many make made being does done ' +
@@ -478,6 +476,7 @@ export function createVaultModule(options: {
   readonly getEmbeddingModel?: () => Promise<string>;
   readonly embeddingModel?: string;
   readonly usageStore?: Pick<UsageStore, 'recordFoundryUsage'>;
+  readonly settingsStore?: SettingsStore;
   readonly onUsageRecordFailure?: () => void;
   readonly log?: (event: 'vault.index' | 'vault.write', fields: VaultLogFields) => void;
   readonly logEmbedding?: (fields: MemoryEmbeddingLogFields) => void;
@@ -493,7 +492,13 @@ export function createVaultModule(options: {
   let lastVaultSyncAt: string | null = null;
   let lastIndexOutcome: VaultIndexOutcome = { outcome: 'pending', at: new Date().toISOString() };
   const pendingVaultDeletions = new Set<string>();
-  let graphCache: Promise<KnowledgeGraph> | undefined;
+  let graphCache: { readonly key: string; readonly value: Promise<KnowledgeGraph> } | undefined;
+
+  async function memorySettings() {
+    return options.settingsStore
+      ? (await readSettings(options.settingsStore)).memory
+      : defaultSettings.memory;
+  }
 
   async function activeEmbedder(): Promise<MemoryEmbedder | undefined> {
     return options.getEmbedder ? options.getEmbedder() : options.embedder;
@@ -740,14 +745,18 @@ export function createVaultModule(options: {
     return { memories, memoryPending, vaultFiles: vaultFiles.length, vaultPending };
   }
 
-  async function buildKnowledgeGraph(signal: AbortSignal): Promise<KnowledgeGraph> {
+  async function buildKnowledgeGraph(
+    signal: AbortSignal,
+    similarityThreshold: number,
+    graphTextSimilarityThreshold: number,
+  ): Promise<KnowledgeGraph> {
     const embeddingModel = await activeEmbeddingModel(await activeEmbedder());
     const files = (await options.indexStore.graphFiles(signal))
       .filter(({ path }) => isRoutedNotePath(path))
       .slice(0, maxGraphNodes);
     const paths = files.map(({ path }) => path);
     const pathSet = new Set(paths);
-    const graphData = await options.indexStore.graphData(paths, embeddingModel, signal);
+    const graphData = await options.indexStore.graphData(paths, embeddingModel, signal, similarityThreshold);
     const ids = new Map(paths.map((path) => [path, graphNodeId(path)]));
     const nodes: KnowledgeGraphNode[] = files.flatMap((file) => {
       const folder = safeFolder(file.path);
@@ -823,7 +832,7 @@ export function createVaultModule(options: {
           const targetVector = target === source ? undefined : textual.get(target);
           if (!targetVector) return [];
           const score = sparseCosine(sourceVector, targetVector);
-          return score > textSimilarityThreshold ? [{ target, score }] : [];
+          return score > graphTextSimilarityThreshold ? [{ target, score }] : [];
         }).sort((left, right) => right.score - left.score || left.target.localeCompare(right.target))
           .slice(0, 3);
         for (const neighbour of neighbours) {
@@ -850,19 +859,23 @@ export function createVaultModule(options: {
   }
 
   async function knowledgeGraph(signal: AbortSignal): Promise<KnowledgeGraph> {
-    if (graphCache) return graphCache;
+    const settings = await memorySettings();
+    const key = `${settings.similarityThreshold}:${settings.graphTextSimilarityThreshold}`;
+    if (graphCache?.key === key) return graphCache.value;
     if (synchronization) await synchronization;
     if (indexStatus !== 'ready') {
       throw new ToolFailure(appMissing
         ? 'The GitHub App is not installed on DanAakesen/vault with Contents read/write access.'
         : 'The vault index is not ready. Please try again after synchronization finishes.');
     }
-    const pending = buildKnowledgeGraph(signal);
-    graphCache = pending;
+    const pending = buildKnowledgeGraph(
+      signal, settings.similarityThreshold, settings.graphTextSimilarityThreshold,
+    );
+    graphCache = { key, value: pending };
     try {
       return await pending;
     } catch (error) {
-      if (graphCache === pending) graphCache = undefined;
+      if (graphCache?.value === pending) graphCache = undefined;
       throw error;
     }
   }
@@ -969,7 +982,8 @@ export function createVaultModule(options: {
           throw new ToolRefusal('Vault search query or result count is invalid.');
         }
         const query = value.query.trim();
-        const limit = value.k === undefined ? 5 : Number(value.k);
+        const topK = (await memorySettings()).searchTopK;
+        const limit = Math.min(value.k === undefined ? topK : Number(value.k), topK);
         const hits = await searchVault(query, limit, signal);
         return {
           results: hits.map((hit) => ({
@@ -1002,7 +1016,7 @@ export function createVaultModule(options: {
         }
         const query = value.query.trim();
         const graph = await knowledgeGraph(signal);
-        const hits = await searchVault(query, maxSearchResults, signal);
+        const hits = await searchVault(query, (await memorySettings()).searchTopK, signal);
         const byPath = new Map(graph.nodes.map((node) => [node.path, node]));
         const highlight = [...new Set(hits.flatMap((hit) => {
             const node = byPath.get(hit.path);
@@ -1069,7 +1083,7 @@ export function createVaultModule(options: {
     },
     {
       name: 'vault_write',
-      description: 'Create, append to, or update one vault Markdown note. Read and follow AGENTS.md, .github/agent-state/routing.md and relevant .github/instructions/*.instructions.md. Use People/, Work/, Personal/ or General/. Never store secrets or credentials. The write is committed to master.',
+      description: 'Create, append to, or update one vault Markdown note. Set automaticCapture true only for proactive memory capture and false for Dan-requested writes. Read and follow AGENTS.md, .github/agent-state/routing.md and relevant .github/instructions/*.instructions.md. Use People/, Work/, Personal/ or General/. Never store secrets or credentials. The write is committed to master.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -1077,15 +1091,20 @@ export function createVaultModule(options: {
           content: { type: 'string', minLength: 1, maxLength: MAX_VAULT_FILE_BYTES },
           append: { type: 'string', minLength: 1, maxLength: MAX_VAULT_FILE_BYTES },
           reason: { type: 'string', minLength: 1, maxLength: maxReasonLength },
+          automaticCapture: { type: 'boolean' },
         },
-        required: ['path', 'reason'],
+        required: ['path', 'reason', 'automaticCapture'],
         additionalProperties: false,
       },
       sensitive: true,
       execute: async (value: unknown, request: FastifyRequest, signal: AbortSignal) => {
         if (!isRecord(value) || Object.keys(value).some((key) =>
-          !['path', 'content', 'append', 'reason'].includes(key))) {
+          !['path', 'content', 'append', 'reason', 'automaticCapture'].includes(key)) ||
+            typeof value.automaticCapture !== 'boolean') {
           throw new ToolRefusal('The vault write request is invalid. Nothing was written.');
+        }
+        if (value.automaticCapture && !(await memorySettings()).automaticCapture) {
+          throw new ToolRefusal('Automatic memory capture is turned off. Nothing was written.');
         }
         const path = validatePath(value.path);
         const folder = safeFolder(path);
@@ -1262,7 +1281,8 @@ export function createVaultModule(options: {
         try {
           const graph = await knowledgeGraph(signal);
           const nodeByPath = new Map(graph.nodes.map((node) => [node.path, node]));
-          const ranked = await searchVault(request.query.q.trim(), maxSearchResults, signal);
+          const topK = (await memorySettings()).searchTopK;
+          const ranked = await searchVault(request.query.q.trim(), topK, signal);
           const seen = new Set<string>();
           const hits = ranked.flatMap((hit, index) => {
             const node = nodeByPath.get(hit.path);
@@ -1272,7 +1292,7 @@ export function createVaultModule(options: {
               ? Math.max(-1, Math.min(1, hit.score!))
               : Math.max(0, 1 - index / maxSearchResults);
             return [{ nodeId: node.id, score, snippet: snippet(hit.content) }];
-          }).slice(0, maxSearchResults);
+          }).slice(0, topK);
           return { hits };
         } catch (error) {
           if (error instanceof ToolFailure) return reply.code(503).send({ error: error.message });
