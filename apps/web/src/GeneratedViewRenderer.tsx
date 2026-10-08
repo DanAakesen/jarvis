@@ -2,6 +2,7 @@ import { isGeneratedView, type GeneratedView } from '@jarvis/contracts';
 import { Fragment } from 'react';
 import { Link } from 'react-router-dom';
 import { KnowledgeGraphWindow } from './knowledge/KnowledgeGraphView';
+import { CodeView } from './CodeView';
 
 function ViewAction({ view, title }: { view: GeneratedView; title: string }) {
   const action = view.actions?.find((candidate) => candidate.type === 'open-route' || candidate.type === 'open-link');
@@ -24,6 +25,8 @@ export function GeneratedViewRenderer({
   }
 
   switch (view.renderer) {
+    case 'code':
+      return <CodeView data={view.data} title={view.title} />;
     case 'knowledge-graph':
       return <KnowledgeGraphWindow query={view.data.query} highlight={view.data.highlight} />;
     case 'table':

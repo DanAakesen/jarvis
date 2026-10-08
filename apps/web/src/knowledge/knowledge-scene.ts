@@ -23,6 +23,25 @@ function folderColours(element: HTMLElement): Record<KnowledgeFolder, THREE.Colo
   };
 }
 
+// Idle life on a flat map (Dan, 8 October): each note floats a few pixels on its own slow orbit; links follow.
+const driftChunk = `vec2 float_drift(float phase, float time) {
+  return vec2(sin(time * (0.35 + phase * 0.25) + phase * 6.2831), cos(time * (0.3 + phase * 0.2) + phase * 9.1));
+}`;
+
+const lineVertex = `attribute vec3 lineColour;
+attribute float phase;
+uniform float time;
+uniform float drift;
+varying vec3 vColour;
+${driftChunk}
+void main() {
+  vColour = lineColour;
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(position + vec3(float_drift(phase, time) * drift, 0.0), 1.0);
+}`;
+
+const lineFragment = `varying vec3 vColour;
+void main() { gl_FragColor = vec4(vColour, 1.0); }`;
+
 const pointVertex = `
 attribute float size;
 attribute vec3 colour;
@@ -32,16 +51,18 @@ attribute float phase;
 uniform float dimOthers;
 uniform float pixelRatio;
 uniform float time;
+uniform float drift;
 varying vec3 vColour;
 varying float vAlpha;
+${driftChunk}
 void main() {
-  vec4 view = modelViewMatrix * vec4(position, 1.0);
+  vec4 view = modelViewMatrix * vec4(position + vec3(float_drift(phase, time) * drift, 0.0), 1.0);
   float emphasis = mix(1.0 - dimOthers * 0.82, 1.0, lit);
   // Idle life: every star breathes slowly on its own rhythm.
   float breath = sin(time * (0.6 + phase * 0.5) + phase * 6.2831);
-  vColour = colour * mix(1.0, 1.6, lit) * (0.9 + 0.12 * breath);
+  vColour = colour * mix(1.0, 1.6, lit) * (0.92 + 0.08 * breath);
   vAlpha = emphasis * shown;
-  gl_PointSize = shown * size * pixelRatio * (1.0 + lit * 0.7) * (1.0 + 0.09 * breath) * (520.0 / max(1.0, -view.z));
+  gl_PointSize = shown * size * pixelRatio * (1.0 + lit * 0.7) * (1.0 + 0.05 * breath) * (400.0 / max(1.0, -view.z));
   gl_Position = projectionMatrix * view;
 }`;
 
@@ -52,14 +73,15 @@ void main() {
   vec2 uv = gl_PointCoord - 0.5;
   float distance = length(uv);
   if (distance > 0.5) discard;
-  float core = smoothstep(0.26, 0.04, distance);
-  float glow = pow(smoothstep(0.5, 0.0, distance), 1.6) * 0.8;
+  // A crisp core with only a faint halo, so dense areas stay legible instead of blooming.
+  float core = smoothstep(0.3, 0.12, distance);
+  float glow = pow(smoothstep(0.5, 0.0, distance), 2.4) * 0.28;
   gl_FragColor = vec4(vColour * (core + glow), (core + glow) * vAlpha);
 }`;
 
 /**
- * The 3D knowledge cloud: one draw call for every note, one for every link. At 30 fps it drifts slowly, its stars breathe
- * and a link now and then lights up; it stops drawing when off-screen or hidden, and stays still with reduced motion.
+ * The knowledge map, drawn flat with WebGL: one draw call for every note, one for every link. At 30 fps its stars breathe
+ * and a link now and then lights up; dragging pans and the wheel zooms; it stops drawing when off-screen or hidden, and stays still with reduced motion.
  */
 export function createKnowledgeScene(host: HTMLElement, graph: KnowledgeGraph, callbacks: KnowledgeSceneCallbacks, reducedMotion: boolean) {
   const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: false, powerPreference: 'low-power' });
@@ -74,7 +96,8 @@ export function createKnowledgeScene(host: HTMLElement, graph: KnowledgeGraph, c
   const layout = createKnowledgeLayout(graph);
   if (reducedMotion) layout.settle();
   const spread = 26 * Math.cbrt(Math.max(graph.nodes.length, 8) / 400);
-  camera.position.set(spread * 1.05, spread * 0.45, spread * 1.55);
+  // A flat map seen straight on (Dan, 8 October): no perspective tilt or rotation, only pan and zoom.
+  camera.position.set(0, 0, spread * 2.4);
 
   const colours = folderColours(host);
   const count = graph.nodes.length;
@@ -84,7 +107,7 @@ export function createKnowledgeScene(host: HTMLElement, graph: KnowledgeGraph, c
   graph.nodes.forEach((node, index) => {
     const colour = colours[node.folder];
     colourArray.set([colour.r, colour.g, colour.b], index * 3);
-    sizes[index] = 2.6 + Math.min(4, Math.sqrt(node.degree) * 0.9);
+    sizes[index] = 1.9 + Math.min(3, Math.sqrt(node.degree) * 0.7);
   });
   const pointGeometry = new THREE.BufferGeometry();
   const positionAttribute = new THREE.BufferAttribute(layout.positions, 3);
@@ -102,7 +125,7 @@ export function createKnowledgeScene(host: HTMLElement, graph: KnowledgeGraph, c
   const pointMaterial = new THREE.ShaderMaterial({
     vertexShader: pointVertex,
     fragmentShader: pointFragment,
-    uniforms: { dimOthers: { value: 0 }, pixelRatio: { value: pixelRatio }, time: { value: 0 } },
+    uniforms: { dimOthers: { value: 0 }, pixelRatio: { value: pixelRatio }, time: { value: 0 }, drift: { value: reducedMotion ? 0 : spread * 0.012 } },
     transparent: true,
     depthWrite: false,
     blending: THREE.AdditiveBlending,
@@ -134,10 +157,19 @@ export function createKnowledgeScene(host: HTMLElement, graph: KnowledgeGraph, c
   const linePositionAttribute = new THREE.BufferAttribute(linePositions, 3);
   const lineColourAttribute = new THREE.BufferAttribute(lineColours, 3);
   lineGeometry.setAttribute('position', linePositionAttribute);
-  lineGeometry.setAttribute('color', lineColourAttribute);
-  const lines = new THREE.LineSegments(lineGeometry, new THREE.LineBasicMaterial({
-    vertexColors: true, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
-  }));
+  lineGeometry.setAttribute('lineColour', lineColourAttribute);
+  const linePhases = new Float32Array(edgePairs.length * 2);
+  edgePairs.forEach(({ source, target }, edge) => { linePhases[edge * 2] = phases[source]!; linePhases[edge * 2 + 1] = phases[target]!; });
+  lineGeometry.setAttribute('phase', new THREE.BufferAttribute(linePhases, 1));
+  const lineMaterial = new THREE.ShaderMaterial({
+    vertexShader: lineVertex,
+    fragmentShader: lineFragment,
+    uniforms: { time: pointMaterial.uniforms.time!, drift: pointMaterial.uniforms.drift! },
+    transparent: true,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+  });
+  const lines = new THREE.LineSegments(lineGeometry, lineMaterial);
   scene.add(lines);
 
   const syncLines = () => {
@@ -156,8 +188,11 @@ export function createKnowledgeScene(host: HTMLElement, graph: KnowledgeGraph, c
   controls.dampingFactor = 0.08;
   controls.minDistance = spread * 0.15;
   controls.maxDistance = spread * 6;
-  controls.autoRotate = !reducedMotion;
-  controls.autoRotateSpeed = 0.35;
+  controls.enableRotate = false;
+  controls.screenSpacePanning = true;
+  controls.mouseButtons = { LEFT: THREE.MOUSE.PAN, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.PAN };
+  controls.touches = { ONE: THREE.TOUCH.PAN, TWO: THREE.TOUCH.DOLLY_PAN };
+  controls.autoRotate = false;
 
   let highlighted: string[] = [];
   let selected: string | null = null;
@@ -166,10 +201,7 @@ export function createKnowledgeScene(host: HTMLElement, graph: KnowledgeGraph, c
   let frame = 0;
   let last = 0;
   let disposed = false;
-  let lastInteraction = performance.now();
-  const autoRotateFor = 8000;
-  // After interaction settles the cloud keeps turning, just slower, and a link now and then lights up and fades.
-  const idleRotateSpeed = 0.1;
+  // Between interactions the stars breathe and a link now and then lights up and fades.
   const sparks: { edge: number; start: number }[] = [];
   let nextSpark = performance.now() + 1200;
   let onScreen = true;
@@ -190,7 +222,7 @@ export function createKnowledgeScene(host: HTMLElement, graph: KnowledgeGraph, c
       const spark = sparks[index]!;
       const t = (now - spark.start) / sparkDuration;
       if (t >= 1) { paintEdge(spark.edge, 0); sparks.splice(index, 1); continue; }
-      paintEdge(spark.edge, Math.sin(Math.PI * t) * (pairSimilar(spark.edge) ? 4 : 1.6));
+      paintEdge(spark.edge, Math.sin(Math.PI * t) * (pairSimilar(spark.edge) ? 2.6 : 1.1));
     }
     lineColourAttribute.needsUpdate = true;
   };
@@ -237,11 +269,10 @@ export function createKnowledgeScene(host: HTMLElement, graph: KnowledgeGraph, c
       moving = true;
     }
     if (!reducedMotion) {
-      const recent = now - lastInteraction < autoRotateFor;
-      controls.autoRotate = true;
-      controls.autoRotateSpeed += ((recent ? 0.35 : idleRotateSpeed) - controls.autoRotateSpeed) * 0.04;
       pointMaterial.uniforms.time!.value = now / 1000;
       stepSparks(now);
+      // Breathing stars and sparks keep the map alive between interactions.
+      moving = true;
     }
     inLoop = true;
     if (controls.update() || controls.autoRotate) moving = true;
@@ -278,7 +309,7 @@ export function createKnowledgeScene(host: HTMLElement, graph: KnowledgeGraph, c
   };
   let downAt: { x: number; y: number } | null = null;
   let hoverTimer = 0;
-  const onPointerDown = (event: PointerEvent) => { downAt = { x: event.clientX, y: event.clientY }; lastInteraction = performance.now(); };
+  const onPointerDown = (event: PointerEvent) => { downAt = { x: event.clientX, y: event.clientY }; };
   const onPointerUp = (event: PointerEvent) => {
     // A click (not the end of an orbit drag) opens the star under the pointer.
     if (downAt && Math.hypot(event.clientX - downAt.x, event.clientY - downAt.y) < 5) {
@@ -296,7 +327,7 @@ export function createKnowledgeScene(host: HTMLElement, graph: KnowledgeGraph, c
     callbacks.onHover(node ? { id: node.id, x: event.clientX - bounds.left, y: event.clientY - bounds.top } : null);
   };
   const onLeave = () => callbacks.onHover(null);
-  const onControlStart = () => { lastInteraction = performance.now(); wake(); };
+  const onControlStart = () => { wake(); };
   renderer.domElement.addEventListener('pointerdown', onPointerDown);
   renderer.domElement.addEventListener('pointerup', onPointerUp);
   renderer.domElement.addEventListener('pointermove', onPointerMove);
@@ -316,7 +347,6 @@ export function createKnowledgeScene(host: HTMLElement, graph: KnowledgeGraph, c
     const radius = Math.max(spread * 0.4, box.getSize(new THREE.Vector3()).length() * 0.65);
     const direction = camera.position.clone().sub(controls.target).normalize();
     const to = centre.clone().add(direction.multiplyScalar(radius / Math.tan((camera.fov * Math.PI) / 360) * 1.5));
-    lastInteraction = performance.now();
     if (reducedMotion) {
       camera.position.copy(to);
       controls.target.copy(centre);

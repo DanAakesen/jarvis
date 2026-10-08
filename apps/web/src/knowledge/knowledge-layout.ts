@@ -42,7 +42,8 @@ export function createKnowledgeLayout(graph: KnowledgeGraph, seed = 11): Knowled
     const phi = Math.acos(2 * random() - 1);
     positions[node * 3] = centre[0]! + radius * Math.sin(phi) * Math.cos(theta);
     positions[node * 3 + 1] = centre[1]! + radius * Math.sin(phi) * Math.sin(theta);
-    positions[node * 3 + 2] = centre[2]! + radius * Math.cos(phi);
+    // A flat map (Dan, 8 October): every note lies on one plane.
+    positions[node * 3 + 2] = 0;
   }
 
   const repelRadius = spread * 0.16;
@@ -94,6 +95,7 @@ export function createKnowledgeLayout(graph: KnowledgeGraph, seed = 11): Knowled
       for (let axis = 0; axis < 3; axis += 1) {
         const at = node * 3 + axis;
         // A gentle pull back to the folder's region keeps the four clusters readable.
+        if (axis === 2) continue;
         const home = (centre[axis]! - positions[at]!) * 0.004;
         velocities[at] = (velocities[at]! + forces[at]! + home) * 0.82;
         const capped = Math.max(-spread * 0.05, Math.min(spread * 0.05, velocities[at]! * temperature));

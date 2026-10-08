@@ -304,6 +304,16 @@ function graphNodeId(path: string): string {
   return createHash('sha256').update(path, 'utf8').digest('hex');
 }
 
+export function knowledgeGraphView(query: string, paths: readonly string[], updatedAt = new Date().toISOString()) {
+  return {
+    version: 1 as const,
+    title: 'Knowledge graph',
+    renderer: 'knowledge-graph' as const,
+    source: { id: 'knowledge_graph' as const, status: 'complete' as const, updatedAt },
+    data: { query, highlight: [...new Set(paths.map(graphNodeId))].slice(0, maxSearchResults) },
+  };
+}
+
 function extractLinkTargets(content: string): string[] {
   const targets = new Set<string>();
   const add = (target: string | undefined) => {
@@ -1040,17 +1050,8 @@ export function createVaultModule(options: {
         const graph = await knowledgeGraph(signal);
         const hits = await searchVault(query, (await memorySettings()).searchTopK, signal);
         const byPath = new Map(graph.nodes.map((node) => [node.path, node]));
-        const highlight = [...new Set(hits.flatMap((hit) => {
-            const node = byPath.get(hit.path);
-            return node ? [node.id] : [];
-        }))].slice(0, maxSearchResults);
-        const view = {
-            version: 1 as const,
-            title: 'Knowledge graph',
-            renderer: 'knowledge-graph' as const,
-            source: { id: 'knowledge_graph' as const, status: 'complete' as const, updatedAt: graph.updatedAt },
-            data: { query, highlight },
-        };
+        const view = knowledgeGraphView(query, hits.filter((hit) => byPath.has(hit.path)).map((hit) => hit.path), graph.updatedAt);
+        const { highlight } = view.data;
         if (!isGeneratedView(view)) throw new ToolFailure('The knowledge graph view is invalid.');
         const existing = request.server.workspaceCommands.snapshot(request.server.ownerObjectId)
             ?.windows.some((window) => window.viewId === 'knowledge-graph') ?? false;
