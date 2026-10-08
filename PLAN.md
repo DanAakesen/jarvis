@@ -473,7 +473,7 @@ Declined in the audit (do not file): verbosity and max-output-token settings, no
 | P9-28 | [#522](https://github.com/DanAakesen/jarvis/issues/522) | Project update and archive tools | Backend | — | Not started |
 | P9-29 | [#523](https://github.com/DanAakesen/jarvis/issues/523) | Factory retry and release status tools | Backend | — | Complete |
 | P9-30 | [#524](https://github.com/DanAakesen/jarvis/issues/524) | Job detail and retry | Backend | P9-14 | Not started |
-| P9-31 | [#525](https://github.com/DanAakesen/jarvis/issues/525) | Usage tool | Backend | P9-23 | Not started |
+| P9-31 | [#525](https://github.com/DanAakesen/jarvis/issues/525) | Usage tool | Backend | P9-23 | Complete |
 | P9-32 | [#526](https://github.com/DanAakesen/jarvis/issues/526) | Clipboard read and write via the PC bridge | Backend | — | Not started |
 | P9-33 | [#527](https://github.com/DanAakesen/jarvis/issues/527) | Delete a vault note | Backend | — | Not started |
 | P9-34 | [#528](https://github.com/DanAakesen/jarvis/issues/528) | Weather and location | Backend | — | Not started |

@@ -220,6 +220,7 @@ export interface WebResearchResult {
 
 export type UsageRole = 'chat' | 'voice' | 'vision' | 'research' | 'embeddings';
 export type UsageVerification = 'measured' | 'estimated' | 'unverified';
+export type UsagePeriod = 'today' | '7d' | '30d' | '90d' | 'all';
 export type UsageSource = 'sandbox' | 'jarvis_model' | 'voice' | 'codex' | 'copilot';
 export type UsageMetric = 'minutes' | 'input_tokens' | 'output_tokens' | 'turns' | 'premium_requests' | 'screen_frames';
 
@@ -263,7 +264,7 @@ export interface UsageRoleCoverage {
 }
 
 export interface UsageReport {
-  period: '7d' | '30d' | '90d' | 'all';
+  period: UsagePeriod;
   from: string | null;
   to: string;
   entries: UsageEntry[];

@@ -1340,6 +1340,13 @@ daily totals are bounded to the latest 90 days; monthly totals cover the selecte
 period. Provider-reported chat/voice tokens, SQL collection and live billing have
 not been verified against a deployed service or invoice.
 
+P9-31 adds the agent-only `get_usage` tool to the shared registry. It uses the
+existing usage store and shared period/entry contracts to return USD and DKK
+spend grouped by role (or source where no role is recorded) and model, preserving
+estimated and unverified counts and surfacing unpriced tool calls and truncation.
+The `today` period uses UTC midnight. Sensitive tool-call audit records redact
+the arguments and result; no migration or web change is needed.
+
 P6-03's backend job checks for events older than 90 days hourly while a sandbox
 is active, in bounded SQL batches, and uploads deterministic per-task blobs
 before deleting each batch in the same SQL transaction. While idle, it skips

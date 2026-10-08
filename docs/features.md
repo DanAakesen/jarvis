@@ -113,6 +113,7 @@ Status as of 7 October 2026.
 | System status | Inspect database, Foundry, vault index/embedding coverage, GitHub App permissions, Google, PC bridge, runner configuration, deployed commit and most recent unhandled server error | Backend API; UI pending | Dan-only `GET /status`; `get_status_summary` shares the cached snapshot | Backend implemented offline; UI and live-provider verification pending | P9-20 |
 | Codex login renewal | Daily automatic renewal of the Jarvis Codex login | Background | Settings | Built | P2-08 |
 | Usage and cost | Per-model and per-role Foundry tokens; daily/monthly USD and DKK totals; research and image-generation call counts, with estimated and unverified costs identified | Screen | Usage API; UI integration pending | Backend implemented offline; live provider billing unverified | P2-12, P6-01, P7-14, P9-23 |
+| Usage and cost tool | Ask Jarvis for spend by area and model for today or another supported period, with estimated and unverified amounts identified | Voice/chat | `get_usage` | Backend implemented offline; live provider billing unverified | P9-31 |
 | Event archive | Old task events move to Blob and load on demand; idle checks skip SQL until a sandbox is active | Background | Task detail | Built offline | P6-03, P5-13 |
 | Alerts | Failed deploys, sandbox crashes, credential expiry, budget 80 % | Now + email | Main page; email-only Azure Monitor action group | Built (offline; live Azure delivery unverified) | P6-02 |
 | Backup drill | Database restore documented | Background | — | Planned | P6-04 |
