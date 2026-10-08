@@ -31,6 +31,23 @@ export interface ResearchSettings {
   maxSources: number;
   timeoutSeconds: number;
 }
+export interface MemorySettings {
+  similarityThreshold: number;
+  searchTopK: number;
+  graphTextSimilarityThreshold: number;
+  automaticCapture: boolean;
+}
+export const memorySettingsBounds: Readonly<{
+  similarityThreshold: Readonly<{ minimum: 0; maximum: 1 }>;
+  searchTopK: Readonly<{ minimum: 1; maximum: 8 }>;
+  graphTextSimilarityThreshold: Readonly<{ minimum: 0; maximum: 1 }>;
+}>;
+export const memorySettingsSchema: Readonly<{
+  type: 'object';
+  minProperties: 1;
+  additionalProperties: false;
+  properties: Readonly<Record<keyof MemorySettings, Readonly<Record<string, unknown>>>>;
+}>;
 export const researchSettingsBounds: Readonly<{
   maxSources: Readonly<{ minimum: 1; maximum: 50 }>;
   timeoutSeconds: Readonly<{ minimum: 1; maximum: 320 }>;

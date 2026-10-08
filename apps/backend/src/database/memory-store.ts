@@ -143,7 +143,12 @@ export interface VaultIndexStore {
   ): Promise<void>;
   deleteFiles(paths: readonly string[], signal: AbortSignal): Promise<void>;
   graphFiles(signal: AbortSignal): Promise<VaultGraphFile[]>;
-  graphData(paths: readonly string[], embeddingModel: string, signal: AbortSignal): Promise<VaultGraphData>;
+  graphData(
+    paths: readonly string[],
+    embeddingModel: string,
+    signal: AbortSignal,
+    similarityThreshold?: number,
+  ): Promise<VaultGraphData>;
   searchByVector(embedding: readonly number[], embeddingModel: string, limit: number, signal: AbortSignal): Promise<VaultSearchHit[]>;
   searchByTerms(terms: readonly string[], limit: number, signal: AbortSignal): Promise<VaultSearchHit[]>;
 }
@@ -915,7 +920,7 @@ export function createVaultIndexStore(pool: sql.ConnectionPool): VaultIndexStore
       }));
     },
 
-    async graphData(paths, embeddingModel, signal) {
+    async graphData(paths, embeddingModel, signal, similarityThreshold = vaultSimilarityThreshold) {
       ensureInitialized();
       if (paths.length === 0) return { links: [], similarities: [], embeddings: [] };
       const pathsByHash = new Map(paths.map((path) => [pathHash(path).toString('hex'), path]));
@@ -926,7 +931,7 @@ export function createVaultIndexStore(pool: sql.ConnectionPool): VaultIndexStore
         .input('linkTake', sql.Int, 8_001)
         .input('paths', sql.NVarChar(sql.MAX), JSON.stringify(paths))
         .input('embeddingModel', sql.NVarChar(128), embeddingModel)
-        .input('similarityThreshold', sql.Float, vaultSimilarityThreshold);
+        .input('similarityThreshold', sql.Float, similarityThreshold);
       const similarityQuery = vectorSearchAvailable
         ? `CREATE TABLE #vault_note_vectors (path nvarchar(1024) NOT NULL, embedding vector(1536) NOT NULL);
           ;WITH mean_components AS (

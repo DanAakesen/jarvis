@@ -20,6 +20,7 @@ import { loadConfig } from '../config.js';
 import type { TokenVerifier } from '../auth/verify.js';
 import type { TeamsNotificationService } from '../teams/service.js';
 import { WorkspaceCommandBroker } from '../core/workspace-commands.js';
+import type { Settings } from '../core/settings.js';
 import type { WorkspaceCommand } from '@jarvis/contracts';
 
 const sha = (character: string) => character.repeat(40);
@@ -50,6 +51,30 @@ function fakeGitHub(initial: Record<string, RemoteFile> = {}, conflicts = 0) {
         truncated: false,
         tree: [...files].map(([path, file]) => ({ path, sha: file.sha, type: 'blob', mode: '100644' })),
       });
+
+      it('uses the configured default top-k for vault search', async () => {
+        const remote = { 'Work/project.md': { sha: sha('a'), content: '# Project\n\nProject detail.' } };
+        const index = new FakeIndexStore(true);
+        const { module } = moduleFor({
+          remote,
+          index,
+          embedder: { embed: vi.fn(async () => [0.5]) },
+          memorySettings: { searchTopK: 2 },
+        });
+        await module.synchronize(signal());
+
+        const result = await tool(module, 'vault_search').execute(
+          { query: 'project detail' }, {} as FastifyRequest, signal(),
+        ) as { results: unknown[] };
+        await tool(module, 'vault_search').execute(
+          { query: 'project detail', k: 5 }, {} as FastifyRequest, signal(),
+        );
+
+        expect(index.vectorSearch).toHaveBeenCalledTimes(2);
+        expect(index.vectorSearch).toHaveBeenNthCalledWith(1, [0.5], 'text-embedding-3-small', 2);
+        expect(index.vectorSearch).toHaveBeenNthCalledWith(2, [0.5], 'text-embedding-3-small', 2);
+        expect(result.results).toHaveLength(1);
+      });
     }
     if (parsed.pathname === `/repos/${VAULT_REPOSITORY}/commits`) {
       const file = files.get(parsed.searchParams.get('path') ?? '');
@@ -67,6 +92,33 @@ function fakeGitHub(initial: Record<string, RemoteFile> = {}, conflicts = 0) {
       return response({
         type: 'file', path, sha: file.sha, encoding: 'base64',
         content: Buffer.from(file.content).toString('base64'),
+      });
+
+      it('refuses automatic captures when disabled but permits Dan-requested vault writes', async () => {
+        const remote = {
+          'AGENTS.md': { sha: sha('a'), content: '# Routing\nPeople/ Work/ Personal/ General/' },
+          '.github/agent-state/routing.md': {
+            sha: sha('b'), content: 'Route notes to People/, Work/, Personal/ or General/.',
+          },
+        };
+        const { github, module } = moduleFor({
+          remote,
+          memorySettings: { automaticCapture: false },
+        });
+        const write = tool(module, 'vault_write');
+        const input = {
+          path: 'General/decision.md',
+          content: 'Dan requested this note.',
+          reason: 'requested by Dan',
+        };
+
+        await expect(write.execute({ ...input, automaticCapture: true }, request, signal()))
+          .rejects.toThrow('Automatic memory capture is turned off');
+        expect(github.calls.some(({ method }) => method === 'PUT')).toBe(false);
+
+        await expect(write.execute({ ...input, automaticCapture: false }, request, signal()))
+          .resolves.toMatchObject({ path: 'General/decision.md' });
+        expect(github.calls.some(({ method }) => method === 'PUT')).toBe(true);
       });
     }
     if (method === 'DELETE' && body && typeof body.sha === 'string') {
@@ -169,6 +221,7 @@ function moduleFor(options: {
   readonly embedder?: MemoryEmbedder;
   readonly conflicts?: number;
   readonly apiMemoryStore?: MemoryStore;
+  readonly memorySettings?: Partial<Settings['memory']>;
 } = {}) {
   const github = fakeGitHub(options.remote, options.conflicts);
   const indexStore = options.index ?? new FakeIndexStore();
@@ -179,12 +232,25 @@ function moduleFor(options: {
     getSourceMessage: vi.fn(async (messageId: string) =>
       messageId === '42' ? { messageId, text: sourceText } : null),
   } as Pick<MemoryStore, 'getSourceMessage'>;
+  const settingsStore = options.memorySettings ? {
+    read: async () => Object.fromEntries(Object.entries({
+      similarityThreshold: 'memory.similarity_threshold',
+      searchTopK: 'memory.search_top_k',
+      graphTextSimilarityThreshold: 'memory.graph_text_similarity_threshold',
+      automaticCapture: 'memory.automatic_capture',
+    }).flatMap(([property, key]) => {
+      const value = options.memorySettings?.[property as keyof Settings['memory']];
+      return value === undefined ? [] : [[key, JSON.stringify(value)]];
+    })),
+    write: async () => {},
+  } : undefined;
   const module = createVaultModule({
     client,
     indexStore,
     memoryStore,
     ...(options.apiMemoryStore ? { apiMemoryStore: options.apiMemoryStore } : {}),
     ...(options.embedder ? { embedder: options.embedder } : {}),
+    ...(settingsStore ? { settingsStore } : {}),
   });
   return { github, indexStore, module, tokenIssuer, memoryStore };
 }
@@ -573,6 +639,41 @@ describe('GitHub vault', () => {
     expect(pairs).toContain([id('Personal/Garden.md'), id('Personal/Kitchen.md')].sort().join(':'));
     expect(pairs).not.toContain([id('Work/Azure.md'), id('Personal/Garden.md')].sort().join(':'));
   });
+  it('applies the configured vault similarity threshold to graph edges', async () => {
+    const remote = {
+      'General/First.md': { sha: sha('a'), content: '# First\n\nNote one.' },
+      'General/Second.md': { sha: sha('b'), content: '# Second\n\nNote two.' },
+    };
+    const index = new FakeIndexStore(true);
+    const { module } = moduleFor({
+      remote,
+      index,
+      memorySettings: { similarityThreshold: 0.6 },
+    });
+    await module.synchronize(signal());
+    const graphData = vi.spyOn(index, 'graphData').mockResolvedValue({
+      links: [],
+      similarities: [{
+        sourcePath: 'General/First.md',
+        targetPath: 'General/Second.md',
+        score: 0.55,
+      }],
+      embeddings: [],
+      contents: [],
+    });
+    const app = memoryApiApp(module);
+
+    const graph = await app.inject({ url: '/knowledge/graph', headers: apiAuthorization });
+
+    expect(graph.statusCode).toBe(200);
+    expect(graphData).toHaveBeenCalledWith(
+      ['General/First.md', 'General/Second.md'],
+      'text-embedding-3-small',
+      expect.any(AbortSignal),
+      0.6,
+    );
+    expect(graph.json().edges).toEqual([]);
+  });
   it('bounds the graph to two thousand nodes and eight thousand edges', async () => {
     const index = new FakeIndexStore();
     const { module } = moduleFor({ index });
@@ -721,6 +822,7 @@ describe('GitHub vault', () => {
       path: 'General/decision.md',
       content: '# Decision\n\nUse TypeScript.',
       reason: 'capture confirmed decision',
+      automaticCapture: true,
     }, request, signal()) as { path: string; commit: string; confirmation: string };
 
     const writes = github.calls.filter(({ method }) => method === 'PUT');
@@ -747,12 +849,14 @@ describe('GitHub vault', () => {
     const health = moduleFor({ source: 'I was diagnosed with a condition.' });
     await expect(tool(health.module, 'vault_write').execute({
       path: 'Personal/health.md', content: 'Diagnosis: sensitive detail.', reason: 'capture',
+      automaticCapture: true,
     }, request, signal())).rejects.toThrow('unless Dan explicitly says “remember”');
     expect(health.github.calls.some(({ method }) => method === 'PUT')).toBe(false);
 
     const password = moduleFor({ source: 'Remember my password is apple.' });
     await expect(tool(password.module, 'vault_write').execute({
       path: 'Personal/credentials.md', content: 'Password: apple.', reason: 'capture',
+      automaticCapture: true,
     }, request, signal())).rejects.toThrow('Secrets and credentials can never be saved');
     expect(password.github.calls.some(({ method }) => method === 'PUT')).toBe(false);
 
@@ -761,6 +865,7 @@ describe('GitHub vault', () => {
       path: 'Work/configuration.md',
       content: 'API key: abcdefghijklmnopqrstuvwxyz123456.',
       reason: 'remember credential',
+      automaticCapture: true,
     }, request, signal())).rejects.toThrow('Secrets and credentials can never be saved');
     expect(credential.github.calls.some(({ method }) => method === 'PUT')).toBe(false);
   });
@@ -768,10 +873,10 @@ describe('GitHub vault', () => {
   it('refuses paths outside the vault routing folders and writes larger than 256 KB', async () => {
     const module = moduleFor();
     await expect(tool(module.module, 'vault_write').execute({
-      path: '../General/note.md', content: 'Fact.', reason: 'capture',
+      path: '../General/note.md', content: 'Fact.', reason: 'capture', automaticCapture: true,
     }, request, signal())).rejects.toThrow('Markdown path');
     await expect(tool(module.module, 'vault_write').execute({
-      path: 'General/note.md', content: 'x'.repeat(256 * 1024 + 1), reason: 'capture',
+      path: 'General/note.md', content: 'x'.repeat(256 * 1024 + 1), reason: 'capture', automaticCapture: true,
     }, request, signal())).rejects.toThrow('vault content is invalid');
     expect(module.github.calls).toHaveLength(0);
   });
@@ -787,7 +892,7 @@ describe('GitHub vault', () => {
       },
     });
     await expect(tool(module, 'vault_write').execute({
-      path: 'General/large.md', append: 'More.', reason: 'capture',
+      path: 'General/large.md', append: 'More.', reason: 'capture', automaticCapture: true,
     }, request, signal())).rejects.toThrow('limited to 256 KB');
     expect(github.calls.some(({ method }) => method === 'PUT')).toBe(false);
   });

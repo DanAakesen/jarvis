@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { ToolRefusal } from '../core/tool-registry.js';
 import type { RegisteredTool, ToolRegistry } from '../core/tool-registry.js';
 import { defaultAwayModeState } from '../core/away-mode.js';
+import { defaultSettings } from '../core/settings.js';
 import {
   createEnglishSessionUpdate,
   createRealtimeSessionUpdate,
@@ -67,6 +68,33 @@ describe('English realtime session', () => {
       registry, undefined, defaultAwayModeState, 'en', [], 'mai-transcribe',
     ).session;
     expect(session.input_audio_transcription).toEqual({ model: 'mai-transcribe' });
+  });
+
+  it('includes the persisted automatic-capture policy in voice instructions', () => {
+    const memory = { ...defaultSettings.memory, automaticCapture: false };
+    const session = createRealtimeSessionUpdate(
+      registry,
+      undefined,
+      defaultAwayModeState,
+      'en',
+      [],
+      undefined,
+      undefined,
+      memory,
+    ).session;
+    const danish = createRealtimeSessionUpdate(
+      registry,
+      undefined,
+      defaultAwayModeState,
+      'da',
+      [],
+      undefined,
+      undefined,
+      memory,
+    ).session;
+
+    expect(session.instructions).toContain('Do not proactively save memories');
+    expect(danish.instructions).toContain('Do not proactively save memories');
   });
 
   it('keeps default VAD behavior and bounds spoken replies', () => {
