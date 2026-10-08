@@ -2371,6 +2371,11 @@ credential when no API key is set. Claude requests use
 `https://{resource}.services.ai.azure.com/anthropic/v1/messages` and a bearer token for
 `https://ai.azure.com/.default`.
 
+P9-37 adds offline parity coverage for the realtime voice tool catalogue against
+`GET /tools`, checks tool identifiers in the shared voice/chat capability block
+against the registered tools, and verifies the root of each chat and voice
+model-facing schema is a plain object.
+
 For chat only, an effective deployment name beginning with `claude-` selects
 `AsyncAnthropicFoundry`; other chat models and the separate voice role stay on
 Responses. The adapter converts registered tool schemas to Anthropic's
