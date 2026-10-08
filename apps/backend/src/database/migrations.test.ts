@@ -64,6 +64,7 @@ describe('committed SQL manifest', () => {
       '0033_project_description.sql',
       '0034_research_job_retry.sql',
       '0035_folio.sql',
+      '0036_folio_lowercase_ids.sql',
     ]);
     for (const migration of migrations) await expect(readDownMigration(migration.name)).resolves.toMatchObject({ name: migration.name });
   });
