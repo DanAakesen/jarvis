@@ -467,7 +467,7 @@ Declined in the audit (do not file): verbosity and max-output-token settings, no
 | P9-22 | [#516](https://github.com/DanAakesen/jarvis/issues/516) | Owner-authenticated `GET /phone/status` and bounded recent call history using existing contracts and storage; document the dormant Teams/ACS setup and activation path | History returns UTC start time, duration and outcome without caller IDs; tests cover auth, availability and failures; no web changes or migration. Production number, ACS resource and callbacks remain unverified and require Dan's Azure/Teams access. | — | Complete |
 | P9-23 | [#517](https://github.com/DanAakesen/jarvis/issues/517) | Complete cost coverage | Backend | — | Complete |
 | P9-24 | [#518](https://github.com/DanAakesen/jarvis/issues/518) | Conversation search | Backend | — | Complete |
-| P9-25 | [#519](https://github.com/DanAakesen/jarvis/issues/519) | Folio API and tools search, reopen, pin, rename and remove saved research, HTML apps, images and knowledge-graph views; UI rail/pane remains separate | Backend + UI session | — | In progress |
+| P9-25 | [#519](https://github.com/DanAakesen/jarvis/issues/519) | Folio API and tools search, reopen, pin, rename and remove saved research, HTML apps, images and knowledge-graph views; UI rail/pane remains separate | Backend + UI session | — | Complete |
 | P9-26 | [#520](https://github.com/DanAakesen/jarvis/issues/520) | Calendar update and delete | Backend | — | Complete |
 | P9-27 | [#521](https://github.com/DanAakesen/jarvis/issues/521) | Mail drafts and triage | Backend | — | Complete |
 | P9-28 | [#522](https://github.com/DanAakesen/jarvis/issues/522) | Project update and archive tools | Backend | — | Complete |
