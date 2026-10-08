@@ -1162,10 +1162,19 @@ Deploy, `.github/workflows/deploy.yml` (P0-11):
 | Item | Detail |
 | --- | --- |
 | Triggers | Push to `main` (except `*.md` and `docs/` only); `workflow_dispatch` on `main` redeploys everything |
-| Scripts | `deploy_plan.py` (parts to deploy), `deploy_bicep.sh` (Bicep deployment `jarvis-infra`), `deploy_smoke.py` (Foundry hosts) in `.github/scripts/` |
+| Scripts | `deploy_plan.py` (parts to deploy), `deploy_bicep.sh` (Bicep deployment `jarvis-infra`), `deploy_smoke.py` (Foundry hosts) in `.github/scripts/`; the Deploy workflow also calls the backend's authenticated `GET /status/smoke` |
 | Permissions | `contents: read`; the plan job adds `actions: read` (last successful run); Azure jobs add `id-token: write` for the bootstrap OIDC identity. No stored secrets; the Static Web Apps token is read at run time and masked |
 | Offline checks (verified for P0-11) | `PYTHONPATH=.github/scripts python3 -m unittest discover -s .github/scripts/tests -v` (plan and smoke rules); `az bicep build --file infra/main.bicep --stdout >/dev/null` and `az bicep lint --file infra/main.bicep`; `actionlint .github/workflows/deploy.yml` (actionlint 1.7.12 does not know `concurrency.queue` yet and reports it; GitHub documents it) |
 | Live verification | Pending the first run (P0-16) |
+
+After any component deploy, the serialized Smoke checks job obtains a short-lived
+Azure Resource Manager access token from the existing OIDC deployment identity
+and calls `GET /status/smoke`. The backend accepts that audience only for the
+bootstrapped deploy service principal and that exact route; Dan can also call it
+with his normal API token. The workflow masks the token, stores the JSON only in
+the runner temp directory, and prints only the six allowlisted check IDs and
+statuses. Google, GitHub App, vault, embeddings, and research failures block
+acceptance; an offline PC bridge is reported but does not block deployment.
 
 ### Backend modules
 

@@ -2,9 +2,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ProjectStore } from './projects.js';
 import { buildApp } from '../app.js';
 import { loadConfig } from '../config.js';
+import { capabilityInstructions } from '../core/capability-instructions.js';
 import { coreModule } from '../core/index.js';
+import { defaultSettings } from '../core/settings.js';
 import type { ToolCallRecord } from '../core/tool-calls.js';
-import { ENGLISH_REALTIME_INSTRUCTIONS } from '../voice/realtime.js';
 import type { TaskController, TaskDetail, TaskRecord, TaskStore } from './task-store.js';
 import { factoryModule } from './index.js';
 import type { ConversationMessage, ConversationStore } from '../core/conversation-store.js';
@@ -119,13 +120,14 @@ describe('Software Factory Jarvis tools', () => {
       'list_capabilities', 'repo_overview', 'repo_list', 'repo_read', 'repo_search', 'repo_issues',
     ];
     expect(factoryModule.tools.map(({ name }) => name)).toEqual(names);
+    const capabilities = capabilityInstructions(defaultSettings.memory);
     for (const name of names.filter((name) => !repositoryNames.includes(name))) {
-      expect(ENGLISH_REALTIME_INSTRUCTIONS).toContain(name);
+      expect(capabilities).toContain(name);
     }
-    expect(ENGLISH_REALTIME_INSTRUCTIONS).toContain('repo_overview first');
-    expect(ENGLISH_REALTIME_INSTRUCTIONS).toContain('repo_search or repo_read');
-    expect(ENGLISH_REALTIME_INSTRUCTIONS).toContain('create it only after Dan confirms');
-    expect(ENGLISH_REALTIME_INSTRUCTIONS).toContain('set_jarvis_model');
+    expect(capabilities).toContain('repo_overview first');
+    expect(capabilities).toContain('repo_search or repo_read');
+    expect(capabilities).toContain('create a task only after Dan confirms');
+    expect(capabilities).toContain('set_jarvis_model');
 
     const { app } = fixture();
     const response = await app.inject({ url: '/tools', headers });

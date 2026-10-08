@@ -195,6 +195,7 @@ async def test_loads_effective_model_settings_for_a_new_session() -> None:
             },
         },
         "research": {"timeoutSeconds": 280},
+        "capabilityInstructions": "Shared tools and safety rules.",
         "timeouts": {
             "toolTimeoutSeconds": 45,
             "longToolTimeoutSeconds": 300,
@@ -225,6 +226,7 @@ async def test_loads_effective_model_settings_for_a_new_session() -> None:
     assert settings.away_mode
     assert settings.changed_at == "2026-10-06T12:00:00.000Z"
     assert settings.mode_instructions["on_the_move"] == "Keep it brief."
+    assert settings.capability_instructions == "Shared tools and safety rules."
     assert (
         settings.tool_timeout_seconds,
         settings.long_tool_timeout_seconds,
@@ -279,6 +281,11 @@ async def test_resolved_chat_role_settings_override_legacy_model_fields() -> Non
         {
             "model": "deployment", "reasoningEffort": "none",
             "research": {"timeoutSeconds": 321},
+        },
+        {"model": "deployment", "reasoningEffort": "none", "capabilityInstructions": 42},
+        {
+            "model": "deployment", "reasoningEffort": "none",
+            "capabilityInstructions": "x" * 10_001,
         },
         {"model": "deployment", "reasoningEffort": "none", "personality": {"tone": "unknown"}},
         {

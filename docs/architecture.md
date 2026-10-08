@@ -387,6 +387,16 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   compatibility alias for the chat role and shares the same confirmation and
   validation path. These tools reuse the existing settings store and contracts;
   no migration or web change is required.
+  P9-34 adds a bounded home-location setting (`city`, latitude and longitude) to
+  that same store and registers `weather` through the shared tool registry.
+  Open-Meteo geocodes named places and returns a validated current observation
+  and up to seven forecast days. The tool records its work as an `html_app`
+  background job, stores a static escaped report in the existing workspace HTML
+  artifact tables, and opens it through the workspace command broker. Requests
+  use fixed Open-Meteo HTTPS hosts, an eight-second downstream deadline and
+  bounded JSON responses; no API key or migration is needed. Offline tests cover
+  settings, geocoding, forecast normalization, jobs and workspace delivery;
+  live provider and signed-in workspace acceptance remain unverified.
 - `ci.yml` (P0-10) is the aggregate CI on every PR, `main` push and
   `workflow_dispatch`. It calls the reusable `web-ci.yml`, `backend-ci.yml`
   (including the container smoke), `database-ci.yml` (isolated SQL Server migrations), `foundry-contract.yml`, `runner-ci.yml`
@@ -840,6 +850,19 @@ backend image. `last_error` records only the latest uncaught HTTP 5xx route
 template, timestamp and status code; exception text and credentials are never
 returned. Probe failures are reduced to fixed status details. No status table or
 migration is added.
+
+`GET /status/smoke` forces fresh read-only Google, GitHub App, vault repository
+tree-metadata, embedding, and PC-bridge checks and adds a bounded research dry
+run. It never reads note contents. Its response contains only each check ID,
+status, and timestamp. The latest report is kept in
+the backend's in-memory status snapshot and is returned as `smoke` by `GET /status`
+for the status page; it is lost when the backend restarts. The embedding vector is
+discarded, and the temporary research invocation is cleaned up without writing
+research output or other user data. Dan may call the endpoint with his normal
+token; the configured deployment service principal may call only this exact GET
+route using an Azure Resource Manager token. The Deploy workflow records the
+allowlisted statuses in its run summary and fails on degraded/down checks except
+for an offline PC bridge.
 
 ### Local PC bridge (P7-06)
 
@@ -2256,6 +2279,11 @@ Tone, response style, and JSON-quoted custom instructions modify presentation
 only, with identity, backend tool permissions, and truthful action outcomes
 remaining fixed. It defines no tools itself. Each turn loads the backend catalogue from `GET /tools`
 (cached for 60 seconds) and sends each model tool call to `POST /tools/{name}`.
+The backend builds one bounded capability and safety instruction block from the
+existing memory-capture setting. Realtime voice uses it directly; the agent-only
+`GET /agent/settings` route returns the same block for chat, which adds it to its
+language-specific prompt after loading that settings snapshot. Both surfaces
+continue to use the backend tool registry and confirmation results.
 The agent gets a token for `api://<jarvis-api>/.default`
 from its platform identity through `DefaultAzureCredential`; OpenAI uses the same
 credential when no API key is set. Claude requests use

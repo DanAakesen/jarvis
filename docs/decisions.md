@@ -57,6 +57,18 @@ prove runtime health, and leave bridge versions null until its protocol reports
 them. Focused offline tests cover caching, authorization, status details and
 sanitized failures; production provider health and UI acceptance remain pending.
 
+P9-39 (8 October 2026): use an authenticated, uncached `GET /status/smoke` to
+refresh the existing read-only probes and run bounded embedding and research
+checks. Permit Dan and only the configured deployment service principal, with
+the latter restricted to an Azure Resource Manager audience and this route.
+Return only allowlisted IDs, statuses and timestamps; keep the latest report in
+the existing in-memory status snapshot so the status page can display it without
+a migration. Research uses a temporary invocation with best-effort cleanup and
+does not persist its result. Deploy prints only the six status values, treats
+the disconnected PC bridge as informational, and fails on other degraded/down
+checks. Offline tests cover contract bounds, authentication, refresh, recording
+and secret sanitization; live provider behavior remains pending.
+
 P9-14 (7 October 2026): persist each background-job state and step transition in
 SQL, and publish job events only after the state transaction commits. Keep jobs and
 step history for 30 days. Jobs are not resumed automatically: startup marks running
@@ -163,6 +175,16 @@ settings or the daily vision budget; never return credential records. Keep
 `set_jarvis_model` as a compatibility alias for chat-role updates. No migration
 or web change is needed. Offline tool and alias tests cover the behavior; live
 hosted-agent and Now integration remain unverified.
+
+P9-34 (8 October 2026): keep home city and nullable coordinates in the existing
+`dbo.settings` store and shared settings contract; leave them unset rather than
+guessing a home location. Use Open-Meteo's fixed HTTPS geocoding and forecast
+endpoints without an API key, with bounded requests and validated normalized
+results. Track weather retrieval with the existing persisted job registry, save
+a static escaped report through the workspace HTML artifact store, and open it
+through the command broker. No migration or web change is needed. Offline
+settings/provider/workspace tests cover the flow; live provider and signed-in
+workspace acceptance remain unverified.
 
 P6-22 (6 October 2026): Jarvis runs in Dan's personal tenant, without Microsoft
 365 or Teams. Keep away mode manual and do not read Graph presence. Route
@@ -692,6 +714,16 @@ All changes belong in [#417](https://github.com/DanAakesen/jarvis/issues/417), P
 PR #419 uses one reconciled voice presentation for the under-orb HTML feedback and scene state. The controls retain only More and End voice; current/next language feedback stays in the Language flyout. Explicit Start voice requests microphone permission and prepares audio, then attaches the granted stream after the authenticated handshake. Reconnect preserves mute; ending disposes late grants and audio resources. This replaces the separate-enable lifecycle recorded for P8-05/P8-36.
 
 The same orb uses phased core ignition, outward wave and settling, with distinct listening/thinking/tool motion and actual playback-driven speech energy. Camera, room and platform remain fixed. Reduced motion uses steady forms. The focused tests and prior PR CI passed; Copilot reported browser fixtures and low-rate software-WebGL motion frames. Live microphone/provider, physical devices and normal hardware-GPU motion remain unverified. No new provider protocol or persistence is introduced.
+
+## P9-36 (8 October 2026) — One capability and safety prompt for voice and chat
+
+Keep shared tool-use and safety guidance in the backend, where the existing
+memory automatic-capture setting can shape its knowledge rules. Realtime voice
+uses the generated block directly; the agent-only `/agent/settings` response
+delivers the same block to chat. Preserve the existing tool registry,
+confirmation results, and bounded settings response; do not add a migration or
+change the web app. Focused route, voice, settings-parser, and chat-prompt tests
+cover the offline behavior; live provider behavior remains unverified.
 
 
 ## 6 October 2026 — Credential health and repair (#457)

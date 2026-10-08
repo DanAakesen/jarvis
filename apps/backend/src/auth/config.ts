@@ -4,6 +4,7 @@ export interface AuthConfig {
   tenantId: string;
   apiClientId: string;
   ownerObjectId: string;
+  deployObjectId: string;
   // Hosted Jarvis agent identity; only routes that opt in accept it.
   agentObjectId?: string;
   pcBridgeClientId?: string;
@@ -15,6 +16,7 @@ const bootstrap = {
   tenantId: '802efa29-17f2-4a79-8f5f-38f087aed96a',
   apiClientId: '9f751b64-ea0f-484f-bf09-f08276a69e2f',
   ownerObjectId: '12bcfab7-49ba-4cf7-8be7-780a13911f93',
+  deployObjectId: '07aef8bd-cd65-469e-a366-c1a0598d397c',
 };
 
 const uuid = /^[\da-f]{8}(-[\da-f]{4}){3}-[\da-f]{12}$/i;
@@ -41,11 +43,20 @@ export function loadAuthConfig(env: NodeJS.ProcessEnv): AuthConfig {
     }
     values.agentObjectId = agent.toLowerCase();
   }
+  const deploy = env.ENTRA_DEPLOY_OBJECT_ID || bootstrap.deployObjectId;
+  if (!uuid.test(deploy)) {
+    throw new ConfigurationError('ENTRA_DEPLOY_OBJECT_ID must be a UUID');
+  }
+  if (deploy.toLowerCase() === values.ownerObjectId || deploy.toLowerCase() === values.agentObjectId) {
+    throw new ConfigurationError('ENTRA_DEPLOY_OBJECT_ID must identify a separate service principal');
+  }
+  values.deployObjectId = deploy.toLowerCase();
   const phoneEventGrid = env.ENTRA_PHONE_EVENT_GRID_OBJECT_ID;
   if (phoneEventGrid !== undefined && phoneEventGrid !== '') {
     if (!uuid.test(phoneEventGrid)) throw new ConfigurationError('ENTRA_PHONE_EVENT_GRID_OBJECT_ID must be a UUID');
     if (phoneEventGrid.toLowerCase() === values.ownerObjectId ||
-        phoneEventGrid.toLowerCase() === values.agentObjectId) {
+        phoneEventGrid.toLowerCase() === values.agentObjectId ||
+        phoneEventGrid.toLowerCase() === values.deployObjectId) {
       throw new ConfigurationError('ENTRA_PHONE_EVENT_GRID_OBJECT_ID must identify a separate service principal');
     }
     values.phoneEventGridObjectId = phoneEventGrid.toLowerCase();

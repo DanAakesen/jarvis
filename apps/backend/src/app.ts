@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import Fastify, { LogController } from 'fastify';
 import cors from '@fastify/cors';
 import type { Logger } from 'pino';
+import type { SystemSmokeCheckId } from '@jarvis/contracts';
 import type { BackgroundJobEvent, JarvisActivityEvent, JarvisVoiceWakeEvent } from '@jarvis/contracts';
 import { localWebOrigin, type BackendConfig } from './config.js';
 import { createLogger } from './logging.js';
@@ -41,7 +42,10 @@ import type { TaskStatusNotificationStore } from './database/task-status-notific
 import { WorkspaceCommandBroker } from './core/workspace-commands.js';
 import { createTaskStatusNotificationHandler } from './factory/task-status-notifications.js';
 import type { ModelDeploymentWorkflow } from './core/model-deployments.js';
-import { createSystemStatusReader, type SystemStatusReader } from './system-status.js';
+import {
+  createSystemSmokeReader, createSystemStatusReader, type SystemSmokeReader, type SystemStatusProbe,
+  type SystemStatusReader,
+} from './system-status.js';
 
 export interface BuildAppOptions {
   readonly databaseStatus?: () => boolean;
@@ -81,6 +85,7 @@ export interface BuildAppOptions {
   readonly taskStatusNotificationStore?: TaskStatusNotificationStore | null;
   readonly workspaceCommands?: WorkspaceCommandBroker;
   readonly systemStatusReader?: SystemStatusReader;
+  readonly systemSmokeProbes?: Partial<Record<SystemSmokeCheckId, SystemStatusProbe>>;
 }
 
 declare module 'fastify' {
@@ -120,6 +125,7 @@ declare module 'fastify' {
     backgroundJobs: BackgroundJobRegistry;
     onEmbeddingModelChanged: ((jobs: BackgroundJobRegistry) => Promise<void>) | null;
     systemStatusReader: SystemStatusReader;
+    systemSmokeReader: SystemSmokeReader;
   }
 }
 
@@ -165,6 +171,10 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
   const systemStatusReader = options.systemStatusReader ??
     createSystemStatusReader({}, process.env.JARVIS_DEPLOYED_COMMIT);
   app.decorate('systemStatusReader', systemStatusReader);
+  app.decorate('systemSmokeReader', createSystemSmokeReader(
+    systemStatusReader,
+    options.systemSmokeProbes ?? {},
+  ));
   app.setErrorHandler((error, request, reply) => {
     const candidate = (error as { statusCode?: number }).statusCode;
     const statusCode = candidate && Number.isInteger(candidate) && candidate >= 400 && candidate < 500 ? candidate : 500;

@@ -5,6 +5,7 @@ import type { TokenVerifier } from '../auth/verify.js';
 import { defaultSettings, flattenSettings, readSettings, settingsStoreKeys, type SettingsStore } from './settings.js';
 import type { CredentialStatusStore } from '../credentials/credential-status.js';
 import type { AwayModeStore } from './away-mode.js';
+import { capabilityInstructions } from './capability-instructions.js';
 
 const config = { ...loadConfig({}), logLevel: 'silent' as const };
 const authorization = { authorization: `${['Bear', 'er'].join('')} ${['a', 'b', 'c'].join('.')}` };
@@ -461,6 +462,41 @@ describe('settings API', () => {
     },
   );
 
+  it('persists and reloads a validated home location without a migration', async () => {
+    const { store, values } = createStore();
+    const app = fixture(store);
+    const location = { city: 'Copenhagen', latitude: 55.6761, longitude: 12.5683 };
+    const response = await app.inject({
+      method: 'PATCH', url: '/settings', headers: authorization,
+      payload: { settings: { location } },
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json().settings.location).toEqual(location);
+    expect(values).toMatchObject({
+      'location.home_city': '"Copenhagen"',
+      'location.latitude': '55.6761',
+      'location.longitude': '12.5683',
+    });
+    expect(settingsStoreKeys).toEqual(expect.arrayContaining([
+      'location.home_city', 'location.latitude', 'location.longitude',
+    ]));
+    expect((await readSettings(store)).location).toEqual(location);
+  });
+
+  it.each([
+    { latitude: 90.1 },
+    { longitude: -180.1 },
+    { city: 'Invalid\nCity' },
+  ])('rejects an invalid home location update: %o', async (location) => {
+    const { store } = createStore();
+    const app = fixture(store);
+    const response = await app.inject({
+      method: 'PATCH', url: '/settings', headers: authorization,
+      payload: { settings: { location } },
+    });
+    expect(response.statusCode).toBe(400);
+  });
+
   it('persists bounded personality preferences and supports restoring their defaults', async () => {
     const { store, values } = createStore();
     const app = fixture(store);
@@ -650,6 +686,7 @@ describe('settings API', () => {
     const { store } = createStore();
     await store.write({
       jarvis: { model: 'gpt-5.6-luna', reasoning: 'high' },
+      memory: { automaticCapture: false },
       research: { timeoutSeconds: 280 },
       timeouts: {
         toolTimeoutSeconds: 45,
@@ -677,6 +714,9 @@ describe('settings API', () => {
     const response = await app.inject({ url: '/agent/settings', headers: authorization });
 
     expect(response.statusCode).toBe(200);
+    expect(response.json().capabilityInstructions).toBe(
+      capabilityInstructions({ ...defaultSettings.memory, automaticCapture: false }),
+    );
     expect(response.json()).toEqual({
       model: 'gpt-5.6-luna',
       reasoningEffort: 'high',
@@ -694,9 +734,12 @@ describe('settings API', () => {
         similarityThreshold: 0.35,
         searchTopK: 5,
         graphTextSimilarityThreshold: 0.12,
-        automaticCapture: true,
+        automaticCapture: false,
       },
       research: { timeoutSeconds: 280 },
+      capabilityInstructions: expect.stringContaining(
+        'Do not proactively save memories; save only when Dan directly asks you to write to the vault.',
+      ),
       timeouts: {
         toolTimeoutSeconds: 45,
         longToolTimeoutSeconds: 300,

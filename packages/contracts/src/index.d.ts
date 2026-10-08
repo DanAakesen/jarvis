@@ -58,6 +58,17 @@ export const memorySettingsSchema: Readonly<{
   additionalProperties: false;
   properties: Readonly<Record<keyof MemorySettings, Readonly<Record<string, unknown>>>>;
 }>;
+export interface HomeLocationSettings {
+  city: string;
+  latitude: number | null;
+  longitude: number | null;
+}
+export const homeLocationSettingsSchema: Readonly<{
+  type: 'object';
+  minProperties: 1;
+  additionalProperties: false;
+  properties: Readonly<Record<keyof HomeLocationSettings, Readonly<Record<string, unknown>>>>;
+}>;
 export const researchSettingsBounds: Readonly<{
   maxSources: Readonly<{ minimum: 1; maximum: 50 }>;
   timeoutSeconds: Readonly<{ minimum: 1; maximum: 320 }>;
@@ -519,6 +530,21 @@ export interface PhoneStatus {
   recentCalls: readonly PhoneCallHistoryEntry[];
 }
 
+export const systemSmokeCheckIds: readonly [
+  'google', 'github_app', 'vault', 'foundry.embeddings', 'research', 'pc_bridge',
+];
+export type SystemSmokeCheckId = typeof systemSmokeCheckIds[number];
+export interface SystemSmokeEntry {
+  id: SystemSmokeCheckId;
+  status: SystemStatusValue;
+  checkedAt: string;
+}
+export interface SystemSmokeStatus {
+  checkedAt: string;
+  entries: readonly SystemSmokeEntry[];
+}
+export function isSystemSmokeStatus(value: unknown): value is SystemSmokeStatus;
+
 export type SystemStatusValue = 'ok' | 'degraded' | 'down' | 'unknown';
 export type SystemStatusSubsystem =
   | 'database'
@@ -541,4 +567,5 @@ export interface SystemStatusEntry {
 export interface SystemStatus {
   checkedAt: string;
   entries: readonly SystemStatusEntry[];
+  smoke?: SystemSmokeStatus;
 }
