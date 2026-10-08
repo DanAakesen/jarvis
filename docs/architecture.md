@@ -1895,14 +1895,25 @@ deployed Azure acceptance remain unverified.
 
 ### Interactive research reports (P7-37)
 
-P7-37 registers `research` with `quick` and `deep` depth. After the active
-workspace acknowledges creation of the progress window, the tool returns so
-voice can continue promptly. A bounded detached job reuses the Foundry runner's
-subscription-backed `codex-tool` web-search path, publishes observed
-query/source progress, and asks Codex for one self-contained cited HTML report.
+P7-37 registers `research` with `quick`, `standard` and `deep` depth. Quick runs
+two focused searches, standard runs three, and deep runs five; each depth then
+uses one report-generation pass. After the active workspace acknowledges
+creation of the progress window, the tool returns so voice can continue
+promptly. A bounded detached job reuses the Foundry runner's subscription-backed
+`codex-tool` web-search path and publishes observed query/source progress.
 Research and page text are untrusted evidence; validation bounds UTF-8 size and
 source count, requires a complete parseable document, rejects unsafe elements
 and links, and permits citations only to collected HTTPS sources.
+
+P9-06 stores `research.depth`, `research.max_sources` and
+`research.timeout_seconds` in the existing `dbo.settings` key/value store and
+exposes them through the shared contracts and owner-authenticated `/settings`;
+no migration is needed. The saved depth is the default when a request omits
+depth, while a supplied quick/standard/deep depth takes precedence. The default
+source ceiling is 50, matching the existing collection and artifact bound;
+report generation still receives at most 12 sources. Each runner invocation
+defaults to 305 seconds and can be tuned up to 320 seconds, the configured long
+tool read timeout. The overall job remains bounded at 15 minutes.
 
 The report is persisted in owner-scoped SQL metadata in
 `dbo.workspace_html_artifacts` (migrations 0026/0027), then the same workspace

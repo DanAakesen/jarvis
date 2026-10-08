@@ -98,6 +98,16 @@ VAD's existing 0.6/300/500 ms configuration. The live Danish hosted agent has
 separately provisioned turn detection and is not changed by this session
 settings API. Offline contract, settings, relay and session tests cover the
 backend behavior; live Voice Live behavior remains unverified.
+P9-06 (7 October 2026): persist the default research depth, maximum collected
+sources and per-runner-invocation timeout in the existing settings store and
+shared contracts; add no migration or web changes. Preserve the current quick
+and deep plans (two and five searches), add standard with three, and keep one
+report-generation pass. Default to quick, 50 collected sources and a 305-second
+invocation timeout; explicit request depth overrides the saved default, report
+generation remains capped at 12 sources, and configured timeouts are bounded at
+320 seconds to fit the long-tool timeout. Focused contract, settings and
+background research tests cover validation and use; live Codex/Foundry behavior
+remains unverified.
 P9-07 (7 October 2026): manage model deployments only from models present in the
 live Foundry account catalogue. Generate deployment names from model and version;
 require the existing one-time `model_deployment` Now confirmation for both

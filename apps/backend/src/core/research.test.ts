@@ -89,7 +89,11 @@ function makeRunner(report = reportHtml(), firstSearchGate?: Promise<void>) {
   return { client, requests };
 }
 
-function fixture(runner: ReturnType<typeof makeRunner>, settingsStore?: SettingsStore) {
+function fixture(
+  runner: ReturnType<typeof makeRunner>,
+  settingsStore?: SettingsStore,
+  invocationTimeoutMs: number | undefined = 100,
+) {
   const broker = new WorkspaceCommandBroker();
   const commands: WorkspaceCommand[] = [];
   const artifacts: HtmlArtifact[] = [];
@@ -113,7 +117,7 @@ function fixture(runner: ReturnType<typeof makeRunner>, settingsStore?: Settings
     () => runner.client,
     'gpt-5.5',
     artifactStore,
-    { invocationTimeoutMs: 100, pollIntervalMs: 1 },
+    { ...(invocationTimeoutMs === undefined ? {} : { invocationTimeoutMs }), pollIntervalMs: 1 },
   );
   const module: BackendModule = researchModule;
   const app = buildApp(config, undefined, {
@@ -144,12 +148,15 @@ function fixture(runner: ReturnType<typeof makeRunner>, settingsStore?: Settings
   return { app, broker, commands, artifacts, artifactStore, runner: runner.client };
 }
 
-async function startResearch(app: ReturnType<typeof buildApp>) {
+async function startResearch(
+  app: ReturnType<typeof buildApp>,
+  depth?: 'quick' | 'standard' | 'deep',
+) {
   return app.inject({
     method: 'POST',
     url: '/tools/research',
     headers: agentHeaders,
-    payload: { topic: 'Evidence-based research', depth: 'quick' },
+    payload: { topic: 'Evidence-based research', ...(depth ? { depth } : {}) },
   });
 }
 
@@ -177,6 +184,7 @@ describe('background interactive research', () => {
       read: async () => ({
         'roles.research.model': JSON.stringify('gpt-6-luna'),
         'roles.research.reasoning_effort': JSON.stringify('high'),
+        'research.depth': JSON.stringify('deep'),
       }),
       write: async () => {},
     };
@@ -188,7 +196,7 @@ describe('background interactive research', () => {
       request.announceResearchCompletion = completion;
       done();
     });
-    const response = await startResearch(app);
+    const response = await startResearch(app, 'quick');
 
     expect(response.statusCode).toBe(200);
     expect(response.json()).toMatchObject({ outcome: 'ok', result: { message: expect.stringContaining('Research has started') } });
@@ -223,6 +231,60 @@ describe('background interactive research', () => {
     expect(jobEvents.every((job) => isBackgroundJob(job))).toBe(true);
     expect(jobEvents.at(-1)).toMatchObject({ status: 'done', step: 3, viewId: (commands.at(-1) as { viewId: string }).viewId });
     expect((await app.backgroundJobs.list())[0]).toMatchObject({ status: 'done' });
+  });
+
+  it('uses the saved depth by default and bounds collected sources', async () => {
+    const runner = makeRunner();
+    const settingsStore: SettingsStore = {
+      read: async () => ({
+        'research.depth': JSON.stringify('standard'),
+        'research.max_sources': JSON.stringify(1),
+      }),
+      write: async () => {},
+    };
+    const { app, artifacts } = fixture(runner, settingsStore);
+    const response = await startResearch(app, undefined);
+
+    expect(response.statusCode).toBe(200);
+    await vi.waitFor(() => expect(runner.requests).toHaveLength(4));
+
+    expect(runner.requests.map(({ tool }) => tool)).toEqual([
+      'web_research', 'web_research', 'web_research', 'html_report',
+    ]);
+    expect(JSON.parse(runner.requests[3]!.query)).toMatchObject({
+      depth: 'standard',
+      sources: [{ title: 'Source 1', url: 'https://example.com/source-1' }],
+    });
+    expect(artifacts[0]?.sources).toEqual([{ title: 'Source 1', url: 'https://example.com/source-1' }]);
+  });
+
+  it('uses the configured timeout for each runner invocation', async () => {
+    const runner = makeRunner();
+    runner.client.status = vi.fn(async () => ({
+      ...{
+        invocationId: 'invocation-1',
+        sessionId: 'session-invocation-1',
+        status: 'queued' as const,
+        agent: 'codex' as const,
+      },
+      startedAt: 0,
+      finishedAt: null,
+      events: [],
+      result: null,
+      error: null,
+      status: 'running',
+    }));
+    const settingsStore: SettingsStore = {
+      read: async () => ({ 'research.timeout_seconds': JSON.stringify(1) }),
+      write: async () => {},
+    };
+    const { app } = fixture(runner, settingsStore, undefined);
+
+    const response = await startResearch(app);
+
+    expect(response.statusCode).toBe(200);
+    await vi.waitFor(() => expect(runner.client.cancel).toHaveBeenCalledOnce(), { timeout: 2_000 });
+    expect(runner.client.deleteSession).toHaveBeenCalledOnce();
   });
 
   it('rejects unsafe generated citations and updates the progress window with failure', async () => {

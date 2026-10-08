@@ -69,6 +69,7 @@ describe('settings API', () => {
           bargeInEnabled: true,
           maxSpokenReplyTokens: 4_096,
         },
+        research: { depth: 'quick', maxSources: 50, timeoutSeconds: 305 },
         codex: { model: 'default' },
         copilot: { model: 'default' },
         global: { maxParallelTasks: 1, maxCheckAttempts: 3, screenShareDailyFrameCap: 300, visionDailyBudgetUsd: 1 },
@@ -89,6 +90,44 @@ describe('settings API', () => {
       silenceDurationMs: { minimum: 100, maximum: 5_000 },
       maxSpokenReplyTokens: { minimum: 1, maximum: 4_096 },
     });
+    expect(response.json().options.researchDepths).toEqual(['quick', 'standard', 'deep']);
+    expect(response.json().options.researchSettings).toEqual({
+      maxSources: { minimum: 1, maximum: 50 },
+      timeoutSeconds: { minimum: 1, maximum: 320 },
+    });
+  });
+
+  it('persists bounded research depth, source count, and timeout settings', async () => {
+    const { store, values } = createStore();
+    const app = fixture(store);
+    const settings = { research: { depth: 'standard', maxSources: 18, timeoutSeconds: 320 } };
+
+    const saved = await app.inject({
+      method: 'PATCH', url: '/settings', headers: authorization, payload: { settings },
+    });
+
+    expect(saved.statusCode).toBe(200);
+    expect(saved.json().settings.research).toEqual(settings.research);
+    expect(values).toMatchObject({
+      'research.depth': '"standard"',
+      'research.max_sources': '18',
+      'research.timeout_seconds': '320',
+    });
+  });
+
+  it.each([
+    { research: { depth: 'extreme' } },
+    { research: { maxSources: 0 } },
+    { research: { maxSources: 51 } },
+    { research: { timeoutSeconds: 0 } },
+    { research: { timeoutSeconds: 321 } },
+    { research: { timeoutSeconds: '320' } },
+  ])('rejects invalid research setting values: %j', async (settings) => {
+    const app = fixture(createStore().store);
+    const response = await app.inject({
+      method: 'PATCH', url: '/settings', headers: authorization, payload: { settings },
+    });
+    expect(response.statusCode).toBe(400);
   });
 
   it('serves a Dan-only model catalogue and applies the selected chat model to agent settings', async () => {

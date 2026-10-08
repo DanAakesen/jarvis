@@ -9,13 +9,15 @@ import {
   type HtmlArtifact,
   type HtmlArtifactFrame,
   type HtmlArtifactSource,
+  researchDepths,
+  type ResearchDepth,
   type WebResearchResult,
 } from '@jarvis/contracts';
 import { parse } from 'parse5';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { BackendModule } from '../modules.js';
 import { generatedViewValidationOptions } from './generated-view-validation.js';
-import { readSettings } from './settings.js';
+import { defaultSettings, readSettings } from './settings.js';
 import { ToolFailure, ToolRefusal } from './tool-registry.js';
 import { runCodexToolResult, type WebResearchClient } from './web-research.js';
 
@@ -32,9 +34,9 @@ const inputSchema = Object.freeze({
   properties: {
     topic: { type: 'string', minLength: 1, maxLength: 2_000 },
     title: { type: 'string', minLength: 1, maxLength: 80 },
-    depth: { enum: ['quick', 'deep'] },
+    depth: { enum: [...researchDepths] },
   },
-  required: ['topic', 'depth'],
+  required: ['topic'],
   additionalProperties: false,
 });
 const maxJobs = 8;
@@ -43,12 +45,16 @@ const maxReportBytes = 48 * 1024;
 const maxReportSources = 12;
 const maxFindingLength = 1_000;
 const defaultJobTimeoutMs = 15 * 60_000;
-const defaultInvocationTimeoutMs = 305_000;
 const defaultPollIntervalMs = 1_000;
 const plans = {
   quick: [
     ['Key findings and current evidence', 'Summarize the key findings and current evidence'],
     ['Important facts and primary sources', 'Find important facts and authoritative primary sources'],
+  ],
+  standard: [
+    ['Key findings and current evidence', 'Summarize the key findings and current evidence'],
+    ['Important facts and primary sources', 'Find important facts and authoritative primary sources'],
+    ['Limitations and counterpoints', 'Find important limitations, disagreements, and counterpoints'],
   ],
   deep: [
     ['Overview and key context', 'Explain the background and current state'],
@@ -132,6 +138,10 @@ function boundedQuery(topic: string, suffix: string): string {
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isResearchDepth(value: unknown): value is ResearchDepth {
+  return typeof value === 'string' && researchDepths.includes(value as ResearchDepth);
 }
 
 function hasControlCharacter(value: string): boolean {
@@ -330,7 +340,7 @@ async function sendProgress(
 
 function reportRequest(
   topic: string,
-  depth: 'quick' | 'deep',
+  depth: ResearchDepth,
   partial: boolean,
   frame: HtmlArtifactFrame,
   findings: { query: string; answer: string }[],
@@ -346,7 +356,6 @@ export function createHtmlResearchModule(
   options: ResearchOptions = {},
 ): BackendModule {
   const jobTimeoutMs = options.jobTimeoutMs ?? defaultJobTimeoutMs;
-  const invocationTimeoutMs = options.invocationTimeoutMs ?? defaultInvocationTimeoutMs;
   const pollIntervalMs = options.pollIntervalMs ?? defaultPollIntervalMs;
   const jobs = new Map<string, ResearchJob>();
   return {
@@ -354,12 +363,13 @@ export function createHtmlResearchModule(
     tools: [{
       name: 'research',
       description: 'Research a topic in the background and open an interactive cited HTML report in the workspace. ' +
+        'Choose quick, standard, or deep depth; omit depth to use the saved research default. ' +
         'Set title to a short 3-6 word window title such as "Microsoft Foundry IQ"; put the full request in topic.',
       inputSchema,
       sensitive: true,
       execute: async (input, request, signal) => {
-        if (!isObject(input) || !['quick', 'deep'].includes(input.depth as string)) {
-          throw new ToolFailure('Choose a research depth of quick or deep.');
+        if (!isObject(input) || (input.depth !== undefined && !isResearchDepth(input.depth))) {
+          throw new ToolFailure('Choose a research depth of quick, standard, or deep.');
         }
         const topic = safeTopic(input.topic);
         const windowTitle = researchWindowTitle(input.title, topic);
@@ -368,9 +378,14 @@ export function createHtmlResearchModule(
             request.principal?.objectId.toLowerCase() !== ownerId.toLowerCase()) {
           throw new ToolRefusal('Research requires an authenticated workspace owner.');
         }
+        const settings = request.server.settingsStore
+          ? await readSettings(request.server.settingsStore, await request.server.modelCatalogue.read())
+          : defaultSettings;
         const researchSettings = request.server.settingsStore
-          ? (await readSettings(request.server.settingsStore, await request.server.modelCatalogue.read())).roles.research
+          ? settings.roles.research
           : { model, reasoningEffort: 'none' as const };
+        const depth = isResearchDepth(input.depth) ? input.depth : settings.research.depth;
+        const invocationTimeoutMs = options.invocationTimeoutMs ?? settings.research.timeoutSeconds * 1_000;
         const announceCompletion = request.announceResearchCompletion;
         for (const [id, job] of jobs) {
           if (job.done) jobs.delete(id);
@@ -382,7 +397,7 @@ export function createHtmlResearchModule(
         }
         const jobId = randomUUID();
         const viewId = `research-${jobId.replaceAll('-', '')}`;
-        const searches: SearchProgress[] = plans[input.depth as 'quick' | 'deep'].map(([label, suffix]) => ({
+        const searches: SearchProgress[] = plans[depth].map(([label, suffix]) => ({
           label,
           query: boundedQuery(topic, suffix),
           status: 'pending',
@@ -406,7 +421,7 @@ export function createHtmlResearchModule(
           const sourcesByUrl = new Map<string, HtmlArtifactSource>();
           const findings: { query: string; answer: string }[] = [];
           const app = request.server;
-          const sources = () => [...sourcesByUrl.values()].slice(0, 50);
+          const sources = () => [...sourcesByUrl.values()].slice(0, settings.research.maxSources);
           try {
             // Progress windows are best effort: a tab that misses one update must not stop the research.
             const progress = () => sendProgress(app, ownerId, viewId, windowTitle, searches, sources(), jobSignal)
@@ -432,7 +447,7 @@ export function createHtmlResearchModule(
                 search.answer = result.answer.slice(0, maxFindingLength);
                 findings.push({ query: search.query, answer: result.answer.slice(0, maxFindingLength) });
                 for (const source of result.sources) {
-                  if (sourcesByUrl.size >= 50) break;
+                  if (sourcesByUrl.size >= settings.research.maxSources) break;
                   sourcesByUrl.set(source.url, { title: source.title, url: source.url });
                 }
               } catch (error) {
@@ -451,7 +466,7 @@ export function createHtmlResearchModule(
             const result = await runCodexToolResult(
               clientFor(),
               'html_report',
-              reportRequest(topic, input.depth as 'quick' | 'deep', partial, frame, findings, reportSources),
+              reportRequest(topic, depth, partial, frame, findings, reportSources),
               researchSettings.model,
               jobSignal,
               invocationTimeoutMs,
