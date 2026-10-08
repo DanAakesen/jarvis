@@ -34,6 +34,13 @@ function fixture() {
     })),
     readComments: vi.fn(async () => [{ author: 'DanAakesen', body: 'Please implement this.' }]),
     readAgentRules: vi.fn(async () => 'Read AGENTS.md.'),
+    listIssueTitles: vi.fn(async () => []),
+    createIssue: vi.fn(async () => ({
+      number: 575, url: 'https://github.com/DanAakesen/jarvis/issues/575',
+    })),
+    createComment: vi.fn(async () => {}),
+    addLabels: vi.fn(async () => {}),
+    removeLabel: vi.fn(async () => {}),
   } as unknown as GitHubIssueClient;
   const app = buildApp(config, undefined, {
     taskStore,
@@ -90,5 +97,66 @@ describe('Factory issue start route', () => {
     expect((await app.inject({
       method: 'POST', url: '/factory/issues/574/start', headers, payload: {},
     })).statusCode).toBe(404);
+  });
+
+  it('creates a P11 issue only for Dan and returns its task code', async () => {
+    const { app, githubIssueClient } = fixture();
+    expect((await app.inject({
+      method: 'POST', url: '/factory/issues', payload: {
+        project: '7', title: 'Fix retries', body: 'Problem and acceptance.',
+      },
+    })).statusCode).toBe(401);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/factory/issues',
+      headers,
+      payload: { project: '7', title: 'Fix retries', body: 'Problem and acceptance.' },
+    });
+    expect(response.statusCode).toBe(201);
+    expect(response.json()).toEqual({
+      number: 575,
+      url: 'https://github.com/DanAakesen/jarvis/issues/575',
+      taskCode: 'P11-01',
+    });
+    expect(githubIssueClient.createIssue).toHaveBeenCalledWith(
+      project.repo, 'P11-01: Fix retries', 'Problem and acceptance.',
+      { labels: ['P11', 'enhancement'] },
+    );
+    expect(githubIssueClient.addLabels).toHaveBeenCalledWith(project.repo, 575, ['Jarvis']);
+  });
+
+  it('assigns Copilot and refuses invalid issue drafts before creating them', async () => {
+    const { app, githubIssueClient } = fixture();
+    const copilot = await app.inject({
+      method: 'POST', url: '/factory/issues', headers,
+      payload: {
+        project: '7', title: '[Bug] Retry fails', body: 'Problem and acceptance.', executor: 'copilot',
+      },
+    });
+    expect(copilot.statusCode).toBe(201);
+    expect(githubIssueClient.createIssue).toHaveBeenCalledWith(
+      project.repo,
+      'P11-01: [Bug] Retry fails',
+      'Problem and acceptance.',
+      { labels: ['P11', 'bug', 'Copilot'], assignees: ['copilot'] },
+    );
+    expect(githubIssueClient.createComment).toHaveBeenCalledWith(
+      project.repo, 575, expect.stringContaining('acceptance criteria'),
+    );
+
+    const beforeSecret = vi.mocked(githubIssueClient.createIssue).mock.calls.length;
+    const secret = await app.inject({
+      method: 'POST', url: '/factory/issues', headers,
+      payload: { project: '7', title: 'Credentials', body: 'password: a-real-secret-value' },
+    });
+    expect(secret.statusCode).toBe(400);
+    expect(githubIssueClient.createIssue).toHaveBeenCalledTimes(beforeSecret);
+
+    const invalidExecutor = await app.inject({
+      method: 'POST', url: '/factory/issues', headers,
+      payload: { project: '7', title: 'Valid', body: 'Valid', executor: 'other' },
+    });
+    expect(invalidExecutor.statusCode).toBe(400);
   });
 });

@@ -20,7 +20,12 @@ import type {
 import { factoryTools } from './tools.js';
 import { repositoryTools } from './repository-tools.js';
 import { registerReleaseViewRoutes } from './release-view.js';
-import { startIssueTask } from './issues.js';
+import {
+  createJarvisIssue,
+  IssueCreationPartialError,
+  IssueDraftValidationError,
+  startIssueTask,
+} from './issues.js';
 import { registerFactoryBoardRoute } from './board.js';
 
 const maxSqlBigInt = 9_223_372_036_854_775_807n;
@@ -120,6 +125,52 @@ export const factoryModule: BackendModule = {
         return reply.code(502).send({ error: 'GitHub repository service unavailable' });
       }
     });
+
+    app.post<{ Body: { project: string; title: string; body: string; executor?: 'jarvis' | 'copilot' | 'none' } }>(
+      '/factory/issues',
+      {
+        schema: {
+          body: {
+            type: 'object',
+            properties: {
+              project: { type: 'string', minLength: 1, maxLength: 140 },
+              title: { type: 'string', minLength: 1, maxLength: 200 },
+              body: { type: 'string', minLength: 1, maxLength: 50_000 },
+              executor: { type: 'string', enum: ['jarvis', 'copilot', 'none'] },
+            },
+            required: ['project', 'title', 'body'],
+            additionalProperties: false,
+          },
+        },
+      },
+      async (request, reply) => {
+        try {
+          const issue = await createJarvisIssue({
+            ...request.body,
+            projects: app.projectStore,
+            github: app.githubIssueClient,
+          });
+          return reply.code(201).send(issue);
+        } catch (error) {
+          if (error instanceof IssueDraftValidationError) {
+            return reply.code(400).send({ error: 'Issue title or body is invalid or contains a secret' });
+          }
+          if (error instanceof ToolRefusal) return reply.code(404).send({ error: error.message });
+          if (error instanceof IssueCreationPartialError) {
+            request.log.warn('factory.issue_executor_handoff_failed');
+            return reply.code(502).send({
+              error: 'The issue was created but its executor handoff did not complete',
+              number: error.issue.number,
+              url: error.issue.url,
+              taskCode: error.taskCode,
+            });
+          }
+          request.log.warn('factory.issue_create_failed');
+          return reply.code(app.githubIssueClient ? 502 : 503)
+            .send({ error: 'GitHub issue service unavailable' });
+        }
+      },
+    );
 
     app.post<{ Body: CreateTaskInput }>('/factory/tasks', {
       schema: {

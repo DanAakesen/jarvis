@@ -2,9 +2,144 @@ import { JARVIS_REPOSITORY } from './project-context.js';
 import type { Project, ProjectStore } from './projects.js';
 import type { TaskRecord, TaskStore } from './task-store.js';
 import type { GitHubIssue, GitHubIssueClient } from '../github/issues.js';
+import { resolveRepository } from './project-context.js';
 
 const maxPromptBytes = 50_000;
 const danLogin = JARVIS_REPOSITORY.split('/')[0] ?? 'DanAakesen';
+const maxP11Code = 999_999;
+
+export type IssueExecutor = 'jarvis' | 'copilot' | 'none';
+
+export class IssueDraftValidationError extends Error {
+  constructor() {
+    super('Issue content is invalid or contains a secret');
+  }
+}
+
+export class IssueTaskCodeConflictError extends Error {
+  constructor() {
+    super('The reserved P11 task code is no longer available');
+  }
+}
+
+export class IssueCreationPartialError extends Error {
+  constructor(
+    readonly issue: { number: number; url: string },
+    readonly taskCode: string,
+    readonly executor: IssueExecutor,
+  ) {
+    super('The GitHub issue was created but its executor handoff was incomplete');
+  }
+}
+
+const issueCreationQueues = new Map<string, Promise<void>>();
+
+async function withIssueCreationLock<T>(repository: string, work: () => Promise<T>): Promise<T> {
+  const key = repository.toLowerCase();
+  const previous = issueCreationQueues.get(key) ?? Promise.resolve();
+  let release = () => {};
+  const current = new Promise<void>((resolve) => { release = resolve; });
+  issueCreationQueues.set(key, current);
+  await previous;
+  try {
+    return await work();
+  } finally {
+    release();
+    if (issueCreationQueues.get(key) === current) issueCreationQueues.delete(key);
+  }
+}
+
+export function allocateP11TaskCode(issueTitles: readonly string[]): string {
+  const used = new Set<number>();
+  for (const title of issueTitles) {
+    for (const match of title.matchAll(/\bP11-(\d{2,})\b/giu)) {
+      const number = Number(match[1]);
+      if (Number.isSafeInteger(number) && number > 0) used.add(number);
+    }
+  }
+  for (let number = 1; number <= maxP11Code; number += 1) {
+    if (!used.has(number)) return `P11-${String(number).padStart(2, '0')}`;
+  }
+  throw new Error('The P11 task-code range is full');
+}
+
+function containsLikelySecret(value: string): boolean {
+  return /-----BEGIN [A-Z ]*PRIVATE KEY-----|(?:gh[pousr]_[A-Za-z0-9_]{20,}|github_pat_[A-Za-z0-9_]{20,}|AKIA[0-9A-Z]{16})|(?:api[_-]?key|access[_-]?token|client[_-]?secret|password)\s*[:=]\s*["']?\S{8,}|(?:eyJ[A-Za-z0-9_-]{10,}\.){2}[A-Za-z0-9_-]{10,}/iu.test(value);
+}
+
+export function validateIssueDraft(title: string, body: string): void {
+  if (!title.trim() || title.trim().length > 200 || !body.trim() ||
+      Buffer.byteLength(body, 'utf8') > 50_000) {
+    throw new IssueDraftValidationError();
+  }
+  if (containsLikelySecret(title) || containsLikelySecret(body)) {
+    throw new IssueDraftValidationError();
+  }
+}
+
+function issueKindLabel(title: string): 'bug' | 'enhancement' {
+  return /^\s*(?:\[bug\]|\bbug\s*:|\bregression\s*:)/iu.test(title) ? 'bug' : 'enhancement';
+}
+
+export async function previewP11TaskCode(input: {
+  project?: string;
+  projects: ProjectStore | null;
+  github: GitHubIssueClient | null;
+}): Promise<{ repository: string; taskCode: string }> {
+  if (!input.github?.listIssueTitles) throw new Error('GitHub issue service unavailable');
+  const repository = await resolveRepository(input.project, input.projects);
+  const issueTitles = await input.github.listIssueTitles(repository);
+  return { repository, taskCode: allocateP11TaskCode(issueTitles) };
+}
+
+export async function createJarvisIssue(input: {
+  project?: string;
+  title: string;
+  body: string;
+  executor?: IssueExecutor;
+  expectedTaskCode?: string;
+  projects: ProjectStore | null;
+  github: GitHubIssueClient | null;
+}): Promise<{ number: number; url: string; taskCode: string }> {
+  validateIssueDraft(input.title, input.body);
+  const executor = input.executor ?? 'jarvis';
+  if (!['jarvis', 'copilot', 'none'].includes(executor)) throw new Error('Invalid issue executor');
+  if (!input.github?.listIssueTitles || !input.github.createIssue || !input.github.addLabels) {
+    throw new Error('GitHub issue service unavailable');
+  }
+  const repository = await resolveRepository(input.project, input.projects);
+  return withIssueCreationLock(repository, async () => {
+    const taskCode = allocateP11TaskCode(await input.github!.listIssueTitles(repository));
+    if (input.expectedTaskCode !== undefined && taskCode !== input.expectedTaskCode) {
+      throw new IssueTaskCodeConflictError();
+    }
+    const title = `${taskCode}: ${input.title.trim()}`;
+    const labels = ['P11', issueKindLabel(input.title)];
+    if (executor === 'copilot') labels.push('Copilot');
+    const issue = await input.github!.createIssue(repository, title, input.body.trim(), {
+      labels,
+      ...(executor === 'copilot' ? { assignees: ['copilot'] } : {}),
+    });
+    if (executor === 'jarvis') {
+      try {
+        await input.github!.addLabels(repository, issue.number, ['Jarvis']);
+      } catch {
+        throw new IssueCreationPartialError(issue, taskCode, executor);
+      }
+    } else if (executor === 'copilot') {
+      try {
+        await input.github!.createComment(
+          repository,
+          issue.number,
+          '@copilot Please implement only the problem and acceptance criteria in this issue. Ask Dan for clarification rather than expanding the scope.',
+        );
+      } catch {
+        throw new IssueCreationPartialError(issue, taskCode, executor);
+      }
+    }
+    return { ...issue, taskCode };
+  });
+}
 
 export type StartIssueResult =
   | { kind: 'created'; task: TaskRecord; issue: GitHubIssue; repository: string }

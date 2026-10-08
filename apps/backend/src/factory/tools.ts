@@ -10,7 +10,17 @@ import { settingsOptions } from '../core/settings.js';
 import { modelsForRole, reasoningForModel } from '../core/model-catalog.js';
 import type { ModelCatalogue } from '@jarvis/contracts';
 import { createGitHubActionsRunClient } from '../github/actions-runs.js';
-import { createLinkedTaskFromPrompt, LinkedIssueTaskCreationError, startIssueTask } from './issues.js';
+import {
+  createJarvisIssue,
+  createLinkedTaskFromPrompt,
+  IssueCreationPartialError,
+  IssueTaskCodeConflictError,
+  LinkedIssueTaskCreationError,
+  previewP11TaskCode,
+  startIssueTask,
+  type IssueExecutor,
+  validateIssueDraft,
+} from './issues.js';
 
 const idSchema = { type: 'string', pattern: '^[1-9][0-9]{0,18}$', maxLength: 19 };
 const maxSqlBigInt = 9_223_372_036_854_775_807n;
@@ -37,9 +47,21 @@ interface PendingProjectArchive {
   sourceMessageId: string;
   createdAt: number;
 }
+interface PendingIssueCreation {
+  project?: string;
+  title: string;
+  body: string;
+  executor: IssueExecutor;
+  taskCode: string;
+  sourceMessageId: string;
+  createdAt: number;
+}
 const pendingProjectArchives = new WeakMap<FastifyInstance, Map<string, PendingProjectArchive>>();
+const pendingIssueCreations = new WeakMap<FastifyInstance, Map<string, PendingIssueCreation>>();
 const projectArchiveTtlMs = 10 * 60_000;
 const maxPendingProjectArchives = 50;
+const issueCreationTtlMs = 10 * 60_000;
+const maxPendingIssueCreations = 50;
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -123,23 +145,23 @@ function projectSummary(project: Project) {
   };
 }
 
-async function currentDanMessage(request: FastifyRequest): Promise<ConversationMessage> {
+async function currentDanMessage(request: FastifyRequest, operation = 'project archive'): Promise<ConversationMessage> {
   const voiceMessage = request.jarvisConversationMessage;
   if (voiceMessage) {
     if (request.principal === null || voiceMessage.role !== 'dan') {
-      throw new ToolRefusal('A verified Dan message is required to confirm this project archive.');
+      throw new ToolRefusal(`A verified Dan message is required to confirm this ${operation}.`);
     }
     return voiceMessage;
   }
   const id = request.headers['x-jarvis-message-id'];
   if (typeof id !== 'string' || !/^[1-9]\d{0,18}$/u.test(id) ||
       BigInt(id) > maxSqlBigInt || !request.agentPrincipal || !request.server.conversationStore) {
-    throw new ToolRefusal('A verified Dan message is required to confirm this project archive.');
+    throw new ToolRefusal(`A verified Dan message is required to confirm this ${operation}.`);
   }
   const page = await request.server.conversationStore.getHistory({ limit: 1 });
   const message = page.messages[0];
   if (!message || message.id !== id || message.role !== 'dan') {
-    throw new ToolRefusal('A verified Dan message is required to confirm this project archive.');
+    throw new ToolRefusal(`A verified Dan message is required to confirm this ${operation}.`);
   }
   return message;
 }
@@ -210,6 +232,98 @@ async function confirmProjectArchive(
   return { status: 'archived', projectId: action.projectId, name: action.name, repo: action.repo };
 }
 
+async function stageIssueCreation(
+  server: FastifyInstance,
+  input: { project?: string; title: string; body: string; executor?: IssueExecutor },
+  source: ConversationMessage,
+) {
+  if (!/^[1-9]\d{0,18}$/u.test(source.id) || BigInt(source.id) > maxSqlBigInt) {
+    throw new ToolRefusal('A verified Dan message is required to confirm this issue creation.');
+  }
+  const preview = await previewP11TaskCode({
+    ...(input.project ? { project: input.project } : {}),
+    projects: server.projectStore,
+    github: server.githubIssueClient,
+  });
+  let actions = pendingIssueCreations.get(server);
+  if (!actions) {
+    actions = new Map();
+    pendingIssueCreations.set(server, actions);
+  }
+  const now = Date.now();
+  for (const [code, action] of actions) {
+    if (action.createdAt <= now - issueCreationTtlMs) actions.delete(code);
+  }
+  if (actions.size >= maxPendingIssueCreations) throw new Error('Too many pending issue creations');
+  let confirmationCode: string;
+  do {
+    confirmationCode = String(randomInt(0, 100_000_000)).padStart(8, '0');
+  } while (actions.has(confirmationCode));
+  const executor = input.executor ?? 'jarvis';
+  actions.set(confirmationCode, {
+    ...(input.project ? { project: input.project } : {}),
+    title: input.title.trim(),
+    body: input.body.trim(),
+    executor,
+    taskCode: preview.taskCode,
+    sourceMessageId: source.id,
+    createdAt: now,
+  });
+  return {
+    status: 'awaiting_confirmation',
+    repository: preview.repository,
+    taskCode: preview.taskCode,
+    title: `${preview.taskCode}: ${input.title.trim()}`,
+    executor,
+    confirmationCode,
+    instruction: `Nothing has been created. To approve, say exactly "confirm ${confirmationCode}" in a new message.`,
+  };
+}
+
+async function confirmIssueCreation(
+  request: FastifyRequest,
+  confirmationCode: string,
+  signal: AbortSignal,
+) {
+  const message = await currentDanMessage(request, 'issue creation');
+  const actions = pendingIssueCreations.get(request.server);
+  const now = Date.now();
+  if (actions) {
+    for (const [code, action] of actions) {
+      if (action.createdAt <= now - issueCreationTtlMs) actions.delete(code);
+    }
+  }
+  const action = actions?.get(confirmationCode);
+  if (!actions || !action || message.role !== 'dan' ||
+      !/^[1-9]\d{0,18}$/u.test(message.id) || BigInt(message.id) > maxSqlBigInt ||
+      BigInt(message.id) <= BigInt(action.sourceMessageId) ||
+      !Number.isFinite(message.at.getTime()) || message.at.getTime() <= action.createdAt ||
+      message.text.trim().toLowerCase() !== `confirm ${confirmationCode}`) {
+    throw new ToolRefusal('No issue was created. Dan must send the exact confirmation phrase in a new message.');
+  }
+  actions.delete(confirmationCode);
+  signal.throwIfAborted();
+  try {
+    return await createJarvisIssue({
+      ...(action.project ? { project: action.project } : {}),
+      title: action.title,
+      body: action.body,
+      executor: action.executor,
+      expectedTaskCode: action.taskCode,
+      projects: request.server.projectStore,
+      github: request.server.githubIssueClient,
+    });
+  } catch (error) {
+    if (error instanceof IssueTaskCodeConflictError) {
+      throw new ToolRefusal(`${action.taskCode} was taken before confirmation; nothing was created. Draft the issue again to review the next available code.`);
+    }
+    if (error instanceof IssueCreationPartialError) {
+      throw new ToolFailure(`Issue ${error.issue.url} was created as ${error.taskCode}, but the ${error.executor} handoff did not complete. Check the issue before retrying.`);
+    }
+    throw new ToolFailure('The GitHub issue could not be created.');
+  }
+}
+
 function taskDetailSummary(detail: TaskDetail) {
   return {
     ...detail,
@@ -262,6 +376,46 @@ async function controlTask(
 }
 
 export const factoryTools: readonly JarvisTool[] = [
+  {
+    name: 'create_issue',
+    description: 'Prepare a P11 GitHub issue for new project-code work. Show Dan the title, problem, and acceptance criteria, then wait for his exact confirmation phrase before creating it.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        project: { type: 'string', minLength: 1, maxLength: 140 },
+        title: { type: 'string', minLength: 1, maxLength: 200 },
+        body: { type: 'string', minLength: 1, maxLength: 50_000 },
+        executor: { type: 'string', enum: ['jarvis', 'copilot', 'none'] },
+      },
+      required: ['title', 'body'],
+      additionalProperties: false,
+    },
+    sensitive: true,
+    execute: async (input, request) => {
+      const draft = input as { project?: string; title: string; body: string; executor?: IssueExecutor };
+      try {
+        validateIssueDraft(draft.title, draft.body);
+        return await stageIssueCreation(request.server, draft, await currentDanMessage(request, 'issue creation'));
+      } catch (error) {
+        if (error instanceof ToolRefusal) throw error;
+        throw new ToolFailure('The GitHub issue draft could not be prepared.');
+      }
+    },
+  },
+  {
+    name: 'confirm_create_issue',
+    description: 'Create the staged P11 GitHub issue only when Dan’s latest message exactly says “confirm” followed by its eight-digit code.',
+    inputSchema: {
+      type: 'object',
+      properties: { confirmationCode: { type: 'string', pattern: '^[0-9]{8}$' } },
+      required: ['confirmationCode'],
+      additionalProperties: false,
+    },
+    sensitive: true,
+    execute: (input, request, signal) => confirmIssueCreation(
+      request, (input as { confirmationCode: string }).confirmationCode, signal,
+    ),
+  },
   {
     name: 'start_issue',
     description: 'Start an open GitHub issue as a Codex Factory task in an active project.',

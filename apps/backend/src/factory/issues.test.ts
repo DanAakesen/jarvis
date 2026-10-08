@@ -2,7 +2,15 @@ import { describe, expect, it, vi } from 'vitest';
 import type { Project, ProjectStore } from './projects.js';
 import type { TaskDetail, TaskRecord, TaskStore } from './task-store.js';
 import type { GitHubIssue, GitHubIssueClient } from '../github/issues.js';
-import { createLinkedTaskFromPrompt, recordIssueTaskProgress, startIssueTask } from './issues.js';
+import {
+  allocateP11TaskCode,
+  createJarvisIssue,
+  createLinkedTaskFromPrompt,
+  IssueCreationPartialError,
+  IssueTaskCodeConflictError,
+  recordIssueTaskProgress,
+  startIssueTask,
+} from './issues.js';
 
 const project: Project = {
   id: '7',
@@ -65,14 +73,116 @@ function fixture() {
       { author: 'someone-else', body: 'Do something else.' },
     ]),
     readAgentRules: vi.fn(async () => 'Repository rule: run backend tests.'),
+    listIssueTitles: vi.fn(async () => []),
     createIssue: vi.fn(async () => ({ number: 9, url: 'https://github.com/DanAakesen/jarvis/issues/9' })),
     createComment: vi.fn(async () => {}),
+    addLabels: vi.fn(async () => {}),
     removeLabel: vi.fn(async () => {}),
   } satisfies GitHubIssueClient;
   return { projects, tasks, github };
 }
 
 describe('Factory issue tasks', () => {
+  it('allocates the lowest unused P11 task code across issue titles', () => {
+    expect(allocateP11TaskCode([
+      'P11-01: Existing issue',
+      'P11-03: Another issue',
+      'A mention of P11-04 in another title',
+    ])).toBe('P11-02');
+    expect(allocateP11TaskCode(['P11-01: Existing issue'])).toBe('P11-02');
+  });
+
+  it('creates a Jarvis issue with phase/type labels and applies the trigger label after opening', async () => {
+    const { projects, github } = fixture();
+    vi.mocked(github.listIssueTitles).mockResolvedValue(['P11-01: Existing issue']);
+
+    await expect(createJarvisIssue({
+      project: '7',
+      title: '[Bug] Retry fails',
+      body: 'Problem: retries fail.\nAcceptance: retry succeeds.',
+      projects,
+      github,
+    })).resolves.toEqual({
+      number: 9,
+      url: 'https://github.com/DanAakesen/jarvis/issues/9',
+      taskCode: 'P11-02',
+    });
+    expect(github.createIssue).toHaveBeenCalledWith(
+      project.repo,
+      'P11-02: [Bug] Retry fails',
+      'Problem: retries fail.\nAcceptance: retry succeeds.',
+      { labels: ['P11', 'bug'] },
+    );
+    expect(github.addLabels).toHaveBeenCalledWith(project.repo, 9, ['Jarvis']);
+    expect(github.createComment).not.toHaveBeenCalled();
+  });
+
+  it('assigns Copilot with a scope comment, or creates an unassigned issue when executor is none', async () => {
+    const { projects, github } = fixture();
+
+    await createJarvisIssue({
+      project: '7', title: 'Add a setting', body: 'Problem and acceptance.',
+      executor: 'copilot', projects, github,
+    });
+    expect(github.createIssue).toHaveBeenLastCalledWith(
+      project.repo,
+      'P11-01: Add a setting',
+      'Problem and acceptance.',
+      { labels: ['P11', 'enhancement', 'Copilot'], assignees: ['copilot'] },
+    );
+    expect(github.createComment).toHaveBeenCalledWith(
+      project.repo,
+      9,
+      expect.stringContaining('only the problem and acceptance criteria'),
+    );
+    expect(github.addLabels).not.toHaveBeenCalled();
+
+    vi.mocked(github.listIssueTitles).mockResolvedValue(['P11-01: Add a setting']);
+    await createJarvisIssue({
+      project: '7', title: 'Document the API', body: 'Problem and acceptance.',
+      executor: 'none', projects, github,
+    });
+    expect(github.createIssue).toHaveBeenLastCalledWith(
+      project.repo,
+      'P11-02: Document the API',
+      'Problem and acceptance.',
+      { labels: ['P11', 'enhancement'] },
+    );
+  });
+
+  it('refuses likely secrets and changed confirmation codes without creating issues', async () => {
+    const { projects, github } = fixture();
+    await expect(createJarvisIssue({
+      project: '7',
+      title: 'Fix auth',
+      body: 'api_key = "super-secret-value"',
+      projects,
+      github,
+    })).rejects.toThrow('contains a secret');
+    await expect(createJarvisIssue({
+      project: '7',
+      title: 'Fix auth',
+      body: 'Problem and acceptance.',
+      expectedTaskCode: 'P11-02',
+      projects,
+      github,
+    })).rejects.toBeInstanceOf(IssueTaskCodeConflictError);
+    expect(github.createIssue).not.toHaveBeenCalled();
+  });
+
+  it('reports partial executor failures with the created issue reference', async () => {
+    const { projects, github } = fixture();
+    vi.mocked(github.addLabels).mockRejectedValue(new Error('GitHub unavailable'));
+    await expect(createJarvisIssue({
+      project: '7', title: 'Fix a bug', body: 'Problem and acceptance.',
+      projects, github,
+    })).rejects.toMatchObject({
+      issue: { number: 9 },
+      taskCode: 'P11-01',
+      executor: 'jarvis',
+    } satisfies Partial<IssueCreationPartialError>);
+  });
+
   it('starts an open issue as Codex with untrusted issue data and only Dan comments', async () => {
     const { projects, tasks, github } = fixture();
     const result = await startIssueTask({ projects, tasks, github, issue: 8 });
