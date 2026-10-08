@@ -2,17 +2,20 @@ import type { FastifyInstance } from 'fastify';
 import type {
   UsageCostTotal,
   UsageEntry,
+  UsagePeriod,
   UsageReport,
   UsageRole,
   UsageRoleCoverage,
   UsageToolCallCount,
 } from '@jarvis/contracts';
 import type { CodexToolUsageCount } from './tool-calls.js';
+import type { JarvisTool } from './tool-registry.js';
+import { ToolFailure } from './tool-registry.js';
 
-export type UsagePeriod = '7d' | '30d' | '90d' | 'all';
 export type {
   UsageEntry,
   UsageMetric,
+  UsagePeriod,
   UsageRole,
   UsageSource,
   UsageVerification,
@@ -44,6 +47,7 @@ export interface UsageStore {
 }
 
 const periodDays: Record<UsagePeriod, number | null> = {
+  today: null,
   '7d': 7,
   '30d': 30,
   '90d': 90,
@@ -83,6 +87,37 @@ const roleCoverage: UsageRoleCoverage[] = [
   },
 ];
 
+function usageRange(period: UsagePeriod, to: Date): { from: Date | null; to: Date } {
+  if (period === 'today') {
+    return { from: new Date(Date.UTC(to.getUTCFullYear(), to.getUTCMonth(), to.getUTCDate())), to };
+  }
+  const days = periodDays[period];
+  return { from: days === null ? null : new Date(to.getTime() - days * 24 * 60 * 60 * 1000), to };
+}
+
+function summarizeSpend(entries: UsageEntry[], key: (entry: UsageEntry) => string | null) {
+  const groups = new Map<string | null, {
+    usd: number;
+    dkk: number;
+    estimatedEntries: number;
+    unverifiedEntries: number;
+  }>();
+  for (const entry of entries) {
+    const label = key(entry);
+    const total = groups.get(label) ?? { usd: 0, dkk: 0, estimatedEntries: 0, unverifiedEntries: 0 };
+    total.usd += entry.costUsd ?? 0;
+    total.dkk += entry.costDkk ?? 0;
+    if (entry.costStatus === 'estimated') total.estimatedEntries += 1;
+    if (entry.costStatus === 'unverified') total.unverifiedEntries += 1;
+    groups.set(label, total);
+  }
+  return [...groups].map(([label, total]) => ({
+    label,
+    ...total,
+    costStatus: total.unverifiedEntries > 0 ? 'unverified' : total.estimatedEntries > 0 ? 'estimated' : 'measured',
+  })).sort((a, b) => (a.label ?? '').localeCompare(b.label ?? ''));
+}
+
 function validFoundryUsage(value: unknown): value is FoundryModelUsage {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) return false;
   const usage = value as Record<string, unknown>;
@@ -114,8 +149,7 @@ export async function registerUsageRoutes(app: FastifyInstance) {
     if (!app.usageStore) return reply.code(503).send({ error: 'Usage service unavailable' });
     const period = request.query.period ?? '30d';
     const to = new Date();
-    const days = periodDays[period];
-    const from = days === null ? null : new Date(to.getTime() - days * 24 * 60 * 60 * 1000);
+    const { from } = usageRange(period, to);
     const report = await app.usageStore.list(from, to);
     const todayStart = new Date(Date.UTC(to.getUTCFullYear(), to.getUTCMonth(), to.getUTCDate()));
     const tomorrowStart = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000);
@@ -174,3 +208,44 @@ export async function registerUsageRoutes(app: FastifyInstance) {
     return reply.code(204).send();
   });
 }
+
+export const getUsageTool: JarvisTool = {
+  name: 'get_usage',
+  description: 'Return usage spend grouped by area and model for the requested period. Use today for today’s UTC spend.',
+  sensitive: true,
+  inputSchema: {
+    type: 'object',
+    properties: { period: { type: 'string', enum: Object.keys(periodDays) } },
+    required: ['period'],
+    additionalProperties: false,
+  },
+  execute: async (input, request) => {
+    const { period } = input as { period: UsagePeriod };
+    const store = request.server.usageStore;
+    if (!store) throw new ToolFailure('Usage data is currently unavailable.');
+    const to = new Date();
+    const { from } = usageRange(period, to);
+    const report = await store.list(from, to);
+    const [total] = summarizeSpend(report.entries, () => 'all');
+    return {
+      period,
+      from: from?.toISOString() ?? null,
+      to: to.toISOString(),
+      total: total ? {
+        usd: total.usd,
+        dkk: total.dkk,
+        estimatedEntries: total.estimatedEntries,
+        unverifiedEntries: total.unverifiedEntries,
+        costStatus: total.costStatus,
+      } : {
+        usd: 0, dkk: 0, estimatedEntries: 0, unverifiedEntries: 0, costStatus: 'measured',
+      },
+      areas: summarizeSpend(report.entries, (entry) => entry.role ?? entry.source)
+        .map(({ label, ...spend }) => ({ area: label, ...spend })),
+      models: summarizeSpend(report.entries, (entry) => entry.model)
+        .map(({ label, ...spend }) => ({ model: label, ...spend })),
+      unpricedToolCalls: report.toolCalls ?? [],
+      truncated: BigInt(report.totalEntries) > BigInt(report.entries.length),
+    };
+  },
+};
