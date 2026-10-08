@@ -193,10 +193,33 @@ function projectName(projects: Project[], projectId: string): string {
   return projects.find((project) => project.id === projectId)?.name ?? `Unavailable project (${projectId})`;
 }
 
-function KanbanIcon({ name }: { name: 'search' | 'plus' | 'clock' | 'branch' }) {
+const collapsedColumnsKey = 'jarvis.kanban.collapsedColumns';
+const filtersOpenKey = 'jarvis.kanban.filtersOpen';
+function readStoredList(key: string): ReadonlySet<string> {
+  try {
+    const value: unknown = JSON.parse(localStorage.getItem(key) ?? '[]');
+    return new Set(Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string').slice(0, 12) : []);
+  } catch {
+    return new Set();
+  }
+}
+function readStoredFlag(key: string, fallback: boolean) {
+  try {
+    const value = localStorage.getItem(key);
+    return value === null ? fallback : value === '1';
+  } catch {
+    return fallback;
+  }
+}
+function writeStored(key: string, value: string) {
+  try { localStorage.setItem(key, value); } catch { /* Storage can be blocked; the board then simply forgets. */ }
+}
+
+function KanbanIcon({ name }: { name: 'search' | 'plus' | 'clock' | 'branch' | 'chevron' }) {
   const common = { 'aria-hidden': true as const, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
   switch (name) {
     case 'search': return <svg {...common}><circle cx="11" cy="11" r="6.5" /><path d="m16 16 4.5 4.5" /></svg>;
+    case 'chevron': return <svg {...common}><path d="m8 10 4 4 4-4" /></svg>;
     case 'plus': return <svg {...common}><path d="M12 5v14M5 12h14" /></svg>;
     case 'clock': return <svg {...common}><circle cx="12" cy="12" r="8.5" /><path d="M12 7.5V12l3 2" /></svg>;
     case 'branch': return <svg {...common}><circle cx="7" cy="5.5" r="2" /><circle cx="7" cy="18.5" r="2" /><circle cx="17" cy="8" r="2" /><path d="M7 7.5v9M17 10c0 4-10 2.5-10 6.5" /></svg>;
@@ -234,6 +257,16 @@ export function TasksPage({ backendUrl, getAccessToken }: Props) {
   const [settledTaskKey, setSettledTaskKey] = useState('');
   const [filters, setFilters] = useState(emptyFilters);
   const [appliedFilters, setAppliedFilters] = useState(emptyFilters);
+  // Space on the board (Dan, 8 October): columns and the search/filter section collapse, remembered on this device.
+  const [collapsedColumns, setCollapsedColumns] = useState<ReadonlySet<string>>(() => readStoredList(collapsedColumnsKey));
+  const [filtersOpen, setFiltersOpen] = useState(() => readStoredFlag(filtersOpenKey, !(window.matchMedia?.('(max-width: 700px)').matches ?? false)));
+  useEffect(() => { writeStored(collapsedColumnsKey, JSON.stringify([...collapsedColumns])); }, [collapsedColumns]);
+  useEffect(() => { writeStored(filtersOpenKey, filtersOpen ? '1' : '0'); }, [filtersOpen]);
+  const toggleColumn = (label: string) => setCollapsedColumns((current) => {
+    const next = new Set(current);
+    if (next.has(label)) next.delete(label); else next.add(label);
+    return next;
+  });
   const [reloadKey, setReloadKey] = useState(0);
   const [streamKey, setStreamKey] = useState(0);
   const [liveStatuses, setLiveStatuses] = useState<Record<string, StreamStatus>>({});
@@ -510,6 +543,7 @@ export function TasksPage({ backendUrl, getAccessToken }: Props) {
     setDialogOpen(true);
     setCreateError('');
   };
+  const activeFilterCount = [filters.search.trim(), filters.projectId, filters.agent, filters.state, filters.period].filter(Boolean).length;
   const createUnavailable = !backendUrl || visibleProjectState !== 'ready' || projects.length === 0;
   const createHelp = visibleProjectState === 'loading' ? 'Loading projects before task creation is available.' :
     visibleProjectState === 'error' ? 'Retry project loading before creating a task.' :
@@ -533,6 +567,7 @@ export function TasksPage({ backendUrl, getAccessToken }: Props) {
               <li data-tone="done"><span aria-hidden="true" />{tasks.filter((task) => task.state === 'Done').length} done</li>
             </ul>
           )}
+          <div className="kanban-header-actions">
           <button className="secondary-button kanban-create kanban-create-project" type="button" ref={createProjectButtonRef}
             onClick={() => setProjectDialogOpen(true)} disabled={!backendUrl}>
             <KanbanIcon name="plus" />
@@ -543,6 +578,7 @@ export function TasksPage({ backendUrl, getAccessToken }: Props) {
             <KanbanIcon name="plus" />
             <span>Create task</span>
           </button>
+          </div>
         </header>
         <p id="create-task-help" className={createUnavailable ? 'tasks-help' : 'visually-hidden'}>{createHelp}</p>
         {visibleProjectState === 'error' && (
@@ -553,6 +589,15 @@ export function TasksPage({ backendUrl, getAccessToken }: Props) {
         )}
         {notice && <p className="tasks-feedback" role="status">{notice}</p>}
 
+        <section className="kanban-filter-panel" data-open={filtersOpen} aria-label="Search and filters">
+        <button className="kanban-filter-toggle" type="button" aria-expanded={filtersOpen} aria-controls="kanban-filter-body"
+          onClick={() => setFiltersOpen((open) => !open)}>
+          <KanbanIcon name="search" />
+          <span>Search and filters</span>
+          {activeFilterCount > 0 && <span className="kanban-filter-badge">{activeFilterCount} active</span>}
+          <span className="kanban-chevron" aria-hidden="true"><KanbanIcon name="chevron" /></span>
+        </button>
+        <div id="kanban-filter-body" className="kanban-filter-body" inert={!filtersOpen}>
         <form className="kanban-filters" role="search" aria-label="Filter tasks" onSubmit={applyFilters}>
           <label className="kanban-search">
             <KanbanIcon name="search" />
@@ -592,6 +637,8 @@ export function TasksPage({ backendUrl, getAccessToken }: Props) {
             </select>
           </label>
         </form>
+        </div>
+        </section>
 
         <TaskReleaseBar backendUrl={backendUrl} getAccessToken={getAccessToken} projectId={appliedFilters.projectId} variant="trail" />
 
@@ -608,17 +655,26 @@ export function TasksPage({ backendUrl, getAccessToken }: Props) {
             {visibleTaskState === 'error' && tasks.length > 0 &&
               <p className="tasks-feedback" role="status">Showing the last loaded tasks because refresh failed.</p>}
             {tasks.length === 100 && <p className="task-limit-note">Showing the 100 most recent matching tasks. Refine filters to narrow the list.</p>}
-            <div className="task-board kanban-board" role="region" aria-label="Tasks by state">
+            <div className="task-board kanban-board" role="region" aria-label="Tasks by state"
+              style={{ '--kanban-columns': columns.map((column) => collapsedColumns.has(column.label) ? '52px' : 'minmax(240px, 1fr)').join(' ') } as CSSProperties}>
               {columns.map((column) => {
                 const items = tasks.filter((task) => column.states.includes(task.state));
                 const headingId = `column-${columnTone(column.label)}`;
                 return (
-                  <section className="task-column kanban-column" key={column.label} aria-labelledby={headingId}>
+                  <section className="task-column kanban-column" key={column.label} aria-labelledby={headingId}
+                    data-collapsed={collapsedColumns.has(column.label) || undefined}>
                     <header className="kanban-column-heading">
-                      <span className={`kanban-dot kanban-dot-${columnTone(column.label)}`} aria-hidden="true" />
-                      <h2 id={headingId}>{column.label}</h2>
+                      <h2 id={headingId}>
+                        <button className="kanban-column-toggle" type="button" aria-expanded={!collapsedColumns.has(column.label)}
+                          aria-controls={`${headingId}-cards`} onClick={() => toggleColumn(column.label)}>
+                          <span className={`kanban-dot kanban-dot-${columnTone(column.label)}`} aria-hidden="true" />
+                          <span className="kanban-column-label">{column.label}</span>
+                          <span className="kanban-chevron" aria-hidden="true"><KanbanIcon name="chevron" /></span>
+                        </button>
+                      </h2>
                       <span className="kanban-count" aria-label={`${items.length} tasks`}>{items.length}</span>
                     </header>
+                    <div id={`${headingId}-cards`} className="kanban-column-body" hidden={collapsedColumns.has(column.label)}>
                     {items.length === 0
                       ? <p className="task-column-empty">No matching tasks.</p>
                       : <ul className="task-card-list">
@@ -669,6 +725,7 @@ export function TasksPage({ backendUrl, getAccessToken }: Props) {
                           </li>
                         ))}
                       </ul>}
+                    </div>
                   </section>
                 );
               })}

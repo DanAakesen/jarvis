@@ -4,6 +4,7 @@ import { useThemePreference } from './theme-preference-context';
 import { saveVoiceWorkspacePreference } from './voice-workspace-preference';
 import { TaskRecipesSettings } from './TaskRecipesSettings';
 import { Loader } from './Loader';
+import { CollapsibleSection } from './CollapsibleSection';
 
 interface Settings {
   appearance: { theme: 'light' | 'dark' | 'system' };
@@ -416,8 +417,7 @@ export function SettingsPage({ backendUrl, getAccessToken, activity, presence, p
       )}
       {state === 'ready' && settings && options && (
         <form onSubmit={(event) => { void save(event); }}>
-          <section className="settings-section" aria-labelledby="appearance-settings-heading">
-            <h2 id="appearance-settings-heading">Appearance</h2>
+          <CollapsibleSection storageKey="settings.appearance" headingId="appearance-settings-heading" title="Appearance" summary={<>{themePreference.theme === 'system' ? 'System theme' : themePreference.theme === 'dark' ? 'Dark theme' : 'Light theme'}</>}>
             <p className="settings-explanation">Choose a light, dark, or system appearance for every page. System follows your OS appearance. The accepted theme is saved separately from other settings.</p>
             <fieldset className="choice-group theme-choice-group"
               disabled={themePreference.state !== 'ready' || themePreference.saving}>
@@ -459,10 +459,9 @@ export function SettingsPage({ backendUrl, getAccessToken, activity, presence, p
             <p className="settings-explanation" id="theme-variables-help">
               Jarvis can update approved appearance variables through its validated theme tool.
             </p>
-          </section>
+          </CollapsibleSection>
 
-          <section className="settings-section" aria-labelledby="jarvis-settings-heading">
-            <h2 id="jarvis-settings-heading">Jarvis</h2>
+          <CollapsibleSection storageKey="settings.jarvis" headingId="jarvis-settings-heading" title="Jarvis" summary={<>{settings.jarvis.model}</>}>
             <div className="settings-grid">
               <SelectField id="jarvis-model" label="Chat and Danish voice model" value={settings.jarvis.model}
                 options={options.jarvisModels} disabled={saving}
@@ -472,10 +471,9 @@ export function SettingsPage({ backendUrl, getAccessToken, activity, presence, p
                 onChange={(value) => update('jarvis', 'reasoning', value)} />
             </div>
             <p className="settings-explanation">Model choices are limited to deployments currently configured for Jarvis.</p>
-          </section>
+          </CollapsibleSection>
 
-          <section className="settings-section" aria-labelledby="personality-settings-heading">
-            <h2 id="personality-settings-heading">Jarvis Personality</h2>
+          <CollapsibleSection storageKey="settings.personality" headingId="personality-settings-heading" title="Jarvis Personality">
             <p className="settings-explanation" id="personality-session-help">
               Personality changes apply to new sessions. Active sessions keep their current settings.
             </p>
@@ -523,10 +521,9 @@ export function SettingsPage({ backendUrl, getAccessToken, activity, presence, p
                 {resettingPersonality ? 'Resetting personality…' : personalityResetMessage}
               </p>
             )}
-          </section>
+          </CollapsibleSection>
 
-          <section className="settings-section" aria-labelledby="voice-settings-heading">
-            <h2 id="voice-settings-heading">Voice</h2>
+          <CollapsibleSection storageKey="settings.voice" headingId="voice-settings-heading" title="Voice">
             <div className="settings-grid">
               <SelectField id="speech-model" label="Speech-to-text model" value={settings.voice.speechToTextModel}
                 options={options.speechToTextModels} disabled={saving}
@@ -560,10 +557,9 @@ export function SettingsPage({ backendUrl, getAccessToken, activity, presence, p
               <button className="secondary-button" type="button" disabled aria-describedby="voice-sample-help">Play English sample</button>
               <button className="secondary-button" type="button" disabled aria-describedby="voice-sample-help">Play Danish sample</button>
             </div>
-          </section>
+          </CollapsibleSection>
 
-          <section className="settings-section" aria-labelledby="coding-settings-heading">
-            <h2 id="coding-settings-heading">Coding agents</h2>
+          <CollapsibleSection storageKey="settings.coding" headingId="coding-settings-heading" title="Coding agents">
             <div className="settings-grid">
               <SelectField id="codex-model" label="Codex model" value={settings.codex.model}
                 options={options.codexModels} disabled={saving}
@@ -576,10 +572,9 @@ export function SettingsPage({ backendUrl, getAccessToken, activity, presence, p
                 onChange={(value) => update('copilot', 'model', value)} />
             </div>
             <p className="settings-explanation">Only verified provider choices are offered. Additional agent model choices depend on provider support verification.</p>
-          </section>
+          </CollapsibleSection>
 
-          <section className="settings-section" aria-labelledby="global-settings-heading">
-            <h2 id="global-settings-heading">Global</h2>
+          <CollapsibleSection storageKey="settings.global" headingId="global-settings-heading" title="Global" summary={<>{`Up to ${settings.global.maxParallelTasks} parallel tasks`}</>}>
             <div className="settings-field settings-number-field">
               <label htmlFor="max-parallel-tasks">Maximum parallel tasks</label>
               <input id="max-parallel-tasks" type="number" min="1" max="100" step="1"
@@ -594,10 +589,9 @@ export function SettingsPage({ backendUrl, getAccessToken, activity, presence, p
                 onChange={(event) => update('global', 'screenShareDailyFrameCap', Number(event.target.value))} />
               <p className="settings-explanation">Maximum screen frames sent to the vision model per UTC day (1–300).</p>
             </div>
-          </section>
+          </CollapsibleSection>
 
-          <section className="settings-section" aria-labelledby="new-projects-settings-heading">
-            <h2 id="new-projects-settings-heading">New projects</h2>
+          <CollapsibleSection storageKey="settings.new-projects" headingId="new-projects-settings-heading" title="New projects">
             <div className="settings-grid">
               <div className="settings-field">
                 <label htmlFor="new-project-owner">Owner</label>
@@ -635,10 +629,9 @@ export function SettingsPage({ backendUrl, getAccessToken, activity, presence, p
               a templates repository in owner/name format, and a valid branch name.
             </p>
             <p className="settings-explanation">New project task limits must be whole numbers from 1 to 100.</p>
-          </section>
+          </CollapsibleSection>
 
-          <section className="settings-section" aria-labelledby="credentials-heading">
-            <h2 id="credentials-heading">Credentials</h2>
+          <CollapsibleSection storageKey="settings.credentials" headingId="credentials-heading" title="Credentials">
             <p className="settings-explanation" id="credential-actions-help">
               Renewal runs daily when no Codex task is active. Manual renewal and re-seed instructions are unavailable here. Secret values are never shown.
             </p>
@@ -660,7 +653,7 @@ export function SettingsPage({ backendUrl, getAccessToken, activity, presence, p
               <button className="secondary-button" type="button" disabled aria-describedby="credential-actions-help">Trigger Codex renewal</button>
               <button className="secondary-button" type="button" disabled aria-describedby="credential-actions-help">Open re-seed instructions</button>
             </div>
-          </section>
+          </CollapsibleSection>
 
           <div className="settings-save">
             <button className="primary-button" type="submit"

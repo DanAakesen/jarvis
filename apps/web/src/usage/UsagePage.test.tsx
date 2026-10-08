@@ -66,15 +66,14 @@ describe('Usage page', () => {
     const table = await screen.findByRole('table', { name: 'Usage entries for Jarvis' });
     expect(screen.getByRole('heading', { name: 'Project: Jarvis' })).not.toBeNull();
     expect(within(table).getAllByRole('link', { name: 'Fix the bug' })[0]?.getAttribute('href')).toBe('/factory/tasks/42');
-    expect(within(table).getByText(/Estimated/)).not.toBeNull();
+    expect(within(table).getAllByTitle('Estimated').length).toBeGreaterThan(0);
     expect(within(table).getByText('Agent turns: 2 turns')).not.toBeNull();
     expect(within(table).getAllByText('—')).toHaveLength(2);
-    expect(screen.getAllByText(/Includes estimated DKK for this group/)).toHaveLength(2);
-    expect(screen.getByText(/sandbox and voice costs are estimates/)).not.toBeNull();
-    expect(screen.getByRole('heading', { name: 'Jarvis tool calls today (UTC)' })).not.toBeNull();
-    expect(screen.getByText('image_generation').parentElement?.textContent).toBe('image_generation: 2');
-    expect(screen.getByRole('heading', { name: 'Codex tool calls today (UTC)' })).not.toBeNull();
-    expect(screen.getByText('3 calls')).not.toBeNull();
+    expect(screen.getByText('Includes estimates')).not.toBeNull();
+    expect(screen.getByRole('img', { name: /^Cost by project: / })).not.toBeNull();
+    expect(screen.getByRole('heading', { name: 'Tool calls today' })).not.toBeNull();
+    expect(screen.getByText('image generation').parentElement?.textContent).toContain('2');
+    expect(screen.getByText('Codex research 3')).not.toBeNull();
     expect(fetchMock).toHaveBeenCalledWith('https://api.example.com/usage?period=30d', {
       headers: { Authorization: `${['Bear', 'er'].join('')} fixture-token` },
       signal: expect.any(AbortSignal),
@@ -86,18 +85,19 @@ describe('Usage page', () => {
     renderPage();
     await screen.findByRole('table', { name: 'Usage entries for Jarvis' });
 
-    await user.selectOptions(screen.getByRole('combobox', { name: 'Group by' }), 'agent');
+    const groupBy = screen.getByRole('group', { name: 'Group by' });
+    await user.click(within(groupBy).getByRole('button', { name: 'Agent' }));
     expect(screen.getByRole('heading', { name: 'Agent: Jarvis' })).not.toBeNull();
     expect(screen.getByRole('link', { name: 'Update docs' })).not.toBeNull();
 
-    await user.selectOptions(screen.getByRole('combobox', { name: 'Time period' }), '7d');
+    await user.click(within(screen.getByRole('group', { name: 'Time period' })).getByRole('button', { name: '7 days' }));
     await screen.findByText('Agent turns: 2 turns');
     expect(fetchMock).toHaveBeenLastCalledWith('https://api.example.com/usage?period=7d', expect.any(Object));
 
-    await user.selectOptions(screen.getByRole('combobox', { name: 'Group by' }), 'source');
+    await user.click(within(screen.getByRole('group', { name: 'Group by' })).getByRole('button', { name: 'Source' }));
     expect(screen.getByRole('heading', { name: 'Source: Voice' })).not.toBeNull();
-    expect(screen.getByText('Jarvis conversation')).not.toBeNull();
-    await user.selectOptions(screen.getByRole('combobox', { name: 'Time period' }), 'all');
+    expect(screen.getAllByText('Jarvis conversation').length).toBeGreaterThan(0);
+    await user.click(within(screen.getByRole('group', { name: 'Time period' })).getByRole('button', { name: 'All time' }));
     await screen.findByText('Agent turns: 2 turns');
     expect(fetchMock).toHaveBeenLastCalledWith('https://api.example.com/usage?period=all', expect.any(Object));
   });
@@ -114,7 +114,7 @@ describe('Usage page', () => {
     fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ ...report, entries: [], totalEntries: '0' }), {
       status: 200, headers: { 'Content-Type': 'application/json' },
     }));
-    await user.selectOptions(screen.getByRole('combobox', { name: 'Time period' }), '90d');
+    await user.click(within(screen.getByRole('group', { name: 'Time period' })).getByRole('button', { name: '90 days' }));
     expect(await screen.findByText('No usage was recorded in this period.')).not.toBeNull();
   });
 
@@ -127,14 +127,14 @@ describe('Usage page', () => {
         <UsagePage backendUrl="https://api.example.com" getAccessToken={getAccessToken} />
       </MemoryRouter>,
     );
-    expect(await screen.findByText('No Codex tool calls were recorded today (UTC).')).not.toBeNull();
+    expect(await screen.findByText('Codex research 0')).not.toBeNull();
     unmount();
 
     fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({
       ...report, codexToolCallsToday: null,
     }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
     renderPage();
-    expect(await screen.findByText('Codex tool counts are unavailable.')).not.toBeNull();
+    expect(await screen.findByText('Codex research unavailable')).not.toBeNull();
   });
 
   it('rejects a Codex tool count outside the SQL bigint range', async () => {

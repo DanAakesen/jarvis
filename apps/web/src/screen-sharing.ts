@@ -15,6 +15,9 @@ export interface ScreenShareController {
   start(onError?: (message: string) => void): Promise<void>;
   stop(): void;
   inspect(sessionId: string, feedback?: 'inline' | 'caller'): Promise<VisionContext>;
+  /** Camera only: which way the camera faces, and a switch between front and back (phones). */
+  readonly facing?: 'user' | 'environment';
+  switchCamera?(): Promise<void>;
 }
 
 export interface VisionContext {
@@ -100,6 +103,8 @@ function useVisionCapture(
   const [starting, setStarting] = useState(false);
   const [inspecting, setInspecting] = useState(false);
   const [error, setError] = useState('');
+  const [facing, setFacing] = useState<'user' | 'environment'>('user');
+  const facingRef = useRef<'user' | 'environment'>('user');
   const label = source === 'camera' ? 'camera' : 'screen';
 
   const stop = useCallback(() => {
@@ -139,7 +144,7 @@ function useVisionCapture(
     try {
       const stream = source === 'camera'
         ? await navigator.mediaDevices.getUserMedia({
-          video: { width: { ideal: 1280 }, height: { ideal: 720 } },
+          video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: { ideal: facingRef.current } },
           audio: false,
         })
         : await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
@@ -254,7 +259,19 @@ function useVisionCapture(
     }
   }, [config.backendUrl, getAccessToken, label, source]);
 
-  return { sharing, starting, inspecting, error, start, stop, inspect };
+  // Front and back cameras on a phone: stop the current stream and start again facing the other way.
+  const switchCamera = useCallback(async () => {
+    const next = facingRef.current === 'user' ? 'environment' : 'user';
+    facingRef.current = next;
+    setFacing(next);
+    if (!streamRef.current) return;
+    stop();
+    await start();
+  }, [start, stop]);
+
+  return source === 'camera'
+    ? { sharing, starting, inspecting, error, start, stop, inspect, facing, switchCamera }
+    : { sharing, starting, inspecting, error, start, stop, inspect };
 }
 
 export function useScreenShare(config: PublicConfig, getAccessToken: () => Promise<string>): ScreenShareController {

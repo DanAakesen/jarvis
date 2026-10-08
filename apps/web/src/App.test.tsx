@@ -632,11 +632,23 @@ describe('App shell', () => {
 
   it('keeps camera and screen sharing out of the top bar and in the chat More menu', async () => {
     const user = userEvent.setup();
+    Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: { getDisplayMedia: vi.fn(), getUserMedia: vi.fn() } });
+    try {
+      await renderSignedIn();
+      const topbar = document.querySelector('.topbar-actions') as HTMLElement;
+      expect(within(topbar).queryByRole('button', { name: /share screen|camera/i })).toBeNull();
+      await user.click(screen.getByRole('button', { name: 'More options' }));
+      expect(screen.getByRole('menuitem', { name: 'Share screen' })).not.toBeNull();
+      expect(screen.getByRole('menuitem', { name: 'Turn camera on' })).not.toBeNull();
+    } finally {
+      Reflect.deleteProperty(navigator, 'mediaDevices');
+    }
+  });
+  it('offers no screen sharing where the browser cannot share the screen (phones)', async () => {
+    const user = userEvent.setup();
     await renderSignedIn();
-    const topbar = document.querySelector('.topbar-actions') as HTMLElement;
-    expect(within(topbar).queryByRole('button', { name: /share screen|camera/i })).toBeNull();
     await user.click(screen.getByRole('button', { name: 'More options' }));
-    expect(screen.getByRole('menuitem', { name: 'Share screen' })).not.toBeNull();
+    expect(screen.queryByRole('menuitem', { name: 'Share screen' })).toBeNull();
     expect(screen.getByRole('menuitem', { name: 'Turn camera on' })).not.toBeNull();
   });
   it('shows chat work only after a runtime event and clears it on the reported terminal event', async () => {
@@ -755,7 +767,7 @@ describe('App shell', () => {
     await renderSignedIn();
     expect(screen.queryByRole('button', { name: /area navigation/ })).toBeNull();
 
-    for (const [area, heading] of [['Software Factory', 'Kanban'], ['Usage', 'Usage and cost']] as const) {
+    for (const [area, heading] of [['Software Factory', 'Kanban'], ['Usage', 'Usage']] as const) {
       await user.click(screen.getByRole('link', { name: area }));
       await screen.findByRole('heading', { level: 1, name: heading });
       expect(screen.queryByRole('button', { name: /area navigation/ })).toBeNull();
@@ -787,7 +799,7 @@ describe('App shell', () => {
     expect(await screen.findByText('Camera on for Jarvis')).not.toBeNull();
     const activeCamera = screen.getByRole('button', { name: 'Camera off' });
     expect(getUserMedia).toHaveBeenCalledWith({
-      video: { width: { ideal: 1280 }, height: { ideal: 720 } },
+      video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: { ideal: 'user' } },
       audio: false,
     });
     await user.click(activeCamera);

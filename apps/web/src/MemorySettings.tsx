@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { backendFetch } from './backend-request';
 import { Loader } from './Loader';
+import { CollapsibleSection } from './CollapsibleSection';
 
 // Durable memories Jarvis keeps are grouped under General by the memory API (docs/architecture.md, P7-40/P7-42).
 type Folder = 'People' | 'Work' | 'Personal' | 'General';
@@ -236,8 +237,7 @@ export function MemorySettings({ backendUrl, getAccessToken }: { backendUrl: str
 
   const unavailable = list.status === 'unavailable' || (list.status !== 'ready' && status.status === 'unavailable');
   return (
-    <section className="settings-section memory-settings" id="memory" aria-labelledby={`${ids}-heading`}>
-      <h2 id={`${ids}-heading`}>Memory</h2>
+    <CollapsibleSection storageKey="settings.memory" className="memory-settings" id="memory" headingId={`${ids}-heading`} title="Memory">
       <p className="settings-explanation">What Jarvis knows about people, work and you: notes in your vault plus memories Jarvis keeps. Correct anything that is wrong, or ask Jarvis to forget it.</p>
       {unavailable ? (
         <p className="settings-unavailable" role="status">Memory is not available yet. It appears here once the memory service is deployed.</p>
@@ -348,6 +348,6 @@ export function MemorySettings({ backendUrl, getAccessToken }: { backendUrl: str
           </div>
         </>
       )}
-    </section>
+    </CollapsibleSection>
   );
 }

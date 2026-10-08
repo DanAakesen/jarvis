@@ -34,8 +34,10 @@ import { useGlassLight } from './glass-light';
 import { TaskDetailPage } from './factory/TaskDetailPage';
 import { InputOrbCore } from './InputOrbCore';
 import { TaskWindowsContext, readTaskWindows, saveTaskWindows, taskWindowViewId, type TaskWindowEntry } from './task-windows';
-import { pageForPath, readNavigateCommand, resolveNavigation, revealWhenReady, useVisibleSettingsSection, type NavigateRequest } from './page-navigation';
+import { pageForPath, readConversationCommand, readNavigateCommand, resolveNavigation, revealWhenReady, useVisibleSettingsSection, type NavigateRequest } from './page-navigation';
 import { FolioPane } from './Folio';
+import { CollapsibleSection } from './CollapsibleSection';
+import { MobileCaption, MobileMenu } from './MobileShell';
 import { flyChat } from './chat-flight';
 import { readWorkspaceFrame } from './workspace-frame';
 import { JobsChip } from './JobsChip';
@@ -126,7 +128,7 @@ function ShellLayout({ signedIn, config, session, camera, screenShare }: {
   const pathnameRef = useRef(pathname);
   useLayoutEffect(() => { pathnameRef.current = pathname; }, [pathname]);
   const getAccessToken = session.getAccessToken;
-  const { working, latestActivity } = useJarvisActivity();
+  const { working, latestActivity, workText } = useJarvisActivity();
   const activityText = activityLabel(latestActivity);
   const navigationToggle = useRef<HTMLButtonElement>(null);
   const workspaceController = useRef<WorkspaceController>(null);
@@ -157,11 +159,17 @@ function ShellLayout({ signedIn, config, session, camera, screenShare }: {
   }, [signedIn, pathname]);
   const [voiceHasWindows, setVoiceHasWindows] = useState(false);
   const [phone, setPhone] = useState(() => window.matchMedia?.(PHONE_LAYOUT_MEDIA_QUERY).matches ?? false);
+  // Phone shell: the open windows list and the page menu are sheets opened from the top bar.
+  const [windowsSheetOpen, setWindowsSheetOpen] = useState(false);
+  const windowCount = openWindows.filter((window) => window.viewId !== conversationViewId).length;
+  const [menuOpen, setMenuOpen] = useState(false);
+  const closeMenu = useCallback(() => setMenuOpen(false), []);
   // Jarvis switching the page Dan is looking at (P9-40): the route changes with the usual page transition, then the
   // named Settings section or task card is scrolled into view and glows once its data has loaded.
   // The Folio pane (P9-25) shares the left sidebar slot with area navigation; only one is open at a time.
   const [folioOpen, setFolioOpen] = useState(false);
   const openTaskRef = useRef<(taskId: string) => void>(() => {});
+  const conversationWindowRef = useRef<{ open: boolean; setOpen: (open: boolean) => boolean } | null>(null);
   const cancelReveal = useRef<() => void>(() => {});
   const navigateTo = useCallback((request: NavigateRequest) => {
     const target = resolveNavigation(request);
@@ -200,6 +208,8 @@ function ShellLayout({ signedIn, config, session, camera, screenShare }: {
     dispatch: (command: Parameters<WorkspaceController['dispatch']>[0], trustedBlobHost?: string) => {
       const navigateRequest = readNavigateCommand(command);
       if (navigateRequest) return navigateTo(navigateRequest);
+      const conversationAction = readConversationCommand(command);
+      if (conversationAction) return conversationWindowRef.current?.setOpen(conversationAction === 'show') ?? false;
       if (command.operation === 'context-panel') {
         if (command.action === 'open') {
           contextPanel.show(command.view ? {
@@ -247,7 +257,8 @@ function ShellLayout({ signedIn, config, session, camera, screenShare }: {
     setChatOutPath(pathname);
     if (chatOut) setChatOut(false);
   }
-  const chatPlace: 'home' | 'out' | 'rail' = !signedIn || home ? 'home' : chatOut ? 'out' : 'rail';
+  // On phones there is no rail: the chat bar is the dock at the bottom of every page (Dan, 8 October).
+  const chatPlace: 'home' | 'out' | 'rail' = !signedIn || home ? 'home' : phone || chatOut ? 'out' : 'rail';
   const railOrb = useRef<HTMLButtonElement>(null);
   const previousChatPlace = useRef(chatPlace);
   useLayoutEffect(() => {
@@ -329,6 +340,14 @@ function ShellLayout({ signedIn, config, session, camera, screenShare }: {
       viewId: conversationViewId,
     }) ?? false,
   }), [conversationHost, conversationOpen]);
+  useEffect(() => { conversationWindowRef.current = conversationWindow; }, [conversationWindow]);
+  // Phones (Dan, 8 October): moving to another page tucks the chat away so the new page is not covered.
+  const lastPath = useRef(pathname);
+  useEffect(() => {
+    if (lastPath.current === pathname) return;
+    lastPath.current = pathname;
+    if (phone && conversationWindowRef.current?.open) conversationWindowRef.current.setOpen(false);
+  }, [pathname, phone]);
   const backendUrl = config.backendUrl;
   const taskViews = useMemo<WorkspaceView[]>(() => taskWindows.map(({ taskId, title, restored }) => ({
     id: taskWindowViewId(taskId),
@@ -364,7 +383,11 @@ function ShellLayout({ signedIn, config, session, camera, screenShare }: {
     const command = (operation: 'minimise' | 'restore') => controller.dispatch({
       commandId: `conversation-${operation}`, operation, viewId: conversationViewId,
     });
-    if (voiceActive) {
+    if (phone) {
+      // Phones are voice first: the transcript stays tucked away until Dan swipes it up or asks Jarvis for it.
+      if (becameAvailable) command('minimise');
+      lifecycle.hiddenForVoice = false;
+    } else if (voiceActive) {
       // Fullscreen voice starts with history out of the way; Jarvis can still show it with window commands.
       if (!lifecycle.hiddenForVoice) lifecycle.hiddenForVoice = command('minimise');
     } else if (lifecycle.hiddenForVoice || (becameAvailable && !controller.isViewVisible?.(conversationViewId))) {
@@ -372,7 +395,7 @@ function ShellLayout({ signedIn, config, session, camera, screenShare }: {
       lifecycle.hiddenForVoice = false;
       command('restore');
     }
-  }, [conversationAvailable, voiceActive]);
+  }, [conversationAvailable, phone, voiceActive]);
   // The navigation is a drawer over the page: it starts closed and opens from the rail.
   const [navigationOpen, setNavigationOpen] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useState(() => readPanelWidth('sidebar', sidebarLimits.min, sidebarLimits.max));
@@ -465,7 +488,7 @@ function ShellLayout({ signedIn, config, session, camera, screenShare }: {
     <div className={`app app-shell${signedIn ? '' : ' app-signed-out'}`} data-navigation-open={signedIn && (navigationShown || folioOpen)} data-folio-open={signedIn && folioOpen}
       data-context-open={signedIn && contextPanel.isOpen} data-voice-active={voiceActive}
       data-voice-has-windows={voiceHasWindows} data-conversation-open={signedIn && conversationOpen} style={panelWidths}
-      data-home={home} data-chat={chatPlace}>
+      data-home={home} data-chat={chatPlace} data-phone={signedIn && phone} data-windows-open={signedIn && phone && windowsSheetOpen && windowCount > 0}>
       <a className="skip-link" href="#content">Skip to content</a>
       {signedIn && (
         <nav className="area-rail" aria-label="Areas">
@@ -533,13 +556,19 @@ function ShellLayout({ signedIn, config, session, camera, screenShare }: {
           <Link className="brand" to="/" aria-label="Jarvis home">Jarvis</Link>
         </div>
         {/* Open windows live as tabs in the top bar, between the brand and the controls (no breadcrumb). */}
-        {signedIn && <div className="window-tabstrip">
+        {signedIn && <div className="window-tabstrip" onClick={(event) => { if (phone && (event.target as HTMLElement).closest('button')) setWindowsSheetOpen(false); }}>
         <div ref={setTabsHost} className="window-tabbar" />
         <JobsChip backendUrl={config.backendUrl} getAccessToken={session.getAccessToken} onResult={openJobResult} />
         </div>}
 
         {signedIn && (
           <div className="topbar-actions">
+            {phone && windowCount > 0 && (
+              <button className="topbar-icon-button mobile-windows-button" type="button" aria-expanded={windowsSheetOpen}
+                aria-label={`Open windows: ${windowCount}`} onClick={() => setWindowsSheetOpen((open) => !open)}>
+                <span className="mobile-windows-count" aria-hidden="true">{windowCount}</span>
+              </button>
+            )}
             <PresenceChip backendUrl={config.backendUrl} getAccessToken={session.getAccessToken} />
             {config.backendUrl && (
               <DatabaseWakeStatus backendUrl={config.backendUrl} getAccessToken={session.getAccessToken} />
@@ -562,6 +591,12 @@ function ShellLayout({ signedIn, config, session, camera, screenShare }: {
             >
               <ShellIcon name="context" />
             </button>
+            {phone && (
+              <button className="topbar-icon-button mobile-menu-button" type="button" aria-label="Menu" aria-expanded={menuOpen}
+                aria-controls="mobile-menu" onClick={() => setMenuOpen((open) => !open)}>
+                <ShellIcon name="navigation" />
+              </button>
+            )}
             <NavLink className="settings-link" to="/settings" aria-label="Settings">
               <ShellIcon name="settings" /><span className="settings-label">Settings</span>
             </NavLink>
@@ -585,7 +620,7 @@ function ShellLayout({ signedIn, config, session, camera, screenShare }: {
                   camera={camera}
                   screenShare={screenShare}
                   docked={chatPlace === 'rail'}
-                  {...(chatPlace === 'out' ? { onDismiss: collapseChat } : {})}
+                  {...(chatPlace === 'out' && !phone ? { onDismiss: collapseChat } : {})}
                 />
               )}
             </ConversationWindowContext.Provider>
@@ -612,6 +647,12 @@ function ShellLayout({ signedIn, config, session, camera, screenShare }: {
         </KnowledgeBackendContext.Provider>
         </JarvisStage>
       </main>
+      {signedIn && phone && (
+        <>
+          <MobileCaption text={workText ?? (working ? activityText : null)} />
+          <MobileMenu open={menuOpen} onClose={closeMenu} onFolio={() => setFolioOpen(true)} onContext={contextPanel.toggle} />
+        </>
+      )}
       {signedIn && <ContextPanel closeIcon={<ShellIcon name="close" />} resizeHandle={phone ? undefined : (
         <PanelResizeHandle edge="left" label="Resize context panel" width={contextWidth ?? 280}
           min={contextLimits.min} max={contextLimits.max} onChange={changeContextWidth} />
@@ -658,10 +699,9 @@ function SettingsActivity({ client, config, getAccessToken }: {
   return (
     <>
       <NowFeedPanel client={client} config={config} getAccessToken={getAccessToken} applyWorkspaceCommand={applyWorkspaceCommand} />
-      <section className="panel" aria-labelledby="backend-heading">
-        <h2 id="backend-heading">Backend</h2>
+      <CollapsibleSection storageKey="settings.backend" className="panel" headingId="backend-heading" title="Backend">
         <BackendSleepControl client={client} config={config} />
-      </section>
+      </CollapsibleSection>
     </>
   );
 }

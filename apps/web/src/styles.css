@@ -1024,8 +1024,8 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
   -webkit-mask-composite: xor;
   mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
 }
-.conversation-input.luminous-glass:hover::after { opacity: .7; animation: rim-sweep 3.6s linear infinite; }
-.conversation-input.luminous-glass:focus-within::after { opacity: 1; animation: rim-sweep 2.8s linear infinite; }
+.conversation-input.luminous-glass:hover::after { opacity: .7; animation: rim-sweep 7s linear infinite; }
+.conversation-input.luminous-glass:focus-within::after { opacity: 1; animation: rim-sweep 6s linear infinite; }
 @keyframes rim-sweep { to { --rim-sweep: 360deg; } }
 :root[data-motion="reduced"] .conversation-input.luminous-glass::after { animation: none; background: color-mix(in srgb, var(--glass-edge-cool) 80%, var(--glass-rim-light)); }
 .workspace-window-conversation.luminous-glass:focus-within { box-shadow: 0 26px 60px -18px rgb(0 0 0 / 55%), 0 0 0 2px var(--focus); }
@@ -2726,7 +2726,13 @@ a.task-chip:hover { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--glass-e
 
 /* No page bounce (Dan, 7 October): signed in, the shell owns every scroll area, so the document itself never scrolls,
    wobbles or rubber-bands; inner lists stop their scroll at their own edges instead of passing it to the page. */
-:root:has(.app-shell:not(.app-signed-out)), :root:has(.app-shell:not(.app-signed-out)) body { height: 100%; overflow: hidden; overscroll-behavior: none; }
+/* Desktop only: there the shell is exactly the viewport and inner panes scroll. On phones the page itself scrolls (Dan, 8 October). */
+@media (min-width: 701px) and (not ((max-height: 500px) and (pointer: coarse))) {
+  :root:has(.app-shell:not(.app-signed-out)), :root:has(.app-shell:not(.app-signed-out)) body { height: 100%; overflow: hidden; overscroll-behavior: none; }
+}
+@media (max-width: 700px), (max-height: 500px) and (pointer: coarse) {
+  :root:has(.app-shell:not(.app-signed-out)) { overscroll-behavior-y: none; }
+}
 .app-shell:not(.app-signed-out) { overscroll-behavior: none; }
 .app-shell:not(.app-signed-out) :is(.shell-main, .conversation-transcript, .workspace-view-content, .context-panel-body, .area-sidebar > nav, .knowledge-results, .knowledge-note-body, .jobs-popover, .modal-backdrop) { overscroll-behavior: contain; }
 /* Loading (Dan, 7 October). The amber core is Jarvis's own and appears on the app's first load only. Everything after
@@ -2964,3 +2970,240 @@ a.task-chip:hover { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--glass-e
 @keyframes code-view-in { from { opacity: 0; translate: 0 6px; } }
 :root[data-motion="reduced"] .code-view-body { animation: none; }
 @media (prefers-reduced-motion: reduce) { .code-view-body { animation: none; } }
+/* Phone shell (Dan, 8 October): voice first and hands free. No rail or side panels: a slim top bar (windows count,
+   presence, menu), the room, one caption line, and the chat bar as the dock on every page. Pages scroll normally. */
+.app-shell[data-phone="true"] { --dock-space: calc(84px + env(safe-area-inset-bottom)); grid-template-columns: minmax(0, 1fr); }
+.app-shell[data-phone="true"] .area-rail { display: none; }
+.app-shell[data-phone="true"] :is(.shell-main, .area-sidebar, .context-panel, .folio-pane) { grid-column: 1; }
+.app-shell[data-phone="true"][data-home="false"] .shell-main { padding-bottom: calc(var(--dock-space) + 16px); }
+.app-shell[data-phone="true"][data-home="true"] .jarvis-page { padding-bottom: max(8px, env(safe-area-inset-bottom)); }
+.app-shell[data-phone="true"] :is(#context-panel-toggle, .settings-link) { display: none; }
+.app-shell[data-phone="true"] .app-topbar { gap: 6px; padding-inline: 10px 6px; }
+/* The open windows list is a sheet under the top bar, opened from the count button. */
+.app-shell[data-phone="true"] .window-tabstrip { display: none; }
+.app-shell[data-phone="true"][data-windows-open="true"] .window-tabstrip {
+  position: fixed; z-index: 45; top: calc(var(--rail-size) + 6px); right: 8px; left: 8px; display: flex; max-height: 60dvh; flex-direction: column;
+  gap: 6px; padding: 8px; overflow: auto; border-radius: 20px; background: var(--stage-slab); box-shadow: var(--slab-shadow), inset 0 1px 0 var(--glass-rim-light);
+  backdrop-filter: blur(16px) saturate(1.3); animation: mobile-drop 320ms var(--ease-enter) both;
+}
+.app-shell[data-phone="true"][data-windows-open="true"] :is(.window-tabbar, .workspace-tabs) { display: flex; width: 100%; flex-direction: column; gap: 4px; overflow: visible; }
+.app-shell[data-phone="true"][data-windows-open="true"] .workspace-tab-item { width: 100%; max-width: none; }
+.app-shell[data-phone="true"][data-windows-open="true"] .workspace-tab { width: 100%; max-width: none; min-height: 44px; justify-content: flex-start; }
+.mobile-windows-button { display: grid; place-items: center; }
+.mobile-windows-count { display: grid; min-width: 24px; height: 22px; padding: 0 6px; place-items: center; border-radius: 7px;
+  box-shadow: inset 0 0 0 1.5px currentColor, 3px -3px 0 -1.5px color-mix(in srgb, currentColor 55%, transparent); font-size: 12px; font-weight: 700; }
+.mobile-windows-button[aria-expanded="true"] { background: var(--glass-selected); box-shadow: var(--glass-selected-glow); }
+/* The chat bar is the dock: full width at the bottom of every page, above the home indicator. */
+.app-shell[data-phone="true"][data-home="false"]:not(.app-signed-out) .jarvis-page { right: 8px; bottom: max(8px, env(safe-area-inset-bottom)); left: 8px; max-width: none; }
+.app-shell[data-phone="true"][data-home="false"]:not(.app-signed-out) .workspace-shell-area { top: calc(var(--rail-size) + 8px); right: 8px; bottom: var(--dock-space); left: 8px; }
+.app-shell[data-phone="true"] .conversation-input .input-orb { width: 48px; height: 48px; }
+/* Windows Jarvis opens slide up as sheets over the room. */
+.app-shell[data-phone="true"] .workspace-window:not(.workspace-window-conversation):not([hidden]):not(.workspace-window-minimized) {
+  border-radius: 22px; animation: mobile-sheet-in 420ms var(--ease-enter) both;
+}
+/* One caption line above the dock with what Jarvis is doing. */
+.mobile-caption { position: fixed; z-index: 41; right: 20px; bottom: calc(var(--dock-space) + 6px); left: 20px; margin: 0; color: var(--text-muted);
+  font-size: var(--type-small); text-align: center; text-shadow: 0 1px 8px rgb(0 0 0 / 60%); opacity: 0; pointer-events: none;
+  transition: opacity var(--motion-state) var(--ease-standard); }
+.mobile-caption[data-visible] { opacity: 1; }
+/* The caption stands in for the transcript, so it steps aside whenever the transcript or a window is on screen. */
+.app-shell:is([data-conversation-open="true"], [data-voice-has-windows="true"], [data-windows-open="true"]) .mobile-caption { opacity: 0; }
+.mobile-caption span { display: inline-block; animation: mobile-caption-in 360ms var(--ease-enter) both; }
+/* The page menu: a glass sheet from the bottom. */
+.mobile-menu { position: fixed; z-index: 60; inset: 0; }
+.mobile-menu[hidden] { display: none; }
+.mobile-menu-backdrop { position: absolute; inset: 0; border: 0; background: rgb(0 0 0 / 35%); animation: mobile-fade 240ms var(--ease-standard) both; }
+.mobile-menu-sheet { position: absolute; right: 8px; bottom: calc(var(--dock-space, 84px) - 4px); left: 8px; max-height: calc(100dvh - var(--dock-space, 84px) - 64px); overflow: auto; display: grid; gap: 4px; padding: 8px 10px 14px;
+  border-radius: 26px; background: var(--stage-slab); box-shadow: var(--slab-shadow), inset 0 1px 0 var(--glass-rim-light); backdrop-filter: blur(18px) saturate(1.3);
+  animation: mobile-sheet-in 380ms var(--ease-enter) both; }
+.mobile-menu-grip { justify-self: center; width: 36px; height: 4px; margin: 2px 0 6px; border-radius: 999px; background: color-mix(in srgb, var(--text) 30%, transparent); }
+.mobile-menu-sheet nav, .mobile-menu-actions { display: grid; gap: 2px; }
+.mobile-menu-actions { padding-top: 6px; border-top: 1px solid var(--rule); }
+.mobile-menu-link { display: flex; align-items: center; min-height: 48px; padding: 0 14px; border: 0; border-radius: 14px; background: transparent; color: var(--text);
+  font: inherit; font-weight: 600; text-align: left; text-decoration: none; cursor: pointer; }
+.mobile-menu-link:hover, .mobile-menu-link:focus-visible { background: var(--glass-hover); }
+.mobile-menu-link:active { background: var(--glass-pressed); }
+.mobile-menu-sheet:focus { outline: none; }
+.mobile-menu-link[aria-current="page"] { background: var(--glass-selected); box-shadow: var(--glass-selected-glow); }
+.mobile-menu-hint { margin: 8px 14px 0; color: var(--text-muted); font-size: var(--type-caption); }
+@keyframes mobile-sheet-in { from { opacity: 0; translate: 0 36px; } }
+@keyframes mobile-drop { from { opacity: 0; translate: 0 -10px; } }
+@keyframes mobile-fade { from { opacity: 0; } }
+@keyframes mobile-caption-in { from { opacity: 0; translate: 0 4px; } }
+:root[data-motion="reduced"] :is(.mobile-menu-sheet, .mobile-menu-backdrop, .mobile-caption span, .app-shell[data-phone="true"] .workspace-window, .app-shell[data-phone="true"] .window-tabstrip) { animation: none; }
+@media (prefers-reduced-motion: reduce) { :is(.mobile-menu-sheet, .mobile-menu-backdrop, .mobile-caption span, .app-shell[data-phone="true"] .workspace-window, .app-shell[data-phone="true"] .window-tabstrip) { animation: none; } }
+/* Kanban space and alignment (Dan, 8 October). Header: title and actions share a row (actions as a matched pair),
+   the summary pills sit underneath. Search and filters live in one collapsible glass section; columns collapse from
+   their title. */
+.kanban-header { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "title actions" "pulse pulse"; align-items: center; gap: 12px 16px; }
+.kanban-header h1 { grid-area: title; }
+.kanban-header .kanban-pulse { grid-area: pulse; }
+.kanban-header-actions { display: flex; grid-area: actions; align-items: center; gap: 10px; }
+.kanban-header .kanban-create-project { margin-left: 0; }
+.kanban-header-actions .kanban-create { min-height: 44px; padding: 0 18px; justify-content: center; font-size: 15px; font-weight: 650; line-height: 1; }
+@media (max-width: 700px) {
+  .kanban-header { grid-template-columns: minmax(0, 1fr); grid-template-areas: "title" "pulse" "actions"; gap: 12px; }
+  .kanban-header h1 { font-size: 30px; }
+  .kanban-header .kanban-pulse { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+  .kanban-header .kanban-pulse li { flex: none; }
+  .kanban-header-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .kanban-header-actions .kanban-create { width: 100%; padding: 0 12px; }
+}
+.kanban-filter-panel { margin: 0 0 var(--space-4); border-radius: 18px; background: color-mix(in srgb, var(--text) 3%, transparent); box-shadow: inset 0 0 0 1px var(--rule); }
+.kanban-filter-toggle { display: flex; width: 100%; min-height: 48px; align-items: center; gap: 10px; padding: 0 14px; border: 0; border-radius: 18px; background: transparent;
+  color: var(--text); font: inherit; font-weight: 600; text-align: left; cursor: pointer; transition: background-color var(--motion-press) var(--ease-standard); }
+.kanban-filter-toggle:hover { background: var(--glass-hover); }
+.kanban-filter-toggle:active { background: var(--glass-pressed); }
+.app-shell .kanban-filter-toggle svg { width: 18px; height: 18px; flex: none; }
+.kanban-filter-badge { padding: 2px 9px; border-radius: 999px; background: color-mix(in srgb, var(--glass-edge-cool) 18%, transparent); color: var(--text); font-size: var(--type-caption); font-weight: 600; }
+.kanban-chevron { display: grid; margin-left: auto; place-items: center; color: var(--text-muted); transition: rotate var(--motion-state) var(--ease-enter); }
+.kanban-filter-panel[data-open="false"] .kanban-chevron { rotate: -90deg; }
+.kanban-filter-body { display: grid; grid-template-rows: 1fr; transition: grid-template-rows var(--motion-panel) var(--ease-enter); }
+.kanban-filter-panel[data-open="false"] .kanban-filter-body { grid-template-rows: 0fr; }
+.kanban-filter-body > .kanban-filters { min-height: 0; margin: 0; padding: 0 12px 12px; overflow: hidden; transition: padding var(--motion-panel) var(--ease-enter), opacity var(--motion-state) var(--ease-standard); }
+.kanban-filter-panel[data-open="false"] .kanban-filter-body > .kanban-filters { padding-bottom: 0; opacity: 0; }
+.kanban-column-heading h2 { flex: 1; min-width: 0; margin: 0; }
+.kanban-column-toggle { display: flex; width: calc(100% + 8px); min-height: 40px; align-items: center; gap: 8px; margin-left: -8px; padding: 0 8px; border: 0; border-radius: 10px;
+  background: transparent; color: inherit; font: inherit; font-size: 15px; font-weight: 650; text-align: left; cursor: pointer; transition: background-color var(--motion-press) var(--ease-standard); }
+.kanban-column-toggle:hover { background: var(--glass-hover); }
+.kanban-column-toggle:active { background: var(--glass-pressed); }
+.kanban-column-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.app-shell .kanban-column-toggle .kanban-chevron svg { width: 16px; height: 16px; }
+.kanban-column[data-collapsed] .kanban-chevron { rotate: -90deg; }
+.kanban-column[data-collapsed] { min-height: 0; }
+.kanban-column[data-collapsed] .kanban-column-heading { margin-bottom: 0; }
+.kanban-column-body[hidden] { display: none; }
+@media (min-width: 1200px) {
+  .task-board.kanban-board { grid-template-columns: var(--kanban-columns, none); }
+  /* A collapsed column becomes a slim strip with its title running down it. */
+  .kanban-column[data-collapsed] { padding-inline: 4px; }
+  .kanban-column[data-collapsed] .kanban-column-heading { flex-direction: column; align-items: center; gap: 10px; padding: 6px 0; }
+  .kanban-column[data-collapsed] .kanban-column-toggle { width: 40px; min-height: 160px; margin: 0; padding: 10px 0; flex-direction: column; justify-content: flex-start; }
+  .kanban-column[data-collapsed] .kanban-column-label { writing-mode: vertical-rl; white-space: nowrap; }
+  .kanban-column[data-collapsed] .kanban-chevron { margin: 0; order: -1; }
+}
+:root[data-motion="reduced"] :is(.kanban-filter-body, .kanban-filter-body > .kanban-filters, .kanban-chevron) { transition: none; }
+@media (prefers-reduced-motion: reduce) { :is(.kanban-filter-body, .kanban-filter-body > .kanban-filters, .kanban-chevron) { transition: none; } }
+/* Chat bar idle lap (Dan, 8 October): one thin, unhurried light runs the rim every 10 s, easing from slow to moderate. */
+.conversation-input.luminous-glass:not(:hover, :focus-within)::after { padding: 1.25px; animation: rim-idle 10s infinite; }
+@keyframes rim-idle {
+  0% { --rim-sweep: -40deg; opacity: 0; animation-timing-function: cubic-bezier(.45, 0, .7, .6); }
+  8% { opacity: .85; }
+  60% { --rim-sweep: 400deg; opacity: .8; }
+  70%, 100% { --rim-sweep: 400deg; opacity: 0; }
+}:root[data-motion="reduced"] .conversation-input.luminous-glass::after { animation: none; }
+@media (prefers-reduced-motion: reduce) { .conversation-input.luminous-glass:not(:hover, :focus-within)::after { animation: none; } }
+
+/* Knowledge folder pills on phones (Dan, 8 October): smaller, on one row that scrolls sideways if needed. */
+.app-shell[data-phone="true"] .knowledge-legend { right: 8px; flex-wrap: nowrap; gap: 5px; overflow-x: auto; scrollbar-width: none; overscroll-behavior-x: contain; }
+.app-shell[data-phone="true"] .knowledge-legend li { flex: none; min-height: 30px; gap: 5px; padding: 0 9px; font-size: 12px; }
+.app-shell[data-phone="true"] .knowledge-legend li:has(> button) { padding: 0; }
+.app-shell[data-phone="true"] .knowledge-legend button { min-height: 30px; gap: 5px; padding: 0 9px; }
+/* Phones (Dan, 8 October): while a page is loading (the amber core in the middle), the chat bar steps aside and comes
+   back once the content arrives. */
+.app-shell[data-phone="true"] .jarvis-page .conversation-input { transition: opacity var(--motion-state) var(--ease-standard), translate var(--motion-panel) var(--ease-enter), visibility 0s; }
+.app-shell[data-phone="true"]:has(.shell-main .loader.loader-block) .jarvis-page .conversation-input,
+.app-shell[data-phone="true"]:has(.shell-main .loader.loader-block) .mobile-caption {
+  opacity: 0; translate: 0 16px; visibility: hidden; pointer-events: none;
+  transition: opacity var(--motion-state) var(--ease-standard), translate var(--motion-state) var(--ease-standard), visibility 0s linear var(--motion-state);
+}
+/* Collapsible sections (Dan, 8 October): the house pattern for settings-like pages. The title row is the toggle;
+   folded, it shows a one-line summary. The body eases open and shut. */
+.collapsible-section { padding-block: 0; }
+.collapsible-heading { margin: 0; }
+.collapsible-toggle { display: flex; width: 100%; min-height: 56px; align-items: center; gap: 12px; padding: 0 4px; border: 0; border-radius: 12px;
+  background: transparent; color: var(--text); font: inherit; font-size: 18px; font-weight: 650; text-align: left; cursor: pointer;
+  transition: background-color var(--motion-press) var(--ease-standard); }
+.collapsible-toggle:hover { background: var(--glass-hover); }
+.collapsible-toggle:active { background: var(--glass-pressed); }
+.collapsible-toggle:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.collapsible-title { flex: none; }
+.collapsible-summary { min-width: 0; overflow: hidden; color: var(--text-muted); font-size: var(--type-small); font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
+.collapsible-aside { color: var(--text-muted); font-size: var(--type-small); font-weight: 500; }
+.app-shell .collapsible-chevron { flex: none; width: 18px; height: 18px; margin-left: auto; color: var(--text-muted); transition: rotate var(--motion-state) var(--ease-enter); }
+.collapsible-section[data-open="false"] .collapsible-chevron { rotate: -90deg; }
+.collapsible-body { display: grid; grid-template-rows: 1fr; transition: grid-template-rows var(--motion-panel) var(--ease-enter), visibility 0s; }
+.collapsible-section[data-open="false"] .collapsible-body { grid-template-rows: 0fr; visibility: hidden; transition: grid-template-rows var(--motion-panel) var(--ease-enter), visibility 0s linear var(--motion-panel); }
+.collapsible-inner { min-height: 0; overflow: hidden; padding: 0 4px; }
+.collapsible-section[data-open="true"] .collapsible-inner { padding-bottom: 20px; }
+.collapsible-section[data-open="true"] .collapsible-body { overflow: visible; }
+.collapsible-section[data-open="true"] .collapsible-inner:has(select:open, .more-menu[data-open="true"]) { overflow: visible; }
+/* One even stack of folded cards: same padding, same height, same 10 px rhythm. */
+.collapsible-section.collapsible-section { padding: 4px 12px; }
+.collapsible-section h2.collapsible-heading { margin: 0; font-size: inherit; }
+.settings-page form { gap: 10px; margin-top: 10px; }
+.settings-page > .collapsible-section { margin-top: 10px; }
+.settings-activity { gap: 10px; margin: 16px 0 0; }
+.settings-page > .settings-activity + .collapsible-section { margin-top: 10px; }
+@media (max-width: 700px) { .collapsible-toggle { min-height: 52px; font-size: 17px; } }
+:root[data-motion="reduced"] :is(.collapsible-body, .collapsible-chevron) { transition: none; }
+@media (prefers-reduced-motion: reduce) { :is(.collapsible-body, .collapsible-chevron) { transition: none; } }
+/* Usage (Dan, 8 October): visual and quiet. A cost hero with metric tiles, glass cards with a cost-split bar, ranked
+   bars and today's tool calls; every figure has a text label. Detail tables fold away under "All usage". */
+.usage-page { display: grid; gap: 16px; }
+.usage-header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+.usage-header h1 { margin: 0; }
+.usage-results { display: grid; gap: 16px; }
+.usage-segmented { display: inline-flex; gap: 2px; padding: 3px; border-radius: 999px; background: color-mix(in srgb, var(--text) 6%, transparent); box-shadow: inset 0 0 0 1px var(--rule); }
+.usage-segmented button { min-height: 32px; padding: 0 12px; border: 0; border-radius: 999px; background: transparent; color: var(--text-muted);
+  font: inherit; font-size: var(--type-small); font-weight: 600; cursor: pointer; transition: background-color var(--motion-press) var(--ease-standard), color var(--motion-press) var(--ease-standard); }
+.usage-segmented button:hover { color: var(--text); background: var(--glass-hover); }
+.usage-segmented button[aria-pressed="true"] { background: var(--glass-selected); color: var(--text); box-shadow: var(--glass-selected-glow); }
+.usage-segmented button:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.usage-hero, .usage-card { border-radius: 22px; background: var(--stage-slab); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--glass-rim-light) 26%, transparent), var(--soft-shadow);
+  backdrop-filter: blur(var(--glass-blur-window)) saturate(1.3); }
+.usage-hero { display: grid; grid-template-columns: minmax(180px, 1fr) 2fr; align-items: center; gap: 20px; padding: 22px 24px; }
+.usage-total { display: grid; gap: 4px; justify-items: start; }
+.usage-total-label { color: var(--text-muted); font-size: var(--type-small); font-weight: 600; }
+.usage-total-value { font-size: clamp(30px, 4vw, 42px); font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.usage-chip { display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 999px; background: color-mix(in srgb, var(--glass-glow-warm) 16%, transparent);
+  color: var(--text); font-size: var(--type-caption); font-weight: 600; white-space: nowrap; }
+.usage-tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin: 0; padding: 0; list-style: none; }
+.usage-tiles li { display: grid; gap: 2px; padding: 12px 14px; border-radius: 16px; background: color-mix(in srgb, var(--text) 4%, transparent); }
+.usage-tile-value { font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.usage-tile-label { color: var(--text-muted); font-size: var(--type-caption); }
+.usage-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.usage-card { display: grid; align-content: start; gap: 14px; min-width: 0; padding: 18px 20px; }
+.usage-card h2 { margin: 0; font-size: 16px; font-weight: 650; }
+.usage-card-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
+.usage-split { display: flex; height: 14px; gap: 3px; overflow: hidden; border-radius: 999px; }
+.usage-split span { min-width: 4px; border-radius: 999px; animation: usage-grow 700ms var(--ease-enter) both; transform-origin: left; }
+.usage-legend { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.usage-legend li { display: grid; grid-template-columns: 10px minmax(0, 1fr) auto 40px; align-items: center; gap: 10px; font-size: var(--type-small); }
+.usage-swatch { width: 10px; height: 10px; border-radius: 3px; }
+.usage-legend-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.usage-legend-value { font-weight: 650; font-variant-numeric: tabular-nums; }
+.usage-legend-share { color: var(--text-muted); font-variant-numeric: tabular-nums; text-align: right; }
+.usage-rank { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.usage-rank li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 10px; font-size: var(--type-small); }
+.usage-rank-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-transform: none; }
+.usage-rank-label a { color: var(--text); text-decoration: none; }
+.usage-rank-label a:hover { text-decoration: underline; }
+.usage-rank-value { font-weight: 650; font-variant-numeric: tabular-nums; }
+.usage-rank-track { grid-column: 1 / -1; height: 6px; overflow: hidden; border-radius: 999px; background: color-mix(in srgb, var(--text) 6%, transparent); }
+.usage-rank-track span { display: block; height: 100%; border-radius: inherit;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--glass-edge-cool) 70%, transparent), var(--glass-edge-cool)); animation: usage-grow 700ms var(--ease-enter) both; transform-origin: left; }
+.usage-quiet { margin: 0; color: var(--text-muted); font-size: var(--type-small); }
+.usage-empty { margin: 0; padding: 24px; border-radius: 22px; background: var(--stage-slab); color: var(--text-muted); text-align: center; }
+.usage-limit-note { margin: 0; color: var(--text-muted); font-size: var(--type-caption); }
+.usage-details { border-radius: 22px; background: var(--stage-slab); padding: 4px 16px; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--glass-rim-light) 26%, transparent); }
+.usage-details .collapsible-toggle { font-size: 16px; }
+.usage-group h3 { margin: 12px 0 6px; font-size: var(--type-small); color: var(--text-muted); font-weight: 650; }
+.usage-details .usage-table { min-width: 0; width: 100%; font-size: var(--type-small); }
+.usage-source { display: block; color: var(--text-muted); font-size: var(--type-caption); }
+.usage-est { color: var(--text-muted); font-size: var(--type-caption); }
+@keyframes usage-grow { from { scale: 0 1; } }
+@media (max-width: 900px) {
+  .usage-hero { grid-template-columns: minmax(0, 1fr); }
+  .usage-grid { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 700px) {
+  .usage-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .usage-hero { padding: 18px; }
+  .usage-card { padding: 16px; }
+  .usage-header .usage-segmented { width: 100%; }
+  .usage-header .usage-segmented button { flex: 1; padding: 0 6px; }
+  .usage-details .usage-table th:nth-child(4), .usage-details .usage-table td:nth-child(4) { display: none; }
+}
+:root[data-motion="reduced"] :is(.usage-split span, .usage-rank-track span) { animation: none; }
+@media (prefers-reduced-motion: reduce) { :is(.usage-split span, .usage-rank-track span) { animation: none; } }

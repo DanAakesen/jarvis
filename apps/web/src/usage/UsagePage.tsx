@@ -3,6 +3,7 @@ import { backendFetch } from '../backend-request';
 import { TaskWindowLink } from '../TaskWindowLink';
 import type { AreaProps } from '../areas';
 import { Loader } from '../Loader';
+import { CollapsibleSection } from '../CollapsibleSection';
 
 type UsagePeriod = '7d' | '30d' | '90d' | 'all';
 type UsageGroupBy = 'project' | 'agent' | 'source';
@@ -177,6 +178,77 @@ async function fetchUsageReport(
   return report;
 }
 
+const tones = ['var(--glass-edge-cool)', 'var(--glass-glow-warm)', 'color-mix(in srgb, var(--glass-edge-cool) 55%, var(--text))',
+  'color-mix(in srgb, var(--glass-glow-warm) 55%, var(--text))', 'color-mix(in srgb, var(--text) 55%, transparent)',
+  'color-mix(in srgb, var(--glass-edge-cool) 45%, transparent)'];
+const compact = new Intl.NumberFormat('en-GB', { notation: 'compact', maximumFractionDigits: 1 });
+const dkkShort = new Intl.NumberFormat('da-DK', { style: 'currency', currency: 'DKK', maximumFractionDigits: 2 });
+
+interface Slice { key: string; label: string; value: number; taskId?: string | null }
+
+/** One segmented choice; each option is a button so it reads as a set of pressed states. */
+function Segmented<T extends string>({ label, value, options, onChange }: {
+  label: string; value: T; options: readonly { value: T; label: string }[]; onChange: (value: T) => void;
+}) {
+  return (
+    <div className="usage-segmented" role="group" aria-label={label}>
+      {options.map((option) => (
+        <button key={option.value} type="button" aria-pressed={value === option.value} onClick={() => onChange(option.value)}>
+          {option.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** A single stacked bar with a labelled legend; colour never carries meaning alone. */
+function SplitBar({ slices, format, label }: { slices: Slice[]; format: (value: number) => string; label: string }) {
+  const total = slices.reduce((sum, slice) => sum + slice.value, 0);
+  if (total <= 0) return <p className="usage-quiet">Nothing to compare yet.</p>;
+  return (
+    <>
+      <div className="usage-split" role="img" aria-label={`${label}: ${slices.map((slice) => `${slice.label} ${format(slice.value)}`).join(', ')}`}>
+        {slices.map((slice, index) => (
+          <span key={slice.key} style={{ flexGrow: slice.value, background: tones[index % tones.length] }} />
+        ))}
+      </div>
+      <ul className="usage-legend">
+        {slices.map((slice, index) => (
+          <li key={slice.key}>
+            <span className="usage-swatch" style={{ background: tones[index % tones.length] }} aria-hidden="true" />
+            <span className="usage-legend-label">{slice.label}</span>
+            <span className="usage-legend-value">{format(slice.value)}</span>
+            <span className="usage-legend-share">{Math.round((slice.value / total) * 100)}%</span>
+          </li>
+        ))}
+      </ul>
+    </>
+  );
+}
+
+/** Ranked horizontal bars, scaled to the largest value. */
+function RankBars({ items, format }: { items: Slice[]; format: (value: number) => string }) {
+  const max = Math.max(...items.map((item) => item.value), 0);
+  if (!items.length || max <= 0) return <p className="usage-quiet">Nothing recorded yet.</p>;
+  return (
+    <ol className="usage-rank">
+      {items.map((item) => (
+        <li key={item.key}>
+          <span className="usage-rank-label">
+            {item.taskId ? <TaskWindowLink taskId={item.taskId}>{item.label}</TaskWindowLink> : item.label}
+          </span>
+          <span className="usage-rank-value">{format(item.value)}</span>
+          <span className="usage-rank-track" aria-hidden="true"><span style={{ width: `${Math.max(3, (item.value / max) * 100)}%` }} /></span>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+function sumMetric(entries: UsageEntry[], ...metrics: UsageMetric[]) {
+  return entries.filter((entry) => metrics.includes(entry.metric)).reduce((sum, entry) => sum + entry.quantity, 0);
+}
+
 export function UsagePage({ backendUrl, getAccessToken }: AreaProps) {
   const [period, setPeriod] = useState<UsagePeriod>('30d');
   const [groupBy, setGroupBy] = useState<UsageGroupBy>('project');
@@ -201,37 +273,48 @@ export function UsagePage({ backendUrl, getAccessToken }: AreaProps) {
 
   const currentState = state.requestKey === requestKey ? state : { status: 'loading' as const, requestKey };
   const report = currentState.status === 'ready' ? currentState.report : null;
+  const entries = report?.entries ?? [];
   const groups = new Map<string, { label: string; entries: UsageEntry[] }>();
-  for (const entry of report?.entries ?? []) {
+  for (const entry of entries) {
     const group = groupFor(entry, groupBy);
     const current = groups.get(group.key) ?? { label: group.label, entries: [] };
     current.entries.push(entry);
     groups.set(group.key, current);
   }
-  const totalCost = report?.entries.reduce((sum, entry) => sum + (entry.costDkk ?? 0), 0) ?? 0;
-  const hasCosts = report?.entries.some(({ costDkk }) => costDkk !== null) ?? false;
+  const totalCost = entries.reduce((sum, entry) => sum + (entry.costDkk ?? 0), 0);
+  const hasCosts = entries.some(({ costDkk }) => costDkk !== null);
+  const hasEstimates = entries.some(({ costDkk, estimated }) => costDkk !== null && estimated);
+  // Cost is the measure when it is reported; otherwise the split counts usage records, and says so.
+  const measure = (list: UsageEntry[]) => hasCosts ? list.reduce((sum, entry) => sum + (entry.costDkk ?? 0), 0) : list.length;
+  const formatMeasure = (value: number) => hasCosts ? dkkShort.format(value) : `${countFormat.format(value)} ${value === 1 ? 'record' : 'records'}`;
+  const split: Slice[] = [...groups.entries()].map(([key, group]) => ({ key, label: group.label, value: measure(group.entries) }))
+    .filter((slice) => slice.value > 0).sort((left, right) => right.value - left.value);
+  const byTask = new Map<string, Slice>();
+  for (const entry of entries) {
+    const key = entry.taskId ?? `${entry.source}-activity`;
+    const current = byTask.get(key) ?? { key, label: taskLabel(entry), value: 0, taskId: entry.taskId };
+    current.value += hasCosts ? entry.costDkk ?? 0 : 1;
+    byTask.set(key, current);
+  }
+  const topTasks = [...byTask.values()].filter((item) => item.value > 0).sort((left, right) => right.value - left.value).slice(0, 6);
+  const tools: Slice[] = (report?.dailyToolUsage.tools ?? []).map(({ tool, count }) => ({ key: tool, label: tool.replaceAll('_', ' '), value: Number(count) }))
+    .sort((left, right) => right.value - left.value);
+  const codexCalls = report?.codexToolCallsToday?.reduce((sum, { count }) => sum + Number(count), 0) ?? null;
+  const groupNoun = groupBy === 'project' ? 'Project' : groupBy === 'agent' ? 'Agent' : 'Source';
+  const tiles = [
+    { label: 'Sandbox time', value: `${compact.format(sumMetric(entries, 'minutes'))} min` },
+    { label: 'Tokens', value: compact.format(sumMetric(entries, 'input_tokens', 'output_tokens')) },
+    { label: 'Agent turns', value: compact.format(sumMetric(entries, 'turns')) },
+    { label: 'Premium requests', value: compact.format(sumMetric(entries, 'premium_requests')) },
+  ];
 
   return (
     <section className="usage-page" aria-labelledby="usage-heading">
-      <h1 id="usage-heading">Usage and cost</h1>
-      <p>Recorded usage by task, project, agent, and source. DKK amounts are shown only when available; sandbox and voice costs are estimates.</p>
-
-      <div className="usage-controls">
-        <div className="usage-field">
-          <label htmlFor="usage-period">Time period</label>
-          <select id="usage-period" value={period} onChange={(event) => setPeriod(event.target.value as UsagePeriod)}>
-            {periods.map(({ value, label }) => <option key={value} value={value}>{label}</option>)}
-          </select>
-        </div>
-        <div className="usage-field">
-          <label htmlFor="usage-group">Group by</label>
-          <select id="usage-group" value={groupBy} onChange={(event) => setGroupBy(event.target.value as UsageGroupBy)}>
-            <option value="project">Project</option>
-            <option value="agent">Agent</option>
-            <option value="source">Source</option>
-          </select>
-        </div>
-      </div>
+      <header className="usage-header">
+        <h1 id="usage-heading">Usage</h1>
+        <Segmented label="Time period" value={period} options={periods.map(({ value, label }) => ({ value, label: label.replace('Last ', '') }))}
+          onChange={setPeriod} />
+      </header>
 
       {currentState.status === 'loading' && <Loader variant="core" label={`Loading usage for ${periods.find(({ value }) => value === period)?.label.toLowerCase()}…`} />}
       {currentState.status === 'error' && (
@@ -242,67 +325,62 @@ export function UsagePage({ backendUrl, getAccessToken }: AreaProps) {
       )}
       {report && (
         <div className="usage-results">
-          <p className="usage-summary">
-            {hasCosts
-              ? `Recorded and estimated cost for ${report.truncated ? 'displayed entries' : 'this period'}: ${dkk.format(totalCost)}.`
-              : `No DKK costs were reported for ${report.truncated ? 'the displayed entries' : 'this period'}.`}
-            {' '}{report.from ? `Period starts ${dateTime(report.from)}.` : 'All recorded usage.'}
-          </p>
-          <section className="usage-tool-counts" aria-labelledby="usage-tool-counts-heading">
-            <h2 id="usage-tool-counts-heading">Jarvis tool calls today (UTC)</h2>
-            <p>Recorded chat tool calls since 00:00 UTC, including successful, refused, and failed calls. Coding-agent turns are shown separately in usage entries.</p>
-            {report.dailyToolUsage.tools.length === 0
-              ? <p>No Jarvis tool calls were recorded today.</p>
-              : <ul>
-                {report.dailyToolUsage.tools.map(({ tool, count }) => (
-                  <li key={tool}><code>{tool}</code>: {quantityFormat.format(BigInt(count))}</li>
-                ))}
-              </ul>}
-          </section>
+          <div className="usage-hero">
+            <div className="usage-total">
+              <span className="usage-total-label">Cost{report.truncated ? ' (shown rows)' : ''}</span>
+              <span className="usage-total-value">{hasCosts ? dkkShort.format(totalCost) : '—'}</span>
+              {hasEstimates && <span className="usage-chip">Includes estimates</span>}
+              {!hasCosts && <span className="usage-quiet">No costs reported</span>}
+            </div>
+            <ul className="usage-tiles" aria-label="Totals">
+              {tiles.map((tile) => (
+                <li key={tile.label}><span className="usage-tile-value">{tile.value}</span><span className="usage-tile-label">{tile.label}</span></li>
+              ))}
+            </ul>
+          </div>
           {report.truncated && (
             <p className="usage-limit-note" role="status">
-              Showing the latest {report.entries.length} of {report.totalEntries} usage breakdowns; totals below reflect the displayed rows only.
+              Showing the latest {entries.length} of {report.totalEntries} records.
             </p>
           )}
-          <section className="usage-tool-counts" aria-labelledby="usage-tool-counts-heading">
-            <h2 id="usage-tool-counts-heading">Codex tool calls today (UTC)</h2>
-            <p>Counts include successful, refused, and failed web research calls.</p>
-            {report.codexToolCallsToday === null
-              ? <p role="status">Codex tool counts are unavailable.</p>
-              : report.codexToolCallsToday.length === 0
-                ? <p>No Codex tool calls were recorded today (UTC).</p>
-                : (
-                  <dl>
-                    {report.codexToolCallsToday.map(({ tool, count }) => (
-                      <div key={tool}>
-                        <dt>Web research</dt>
-                        <dd>{countFormat.format(BigInt(count))} calls</dd>
-                      </div>
-                    ))}
-                  </dl>
-                )}
+
+          {entries.length === 0 ? <p className="usage-empty">No usage was recorded in this period.</p> : (
+            <div className="usage-grid">
+              <section className="usage-card" aria-labelledby="usage-split-heading">
+                <div className="usage-card-head">
+                  <h2 id="usage-split-heading">{hasCosts ? 'Where it goes' : 'Activity split'}</h2>
+                  <Segmented label="Group by" value={groupBy} onChange={setGroupBy}
+                    options={[{ value: 'project', label: 'Project' }, { value: 'agent', label: 'Agent' }, { value: 'source', label: 'Source' }]} />
+                </div>
+                <SplitBar slices={split} format={formatMeasure} label={`${hasCosts ? 'Cost' : 'Records'} by ${groupNoun.toLowerCase()}`} />
+              </section>
+              <section className="usage-card" aria-labelledby="usage-top-heading">
+                <h2 id="usage-top-heading">Top tasks</h2>
+                <RankBars items={topTasks} format={formatMeasure} />
+              </section>
+            </div>
+          )}
+
+          <section className="usage-card" aria-labelledby="usage-today-heading">
+            <div className="usage-card-head">
+              <h2 id="usage-today-heading">Tool calls today</h2>
+              <span className="usage-chip">{codexCalls === null ? 'Codex research unavailable' : `Codex research ${countFormat.format(codexCalls)}`}</span>
+            </div>
+            <RankBars items={tools} format={(value) => countFormat.format(value)} />
           </section>
-          {report.entries.length === 0
-            ? <p className="usage-empty">No usage was recorded in this period.</p>
-            : [...groups.entries()].map(([key, group]) => {
-              const groupCost = group.entries.reduce((sum, entry) => sum + (entry.costDkk ?? 0), 0);
-              const groupHasCosts = group.entries.some(({ costDkk }) => costDkk !== null);
-              const groupHasEstimates = group.entries.some(({ costDkk, estimated }) => costDkk !== null && estimated);
-              return (
-                <section className="usage-group" key={key} aria-labelledby={`usage-group-${key}`}>
-                  <h2 id={`usage-group-${key}`}>{groupBy === 'project' ? 'Project' : groupBy === 'agent' ? 'Agent' : 'Source'}: {group.label}</h2>
-                  <p className="usage-group-summary">
-                    {groupHasCosts
-                      ? `${groupHasEstimates ? 'Includes estimated' : 'Recorded'} DKK for ${report.truncated ? 'displayed rows' : 'this group'}: ${dkk.format(groupCost)}.`
-                      : `No DKK costs reported for ${report.truncated ? 'displayed rows' : 'this group'}.`}
-                  </p>
+
+          {entries.length > 0 && (
+            <CollapsibleSection storageKey="usage.details" title="All usage" className="usage-details"
+              summary={`${entries.length} ${entries.length === 1 ? 'record' : 'records'}`}>
+              {[...groups.entries()].map(([key, group]) => (
+                <div className="usage-group" key={key}>
+                  <h3>{groupNoun}: {group.label}</h3>
                   <div className="usage-table-wrap">
                     <table className="usage-table">
-                      <caption>Usage entries for {group.label}</caption>
+                      <caption className="visually-hidden">Usage entries for {group.label}</caption>
                       <thead>
                         <tr>
                           <th scope="col">Task or activity</th>
-                          <th scope="col">Source</th>
                           <th scope="col">Usage</th>
                           <th scope="col">DKK</th>
                           <th scope="col">Last used</th>
@@ -313,21 +391,19 @@ export function UsagePage({ backendUrl, getAccessToken }: AreaProps) {
                           <tr key={`${entry.taskId ?? 'jarvis'}-${entry.source}-${entry.metric}`}>
                             <td>{entry.taskId
                               ? <TaskWindowLink taskId={entry.taskId}>{taskLabel(entry)}</TaskWindowLink>
-                              : taskLabel(entry)}</td>
-                            <td>{sourceLabel(entry.source)}</td>
+                              : taskLabel(entry)}<span className="usage-source">{sourceLabel(entry.source)}</span></td>
                             <td>{metricLabel(entry.metric)}: {formatQuantity(entry)}</td>
-                            <td>{entry.costDkk === null
-                              ? '—'
-                              : <>{entry.estimated ? 'Estimated ' : ''}{dkk.format(entry.costDkk)}</>}</td>
+                            <td>{entry.costDkk === null ? '—' : <>{dkk.format(entry.costDkk)}{entry.estimated && <span className="usage-est" title="Estimated"> est.</span>}</>}</td>
                             <td>{dateTime(entry.at)}</td>
                           </tr>
                         ))}
                       </tbody>
                     </table>
                   </div>
-                </section>
-              );
-            })}
+                </div>
+              ))}
+            </CollapsibleSection>
+          )}
         </div>
       )}
     </section>

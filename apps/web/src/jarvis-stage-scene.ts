@@ -138,9 +138,6 @@ function createJarvisStageSceneWithRenderer(
   let animationFrame = 0;
   let animating = false;
   let elapsed = 0;
-  let dockMix = 0;
-  let dockBottom = 0;
-  let dockRadius = 0;
   let previous = performance.now();
   let current = initialOptions;
   let qualityLevel: JarvisStageQualityLevel = renderer.capabilities.maxTextureSize < 4096 ? 1 : 0;
@@ -148,8 +145,6 @@ function createJarvisStageSceneWithRenderer(
   let qualityFrameTime = 0;
   let qualityWindowStarted = performance.now();
   let smoothQualityWindows = 0;
-  let windowPosition = 0;
-  let windowVelocity = 0;
   let signals: VoiceSignals | null = null;
   const motion = createOrbMotion();
   const orbGeometry = { x: '', y: '', radius: '' };
@@ -487,44 +482,12 @@ function createJarvisStageSceneWithRenderer(
     architecture.position.copy(anchor.worldToLocal(rearWorld));
     architecture.quaternion.copy(camera.quaternion);
 
-    if (current.reducedMotion) {
-      windowPosition = Number(current.hasWindows);
-      windowVelocity = 0;
-    } else {
-      const factor = Math.max(0, Math.min(delta, 0.12));
-      const steps = Math.max(1, Math.ceil(factor / (1 / 90)));
-      const step = factor / steps;
-      const frequency = 7.8;
-      for (let index = 0; index < steps; index += 1) {
-        const acceleration = (frequency ** 2) * (Number(current.hasWindows) - windowPosition) -
-          2 * frequency * windowVelocity;
-        windowVelocity += acceleration * step;
-        windowPosition += windowVelocity * step;
-      }
-    }
-    const layout = THREE.MathUtils.clamp(windowPosition, 0, 1);
-    // Desktop keeps the orb fixed in the room behind windows; only phones move it clear of them.
+    // The orb stays where it is on every screen (Dan, 8 October): windows and controls move around it, never the orb.
     const screenX = 0.5;
-    let screenY = mobile ? THREE.MathUtils.lerp(0.46, 0.78, layout) : 0.46;
-    let pixelRadius = mobile
+    const screenY = 0.46;
+    const pixelRadius = mobile
       ? Math.min(width * 0.28, height * 0.16)
       : Math.min(width * 0.18, height * 0.18);
-    // During phone voice with a window, the shell publishes a compact dock between the window and
-    // the controls so the HTML status can sit beneath the orb without covering it.
-    const dock = mobile ? readOrbDock() : null;
-    if (dock) {
-      dockBottom = dock.bottom;
-      dockRadius = dock.radius;
-    }
-    const dockTarget = dock ? 1 : 0;
-    dockMix = current.reducedMotion
-      ? dockTarget
-      : dockMix + (dockTarget - dockMix) * (1 - Math.exp(-Math.max(0, Math.min(delta, 0.12)) * 9));
-    const docked = mobile && dockRadius > 0 ? dockMix * layout : 0;
-    if (docked > 0.001) {
-      pixelRadius = THREE.MathUtils.lerp(pixelRadius, dockRadius, docked);
-      screenY = THREE.MathUtils.lerp(screenY, (height - dockBottom - dockRadius) / height, docked);
-    }
     cameraRay.set(screenX * 2 - 1, 1 - screenY * 2, 0.5).unproject(camera).sub(camera.position).normalize();
     orbWorld.copy(camera.position).addScaledVector(cameraRay, -camera.position.z / cameraRay.z);
     orbRig.position.copy(orbWorld);
@@ -582,14 +545,6 @@ function createJarvisStageSceneWithRenderer(
     seam.emissiveIntensity = 0.13 + power * 0.16;
     wallLight.target.updateMatrixWorld();
     renderer.render(scene, camera);
-  }
-
-  /** Lets the HTML voice status sit beneath the orb wherever the layout places it. */
-  function readOrbDock(): { bottom: number; radius: number } | null {
-    const style = window.getComputedStyle(host);
-    const bottom = Number.parseFloat(style.getPropertyValue('--jarvis-orb-dock-bottom'));
-    const radius = Number.parseFloat(style.getPropertyValue('--jarvis-orb-dock-radius'));
-    return Number.isFinite(bottom) && Number.isFinite(radius) && bottom > 0 && radius > 0 ? { bottom, radius } : null;
   }
 
   function publishOrbGeometry(x: number, y: number, radius: number) {

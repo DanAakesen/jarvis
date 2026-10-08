@@ -4,6 +4,7 @@ import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { Modal } from '../Modal';
 import { useConversationIntents } from '../conversation-intents';
 import { Loader } from '../Loader';
+import { CollapsibleSection } from '../CollapsibleSection';
 
 interface Project {
   id: string;
@@ -322,8 +323,7 @@ export function ProjectsPage({ backendUrl, getAccessToken }: ProjectsPageProps) 
   const otherRepositories = repositories.filter((repository) => !managedRepositories.has(repository.fullName.toLowerCase()));
 
   return (
-    <section className="projects-page settings-section" id="projects" aria-labelledby="projects-heading">
-      <h2 id="projects-heading">Projects</h2>
+    <CollapsibleSection storageKey="settings.projects" className="projects-page" id="projects" headingId="projects-heading" title="Projects">
       <p className="settings-explanation">Manage repositories and the defaults used for new tasks. Changes do not alter running tasks.</p>
       <div className="projects-toolbar">
         {visibleState === 'ready' && (
@@ -418,7 +418,7 @@ export function ProjectsPage({ backendUrl, getAccessToken }: ProjectsPageProps) 
           </section>
         </>
       )}
-    </section>
+    </CollapsibleSection>
   );
 }
 

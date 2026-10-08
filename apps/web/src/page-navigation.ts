@@ -81,6 +81,9 @@ export function revealWhenReady(find: () => Element | null, reducedMotion: boole
       if (performance.now() - started < 6000) timer = window.setTimeout(attempt, 120);
       return;
     }
+    // A folded section opens first, so Jarvis never points at something hidden.
+    const fold = target.closest('[data-collapsible]');
+    if (fold?.getAttribute('data-open') === 'false') fold.querySelector<HTMLButtonElement>('.collapsible-toggle')?.click();
     const host = target.closest('section, .kanban-card, li') ?? target;
     host.scrollIntoView?.({ behavior: reducedMotion ? 'auto' : 'smooth', block: 'center' });
     host.setAttribute('data-navigated', '');
@@ -133,4 +136,11 @@ export function useVisibleSettingsSection(active: boolean): WorkspaceSettingsSec
     };
   }, [active]);
   return active ? section : undefined;
+}
+
+/** Jarvis showing or hiding the conversation transcript (P9-45, #596); read structurally until the contract lands. */
+export function readConversationCommand(command: unknown): 'show' | 'hide' | null {
+  if (typeof command !== 'object' || command === null) return null;
+  const { operation, action } = command as Record<string, unknown>;
+  return operation === 'conversation' && (action === 'show' || action === 'hide') ? action : null;
 }

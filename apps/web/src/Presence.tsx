@@ -1,7 +1,8 @@
 import { useEffect, useId, useRef, useState, type CSSProperties } from 'react';
 import { backendFetch } from './backend-request';
-import { presenceLabel, presenceModes, usePresence, type PresenceMode } from './presence-store';
+import { presenceLabel, presenceModes, usePresence, useDevicePresence, type PresenceMode } from './presence-store';
 import { Loader } from './Loader';
+import { CollapsibleSection } from './CollapsibleSection';
 
 type ModeInstructions = Record<PresenceMode, string>;
 const maxInstruction = 2_000;
@@ -19,6 +20,7 @@ function sourceLabel(source: string) {
 /** Top-bar presence chip: shows the live mode and switches it. Hidden until the presence service answers. */
 export function PresenceChip({ backendUrl, getAccessToken }: { backendUrl: string | null; getAccessToken: () => Promise<string> }) {
   const { presence, setMode } = usePresence(backendUrl, getAccessToken);
+  useDevicePresence(backendUrl, getAccessToken, true);
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
@@ -136,8 +138,8 @@ export function PresenceSettings({ backendUrl, getAccessToken }: { backendUrl: s
   }
 
   return (
-    <section className="settings-section presence-settings" id="presence" aria-labelledby={`${ids}-heading`}>
-      <h2 id={`${ids}-heading`}>Presence</h2>
+    <CollapsibleSection storageKey="settings.presence" className="presence-settings" id="presence" headingId={`${ids}-heading`} title="Presence"
+      summary={presence.status === 'ready' ? presenceLabel(presence.mode) : undefined}>
       <p className="settings-explanation">Jarvis adapts to where you are. You can switch here or in the top bar, and Jarvis can switch it too.</p>
       {presence.status === 'loading' || presence.status === 'idle' ? <Loader variant="rows" label="Loading presence…" /> : null}
       {presence.status === 'unavailable' && (
@@ -200,6 +202,6 @@ export function PresenceSettings({ backendUrl, getAccessToken }: { backendUrl: s
           {error && <p className="settings-validation-error" role="alert">{error}</p>}
         </>
       )}
-    </section>
+    </CollapsibleSection>
   );
 }

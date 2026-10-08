@@ -40,7 +40,7 @@ function subscribe(listener: () => void) {
 /** A missing route means the presence backend has not been deployed yet; that is shown, never guessed. */
 const unavailableStatuses = new Set([404, 405, 501]);
 
-async function request(backendUrl: string, getAccessToken: () => Promise<string>, init?: { mode: PresenceMode }) {
+async function request(backendUrl: string, getAccessToken: () => Promise<string>, init?: { mode: PresenceMode; source?: 'device' }) {
   const token = await getAccessToken();
   return backendFetch(`${backendUrl.replace(/\/+$/u, '')}/presence`, {
     method: init ? 'PUT' : 'GET',
@@ -49,7 +49,7 @@ async function request(backendUrl: string, getAccessToken: () => Promise<string>
       Accept: 'application/json',
       ...(init ? { 'Content-Type': 'application/json' } : {}),
     },
-    ...(init ? { body: JSON.stringify({ mode: init.mode }) } : {}),
+    ...(init ? { body: JSON.stringify(init.source ? { mode: init.mode, source: init.source } : { mode: init.mode }) } : {}),
     cache: 'no-store',
   });
 }
@@ -93,6 +93,45 @@ export function publishPresenceMode(mode: string) {
 export function resetPresenceForTests() {
   state = { status: 'idle' };
   inflight = null;
+  lastDeviceSync = 0;
+}
+
+// Phones are where Dan is on the move (Dan, 8 October, P9-44): a touch device with a phone-sized screen. A narrow
+// desktop window is not a phone, so the pointer decides as well as the size.
+const phoneDeviceQuery = '(pointer: coarse) and (max-width: 900px), (pointer: coarse) and (max-height: 500px)';
+const manualHold = 2 * 60 * 60 * 1000;
+const deviceResync = 10 * 60 * 1000;
+let lastDeviceSync = 0;
+
+async function syncDevicePresence(backendUrl: string, getAccessToken: () => Promise<string>) {
+  if (state.status !== 'ready' || state.saving) return;
+  const target: PresenceMode = window.matchMedia?.(phoneDeviceQuery).matches ? 'on_the_move' : 'present';
+  const recentManual = state.source === 'manual' && state.changedAt !== null && Date.now() - Date.parse(state.changedAt) < manualHold;
+  if (state.mode === target || recentManual) return;
+  lastDeviceSync = Date.now();
+  try {
+    const response = await request(backendUrl, getAccessToken, { mode: target, source: 'device' });
+    if (!response.ok) return;
+    const presence = readPresence(await response.json().catch(() => null));
+    if (presence && state.status === 'ready') setState({ ...state, ...presence, saving: null, error: '' });
+  } catch {
+    // Device presence is a convenience; a failed attempt leaves the current mode and is retried later.
+  }
+}
+
+/** Sets On the move on a phone and Present on a computer, unless Dan chose a mode himself in the last two hours. */
+export function useDevicePresence(backendUrl: string | null, getAccessToken: () => Promise<string>, enabled: boolean) {
+  const current = useSyncExternalStore(subscribe, () => state, () => state);
+  const ready = current.status === 'ready';
+  useEffect(() => {
+    if (!backendUrl || !enabled || !ready) return;
+    if (lastDeviceSync === 0) void syncDevicePresence(backendUrl, getAccessToken);
+    const onVisible = () => {
+      if (document.visibilityState === 'visible' && Date.now() - lastDeviceSync > deviceResync) void syncDevicePresence(backendUrl, getAccessToken);
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [backendUrl, enabled, getAccessToken, ready]);
 }
 
 /** Shared presence state: loaded once, refreshed every minute while the page is visible, switched with PUT. */

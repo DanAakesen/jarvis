@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { backendFetch } from './backend-request';
 import { Loader } from './Loader';
+import { CollapsibleSection } from './CollapsibleSection';
 
 interface RecipeSummary {
   id: string;
@@ -129,8 +130,7 @@ export function TaskRecipesSettings({ backendUrl, getAccessToken }: {
   }
 
   return (
-    <section className="settings-section" aria-labelledby="task-recipes-heading">
-      <h2 id="task-recipes-heading">Task recipes</h2>
+    <CollapsibleSection storageKey="settings.recipes" headingId="task-recipes-heading" title="Task recipes">
       <p className="settings-explanation">
         Recipes replay verified steps for an app or site. Typed text and page content are not stored.
         Delete a recipe to stop reusing those steps.
@@ -166,6 +166,6 @@ export function TaskRecipesSettings({ backendUrl, getAccessToken }: {
           ))}
         </ul>
       )}
-    </section>
+    </CollapsibleSection>
   );
 }

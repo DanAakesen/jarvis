@@ -67,6 +67,12 @@ const livePhrases = {
     'Unrolling the maps…', 'Calling it up…', 'Straightening the shelves…', 'Bringing it in…', 'One moment, sir…',
     'Polishing the glass…', 'Nearly there…', 'Putting the kettle on…', 'Sorting the post…',
   ],
+  // The chat bar's invitation (Dan, 8 October): it types in, rests, a light passes over it, then the next one.
+  prompt: [
+    'Ask me anything, sir…', 'What shall we tackle?', 'Say the word and I’ll get on it…', 'What’s next on the list?',
+    'Need something looked up?', 'Shall I check on the Factory?', 'Plan it, research it, remember it…', 'Tell me what you need…',
+    'Draft, fix or find something?', 'Where were we?', 'A question, a task, a hunch?', 'Shall I pull something up?',
+  ],
 } as const;
 
 function shuffled(phrases: readonly string[], avoidFirst?: string) {
@@ -80,7 +86,9 @@ function shuffled(phrases: readonly string[], avoidFirst?: string) {
 }
 
 /** The visible, rotating line beside the working core. Screen readers get one steady status from the caller instead. */
-export function LivePhrase({ phase, text }: { phase: keyof typeof livePhrases; text?: string | null }) {
+export function LivePhrase({ phase, text, interval = 3200, typeSpeed }: {
+  phase: keyof typeof livePhrases; text?: string | null; interval?: number; /** Milliseconds per character. */ typeSpeed?: number;
+}) {
   const [state, setState] = useState(() => ({ order: shuffled(livePhrases[phase]), index: 0 }));
   useEffect(() => {
     const timer = window.setInterval(() => setState((current) => {
@@ -89,15 +97,15 @@ export function LivePhrase({ phase, text }: { phase: keyof typeof livePhrases; t
       return next < current.order.length
         ? { ...current, index: next }
         : { order: shuffled(current.order, current.order[current.index]), index: 0 };
-    }), 3200);
+    }), interval);
     return () => window.clearInterval(timer);
-  }, []);
+  }, [interval]);
   // When Jarvis reports what it is actually doing, that line replaces the canned phrases.
-  if (text) return <TypedPhrase key={`work-${text}`} text={text} />;
-  return <TypedPhrase key={`${state.index}-${state.order[state.index]}`} text={state.order[state.index] ?? ''} />;
+  if (text) return <TypedPhrase key={`work-${text}`} text={text} speed={typeSpeed} />;
+  return <TypedPhrase key={`${state.index}-${state.order[state.index]}`} text={state.order[state.index] ?? ''} speed={typeSpeed} />;
 }
 /** Writes a phrase in from the left, then two soft lights sweep across it (CSS). Reduced motion shows it whole. */
-function TypedPhrase({ text }: { text: string }) {
+function TypedPhrase({ text, speed = 34 }: { text: string; speed?: number | undefined }) {
   const reduced = typeof window !== 'undefined' && ((window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false) ||
     document.documentElement.dataset.motion === 'reduced');
   const [typed, setTyped] = useState(reduced ? text.length : 0);
@@ -106,9 +114,9 @@ function TypedPhrase({ text }: { text: string }) {
     const timer = window.setInterval(() => setTyped((count) => {
       if (count >= text.length) { window.clearInterval(timer); return count; }
       return count + 1;
-    }), 34);
+    }), speed);
     return () => window.clearInterval(timer);
-  }, [reduced, text]);
+  }, [reduced, speed, text]);
   const done = typed >= text.length;
   return (
     <span className="live-phrase" data-typed={done || undefined} aria-hidden="true">
