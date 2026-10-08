@@ -166,6 +166,35 @@ describe('workspace command delivery', () => {
     connection.close();
   });
 
+  it.each([
+    { commandId: 'place-intent', operation: 'place', viewId: 'report', region: 'left' },
+    { commandId: 'arrange-intent', operation: 'arrange', layout: 'grid', viewIds: ['report', 'chart'] },
+    { commandId: 'minimise-all-intent', operation: 'minimise-all' },
+    { commandId: 'restore-all-intent', operation: 'restore-all' },
+    { commandId: 'close-all-intent', operation: 'close-all' },
+    { commandId: 'pin-intent', operation: 'pin', viewId: 'report' },
+    { commandId: 'unpin-intent', operation: 'unpin', viewId: 'report' },
+  ] as const)('relays the $operation window intent unchanged', async (command) => {
+    const { app, broker } = fixture();
+    let delivered: WorkspaceCommand | undefined;
+    const connection = broker.connect(ownerId, (event, data) => {
+      if (event === 'workspace-command') {
+        delivered = data.command;
+        broker.acknowledge(ownerId, connection.sessionId, data.command.commandId, true);
+      }
+      return true;
+    });
+    const response = await app.inject({
+      method: 'POST', url: '/tools/workspace_command', headers: agentHeaders, payload: command,
+    });
+    expect(delivered).toEqual(command);
+    expect(isWorkspaceReflexOperation(command)).toBe(true);
+    expect(response.json()).toMatchObject({
+      outcome: 'ok', result: { applied: true, commandId: command.commandId, operation: command.operation },
+    });
+    connection.close();
+  });
+
   it('broadcasts navigation only to owner tabs and waits for an authenticated applied acknowledgement', async () => {
     const { app, broker } = fixture();
     const command = { commandId: 'navigate-settings', operation: 'navigate', page: 'settings', section: 'voice' };
@@ -345,7 +374,9 @@ describe('workspace command delivery', () => {
     const connection = broker.connect(ownerId, () => true);
     const payload = {
       sessionId: connection.sessionId,
-      windows: [{ viewId: 'tasks', title: 'Tasks' }],
+      windows: [{
+        viewId: 'tasks', title: 'Tasks', state: 'open', placement: 'region', region: 'left', pinned: true, front: true,
+      }],
       contextPanelOpen: false,
       frame: {
         widthPx: 1280,
@@ -367,6 +398,10 @@ describe('workspace command delivery', () => {
     expect(broker.snapshot(ownerId)?.windows).toEqual(payload.windows);
     expect(broker.snapshot(ownerId)?.frame).toEqual(payload.frame);
     expect((await publish({ ...payload, frame: { ...payload.frame, widthPx: 0 } })).statusCode).toBe(400);
+    expect((await publish({
+      ...payload,
+      windows: [{ viewId: 'tasks', title: 'Tasks', region: 'left' }],
+    })).statusCode).toBe(400);
     expect((await publish(payload, agentHeaders)).statusCode).toBe(403);
     const create = await app.inject({
       method: 'POST', url: '/tools/workspace_command', headers: { ...userHeaders, 'x-jarvis-message-id': '101' },
