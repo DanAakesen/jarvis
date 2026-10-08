@@ -1,4 +1,6 @@
-import { useCallback, useEffect, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { useThemePreference } from './theme-preference-context';
+import type { AppearanceChange } from './theme-preference-context';
 import { isModelCatalogue } from '@jarvis/contracts';
 import { backendFetch } from './backend-request';
 import { CollapsibleSection } from './CollapsibleSection';
@@ -30,13 +32,13 @@ function NumberField({ id, label, value, unit, min, max, step = 1, problem, disa
 }
 
 /** A 0–1 value as a slider with its number beside it. */
-function RangeField({ id, label, value, min, max, step, disabled, onChange, low, high }: {
+function RangeField({ id, label, value, min, max, step, disabled, onChange, low, high, format }: {
   id: string; label: string; value: number; min: number; max: number; step: number; disabled: boolean;
-  onChange: (value: number) => void; low: string; high: string;
+  onChange: (value: number) => void; low: string; high: string; format?: (value: number) => string;
 }) {
   return (
     <div className="settings-field advanced-field advanced-range">
-      <label htmlFor={id}>{label}<output htmlFor={id}>{Number.isFinite(value) ? value.toFixed(2) : '—'}</output></label>
+      <label htmlFor={id}>{label}<output htmlFor={id}>{Number.isFinite(value) ? (format ? format(value) : value.toFixed(2)) : '—'}</output></label>
       <input id={id} type="range" min={min} max={max} step={step} value={Number.isFinite(value) ? value : min} disabled={disabled}
         onChange={(event) => onChange(event.target.valueAsNumber)} />
       <span className="advanced-range-ends" aria-hidden="true"><span>{low}</span><span>{high}</span></span>
@@ -324,5 +326,81 @@ export function TimeoutsSection({ timeouts, problems, disabled, onChange }: {
           problem={problems['timeouts.backendHttpTimeoutSeconds']} disabled={disabled} onChange={(value) => onChange('backendHttpTimeoutSeconds', value)} />
       </div>
     </Section>
+  );
+}
+
+function Choice<T extends string>({ label, value, options, disabled, onChange }: {
+  label: string; value: T | undefined; options: readonly { value: T; label: string }[]; disabled: boolean; onChange: (value: T) => void;
+}) {
+  return (
+    <div className="settings-field advanced-field">
+      <span className="advanced-choice-label" id={`${label}-label`}>{label}</span>
+      <div className="advanced-segmented" role="group" aria-labelledby={`${label}-label`}>
+        {options.map((option) => (
+          <button key={option.value} type="button" aria-pressed={value === option.value} disabled={disabled} onClick={() => onChange(option.value)}>
+            {option.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Appearance details (P9-09): motion, density, background, corners, glow and colours. Each change applies at once and
+ * saves; sliders and colour pickers wait until Dan pauses. Colours can return to Jarvis's own cyan and amber.
+ */
+export function AppearanceDetails() {
+  const preference = useThemePreference();
+  const appearance = preference.appearance;
+  const disabled = preference.state !== 'ready' || !preference.saveAppearance;
+  const [draft, setDraft] = useState<{ radius?: number; glow?: number; accent?: string; 'accent-secondary'?: string; 'surface-tint'?: string }>({});
+  const timer = useRef(0);
+  useEffect(() => () => window.clearTimeout(timer.current), []);
+  const save = (change: AppearanceChange) => { void preference.saveAppearance?.(change); };
+  const later = (change: Partial<typeof draft>) => {
+    setDraft((current) => ({ ...current, ...change }));
+    window.clearTimeout(timer.current);
+    timer.current = window.setTimeout(() => {
+      void preference.saveAppearance?.(change).finally(() => setDraft((current) => {
+        const next = { ...current };
+        for (const key of Object.keys(change)) delete next[key as keyof typeof next];
+        return next;
+      }));
+    }, 450);
+  };
+  const radius = draft.radius ?? appearance.radius ?? 18;
+  const glow = draft.glow ?? appearance.glow ?? 1;
+  const hasCustomColours = Boolean(appearance.accent || appearance['accent-secondary'] || appearance['surface-tint']);
+  const colour = (key: 'accent' | 'accent-secondary' | 'surface-tint', label: string, fallback: string) => (
+    <label className="advanced-colour" htmlFor={`appearance-${key}`}>
+      <input id={`appearance-${key}`} type="color" value={draft[key] ?? appearance[key] ?? fallback} disabled={disabled}
+        onChange={(event) => later({ [key]: event.target.value })} />
+      <span>{label}<span className="advanced-toggle-hint">{appearance[key] ? appearance[key] : 'Jarvis default'}</span></span>
+    </label>
+  );
+  return (
+    <div className="advanced-group">
+      <h3>Look and feel</h3>
+      <Choice label="Motion" value={appearance.motion ?? 'full'} disabled={disabled} onChange={(motion) => save({ motion })}
+        options={[{ value: 'full', label: 'Full' }, { value: 'calm', label: 'Calm' }, { value: 'reduced', label: 'Reduced' }]} />
+      <Choice label="Density" value={appearance.density ?? 'comfortable'} disabled={disabled} onChange={(density) => save({ density })}
+        options={[{ value: 'comfortable', label: 'Comfortable' }, { value: 'compact', label: 'Compact' }]} />
+      <Choice label="Background" value={appearance.background ?? 'living-aurora'} disabled={disabled} onChange={(background) => save({ background })}
+        options={[{ value: 'living-aurora', label: 'Living aurora' }, { value: 'daylight-studio', label: 'Daylight studio' }]} />
+      <RangeField id="appearance-radius" label="Corner roundness" value={radius} min={0} max={24} step={1} disabled={disabled}
+        onChange={(value) => later({ radius: value })} low="Square" high="Round" format={(value) => `${Math.round(value)} px`} />
+      <RangeField id="appearance-glow" label="Room glow" value={glow} min={0} max={1} step={0.05} disabled={disabled}
+        onChange={(value) => later({ glow: value })} low="Dim" high="Bright" format={(value) => `${Math.round(value * 100)}%`} />
+      <div className="advanced-colours">
+        {colour('accent', 'Accent', '#52dcfa')}
+        {colour('accent-secondary', 'Second accent', '#55bace')}
+        {colour('surface-tint', 'Surface tint', '#101f2d')}
+      </div>
+      {hasCustomColours && (
+        <button className="secondary-button" type="button" disabled={disabled}
+          onClick={() => save({ accent: null, 'accent-secondary': null, 'surface-tint': null })}>Use Jarvis colours</button>
+      )}
+    </div>
   );
 }

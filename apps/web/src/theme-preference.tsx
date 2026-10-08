@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useState, type ReactNode } fro
 import { backendFetch } from './backend-request';
 import {
   ThemePreferenceContext,
+  type AppearanceChange,
   type AppearancePreferences,
   type ResolvedTheme,
   type ThemeMode,
@@ -78,16 +79,16 @@ async function requestAppearance(
   backendUrl: string,
   getAccessToken: () => Promise<string>,
   method: 'GET' | 'PATCH',
-  theme?: ThemeMode,
+  change?: AppearanceChange,
 ): Promise<AppearancePreferences> {
   const response = await backendFetch(`${backendUrl}/settings`, {
     method,
     headers: {
       Authorization: `${['Bear', 'er'].join('')} ${await getAccessToken()}`,
       Accept: 'application/json',
-      ...(theme ? { 'Content-Type': 'application/json' } : {}),
+      ...(change ? { 'Content-Type': 'application/json' } : {}),
     },
-    ...(theme ? { body: JSON.stringify({ settings: { appearance: { theme } } }) } : {}),
+    ...(change ? { body: JSON.stringify({ settings: { appearance: change } }) } : {}),
   });
   if (response.status === 401) throw new Error('Your Microsoft sign-in needs attention. Sign in again.');
   if (response.status === 503) throw new Error('Settings are unavailable until the database is connected.');
@@ -156,7 +157,7 @@ export function ThemePreferenceProvider({
     setError('');
     setMessage('');
     try {
-      const acceptedAppearance = await requestAppearance(backendUrl, getAccessToken, 'PATCH', nextTheme);
+      const acceptedAppearance = await requestAppearance(backendUrl, getAccessToken, 'PATCH', { theme: nextTheme });
       if (acceptedAppearance.theme !== nextTheme) throw new Error('Jarvis did not accept the requested theme. The previous theme remains active.');
       setAppearance(acceptedAppearance);
       setMessage('Theme saved.');
@@ -166,6 +167,26 @@ export function ThemePreferenceProvider({
       setSaving(false);
     }
   }, [backendUrl, getAccessToken, saving, state]);
+
+  // Appearance details apply at once (Dan sees the change as he makes it) and roll back if Jarvis refuses them.
+  const saveAppearance = useCallback(async (change: AppearanceChange) => {
+    if (state !== 'ready' || !backendUrl) return false;
+    const previous = appearance;
+    const preview = { ...appearance } as Record<string, unknown>;
+    for (const [key, value] of Object.entries(change)) { if (value === null) delete preview[key]; else preview[key] = value; }
+    setAppearance(preview as unknown as AppearancePreferences);
+    setError('');
+    setMessage('');
+    try {
+      setAppearance(await requestAppearance(backendUrl, getAccessToken, 'PATCH', change));
+      setMessage('Appearance saved.');
+      return true;
+    } catch (cause) {
+      setAppearance(previous);
+      setError(cause instanceof Error ? cause.message : 'Appearance could not be saved. Try again.');
+      return false;
+    }
+  }, [appearance, backendUrl, getAccessToken, state]);
 
   const refreshAppearance = useCallback(async () => {
     if (!enabled || !backendUrl) return;
@@ -195,6 +216,7 @@ export function ThemePreferenceProvider({
       error,
       message,
       saveTheme,
+      saveAppearance,
       refreshAppearance,
       retry,
     }}>

@@ -5,7 +5,7 @@ import { saveVoiceWorkspacePreference } from './voice-workspace-preference';
 import { TaskRecipesSettings } from './TaskRecipesSettings';
 import { Loader } from './Loader';
 import { CollapsibleSection } from './CollapsibleSection';
-import { ModelsSection, ResearchSection, RetrievalSection, TimeoutsSection, VoiceTuningFields } from './SettingsAdvanced';
+import { AppearanceDetails, ModelsSection, ResearchSection, RetrievalSection, TimeoutsSection, VoiceTuningFields } from './SettingsAdvanced';
 import {
   advancedProblems, isRoleOptions, isRoleSettings,
   type MemorySettings, type ModelRole, type ResearchSettings, type RoleSettings, type TimeoutSettings, type VoiceTuningSettings,
@@ -34,7 +34,7 @@ interface Settings {
   timeouts?: TimeoutSettings;
   codex: { model: string; reasoning: string };
   copilot: { model: string };
-  global: { maxParallelTasks: number; screenShareDailyFrameCap: number };
+  global: { maxParallelTasks: number; screenShareDailyFrameCap: number; maxCheckAttempts?: number; visionDailyBudgetUsd?: number };
   newProjects: {
     owner: string;
     visibility: 'private' | 'public';
@@ -402,6 +402,9 @@ export function SettingsPage({ backendUrl, getAccessToken, activity, presence, p
 
   const dirty = settings !== null && savedSettings !== null &&
     Object.keys(changedSettings(savedSettings, settings)).length > 0;
+  const globalLimitsValid = settings !== null &&
+    (settings.global.maxCheckAttempts === undefined || (Number.isInteger(settings.global.maxCheckAttempts) && settings.global.maxCheckAttempts >= 0 && settings.global.maxCheckAttempts <= 10)) &&
+    (settings.global.visionDailyBudgetUsd === undefined || (Number.isFinite(settings.global.visionDailyBudgetUsd) && settings.global.visionDailyBudgetUsd >= 0 && settings.global.visionDailyBudgetUsd <= 100));
   const maxTasksValid = settings !== null && Number.isSafeInteger(settings.global.maxParallelTasks) &&
     settings.global.maxParallelTasks >= 1 && settings.global.maxParallelTasks <= 100;
   const newProjectMaxTasksValid = settings !== null && Number.isSafeInteger(settings.newProjects.maxParallelTasks) &&
@@ -480,11 +483,7 @@ export function SettingsPage({ backendUrl, getAccessToken, activity, presence, p
               <p className="settings-feedback" role="alert">{themePreference.error}</p>}
             {themePreference.state === 'ready' && !themePreference.error && themePreference.message &&
               <p className="settings-feedback" role="status">{themePreference.message}</p>}
-            <button className="secondary-button theme-variable-button" type="button" disabled
-              aria-describedby="theme-variables-help">Edit theme variables</button>
-            <p className="settings-explanation" id="theme-variables-help">
-              Jarvis can update approved appearance variables through its validated theme tool.
-            </p>
+            <AppearanceDetails />
           </CollapsibleSection>
 
           {!roleModels && (
@@ -633,6 +632,24 @@ export function SettingsPage({ backendUrl, getAccessToken, activity, presence, p
                 onChange={(event) => update('global', 'screenShareDailyFrameCap', Number(event.target.value))} />
               <p className="settings-explanation">Maximum screen frames sent to the vision model per UTC day (1–300).</p>
             </div>
+            {typeof settings.global.maxCheckAttempts === 'number' && (
+              <div className="settings-field settings-number-field">
+                <label htmlFor="max-check-attempts">Check repair attempts</label>
+                <input id="max-check-attempts" type="number" min="0" max="10" step="1"
+                  value={settings.global.maxCheckAttempts} disabled={saving}
+                  onChange={(event) => update('global', 'maxCheckAttempts', Number(event.target.value))} />
+                <p className="settings-explanation">How often a Factory task may retry failing checks before asking you (0–10).</p>
+              </div>
+            )}
+            {typeof settings.global.visionDailyBudgetUsd === 'number' && (
+              <div className="settings-field settings-number-field">
+                <label htmlFor="vision-daily-budget">Daily watch budget (USD)</label>
+                <input id="vision-daily-budget" type="number" min="0" max="100" step="0.1"
+                  value={settings.global.visionDailyBudgetUsd} disabled={saving}
+                  onChange={(event) => update('global', 'visionDailyBudgetUsd', event.target.valueAsNumber)} />
+                <p className="settings-explanation">The most watch mode may spend on vision per UTC day; 0 turns watching off (0–100).</p>
+              </div>
+            )}
           </CollapsibleSection>
 
           <CollapsibleSection storageKey="settings.new-projects" headingId="new-projects-settings-heading" title="New projects">
@@ -701,7 +718,7 @@ export function SettingsPage({ backendUrl, getAccessToken, activity, presence, p
 
           <div className="settings-save">
             <button className="primary-button" type="submit"
-              disabled={!dirty || !advancedValid || !maxTasksValid || !newProjectMaxTasksValid || !personalityInstructionsValid || saving}>
+              disabled={!dirty || !advancedValid || !globalLimitsValid || !maxTasksValid || !newProjectMaxTasksValid || !personalityInstructionsValid || saving}>
               {saving && !resettingPersonality ? 'Saving…' : 'Save settings'}
             </button>
             <p className="settings-feedback" role={error ? 'alert' : 'status'} aria-live="polite">
