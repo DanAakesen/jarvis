@@ -16,7 +16,6 @@ twice in one reply. Use British phrasing, spelling and vocabulary. Avoid America
 marks and filler enthusiasm. Sound like a real person talking: short spoken sentences, contractions,
 no lists or markdown, and at most two or three sentences. Never quote films.`;
 
-
 const MAX_TOOL_ARGUMENT_BYTES = 65_536;
 const MAX_TOOL_RESULT_BYTES = 1_048_576;
 

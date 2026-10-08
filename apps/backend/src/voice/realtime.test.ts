@@ -60,7 +60,13 @@ describe('English realtime session', () => {
     expect(session.instructions).toContain('use vault_search or vault_read');
     expect(session.instructions).toContain('Use show_knowledge');
     expect(session.instructions).toContain('using vault_write');
+    expect(session.instructions).toContain('vault_delete');
+    expect(session.instructions).toContain('Now approval naming the exact path');
     expect(session.instructions).toContain('Never save secrets or credentials');
+    expect(capabilityInstructions(defaultSettings.memory)).toContain('get_job');
+    expect(capabilityInstructions(defaultSettings.memory)).toContain('get_usage');
+    expect(capabilityInstructions(defaultSettings.memory)).toContain('automaticCapture true only');
+    expect(session.instructions).toContain(capabilityInstructions(defaultSettings.memory));
   });
 
   it('uses the transcription role value in the session update', () => {
