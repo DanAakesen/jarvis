@@ -4,6 +4,7 @@ Phase 1 delivers the Software Factory. Requirements and page specifications are 
 
 ## Current focus
 
+- **P10 — GitHub backlog (8 October 2026):** GitHub issues become the single backlog; the Factory (label `Jarvis`, agent `codex`) and Copilot are executors, and the Factory board mirrors the GitHub Project columns. See [P10](#p10--github-backlog-as-source-of-truth).
 - **P9 — Control and reach (filed 7 October 2026):** 39 tasks ([#495](https://github.com/DanAakesen/jarvis/issues/495)–[#533](https://github.com/DanAakesen/jarvis/issues/533)) from Dan's gap audit: per-role model and reasoning control, the Folio, missing tools and unconnected features. See [P9](#p9--control-and-reach).
 - **Local UI session with Dan (branch `ui/shell-iteration`, 6 October 2026):** implemented locally:
   - the stage glass shell, the same on every page, with one shared 3D room behind all pages and sign-in;
@@ -482,6 +483,25 @@ Declined in the audit (do not file): verbosity and max-output-token settings, no
 | P9-37 | [#531](https://github.com/DanAakesen/jarvis/issues/531) | Tool parity and stale-tool tests | Backend | — | Not started |
 | P9-38 | [#532](https://github.com/DanAakesen/jarvis/issues/532) | Clean up features.md, add a verified-live column | Backend | — | Not started |
 | P9-39 | [#533](https://github.com/DanAakesen/jarvis/issues/533) | After every Deploy, run and record read-only Google, GitHub, vault, embeddings, research dry-run, and PC-bridge checks through authenticated `GET /status/smoke` | Backend + deploy workflow | P9-20 | Complete |
+
+### P10 — GitHub backlog as source of truth
+
+Goal: GitHub issues are the single backlog. The Software Factory (worker label `Jarvis`, default agent `codex`) and Copilot (`Copilot`) are executors that pick issues up; the Factory board shows the same columns as the GitHub Project. Decided by Dan on 8 October 2026.
+
+| ID | Issue | Task | Acceptance criteria | Depends on | Status |
+| --- | --- | --- | --- | --- | --- |
+| P10-01 | [#573](https://github.com/DanAakesen/jarvis/issues/573) | Grant the GitHub App Issues write and the Issues and Issue comment events | Installation token mints with `issues: write`; webhook receives `issues` events | — | Not started |
+| P10-02 | [#574](https://github.com/DanAakesen/jarvis/issues/574) | Factory tasks are backed by GitHub issues | `tasks.issue_number`; `Jarvis` label, route or `start_issue` starts one task per issue with the `codex` agent; PR title from the issue's task ID and `Fixes #N`; progress comments on the issue | P10-01 | In progress |
+| P10-03 | [#575](https://github.com/DanAakesen/jarvis/issues/575) | Jarvis raises GitHub issues and hands them to the Factory | `create_issue` allocates the next `P11-NN`, confirms with Dan, labels the executor; code changes go through an issue | P10-02 | Not started |
+| P10-04 | [#576](https://github.com/DanAakesen/jarvis/issues/576) | Factory board columns match the GitHub Project | `GET /factory/board` groups issues as Backlog, Needs Dan, Ready, In progress, In review, Done using the `project_board.py` rules, with the Factory task overlay; UI session switches the Kanban | — | In progress |
+| P10-05 | [#577](https://github.com/DanAakesen/jarvis/issues/577) | Backfill issues for existing Factory tasks | Every open Factory task has a linked issue, starting with task 10 | P10-02, P10-03 | Not started |
+
+### P11 — Jarvis-raised fixes
+
+A rolling intake phase. When Dan asks Jarvis to change its own code or a project's code, Jarvis drafts the issue, confirms it with Dan and creates it as `P11-NN` (P10-03). Rows are added here as the issues are created.
+
+| ID | Issue | Task | Acceptance criteria | Depends on | Status |
+| --- | --- | --- | --- | --- | --- |
 
 ### Out of scope for phase 1
 
