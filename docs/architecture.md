@@ -216,9 +216,16 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   The UI session owns shell routing, settings-section
   selection, page transitions and applied/refused acknowledgements; this
   backend change does not implement those UI behaviors or claim live acceptance.
-  The web build currently reports TS2366 at `apps/web/src/Workspace.tsx:391`:
-  its exhaustive dispatcher must handle the new union member in the UI change
-  before the combined feature can merge or deploy.
+- P9-45 adds `conversation` with `action: 'show' | 'hide'` to the same flat
+  `workspace_command` contract and guard. It reuses the owner-authenticated,
+  all-tab broker without a new event channel or persistence; the tool waits for
+  the UI's applied/refused acknowledgement and relays refusal reasons. Invalid
+  actions use the shared P9-42 argument-refusal path. The reversible action needs
+  no confirmation. The UI session owns applying it and hiding the transcript by
+  default on phones; those behaviors and live acceptance remain pending.
+  The web dispatcher at `apps/web/src/Workspace.tsx:391` must handle the P9-40
+  and P9-45 union members in the UI change before the combined feature can build
+  or deploy.
 - P8-37 registers conversation history as the page-owned workspace view
   `conversation` from `App.tsx` once a conversation exists. The view content is
   an empty host element; `ConversationHistory` portals its transcript into it

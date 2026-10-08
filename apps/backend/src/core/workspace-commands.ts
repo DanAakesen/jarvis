@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifySchemaValidationError } from 'fastify';
 import {
   htmlArtifactFrameSchema,
   isWorkspaceCommand,
@@ -12,6 +12,7 @@ import {
 } from '@jarvis/contracts';
 import type { BackendModule } from '../modules.js';
 import { generatedViewValidationOptions } from './generated-view-validation.js';
+import { toolArgumentRefusal } from './tool-arguments.js';
 import { ToolFailure, ToolRefusal } from './tool-registry.js';
 
 const commandTimeoutMs = 10_000;
@@ -360,6 +361,7 @@ export function registerWorkspaceCommandRoutes(app: FastifyInstance): void {
 
 export function isWorkspaceReflexOperation(args: Readonly<Record<string, unknown>>): boolean {
   return ['show', 'focus', 'minimise', 'restore', 'close', 'resize'].includes(String(args.operation)) ||
+    args.operation === 'conversation' && ['show', 'hide'].includes(String(args.action)) ||
     args.operation === 'layout' ||
     args.operation === 'context-panel' && (args.action === 'close' ||
       args.action === 'open' && args.view === undefined);
@@ -367,7 +369,7 @@ export function isWorkspaceReflexOperation(args: Readonly<Record<string, unknown
 
 export const workspaceCommandTool: BackendModule['tools'][number] = {
   name: 'workspace_command',
-  description: 'Navigate Dan’s visible shell page (home, factory board or task/issue, settings section, usage, knowledge, folio, status), create, update, show, close, minimise, restore, focus, move, resize, or arrange a temporary workspace view, or change its context panel. Supply a unique commandId. Navigation section is settings-only; taskId and positive integer issueNumber are factory-only. Success requires a tab to acknowledge applying the command; relay its refusal reason for missing tasks/issues or unavailable pages.',
+  description: 'Show or hide Dan’s conversation transcript, navigate his visible shell page (home, factory board or task/issue, settings section, usage, knowledge, folio, status), create, update, show, close, minimise, restore, focus, move, resize, or arrange a temporary workspace view, or change its context panel. Conversation visibility is reversible and needs no confirmation. Supply a unique commandId. Navigation section is settings-only; taskId and positive integer issueNumber are factory-only. Success requires a tab to acknowledge applying the command; relay its refusal reason.',
   inputSchema: workspaceCommandSchema,
   sensitive: true,
   async execute(input, request, signal) {
@@ -378,6 +380,17 @@ export const workspaceCommandTool: BackendModule['tools'][number] = {
       throw new ToolRefusal('Only Jarvis can create or update views; the workspace owner can control existing windows.');
     }
     if (!isWorkspaceCommand(input, generatedViewValidationOptions(request.server))) {
+      if (typeof input === 'object' && input !== null && !Array.isArray(input) &&
+          (input as Record<string, unknown>).operation === 'conversation') {
+        const missingAction = (input as Record<string, unknown>).action === undefined;
+        const validationError: FastifySchemaValidationError = {
+          keyword: missingAction ? 'required' : 'enum',
+          instancePath: missingAction ? '' : '/action',
+          schemaPath: missingAction ? '#/required' : '#/properties/action/enum',
+          params: missingAction ? { missingProperty: 'action' } : {},
+        };
+        throw new ToolRefusal(toolArgumentRefusal(workspaceCommandTool, validationError, request.log).refused);
+      }
       throw new ToolRefusal('The workspace command or generated view is invalid.');
     }
     await request.server.workspaceCommands.execute(request.server.ownerObjectId, input, signal);
@@ -386,6 +399,7 @@ export const workspaceCommandTool: BackendModule['tools'][number] = {
       return { type: 'generated-view', view: input.view };
     }
     if (input.operation === 'navigate') return { applied: true, ...input };
+    if (input.operation === 'conversation') return { applied: true, ...input };
     return { applied: true, commandId: input.commandId, operation: input.operation };
   },
 };

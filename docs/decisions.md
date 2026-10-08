@@ -804,6 +804,17 @@ a reason if they are missing or if Folio/Status is not implemented; sending a
 command never implies application.
 
 
+## P9-45 (8 October 2026) — Show or hide the conversation
+
+Add `conversation` with `action: 'show' | 'hide'` to the existing flat-root
+workspace command contract. Reuse its authenticated all-tab broker and require
+an applied/refused acknowledgement; do not treat sending as success. This is a
+reversible view change and needs no confirmation. Route invalid arguments
+through P9-42's safe refusal guidance. The backend and shared voice/chat prompt
+are implemented offline; the UI session owns the handler and the phone default
+of hiding the transcript, with live acceptance still pending.
+
+
 ## P9-37 (8 October 2026) — Keep voice, chat, and the backend tool catalogue aligned
 
 Treat `GET /tools` as the source catalogue for both model clients. Offline backend

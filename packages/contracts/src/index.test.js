@@ -732,6 +732,7 @@ test('defines and validates bounded workspace commands for the approved operatio
     { ...base, operation: 'context-panel', action: 'open', view: listView() },
     { ...base, operation: 'context-panel', action: 'open' },
     ...['close', 'toggle'].map((action) => ({ ...base, operation: 'context-panel', action })),
+    ...['show', 'hide'].map((action) => ({ ...base, operation: 'conversation', action })),
   ];
 
   assert.equal(workspaceCommandSchema.type, 'object');
@@ -739,6 +740,17 @@ test('defines and validates bounded workspace commands for the approved operatio
     assert.equal(Object.hasOwn(workspaceCommandSchema, key), false, key);
   }
   for (const command of commands) assert.equal(isWorkspaceCommand(command), true, command.operation);
+});
+
+test('validates conversation visibility actions without accepting unrelated fields', () => {
+  const command = { commandId: 'conversation-1', operation: 'conversation' };
+  for (const action of ['show', 'hide']) {
+    assert.equal(isWorkspaceCommand({ ...command, action }), true, action);
+  }
+  for (const action of ['open', 'close', 'toggle', 'shown', '', null]) {
+    assert.equal(isWorkspaceCommand({ ...command, action }), false, String(action));
+  }
+  assert.equal(isWorkspaceCommand({ ...command, action: 'show', viewId: 'conversation' }), false);
 });
 
 test('validates exact navigation keys, settings sections and bounded factory task/issue selectors', () => {
