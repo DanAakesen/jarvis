@@ -99,7 +99,7 @@ describe('committed SQL manifest', () => {
     expect(migration?.sql).toContain('retry_input nvarchar(max) NULL');
     expect(migration?.sql).toContain('retry_job_id nvarchar(36)');
     await expect(readDownMigration('0033_research_job_retry.sql')).resolves.toMatchObject({
-      sql: expect.stringContaining('Research retry metadata must be retained'),
+      sql: expect.stringContaining('DROP COLUMN retry_input, retry_job_id'),
     });
   });
   it('indexes conversation message dates for bounded search', async () => {

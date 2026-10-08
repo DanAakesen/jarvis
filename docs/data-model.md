@@ -94,7 +94,8 @@ P9-14 creates `background_jobs` and append-only `background_job_steps` in
 columns in `0033_research_job_retry.sql`: the former stores only the original
 research topic and selected depth for 30 days; the latter atomically links a
 failed attempt to its one retry. Existing jobs without retry input are not
-retryable, and the down migration refuses to discard persisted retry metadata.
+retryable, and reverting migration 0033 drops both retry columns and their
+metadata.
 
 ## Overview
 
