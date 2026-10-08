@@ -1893,8 +1893,9 @@ def test_untrusted_invocation_identifier_cannot_escape_metadata_directory(tmp_pa
     assert app._load_task(state.invocation_id).status == "completed"
 
 
-def test_acp_reader_drops_an_over_limit_line_and_keeps_reading(tmp_path):
+def test_acp_reader_drops_an_over_limit_line_and_keeps_reading(tmp_path, monkeypatch):
     """A huge tool-output line must not kill the reader and hang the agent (L126)."""
+    monkeypatch.setattr(app, "WORK_ROOT", tmp_path)
     state = app.TaskState("i", "s", "codex", "task")
     client = app.ACPClient([], tmp_path, state, {})
 
