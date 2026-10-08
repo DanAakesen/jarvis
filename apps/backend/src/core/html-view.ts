@@ -7,6 +7,7 @@ import {
   WorkspaceHtmlArtifactStore,
   type WorkspaceHtmlSource,
 } from '../database/workspace-html-artifact-store.js';
+import type { FolioStore } from '../database/folio-store.js';
 import { validateHtmlApp } from './html-artifact-validation.js';
 import { ToolFailure, ToolRefusal } from './tool-registry.js';
 
@@ -78,7 +79,10 @@ function htmlView(artifactId: string, title: string) {
   };
 }
 
-function createHtmlViewTool(artifacts: WorkspaceHtmlArtifactStore): BackendModule['tools'][number] {
+function createHtmlViewTool(
+  artifacts: WorkspaceHtmlArtifactStore,
+  folio?: FolioStore,
+): BackendModule['tools'][number] {
   return {
     name: 'create_html_view',
     description: 'Create a self-contained HTML/JavaScript app in the active workspace sandbox. Include HTTPS sources used.',
@@ -102,6 +106,14 @@ function createHtmlViewTool(artifacts: WorkspaceHtmlArtifactStore): BackendModul
         input.sources as WorkspaceHtmlSource[],
         signal,
       );
+      await folio?.record(ownerId, {
+        id: `html_app:${artifact.id}`,
+        kind: 'html_app',
+        sourceId: artifact.id,
+        title: artifact.title,
+        promptSummary: artifact.title,
+        createdAt: artifact.createdAt,
+      }, signal);
       const command: WorkspaceCommand = {
         commandId: randomUUID(),
         operation: 'create',
@@ -121,10 +133,10 @@ function createHtmlViewTool(artifacts: WorkspaceHtmlArtifactStore): BackendModul
   };
 }
 
-export function createHtmlViewModule(artifacts: WorkspaceHtmlArtifactStore): BackendModule {
+export function createHtmlViewModule(artifacts: WorkspaceHtmlArtifactStore, folio?: FolioStore): BackendModule {
   return {
     id: 'html-view',
-    tools: [createHtmlViewTool(artifacts)],
+    tools: [createHtmlViewTool(artifacts, folio)],
     registerRoutes: async (app: FastifyInstance) => {
       app.get<{ Params: { artifactId: string } }>('/factory/workspace-artifacts/html/:artifactId', {
         schema: {

@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { DefaultAzureCredential } from '@azure/identity';
 import { SecretClient } from '@azure/keyvault-secrets';
 import { CallAutomationClient } from '@azure/communication-call-automation';
@@ -106,6 +107,8 @@ import { createImageGenerationModule } from './core/image-generation.js';
 import { WorkspaceArtifactStore } from './database/workspace-artifact-store.js';
 import { WorkspaceHtmlArtifactStore } from './database/workspace-html-artifact-store.js';
 import { createHtmlViewModule } from './core/html-view.js';
+import { createFolioModule } from './core/folio.js';
+import { FolioStore } from './database/folio-store.js';
 import { createWeatherModule } from './core/weather.js';
 import { createSystemStatusReader } from './system-status.js';
 
@@ -132,6 +135,8 @@ try {
   const memoryStore = database ? createMemoryStore(database.pool) : undefined;
   const settingsStore = database ? createSettingsStore(database.pool) : undefined;
   const htmlArtifactStore = database ? new HtmlArtifactStore(database.pool) : undefined;
+  const workspaceHtmlArtifactStore = database ? new WorkspaceHtmlArtifactStore(database.pool) : undefined;
+  const folioStore = database ? new FolioStore(database.pool) : undefined;
   const vaultIndexStore = database ? createVaultIndexStore(database.pool) : undefined;
   const phoneSessionStore = database
     ? createPhoneSessionStore(database.pool)
@@ -364,6 +369,18 @@ try {
       indexStore: vaultIndexStore,
       memoryStore,
       apiMemoryStore: memoryStore,
+      ...(folioStore ? { recordFolioGraph: (query: string, highlight: readonly string[], createdAt: string) => {
+        const id = randomUUID();
+        return folioStore.record(config.auth.ownerObjectId, {
+          id: `knowledge_graph:${id}`,
+          kind: 'knowledge_graph',
+          sourceId: id,
+          title: 'Knowledge graph',
+          promptSummary: query,
+          createdAt,
+          payload: { query, highlight },
+        }, AbortSignal.timeout(10_000));
+      } } : {}),
       ...(settingsStore ? { settingsStore } : {}),
       getEmbedder: getMemoryEmbedder,
       getEmbeddingModel: embeddingModel,
@@ -423,6 +440,8 @@ try {
       () => clientFor(config.foundryRunnerAgentName!),
       config.codexToolModel,
       htmlArtifactStore,
+      {},
+      folioStore,
     )
     : undefined;
   const sandboxHeartbeat = database && config.foundryEndpoints
@@ -637,12 +656,15 @@ try {
       runner: clientFor(config.foundryRunnerAgentName),
       artifacts: workspaceArtifacts,
       model: config.codexImageModel,
+      ...(folioStore ? { folio: folioStore } : {}),
     }));
   }
-  if (database) {
-    const workspaceHtmlArtifacts = new WorkspaceHtmlArtifactStore(database.pool);
-    modules.push(createHtmlViewModule(workspaceHtmlArtifacts));
-    modules.push(createWeatherModule(workspaceHtmlArtifacts));
+  if (database && workspaceHtmlArtifactStore) {
+    modules.push(createHtmlViewModule(workspaceHtmlArtifactStore, folioStore));
+    modules.push(createWeatherModule(workspaceHtmlArtifactStore));
+  }
+  if (database && folioStore && workspaceHtmlArtifactStore) {
+    modules.push(createFolioModule(folioStore, workspaceHtmlArtifactStore, workspaceArtifacts));
   }
   let visionWatch: VisionWatchService | undefined;
   if (database && settingsStore && screenVisionModel) {

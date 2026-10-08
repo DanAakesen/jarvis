@@ -9,11 +9,11 @@ import re
 from pathlib import Path
 from typing import Any
 
-TASK_ID = re.compile(r"P\d-\d{2}")
-ISSUE_TITLE = re.compile(r"^(P\d-\d{2}):\s*(.+)$")
+TASK_ID = re.compile(r"P\d{1,2}-\d{2}")
+ISSUE_TITLE = re.compile(r"^(P\d{1,2}-\d{2}):\s*(.+)$")
 FIXES_ISSUE = re.compile(r"\bFixes\s+#(\d+)\b", re.IGNORECASE)
 DEPENDENCY_RANGE = re.compile(
-    r"(P\d)-(\d{2})\s*(?:…|\.{3}|–|-)\s*(?:P\d-)?(\d{2})"
+    r"(P\d{1,2})-(\d{2})\s*(?:…|\.{3}|–|-)\s*(?:P\d{1,2}-)?(\d{2})"
 )
 WORKER_LABELS = {"Codex", "Copilot", "Dan", "Jarvis"}
 
@@ -44,7 +44,7 @@ def plan_tasks(plan: str) -> list[dict[str, Any]]:
         if "ID" in cells and "Task" in cells and "Status" in cells:
             columns = {name: index for index, name in enumerate(cells)}
             continue
-        if not columns or not re.match(r"^\|\s*P\d-\d{2}\s*\|", line):
+        if not columns or not re.match(r"^\|\s*P\d{1,2}-\d{2}\s*\|", line):
             continue
         if len(cells) <= max(columns.values()):
             continue
@@ -128,7 +128,7 @@ def reconcile_plan(
             columns = {name: index for index, name in enumerate(cells)}
             rows.append(line)
             continue
-        if not columns or not re.match(r"^\|\s*P\d-\d{2}\s*\|", line):
+        if not columns or not re.match(r"^\|\s*P\d{1,2}-\d{2}\s*\|", line):
             rows.append(line)
             continue
         if len(cells) <= max(columns.values()):

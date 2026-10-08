@@ -249,6 +249,23 @@ export interface HtmlArtifact {
   pinned: boolean;
 }
 
+export type FolioKind = 'research' | 'html_app' | 'image' | 'knowledge_graph';
+export interface FolioItem {
+  id: `${FolioKind}:${string}`;
+  title: string;
+  kind: FolioKind;
+  createdAt: string;
+  promptSummary: string;
+  pinned: boolean;
+}
+export interface FolioSearch {
+  q?: string;
+  kind?: FolioKind;
+  before?: string;
+}
+export interface FolioSearchResponse { items: FolioItem[] }
+export interface FolioPatch { title?: string; pinned?: boolean }
+
 export interface HtmlArtifactFrame {
   widthPx: number;
   heightPx: number;
@@ -395,6 +412,15 @@ export function isJarvisVoiceWakeEvent(value: unknown): value is JarvisVoiceWake
 
 export const generatedViewSchema: Readonly<Record<string, unknown>>;
 export const htmlArtifactSchema: Readonly<Record<string, unknown>>;
+export const folioKinds: readonly FolioKind[];
+export const folioItemSchema: Readonly<Record<string, unknown>>;
+export const folioSearchSchema: Readonly<Record<string, unknown>>;
+export const folioSearchResponseSchema: Readonly<Record<string, unknown>>;
+export const folioPatchSchema: Readonly<Record<string, unknown>>;
+export const folioDeleteSchema: Readonly<Record<string, unknown>>;
+export const folioSearchToolSchema: Readonly<Record<string, unknown>>;
+export const folioOpenToolSchema: Readonly<Record<string, unknown>>;
+export function isFolioItem(value: unknown): value is FolioItem;
 export const htmlArtifactFrameSchema: Readonly<Record<string, unknown>>;
 export function isHtmlArtifact(value: unknown): value is HtmlArtifact;
 export function isHtmlArtifactFrame(value: unknown): value is HtmlArtifactFrame;
