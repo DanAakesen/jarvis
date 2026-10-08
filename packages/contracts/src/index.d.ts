@@ -283,9 +283,38 @@ export interface WorkspaceSnapshot {
   windows: readonly { viewId: string; title: string }[];
   contextPanelOpen: boolean;
   frame?: HtmlArtifactFrame;
+  view?: WorkspaceView;
 }
 
+export interface WorkspaceViewLocation {
+  page: WorkspaceNavigationPage;
+  section?: WorkspaceSettingsSection;
+  taskId?: string;
+  issueNumber?: number;
+}
+export interface WorkspaceView extends WorkspaceViewLocation {
+  folioOpen?: boolean;
+  focusedViewId?: string;
+  previous?: WorkspaceViewLocation;
+}
+export const workspaceViewSchema: Readonly<Record<string, unknown>>;
+export function isWorkspaceView(value: unknown): value is WorkspaceView;
+export function isWorkspaceSnapshot(value: unknown): value is WorkspaceSnapshot;
+
+export const workspaceNavigationPages: readonly [
+  'home', 'factory', 'settings', 'usage', 'knowledge', 'folio', 'status',
+];
+export type WorkspaceNavigationPage = typeof workspaceNavigationPages[number];
+export const workspaceSettingsSections: readonly [
+  'appearance', 'jarvis', 'personality', 'voice', 'presence', 'memory',
+  'coding', 'projects', 'routines', 'credentials', 'backend',
+];
+export type WorkspaceSettingsSection = typeof workspaceSettingsSections[number];
+
 export type WorkspaceCommand =
+  | { commandId: string; operation: 'navigate'; page: 'settings'; section?: WorkspaceSettingsSection }
+  | { commandId: string; operation: 'navigate'; page: 'factory'; taskId?: string; issueNumber?: number }
+  | { commandId: string; operation: 'navigate'; page: Exclude<WorkspaceNavigationPage, 'settings' | 'factory'> }
   | { commandId: string; operation: 'create' | 'update'; viewId: string; view: GeneratedView }
   | { commandId: string; operation: 'show' | 'close' | 'minimise' | 'restore' | 'focus'; viewId: string }
   | { commandId: string; operation: 'move'; viewId: string; x: number; y: number }

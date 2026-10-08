@@ -68,6 +68,8 @@ import { createGitHubActionsLogClient } from './github/actions-logs.js';
 import { createGitHubReleaseGraphReader } from './github/release-graph.js';
 import { createChecksLoop } from './github/checks-loop.js';
 import { createGithubWebhookModule } from './github/webhook.js';
+import { createGitHubIssueClient } from './github/issues.js';
+import { startIssueTask } from './factory/issues.js';
 import { createProjectPolicyStore } from './database/project-policy-store.js';
 import { createProjectPolicyEvaluator } from './github/project-policy.js';
 import { createGitHubDeliveryHandler } from './github/delivery.js';
@@ -241,6 +243,9 @@ try {
       getPrivateKey: getGitHubAppPrivateKey,
       onTokenMint,
     })
+    : undefined;
+  const githubIssueClient = githubAppTokenIssuer
+    ? createGitHubIssueClient(githubAppTokenIssuer)
     : undefined;
   const githubRepositoryCatalog = config.githubAppId && githubAppKeyVault
     ? createGitHubAppRepositoryCatalog({
@@ -611,8 +616,22 @@ try {
       } : {}),
       isTrackedRepository: (repository) => repository.toLowerCase() === VAULT_REPOSITORY.toLowerCase() ||
         trackedRepositories.has(repository.toLowerCase()),
-      ...(checksLoop || projectPolicyEvaluator || vaultModule ? {
+      ...(checksLoop || projectPolicyEvaluator || vaultModule ||
+        (githubIssueClient && projectStore && taskStore) ? {
         onMapping: async (mapping) => {
+          if (mapping.kind === 'issue_labeled' && githubIssueClient && projectStore && taskStore) {
+            const result = await startIssueTask({
+              projects: projectStore,
+              tasks: taskStore,
+              github: githubIssueClient,
+              repository: mapping.repository,
+              issue: mapping.number,
+            });
+            if (!['created', 'existing', 'project-not-found', 'issue-not-found', 'issue-closed',
+              'not-an-issue', 'prompt-too-large'].includes(result.kind)) {
+              throw new Error('Issue task start failed');
+            }
+          }
           if (mapping.kind === 'push' && mapping.repository.toLowerCase() === VAULT_REPOSITORY.toLowerCase() &&
               mapping.ref === `refs/heads/${VAULT_BRANCH}` && vaultModule) {
             void vaultModule.synchronize(AbortSignal.timeout(10 * 60_000)).catch(() => {
@@ -923,6 +942,7 @@ try {
       ...(visionWatch ? { onConversationSessionEnded: (sessionId: string) => visionWatch?.forgetSession(sessionId) } : {}),
       taskStore,
       ...(githubAppTokenIssuer ? { githubAppTokenIssuer } : {}),
+      ...(githubIssueClient ? { githubIssueClient, issueProgressBoardUrl: config.staticWebAppOrigin } : {}),
       ...(githubRepositoryCatalog ? { githubRepositoryCatalog } : {}),
       ...(dispatcher ? { taskController: dispatcher } : {}),
       nowFeedStore,

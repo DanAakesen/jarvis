@@ -3,7 +3,9 @@ import type { FastifyInstance } from 'fastify';
 import {
   htmlArtifactFrameSchema,
   isWorkspaceCommand,
+  isWorkspaceSnapshot,
   workspaceCommandSchema,
+  workspaceViewSchema,
   type WorkspaceSseEvent,
   type WorkspaceCommand,
   type WorkspaceSnapshot,
@@ -293,6 +295,7 @@ export function registerWorkspaceCommandRoutes(app: FastifyInstance): void {
           },
           contextPanelOpen: { type: 'boolean' },
           frame: htmlArtifactFrameSchema,
+          view: workspaceViewSchema,
         },
         required: ['sessionId', 'windows', 'contextPanelOpen'], additionalProperties: false,
       },
@@ -301,12 +304,11 @@ export function registerWorkspaceCommandRoutes(app: FastifyInstance): void {
     if (!request.principal || request.principal.objectId.toLowerCase() !== app.ownerObjectId.toLowerCase()) {
       return reply.code(403).send({ error: 'Forbidden' });
     }
-    const { sessionId, windows, contextPanelOpen, frame } = request.body;
-    if (!app.workspaceCommands.updateSnapshot(request.principal.objectId, sessionId, {
-      windows,
-      contextPanelOpen,
-      ...(frame ? { frame } : {}),
-    })) {
+    const { sessionId, ...snapshot } = request.body;
+    if (!isWorkspaceSnapshot(snapshot)) {
+      return reply.code(400).send({ error: 'Invalid workspace snapshot' });
+    }
+    if (!app.workspaceCommands.updateSnapshot(request.principal.objectId, sessionId, snapshot)) {
       return reply.code(409).send({ error: 'Workspace connection is stale' });
     }
     return reply.code(204).send();
@@ -365,7 +367,7 @@ export function isWorkspaceReflexOperation(args: Readonly<Record<string, unknown
 
 export const workspaceCommandTool: BackendModule['tools'][number] = {
   name: 'workspace_command',
-  description: 'Create, update, show, close, minimise, restore, focus, move, resize, or arrange a temporary view in Dan’s active workspace, or change its context panel.',
+  description: 'Navigate Dan’s visible shell page (home, factory board or task/issue, settings section, usage, knowledge, folio, status), create, update, show, close, minimise, restore, focus, move, resize, or arrange a temporary workspace view, or change its context panel. Supply a unique commandId. Navigation section is settings-only; taskId and positive integer issueNumber are factory-only. Success requires a tab to acknowledge applying the command; relay its refusal reason for missing tasks/issues or unavailable pages.',
   inputSchema: workspaceCommandSchema,
   sensitive: true,
   async execute(input, request, signal) {
@@ -383,6 +385,7 @@ export const workspaceCommandTool: BackendModule['tools'][number] = {
         (input.operation === 'context-panel' && input.action === 'open' && input.view !== undefined)) {
       return { type: 'generated-view', view: input.view };
     }
+    if (input.operation === 'navigate') return { applied: true, ...input };
     return { applied: true, commandId: input.commandId, operation: input.operation };
   },
 };

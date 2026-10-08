@@ -16,6 +16,7 @@ import type { SettingsStore } from '../core/settings.js';
 import type { AwayModeStore, AwayModeState } from '../core/away-mode.js';
 import type { ToolCallStore } from '../core/tool-calls.js';
 import { ToolRefusal } from '../core/tool-registry.js';
+import { workspaceContext } from '../core/workspace-context.js';
 import type { ReflexClassifier } from '../core/reflex.js';
 import type { WorkspaceCommand } from '@jarvis/contracts';
 import type { PartialSpeechRecognizerFactory } from './speech-recognizer.js';
@@ -167,6 +168,7 @@ async function connectedPartialVoice(
   classifier: ReflexClassifier,
   records: string[] = [],
   services = taskReflexServices(),
+  path = '/voice',
 ) {
   const received: Record<string, unknown>[] = [];
   let upstream!: WebSocket;
@@ -196,7 +198,7 @@ async function connectedPartialVoice(
   );
   await app.listen({ host: '127.0.0.1', port: 0 });
   const address = app.server.address() as AddressInfo;
-  const browser = await openBrowser(`ws://127.0.0.1:${address.port}/voice`);
+  const browser = await openBrowser(`ws://127.0.0.1:${address.port}${path}`);
   await vi.waitFor(() => expect(received.some((event) => event.type === 'session.update')).toBe(true));
   return { app, browser, conversationStore, received, services, upstream };
 }
@@ -231,6 +233,38 @@ function sendTimedPartialTranscript(socket: WebSocket, itemId: string) {
 }
 
 describe('backend-relayed Voice Live WebSocket', () => {
+  it.each(['/voice', '/voice/da'])('refreshes workspace reference context before each response on %s, including disconnects', async (path) => {
+    const { app, browser, upstream, received } = await connectedPartialVoice(
+      partialSpeechHarness(), { classify: vi.fn(async () => null) }, undefined, undefined, path,
+    );
+    const contextLines = () => received.filter((event) => event.type === 'response.create')
+      .map((event) => (event.response as { instructions: string }).instructions);
+    browser.send(JSON.stringify({ type: 'response.create' }));
+    await vi.waitFor(() => expect(contextLines()).toHaveLength(1));
+    expect(contextLines()[0]).toContain('no workspace snapshot');
+    expect(contextLines()[0]).toContain('Use the backend tools supplied for the requested action');
+    const connection = app.workspaceCommands.connect(config.auth.ownerObjectId, () => true);
+    app.workspaceCommands.updateSnapshot(config.auth.ownerObjectId, connection.sessionId, {
+      windows: [{ viewId: 'report', title: 'Ignite\nreport' }], contextPanelOpen: false,
+      view: { page: 'factory', taskId: '10', focusedViewId: 'report', folioOpen: true },
+    });
+    const firstDone = once(browser, 'message');
+    upstream.send(JSON.stringify({ type: 'response.done' }));
+    await firstDone;
+    browser.send(JSON.stringify({ type: 'response.create' }));
+    await vi.waitFor(() => expect(contextLines()).toHaveLength(2));
+    expect(contextLines()[1]).toContain('Factory board, task 10 focused');
+    expect(contextLines()[1]).toContain('"Ignite\\nreport" [viewId=report] (focused)');
+    connection.close();
+    const secondDone = once(browser, 'message');
+    upstream.send(JSON.stringify({ type: 'response.done' }));
+    await secondDone;
+    browser.send(JSON.stringify({ type: 'response.create' }));
+    await vi.waitFor(() => expect(contextLines()).toHaveLength(3));
+    expect(contextLines()[2]).toContain('no workspace snapshot');
+    expect(received.filter((event) => event.type === 'conversation.item.create')).toEqual([]);
+  });
+
   it('logs transcript, Jev, tool, audio, and response timings for one voice turn', async () => {
     vi.useFakeTimers({ toFake: ['performance'] });
     const records: string[] = [];
@@ -495,7 +529,7 @@ describe('backend-relayed Voice Live WebSocket', () => {
     upstream!.send(JSON.stringify({ type: 'input_audio_buffer.speech_stopped' }));
     await vi.waitFor(() => expect(received.some((event) => event.type === 'response.create')).toBe(true));
     expect(received.find((event) => event.type === 'response.create')).toMatchObject({
-      response: { instructions: 'Speak this exact status update to Dan, verbatim: Task 1 is done.' },
+      response: { instructions: `Speak this exact status update to Dan, verbatim: Task 1 is done.\n${workspaceContext()}` },
     });
   });
 
@@ -541,7 +575,7 @@ describe('backend-relayed Voice Live WebSocket', () => {
       expect(received.find((event) => event.type === 'response.create')).toEqual({
         type: 'response.create',
         response: {
-          instructions: 'Speak this exact status update to Dan, verbatim: The download has finished.',
+          instructions: `Speak this exact status update to Dan, verbatim: The download has finished.\n${workspaceContext()}`,
           tools: [],
           tool_choice: 'none',
         },
@@ -645,7 +679,7 @@ describe('backend-relayed Voice Live WebSocket', () => {
       expect(received[0]).toEqual({
         type: 'response.create',
         response: {
-          instructions: 'Speak this exact status update to Dan, verbatim: Downloadet er færdigt.',
+          instructions: `Speak this exact status update to Dan, verbatim: Downloadet er færdigt.\n${workspaceContext()}`,
           tools: [],
           tool_choice: 'none',
         },

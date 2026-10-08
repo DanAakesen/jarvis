@@ -44,9 +44,13 @@ import {
   isBackgroundJobStep,
   isWebResearchResult,
   isWorkspaceCommand,
+  isWorkspaceSnapshot,
+  isWorkspaceView,
   generatedViewVersion,
   nowSseEventNames,
   workspaceCommandSchema,
+  workspaceNavigationPages,
+  workspaceSettingsSections,
   webResearchResultSchema,
   clipboardTextMaxBytes,
   isClipboardText,
@@ -58,6 +62,33 @@ import {
   isFactoryBoard,
   isFactoryBoardUpdate,
 } from './index.js';
+
+test('workspace snapshots accept old clients and validate optional current and previous views', () => {
+  const snapshot = { windows: [{ viewId: 'report', title: 'Report' }], contextPanelOpen: false };
+  assert.equal(isWorkspaceSnapshot(snapshot), true);
+  for (const page of workspaceNavigationPages) {
+    assert.equal(isWorkspaceSnapshot({ ...snapshot, view: { page } }), true);
+  }
+  const view = {
+    page: 'factory', taskId: '10', issueNumber: 587, focusedViewId: 'report', folioOpen: true,
+    previous: { page: 'settings', section: 'voice' },
+  };
+  assert.equal(isWorkspaceSnapshot({ ...snapshot, view }), true);
+  for (const invalid of [
+    { page: 'unknown' }, { page: 'home', section: 'voice' },
+    { page: 'settings', section: 'unknown' }, { page: 'home', taskId: '10' },
+    { page: 'factory', taskId: '../10' }, { page: 'factory', issueNumber: 0 },
+    { page: 'factory', issueNumber: Number.MAX_SAFE_INTEGER + 1 },
+    { page: 'home', folioOpen: 'true' }, { page: 'home', focusedViewId: '../report' },
+    { page: 'home', previous: { page: 'home', previous: { page: 'factory' } } },
+    { page: 'home', previous: { page: 'factory', issueNumber: -1 } },
+  ]) {
+    assert.equal(isWorkspaceView(invalid), false, JSON.stringify(invalid));
+    assert.equal(isWorkspaceSnapshot({ ...snapshot, view: invalid }), false);
+  }
+  assert.equal(isWorkspaceSnapshot({ ...snapshot, windows: Array(33).fill(snapshot.windows[0]) }), false);
+  assert.equal(isWorkspaceSnapshot({ ...snapshot, frame: {} }), false);
+});
 
 const source = { id: 'factory.tasks', status: 'complete' };
 const listView = (overrides = {}) => ({
@@ -596,8 +627,59 @@ test('defines and validates bounded workspace commands for the approved operatio
     ...['close', 'toggle'].map((action) => ({ ...base, operation: 'context-panel', action })),
   ];
 
-  assert.equal(workspaceCommandSchema.oneOf.length, 13);
+  assert.equal(workspaceCommandSchema.type, 'object');
+  for (const key of ['oneOf', 'anyOf', 'allOf', 'not']) {
+    assert.equal(Object.hasOwn(workspaceCommandSchema, key), false, key);
+  }
   for (const command of commands) assert.equal(isWorkspaceCommand(command), true, command.operation);
+});
+
+test('validates exact navigation keys, settings sections and bounded factory task/issue selectors', () => {
+  const command = { commandId: 'navigate-1', operation: 'navigate' };
+  assert.deepEqual(workspaceNavigationPages, [
+    'home', 'factory', 'settings', 'usage', 'knowledge', 'folio', 'status',
+  ]);
+  assert.deepEqual(workspaceSettingsSections, [
+    'appearance', 'jarvis', 'personality', 'voice', 'presence', 'memory',
+    'coding', 'projects', 'routines', 'credentials', 'backend',
+  ]);
+  assert.deepEqual(workspaceCommandSchema.properties.page.enum, workspaceNavigationPages);
+  assert.deepEqual(workspaceCommandSchema.properties.section.enum, workspaceSettingsSections);
+  for (const page of workspaceNavigationPages) {
+    const navigation = { ...command, page };
+    assert.equal(isWorkspaceCommand(navigation), true, page);
+    assert.equal(isNowSseEvent({
+      event: 'workspace-command', data: { command: navigation, expiresAt: 1_791_379_200_000 },
+    }), true, page);
+  }
+  for (const section of workspaceSettingsSections) {
+    assert.equal(isWorkspaceCommand({ ...command, page: 'settings', section }), true, section);
+  }
+  for (const taskId of ['1', '9223372036854775807']) {
+    assert.equal(isWorkspaceCommand({ ...command, page: 'factory', taskId }), true, taskId);
+  }
+  for (const issueNumber of [1, 567, Number.MAX_SAFE_INTEGER]) {
+    const navigation = { ...command, page: 'factory', issueNumber };
+    assert.equal(isWorkspaceCommand(navigation), true, String(issueNumber));
+    assert.equal(isWorkspaceCommand({ ...navigation, taskId: '42' }), true);
+    assert.equal(isNowSseEvent({
+      event: 'workspace-command', data: { command: navigation, expiresAt: 1_791_379_200_000 },
+    }), true);
+  }
+  for (const invalid of [
+    {}, { page: 'kanban' }, { page: 'knowledge-graph' }, { page: '/settings' }, { page: 'https://example.com' },
+    { page: 'settings', section: 'unknown' }, { page: 'settings', section: null },
+    { page: 'home', section: 'voice' }, { page: 'settings', taskId: '1' },
+    { page: 'factory', section: 'voice' }, { page: 'home', viewId: 'conversation' },
+    { page: 'home', issueNumber: 567 }, { page: 'settings', issueNumber: 567 },
+    ...['global', 'new-projects', 'task-recipes'].map((section) => ({ page: 'settings', section })),
+    ...[0, -1, 1.5, Number.MAX_SAFE_INTEGER + 1, Number.NaN, Number.POSITIVE_INFINITY, '567', null]
+      .map((issueNumber) => ({ page: 'factory', issueNumber })),
+    ...['0', '01', '-1', '1/../../settings', '9223372036854775808', '9'.repeat(20), 1, null]
+      .map((taskId) => ({ page: 'factory', taskId })),
+  ]) {
+    assert.equal(isWorkspaceCommand({ ...command, ...invalid }), false, JSON.stringify(invalid));
+  }
 });
 
 test('rejects invalid workspace IDs, geometry, operations, and generated-view allowlists', () => {

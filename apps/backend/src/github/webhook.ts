@@ -10,6 +10,7 @@ const acceptedEvents = new Set([
   'workflow_run',
   'deployment_status',
   'push',
+  'issues',
 ]);
 
 interface WebhookOptions {
@@ -100,6 +101,7 @@ export function createGithubWebhookModule(options: WebhookOptions): BackendModul
         const invalidatesBoard = invalidatesFactoryBoard(event);
         const trackedBoardRepository = repository !== undefined &&
           (!options.isTrackedRepository || options.isTrackedRepository(repository));
+        let mapping = acceptedEvents.has(event) ? mapGithubWebhook(event, payload) : undefined;
         const publishBoardUpdate = async (repo: string) => {
           try {
             const project = (await app.projectStore?.list())?.find((candidate) =>
@@ -109,7 +111,7 @@ export function createGithubWebhookModule(options: WebhookOptions): BackendModul
             request.log.warn('factory.board_webhook_update_failed');
           }
         };
-        if (event === 'issues' && repository && trackedBoardRepository) {
+        if (event === 'issues' && repository && trackedBoardRepository && !mapping) {
           let inserted: boolean;
           try {
             inserted = await options.deliveryStore.record({
@@ -122,7 +124,6 @@ export function createGithubWebhookModule(options: WebhookOptions): BackendModul
           if (inserted) await publishBoardUpdate(repository);
           return reply.code(202).send({ status: inserted ? 'accepted' : 'duplicate' });
         }
-        let mapping = acceptedEvents.has(event) ? mapGithubWebhook(event, payload) : undefined;
         if (!mapping || (options.isTrackedRepository && !options.isTrackedRepository(mapping.repository))) {
           if (invalidatesBoard && trackedBoardRepository && repository) await publishBoardUpdate(repository);
           return reply.code(202).send({ status: 'ignored' });

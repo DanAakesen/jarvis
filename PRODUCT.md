@@ -140,6 +140,27 @@ Dan never fills in a project form. He gives Jarvis, by voice or chat, a project 
 
 ### Settings
 
+P9-40 lets Dan ask Jarvis by voice or chat to switch the visible page: Jarvis
+home, the Software Factory Kanban board or a specific task/issue, Settings (including
+named sections), Usage, the knowledge graph, Folio or Status. “Kanban”, “board”,
+“factory” and “tasks” select the Factory board; “go home” and “back to Jarvis”
+select home. Navigation is reversible and needs no confirmation. The backend
+delivers it to all open signed-in tabs through the existing workspace broker
+and reports success only after an applied acknowledgement; refusals and failures
+remain visible. The navigation contract and backend are built offline; shell
+routing, the usual page transition and live acceptance remain the UI session's work.
+Factory task navigation opens the task window over the board and focuses its
+card; issue-number navigation focuses that issue's card. The UI refuses missing
+tasks/issues and Status until its page exists, returning a reason. Folio is a
+pane: navigating to `folio` opens it over the current page.
+
+P9-43 supplies a short, content-free workspace reference on every voice and chat
+turn. “This/that” identifies the focused window or task/issue; “go back” uses the
+reported previous page and selectors. Titles are untrusted data, not instructions;
+summaries require retrieving the identified content. If no snapshot, focus or
+previous destination is available, Jarvis says so and asks rather than guessing.
+The UI session owns publishing view metadata on route, section, focus and pane changes.
+
 Global defaults on the settings page; a task can override the coding-agent model and reasoning. A changed setting applies to new sessions and tasks, never to running ones. Only models available in the Foundry account or Dan's subscriptions are offered. Light, dark, or system appearance and the optional voice-start window preference are persisted; system appearance follows the OS without replacing or restarting the live Jarvis room. Generated views and window arrangement remain temporary.
 
 Dan can also change Jarvis's model or reasoning by chat or voice for the next session, and change the agent or verified model options on a Ready coding task. Running-task model changes are refused with a reason; they never alter an active turn.
@@ -231,12 +252,14 @@ footer belongs only to screenshot fixtures and is absent from the production UI.
 
 | Data points | Actions |
 | --- | --- |
-| Columns by state: Ready, Running, Paused, Needs attention, Done, Cancelled | Create task (project, agent, text, optional model/reasoning override) |
+| Columns by state: Ready, Running, Paused, Needs attention, Done, Cancelled | Create a linked GitHub issue and task (project, agent, text, optional model/reasoning override) |
 | Card: title, project, agent, state, current activity, last update, duration, attempt count, PR number and checks state, usage so far | Open; steer; pause; resume; cancel; continue after idle expiry; recover after crash |
 | Filters: project, agent, state, period | Filter; search |
 | Compact release context for the selected project: repository/default branch, latest build/deployment status, short commit timeline | Open the full project release view; select a project when the filter is All |
 
 The board shows up to 100 newest matching tasks. P6-21 connects recorded pull-request, check and usage summaries to the task API; absent data remains unreported rather than inferred. Dan can retry a Needs attention task whose dispatch failed before a sandbox ran, resetting its start-attempt budget and returning it to Ready. Tasks with sandbox history use Recover instead. UI rendering and retry controls are separate work.
+
+GitHub issues are the single backlog and source of truth; the Software Factory and Copilot execute them, with Codex as the default for Jarvis-raised work. Dan can start an existing issue with the `Jarvis` label, the `start_issue` tool, or the authenticated Factory API. Duplicate starts reuse the active task, and task progress links back to the issue without copying code or issue content into comments.
 
 P8-34 (#369) implements the approved board/release-bar/right-details composition. Selecting a task opens its existing task detail data in the contextual right pane while retaining filters and board position; Open full task keeps the complete timeline available. The release bar uses the existing authenticated project release source, never mixes data between projects, and shows honest loading/empty/unavailable/stale states. The Factory Ask Jarvis composer hands messages to the existing conversation queue and focuses the explicit voice-start control without activating the microphone. These paths reuse existing contracts; fixture browser checks do not establish live Entra, backend, release, provider-usage, or voice behavior.
 

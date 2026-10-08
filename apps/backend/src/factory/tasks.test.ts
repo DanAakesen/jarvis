@@ -503,9 +503,28 @@ describe('factory tasks API', () => {
     const taskList = await app.inject({ url: '/factory/tasks', headers });
 
     expect(response.statusCode).toBe(200);
-    expect(response.json()).toEqual(context);
+    expect(response.json()).toEqual({
+      ...context,
+      workspaceContext: expect.stringContaining('no workspace snapshot'),
+    });
     expect(store.getRunningContext).toHaveBeenCalledOnce();
     expect(taskList.statusCode).toBe(403);
+    const other = app.workspaceCommands.connect('other-owner', () => true);
+    app.workspaceCommands.updateSnapshot('other-owner', other.sessionId, {
+      windows: [], contextPanelOpen: false, view: { page: 'usage' },
+    });
+    expect((await app.inject({ url: '/factory/context', headers })).json().workspaceContext).toContain('no workspace snapshot');
+    const connection = app.workspaceCommands.connect(config.auth.ownerObjectId, () => true);
+    app.workspaceCommands.updateSnapshot(config.auth.ownerObjectId, connection.sessionId, {
+      windows: [{ viewId: 'report', title: 'Report' }], contextPanelOpen: false,
+      view: { page: 'factory', taskId: '10', focusedViewId: 'report', previous: { page: 'home' } },
+    });
+    const next = (await app.inject({ url: '/factory/context', headers })).json();
+    expect(next.runningTasks).toEqual(context.runningTasks);
+    expect(next.workspaceContext).toContain('Factory board, task 10 focused');
+    expect(next.workspaceContext).toContain('view.previous={"page":"home"}');
+    connection.close();
+    expect((await app.inject({ url: '/factory/context', headers })).json().workspaceContext).toContain('no workspace snapshot');
   });
 
   it('records validated runner events through the task store', async () => {

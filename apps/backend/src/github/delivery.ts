@@ -9,6 +9,7 @@ const maxResponseBytes = 1024 * 1024;
 interface DeliveryTask {
   id: string;
   title: string;
+  issueNumber?: number | null;
 }
 
 interface PullRequest {
@@ -121,6 +122,11 @@ function pullRequest(value: unknown, repository: string, branch: string, baseBra
   };
 }
 
+function pullRequestTitle(task: DeliveryTask): string {
+  const match = /^(P\d{2}-\d{2}):\s*(.+)$/u.exec(task.title.trim());
+  return match ? `${match[1]}: ${match[2]}` : task.title;
+}
+
 async function findOpenPullRequest(
   fetchImpl: typeof fetch,
   repositoryPath: string,
@@ -204,12 +210,15 @@ export function createGitHubDeliveryHandler(
           const taskPath = `/factory/tasks/${encodeURIComponent(task.id)}`;
           try {
             const created = await request(fetchImpl, `/repos/${repositoryPath}/pulls`, token, {
-              title: task.title,
+              title: pullRequestTitle(task),
               head: branch,
               base: defaultBranch,
-              body: staticWebAppOrigin
-                ? `Completed by Jarvis task [#${task.id}](${staticWebAppOrigin}${taskPath}).`
-                : `Completed by Jarvis task #${task.id} (task details: ${taskPath}).`,
+              body: [
+                task.issueNumber ? `Fixes #${task.issueNumber}` : undefined,
+                staticWebAppOrigin
+                  ? `Completed by Jarvis task [#${task.id}](${staticWebAppOrigin}${taskPath}).`
+                  : `Completed by Jarvis task #${task.id} (task details: ${taskPath}).`,
+              ].filter((line): line is string => line !== undefined).join('\n\n'),
             }, 6_000);
             const opened = pullRequest(created, repository, branch, defaultBranch);
             if (!opened) throw new Error('GitHub pull request response is invalid');
