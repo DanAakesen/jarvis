@@ -63,10 +63,23 @@ describe('English realtime session', () => {
     expect(session.instructions).toContain('vault_delete');
     expect(session.instructions).toContain('Now approval naming the exact path');
     expect(session.instructions).toContain('Never save secrets or credentials');
-    expect(capabilityInstructions(defaultSettings.memory)).toContain('get_job');
-    expect(capabilityInstructions(defaultSettings.memory)).toContain('get_usage');
-    expect(capabilityInstructions(defaultSettings.memory)).toContain('automaticCapture true only');
-    expect(session.instructions).toContain(capabilityInstructions(defaultSettings.memory));
+    const capabilities = capabilityInstructions(defaultSettings.memory);
+    for (const instruction of [
+      'update_project',
+      'confirm_project_archive',
+      'later message from Dan',
+      'retry_task',
+      'list_releases',
+      'get_release',
+      'get_deployment_status',
+      'get_job',
+      'retry_job',
+      'get_usage',
+      'automaticCapture true only',
+    ]) {
+      expect(capabilities).toContain(instruction);
+    }
+    expect(session.instructions).toContain(capabilities);
   });
 
   it('uses the transcription role value in the session update', () => {
