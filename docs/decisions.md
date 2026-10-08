@@ -946,3 +946,10 @@ Offline validation: 55 focused pending-action, Google-tool and capability-instru
 tests pass, along with backend lint and build. Unit and fake-provider HTTP checks
 cover approval, cancellation, expiry, identity/turn checks, supersession and Gmail
 regression; live acceptance is pending.
+
+## 2026-10-08: Settings Memory shows only conversation memories
+
+- **Decision (Dan):** Settings → Memory lists only what Jarvis remembered about Dan from conversations (durable memories), merged with the retrieval settings in one card. Vault notes are browsed in Knowledge, not Settings.
+- **Rationale:** the old panel duplicated the knowledge graph and added no settings value.
+- **Evidence:** `GET /memory` lists durable memories (folder General) before vault notes, so the UI requests `folder=General` and keeps `type: memory` items. A server-side type filter would remove the reliance on that ordering if more than 50 memories accumulate.
+- **Status:** implemented on `ui/shell-iteration`.

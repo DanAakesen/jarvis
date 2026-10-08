@@ -5,6 +5,7 @@ import { saveVoiceWorkspacePreference } from './voice-workspace-preference';
 import { TaskRecipesSettings } from './TaskRecipesSettings';
 import { Loader } from './Loader';
 import { CollapsibleSection } from './CollapsibleSection';
+import { useWakeStatus } from './wake-store';
 import { AppearanceDetails, ModelsSection, ResearchSection, RetrievalSection, TimeoutsSection, VoiceTuningFields } from './SettingsAdvanced';
 import {
   advancedProblems, isRoleOptions, isRoleSettings,
@@ -192,6 +193,8 @@ const credentialNames: Record<string, string> = {
   'copilot-token': 'Copilot token (jarvis-copilot)',
   'github-app': 'GitHub App',
 };
+/** Credentials the backend can renew on request. */
+const renewableCredentials = new Set(['codex-login']);
 const credentialStatusLabels: Record<CredentialStatus['status'], string> = {
   ok: 'OK',
   renew_soon: 'Renew soon',
@@ -356,7 +359,31 @@ export function SettingsPage({ backendUrl, getAccessToken, activity, presence, p
     setMessage('');
   };
 
+  // Manual credential renewal (P9-19): the backend renews Codex today; the card reports success, busy or failure.
+  const wakeStatus = useWakeStatus();
+  const [renewals, setRenewals] = useState<Record<string, { busy: boolean; message: string; tone: 'ok' | 'error' }>>({});
+  const renewCredential = async (name: string) => {
+    if (!backendUrl) return;
+    setRenewals((current) => ({ ...current, [name]: { busy: true, message: '', tone: 'ok' } }));
+    try {
+      const response = await backendFetch(`${backendUrl}/settings/credentials/${encodeURIComponent(name)}/renew`, {
+        method: 'POST',
+        headers: { Authorization: `${['Bear', 'er'].join('')} ${await getAccessToken()}` },
+      });
+      const body = await response.json().catch(() => null) as { error?: unknown; credential?: unknown } | null;
+      const updated = body && isObject(body.credential) && body.credential.name === name ? body.credential as unknown as CredentialStatus : null;
+      if (updated) setCredentials((current) => current.map((credential) => credential.name === name ? updated : credential));
+      const message = response.ok ? 'Renewed.'
+        : response.status === 409 ? 'Codex is busy with a task. Try again when it finishes.'
+          : typeof body?.error === 'string' ? `${body.error}.` : `Renewal failed (HTTP ${response.status}).`;
+      setRenewals((current) => ({ ...current, [name]: { busy: false, message, tone: response.ok ? 'ok' : 'error' } }));
+    } catch {
+      setRenewals((current) => ({ ...current, [name]: { busy: false, message: 'Jarvis could not be reached. Try again.', tone: 'error' } }));
+    }
+  };
+
   const resetPersonality = async () => {
+
     if (!settings || !savedSettings || !backendUrl || saving || personalityIsDefault) return;
     setSaving(true);
     setResettingPersonality(true);
@@ -445,7 +472,7 @@ export function SettingsPage({ backendUrl, getAccessToken, activity, presence, p
         </div>
       )}
       {state === 'ready' && settings && options && (
-        <form onSubmit={(event) => { void save(event); }}>
+        <form id="settings-form" onSubmit={(event) => { void save(event); }}>
           <CollapsibleSection storageKey="settings.appearance" headingId="appearance-settings-heading" title="Appearance" summary={<>{themePreference.theme === 'system' ? 'System theme' : themePreference.theme === 'dark' ? 'Dark theme' : 'Light theme'}</>}>
             <p className="settings-explanation">Choose a light, dark, or system appearance for every page. System follows your OS appearance. The accepted theme is saved separately from other settings.</p>
             <fieldset className="choice-group theme-choice-group"
@@ -589,14 +616,22 @@ export function SettingsPage({ backendUrl, getAccessToken, activity, presence, p
               <button className="secondary-button" type="button" disabled aria-describedby="voice-sample-help">Play English sample</button>
               <button className="secondary-button" type="button" disabled aria-describedby="voice-sample-help">Play Danish sample</button>
             </div>
+            <p className="wake-status" role="status" data-outcome={wakeStatus?.outcome ?? 'none'}>
+              <strong>Wake word</strong>
+              <span>{wakeStatus
+                ? `Last heard ${new Date(wakeStatus.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}. ${wakeStatus.message}`
+                : 'Not heard since this page opened. Say “Wake up Jarvis” at the computer.'}</span>
+            </p>
             {hasVoiceTuning && <VoiceTuningFields voice={settings.voice as VoiceTuningSettings} problems={problems} disabled={saving}
               onChange={(key, value) => update('voice', key, value as never)} />}
           </CollapsibleSection>
 
           {settings.research && <ResearchSection research={settings.research} problems={problems} disabled={saving}
             onChange={(key, value) => updateArea('research', key, value)} />}
-          {settings.memory && <RetrievalSection memory={settings.memory} problems={problems} disabled={saving}
-            onChange={(key, value) => updateArea('memory', key, value)} />}
+          {settings.memory
+            ? <RetrievalSection memory={settings.memory} problems={problems} disabled={saving}
+              onChange={(key, value) => updateArea('memory', key, value)}>{memory}</RetrievalSection>
+            : memory && <CollapsibleSection storageKey="settings.memory" id="memory" headingId="memory-settings-heading" title="Memory">{memory}</CollapsibleSection>}
           {settings.timeouts && <TimeoutsSection timeouts={settings.timeouts} problems={problems} disabled={saving}
             onChange={(key, value) => updateArea('timeouts', key, value)} />}
 
@@ -617,7 +652,7 @@ export function SettingsPage({ backendUrl, getAccessToken, activity, presence, p
           </CollapsibleSection>
           )}
 
-          <CollapsibleSection storageKey="settings.global" headingId="global-settings-heading" title="Global" summary={<>{`Up to ${settings.global.maxParallelTasks} parallel tasks`}</>}>
+          <CollapsibleSection storageKey="settings.global" headingId="global-settings-heading" title="Limits" summary={<>{`Up to ${settings.global.maxParallelTasks} parallel tasks`}</>}>
             <div className="settings-field settings-number-field">
               <label htmlFor="max-parallel-tasks">Maximum parallel tasks</label>
               <input id="max-parallel-tasks" type="number" min="1" max="100" step="1"
@@ -694,42 +729,56 @@ export function SettingsPage({ backendUrl, getAccessToken, activity, presence, p
 
           <CollapsibleSection storageKey="settings.credentials" headingId="credentials-heading" title="Credentials">
             <p className="settings-explanation" id="credential-actions-help">
-              Renewal runs daily when no Codex task is active. Manual renewal and re-seed instructions are unavailable here. Secret values are never shown.
+              Renewal also runs daily when no Codex task is active. Secret values are never shown.
             </p>
             {credentials.length === 0
               ? <p role="status">No credential status has been recorded yet.</p>
               : (
-                <div className="settings-grid">
-                  {credentials.map((credential) => (
-                    <div className="settings-field" key={credential.name}>
-                      <strong>{credentialNames[credential.name] ?? credential.name}</strong>
-                      <span>Status: {credentialStatusLabels[credential.status]}</span>
-                      <span>Expires: {formatCredentialDate(credential.expiresAt)}</span>
-                      <span>Last renewed: {formatCredentialDate(credential.lastRenewedAt)}</span>
-                    </div>
-                  ))}
-                </div>
+                <ul className="credential-list">
+                  {credentials.map((credential) => {
+                    const renewal = renewals[credential.name];
+                    return (
+                      <li className="credential-card" key={credential.name} data-status={credential.status}>
+                        <span className="credential-head">
+                          <strong>{credentialNames[credential.name] ?? credential.name}</strong>
+                          <span className="credential-status">Status: {credentialStatusLabels[credential.status]}</span>
+                        </span>
+                        <span>Expires: {formatCredentialDate(credential.expiresAt)}</span>
+                        <span>Last renewed: {formatCredentialDate(credential.lastRenewedAt)}</span>
+                        {renewableCredentials.has(credential.name) && (
+                          <span className="credential-actions">
+                            <button className="secondary-button" type="button" disabled={renewal?.busy || !backendUrl}
+                              onClick={() => { void renewCredential(credential.name); }}>
+                              {renewal?.busy ? 'Renewing…' : 'Renew'}
+                            </button>
+                            {renewal?.message && (
+                              <span className="credential-result" role={renewal.tone === 'error' ? 'alert' : 'status'} data-tone={renewal.tone}>{renewal.message}</span>
+                            )}
+                          </span>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
               )}
-            <div className="settings-actions">
-              <button className="secondary-button" type="button" disabled aria-describedby="credential-actions-help">Trigger Codex renewal</button>
-              <button className="secondary-button" type="button" disabled aria-describedby="credential-actions-help">Open re-seed instructions</button>
-            </div>
           </CollapsibleSection>
 
-          <div className="settings-save">
-            <button className="primary-button" type="submit"
-              disabled={!dirty || !advancedValid || !globalLimitsValid || !maxTasksValid || !newProjectMaxTasksValid || !personalityInstructionsValid || saving}>
-              {saving && !resettingPersonality ? 'Saving…' : 'Save settings'}
-            </button>
-            <p className="settings-feedback" role={error ? 'alert' : 'status'} aria-live="polite">
-              {error || message}
-            </p>
-          </div>
         </form>
       )}
       {projects}
-      {memory}
+      {state !== 'ready' && memory && <CollapsibleSection storageKey="settings.memory" id="memory" headingId="memory-settings-heading" title="Memory">{memory}</CollapsibleSection>}
       {backendUrl && <TaskRecipesSettings key={backendUrl} backendUrl={backendUrl} getAccessToken={getAccessToken} />}
+      {state === 'ready' && settings && options && (
+      <div className="settings-save">
+        <button className="primary-button" type="submit" form="settings-form"
+          disabled={!dirty || !advancedValid || !globalLimitsValid || !maxTasksValid || !newProjectMaxTasksValid || !personalityInstructionsValid || saving}>
+          {saving && !resettingPersonality ? 'Saving…' : 'Save settings'}
+        </button>
+        <p className="settings-feedback" role={error ? 'alert' : 'status'} aria-live="polite">
+          {error || message}
+        </p>
+      </div>
+      )}
     </section>
   );
 }

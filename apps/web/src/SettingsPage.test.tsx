@@ -147,10 +147,7 @@ describe('SettingsPage', () => {
       description: /voice playback is connected/,
     })).toHaveProperty('disabled', true);
     expect(screen.queryByRole('link', { name: 'Open the Jarvis main page' })).toBeNull();
-    expect(screen.getByRole('button', {
-      name: 'Trigger Codex renewal',
-      description: /Manual renewal and re-seed instructions are unavailable/,
-    })).toHaveProperty('disabled', true);
+    expect(screen.queryByRole('button', { name: 'Trigger Codex renewal' })).toBeNull();
   });
 
   it('loads and saves personality preferences through the existing settings endpoint', async () => {
@@ -521,5 +518,27 @@ describe('SettingsPage', () => {
     await user.click(screen.getByRole('button', { name: 'Save settings' }));
     await screen.findByText(/Saved\. These are defaults/);
     expect(JSON.parse(String(fetchMock.mock.calls[1]![1]?.body))).toEqual({ settings: { global: { maxCheckAttempts: 5, visionDailyBudgetUsd: 2.5 } } });
+  });
+
+  it('renews the Codex credential on request and reports a busy agent', async () => {
+    const user = userEvent.setup();
+    const codex = { name: 'codex-login', expiresAt: null, lastRenewedAt: null, status: 'renew_soon' as const };
+    fetchMock.mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.endsWith('/settings/credentials/codex-login/renew')) {
+        return fetchMock.mock.calls.filter(([called]) => String(called).endsWith('/renew')).length === 1
+          ? response({ error: 'Codex credential is busy; retry later', credential: codex }, 409)
+          : response({ credential: { ...codex, status: 'ok', lastRenewedAt: '2026-10-08T15:00:00.000Z' } });
+      }
+      return response(settingsResponse(settings, [codex, { name: 'copilot-token', expiresAt: null, lastRenewedAt: null, status: 'ok' }]));
+    });
+    renderSettingsPage();
+    const renew = await screen.findByRole('button', { name: 'Renew' });
+    expect(screen.getAllByRole('button', { name: 'Renew' })).toHaveLength(1);
+    await user.click(renew);
+    expect(await screen.findByText('Codex is busy with a task. Try again when it finishes.')).not.toBeNull();
+    await user.click(screen.getByRole('button', { name: 'Renew' }));
+    expect(await screen.findByText('Renewed.')).not.toBeNull();
+    expect(screen.getAllByText('Status: OK')).toHaveLength(2);
   });
 });

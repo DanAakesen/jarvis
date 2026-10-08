@@ -6,6 +6,7 @@ import { useJarvisActivity } from './activity-context';
 import { JarvisActivityProvider } from './activity-provider';
 import { VoiceStageContext } from './voice-stage-context';
 import { VoiceControls } from './VoiceControls';
+import { publishVoiceWake, resetWakeForTests, useWakeStatus } from './wake-store';
 
 const clients = vi.hoisted(() => ({
   instances: [] as Array<{
@@ -458,5 +459,44 @@ describe('VoiceControls', () => {
     expect(instance.client.sendScreenContext).toHaveBeenCalledWith('A red mug.', undefined);
     act(() => options.onStatus('stopped', 'Voice is off.'));
     expect(camera.stop).toHaveBeenCalledOnce();
+  });
+
+  describe('wake word', () => {
+    function WakeProbe() {
+      const status = useWakeStatus();
+      return <output aria-label="Wake status">{status ? `${status.outcome}: ${status.message}` : 'none'}</output>;
+    }
+    const wake = (offset = 0) => new Date(Date.now() - 1000 + offset).toISOString();
+
+    beforeEach(() => {
+      resetWakeForTests();
+      Object.defineProperty(navigator, 'userActivation', { configurable: true, value: { hasBeenActive: true, isActive: false } });
+    });
+
+    it('starts voice once per detection and reports it', () => {
+      render(<JarvisActivityProvider><VoiceControls client={{} as PublicClientApplication} config={config} /><WakeProbe /></JarvisActivityProvider>);
+      const at = wake();
+      act(() => { publishVoiceWake(at); publishVoiceWake(at); });
+      expect(clients.instances).toHaveLength(1);
+      expect(clients.instances[0]!.client.start).toHaveBeenCalledOnce();
+      expect(screen.getByText('Heard “Wake up Jarvis”.')).not.toBeNull();
+      expect(screen.getByLabelText('Wake status').textContent).toBe('started: Voice started.');
+
+      act(() => { publishVoiceWake(wake(1)); });
+      expect(clients.instances).toHaveLength(1);
+      expect(screen.getByLabelText('Wake status').textContent).toBe('already-active: Voice was already on.');
+    });
+
+    it('asks for one click when the browser will not play sound yet, and ignores stale detections', () => {
+      Object.defineProperty(navigator, 'userActivation', { configurable: true, value: { hasBeenActive: false, isActive: false } });
+      render(<JarvisActivityProvider><VoiceControls client={{} as PublicClientApplication} config={config} /><WakeProbe /></JarvisActivityProvider>);
+      act(() => { publishVoiceWake(wake()); });
+      expect(clients.instances).toHaveLength(0);
+      expect(screen.getByText(/Click the orb once to start/)).not.toBeNull();
+      expect(screen.getByLabelText('Wake status').textContent).toMatch(/^needs-click/);
+
+      act(() => { publishVoiceWake(new Date(Date.now() - 120_000).toISOString()); });
+      expect(screen.getByLabelText('Wake status').textContent).toBe('error: Heard too long ago to start voice.');
+    });
   });
 });

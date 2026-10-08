@@ -151,6 +151,24 @@ describe('Now feed client', () => {
     expect(updates).toHaveBeenCalledTimes(2);
   });
 
+  it('forwards valid wake-word detections and drops malformed ones', async () => {
+    fetchMock.mockResolvedValueOnce(eventStream('event: voice-wake\ndata: {"type":"voice.wake","at":"yesterday"}\n\n'
+      + 'event: voice-wake\ndata: {"type":"voice.wake","at":"2026-10-08T15:52:10.123Z"}\n\n'));
+    const controller = new AbortController();
+    const onVoiceWake = vi.fn(() => controller.abort());
+
+    await streamNowFeed({
+      backendUrl: 'https://api.example.com',
+      getAccessToken,
+      onUpdate: () => {},
+      onStatus: () => {},
+      onVoiceWake,
+      signal: controller.signal,
+    });
+
+    expect(onVoiceWake).toHaveBeenCalledOnce();
+    expect(onVoiceWake).toHaveBeenCalledWith('2026-10-08T15:52:10.123Z');
+  });
   it('forwards presence mode changes from mode_changed events', async () => {
     fetchMock.mockResolvedValueOnce(eventStream('event: mode_changed\ndata: {"mode":"on_the_move","away":true}\n\n'));
     const controller = new AbortController();
