@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { backendFetch } from './backend-request';
+import { Loader } from './Loader';
 
 // Durable memories Jarvis keeps are grouped under General by the memory API (docs/architecture.md, P7-40/P7-42).
 type Folder = 'People' | 'Work' | 'Personal' | 'General';
@@ -266,7 +267,7 @@ export function MemorySettings({ backendUrl, getAccessToken }: { backendUrl: str
           </div>
           <div className="memory-browser">
             <div className="memory-results">
-              {list.status === 'loading' && <p className="settings-feedback" role="status">Loading memories…</p>}
+              {list.status === 'loading' && <Loader variant="rows" label="Loading memories…" />}
               {list.status === 'error' && (
                 <div className="settings-feedback" role="alert">
                   <p>{list.message}</p>
@@ -292,7 +293,7 @@ export function MemorySettings({ backendUrl, getAccessToken }: { backendUrl: str
             </div>
             <div className="memory-detail" aria-live="polite">
               {!detail && <p className="settings-explanation">Choose a memory to read, correct or forget it.</p>}
-              {detail?.status === 'loading' && <p className="settings-feedback" role="status">Opening memory…</p>}
+              {detail?.status === 'loading' && <Loader variant="lines" label="Opening memory…" />}
               {detail?.status === 'error' && <p className="settings-validation-error" role="alert">{detail.message}</p>}
               {current && (
                 <>

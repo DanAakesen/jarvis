@@ -4,6 +4,7 @@ import { TaskWindowLink } from '../TaskWindowLink';
 import { backendFetch } from '../backend-request';
 import type { AreaProps } from '../areas';
 import { fetchReleaseView } from './release-data';
+import { Loader } from '../Loader';
 import type {
   Deployment, DeploymentStatus, GitGraph, PullRequest, Release, ReleaseView, WorkflowRun,
 } from './release-data';
@@ -228,7 +229,7 @@ export function ReleasePage({ backendUrl, getAccessToken }: AreaProps) {
     setRequestVersion((current) => current + 1);
   };
   if (!data && loading) {
-    return <section className="release-page" aria-labelledby="release-heading"><h1 id="release-heading">Project releases</h1><p role="status">Loading releases…</p></section>;
+    return <section className="release-page" aria-labelledby="release-heading"><h1 id="release-heading">Project releases</h1><Loader variant="panel" label="Loading releases…" /></section>;
   }
   if (!data && error) {
     return (
@@ -445,7 +446,7 @@ export function ReleaseRedirectPage({ backendUrl, getAccessToken }: AreaProps) {
     <section className="release-page" aria-labelledby="release-heading">
       <h1 id="release-heading">Opening release</h1>
       {loading
-        ? <p role="status">Loading release…</p>
+        ? <Loader variant="panel" label="Loading release…" />
         : (
           <div className="release-feedback" role="alert">
             <p>{lookup.message}</p>

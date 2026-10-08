@@ -14,6 +14,7 @@ import {
   type NowFeedStreamStatus,
 } from './activity';
 import { GeneratedViewRenderer } from './GeneratedViewRenderer';
+import { Loader } from './Loader';
 
 function confirmationLabel(kind: ConfirmationActionKind): string {
   const words = kind.replaceAll('_', ' ');
@@ -168,7 +169,7 @@ export function ActivityPanel({ feed, onDismiss, onResolveConfirmation, onRetry,
   return (
     <section className="panel now-panel" aria-labelledby="now-heading">
       <h2 id="now-heading" ref={heading} tabIndex={-1}>Now</h2>
-      {feed.status === 'loading' ? <p>Loading current activity…</p> : feed.status === 'unavailable' ? (
+      {feed.status === 'loading' ? <Loader variant="rows" label="Loading current activity…" /> : feed.status === 'unavailable' ? (
         <>
           <p>{feed.message}</p>
           {onRetry && <button className="secondary-button" type="button" onClick={onRetry}>Retry</button>}

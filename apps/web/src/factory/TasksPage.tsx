@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { TaskWindowLink } from '../TaskWindowLink';
+import { Modal } from '../Modal';
 import { backendFetch } from '../backend-request';
 import { useConversationIntents } from '../conversation-intents';
 import { streamTaskEvents } from '../task-events';
@@ -9,6 +10,7 @@ import { TaskDetailPage } from './TaskDetailPage';
 import { TaskReleaseBar } from './TaskReleaseBar';
 import { TaskControls } from './TaskControls';
 import { CreateProjectDialog } from './ProjectsPage';
+import { Loader } from '../Loader';
 
 interface Project {
   id: string;
@@ -494,35 +496,7 @@ export function TasksPage({ backendUrl, getAccessToken }: Props) {
     </form>
   );
   const createDialog = dialogOpen && (
-    <div className="task-dialog-backdrop">
-      <section
-        className="task-dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="create-task-heading"
-        onKeyDown={(event) => {
-          if (event.key === 'Escape' && !creating) {
-            event.preventDefault();
-            closeDialog();
-            return;
-          }
-          if (event.key === 'Tab') {
-            const controls = event.currentTarget.querySelectorAll<HTMLElement>(
-              'button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), a[href]',
-            );
-            const first = controls[0];
-            const last = controls[controls.length - 1];
-            if (event.shiftKey && document.activeElement === first) {
-              event.preventDefault();
-              last?.focus();
-            } else if (!event.shiftKey && document.activeElement === last) {
-              event.preventDefault();
-              first?.focus();
-            }
-          }
-        }}
-      >
-        <h2 id="create-task-heading">Create task</h2>
+    <Modal title="Create task" titleId="create-task-heading" onClose={closeDialog} busy={creating} className="task-dialog">
         <p>Choose the project and agent, then describe the work.</p>
         <form className="task-create-form" onSubmit={(event) => { void createTask(event); }}>
           <div className="task-form-field">
@@ -573,8 +547,7 @@ export function TasksPage({ backendUrl, getAccessToken }: Props) {
             <button className="secondary-button" type="button" onClick={closeDialog} disabled={creating}>Cancel</button>
           </div>
         </form>
-      </section>
-    </div>
+    </Modal>
   );
   const openCreateDialog = () => {
     const selected = projects.find((project) => project.id === createProjectId) ?? projects[0];
@@ -670,7 +643,7 @@ export function TasksPage({ backendUrl, getAccessToken }: Props) {
 
         <TaskReleaseBar backendUrl={backendUrl} getAccessToken={getAccessToken} projectId={appliedFilters.projectId} variant="trail" />
 
-        {visibleTaskState === 'loading' && <p className="tasks-feedback" role="status">Loading tasks…</p>}
+        {visibleTaskState === 'loading' && <Loader variant="cards" label="Loading tasks…" />}
         {visibleTaskState === 'error' && (
           <div className="tasks-feedback" role="alert">
             <p>{visibleTaskError}</p>
