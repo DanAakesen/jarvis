@@ -22,6 +22,7 @@ function fixture(available = true, auth: TokenVerifier = async () => ({
   const store: RecipeStore = {
     list: vi.fn(async () => [recipe]),
     save: vi.fn(async () => {}),
+    rename: vi.fn(async () => true),
     delete: vi.fn(async () => true),
   };
   const module = createRecipeModule(available ? store : undefined);
@@ -30,48 +31,63 @@ function fixture(available = true, auth: TokenVerifier = async () => ({
     modules: [coreModule, module],
   });
   apps.push(app);
-  return { app, store, recipe, tool: module.tools[0]! };
+  return { app, store, recipe, tool: module.tools[0]!, legacyTool: module.tools[1]! };
 }
 
 describe('recipe management', () => {
   it('requires authentication and lists bounded safe records without cache', async () => {
     const { app, recipe, store } = fixture();
-    expect((await app.inject({ url: '/recipes' })).statusCode).toBe(401);
+    expect((await app.inject({ url: '/routines' })).statusCode).toBe(401);
     expect(store.list).not.toHaveBeenCalled();
-    const response = await app.inject({ url: '/recipes', headers });
+    const response = await app.inject({ url: '/routines', headers });
     expect(response.statusCode).toBe(200);
     expect(response.headers['cache-control']).toBe('no-store');
-    expect(response.json()).toEqual({ recipes: [recipe] });
+    expect(response.json()).toEqual({ routines: [recipe] });
+    expect((await app.inject({ url: '/recipes', headers })).json()).toEqual({ recipes: [recipe] });
   });
-  it('deletes only a valid recipe ID, with not-found and storage-unavailable states', async () => {
+  it('renames and deletes only valid routines, with not-found and storage-unavailable states', async () => {
     const { app, store, recipe } = fixture();
-    expect((await app.inject({ method: 'DELETE', url: `/recipes/${recipe.id}` })).statusCode).toBe(401);
-    expect((await app.inject({ method: 'DELETE', url: '/recipes/invalid', headers })).statusCode).toBe(400);
+    expect((await app.inject({ method: 'PATCH', url: `/routines/${recipe.id}` })).statusCode).toBe(401);
+    expect((await app.inject({ method: 'PATCH', url: '/routines/invalid', headers, payload: { name: 'Search' } })).statusCode).toBe(400);
+    expect((await app.inject({ method: 'PATCH', url: `/routines/${recipe.id}`, headers, payload: { name: '  ' } })).statusCode).toBe(400);
+    const rename = await app.inject({ method: 'PATCH', url: `/routines/${recipe.id}`, headers, payload: { name: 'Search' } });
+    expect(rename.statusCode).toBe(200);
+    expect(rename.headers['cache-control']).toBe('no-store');
+    expect(rename.json()).toEqual({ updated: true });
+    expect(store.rename).toHaveBeenCalledWith(recipe.id, 'Search');
+    vi.mocked(store.rename).mockResolvedValue(false);
+    expect((await app.inject({ method: 'PATCH', url: `/recipes/${recipe.id}`, headers, payload: { name: 'Search' } })).statusCode).toBe(404);
+    expect(store.rename).toHaveBeenCalledTimes(2);
     expect(store.delete).not.toHaveBeenCalled();
-    expect((await app.inject({ method: 'DELETE', url: `/recipes/${recipe.id}`, headers })).statusCode).toBe(204);
+    expect((await app.inject({ method: 'DELETE', url: `/routines/${recipe.id}`, headers })).statusCode).toBe(204);
     expect(store.delete).toHaveBeenCalledWith(recipe.id);
     vi.mocked(store.delete).mockResolvedValue(false);
     expect((await app.inject({ method: 'DELETE', url: `/recipes/${recipe.id}`, headers })).statusCode).toBe(404);
     const unavailable = fixture(false);
-    expect((await unavailable.app.inject({ url: '/recipes', headers })).statusCode).toBe(503);
-    expect((await unavailable.app.inject({ method: 'DELETE', url: `/recipes/${recipe.id}`, headers })).statusCode).toBe(503);
+    expect((await unavailable.app.inject({ url: '/routines', headers })).statusCode).toBe(503);
+    expect((await unavailable.app.inject({ method: 'PATCH', url: `/routines/${recipe.id}`, headers, payload: { name: 'Search' } })).statusCode).toBe(503);
+    expect((await unavailable.app.inject({ method: 'DELETE', url: `/routines/${recipe.id}`, headers })).statusCode).toBe(503);
   });
-  it('exposes a sensitive list/delete tool through the existing dispatcher', async () => {
-    const { app, tool, recipe } = fixture();
+  it('exposes sensitive routine tools and a backward-compatible recipes tool', async () => {
+    const { app, tool, legacyTool, recipe } = fixture();
     const catalogue = (await app.inject({ url: '/tools', headers })).json() as { name: string }[];
+    expect(catalogue.some(item => item.name === 'task_routines')).toBe(true);
     expect(catalogue.some(item => item.name === 'task_recipes')).toBe(true);
     expect(tool.sensitive).toBe(true);
     const request = {} as Parameters<typeof tool.execute>[1];
     const signal = new AbortController().signal;
-    expect(await tool.execute({ action: 'list' }, request, signal)).toEqual({ recipes: [recipe] });
+    expect(await tool.execute({ action: 'list' }, request, signal)).toEqual({ routines: [recipe] });
     expect(await tool.execute({ action: 'delete', id: recipe.id }, request, signal)).toEqual({ deleted: true });
-    await expect(tool.execute({ action: 'delete' }, request, signal)).rejects.toThrow('recipe ID');
+    expect(await tool.execute({ action: 'rename', id: recipe.id, name: 'Find search' }, request, signal)).toEqual({ updated: true });
+    expect(await tool.execute({ action: 'update', id: recipe.id, name: 'Find search' }, request, signal)).toEqual({ updated: true });
+    await expect(tool.execute({ action: 'delete' }, request, signal)).rejects.toThrow('routine ID');
     await expect(tool.execute({ action: 'list', id: recipe.id }, request, signal)).rejects.toThrow('Choose list');
+    expect(await legacyTool.execute({ action: 'list' }, request, signal)).toEqual({ recipes: [recipe] });
   });
   it('does not expose storage exception details', async () => {
     const { app, store } = fixture();
     vi.mocked(store.list).mockRejectedValue(new Error('private storage details'));
-    const response = await app.inject({ url: '/recipes', headers });
+    const response = await app.inject({ url: '/routines', headers });
     expect(response.statusCode).toBe(500);
     expect(response.body).not.toContain('private');
   });
@@ -80,8 +96,8 @@ describe('recipe management', () => {
       const { app, store, recipe } = fixture(true, async () => ({
         kind, objectId: 'offline-service', tenantId: config.auth.tenantId,
       }));
-      expect((await app.inject({ url: '/recipes', headers })).statusCode).toBe(403);
-      expect((await app.inject({ method: 'DELETE', url: `/recipes/${recipe.id}`, headers })).statusCode).toBe(403);
+      expect((await app.inject({ url: '/routines', headers })).statusCode).toBe(403);
+      expect((await app.inject({ method: 'DELETE', url: `/routines/${recipe.id}`, headers })).statusCode).toBe(403);
       expect(store.list).not.toHaveBeenCalled();
       expect(store.delete).not.toHaveBeenCalled();
     },

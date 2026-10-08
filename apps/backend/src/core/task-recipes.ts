@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import type { FastifyRequest } from 'fastify';
+import type { Routine } from '@jarvis/contracts';
 import {
   isJevFailure, jevChoiceConfidenceThreshold, jevFailureFromStatus,
   logJevFailure, reflexSourceForRequest, type JevFailure,
@@ -15,22 +16,17 @@ export interface RecipeTarget {
   readonly name: string;
 }
 export interface RecipeStep {
-  readonly operation: RecipeOperation;
+  readonly operation: Exclude<RecipeOperation, 'blocked'>;
   readonly target?: RecipeTarget;
   readonly valueSlot?: number;
   readonly keys?: KeySequence;
 }
-export interface TaskRecipe {
-  readonly id: string;
-  readonly kind: RecipeKind;
-  readonly key: string;
-  readonly goal: string;
-  readonly steps: readonly RecipeStep[];
-}
+export type TaskRecipe = Routine;
 export type RecipeDraft = Omit<TaskRecipe, 'id'>;
 export interface RecipeStore {
   list(filter?: { kind: RecipeKind; key: string }): Promise<readonly TaskRecipe[]>;
   save(recipe: RecipeDraft, signal?: AbortSignal): Promise<void>;
+  rename(id: string, name: string): Promise<boolean>;
   delete(id: string): Promise<boolean>;
 }
 export interface RecipeChoice {
@@ -113,9 +109,16 @@ export function recipeId(recipe: Pick<RecipeDraft, 'kind' | 'key' | 'goal'>): st
   return createHash('sha256').update(JSON.stringify([recipe.kind, recipe.key, recipe.goal])).digest('hex');
 }
 
+export function normalizeRoutineName(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const name = value.trim();
+  return name && name.length <= 80 && !unsafeMetadata(name) ? name : undefined;
+}
+
 export function validRecipe(value: unknown): value is TaskRecipe {
-  if (!record(value) || Object.keys(value).some(key => !['id', 'kind', 'key', 'goal', 'steps'].includes(key)) ||
+  if (!record(value) || Object.keys(value).some(key => !['id', 'name', 'kind', 'key', 'goal', 'steps'].includes(key)) ||
       typeof value.id !== 'string' || !/^[a-f0-9]{64}$/u.test(value.id) ||
+      (value.name !== undefined && normalizeRoutineName(value.name) !== value.name) ||
       !['pc', 'browser'].includes(String(value.kind)) || typeof value.key !== 'string' ||
       value.key.length > 256 || (value.kind === 'pc' ? !/^[\p{L}\p{N}_.-]{1,128}$/u.test(value.key)
         : recipeSiteKey(value.key) !== value.key) ||
@@ -242,6 +245,10 @@ export async function createRecipeSession(
     },
     record(operation, target, input) {
       if (!eligible) return;
+      if (operation === 'blocked') {
+        eligible = false;
+        return;
+      }
       const value = input?.text ?? input?.selectionValue;
       if (value) values.push(value);
       const valueSlot = value ? goalValues.indexOf(value) : -1;
