@@ -60,6 +60,8 @@ describe('English realtime session', () => {
     expect(ENGLISH_REALTIME_INSTRUCTIONS).toContain('use vault_search or vault_read');
     expect(ENGLISH_REALTIME_INSTRUCTIONS).toContain('use show_knowledge');
     expect(ENGLISH_REALTIME_INSTRUCTIONS).toContain('use vault_write');
+    expect(ENGLISH_REALTIME_INSTRUCTIONS).toContain('use vault_delete');
+    expect(ENGLISH_REALTIME_INSTRUCTIONS).toContain('Now approval');
     expect(ENGLISH_REALTIME_INSTRUCTIONS).toContain('Never save secrets or credentials');
   });
 

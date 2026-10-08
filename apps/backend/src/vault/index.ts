@@ -960,6 +960,23 @@ export function createVaultModule(options: {
     throw new Error('Vault write did not complete');
   }
 
+  async function deleteNote(path: string, expectedSha: string, signal: AbortSignal): Promise<string> {
+    const latest = await options.client.read(path, signal);
+    if (!latest) throw new ToolRefusal('The vault note no longer exists. Nothing was deleted.');
+    if (latest.sha !== expectedSha) throw new VaultWriteConflictError();
+    const commit = await options.client.delete(
+      path,
+      latest.sha,
+      'jarvis: forget vault note\n\nCo-authored-by: Jarvis',
+      signal,
+    );
+    await options.indexStore.deleteFiles([path], signal);
+    graphCache = undefined;
+    const folder = safeFolder(path);
+    log('vault.write', { outcome: 'ok', ...(folder ? { folder } : {}) });
+    return commit;
+  }
+
   const tools = [
     {
       name: 'vault_search',
@@ -1151,6 +1168,87 @@ export function createVaultModule(options: {
         const confirmation = `Saved to vault: ${result.path} — ${url}`;
         logWrite('ok');
         return { ...result, url, confirmation };
+      },
+    },
+    {
+      name: 'vault_delete',
+      description: 'Permanently delete one Markdown note from Dan’s GitHub vault. Use only when Dan explicitly asks to delete it; the exact path is shown in a Now confirmation before the commit.',
+      inputSchema: {
+        type: 'object',
+        properties: { path: { type: 'string', minLength: 1, maxLength: maxPathLength } },
+        required: ['path'],
+        additionalProperties: false,
+      },
+      sensitive: true,
+      execute: async (value: unknown, request: FastifyRequest, signal: AbortSignal) => {
+        if (!request.principal && !request.agentPrincipal) {
+          throw new ToolRefusal('Vault access is not authorized.');
+        }
+        if (!isRecord(value) || Object.keys(value).some((key) => key !== 'path')) {
+          throw new ToolRefusal('The vault deletion request is invalid.');
+        }
+        const path = validatePath(value.path);
+        if (!isRoutedNotePath(path)) {
+          throw new ToolRefusal('Use a Markdown path in People/, Work/, Personal/ or General/.');
+        }
+        const service: TeamsNotificationService | null = request.server.teamsNotifications;
+        if (!service) {
+          throw new ToolRefusal('Dan’s Now approval service is unavailable; the note was not deleted.');
+        }
+        try {
+          if (request.server.awayModeStore &&
+              (await request.server.awayModeStore.read()).mode !== 'present') {
+            throw new ToolRefusal('Vault deletion requires Dan’s browser confirmation while present.');
+          }
+        } catch (error) {
+          if (error instanceof ToolRefusal) throw error;
+          throw new ToolRefusal('Dan’s Now approval service is unavailable; the note was not deleted.');
+        }
+        if (pendingVaultDeletions.has(path)) {
+          throw new ToolRefusal('A deletion for this vault note is already awaiting approval.');
+        }
+        pendingVaultDeletions.add(path);
+        const operationSignal = AbortSignal.any([signal, AbortSignal.timeout(6 * 60_000)]);
+        const folder = safeFolder(path);
+        try {
+          let note: VaultFile | null;
+          try {
+            note = await options.client.read(path, operationSignal);
+          } catch (error) {
+            if (error instanceof VaultAppNotInstalledError) {
+              throw new ToolFailure('The GitHub App is not installed on DanAakesen/vault with Contents read/write access.');
+            }
+            throw new ToolFailure('Vault deletion is temporarily unavailable.');
+          }
+          if (!note) throw new ToolRefusal('That vault note does not exist.');
+          const commit = await service.runConfirmed(
+            'delete',
+            `Permanently delete vault note ${path}.`,
+            () => deleteNote(path, note!.sha, operationSignal),
+            operationSignal,
+          );
+          const url = commitUrl(commit);
+          return {
+            path,
+            commit,
+            url,
+            confirmation: `Deleted vault note: ${path} — ${url}`,
+          };
+        } catch (error) {
+          if (signal.aborted) signal.throwIfAborted();
+          const outcome = error instanceof ToolRefusal ? 'refused' : 'error';
+          log('vault.write', { outcome, ...(folder ? { folder } : {}) });
+          if (error instanceof ToolRefusal || error instanceof ToolFailure) throw error;
+          if (error instanceof VaultAppNotInstalledError) {
+            throw new ToolFailure('The GitHub App is not installed on DanAakesen/vault with Contents read/write access.');
+          }
+          if (error instanceof VaultWriteConflictError) {
+            throw new ToolFailure('The note changed while approval was pending. Nothing was deleted; retry the request.');
+          }
+          throw new ToolFailure('Vault deletion failed. The note was not reported as deleted.');
+        } finally {
+          pendingVaultDeletions.delete(path);
+        }
       },
     },
   ] as const;
@@ -1589,22 +1687,7 @@ export function createVaultModule(options: {
         }
         pendingVaultDeletions.add(path);
         void service.runConfirmed('delete', `Permanently delete vault note ${path}.`, async () => {
-          const latest = await options.client.read(path, AbortSignal.timeout(15_000));
-          if (!latest) return;
-          if (latest.sha !== note.sha) throw new VaultWriteConflictError();
-          const commit = await options.client.delete(
-            path,
-            latest.sha,
-            'jarvis: forget vault note',
-            AbortSignal.timeout(15_000),
-          );
-          await options.indexStore.deleteFiles([path], AbortSignal.timeout(10_000));
-          const folder = safeFolder(path);
-          log('vault.write', {
-            outcome: 'ok',
-            ...(folder ? { folder } : {}),
-          });
-          return commit;
+          return deleteNote(path, note.sha, AbortSignal.timeout(30_000));
         }, AbortSignal.timeout(6 * 60_000)).catch(() => {
           app.log.warn('memory.vault_forget_failed');
         }).finally(() => { pendingVaultDeletions.delete(path); });
