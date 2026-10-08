@@ -96,17 +96,17 @@ function fixture() {
     })),
     readComments: vi.fn(async () => [{ author: 'DanAakesen', body: 'Please implement it.' }]),
     readAgentRules: vi.fn(async () => 'Repository agent rules.'),
+    listIssueTitles: vi.fn(async () => []),
     createIssue: vi.fn(async () => ({ number: 9, url: 'https://github.com/DanAakesen/jarvis/issues/9' })),
     createComment: vi.fn(async () => {}),
+    addLabels: vi.fn(async () => {}),
     removeLabel: vi.fn(async () => {}),
   } satisfies GitHubIssueClient;
+  let latestMessage: ConversationMessage = {
+    id: '42', sessionId: 'session', role: 'dan', text: 'Start issue 8', model: null, at: new Date(),
+  };
   const conversationStore = {
-    getHistory: vi.fn(async () => ({
-      messages: [{
-        id: '42', sessionId: 'session', role: 'dan', text: 'Start issue 8', model: null, at: new Date(),
-      }],
-      nextCursor: null,
-    })),
+    getHistory: vi.fn(async () => ({ messages: [latestMessage], nextCursor: null })),
   } as unknown as ConversationStore;
   const app = buildApp(config, undefined, {
     modules: [coreModule, factoryModule],
@@ -123,7 +123,10 @@ function fixture() {
     toolCallStore: { record },
   });
   apps.push(app);
-  return { app, projectStore, taskStore, taskController, record, githubIssueClient };
+  return {
+    app, projectStore, taskStore, taskController, record, githubIssueClient,
+    setLatestMessage: (message: ConversationMessage) => { latestMessage = message; },
+  };
 }
 
 afterEach(async () => {
@@ -133,7 +136,7 @@ afterEach(async () => {
 describe('Software Factory Jarvis tools', () => {
   it('registers every project and task tool for discovery and English voice', async () => {
     const names = [
-      'start_issue',
+      'create_issue', 'confirm_create_issue', 'start_issue',
       'list_projects', 'update_project', 'archive_project', 'confirm_project_archive',
       'list_tasks', 'get_task', 'list_releases', 'get_release', 'get_deployment_status',
       'create_task', 'set_task_model', 'retry_task', 'steer_task', 'pause_task', 'resume_task', 'cancel_task',
@@ -150,7 +153,8 @@ describe('Software Factory Jarvis tools', () => {
     }
     expect(capabilities).toContain('repo_overview first');
     expect(capabilities).toContain('repo_search or repo_read');
-    expect(capabilities).toContain('create a task only after Dan confirms');
+    expect(capabilities).toContain('draft a GitHub issue');
+    expect(capabilities).toContain('confirm_create_issue');
     expect(capabilities).toContain('set_jarvis_model');
 
     const { app } = fixture();
@@ -161,6 +165,79 @@ describe('Software Factory Jarvis tools', () => {
     ]);
     expect(response.json().every(({ inputSchema }: { inputSchema: { type: string } }) =>
       inputSchema.type === 'object')).toBe(true);
+  });
+
+  it('creates a code-change issue only after an exact confirmation in a later Dan message', async () => {
+    const { app, githubIssueClient, setLatestMessage } = fixture();
+    const draft = await app.inject({
+      method: 'POST',
+      url: '/tools/create_issue',
+      headers,
+      payload: {
+        title: 'Fix retries',
+        body: 'Problem: retries fail.\nAcceptance: retry succeeds.',
+      },
+    });
+    expect(draft.json()).toMatchObject({
+      outcome: 'ok',
+      result: {
+        status: 'awaiting_confirmation',
+        taskCode: 'P11-01',
+        title: 'P11-01: Fix retries',
+        body: 'Problem: retries fail.\nAcceptance: retry succeeds.',
+        executor: 'jarvis',
+      },
+    });
+    const confirmationCode = draft.json().result.confirmationCode as string;
+    expect(confirmationCode).toMatch(/^\d{8}$/u);
+    expect(githubIssueClient.createIssue).not.toHaveBeenCalled();
+
+    setLatestMessage({
+      id: '42',
+      sessionId: 'session',
+      role: 'dan',
+      text: `confirm ${confirmationCode}`,
+      model: null,
+      at: new Date(Date.now() + 1_000),
+    });
+    const sameMessage = await app.inject({
+      method: 'POST',
+      url: '/tools/confirm_create_issue',
+      headers,
+      payload: { confirmationCode },
+    });
+    expect(sameMessage.json()).toMatchObject({ outcome: 'refused' });
+    expect(githubIssueClient.createIssue).not.toHaveBeenCalled();
+
+    setLatestMessage({
+      id: '43',
+      sessionId: 'session',
+      role: 'dan',
+      text: `confirm ${confirmationCode}`,
+      model: null,
+      at: new Date(Date.now() + 2_000),
+    });
+    const confirmed = await app.inject({
+      method: 'POST',
+      url: '/tools/confirm_create_issue',
+      headers: { ...headers, 'x-jarvis-message-id': '43' },
+      payload: { confirmationCode },
+    });
+    expect(confirmed.json()).toMatchObject({
+      outcome: 'ok',
+      result: {
+        number: 9,
+        url: 'https://github.com/DanAakesen/jarvis/issues/9',
+        taskCode: 'P11-01',
+      },
+    });
+    expect(githubIssueClient.createIssue).toHaveBeenCalledWith(
+      project.repo,
+      'P11-01: Fix retries',
+      'Problem: retries fail.\nAcceptance: retry succeeds.',
+      { labels: ['P11', 'enhancement'] },
+    );
+    expect(githubIssueClient.addLabels).toHaveBeenCalledWith(project.repo, 9, ['Jarvis']);
   });
 
   it('executes all tools through their stores and records message-linked calls', async () => {

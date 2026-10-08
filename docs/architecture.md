@@ -557,6 +557,23 @@ issue; cancellation also removes the `Jarvis` label. PRs use the issue's task ID
 in their title and include `Fixes #N`. Offline fake-backed tests cover these
 flows; live GitHub issue reads/writes await the P10-01 App permission change.
 
+P10-03 adds the sensitive `create_issue` and `confirm_create_issue` tools. The
+first stages a draft and the next creates it only after a later stored Dan
+message exactly confirms its eight-digit code. The Dan-only
+`POST /factory/issues` route uses the same draft validation and creation service
+for the board. It reads all issue-title pages in the selected active repository,
+allocates the lowest free `P11-NN` code (two digits minimum), then rechecks it
+immediately before creation. New issues receive `P11` and `enhancement` labels;
+titles explicitly marked `[Bug]`, `Bug:`, or `Regression:` receive `bug`.
+The default Jarvis executor creates the issue and then applies the `Jarvis`
+worker label so GitHub emits the `issues.labeled` event that P10-02 consumes.
+Copilot issues are assigned to `copilot`, carry the `Copilot` label, and receive
+a scope comment; `none` adds no executor label. Likely credentials are refused
+before issue creation. Drafted codes are checked again at confirmation, and
+creation requests are serialized within the single configured backend replica.
+These flows are covered by offline fakes; live issue writes and the
+`issues` webhook remain pending P10-01's App permission/subscription change.
+
 Chat-created tasks retain their originating message ID. Committed Done,
 NeedsAttention, Cancelled, and backend `pull_request_opened` events route a short
 status message with the task ID, outcome, and validated GitHub PR link to that

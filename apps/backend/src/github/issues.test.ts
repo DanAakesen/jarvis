@@ -26,12 +26,14 @@ function fixture() {
     if (parsed.pathname.endsWith('/contents/AGENTS.md')) {
       return Response.json({ encoding: 'base64', content: Buffer.from('Follow AGENTS.md').toString('base64') });
     }
+    if (parsed.pathname.endsWith('/issues') && method === 'GET') return Response.json([]);
     if (parsed.pathname.endsWith('/issues') && method === 'POST') {
       return Response.json({
         number: 9,
         html_url: 'https://github.com/DanAakesen/jarvis/issues/9',
       }, { status: 201 });
     }
+    if (parsed.pathname.endsWith('/labels') && method === 'POST') return Response.json([{ name: 'Jarvis' }]);
     if (parsed.pathname.endsWith('/comments') && method === 'POST') return Response.json({ id: 1 }, { status: 201 });
     if (method === 'DELETE') return new Response(null, { status: 204 });
     throw new Error(`Unexpected GitHub request: ${url}`);
@@ -49,16 +51,19 @@ describe('GitHub issue client', () => {
       { author: 'DanAakesen', body: 'Please implement it.' },
     ]);
     await expect(test.client.readAgentRules('DanAakesen/jarvis')).resolves.toBe('Follow AGENTS.md');
+    await expect(test.client.listIssueTitles('DanAakesen/jarvis')).resolves.toEqual([]);
     await expect(test.client.createIssue('DanAakesen/jarvis', 'Fix task', 'Issue details'))
       .resolves.toMatchObject({ number: 9 });
     await test.client.createComment('DanAakesen/jarvis', 8, 'Started.');
+    await test.client.addLabels('DanAakesen/jarvis', 8, ['Jarvis']);
     await test.client.removeLabel('DanAakesen/jarvis', 8, 'Codex');
 
-    expect(test.calls.map(({ method }) => method)).toEqual(['GET', 'GET', 'GET', 'POST', 'POST', 'DELETE']);
-    expect(test.calls[3]?.body).toBe(JSON.stringify({ title: 'Fix task', body: 'Issue details' }));
-    expect(test.tokenIssuer.issueForRepositoryRead).toHaveBeenCalledTimes(2);
+    expect(test.calls.map(({ method }) => method)).toEqual(['GET', 'GET', 'GET', 'GET', 'POST', 'POST', 'POST', 'DELETE']);
+    expect(test.calls[4]?.body).toBe(JSON.stringify({ title: 'Fix task', body: 'Issue details' }));
+    expect(test.calls[6]?.body).toBe(JSON.stringify({ labels: ['Jarvis'] }));
+    expect(test.tokenIssuer.issueForRepositoryRead).toHaveBeenCalledTimes(3);
     expect(test.tokenIssuer.issueForContents).toHaveBeenCalledWith('DanAakesen/jarvis');
-    expect(test.tokenIssuer.issueForIssuesWrite).toHaveBeenCalledTimes(3);
+    expect(test.tokenIssuer.issueForIssuesWrite).toHaveBeenCalledTimes(4);
   });
 
   it('treats a missing GitHub issue as not found', async () => {
@@ -90,5 +95,36 @@ describe('GitHub issue client', () => {
     await expect(client.readComments('DanAakesen/jarvis', 8)).resolves.toHaveLength(102);
     await expect(client.readAgentRules('DanAakesen/jarvis')).resolves.toBe('');
     expect(requestedPages).toEqual(['1', '2']);
+  });
+
+  it('reads bounded issue-title pages for safe task-code allocation', async () => {
+    const requestedPages: string[] = [];
+    const client = createGitHubIssueClient({
+      issueForRepositoryRead: vi.fn(async () => 'token'),
+    } as unknown as GitHubAppTokenIssuer, async (input) => {
+      const url = new URL(String(input));
+      requestedPages.push(url.searchParams.get('page') ?? '');
+      return Response.json(url.searchParams.get('page') === '1'
+        ? Array.from({ length: 100 }, (_value, index) => ({ title: `Issue ${index}` }))
+        : [{ title: 'P11-01: Existing work' }]);
+    });
+
+    await expect(client.listIssueTitles('DanAakesen/jarvis')).resolves.toHaveLength(101);
+    expect(requestedPages).toEqual(['1', '2']);
+  });
+
+  it('includes labels and assignees in the issue creation request', async () => {
+    const test = fixture();
+    await test.client.createIssue('DanAakesen/jarvis', 'P11-01: Fix', 'Problem and acceptance', {
+      labels: ['P11', 'bug', 'Copilot'],
+      assignees: ['copilot'],
+    });
+
+    expect(test.calls.at(-1)?.body).toBe(JSON.stringify({
+      title: 'P11-01: Fix',
+      body: 'Problem and acceptance',
+      labels: ['P11', 'bug', 'Copilot'],
+      assignees: ['copilot'],
+    }));
   });
 });
