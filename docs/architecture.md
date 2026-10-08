@@ -170,6 +170,32 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   HTML/JS executes only inside its restrictive sandboxed iframe, never in the
   host page. Workspace-command tests pass; live delivery and report browser
   acceptance remain unverified.
+- P9-40 extends that same registered tool and broker with `navigate`; no new
+  event channel, route or persistence is added. `packages/contracts` exports
+  `workspaceNavigationPages` (`home`, `factory`, `settings`, `usage`,
+  `knowledge`, `folio`, `status`) and `workspaceSettingsSections`
+  (`appearance`, `jarvis`, `personality`, `voice`, `presence`, `memory`,
+  `coding`, `projects`, `routines`, `credentials`, `backend`). The command requires
+  `commandId`, `operation: 'navigate'` and `page`; `section` is settings-only,
+  and a positive SQL-bigint decimal-string `taskId` or positive safe-integer
+  `issueNumber` is factory-only. Factory without a selector means the Kanban
+  board; `taskId` opens the task window over the board and focuses its card,
+  while `issueNumber` focuses the issue's card. The root tool schema is a plain object
+  (L121); the shared `isWorkspaceCommand` guard enforces per-operation fields
+  before delivery, including existing window operations. Voice and chat receive
+  the same navigation aliases from `core/capability-instructions.ts`.
+  Navigation returns `applied: true` and its destination only after a tab
+  acknowledges application; refusal, timeout and cancellation retain existing
+  broker semantics. Send is not an applied acknowledgement. The UI reports a
+  reason when a page/section is unknown, a task/issue is not found, or Folio/Status
+  is not yet implemented. The backend rejects unknown contract keys before
+  delivery and does not resolve task/issue existence on the UI's behalf.
+  The UI session owns shell routing, settings-section
+  selection, page transitions and applied/refused acknowledgements; this
+  backend change does not implement those UI behaviors or claim live acceptance.
+  The web build currently reports TS2366 at `apps/web/src/Workspace.tsx:391`:
+  its exhaustive dispatcher must handle the new union member in the UI change
+  before the combined feature can merge or deploy.
 - P8-37 registers conversation history as the page-owned workspace view
   `conversation` from `App.tsx` once a conversation exists. The view content is
   an empty host element; `ConversationHistory` portals its transcript into it
@@ -434,7 +460,7 @@ untracked events are acknowledged as ignored without SQL. Tracked mappings and
 the delivery ID are committed together in one serializable transaction; duplicate
 deliveries cannot replay state writes. Only delivery metadata and allowlisted
 mapping fields are stored; P3-04 and P3-07 update project records. The `issues`
-event maps only a `labeled` action for the `Codex` label on a tracked repository;
+event maps only a `labeled` action for the `Jarvis` label on a tracked repository;
 the Factory fetches the issue and Dan's comments through the existing
 repository-scoped GitHub App token issuer before creating a task.
 `KEY_VAULT_URI` is supplied by Bicep, and the backend managed identity reads and
@@ -468,7 +494,24 @@ confirms completion. The browser and hosted agent service identities do not rece
 a task-state bypass. Responses are capped at 1 MiB, and event payloads above 4 KiB
 are omitted with an explicit truncation flag.
 
-Migration `0036_task_github_issues` adds nullable `tasks.issue_number` and a
+`GET /factory/board?project=<id>` returns `{ project, fetchedAt, stale, columns }`
+in the shared `FactoryBoard` contract, with all six ordered columns:
+Backlog, Needs Dan, Ready, In progress, In review, and Done. Each card contains
+an issue, its linked pull request (including draft/readiness and checks), and
+the existing Factory task overlay when linked. Issues carry their task code,
+label names, worker, state, timestamps, and exact blocked issue numbers. The
+endpoint uses the repository-scoped GitHub App read token to load open issues,
+issues closed in the last 14 days, and open pull requests. Its status precedence
+matches `.github/scripts/project_board.py`; both test suites read the same
+status fixtures. Done cards sort by close time, and other columns by update
+time. The in-memory project snapshot is cached for one minute and invalidated
+by signed issue, pull-request, check, and workflow webhooks and committed task
+events. `/now/events` emits a typed `board` event with the affected project ID
+and monotonically increasing in-process version. No migration or GitHub
+Project write is needed; live GitHub reads require the App's issue read
+permission.
+
+Migration `0037_task_github_issues` adds nullable `tasks.issue_number` and a
 filtered unique index that permits one active task per project and issue while
 retaining old unlinked rows. `POST /factory/issues/:number/start` is available
 only to Dan; the shared `start_issue` tool accepts an optional active project and
@@ -476,9 +519,9 @@ defaults to Codex. `create_task` creates a GitHub issue before queuing its linke
 task. Issue title, body and Dan-authored comments are encoded as untrusted JSON
 in the task prompt alongside the repository's root `AGENTS.md`. Task events
 publish content-free started, PR, attention, done and cancelled comments to the
-issue; cancellation also removes the `Codex` label. PRs use the issue's task ID
-in their title and include `Closes #N`. Offline fake-backed tests cover these
-flows; live issue reads/writes await the P10-01 GitHub App permission change.
+issue; cancellation also removes the `Jarvis` label. PRs use the issue's task ID
+in their title and include `Fixes #N`. Offline fake-backed tests cover these
+flows; live GitHub issue reads/writes await the P10-01 App permission change.
 
 Chat-created tasks retain their originating message ID. Committed Done,
 NeedsAttention, Cancelled, and backend `pull_request_opened` events route a short
@@ -833,12 +876,28 @@ confirmed. Calls require
 tool routes accept Dan's delegated token and opt in to the Jarvis agent identity
 ([backend authentication](#backend-authentication)). Existing Foundry client, health/security/logging and
 process shutdown behavior are preserved.
+P9-42 returns body-schema failures as HTTP 200 tool envelopes with
+`outcome: refused`, a bounded validation hint and retry guidance, so the hosted chat client
+can pass them to the model. Voice's direct executor uses the same formatter.
+Unknown root arguments are refused before Fastify can silently strip them.
+Invalid inputs never execute tools or enter the generic tool-call audit; they
+emit `tool.invalid_arguments` to stdout and Application Insights with only the
+tool name, validation keyword and a bounded property identifier, never argument
+values or raw validator messages. Authentication and other HTTP errors remain
+unchanged. The shared capability prompt guides both voice and chat to correct
+arguments before retrying; workspace commands still use the existing broker and
+`packages/contracts` schemas.
 P7-45 adds `list_capabilities` and read-only `repo_*` tools to the shared Factory
 registry. They use only repository-scoped GitHub App installation tokens, default
 to `JARVIS_REPOSITORY` (`DanAakesen/jarvis`), and accept explicit project IDs or
 repositories only when they match an active project. File paths, encodings and
 response sizes are validated and bounded; overview responses are cached by commit
 SHA. Repository files and issue text are explicitly framed as untrusted input.
+P9-42 lets `repo_search` accept `repository` or `repo` as aliases of `project`,
+using the same active-project resolver and read-only token scope. Conflicting
+selectors are refused. Results include `incompleteResults`; incomplete searches,
+zero GitHub hits or missing readable snippets return an explanation and suggest
+`repo_list` followed by `repo_read`, without claiming the code is absent.
 The tools support Jarvis chat, voice and the hosted agent through the existing
 `GET /tools` and `POST /tools/{name}` routes.
 The [module guide](../apps/backend/src/modules.README.md) explains adding areas,
@@ -1730,7 +1789,7 @@ These boxes are responsibilities; they do not each need a separate service.
 | Stale task reconciliation | At dispatcher startup, scan at most five Running tasks whose latest sandbox heartbeat is at least five minutes old. While a sandbox is tracked, repeat at five-minute intervals. Query the recorded Foundry invocation with a 15-second timeout. A live invocation refreshes its heartbeat; a completed invocation uses the normal GitHub delivery and project-policy path, persisting a discovered PR through the P3-04 mapping first. Failed, unavailable, mismatched, or otherwise unverifiable states move to NeedsAttention with a user-visible reason; Done requires the existing verified completion path. Each outcome logs an allowlisted `task_reconciliation.decision` with task/session/invocation IDs and bounded status/decision fields only. This bounded scan is the recovery path for lost completion/webhook events, not a substitute for webhook delivery. |
 | Recovery and completion | Recover atomically claims a NeedsAttention task after an actual crash; Continue after `idle_expired` uses the same branch-recovery path. Both start a fresh Foundry session from the existing task branch with the original request, bounded steering history, and event summary. A completed invocation is correlated to its active task session; the backend accepts Done only after a repository-scoped GitHub App check confirms both the branch and a pull request. Missing evidence returns the task to NeedsAttention; API failures do not produce false success. Migration `0010_idle_expired_sessions.sql` extends the session end-reason vocabulary. Offline fake tests cover both heartbeat outcomes and continuation; SQL Server CI, live runner, Foundry, and GitHub behavior remain unverified. |
 | Live progress | The runner posts task-scoped events to `POST /factory/sandbox-events` with its managed identity; the backend records each through P1-05's transaction and publishes only after commit. The dispatcher sends `task_id` in every start and resume invocation; a runner deployed with `JARVIS_BACKEND_URL` rejects task invocations without one (L59). Browser streaming is P1-06. |
-| Build and release status | GitHub App webhooks: `pull_request`, `check_run`, `workflow_run`, `deployment_status`, and `push`. No polling. |
+| Build and release status | GitHub App webhooks: `pull_request`, `check_run`, `workflow_run`, `deployment_status`, and `push`. No polling. Signed `issues`, `pull_request`, `check_run` and `workflow_run` events also invalidate Factory board snapshots for tracked repositories; issue payloads are not persisted. |
 | Board updates | `GET /factory/tasks/:id/events` authenticates the bearer token, replays typed `task_events` after `Last-Event-ID`, then streams committed hub events and a 25-second heartbeat. Shared contracts define the task frame; one typed backend helper serializes it. The fetch client reconnects with its last delivered ID and ignores repeats. |
 | Factory task view | P1-08 loads up to 100 tasks from the filtered task API, opens task-scoped SSE streams for nonterminal cards, and refreshes the snapshot after updates. P2-14 exposes the latest session end reason so an expired completed invocation offers Continue rather than Recover. P6-21 supplies recorded PR/check/usage summaries and a Dan-only retry API for failed starts without sandbox history; UI rendering and retry controls are owned separately. |
 | Idle | The dispatcher subscribes to committed task events and schedules the next retry deadline. It performs one startup stale-task scan, then schedules five-minute scans only while a sandbox is tracked. The event-archive timer also skips SQL until active sandbox work exists. |
@@ -2055,6 +2114,28 @@ network, forms, popups or top navigation. The host acts only on HTTPS
 `open_url`, bounded `ask`, `pin`/`unpin`, and bounded `resize` messages; all
 other messages are ignored. Renderer integration and browser acceptance remain
 pending that dependency.
+
+### Folio (P9-25)
+
+Migration `0035_folio.sql` adds an owner-scoped `dbo.folio_items` index over
+research reports, HTML apps, generated images and knowledge-graph views. New
+reports record their topic summary, HTML apps their title, generated images
+their prompt summary, and graph views their query and highlighted node IDs.
+Migration 0035 backfills existing HTML artifacts and images; legacy HTML
+artifacts do not retain their originating job, so they are indexed as
+`html_app`. Graph snapshots are recorded from now on; older transient graph
+views cannot be recovered.
+
+Owner-only `GET /folio?q=&kind=&before=` returns at most 100 items, pinned
+first and then newest, matching the item title, prompt summary, or historical
+HTML version title. `POST /folio/:id/open` validates source ownership and
+recreates or updates the saved view through the workspace command broker,
+then focuses it. `PATCH /folio/:id` pins or renames an item. Confirmed
+`DELETE /folio/:id` removes only its Folio index entry; the original artifact
+and its history remain available. The shared sensitive tools `folio_search`
+and `folio_open` provide the same owner-scoped search and broker-backed reopen
+behavior to Jarvis without retaining search arguments or results in tool audit.
+The Folio rail and pane are a separate UI task.
 
 ### Sandbox credentials
 

@@ -455,6 +455,10 @@ describe('Now feed API', () => {
       const mode = reader.read().then(({ value }) => new TextDecoder().decode(value));
       nowEventHub.publish({ type: 'mode_changed', mode: 'present', away: false });
       expect(await mode).toContain('event: mode\ndata: {}');
+
+      const board = reader.read().then(({ value }) => new TextDecoder().decode(value));
+      nowEventHub.publish({ type: 'board', projectId: '42', version: 3 });
+      expect(await board).toContain('event: board\ndata: {"projectId":"42","version":3}');
     } finally {
       controller.abort();
       await reader.cancel().catch(() => {});

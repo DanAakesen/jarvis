@@ -259,6 +259,52 @@ export const htmlArtifactSchema = Object.freeze(object({
   createdAt: dateTime,
   pinned: { type: 'boolean' },
 }));
+export const folioKinds = Object.freeze(['research', 'html_app', 'image', 'knowledge_graph']);
+const folioIdPattern = '^(?:research|html_app|image|knowledge_graph):[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$';
+export const folioItemSchema = Object.freeze(object({
+  id: { type: 'string', pattern: folioIdPattern },
+  title: string(200, 1),
+  kind: { enum: folioKinds },
+  createdAt: dateTime,
+  promptSummary: string(500, 1),
+  pinned: { type: 'boolean' },
+}));
+export const folioSearchSchema = Object.freeze(object({
+  q: string(120, 1),
+  kind: { enum: folioKinds },
+  before: dateTime,
+}, []));
+export const folioSearchResponseSchema = Object.freeze(object({
+  items: array(folioItemSchema, 100),
+}));
+export const folioPatchSchema = Object.freeze({
+  type: 'object',
+  properties: {
+    title: { ...string(200, 1), pattern: '\\S' },
+    pinned: { type: 'boolean' },
+  },
+  required: [],
+  minProperties: 1,
+  additionalProperties: false,
+});
+export const folioDeleteSchema = Object.freeze(object({
+  confirm: { const: true },
+}));
+export const folioSearchToolSchema = Object.freeze(object({
+  q: { ...string(120, 1), pattern: '\\S' },
+  kind: { enum: folioKinds },
+}, []));
+export const folioOpenToolSchema = Object.freeze({
+  type: 'object',
+  properties: {
+    id: { type: 'string', pattern: folioIdPattern },
+    query: { ...string(120, 1), pattern: '\\S' },
+  },
+  required: [],
+  minProperties: 1,
+  maxProperties: 1,
+  additionalProperties: false,
+});
 const htmlArtifactFrameSchemaValue = object({
   widthPx: { type: 'integer', minimum: 1, maximum: 8192 },
   heightPx: { type: 'integer', minimum: 1, maximum: 8192 },
@@ -357,31 +403,22 @@ const workspaceViewId = {
   ...string(64, 1),
   pattern: '^[A-Za-z][A-Za-z0-9_-]{0,63}$',
 };
-const workspaceOperation = (operation, required = []) => ({
-  properties: { operation: { const: operation } },
-  required: ['operation', ...required],
-});
-const workspaceCommandVariants = [
-  ...['create', 'update'].map((operation) => workspaceOperation(operation, ['viewId', 'view'])),
-  ...['show', 'close', 'minimise', 'restore', 'focus'].map((operation) =>
-    workspaceOperation(operation, ['viewId'])),
-  workspaceOperation('move', ['viewId', 'x', 'y']),
-  workspaceOperation('resize', ['viewId', 'width', 'height']),
-  workspaceOperation('layout', ['arrangement']),
-  {
-    properties: { operation: { const: 'context-panel' }, action: { const: 'open' } },
-    required: ['operation', 'action'],
-  },
-  ...['close', 'toggle'].map((action) => ({
-    properties: { operation: { const: 'context-panel' }, action: { const: action } },
-    required: ['operation', 'action'],
-  })),
-];
+export const workspaceNavigationPages = Object.freeze([
+  'home', 'factory', 'settings', 'usage', 'knowledge', 'folio', 'status',
+]);
+export const workspaceSettingsSections = Object.freeze([
+  'appearance', 'jarvis', 'personality', 'voice', 'presence', 'memory',
+  'coding', 'projects', 'routines', 'credentials', 'backend',
+]);
 export const workspaceCommandSchema = Object.freeze({
   type: 'object',
   properties: {
     commandId: workspaceCommandId,
-    operation: { enum: ['create', 'update', 'show', 'close', 'minimise', 'restore', 'focus', 'move', 'resize', 'layout', 'context-panel'] },
+    operation: { type: 'string', enum: ['create', 'update', 'show', 'close', 'minimise', 'restore', 'focus', 'move', 'resize', 'layout', 'context-panel', 'navigate'] },
+    page: { type: 'string', enum: [...workspaceNavigationPages] },
+    section: { type: 'string', enum: [...workspaceSettingsSections] },
+    taskId: { type: 'string', pattern: '^[1-9][0-9]{0,18}$', maxLength: 19 },
+    issueNumber: { type: 'integer', minimum: 1, maximum: Number.MAX_SAFE_INTEGER },
     viewId: workspaceViewId,
     view: generatedViewSchema,
     x: { type: 'number', minimum: 0, maximum: 1 },
@@ -393,9 +430,6 @@ export const workspaceCommandSchema = Object.freeze({
   },
   required: ['commandId', 'operation'],
   additionalProperties: false,
-  oneOf: [
-    ...workspaceCommandVariants,
-  ],
 });
 
 const routePattern = /^\/(?:$|factory\/tasks\/[1-9]\d{0,18}|factory\/(?:projects|releases)\/[1-9]\d{0,15}|usage|settings)(?:\?[^#]*)?$/;
@@ -659,6 +693,15 @@ function validIsoDateTime(value) {
     Number.isFinite(Date.parse(value)) && new Date(value).toISOString() === value;
 }
 
+export function isFolioItem(value) {
+  return isObject(value) && Object.keys(value).length === 6 &&
+    /^[a-z_]+:[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/.test(value.id) &&
+    folioKinds.includes(value.kind) && value.id.startsWith(`${value.kind}:`) &&
+    boundedString(value.title, 200, 1) && value.title === value.title.trim() &&
+    validIsoDateTime(value.createdAt) && boundedString(value.promptSummary, 500, 1) &&
+    value.promptSummary === value.promptSummary.trim() && typeof value.pinned === 'boolean';
+}
+
 export function isHtmlArtifact(value) {
   if (!isObject(value) || Object.keys(value).some((key) =>
     !['id', 'kind', 'title', 'html', 'sources', 'createdAt', 'pinned'].includes(key)) ||
@@ -715,6 +758,13 @@ export function isWorkspaceCommand(value, options = {}) {
     typeof value.commandId !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/.test(value.commandId)) return false;
   const hasOnly = (...keys) => Object.keys(value).every((key) => ['commandId', 'operation', ...keys].includes(key));
   switch (value.operation) {
+    case 'navigate':
+      return hasOnly('page', 'section', 'taskId', 'issueNumber') && workspaceNavigationPages.includes(value.page) &&
+        (value.section === undefined ||
+          value.page === 'settings' && workspaceSettingsSections.includes(value.section)) &&
+        (value.taskId === undefined || value.page === 'factory' && isTaskEventId(value.taskId)) &&
+        (value.issueNumber === undefined ||
+          value.page === 'factory' && Number.isSafeInteger(value.issueNumber) && value.issueNumber > 0);
     case 'create':
     case 'update':
       return hasOnly('viewId', 'view') &&
@@ -837,7 +887,11 @@ export function isBackgroundJobEvent(value) {
 }
 
 export const nowSseEventNames = Object.freeze([
-  'mode', 'now', 'voice-wake', 'job', 'jarvis-activity', 'workspace-ready', 'workspace-command', 'workspace-cancel',
+  'mode', 'now', 'voice-wake', 'job', 'jarvis-activity', 'workspace-ready', 'workspace-command',
+  'workspace-cancel', 'board',
+]);
+export const factoryBoardColumnIds = Object.freeze([
+  'backlog', 'needs_dan', 'ready', 'in_progress', 'in_review', 'done',
 ]);
 
 const taskEventSources = Object.freeze(['runner', 'backend', 'github', 'dan']);
@@ -875,6 +929,93 @@ export function isTaskEventMessage(value) {
     isTaskEventId(value.taskId);
 }
 
+const boardWorkers = ['Jarvis', 'Copilot', 'Codex', 'Dan'];
+const boardTaskStates = ['Ready', 'Running', 'PauseRequested', 'Paused', 'NeedsAttention', 'Done', 'Cancelled'];
+const sandboxEndReasons = ['done', 'cancelled', 'crashed', 'idle', 'idle_expired'];
+const githubHosts = new Set(['github.com']);
+
+function isBoardCardIssue(value) {
+  return isObject(value) &&
+    Object.keys(value).length === 10 &&
+    Object.keys(value).every((key) =>
+      ['number', 'url', 'title', 'taskCode', 'labels', 'worker', 'state', 'updatedAt', 'closedAt', 'blockedBy'].includes(key)) &&
+    Number.isSafeInteger(value.number) && value.number > 0 &&
+    safeHttpsUrl(value.url, githubHosts) &&
+    boundedString(value.title, 500, 1) &&
+    (value.taskCode === null || typeof value.taskCode === 'string' && /^P\d{1,2}-\d{2,3}$/.test(value.taskCode)) &&
+    Array.isArray(value.labels) && value.labels.length <= 100 &&
+    value.labels.every((label) => boundedString(label, 100, 1)) &&
+    new Set(value.labels).size === value.labels.length &&
+    (value.worker === null || boardWorkers.includes(value.worker)) &&
+    ['open', 'closed'].includes(value.state) &&
+    validIsoDateTime(value.updatedAt) &&
+    (value.closedAt === null || validIsoDateTime(value.closedAt)) &&
+    Array.isArray(value.blockedBy) && value.blockedBy.length <= 100 &&
+    value.blockedBy.every((number) => Number.isSafeInteger(number) && number > 0) &&
+    new Set(value.blockedBy).size === value.blockedBy.length;
+}
+
+function isFactoryBoardTask(value) {
+  return isObject(value) &&
+    Object.keys(value).length === 8 &&
+    Object.keys(value).every((key) => [
+      'id', 'state', 'activity', 'agent', 'attemptCount', 'branch', 'startedAt', 'latestSessionEndReason',
+    ].includes(key)) &&
+    isTaskEventId(value.id) &&
+    boardTaskStates.includes(value.state) &&
+    (value.activity === null || boundedString(value.activity, 2_000)) &&
+    ['codex', 'copilot'].includes(value.agent) &&
+    Number.isSafeInteger(value.attemptCount) && value.attemptCount >= 0 &&
+    (value.branch === null || boundedString(value.branch, 255)) &&
+    (value.startedAt === null || validIsoDateTime(value.startedAt)) &&
+    (value.latestSessionEndReason === null || sandboxEndReasons.includes(value.latestSessionEndReason));
+}
+
+function isBoardCard(value) {
+  return isObject(value) &&
+    Object.keys(value).length === 3 &&
+    Object.keys(value).every((key) => ['issue', 'pr', 'task'].includes(key)) &&
+    isBoardCardIssue(value.issue) &&
+    (value.pr === null || isObject(value.pr) &&
+      Object.keys(value.pr).length === 4 &&
+      Object.keys(value.pr).every((key) => ['number', 'url', 'draft', 'checks'].includes(key)) &&
+      Number.isSafeInteger(value.pr.number) && value.pr.number > 0 &&
+      safeHttpsUrl(value.pr.url, githubHosts) &&
+      typeof value.pr.draft === 'boolean' &&
+      ['none', 'pending', 'passing', 'failing'].includes(value.pr.checks)) &&
+    (value.task === null || isFactoryBoardTask(value.task));
+}
+
+export function isFactoryBoard(value) {
+  if (!isObject(value) || Object.keys(value).length !== 4 ||
+      Object.keys(value).some((key) => !['project', 'fetchedAt', 'stale', 'columns'].includes(key)) ||
+      !isObject(value.project) || Object.keys(value.project).length !== 2 ||
+      Object.keys(value.project).some((key) => !['id', 'repo'].includes(key)) ||
+      !isTaskEventId(value.project.id) ||
+      !boundedString(value.project.repo, 140, 3) ||
+      !/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(value.project.repo) ||
+      !validIsoDateTime(value.fetchedAt) ||
+      typeof value.stale !== 'boolean' ||
+      !Array.isArray(value.columns) || value.columns.length !== factoryBoardColumnIds.length) return false;
+  let cardCount = 0;
+  return value.columns.every((column, index) => {
+    if (!isObject(column) || Object.keys(column).length !== 2 ||
+        Object.keys(column).some((key) => !['id', 'cards'].includes(key)) ||
+        column.id !== factoryBoardColumnIds[index] ||
+        !Array.isArray(column.cards) || column.cards.length > 2_000) return false;
+    cardCount += column.cards.length;
+    return cardCount <= 2_000 && column.cards.every(isBoardCard);
+  });
+}
+
+export function isFactoryBoardUpdate(value) {
+  return isObject(value) &&
+    Object.keys(value).length === 2 &&
+    Object.keys(value).every((key) => ['projectId', 'version'].includes(key)) &&
+    isTaskEventId(value.projectId) &&
+    Number.isSafeInteger(value.version) && value.version > 0;
+}
+
 export function isNowSseEvent(value, options = {}) {
   if (!isObject(value) || Object.keys(value).length !== 2 ||
     !Object.keys(value).every((key) => ['event', 'data'].includes(key)) ||
@@ -883,6 +1024,8 @@ export function isNowSseEvent(value, options = {}) {
     case 'mode':
     case 'now':
       return isEmptyObject(value.data);
+    case 'board':
+      return isFactoryBoardUpdate(value.data);
     case 'voice-wake':
       return isJarvisVoiceWakeEvent(value.data);
     case 'job':

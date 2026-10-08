@@ -249,6 +249,23 @@ export interface HtmlArtifact {
   pinned: boolean;
 }
 
+export type FolioKind = 'research' | 'html_app' | 'image' | 'knowledge_graph';
+export interface FolioItem {
+  id: `${FolioKind}:${string}`;
+  title: string;
+  kind: FolioKind;
+  createdAt: string;
+  promptSummary: string;
+  pinned: boolean;
+}
+export interface FolioSearch {
+  q?: string;
+  kind?: FolioKind;
+  before?: string;
+}
+export interface FolioSearchResponse { items: FolioItem[] }
+export interface FolioPatch { title?: string; pinned?: boolean }
+
 export interface HtmlArtifactFrame {
   widthPx: number;
   heightPx: number;
@@ -268,7 +285,20 @@ export interface WorkspaceSnapshot {
   frame?: HtmlArtifactFrame;
 }
 
+export const workspaceNavigationPages: readonly [
+  'home', 'factory', 'settings', 'usage', 'knowledge', 'folio', 'status',
+];
+export type WorkspaceNavigationPage = typeof workspaceNavigationPages[number];
+export const workspaceSettingsSections: readonly [
+  'appearance', 'jarvis', 'personality', 'voice', 'presence', 'memory',
+  'coding', 'projects', 'routines', 'credentials', 'backend',
+];
+export type WorkspaceSettingsSection = typeof workspaceSettingsSections[number];
+
 export type WorkspaceCommand =
+  | { commandId: string; operation: 'navigate'; page: 'settings'; section?: WorkspaceSettingsSection }
+  | { commandId: string; operation: 'navigate'; page: 'factory'; taskId?: string; issueNumber?: number }
+  | { commandId: string; operation: 'navigate'; page: Exclude<WorkspaceNavigationPage, 'settings' | 'factory'> }
   | { commandId: string; operation: 'create' | 'update'; viewId: string; view: GeneratedView }
   | { commandId: string; operation: 'show' | 'close' | 'minimise' | 'restore' | 'focus'; viewId: string }
   | { commandId: string; operation: 'move'; viewId: string; x: number; y: number }
@@ -382,6 +412,15 @@ export function isJarvisVoiceWakeEvent(value: unknown): value is JarvisVoiceWake
 
 export const generatedViewSchema: Readonly<Record<string, unknown>>;
 export const htmlArtifactSchema: Readonly<Record<string, unknown>>;
+export const folioKinds: readonly FolioKind[];
+export const folioItemSchema: Readonly<Record<string, unknown>>;
+export const folioSearchSchema: Readonly<Record<string, unknown>>;
+export const folioSearchResponseSchema: Readonly<Record<string, unknown>>;
+export const folioPatchSchema: Readonly<Record<string, unknown>>;
+export const folioDeleteSchema: Readonly<Record<string, unknown>>;
+export const folioSearchToolSchema: Readonly<Record<string, unknown>>;
+export const folioOpenToolSchema: Readonly<Record<string, unknown>>;
+export function isFolioItem(value: unknown): value is FolioItem;
 export const htmlArtifactFrameSchema: Readonly<Record<string, unknown>>;
 export function isHtmlArtifact(value: unknown): value is HtmlArtifact;
 export function isHtmlArtifactFrame(value: unknown): value is HtmlArtifactFrame;
@@ -443,7 +482,8 @@ export function isBackgroundJobDetails(value: unknown): value is BackgroundJobDe
 export function isBackgroundJobEvent(value: unknown): value is BackgroundJobEvent;
 
 export const nowSseEventNames: readonly [
-  'mode', 'now', 'voice-wake', 'job', 'jarvis-activity', 'workspace-ready', 'workspace-command', 'workspace-cancel',
+  'mode', 'now', 'voice-wake', 'job', 'jarvis-activity', 'workspace-ready', 'workspace-command',
+  'workspace-cancel', 'board',
 ];
 export interface TaskEventRecord {
   id: string;
@@ -460,6 +500,7 @@ export interface TaskEventMessage extends TaskEventRecord {
 export type NowSseEvent =
   | { event: 'mode'; data: Record<string, never> }
   | { event: 'now'; data: Record<string, never> }
+  | { event: 'board'; data: FactoryBoardUpdate }
   | { event: 'voice-wake'; data: JarvisVoiceWakeEvent }
   | { event: 'job'; data: BackgroundJob }
   | { event: 'jarvis-activity'; data: JarvisActivityEvent }
@@ -471,6 +512,60 @@ export type TaskEventStreamEvent =
   | { event: 'task'; id: string; data: TaskEventMessage }
   | { event: 'ready'; data: Record<string, never> };
 export type ServerSentEvent = NowSseEvent | TaskEventStreamEvent;
+
+export const factoryBoardColumnIds: readonly [
+  'backlog', 'needs_dan', 'ready', 'in_progress', 'in_review', 'done',
+];
+export type FactoryBoardColumnId = typeof factoryBoardColumnIds[number];
+export interface BoardCardIssue {
+  number: number;
+  url: string;
+  title: string;
+  taskCode: string | null;
+  labels: string[];
+  worker: 'Jarvis' | 'Copilot' | 'Codex' | 'Dan' | null;
+  state: 'open' | 'closed';
+  updatedAt: string;
+  closedAt: string | null;
+  blockedBy: number[];
+}
+export interface BoardCardPullRequest {
+  number: number;
+  url: string;
+  draft: boolean;
+  checks: 'none' | 'pending' | 'passing' | 'failing';
+}
+export interface FactoryBoardTask {
+  id: string;
+  state: 'Ready' | 'Running' | 'PauseRequested' | 'Paused' | 'NeedsAttention' | 'Done' | 'Cancelled';
+  agent: 'codex' | 'copilot';
+  activity: string | null;
+  attemptCount: number;
+  branch: string | null;
+  startedAt: string | null;
+  latestSessionEndReason: 'done' | 'cancelled' | 'crashed' | 'idle' | 'idle_expired' | null;
+}
+export interface BoardCard {
+  issue: BoardCardIssue;
+  pr: BoardCardPullRequest | null;
+  task: FactoryBoardTask | null;
+}
+export interface FactoryBoardColumn {
+  id: FactoryBoardColumnId;
+  cards: BoardCard[];
+}
+export interface FactoryBoard {
+  project: { id: string; repo: string };
+  fetchedAt: string;
+  stale: boolean;
+  columns: FactoryBoardColumn[];
+}
+export interface FactoryBoardUpdate {
+  projectId: string;
+  version: number;
+}
+export function isFactoryBoard(value: unknown): value is FactoryBoard;
+export function isFactoryBoardUpdate(value: unknown): value is FactoryBoardUpdate;
 export function isTaskEventRecord(value: unknown): value is TaskEventRecord;
 export function isTaskEventMessage(value: unknown): value is TaskEventMessage;
 export function isNowSseEvent(

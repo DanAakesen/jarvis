@@ -20,6 +20,7 @@ import { factoryTools } from './tools.js';
 import { repositoryTools } from './repository-tools.js';
 import { registerReleaseViewRoutes } from './release-view.js';
 import { startIssueTask } from './issues.js';
+import { registerFactoryBoardRoute } from './board.js';
 
 const maxSqlBigInt = 9_223_372_036_854_775_807n;
 const maxResponseBytes = 1024 * 1024;
@@ -96,6 +97,7 @@ export const factoryModule: BackendModule = {
   }],
   registerRoutes: async (app) => {
     registerReleaseViewRoutes(app);
+    registerFactoryBoardRoute(app);
     app.get<{ Querystring: { refresh?: boolean } }>('/factory/repositories', {
       schema: {
         querystring: {

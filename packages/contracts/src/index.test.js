@@ -4,6 +4,10 @@ import {
   generatedViewActionTypes,
   generatedViewRenderers,
   generatedViewSchema,
+  folioKinds,
+  folioItemSchema,
+  folioSearchResponseSchema,
+  isFolioItem,
   htmlArtifactByteLimit,
   htmlArtifactFrameSchema,
   htmlArtifactSchema,
@@ -43,6 +47,8 @@ import {
   generatedViewVersion,
   nowSseEventNames,
   workspaceCommandSchema,
+  workspaceNavigationPages,
+  workspaceSettingsSections,
   webResearchResultSchema,
   clipboardTextMaxBytes,
   isClipboardText,
@@ -50,6 +56,9 @@ import {
   isClipboardWriteResult,
   isSystemSmokeStatus,
   systemSmokeCheckIds,
+  factoryBoardColumnIds,
+  isFactoryBoard,
+  isFactoryBoardUpdate,
 } from './index.js';
 
 const source = { id: 'factory.tasks', status: 'complete' };
@@ -60,6 +69,23 @@ const listView = (overrides = {}) => ({
   source,
   data: { items: [{ title: 'Ship the contract', details: [{ label: 'Project', value: 'Jarvis' }] }] },
   ...overrides,
+});
+
+test('Folio contracts use bounded searchable item metadata and closed item kinds', () => {
+  const item = {
+    id: 'research:56a2b0bd-af47-46b5-8e15-c6e9a718ae93',
+    title: 'Ignite report',
+    kind: 'research',
+    createdAt: '2026-10-06T10:00:00.000Z',
+    promptSummary: 'Research Ignite battery storage',
+    pinned: false,
+  };
+  assert.deepEqual(folioKinds, ['research', 'html_app', 'image', 'knowledge_graph']);
+  assert.equal(folioItemSchema.properties.promptSummary.maxLength, 500);
+  assert.equal(folioSearchResponseSchema.properties.items.maxItems, 100);
+  assert.equal(isFolioItem(item), true);
+  assert.equal(isFolioItem({ ...item, kind: 'conversation' }), false);
+  assert.equal(isFolioItem({ ...item, promptSummary: ' Research ' }), false);
 });
 
 test('clipboard contracts bound UTF-8 text and keep read/write result shapes exact', () => {
@@ -256,11 +282,13 @@ test('Now SSE contracts guard every named event and its payload', () => {
       data: { command: { commandId: 'cmd_1', operation: 'show', viewId: 'report' }, expiresAt: 1_791_379_200_000 },
     },
     { event: 'workspace-cancel', data: { commandId: 'cmd_1' } },
+    { event: 'board', data: { projectId: '42', version: 1 } },
   ];
 
   assert.deepEqual(nowSseEventNames, events.map(({ event }) => event));
   for (const event of events) assert.equal(isNowSseEvent(event), true, event.event);
   assert.equal(isNowSseEvent({ event: 'mode', data: { mode: 'away' } }), false);
+  assert.equal(isNowSseEvent({ event: 'board', data: { projectId: '0', version: 1 } }), false);
   assert.equal(isNowSseEvent({ event: 'job', data: { ...job, unexpected: true } }), false);
   assert.equal(isNowSseEvent({
     event: 'workspace-command',
@@ -268,6 +296,61 @@ test('Now SSE contracts guard every named event and its payload', () => {
   }), false);
   assert.equal(isNowSseEvent({ event: 'workspace-cancel', data: { commandId: 'cmd_1', extra: true } }), false);
   assert.equal(isNowSseEvent({ event: 'unknown', data: {} }), false);
+});
+
+test('Factory board contract validates the exact ordered board, cards, and task overlay', () => {
+  const timestamp = '2026-10-08T00:00:00.000Z';
+  const board = {
+    project: { id: '42', repo: 'DanAakesen/jarvis' },
+    fetchedAt: timestamp,
+    stale: false,
+    columns: factoryBoardColumnIds.map((id) => ({ id, cards: [] })),
+  };
+  board.columns[4].cards.push({
+    issue: {
+      number: 7,
+      url: 'https://github.com/DanAakesen/jarvis/issues/7',
+      title: 'P10-04: Match board',
+      taskCode: 'P10-04',
+      labels: ['Codex'],
+      worker: 'Codex',
+      state: 'open',
+      updatedAt: timestamp,
+      closedAt: null,
+      blockedBy: [],
+    },
+    pr: {
+      number: 70,
+      url: 'https://github.com/DanAakesen/jarvis/pull/70',
+      draft: false,
+      checks: 'passing',
+    },
+    task: {
+      id: '81',
+      state: 'Running',
+      activity: 'Running tests',
+      agent: 'codex',
+      attemptCount: 1,
+      branch: 'jarvis/task-81',
+      startedAt: timestamp,
+      latestSessionEndReason: null,
+    },
+  });
+
+  assert.equal(isFactoryBoard(board), true);
+  assert.equal(isFactoryBoardUpdate({ projectId: '42', version: 1 }), true);
+  assert.equal(isFactoryBoardUpdate({ projectId: '42', version: 0 }), false);
+  assert.equal(isFactoryBoard({ ...board, columns: [...board.columns].reverse() }), false);
+  assert.equal(isFactoryBoard({
+    ...board,
+    columns: board.columns.map((column, index) =>
+      index === 4 ? { ...column, cards: [{ ...column.cards[0], issue: { ...column.cards[0].issue, url: 'http://github.com/issues/7' } }] } : column),
+  }), false);
+  assert.equal(isFactoryBoard({
+    ...board,
+    columns: board.columns.map((column, index) =>
+      index === 4 ? { ...column, cards: [{ ...column.cards[0], task: { ...column.cards[0].task, unexpected: true } }] } : column),
+  }), false);
 });
 
 test('task-event and task stream contracts constrain persisted event identity and shape', () => {
@@ -515,8 +598,59 @@ test('defines and validates bounded workspace commands for the approved operatio
     ...['close', 'toggle'].map((action) => ({ ...base, operation: 'context-panel', action })),
   ];
 
-  assert.equal(workspaceCommandSchema.oneOf.length, 13);
+  assert.equal(workspaceCommandSchema.type, 'object');
+  for (const key of ['oneOf', 'anyOf', 'allOf', 'not']) {
+    assert.equal(Object.hasOwn(workspaceCommandSchema, key), false, key);
+  }
   for (const command of commands) assert.equal(isWorkspaceCommand(command), true, command.operation);
+});
+
+test('validates exact navigation keys, settings sections and bounded factory task/issue selectors', () => {
+  const command = { commandId: 'navigate-1', operation: 'navigate' };
+  assert.deepEqual(workspaceNavigationPages, [
+    'home', 'factory', 'settings', 'usage', 'knowledge', 'folio', 'status',
+  ]);
+  assert.deepEqual(workspaceSettingsSections, [
+    'appearance', 'jarvis', 'personality', 'voice', 'presence', 'memory',
+    'coding', 'projects', 'routines', 'credentials', 'backend',
+  ]);
+  assert.deepEqual(workspaceCommandSchema.properties.page.enum, workspaceNavigationPages);
+  assert.deepEqual(workspaceCommandSchema.properties.section.enum, workspaceSettingsSections);
+  for (const page of workspaceNavigationPages) {
+    const navigation = { ...command, page };
+    assert.equal(isWorkspaceCommand(navigation), true, page);
+    assert.equal(isNowSseEvent({
+      event: 'workspace-command', data: { command: navigation, expiresAt: 1_791_379_200_000 },
+    }), true, page);
+  }
+  for (const section of workspaceSettingsSections) {
+    assert.equal(isWorkspaceCommand({ ...command, page: 'settings', section }), true, section);
+  }
+  for (const taskId of ['1', '9223372036854775807']) {
+    assert.equal(isWorkspaceCommand({ ...command, page: 'factory', taskId }), true, taskId);
+  }
+  for (const issueNumber of [1, 567, Number.MAX_SAFE_INTEGER]) {
+    const navigation = { ...command, page: 'factory', issueNumber };
+    assert.equal(isWorkspaceCommand(navigation), true, String(issueNumber));
+    assert.equal(isWorkspaceCommand({ ...navigation, taskId: '42' }), true);
+    assert.equal(isNowSseEvent({
+      event: 'workspace-command', data: { command: navigation, expiresAt: 1_791_379_200_000 },
+    }), true);
+  }
+  for (const invalid of [
+    {}, { page: 'kanban' }, { page: 'knowledge-graph' }, { page: '/settings' }, { page: 'https://example.com' },
+    { page: 'settings', section: 'unknown' }, { page: 'settings', section: null },
+    { page: 'home', section: 'voice' }, { page: 'settings', taskId: '1' },
+    { page: 'factory', section: 'voice' }, { page: 'home', viewId: 'conversation' },
+    { page: 'home', issueNumber: 567 }, { page: 'settings', issueNumber: 567 },
+    ...['global', 'new-projects', 'task-recipes'].map((section) => ({ page: 'settings', section })),
+    ...[0, -1, 1.5, Number.MAX_SAFE_INTEGER + 1, Number.NaN, Number.POSITIVE_INFINITY, '567', null]
+      .map((issueNumber) => ({ page: 'factory', issueNumber })),
+    ...['0', '01', '-1', '1/../../settings', '9223372036854775808', '9'.repeat(20), 1, null]
+      .map((taskId) => ({ page: 'factory', taskId })),
+  ]) {
+    assert.equal(isWorkspaceCommand({ ...command, ...invalid }), false, JSON.stringify(invalid));
+  }
 });
 
 test('rejects invalid workspace IDs, geometry, operations, and generated-view allowlists', () => {

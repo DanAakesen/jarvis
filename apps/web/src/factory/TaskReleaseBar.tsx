@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { fetchReleaseView } from './release-data';
 import type { ReleaseView } from './release-data';
+import { Loader } from '../Loader';
 
 const idPattern = /^[1-9]\d{0,18}$/u;
 const releaseStatuses = ['building', 'deploying', 'released', 'failed'];
@@ -161,7 +162,7 @@ export function TaskReleaseBar({
             ? currentResult.message
             : !backendUrl
               ? 'Release data is unavailable until the backend is deployed.'
-              : 'Loading project release context…'}
+              : <Loader variant="inline" announce={false} label="Loading project release context…" />}
         </p>
         {currentResult?.status === 'error' && backendUrl && (
           <button className="secondary-button" type="button" onClick={() => setRefreshKey((key) => key + 1)}>
@@ -309,7 +310,7 @@ export function TaskReleaseBar({
           : null}
         <button className="secondary-button" type="button" disabled={loading}
           onClick={() => setRefreshKey((key) => key + 1)}>
-          {loading ? currentView ? 'Refreshing…' : 'Loading…' : 'Refresh'}
+          {loading ? <Loader variant="inline" announce={false} label={currentView ? 'Refreshing…' : 'Loading…'} /> : 'Refresh'}
         </button>
         <Link className="secondary-button" to={releaseUrl}>Open release</Link>
       </div>

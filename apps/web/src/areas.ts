@@ -1,6 +1,7 @@
 import type { ComponentType } from 'react';
 import { FactoryArea } from './factory/FactoryArea';
 import { UsagePage } from './usage/UsagePage';
+import { KnowledgeArea } from './knowledge/KnowledgeArea';
 
 export interface AreaProps {
   backendUrl: string | null;
@@ -27,5 +28,6 @@ export const areas: readonly Area[] = [
     ],
     Component: FactoryArea,
   },
+  { id: 'knowledge', label: 'Knowledge', path: 'knowledge', navigation: [{ label: 'Knowledge', path: '/knowledge' }], Component: KnowledgeArea },
   { id: 'usage', label: 'Usage', path: 'usage', navigation: [{ label: 'Usage', path: '/usage' }], Component: UsagePage },
 ];

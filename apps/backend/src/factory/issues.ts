@@ -194,6 +194,6 @@ export async function recordIssueTaskProgress(input: {
   if (input.event.type === 'state_changed' &&
     typeof input.event.payload === 'object' && input.event.payload !== null &&
     (input.event.payload as Record<string, unknown>).to === 'Cancelled') {
-    await input.github.removeLabel(project.repo, detail.issueNumber, 'Codex');
+    await input.github.removeLabel(project.repo, detail.issueNumber, 'Jarvis');
   }
 }

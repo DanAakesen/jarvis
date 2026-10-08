@@ -20,6 +20,7 @@ import type { ReflexClassifier } from './core/reflex.js';
 import type { BrowserAgent } from './core/browser-agent.js';
 import { factoryModule } from './factory/index.js';
 import type { TaskController, TaskEventHub, TaskEventMessage, TaskStore } from './factory/task-store.js';
+import { createGitHubFactoryBoardReader, FactoryBoardCache, type FactoryBoardReader } from './factory/board.js';
 import type { GitHubAppTokenIssuer, GitHubRepositoryCatalog } from './github-app.js';
 import type { ProjectStore } from './factory/projects.js';
 import type { ReleaseGraphReader, ReleaseViewStore } from './factory/release-view.js';
@@ -62,6 +63,7 @@ export interface BuildAppOptions {
   readonly githubAppTokenIssuer?: GitHubAppTokenIssuer;
   readonly githubIssueClient?: GitHubIssueClient;
   readonly issueProgressBoardUrl?: string;
+  readonly factoryBoardReader?: FactoryBoardReader;
   readonly githubRepositoryCatalog?: GitHubRepositoryCatalog;
   readonly taskController?: TaskController;
   readonly eventHub?: TaskEventHub;
@@ -104,6 +106,9 @@ declare module 'fastify' {
     taskStore: TaskStore | null;
     githubAppTokenIssuer: GitHubAppTokenIssuer | null;
     githubIssueClient: GitHubIssueClient | null;
+    factoryBoardReader: FactoryBoardReader;
+    factoryBoardCache: FactoryBoardCache;
+    publishFactoryBoardChange(projectId: string): void;
     githubRepositoryCatalog: GitHubRepositoryCatalog | null;
     taskController: TaskController | null;
     eventHub: TaskEventHub;
@@ -200,8 +205,24 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
   app.decorate('githubRepositoryCatalog', options.githubRepositoryCatalog ?? null);
   app.decorate('taskController', options.taskController ?? null);
   app.decorate('eventHub', options.eventHub ?? createEventHub<TaskEventMessage>());
+  app.decorate('factoryBoardReader', options.factoryBoardReader ?? createGitHubFactoryBoardReader());
+  app.decorate('factoryBoardCache', new FactoryBoardCache());
   app.decorate('nowFeedStore', options.nowFeedStore ?? null);
   app.decorate('nowEventHub', options.nowEventHub ?? createEventHub<NowFeedUpdate>());
+  const factoryBoardVersions = new Map<string, number>();
+  app.decorate('publishFactoryBoardChange', (projectId: string) => {
+    const version = (factoryBoardVersions.get(projectId) ?? 0) + 1;
+    factoryBoardVersions.set(projectId, version);
+    app.factoryBoardCache.invalidateAll();
+    app.nowEventHub.publish({ type: 'board', projectId, version });
+  });
+  const unsubscribeFactoryBoardEvents = app.eventHub.subscribe((event) => {
+    app.factoryBoardCache.invalidateAll();
+    void app.taskStore?.get(event.taskId, 0, 0).then((task) => {
+      if (task) app.publishFactoryBoardChange(task.projectId);
+    }).catch(() => app.log.warn('factory.board_task_event_failed'));
+  });
+  app.addHook('onClose', async () => { unsubscribeFactoryBoardEvents(); });
   app.decorate('jarvisActivityHub', options.jarvisActivityHub ??
     createEventHub<JarvisActivityEvent | JarvisVoiceWakeEvent | BackgroundJobEvent>());
   const backgroundJobs = new BackgroundJobRegistry(app.jarvisActivityHub, Date.now, options.backgroundJobStore);

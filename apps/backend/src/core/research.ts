@@ -20,6 +20,7 @@ import { generatedViewValidationOptions } from './generated-view-validation.js';
 import { defaultSettings, readSettings } from './settings.js';
 import { ToolFailure, ToolRefusal } from './tool-registry.js';
 import { runCodexToolResult, type WebResearchClient } from './web-research.js';
+import type { FolioStore } from '../database/folio-store.js';
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -354,6 +355,7 @@ export function createHtmlResearchModule(
   model: string,
   artifacts: ResearchArtifactStore,
   options: ResearchOptions = {},
+  folio?: FolioStore,
 ): BackendModule {
   const jobTimeoutMs = options.jobTimeoutMs ?? defaultJobTimeoutMs;
   const pollIntervalMs = options.pollIntervalMs ?? defaultPollIntervalMs;
@@ -473,6 +475,14 @@ export function createHtmlResearchModule(
             );
             const artifact = await artifacts.create(ownerId, result.title, result.html, sources(), jobSignal);
             if (!isHtmlArtifact(artifact)) throw new ToolFailure('The report failed artifact validation.');
+            await folio?.record(ownerId, {
+              id: `research:${artifact.id}`,
+              kind: 'research',
+              sourceId: artifact.id,
+              title: artifact.title,
+              promptSummary: topic.replace(/\s+/gu, ' ').slice(0, 500),
+              createdAt: artifact.createdAt,
+            }, jobSignal);
             const view: GeneratedView = {
               version: 1,
               title: windowTitle,

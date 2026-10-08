@@ -203,9 +203,10 @@ describe('ConversationHistory', () => {
 
     expect(await screen.findByText('I started the task.')).not.toBeNull();
     expect(screen.getByText('Sure.')).not.toBeNull();
-    expect(screen.getByText('Voice · English · 2.5 voice minutes')).not.toBeNull();
+    expect(screen.getByText('Voice · 2.5 voice minutes')).not.toBeNull();
+    expect(screen.queryByText(/Chat · English/)).toBeNull();
     expect(screen.getAllByText(/voice minutes/u)).toHaveLength(1);
-    expect(screen.getByText('factory_create_task · ok')).not.toBeNull();
+    expect(screen.getByTitle('factory_create_task · done').textContent).toContain('Factory create task');
     expect(screen.getByRole('link', { name: 'Task #77' }).getAttribute('href')).toBe('/factory/tasks/77');
   });
 
@@ -1063,27 +1064,12 @@ describe('ConversationHistory', () => {
     expect(reply?.querySelector('img, .message-avatar')).toBeNull();
   });
 
-  it('offers visual context from the composer More menu only when a source is shared', async () => {
-    const camera: CameraController = {
-      sharing: true,
-      starting: false,
-      inspecting: false,
-      error: '',
-      start: vi.fn(async () => {}),
-      stop: vi.fn(),
-      inspect: vi.fn(async () => ({ description: 'A red mug.' })),
-    };
-    renderConversation(0, camera);
+  it('offers sharing in the More menu without separate look actions', async () => {
+    renderConversation(0);
     await screen.findByRole('heading', { name: 'What’s on your mind?' });
 
     fireEvent.click(screen.getByRole('button', { name: 'More options' }));
-    const screenItem = screen.getByRole('menuitem', { name: 'Look at screen' });
-    expect(screenItem.getAttribute('aria-disabled')).toBe('true');
-    expect(screenItem.getAttribute('title')).toBe('Share your screen from the top bar first.');
+    expect(screen.queryByRole('menuitem', { name: /^Look at/ })).toBeNull();
     expect(screen.getByRole('menuitem', { name: 'Language' })).not.toBeNull();
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Look at camera' }));
-
-    await waitFor(() => expect(camera.inspect).toHaveBeenCalledWith(session.id));
-    expect((await screen.findByText(/Camera context is ready for the next message/)).getAttribute('role')).toBe('status');
   });
 });

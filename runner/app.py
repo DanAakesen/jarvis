@@ -45,6 +45,8 @@ APP_VERSION = "0.2.0"
 WORK_ROOT = Path(os.environ.get("JARVIS_WORK_ROOT", "/files/jarvis"))
 MAX_EVENTS = 500
 MAX_EVENT_PAYLOAD_BYTES = 256 * 1024
+# One ACP message per line; tool output (for example a large file dump) can exceed asyncio's 64 KiB default (L126).
+ACP_LINE_LIMIT_BYTES = 32 * 1024 * 1024
 MAX_ATTENTION_QUESTION_LENGTH = 500
 DEFAULT_DISK_LOW_THRESHOLD_BYTES = 1024**3
 MAX_GENERATED_IMAGE_BYTES = 5 * 1024 * 1024
@@ -1303,6 +1305,7 @@ class ACPClient:
             stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
+            limit=ACP_LINE_LIMIT_BYTES,
         )
         self.state.process = self.process
         self._reader_task = asyncio.create_task(self._read_stdout())
@@ -1331,7 +1334,13 @@ class ACPClient:
     async def _read_stdout(self) -> None:
         assert self.process and self.process.stdout
         while True:
-            line = await self.process.stdout.readline()
+            try:
+                line = await self.process.stdout.readline()
+            except ValueError:
+                # readline() drops an over-limit line and raises; keep draining so the agent never
+                # blocks on a full pipe (L126).
+                self.state.event("acp_message_dropped", reason="line_limit")
+                continue
             if not line:
                 break
             try:

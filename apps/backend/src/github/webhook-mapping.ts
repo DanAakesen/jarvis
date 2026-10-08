@@ -59,7 +59,7 @@ type IssueLabeledMapping = {
   readonly kind: 'issue_labeled';
   readonly repository: string;
   readonly number: number;
-  readonly label: 'Codex';
+  readonly label: 'Jarvis';
 };
 
 export type GithubWebhookMapping =
@@ -270,8 +270,8 @@ export function mapGithubWebhook(event: string, value: unknown): GithubWebhookMa
     const label = object(payload.label);
     if (payload.action === 'labeled' && numberValue &&
       !object(issue?.pull_request) &&
-      typeof label?.name === 'string' && label.name.toLowerCase() === 'codex') {
-      return { kind: 'issue_labeled', repository: repo, number: numberValue, label: 'Codex' };
+      typeof label?.name === 'string' && label.name.toLowerCase() === 'jarvis') {
+      return { kind: 'issue_labeled', repository: repo, number: numberValue, label: 'Jarvis' };
     }
   }
 

@@ -169,7 +169,7 @@ describe('Factory issue tasks', () => {
       expect.stringContaining('Cancelled.'),
     ]);
     expect(github.createComment.mock.calls[0]?.[0]).not.toContain(issue.body);
-    expect(github.removeLabel).toHaveBeenCalledWith(project.repo, 8, 'Codex');
+    expect(github.removeLabel).toHaveBeenCalledWith(project.repo, 8, 'Jarvis');
 
     vi.mocked(github.readComments).mockResolvedValue([
       { author: 'jarvis', body: '<!-- jarvis-factory:42:5 -->\nCancelled.' },

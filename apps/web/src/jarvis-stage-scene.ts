@@ -31,6 +31,8 @@ type ThemePalette = {
   metal: string;
   seam: string;
   amber: string;
+  /** The bright amber glow shared with the chat orb's brain (--glass-glow-warm). */
+  warm: string;
   hemisphere: string;
   ground: string;
   key: string;
@@ -41,7 +43,7 @@ type ThemePalette = {
   glow: number;
 };
 
-type ThemeColor = Exclude<keyof ThemePalette, 'reflector' | 'exposure' | 'glow'>;
+type ThemeColor = Exclude<keyof ThemePalette, 'reflector' | 'exposure' | 'glow' | 'warm'>;
 
 function readStagePalette(): ThemePalette {
   const style = window.getComputedStyle(document.documentElement);
@@ -69,6 +71,7 @@ function readStagePalette(): ThemePalette {
     metal: color('metal'),
     seam: color('seam'),
     amber: color('amber'),
+    warm: style.getPropertyValue('--glass-glow-warm').trim() || '#ffb45c',
     hemisphere: color('hemisphere'),
     ground: color('ground'),
     key: color('key'),
@@ -108,6 +111,8 @@ export function createJarvisStageScene(
     throw error;
   }
 }
+
+const ambientFrameInterval = 1000 / 30;
 
 function createJarvisStageSceneWithRenderer(
   host: HTMLElement,
@@ -161,7 +166,9 @@ function createJarvisStageSceneWithRenderer(
   };
   const glow = new THREE.MeshBasicMaterial({ color: '#8bdce8', transparent: true, opacity: 0.52 });
   const cyan = new THREE.MeshBasicMaterial({ color: '#74e5ef', transparent: true, opacity: 0.88 });
-  const warm = new THREE.MeshBasicMaterial({ color: '#e6ba79', transparent: true, opacity: 0.46 });
+  const warm = new THREE.MeshBasicMaterial({ color: palette.warm, transparent: true, opacity: 0.85 });
+  // Thin amber lines are flat and unlit, so they stay crisp instead of blooming.
+  const warmLine = new THREE.MeshBasicMaterial({ color: palette.warm });
   const metal = standard('metal', { metalness: 0.88, roughness: 0.24 });
   const darkMetal = standard('wall', {
     metalness: 0.62, roughness: 0.42, side: THREE.DoubleSide,
@@ -172,7 +179,6 @@ function createJarvisStageSceneWithRenderer(
   const seam = standard('seam', {
     metalness: 0.78, roughness: 0.22, emissive: palette.seam,
   });
-  const gold = standard('amber', { metalness: 0.85, roughness: 0.28, emissive: '#bf7134' });
 
   const hemisphere = new THREE.HemisphereLight(palette.hemisphere, palette.ground, 0.56);
   scene.add(hemisphere);
@@ -222,7 +228,7 @@ function createJarvisStageSceneWithRenderer(
   const packets: THREE.Mesh<THREE.SphereGeometry, THREE.MeshBasicMaterial>[] = [];
   for (let index = 0; index < 6; index += 1) {
     const packet = new THREE.Mesh(new THREE.SphereGeometry(0.021, 8, 6),
-      new THREE.MeshBasicMaterial({ color: index % 3 === 0 ? '#d7b77d' : '#b8f5ff' }));
+      new THREE.MeshBasicMaterial({ color: index % 3 === 0 ? palette.warm : '#b8f5ff' }));
     platform.add(packet);
     packets.push(packet);
   }
@@ -290,7 +296,7 @@ function createJarvisStageSceneWithRenderer(
       strip.position.z += 0.355;
       strip.rotation.copy(beam.rotation);
       chamber.add(strip);
-      const amberSlit = new THREE.Mesh(new THREE.BoxGeometry(0.026, 0.85, 0.032), warm);
+      const amberSlit = new THREE.Mesh(new THREE.BoxGeometry(0.011, 0.85, 0.014), warm);
       amberSlit.position.copy(beam.position);
       amberSlit.position.y = 1;
       amberSlit.position.z += 0.36;
@@ -315,12 +321,16 @@ function createJarvisStageSceneWithRenderer(
     const moving = new THREE.Group();
     pivot.add(moving);
     for (let section = 0; section < 4; section += 1) {
-      const arc = new THREE.Mesh(
-        new THREE.TorusGeometry(radius, 0.115 + index * 0.022, 12, 44, Math.PI * 0.34),
-        section === index ? gold : metal,
-      );
+      const tube = 0.115 + index * 0.022;
+      const arc = new THREE.Mesh(new THREE.TorusGeometry(radius, tube, 12, 44, Math.PI * 0.34), metal);
       arc.rotation.z = section * Math.PI / 2 + 0.12;
       moving.add(arc);
+      // The accent section carries a fine, crisp amber inlay on its face instead of a thick orange band (Dan, 7 October).
+      if (section === index) {
+        const inlay = new THREE.Mesh(new THREE.TorusGeometry(radius, 0.009, 4, 88, Math.PI * 0.34), warmLine);
+        inlay.position.z = tube + 0.004;
+        arc.add(inlay);
+      }
       const tracer = new THREE.Mesh(new THREE.TorusGeometry(radius - 0.16, 0.011, 6, 44, Math.PI * 0.3), glow);
       tracer.rotation.z = section * Math.PI / 2 + 0.16;
       tracer.position.z = 0.1;
@@ -345,7 +355,7 @@ function createJarvisStageSceneWithRenderer(
   for (let index = 0; index < 8; index += 1) {
     const arc = new THREE.Mesh(
       new THREE.TorusGeometry(3.34, 0.011, 5, 32, Math.PI * 0.13),
-      index % 4 === 0 ? gold : seam,
+      index % 4 === 0 ? warmLine : seam,
     );
     arc.rotation.set(-Math.PI / 2, 0, index * Math.PI / 4);
     arc.position.y = -0.15;
@@ -402,7 +412,8 @@ function createJarvisStageSceneWithRenderer(
   scene.add(orbRig);
   const orbLight = new THREE.PointLight(palette.orb, 100, 26, 2);
   scene.add(orbLight);
-  const amberLight = new THREE.PointLight('#ff984c', 4, 10, 2);
+  const amberLight = new THREE.PointLight(palette.warm, 4, 10, 2);
+  orbVisual.uniforms.uWarm.value.set(palette.warm);
   scene.add(amberLight);
   const wallLight = new THREE.SpotLight(palette.orb, 100, 45, 0.83, 0.85, 2);
   scene.add(wallLight, wallLight.target);
@@ -425,6 +436,10 @@ function createJarvisStageSceneWithRenderer(
     reflectionMaterial.uniforms['color']?.value.set(palette.reflector);
     seam.emissive.set(palette.seam);
     themeColors.orb.set(palette.orb);
+    warm.color.set(palette.warm);
+    warmLine.color.set(palette.warm);
+    amberLight.color.set(palette.warm);
+    orbVisual.uniforms.uWarm.value.set(palette.warm);
   }
 
   function resize(redraw = true) {
@@ -613,12 +628,19 @@ function createJarvisStageSceneWithRenderer(
       return;
     }
     const frameInterval = Math.max(0, now - previous);
+    // The room is ambient: 30 fps keeps it smooth at half the cost. Voice gets the full display rate.
+    const targetInterval = current.voiceActive ? 0 : ambientFrameInterval;
+    if (frameInterval < targetInterval - 4) {
+      animationFrame = window.requestAnimationFrame(frame);
+      return;
+    }
     const delta = Math.max(0, Math.min(frameInterval / 1000, 0.12));
     previous = now;
     elapsed += delta;
     draw(delta);
     qualityFrameCount += 1;
-    qualityFrameTime += Math.min(frameInterval, 1000);
+    // Quality adapts to lateness against the frame budget, so the deliberate 30 fps cap never lowers quality.
+    qualityFrameTime += Math.min(Math.max(0, frameInterval - Math.max(0, targetInterval - 1000 / 60)), 1000);
     if (now - qualityWindowStarted >= 1000 && qualityFrameCount > 0) {
       const nextQuality = nextJarvisStageQualityLevel(qualityLevel, qualityFrameTime / qualityFrameCount);
       if (nextQuality > qualityLevel) {

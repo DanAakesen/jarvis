@@ -214,7 +214,7 @@ export function createGitHubDeliveryHandler(
               head: branch,
               base: defaultBranch,
               body: [
-                task.issueNumber ? `Closes #${task.issueNumber}` : undefined,
+                task.issueNumber ? `Fixes #${task.issueNumber}` : undefined,
                 staticWebAppOrigin
                   ? `Completed by Jarvis task [#${task.id}](${staticWebAppOrigin}${taskPath}).`
                   : `Completed by Jarvis task #${task.id} (task details: ${taskPath}).`,

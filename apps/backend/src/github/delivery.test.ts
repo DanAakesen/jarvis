@@ -157,7 +157,7 @@ describe('GitHub task delivery', () => {
     const create = api.calls.find((call) => call.method === 'POST');
     expect(JSON.parse(create?.body ?? '{}')).toMatchObject({
       title: 'P10-02: Factory tasks are backed by GitHub issues',
-      body: expect.stringMatching(/^Closes #574\n\n/u),
+      body: expect.stringMatching(/^Fixes #574\n\n/u),
     });
   });
 

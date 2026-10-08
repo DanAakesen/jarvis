@@ -365,7 +365,7 @@ export function isWorkspaceReflexOperation(args: Readonly<Record<string, unknown
 
 export const workspaceCommandTool: BackendModule['tools'][number] = {
   name: 'workspace_command',
-  description: 'Create, update, show, close, minimise, restore, focus, move, resize, or arrange a temporary view in Dan’s active workspace, or change its context panel.',
+  description: 'Navigate Dan’s visible shell page (home, factory board or task/issue, settings section, usage, knowledge, folio, status), create, update, show, close, minimise, restore, focus, move, resize, or arrange a temporary workspace view, or change its context panel. Supply a unique commandId. Navigation section is settings-only; taskId and positive integer issueNumber are factory-only. Success requires a tab to acknowledge applying the command; relay its refusal reason for missing tasks/issues or unavailable pages.',
   inputSchema: workspaceCommandSchema,
   sensitive: true,
   async execute(input, request, signal) {
@@ -383,6 +383,7 @@ export const workspaceCommandTool: BackendModule['tools'][number] = {
         (input.operation === 'context-panel' && input.action === 'open' && input.view !== undefined)) {
       return { type: 'generated-view', view: input.view };
     }
+    if (input.operation === 'navigate') return { applied: true, ...input };
     return { applied: true, commandId: input.commandId, operation: input.operation };
   },
 };

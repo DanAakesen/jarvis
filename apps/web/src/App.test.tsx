@@ -417,12 +417,13 @@ describe('App shell', () => {
     expect(document.querySelector('.conversation-window-bar, .conversation-restore')).toBeNull();
 
     await user.click(within(historyWindow).getByRole('button', { name: 'Minimise Conversation' }));
-    const tabs = screen.getByRole('navigation', { name: 'Minimised views' });
+    // The conversation has no tab; the chat bar's handle brings it back.
+    expect(screen.queryByRole('button', { name: 'Restore Conversation' })).toBeNull();
     expect(historyWindow.hasAttribute('inert')).toBe(true);
     expect(screen.getByLabelText('Conversation history')).toBe(transcript);
     await user.type(composer, 'Still typing');
     expect((composer as HTMLTextAreaElement).value).toBe('Still typing');
-    await user.click(within(tabs).getByRole('button', { name: 'Restore Conversation' }));
+    await user.click(screen.getByRole('button', { name: 'Show conversation' }));
     expect(historyWindow.hasAttribute('inert')).toBe(false);
     expect(screen.getByLabelText('Conversation history')).toBe(transcript);
 
@@ -454,9 +455,9 @@ describe('App shell', () => {
     ))).toBe(true));
 
     expect(await workspace.command('jarvis-minimise', 'minimise')).toMatchObject({ applied: true });
-    expect(screen.getByRole('button', { name: 'Restore Conversation' })).not.toBeNull();
+    expect(screen.getByRole('button', { name: 'Show conversation' })).not.toBeNull();
     expect(await workspace.command('jarvis-restore', 'restore')).toMatchObject({ applied: true });
-    expect(screen.queryByRole('button', { name: 'Restore Conversation' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Hide conversation' })).not.toBeNull();
     expect(await workspace.command('jarvis-close', 'close')).toMatchObject({ applied: true });
     expect(screen.queryByRole('article', { name: 'Conversation' })).toBeNull();
     expect(await workspace.command('jarvis-reopen', 'restore')).toMatchObject({ applied: true });
@@ -538,7 +539,7 @@ describe('App shell', () => {
     await user.type(composer, 'Unsent draft');
 
     await user.click(within(historyWindow).getByRole('button', { name: 'Minimise Conversation' }));
-    await user.click(screen.getByRole('button', { name: 'Restore Conversation' }));
+    await user.click(screen.getByRole('button', { name: 'Show conversation' }));
     await user.click(within(historyWindow).getByRole('button', { name: 'Close Conversation' }));
     expect(screen.queryByRole('article', { name: 'Conversation' })).toBeNull();
     expect(screen.getByRole('textbox', { name: 'Message Jarvis' })).toBe(composer);
@@ -564,7 +565,7 @@ describe('App shell', () => {
     await renderSignedIn();
     await screen.findByText('I am ready.');
 
-    await user.click(screen.getByRole('button', { name: 'Close Conversation' }));
+    await user.click(within(screen.getByRole('article', { name: 'Conversation' })).getByRole('button', { name: 'Close Conversation' }));
     await user.type(screen.getByRole('textbox', { name: 'Message Jarvis' }), 'Will this fail?');
     await user.click(screen.getByRole('button', { name: 'Send' }));
     const turnAlert = await screen.findByText('Jarvis could not finish the reply. Try again.');
@@ -629,31 +630,15 @@ describe('App shell', () => {
     expect(screen.queryByRole('button', { name: 'Restore Conversation' })).toBeNull();
   });
 
-  it('keeps camera/sharing behind a labelled disclosure with Escape focus recovery', async () => {
-    const media = { matches: true, addEventListener: vi.fn(), removeEventListener: vi.fn() };
-    vi.stubGlobal('matchMedia', vi.fn(() => media));
+  it('keeps camera and screen sharing out of the top bar and in the chat More menu', async () => {
     const user = userEvent.setup();
     await renderSignedIn();
-    const trigger = screen.getByLabelText('Camera and sharing controls');
-    const menu = trigger.closest('details')!;
-    await user.click(trigger);
-    expect(menu.open).toBe(true);
-    expect(within(menu).getByRole('button', { name: 'Screen sharing off. Share screen.' }).hasAttribute('disabled')).toBe(false);
-    expect(within(menu).getByRole('button', { name: 'Camera off. Turn camera on.' })).not.toBeNull();
-    trigger.focus();
-    await user.keyboard('{Escape}');
-    expect(menu.open).toBe(false);
-    expect(document.activeElement).toBe(trigger);
-    act(() => {
-      media.matches = false;
-      media.addEventListener.mock.calls.forEach(([, listener]) => listener());
-    });
-    expect(screen.queryByLabelText('Camera and sharing controls')).toBeNull();
-    expect(screen.getByRole('button', { name: 'Camera off. Turn camera on.' }).closest('details')).toBeNull();
-    const topbar = screen.getByRole('button', { name: 'Camera off. Turn camera on.' }).closest('.topbar-actions') as HTMLElement;
-    expect(within(topbar).getByRole('button', { name: 'Screen sharing off. Share screen.' }).closest('details')).toBeNull();
+    const topbar = document.querySelector('.topbar-actions') as HTMLElement;
+    expect(within(topbar).queryByRole('button', { name: /share screen|camera/i })).toBeNull();
+    await user.click(screen.getByRole('button', { name: 'More options' }));
+    expect(screen.getByRole('menuitem', { name: 'Share screen' })).not.toBeNull();
+    expect(screen.getByRole('menuitem', { name: 'Turn camera on' })).not.toBeNull();
   });
-
   it('shows chat work only after a runtime event and clears it on the reported terminal event', async () => {
     const user = userEvent.setup();
     let finish: (() => void) | undefined;
@@ -693,6 +678,15 @@ describe('App shell', () => {
     };
     publish({ type: 'thinking', activityId: '22222222-2222-4222-8222-222222222222', source: 'chat' });
     expect(await screen.findByRole('status', { name: 'Jarvis is thinking' })).not.toBeNull();
+    const tool = (type: string, outcome?: string) => activityStream?.enqueue(new TextEncoder().encode(`event: jarvis-activity\ndata: ${JSON.stringify({
+      type, activityId: '33333333-3333-4333-8333-333333333333', source: 'chat', toolName: 'web_search', ...(outcome ? { outcome } : {}),
+    })}\n\n`));
+    tool('tool-call-started');
+    const trail = await screen.findByRole('list', { name: 'Tools Jarvis is using' });
+    expect(within(trail).getByTitle('web_search · running')).not.toBeNull();
+    tool('tool-call-finished', 'ok');
+    expect(await within(trail).findByTitle('web_search · done')).not.toBeNull();
+    expect(within(trail).getAllByRole('listitem')).toHaveLength(1);
 
     finish?.();
     publish({ type: 'ended', activityId: '22222222-2222-4222-8222-222222222222', source: 'chat' });
@@ -707,30 +701,30 @@ describe('App shell', () => {
     expect(screen.queryByRole('heading', { name: 'Tasks' })).toBeNull();
   });
 
-  it('offers the Software Factory and Usage areas with a settings entry', async () => {
+  it('offers the Software Factory, Knowledge and Usage areas with a settings entry', async () => {
     await renderSignedIn();
 
     const areas = screen.getByRole('navigation', { name: 'Areas' });
     expect(within(areas).getAllByRole('link').map((link) => link.getAttribute('aria-label'))).toEqual([
       'Conversation',
       'Software Factory',
+      'Knowledge',
       'Usage',
     ]);
     expect(screen.getByRole('link', { name: 'Settings' }).getAttribute('href')).toBe('/settings');
   });
 
-  it('shows a single home breadcrumb and adds area and page only on deeper routes', async () => {
+  it('shows only the brand in the top bar, with open windows as tabs beside it and no breadcrumb', async () => {
     const user = userEvent.setup();
     await renderSignedIn();
-    const breadcrumb = document.querySelector('.topbar-context')!;
+    const context = document.querySelector('.topbar-context')!;
 
-    expect(breadcrumb.textContent).toBe('Jarvis');
-    expect(screen.queryByText('Local UI fixture · not production')).toBeNull();
+    expect(context.textContent).toBe('Jarvis');
+    expect(document.querySelector('.app-topbar .window-tabbar')).not.toBeNull();
     await user.click(screen.getByRole('link', { name: 'Software Factory' }));
     await screen.findByRole('heading', { level: 1, name: 'Kanban' });
-
-    expect(breadcrumb.textContent).toBe('Jarvis/Software Factory/Kanban');
-    expect(breadcrumb.querySelector('[aria-current="page"]')?.textContent).toBe('Kanban');
+    expect(context.textContent).toBe('Jarvis');
+    expect(screen.queryByText('Open windows appear here.')).toBeNull();
   });
 
   it('restores the accepted appearance across signed-in app routes', async () => {
@@ -769,7 +763,7 @@ describe('App shell', () => {
     }
   });
 
-  it('turns the camera on and off from the shared shell', async () => {
+  it('turns the camera on from the chat More menu and off from the live line', async () => {
     const user = userEvent.setup();
     let stopped = false;
     const track = {
@@ -788,12 +782,10 @@ describe('App shell', () => {
     });
     await renderSignedIn();
 
-    const camera = screen.getByRole('button', { name: 'Camera off. Turn camera on.' });
-    expect(camera).toHaveProperty('disabled', false);
-    expect(camera.getAttribute('aria-pressed')).toBe('false');
-    await user.click(camera);
-    const activeCamera = await screen.findByRole('button', { name: 'Camera on. Turn camera off.' });
-    expect(activeCamera.getAttribute('aria-pressed')).toBe('true');
+    await user.click(screen.getByRole('button', { name: 'More options' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Turn camera on' }));
+    expect(await screen.findByText('Camera on for Jarvis')).not.toBeNull();
+    const activeCamera = screen.getByRole('button', { name: 'Camera off' });
     expect(getUserMedia).toHaveBeenCalledWith({
       video: { width: { ideal: 1280 }, height: { ideal: 720 } },
       audio: false,
@@ -801,7 +793,7 @@ describe('App shell', () => {
     await user.click(activeCamera);
     expect(track.stop).toHaveBeenCalledOnce();
     expect(screen.queryByText('Activity, sharing and backend')).toBeNull();
-    expect(screen.getByRole('button', { name: 'Screen sharing off. Share screen.' })).toHaveProperty('disabled', false);
+    expect(screen.queryByText('Camera on for Jarvis')).toBeNull();
   });
 
   it('opens and closes the contextual shell panel without replacing page content', async () => {

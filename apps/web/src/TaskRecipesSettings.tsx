@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { backendFetch } from './backend-request';
+import { Loader } from './Loader';
 
 interface RecipeSummary {
   id: string;
@@ -137,11 +138,11 @@ export function TaskRecipesSettings({ backendUrl, getAccessToken }: {
       <div className="settings-actions">
         <button className="secondary-button" type="button"
           disabled={loading || deleting !== null || !backendUrl} onClick={() => { void load(); }}>
-          {loading ? 'Refreshing…' : error && !loaded ? 'Retry task recipes' : 'Refresh task recipes'}
+          {loading ? <Loader variant="inline" announce={false} label="Refreshing…" /> : error && !loaded ? 'Retry task recipes' : 'Refresh task recipes'}
         </button>
       </div>
       <p className="settings-feedback" role={error ? 'alert' : 'status'}>
-        {error || (loading ? 'Loading task recipes…' : message)}
+        {error || (loading ? <Loader variant="inline" announce={false} label="Loading task recipes…" /> : message)}
       </p>
       {error && loaded && <p className="settings-explanation">Previously loaded recipes are shown.</p>}
       {loaded && recipes.length === 0 && <p>No task recipes saved yet.</p>}

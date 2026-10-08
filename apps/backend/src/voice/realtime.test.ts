@@ -270,20 +270,22 @@ describe('English realtime session', () => {
   });
 
   it.each([
-    ['invalid JSON', call({ arguments: '{' }), true],
-    ['invalid schema', call({ arguments: '{"text":"hello"}' }), false],
-    ['unregistered tool', call({ name: 'missing' }), true],
-  ])('does not execute a tool with %s', async (_label, functionCall, valid) => {
-    const request = { validateInput: vi.fn(() => valid) } as unknown as FastifyRequest;
+    ['invalid JSON', call({ arguments: '{' }), true, 'Invalid arguments: expected a JSON object. Allowed: text. Retry with arguments matching the tool schema.'],
+    ['invalid schema', call({ arguments: '{"text":"hello"}' }), false, 'Invalid arguments: input does not match the tool schema. Allowed: text. Retry with arguments matching the tool schema.'],
+    ['unregistered tool', call({ name: 'missing' }), true, undefined],
+  ])('does not execute a tool with %s', async (_label, functionCall, valid, refused) => {
+    const request = {
+      validateInput: vi.fn(() => valid), getValidationFunction: vi.fn(() => undefined), log: { info: vi.fn() },
+    } as unknown as FastifyRequest;
     const execute = vi.mocked(tool.execute);
     execute.mockClear();
 
     await expect(executeRealtimeToolCall(functionCall, registry, request, new AbortController().signal))
       .resolves.toBe(JSON.stringify({
         tool: functionCall.name,
-        outcome: 'error',
-        result: { error: 'Tool execution failed' },
-        confirmation: `Not done: ${functionCall.name} failed.`,
+        outcome: refused ? 'refused' : 'error',
+        result: refused ? { refused } : { error: 'Tool execution failed' },
+        confirmation: refused ? `Not done: ${functionCall.name} was refused. ${refused}` : `Not done: ${functionCall.name} failed.`,
       }));
     expect(execute).not.toHaveBeenCalled();
   });

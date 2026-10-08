@@ -92,7 +92,10 @@ describe('backend module composition', () => {
       method: 'POST', url: '/tools/extension_echo', headers: { ...headers, 'x-jarvis-message-id': '42' },
       payload: {},
     });
-    expect(invalid.statusCode).toBe(400);
+    expect(invalid.statusCode).toBe(200);
+    expect(invalid.json()).toMatchObject({
+      outcome: 'refused', result: { refused: expect.stringContaining("missing property 'text'") },
+    });
     expect(execute).toHaveBeenCalledOnce();
     expect(record).toHaveBeenCalledOnce();
     expect((await app.inject({ method: 'POST', url: '/tools/missing', headers })).statusCode).toBe(404);

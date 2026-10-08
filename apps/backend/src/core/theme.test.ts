@@ -102,7 +102,8 @@ describe('set_theme tool', () => {
       payload: { tokens: { appearance: 'dark', accent: 'red', background: 'unregistered' } },
     });
 
-    expect(response.statusCode).toBe(400);
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({ outcome: 'refused', result: { refused: expect.stringContaining('Invalid arguments:') } });
     expect(write).not.toHaveBeenCalled();
     expect(record).not.toHaveBeenCalled();
   });

@@ -42,7 +42,7 @@ function payloadFor(event: string) {
     repository,
     action: 'labeled',
     issue: { number: 42, state: 'open', title: 'P10-02: Factory tasks' },
-    label: { name: 'Codex' },
+    label: { name: 'Jarvis' },
   };
   if (event === 'deployment_status') return {
     repository,
@@ -76,7 +76,12 @@ function fixture(
     },
   });
   const config = loadConfig({ STATIC_WEB_APP_ORIGIN: 'https://fixture.azurestaticapps.net' });
-  const app = buildApp(config, undefined, { modules: [module] });
+  const projectStore = {
+    list: async () => [{
+      id: '42', repo: repository.full_name, active: true,
+    }],
+  } as unknown as ProjectStore;
+  const app = buildApp(config, undefined, { modules: [module], projectStore });
   apps.push(app);
   return { app, deliveries };
 }
@@ -107,7 +112,7 @@ async function deliver(
 }
 
 describe('GitHub webhook receiver', () => {
-  it('forwards signed Codex issue labels for idempotent task creation', async () => {
+  it('forwards signed Jarvis issue labels for idempotent task creation', async () => {
     const issueTask: TaskRecord = {
       id: '42', projectId: '7', issueNumber: 42, originMessageId: null,
       title: 'P10-02: Factory tasks', request: 'prompt', source: 'board', agent: 'codex',
@@ -130,7 +135,7 @@ describe('GitHub webhook receiver', () => {
     const github = {
       readIssue: vi.fn(async () => ({
         number: 42, title: issueTask.title, body: 'Issue request', state: 'open' as const,
-        url: `https://github.com/${repository.full_name}/issues/42`, labels: ['Codex'], isPullRequest: false,
+        url: `https://github.com/${repository.full_name}/issues/42`, labels: ['Jarvis'], isPullRequest: false,
       })),
       readComments: vi.fn(async () => [{ author: 'DanAakesen', body: 'Please do this.' }]),
       readAgentRules: vi.fn(async () => 'AGENTS instructions'),
@@ -236,6 +241,24 @@ describe('GitHub webhook receiver', () => {
     expect(deliveries.size).toBe(1);
   });
 
+  it.each(['issues', 'pull_request'])('invalidates cached Factory boards for signed %s events', async (event) => {
+    const { app } = fixture();
+    const board = {
+      projectId: '42', repository: repository.full_name, fetchedAt: timestamp, columns: [],
+    };
+    const load = vi.fn(async () => board);
+    await app.factoryBoardCache.get(repository.full_name, load);
+    const body = event === 'issues'
+      ? Buffer.from(JSON.stringify({ repository, action: 'opened', issue: { number: 7 } }))
+      : Buffer.from(JSON.stringify(payloadFor(event)));
+
+    const response = await deliver(app, `board-${event}`, event, body);
+
+    expect(response.statusCode).toBe(202);
+    await app.factoryBoardCache.get(repository.full_name, load);
+    expect(load).toHaveBeenCalledTimes(2);
+  });
+
   it('publishes a short status event only when a pull request is marked ready for review', async () => {
     const { app } = fixture();
     const events: unknown[] = [];
@@ -251,6 +274,7 @@ describe('GitHub webhook receiver', () => {
     expect(duplicate.json()).toEqual({ status: 'duplicate' });
     expect(events).toEqual([
       { type: 'refresh' },
+      { type: 'board', projectId: '42', version: 1 },
       { type: 'status', kind: 'pull_request_ready' },
     ]);
     unsubscribe();

@@ -1,24 +1,26 @@
 import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import { InputOrbCore } from './InputOrbCore';
 import type { SignInSession } from './useSignIn';
+import { Loader } from './Loader';
 
 export function SignInPage({ session }: { session: SignInSession }) {
   const { state, message } = session;
   const pending = state === 'checking' || state === 'signing-in';
   return (
     <section className="signin" aria-labelledby="welcome-heading">
+      {/* The room's own orb is the hero; the card is a dense glass slab low over the floor, where the chat bar lives. */}
       <div className="signin-card" data-state={state}>
-        <span className="signin-orb" aria-hidden="true"><InputOrbCore /></span>
-        <h1 id="welcome-heading">Jarvis is taking shape</h1>
-        <p>Your personal AI platform starts here. Sign in with your Microsoft account to continue.</p>
+        <div className="signin-copy">
+          <h1 id="welcome-heading">Jarvis is taking shape</h1>
+          <p>Your personal AI platform starts here. Sign in with your Microsoft account to continue.</p>
+        </div>
         <button className="primary-button signin-button" type="button" onClick={() => { void session.signIn(); }} disabled={pending || state === 'unavailable'}>
           {state === 'signing-in' ? 'Signing in…' : state === 'error' ? 'Try another Microsoft account' : 'Sign in with Microsoft'}
         </button>
         <p className="sign-in-status" role={state === 'error' ? 'alert' : 'status'} aria-live="polite">
-          {state === 'checking' && 'Checking for an existing sign-in…'}
+          {state === 'checking' && <Loader variant="core" size="inline" announce={false} label="Checking for an existing sign-in…" />}
           {state === 'signed-out' && 'Not signed in.'}
-          {state === 'signing-in' && 'Opening Microsoft sign-in…'}
+          {state === 'signing-in' && <Loader variant="core" size="inline" announce={false} label="Opening Microsoft sign-in…" />}
           {state === 'unavailable' && 'Sign-in is unavailable until the backend is deployed.'}
           {state === 'error' && message}
         </p>
