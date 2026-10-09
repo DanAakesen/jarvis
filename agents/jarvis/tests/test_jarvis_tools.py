@@ -27,6 +27,16 @@ from jarvis_tools import (
 )
 
 TOKEN = "agent-token-secret"
+
+
+def test_google_instructions_require_later_approval_and_preserve_mail_confirmation() -> None:
+    assert 'Calendar accepts a later "approve" reply for one pending change' in INSTRUCTIONS
+    assert '"confirm <code>" to select a change' in INSTRUCTIONS
+    assert "Gmail requires the exact returned phrase" in INSTRUCTIONS
+    assert "confirmation tool without the required later Dan approval" in INSTRUCTIONS
+    assert "use the staged action’s code" in INSTRUCTIONS
+
+
 CREATE_TASK = {
     "name": "create_task",
     "description": "Start a new coding task.",
