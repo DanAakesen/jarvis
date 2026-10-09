@@ -7,7 +7,7 @@ function message(id: string, text: string, at: number): ConversationMessage {
 }
 
 describe('pending Google actions', () => {
-  it('requires exact confirmation from a later Dan message and consumes it once', async () => {
+  it('accepts code selection from a later Dan message and consumes it once', async () => {
     let now = 1000;
     const actions = new PendingGoogleActions(() => now);
     const execute = vi.fn(async () => ({ status: 'completed' }));
@@ -107,6 +107,35 @@ describe('short calendar approval', () => {
     await expect(actions.confirm('mail', mail.confirmationCode, message('11', 'approve', 1001), signal))
       .rejects.toMatchObject({ name: 'ToolRefusal' });
     await actions.confirm('mail', mail.confirmationCode, message('11', `confirm ${mail.confirmationCode}`, 1001), signal);
+    expect(execute).toHaveBeenCalledOnce();
+  });
+
+  it('consumes approval before execution settles, refusing concurrent replay for another action', async () => {
+    const { actions, pending } = setup();
+    let finish!: () => void;
+    const execute = vi.fn(() => new Promise<void>((resolve) => { finish = resolve; }));
+    const second = actions.stage({ scope: 'calendar', sourceMessageId: '10', summary: 'Move meeting.', execute });
+    const approval = message('11', `confirm ${second.confirmationCode}`, 1001);
+    const running = actions.confirm('calendar', second.confirmationCode, approval, signal);
+    expect(execute).toHaveBeenCalledOnce();
+    await expect(actions.confirm('calendar', second.confirmationCode, approval, signal))
+      .rejects.toMatchObject({ name: 'ToolRefusal' });
+    await expect(actions.confirm('calendar', pending.confirmationCode, message('11', 'approve', 1001), signal))
+      .rejects.toMatchObject({ name: 'ToolRefusal' });
+    expect(actions.size).toBe(1);
+    finish();
+    await running;
+  });
+
+  it('reports execution failure and prevents retrying a potentially completed external write', async () => {
+    const actions = new PendingGoogleActions(() => 1000);
+    const execute = vi.fn(async () => { throw new Error('Provider unavailable'); });
+    const pending = actions.stage({ scope: 'calendar', sourceMessageId: '10', summary: 'Create meeting.', execute });
+    await expect(actions.confirm('calendar', pending.confirmationCode, message('11', 'approve', 1001), signal))
+      .rejects.toThrow('Provider unavailable');
+    await expect(actions.confirm('calendar', pending.confirmationCode, message('12', 'approve', 1002), signal))
+      .rejects.toMatchObject({ name: 'ToolRefusal' });
+    expect(actions.size).toBe(0);
     expect(execute).toHaveBeenCalledOnce();
   });
 });
