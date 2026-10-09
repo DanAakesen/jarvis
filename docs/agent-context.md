@@ -1441,3 +1441,5 @@ These use scratch authentication/API/socket and fake media, not live providers.
 ## Calendar approval validation (2026-10-08)
 
 `npm test --workspace @jarvis/backend -- src/google` passed all 49 tests. Backend lint/build and Python syntax/instruction assertions passed. The full backend suite encountered sandbox `listen EPERM` failures; permission-enabled retries (including two workers) stalled and were stopped, so full-suite validation is incomplete. Agent pytest checks could not start because pytest is unavailable in this runner. No live Google calls were made.
+
+Recovery on 2026-10-09 restored npm dependencies with `npm ci --ignore-scripts` and installed the hash-locked `agents/jarvis/requirements-dev.txt` in a temporary venv. Google tests now pass 51 cases; `src/core/model-tools.test.ts` passes 4; `src/auth/auth.test.ts` passes 55 after a loopback-enabled retry (the sandbox-only run failed with `listen EPERM`). Backend lint/build pass. From `agents/jarvis`, `python -m pytest -q tests/test_jarvis_tools.py tests/test_model_client.py` passes 136 tests; Ruff passes both changed test files. Full-suite and live-provider validation remain incomplete.

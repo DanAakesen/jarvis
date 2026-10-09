@@ -546,3 +546,5 @@ Proposals only; an idea enters a phase only when Dan accepts it into scope.
 ### Calendar approval follow-up (2026-10-08)
 
 Backend implementation and regression tests added for short, unambiguous calendar approval, code selection, replay prevention, and refusal conditions. Validation: all 49 Google tests, backend lint/build, and Python syntax/instruction assertions passed. Full backend suite did not complete: sandbox loopback failures occurred, and permission-enabled retries stalled and were stopped. Python pytest is unavailable; live Google acceptance remains unverified. No web changes or migration.
+
+Recovery validation (2026-10-09): preserved the existing task implementation; added concurrent replay/provider-failure tests, corrected stale agent instruction tests, and aligned feature/flow references. All 51 Google tests, 4 model-tool tests, 55 authentication tests (with loopback access), 136 relevant Python agent tests, backend lint/build, and Ruff on changed Python tests passed. Full backend suite and live Google acceptance remain unverified. The next step is PR review.

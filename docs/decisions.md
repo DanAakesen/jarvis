@@ -725,3 +725,5 @@ Dan requested the hotfix after seeing inspection guidance overlay More and persi
 ## Calendar approval follow-up — 2026-10-08
 
 Calendar writes accept a later persisted Dan reply of `approve` only when one calendar change is pending. Multiple pending calendar changes require `confirm <code>` to select the reviewed action. Keep the existing ten-minute expiry, code-bound tool input, one-shot execution, sensitive audit redaction, and exact mail approval. A monotonic calendar approval message ID prevents reusing one reply for another action, including concurrent calls. Refuse aborted requests before consuming approval. This backend-only choice reduces typing while retaining explicit approval; live Google acceptance remains unverified.
+
+Recovery evidence (2026-10-09): 51 Google tests cover approval/refusal, concurrent replay, and consumed approval after provider failure; 136 agent tests verify the updated instructions and existing tool-loop behavior. Backend lint/build and 55 loopback-enabled authentication tests pass. Feature inventory and flow diagram now describe the revised calendar/mail approval distinction.
