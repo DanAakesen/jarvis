@@ -290,7 +290,8 @@ export function TasksPage({ backendUrl, getAccessToken }: Props) {
   const taskIds = tasks.filter((task) => task.state !== 'Done' && task.state !== 'Cancelled').map((task) => task.id).join(',');
   const filterKey = JSON.stringify(appliedFilters);
   const projectRequestKey = `${backendUrl ?? ''}:${projectRetry}`;
-  const taskRequestKey = `${backendUrl ?? ''}:${filterKey}:${reloadKey}`;
+  // Live refreshes change reloadKey, not the dataset identity: keep the board mounted while fetching.
+  const taskRequestKey = `${backendUrl ?? ''}:${filterKey}`;
   const visibleProjectState: PageState = !backendUrl ? 'error' :
     settledProjectKey === projectRequestKey ? projectState : 'loading';
   const visibleProjectError = backendUrl ? projectError : 'Projects are unavailable until the backend is deployed.';
@@ -465,7 +466,6 @@ export function TasksPage({ backendUrl, getAccessToken }: Props) {
       if (!isTask(value)) throw new Error('Jarvis returned invalid task data. Try again.');
       setNotice('Task created and added to Ready.');
       setDialogOpen(false);
-      setTasks([]);
       setReloadKey((current) => current + 1);
       window.setTimeout(() => createButtonRef.current?.focus(), 0);
     } catch (reason) {
@@ -642,7 +642,7 @@ export function TasksPage({ backendUrl, getAccessToken }: Props) {
 
         <TaskReleaseBar backendUrl={backendUrl} getAccessToken={getAccessToken} projectId={appliedFilters.projectId} variant="trail" />
 
-        {visibleTaskState === 'loading' && <Loader variant="core" label="Loading tasks…" />}
+        {visibleTaskState === 'loading' && <Loader variant="cards" label="Loading tasks…" />}
         {visibleTaskState === 'error' && (
           <div className="tasks-feedback" role="alert">
             <p>{visibleTaskError}</p>

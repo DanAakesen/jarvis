@@ -289,6 +289,8 @@ describe('ConversationHistory', () => {
     renderConversation();
 
     expect(screen.getByRole('status').textContent).toBe('Loading conversation history…');
+    expect(screen.getByRole('status').classList.contains('skeleton-lines')).toBe(true);
+    expect(document.querySelector('.loader-core')).toBeNull();
     resolve?.({ messages: [], nextCursor: null });
     expect(await screen.findByRole('heading', { name: 'What’s on your mind?' })).not.toBeNull();
   });

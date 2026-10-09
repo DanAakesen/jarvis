@@ -672,7 +672,7 @@ export function ConversationHistory({
   const transcriptContent = (
     <>
         {loading ? (
-          <Loader variant="core" label="Loading conversation history…" />
+          <Loader variant="lines" label="Loading conversation history…" />
         ) : historyError && messages.length === 0 ? null : messages.length === 0 && !sending && queue.length === 0 && failedTurns.length === 0 ? (
           <div className="conversation-greeting visually-hidden">
             {/* Dan, 8 October: no greeting card; screen readers still hear that the conversation is empty. */}

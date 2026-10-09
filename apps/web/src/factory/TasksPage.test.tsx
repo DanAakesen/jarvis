@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -51,7 +51,10 @@ const task = {
   startedAt: '2026-10-03T12:10:00.000Z',
   finishedAt: null,
 };
-let boardTask = { ...task };
+let boardTask: Omit<typeof task, 'state'> & {
+  state: 'Ready' | 'Running' | 'PauseRequested' | 'Paused' | 'NeedsAttention' | 'Done' | 'Cancelled';
+  latestSessionEndReason?: 'crashed' | null;
+} = { ...task };
 
 const getAccessToken = vi.fn(async () => 'test-access-token');
 const fetchMock = vi.fn<typeof fetch>();
@@ -219,6 +222,111 @@ describe('Factory task board', () => {
     await waitFor(() => {
       expect(within(card).getByText('Tests passed')).not.toBeNull();
     });
+  });
+
+  it('keeps the board, scroll and selected task mounted while a live refresh is pending', async () => {
+      const user = userEvent.setup();
+      renderFactory();
+      const board = await screen.findByRole('region', { name: 'Tasks by state' });
+      const title = screen.getByRole('button', { name: 'Fix the bug' });
+      await waitFor(() => expect(streamHarness.callbacks.has('42')).toBe(true));
+      const onBoardEvent = streamHarness.callbacks.get('42')!;
+      await user.click(title);
+      board.scrollLeft = 180;
+      board.scrollTop = 90;
+      await waitFor(() => expect(streamHarness.callbacks.has('42')).toBe(true));
+      let finishRefresh!: (value: Response) => void;
+      const originalFetch = fetchMock.getMockImplementation()!;
+      fetchMock.mockImplementation((input, init) => String(input).includes('/factory/tasks?')
+        ? new Promise<Response>((resolve) => { finishRefresh = resolve; })
+        : originalFetch(input, init));
+      act(() => onBoardEvent({
+        id: '20', taskId: '42', type: 'progress', summary: 'Recovering',
+        at: '2026-10-09T07:55:00.000Z',
+      }));
+      await waitFor(() => expect(finishRefresh).toBeDefined());
+      expect(screen.queryByText('Loading tasks…')).toBeNull();
+      expect(screen.getByRole('region', { name: 'Tasks by state' })).toBe(board);
+      expect(title.getAttribute('aria-pressed')).toBe('true');
+      expect(board.scrollLeft).toBe(180);
+      expect(board.scrollTop).toBe(90);
+      await act(async () => finishRefresh(response({ tasks: [{ ...task, activity: 'Recovered' }] })));
+      expect(await screen.findByText('Recovered')).not.toBeNull();
+      expect(screen.getByRole('region', { name: 'Tasks by state' })).toBe(board);
+      expect(screen.getByRole('button', { name: 'Fix the bug' })).toBe(title);
+      expect(board.scrollLeft).toBe(180);
+      expect(board.scrollTop).toBe(90);
+      expect(title.getAttribute('aria-pressed')).toBe('true');
+    });
+
+  it('keeps an empty board mounted after a live refresh without an orb', async () => {
+      renderFactory();
+      const board = await screen.findByRole('region', { name: 'Tasks by state' });
+      await waitFor(() => expect(streamHarness.callbacks.has('42')).toBe(true));
+      const originalFetch = fetchMock.getMockImplementation()!;
+      fetchMock.mockImplementation((input, init) => String(input).includes('/factory/tasks?')
+        ? Promise.resolve(response({ tasks: [] }))
+        : originalFetch(input, init));
+      act(() => streamHarness.callbacks.get('42')?.({
+        id: '21', taskId: '42', type: 'progress', summary: null, at: '2026-10-09T07:56:00.000Z',
+      }));
+      await waitFor(() => expect(screen.queryByRole('article', { name: 'Fix the bug' })).toBeNull());
+      expect(screen.getByRole('region', { name: 'Tasks by state' })).toBe(board);
+      expect(document.querySelector('.loader-core')).toBeNull();
+  });
+
+  it('refreshes after Recover without inserting a loader or replacing the board', async () => {
+    const user = userEvent.setup();
+    boardTask = { ...task, state: 'NeedsAttention', latestSessionEndReason: 'crashed' };
+    renderFactory();
+    const board = await screen.findByRole('region', { name: 'Tasks by state' });
+    const card = await screen.findByRole('article', { name: 'Fix the bug' });
+    board.scrollLeft = 160;
+    board.scrollTop = 70;
+    let finishRefresh!: (value: Response) => void;
+    const originalFetch = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation((input, init) => {
+      if (String(input).endsWith('/factory/tasks/42/controls')) {
+        return Promise.resolve(response({ id: '42', state: 'Running' }));
+      }
+      return String(input).includes('/factory/tasks?')
+        ? new Promise<Response>((resolve) => { finishRefresh = resolve; })
+        : originalFetch(input, init);
+    });
+    await user.click(within(card).getByRole('button', { name: 'Recover' }));
+    await waitFor(() => expect(finishRefresh).toBeDefined());
+    expect(screen.getByRole('region', { name: 'Tasks by state' })).toBe(board);
+    expect(screen.getByRole('article', { name: 'Fix the bug' })).toBe(card);
+    expect(board.scrollLeft).toBe(160);
+    expect(board.scrollTop).toBe(70);
+    expect(screen.queryByText('Loading tasks…')).toBeNull();
+    expect(document.querySelector('.loader-core')).toBeNull();
+    await act(async () => finishRefresh(response({ tasks: [{ ...task, activity: 'Recovered' }] })));
+    expect(await screen.findByText('Recovered')).not.toBeNull();
+    expect(screen.getByRole('region', { name: 'Tasks by state' })).toBe(board);
+    expect(board.scrollLeft).toBe(160);
+    expect(board.scrollTop).toBe(70);
+    const control = fetchMock.mock.calls.find(([url]) => String(url).endsWith('/controls'));
+    expect(JSON.parse(String(control?.[1]?.body))).toEqual({ action: 'recover' });
+  });
+
+  it('shows a live refresh failure beside the retained board without replacing its cards', async () => {
+    renderFactory();
+    const board = await screen.findByRole('region', { name: 'Tasks by state' });
+    const card = screen.getByRole('article', { name: 'Fix the bug' });
+    await waitFor(() => expect(streamHarness.callbacks.has('42')).toBe(true));
+    const originalFetch = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation((input, init) => String(input).includes('/factory/tasks?')
+      ? Promise.resolve(response({ error: 'unavailable' }, 503))
+      : originalFetch(input, init));
+    act(() => streamHarness.callbacks.get('42')?.({
+      id: '22', taskId: '42', type: 'progress', summary: null, at: '2026-10-09T07:57:00.000Z',
+    }));
+    expect(await screen.findByText('Showing the last loaded tasks because refresh failed.')).not.toBeNull();
+    expect(screen.getByRole('region', { name: 'Tasks by state' })).toBe(board);
+    expect(screen.getByRole('article', { name: 'Fix the bug' })).toBe(card);
+    expect(screen.queryByText('Loading tasks…')).toBeNull();
+    expect(document.querySelector('.loader-core')).toBeNull();
   });
 
   it('shows a recoverable error when the task list cannot be loaded', async () => {
