@@ -92,6 +92,48 @@ describe('settings API', () => {
     },
   );
 
+  it('defaults the decision provider to Jev and persists either provider with its options', async () => {
+    const { store, values } = createStore();
+    const app = fixture(store);
+    expect(settingsStoreKeys).toContain('decisions.provider');
+    expect((await readSettings(store)).decisions).toEqual({ provider: 'jev' });
+    for (const provider of ['microsoft', 'jev']) {
+      const settings = { decisions: { provider } };
+      expect(validateSettingsPatch(settings)).toEqual(settings);
+      const saved = await app.inject({
+        method: 'PATCH', url: '/settings', headers: authorization, payload: { settings },
+      });
+      expect(saved.statusCode).toBe(200);
+      expect(saved.json().settings.decisions).toEqual(settings.decisions);
+      expect(values['decisions.provider']).toBe(JSON.stringify(provider));
+      const read = (await app.inject({ url: '/settings', headers: authorization })).json();
+      expect(read.settings.decisions).toEqual(settings.decisions);
+      expect(read.options.decisionProviders).toEqual(['jev', 'microsoft']);
+    }
+  });
+
+  it.each([
+    {}, null, [], 'jev', { provider: 'openai' }, { provider: 'Jev' }, { provider: null }, { provider: 1 },
+    { provider: true }, { provider: 'jev', unknown: true },
+  ])('rejects malformed decision provider patches without coercion: %j', async (decisions) => {
+    const { store, values } = createStore();
+    const app = fixture(store);
+    expect(validateSettingsPatch({ decisions })).toBeNull();
+    const response = await app.inject({
+      method: 'PATCH', url: '/settings', headers: authorization, payload: { settings: { decisions } },
+    });
+    expect(response.statusCode).toBe(400);
+    expect(values).toEqual({});
+  });
+
+  it.each(['null', '"openai"', '1', '{}', 'invalid'])(
+    'ignores invalid stored decision providers: %s', async (stored) => {
+      const { store, values } = createStore();
+      values['decisions.provider'] = stored;
+      expect((await readSettings(store)).decisions).toEqual({ provider: 'jev' });
+    },
+  );
+
   it('requires authentication and reports unavailable persistence', async () => {
     const denied = fixture();
     expect((await denied.inject({ url: '/settings' })).statusCode).toBe(401);

@@ -1,4 +1,5 @@
 import type { FastifyRequest } from 'fastify';
+import type { DecisionProviderId } from './decision-provider.js';
 
 export type JevFailureReason =
   | 'billing'
@@ -11,6 +12,8 @@ export type JevFailureReason =
 
 export interface JevFailure {
   readonly failure: JevFailureReason;
+  /** Which decision provider failed (for comparing providers in the logs). */
+  readonly provider?: DecisionProviderId;
 }
 
 export const jevChoiceConfidenceThreshold = 0.9;
@@ -33,6 +36,11 @@ export function isJevFailure(value: unknown): value is JevFailure {
     /^http_[1-5]\d{2}$/u.test(value.failure);
 }
 
+/** Marks a failure with the provider that produced it; other results pass through unchanged. */
+export function tagJevFailure<T>(result: T | JevFailure | null, provider: DecisionProviderId): T | JevFailure | null {
+  return isJevFailure(result) ? { ...result, provider } : result;
+}
+
 export function reflexSourceForRequest(request: FastifyRequest): 'chat' | 'voice-final' {
   return request.routeOptions.url?.includes('/voice') ? 'voice-final' : 'chat';
 }
@@ -42,9 +50,11 @@ export function logJevFailure(
   source: 'chat' | 'voice-partial' | 'voice-final',
   startedAt: number,
   failure: JevFailureReason,
+  provider?: DecisionProviderId,
 ): void {
   request.log.info({
     source,
+    ...(provider ? { provider } : {}),
     addressed: false,
     intent: 'other',
     tool: 'none',

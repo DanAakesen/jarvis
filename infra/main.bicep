@@ -534,6 +534,27 @@ resource gpt61SolDeployment 'Microsoft.CognitiveServices/accounts/deployments@20
   }
 }
 
+// Alternative decision provider (Dan's choice, 10 October): selectable in Settings next to Jev. The deployment
+// name cannot contain "microsoft" (reserved word). Quota for this model is 60 requests per minute.
+resource decision1Deployment 'Microsoft.CognitiveServices/accounts/deployments@2024-10-01' = {
+  parent: foundryAccount
+  name: 'decision-1'
+  dependsOn: [
+    gpt61SolDeployment
+  ]
+  sku: {
+    name: 'GlobalStandard'
+    capacity: 60
+  }
+  properties: {
+    model: {
+      format: 'Microsoft'
+      name: 'Microsoft-Decision-1'
+      version: '1'
+    }
+  }
+}
+
 resource foundryAcrPullAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
   name: guid(registry.id, foundryProject.id, acrPullRoleId)
   scope: registry
