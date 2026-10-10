@@ -1132,3 +1132,16 @@ regression; live acceptance is pending.
   desktop/phone checks in both themes. Fixture captures and limitations are
   recorded in `docs/ui/screenshots/orb-folio-polish/README.md`.
 - **Status:** implemented locally; production acceptance follows merge.
+
+## 2026-10-10: Composer follows enlarged conversation
+
+- **Decision (Dan):** desktop typing keeps the composer aligned with both edges
+  of the visible maximised conversation, on home and when chat floats over
+  another page. Restore/minimise/close return to the normal width; phones,
+  voice and unrelated maximised windows do not trigger expansion.
+- **Implementation:** derive the local chat-width token from the existing
+  conversation window class and shell attributes, without a second state owner.
+- **Evidence:** local Chromium fixture measurements, keyboard/window controls,
+  hide/reopen and repeated toggles, with desktop light/dark and phone captures
+  in `docs/ui/screenshots/composer-sizing/README.md`.
+- **Status:** implemented locally; production acceptance follows deployment.

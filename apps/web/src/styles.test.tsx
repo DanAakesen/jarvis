@@ -157,6 +157,15 @@ describe('shared glass tokens', () => {
     expect(ruleDeclaration(source, /\.markdown-content p\s*\{([^}]*)\}/, 'color')).toBe('inherit');
   });
 
+  it('widens only the visible maximised desktop conversation composer', () => {
+    const source = readFileSync('src/ConversationHistory.css', 'utf8');
+    const selector = '.app-shell[data-phone="false"][data-voice-active="false"][data-conversation-open="true"]:has(.workspace-window-conversation.workspace-window-maximized:not(.workspace-window-minimized, [hidden])) .jarvis-page';
+    expect(source).toContain(`${selector} { --chat-width: 100%; }`);
+    expect(ruleDeclaration(source, /\.conversation-input\s*\{([^}]*)\}/, 'max-width')).toBe('var(--chat-width)');
+    expect(ruleDeclaration(source, /\.app-shell\[data-home="false"\]:not\(\.app-signed-out\) \.jarvis-page\s*\{([^}]*)\}/, 'max-width')).toBe('var(--chat-width)');
+    expect(source).toContain(':root { --chat-width: 740px;');
+  });
+
   it('uses the accepted sans typography for shared headings', () => {
     const source = readFileSync('src/styles.css', 'utf8');
 
