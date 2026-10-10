@@ -397,6 +397,7 @@ export function isWorkspaceReflexOperation(args: Readonly<Record<string, unknown
   return ['show', 'focus', 'minimise', 'restore', 'close', 'resize', 'place', 'arrange', 'minimise-all',
     'restore-all', 'close-all', 'pin', 'unpin'].includes(String(args.operation)) ||
     args.operation === 'conversation' && ['show', 'hide'].includes(String(args.action)) ||
+    args.operation === 'session' && ['language', 'voice', 'camera'].includes(String(args.action)) ||
     args.operation === 'layout' ||
     args.operation === 'context-panel' && (args.action === 'close' ||
       args.action === 'open' && args.view === undefined);
@@ -404,7 +405,7 @@ export function isWorkspaceReflexOperation(args: Readonly<Record<string, unknown
 
 export const workspaceCommandTool: BackendModule['tools'][number] = {
   name: 'workspace_command',
-  description: 'Show or hide Dan’s conversation transcript, navigate his visible shell page (home, factory board or task/issue, settings section, usage, knowledge, folio, status), create, update, show, close, minimise, restore, focus, move, resize, or arrange a temporary workspace view, or change its context panel. For visual "show me", "visualise", chart or timeline requests, create a view with renderer chart or timeline; chart data uses kind line, bar or area and 1–5 named series of x/y points, up to 1,000 points total. Timeline views use data.events in the given order; each event needs a title and at or label (or both), with optional description. Use label (1–40 characters) for seasons or periods such as "2009/10"; use at (RFC 3339 date-time or YYYY-MM-DD) for precise dates. Use an HTML view for richer visuals. Conversation visibility is reversible and needs no confirmation. Supply a unique commandId. Navigation section is settings-only; taskId and positive integer issueNumber are factory-only. Success requires a tab to acknowledge applying the command; relay its refusal reason.',
+  description: 'Show or hide Dan’s conversation transcript, navigate his visible shell page (home, factory board or task/issue, settings section, usage, knowledge, folio, status), create, update, show, close, minimise, restore, focus, move, resize, or arrange a temporary workspace view, or change its context panel. Use operation session to change the current session, not saved defaults: action language with value da or en, action voice with value end, or action camera with value front, rear or off. The page applies session changes; the backend never requests browser permissions. If the page refuses for missing camera or microphone permission, relay its reason and tell Dan to grant permission in the browser. For visual "show me", "visualise", chart or timeline requests, create a view with renderer chart or timeline; chart data uses kind line, bar or area and 1–5 named series of x/y points, up to 1,000 points total. Timeline views use data.events in the given order; each event needs a title and at or label (or both), with optional description. Use label (1–40 characters) for seasons or periods such as "2009/10"; use at (RFC 3339 date-time or YYYY-MM-DD) for precise dates. Use an HTML view for richer visuals. Conversation visibility is reversible and needs no confirmation. Supply a unique commandId. Navigation section is settings-only; taskId and positive integer issueNumber are factory-only. Success requires a tab to acknowledge applying the command; relay its refusal reason.',
   inputSchema: workspaceCommandSchema,
   sensitive: true,
   async execute(input, request, signal) {
@@ -434,7 +435,7 @@ export const workspaceCommandTool: BackendModule['tools'][number] = {
       return { type: 'generated-view', view: input.view };
     }
     if (input.operation === 'navigate') return { applied: true, ...input };
-    if (input.operation === 'conversation') return { applied: true, ...input };
+    if (input.operation === 'conversation' || input.operation === 'session') return { applied: true, ...input };
     return { applied: true, commandId: input.commandId, operation: input.operation };
   },
 };

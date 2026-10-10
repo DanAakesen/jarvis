@@ -886,6 +886,20 @@ through P9-42's safe refusal guidance. The backend and shared voice/chat prompt
 are implemented offline; the UI session owns the handler and the phone default
 of hiding the transcript, with live acceptance still pending.
 
+## P9-60 (10 October 2026) — Current-session controls
+
+Add `session` with exact language (`da`/`en`), voice (`end`) and camera
+(`front`/`rear`/`off`) action/value pairs to the existing plain-root workspace
+contract (L121). Keep this separate from persisted settings and reuse the
+authenticated broker's applied/refused acknowledgement and refusal reasons.
+The page owns application and permission checks; the backend never requests
+browser permissions, and Jarvis directs Dan to grant missing permission.
+No migration, new App permission or `apps/web` edit is needed in the backend task.
+The change is additive but old UI validators/dispatchers do not support it;
+Dan holds merge until the coordinator confirms #641 handlers have landed first.
+Offline checks cover the backend contract; live browser/model acceptance remains
+unverified.
+
 
 ## P9-37 (8 October 2026) — Keep voice, chat, and the backend tool catalogue aligned
 
