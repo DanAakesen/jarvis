@@ -352,6 +352,9 @@ export class TaskDispatcher implements TaskController {
   async control(taskId: string, command: TaskControlCommand): Promise<TaskControlResult> {
     let task = await this.tasks.get(taskId, 1, 0);
     if (!task) return { kind: 'not-found' };
+    if (task.state === 'Done' || task.state === 'Cancelled') {
+      return { kind: 'invalid-transition', reason: `Task is already ${task.state}` };
+    }
     const continueWithSteering = command.action === 'steer' && task.latestSessionEndReason === 'idle_expired';
     if (command.action === 'recover' || continueWithSteering) {
       if (task.state === 'Running' && task.latestSessionEndReason === 'idle_expired') {
@@ -369,9 +372,17 @@ export class TaskDispatcher implements TaskController {
     }
     const activeTurn = task.state === 'Running' && target?.sessionStatus === 'Active' && target.invocationId;
     const pausedSession = task.state === 'Paused' && target?.sessionStatus === 'Idle';
+    const finishingDelivery = task.state === 'Running' && !activeTurn && (
+      Boolean(target) || task.activity === 'Finishing delivery' ||
+      task.latestSessionEndReason === 'done' || task.pullRequest?.state === 'open'
+    );
 
     if (command.action === 'steer') {
-      if (!activeTurn || !target) return { kind: 'invalid-transition' };
+      if (!activeTurn || !target) return {
+        kind: 'invalid-transition',
+        ...(finishingDelivery || (task.state === 'Running' && await this.store.hasPendingProjectPolicyMerge(taskId))
+          ? { reason: 'Delivery is finishing; try again when it completes' } : {}),
+      };
       let accepted: InvocationAccepted | undefined;
       try {
         accepted = await this.clientFor(target.agentName).steer(
@@ -390,8 +401,7 @@ export class TaskDispatcher implements TaskController {
       }
     }
 
-    if (command.action === 'pause') {
-      if (!activeTurn || !target) return { kind: 'invalid-transition' };
+    if (command.action === 'pause' && activeTurn && target) {
       const requested = await this.tasks.transition(taskId, 'PauseRequested');
       if (requested.kind !== 'ok') return transitionResult(requested.kind);
       try {
@@ -433,44 +443,70 @@ export class TaskDispatcher implements TaskController {
     if (task.state !== 'Ready' && task.state !== 'Running' && task.state !== 'Paused') {
       return { kind: 'invalid-transition' };
     }
-    if (task.state === 'Running' && (!activeTurn || !target)) return { kind: 'unavailable' };
-    if (task.state === 'Paused' && !target) return { kind: 'unavailable' };
+    if (command.action === 'pause' && task.state !== 'Running') return { kind: 'invalid-transition' };
+    const endState = command.action === 'pause' ? 'Paused' : 'Cancelled';
     const cancellation = await this.store.withTaskPolicyLock(taskId, async () => {
       const latestTask = await this.tasks.get(taskId, 1, 0);
-      if (!latestTask || latestTask.state !== task.state) return { kind: 'state-changed' as const };
+      if (!latestTask || latestTask.state !== task.state) {
+        return { kind: 'state-changed' as const, state: latestTask?.state };
+      }
       if (await this.store.hasPendingProjectPolicyMerge(taskId)) return { kind: 'merge-pending' as const };
-      if (task.state === 'Running' && target) {
+      target = await this.store.getControlTarget(taskId);
+      if (task.state === 'Running' && !target &&
+          latestTask.activity !== 'Finishing delivery' && latestTask.latestSessionEndReason !== 'done' &&
+          latestTask.pullRequest?.state !== 'open' && !finishingDelivery) {
+        return { kind: 'runtime-unknown' as const };
+      }
+      if (task.state === 'Running' && target?.sessionStatus === 'Active' && target.invocationId) {
+        if (command.action === 'pause') return { kind: 'state-changed' as const, state: latestTask.state };
         try {
           await this.clientFor(target.agentName).cancel(target.invocationId);
         } catch {
           return { kind: 'cancel-failed' as const };
         }
       }
-      return { kind: 'transitioned' as const, result: await this.tasks.transition(taskId, 'Cancelled') };
+      if (endState === 'Paused') {
+        const requested = await this.tasks.transition(taskId, 'PauseRequested');
+        if (requested.kind !== 'ok') return { kind: 'transitioned' as const, result: requested };
+      }
+      return { kind: 'transitioned' as const, result: await this.tasks.transition(taskId, endState) };
     });
-    if (cancellation.kind === 'cancel-failed') return { kind: 'failed' };
-    if (cancellation.kind === 'state-changed' || cancellation.kind === 'merge-pending') {
-      return { kind: 'invalid-transition' };
+    if (cancellation.kind === 'cancel-failed') return {
+      kind: 'failed', reason: 'Task runtime could not be reached to cancel the active invocation',
+    };
+    if (cancellation.kind === 'runtime-unknown') return {
+      kind: 'unavailable', reason: 'No task runtime session or completed delivery evidence could be found',
+    };
+    if (cancellation.kind === 'merge-pending') return {
+      kind: 'invalid-transition', reason: 'Delivery is finishing; try again when it completes',
+    };
+    if (cancellation.kind === 'state-changed') {
+      return { kind: 'invalid-transition', reason: cancellation.state
+        ? `Task is now ${cancellation.state}` : 'Task not found' };
     }
     const cancelled = cancellation.result;
     if (cancelled.kind !== 'ok') return transitionResult(cancelled.kind);
     let cleanupFailed = false;
+    try {
+      const ended = await this.store.endTaskSessions(taskId, endState);
+      ended.forEach((id) => this.heartbeat.untrack(id));
+    } catch (error) {
+      cleanupFailed = true;
+      this.onError(error);
+    }
     if (target) {
-      try {
-        await this.endSession(target, 'Cancelled');
-      } catch (error) {
-        cleanupFailed = true;
-        this.heartbeat.untrack(target.sandboxSessionId);
-        this.onError(error);
-      }
-      try {
-        await this.clientFor(target.agentName).deleteSession(target.foundrySessionId);
-      } catch (error) {
-        cleanupFailed = true;
-        this.onError(error);
+      this.heartbeat.untrack(target.sandboxSessionId);
+      if (endState === 'Cancelled') {
+        try {
+          await this.clientFor(target.agentName).deleteSession(target.foundrySessionId);
+        } catch (error) {
+          cleanupFailed = true;
+          this.onError(error);
+        }
       }
     }
-    return cleanupFailed ? { kind: 'failed' } : { kind: 'ok', task: cancelled.task };
+    return cleanupFailed ? { kind: 'failed', reason: `Task is ${endState}, but sandbox cleanup could not be completed` }
+      : { kind: 'ok', task: cancelled.task };
   }
 
   private async recover(task: TaskDetail, steering?: string): Promise<TaskControlResult> {
@@ -572,11 +608,6 @@ export class TaskDispatcher implements TaskController {
       ended.forEach((id) => this.heartbeat.untrack(id));
       return true;
     });
-  }
-
-  private async endSession(target: TaskControlTarget, state: 'Paused' | 'Cancelled' = 'Paused'): Promise<void> {
-    const ids = await this.store.endTaskSessions(target.taskId, state);
-    ids.forEach((id) => this.heartbeat.untrack(id));
   }
 
   private onTaskEvent(event: TaskEventMessage): void {

@@ -297,6 +297,21 @@ describe('factory tasks API', () => {
     })).statusCode).toBe(400);
   });
 
+  it.each([
+    { kind: 'invalid-transition' as const, reason: 'Delivery is finishing; try again when it completes', status: 409 },
+    { kind: 'invalid-transition' as const, reason: 'Task is already Done', status: 409 },
+    { kind: 'invalid-transition' as const, reason: 'Task is already Cancelled', status: 409 },
+    { kind: 'failed' as const, reason: 'Task runtime could not be reached to cancel the active invocation', status: 502 },
+    { kind: 'unavailable' as const, reason: 'No task runtime session or completed delivery evidence could be found', status: 503 },
+  ])('relays explicit control reason: $reason', async ({ kind, reason, status }) => {
+    const { app } = fixture({}, undefined, { control: vi.fn(async () => ({ kind, reason })) });
+    const response = await app.inject({
+      method: 'POST', url: '/factory/tasks/42/controls', headers, payload: { action: 'cancel' },
+    });
+    expect(response.statusCode).toBe(status);
+    expect(response.json()).toEqual({ error: reason });
+  });
+
   it('mints a task repository token only for its runner session', async () => {
     const issue = vi.fn(async (repository: string) =>
       repository === 'DanAakesen/jarvis-test-target' ? 'ghs_test-installation-token' : 'wrong-repository');

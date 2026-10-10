@@ -611,7 +611,9 @@ describe('task dispatcher', () => {
     };
     const { dispatcher, cancel, transition } = harness(store);
 
-    await expect(dispatcher.control('42', { action: 'cancel' })).resolves.toEqual({ kind: 'invalid-transition' });
+    await expect(dispatcher.control('42', { action: 'cancel' })).resolves.toEqual({
+      kind: 'invalid-transition', reason: 'Delivery is finishing; try again when it completes',
+    });
 
     expect(cancel).not.toHaveBeenCalled();
     expect(transition).not.toHaveBeenCalled();
@@ -626,7 +628,9 @@ describe('task dispatcher', () => {
     const { dispatcher, deleteSession, transition } = harness(store, undefined, { ...controlTask, state: 'Paused' });
     deleteSession.mockRejectedValue(new Error('Foundry unavailable'));
 
-    await expect(dispatcher.control('42', { action: 'cancel' })).resolves.toEqual({ kind: 'failed' });
+    await expect(dispatcher.control('42', { action: 'cancel' })).resolves.toEqual({
+      kind: 'failed', reason: 'Task is Cancelled, but sandbox cleanup could not be completed',
+    });
 
     expect(transition).toHaveBeenCalledWith('42', 'Cancelled');
     expect(store.endTaskSessions).toHaveBeenCalledWith('42', 'Cancelled');
@@ -641,7 +645,95 @@ describe('task dispatcher', () => {
 
     const doneHarness = harness(store, undefined, { ...controlTask, state: 'Done' });
     expect(await doneHarness.dispatcher.control('42', { action: 'pause' }))
-      .toEqual({ kind: 'invalid-transition' });
+      .toEqual({ kind: 'invalid-transition', reason: 'Task is already Done' });
+  });
+
+  it.each([null, { ...controlTarget, invocationId: '' }])(
+    'cancels a finishing task without cancelling a completed invocation (%s)', async (target) => {
+      const store = { ...idleStore(), getControlTarget: vi.fn(async () => target) };
+      const { dispatcher, cancel, transition } = harness(store, undefined, {
+        ...controlTask, latestSessionEndReason: 'done',
+      });
+      await expect(dispatcher.control('42', { action: 'cancel' }))
+        .resolves.toMatchObject({ kind: 'ok', task: { state: 'Cancelled' } });
+      expect(cancel).not.toHaveBeenCalled();
+      expect(transition).toHaveBeenCalledWith('42', 'Cancelled');
+      expect(store.endTaskSessions).toHaveBeenCalledWith('42', 'Cancelled');
+    },
+  );
+
+  it.each(['cancel', 'pause', 'steer'] as const)('explains finishing delivery for %s while a merge is pending', async (action) => {
+    const store = { ...idleStore(), hasPendingProjectPolicyMerge: vi.fn(async () => true) };
+    const { dispatcher, cancel, pause, steer, transition } = harness(store);
+    await expect(dispatcher.control('42', action === 'steer' ? { action, message: 'Stop' } : { action }))
+      .resolves.toEqual({ kind: 'invalid-transition', reason: 'Delivery is finishing; try again when it completes' });
+    expect(cancel).not.toHaveBeenCalled();
+    expect(pause).not.toHaveBeenCalled();
+    expect(steer).not.toHaveBeenCalled();
+    expect(transition).not.toHaveBeenCalled();
+  });
+
+  it('pauses a finishing task without contacting its completed invocation', async () => {
+    const store = { ...idleStore(), getControlTarget: vi.fn(async () => ({ ...controlTarget, invocationId: '' })) };
+    const { dispatcher, pause, cancel, transition } = harness(store);
+    await expect(dispatcher.control('42', { action: 'pause' }))
+      .resolves.toMatchObject({ kind: 'ok', task: { state: 'Paused' } });
+    expect(transition.mock.calls.map(([, state]) => state)).toEqual(['PauseRequested', 'Paused']);
+    expect(pause).not.toHaveBeenCalled();
+    expect(cancel).not.toHaveBeenCalled();
+    expect(store.endTaskSessions).toHaveBeenCalledWith('42', 'Paused');
+  });
+
+  it('reports unreachable cancellation without changing state or exposing provider errors', async () => {
+    const store = { ...idleStore(), getControlTarget: vi.fn(async () => controlTarget) };
+    const { dispatcher, cancel, transition } = harness(store);
+    cancel.mockRejectedValue(new Error('private provider response'));
+    await expect(dispatcher.control('42', { action: 'cancel' })).resolves.toEqual({
+      kind: 'failed', reason: 'Task runtime could not be reached to cancel the active invocation',
+    });
+
+    expect(transition).not.toHaveBeenCalled();
+    expect(store.endTaskSessions).not.toHaveBeenCalled();
+  });
+
+  it('reports missing runtime evidence accurately rather than claiming delivery is complete', async () => {
+    const { dispatcher, transition } = harness(idleStore());
+    await expect(dispatcher.control('42', { action: 'cancel' })).resolves.toEqual({
+      kind: 'unavailable', reason: 'No task runtime session or completed delivery evidence could be found',
+    });
+    expect(transition).not.toHaveBeenCalled();
+  });
+
+  it('rechecks the active turn under the policy lock before cancelling its invocation', async () => {
+    const store = {
+      ...idleStore(),
+      getControlTarget: vi.fn()
+        .mockResolvedValueOnce(controlTarget)
+        .mockResolvedValue({ ...controlTarget, invocationId: null }),
+    };
+    const { dispatcher, cancel } = harness(store);
+    await expect(dispatcher.control('42', { action: 'cancel' }))
+      .resolves.toMatchObject({ kind: 'ok', task: { state: 'Cancelled' } });
+    expect(cancel).not.toHaveBeenCalled();
+  });
+
+  it('allows cancellation with an open PR and an already-ended session', async () => {
+    const { dispatcher, cancel } = harness(idleStore(), undefined, {
+      ...controlTask, pullRequest: { number: 1, url: 'https://github.com/DanAakesen/jarvis/pull/1', state: 'open' },
+    });
+    await expect(dispatcher.control('42', { action: 'cancel' }))
+      .resolves.toMatchObject({ kind: 'ok', task: { state: 'Cancelled' } });
+    expect(cancel).not.toHaveBeenCalled();
+  });
+
+  it.each(['Done', 'Cancelled'] as const)('rejects repeated cancellation with terminal state %s', async (state) => {
+    const store = idleStore();
+    const { dispatcher, transition } = harness(store, undefined, { ...controlTask, state });
+    await expect(dispatcher.control('42', { action: 'cancel' })).resolves.toEqual({
+      kind: 'invalid-transition', reason: `Task is already ${state}`,
+    });
+    expect(store.getControlTarget).not.toHaveBeenCalled();
+    expect(transition).not.toHaveBeenCalled();
   });
 });
 

@@ -353,6 +353,19 @@ describe('Software Factory Jarvis tools', () => {
     expect(taskController.control).not.toHaveBeenCalled();
   });
 
+  it.each(['steer_task', 'pause_task', 'cancel_task'])('relays finishing and runtime reasons through %s', async (name) => {
+    const { app, taskController } = fixture();
+    const payload = { taskId: '42', ...(name === 'steer_task' ? { message: 'Stop' } : {}) };
+    const reason = 'Delivery is finishing; try again when it completes';
+    vi.mocked(taskController.control).mockResolvedValue({ kind: 'invalid-transition', reason });
+    const conflict = await app.inject({ method: 'POST', url: `/tools/${name}`, headers, payload });
+    expect(conflict.json()).toMatchObject({ outcome: 'refused', result: { refused: reason } });
+    const failureReason = 'Task runtime could not be reached to cancel the active invocation';
+    vi.mocked(taskController.control).mockResolvedValue({ kind: 'failed', reason: failureReason });
+    const failure = await app.inject({ method: 'POST', url: `/tools/${name}`, headers, payload });
+    expect(failure.json()).toMatchObject({ outcome: 'error', result: { error: failureReason } });
+  });
+
   it('returns refused, reasoned outcomes for missing records and invalid lifecycle actions', async () => {
     const { app, taskStore, taskController, record, projectStore } = fixture();
     vi.mocked(taskStore.get).mockResolvedValue(null);
