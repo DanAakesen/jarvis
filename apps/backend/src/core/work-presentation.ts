@@ -40,6 +40,45 @@ function escape(value: string): string {
     .replaceAll('"', '&quot;').replaceAll("'", '&#39;');
 }
 
+/** A readable agenda for calendar_list_events / calendar_next_event results, or undefined for any other shape. */
+function calendarAgenda(value: Record<string, unknown>): string | undefined {
+  if (!Array.isArray(value.events)) return undefined;
+  const zone = typeof value.timeZone === 'string' ? value.timeZone : 'UTC';
+  try {
+    const day = new Intl.DateTimeFormat('en-GB', { timeZone: zone, weekday: 'long', day: 'numeric', month: 'long' });
+    const time = new Intl.DateTimeFormat('en-GB', { timeZone: zone, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
+    const allDay = new Intl.DateTimeFormat('en-GB', { timeZone: 'UTC', weekday: 'long', day: 'numeric', month: 'long' });
+    const lines: string[] = [];
+    let heading = '';
+    for (const raw of value.events) {
+      const event = object(raw);
+      const subject = safeText(event.subject, 200) || 'Untitled event';
+      const location = safeText(event.location, 120);
+      const start = typeof event.start === 'string' ? event.start : '';
+      const end = typeof event.end === 'string' ? event.end : '';
+      let label: string;
+      let group: string;
+      if (event.allDay === true) {
+        const date = new Date(`${start}T12:00:00Z`);
+        if (Number.isNaN(date.getTime())) return undefined;
+        group = allDay.format(date);
+        label = 'All day';
+      } else {
+        const from = new Date(start);
+        const to = new Date(end);
+        if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime())) return undefined;
+        group = day.format(from);
+        label = `${time.format(from)}–${time.format(to)}`;
+      }
+      if (group !== heading) { if (lines.length) lines.push(''); lines.push(group); heading = group; }
+      lines.push(`${label} · ${subject}${location ? ` (${location})` : ''}`);
+    }
+    if (!lines.length) return 'No events in this period.';
+    if (value.truncated === true) lines.push('', 'More events exist than are shown.');
+    return lines.join('\n');
+  } catch { return undefined; }
+}
+
 function codeView(tool: string, input: Record<string, unknown>, result: Record<string, unknown>): GeneratedView {
   const rows = Array.isArray(result.results) ? result.results.map(object) : [];
   const match = tool === 'repo_search' ? rows[0] : undefined;
@@ -80,7 +119,15 @@ function codeView(tool: string, input: Record<string, unknown>, result: Record<s
 }
 
 /** Presentation has its own bounded lifetime and never delays a tool or its confirmation. */
-export function startWorkPresentation(tool: string, rawInput: unknown, request: FastifyRequest, activityId: string, turnId: string, signal: AbortSignal): { finish: (result: unknown, successful: boolean) => void } {
+export type PresentationSurface = 'chat' | 'voice';
+
+/**
+ * Surface policy (10 Oct): typed chat answers inline, so nothing opens on its own there; Dan
+ * asks for a window ("show me", "open", "put it on screen") and Jarvis creates one through the
+ * view tools. Voice has no visible answer, so lookups open their window automatically.
+ */
+export function startWorkPresentation(tool: string, rawInput: unknown, request: FastifyRequest, activityId: string, turnId: string, signal: AbortSignal, surface: PresentationSurface): { finish: (result: unknown, successful: boolean) => void } {
+  if (surface === 'chat') return { finish: () => {} };
   try {
     return beginWorkPresentation(tool, rawInput, request, activityId, turnId, signal);
   } catch {
@@ -165,11 +212,13 @@ function beginWorkPresentation(tool: string, rawInput: unknown, request: Fastify
               void deliver({ commandId: randomUUID(), operation: 'navigate', page: 'factory', taskId });
             }
           } else if (google) {
-            const preview = value.status === 'awaiting_confirmation' ? value.summary : JSON.stringify(value);
+            const preview = value.status === 'awaiting_confirmation'
+              ? value.summary : calendarAgenda(value) ?? JSON.stringify(value, null, 2);
             if (typeof preview === 'string') showView(`google-${turnId}`, {
               version: 1, title: tool.startsWith('mail_') ? 'Mail' : 'Calendar', renderer: 'text',
               source: { id: 'now', status: 'complete', updatedAt: new Date().toISOString() },
-              data: { format: 'plain', content: escape(redactWorkContent(preview)).slice(0, 10_000) },
+              // The text renderer escapes on output, so escaping here would show entities such as &quot;.
+              data: { format: 'plain', content: redactWorkContent(preview).slice(0, 10_000) },
             });
           }
         } catch { /* Never change the tool outcome for a presentation failure. */ }

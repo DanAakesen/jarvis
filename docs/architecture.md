@@ -198,7 +198,14 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   refused/failed/cancelled tools. No arguments, transcripts, or result bodies
   enter the status line. Selected query/path/task subjects are redacted.
   `presentation.showWork` defaults to true, persists as `presentation.show_work`,
-  and is suppressed in `on_the_move`. Settings/presence reads are bounded to
+  and is suppressed in `on_the_move`. Surface policy (10 Oct): the dispatcher
+  passes `voice` when a call carries `X-Jarvis-Voice-Item-ID` or a phone-session
+  header and `chat` otherwise (direct reflex execution uses its route); `chat`
+  presents nothing, because the chat answer already carries the data and an
+  explicit "show me" goes through the view tools, while `voice` presents as
+  below. Google results render as plain text (the text renderer escapes on
+  output): calendar lookups as an agenda in the calendar's time zone, others as
+  indented JSON. Settings/presence reads are bounded to
   250 ms and fail closed for presentation only; tools never wait for those reads
   or workspace acknowledgements.
   Successful vault tools reuse `show_knowledge`'s graph payload builder and
