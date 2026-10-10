@@ -17,6 +17,7 @@ import chat_runtime
 import chat_telemetry
 from jarvis_tools import (
     BackendToolClient,
+    BackendUnavailable,
     current_chat_phase_setter,
     current_chat_session_id,
     current_chat_turn_id,
@@ -545,6 +546,43 @@ def test_chat_stream_errors_are_sanitized() -> None:
     assert response.status_code == 200
     assert "event: error" in response.text
     assert "provider secret" not in response.text
+    assert '"code": "error_runtimeerror"' in response.text
+
+
+def test_chat_stream_error_carries_the_settings_failure_code_only() -> None:
+    class SettingsFailedModel(FakeModel):
+        async def complete_chat(
+            self,
+            messages: Sequence[ModelMessage],
+            language: str,
+            *,
+            settings: ModelSettings | None = None,
+        ) -> AsyncIterator[str]:
+            del messages, language, settings
+            raise BackendUnavailable(
+                "Jarvis settings are unavailable SECRET-DETAIL", "capability_instructions_too_large"
+            )
+            yield ""
+
+    app = create_app(
+        SettingsFailedModel(),
+        configure_observability=None,
+        chat_context_loader=lambda *_args: _context(),
+    )
+    with TestClient(app) as client:
+        response = client.post(
+            "/invocations",
+            json={
+                "messageId": "42",
+                "text": "Hello",
+                "language": "en",
+                "delegatedAuthorization": AUTHORIZATION,
+            },
+        )
+
+    assert "event: error" in response.text
+    assert '"code": "capability_instructions_too_large"' in response.text
+    assert "SECRET-DETAIL" not in response.text
 
 
 async def _context() -> list[ModelMessage]:

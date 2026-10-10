@@ -7,6 +7,7 @@ from __future__ import annotations
 import asyncio
 import contextvars
 import json
+import logging
 import re
 import time
 from collections.abc import Awaitable, Callable, Sequence
@@ -21,6 +22,7 @@ from starlette.responses import JSONResponse, StreamingResponse
 from chat_telemetry import latency_span, log_latency
 from jarvis_tools import (
     BACKEND_HTTP_TIMEOUT_SECONDS,
+    BackendUnavailable,
     backend_settings_from_environment,
     current_chat_phase_setter,
     current_chat_session_id,
@@ -34,6 +36,19 @@ from model_contract import StreamingModelClient
 from state import ModelMessage
 
 MAX_REQUEST_BYTES = 64 * 1024
+
+logger = logging.getLogger("chat_runtime")
+
+
+def chat_failure_code(exc: BaseException) -> str:
+    """A short, content-free cause for a failed turn: a known code or only the exception class."""
+    code = getattr(exc, "code", None) if isinstance(exc, BackendUnavailable) else None
+    if isinstance(code, str) and re.fullmatch(r"[a-z0-9_]{1,64}", code):
+        return code
+    if isinstance(exc, RuntimeError) and str(exc) == "Chat response exceeded the size limit":
+        return "response_too_large"
+    name = re.sub(r"[^a-z0-9]+", "_", type(exc).__name__.lower()).strip("_")[:40]
+    return f"error_{name or 'unknown'}"
 MAX_HISTORY_MESSAGES = 100
 MAX_CONTEXT_MESSAGES = 20
 MAX_CONTEXT_CHARACTERS = 32_000
@@ -473,8 +488,10 @@ def register_chat_invocation(
                 yield "event: done\ndata: {}\n\n"
             except asyncio.CancelledError:
                 raise
-            except Exception:
-                yield "event: error\ndata: {}\n\n"
+            except Exception as exc:
+                code = chat_failure_code(exc)
+                logger.warning("chat.failed code=%s", code)
+                yield f"event: error\ndata: {json.dumps({'code': code})}\n\n"
             finally:
                 if steering_fetcher_token is not None:
                     current_steering_fetcher.reset(steering_fetcher_token)

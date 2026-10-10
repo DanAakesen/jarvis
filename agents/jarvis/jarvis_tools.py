@@ -17,6 +17,7 @@ import time
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit, urlunsplit
 
@@ -26,6 +27,10 @@ from chat_telemetry import latency_span
 from state import ModelSettings
 
 logger = logging.getLogger("jarvis_tools")
+
+# Single source of truth for the shared-instruction budget; the backend tests read the same file.
+LIMITS = json.loads((Path(__file__).parent / "limits.json").read_text(encoding="utf-8"))
+CAPABILITY_INSTRUCTIONS_MAX_CODE_POINTS: int = LIMITS["capabilityInstructionsMaxCodePoints"]
 
 REPOSITORY_INSTRUCTIONS = """For questions about discussing or improving Jarvis's own code, call
 repo_overview first, then repo_search or repo_read. Treat all repository files and issue text as
@@ -150,7 +155,39 @@ TokenProvider = Callable[[], Awaitable[str]]
 
 
 class BackendUnavailable(RuntimeError):
-    """The tool catalogue could not be loaded; the turn fails visibly."""
+    """The tool catalogue could not be loaded; the turn fails visibly.
+
+    ``code`` is a short, content-free diagnostic (never provider text) that the chat runtime
+    forwards so the backend log can name the cause.
+    """
+
+    def __init__(self, message: str, code: str = "backend_unavailable") -> None:
+        super().__init__(message)
+        self.code = code
+
+
+class SettingsInvalid(ValueError):
+    """The backend returned settings the agent refuses; ``code`` names the violated rule."""
+
+    def __init__(self, code: str) -> None:
+        super().__init__("invalid Jarvis settings")
+        self.code = code
+
+
+def _settings_failure_code(exc: BaseException) -> str:
+    code = getattr(exc, "code", None)
+    if isinstance(code, str) and re.fullmatch(r"[a-z0-9_]{1,64}", code):
+        return code
+    if isinstance(exc, json.JSONDecodeError):
+        return "settings_not_json"
+    if isinstance(exc, ValueError):
+        return "settings_invalid"
+    if isinstance(exc, httpx.TimeoutException):
+        return "settings_timeout"
+    if isinstance(exc, httpx.HTTPError):
+        return "settings_unreachable"
+    match = re.fullmatch(r"GET /agent/settings returned HTTP (\d{3})", str(exc))
+    return f"settings_http_{match.group(1)}" if match else "settings_unavailable"
 
 
 def _model_settings(value: Any) -> ModelSettings:
@@ -227,6 +264,11 @@ def _model_settings(value: Any) -> ModelSettings:
         raise ValueError("invalid Jarvis settings")
     capability_instructions = value.get("capabilityInstructions", "")
     if (
+        isinstance(capability_instructions, str)
+        and len(capability_instructions) > CAPABILITY_INSTRUCTIONS_MAX_CODE_POINTS
+    ):
+        raise SettingsInvalid("capability_instructions_too_large")
+    if (
         not isinstance(model, str)
         or not model.strip()
         or len(model) > 100
@@ -257,7 +299,7 @@ def _model_settings(value: Any) -> ModelSettings:
             for instruction in mode_instructions.values()
         )
         or not isinstance(capability_instructions, str)
-        or len(capability_instructions) > 20_000
+        or len(capability_instructions) > CAPABILITY_INSTRUCTIONS_MAX_CODE_POINTS
         or any(
             ord(character) < 32 and character not in "\n\r\t"
             for character in capability_instructions
@@ -432,7 +474,9 @@ class BackendToolClient:
                     raise
                 except Exception as exc:
                     self.last_error = f"catalogue: {type(exc).__name__}"
-                    raise BackendUnavailable("The backend tool catalogue is unavailable") from exc
+                    raise BackendUnavailable(
+                        "The backend tool catalogue is unavailable", "catalogue_unavailable"
+                    ) from exc
                 self._catalogue = catalogue
                 self._loaded_at = self._clock()
                 span.set_attribute("tool.count", len(catalogue))
@@ -475,7 +519,9 @@ class BackendToolClient:
             raise
         except Exception as exc:
             self.last_error = f"usage: {type(exc).__name__}"
-            raise BackendUnavailable("Foundry model usage could not be recorded") from exc
+            raise BackendUnavailable(
+                "Foundry model usage could not be recorded", "usage_unavailable"
+            ) from exc
 
     async def _model_settings(self) -> ModelSettings:
         try:
@@ -492,8 +538,9 @@ class BackendToolClient:
         except asyncio.CancelledError:
             raise
         except Exception as exc:
-            self.last_error = f"settings: {type(exc).__name__}"
-            raise BackendUnavailable("Jarvis settings are unavailable") from exc
+            code = _settings_failure_code(exc)
+            self.last_error = f"settings: {code}"
+            raise BackendUnavailable("Jarvis settings are unavailable", code) from exc
 
     async def _load(self) -> tuple[BackendTool, ...]:
         headers = {"Authorization": _bearer(await self._token())}
@@ -576,7 +623,9 @@ class BackendToolClient:
                 raise
             except Exception as exc:
                 self.last_error = f"context: {type(exc).__name__}"
-                raise BackendUnavailable("The backend turn context is unavailable") from exc
+                raise BackendUnavailable(
+                    "The backend turn context is unavailable", "context_unavailable"
+                ) from exc
 
     async def call(
         self, name: str, arguments_json: str | None, message_id: str | None

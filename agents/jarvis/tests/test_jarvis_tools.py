@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Callable
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
@@ -11,6 +12,7 @@ import httpx
 import pytest
 
 from jarvis_tools import (
+    CAPABILITY_INSTRUCTIONS_MAX_CODE_POINTS,
     CATALOGUE_TTL_SECONDS,
     INSTRUCTIONS,
     MAX_RESPONSE_BYTES,
@@ -316,6 +318,63 @@ async def test_invalid_or_unavailable_model_settings_fail_session_start(settings
 
     with pytest.raises(BackendUnavailable):
         await client.model_settings()
+
+
+def _settings_with_instructions(length: int) -> dict[str, Any]:
+    return {
+        "model": "deployment",
+        "reasoningEffort": "none",
+        "capabilityInstructions": "x" * length,
+    }
+
+
+async def test_capability_instruction_limit_comes_from_the_shared_limits_file() -> None:
+    shared = json.loads((Path(__file__).parents[1] / "limits.json").read_text(encoding="utf-8"))
+
+    assert CAPABILITY_INSTRUCTIONS_MAX_CODE_POINTS == shared["capabilityInstructionsMaxCodePoints"]
+    shared_budget = shared["capabilityInstructionsBudgetCodePoints"]
+    assert shared_budget < CAPABILITY_INSTRUCTIONS_MAX_CODE_POINTS
+
+
+async def test_capability_instructions_are_accepted_exactly_at_the_limit() -> None:
+    client = make_client(
+        Backend(settings=_settings_with_instructions(CAPABILITY_INSTRUCTIONS_MAX_CODE_POINTS))
+    )
+
+    settings = await client.model_settings()
+
+    assert len(settings.capability_instructions) == CAPABILITY_INSTRUCTIONS_MAX_CODE_POINTS
+
+
+async def test_oversized_capability_instructions_fail_with_a_named_content_free_code() -> None:
+    oversized = _settings_with_instructions(CAPABILITY_INSTRUCTIONS_MAX_CODE_POINTS + 1)
+    oversized["capabilityInstructions"] = "SECRET-" + oversized["capabilityInstructions"]
+    client = make_client(Backend(settings=oversized))
+
+    with pytest.raises(BackendUnavailable) as raised:
+        await client.model_settings()
+
+    assert raised.value.code == "capability_instructions_too_large"
+    assert "SECRET" not in str(raised.value)
+    assert "SECRET" not in client.last_error
+    assert client.last_error == "settings: capability_instructions_too_large"
+
+
+@pytest.mark.parametrize(
+    ("settings", "code"),
+    [
+        (httpx.Response(503, json={"error": "unavailable"}), "settings_http_503"),
+        (httpx.Response(200, content=b"not json"), "settings_not_json"),
+        ({"model": "", "reasoningEffort": "none"}, "settings_invalid"),
+    ],
+)
+async def test_other_settings_failures_get_distinct_safe_codes(settings: Any, code: str) -> None:
+    client = make_client(Backend(settings=settings))
+
+    with pytest.raises(BackendUnavailable) as raised:
+        await client.model_settings()
+
+    assert raised.value.code == code
 
 
 @pytest.mark.parametrize(
