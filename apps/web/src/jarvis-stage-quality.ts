@@ -1,5 +1,9 @@
 export type JarvisStageQualityLevel = 0 | 1 | 2;
 
+export function initialJarvisStageQualityLevel(maxTextureSize: number, compact: boolean): JarvisStageQualityLevel {
+  return Math.max(maxTextureSize < 4096 ? 1 : 0, compact ? 2 : 0) as JarvisStageQualityLevel;
+}
+
 export function resolveJarvisStageQuality(
   width: number,
   height: number,

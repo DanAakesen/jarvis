@@ -749,6 +749,17 @@ export interface SystemStatus {
   entries: readonly SystemStatusEntry[];
   smoke?: SystemSmokeStatus;
 }
+export interface SystemHealthComponent {
+  id: string;
+  status: SystemStatusValue;
+  detail: string;
+  checkedAt: string | null;
+  recovery: { tool: 'retry_job' | 'renew_credential' | 'get_deployment_status' | 'get_work_status';
+    description: string }[];
+}
+export interface SystemHealth {
+  components: SystemHealthComponent[];
+}
 export interface WorkStatusInput {
   issueNumber?: number;
   taskId?: string;

@@ -31,6 +31,7 @@ import type { SettingsStore } from './core/settings.js';
 import { fallbackModelCatalogue, type ModelCatalogueReader } from './core/model-catalog.js';
 import type { NowFeedEventHub, NowFeedStore, NowFeedUpdate } from './core/now.js';
 import type { CredentialStatusStore } from './credentials/credential-status.js';
+import { SystemHealthDiagnostics } from './core/system-health.js';
 import type { runCodexRenewalOnce } from './credentials/codex-renewal.js';
 import type { UsageStore } from './core/usage.js';
 import type { BackgroundJobStore } from './database/background-job-store.js';
@@ -146,6 +147,7 @@ declare module 'fastify' {
     backgroundJobs: BackgroundJobRegistry;
     onEmbeddingModelChanged: ((jobs: BackgroundJobRegistry) => Promise<void>) | null;
     systemStatusReader: SystemStatusReader;
+    systemHealthDiagnostics: SystemHealthDiagnostics;
     systemSmokeReader: SystemSmokeReader;
   }
 }
@@ -195,6 +197,7 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
   const systemStatusReader = options.systemStatusReader ??
     createSystemStatusReader({}, process.env.JARVIS_DEPLOYED_COMMIT);
   app.decorate('systemStatusReader', systemStatusReader);
+  app.decorate('systemHealthDiagnostics', new SystemHealthDiagnostics());
   app.decorate('systemSmokeReader', createSystemSmokeReader(
     systemStatusReader,
     options.systemSmokeProbes ?? {},
