@@ -478,6 +478,13 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   compatibility alias for the chat role and shares the same confirmation and
   validation path. These tools reuse the existing settings store and contracts;
   no migration or web change is required.
+  P9-55 adds the same catalogue-derived options as `GET /settings` and a
+  schema-derived `fields` guide with key paths, types, allowed values, numeric
+  bounds and Now-confirmation flags. Optional `area` selects roles, voice,
+  research, memory, timeouts, appearance or personality and filters all three
+  output sections. Invalid updates retain the existing validator but return
+  bounded field-specific hints without submitted values. The shared instructions
+  advise discovery before uncertain updates; both tools are always registered.
   P9-34 adds a bounded home-location setting (`city`, latitude and longitude) to
   that same store and registers `weather` through the shared tool registry.
   Open-Meteo geocodes named places and returns a validated current observation

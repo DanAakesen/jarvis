@@ -6,6 +6,8 @@ import type { ToolCallRecord } from './tool-calls.js';
 import { flattenSettings, type SettingsStore } from './settings.js';
 import { ToolRefusal } from './tool-registry.js';
 import { coreModule } from './index.js';
+import { fallbackModelCatalogue } from './model-catalog.js';
+import type { ModelCatalogue } from '@jarvis/contracts';
 
 const config = { ...loadConfig({}), logLevel: 'silent' as const };
 const headers = {
@@ -14,7 +16,7 @@ const headers = {
 };
 const apps: ReturnType<typeof buildApp>[] = [];
 
-function fixture(options: { teamsNotifications?: TeamsNotificationService } = {}) {
+function fixture(options: { teamsNotifications?: TeamsNotificationService; catalogue?: ModelCatalogue } = {}) {
   const values: Record<string, unknown> = {};
   const settingsStore: SettingsStore = {
     read: vi.fn(async () => ({ ...values })),
@@ -31,6 +33,7 @@ function fixture(options: { teamsNotifications?: TeamsNotificationService } = {}
       displayName: 'Dan',
     }),
     settingsStore,
+    ...(options.catalogue ? { modelCatalogue: { read: async () => options.catalogue! } } : {}),
     toolCallStore: { record },
     conversationStore: {
       getDanMessageIdBySourceItemId: vi.fn(async () => '43'),
@@ -97,6 +100,101 @@ describe('Jarvis settings tools', () => {
       result: { redacted: true },
     }));
   });
+
+    it('matches HTTP options for a fake catalogue and guides every supported field', async () => {
+      const catalogue = fallbackModelCatalogue();
+      catalogue.deployments = [{
+        name: 'test-chat', model: 'test-chat', version: '1', sku: 'GlobalStandard',
+        capacity: 1, capabilities: ['chat', 'responses'], reasoningEfforts: ['none', 'high'],
+      }];
+      const { app, record } = fixture({ catalogue });
+      const http = await app.inject({ url: '/settings', headers });
+      const response = await app.inject({ method: 'POST', url: '/tools/get_settings', headers, payload: {} });
+      const { settings, options, fields } = response.json().result;
+
+      expect(options).toEqual(http.json().options);
+      expect(settings).toEqual(http.json().settings);
+      expect(options.roles.chat).toEqual({
+        models: ['test-chat'], reasoningEffortsByModel: { 'test-chat': ['none', 'high'] },
+      });
+      expect(fields).toEqual(expect.arrayContaining([
+        expect.objectContaining({ path: 'roles.chat.model', type: 'string', allowedValues: ['test-chat'], nowConfirmation: true }),
+        expect.objectContaining({ path: 'voice.defaultLanguage', allowedValues: ['da', 'en'], nowConfirmation: false }),
+        expect.objectContaining({ path: 'appearance.radius', type: 'number', minimum: 0, maximum: 24, nowConfirmation: false }),
+        expect.objectContaining({ path: 'global.visionDailyBudgetUsd', minimum: 0, maximum: 100, nowConfirmation: true }),
+        expect.objectContaining({ path: 'personality.modeInstructions.present', type: 'string', maxLength: 2_000 }),
+      ]));
+      const paths: string[] = fields.map((field: { path: string }) => field.path);
+      const checkPaths = (values: Record<string, unknown>, prefix = '') => {
+        for (const [key, value] of Object.entries(values)) {
+          const path = prefix ? `${prefix}.${key}` : key;
+          if (typeof value === 'object' && value !== null) checkPaths(value as Record<string, unknown>, path);
+          else expect(paths).toContain(path);
+        }
+      };
+      checkPaths(settings);
+      expect(record).toHaveBeenCalledWith(expect.objectContaining({
+        arguments: { redacted: true }, result: { redacted: true },
+      }));
+    });
+
+    it.each(['roles', 'voice', 'research', 'memory', 'timeouts', 'appearance', 'personality'])(
+      'filters settings, options and fields to %s', async (area) => {
+        const { app } = fixture();
+        const full = await app.inject({ method: 'POST', url: '/tools/get_settings', headers, payload: {} });
+        const response = await app.inject({ method: 'POST', url: '/tools/get_settings', headers, payload: { area } });
+        const result = response.json().result;
+
+        expect(response.json().outcome).toBe('ok');
+        expect(result.settings).toEqual({ [area]: full.json().result.settings[area] });
+        expect(result.fields.length).toBeGreaterThan(0);
+        expect(result.fields.every((field: { path: string }) => field.path.startsWith(`${area}.`))).toBe(true);
+        for (const [key, value] of Object.entries(result.options)) expect(value).toEqual(full.json().result.options[key]);
+        if (area !== 'roles') expect(result.options).not.toHaveProperty('roles');
+      },
+    );
+
+    it.each([
+      [{ voice: { defaultLanguage: 'de' } }, 'voice.defaultLanguage', '"da", "en"'],
+      [{ appearance: { theme: 'blue' } }, 'appearance.theme', '"light", "dark", "system"'],
+      [{ voice: { maxSpokenReplyTokens: 0 } }, 'voice.maxSpokenReplyTokens', 'from 1 to 4096'],
+      [{ memory: { unsupported: 'private-value' } }, 'memory.unsupported', 'similarityThreshold'],
+      [{ memory: { 'private text in key': 'private-value' } }, 'memory.[unsupported key]', 'similarityThreshold'],
+      [{ roles: { unknown: { model: 'private-value' } } }, 'roles.unknown', 'chat'],
+      [{ roles: { chat: {} } }, 'roles.chat', 'reasoningEffort'],
+      [{ roles: { chat: { model: 'gpt-6-luna', reasoningEffort: 'default' } } }, 'roles.chat.reasoningEffort', '"xhigh"'],
+      [{ roles: { chat: { model: 'missing' } } }, 'roles.chat.model', 'gpt-5.6-luna'],
+      [{ roles: { voice: { reasoningEffort: 'high' } } }, 'roles.voice.reasoningEffort', '"none"'],
+      [{ jarvis: { reasoning: 'xhigh' } }, 'jarvis.reasoning', '"none", "low", "medium", "high"'],
+      [{ personality: { modeInstructions: { present: '\u0001private-value' } } }, 'personality.modeInstructions.present', '2000'],
+    ])('returns actionable refusal for %j', async (settings, path, valid) => {
+      const { app, settingsStore, record } = fixture();
+      const response = await app.inject({
+        method: 'POST', url: '/tools/update_settings', headers, payload: { settings },
+      });
+      const body = response.json();
+      expect(body.outcome).toBe('refused');
+      expect(JSON.stringify(body)).toContain(path);
+      expect(JSON.stringify(body)).toContain(valid.replaceAll('"', '\\"'));
+      expect(JSON.stringify(body)).not.toContain('private-value');
+      expect(settingsStore.write).not.toHaveBeenCalled();
+      expect(record).toHaveBeenCalledWith(expect.objectContaining({
+        arguments: { redacted: true }, result: { redacted: true },
+      }));
+    });
+
+    it('validates reasoning against the proposed model rather than the current model', async () => {
+      const runConfirmed = vi.fn(async (_kind: string, _summary: string, action: () => Promise<unknown>) => action());
+      const { app, values } = fixture({
+        teamsNotifications: { runConfirmed } as unknown as TeamsNotificationService,
+      });
+      const response = await app.inject({
+        method: 'POST', url: '/tools/update_settings', headers,
+        payload: { settings: { roles: { chat: { model: 'gpt-6-luna', reasoningEffort: 'xhigh' } } } },
+      });
+      expect(response.json().outcome).toBe('ok');
+      expect(values['roles.chat.reasoning_effort']).toBe('"xhigh"');
+    });
 
   it('confirms model-role and budget changes in Now before writing', async () => {
     let approve!: () => void;
