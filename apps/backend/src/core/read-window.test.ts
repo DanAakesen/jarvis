@@ -108,7 +108,7 @@ describe('read_window', () => {
     const state = await app.inject({
       method: 'POST', url: '/now/workspace/state', headers: headers('owner'),
       payload: { sessionId: connection.sessionId, contextPanelOpen: false, windows: [
-        { viewId: 'report', title: 'Live report', content: '<p>Page finding</p><script>bad()</script>', selection: 'Selected finding' },
+        { viewId: 'report', title: 'Live report', content: 'Page finding: Array<T> &amp;\n  indented', selection: 'Selected finding: Array<T>' },
         { viewId: 'settings', title: 'Settings', content: 'Voice: Ryan', front: true },
         { viewId: 'task', title: 'Task', selection: 'Selected task detail' },
       ] },
@@ -117,6 +117,7 @@ describe('read_window', () => {
     const text = (await readWindow()).json().result.text;
     expect(text).toContain('Selection: Selected finding');
     expect(text).toContain('Page finding');
+    expect(text).toContain('Array‹T› &amp;\n  indented');
     expect(text).not.toMatch(/Cached finding|bad\(\)|<|>/u);
     expect((await readWindow('settings', 'owner')).json().result.text).toContain('Voice: Ryan');
     expect((await readWindow('task')).json().result.text).toContain('Selection: Selected task detail');
@@ -206,14 +207,15 @@ describe('read_window', () => {
     broker.dispose();
   });
 
-  it('strips markup and script text embedded in generated rows', async () => {
+  it('preserves literal code, entities and whitespace without returning raw markup', async () => {
     const { send, readWindow } = fixture();
-    await send({ ...base, renderer: 'list', data: { items: [
-      { title: '<b>Finding</b><script>untrustedScript()</script>', description: '<p>Evidence</p>' },
-    ] } });
+    await send({ ...base, renderer: 'code', data: {
+      repo: 'DanAakesen/jarvis', path: 'example.ts',
+      content: 'const items: Array<T> = [];\n  // &amp; stays literal', language: 'typescript',
+    } });
     const text = (await readWindow()).json().result.text;
-    expect(text).toContain('Finding');
-    expect(text).toContain('Evidence');
-    expect(text).not.toMatch(/<|>|untrustedScript/u);
+    expect(text).toContain('Array‹T›');
+    expect(text).toContain('\\n  // &amp; stays literal');
+    expect(text).not.toMatch(/<|>/u);
   });
 });

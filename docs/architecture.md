@@ -173,7 +173,9 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   units and points within that cap. HTML views reuse the owner-scoped artifact
   store injected into the shared app; parse5 extracts static body/SVG text
   without executing scripts, loading resources or returning markup. CSS-driven
-  and script-rendered visibility is not evaluated. Page text reporting remains
+  and script-rendered visibility is not evaluated. Plain/code and page text
+  retain whitespace and entities; literal angle brackets become `‹`/`›` rather
+  than being parsed as HTML. Page text reporting remains
   the separate UI task #640; old snapshots still validate.
   On non-conversation signed-in routes, the shell keeps the command stream
   mounted in a hidden Now panel while the workspace controller remains active.

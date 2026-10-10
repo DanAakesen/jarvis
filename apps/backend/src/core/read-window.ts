@@ -7,6 +7,10 @@ import { WorkspaceHtmlArtifactNotFound } from '../database/workspace-html-artifa
 
 const textLimit = 8 * 1024;
 
+function plainText(text: string): string {
+  return text.replace(/</gu, '‹').replace(/>/gu, '›');
+}
+
 function boundedText(text: string): string {
   if (Buffer.byteLength(text) <= textLimit) return text;
   const suffix = '\n[truncated]';
@@ -34,7 +38,7 @@ function visibleText(html: string): string {
             name === 'style' && /(?:display\s*:\s*none|visibility\s*:\s*hidden)/iu.test(value)))) continue;
     if ('childNodes' in node) stack.push(...[...node.childNodes].reverse());
   }
-  return parts.join(' ').replace(/\s+/gu, ' ').trim().replace(/</gu, '‹').replace(/>/gu, '›');
+  return plainText(parts.join(' ').replace(/\s+/gu, ' ').trim());
 }
 
 function viewText(view: GeneratedView): string {
@@ -42,8 +46,7 @@ function viewText(view: GeneratedView): string {
   if (view.renderer === 'list') data = { items: view.data.items.slice(0, 50), omitted: Math.max(0, view.data.items.length - 50) };
   if (view.renderer === 'table') data = { columns: view.data.columns, rows: view.data.rows.slice(0, 50), omitted: Math.max(0, view.data.rows.length - 50) };
   if (view.renderer === 'timeline') data = { events: view.data.events.slice(0, 100), omitted: Math.max(0, view.data.events.length - 100) };
-  return `${visibleText(view.title)}\nRenderer: ${view.renderer}\n${JSON.stringify(data, (_key, value: unknown) =>
-    typeof value === 'string' ? visibleText(value) : value)}`;
+  return `${plainText(view.title)}\nRenderer: ${view.renderer}\n${plainText(JSON.stringify(data))}`;
 }
 
 export const readWindowTool: JarvisTool = {
@@ -69,14 +72,14 @@ export const readWindowTool: JarvisTool = {
     const view = broker.view(ownerId, viewId);
     let text: string;
     if (window?.content !== undefined) {
-      text = `${visibleText(window.title)}\n${view ? `Renderer: ${view.renderer}\n` : ''}${visibleText(window.content)}`;
+      text = `${plainText(window.title)}\n${view ? `Renderer: ${view.renderer}\n` : ''}${plainText(window.content)}`;
     } else if (view?.renderer === 'html-app') {
       const store = request.server.workspaceHtmlArtifacts;
       if (!store) throw new ToolRefusal('Workspace HTML storage is unavailable.');
       try {
         const artifact = await store.read(view.data.artifactId, ownerId, signal);
-        text = `${visibleText(artifact.title)}\nRenderer: html-app\nSources: ${artifact.sources.map((source) =>
-          `${visibleText(source.title)} (${visibleText(source.url)})`).join('\n')}\n${visibleText(artifact.html)}`;
+        text = `${plainText(artifact.title)}\nRenderer: html-app\nSources: ${artifact.sources.map((source) =>
+          `${plainText(source.title)} (${plainText(source.url)})`).join('\n')}\n${visibleText(artifact.html)}`;
       } catch (error) {
         if (error instanceof WorkspaceHtmlArtifactNotFound) throw new ToolRefusal('The window report is no longer available.');
         throw error;
@@ -88,7 +91,7 @@ export const readWindowTool: JarvisTool = {
     } else {
       throw new ToolRefusal(window ? 'This window has not reported readable content.' : 'No readable window with that viewId belongs to this workspace.');
     }
-    if (window?.selection !== undefined) text = `${visibleText(window.title)}\nSelection: ${visibleText(window.selection)}\n${text}`;
+    if (window?.selection !== undefined) text = `${plainText(window.title)}\nSelection: ${plainText(window.selection)}\n${text}`;
     return { viewId, untrusted: true, text: boundedText(text) };
   },
 };
