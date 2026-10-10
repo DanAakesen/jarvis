@@ -180,6 +180,18 @@ database migration is needed. Expose `task_routines` and `/routines`, retaining
 `task_recipes` and `/recipes` as one-release aliases. The web UI remains outside
 this backend change.
 
+P9-62 (10 October 2026): make self-diagnosis read-only and cache-only for
+integration probes. Keep a last status snapshot separate from its refresh TTL;
+mark subsystem, smoke and work evidence older than five minutes unknown. Use
+fixed safe reasons rather than returning arbitrary source detail or private
+text. Reuse credential/job/release stores; cache only work verdicts and bounded
+hourly tool-event counts in process. Return 26 fixed-order components, nullable
+missing timestamps and registry-gated existing recovery actions. Do not infer
+delivery from recorded deployment status, auto-repair, add a migration or expand
+App permissions. Focused offline tests verify statuses, expiry, missing/stale
+sources, no probe calls, sanitisation, ordering and recovery gating; live model,
+SQL and provider acceptance remain pending.
+
 P9-20 (7 October 2026): expose one owner-authenticated, cached `/status`
 snapshot using the shared contracts; reuse it in `get_status_summary`. Keep
 status probes bounded and return only allowlisted metadata, never provider

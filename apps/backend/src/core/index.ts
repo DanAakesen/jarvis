@@ -13,6 +13,7 @@ import { renewCredentialTool } from './credential-tools.js';
 import { manageModelDeploymentTool, registerModelDeploymentRoutes } from './model-deployments.js';
 import { setAwayModeTool, setPresenceModeTool } from './away-mode.js';
 import { getStatusSummaryTool } from './status.js';
+import { getSystemHealthTool } from './system-health.js';
 import { generatedViewValidationOptions } from './generated-view-validation.js';
 import { registerWorkspaceCommandRoutes, workspaceCommandTool } from './workspace-commands.js';
 import { readWindowTool } from './read-window.js';
@@ -54,7 +55,7 @@ function isObject(value: unknown): value is Record<string, unknown> {
 
 export const coreModule: BackendModule = {
   id: 'core',
-  tools: [setThemeTool, getSettingsTool, updateSettingsTool, renewCredentialTool, setJarvisModelTool, manageModelDeploymentTool, setPresenceModeTool, setAwayModeTool, getStatusSummaryTool, workspaceCommandTool, readWindowTool, listJobsTool, getJobTool, cancelJobTool, getUsageTool],
+  tools: [setThemeTool, getSettingsTool, updateSettingsTool, renewCredentialTool, setJarvisModelTool, manageModelDeploymentTool, setPresenceModeTool, setAwayModeTool, getStatusSummaryTool, getSystemHealthTool, workspaceCommandTool, readWindowTool, listJobsTool, getJobTool, cancelJobTool, getUsageTool],
   registerRoutes: async (app) => {
     await registerSettingsRoutes(app);
     registerModelDeploymentRoutes(app);
@@ -133,12 +134,14 @@ export const coreModule: BackendModule = {
           // Fastify otherwise silently removes unknown root properties.
           const error = unexpectedToolArgument(request.body, tool.inputSchema);
           if (error) {
+            app.systemHealthDiagnostics.record('invalid');
             const result = toolArgumentRefusal(tool, error, request.log);
             return reply.send({ tool: tool.name, outcome: 'refused', result, confirmation: confirmToolCall(tool.name, 'refused', result) });
           }
         },
         errorHandler: (error, request, reply) => {
           if (!error.validation || error.validationContext !== 'body') return reply.send(error);
+          app.systemHealthDiagnostics.record('invalid');
           const result = toolArgumentRefusal(tool, error.validation, request.log);
           return reply.code(200).send({
             tool: tool.name, outcome: 'refused', result, confirmation: confirmToolCall(tool.name, 'refused', result),
@@ -241,6 +244,7 @@ export const coreModule: BackendModule = {
             result = { error: 'Tool execution failed' };
           }
         } finally {
+          if (outcome === 'error') app.systemHealthDiagnostics.record('failed');
           presentation.finish(result, outcome === 'ok');
           request.raw.removeListener('aborted', abortOnRequest);
           reply.raw.removeListener('close', abortOnClose);

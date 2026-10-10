@@ -1070,6 +1070,32 @@ Dan-only `GET /status` returns the shared `SystemStatus` contract with one
 sets a private 30-second HTTP cache. `get_status_summary` reads the same snapshot
 and combines health counts with the existing Now-feed counts.
 
+P9-62 adds always-registered `get_system_health`, returning the shared
+`SystemHealth` contract: 26 fixed-order components with status, safe detail,
+nullable evidence timestamp and available recovery tool descriptions.
+`SystemStatusReader.peek` never starts or refreshes probes, even after cache
+expiry or error invalidation. Cached subsystem, smoke and work evidence older
+than five minutes becomes unknown; its timestamp remains visible. Credentials
+come from the existing metadata store, with expired credentials down and expiry
+within seven days degraded. Missing metadata is unknown. The latest stored
+production deployment or Deploy workflow result comes from Jarvis's release
+store, not a live GitHub call. It reports recorded evidence, not deployment
+freshness or exact-commit delivery.
+
+Background health examines up to 100 retained jobs for failures in the last
+hour, checking at most five failed jobs for retry eligibility. Work lookups
+record only a safe verdict; self-diagnosis never invokes the potentially costly
+work-status reader. Per-minute in-memory buckets count invalid tool arguments
+and execution failures over the last hour, capped at 1,000 and reset on restart.
+HTTP and reflex execution failures contribute; HTTP schema refusals contribute
+to invalid-argument counts. Stored-state reads have a shared five-second
+response deadline and failed reads remain unknown. No raw provider details,
+job text, project/repository text, credentials or work warnings are returned.
+Recovery references are filtered through the current tool registry; only
+eligible research retries, Codex renewal, deployment lookup and work lookup
+are offered. Recovery still uses each existing tool's validation/approval.
+`get_status_summary` is unchanged; no migration or GitHub App permission changes.
+
 The database check runs a bounded `SELECT 1`; Foundry chat, voice and embedding
 entries compare configuration and the cached ARM catalogue, without claiming a
 successful model invocation. Vault status aggregates note/chunk counts, latest
