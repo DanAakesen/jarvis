@@ -41,6 +41,25 @@ function fixture() {
 }
 
 describe('workspace command delivery', () => {
+  it('resolves HTML artifact/window references only from owner-scoped applied commands', async () => {
+    const broker = new WorkspaceCommandBroker();
+    const artifactId = '56a2b0bd-af47-46b5-8e15-c6e9a718ae93';
+    const command: WorkspaceCommand = {
+      commandId: 'html-reference', operation: 'update', viewId: 'research-existing',
+      view: { version: 1, title: 'Report', renderer: 'html-app',
+        source: { id: 'research', status: 'complete' }, data: { artifactId } },
+    };
+    const connection = broker.connect(ownerId, () => true);
+    const pending = broker.execute(ownerId, command, new AbortController().signal);
+    expect(broker.htmlView(ownerId, { viewId: command.viewId })).toBeUndefined();
+    broker.acknowledge(ownerId, connection.sessionId, command.commandId, true);
+    await pending;
+    expect(broker.htmlView(ownerId, { viewId: command.viewId })).toEqual({ viewId: command.viewId, artifactId });
+    expect(broker.htmlView(ownerId, { artifactId })).toEqual({ viewId: command.viewId, artifactId });
+    expect(broker.htmlView('another-owner', { artifactId })).toBeUndefined();
+    connection.close();
+  });
+
   it('describes ordered timeline events and dates or period labels to the model', () => {
     expect(workspaceCommandTool.description).toContain('chart or timeline requests');
     expect(workspaceCommandTool.description).toContain('chart data uses kind line, bar or area and 1–5 named series of x/y points, up to 1,000 points total');

@@ -19,6 +19,20 @@ The nine design areas and where each stands. **Confirmed** = Dan's requirement o
 
 ## Decision log
 
+P9-53 (10 October 2026): revise HTML apps/reports through owner-scoped,
+agent-only read/update tools using the existing artifact history table and
+workspace update contract. Archive previous content and increment its version
+inside a row-locked SQL transaction; retain all history on this path and preserve
+omitted metadata, Folio records and pins. Read historical versions to support
+rollback by submitting their HTML/title/sources as another revision. Keep tool
+names in tool descriptions, with one tool-name-free shared instruction bullet
+because the HTML module is conditionally registered. Applied broker commands
+provide a bounded research-window/artifact mapping; canonical HTML windows need
+no mapping. Tests cover tools, redacted audits and SQL persistence. Backend-only
+scope is preserved: the current web iframe does not refetch same-ID updates,
+so visual refresh acceptance remains blocked on separately authorized web work.
+No migration, new dependency or App permission is needed.
+
 P9-43 (8 October 2026): reuse the workspace broker's latest connected-owner
 snapshot for per-turn model awareness; do not persist screen or view content.
 Keep `view` optional for old clients, validate current/previous destinations,
