@@ -29,6 +29,12 @@ then focus; refuse when no owner workspace is connected. Use plain root object
 schemas (L121), one tool-name-free shared instruction, untrusted title markers
 and redacted audits. No migration, App permission or web change is required.
 Acceptance paths are verified offline; live model/browser use remains unverified.
+P9-74 (10 October 2026): hide note front matter rather than introduce a YAML
+parser or property editor. Strip delimited metadata after leading comments,
+whitespace and BOMs, including malformed YAML. Keep the note path, Markdown and
+connections in one scroll region with a bottom fade and labelled scroll control.
+Exclude documented tooling patterns from graph/count presentation only; preserve
+indexing and Jarvis search.
 
 P9-56 (10 October 2026): reuse the Folio route stores for Jarvis rename,
 pin/unpin and removal, preserving the existing index-only deletion semantics:

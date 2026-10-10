@@ -325,6 +325,13 @@ The phone voice container measures about 212px rather than 844px; its background
 and backdrop filter are absent and its pointer events are disabled. The 60px
 bar remains interactive. Before/after fixture captures and measurements are in
 `docs/ui/screenshots/p9-72/`; these are not live audio or physical-device evidence.
+P9-74 used the same scratch-only auth/API approach in Chromium and WebKit at
+390×844 and 1280×900 in light/dark. Synthetic fixture notes reproduced raw YAML
+before the change and verified its removal, wrapped titles/paths, the scroll cue,
+button and keyboard scrolling to the final paragraph, close/reset and note-load
+errors. Normal and reduced-motion scrolling passed; no page exceptions or horizontal overflow
+were observed. Before/after captures: `docs/ui/screenshots/p9-74/`. No live vault
+or physical-device behavior was inspected.
 
 P7-15's conversation image preview was inspected in Chromium at 1280×900 and
 390×844 using scratch-only signed-in and API fixtures. The existing history

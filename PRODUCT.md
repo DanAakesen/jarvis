@@ -413,6 +413,12 @@ Feedback and windows must not overlap those controls. Portrait and landscape
 respect all safe-area edges; desktop remains unchanged. Home Screen launch uses
 a minimal standalone Jarvis manifest and the existing app icon.
 
+P9-74 excludes skill tooling, `.template.md` files and `.github` files from the
+Knowledge graph and displayed note counts, without changing Jarvis vault search.
+Notes render Markdown without raw front matter, including after leading comments
+or a BOM. Long notes scroll with a bottom fade and visible scroll control; titles
+and paths wrap.
+
 The confirmed requirements and proposed feature placement are in [ui.md](ui.md).
 Jarvis has one typing shell with expandable navigation and context panels, and a
 fullscreen voice workspace with a runtime-state-driven orb. Jarvis can create and

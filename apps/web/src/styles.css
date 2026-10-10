@@ -2587,13 +2587,19 @@ a.task-chip:hover { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--glass-e
   position: absolute; z-index: 3; top: 16px; right: 16px; bottom: 16px; display: flex; width: min(380px, calc(100% - 32px)); flex-direction: column;
   padding: 12px 12px 14px 16px; border-radius: var(--radius-window); animation: modal-rise calc(var(--motion-state) * 1.4) var(--ease-enter);
 }
-.knowledge-note-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
-.knowledge-note-heading h3 { display: flex; align-items: center; gap: 8px; margin: 4px 0 0; font-size: 17px; overflow-wrap: anywhere; }
+.knowledge-note-heading { display: flex; flex: 0 0 auto; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.knowledge-note-heading h3 { display: flex; min-width: 0; align-items: center; gap: 8px; margin: 4px 0 0; font-size: 17px; overflow-wrap: anywhere; }
+.knowledge-note-heading .knowledge-dot, .knowledge-note-heading .modal-close { flex-shrink: 0; }
 .knowledge-note-meta { margin: 4px 0 10px; color: var(--text-muted); font-size: 12px; overflow-wrap: anywhere; }
-.knowledge-note-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding-right: 4px; font-size: 14px; }
+.knowledge-note-reader { position: relative; display: flex; flex: 1 1 auto; min-height: 0; flex-direction: column; }
+.knowledge-note-reader[data-more]::after { position: absolute; right: 0; bottom: 44px; left: 0; height: 32px; background: linear-gradient(transparent, var(--surface)); pointer-events: none; content: ""; }
+.knowledge-note-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 0 4px 24px 0; font-size: 14px; scrollbar-width: auto; scrollbar-gutter: stable; }
+.knowledge-note-scroll { flex: 0 0 auto; min-height: 44px; border: 0; border-radius: var(--radius-control); background: var(--glass-hover); color: var(--text); font: inherit; font-size: 12px; cursor: pointer; }
+.knowledge-note-scroll:hover { background: var(--glass-pressed); }
+.knowledge-note-scroll:focus-visible, .knowledge-note-body:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
 .knowledge-note-link { margin-top: 10px; font-size: 13px; font-weight: 600; }
 .knowledge-note-subheading { margin: 14px 0 4px; font-size: 13px; }
-.knowledge-neighbours { display: grid; max-height: 30%; gap: 2px; margin: 0; padding: 0; overflow-y: auto; list-style: none; }
+.knowledge-neighbours { display: grid; gap: 2px; margin: 0; padding: 0; list-style: none; overflow-wrap: anywhere; }
 @media (max-width: 700px) {
   .knowledge-note { top: auto; left: 8px; right: 8px; width: auto; max-height: 60%; }
   .knowledge-legend { bottom: 8px; left: 8px; }

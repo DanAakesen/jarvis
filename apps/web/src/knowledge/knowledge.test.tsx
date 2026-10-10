@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { matchTitles, readKnowledgeGraph, sampleKnowledgeGraph, vaultMemoryId } from './knowledge-data';
 import { GeneratedViewRenderer } from '../GeneratedViewRenderer';
@@ -39,6 +39,56 @@ describe('knowledge graph data', () => {
 });
 
 describe('knowledge graph view', () => {
+  it.each([
+    ['front matter first', '---\ntags: [fixture]\ncreated: 2026-10-10\n---\n'],
+    ['leading comments and whitespace', ' \n<!-- Fixture sync template -->\n<!-- Another comment -->\n---\ntags: [fixture]\n---\n'],
+    ['no front matter', ''],
+    ['malformed YAML', '---\ntags: [broken\ncreated: : invalid\n---\n'],
+    ['BOM and CRLF', '\uFEFF \r\n<!-- Fixture -->\r\n---\r\ntags: [fixture]\r\n---\r\n'],
+    ['closing delimiter at EOF', '---\ntags: [fixture]\n---'],
+    ['many leading comments', `${'<!-- fixture -->'.repeat(2000)}\n---\ntags: [fixture]\n---\n`],
+    ['many comments without front matter', `${'<!-- fixture -->'.repeat(2000)}\n`],
+  ])('renders fixture Markdown without raw metadata: %s', async (_name, prefix) => {
+    const content = prefix.endsWith('---') ? prefix : `${prefix}# Fixture heading\n\n- First item\n- Second item\n\n---\n\nBody text.`;
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => new URL(String(input)).pathname === '/knowledge/graph'
+      ? json({ nodes: [{ id: 'fixture', path: 'Work/Fixture.md', title: 'Fixture note', folder: 'Work' }], edges: [] })
+      : json({ title: 'Fixture note', content })));
+    render(<KnowledgeGraphView backendUrl="https://api.example.com" getAccessToken={getAccessToken} />);
+    expect(await screen.findByText('1 notes')).not.toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Work1' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Fixture note' }));
+    const body = await screen.findByRole('region', { name: 'Note content' });
+    if (prefix.endsWith('---')) {
+      expect(await within(body).findByText('This note is empty.')).not.toBeNull();
+    } else {
+      expect(await within(body).findByRole('heading', { name: 'Fixture heading' })).not.toBeNull();
+      expect(within(body).getAllByRole('listitem')).toHaveLength(2);
+      expect(body.querySelectorAll('hr')).toHaveLength(1);
+    }
+    expect(body.textContent).not.toMatch(/tags:|created:|broken|invalid|sync template/);
+    expect(body.tabIndex).toBe(0);
+  });
+
+  it('shows a working scroll cue only while fixture content remains below the reader', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => new URL(String(input)).pathname === '/knowledge/graph'
+      ? json({ nodes: [{ id: 'fixture', path: 'Work/Fixture.md', title: 'Fixture note', folder: 'Work' }], edges: [] })
+      : json({ content: '# Long fixture\n\nReadable body.' })));
+    render(<KnowledgeGraphView backendUrl="https://api.example.com" getAccessToken={getAccessToken} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Work1' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Fixture note' }));
+    const body = await screen.findByRole('region', { name: 'Note content' });
+    await within(body).findByRole('heading', { name: 'Long fixture' });
+    Object.defineProperties(body, { clientHeight: { value: 200 }, scrollHeight: { value: 1000 } });
+    const scrollBy = vi.fn();
+    body.scrollBy = scrollBy;
+    fireEvent.scroll(body);
+    fireEvent.click(await screen.findByRole('button', { name: 'Scroll down' }));
+    expect(scrollBy).toHaveBeenCalledWith({ top: 160, behavior: 'smooth' });
+    body.scrollTop = 800;
+    fireEvent.scroll(body);
+    expect(screen.queryByRole('button', { name: 'Scroll down' })).toBeNull();
+  });
+
   it('shows a neutral unavailable state instead of inventing data when the service is missing', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => json({ error: 'not found' }, 404)));
     render(<KnowledgeGraphView backendUrl="https://api.example.com" getAccessToken={getAccessToken} />);
