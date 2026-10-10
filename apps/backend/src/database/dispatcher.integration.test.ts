@@ -73,27 +73,28 @@ describe('dispatcher SQL coordination', () => {
     const taskStore = createTaskStore(pool, events);
     const store = createDispatcherStore(pool, events);
     const task = await createTask(events, 'Finishing delivery cancellation');
-    expect((await taskStore.transition(task.id, 'Running')).kind).toBe('ok');
-    const session = await pool.request()
-      .input('taskId', sql.BigInt, BigInt(task.id))
-      .input('status', sql.NVarChar(8), sessionStatus)
-      .query<{ id: string }>(`INSERT dbo.sandbox_sessions
+    try {
+      expect((await taskStore.transition(task.id, 'Running')).kind).toBe('ok');
+      const session = await pool.request()
+        .input('taskId', sql.BigInt, BigInt(task.id))
+        .input('status', sql.NVarChar(8), sessionStatus)
+        .input('foundrySessionId', sql.NVarChar(255), `finishing-${sessionStatus}-${randomUUID()}`)
+        .query<{ id: string }>(`INSERT dbo.sandbox_sessions
         (task_id, foundry_session_id, agent_version, agent_name, size, image, status, ended_at, end_reason)
         OUTPUT CAST(inserted.id AS varchar(19)) AS id
-        VALUES (@taskId, N'finishing-session', N'1', N'jarvis-runner-base-1x2', N'1x2', N'fixture', @status,
+        VALUES (@taskId, @foundrySessionId, N'1', N'jarvis-runner-base-1x2', N'1x2', N'fixture', @status,
           CASE WHEN @status = N'Ended' THEN SYSUTCDATETIME() ELSE NULL END,
           CASE WHEN @status = N'Ended' THEN N'done' ELSE NULL END);`);
-    const sessionId = session.recordset[0]!.id;
-    await pool.request()
-      .input('sessionId', sql.BigInt, BigInt(sessionId))
-      .query(`INSERT dbo.sandbox_turns (sandbox_session_id, invocation_id, mode, acp_session_id, status, ended_at)
+      const sessionId = session.recordset[0]!.id;
+      await pool.request()
+        .input('sessionId', sql.BigInt, BigInt(sessionId))
+        .query(`INSERT dbo.sandbox_turns (sandbox_session_id, invocation_id, mode, acp_session_id, status, ended_at)
         VALUES (@sessionId, N'finishing-invocation', N'task', N'fixture-acp', N'completed', SYSUTCDATETIME());`);
-    const cancel = vi.fn();
-    const deleteSession = vi.fn(async () => {});
-    const dispatcher = new TaskDispatcher(store, taskStore, settings(), () => ({
-      startTask: vi.fn(), steer: vi.fn(), pause: vi.fn(), resume: vi.fn(), cancel, deleteSession, status: vi.fn(),
-    }), heartbeat(), events);
-    try {
+      const cancel = vi.fn();
+      const deleteSession = vi.fn(async () => {});
+      const dispatcher = new TaskDispatcher(store, taskStore, settings(), () => ({
+        startTask: vi.fn(), steer: vi.fn(), pause: vi.fn(), resume: vi.fn(), cancel, deleteSession, status: vi.fn(),
+      }), heartbeat(), events);
       expect(await taskStore.get(task.id, 1, 0)).toMatchObject({ state: 'Running', activity: 'Finishing delivery' });
       expect(await taskStore.list({ limit: 100, offset: 0 })).toContainEqual(
         expect.objectContaining({ id: task.id, activity: 'Finishing delivery' }),
@@ -113,16 +114,30 @@ describe('dispatcher SQL coordination', () => {
       expect(ended.recordset).toEqual([{ status: 'Ended' }]);
       await pool.request()
         .input('taskId', sql.BigInt, BigInt(task.id))
+        .input('foundrySessionId', sql.NVarChar(255), `new-finishing-${sessionStatus}-${randomUUID()}`)
         .query(`UPDATE dbo.tasks SET state = N'Running' WHERE id = @taskId;
           INSERT dbo.sandbox_sessions
             (task_id, foundry_session_id, agent_version, agent_name, size, image, status, started_at)
-          VALUES (@taskId, N'new-finishing-session', N'1', N'jarvis-runner-base-1x2', N'1x2', N'fixture',
-            N'Active', DATEADD(second, 1, SYSUTCDATETIME()));`);
+          VALUES (@taskId, @foundrySessionId, N'1', N'jarvis-runner-base-1x2', N'1x2', N'fixture',
+            N'Active', SYSUTCDATETIME());`);
       expect(await taskStore.get(task.id, 1, 0)).toMatchObject({ activity: null });
     } finally {
-      await store.endTaskSessions(task.id, 'Cancelled');
-      await pool.request().input('taskId', sql.BigInt, BigInt(task.id))
-        .query("UPDATE dbo.tasks SET state = N'Cancelled' WHERE id = @taskId;");
+      await pool.request()
+        .input('taskId', sql.BigInt, BigInt(task.id))
+        .input('projectId', sql.BigInt, BigInt(task.projectId))
+        .input('link', sql.NVarChar(100), `task:${task.id}`)
+        .query(`SET XACT_ABORT ON;
+          BEGIN TRANSACTION;
+          DELETE dbo.usage WHERE task_id = @taskId;
+          DELETE dbo.task_events WHERE task_id = @taskId;
+          DELETE dbo.sandbox_turns WHERE sandbox_session_id IN (
+            SELECT id FROM dbo.sandbox_sessions WHERE task_id = @taskId);
+          DELETE dbo.sandbox_sessions WHERE task_id = @taskId;
+          DELETE dbo.task_status_notifications WHERE task_id = @taskId;
+          DELETE dbo.activity WHERE link = @link;
+          DELETE dbo.tasks WHERE id = @taskId;
+          DELETE dbo.projects WHERE id = @projectId;
+          COMMIT TRANSACTION;`);
     }
   });
 
