@@ -46,6 +46,7 @@ export interface StoredBackgroundJobDetails {
 }
 
 export interface BackgroundJobStore {
+  recentFailures?(from: Date, to: Date, signal: AbortSignal): Promise<{ count: number; retryable: boolean }>;
   create(job: BackgroundJob, retryInput?: ResearchJobRetryInput, retryOf?: string): Promise<boolean>;
   update(job: BackgroundJob): Promise<BackgroundJob | null>;
   list(): Promise<BackgroundJob[]>;
@@ -191,6 +192,23 @@ export function createBackgroundJobStore(pool: sql.ConnectionPool): BackgroundJo
         await transaction.rollback();
         throw error;
       }
+    },
+    async recentFailures(from, to, signal) {
+      signal.throwIfAborted();
+      const request = pool.request().input('from', sql.DateTime2, from).input('to', sql.DateTime2, to);
+      const cancel = () => request.cancel();
+      signal.addEventListener('abort', cancel, { once: true });
+      try {
+        const { recordset } = await request.query<{ count: number; retryable: number }>(`SELECT
+          COUNT(*) AS count,
+          COALESCE(MAX(CASE WHEN kind = N'research' AND retry_input IS NOT NULL
+            AND retry_job_id IS NULL THEN 1 ELSE 0 END), 0) AS retryable
+          FROM dbo.background_jobs WHERE status = N'failed'
+            AND updated_at >= @from AND updated_at <= @to
+            AND started_at >= DATEADD(day, -${retentionDays}, @to);`);
+        signal.throwIfAborted();
+        return { count: Math.min(1_000, recordset[0]?.count ?? 0), retryable: recordset[0]?.retryable === 1 };
+      } finally { signal.removeEventListener('abort', cancel); }
     },
     async list() {
       await pruneJobs(pool);

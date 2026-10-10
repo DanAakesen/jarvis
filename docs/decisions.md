@@ -184,9 +184,11 @@ P9-62 (10 October 2026): make self-diagnosis read-only and cache-only for
 integration probes. Keep a last status snapshot separate from its refresh TTL;
 mark subsystem, smoke and work evidence older than five minutes unknown. Use
 fixed safe reasons rather than returning arbitrary source detail or private
-text. Reuse credential/job/release stores; cache only work verdicts and bounded
+text. Reuse credential/job/release stores, with a cancellable job-failure
+aggregate that returns no private text; cache only work verdicts and bounded
 hourly tool-event counts in process. Return 26 fixed-order components, nullable
-missing timestamps and registry-gated existing recovery actions. Do not infer
+missing timestamps and registry-gated existing recovery actions; renewal also
+requires its runtime callback and Now approval service. Do not infer
 delivery from recorded deployment status, auto-repair, add a migration or expand
 App permissions. Focused offline tests verify statuses, expiry, missing/stale
 sources, no probe calls, sanitisation, ordering and recovery gating; live model,

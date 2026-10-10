@@ -111,7 +111,7 @@ export async function getSystemHealth(app: FastifyInstance, signal: AbortSignal,
   }
   const [credentials, jobs, projects] = await Promise.all([
     app.credentialStatusStore ? read(() => app.credentialStatusStore!.list(), signal) : undefined,
-    read(() => app.backgroundJobs.list(), signal),
+    read(() => app.backgroundJobs.recentFailures(new Date(now - hourMs), new Date(now), signal), signal),
     app.projectStore ? read(() => app.projectStore!.list(), signal) : undefined,
   ]);
   for (const name of credentialNames) {
@@ -126,21 +126,13 @@ export async function getSystemHealth(app: FastifyInstance, signal: AbortSignal,
       status === 'degraded' ? 'Credential expires soon or needs renewal.' :
       status === 'ok' ? 'Stored credential status is healthy.' : 'Credential status is unavailable.',
     credential?.lastCheckedAt ?? credential?.lastRenewedAt,
-    name === 'codex-login' ? [{ tool: 'renew_credential', description: 'Request renewal of codex-login; Now approval may be required.' }] : []);
+    name === 'codex-login' && app.renewCodexCredential && app.teamsNotifications
+      ? [{ tool: 'renew_credential', description: 'Request renewal of codex-login with Now approval.' }] : []);
   }
-  const failed = jobs?.slice(0, 100).filter((job) => job.status === 'failed' &&
-    timestamp(job.updatedAt) !== null && Date.parse(job.updatedAt) >= now - hourMs && Date.parse(job.updatedAt) <= now);
-  let retryable = false;
-  if (app.jarvisTools.get('retry_job')) {
-    for (const job of (failed ?? []).slice(0, 5)) {
-      const details = await read(() => app.backgroundJobs.details(job.jobId), signal);
-      if (details?.details.retryable) { retryable = true; break; }
-    }
-  }
-  add('background_jobs', failed ? failed.length ? 'degraded' : 'ok' : 'unknown',
-    failed ? `${Math.min(100, failed.length)} failed background jobs in the last hour (up to 100 retained jobs).` :
+  add('background_jobs', jobs ? jobs.count ? 'degraded' : 'ok' : 'unknown',
+    jobs ? `${jobs.count === 1_000 ? '1000 or more' : jobs.count} failed background jobs in the last hour of retained history.` :
       'Background job history is unavailable.', new Date(now).toISOString(),
-    retryable ? [{ tool: 'retry_job', description: 'List failed jobs, then retry an eligible research job by jobId.' }] : []);
+    jobs?.retryable ? [{ tool: 'retry_job', description: 'List failed jobs, then retry an eligible research job by jobId.' }] : []);
 
   const project = projects?.find((item) => item.active && item.repo.toLowerCase() === JARVIS_REPOSITORY.toLowerCase());
   const records = project && app.releaseViewStore

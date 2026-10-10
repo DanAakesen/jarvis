@@ -159,6 +159,21 @@ export class BackgroundJobRegistry {
     };
   }
 
+  async recentFailures(from: Date, to: Date, signal: AbortSignal): Promise<{ count: number; retryable: boolean } | undefined> {
+    if (this.store) return this.store.recentFailures?.(from, to, signal);
+    signal.throwIfAborted();
+    this.prune();
+    let count = 0;
+    let retryable = false;
+    for (const tracked of this.jobs.values()) {
+      const at = Date.parse(tracked.job.updatedAt);
+      if (tracked.job.status !== 'failed' || at < from.getTime() || at > to.getTime()) continue;
+      count = Math.min(1_000, count + 1);
+      retryable ||= tracked.job.kind === 'research' && tracked.retryInput !== undefined && tracked.retryJobId === undefined;
+    }
+    return { count, retryable };
+  }
+
   async list(): Promise<BackgroundJob[]> {
     this.prune();
     const jobs = await this.store?.list() ?? [...this.jobs.values()].map(({ job }) => job)

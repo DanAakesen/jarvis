@@ -84,6 +84,9 @@ describe('structured system health', () => {
     const f = fixture();
     f.credentials[0]!.expiresAt = at;
     f.credentials[1]!.expiresAt = new Date(now + 60_000).toISOString();
+    expect(component(await health(f.app), 'credential.codex-login').recovery).toEqual([]);
+    f.app.renewCodexCredential = vi.fn();
+    f.app.teamsNotifications = { runConfirmed: vi.fn() } as unknown as NonNullable<typeof f.app.teamsNotifications>;
     const result = await health(f.app);
     expect(component(result, 'credential.codex-login')).toMatchObject({ status: 'down',
       detail: 'Credential has expired.', recovery: [{ tool: 'renew_credential' }] });
@@ -94,7 +97,7 @@ describe('structured system health', () => {
     const f = fixture();
     f.reader.peek.mockReturnValue(undefined as unknown as SystemStatus);
     f.listCredentials.mockRejectedValue(new Error('private credential error'));
-    vi.spyOn(f.app.backgroundJobs, 'list').mockRejectedValue(new Error('private job error'));
+    vi.spyOn(f.app.backgroundJobs, 'recentFailures').mockRejectedValue(new Error('private job error'));
     f.app.releaseViewStore = null;
     const result = await health(f.app);
     for (const id of ['database', 'smoke.research', 'credential.codex-login', 'background_jobs', 'deployment']) {
@@ -145,6 +148,17 @@ describe('structured system health', () => {
     expect(JSON.stringify(result)).not.toMatch(/private topic|private-stack/u);
     expect(component(await getSystemHealth(f.app, new AbortController().signal, Date.now() + 2 * 60 * 60_000),
       'background_jobs')).toMatchObject({ status: 'ok', recovery: [] });
+  });
+
+  it('does not hide an older-started job that fails after 100 newer jobs start', async () => {
+    vi.useFakeTimers(); vi.setSystemTime(now - 30 * 60_000);
+    const f = fixture();
+    const old = await f.app.backgroundJobs.start('research', 'private topic', 1);
+    vi.setSystemTime(now);
+    for (let i = 0; i < 101; i++) await f.app.backgroundJobs.start('research', 'private topic', 1);
+    await old.fail('private failure');
+    expect(component(await health(f.app), 'background_jobs')).toMatchObject({
+      status: 'degraded', detail: '1 failed background jobs in the last hour of retained history.' });
   });
 
   it('records bounded rolling tool counts and stores only safe work verdicts', () => {

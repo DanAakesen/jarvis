@@ -1082,8 +1082,10 @@ production deployment or Deploy workflow result comes from Jarvis's release
 store, not a live GitHub call. It reports recorded evidence, not deployment
 freshness or exact-commit delivery.
 
-Background health examines up to 100 retained jobs for failures in the last
-hour, checking at most five failed jobs for retry eligibility. Work lookups
+Background health uses a single aggregate over retained jobs updated in the
+last hour, returning a count capped at 1,000 and retry eligibility without
+loading job text. The SQL request is cancelled at the response deadline; stores
+without the aggregate report unknown. Work lookups
 record only a safe verdict; self-diagnosis never invokes the potentially costly
 work-status reader. Per-minute in-memory buckets count invalid tool arguments
 and execution failures over the last hour, capped at 1,000 and reset on restart.
