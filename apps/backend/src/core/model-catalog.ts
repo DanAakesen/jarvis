@@ -274,7 +274,12 @@ export const defaultRoleModels: Readonly<Record<ModelRole, string>> = Object.fre
   copilot: 'default',
 });
 
-export const codexModels = ['default', 'gpt-5.5', 'gpt-5.4', 'gpt-5.3-codex'] as const;
+// Codex's own current model list (its models_cache), newest first. The Jarvis-only ChatGPT login serves these.
+export const codexModels = [
+  'default',
+  'gpt-6.1-sol', 'gpt-6-astra', 'gpt-6-sol', 'gpt-6-luna',
+  'gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna',
+] as const;
 export const copilotModels = [
   'default',
   'gpt-5-mini', 'gpt-5.3-codex', 'gpt-5.4', 'gpt-5.4-mini', 'gpt-5.4-nano', 'gpt-5.5',
