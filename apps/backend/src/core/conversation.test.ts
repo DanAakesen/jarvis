@@ -29,6 +29,7 @@ const history = {
     interrupted: false,
     voiceMinutes: null,
     toolCalls: [{ id: '90', tool: 'factory_create_task', outcome: 'refused' as const, taskId: null }],
+    attachments: [],
   }],
   nextCursor: null,
 };
@@ -110,6 +111,7 @@ describe('conversation routes', () => {
       conversationStore: store,
       conversationAgent: chatAgent,
     });
+
     apps.push(app);
 
     const response = await app.inject({
@@ -145,6 +147,63 @@ describe('conversation routes', () => {
       model: null,
       language: 'da',
     });
+  });
+
+  it('links owner-owned attachments to the Dan message and forwards untrusted summaries', async () => {
+    const store = storeFixture();
+    const id = '7b96c6a9-9f80-4a8b-8a73-51517fe37512';
+    const attachments = {
+      retentionDays: 30,
+      getModelContext: vi.fn(async () => [{
+        id, name: 'notes.txt', contentType: 'text/plain', size: 24,
+        status: 'ready' as const, context: 'Quarterly results.',
+      }]),
+    };
+    const chatAgent = { stream: vi.fn(async function* () { yield 'The file says quarterly results.'; }) };
+    const app = createApp(store, {
+      conversationAgent: chatAgent,
+      conversationAttachments: attachments as never,
+    });
+    const response = await app.inject({
+      method: 'POST',
+      url: '/conversation/sessions/41/turns',
+      headers,
+      payload: { text: 'Summarize this file', attachmentIds: [id] },
+    });
+    expect(response.statusCode).toBe(200);
+    expect(attachments.getModelContext).toHaveBeenCalledWith(config.auth.ownerObjectId, [id]);
+    expect(store.addMessage).toHaveBeenCalledWith(expect.objectContaining({
+      role: 'dan',
+      attachmentIds: [id],
+      attachmentOwnerObjectId: config.auth.ownerObjectId,
+      attachmentRetentionDays: 30,
+    }));
+    expect(chatAgent.stream).toHaveBeenCalledWith(expect.objectContaining({
+      attachments: [{
+        id, name: 'notes.txt', contentType: 'text/plain', size: 24,
+        status: 'ready', context: 'Quarterly results.',
+      }],
+    }), headers.authorization, expect.any(AbortSignal));
+  });
+
+  it('refuses to link an attachment that does not belong to the owner', async () => {
+    const store = storeFixture();
+    const attachments = {
+      retentionDays: 30,
+      getModelContext: vi.fn(async () => []),
+    };
+    const app = createApp(store, {
+      conversationAttachments: attachments as never,
+      conversationAgent: { stream: vi.fn(async function* () { yield 'unused'; }) },
+    });
+    const response = await app.inject({
+      method: 'POST',
+      url: '/conversation/sessions/41/turns',
+      headers,
+      payload: { text: 'Read this', attachmentIds: ['7b96c6a9-9f80-4a8b-8a73-51517fe37512'] },
+    });
+    expect(response.statusCode).toBe(400);
+    expect(store.addMessage).not.toHaveBeenCalled();
   });
 
   it('interrupts streamed text, saves it as interrupted, and restarts once with the steering message', async () => {

@@ -67,7 +67,7 @@ export function createFoundryScreenVisionModel(
   endpoint.searchParams.set('api-version', '2024-05-01-preview');
 
   return {
-    async describe({ image, model, reasoningEffort = 'none', signal, watch }): Promise<ScreenVisionResult> {
+    async describe({ image, contentType = 'image/jpeg', model, reasoningEffort = 'none', signal, watch }): Promise<ScreenVisionResult> {
       if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u.test(model)) {
         throw new Error('Invalid screen model');
       }
@@ -102,7 +102,7 @@ export function createFoundryScreenVisionModel(
                 },
                 {
                   type: 'image_url',
-                  image_url: { url: `data:image/jpeg;base64,${image.toString('base64')}`, detail: 'auto' },
+                  image_url: { url: `data:${contentType};base64,${image.toString('base64')}`, detail: 'auto' },
                 },
               ],
             },
