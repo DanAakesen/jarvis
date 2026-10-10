@@ -1044,7 +1044,7 @@ export async function registerSettingsRoutes(app: import('fastify').FastifyInsta
               required: ['timeoutSeconds'],
               additionalProperties: false,
             },
-            capabilityInstructions: { type: 'string', maxLength: 10_000 },
+            capabilityInstructions: { type: 'string', maxLength: 20_000 },
             timeouts: {
               ...timeoutSettingsSchema,
               required: Object.keys(defaultSettings.timeouts),
