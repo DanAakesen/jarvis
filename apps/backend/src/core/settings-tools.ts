@@ -1,11 +1,16 @@
 import { modelRoles } from '@jarvis/contracts';
 import type { FastifyRequest } from 'fastify';
-import { readSettings, validateSettingsPatch, type SettingsPatch } from './settings.js';
+import {
+  readSettings, settingsFieldsForCatalogue, settingsOptionsForCatalogue, settingsPatchRefusal,
+  validateSettingsPatch, type SettingsPatch,
+} from './settings.js';
 import { ToolRefusal, type JarvisTool } from './tool-registry.js';
 
 const getSettingsSchema = {
   type: 'object',
-  properties: {},
+  properties: {
+    area: { type: 'string', enum: ['roles', 'voice', 'research', 'memory', 'timeouts', 'appearance', 'personality'] },
+  },
   additionalProperties: false,
 } as const;
 
@@ -41,14 +46,14 @@ export async function applySettingsPatch(
   const catalogue = await request.server.modelCatalogue.read();
   const current = await readSettings(store, catalogue);
   const patch = validateSettingsPatch(value, catalogue, current);
-  if (!patch) throw new ToolRefusal('Use supported non-secret settings and valid values.');
+  if (!patch) throw new ToolRefusal(settingsPatchRefusal(value, catalogue, current));
 
   const summary = confirmationSummary(patch);
   const save = async () => {
     signal.throwIfAborted();
     const latest = await readSettings(store, catalogue);
     const acceptedPatch = validateSettingsPatch(value, catalogue, latest);
-    if (!acceptedPatch) throw new ToolRefusal('The requested settings are no longer valid.');
+    if (!acceptedPatch) throw new ToolRefusal(settingsPatchRefusal(value, catalogue, latest));
     const embeddingModelChanged = acceptedPatch.roles?.embedding?.model !== undefined &&
       acceptedPatch.roles.embedding.model !== latest.roles.embedding.model;
     await store.write(acceptedPatch);
@@ -64,20 +69,42 @@ export async function applySettingsPatch(
 
 export const getSettingsTool: JarvisTool = {
   name: 'get_settings',
-  description: 'Read Jarvis’s current non-secret settings. Credential values are never available through this tool.',
+  description: 'Read current non-secret settings, valid catalogue options and field constraints before updating. Optionally select an area. Credential values are never available.',
   inputSchema: getSettingsSchema,
   sensitive: true,
-  async execute(_input, request) {
+  async execute(input, request) {
     const store = request.server.settingsStore;
     if (!store) throw new ToolRefusal('Settings are unavailable.');
     const catalogue = await request.server.modelCatalogue.read();
-    return { settings: await readSettings(store, catalogue) };
+    const settings = await readSettings(store, catalogue);
+    const options = settingsOptionsForCatalogue(catalogue);
+    const fields = settingsFieldsForCatalogue(catalogue, settings);
+    const area = isObject(input) ? input.area : undefined;
+    const optionKeys = {
+      roles: ['roles', 'reasoningEfforts', 'jarvisModels', 'codexModels', 'codexReasoningEfforts', 'copilotModels', 'copilotReasoningEfforts'],
+      voice: ['speechToTextModels', 'englishModels', 'englishVoices', 'danishVoices', 'languages', 'voiceTuning'],
+      research: ['researchDepths', 'researchSettings'],
+      memory: ['memorySettings'],
+      timeouts: ['timeoutSettings'],
+      appearance: ['themes', 'backgrounds', 'themeMotions', 'themeDensities'],
+      personality: ['personalityTones', 'personalityResponseStyles'],
+    } as const;
+    if (area === undefined) return { settings, options, fields };
+    if (typeof area !== 'string' || !Object.hasOwn(optionKeys, area)) {
+      throw new ToolRefusal(`Invalid area. Valid values: ${Object.keys(optionKeys).join(', ')}.`);
+    }
+    const selectedArea = area as keyof typeof optionKeys;
+    return {
+      settings: { [selectedArea]: settings[selectedArea] },
+      options: Object.fromEntries(optionKeys[selectedArea].map((key) => [key, options[key as keyof typeof options]])),
+      fields: fields.filter((field) => field.path.startsWith(`${selectedArea}.`)),
+    };
   },
 };
 
 export const updateSettingsTool: JarvisTool = {
   name: 'update_settings',
-  description: 'Update supported non-secret Jarvis settings. Model-role and daily vision budget changes require Now confirmation.',
+  description: 'Update supported non-secret Jarvis settings; read get_settings first when unsure of fields or values. Model-role and daily vision budget changes require Now confirmation.',
   inputSchema: updateSettingsSchema,
   sensitive: true,
   async execute(input, request, signal) {
