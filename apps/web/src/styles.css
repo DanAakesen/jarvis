@@ -515,7 +515,6 @@ dd { margin: 0; color: var(--text-muted); overflow-wrap: anywhere; }
 .primary-button:active:not(:disabled) { transform: translateY(1px); }
 .primary-button:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
 .primary-button:disabled { background: var(--primary-action-disabled); color: var(--primary-action-disabled-text); cursor: not-allowed; }
-.sign-in-status { min-height: 1.6em; margin-top: 16px; font-size: 15px; }
 .skip-link { position: absolute; top: 8px; left: 16px; padding: 8px 16px; background: var(--surface); transform: translateY(-150%); }
 .skip-link:focus { transform: translateY(0); }
 h2 { margin: 0 0 var(--space-3); font-size: var(--type-subheading); font-weight: 650; line-height: 1.3; }
@@ -1886,61 +1885,20 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
 .settings-save:has(.settings-feedback:empty) { padding-left: var(--space-2); }
 
 /* ---------------------------------------------------------------------------------------------
-   Sign-in: the room behind a single glass card; the orb ignites and the card rises into place.
+   Sign-in: one personal greeting and one action over the existing room.
    --------------------------------------------------------------------------------------------- */
-.app-signed-out .shell-main { display: grid; max-width: none; place-items: center; padding: var(--space-5) var(--space-4); }
-.signin { display: grid; width: 100%; min-height: calc(100dvh - var(--rail-size) - var(--space-7)); place-items: center; }
-.signin-card {
-  position: relative;
-  isolation: isolate;
-  display: grid;
-  width: min(440px, 100%);
-  justify-items: center;
-  gap: var(--space-3);
-  padding: var(--space-6) var(--space-5) var(--space-5);
-  border: 1px solid color-mix(in srgb, var(--glass-rim-light) 35%, transparent);
-  border-radius: var(--radius-window);
-  background: var(--stage-glass);
-  backdrop-filter: blur(28px) saturate(1.3);
-  box-shadow: var(--slab-shadow), 0 30px 80px -40px var(--glass-glow-warm), inset 0 1px 0 var(--glass-rim-light);
-  text-align: center;
-  animation: signin-rise calc(var(--motion-panel) * 2.2) var(--ease-enter) both;
-}
-.signin-card h1 { margin: var(--space-2) 0 0; font-size: clamp(26px, 3vw, 32px); }
-.signin-card p { max-width: 34ch; margin: 0 auto; font-size: var(--type-body); }
-.signin-card .sign-in-status { min-height: 1.5em; margin-top: 0; font-size: var(--type-small); }
-.signin-orb {
-  position: relative;
-  display: block;
-  width: 112px;
-  height: 112px;
-  overflow: hidden;
-  border-radius: 50%;
-  background:
-    radial-gradient(circle at 34% 28%, rgb(255 255 255 / 16%), transparent 42%),
-    radial-gradient(circle, var(--stage-background) 52%, color-mix(in srgb, var(--stage-orb) 55%, var(--stage-background)) 100%);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--stage-orb) 85%, transparent), 0 0 44px color-mix(in srgb, var(--stage-orb) 45%, transparent),
-    inset 0 0 22px color-mix(in srgb, var(--stage-orb) 35%, transparent);
-  animation: signin-ignite calc(var(--motion-panel) * 3.4) var(--ease-enter) both;
-}
-.signin-orb canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
-.signin-button { min-width: 240px; min-height: 48px; margin-top: var(--space-2); border-radius: var(--radius-pill); box-shadow: 0 0 24px -6px var(--primary-action); }
+.signin { display: grid; width: 100%; height: 100%; min-height: 0; align-content: center; justify-items: center; gap: var(--space-3); padding: var(--space-5); text-align: center; }
+.signin h1 { margin: 0; font-size: clamp(26px, 3vw, 34px); line-height: 1.1; }
+.signin-error { margin: 0; color: var(--text-muted); font-size: var(--type-small); }
+.signin-loader.loader-inline .loader-core { width: 46px; height: 46px; }
+.signin-button { display: inline-flex; min-width: 160px; min-height: 52px; align-items: center; justify-content: center; gap: var(--space-2); margin: 0; border-radius: var(--radius-pill); box-shadow: 0 0 24px -6px var(--primary-action); }
 .signin-button:hover:not(:disabled) { box-shadow: 0 0 34px -4px var(--primary-action); }
-@keyframes signin-rise {
-  from { opacity: 0; transform: translateY(20px) scale(.97); filter: blur(6px); }
-  to { opacity: 1; transform: none; filter: none; }
-}
-@keyframes signin-ignite {
-  0% { opacity: 0; transform: scale(.55); }
-  55% { opacity: 1; transform: scale(1.06); }
-  100% { opacity: 1; transform: none; }
-}
 
 /* ---------------------------------------------------------------------------------------------
    Living surfaces: glass catches light where the pointer is, pages assemble as they open, and a
    surface Jarvis is acting on glows so Dan can see it change.
    --------------------------------------------------------------------------------------------- */
-:is(.workspace-window, .kanban-column, .kanban-card, .settings-section, .settings-activity .panel, .signin-card, .area-sidebar,
+:is(.workspace-window, .kanban-column, .kanban-card, .settings-section, .settings-activity .panel, .area-sidebar,
   .context-panel, .app-topbar, .area-rail, .conversation-input.luminous-glass, .task-release-bar)[data-lit] {
   background-image: radial-gradient(circle 140px at var(--light-x, 50%) var(--light-y, 50%),
     color-mix(in srgb, var(--glass-rim-light) 26%, transparent), transparent 72%);
@@ -1969,9 +1927,9 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
   100% { box-shadow: 0 26px 60px -18px rgb(0 0 0 / 55%), inset 0 1px 0 var(--glass-rim-light); }
 }
 @media (prefers-reduced-motion: reduce) {
-  .signin-card, .signin-orb, .shell-main > *, .kanban-column, .settings-page form > .settings-section, .workspace-window.workspace-window-jarvis-updating { animation: none !important; }
+  .shell-main > *, .kanban-column, .settings-page form > .settings-section, .workspace-window.workspace-window-jarvis-updating { animation: none !important; }
 }
-:root[data-motion="reduced"] :is(.signin-card, .signin-orb, .shell-main > *, .kanban-column, .settings-page form > .settings-section,
+:root[data-motion="reduced"] :is(.shell-main > *, .kanban-column, .settings-page form > .settings-section,
   .workspace-window.workspace-window-jarvis-updating) { animation: none !important; }
 /* The Factory composer uses the same clear glass and warm lower light as the Jarvis chat bar. */
 /* ---------------------------------------------------------------------------------------------
@@ -2428,53 +2386,13 @@ a.task-chip:hover { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--glass-e
 .memory-forget-dialog h3 { margin: 0 0 8px; }
 @media (max-width: 900px) { .memory-browser { grid-template-columns: minmax(0, 1fr); } .memory-toolbar { grid-template-columns: minmax(0, 1fr); } }.memory-status li.memory-status-warning { background: color-mix(in srgb, var(--warning) 18%, transparent); color: var(--text); }
 
-/* Sign-in v2 (Dan, 7 October): the room's orb is the hero and stays clear. A dense glass slab sits low over the
-   floor with the headline, the Microsoft button and the status; the top bar floats as the same slab as when signed in. */
-.app-signed-out .shell-main { align-items: end; padding: var(--space-5) var(--space-4) clamp(28px, 9vh, 96px); }
-.app-signed-out .signin { display: block; width: min(760px, 100%); min-height: 0; margin: auto auto clamp(28px, 9vh, 96px); align-self: center; }
-.signin-card {
-  display: grid;
-  width: min(760px, 100%);
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  justify-items: stretch;
-  gap: var(--space-2) var(--space-5);
-  padding: var(--space-5) var(--space-5) var(--space-4) var(--space-6);
-  border: 0;
-  background: var(--stage-slab);
-  backdrop-filter: blur(30px) saturate(1.45);
-  text-align: left;
-}
-:root[data-theme="light"] .signin-card { background: color-mix(in srgb, var(--surface) 74%, transparent); }
-.signin-card::before {
-  position: absolute; inset: 0; z-index: -1; padding: 1.5px; border-radius: inherit; content: ""; pointer-events: none;
-  background: radial-gradient(55% 80% at 50% 100%, var(--glass-glow-warm), transparent 75%),
-    linear-gradient(180deg, var(--glass-rim-light), color-mix(in srgb, var(--glass-rim-light) 20%, transparent) 45%, color-mix(in srgb, var(--glass-edge-cool) 60%, transparent));
-  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor;
-  mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
-}
-.signin-copy { display: grid; gap: var(--space-2); min-width: 0; }
-.signin-card h1 { margin: 0; font-size: clamp(26px, 2.6vw, 34px); line-height: 1.1; }
-.signin-card p { max-width: 44ch; margin: 0; color: var(--text-muted); }
-.signin-card .signin-button { margin: 0; justify-self: end; }
-.signin-card .sign-in-status { grid-column: 1 / -1; min-height: 1.3em; margin: 0; color: var(--text-muted); font-size: var(--type-caption); }
-.app-signed-out .signin-orb { display: none; }
+/* Signed-out views use the full viewport: the room remains clear, and the greeting owns the focus. */
+.app-shell.app-signed-out:has(.signin) { height: 100dvh; min-height: 100dvh; overflow: hidden; grid-template-rows: minmax(0, 1fr); }
+.app-shell.app-signed-out:has(.signin) .app-topbar { display: none; }
+.app-shell.app-signed-out:has(.signin) .shell-main { grid-row: 1; width: 100%; max-width: none; height: 100%; min-height: 0; padding: 0; overflow: hidden; }
+.app-shell.app-signed-out:has(.signin) .jarvis-stage-fallback { display: none; }
 @media (max-width: 700px) {
-  .signin-card { grid-template-columns: minmax(0, 1fr); padding: var(--space-5) var(--space-4) var(--space-4); text-align: center; }
-  .signin-card p { margin-inline: auto; }
-  .signin-card .signin-button { justify-self: stretch; }
-  .app-signed-out .signin { margin-bottom: 14px; }
-}
-@media (min-width: 701px) {
-  .app-shell.app-signed-out .app-topbar {
-    position: relative; isolation: isolate;
-    height: calc(var(--rail-size) - var(--slab-gap)); min-height: calc(var(--rail-size) - var(--slab-gap));
-    margin: var(--slab-gap) var(--slab-gap) 0; padding-inline: var(--space-3);
-    border: 0; border-radius: var(--radius-panel);
-    background: var(--shell-slab); backdrop-filter: blur(var(--glass-blur-shell)) saturate(1.4);
-    box-shadow: var(--slab-shadow), inset 0 1px 0 var(--glass-rim-light);
-  }
+  .app-shell.app-signed-out:has(.signin) .signin { align-content: end; padding-bottom: calc(16px + 14vh); }
 }
 /* Tab bar v2 (Dan, 7 October): always present under the top bar and listing every open window. The window in front
    is lit, minimised windows are dimmed, and an empty bar says where windows will appear. */
