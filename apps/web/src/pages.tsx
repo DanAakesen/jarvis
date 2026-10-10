@@ -2,29 +2,33 @@ import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import type { SignInSession } from './useSignIn';
 import { Loader } from './Loader';
+import { getSignInGreeting } from './sign-in-greeting';
 
 export function SignInPage({ session }: { session: SignInSession }) {
   const { state, message } = session;
-  const pending = state === 'checking' || state === 'signing-in';
+  if (state === 'checking') {
+    return (
+      <section className="signin signin-loading" aria-busy="true">
+        <Loader className="signin-loader" variant="core" size="inline" label="Checking for an existing sign-in…" />
+      </section>
+    );
+  }
+
+  const pending = state === 'signing-in';
+  const unavailable = state === 'unavailable';
   return (
     <section className="signin" aria-labelledby="welcome-heading">
-      {/* The room's own orb is the hero; the card is a dense glass slab low over the floor, where the chat bar lives. */}
-      <div className="signin-card" data-state={state}>
-        <div className="signin-copy">
-          <h1 id="welcome-heading">Jarvis is taking shape</h1>
-          <p>Your personal AI platform starts here. Sign in with your Microsoft account to continue.</p>
-        </div>
-        <button className="primary-button signin-button" type="button" onClick={() => { void session.signIn(); }} disabled={pending || state === 'unavailable'}>
-          {state === 'signing-in' ? 'Signing in…' : state === 'error' ? 'Try another Microsoft account' : 'Sign in with Microsoft'}
-        </button>
-        <p className="sign-in-status" role={state === 'error' ? 'alert' : 'status'} aria-live="polite">
-          {state === 'checking' && <Loader variant="core" size="inline" announce={false} label="Checking for an existing sign-in…" />}
-          {state === 'signed-out' && 'Not signed in.'}
-          {state === 'signing-in' && <Loader variant="core" size="inline" announce={false} label="Opening Microsoft sign-in…" />}
-          {state === 'unavailable' && 'Sign-in is unavailable until the backend is deployed.'}
-          {state === 'error' && message}
-        </p>
-      </div>
+      <h1 id="welcome-heading">{getSignInGreeting()}</h1>
+      {state === 'error' && <p className="signin-error" role="alert">{message || 'Sign-in failed.'}</p>}
+      <button className="primary-button signin-button" type="button" onClick={() => { void session.signIn(); }}
+        disabled={pending || unavailable} aria-label="Sign in with Microsoft" aria-busy={pending}
+        aria-describedby={unavailable ? 'signin-unavailable' : undefined}>
+        {state === 'error' ? 'Retry' : 'Sign in'}
+        {pending && <Loader variant="core" size="inline" announce={false} label="Opening Microsoft sign-in…" />}
+      </button>
+      {unavailable && (
+        <span className="visually-hidden" id="signin-unavailable">Sign-in is unavailable until the backend is configured.</span>
+      )}
     </section>
   );
 }

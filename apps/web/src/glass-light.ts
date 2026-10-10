@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 
 const litSurfaces = [
-  '.workspace-window', '.kanban-card', '.kanban-column', '.settings-section', '.settings-activity .panel', '.signin-card',
+  '.workspace-window', '.kanban-card', '.kanban-column', '.settings-section', '.settings-activity .panel',
   '.area-sidebar', '.context-panel', '.app-topbar', '.area-rail', '.conversation-input.luminous-glass', '.task-release-bar',
 ].join(', ');
 
