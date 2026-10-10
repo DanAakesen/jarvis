@@ -223,7 +223,7 @@ Jarvis is one backend with a shared core and one module per area, a static web a
 - P9-40 extends that same registered tool and broker with `navigate`; no new
   event channel, route or persistence is added. `packages/contracts` exports
   `workspaceNavigationPages` (`home`, `factory`, `settings`, `usage`,
-  `knowledge`, `folio`, `status`) and `workspaceSettingsSections`
+  `notes`, `knowledge` (kept; opens the graph), `folio`, `status`) and `workspaceSettingsSections`
   (`appearance`, `jarvis`, `personality`, `voice`, `presence`, `memory`,
   `coding`, `projects`, `routines`, `credentials`, `backend`). The command requires
   `commandId`, `operation: 'navigate'` and `page`; `section` is settings-only,
