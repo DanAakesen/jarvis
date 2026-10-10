@@ -156,13 +156,20 @@ are pending; no fake task data is shown. P1-07 shows unbuilt actions as explaine
 disabled controls; see below. Unknown addresses have a return link. A skip link
 and visible keyboard focus support navigation. Dan's page designs remain to be selected.
 
-## Sign-in (P0-09)
+## Sign-in (P0-09; simplified in P9-69)
 
-The home page keeps the neutral, single-column shell and presents one Microsoft
-sign-in action. Disable it with an explanation until the backend is configured;
-show pending and refusal feedback beside the action. After `/me` verifies the
-session, show the returned name as the page headline. Do not expose account
-tokens, email addresses, or unverified identity claims in the interface.
+The signed-out screen keeps the room and orb as its background. Its only visible
+content is one device-local time greeting for Dan and one primary action,
+**Sign in** (accessible name **Sign in with Microsoft**); there is no card,
+supporting copy, or idle status. Center the content on desktop and place the
+phone action in the lower third above the safe area without page scrolling.
+Complete silent account restoration before showing the interactive screen. A
+failure adds one short inline message and changes the same action to **Retry**.
+Keep the existing 140 ms delayed loader, theme behavior, and reduced-motion
+support. Disable the action with an accessible explanation until the backend
+is configured. After `/me` verifies the session, show the returned name as the
+page headline. Do not expose account tokens, email addresses, or unverified
+identity claims in the interface.
 
 ## App shell (P1-07)
 
@@ -436,8 +443,10 @@ P8-23 keeps the microphone and inspection actions in the orb's control group
 with End voice. Long runtime status text stays within the dock without covering
 those controls. The dock expands only while the microphone is ready and at
 narrow widths where those controls wrap, keeping End voice above the workspace.
-With no non-minimised content, the orb returns to the centre with its controls
-below it. Typing never shows the large orb. Camera and sharing move behind a
+P9-72 keeps phone voice docked even without a non-minimised window, and starting
+voice preserves the current page and header. The dock has no foreground veil or
+viewport-sized hit target; only its compact controls and status accept input.
+The phone header is a straight, unblurred surface. Typing never shows the large orb. Camera and sharing move behind a
 labelled phone disclosure; Settings stays at the right of the one-line top bar.
 Escape closes the disclosure and returns focus before ending voice.
 

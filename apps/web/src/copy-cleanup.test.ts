@@ -56,10 +56,12 @@ describe('production interface copy', () => {
     expect(readFileSync('src/ConversationHistory.tsx', 'utf8')).toContain('Ask Jarvis');
   });
 
-  it('leaves the sign-in copy to the separate sign-in task', () => {
+  it('keeps sign-in to its personal greeting and provider-accessible action', () => {
     const signIn = readFileSync('src/pages.tsx', 'utf8');
-    expect(signIn).toContain('Jarvis is taking shape');
-    expect(signIn).toContain('Your personal AI platform starts here.');
-    expect(signIn).toContain('Not signed in.');
+    expect(signIn).toContain('getSignInGreeting');
+    expect(signIn).toContain('aria-label="Sign in with Microsoft"');
+    expect(signIn).not.toContain('Jarvis is taking shape');
+    expect(signIn).not.toContain('Your personal AI platform starts here.');
+    expect(signIn).not.toContain('Not signed in.');
   });
 });

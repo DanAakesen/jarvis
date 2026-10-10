@@ -253,6 +253,15 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   oldest first, and updating an existing pin preserves its timestamp. The shared
   contracts enforce the workspace view-ID format, view shape and bounded
   response; the UI session owns calling these routes.
+  P9-57 registers sensitive `pins_list` and `pin_restore` alongside these routes
+  when pin storage is available. Owner/agent calls read only the owner's store:
+  listing returns at most 20 metadata entries oldest first; restore accepts
+  exactly one view ID or case-insensitive title query, refusing unknown or
+  ambiguous matches. Stored views are revalidated with `isWorkspaceCommand`
+  against registered tools before acknowledged create/update and focus commands.
+  Restore refuses without a connected owner workspace; pin/unpin remain
+  page-owned. Titles are untrusted and tool audits redact arguments/results.
+  No migration, permission, dependency or web change is needed.
   The web dispatcher at `apps/web/src/Workspace.tsx:391` must handle the P9-40
   and P9-45 union members in the UI change before the combined feature can build
   or deploy.
@@ -2738,6 +2747,13 @@ The accepted [stage reference](reference/ui-stage-prototype/README.md) uses Thre
 The accepted [stage reference](reference/ui-stage-prototype/README.md) is reference-only. Production `apps/web` now depends on `three@0.180.0` and dev-only `@types/three@0.180.0`; the standalone prototype lockfile remains outside the root workspaces. The production Jarvis page lazy-loads `JarvisStage`, which dynamically imports the scene. Other routes do not mount the renderer or orb. The production bundle retains the Three.js MIT notice.
 
 The scene owns its renderer, geometry, materials, reflector target, animation frame, visibility/resize/context-loss listeners and disposal. It builds live room geometry and independently rotating rear mechanisms, renders the floor through Three.js `Reflector`, and positions room lights from the live orb. Theme changes apply a dark/light palette to the same geometry and reflector. The camera and platform remain stable across typing/voice and workspace changes; only the orb changes placement for content. Existing HTML chat/workspace/voice controls remain above the canvas.
+
+P9-72 restores phone voice placement from the registered CSS orb-dock lengths,
+including updates to measured bar/status height under reduced motion. Phone
+voice retains the current route and ordinary shell scrolling; only the compact
+dock receives pointer input. Desktop fullscreen voice rules remain desktop-only.
+Phone wall panels extend above the viewport so their upper curved edge cannot
+expose the ambient background below the header.
 
 P8-29 (#362, implemented offline in draft PR #377) keeps the same scene mounted and wires its presentation to existing contracts. `JarvisStage` reads authenticated runtime activity through `useJarvisActivity` and observes explicit voice-active state; voice entry does not reconstruct the renderer. `VoiceControls` forwards the existing decoded response-playback level through `PlaybackAudioLevelContext` to the scene's stable setter. No microphone analysis, new activity producer, simulated production selector or extra DOM wrapper is introduced. Visual dormancy is independent of backend sleep and microphone/readiness state.
 

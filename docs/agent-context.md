@@ -318,6 +318,13 @@ scratch-only auth/API/voice fixtures. Before/after captures are in
 `docs/ui/screenshots/p9-73/`. These are not physical iPhone, browser-toolbar,
 installed Home Screen or live microphone/provider verification.
 
+P9-72 uses the same scratch-only auth/API browser approach with a voice-client
+fixture. Chromium/WebKit checks at 390×844 and 1280×900 cover light/dark,
+voice entry/exit, More/Escape, phone menu dismissal and Settings scrolling.
+The phone voice container measures about 212px rather than 844px; its background
+and backdrop filter are absent and its pointer events are disabled. The 60px
+bar remains interactive. Before/after fixture captures and measurements are in
+`docs/ui/screenshots/p9-72/`; these are not live audio or physical-device evidence.
 P9-74 used the same scratch-only auth/API approach in Chromium and WebKit at
 390×844 and 1280×900 in light/dark. Synthetic fixture notes reproduced raw YAML
 before the change and verified its removal, wrapped titles/paths, the scroll cue,

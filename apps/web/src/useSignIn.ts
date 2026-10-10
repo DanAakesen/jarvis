@@ -26,15 +26,15 @@ export function useSignIn(config: PublicConfig): SignInSession {
 
     let active = true;
     void client.initialize().catch(() => {
-      throw new Error('Microsoft sign-in could not be initialized. Try again.');
+      throw new Error('Sign-in needs attention.');
     }).then(async () => {
       const restored = await restoreProfile(client, config);
       if (!active) return;
       setProfile(restored);
       setState(restored ? 'signed-in' : 'signed-out');
-    }).catch((error: unknown) => {
+    }).catch(() => {
       if (!active) return;
-      setMessage(error instanceof Error ? error.message : 'Jarvis could not verify your sign-in. Try again.');
+      setMessage('Sign-in needs attention.');
       setState('error');
     });
 
@@ -46,8 +46,8 @@ export function useSignIn(config: PublicConfig): SignInSession {
     setMessage('');
     try {
       await signIn(client, config); // The page now navigates to Microsoft sign-in.
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'Jarvis could not verify your sign-in. Try again.');
+    } catch {
+      setMessage('Sign-in failed.');
       setState('error');
     }
   }, [client, config]);

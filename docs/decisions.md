@@ -19,6 +19,16 @@ The nine design areas and where each stands. **Confirmed** = Dan's requirement o
 
 ## Decision log
 
+P9-57 (10 October 2026): reuse `WorkspacePinStore.list` and the existing
+acknowledged workspace broker for owner-scoped saved-pin discovery and restore.
+Keep the tools read/restore-only: pin/unpin remain page-owned. Return bounded
+oldest-first metadata, resolve exactly one view ID or unique case-insensitive
+title query, and ask Dan to choose ambiguous matches. Revalidate stored views
+with `isWorkspaceCommand` and current registered tools before create/update,
+then focus; refuse when no owner workspace is connected. Use plain root object
+schemas (L121), one tool-name-free shared instruction, untrusted title markers
+and redacted audits. No migration, App permission or web change is required.
+Acceptance paths are verified offline; live model/browser use remains unverified.
 P9-74 (10 October 2026): hide note front matter rather than introduce a YAML
 parser or property editor. Strip delimited metadata after leading comments,
 whitespace and BOMs, including malformed YAML. Keep the note path, Markdown and
@@ -1020,3 +1030,16 @@ regression; live acceptance is pending.
 - **Rationale:** the old panel duplicated the knowledge graph and added no settings value.
 - **Evidence:** `GET /memory` lists durable memories (folder General) before vault notes, so the UI requests `folder=General` and keeps `type: memory` items. A server-side type filter would remove the reliance on that ordering if more than 50 memories accumulate.
 - **Status:** implemented on `ui/shell-iteration`.
+
+## 2026-10-10: P9-72 phone voice stays below foreground content
+
+- **Decision:** phone voice keeps the current page and header, with an always-docked
+  orb/status and compact glass controls. The dock container is transparent and
+  non-intercepting; desktop fullscreen voice is unchanged. The phone header is
+  straight and unblurred.
+- **Evidence:** fixture Chromium/WebKit at 390×844 reproduced the full-viewport
+  voice container and curved top band. Header removal did not remove the band;
+  hiding the canvas did. Extending the phone wall panels removes that exposed
+  ambient-background edge. Dock lengths reuse P9-73 safe-area spacing.
+- **Status:** implemented and browser-checked offline; physical iPhone and live
+  microphone/provider verification remain open.

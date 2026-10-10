@@ -56,6 +56,7 @@ describe('workspace pin store', () => {
       { viewId: row.view_id, view, pinnedAt },
     ]);
     expect(data.statements[0]).toContain('ORDER BY pinned_at, view_id');
+    expect(data.statements[0]).toContain('SELECT TOP (20)');
     expect(data.statements[0]).toContain('WHERE owner_object_id = @owner');
   });
 
