@@ -46,6 +46,8 @@ describe('knowledge graph view', () => {
     ['malformed YAML', '---\ntags: [broken\ncreated: : invalid\n---\n'],
     ['BOM and CRLF', '\uFEFF \r\n<!-- Fixture -->\r\n---\r\ntags: [fixture]\r\n---\r\n'],
     ['closing delimiter at EOF', '---\ntags: [fixture]\n---'],
+    ['many leading comments', `${'<!-- fixture -->'.repeat(2000)}\n---\ntags: [fixture]\n---\n`],
+    ['many comments without front matter', `${'<!-- fixture -->'.repeat(2000)}\n`],
   ])('renders fixture Markdown without raw metadata: %s', async (_name, prefix) => {
     const content = prefix.endsWith('---') ? prefix : `${prefix}# Fixture heading\n\n- First item\n- Second item\n\n---\n\nBody text.`;
     vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => new URL(String(input)).pathname === '/knowledge/graph'

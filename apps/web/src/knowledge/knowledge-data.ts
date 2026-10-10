@@ -87,6 +87,20 @@ export function vaultMemoryId(path: string) {
   return `vault_${btoa(binary).replace(/\+/gu, '-').replace(/\//gu, '_').replace(/=+$/u, '')}`;
 }
 
+function withoutFrontMatter(content: string) {
+  let start = 0;
+  while (start < content.length) {
+    while (start < content.length && /\s/u.test(content[start]!)) start += 1;
+    if (!content.startsWith('<!--', start)) break;
+    const end = content.indexOf('-->', start + 4);
+    if (end === -1) return content.trimStart();
+    start = end + 3;
+  }
+  const body = content.slice(start);
+  const block = /^---[ \t]*\r?\n[\s\S]*?\r?\n---[ \t]*(?:\r?\n|$)/u.exec(body);
+  return (block ? body.slice(block[0].length) : content).trimStart();
+}
+
 export async function loadKnowledgeNote(backendUrl: string, getAccessToken: () => Promise<string>, node: Pick<KnowledgeNode, 'id' | 'path'>, signal?: AbortSignal): Promise<KnowledgeNote> {
   const id = node.path ? vaultMemoryId(node.path) : node.id;
   const note = record(await request(backendUrl, getAccessToken, `/memory/${encodeURIComponent(id)}`, signal));
@@ -98,8 +112,7 @@ export async function loadKnowledgeNote(backendUrl: string, getAccessToken: () =
     title: text(note.title ?? note.key, 200) || id,
     folder: text(note.folder, 40) || 'General',
     // Obsidian front matter (tags, created, icon) is metadata, not reading material.
-    content: text(note.content ?? note.snippet, 200_000)
-      .replace(/^(?:\s|<!--[\s\S]*?-->)*---[ \t]*\r?\n[\s\S]*?\r?\n---[ \t]*(?:\r?\n|$)/u, '').trimStart(),
+    content: withoutFrontMatter(text(note.content ?? note.snippet, 200_000)),
     updatedAt: typeof note.updatedAt === 'string' ? note.updatedAt : null,
     githubUrl: url,
   };
