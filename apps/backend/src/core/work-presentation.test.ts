@@ -196,7 +196,9 @@ describe('best-effort work presentation', () => {
   );
   it.each(['calendar_list_events', 'repo_read'])('still opens its window in voice for %s', async (tool) => {
     const { start, events, commands } = fixture();
-    start(tool, { path: 'a.ts' }).finish({ timeZone: 'UTC', events: [], content: 'code' }, true);
+    start(tool, { path: 'a.ts' }).finish(
+      { timeZone: 'UTC', events: [], repository: 'DanAakesen/jarvis', path: 'a.ts', content: 'code' }, true,
+    );
     await settled();
     expect(events.map((event) => event.type)).toEqual(['work-started', 'work-finished']);
     expect(commands[0]).toMatchObject({ operation: 'create' });
