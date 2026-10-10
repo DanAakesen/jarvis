@@ -1,5 +1,12 @@
 import type { MemorySettings } from '@jarvis/contracts';
 
+/**
+ * Hard limit the hosted agent enforces on these instructions, in Unicode code points. The
+ * authoritative value is agents/jarvis/limits.json (read by the agent); a backend test fails if
+ * this constant drifts from it.
+ */
+export const CAPABILITY_INSTRUCTIONS_MAX_CODE_POINTS = 20_000;
+
 export function capabilityInstructions(memory: Pick<MemorySettings, 'automaticCapture'>): string {
   return `Use the backend tools supplied for the requested action; never invent projects, tasks, status, search results or completed actions. Only say an action succeeded when its tool result reports success. Report refusals and failures plainly and relay the backend-built confirmation.
 If a tool refuses invalid arguments, correct them using its schema and the returned validation hint, then retry; do not repeat the same invalid call or claim the action happened.

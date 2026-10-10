@@ -1,6 +1,6 @@
 import { defaultAwayModeState, presenceModes } from './away-mode.js';
 import { JARVIS_REPOSITORY, projectContext } from '../factory/project-context.js';
-import { capabilityInstructions } from './capability-instructions.js';
+import { capabilityInstructions, CAPABILITY_INSTRUCTIONS_MAX_CODE_POINTS } from './capability-instructions.js';
 import {
   homeLocationSettingsSchema, isModelCatalogue, modelRoles, reasoningEfforts, researchDepths, researchSettingsBounds,
   memorySettingsBounds, memorySettingsSchema, researchSettingsSchema,
@@ -1044,7 +1044,7 @@ export async function registerSettingsRoutes(app: import('fastify').FastifyInsta
               required: ['timeoutSeconds'],
               additionalProperties: false,
             },
-            capabilityInstructions: { type: 'string', maxLength: 20_000 },
+            capabilityInstructions: { type: 'string', maxLength: CAPABILITY_INSTRUCTIONS_MAX_CODE_POINTS },
             timeouts: {
               ...timeoutSettingsSchema,
               required: Object.keys(defaultSettings.timeouts),
