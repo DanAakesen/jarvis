@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, useNavigate } from 'react-router-dom';
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from './App';
@@ -94,6 +94,14 @@ beforeEach(() => {
 });
 
 const mediaDevicesDescriptor = Object.getOwnPropertyDescriptor(navigator, 'mediaDevices');
+
+function HistoryControls() {
+  const navigate = useNavigate();
+  return <>
+    <button onClick={() => navigate(-1)}>Previous page</button>
+    <button onClick={() => navigate(1)}>Next page</button>
+  </>;
+}
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -881,6 +889,93 @@ describe('App shell', () => {
       expect(screen.queryByRole('button', { name: /area navigation/ })).toBeNull();
       expect(screen.queryByRole('navigation', { name: area })).toBeNull();
     }
+  });
+
+  it.each([
+    ['Software Factory', '/'],
+    ['Knowledge', '/'],
+    ['Usage', '/'],
+    ['Usage', '/usage'],
+    ['Conversation', '/usage'],
+    ['Conversation', '/'],
+    ['Jarvis home', '/'],
+    ['Settings', '/'],
+  ])('closes the Folio when selecting %s from %s on desktop', async (name, path) => {
+    const user = userEvent.setup();
+    await renderSignedIn(path);
+    const shell = document.querySelector('.app-shell')!;
+    const folio = screen.getByRole('button', { name: 'Folio' });
+    await user.click(folio);
+    expect(shell.getAttribute('data-folio-open')).toBe('true');
+    await user.click(screen.getByRole('link', { name }));
+    expect(shell.getAttribute('data-folio-open')).toBe('false');
+    expect(shell.getAttribute('data-navigation-open')).toBe('false');
+    expect(folio.getAttribute('aria-pressed')).toBe('false');
+  });
+
+  it('closes the Folio when a phone menu selects the same page or a different page', async () => {
+    vi.stubGlobal('matchMedia', vi.fn((query: string) => ({
+      matches: query.includes('max-width: 700px'),
+      media: query, addEventListener: vi.fn(), removeEventListener: vi.fn(),
+    })));
+    const user = userEvent.setup();
+    await renderSignedIn();
+    const menu = screen.getByRole('button', { name: 'Menu' });
+    const shell = document.querySelector('.app-shell')!;
+    for (const page of ['Jarvis', 'Usage', 'Usage', 'Settings']) {
+      await user.click(menu);
+      await user.click(within(screen.getByRole('dialog', { name: 'Go to' })).getByRole('button', { name: 'Folio' }));
+      expect(shell.getAttribute('data-folio-open')).toBe('true');
+      await user.click(menu);
+      await user.click(within(screen.getByRole('dialog', { name: 'Go to' })).getByRole('link', { name: page }));
+      expect(shell.getAttribute('data-folio-open')).toBe('false');
+      expect(menu.getAttribute('aria-expanded')).toBe('false');
+    }
+  });
+
+  it('closes the Folio for Jarvis navigation even when the page does not change', async () => {
+    const user = userEvent.setup();
+    streamWorkspaceCommands();
+    await renderSignedIn();
+    await waitFor(() => expect(activityStream).not.toBeNull());
+    act(() => {
+      activityStream!.enqueue(new TextEncoder().encode(
+        `event: workspace-ready\ndata: ${JSON.stringify({ sessionId: '12345678-1234-4234-8234-123456789abc' })}\n\n`,
+      ));
+    });
+    const shell = document.querySelector('.app-shell')!;
+    for (const [index, page] of ['home', 'usage'].entries()) {
+      await user.click(screen.getByRole('button', { name: 'Folio' }));
+      expect(shell.getAttribute('data-folio-open')).toBe('true');
+      const commandId = `leave-folio-${index}`;
+      act(() => {
+        activityStream!.enqueue(new TextEncoder().encode(
+          `event: workspace-command\ndata: ${JSON.stringify({
+            command: { commandId, operation: 'navigate', page },
+            expiresAt: Date.now() + 5_000,
+          })}\n\n`,
+        ));
+      });
+      await waitFor(() => expect(shell.getAttribute('data-folio-open')).toBe('false'));
+      expect(document.activeElement?.closest('#folio-pane')).toBeNull();
+      await waitFor(() => expect(fetchMock.mock.calls.find(([url]) => String(url).endsWith(`/commands/${commandId}/ack`))).toBeTruthy());
+    }
+  });
+
+  it('does not reopen the Folio after history navigation returns to its previous page', async () => {
+    const user = userEvent.setup();
+    restoreProfile.mockResolvedValue({ name: 'Dan Aakesen' });
+    render(<MemoryRouter initialEntries={['/', '/usage']} initialIndex={1}>
+      <App config={config} /><HistoryControls />
+    </MemoryRouter>);
+    await screen.findByRole('navigation', { name: 'Areas' });
+    await user.click(screen.getByRole('button', { name: 'Folio' }));
+    const shell = document.querySelector('.app-shell')!;
+    expect(shell.getAttribute('data-folio-open')).toBe('true');
+    await user.click(screen.getByRole('button', { name: 'Previous page' }));
+    expect(shell.getAttribute('data-folio-open')).toBe('false');
+    await user.click(screen.getByRole('button', { name: 'Next page' }));
+    expect(shell.getAttribute('data-folio-open')).toBe('false');
   });
 
   it('turns the camera on from the chat More menu and off from the live line', async () => {

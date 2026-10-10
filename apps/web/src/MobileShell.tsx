@@ -13,9 +13,10 @@ const pages = [
   { to: '/settings', label: 'Settings' },
 ] as const;
 
-export function MobileMenu({ open, onClose, onFolio, onContext }: {
+export function MobileMenu({ open, onClose, onNavigate, onFolio, onContext }: {
   open: boolean;
   onClose: () => void;
+  onNavigate: () => void;
   onFolio: () => void;
   onContext: () => void;
 }) {
@@ -39,7 +40,7 @@ export function MobileMenu({ open, onClose, onFolio, onContext }: {
         <span className="mobile-menu-grip" aria-hidden="true" />
         <nav aria-label="Pages">
           {pages.map((page) => (
-            <NavLink key={page.to} className="mobile-menu-link" to={page.to} end={'end' in page} onClick={onClose}>{page.label}</NavLink>
+            <NavLink key={page.to} className="mobile-menu-link" to={page.to} end={'end' in page} onClick={() => { onNavigate(); onClose(); }}>{page.label}</NavLink>
           ))}
         </nav>
         <div className="mobile-menu-actions">

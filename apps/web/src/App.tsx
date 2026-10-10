@@ -171,6 +171,19 @@ function ShellLayout({ signedIn, config, session, camera, screenShare }: {
   // named Settings section or task card is scrolled into view and glows once its data has loaded.
   // The Folio pane (P9-25) shares the left sidebar slot with area navigation; only one is open at a time.
   const [folioOpen, setFolioOpen] = useState(false);
+  const [folioPath, setFolioPath] = useState(pathname);
+  if (folioPath !== pathname) {
+    setFolioPath(pathname);
+    setFolioOpen(false);
+  }
+  const [navigationOpen, setNavigationOpen] = useState(false);
+  const closePagePanels = useCallback(() => {
+    if (document.activeElement?.closest('#folio-pane')) {
+      document.getElementById('content')?.focus({ preventScroll: true });
+    }
+    setFolioOpen(false);
+    setNavigationOpen(false);
+  }, []);
   const openTaskRef = useRef<(taskId: string) => void>(() => {});
   const conversationWindowRef = useRef<{ open: boolean; setOpen: (open: boolean) => boolean } | null>(null);
   const cancelReveal = useRef<() => void>(() => {});
@@ -178,6 +191,7 @@ function ShellLayout({ signedIn, config, session, camera, screenShare }: {
     const target = resolveNavigation(request);
     if (!target.ok) return false;
     if (target.pane === 'folio') { setFolioOpen(true); return true; }
+    closePagePanels();
     if (pathnameRef.current !== target.path) navigate(target.path);
     if (target.taskId) openTaskRef.current(target.taskId);
     const reduced = document.documentElement.dataset.motion === 'reduced' ||
@@ -186,7 +200,7 @@ function ShellLayout({ signedIn, config, session, camera, screenShare }: {
     cancelReveal.current();
     cancelReveal.current = revealId ? revealWhenReady(() => document.getElementById(revealId), reduced) : () => {};
     return true;
-  }, [navigate]);
+  }, [closePagePanels, navigate]);
   useEffect(() => () => cancelReveal.current(), []);
   // What Dan is looking at (P9-43), sent with the snapshot so Jarvis can say "this page" or "that task" correctly.
   const [frontViewId, setFrontViewId] = useState<string | null>(null);
@@ -400,7 +414,6 @@ function ShellLayout({ signedIn, config, session, camera, screenShare }: {
     }
   }, [conversationAvailable, phone, voiceActive]);
   // The navigation is a drawer over the page: it starts closed and opens from the rail.
-  const [navigationOpen, setNavigationOpen] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useState(() => readPanelWidth('sidebar', sidebarLimits.min, sidebarLimits.max));
   const [contextWidth, setContextWidth] = useState(() => readPanelWidth('context', contextLimits.min, contextLimits.max));
   const changeSidebarWidth = useCallback((width: number) => {
@@ -508,11 +521,11 @@ function ShellLayout({ signedIn, config, session, camera, screenShare }: {
               <ShellIcon name="navigation" />
             </button>
           )}
-          <NavLink className="rail-link" to="/" end aria-label="Conversation">
+          <NavLink className="rail-link" to="/" end aria-label="Conversation" onClick={closePagePanels}>
             <ShellIcon name="home" /><span className="visually-hidden">Jarvis</span>
           </NavLink>
           {areas.map((area) => (
-            <NavLink key={area.id} className="rail-link" to={`/${area.path}`} aria-label={area.label} onClick={() => { setNavigationOpen(area.navigation.length > 1); if (area.navigation.length > 1) setFolioOpen(false); }}>
+            <NavLink key={area.id} className="rail-link" to={`/${area.path}`} aria-label={area.label} onClick={() => { setFolioOpen(false); setNavigationOpen(area.navigation.length > 1); }}>
               <ShellIcon name={area.id === 'factory' ? 'factory' : area.id === 'knowledge' ? 'knowledge' : 'usage'} /><span className="visually-hidden">{area.label}</span>
             </NavLink>
           ))}
@@ -556,7 +569,7 @@ function ShellLayout({ signedIn, config, session, camera, screenShare }: {
         onClose={() => setFolioOpen(false)} refreshKey={openWindows.length} />}
       <header className="app-topbar">
         <div className="topbar-context">
-          <Link className="brand" to="/" aria-label="Jarvis home">Jarvis</Link>
+          <Link className="brand" to="/" aria-label="Jarvis home" onClick={closePagePanels}>Jarvis</Link>
         </div>
         {/* Open windows live as tabs in the top bar, between the brand and the controls (no breadcrumb). */}
         {signedIn && <div className="window-tabstrip" onClick={(event) => { if (phone && (event.target as HTMLElement).closest('button')) setWindowsSheetOpen(false); }}>
@@ -600,7 +613,7 @@ function ShellLayout({ signedIn, config, session, camera, screenShare }: {
                 <ShellIcon name="navigation" />
               </button>
             )}
-            <NavLink className="settings-link" to="/settings" aria-label="Settings">
+            <NavLink className="settings-link" to="/settings" aria-label="Settings" onClick={closePagePanels}>
               <ShellIcon name="settings" /><span className="settings-label">Settings</span>
             </NavLink>
           </div>
@@ -653,7 +666,7 @@ function ShellLayout({ signedIn, config, session, camera, screenShare }: {
       {signedIn && phone && (
         <>
           <MobileCaption text={workText ?? (working ? activityText : null)} />
-          <MobileMenu open={menuOpen} onClose={closeMenu} onFolio={() => setFolioOpen(true)} onContext={contextPanel.toggle} />
+          <MobileMenu open={menuOpen} onClose={closeMenu} onNavigate={closePagePanels} onFolio={() => setFolioOpen(true)} onContext={contextPanel.toggle} />
         </>
       )}
       {signedIn && <ContextPanel closeIcon={<ShellIcon name="close" />} resizeHandle={phone ? undefined : (

@@ -4,6 +4,8 @@ Phase 1 delivers the Software Factory. Requirements and page specifications are 
 
 ## Current focus
 
+- **Local UI polish (Dan, 10 October):** orb-ring inlays retain bright amber at the rear of the room; Folio closes on page selection, including same-page desktop/phone links and Jarvis navigation. These corrections ship separately from unfinished #430 window layout/pins. Current phone polish is retained from `main`; live production acceptance follows merge.
+
 - **P11-01:** Calendar-only short approval complete offline on the task branch: 55 focused tests, backend lint and build pass. Next: review and live account/voice acceptance after deployment. The supplied request has no issue number and GitHub searches did not resolve it; the PR closing reference remains open. Gmail and other confirmation flows are unchanged.
 
 - **P10 — GitHub backlog (8 October 2026):** GitHub issues become the single backlog; the Factory (label `Jarvis`, agent `codex`) and Copilot are executors, and the Factory board mirrors the GitHub Project columns. See [P10](#p10--github-backlog-as-source-of-truth).
