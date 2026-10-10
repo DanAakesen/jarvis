@@ -193,6 +193,7 @@ describe('shared glass tokens', () => {
     expect(ruleDeclaration(history, dock, 'inset')).toBe('auto 12px var(--phone-dock-bottom)');
     expect(ruleDeclaration(history, dock, 'height')).toBe('calc(var(--voice-dock-top) - var(--phone-dock-bottom))');
     expect(ruleDeclaration(history, dock, 'pointer-events')).toBe('none');
+    expect(ruleDeclaration(history, dock, 'z-index')).toBe('43');
     expect(ruleDeclaration(history, dock, 'background')).toBe('transparent');
     expect(ruleDeclaration(history, dock, 'backdrop-filter')).toBe('none');
     expect(history).toContain('@media (min-width: 701px) and (not ((max-height: 500px) and (pointer: coarse))) {\n.app-shell[data-voice-active="true"]');
@@ -200,6 +201,7 @@ describe('shared glass tokens', () => {
     expect(history).toContain('.conversation-input::after { content: none; }');
     expect(history).toContain('.workspace { height: 100%; min-height: 0; margin: 0; padding: 0; border: 0; background: transparent; box-shadow: none; backdrop-filter: none; }');
     expect(styles).toContain('.app-topbar { border-radius: 0; background: var(--stage-slab); box-shadow: none; backdrop-filter: none; }');
+    expect(styles).toContain('.app-shell[data-phone="true"][data-voice-active="false"]:has(.shell-main .loader.loader-block) .jarvis-page .conversation-input,');
     const scene = readFileSync('src/jarvis-stage-scene.ts', 'utf8');
     expect(scene).toContain("getPropertyValue('--jarvis-orb-dock-radius')");
     expect(scene).toContain("getPropertyValue('--jarvis-orb-dock-bottom')");

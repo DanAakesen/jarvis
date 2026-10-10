@@ -3104,7 +3104,7 @@ a.task-chip:hover { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--glass-e
 /* Phones (Dan, 8 October): while a page is loading (the amber core in the middle), the chat bar steps aside and comes
    back once the content arrives. */
 .app-shell[data-phone="true"] .jarvis-page .conversation-input { transition: opacity var(--motion-state) var(--ease-standard), translate var(--motion-panel) var(--ease-enter), visibility 0s; }
-.app-shell[data-phone="true"]:has(.shell-main .loader.loader-block) .jarvis-page .conversation-input,
+.app-shell[data-phone="true"][data-voice-active="false"]:has(.shell-main .loader.loader-block) .jarvis-page .conversation-input,
 .app-shell[data-phone="true"]:has(.shell-main .loader.loader-block) .mobile-caption {
   opacity: 0; translate: 0 16px; visibility: hidden; pointer-events: none;
   transition: opacity var(--motion-state) var(--ease-standard), translate var(--motion-state) var(--ease-standard), visibility 0s linear var(--motion-state);
