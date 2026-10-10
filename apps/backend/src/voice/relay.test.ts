@@ -100,7 +100,7 @@ function appFor(
   } satisfies ConversationStore,
   settingsStore?: SettingsStore,
   reflexClassifier?: ReflexClassifier,
-  services: Pick<BuildAppOptions, 'taskStore' | 'taskController' | 'toolCallStore' | 'awayModeStore'> = {},
+  services: Pick<BuildAppOptions, 'taskStore' | 'taskController' | 'toolCallStore' | 'awayModeStore' | 'projectStore' | 'factoryBoardReader' | 'githubAppTokenIssuer'> = {},
   logLevel: 'info' | 'silent' = 'silent',
   createPartialRecognizer?: PartialSpeechRecognizerFactory,
   visionWatch?: VoiceRelayOptions['visionWatch'],
@@ -204,9 +204,10 @@ async function connectedPartialVoice(
 }
 
 function taskReflexServices() {
-  const task = { id: '12', state: 'Running' } as unknown as TaskRecord;
+  const task = { id: '12', projectId: '7', title: 'Current task', state: 'Running' } as unknown as TaskRecord;
   const taskStore = {
     list: vi.fn(async () => [task]),
+    get: vi.fn(async () => ({ ...task, events: [], usage: [] })),
     getRunningContext: vi.fn(async () => ({
       runningTasks: [{ projectName: 'Current project' }],
       truncated: false,
@@ -216,7 +217,13 @@ function taskReflexServices() {
     control: vi.fn(async () => ({ kind: 'ok' as const, task })),
   };
   const toolCallStore: ToolCallStore = { record: vi.fn(async () => {}) };
-  return { task, taskStore, taskController, toolCallStore };
+  const projectStore = {
+    list: vi.fn(async () => [{ id: '7', name: 'Current project', repo: 'DanAakesen/jarvis',
+      default_branch: 'main', active: true }]),
+  } as unknown as NonNullable<BuildAppOptions['projectStore']>;
+  const githubAppTokenIssuer = { issueForRepositoryRead: vi.fn(async () => 'read-token') } as unknown as NonNullable<BuildAppOptions['githubAppTokenIssuer']>;
+  const factoryBoardReader = { read: vi.fn(), searchIssues: vi.fn(async () => ({ numbers: [], incomplete: false })) };
+  return { task, taskStore, taskController, toolCallStore, projectStore, githubAppTokenIssuer, factoryBoardReader };
 }
 
 function sendTimedPartialTranscript(socket: WebSocket, itemId: string) {

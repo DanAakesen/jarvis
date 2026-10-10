@@ -744,3 +744,23 @@ export interface SystemStatus {
   entries: readonly SystemStatusEntry[];
   smoke?: SystemSmokeStatus;
 }
+export interface WorkStatusInput {
+  issueNumber?: number;
+  taskId?: string;
+  query?: string;
+  project?: string;
+}
+export interface WorkStatus {
+  verdict: 'delivered' | 'in_progress' | 'needs_attention' | 'not_started';
+  project: { id: string; name: string; repo: string } | null;
+  issue: { number: number; url: string; title: string; state: 'open' | 'closed'; labels: string[] } | null;
+  tasks: { id: string; issueNumber: number | null; title: string; state: string; activity: string | null;
+    attemptCount: number; linked: boolean }[];
+  pullRequests: { number: number; url: string; state: 'open' | 'closed' | 'merged'; draft: boolean;
+    merged: boolean;
+    checks: 'pending' | 'passed' | 'failed'; mergeSha: string | null }[];
+  deployments: { sha: string; status: 'verified' | 'failed' | 'pending' | 'unknown';
+    source: 'release' | 'actions'; url: string | null }[];
+  warnings: string[];
+  partial: boolean;
+}

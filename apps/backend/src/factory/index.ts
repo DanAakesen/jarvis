@@ -18,6 +18,7 @@ import type {
   CreateTaskInput, RecordTaskEventInput, TaskControlCommand, TaskEventMessage, TaskListFilters,
 } from './task-store.js';
 import { factoryTools } from './tools.js';
+import { taskRestartReason } from './work-status.js';
 import { repositoryTools } from './repository-tools.js';
 import { registerReleaseViewRoutes } from './release-view.js';
 import {
@@ -315,7 +316,12 @@ export const factoryModule: BackendModule = {
       return sendBounded(reply, result.task);
     });
 
-    app.post<{ Params: { id: string }; Body: { action: string; message?: string } }>('/factory/tasks/:id/controls', {
+    app.post<{ Params: { id: string }; Body: { action: string; message?: string; confirm?: boolean } }>('/factory/tasks/:id/controls', {
+      preValidation: async (request, reply) => {
+        if (request.body?.confirm !== undefined && typeof request.body.confirm !== 'boolean') {
+          return reply.code(400).send({ error: 'Confirmation must be a boolean' });
+        }
+      },
       schema: {
         params: { type: 'object', properties: { id: idSchema }, required: ['id'], additionalProperties: false },
         body: {
@@ -323,6 +329,7 @@ export const factoryModule: BackendModule = {
           properties: {
             action: { type: 'string', enum: ['steer', 'pause', 'resume', 'cancel', 'recover'] },
             message: { type: 'string', minLength: 1, maxLength: 65_536 },
+            confirm: { type: 'boolean' },
           },
           required: ['action'],
           additionalProperties: false,
@@ -340,7 +347,27 @@ export const factoryModule: BackendModule = {
       if (request.body.action === 'steer' && !request.body.message?.trim()) {
         return reply.code(400).send({ error: 'Steering message cannot be empty' });
       }
-      const result = await controller.control(request.params.id, request.body as TaskControlCommand);
+      if (request.body.action === 'resume' || request.body.action === 'recover') {
+        const reason = await taskRestartReason(app, request.params.id);
+        if (reason === 'task_not_found') return reply.code(404).send({ error: 'Task not found', reason });
+        if (reason === 'work_status_unverified') {
+          return reply.code(503).send({ error: 'Task restart safety could not be verified', reason });
+        }
+        if (reason && (request.body.confirm !== true ||
+            !request.principal || request.agentPrincipal)) {
+          const explanations: Record<string, string> = {
+            issue_closed: 'This task’s linked issue is closed. Recover/resume requires confirm: true.',
+            pull_request_merged: 'This task’s linked pull request is merged. Recover/resume requires confirm: true.',
+            superseded_legacy_task: 'This unlinked task has been superseded by completed work. Recover/resume requires confirm: true.',
+          };
+          return reply.code(409).send({ error: explanations[reason] ?? 'Task restart requires Dan’s explicit confirmation.', reason,
+            confirmationRequired: true });
+        }
+      }
+      const command: TaskControlCommand = request.body.action === 'steer'
+        ? { action: 'steer', message: request.body.message! }
+        : { action: request.body.action as 'resume' | 'recover' | 'pause' | 'cancel' };
+      const result = await controller.control(request.params.id, command);
       if (result.kind === 'not-found') return reply.code(404).send({ error: 'Task not found' });
       if (result.kind === 'invalid-transition') return reply.code(409).send({ error: 'Task state does not allow this action' });
       if (result.kind === 'unavailable') return reply.code(503).send({ error: 'Task runtime is unavailable' });
