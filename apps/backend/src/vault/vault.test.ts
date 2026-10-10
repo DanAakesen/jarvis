@@ -785,6 +785,7 @@ describe('GitHub vault', () => {
         },
         'People/Alex.md': { sha: sha('c'), content: '# Alex\n\nProject engineer.' },
         'General/Old.md': { sha: sha('d'), content: '# Old\n\nArchived note.' },
+        'General/Long-title.md': { sha: sha('e'), content: `# ${'L'.repeat(250)}\n\nDistinctive body.` },
       },
       log,
     });
@@ -805,6 +806,13 @@ describe('GitHub vault', () => {
       }],
       limit: 1, offset: 0, hasMore: false,
     });
+    const longTitleList = await app.inject({
+      url: '/notes?query=distinctive&limit=100', headers: apiAuthorization,
+    });
+    expect(longTitleList.statusCode).toBe(200);
+    expect(longTitleList.json().notes).toEqual([
+      expect.objectContaining({ path: 'General/Long-title.md', title: 'L'.repeat(200) }),
+    ]);
     const detail = await app.inject({
       url: '/notes/note?path=People%2FAlex.md', headers: apiAuthorization,
     });

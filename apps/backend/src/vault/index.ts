@@ -300,9 +300,9 @@ function vaultApiItem(path: string, content: string, updatedAt: Date): MemoryApi
 
 function vaultNoteTitle(path: string, heading: string): string {
   const title = heading.trim();
-  return title && title !== 'Introduction'
+  return (title && title !== 'Introduction'
     ? title.split(' > ', 1)[0]!
-    : posix.basename(path).replace(/\.md$/iu, '').replace(/[-_]/gu, ' ');
+    : posix.basename(path).replace(/\.md$/iu, '').replace(/[-_]/gu, ' ')).slice(0, 200);
 }
 
 function shouldRedact(value: string): boolean {
