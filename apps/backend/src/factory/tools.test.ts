@@ -195,7 +195,7 @@ describe('Software Factory Jarvis tools', () => {
     expect(test.githubIssueClient.createComment).not.toHaveBeenCalled();
     expect((await confirm(test, staged.json().result)).json()).toMatchObject({ outcome: 'ok', result: { status: 'commented', number: 8 } });
     expect(test.githubIssueClient.createComment).toHaveBeenCalledWith(project.repo, 8,
-      withAttachment ? expect.stringContaining('Error: retry failed') : 'Retry is still broken.');
+      withAttachment ? expect.stringContaining('Error: retry failed') : 'Retry is still broken.', expect.any(AbortSignal));
     expect(test.githubIssueClient.publishIssueImage).not.toHaveBeenCalled();
   });
 
@@ -221,7 +221,7 @@ describe('Software Factory Jarvis tools', () => {
     expect(call.slice(0, 2)).toEqual([project.repo, 8]);
     expect((await sharp(call[2]).metadata()).exif).toBeUndefined();
     expect(test.githubIssueClient.createComment).toHaveBeenCalledWith(project.repo, 8,
-      expect.stringContaining('![broken.png](https://raw.githubusercontent.com/'));
+      expect.stringContaining('![broken.png](https://raw.githubusercontent.com/'), expect.any(AbortSignal));
     expect(JSON.stringify(test.record.mock.calls)).not.toContain('sig=private');
     expect((await confirm(test, draft, `confirm ${draft.confirmationCode} publish ${test.attachment.name}`)).json().outcome).toBe('refused');
   });
@@ -290,7 +290,7 @@ describe('Software Factory Jarvis tools', () => {
       payload: { issueNumber: 8, text: 'Details', attachmentIds: ['00000000-0000-4000-8000-000000000000'] } })).json().outcome).toBe('refused');
     expect((await test.app.inject({ method: 'POST', url: '/tools/issue_comment', headers,
       payload: { issueNumber: 8, text: ['password', '=do-not-publish-this'].join('') } })).json().outcome).toBe('refused');
-    test.attachment.content = 'access_token=do-not-publish-this';
+    test.attachment.content = '{"access_token":"do-not-publish-this"}';
     expect((await test.app.inject({ method: 'POST', url: '/tools/issue_comment', headers,
       payload: { issueNumber: 8, text: 'Details', attachmentIds: [test.attachment.id] } })).json().outcome).toBe('refused');
     expect(test.githubIssueClient.createComment).not.toHaveBeenCalled();

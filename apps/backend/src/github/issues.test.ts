@@ -43,6 +43,34 @@ function fixture() {
 }
 
 describe('GitHub issue client', () => {
+  it('reuses large images through the supported Contents object media type', async () => {
+    const bytes = Buffer.alloc(900_000, 1);
+    const tokenIssuer = { issueForContentsWrite: vi.fn(async () => 'contents-write-token') } as unknown as GitHubAppTokenIssuer;
+    const client = createGitHubIssueClient(tokenIssuer, async (input, init) => {
+      expect(init?.method).toBe('GET');
+      if (String(input).includes('/contents/')) {
+        expect(init?.headers).toMatchObject({ Accept: 'application/vnd.github.object+json' });
+        return Response.json({
+          sha: createHash('sha1').update(`blob ${bytes.length}\0`).update(bytes).digest('hex'),
+          content: bytes.toString('base64'), encoding: 'base64',
+        });
+      }
+      return Response.json({ object: { sha: 'a'.repeat(40) } });
+    });
+    await expect(client.publishIssueImage!('DanAakesen/jarvis', 8, bytes, 'png')).resolves.toContain('/issue-attachments/8/');
+  });
+  it('does not create a branch or publish bytes if cancelled during branch discovery', async () => {
+    const controller = new AbortController();
+    const calls: string[] = [];
+    const tokenIssuer = { issueForContentsWrite: vi.fn(async () => 'contents-write-token') } as unknown as GitHubAppTokenIssuer;
+    const client = createGitHubIssueClient(tokenIssuer, async (input, init) => {
+      calls.push(init?.method ?? 'GET');
+      controller.abort();
+      return new Response(null, { status: 404 });
+    });
+    await expect(client.publishIssueImage!('DanAakesen/jarvis', 8, Buffer.from('image'), 'png', controller.signal)).rejects.toThrow();
+    expect(calls).toEqual(['GET']);
+  });
   it('creates the dedicated branch and commits only the confirmed image with a content-addressed URL', async () => {
     const calls: { path: string; method: string; body: unknown }[] = [];
     const tokenIssuer = { issueForContentsWrite: vi.fn(async () => 'contents-write-token') } as unknown as GitHubAppTokenIssuer;

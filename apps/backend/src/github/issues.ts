@@ -44,10 +44,10 @@ export interface GitHubIssueClient {
     body: string,
     options?: GitHubIssueCreateOptions,
   ): Promise<GitHubIssueReference>;
-  createComment(repository: string, issue: number, body: string): Promise<void>;
+  createComment(repository: string, issue: number, body: string, signal?: AbortSignal): Promise<void>;
   addLabels(repository: string, issue: number, labels: readonly string[]): Promise<void>;
   removeLabel(repository: string, issue: number, label: string): Promise<void>;
-  publishIssueImage?(repository: string, issue: number, bytes: Buffer, extension: 'png' | 'jpeg' | 'webp'): Promise<string>;
+  publishIssueImage?(repository: string, issue: number, bytes: Buffer, extension: 'png' | 'jpeg' | 'webp', signal?: AbortSignal): Promise<string>;
 }
 
 export class GitHubIssueRequestError extends Error {
@@ -67,9 +67,9 @@ function repositoryPath(repository: string): string {
   return repository.split('/').map(encodeURIComponent).join('/');
 }
 
-async function readJson(response: Response): Promise<unknown> {
+async function readJson(response: Response, limit = maxResponseBytes): Promise<unknown> {
   const contentLength = response.headers.get('content-length');
-  if (contentLength !== null && Number(contentLength) > maxResponseBytes) {
+  if (contentLength !== null && Number(contentLength) > limit) {
     await response.body?.cancel().catch(() => undefined);
     throw new Error('GitHub issue response is too large');
   }
@@ -82,7 +82,7 @@ async function readJson(response: Response): Promise<unknown> {
       const { done, value } = await reader.read();
       if (done) break;
       size += value.byteLength;
-      if (size > maxResponseBytes) {
+      if (size > limit) {
         await reader.cancel().catch(() => undefined);
         throw new Error('GitHub issue response is too large');
       }
@@ -104,17 +104,20 @@ async function request(
   path: string,
   method = 'GET',
   body?: unknown,
+  signal?: AbortSignal,
+  contentsObject = false,
 ): Promise<unknown> {
+  signal?.throwIfAborted();
   const response = await fetchImpl(`${apiUrl}${path}`, {
     method,
     headers: {
-      Accept: 'application/vnd.github+json',
+      Accept: contentsObject ? 'application/vnd.github.object+json' : 'application/vnd.github+json',
       Authorization: `${['Bear', 'er'].join('')} ${token}`,
       'X-GitHub-Api-Version': '2022-11-28',
       ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
     },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-    signal: AbortSignal.timeout(10_000),
+    signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(10_000)]) : AbortSignal.timeout(10_000),
     redirect: 'error',
   });
   if (!response.ok) {
@@ -122,7 +125,7 @@ async function request(
     throw new GitHubIssueRequestError(response.status);
   }
   if (response.status === 204) return null;
-  return readJson(response);
+  return readJson(response, contentsObject ? 2 * maxResponseBytes : maxResponseBytes);
 }
 
 function parsedIssue(value: unknown, repository: string, issue: number): GitHubIssue {
@@ -154,7 +157,7 @@ export function createGitHubIssueClient(
   fetchImpl: typeof fetch = fetch,
 ): GitHubIssueClient {
   return {
-    async publishIssueImage(repository, issue, bytes, extension) {
+    async publishIssueImage(repository, issue, bytes, extension, signal) {
       const path = repositoryPath(repository);
       if (!Number.isSafeInteger(issue) || issue < 1 || issue > 2_147_483_647 ||
           bytes.length < 1 || bytes.length > 10 * 1024 * 1024 ||
@@ -164,28 +167,28 @@ export function createGitHubIssueClient(
       const branch = 'issue-attachments';
       const ref = `${root}/git/ref/heads/${branch}`;
       try {
-        await request(fetchImpl, token, ref);
+        await request(fetchImpl, token, ref, 'GET', undefined, signal);
       } catch (error) {
         if (!(error instanceof GitHubIssueRequestError) || error.status !== 404) throw error;
-        const repo = await request(fetchImpl, token, root);
+        const repo = await request(fetchImpl, token, root, 'GET', undefined, signal);
         if (!object(repo) || typeof repo.default_branch !== 'string') throw new Error('Invalid repository response', { cause: error });
-        const base = await request(fetchImpl, token, `${root}/git/ref/heads/${encodeURIComponent(repo.default_branch)}`);
+        const base = await request(fetchImpl, token, `${root}/git/ref/heads/${encodeURIComponent(repo.default_branch)}`, 'GET', undefined, signal);
         if (!object(base) || !object(base.object) || typeof base.object.sha !== 'string' ||
             !/^[0-9a-f]{40}$/u.test(base.object.sha)) throw new Error('Invalid branch response', { cause: error });
         try {
           await request(fetchImpl, token, `${root}/git/refs`, 'POST', {
             ref: `refs/heads/${branch}`, sha: base.object.sha,
-          });
+          }, signal);
         } catch (creationError) {
           if (!(creationError instanceof GitHubIssueRequestError) || creationError.status !== 422) throw creationError;
-          await request(fetchImpl, token, ref);
+          await request(fetchImpl, token, ref, 'GET', undefined, signal);
         }
       }
       const hash = createHash('sha256').update(bytes).digest('hex');
       const file = `issue-attachments/${issue}/${hash}.${extension}`;
       const contentsPath = `${root}/contents/${file}`;
       try {
-        const existing = await request(fetchImpl, token, `${contentsPath}?ref=${branch}`);
+        const existing = await request(fetchImpl, token, `${contentsPath}?ref=${branch}`, 'GET', undefined, signal, true);
         if (!object(existing) || existing.sha !== createHash('sha1')
           .update(`blob ${bytes.length}\0`).update(bytes).digest('hex')) {
           throw new Error('Existing issue image does not match');
@@ -195,7 +198,7 @@ export function createGitHubIssueClient(
         await request(fetchImpl, token, contentsPath, 'PUT', {
           message: `Add confirmed image for issue #${issue}`,
           content: bytes.toString('base64'), branch,
-        });
+        }, signal);
       }
       return `https://raw.githubusercontent.com/${repository}/${branch}/${file}`;
     },
@@ -333,12 +336,12 @@ export function createGitHubIssueClient(
       const token = await tokenIssuer.issueForIssuesWrite(repository);
       await request(fetchImpl, token, `/repos/${path}/issues/${issue}/labels`, 'POST', { labels });
     },
-    async createComment(repository, issue, body) {
+    async createComment(repository, issue, body, signal) {
       const path = repositoryPath(repository);
       if (!Number.isSafeInteger(issue) || issue < 1 || issue > 2_147_483_647 ||
         !body.trim() || body.length > 4_000) throw new Error('Invalid issue comment');
       const token = await tokenIssuer.issueForIssuesWrite(repository);
-      await request(fetchImpl, token, `/repos/${path}/issues/${issue}/comments`, 'POST', { body });
+      await request(fetchImpl, token, `/repos/${path}/issues/${issue}/comments`, 'POST', { body }, signal);
     },
     async removeLabel(repository, issue, label) {
       const path = repositoryPath(repository);

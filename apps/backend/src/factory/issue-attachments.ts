@@ -94,6 +94,6 @@ export async function publishIssueAttachment(
   const extension = attachment.contentType === 'image/jpeg' ? 'jpeg' : attachment.contentType === 'image/webp' ? 'webp' : 'png';
   const sanitized = await sharp(bytes, { failOn: 'error', limitInputPixels: 40_000_000 }).rotate()[extension]().toBuffer();
   signal.throwIfAborted();
-  const url = await server.githubIssueClient!.publishIssueImage!(repository, issue, sanitized, extension);
+  const url = await server.githubIssueClient!.publishIssueImage!(repository, issue, sanitized, extension, signal);
   return `![${attachment.name.replace(/[\\[\]\r\n]/gu, '\\$&')}](${url})`;
 }

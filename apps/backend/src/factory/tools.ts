@@ -348,7 +348,8 @@ async function confirmIssueCreation(
       if (action.publicAttachment) {
         body += `\n\n${await publishIssueAttachment(request.server, action.repository, action.issueNumber, action.publicAttachment, signal)}`;
       }
-      await request.server.githubIssueClient!.createComment(action.repository, action.issueNumber, body);
+      signal.throwIfAborted();
+      await request.server.githubIssueClient!.createComment(action.repository, action.issueNumber, body, signal);
       return { status: 'commented', number: action.issueNumber, url: issue.url };
     }
     if (await resolveRepository(action.project, request.server.projectStore) !== action.repository) {
@@ -366,7 +367,8 @@ async function confirmIssueCreation(
     if (action.publicAttachment) {
       try {
         const image = await publishIssueAttachment(request.server, action.repository, created.number, action.publicAttachment, signal);
-        await request.server.githubIssueClient!.createComment(action.repository, created.number, image);
+        signal.throwIfAborted();
+        await request.server.githubIssueClient!.createComment(action.repository, created.number, image, signal);
       } catch {
         throw new ToolFailure(`Issue ${created.url} was created, but image publication or embedding could not be confirmed. Check the issue and attachment branch before retrying.`);
       }

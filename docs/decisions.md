@@ -28,6 +28,8 @@ Contents write for EXIF-free, content-addressed images on the never-merged
 `issue-attachments` branch and embed raw GitHub image URLs in comments. Public
 Git history is not governed by private attachment retention. No migration,
 new dependency, App permission or web change; live acceptance remains pending.
+Workspace acknowledgement confirms preview creation only; image-load/visibility
+acknowledgement remains a web limitation for #649, outside this backend task.
 
 P9-66 (10 October 2026): keep conversation uploads in the existing private
 `artifacts` Blob container under `attachments/`, with SQL-owned metadata and

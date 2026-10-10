@@ -2225,6 +2225,8 @@ comment (also after a public-mode issue creation). Existing hash-matched images
 are reused. Partial/uncertain writes require checking GitHub before retrying.
 No migration, infrastructure, Python agent or web change; live chat, Blob and
 GitHub publication acceptance remain unverified.
+The existing renderer acknowledges workspace creation, not successful image
+loading; verifying on-screen loading requires the deferred web work (#649).
 
 P2-13 compares task-branch commits before and after each agent turn. An
 `end_turn` without a new task-branch commit emits `session_question` with the
