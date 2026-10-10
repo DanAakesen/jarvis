@@ -250,19 +250,63 @@ describe('shared glass tokens', () => {
     }
   });
 
-  it('removes the bottom shell bar and marks selection with complete illuminated surfaces', () => {
+  it('removes the bottom shell bar and shares subtle selection without outlined slabs', () => {
     const source = readFileSync('src/styles.css', 'utf8');
     const historyStyles = readFileSync('src/ConversationHistory.css', 'utf8');
 
     expect(source).not.toContain('.bottom-bar');
     expect(historyStyles).not.toContain('.bottom-bar');
     expect(ruleDeclaration(source, /\.app-shell\s*\{([^}]*)\}/, 'grid-template-rows')).toBe('var(--rail-size) minmax(0, 1fr)');
-    // The rail marks its current area on the icon itself (Dan, 6 October); the sidebar keeps the lit surface.
-    expect(ruleDeclaration(source, /\.rail-link\[aria-current="page"\]\s*\{([^}]*)\}/, 'background')).toBe('transparent');
-    expect(ruleDeclaration(source, /\.rail-link\[aria-current="page"\] svg\s*\{([^}]*)\}/, 'filter')).toContain('drop-shadow');
-    for (const selector of [/\.sidebar-link\[aria-current="page"\]\s*\{([^}]*)\}/]) {
-      expect(ruleDeclaration(source, selector, 'background')).toBe('var(--glass-selected)');
-      expect(ruleDeclaration(source, selector, 'box-shadow')).toBe('var(--glass-selected-glow)');
+    expect(ruleDeclaration(source, /\.rail-link\[aria-current="page"\] svg\s*\{([^}]*)\}/, 'stroke-width')).toBe('2.1');
+    for (const selector of [
+      /\.rail-link\[aria-current="page"\]\s*\{([^}]*)\}/,
+      /\.sidebar-link\[aria-current="page"\]\s*\{([^}]*)\}/,
+      /\.mobile-menu-link\[aria-current="page"\]\s*\{([^}]*)\}/,
+      /\.camera-control-button\[aria-pressed="true"\], \.topbar-icon-button\[aria-expanded="true"\], \.settings-link\[aria-current="page"\]\s*\{([^}]*)\}/,
+      /\.workspace-view-switcher \.workspace-tab\[aria-current="true"\]\s*\{([^}]*)\}/,
+      /\.workspace-arrangement-options \[aria-pressed="true"\]\s*\{([^}]*)\}/,
+      /\.folio-kind\[aria-pressed="true"\]\s*\{([^}]*)\}/,
+      /\.usage-segmented button\[aria-pressed="true"\]\s*\{([^}]*)\}/,
+      /\.advanced-segmented button\[aria-pressed="true"\]\s*\{([^}]*)\}/,
+    ]) {
+      expect(ruleDeclaration(source, selector, 'background')).toBe('var(--state-selected-bg)');
+      expect(ruleDeclaration(source, selector, 'color')).toBe('var(--state-selected-fg)');
+      expect(ruleDeclaration(source, selector, 'box-shadow')).toBe('none');
+    }
+    expect(ruleDeclaration(source, /\.presence-chip-trigger\[aria-expanded="true"\]\s*\{([^}]*)\}/, 'background')).toBe('var(--state-selected-bg)');
+    expect(ruleDeclaration(source, /\.workspace-tab-item\[data-state="front"\]\s*\{([^}]*)\}/, 'background')).toBe('var(--state-selected-bg)');
+    expect(ruleDeclaration(source, /\.mobile-menu-link\[aria-current="page"\]\s*\{([^}]*)\}/, 'font-weight')).toBe('750');
+    expect(source).toContain('--selection-hover: var(--state-selected-hover)');
+    expect(source).toContain('--selection-pressed: var(--state-selected-pressed)');
+    expect(source).toContain('background: var(--selection-pressed, var(--glass-pressed))');
+    expect(source).toContain('@media (hover: hover)');
+    expect(source).toMatch(/\.app-shell :is\(\.rail-link,[^{}]+\):active:not\(:disabled\) \{\s*background: var\(--selection-pressed, var\(--glass-pressed\)\);/);
+    expect(source).toMatch(/@media \(hover: hover\) \{\s*\.app-shell :is\(\.rail-link,[^{}]+\):hover:not\(:disabled\)/);
+    expect(source).toContain('@media (pointer: coarse) { .presence-chip-trigger { min-width: 44px; min-height: 44px; justify-content: center; } }');
+  });
+
+  it('keeps selected text at 4.5:1 and indicators at 3:1 in both themes and interaction states', () => {
+    const source = readFileSync('src/styles.css', 'utf8');
+    expect(tokenValue(source, ':root', '--state-selected-fg')).toBe('color-mix(in srgb, var(--focus) 40%, var(--text))');
+    expect(tokenValue(source, ':root', '--state-selected-indicator')).toBe('var(--state-selected-fg)');
+    for (const selector of [':root', ':root\\[data-theme="dark"\\]']) {
+      const focus = parseColor(tokenValue(source, selector, '--focus')).color;
+      const text = parseColor(tokenValue(source, selector, '--text')).color;
+      const selected = composite(focus, .4, text);
+      for (const name of ['--page', '--surface', '--surface-muted', '--surface-translucent', '--stage-background', '--stage-floor']) {
+        const surface = parseColor(tokenValue(source, selector, name));
+        for (const backdrop of [[0, 0, 0], [255, 255, 255]] as Color[]) {
+          const rendered = composite(surface.color, surface.alpha, backdrop);
+          for (const token of ['--state-selected-bg', '--state-selected-hover', '--state-selected-pressed']) {
+            const value = tokenValue(source, ':root', token);
+            expect(value).toMatch(/^color-mix\(in srgb, var\(--state-selected-indicator\) \d+%, transparent\)$/);
+            const alpha = Number(value.match(/(\d+)%/)![1]) / 100;
+            const background = composite(selected, alpha, rendered);
+            expect(contrast(selected, background), `${selector} ${name} ${token}`).toBeGreaterThanOrEqual(4.5);
+            expect(contrast(selected, background)).toBeGreaterThanOrEqual(3);
+          }
+        }
+      }
     }
   });
 });

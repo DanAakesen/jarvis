@@ -790,6 +790,47 @@ describe('App shell', () => {
     expect(screen.getByRole('link', { name: 'Settings' }).getAttribute('href')).toBe('/settings');
   });
 
+  it('marks only the current desktop area as the page', async () => {
+    const user = userEvent.setup();
+    await renderSignedIn();
+    const areas = screen.getByRole('navigation', { name: 'Areas' });
+    const home = within(areas).getByRole('link', { name: 'Conversation' });
+    const usage = within(areas).getByRole('link', { name: 'Usage' });
+    expect(home.getAttribute('aria-current')).toBe('page');
+    expect(usage.hasAttribute('aria-current')).toBe(false);
+    await user.click(usage);
+    expect(usage.getAttribute('aria-current')).toBe('page');
+    expect(home.hasAttribute('aria-current')).toBe(false);
+    expect(areas.querySelectorAll('[aria-current="page"]')).toHaveLength(1);
+  });
+
+  it('keeps phone menu expansion and current page in sync after navigation and Escape', async () => {
+    vi.stubGlobal('matchMedia', vi.fn((query: string) => ({
+      matches: query.includes('max-width: 700px'),
+      media: query, addEventListener: vi.fn(), removeEventListener: vi.fn(),
+    })));
+    const user = userEvent.setup();
+    await renderSignedIn();
+    const menu = screen.getByRole('button', { name: 'Menu' });
+    expect(menu.getAttribute('aria-expanded')).toBe('false');
+    expect(menu.getAttribute('aria-controls')).toBe('mobile-menu');
+    await user.click(menu);
+    expect(menu.getAttribute('aria-expanded')).toBe('true');
+    const sheet = screen.getByRole('dialog', { name: 'Go to' });
+    const home = within(sheet).getByRole('link', { name: 'Jarvis' });
+    const usage = within(sheet).getByRole('link', { name: 'Usage' });
+    expect(home.getAttribute('aria-current')).toBe('page');
+    expect(usage.hasAttribute('aria-current')).toBe(false);
+    await user.click(usage);
+    expect(menu.getAttribute('aria-expanded')).toBe('false');
+    await user.click(menu);
+    expect(usage.getAttribute('aria-current')).toBe('page');
+    expect(home.hasAttribute('aria-current')).toBe(false);
+    expect(sheet.querySelectorAll('[aria-current="page"]')).toHaveLength(1);
+    await user.keyboard('{Escape}');
+    expect(menu.getAttribute('aria-expanded')).toBe('false');
+  });
+
   it('shows only the brand in the top bar, with open windows as tabs beside it and no breadcrumb', async () => {
     const user = userEvent.setup();
     await renderSignedIn();
@@ -877,6 +918,8 @@ describe('App shell', () => {
     await renderSignedIn();
 
     const toggle = screen.getByRole('button', { name: 'Toggle contextual panel' });
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    expect(toggle.getAttribute('aria-controls')).toBe('context-panel');
     await user.click(toggle);
     expect(toggle.getAttribute('aria-expanded')).toBe('true');
     expect(screen.getByRole('heading', { name: 'Context' })).not.toBeNull();
@@ -886,6 +929,10 @@ describe('App shell', () => {
     expect(toggle.getAttribute('aria-expanded')).toBe('false');
     expect(screen.queryByRole('heading', { name: 'Context' })).toBeNull();
     expect(document.activeElement).toBe(toggle);
+    await user.keyboard(' ');
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+    await user.keyboard(' ');
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
   });
 
   it('enables chat and explains the other unavailable main-page actions', async () => {

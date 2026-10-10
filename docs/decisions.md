@@ -1061,3 +1061,16 @@ regression; live acceptance is pending.
   ambient-background edge. Dock lengths reuse P9-73 safe-area spacing.
 - **Status:** implemented and browser-checked offline; physical iPhone and live
   microphone/provider verification remain open.
+
+## 2026-10-10: P9-71 shared cyan selection
+
+- **Decision:** navigation, top-bar toggles, tabs and segmented choices use one
+  subtle cyan tint and readable foreground from canonical `--state-selected-*`
+  roles. Weight or stronger icon strokes reinforce selection without a selected
+  outline/glow. Presence mode colours remain separate from the open-menu state.
+- **Evidence:** fixture Chromium/WebKit checks at 390×844 and 1280×900 in both
+  themes exercise keyboard, touch, hover, press and reduced motion. CSS regressions
+  verify selected text/indicator contrast; component tests assert current-page and
+  toggle semantics. Before/after captures are in `docs/ui/screenshots/p9-71/`.
+- **Status:** implemented offline; physical-device and live-service checks are
+  not claimed.
