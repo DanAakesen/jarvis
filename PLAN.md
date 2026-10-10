@@ -4,6 +4,8 @@ Phase 1 delivers the Software Factory. Requirements and page specifications are 
 
 ## Current focus
 
+- **Composer sizing (Dan, 10 October):** desktop chat input follows the visible maximised conversation width on home and other pages, returning to its normal width on restore/minimise/close. Phone and voice sizing stay unchanged. Local fixture measurements and captures are recorded in `docs/ui/screenshots/composer-sizing/README.md`; production acceptance follows deployment. This correction ships separately from unfinished #430.
+
 - **Local UI polish (Dan, 10 October):** orb-ring inlays retain bright amber at the rear of the room; Folio closes on page selection, including same-page desktop/phone links and Jarvis navigation. These corrections ship separately from unfinished #430 window layout/pins. Current phone polish is retained from `main`; live production acceptance follows merge.
 
 - **P11-01:** Calendar-only short approval complete offline on the task branch: 55 focused tests, backend lint and build pass. Next: review and live account/voice acceptance after deployment. The supplied request has no issue number and GitHub searches did not resolve it; the PR closing reference remains open. Gmail and other confirmation flows are unchanged.

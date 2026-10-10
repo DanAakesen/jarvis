@@ -68,6 +68,8 @@
 .conversation-transcript[hidden], .composer[hidden] { display: none; }
 .conversation-transcript:focus-visible { outline: 3px solid var(--focus); outline-offset: -3px; }
 .conversation-input { position: relative; display: grid; grid-template-columns: 40px minmax(0, 1fr); align-items: center; gap: 22px; flex: 0 0 auto; width: 100%; max-width: var(--chat-width); margin: 0 auto; padding: 5px 6px 5px 7px; border: 1px solid var(--rule); border-radius: 26px; background: var(--surface-translucent); backdrop-filter: blur(var(--surface-blur)); box-shadow: var(--dialog-shadow); }
+/* The desktop composer and maximised transcript share their page gutters. Restore keeps the normal dock width. */
+.app-shell[data-phone="false"][data-voice-active="false"][data-conversation-open="true"]:has(.workspace-window-conversation.workspace-window-maximized:not(.workspace-window-minimized, [hidden])) .jarvis-page { --chat-width: 100%; }
 .conversation-input:has(textarea:focus-visible) { box-shadow: var(--dialog-shadow), 0 0 0 3px var(--focus); }
 /* In typing mode the voice wrappers dissolve into the shared composer grid. Feedback is portalled outside the composer. */
 .conversation-input[data-voice-active="false"] > .conversation-actions,
