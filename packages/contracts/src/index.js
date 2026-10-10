@@ -1313,3 +1313,10 @@ export function isTaskEventStreamEvent(value) {
     Object.keys(value).every((key) => ['event', 'id', 'data'].includes(key)) &&
     isTaskEventMessage(value.data) && value.id === value.data.id;
 }
+export const issueAttachmentFields = Object.freeze({
+  attachmentIds: {
+    type: 'array', maxItems: 5, uniqueItems: true,
+    items: { type: 'string', pattern: '^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$' },
+  },
+  publish: { type: 'string', enum: ['description', 'public'], default: 'description' },
+});

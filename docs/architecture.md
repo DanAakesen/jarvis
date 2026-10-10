@@ -2205,6 +2205,27 @@ descriptions are excluded from ordinary logs and tool-call audit records.
 Offline route, store, extraction, tool-parity and agent tests cover the flow;
 live model and Azure Blob acceptance remain unverified.
 
+### P9-67 private-by-default issue attachments
+
+`create_issue` and the sensitive `issue_comment` tool accept up to five owned,
+sent attachment IDs. The default `publish: description` adds cached vision
+descriptions and extracted error text as fenced, untrusted data; file bytes stay
+in private storage. Text and filenames pass the existing issue secret checks.
+Both writes reuse the ten-minute, one-shot, later-message confirmation gate.
+
+Explicit `publish: public` accepts one image per confirmation. The backend first
+shows its private image through the acknowledged workspace image renderer and
+returns a public-repository warning. The later exact phrase must include
+`publish <filename>` after the confirmation code. It rechecks the attachment,
+re-encodes it without EXIF, and uses the App's existing Contents-write scope to
+commit `issue-attachments/<issue>/<sha256>.<ext>` on the target repository's
+dedicated `issue-attachments` branch, created from its default branch on first
+use and never merged. A raw GitHub Markdown image is embedded in a confirmed
+comment (also after a public-mode issue creation). Existing hash-matched images
+are reused. Partial/uncertain writes require checking GitHub before retrying.
+No migration, infrastructure, Python agent or web change; live chat, Blob and
+GitHub publication acceptance remain unverified.
+
 P2-13 compares task-branch commits before and after each agent turn. An
 `end_turn` without a new task-branch commit emits `session_question` with the
 last agent message. The backend records the question and moves a Running or

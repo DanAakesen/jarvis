@@ -23,6 +23,21 @@ function fixture(query: ReturnType<typeof vi.fn>) {
 }
 
 describe('conversation attachment store', () => {
+  it('reads image bytes only for owned, ready, sent and unexpired attachments with an exact blob path', async () => {
+    const id = '7b96c6a9-9f80-4a8b-8a73-51517fe37512';
+    const owner = '00000000-0000-0000-0000-000000000001';
+    const query = vi.fn().mockResolvedValue({ recordset: [] });
+    const { store, request, container } = fixture(query);
+    expect(await store.readImageBytes(owner, id)).toBeNull();
+    expect(container.getBlockBlobClient).not.toHaveBeenCalled();
+    expect(request.input).toHaveBeenCalledWith('owner', sql.UniqueIdentifier, owner);
+    expect(query.mock.calls[0]?.[0]).toContain('message_id IS NOT NULL');
+    expect(query.mock.calls[0]?.[0]).toContain("status = N'ready'");
+    expect(query.mock.calls[0]?.[0]).toContain('expires_at > SYSUTCDATETIME()');
+    query.mockResolvedValue({ recordset: [{ blob_name: `attachments/${id}/other`, size_bytes: 20 }] });
+    expect(await store.readImageBytes(owner, id)).toBeNull();
+    expect(container.getBlockBlobClient).not.toHaveBeenCalled();
+  });
   it('validates retention settings with a safe default and hard bounds', () => {
     expect(attachmentRetentionDays(undefined)).toBe(30);
     expect(attachmentRetentionDays('90')).toBe(90);

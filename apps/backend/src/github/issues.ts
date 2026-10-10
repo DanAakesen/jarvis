@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import type { GitHubAppTokenIssuer } from '../github-app.js';
 
 const apiUrl = 'https://api.github.com';
@@ -46,6 +47,7 @@ export interface GitHubIssueClient {
   createComment(repository: string, issue: number, body: string): Promise<void>;
   addLabels(repository: string, issue: number, labels: readonly string[]): Promise<void>;
   removeLabel(repository: string, issue: number, label: string): Promise<void>;
+  publishIssueImage?(repository: string, issue: number, bytes: Buffer, extension: 'png' | 'jpeg' | 'webp'): Promise<string>;
 }
 
 export class GitHubIssueRequestError extends Error {
@@ -152,6 +154,51 @@ export function createGitHubIssueClient(
   fetchImpl: typeof fetch = fetch,
 ): GitHubIssueClient {
   return {
+    async publishIssueImage(repository, issue, bytes, extension) {
+      const path = repositoryPath(repository);
+      if (!Number.isSafeInteger(issue) || issue < 1 || issue > 2_147_483_647 ||
+          bytes.length < 1 || bytes.length > 10 * 1024 * 1024 ||
+          !['png', 'jpeg', 'webp'].includes(extension)) throw new Error('Invalid issue image');
+      const token = await tokenIssuer.issueForContentsWrite(repository);
+      const root = `/repos/${path}`;
+      const branch = 'issue-attachments';
+      const ref = `${root}/git/ref/heads/${branch}`;
+      try {
+        await request(fetchImpl, token, ref);
+      } catch (error) {
+        if (!(error instanceof GitHubIssueRequestError) || error.status !== 404) throw error;
+        const repo = await request(fetchImpl, token, root);
+        if (!object(repo) || typeof repo.default_branch !== 'string') throw new Error('Invalid repository response', { cause: error });
+        const base = await request(fetchImpl, token, `${root}/git/ref/heads/${encodeURIComponent(repo.default_branch)}`);
+        if (!object(base) || !object(base.object) || typeof base.object.sha !== 'string' ||
+            !/^[0-9a-f]{40}$/u.test(base.object.sha)) throw new Error('Invalid branch response', { cause: error });
+        try {
+          await request(fetchImpl, token, `${root}/git/refs`, 'POST', {
+            ref: `refs/heads/${branch}`, sha: base.object.sha,
+          });
+        } catch (creationError) {
+          if (!(creationError instanceof GitHubIssueRequestError) || creationError.status !== 422) throw creationError;
+          await request(fetchImpl, token, ref);
+        }
+      }
+      const hash = createHash('sha256').update(bytes).digest('hex');
+      const file = `issue-attachments/${issue}/${hash}.${extension}`;
+      const contentsPath = `${root}/contents/${file}`;
+      try {
+        const existing = await request(fetchImpl, token, `${contentsPath}?ref=${branch}`);
+        if (!object(existing) || existing.sha !== createHash('sha1')
+          .update(`blob ${bytes.length}\0`).update(bytes).digest('hex')) {
+          throw new Error('Existing issue image does not match');
+        }
+      } catch (error) {
+        if (!(error instanceof GitHubIssueRequestError) || error.status !== 404) throw error;
+        await request(fetchImpl, token, contentsPath, 'PUT', {
+          message: `Add confirmed image for issue #${issue}`,
+          content: bytes.toString('base64'), branch,
+        });
+      }
+      return `https://raw.githubusercontent.com/${repository}/${branch}/${file}`;
+    },
     async readIssue(repository, issue) {
       const path = repositoryPath(repository);
       if (!Number.isSafeInteger(issue) || issue < 1 || issue > 2_147_483_647) throw new Error('Invalid issue number');

@@ -780,3 +780,8 @@ export interface WorkStatus {
   warnings: string[];
   partial: boolean;
 }
+export type IssueAttachmentInput = {
+  attachmentIds?: string[];
+  publish?: 'description' | 'public';
+};
+export const issueAttachmentFields: Readonly<Record<'attachmentIds' | 'publish', object>>;

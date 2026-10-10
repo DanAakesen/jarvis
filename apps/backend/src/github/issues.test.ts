@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { createHash } from 'node:crypto';
 import type { GitHubAppTokenIssuer } from '../github-app.js';
 import { createGitHubIssueClient } from './issues.js';
 
@@ -42,6 +43,42 @@ function fixture() {
 }
 
 describe('GitHub issue client', () => {
+  it('creates the dedicated branch and commits only the confirmed image with a content-addressed URL', async () => {
+    const calls: { path: string; method: string; body: unknown }[] = [];
+    const tokenIssuer = { issueForContentsWrite: vi.fn(async () => 'contents-write-token') } as unknown as GitHubAppTokenIssuer;
+    const bytes = Buffer.from('sanitized image fixture');
+    let branchExists = false;
+    let committed = false;
+    const client = createGitHubIssueClient(tokenIssuer, async (input, init) => {
+      const url = new URL(String(input));
+      const method = init?.method ?? 'GET';
+      const body = typeof init?.body === 'string' ? JSON.parse(init.body) as unknown : undefined;
+      calls.push({ path: url.pathname, method, body });
+      if (url.pathname.endsWith('/git/ref/heads/issue-attachments')) {
+        return branchExists ? Response.json({ object: { sha: 'a'.repeat(40) } }) : new Response(null, { status: 404 });
+      }
+      if (url.pathname.endsWith('/jarvis')) return Response.json({ default_branch: 'main' });
+      if (url.pathname.endsWith('/git/ref/heads/main')) return Response.json({ object: { sha: 'a'.repeat(40) } });
+      if (url.pathname.endsWith('/git/refs')) { branchExists = true; return Response.json({}); }
+      if (method === 'PUT') { committed = true; return Response.json({}); }
+      return committed
+        ? Response.json({ sha: createHash('sha1').update(`blob ${bytes.length}\0`).update(bytes).digest('hex') })
+        : new Response(null, { status: 404 });
+    });
+    const url = await client.publishIssueImage!('DanAakesen/jarvis', 8, bytes, 'png');
+    expect(url).toBe(`https://raw.githubusercontent.com/DanAakesen/jarvis/issue-attachments/issue-attachments/8/${createHash('sha256').update(bytes).digest('hex')}.png`);
+    expect(calls.filter(({ method }) => method === 'POST')).toEqual([{
+      path: '/repos/DanAakesen/jarvis/git/refs', method: 'POST',
+      body: { ref: 'refs/heads/issue-attachments', sha: 'a'.repeat(40) },
+    }]);
+    expect(calls.find(({ method }) => method === 'PUT')?.body).toEqual({
+      branch: 'issue-attachments', content: bytes.toString('base64'), message: 'Add confirmed image for issue #8',
+    });
+    await client.publishIssueImage!('DanAakesen/jarvis', 8, bytes, 'png');
+    expect(calls.filter(({ method }) => method === 'PUT')).toHaveLength(1);
+    expect(calls.some(({ path }) => path.includes('/merges'))).toBe(false);
+    expect(tokenIssuer.issueForContentsWrite).toHaveBeenCalledWith('DanAakesen/jarvis');
+  });
   it('reads issue context, creates linked issues and progress comments, and removes labels', async () => {
     const test = fixture();
     await expect(test.client.readIssue('DanAakesen/jarvis', 8)).resolves.toMatchObject({

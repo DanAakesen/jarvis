@@ -11,6 +11,8 @@ import { factoryModule } from './index.js';
 import type { ConversationMessage, ConversationStore } from '../core/conversation-store.js';
 import type { TokenVerifier } from '../auth/verify.js';
 import type { GitHubIssueClient } from '../github/issues.js';
+import sharp from 'sharp';
+import type { ConversationAttachmentStore } from '../database/conversation-attachment-store.js';
 
 const config = { ...loadConfig({}), logLevel: 'silent' as const };
 const headers = {
@@ -70,6 +72,19 @@ const detail: TaskDetail = {
 };
 
 function fixture() {
+  const attachment = {
+    id: '7b96c6a9-9f80-4a8b-8a73-51517fe37512', name: 'broken.png',
+    contentType: 'image/png', size: 100, status: 'ready' as const,
+    content: 'The screen shows Error: retry failed.', offset: 0, nextOffset: null,
+  };
+  const conversationAttachments = {
+    read: vi.fn(async (_owner: string, id: string) => id === attachment.id ? attachment : null),
+    readUrl: vi.fn(async () => 'https://jarvisstorage.blob.core.windows.net/artifacts/attachments/image?sig=private'),
+    readImageBytes: vi.fn(async () => sharp({
+      create: { width: 2, height: 2, channels: 3, background: 'white' },
+    }).png().withExif({ IFD0: { Copyright: 'private metadata' } }).toBuffer()),
+  };
+  const workspaceCommands = { isConnected: vi.fn(() => true), execute: vi.fn(async () => {}), dispose: vi.fn() };
   const projectStore = {
     list: vi.fn(async () => [project]),
     update: vi.fn(async (id: string, fields: Partial<typeof project>) => id === project.id ? { ...project, ...fields } : null),
@@ -97,10 +112,11 @@ function fixture() {
     readComments: vi.fn(async () => [{ author: 'DanAakesen', body: 'Please implement it.' }]),
     readAgentRules: vi.fn(async () => 'Repository agent rules.'),
     listIssueTitles: vi.fn(async () => []),
-    createIssue: vi.fn(async () => ({ number: 9, url: 'https://github.com/DanAakesen/jarvis/issues/9' })),
+    createIssue: vi.fn<GitHubIssueClient['createIssue']>(async () => ({ number: 9, url: 'https://github.com/DanAakesen/jarvis/issues/9' })),
     createComment: vi.fn(async () => {}),
     addLabels: vi.fn(async () => {}),
     removeLabel: vi.fn(async () => {}),
+    publishIssueImage: vi.fn<NonNullable<GitHubIssueClient['publishIssueImage']>>(async () => 'https://raw.githubusercontent.com/DanAakesen/jarvis/issue-attachments/issue-attachments/8/image.png'),
   } satisfies GitHubIssueClient;
   let latestMessage: ConversationMessage = {
     id: '42', sessionId: 'session', role: 'dan', text: 'Start issue 8', model: null, at: new Date(),
@@ -121,12 +137,15 @@ function fixture() {
     githubAppTokenIssuer: { issueForRepositoryRead: vi.fn(async () => 'read-token') } as unknown as NonNullable<import('../app.js').BuildAppOptions['githubAppTokenIssuer']>,
     factoryBoardReader: { read: vi.fn(), searchIssues: vi.fn(async () => ({ numbers: [], incomplete: false })) },
     conversationStore,
+    conversationAttachments: conversationAttachments as unknown as ConversationAttachmentStore,
+    workspaceCommands: workspaceCommands as never,
     taskController,
     toolCallStore: { record },
   });
   apps.push(app);
   return {
     app, projectStore, taskStore, taskController, record, githubIssueClient,
+    attachment, conversationAttachments, workspaceCommands,
     setLatestMessage: (message: ConversationMessage) => { latestMessage = message; },
   };
 }
@@ -136,10 +155,151 @@ afterEach(async () => {
 });
 
 describe('Software Factory Jarvis tools', () => {
+  async function confirm(test: ReturnType<typeof fixture>, draft: { confirmationCode: string }, text?: string) {
+    test.setLatestMessage({
+      id: '43', sessionId: 'session', role: 'dan', model: null,
+      text: text ?? `confirm ${draft.confirmationCode}`, at: new Date(Date.now() + 2_000),
+    });
+    return test.app.inject({
+      method: 'POST', url: '/tools/confirm_create_issue',
+      headers: { ...headers, 'x-jarvis-message-id': '43' }, payload: { confirmationCode: draft.confirmationCode },
+    });
+  }
+
+  it('creates a confirmed bug with private attachment description and error text, never an image', async () => {
+    const test = fixture();
+    const staged = await test.app.inject({
+      method: 'POST', url: '/tools/create_issue', headers,
+      payload: { title: 'Bug: broken screen', body: 'Problem: retry fails.\nAcceptance: retry works.', attachmentIds: [test.attachment.id] },
+    });
+    expect(staged.json().outcome).toBe('ok');
+    expect(test.githubIssueClient.createIssue).not.toHaveBeenCalled();
+    const result = await confirm(test, staged.json().result);
+    expect(result.json().outcome).toBe('ok');
+    const body = test.githubIssueClient.createIssue.mock.calls[0]?.[2];
+    expect(body).toContain('broken.png');
+    expect(body).toContain('Error: retry failed');
+    expect(body).not.toContain('![');
+    expect(body).not.toContain('https://');
+    expect(test.githubIssueClient.publishIssueImage).not.toHaveBeenCalled();
+    expect(test.conversationAttachments.readImageBytes).not.toHaveBeenCalled();
+    expect(test.record.mock.calls.every(([call]) => JSON.stringify(call).includes('retry failed') === false)).toBe(true);
+  });
+
+  it.each([false, true])('stages and confirms comments with attachments=%s', async (withAttachment) => {
+    const test = fixture();
+    const staged = await test.app.inject({
+      method: 'POST', url: '/tools/issue_comment', headers,
+      payload: { issueNumber: 8, text: 'Retry is still broken.', ...(withAttachment ? { attachmentIds: [test.attachment.id] } : {}) },
+    });
+    expect(test.githubIssueClient.createComment).not.toHaveBeenCalled();
+    expect((await confirm(test, staged.json().result)).json()).toMatchObject({ outcome: 'ok', result: { status: 'commented', number: 8 } });
+    expect(test.githubIssueClient.createComment).toHaveBeenCalledWith(project.repo, 8,
+      withAttachment ? expect.stringContaining('Error: retry failed') : 'Retry is still broken.');
+    expect(test.githubIssueClient.publishIssueImage).not.toHaveBeenCalled();
+  });
+
+  it('previews only one image, warns, and publishes EXIF-free bytes only after later file-named confirmation', async () => {
+    const test = fixture();
+    const staged = await test.app.inject({
+      method: 'POST', url: '/tools/issue_comment', headers,
+      payload: { issueNumber: 8, text: 'Confirmed screenshot.', attachmentIds: [test.attachment.id], publish: 'public' },
+    });
+    const draft = staged.json().result;
+    expect(draft.warning).toContain('public');
+    expect(draft.warning).toContain(test.attachment.name);
+    expect(test.workspaceCommands.execute).toHaveBeenCalledWith(expect.any(String),
+      expect.objectContaining({ view: expect.objectContaining({ renderer: 'image' }) }), expect.any(AbortSignal));
+    expect(test.githubIssueClient.publishIssueImage).not.toHaveBeenCalled();
+    expect((await confirm(test, draft)).json().outcome).toBe('refused');
+    expect((await confirm(test, draft, `confirm ${draft.confirmationCode} publish other.png`)).json().outcome).toBe('refused');
+    expect(test.githubIssueClient.publishIssueImage).not.toHaveBeenCalled();
+    const result = await confirm(test, draft, `confirm ${draft.confirmationCode} publish ${test.attachment.name}`);
+    expect(result.json().outcome).toBe('ok');
+    expect(test.githubIssueClient.publishIssueImage).toHaveBeenCalledOnce();
+    const call = test.githubIssueClient.publishIssueImage.mock.calls[0]!;
+    expect(call.slice(0, 2)).toEqual([project.repo, 8]);
+    expect((await sharp(call[2]).metadata()).exif).toBeUndefined();
+    expect(test.githubIssueClient.createComment).toHaveBeenCalledWith(project.repo, 8,
+      expect.stringContaining('![broken.png](https://raw.githubusercontent.com/'));
+    expect(JSON.stringify(test.record.mock.calls)).not.toContain('sig=private');
+    expect((await confirm(test, draft, `confirm ${draft.confirmationCode} publish ${test.attachment.name}`)).json().outcome).toBe('refused');
+  });
+
+  it('refuses same-message publication, missing previews, multiple files and public documents', async () => {
+    const test = fixture();
+    const payload = { issueNumber: 8, text: 'Attach it.', attachmentIds: [test.attachment.id], publish: 'public' };
+    const staged = await test.app.inject({ method: 'POST', url: '/tools/issue_comment', headers, payload });
+    const code = staged.json().result.confirmationCode;
+    test.setLatestMessage({ id: '42', sessionId: 'session', role: 'dan', model: null,
+      text: `confirm ${code} publish broken.png`, at: new Date(Date.now() + 1_000) });
+    expect((await test.app.inject({ method: 'POST', url: '/tools/confirm_create_issue', headers, payload: { confirmationCode: code } })).json().outcome).toBe('refused');
+    test.workspaceCommands.isConnected.mockReturnValue(false);
+    expect((await test.app.inject({ method: 'POST', url: '/tools/issue_comment', headers, payload })).json().outcome).toBe('refused');
+    test.workspaceCommands.isConnected.mockReturnValue(true);
+    expect((await test.app.inject({ method: 'POST', url: '/tools/issue_comment', headers,
+      payload: { ...payload, attachmentIds: [] } })).json().outcome).toBe('refused');
+    test.attachment.contentType = 'text/plain';
+    expect((await test.app.inject({ method: 'POST', url: '/tools/issue_comment', headers, payload })).json().outcome).toBe('refused');
+    expect(test.githubIssueClient.publishIssueImage).not.toHaveBeenCalled();
+  });
+
+  it('cancels public publication without writes and cannot replay the declined action', async () => {
+    const test = fixture();
+    const staged = await test.app.inject({ method: 'POST', url: '/tools/issue_comment', headers,
+      payload: { issueNumber: 8, text: 'Screenshot', attachmentIds: [test.attachment.id], publish: 'public' } });
+    const draft = staged.json().result;
+    expect((await confirm(test, draft, 'no')).json().outcome).toBe('refused');
+    expect((await confirm(test, draft, `confirm ${draft.confirmationCode} publish broken.png`)).json().outcome).toBe('refused');
+    expect(test.githubIssueClient.publishIssueImage).not.toHaveBeenCalled();
+    expect(test.githubIssueClient.createComment).not.toHaveBeenCalled();
+  });
+
+  it('checks secrets on subsequent document pages and fences file-derived Markdown', async () => {
+    const test = fixture();
+    test.conversationAttachments.read.mockResolvedValueOnce({ ...test.attachment,
+      content: 'Safe first page', nextOffset: 4_000 } as never)
+      .mockResolvedValueOnce({ ...test.attachment, content: 'access_token=do-not-publish-this', offset: 4_000 } as never);
+    expect((await test.app.inject({ method: 'POST', url: '/tools/issue_comment', headers,
+      payload: { issueNumber: 8, text: 'Details', attachmentIds: [test.attachment.id] } })).json().outcome).toBe('refused');
+    test.attachment.content = '```text\n![image](https://example.invalid/private.png)\n<script>bad</script>';
+    const staged = await test.app.inject({ method: 'POST', url: '/tools/issue_comment', headers,
+      payload: { issueNumber: 8, text: 'Details', attachmentIds: [test.attachment.id] } });
+    expect(staged.json().result.body).toContain('````text\nFile: broken.png');
+    expect(test.githubIssueClient.createComment).not.toHaveBeenCalled();
+  });
+
+  it('publishes a reviewed attachment on a newly created issue and surfaces partial embedding failure', async () => {
+    const test = fixture();
+    const staged = await test.app.inject({ method: 'POST', url: '/tools/create_issue', headers,
+      payload: { title: 'Bug: retry', body: 'Problem and acceptance.', attachmentIds: [test.attachment.id], publish: 'public', executor: 'none' } });
+    test.githubIssueClient.createComment.mockRejectedValueOnce(new Error('private provider detail'));
+    const result = await confirm(test, staged.json().result, `confirm ${staged.json().result.confirmationCode} publish broken.png`);
+    expect(result.json().outcome).toBe('error');
+    expect(JSON.stringify(result.json())).toContain('was created');
+    expect(JSON.stringify(result.json())).not.toContain('private provider detail');
+    expect(test.githubIssueClient.publishIssueImage.mock.calls[0]?.slice(0, 2)).toEqual([project.repo, 9]);
+  });
+
+  it('refuses unknown issues, foreign files and secrets before any writes', async () => {
+    const test = fixture();
+    test.githubIssueClient.readIssue.mockResolvedValueOnce(null as never);
+    expect((await test.app.inject({ method: 'POST', url: '/tools/issue_comment', headers,
+      payload: { issueNumber: 999, text: 'Details' } })).json().outcome).toBe('refused');
+    expect((await test.app.inject({ method: 'POST', url: '/tools/issue_comment', headers,
+      payload: { issueNumber: 8, text: 'Details', attachmentIds: ['00000000-0000-4000-8000-000000000000'] } })).json().outcome).toBe('refused');
+    expect((await test.app.inject({ method: 'POST', url: '/tools/issue_comment', headers,
+      payload: { issueNumber: 8, text: ['password', '=do-not-publish-this'].join('') } })).json().outcome).toBe('refused');
+    test.attachment.content = 'access_token=do-not-publish-this';
+    expect((await test.app.inject({ method: 'POST', url: '/tools/issue_comment', headers,
+      payload: { issueNumber: 8, text: 'Details', attachmentIds: [test.attachment.id] } })).json().outcome).toBe('refused');
+    expect(test.githubIssueClient.createComment).not.toHaveBeenCalled();
+    expect(test.githubIssueClient.publishIssueImage).not.toHaveBeenCalled();
+  });
   it('registers every project and task tool for discovery and English voice', async () => {
     const names = [
       'get_work_status',
-      'create_issue', 'confirm_create_issue', 'start_issue',
+      'create_issue', 'issue_comment', 'confirm_create_issue', 'start_issue',
       'list_projects', 'update_project', 'archive_project', 'confirm_project_archive',
       'list_tasks', 'get_task', 'list_releases', 'get_release', 'get_deployment_status',
       'create_task', 'set_task_model', 'retry_task', 'steer_task', 'pause_task', 'resume_task', 'cancel_task',

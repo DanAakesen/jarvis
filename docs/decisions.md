@@ -19,6 +19,16 @@ The nine design areas and where each stands. **Confirmed** = Dan's requirement o
 
 ## Decision log
 
+P9-67 (10 October 2026): issue attachments default to fenced descriptions and
+transcribed text from P9-66's private store. All issue/comment writes are staged
+and checked for secrets. Public publication is one image at a time, requires an
+acknowledged private chat preview, warns that anyone can read it, and requires a
+later confirmation naming the file. GitHub has no issue image-upload API: reuse
+Contents write for EXIF-free, content-addressed images on the never-merged
+`issue-attachments` branch and embed raw GitHub image URLs in comments. Public
+Git history is not governed by private attachment retention. No migration,
+new dependency, App permission or web change; live acceptance remains pending.
+
 P9-66 (10 October 2026): keep conversation uploads in the existing private
 `artifacts` Blob container under `attachments/`, with SQL-owned metadata and
 owner-only short-lived read URLs. Re-encode images with Sharp to remove metadata;
