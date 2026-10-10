@@ -882,7 +882,7 @@ test('validates conversation visibility actions without accepting unrelated fiel
 test('validates exact navigation keys, settings sections and bounded factory task/issue selectors', () => {
   const command = { commandId: 'navigate-1', operation: 'navigate' };
   assert.deepEqual(workspaceNavigationPages, [
-    'home', 'factory', 'settings', 'usage', 'knowledge', 'folio', 'status',
+    'home', 'factory', 'settings', 'usage', 'notes', 'knowledge', 'folio', 'status',
   ]);
   assert.deepEqual(workspaceSettingsSections, [
     'appearance', 'jarvis', 'personality', 'voice', 'presence', 'memory',
