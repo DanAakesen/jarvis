@@ -42,6 +42,13 @@ no mapping. Tests cover tools, redacted audits and SQL persistence. Backend-only
 scope is preserved: the current web iframe does not refetch same-ID updates,
 so visual refresh acceptance remains blocked on separately authorized web work.
 No migration, new dependency or App permission is needed.
+P9-54 (10 October 2026): keep pull-request and CI inspection read-only. Reuse
+the registered-project resolver and repository-scoped GitHub App tokens, and
+expose bounded diffs, resolved review-thread state, check summaries and
+sanitized failed-job log tails. Do not add persistence or App permissions;
+changes remain with the confirmed issue or running-task flow. Fake-backed
+offline tests cover responses and redaction; live GitHub acceptance remains
+pending.
 
 P9-43 (8 October 2026): reuse the workspace broker's latest connected-owner
 snapshot for per-turn model awareness; do not persist screen or view content.
