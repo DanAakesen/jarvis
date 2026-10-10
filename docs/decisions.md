@@ -19,6 +19,16 @@ The nine design areas and where each stands. **Confirmed** = Dan's requirement o
 
 ## Decision log
 
+P9-55 (10 October 2026): reuse `settingsOptionsForCatalogue` for settings-tool
+discovery parity with `GET /settings`, and derive field guidance and numeric
+bounds from the existing patch schema. Filter settings, options and fields
+together for the requested area. Keep existing update validation and Now gates;
+generate bounded refusal hints from known fields and catalogue values, never
+submitted values. Both settings tools remain sensitive and always registered,
+so one shared discovery instruction can name them. No migration, App permission,
+dependency or web change is needed. Verified offline; live model use remains
+unverified.
+
 P9-52 (10 October 2026): keep generated window readback in the existing
 owner-scoped, bounded workspace command records, not SQL. Register `read_window`
 in core even when HTML storage is unavailable, prefer page-reported content,
