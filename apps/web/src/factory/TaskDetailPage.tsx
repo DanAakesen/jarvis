@@ -388,7 +388,7 @@ export function TaskDetailPage({ backendUrl, getAccessToken, taskId, compact = f
         if (active) {
           setLoaded({
             key: requestKey,
-            value: { status: 'error', message: 'Task details are unavailable until the backend is deployed.' },
+            value: { status: 'error', message: 'Task details unavailable.' },
           });
         }
       });
@@ -514,7 +514,7 @@ export function TaskDetailPage({ backendUrl, getAccessToken, taskId, compact = f
       setEventOffset(nextOffset);
       setHasMoreEvents(page.events.length === eventPageSize && nextOffset <= maxEventOffset);
       if (page.events.length === eventPageSize && nextOffset > maxEventOffset) {
-        setEventsError('Additional events may be unavailable because the task service caps event offsets at 10,000.');
+        setEventsError('Task event history limit reached.');
       }
     } catch (error) {
       setEventsError(error instanceof Error ? error.message : 'More task events could not be loaded. Try again.');
@@ -567,7 +567,7 @@ export function TaskDetailPage({ backendUrl, getAccessToken, taskId, compact = f
                 {pullRequestUrl
                   ? <a className="secondary-button" href={pullRequestUrl} target="_blank" rel="noreferrer">Open pull request #{linkedPullRequest!.number}</a>
                   : <button className="secondary-button" type="button" disabled aria-describedby={`${ids}-pr-note`}>Open pull request</button>}
-                {!pullRequestUrl && <p id={`${ids}-pr-note`} className="task-window-note">No pull request has been reported for this task yet.</p>}
+                {!pullRequestUrl && <p id={`${ids}-pr-note`} className="task-window-note">No pull request reported.</p>}
               </div>
             </div>
             <div className="task-window-grid">
@@ -690,7 +690,7 @@ export function TaskDetailPage({ backendUrl, getAccessToken, taskId, compact = f
                 <section className="task-card" aria-labelledby={`${ids}-usage`}>
                   <h4 id={`${ids}-usage`}>Usage</h4>
                   {task.usage.length === 0
-                    ? <p className="task-window-note">No usage has been recorded for this task yet.</p>
+                    ? <p className="task-window-note">No usage recorded.</p>
                     : (
                       <div className="task-usage-table-wrap">
                         <table className="task-usage-table">
@@ -782,7 +782,7 @@ export function TaskDetailPage({ backendUrl, getAccessToken, taskId, compact = f
           </dl>
           <section className="task-detail-section task-actions" aria-labelledby="actions-heading">
             <h2 id="actions-heading">Task actions</h2>
-            {!pullRequestUrl && <p id="pull-request-unavailable">Pull-request links are not reported until the GitHub integration is available.</p>}
+            {!pullRequestUrl && <p id="pull-request-unavailable">No pull request reported.</p>}
             <TaskControls
               backendUrl={backendUrl}
               getAccessToken={getAccessToken}
@@ -852,7 +852,7 @@ export function TaskDetailPage({ backendUrl, getAccessToken, taskId, compact = f
               Sandbox cost is estimated from session time. Agent usage appears only when the provider reports it.
             </p>
             {task.usage.length === 0
-              ? <p>No usage has been recorded for this task yet.</p>
+              ? <p>No usage recorded.</p>
               : (
                 <div className="task-usage-table-wrap">
                   <table className="task-usage-table">
@@ -944,7 +944,7 @@ export function TaskDetailPage({ backendUrl, getAccessToken, taskId, compact = f
               <button className="secondary-button" type="button" disabled aria-describedby="artifacts-unavailable">
                 Open artifacts and CI logs
               </button>
-              <p id="artifacts-unavailable">Artifact and CI log links are not available yet.</p>
+              <p id="artifacts-unavailable">No artifact or CI log links.</p>
             </div>
             </>
             )}

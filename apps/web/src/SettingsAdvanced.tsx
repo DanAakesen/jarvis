@@ -68,7 +68,7 @@ export function ModelsSection({ roles, options, onChange, disabled, backendUrl, 
   const [catalogueError, setCatalogueError] = useState('');
   const [reload, setReload] = useState(0);
   const call = useCallback(async (path: string, init?: { method: 'POST' | 'DELETE'; body?: unknown }) => {
-    if (!backendUrl) throw new Error('Models are unavailable until the backend is deployed.');
+    if (!backendUrl) throw new Error('Models unavailable.');
     const token = await getAccessToken();
     return backendFetch(`${backendUrl.replace(/\/+$/u, '')}${path}`, {
       method: init?.method ?? 'GET',
@@ -96,7 +96,6 @@ export function ModelsSection({ roles, options, onChange, disabled, backendUrl, 
 
   return (
     <CollapsibleSection storageKey="settings.models" headingId="models-settings-heading" title="Models" summary={summary}>
-      <p className="settings-explanation">Which model Jarvis uses for each kind of work. Reasoning shows only the levels the chosen model supports.</p>
       <ul className="role-list">
         {modelRoles.map((role) => {
           const current = roles[role];
@@ -183,10 +182,10 @@ function Deployments({ catalogue, error, call, onChanged }: {
         <div className="deployment-add" role="group" aria-label="New deployment">
           <div className="settings-field"><label htmlFor="deployment-model">Model</label>
             <input id="deployment-model" value={draft.model} maxLength={128} onKeyDown={keepEnterInside}
-              onChange={(event) => setDraft({ ...draft, model: event.target.value })} placeholder="gpt-6-luna" /></div>
+              onChange={(event) => setDraft({ ...draft, model: event.target.value })} /></div>
           <div className="settings-field"><label htmlFor="deployment-version">Version</label>
             <input id="deployment-version" value={draft.version} maxLength={128} onKeyDown={keepEnterInside}
-              onChange={(event) => setDraft({ ...draft, version: event.target.value })} placeholder="2026-09-01" /></div>
+              onChange={(event) => setDraft({ ...draft, version: event.target.value })} /></div>
           <div className="settings-field"><label htmlFor="deployment-sku">SKU</label>
             <input id="deployment-sku" value={draft.sku} maxLength={64} onKeyDown={keepEnterInside}
               onChange={(event) => setDraft({ ...draft, sku: event.target.value })} /></div>
@@ -195,7 +194,7 @@ function Deployments({ catalogue, error, call, onChanged }: {
               onKeyDown={keepEnterInside} onChange={(event) => setDraft({ ...draft, capacity: event.target.valueAsNumber })} /></div>
           <button className="primary-button" type="button" disabled={!draftValid || busy}
             onClick={() => { void run('/models/deployments', { method: 'POST', body: { model: draft.model.trim(), version: draft.version, sku: draft.sku, capacity: draft.capacity } },
-              `Requested ${draft.model.trim()}. Approve it in Teams; it appears here once it is deployed.`).then((done) => { if (done) setAdding(false); }); }}>
+              `Requested ${draft.model.trim()}. Approve it in Teams.`).then((done) => { if (done) setAdding(false); }); }}>
             Request deployment
           </button>
         </div>

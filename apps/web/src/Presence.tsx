@@ -6,12 +6,6 @@ import { CollapsibleSection } from './CollapsibleSection';
 
 type ModeInstructions = Record<PresenceMode, string>;
 const maxInstruction = 2_000;
-const modeDescriptions: Record<PresenceMode, string> = {
-  present: 'You are at the screen.',
-  away: 'You are not at the screen.',
-  on_the_move: 'You are out with your phone.',
-};
-
 // Sources reported by GET /presence (P6-23): manual (Dan), jarvis (its tool) and browser (activity returns Dan to Present).
 function sourceLabel(source: string) {
   return source === 'jarvis' ? 'Jarvis' : source === 'browser' ? 'browser activity' : source === 'manual' || source === 'dan' ? 'you' : source;
@@ -129,7 +123,7 @@ export function PresenceSettings({ backendUrl, getAccessToken }: { backendUrl: s
       });
       if (!response.ok) throw new Error('Mode instructions could not be saved. Try again.');
       setSaved(draft);
-      setMessage('Mode instructions saved. They apply from the next reply.');
+      setMessage('Saved. Applies next reply.');
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Mode instructions could not be saved. Try again.');
     } finally {
@@ -140,10 +134,9 @@ export function PresenceSettings({ backendUrl, getAccessToken }: { backendUrl: s
   return (
     <CollapsibleSection storageKey="settings.presence" className="presence-settings" id="presence" headingId={`${ids}-heading`} title="Presence"
       summary={presence.status === 'ready' ? presenceLabel(presence.mode) : undefined}>
-      <p className="settings-explanation">Jarvis adapts to where you are. You can switch here or in the top bar, and Jarvis can switch it too.</p>
       {presence.status === 'loading' || presence.status === 'idle' ? <Loader variant="rows" label="Loading presence…" /> : null}
       {presence.status === 'unavailable' && (
-        <p className="settings-unavailable" role="status">Presence modes are not available yet. They appear once the presence service is deployed.</p>
+        <p className="settings-unavailable" role="status">Presence modes unavailable.</p>
       )}
       {presence.status === 'error' && (
         <div className="settings-feedback" role="alert">
@@ -159,7 +152,6 @@ export function PresenceSettings({ backendUrl, getAccessToken }: { backendUrl: s
                 disabled={presence.saving !== null} style={{ '--tone': tone } as CSSProperties} onClick={() => { void setMode(mode); }}>
                 <span className="presence-dot" aria-hidden="true" />
                 <span className="presence-mode-name">{presence.saving === mode ? `Switching to ${label}…` : label}</span>
-                <span className="presence-mode-note">{modeDescriptions[mode]}</span>
               </button>
             ))}
           </div>
@@ -171,10 +163,9 @@ export function PresenceSettings({ backendUrl, getAccessToken }: { backendUrl: s
         </>
       )}
       <h3 className="presence-instructions-heading">Instructions per mode</h3>
-      <p className="settings-explanation">Each mode adds its own instruction to the base instruction under Personality.</p>
       {instructionsState === 'loading' && <Loader variant="lines" label="Loading mode instructions…" />}
       {instructionsState === 'unavailable' && (
-        <p className="settings-unavailable" role="status">Instructions per mode are not available yet. They appear once the backend supports them.</p>
+        <p className="settings-unavailable" role="status">Mode instructions unavailable.</p>
       )}
       {instructionsState === 'error' && <p className="settings-validation-error" role="alert">Mode instructions could not be loaded. Reload Settings to try again.</p>}
       {instructionsState === 'ready' && draft && (

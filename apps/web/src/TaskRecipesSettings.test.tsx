@@ -63,7 +63,7 @@ describe('TaskRecipesSettings', () => {
       headers: { Authorization: `${['Bear', 'er'].join('')} ${await getAccessToken()}` },
     });
     await user.click(screen.getByRole('button', { name: 'Refresh task recipes' }));
-    expect(await screen.findByText('No task recipes saved yet.')).not.toBeNull();
+    expect(await screen.findByText('No saved task recipes.')).not.toBeNull();
   });
 
   it('offers recovery for failed loads and rejects malformed data', async () => {
@@ -73,11 +73,11 @@ describe('TaskRecipesSettings', () => {
       .mockResolvedValueOnce(response());
     renderRecipes();
     expect(await screen.findByRole('alert')).toHaveProperty('textContent', 'Could not load task recipes. Try again.');
-    expect(screen.queryByText('No task recipes saved yet.')).toBeNull();
+    expect(screen.queryByText('No saved task recipes.')).toBeNull();
     await user.click(screen.getByRole('button', { name: 'Retry task recipes' }));
     expect(await screen.findByRole('button', { name: 'Retry task recipes' })).not.toBeNull();
     await user.click(screen.getByRole('button', { name: 'Retry task recipes' }));
-    expect(await screen.findByText('No task recipes saved yet.')).not.toBeNull();
+    expect(await screen.findByText('No saved task recipes.')).not.toBeNull();
   });
 
   it('keeps previously loaded recipes visible when a refresh fails', async () => {
@@ -121,7 +121,7 @@ describe('TaskRecipesSettings', () => {
     expect(await screen.findByRole('alert')).toHaveProperty('textContent', 'Could not delete this recipe. Try Delete again.');
     expect(screen.getByText('open a document')).not.toBeNull();
     await user.click(screen.getByRole('button', { name }));
-    expect(await screen.findByText('No task recipes saved yet.')).not.toBeNull();
+    expect(await screen.findByText('No saved task recipes.')).not.toBeNull();
   });
 
   it('aborts an old load and ignores its result after changing the service', async () => {
@@ -160,7 +160,7 @@ describe('TaskRecipesSettings', () => {
 
   it('explains an unavailable backend without attempting requests', async () => {
     render(<TaskRecipesSettings backendUrl={null} getAccessToken={getAccessToken} />);
-    expect(await screen.findByRole('alert')).toHaveProperty('textContent', 'Task recipes are unavailable until the backend is deployed.');
+    expect(await screen.findByRole('alert')).toHaveProperty('textContent', 'Task recipes unavailable.');
     expect(fetchMock).not.toHaveBeenCalled();
     expect(screen.getByRole('button', { name: 'Retry task recipes' }).hasAttribute('disabled')).toBe(true);
   });

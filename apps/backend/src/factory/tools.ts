@@ -381,8 +381,9 @@ async function controlTask(
     ? { action, message: message! }
     : { action });
   if (result.kind === 'not-found') throw new ToolRefusal('Task not found.');
-  if (result.kind === 'invalid-transition') throw new ToolRefusal('Task state does not allow this action.');
-  if (result.kind !== 'ok') throw new Error('Task control failed');
+  if (result.kind === 'invalid-transition') throw new ToolRefusal(result.reason ?? 'Task state does not allow this action.');
+  if (result.kind === 'unavailable') throw new ToolFailure(result.reason ?? 'Task runtime is unavailable');
+  if (result.kind === 'failed') throw new ToolFailure(result.reason ?? 'Task control could not be completed');
   return result.task;
 }
 

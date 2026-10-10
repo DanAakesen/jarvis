@@ -384,7 +384,7 @@ describe('Workspace', () => {
     render(<Workspace views={[]} />);
 
     expect(screen.getByRole('heading', { name: 'Workspace' })).not.toBeNull();
-    expect(screen.getByText('No temporary views are open. Views created during this session will appear here.')).not.toBeNull();
+    expect(screen.getByText('No views are open.')).not.toBeNull();
     expect(screen.queryByRole('group', { name: 'Workspace arrangement' })).toBeNull();
   });
 
@@ -607,7 +607,7 @@ describe('Workspace', () => {
       { id: 'interrupted', title: 'Interrupted view', content: { status: 'interrupted', message: 'Generation stopped. Some results are available.', content: <p>Partial result</p>, resume } },
     ]} />);
 
-    expect(screen.getByText('This view has no content yet.')).not.toBeNull();
+    expect(screen.getByText('No content.')).not.toBeNull();
     expect(screen.getByText('Loading view…').closest('[role="status"]')).not.toBeNull();
     expect(screen.getByText('The source is unavailable.').getAttribute('role')).toBe('alert');
     expect(screen.getByText('Partial result')).not.toBeNull();

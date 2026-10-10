@@ -83,7 +83,7 @@ describe('TaskReleaseBar', () => {
     vi.stubGlobal('fetch', fetchMock);
     renderBar('');
 
-    expect(screen.getByText('Select a project to view its release and commit context.')).not.toBeNull();
+    expect(screen.getByText('No project selected.')).not.toBeNull();
     expect(fetchMock).not.toHaveBeenCalled();
   });
 

@@ -87,7 +87,7 @@ export function useJobs(backendUrl: string | null, getAccessToken: () => Promise
   }, [backendUrl, getAccessToken]);
 
   const cancel = useCallback(async (jobId: string): Promise<string> => {
-    if (!backendUrl) return 'Jobs are unavailable until the backend is deployed.';
+    if (!backendUrl) return 'Jobs unavailable.';
     try {
       const response = await authorizedJobsRequest(backendUrl, `/jobs/${encodeURIComponent(jobId)}/cancel`, await getAccessToken(), 'POST');
       if (response.status === 202 || response.ok) return '';

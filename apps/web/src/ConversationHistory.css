@@ -575,12 +575,10 @@
 @media (min-resolution: 1.5dppx) { .conversation-messages .conversation-message[data-speaker], .conversation-message.live-turn { border-width: 1.5px; } }
 
 /* Chat bar life (Dan, 8 October). Idle: one thin light runs a lap of the rim every few seconds, starting slow and
-   accelerating, then rests. Placeholder: a rotating invitation types in, rests, a light passes over it, then the next. */
+   accelerating, then rests. */
 
 .conversation-history .composer > textarea, .conversation-history .composer > .composer-prompt { grid-row: 1; grid-column: 1; }
 .conversation-history .composer textarea::placeholder { color: transparent; }
 .composer-prompt { align-self: center; min-width: 0; padding: 0 2px; overflow: hidden; color: var(--text-muted); font-size: var(--type-body); line-height: 24px;
   text-overflow: ellipsis; white-space: nowrap; pointer-events: none; transition: opacity var(--motion-state) var(--ease-standard); }
 .conversation-history .composer:focus-within .composer-prompt { opacity: .55; }
-/* The invitation's light sweep is slower than the live turn's: an unhurried pass, twice. */
-.composer-prompt .live-phrase[data-typed] { animation-duration: 2.4s; }

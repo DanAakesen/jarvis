@@ -28,14 +28,14 @@ describe('presence modes', () => {
     expect(screen.getByRole('button', { name: 'Presence: Away. Change mode' })).not.toBeNull();
   });
 
-  it('says presence is not available yet instead of guessing when the service is missing', async () => {
+  it('shows neutral unavailable states when the service is missing', async () => {
     vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => String(input).endsWith('/presence')
       ? json({ error: 'not found' }, 404)
       : json({ settings: { personality: { customInstructions: '' } } })));
     render(<PresenceSettings backendUrl="https://api.example.com" getAccessToken={getAccessToken} />);
 
-    expect(await screen.findByText(/Presence modes are not available yet/)).not.toBeNull();
-    expect(await screen.findByText(/Instructions per mode are not available yet/)).not.toBeNull();
+    expect(await screen.findByText('Presence modes unavailable.')).not.toBeNull();
+    expect(await screen.findByText('Mode instructions unavailable.')).not.toBeNull();
     expect(screen.queryByRole('button', { name: 'Present' })).toBeNull();
   });
 
@@ -52,7 +52,7 @@ describe('presence modes', () => {
     fireEvent.change(move, { target: { value: 'Speak short sentences.' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save mode instructions' }));
 
-    expect(await screen.findByText(/Mode instructions saved/)).not.toBeNull();
+    expect(await screen.findByText('Saved. Applies next reply.')).not.toBeNull();
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('https://api.example.com/settings', expect.objectContaining({
       method: 'PATCH',
       body: JSON.stringify({ personality: { modeInstructions: { present: '', away: 'Be brief.', on_the_move: 'Speak short sentences.' } } }),

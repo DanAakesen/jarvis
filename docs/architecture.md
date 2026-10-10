@@ -693,6 +693,21 @@ A stale or invalid transition returns 409, unavailable runtime state returns
 503, and remote failures are sanitized. The board and detail page share one state-aware
 controls component.
 
+P9-51 derives `Finishing delivery` activity from the latest completed sandbox
+turn while the task remains Running, including ended sessions. Task detail/list,
+Now context and P9-50's work-status reader share that activity. Cancel and pause
+without an active turn use the existing task-policy lock: pending policy merges
+return 409, “Delivery is finishing; try again when it completes”; otherwise
+cancel transitions to Cancelled and ends sessions, while pause uses
+PauseRequested → Paused and retains the idle session. No invocation cancellation
+is sent for an already completed turn. Pause also returns the finishing-delivery
+409 if the session has already ended, avoiding a Paused task with no resumable
+session; cancel remains available. Missing runtime and completion evidence
+returns an explicit 503; active-invocation cancellation failure returns a
+sanitized 502 without transitioning. Terminal tasks return 409 naming their
+state. HTTP controls and model tools relay the same safe reasons. No migration,
+new contract schema, App permission or web change is needed.
+
 P9-50 adds read-only `get_work_status` to the Factory tool registry. It combines
 task detail/list reads, GitHub issue and PR evidence, release records and the
 existing Actions deployment reader. “Delivered” requires a closed issue, a
@@ -2295,6 +2310,18 @@ then focuses it. `PATCH /folio/:id` pins or renames an item. Confirmed
 and its history remain available. The shared sensitive tools `folio_search`
 and `folio_open` provide the same owner-scoped search and broker-backed reopen
 behavior to Jarvis without retaining search arguments or results in tool audit.
+P9-56 adds sensitive `folio_manage` with a plain root object schema: exactly one
+`id` or `query`, `action` (`rename`, `pin`, `unpin`, `delete`), and `title` only
+for rename. It shares unique-query resolution with `folio_open` and reuses
+`FolioStore.update/delete`; ambiguity asks Dan to choose with bounded untrusted
+titles. Reversible changes need no approval. Deletion fails closed if presence
+or Now approval is unavailable, refuses away/on-the-move states, and uses the
+existing `runConfirmed('delete', ...)` flow naming the title and id. Duplicate
+pending deletions are refused; after approval, presence and the title are
+rechecked before removing the Folio index entry. Source artifacts/history are
+retained and no deleted entry is returned by Folio search. Outputs mark titles
+as untrusted; arguments and results are redacted from the tool audit. No
+migration, GitHub App permission, dependency or web change is needed.
 The Folio rail and pane are a separate UI task.
 
 ### Sandbox credentials

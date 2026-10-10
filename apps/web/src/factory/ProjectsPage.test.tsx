@@ -141,7 +141,8 @@ describe('Projects page', () => {
     expect(within(row).getByText('1')).not.toBeNull();
     expect(within(row).getByRole('link', { name: 'View releases' }).getAttribute('href'))
       .toBe('/factory/projects/7/releases');
-    expect(screen.getByText(/Open a project's release view for its latest recorded build and deployment state/)).not.toBeNull();
+    expect(screen.queryByText('Counts update when you refresh projects.')).toBeNull();
+    expect(screen.queryByText('All repositories in the GitHub App installation are managed.')).toBeNull();
     const available = screen.getByRole('article', { name: 'DanAakesen/second-project' });
     expect(within(available).getByText((_text, element) => element?.tagName === 'TIME').getAttribute('dateTime'))
       .toBe('2026-10-03T12:00:00Z');
@@ -211,7 +212,7 @@ describe('Projects page', () => {
     await user.type(branch, 'stable');
     await user.click(screen.getByRole('button', { name: 'Save project' }));
 
-    expect(await screen.findByText(/Saved\. These defaults apply to new tasks only/)).not.toBeNull();
+    expect(await screen.findByText('Saved for new tasks.')).not.toBeNull();
     const patchCall = fetchMock.mock.calls.find(([, init]) => init?.method === 'PATCH');
     expect(patchCall?.[1]?.body).toBe(JSON.stringify({ default_branch: 'stable' }));
 

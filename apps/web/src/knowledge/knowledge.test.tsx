@@ -39,10 +39,11 @@ describe('knowledge graph data', () => {
 });
 
 describe('knowledge graph view', () => {
-  it('says the graph is not available yet instead of inventing data when the service is missing', async () => {
+  it('shows a neutral unavailable state instead of inventing data when the service is missing', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => json({ error: 'not found' }, 404)));
     render(<KnowledgeGraphView backendUrl="https://api.example.com" getAccessToken={getAccessToken} />);
-    expect(await screen.findByText(/knowledge graph is not available yet/)).not.toBeNull();
+    expect(await screen.findByText('The knowledge graph is unavailable.')).not.toBeNull();
+    expect(screen.queryByRole('button', { name: /sample/i })).toBeNull();
   });
 
   it('searches titles, lists the matches and opens a note with its connections', async () => {

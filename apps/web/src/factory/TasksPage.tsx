@@ -137,7 +137,7 @@ async function request(
   }
   if (!response.ok) {
     if (response.status === 401) throw new Error('Your Microsoft sign-in needs attention. Sign in again.');
-    if (response.status === 503) throw new Error('Task data is unavailable until the database is connected.');
+    if (response.status === 503) throw new Error('Task data could not be loaded. Try again.');
     throw new Error(`Jarvis could not ${method === 'GET' ? 'load' : 'create'} task data (HTTP ${response.status}).`);
   }
   try {
@@ -248,12 +248,12 @@ function stateSummary(task: Task): string {
 export function TasksPage({ backendUrl, getAccessToken }: Props) {
   const [projects, setProjects] = useState<Project[]>([]);
   const [projectState, setProjectState] = useState<PageState>(backendUrl ? 'loading' : 'error');
-  const [projectError, setProjectError] = useState(backendUrl ? '' : 'Projects are unavailable until the backend is deployed.');
+  const [projectError, setProjectError] = useState(backendUrl ? '' : 'Projects unavailable.');
   const [projectRetry, setProjectRetry] = useState(0);
   const [settledProjectKey, setSettledProjectKey] = useState('');
   const [tasks, setTasks] = useState<Task[]>([]);
   const [taskState, setTaskState] = useState<PageState>(backendUrl ? 'loading' : 'error');
-  const [error, setError] = useState(backendUrl ? '' : 'Tasks are unavailable until the backend is deployed.');
+  const [error, setError] = useState(backendUrl ? '' : 'Tasks unavailable.');
   const [settledTaskKey, setSettledTaskKey] = useState('');
   const [filters, setFilters] = useState(emptyFilters);
   const [appliedFilters, setAppliedFilters] = useState(emptyFilters);
@@ -294,10 +294,10 @@ export function TasksPage({ backendUrl, getAccessToken }: Props) {
   const taskRequestKey = `${backendUrl ?? ''}:${filterKey}`;
   const visibleProjectState: PageState = !backendUrl ? 'error' :
     settledProjectKey === projectRequestKey ? projectState : 'loading';
-  const visibleProjectError = backendUrl ? projectError : 'Projects are unavailable until the backend is deployed.';
+  const visibleProjectError = backendUrl ? projectError : 'Projects unavailable.';
   const visibleTaskState: PageState = !backendUrl ? 'error' :
     settledTaskKey === taskRequestKey ? taskState : 'loading';
-  const visibleTaskError = backendUrl ? error : 'Tasks are unavailable until the backend is deployed.';
+  const visibleTaskError = backendUrl ? error : 'Tasks unavailable.';
 
   useEffect(() => () => {
     if (selectedTaskIdRef.current) closeContextPanel();
@@ -449,7 +449,7 @@ export function TasksPage({ backendUrl, getAccessToken }: Props) {
     setCreateError('');
     if (!backendUrl) {
       setCreating(false);
-      setCreateError('Task creation is unavailable until the backend is deployed.');
+      setCreateError('Task creation unavailable.');
       return;
     }
     const body = {
@@ -482,7 +482,6 @@ export function TasksPage({ backendUrl, getAccessToken }: Props) {
 
   const createDialog = dialogOpen && (
     <Modal title="Create task" titleId="create-task-heading" onClose={closeDialog} busy={creating} className="task-dialog">
-        <p>Choose the project and agent, then describe the work.</p>
         <form className="task-create-form" onSubmit={(event) => { void createTask(event); }}>
           <div className="task-form-field">
             <label htmlFor="create-project">Project</label>
@@ -654,7 +653,7 @@ export function TasksPage({ backendUrl, getAccessToken }: Props) {
             <div className="task-live-status kanban-live-status" role="status" aria-live="polite">{liveStatusText}</div>
             {visibleTaskState === 'error' && tasks.length > 0 &&
               <p className="tasks-feedback" role="status">Showing the last loaded tasks because refresh failed.</p>}
-            {tasks.length === 100 && <p className="task-limit-note">Showing the 100 most recent matching tasks. Refine filters to narrow the list.</p>}
+            {tasks.length === 100 && <p className="task-limit-note">Showing the 100 most recent matching tasks.</p>}
             <div className="task-board kanban-board" role="region" aria-label="Tasks by state"
               style={{ '--kanban-columns': columns.map((column) => collapsedColumns.has(column.label) ? '52px' : 'minmax(240px, 1fr)').join(' ') } as CSSProperties}>
               {columns.map((column) => {
