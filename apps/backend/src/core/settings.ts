@@ -13,6 +13,7 @@ import type {
 import {
   defaultRoleModels, fallbackModelCatalogue, isRoleModelSupported, modelsForRole, reasoningForModel,
 } from './model-catalog.js';
+import { decisionProviders, defaultDecisionProvider, type DecisionProviderId } from './decision-provider.js';
 
 export interface RoleModelSettings {
   model: string;
@@ -22,6 +23,10 @@ export interface RoleModelSettings {
 export interface Settings {
   presentation: {
     showWork: boolean;
+  };
+  decisions: {
+    /** Which service scores decisions: Jev (Typesafe) or Microsoft-Decision-1 (Foundry). */
+    provider: DecisionProviderId;
   };
   appearance: {
     theme: 'light' | 'dark' | 'system';
@@ -106,6 +111,7 @@ export interface SettingsStore {
 
 export const defaultSettings: Settings = {
   presentation: { showWork: true },
+  decisions: { provider: defaultDecisionProvider },
   appearance: { theme: 'light' },
   jarvis: { model: 'gpt-5.6-luna', reasoning: 'none' },
   personality: {
@@ -159,6 +165,7 @@ export const defaultSettings: Settings = {
 };
 
 export const settingsOptions = {
+  decisionProviders,
   themes: ['light', 'dark', 'system'],
   backgrounds: ['living-aurora', 'daylight-studio'],
   themeMotions: ['full', 'calm', 'reduced'],
@@ -181,6 +188,7 @@ export const settingsOptions = {
 
 const settingKeys = {
   presentation: { showWork: 'presentation.show_work' },
+  decisions: { provider: 'decisions.provider' },
   appearance: {
     theme: 'appearance.theme',
     accent: 'appearance.accent',
@@ -284,6 +292,7 @@ function validSetting(
   catalogue: ModelCatalogue = fallbackModelCatalogue(),
 ): boolean {
   if (area === 'presentation') return key === 'showWork' && typeof value === 'boolean';
+  if (area === 'decisions') return key === 'provider' && isOption(value, settingsOptions.decisionProviders);
   if (area === 'appearance') {
     if (key === 'theme') return isOption(value, settingsOptions.themes);
     if (key === 'accent' || key === 'accent-secondary' || key === 'surface-tint') {
@@ -448,6 +457,10 @@ const settingsPatchSchema = {
         presentation: {
           type: 'object', minProperties: 1, additionalProperties: true,
           properties: { showWork: { type: 'boolean' } },
+        },
+        decisions: {
+          type: 'object', minProperties: 1, additionalProperties: true,
+          properties: { provider: selectSchema(settingsOptions.decisionProviders) },
         },
         appearance: {
           type: 'object', minProperties: 1, additionalProperties: true,

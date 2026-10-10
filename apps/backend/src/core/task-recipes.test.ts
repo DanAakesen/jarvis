@@ -1,4 +1,5 @@
 import type { FastifyRequest } from 'fastify';
+import { jevKeyResolver } from './decision-provider.js';
 import { describe, expect, it, vi } from 'vitest';
 import {
   createJevRecipePlanner, createRecipeSession, normalizeRecipeGoal, recipeId, recipeSiteKey,
@@ -189,7 +190,7 @@ describe('Jev recipe choices', () => {
   }
   it('asks one typed selection among app candidates plus none and one typed verification per step', async () => {
     const fetcher = vi.fn<typeof fetch>().mockResolvedValueOnce(response(recipe.id)).mockResolvedValueOnce(response('replay'));
-    const planner = createJevRecipePlanner(async () => 'offline-test', fetcher);
+    const planner = createJevRecipePlanner(jevKeyResolver('offline-test'), fetcher);
     expect(await planner.select({ kind: 'pc', key: 'sampleapp', goal: 'open search', candidates: [recipe] }, signal))
       .toEqual({ choice: recipe.id, confidence: 0.95 });
     const selection = JSON.parse(fetcher.mock.calls[0]![1]!.body as string);
@@ -207,12 +208,12 @@ describe('Jev recipe choices', () => {
     () => Response.json({ answers: { recipe: { type: 'text', choice: 'none', confidence: 0.95 } } }),
     () => new Response('x'.repeat(16_385), { headers: { 'content-type': 'application/json' } }),
   ])('rejects malformed, unknown and oversized choices', async makeResponse => {
-    const planner = createJevRecipePlanner(async () => 'offline-test', vi.fn<typeof fetch>().mockResolvedValue(makeResponse()));
+    const planner = createJevRecipePlanner(jevKeyResolver('offline-test'), vi.fn<typeof fetch>().mockResolvedValue(makeResponse()));
     expect(await planner.select({ kind: 'pc', key: 'sampleapp', goal: 'open search', candidates: [recipe] }, signal))
       .toEqual({ failure: 'invalid_answer' });
   });
   it('preserves explicit Jev failure statuses and bounds key lookup', async () => {
-    const planner = createJevRecipePlanner(async () => 'offline-test', vi.fn<typeof fetch>().mockResolvedValue(new Response('', { status: 402 })));
+    const planner = createJevRecipePlanner(jevKeyResolver('offline-test'), vi.fn<typeof fetch>().mockResolvedValue(new Response('', { status: 402 })));
     expect(await planner.select({ kind: 'pc', key: 'sampleapp', goal: 'open search', candidates: [recipe] }, signal))
       .toEqual({ failure: 'billing' });
     const controller = new AbortController();
@@ -220,7 +221,7 @@ describe('Jev recipe choices', () => {
       .select({ kind: 'pc', key: 'sampleapp', goal: 'open search', candidates: [recipe] }, controller.signal);
     controller.abort();
     expect(await pending).toEqual({ failure: 'timeout' });
-    const network = createJevRecipePlanner(async () => 'offline-test', vi.fn<typeof fetch>().mockRejectedValue(new Error('private')));
+    const network = createJevRecipePlanner(jevKeyResolver('offline-test'), vi.fn<typeof fetch>().mockRejectedValue(new Error('private')));
     expect(await network.select({ kind: 'pc', key: 'sampleapp', goal: 'open search', candidates: [recipe] }, signal))
       .toEqual({ failure: 'network_error' });
   });

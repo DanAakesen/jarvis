@@ -1,4 +1,5 @@
 import type { FastifyRequest } from 'fastify';
+import { jevKeyResolver } from '../core/decision-provider.js';
 import { describe, expect, it, vi } from 'vitest';
 import type { KeySequence } from '../core/keyboard-actions.js';
 import { recipeId, type RecipeDraft, type RecipeRuntime } from '../core/task-recipes.js';
@@ -257,7 +258,7 @@ describe('pc_act Jev planner', () => {
       target: { type: 'choice', choice: 'element_0', confidence: 0.99 },
       text_value: { type: 'choice', choice: 'value_0', confidence: 0.99 },
     }));
-    const planner = createJevPcActPlanner(async () => 'fake-key', fetcher);
+    const planner = createJevPcActPlanner(jevKeyResolver('fake-key'), fetcher);
 
     const result = await planner.decide({
       goal: 'Enter "Jarvis issue 205"',
@@ -285,7 +286,7 @@ describe('pc_act Jev planner', () => {
       operation: { type: 'choice', choice: 'click', confidence: 0.99 },
       target: { type: 'choice', choice: 'element_0', confidence: 0.99 },
     }));
-    const planner = createJevPcActPlanner(async () => 'fake-key', fetcher);
+    const planner = createJevPcActPlanner(jevKeyResolver('fake-key'), fetcher);
     const visualSnapshot: PcActSnapshot = {
       ...snapshot,
       elements: [{
@@ -324,7 +325,7 @@ describe('pc_act Jev planner', () => {
       text_value: { type: 'choice', choice: 'value_0', confidence: 0.99 },
       confidence: { type: 'score', score: 0.99 },
     }));
-    const planner = createJevPcActPlanner(async () => 'fake-key', fetcher);
+    const planner = createJevPcActPlanner(jevKeyResolver('fake-key'), fetcher);
 
     const result = await planner.decide({
       goal: `Enter the exact prompt ${JSON.stringify(prompt)} in Codex.`,
@@ -342,7 +343,7 @@ describe('pc_act Jev planner', () => {
     [429, 'rate_limited'],
     [503, 'http_503'],
   ] as const)('returns typed Jev HTTP failure %s as %s', async (status, failure) => {
-    const planner = createJevPcActPlanner(async () => 'fake-key', async () => new Response(null, { status }));
+    const planner = createJevPcActPlanner(jevKeyResolver('fake-key'), async () => new Response(null, { status }));
 
     await expect(planner.decide({
       goal: 'Click the open button',
@@ -353,7 +354,7 @@ describe('pc_act Jev planner', () => {
   });
 
   it('uses operation and target Choice confidence for the PC confidence gate', async () => {
-    const planner = createJevPcActPlanner(async () => 'fake-key', async () => jevResponse({
+    const planner = createJevPcActPlanner(jevKeyResolver('fake-key'), async () => jevResponse({
       operation: { type: 'choice', choice: 'click', confidence: 0.99 },
       target: { type: 'choice', choice: 'element_0', confidence: 0.89 },
     }));
@@ -369,7 +370,7 @@ describe('pc_act Jev planner', () => {
   });
 
   it('returns invalid_answer for an unlisted text Choice', async () => {
-    const planner = createJevPcActPlanner(async () => 'fake-key', async () => jevResponse({
+    const planner = createJevPcActPlanner(jevKeyResolver('fake-key'), async () => jevResponse({
       operation: { type: 'choice', choice: 'type', confidence: 0.99 },
       target: { type: 'choice', choice: 'element_0', confidence: 0.99 },
       text_value: { type: 'choice', choice: 'value_9', confidence: 0.99 },
@@ -388,7 +389,7 @@ describe('pc_act Jev planner', () => {
       operation: { type: 'choice', choice: 'keys', confidence: 0.99 },
       key_sequence: { type: 'choice', choice: 'keys_0', confidence: 0.97 },
     }));
-    const planner = createJevPcActPlanner(async () => 'fake-key', fetcher);
+    const planner = createJevPcActPlanner(jevKeyResolver('fake-key'), fetcher);
 
     await expect(planner.decide({
       goal: 'Use Ctrl+P to open a file',
@@ -405,7 +406,7 @@ describe('pc_act Jev planner', () => {
     expect(body.state.commonShortcuts).toContain('Ctrl+P opens Quick Open');
     expect(body.questions.key_sequence.criteria.keys_0).toBe('Ctrl+P');
 
-    const laterChoicePlanner = createJevPcActPlanner(async () => 'fake-key', async () => jevResponse({
+    const laterChoicePlanner = createJevPcActPlanner(jevKeyResolver('fake-key'), async () => jevResponse({
       operation: { type: 'choice', choice: 'keys', confidence: 0.99 },
       key_sequence: { type: 'choice', choice: 'keys_10', confidence: 0.99 },
     }));
@@ -418,7 +419,7 @@ describe('pc_act Jev planner', () => {
   });
 
   it('maps type_focused only to an exact quoted non-sensitive Choice value', async () => {
-    const planner = createJevPcActPlanner(async () => 'fake-key', async () => jevResponse({
+    const planner = createJevPcActPlanner(jevKeyResolver('fake-key'), async () => jevResponse({
       operation: { type: 'choice', choice: 'type_focused', confidence: 0.99 },
       text_value: { type: 'choice', choice: 'value_0', confidence: 0.98 },
     }));
@@ -457,7 +458,7 @@ describe('pc_act Jev planner', () => {
 
   it('refuses sensitive goals and missing Jev keys without making a request', async () => {
     const fetcher = vi.fn();
-    const planner = createJevPcActPlanner(async () => 'fake-key', fetcher);
+    const planner = createJevPcActPlanner(jevKeyResolver('fake-key'), fetcher);
 
     await expect(planner.decide({
       goal: 'Type my password into the field',
@@ -485,7 +486,7 @@ describe('pc_act Jev planner', () => {
     }, new AbortController().signal)).resolves.toBeNull();
     expect(fetcher).not.toHaveBeenCalled();
 
-    const withoutKey = createJevPcActPlanner(async () => undefined, fetcher);
+    const withoutKey = createJevPcActPlanner(jevKeyResolver(undefined), fetcher);
     await expect(withoutKey.decide({
       goal: 'Click the open button',
       step: 1,

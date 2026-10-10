@@ -31,6 +31,7 @@ import {
 } from '../core/reflex.js';
 import { createVoiceStatusAnnouncer } from './status-updates.js';
 import { isJevFailure } from '../core/jev.js';
+import type { DecisionProviderId } from '../core/decision-provider.js';
 import type { VisionWatchService } from '../vision/watch.js';
 import {
   VOICE_PHRASE_HINTS,
@@ -506,6 +507,7 @@ function registerVoiceRoute(
         let classification: ReflexClassification | null = null;
         let action: ReflexActionResult | null = null;
         let reason: string | undefined;
+        let failedProvider: DecisionProviderId | undefined;
         try {
           const ledger = reflexLedger.get(itemId) ?? [];
           const targets = [
@@ -528,6 +530,7 @@ function registerVoiceRoute(
           );
           if (isJevFailure(result)) {
             reason = result.failure;
+            failedProvider = result.provider;
             return;
           }
           classification = result;
@@ -567,7 +570,7 @@ function registerVoiceRoute(
             });
           }
         } finally {
-          logReflexDecision(request, classification, 'voice-partial', startedAt, controller.signal, action, reason);
+          logReflexDecision(request, classification, 'voice-partial', startedAt, controller.signal, action, reason, failedProvider);
         }
       }).catch(() => {
         if (!controller.signal.aborted) request.log.warn('voice.partial_reflex_failed');
@@ -748,6 +751,7 @@ function registerVoiceRoute(
       let classification: ReflexClassification | null = null;
       let finalAction: ReflexActionResult | null = null;
       let reason: string | undefined;
+      let failedProvider: DecisionProviderId | undefined;
       let deferredExecution: (() => Promise<ReflexActionResult | null>) | undefined;
       try {
         await transcriptQueue;
@@ -775,6 +779,7 @@ function registerVoiceRoute(
           if (timing) timing.jevDecisionMs = elapsedSinceSpeechStopped(timing) ?? null;
           if (isJevFailure(result)) {
             reason = result.failure;
+            failedProvider = result.provider;
           } else {
             classification = result;
           }
@@ -877,7 +882,7 @@ function registerVoiceRoute(
       } catch {
         if (!controller.signal.aborted && !endRequested && english) sendResponseCreate({ type: 'response.create' });
       } finally {
-        if (attempted) logReflexDecision(request, classification, 'voice-final', startedAt, controller.signal, finalAction, reason);
+        if (attempted) logReflexDecision(request, classification, 'voice-final', startedAt, controller.signal, finalAction, reason, failedProvider);
         finalReflexPending = false;
         reflexPending = pendingPartialReflex > 0;
         statusAnnouncer?.flush();

@@ -571,6 +571,7 @@ P8-02 allocated P8-04 through P8-13 to frontend work in PR #233. Backend tasks t
 
 | P9-74 | [#655](https://github.com/DanAakesen/jarvis/issues/655) | Knowledge notes hide metadata and scroll; graph/count exclude tooling | Implemented with fixture regressions and Chromium/WebKit phone/desktop light/dark before/after captures; normal/reduced-motion scroll controls verified. 421 web tests plus final 14 Knowledge tests, 27 vault tests and lint/build pass. Main synced; fallback review clean. CodeQL backtracking finding fixed, but rerun timed out: final security confirmation pending. No live vault or physical-device verification | — | Complete |
 | P9-75 | [#669](https://github.com/DanAakesen/jarvis/issues/669) | Keep the sign-in greeting and action clear of the orb; make the idle stage warmer and alive | Reuse luminous glass and existing palette; keep sign-in restore/retry and active voice states intact. Fixture-only Chromium/WebKit checks at phone portrait/landscape and desktop sizes, light/dark, reduced motion and failure recovery; record motion and measured render cost | P9-69, P9-72, P9-73 | Complete |
+| P9-76 | [#681](https://github.com/DanAakesen/jarvis/issues/681) | Choose the decision provider: Jev or Microsoft-Decision-1 | One provider abstraction for reflex, browser, recipe and PC decisions; `decisions.provider` setting (default Jev) in Settings and settings tools; `provider` on `reflex.decision`; Microsoft-Decision-1 deployed as `decision-1` (Bicep) | P9-66 | In review |
 
 ### Confirm before P0
 

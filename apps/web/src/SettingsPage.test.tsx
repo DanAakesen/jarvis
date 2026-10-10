@@ -387,6 +387,43 @@ describe('SettingsPage', () => {
     });
   });
 
+  it('offers the decision service only when the backend supports it and saves the choice', async () => {
+    const user = userEvent.setup();
+    const supported = { ...options, decisionProviders: ['jev', 'microsoft'] };
+    fetchMock.mockResolvedValueOnce(response({
+      settings: { ...settings, decisions: { provider: 'jev' } }, options: supported, credentials: [],
+    })).mockResolvedValueOnce(response({
+      settings: { ...settings, decisions: { provider: 'microsoft' } }, options: supported, credentials: [],
+    }));
+    renderSettingsPage();
+
+    const select = await screen.findByLabelText('Decision service');
+    expect(select).toHaveProperty('value', 'jev');
+    expect(within(select).getAllByRole('option').map((option) => option.textContent))
+      .toEqual(['Jev', 'Microsoft Decision-1']);
+    await user.selectOptions(select, 'microsoft');
+    await user.click(screen.getByRole('button', { name: 'Save settings' }));
+
+    expect(await screen.findByText(/Saved\./)).not.toBeNull();
+    expect(JSON.parse(String(fetchMock.mock.calls[1]![1]?.body))).toEqual({
+      settings: { decisions: { provider: 'microsoft' } },
+    });
+    expect(await screen.findByLabelText('Decision service')).toHaveProperty('value', 'microsoft');
+  });
+
+  it.each([
+    ['omits the decision settings', {}, {}],
+    ['reports a provider this page does not list', { decisions: { provider: 'other' } }, { decisionProviders: ['jev', 'microsoft'] }],
+  ])('hides the decision service when the backend %s', async (_name, extraSettings, extraOptions) => {
+    fetchMock.mockResolvedValueOnce(response({
+      settings: { ...settings, ...extraSettings }, options: { ...options, ...extraOptions }, credentials: [],
+    }));
+    renderSettingsPage();
+
+    await screen.findByRole('checkbox', { name: 'Minimise all windows when starting voice' });
+    expect(screen.queryByLabelText('Decision service')).toBeNull();
+  });
+
   it('offers retry when settings cannot be loaded', async () => {
     const user = userEvent.setup();
     fetchMock.mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce(response(settingsResponse()));

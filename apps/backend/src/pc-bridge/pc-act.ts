@@ -8,8 +8,10 @@ import {
   jevFailureFromStatus,
   logJevFailure,
   reflexSourceForRequest,
+  tagJevFailure,
   type JevFailure,
 } from '../core/jev.js';
+import type { DecisionTarget, DecisionTargetResolver } from '../core/decision-provider.js';
 import {
   closeIntentFor,
   commonShortcutsFor,
@@ -21,8 +23,6 @@ import {
   type KeySequence,
 } from '../core/keyboard-actions.js';
 
-const endpoint = 'https://api.typesafe.ai/v1/systemone';
-const model = 'jev-latest';
 const maxGoalLength = 4_000;
 const maxSteps = 20;
 const maxRunMs = 30_000;
@@ -418,23 +418,19 @@ function logStep(
 }
 
 export function createJevPcActPlanner(
-  getApiKey: () => Promise<string | undefined>,
+  resolveTarget: DecisionTargetResolver,
   fetcher: typeof fetch = fetch,
 ): PcActPlanner {
-  return {
-    async decide(input, signal) {
-      if (!input.goal.trim() || input.goal.length > maxGoalLength || signal.aborted ||
-          sensitiveGoal(input.goal)) return null;
-      const requestSignal = AbortSignal.any([signal, AbortSignal.timeout(requestTimeoutMs)]);
-      let apiKey: string | undefined;
-      try {
-        apiKey = await withAbort(getApiKey(), requestSignal);
-      } catch {
-        return null;
-      }
-      if (!apiKey || !apiKey.trim() || apiKey.length > 10_000 || /[\r\n]/u.test(apiKey) ||
-          requestSignal.aborted) return null;
-
+  const decideWith = async (
+    decision: DecisionTarget,
+    input: PcActDecisionInput,
+    signal: AbortSignal,
+    requestSignal: AbortSignal,
+  ): Promise<PcActDecision | JevFailure | null> => {
+    const endpoint = decision.endpoint;
+    const model = decision.model;
+    const apiKey = decision.token;
+    {
       const values = quotedValues(input.goal).filter(value => !sensitiveText(value));
       const keyboardOptions = keySequencesFor(input.snapshot.application, input.goal);
       const closeIntent = closeIntentFor(input.goal);
@@ -609,6 +605,22 @@ export function createJevPcActPlanner(
         targetIndex,
         text,
       };
+    }
+  };
+
+  return {
+    async decide(input, signal) {
+      if (!input.goal.trim() || input.goal.length > maxGoalLength || signal.aborted ||
+          sensitiveGoal(input.goal)) return null;
+      const requestSignal = AbortSignal.any([signal, AbortSignal.timeout(requestTimeoutMs)]);
+      let decision: DecisionTarget | undefined;
+      try {
+        decision = await withAbort(resolveTarget(requestSignal), requestSignal);
+      } catch {
+        return null;
+      }
+      if (!decision || requestSignal.aborted) return null;
+      return tagJevFailure(await decideWith(decision, input, signal, requestSignal), decision.provider);
     },
   };
 }
@@ -701,8 +713,8 @@ export async function runPcAct(
         }
       }
       if (isJevFailure(result)) {
-        logJevFailure(request, reflexSourceForRequest(request), jevStartedAt, result.failure);
-        throw new ToolRefusal('Jev could not return a valid PC decision. Please try again.');
+        logJevFailure(request, reflexSourceForRequest(request), jevStartedAt, result.failure, result.provider);
+        throw new ToolRefusal('The decision provider could not return a valid PC decision. Please try again.');
       }
       const decision = result;
       if (deadline.aborted) throw deadline.reason;
@@ -710,11 +722,11 @@ export async function runPcAct(
           !['click', 'type', 'type_focused', 'keys', 'scroll_up', 'scroll_down', 'wait', 'done', 'blocked']
             .includes(decision.operation) ||
           decision.confidence < jevChoiceConfidenceThreshold) {
-        throw new ToolRefusal('Jev is not confident enough to choose a safe PC action. Please clarify the goal.');
+        throw new ToolRefusal('The decision provider is not confident enough to choose a safe PC action. Please clarify the goal.');
       }
       operation = decision.operation as PcActOperation;
       if (operation === 'blocked') {
-        throw new ToolRefusal('Jev declined the PC action because it is unsafe or unclear.');
+        throw new ToolRefusal('The decision provider declined the PC action because it is unsafe or unclear.');
       }
       if (operation === 'done') {
         if (!recipeDrifted) {

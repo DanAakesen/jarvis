@@ -33,6 +33,8 @@ interface Settings {
   research?: ResearchSettings;
   memory?: MemorySettings;
   timeouts?: TimeoutSettings;
+  /** Which service scores decisions (Jarvis reflexes, browser and PC steps); newer backends only. */
+  decisions?: { provider: 'jev' | 'microsoft' };
   codex: { model: string; reasoning: string };
   copilot: { model: string };
   global: { maxParallelTasks: number; screenShareDailyFrameCap: number; maxCheckAttempts?: number; visionDailyBudgetUsd?: number };
@@ -63,6 +65,7 @@ interface SettingsOptions {
   codexModels: string[];
   codexReasoningEfforts: string[];
   copilotModels: string[];
+  decisionProviders?: string[];
   projectVisibilities: string[];
   projectAgents: string[];
   projectPolicies: string[];
@@ -84,6 +87,8 @@ const optionLabels: Record<string, string> = {
   'gpt-5.6-luna': 'GPT-5.6 Luna',
   'gpt-realtime-2.1': 'GPT Realtime 2.1',
   'mai-transcribe': 'MAI Transcribe',
+  jev: 'Jev',
+  microsoft: 'Microsoft Decision-1',
   british_butler: 'British butler',
   warm: 'Warm',
   direct: 'Direct',
@@ -354,7 +359,7 @@ export function SettingsPage({ backendUrl, getAccessToken, activity, presence, p
   };
 
   // Optional areas (roles, research, memory, timeouts) only exist on newer backends, so they update separately.
-  const updateArea = (area: 'roles' | 'research' | 'memory' | 'timeouts', key: string, value: unknown) => {
+  const updateArea = (area: 'roles' | 'research' | 'memory' | 'timeouts' | 'decisions', key: string, value: unknown) => {
     setSettings((current) => current && current[area] ? ({ ...current, [area]: { ...current[area], [key]: value } }) : current);
     setMessage('');
   };
@@ -527,6 +532,17 @@ export function SettingsPage({ backendUrl, getAccessToken, activity, presence, p
           {roleModels && settings.roles && <ModelsSection roles={settings.roles} options={roleModels} disabled={saving}
             backendUrl={backendUrl} getAccessToken={getAccessToken}
             onChange={(role: ModelRole, value) => updateArea('roles', role, value)} />}
+
+          {settings.decisions && options.decisionProviders?.includes(settings.decisions.provider) && (
+            <CollapsibleSection storageKey="settings.decisions" headingId="decisions-settings-heading" title="Decisions"
+              summary={<>{optionLabels[settings.decisions.provider] ?? settings.decisions.provider}</>}>
+              <div className="settings-grid">
+                <SelectField id="decision-provider" label="Decision service" value={settings.decisions.provider}
+                  options={options.decisionProviders} disabled={saving}
+                  onChange={(value) => updateArea('decisions', 'provider', value)} />
+              </div>
+            </CollapsibleSection>
+          )}
 
           <CollapsibleSection storageKey="settings.personality" headingId="personality-settings-heading" title="Jarvis Personality">
             <p className="settings-explanation" id="personality-session-help">Applies to new sessions.</p>
