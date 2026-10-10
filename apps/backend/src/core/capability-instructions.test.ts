@@ -38,3 +38,12 @@ describe('shared navigation capability instructions', () => {
     expect(instructions).not.toContain('update_html_view');
   });
 });
+
+describe('shared capability instruction budget', () => {
+  // The hosted chat agent rejects the whole settings payload (and so every text reply) when
+  // capabilityInstructions exceeds its limit (agents/jarvis/jarvis_tools.py, 20_000). Fail here
+  // long before that so a new capability line cannot silently break chat (L129).
+  it.each([true, false])('stays well under the agent limit with automatic capture %s', (automaticCapture) => {
+    expect(capabilityInstructions({ automaticCapture }).length).toBeLessThanOrEqual(15_000);
+  });
+});

@@ -285,7 +285,7 @@ async def test_resolved_chat_role_settings_override_legacy_model_fields() -> Non
         {"model": "deployment", "reasoningEffort": "none", "capabilityInstructions": 42},
         {
             "model": "deployment", "reasoningEffort": "none",
-            "capabilityInstructions": "x" * 10_001,
+            "capabilityInstructions": "x" * 20_001,
         },
         {"model": "deployment", "reasoningEffort": "none", "personality": {"tone": "unknown"}},
         {

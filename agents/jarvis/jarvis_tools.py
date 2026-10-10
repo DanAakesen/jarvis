@@ -257,7 +257,7 @@ def _model_settings(value: Any) -> ModelSettings:
             for instruction in mode_instructions.values()
         )
         or not isinstance(capability_instructions, str)
-        or len(capability_instructions) > 10_000
+        or len(capability_instructions) > 20_000
         or any(
             ord(character) < 32 and character not in "\n\r\t"
             for character in capability_instructions
