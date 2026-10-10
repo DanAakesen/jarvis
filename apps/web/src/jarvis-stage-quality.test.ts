@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { nextJarvisStageQualityLevel, resolveJarvisStageQuality } from './jarvis-stage-quality';
+import { initialJarvisStageQualityLevel, nextJarvisStageQualityLevel, resolveJarvisStageQuality } from './jarvis-stage-quality';
 
 describe('Jarvis stage render quality', () => {
+  it('starts compact viewports in the low-work tier and retains the low-texture fallback', () => {
+    expect(initialJarvisStageQualityLevel(8192, true)).toBe(2);
+    expect(initialJarvisStageQualityLevel(2048, false)).toBe(1);
+    expect(initialJarvisStageQualityLevel(8192, false)).toBe(0);
+  });
+
   it('caps pixel ratio and reflection size for compact viewports', () => {
     expect(resolveJarvisStageQuality(390, 844, 3, 8192, 0)).toEqual({
       pixelRatio: 1,
@@ -15,7 +21,16 @@ describe('Jarvis stage render quality', () => {
     });
   });
 
+  it('caps desktop pixel ratio at 1.2', () => {
+    expect(resolveJarvisStageQuality(1280, 900, 3, 8192, 0).pixelRatio).toBe(1.2);
+  });
+
   it('reduces effects and renderer resolution at lower quality levels', () => {
+    expect(resolveJarvisStageQuality(390, 844, 3, 8192, 2)).toEqual({
+      pixelRatio: 0.7,
+      reflectionSize: 256,
+      particleScale: 0.35,
+    });
     expect(resolveJarvisStageQuality(1440, 900, 2, 4096, 2)).toEqual({
       pixelRatio: 0.84,
       reflectionSize: 384,

@@ -7,9 +7,9 @@ import { createOrbMotion } from './jarvis-orb-motion';
 import type { JarvisOrbState } from './voice-presentation';
 import type { VoiceSignals } from './voice-stage-context';
 import {
+  initialJarvisStageQualityLevel,
   nextJarvisStageQualityLevel,
   resolveJarvisStageQuality,
-  type JarvisStageQualityLevel,
 } from './jarvis-stage-quality';
 
 export type JarvisStageOptions = {
@@ -140,7 +140,9 @@ function createJarvisStageSceneWithRenderer(
   let elapsed = 0;
   let previous = performance.now();
   let current = initialOptions;
-  let qualityLevel: JarvisStageQualityLevel = renderer.capabilities.maxTextureSize < 4096 ? 1 : 0;
+  const compactViewport = window.innerWidth <= 700 ||
+    (window.innerHeight <= 500 && (window.matchMedia?.('(pointer: coarse)').matches ?? false));
+  let qualityLevel = initialJarvisStageQualityLevel(renderer.capabilities.maxTextureSize, compactViewport);
   let qualityFrameCount = 0;
   let qualityFrameTime = 0;
   let qualityWindowStarted = performance.now();
@@ -222,7 +224,7 @@ function createJarvisStageSceneWithRenderer(
   horizontalRing(platform, 4.3, 0.012, glow, -0.27);
   const packets: THREE.Mesh<THREE.SphereGeometry, THREE.MeshBasicMaterial>[] = [];
   for (let index = 0; index < 6; index += 1) {
-    const packet = new THREE.Mesh(new THREE.SphereGeometry(0.021, 8, 6),
+    const packet = new THREE.Mesh(new THREE.SphereGeometry(0.03, 8, 6),
       new THREE.MeshBasicMaterial({ color: index % 3 === 0 ? palette.warm : '#b8f5ff' }));
     platform.add(packet);
     packets.push(packet);
@@ -307,7 +309,7 @@ function createJarvisStageSceneWithRenderer(
   chamber.add(farRail);
 
   const mechanisms: { moving: THREE.Group; speed: number; phase: number }[] = [];
-  const ringData = [{ radius: 3.6, depth: 0, speed: 0.085 }, { radius: 5.2, depth: -0.45, speed: -0.056 }, { radius: 6.8, depth: -0.9, speed: 0.034 }];
+  const ringData = [{ radius: 3.6, depth: 0, speed: 0.14 }, { radius: 5.2, depth: -0.45, speed: -0.095 }, { radius: 6.8, depth: -0.9, speed: 0.058 }];
   for (let index = 0; index < ringData.length; index += 1) {
     const { radius, depth, speed } = ringData[index]!;
     const pivot = new THREE.Group();
@@ -323,7 +325,7 @@ function createJarvisStageSceneWithRenderer(
       arc.rotation.z = section * Math.PI / 2 + 0.12;
       moving.add(arc);
       // The accent section carries a fine, crisp amber inlay on its face instead of a thick orange band (Dan, 7 October).
-      if (section === index) {
+      if (section === index || section === (index + 2) % 4) {
         const inlay = new THREE.Mesh(new THREE.TorusGeometry(radius, 0.009, 4, 88, Math.PI * 0.34), warmLine);
         inlay.position.z = tube + 0.004;
         arc.add(inlay);
@@ -352,7 +354,7 @@ function createJarvisStageSceneWithRenderer(
   for (let index = 0; index < 8; index += 1) {
     const arc = new THREE.Mesh(
       new THREE.TorusGeometry(3.34, 0.011, 5, 32, Math.PI * 0.13),
-      index % 4 === 0 ? warmLine : seam,
+      index % 3 === 0 ? warmLine : seam,
     );
     arc.rotation.set(-Math.PI / 2, 0, index * Math.PI / 4);
     arc.position.y = -0.15;
@@ -418,6 +420,26 @@ function createJarvisStageSceneWithRenderer(
   const cameraRay = new THREE.Vector3();
   const orbWorld = new THREE.Vector3();
   const themeColors = { current: new THREE.Color(), orb: new THREE.Color() };
+  const pointer = { targetX: 0, targetY: 0, x: 0, y: 0 };
+  const parallaxRotation = new THREE.Quaternion();
+  const orientation = { baseX: null as number | null, baseY: null as number | null };
+
+  const onPointerMove = (event: PointerEvent) => {
+    if (event.pointerType === 'touch') return;
+    pointer.targetX = THREE.MathUtils.clamp((event.clientX / Math.max(1, window.innerWidth) - 0.5) * 2, -1, 1);
+    pointer.targetY = THREE.MathUtils.clamp((event.clientY / Math.max(1, window.innerHeight) - 0.5) * 2, -1, 1);
+  };
+  const onPointerLeave = () => {
+    pointer.targetX = 0;
+    pointer.targetY = 0;
+  };
+  const onDeviceOrientation = (event: DeviceOrientationEvent) => {
+    if (event.gamma === null || event.beta === null) return;
+    orientation.baseX ??= event.gamma;
+    orientation.baseY ??= event.beta;
+    pointer.targetX = THREE.MathUtils.clamp((event.gamma - orientation.baseX) / 24, -1, 1);
+    pointer.targetY = THREE.MathUtils.clamp((event.beta - orientation.baseY) / 24, -1, 1);
+  };
 
   function setTheme() {
     palette = readStagePalette();
@@ -488,6 +510,10 @@ function createJarvisStageSceneWithRenderer(
     const rearWorld = camera.position.clone().addScaledVector(cameraRay, (-5 - camera.position.z) / cameraRay.z);
     architecture.position.copy(anchor.worldToLocal(rearWorld));
     architecture.quaternion.copy(camera.quaternion);
+    pointer.x += (pointer.targetX - pointer.x) * (1 - Math.exp(-delta * 2.2));
+    pointer.y += (pointer.targetY - pointer.y) * (1 - Math.exp(-delta * 2.2));
+    parallaxRotation.setFromEuler(new THREE.Euler(pointer.y * 0.025, pointer.x * 0.035, 0));
+    architecture.quaternion.multiply(parallaxRotation);
 
     const dock = mobile && current.voiceActive ? getComputedStyle(host.closest('.app-shell') ?? host) : null;
     const dockRadius = Number.parseFloat(dock?.getPropertyValue('--jarvis-orb-dock-radius') ?? '') || 0;
@@ -515,13 +541,20 @@ function createJarvisStageSceneWithRenderer(
       reducedMotion: current.reducedMotion,
     });
     const time = current.reducedMotion ? 0 : elapsed;
-    const breath = current.reducedMotion ? 0.5 : 0.5 + 0.5 * Math.sin(time * 1.7);
+    const breathWave = Math.sin(time * 0.38 + Math.sin(time * 0.09) * 0.72) * 0.62 +
+      Math.sin(time * 0.17 + 0.8) * 0.25 + Math.sin(time * 0.71 + 1.7) * 0.13;
+    const breath = current.reducedMotion ? 0.5 : 0.5 + 0.5 * breathWave;
+    const idle = current.orbState === 'idle' && !current.voiceActive;
+    const idlePulse = idle && !current.reducedMotion
+      ? Math.pow(Math.max(0, Math.sin(time * 0.72 + Math.sin(time * 0.13) * 0.58)), 12)
+      : 0;
     const speechLight = live.speak * live.speech;
     const cameraDepth = orbWorld.clone().applyMatrix4(camera.matrixWorldInverse).z;
     const scale = pixelRadius * (-cameraDepth) * 2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) /
       height / 1.12;
     // The surge expands then settles; listening breathes and speech swells the shell slightly.
-    const pulse = 1 + (1 - live.awake) * (breath - 0.5) * 0.012 + live.surge * 0.085 + live.listen * (breath - 0.5) * 0.022 + speechLight * 0.04 -
+    const pulse = 1 + (idle ? (breath - 0.5) * 0.05 : (1 - live.awake) * (breath - 0.5) * 0.012) +
+      idlePulse * 0.018 + live.surge * 0.085 + live.listen * (breath - 0.5) * 0.022 + speechLight * 0.04 -
       live.think * 0.012;
     orbRig.scale.setScalar(scale * pulse);
     orbLight.position.copy(orbWorld);
@@ -538,17 +571,22 @@ function createJarvisStageSceneWithRenderer(
     orbVisual.update(time, live);
     orbLight.color.copy(orbVisual.uniforms.uColor.value);
     orbLight.intensity = 100 * power;
-    amberLight.intensity = 5 + (1 - live.awake) * 1.5 * breath + 14 * live.ignite + 14 * live.surge + 7 * live.think + 16 * speechLight;
+    amberLight.intensity = (idle ? 12 + breath * 8 + idlePulse * 16 : 5 + (1 - live.awake) * 1.5 * breath) +
+      14 * live.ignite + 14 * live.surge + 7 * live.think + 16 * speechLight;
     wallLight.color.copy(orbVisual.uniforms.uColor.value);
     wallLight.intensity = 100 * power;
     particleUniforms.uTime.value = time;
     particleUniforms.uOrb.value.copy(orbWorld);
     particleUniforms.uColor.value.copy(orbVisual.uniforms.uColor.value);
     particleUniforms.uPower.value = power;
-    for (const { moving, speed, phase } of mechanisms) moving.rotation.z = elapsed * speed + phase;
-    floorBand.rotation.y = -elapsed * 0.065;
+    for (const { moving, speed, phase } of mechanisms) {
+      moving.rotation.z = elapsed * speed + phase + Math.sin(elapsed * 0.13 + phase) * 0.09 +
+        Math.sin(elapsed * 0.31 + phase * 1.7) * 0.025;
+    }
+    floorBand.rotation.y = -elapsed * 0.11 + Math.sin(elapsed * 0.13) * 0.12;
     packets.forEach((packet, index) => {
-      const angle = elapsed * (index % 2 === 0 ? 0.13 : -0.1) + index * Math.PI / 3;
+      const angle = elapsed * (index % 2 === 0 ? 0.24 : -0.19) + index * Math.PI / 3 +
+        Math.sin(elapsed * 0.17 + index) * 0.08;
       packet.position.set(Math.cos(angle) * 3.35, -0.12, Math.sin(angle) * 3.35);
     });
     seam.emissiveIntensity = 0.13 + power * 0.16;
@@ -661,6 +699,10 @@ function createJarvisStageSceneWithRenderer(
   lifecycle.removeListeners = () => {
     renderer.domElement.removeEventListener('webglcontextlost', onWebGlContextLost);
     renderer.domElement.removeEventListener('webglcontextrestored', onWebGlContextRestored);
+    window.removeEventListener('pointermove', onPointerMove);
+    document.documentElement.removeEventListener('pointerleave', onPointerLeave);
+    window.removeEventListener('blur', onPointerLeave);
+    window.removeEventListener('deviceorientation', onDeviceOrientation);
     window.removeEventListener('resize', onResize);
     window.removeEventListener('orientationchange', onResize);
     window.visualViewport?.removeEventListener('resize', onResize);
@@ -669,6 +711,10 @@ function createJarvisStageSceneWithRenderer(
   };
   renderer.domElement.addEventListener('webglcontextlost', onWebGlContextLost);
   renderer.domElement.addEventListener('webglcontextrestored', onWebGlContextRestored);
+  window.addEventListener('pointermove', onPointerMove, { passive: true });
+  document.documentElement.addEventListener('pointerleave', onPointerLeave);
+  window.addEventListener('blur', onPointerLeave);
+  window.addEventListener('deviceorientation', onDeviceOrientation, { passive: true });
   window.addEventListener('resize', onResize);
   window.addEventListener('orientationchange', onResize);
   window.visualViewport?.addEventListener('resize', onResize);
