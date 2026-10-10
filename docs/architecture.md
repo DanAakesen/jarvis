@@ -693,6 +693,21 @@ A stale or invalid transition returns 409, unavailable runtime state returns
 503, and remote failures are sanitized. The board and detail page share one state-aware
 controls component.
 
+P9-51 derives `Finishing delivery` activity from the latest completed sandbox
+turn while the task remains Running, including ended sessions. Task detail/list,
+Now context and P9-50's work-status reader share that activity. Cancel and pause
+without an active turn use the existing task-policy lock: pending policy merges
+return 409, “Delivery is finishing; try again when it completes”; otherwise
+cancel transitions to Cancelled and ends sessions, while pause uses
+PauseRequested → Paused and retains the idle session. No invocation cancellation
+is sent for an already completed turn. Pause also returns the finishing-delivery
+409 if the session has already ended, avoiding a Paused task with no resumable
+session; cancel remains available. Missing runtime and completion evidence
+returns an explicit 503; active-invocation cancellation failure returns a
+sanitized 502 without transitioning. Terminal tasks return 409 naming their
+state. HTTP controls and model tools relay the same safe reasons. No migration,
+new contract schema, App permission or web change is needed.
+
 P9-50 adds read-only `get_work_status` to the Factory tool registry. It combines
 task detail/list reads, GitHub issue and PR evidence, release records and the
 existing Actions deployment reader. “Delivered” requires a closed issue, a

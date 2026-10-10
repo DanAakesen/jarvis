@@ -376,9 +376,9 @@ export const factoryModule: BackendModule = {
         : { action: request.body.action as 'resume' | 'recover' | 'pause' | 'cancel' };
       const result = await controller.control(request.params.id, command);
       if (result.kind === 'not-found') return reply.code(404).send({ error: 'Task not found' });
-      if (result.kind === 'invalid-transition') return reply.code(409).send({ error: 'Task state does not allow this action' });
-      if (result.kind === 'unavailable') return reply.code(503).send({ error: 'Task runtime is unavailable' });
-      if (result.kind === 'failed') return reply.code(502).send({ error: 'Task control could not be completed' });
+      if (result.kind === 'invalid-transition') return reply.code(409).send({ error: result.reason ?? 'Task state does not allow this action' });
+      if (result.kind === 'unavailable') return reply.code(503).send({ error: result.reason ?? 'Task runtime is unavailable' });
+      if (result.kind === 'failed') return reply.code(502).send({ error: result.reason ?? 'Task control could not be completed' });
       return sendBounded(reply, result.task);
     });
 

@@ -72,9 +72,19 @@ const maxSqlBigInt = 9_223_372_036_854_775_807n;
 const maxPayloadBytes = 1024 * 1024;
 const maxPublishedPayloadBytes = 4096;
 
+function taskActivity(table: string): string {
+  return `CASE WHEN ${table}.state = N'Running' AND (
+    SELECT TOP (1) turn.status FROM dbo.sandbox_turns AS turn
+    INNER JOIN dbo.sandbox_sessions AS session ON session.id = turn.sandbox_session_id
+    WHERE session.id = (SELECT TOP (1) latest.id FROM dbo.sandbox_sessions AS latest
+      WHERE latest.task_id = ${table}.id ORDER BY latest.started_at DESC, latest.id DESC)
+    ORDER BY turn.started_at DESC, turn.id DESC
+  ) = N'completed' THEN N'Finishing delivery' ELSE ${table}.activity END`;
+}
+
 const taskColumns = `CAST(id AS varchar(19)) AS id, CAST(project_id AS varchar(19)) AS projectId,
   issue_number AS issueNumber, CAST(origin_message_id AS varchar(19)) AS originMessageId, title, request, source, agent,
-  model_override AS modelOverride, reasoning_override AS reasoningOverride, state, activity,
+  model_override AS modelOverride, reasoning_override AS reasoningOverride, state, ${taskActivity('dbo.tasks')} AS activity,
   priority, attempt_count AS attemptCount, next_attempt_at AS nextAttemptAt, branch,
   created_at AS createdAt, started_at AS startedAt, finished_at AS finishedAt,
   (SELECT TOP (1) session.end_reason FROM dbo.sandbox_sessions AS session
@@ -700,7 +710,7 @@ export function createTaskStore(
         .input('eventLimit', sql.Int, runningContextEventLimit)
         .query<RunningContextRow>(`WITH running_tasks AS (
             SELECT TOP (@taskLimit) t.id AS task_id, t.project_id, p.name AS project_name,
-              t.title, t.agent, t.state, t.activity, t.started_at,
+              t.title, t.agent, t.state, ${taskActivity('t')} AS activity, t.started_at,
               ROW_NUMBER() OVER (ORDER BY t.started_at DESC, t.id DESC) AS task_order
             FROM dbo.tasks AS t
             INNER JOIN dbo.projects AS p ON p.id = t.project_id

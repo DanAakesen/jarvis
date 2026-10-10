@@ -153,9 +153,9 @@ export type TaskControlCommand =
 export type TaskControlResult =
   | { kind: 'ok'; task: TaskRecord }
   | { kind: 'not-found' }
-  | { kind: 'invalid-transition' }
-  | { kind: 'unavailable' }
-  | { kind: 'failed' };
+  | { kind: 'invalid-transition'; reason?: string }
+  | { kind: 'unavailable'; reason?: string }
+  | { kind: 'failed'; reason?: string };
 
 export interface TaskController {
   control(taskId: string, command: TaskControlCommand): Promise<TaskControlResult>;
