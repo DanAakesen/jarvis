@@ -143,7 +143,7 @@ Dan never fills in a project form. He gives Jarvis, by voice or chat, a project 
 
 P9-40 lets Dan ask Jarvis by voice or chat to switch the visible page: Jarvis
 home, the Software Factory Kanban board or a specific task/issue, Settings (including
-named sections), Usage, the knowledge graph, Folio or Status. “Kanban”, “board”,
+named sections), Usage, Notes, the knowledge graph, Folio or Status. “Kanban”, “board”,
 “factory” and “tasks” select the Factory board; “go home” and “back to Jarvis”
 select home. Navigation is reversible and needs no confirmation. The backend
 delivers it to all open signed-in tabs through the existing workspace broker
