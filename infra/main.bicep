@@ -494,6 +494,46 @@ resource gpt6LunaVisionDeployment 'Microsoft.CognitiveServices/accounts/deployme
   }
 }
 
+// Dan's choice, 10 October: stronger models for research, Danish voice chat and Codex. Deployed one at a
+// time like the others (Foundry allows one operation per account); capacity matches gpt-6-luna.
+resource gpt6AstraDeployment 'Microsoft.CognitiveServices/accounts/deployments@2024-10-01' = {
+  parent: foundryAccount
+  name: 'gpt-6-astra'
+  dependsOn: [
+    gpt6LunaVisionDeployment
+  ]
+  sku: {
+    name: 'GlobalStandard'
+    capacity: 50
+  }
+  properties: {
+    model: {
+      format: 'OpenAI'
+      name: 'gpt-6-astra'
+      version: '2026-09-03'
+    }
+  }
+}
+
+resource gpt61SolDeployment 'Microsoft.CognitiveServices/accounts/deployments@2024-10-01' = {
+  parent: foundryAccount
+  name: 'gpt-6.1-sol'
+  dependsOn: [
+    gpt6AstraDeployment
+  ]
+  sku: {
+    name: 'GlobalStandard'
+    capacity: 50
+  }
+  properties: {
+    model: {
+      format: 'OpenAI'
+      name: 'gpt-6.1-sol'
+      version: '2026-09-29'
+    }
+  }
+}
+
 resource foundryAcrPullAssignment 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
   name: guid(registry.id, foundryProject.id, acrPullRoleId)
   scope: registry

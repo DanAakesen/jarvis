@@ -323,9 +323,10 @@ describe('settings API', () => {
     const app = fixture(store);
     const initial = await app.inject({ url: '/settings', headers: authorization });
 
-    expect(initial.json().options.codexModels).toContain('gpt-5.3-codex');
+    expect(initial.json().options.codexModels).toContain('gpt-6.1-sol');
+    expect(initial.json().options.codexModels).not.toContain('gpt-5.3-codex');
     expect(initial.json().options.copilotModels).toContain('claude-sonnet-4.6');
-    expect(initial.json().options.roles.codex.reasoningEffortsByModel['gpt-5.5'])
+    expect(initial.json().options.roles.codex.reasoningEffortsByModel['gpt-6.1-sol'])
       .toContain('xhigh');
     expect(initial.json().options.roles.copilot.reasoningEffortsByModel['gpt-5.4'])
       .toEqual(['none', 'low', 'medium', 'high']);
@@ -333,14 +334,14 @@ describe('settings API', () => {
     const saved = await app.inject({
       method: 'PATCH', url: '/settings', headers: authorization,
       payload: { settings: { roles: {
-        codex: { model: 'gpt-5.5', reasoningEffort: 'xhigh' },
+        codex: { model: 'gpt-6.1-sol', reasoningEffort: 'xhigh' },
         copilot: { model: 'claude-sonnet-4.6', reasoningEffort: 'high' },
       } } },
     });
 
     expect(saved.statusCode).toBe(200);
     expect(saved.json().settings.roles).toMatchObject({
-      codex: { model: 'gpt-5.5', reasoningEffort: 'xhigh' },
+      codex: { model: 'gpt-6.1-sol', reasoningEffort: 'xhigh' },
       copilot: { model: 'claude-sonnet-4.6', reasoningEffort: 'high' },
     });
   });
