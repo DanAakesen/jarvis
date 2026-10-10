@@ -426,13 +426,14 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   settings store. Appearance is bounded to light/dark/system; colors use
   `#RRGGBB`, background uses the named visual presets, glow is 0–1, motion and
   density use closed catalogs, and radius is 0–24. The registered `set_theme`
-  Jarvis tool validates its token patch and writes through `SettingsStore`;
-  the existing dispatcher records `ok`, `refused`, or sanitized `error`
-  outcomes. Successful calls return the accepted token patch. These values use
-  the existing JSON-scalar settings rows, without a migration. Window/view state
-  remains client-owned and is not stored. Applying tool-originated changes to an
-  already-open client without reload depends on the P8-13 consumer and remains
-  unverified.
+  Jarvis tool maps its token patch through the same settings validation and write
+  path as `update_settings`; colour `null` removes one override and `reset: true`
+  removes all three. The existing dispatcher records `ok`, `refused`, or
+  sanitized `error` outcomes. Successful calls return the accepted token patch.
+  These values use the existing JSON-scalar settings rows, without a migration.
+  Window/view state remains client-owned and is not stored. Applying tool-originated
+  changes to an already-open client without reload depends on the P8-13 consumer
+  and remains unverified.
   The SQL adapter is injected only when database configuration exists; the API
   returns 503 without it. Dan-only `GET /models` reads Foundry deployments
   through ARM with the backend managed identity's account-scoped Reader role.
