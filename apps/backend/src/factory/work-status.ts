@@ -51,7 +51,7 @@ export async function getWorkStatus(app: FastifyInstance, input: WorkStatusInput
         BigInt(input.taskId) > 9_223_372_036_854_775_807n))) {
     warn('Invalid work selector.'); return result;
   }
-  const selectedTask = input.taskId ? await read(() => app.taskStore!.get(input.taskId!, 0, 0),
+  const selectedTask = input.taskId ? await read(() => app.taskStore!.get(input.taskId!, 1, 0),
     'Task lookup unavailable.') : null;
   if (input.taskId && !selectedTask) {
     warn('Task not found or unavailable.'); return result;
@@ -241,7 +241,7 @@ export async function getWorkStatus(app: FastifyInstance, input: WorkStatusInput
 
 export async function taskRestartReason(app: FastifyInstance, taskId: string): Promise<string | null> {
   try {
-    if (app.taskStore && !await app.taskStore.get(taskId, 0, 0)) return 'task_not_found';
+    if (app.taskStore && !await app.taskStore.get(taskId, 1, 0)) return 'task_not_found';
   } catch { return 'work_status_unverified'; }
   const status = await getWorkStatus(app, { taskId });
   if (status.issue?.state === 'closed') return 'issue_closed';

@@ -674,6 +674,8 @@ an unrelated latest deployment cannot prove delivery. Missing or failed reads
 produce a partial answer with sanitized warnings. Repository and issue text is
 untrusted evidence, and the sensitive tool excludes private inputs/results from
 generic tool-call persistence.
+Repository-read installation tokens request the App's existing Checks and
+Statuses read grants so PR checks do not depend on write tokens or new permissions.
 If multiple merged PRs implement the issue, each requires matching deployment
 evidence so an older successful release cannot conceal a newer undelivered fix.
 Exact title/task-code matches and explicit “Supersedes Factory task” references

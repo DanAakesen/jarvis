@@ -34,7 +34,8 @@ function fixture(agent = false) {
   const issue = { number: 8, title: task.title, body: 'private issue body', state: 'closed' as 'open' | 'closed',
     url: 'https://github.com/DanAakesen/jarvis/issues/8', labels: [] as string[], isPullRequest: false };
   const tasks = [structuredClone(task)];
-  const taskStore = { get: vi.fn(async (id: string) => {
+  const taskStore = { get: vi.fn(async (id: string, eventLimit: number) => {
+    if (eventLimit < 1) throw new Error('Invalid archive event limit');
     const item = tasks.find((item) => item.id === id);
     return item ? { ...item, events: [], usage: [] } as TaskDetail : null;
   }), list: vi.fn(async () => tasks), create: vi.fn(), transition: vi.fn(),
@@ -291,6 +292,14 @@ describe('get_work_status evidence and restart safety', () => {
     expect(response.statusCode).toBe(404); expect(response.json().error).toBe('Task not found');
     expect(f.control).not.toHaveBeenCalled();
     expect(f.taskStore.list).not.toHaveBeenCalled();
+  });
+  it('uses positive event limits accepted by production task archive for status and restart safety', async () => {
+    const f = fixture();
+    expect((await getWorkStatus(f.app, { taskId: '42' })).issue?.number).toBe(8);
+    expect(await taskRestartReason(f.app, '42')).toBe('issue_closed');
+    const calls = vi.mocked(f.taskStore.get).mock.calls;
+    expect(calls.length).toBeGreaterThan(1);
+    for (const call of calls) expect(call).toEqual(['42', 1, 0]);
   });
   it.each([{}, { issueNumber: 8, taskId: '42' }, { query: '' }, { issueNumber: 0 }, { taskId: '0' },
     { taskId: '9223372036854775808' }, { query: 'x'.repeat(101) }])('rejects invalid selector %j', async (payload) => {
