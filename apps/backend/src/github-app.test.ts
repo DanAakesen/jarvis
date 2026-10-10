@@ -349,7 +349,7 @@ describe('GitHub App installation tokens', () => {
     });
   });
 
-  it('issues a read-only contents, issues, and pull-requests token for repository discussions', async () => {
+  it('issues read-only repository, checks and statuses permissions for discussions and work status', async () => {
     const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
     const now = Date.parse('2026-10-04T09:00:00.000Z');
     const fetchImpl = vi.fn<typeof fetch>()
@@ -370,7 +370,7 @@ describe('GitHub App installation tokens', () => {
     const [, tokenOptions] = fetchImpl.mock.calls[1]!;
     expect(JSON.parse(String(tokenOptions?.body))).toEqual({
       repositories: ['repo'],
-      permissions: { contents: 'read', issues: 'read', pull_requests: 'read' },
+      permissions: { contents: 'read', issues: 'read', pull_requests: 'read', checks: 'read', statuses: 'read' },
     });
   });
 

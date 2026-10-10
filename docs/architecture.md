@@ -686,6 +686,32 @@ A stale or invalid transition returns 409, unavailable runtime state returns
 503, and remote failures are sanitized. The board and detail page share one state-aware
 controls component.
 
+P9-50 adds read-only `get_work_status` to the Factory tool registry. It combines
+task detail/list reads, GitHub issue and PR evidence, release records and the
+existing Actions deployment reader. “Delivered” requires a closed issue, a
+merged PR and successful deployment evidence for that PR's merge commit;
+an unrelated latest deployment cannot prove delivery. Missing or failed reads
+produce a partial answer with sanitized warnings. Repository and issue text is
+untrusted evidence, and the sensitive tool excludes private inputs/results from
+generic tool-call persistence.
+Repository-read installation tokens request the App's existing Checks and
+Statuses read grants so PR checks do not depend on write tokens or new permissions.
+If multiple merged PRs implement the issue, each requires matching deployment
+evidence so an older successful release cannot conceal a newer undelivered fix.
+Exact title/task-code matches and explicit “Supersedes Factory task” references
+help identify legacy work without rewriting its issue link. Ambiguous matches
+remain warnings rather than an invented authoritative link.
+
+Before recover/resume, the backend checks for a closed linked issue, a merged
+PR, or completed matching work superseding an unlinked legacy task. Such work
+requires explicit `confirm: true` on the Dan-only controls route; otherwise
+the route returns 409 with a reason. The resume tool cannot bypass this gate.
+Unverifiable restart safety returns 503 rather than starting duplicate work.
+Steering an idle-expired session uses recovery and therefore shares this gate;
+ordinary steering of a live session is unchanged.
+No migration, GitHub write operation, App permission or web change is required;
+the existing UI displays the refusal as an error until it gains an override prompt.
+
 P1-08's web board uses the authenticated project and task APIs for filters and
 task creation, requesting at most 100 newest matching tasks at a time. It opens
 the P1-06 authenticated fetch-SSE client for nonterminal tasks, resumes from each

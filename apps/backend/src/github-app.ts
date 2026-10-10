@@ -338,7 +338,7 @@ export function createGitHubAppTokenIssuer({
     issueForChecks: (repository) => issue(repository, { checks: 'read' }),
     issueForContents: (repository) => issue(repository, { contents: 'read' }),
     issueForRepositoryRead: (repository) => issue(repository, {
-      contents: 'read', issues: 'read', pull_requests: 'read',
+      contents: 'read', issues: 'read', pull_requests: 'read', checks: 'read', statuses: 'read',
     }),
     issueForContentsWrite: (repository) => issue(repository, { contents: 'write' }),
     issueForIssuesWrite: (repository) => issue(repository, { issues: 'write' }),
