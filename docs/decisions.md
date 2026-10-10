@@ -19,6 +19,16 @@ The nine design areas and where each stands. **Confirmed** = Dan's requirement o
 
 ## Decision log
 
+P9-52 (10 October 2026): keep generated window readback in the existing
+owner-scoped, bounded workspace command records, not SQL. Register `read_window`
+in core even when HTML storage is unavailable, prefer page-reported content,
+and expose only bounded untrusted text through a sensitive tool. Reuse parse5
+and the existing owner-authorized HTML artifact store for static report text;
+never execute scripts or fetch resources to read a report. Preserve the
+existing chart contract: units are returned when supplied in series names or
+point labels, not invented as a new field. No migration or App permission is
+needed. Backend/contracts verified offline; UI reporting (#640), live model
+use and dynamically rendered report text remain unverified.
 P9-54 (10 October 2026): keep pull-request and CI inspection read-only. Reuse
 the registered-project resolver and repository-scoped GitHub App tokens, and
 expose bounded diffs, resolved review-thread state, check summaries and
