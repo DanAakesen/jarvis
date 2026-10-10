@@ -2974,6 +2974,8 @@ a.task-chip:hover { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--glass-e
    presence, menu), the room, one caption line, and the chat bar as the dock on every page. Pages scroll normally. */
 @media (max-width: 700px), (max-height: 500px) and (pointer: coarse) {
   :root { --phone-dock-bottom: calc(env(safe-area-inset-bottom) + 16px); }
+  .app-shell.app-signed-out { padding: env(safe-area-inset-top) calc(env(safe-area-inset-right) + 20px) env(safe-area-inset-bottom) calc(env(safe-area-inset-left) + 20px); }
+  .app-shell.app-signed-out .app-topbar { margin-inline: -20px; }
 }
 .app-shell[data-phone="true"] { --dock-space: calc(68px + var(--phone-dock-bottom)); grid-template-columns: minmax(0, 1fr); padding: env(safe-area-inset-top) env(safe-area-inset-right) 0 env(safe-area-inset-left); }
 .app-shell[data-phone="true"] .area-rail { display: none; }

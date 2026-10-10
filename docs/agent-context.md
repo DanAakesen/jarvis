@@ -312,7 +312,8 @@ P9-73 fixture checks used Chromium and WebKit at 390×844, 1280×900 and
 844×390 in light/dark, replacing served CSS `env()` values only in the scratch
 harness to simulate zero/34px bottom, 47px portrait top and landscape side insets.
 Composer gaps measured 16px/50px on Home and Knowledge; desktop geometry matched
-the baseline. Draft, More/Escape and voice entry/exit were exercised with
+the baseline. Signed-out headers also cleared the portrait notch and landscape
+side inset. Draft, More/Escape, restored-window sheets and voice entry/exit were exercised with
 scratch-only auth/API/voice fixtures. Before/after captures are in
 `docs/ui/screenshots/p9-73/`. These are not physical iPhone, browser-toolbar,
 installed Home Screen or live microphone/provider verification.
