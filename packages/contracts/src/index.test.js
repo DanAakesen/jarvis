@@ -1033,3 +1033,10 @@ test('validates bounded background job details and history steps', () => {
   assert.equal(isBackgroundJobDetails({ job, steps: [step], retryable: true, extra: true }), false);
   assert.equal(isBackgroundJobDetails({ job: { ...job, status: 'done' }, steps: [step], retryable: true }), false);
 });
+test('issue attachments default to descriptions and bound explicit publication inputs', async () => {
+  const { issueAttachmentFields } = await import('./index.js');
+  assert.equal(issueAttachmentFields.publish.default, 'description');
+  assert.deepEqual(issueAttachmentFields.publish.enum, ['description', 'public']);
+  assert.equal(issueAttachmentFields.attachmentIds.maxItems, 5);
+  assert.equal(issueAttachmentFields.attachmentIds.uniqueItems, true);
+});

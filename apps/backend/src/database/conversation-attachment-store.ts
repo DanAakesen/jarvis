@@ -258,6 +258,23 @@ export class ConversationAttachmentStore {
     return this.createReadUrl(blobName, signal);
   }
 
+  async readImageBytes(ownerObjectId: string, id: string): Promise<Buffer | null> {
+    if (!attachmentId(id) || !ownerId(ownerObjectId)) return null;
+    const { recordset } = await databaseReadRequest(this.options.pool)
+      .input('id', sql.VarChar(36), id)
+      .input('owner', sql.UniqueIdentifier, ownerObjectId)
+      .query<{ blob_name: string; size_bytes: number }>(`SELECT blob_name, size_bytes
+        FROM dbo.conversation_attachments
+        WHERE id = @id AND owner_object_id = @owner AND message_id IS NOT NULL
+          AND status = N'ready' AND content_type IN (N'image/png', N'image/jpeg', N'image/webp')
+          AND expires_at > SYSUTCDATETIME();`);
+    const row = recordset[0];
+    if (!row || row.blob_name !== `attachments/${id}` ||
+        row.size_bytes < 1 || row.size_bytes > 10 * 1024 * 1024) return null;
+    return this.options.container.getBlockBlobClient(row.blob_name)
+      .downloadToBuffer(0, row.size_bytes, { abortSignal: AbortSignal.timeout(30_000) });
+  }
+
   async delete(ownerObjectId: string, id: string): Promise<boolean> {
     if (!attachmentId(id)) return false;
     const result = await databaseReadRequest(this.options.pool)

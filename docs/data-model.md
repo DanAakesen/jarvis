@@ -72,6 +72,12 @@ store only bounded text/description, a SHA-256 digest, and a private
 attachments expire after configurable 1–90 days (default 30). The hourly cleanup
 deletes expired blobs before rows; the owner can also delete an attachment
 immediately. Attachment history exposes only ID, name, content type and size.
+P9-67 reuses these owner-scoped rows without a migration. Issue/comment drafts
+and their ten-minute confirmation codes are process-local and lost on restart.
+Default descriptions leave bytes private; explicitly confirmed public images
+are copied to `issue-attachments/<issue>/<sha256>.<ext>` on GitHub's dedicated
+`issue-attachments` branch. Private attachment deletion/expiry does not remove
+that deliberately published copy or its public Git history.
 P7-40 adds group 11 in `0021_vault_memory_index.sql`: heading chunks indexed by
 vault path and blob SHA, with an optional `vector(1536)` column when available.
 P7-44 adds nullable `embedding_json` to `memories` and `vault_chunks` in
