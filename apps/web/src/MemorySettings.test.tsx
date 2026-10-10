@@ -8,10 +8,10 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
 afterEach(() => { vi.unstubAllGlobals(); });
 
 describe('memory settings', () => {
-  it('shows that memory is not available yet when the service is missing', async () => {
+  it('shows a neutral unavailable state when memory is missing', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => json({ error: 'not found' }, 404)));
     render(<MemorySettings backendUrl="https://api.example.com" getAccessToken={getAccessToken} />);
-    expect(await screen.findByText(/Memory is not available yet/)).not.toBeNull();
+    expect(await screen.findByText('Memory unavailable.')).not.toBeNull();
   });
 
   it('shows only what Jarvis remembers from conversations, then corrects and forgets it', async () => {

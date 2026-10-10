@@ -82,13 +82,13 @@ describe('activity panel', () => {
     for (const text of ['No tasks are running.', 'No tasks need attention.', 'No recent releases or deployments.', 'No credential warnings.', 'No active alerts.']) {
       expect(screen.getByText(text)).not.toBeNull();
     }
-    expect(screen.getByRole('status').textContent).toContain('Away mode is off.');
+    expect(screen.getByRole('status').textContent).toBe('Present');
   });
 
   it('shows the phone-first mode while away', () => {
     renderPanel({ feed: { ...feed, awayMode: true }, onDismiss: vi.fn() });
 
-    expect(screen.getByRole('status').textContent).toContain('Task updates and confirmations go to Teams');
+    expect(screen.getByRole('status').textContent).toBe('Away');
   });
 
   it('dismisses an item once the backend confirms it', async () => {
@@ -126,7 +126,7 @@ describe('activity panel', () => {
   it('disables dismissal with an explanation when no dismiss action is connected', () => {
     renderPanel({ feed });
 
-    expect(screen.getByRole('button', { name: 'Dismiss Sandbox crashed', description: "Dismissing isn't available yet." }))
+    expect(screen.getByRole('button', { name: 'Dismiss Sandbox crashed', description: 'Dismiss unavailable.' }))
       .toHaveProperty('disabled', true);
   });
 });

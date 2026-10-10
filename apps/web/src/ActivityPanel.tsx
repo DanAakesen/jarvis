@@ -177,11 +177,7 @@ export function ActivityPanel({ feed, onDismiss, onResolveConfirmation, onRetry,
       ) : (
         <>
           <p className="freshness">Updated <time dateTime={feed.updatedAt}>{formatTime(feed.updatedAt)}</time></p>
-          <p className="freshness" role="status">
-            {feed.awayMode
-              ? 'Away mode is on. Task updates and confirmations go to Teams; spoken replies are brief.'
-              : 'Away mode is off. Task updates appear in the browser.'}
-          </p>
+          <p className="freshness" role="status">{feed.awayMode ? 'Away' : 'Present'}</p>
           {streamStatus === 'connected' && <p className="freshness" role="status">Live updates connected.</p>}
           {streamStatus === 'reconnecting' && (
             <p className="freshness" role="status">Live updates are reconnecting; showing the last feed snapshot.</p>
@@ -192,7 +188,7 @@ export function ActivityPanel({ feed, onDismiss, onResolveConfirmation, onRetry,
               {onRetry && <button className="secondary-button" type="button" onClick={onRetry}>Reconnect</button>}
             </>
           )}
-          {!onDismiss && <p id="dismiss-status" className="freshness">Dismissing isn&apos;t available yet.</p>}
+          {!onDismiss && <p id="dismiss-status" className="freshness">Dismiss unavailable.</p>}
 
           <BrowserConfirmationList
             confirmations={feed.confirmations}

@@ -816,7 +816,7 @@ describe('App shell', () => {
     await user.click(toggle);
     expect(toggle.getAttribute('aria-expanded')).toBe('true');
     expect(screen.getByRole('heading', { name: 'Context' })).not.toBeNull();
-    expect(screen.getByText('No relevant information is available yet.')).not.toBeNull();
+    expect(screen.getByText('No relevant information.')).not.toBeNull();
     expect(screen.getByRole('heading', { name: 'Welcome, Dan Aakesen' })).not.toBeNull();
     await user.click(screen.getByRole('button', { name: 'Close context panel' }));
     expect(toggle.getAttribute('aria-expanded')).toBe('false');

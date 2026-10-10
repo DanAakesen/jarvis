@@ -91,7 +91,7 @@ async function requestAppearance(
     ...(change ? { body: JSON.stringify({ settings: { appearance: change } }) } : {}),
   });
   if (response.status === 401) throw new Error('Your Microsoft sign-in needs attention. Sign in again.');
-  if (response.status === 503) throw new Error('Settings are unavailable until the database is connected.');
+  if (response.status === 503) throw new Error('Settings could not be loaded. Try again.');
   if (!response.ok) throw new Error(`Jarvis could not ${method === 'GET' ? 'load' : 'save'} the theme (HTTP ${response.status}).`);
   let result: unknown;
   try { result = await response.json(); } catch { throw new Error('Jarvis returned invalid theme settings. Try again.'); }

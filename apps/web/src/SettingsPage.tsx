@@ -245,7 +245,7 @@ async function requestSettings(
     throw new Error('Jarvis could not reach the settings service. Try again.', { cause: error });
   }
   if (response.status === 401) throw new Error('Your Microsoft sign-in needs attention. Sign in again.');
-  if (response.status === 503) throw new Error('Settings are unavailable until the database is connected.');
+  if (response.status === 503) throw new Error('Settings could not be loaded. Try again.');
   if (!response.ok) throw new Error(`Jarvis could not ${method === 'GET' ? 'load' : 'save'} settings (HTTP ${response.status}).`);
   let result: unknown;
   try { result = await response.json(); } catch { throw new Error('Jarvis returned invalid settings. Try again.'); }
@@ -297,11 +297,11 @@ export function SettingsPage({ backendUrl, getAccessToken, activity, presence, p
   const [resettingPersonality, setResettingPersonality] = useState(false);
   const [message, setMessage] = useState('');
   const [personalityResetMessage, setPersonalityResetMessage] = useState('');
-  const [error, setError] = useState(backendUrl ? '' : 'Settings are unavailable until the backend is deployed.');
+  const [error, setError] = useState(backendUrl ? '' : 'Settings unavailable.');
 
   const load = useCallback(async () => {
     if (!backendUrl) {
-      setError('Settings are unavailable until the backend is deployed.');
+      setError('Settings unavailable.');
       setState('error');
       return;
     }
@@ -474,7 +474,6 @@ export function SettingsPage({ backendUrl, getAccessToken, activity, presence, p
       {state === 'ready' && settings && options && (
         <form id="settings-form" onSubmit={(event) => { void save(event); }}>
           <CollapsibleSection storageKey="settings.appearance" headingId="appearance-settings-heading" title="Appearance" summary={<>{themePreference.theme === 'system' ? 'System theme' : themePreference.theme === 'dark' ? 'Dark theme' : 'Light theme'}</>}>
-            <p className="settings-explanation">Choose a light, dark, or system appearance for every page. System follows your OS appearance. The accepted theme is saved separately from other settings.</p>
             <fieldset className="choice-group theme-choice-group"
               disabled={themePreference.state !== 'ready' || themePreference.saving}>
               <legend>Theme</legend>
@@ -523,7 +522,6 @@ export function SettingsPage({ backendUrl, getAccessToken, activity, presence, p
                 options={options.reasoningEfforts} disabled={saving}
                 onChange={(value) => update('jarvis', 'reasoning', value)} />
             </div>
-            <p className="settings-explanation">Model choices are limited to deployments currently configured for Jarvis.</p>
           </CollapsibleSection>
           )}
           {roleModels && settings.roles && <ModelsSection roles={settings.roles} options={roleModels} disabled={saving}
@@ -531,9 +529,7 @@ export function SettingsPage({ backendUrl, getAccessToken, activity, presence, p
             onChange={(role: ModelRole, value) => updateArea('roles', role, value)} />}
 
           <CollapsibleSection storageKey="settings.personality" headingId="personality-settings-heading" title="Jarvis Personality">
-            <p className="settings-explanation" id="personality-session-help">
-              Personality changes apply to new sessions. Active sessions keep their current settings.
-            </p>
+            <p className="settings-explanation" id="personality-session-help">Applies to new sessions.</p>
             <div className="settings-grid">
               <SelectField id="personality-tone" label="Tone" value={settings.personality.tone}
                 options={options.personalityTones} disabled={saving}
@@ -548,9 +544,7 @@ export function SettingsPage({ backendUrl, getAccessToken, activity, presence, p
                   aria-describedby={`personality-instructions-help personality-instructions-count${personalityInstructionsValid ? '' : ' personality-instructions-error'}`}
                   aria-invalid={!personalityInstructionsValid}
                   onChange={(event) => update('personality', 'customInstructions', event.target.value)} />
-                <p className="settings-explanation" id="personality-instructions-help">
-                  Optional. Up to 2,000 characters. Keep instructions focused on tone and response style.
-                </p>
+                <p className="settings-explanation" id="personality-instructions-help">Up to 2,000 characters.</p>
                 <p className="settings-explanation" id="personality-instructions-count">
                   {settings.personality.customInstructions.length.toLocaleString()} / 2,000 characters
                 </p>
@@ -561,12 +555,8 @@ export function SettingsPage({ backendUrl, getAccessToken, activity, presence, p
                 )}
               </div>
             </div>
-            <p className="settings-explanation" id="personality-reset-help">
-              {saving
-                ? 'Wait for the current save to finish before resetting.'
-                : personalityIsDefault
-                  ? 'The current personality already matches the default.'
-                  : 'Reset saves the current default immediately.'}
+            <p className="visually-hidden" id="personality-reset-help">
+              {saving ? 'Personality is saving.' : personalityIsDefault ? 'The default personality is already selected.' : 'Reset the personality to the default.'}
             </p>
             <div className="settings-actions">
               <button className="secondary-button" type="button" disabled={saving || personalityIsDefault}
@@ -610,17 +600,11 @@ export function SettingsPage({ backendUrl, getAccessToken, activity, presence, p
               />
               Minimise all windows when starting voice
             </label>
-            <p className="settings-explanation">Off by default. When enabled, open windows are minimised for new voice sessions.</p>
-            <p className="settings-explanation" id="voice-sample-help">Voice samples will be available when voice playback is connected.</p>
-            <div className="settings-actions">
-              <button className="secondary-button" type="button" disabled aria-describedby="voice-sample-help">Play English sample</button>
-              <button className="secondary-button" type="button" disabled aria-describedby="voice-sample-help">Play Danish sample</button>
-            </div>
             <p className="wake-status" role="status" data-outcome={wakeStatus?.outcome ?? 'none'}>
               <strong>Wake word</strong>
               <span>{wakeStatus
                 ? `Last heard ${new Date(wakeStatus.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}. ${wakeStatus.message}`
-                : 'Not heard since this page opened. Say “Wake up Jarvis” at the computer.'}</span>
+                : 'Not heard in this session.'}</span>
             </p>
             {hasVoiceTuning && <VoiceTuningFields voice={settings.voice as VoiceTuningSettings} problems={problems} disabled={saving}
               onChange={(key, value) => update('voice', key, value as never)} />}
@@ -648,7 +632,6 @@ export function SettingsPage({ backendUrl, getAccessToken, activity, presence, p
                 options={options.copilotModels} disabled={saving}
                 onChange={(value) => update('copilot', 'model', value)} />
             </div>
-            <p className="settings-explanation">Only verified provider choices are offered. Additional agent model choices depend on provider support verification.</p>
           </CollapsibleSection>
           )}
 
@@ -673,7 +656,6 @@ export function SettingsPage({ backendUrl, getAccessToken, activity, presence, p
                 <input id="max-check-attempts" type="number" min="0" max="10" step="1"
                   value={settings.global.maxCheckAttempts} disabled={saving}
                   onChange={(event) => update('global', 'maxCheckAttempts', Number(event.target.value))} />
-                <p className="settings-explanation">How often a Factory task may retry failing checks before asking you (0–10).</p>
               </div>
             )}
             {typeof settings.global.visionDailyBudgetUsd === 'number' && (
@@ -682,7 +664,6 @@ export function SettingsPage({ backendUrl, getAccessToken, activity, presence, p
                 <input id="vision-daily-budget" type="number" min="0" max="100" step="0.1"
                   value={settings.global.visionDailyBudgetUsd} disabled={saving}
                   onChange={(event) => update('global', 'visionDailyBudgetUsd', event.target.valueAsNumber)} />
-                <p className="settings-explanation">The most watch mode may spend on vision per UTC day; 0 turns watching off (0–100).</p>
               </div>
             )}
           </CollapsibleSection>
@@ -720,19 +701,12 @@ export function SettingsPage({ backendUrl, getAccessToken, activity, presence, p
                   onChange={(event) => update('newProjects', 'defaultBranch', event.target.value)} />
               </div>
             </div>
-            <p className="settings-explanation">
-              These defaults are used when Jarvis registers a new project. Use a GitHub account or organization name,
-              a templates repository in owner/name format, and a valid branch name.
-            </p>
-            <p className="settings-explanation">New project task limits must be whole numbers from 1 to 100.</p>
           </CollapsibleSection>
 
           <CollapsibleSection storageKey="settings.credentials" headingId="credentials-heading" title="Credentials">
-            <p className="settings-explanation" id="credential-actions-help">
-              Renewal also runs daily when no Codex task is active. Secret values are never shown.
-            </p>
+            <p className="settings-explanation" id="credential-actions-help">Secret values are never shown.</p>
             {credentials.length === 0
-              ? <p role="status">No credential status has been recorded yet.</p>
+              ? <p role="status">No credential status.</p>
               : (
                 <ul className="credential-list">
                   {credentials.map((credential) => {

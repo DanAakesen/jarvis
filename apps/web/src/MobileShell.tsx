@@ -41,7 +41,6 @@ export function MobileMenu({ open, onClose, onFolio, onContext }: {
           <button className="mobile-menu-link" type="button" onClick={() => { onClose(); onFolio(); }}>Folio</button>
           <button className="mobile-menu-link" type="button" onClick={() => { onClose(); onContext(); }}>Context panel</button>
         </div>
-        <p className="mobile-menu-hint">You can also ask Jarvis to take you anywhere.</p>
       </div>
     </div>
   );

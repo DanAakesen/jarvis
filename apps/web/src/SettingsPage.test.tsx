@@ -142,10 +142,7 @@ describe('SettingsPage', () => {
       },
     });
 
-    expect(screen.getByRole('button', {
-      name: 'Play English sample',
-      description: /voice playback is connected/,
-    })).toHaveProperty('disabled', true);
+    expect(screen.queryByRole('button', { name: /Play .* sample/ })).toBeNull();
     expect(screen.queryByRole('link', { name: 'Open the Jarvis main page' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Trigger Codex renewal' })).toBeNull();
   });
@@ -167,11 +164,11 @@ describe('SettingsPage', () => {
     expect(await screen.findByRole('heading', { name: 'Jarvis Personality', level: 2 })).not.toBeNull();
     expect(screen.getByRole('combobox', { name: 'Tone' })).toHaveProperty('value', 'british_butler');
     expect(screen.getByRole('combobox', { name: 'Response style' })).toHaveProperty('value', 'concise');
-    expect(screen.getByText(/apply to new sessions/)).not.toBeNull();
+    expect(screen.getByText('Applies to new sessions.')).not.toBeNull();
     expect(screen.getByRole('textbox', { name: 'Custom instructions' })).toHaveProperty('maxLength', 2_000);
     expect(screen.getByRole('button', {
       name: 'Reset personality',
-      description: /already matches the default/,
+      description: /default personality is already selected/,
     })).toHaveProperty('disabled', true);
 
     await user.selectOptions(screen.getByRole('combobox', { name: 'Tone' }), 'warm');
@@ -232,7 +229,7 @@ describe('SettingsPage', () => {
     expect(screen.getByRole('textbox', { name: 'Custom instructions' })).toHaveProperty('value', '');
     expect(await screen.findByText(/Personality reset and saved/)).not.toBeNull();
     expect(screen.getByRole('button', { name: 'Save settings' })).toHaveProperty('disabled', true);
-    expect(screen.getByText(/already matches the default/)).not.toBeNull();
+    expect(screen.getByText('The default personality is already selected.')).not.toBeNull();
     const [, request] = fetchMock.mock.calls[2]!;
     expect(JSON.parse(String(request?.body))).toEqual({ settings: { personality: settings.personality } });
   });
@@ -243,7 +240,7 @@ describe('SettingsPage', () => {
     renderSettingsPage();
 
     await screen.findByRole('heading', { name: 'Appearance', level: 2 });
-    expect(screen.getByText(/light, dark, or system appearance/)).not.toBeNull();
+    expect(screen.queryByText(/light, dark, or system appearance/)).toBeNull();
     expect(screen.getByRole('radio', { name: 'Light' })).toHaveProperty('checked', true);
     expect(screen.getByRole('radio', { name: 'Dark' })).toHaveProperty('disabled', false);
     expect(screen.getByRole('radio', { name: 'System' })).toHaveProperty('disabled', false);
@@ -424,7 +421,7 @@ describe('SettingsPage', () => {
   it('settles into a visible unavailable state without a backend URL', async () => {
     renderSettingsPage(null);
 
-    expect((await screen.findByRole('alert')).textContent).toMatch(/backend is deployed/);
+    expect((await screen.findByRole('alert')).textContent).toMatch(/Settings unavailable/);
     expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull();
     expect(fetchMock).not.toHaveBeenCalled();
   });

@@ -757,14 +757,10 @@ export const Workspace = forwardRef<WorkspaceController, {
         )}
       </header>
       {openViews.length === 0 ? (
-        <p className="workspace-empty">No temporary views are open. Views created during this session will appear here.</p>
+        <p className="workspace-empty">No views are open.</p>
       ) : openViews.length === minimizedViews.length ? (
-        <p className="workspace-empty">All views are minimised. Select a tab to restore a view.</p>
-      ) : (
-        <p className="workspace-guidance">
-          {phone ? 'Swipe left or right to switch views, or select a view.' : narrow ? 'Views stack on this screen. Drag a title to reorder, or use Arrange.' : 'Drag a title to move, drag an edge to resize, or use Arrange for keyboard controls.'}
-        </p>
-      )}
+        <p className="workspace-empty">All views are minimised.</p>
+      ) : null}
       {phone && visibleViews.length > 1 && (
         <nav className="workspace-view-switcher" aria-label="Switch foreground view">
           {visibleViews.map((view, index) => (
@@ -896,7 +892,7 @@ export const Workspace = forwardRef<WorkspaceController, {
                       <WindowIcon name="more" />
                     </summary>
                     <div className="workspace-arrange-options">
-                      <p id={`${titleId}-shortcuts`} className="workspace-shortcuts">
+                      <p id={`${titleId}-shortcuts`} className="visually-hidden">
                         Focus Move or Resize, then use arrow keys. {narrow ? 'Up/down changes order or height; width stays full-screen.' : arrangement === 'tiled' ? 'Move changes order; Resize changes tile width or height.' : 'Shift + arrow makes a larger step.'} Escape closes Arrange.
                       </p>
                       <button className="workspace-control" type="button" aria-label={`${arrangement === 'layered' && !narrow ? 'Send backward' : 'Move earlier'} ${view.title}`} disabled={index === 0} onClick={() => reorder(view.id, -1, 'reordered')}>
@@ -966,7 +962,7 @@ export const Workspace = forwardRef<WorkspaceController, {
               </header>
               <div className={view.presentation === 'conversation' ? 'workspace-conversation-content' : 'workspace-view-content'}>
                 {view.content.status === 'loading' && <Loader variant="lines" label="Loading view…" />}
-                {view.content.status === 'empty' && <p>This view has no content yet.</p>}
+                {view.content.status === 'empty' && <p>No content.</p>}
                 {view.content.status === 'error' && (
                   <>
                     <p role="alert">{view.content.message}</p>

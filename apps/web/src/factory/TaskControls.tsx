@@ -47,7 +47,7 @@ export function TaskControls({
 
   async function run(action: Action, steeringMessage?: string) {
     if (!backendUrl) {
-      setError('Task controls are unavailable until the backend is deployed.');
+      setError('Task controls unavailable.');
       return;
     }
     setBusy(action);
@@ -130,17 +130,16 @@ export function TaskControls({
               : continueExpiredSession ? 'Continue' : 'Recover'}
           </button>
         </div>
-        <p className="task-control-guidance">Starts a new sandbox from the existing task branch and its recorded history.</p>
         {error && <p className="task-control-error" role="alert">{error}</p>}
         {feedback && <p className="task-control-feedback" role="status" aria-live="polite">{feedback}</p>}
       </div>
     );
   }
   if (state === 'NeedsAttention') {
-    return <p className="task-control-guidance">Review the task history before taking further action.</p>;
+    return null;
   }
   if (state === 'Done' || state === 'Cancelled') {
-    return <p className="task-control-guidance">This task is finished; no further controls are available.</p>;
+    return null;
   }
 
   return (

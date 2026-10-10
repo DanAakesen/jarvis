@@ -78,7 +78,7 @@ export function TaskRecipesSettings({ backendUrl, getAccessToken }: {
       if (!controller.signal.aborted) {
         setError(backendUrl
           ? 'Could not load task recipes. Try again.'
-          : 'Task recipes are unavailable until the backend is deployed.');
+          : 'Task recipes unavailable.');
       }
     } finally {
       if (!controller.signal.aborted) {
@@ -131,10 +131,7 @@ export function TaskRecipesSettings({ backendUrl, getAccessToken }: {
 
   return (
     <CollapsibleSection storageKey="settings.recipes" headingId="task-recipes-heading" title="Task recipes">
-      <p className="settings-explanation">
-        Recipes replay verified steps for an app or site. Typed text and page content are not stored.
-        Delete a recipe to stop reusing those steps.
-      </p>
+      <p className="settings-explanation">Typed text and page content are not stored.</p>
       <div className="settings-actions">
         <button className="secondary-button" type="button"
           disabled={loading || deleting !== null || !backendUrl} onClick={() => { void load(); }}>
@@ -145,7 +142,7 @@ export function TaskRecipesSettings({ backendUrl, getAccessToken }: {
         {error || (loading ? <Loader variant="inline" announce={false} label="Loading task recipes…" /> : message)}
       </p>
       {error && loaded && <p className="settings-explanation">Previously loaded recipes are shown.</p>}
-      {loaded && recipes.length === 0 && <p>No task recipes saved yet.</p>}
+      {loaded && recipes.length === 0 && <p>No saved task recipes.</p>}
       {recipes.length > 0 && (
         <ul className="repository-list" aria-label="Saved task recipes">
           {recipes.map((recipe) => (
