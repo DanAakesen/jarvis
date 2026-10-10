@@ -249,10 +249,10 @@ function ShellLayout({ signedIn, config, session, camera, screenShare }: {
     if (active && readVoiceWorkspacePreference().voice.minimizeWindowsOnVoiceStart) {
       workspaceController.current?.minimiseAll();
     }
-    // Voice is the full Jarvis room, so starting it from another page returns home.
-    if (active && pathnameRef.current !== '/') navigate('/');
+    // Desktop voice uses the full room; phone voice stays docked on the current page.
+    if (active && !phone && pathnameRef.current !== '/') navigate('/');
     setVoiceActive(active);
-  }, [navigate]);
+  }, [navigate, phone]);
   // Off the home page the chat bar lives in the rail as an orb; pressing it pops the bar out over the current page.
   const [chatOut, setChatOut] = useState(false);
   const [chatOutPath, setChatOutPath] = useState(pathname);

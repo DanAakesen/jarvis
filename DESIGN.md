@@ -436,8 +436,10 @@ P8-23 keeps the microphone and inspection actions in the orb's control group
 with End voice. Long runtime status text stays within the dock without covering
 those controls. The dock expands only while the microphone is ready and at
 narrow widths where those controls wrap, keeping End voice above the workspace.
-With no non-minimised content, the orb returns to the centre with its controls
-below it. Typing never shows the large orb. Camera and sharing move behind a
+P9-72 keeps phone voice docked even without a non-minimised window, and starting
+voice preserves the current page and header. The dock has no foreground veil or
+viewport-sized hit target; only its compact controls and status accept input.
+The phone header is a straight, unblurred surface. Typing never shows the large orb. Camera and sharing move behind a
 labelled phone disclosure; Settings stays at the right of the one-line top bar.
 Escape closes the disclosure and returns focus before ending voice.
 

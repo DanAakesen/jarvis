@@ -326,6 +326,28 @@ describe('App shell', () => {
     expect(screen.queryByText('Waking Jarvis…')).toBeNull();
   });
 
+  it('keeps phone voice on the current page and leaves header controls available through entry and exit', async () => {
+    vi.stubGlobal('matchMedia', vi.fn((query: string) => ({
+      matches: query.includes('max-width: 700px'),
+      media: query, addEventListener: vi.fn(), removeEventListener: vi.fn(),
+    })));
+    const user = userEvent.setup();
+    await renderSignedIn('/settings');
+    const heading = await screen.findByRole('heading', { level: 1, name: 'Settings' });
+    const shell = document.querySelector('.app-shell')!;
+    expect(shell.getAttribute('data-phone')).toBe('true');
+    await user.click(screen.getByRole('button', { name: 'Start voice' }));
+    expect(shell.getAttribute('data-voice-active')).toBe('true');
+    expect(screen.getByRole('heading', { level: 1, name: 'Settings' })).toBe(heading);
+    await user.click(screen.getByRole('button', { name: 'Menu' }));
+    expect(screen.getByRole('button', { name: 'Menu' }).getAttribute('aria-expanded')).toBe('true');
+    await user.keyboard('{Escape}');
+    await user.click(screen.getByRole('button', { name: 'End voice' }));
+    expect(shell.getAttribute('data-voice-active')).toBe('false');
+    expect(screen.getByRole('textbox', { name: 'Message Jarvis' })).not.toBeNull();
+    expect(screen.getByRole('heading', { level: 1, name: 'Settings' })).toBe(heading);
+  });
+
   it('enters fullscreen voice immediately and restores the typing shell when voice ends', async () => {
     const user = userEvent.setup();
     await renderSignedIn();
