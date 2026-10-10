@@ -19,6 +19,14 @@ The nine design areas and where each stands. **Confirmed** = Dan's requirement o
 
 ## Decision log
 
+P9-54 (10 October 2026): keep pull-request and CI inspection read-only. Reuse
+the registered-project resolver and repository-scoped GitHub App tokens, and
+expose bounded diffs, resolved review-thread state, check summaries and
+sanitized failed-job log tails. Do not add persistence or App permissions;
+changes remain with the confirmed issue or running-task flow. Fake-backed
+offline tests cover responses and redaction; live GitHub acceptance remains
+pending.
+
 P9-43 (8 October 2026): reuse the workspace broker's latest connected-owner
 snapshot for per-turn model awareness; do not persist screen or view content.
 Keep `view` optional for old clients, validate current/previous destinations,

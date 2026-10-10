@@ -2250,6 +2250,8 @@ Azure sign-in from GitHub Actions uses OpenID Connect and stores no secret. The 
 
 ### GitHub App
 
+P9-54 adds read-only pull request, diff, review-thread, check and failed-job log tools to the backend Factory module. They use the default Jarvis repository or the same registered-project resolver as `repo_*`, with repository-scoped pull-request, Checks-read and Actions-read installation tokens. Diff patches, review output, API responses and log tails are bounded; log tails redact token-like values before returning, and every tool response warns that provider content is untrusted. No new permission, persistence, route, or migration is required.
+
 [`github-app-manifest.json`](github-app-manifest.json) prepares a private App with contents, pull-request, issues, workflows and repository-creation write access, and commit statuses, checks, Actions, environments and deployments read access. It subscribes to `check_run`, `deployment_status`, `issue_comment`, `issues`, `pull_request`, `push`, and `workflow_run`. The permission set is limited to the operations in P3-02, P3-03 and P7-45; repository metadata read is GitHub's required baseline. P10-02 adds issue operations and the `issues` webhook handler; P10-01 granted Issues write on 8 October 2026 and the `issues` subscription is enabled, so these paths can run live.
 
 The backend reads `github-app-private-key` from Key Vault with its managed identity
