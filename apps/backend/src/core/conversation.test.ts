@@ -770,7 +770,7 @@ describe('conversation routes', () => {
     expect(response.body).not.toContain('capability_instructions_too_large');
     const entry = logged.map((line) => JSON.parse(line) as Record<string, unknown>)
       .find((item) => item.msg === 'conversation.reply_failed');
-    expect(entry).toMatchObject({ code: 'capability_instructions_too_large' });
+    expect(entry).toMatchObject({ failure: 'Chat agent failed (capability_instructions_too_large)' });
     expect(store.addMessage).toHaveBeenCalledTimes(1);
   });
 

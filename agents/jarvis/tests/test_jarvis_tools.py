@@ -332,7 +332,8 @@ async def test_capability_instruction_limit_comes_from_the_shared_limits_file() 
     shared = json.loads((Path(__file__).parents[1] / "limits.json").read_text(encoding="utf-8"))
 
     assert CAPABILITY_INSTRUCTIONS_MAX_CODE_POINTS == shared["capabilityInstructionsMaxCodePoints"]
-    assert shared["capabilityInstructionsBudgetCodePoints"] < CAPABILITY_INSTRUCTIONS_MAX_CODE_POINTS
+    shared_budget = shared["capabilityInstructionsBudgetCodePoints"]
+    assert shared_budget < CAPABILITY_INSTRUCTIONS_MAX_CODE_POINTS
 
 
 async def test_capability_instructions_are_accepted_exactly_at_the_limit() -> None:
