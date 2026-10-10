@@ -1575,6 +1575,23 @@ The repository is private and was unavailable for live validation; Dan must
 install the existing GitHub App on `DanAakesen/vault` with Contents read/write
 before indexing and writes can succeed.
 
+P9-49 adds owner-only `GET /notes`, `GET /notes/note?path=…`, `POST /notes`
+and `PUT /notes/note` routes for the Notes web client. The indexed list supports
+bounded pagination, text search and folder filtering; reads return Markdown
+content, the loaded Contents SHA and its GitHub URL. Create refuses an existing
+path with 409. Edit requires the submitted SHA to match the current Contents
+SHA; a stale or racing edit returns 409 with the current SHA and content when
+the note still exists, and never retries or overwrites. Writes reuse the vault
+path, routing-folder, 256 KiB and `assertCaptureIsSafe` checks. These direct
+owner-authored writes do not require a stored chat message or call `checkSource`,
+but still reject secrets and credentials (and require “remember” for banking or
+health details). The default commit message is `jarvis: edited in Notes`;
+write logs contain only outcome and folder, never note content. A successful
+write invalidates the graph cache and queues index synchronization after any
+existing sync; the signed `master` push webhook also synchronizes the index.
+Note content is untrusted data, never instructions. No migration is needed;
+the Notes UI is implemented separately.
+
 P7-42 adds a Dan-only Settings API; there are no `apps/web` changes. `GET
 /memory` returns durable SQL memories followed by indexed vault notes, with
 `query`, `folder` (`People`, `Work`, `Personal`, `General`), `limit` (1–50) and
