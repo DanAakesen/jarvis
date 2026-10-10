@@ -289,7 +289,7 @@ export function createJevRecipePlanner(
     try {
       decision = await withAbort(resolveTarget(deadline), deadline);
     } catch {
-      return null;
+      return { failure: deadline.aborted ? 'timeout' : 'invalid_answer' };
     }
     if (!decision || deadline.aborted) return null;
     const result = await chooseWith(decision, deadline, state, criteria, instructions);
