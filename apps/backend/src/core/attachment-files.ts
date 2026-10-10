@@ -79,9 +79,17 @@ function rejectBinaryOrMarkup(bytes: Buffer): string {
   } catch {
     throw new AttachmentInputError(415, 'The file content does not match an allowed text type.');
   }
-  const start = text.trimStart().slice(0, 512);
-  if (/^(?:#!|<\s*(?:!doctype\s+html|html\b|head\b|body\b|script\b|svg\b|iframe\b))/iu.test(start) ||
-      /^(?:<\?xml\b[^>]*>\s*)?(?:<!--[\s\S]*?-->\s*)*<\s*svg\b/iu.test(start)) {
+  let start = text.trimStart();
+  if (start.startsWith('<?xml')) {
+    const declarationEnd = start.indexOf('?>');
+    if (declarationEnd >= 0) start = start.slice(declarationEnd + 2).trimStart();
+  }
+  while (start.startsWith('<!--')) {
+    const commentEnd = start.indexOf('-->', 4);
+    if (commentEnd < 0) break;
+    start = start.slice(commentEnd + 3).trimStart();
+  }
+  if (/^(?:#!|<\s*(?:!doctype\s+html\b|html\b|head\b|body\b|script\b|svg\b|iframe\b))/iu.test(start)) {
     throw new AttachmentInputError(415, 'HTML and SVG files are not accepted.');
   }
   return text;

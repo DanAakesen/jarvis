@@ -43,6 +43,11 @@ describe('conversation attachment files', () => {
       bytes: Buffer.from('<?xml version="1.0"?><!-- hidden --><svg/>'),
     })).rejects.toThrow('SVG');
     await expect(validateAttachmentFile({
+      fileName: 'page.txt',
+      contentType: 'text/plain',
+      bytes: Buffer.from(`${'<!--x-->'.repeat(5_000)}<svg/>`),
+    })).rejects.toThrow('SVG');
+    await expect(validateAttachmentFile({
       fileName: 'page.html',
       contentType: 'text/html',
       bytes: Buffer.from('<!doctype html><title>x</title>'),
