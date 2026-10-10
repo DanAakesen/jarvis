@@ -253,6 +253,15 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   oldest first, and updating an existing pin preserves its timestamp. The shared
   contracts enforce the workspace view-ID format, view shape and bounded
   response; the UI session owns calling these routes.
+  P9-57 registers sensitive `pins_list` and `pin_restore` alongside these routes
+  when pin storage is available. Owner/agent calls read only the owner's store:
+  listing returns at most 20 metadata entries oldest first; restore accepts
+  exactly one view ID or case-insensitive title query, refusing unknown or
+  ambiguous matches. Stored views are revalidated with `isWorkspaceCommand`
+  against registered tools before acknowledged create/update and focus commands.
+  Restore refuses without a connected owner workspace; pin/unpin remain
+  page-owned. Titles are untrusted and tool audits redact arguments/results.
+  No migration, permission, dependency or web change is needed.
   The web dispatcher at `apps/web/src/Workspace.tsx:391` must handle the P9-40
   and P9-45 union members in the UI change before the combined feature can build
   or deploy.
