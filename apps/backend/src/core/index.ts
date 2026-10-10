@@ -9,6 +9,7 @@ import { registerNowRoutes } from './now.js';
 import { getUsageTool, registerUsageRoutes } from './usage.js';
 import { setJarvisModelTool } from './model-tools.js';
 import { getSettingsTool, updateSettingsTool } from './settings-tools.js';
+import { renewCredentialTool } from './credential-tools.js';
 import { manageModelDeploymentTool, registerModelDeploymentRoutes } from './model-deployments.js';
 import { setAwayModeTool, setPresenceModeTool } from './away-mode.js';
 import { getStatusSummaryTool } from './status.js';
@@ -53,7 +54,7 @@ function isObject(value: unknown): value is Record<string, unknown> {
 
 export const coreModule: BackendModule = {
   id: 'core',
-  tools: [setThemeTool, getSettingsTool, updateSettingsTool, setJarvisModelTool, manageModelDeploymentTool, setPresenceModeTool, setAwayModeTool, getStatusSummaryTool, workspaceCommandTool, readWindowTool, listJobsTool, getJobTool, cancelJobTool, getUsageTool],
+  tools: [setThemeTool, getSettingsTool, updateSettingsTool, renewCredentialTool, setJarvisModelTool, manageModelDeploymentTool, setPresenceModeTool, setAwayModeTool, getStatusSummaryTool, workspaceCommandTool, readWindowTool, listJobsTool, getJobTool, cancelJobTool, getUsageTool],
   registerRoutes: async (app) => {
     await registerSettingsRoutes(app);
     registerModelDeploymentRoutes(app);
