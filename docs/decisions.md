@@ -40,6 +40,13 @@ then focus; refuse when no owner workspace is connected. Use plain root object
 schemas (L121), one tool-name-free shared instruction, untrusted title markers
 and redacted audits. No migration, App permission or web change is required.
 Acceptance paths are verified offline; live model/browser use remains unverified.
+P9-58 (10 October 2026): keep `set_theme` as a compatibility tool, but route its
+flat appearance tokens through the shared `applySettingsPatch` validation and
+write path used by `update_settings`. Colour `null` clears one override and
+`reset: true` clears all three. Preserve the existing settings rows and omit
+cleared colours from effective settings; no migration, App permission, contract,
+or web change is required. Backend tool and HTTP tests verify the behavior
+offline; live model use remains unverified.
 P9-74 (10 October 2026): hide note front matter rather than introduce a YAML
 parser or property editor. Strip delimited metadata after leading comments,
 whitespace and BOMs, including malformed YAML. Keep the note path, Markdown and
