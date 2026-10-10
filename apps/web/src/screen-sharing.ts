@@ -194,7 +194,7 @@ function useVisionCapture(
     if (!stream || stream.getVideoTracks().every((track) => track.readyState !== 'live')) {
       throw new Error(`Start ${label === 'camera' ? 'the camera' : 'screen sharing'} before asking Jarvis to inspect it.`);
     }
-    if (!config.backendUrl) throw new Error('Visual inspection is unavailable until the backend is configured.');
+    if (!config.backendUrl) throw new Error('Visual inspection unavailable. Try again.');
 
     const controller = new AbortController();
     inspectionRef.current?.abort();

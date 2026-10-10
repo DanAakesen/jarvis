@@ -570,7 +570,7 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
 }
 .workspace-arrangement-options [aria-pressed="true"] { background: var(--disabled-surface); color: var(--text); box-shadow: inset 0 0 0 1px var(--control-rule); }
 .workspace-shortcuts { flex-basis: 100%; margin: 0; color: var(--text-muted); font-size: var(--type-caption); }
-.workspace-guidance, .workspace-empty { margin: var(--space-2) 0 var(--space-4); font-size: var(--type-small); }
+.workspace-empty { margin: var(--space-2) 0 var(--space-4); font-size: var(--type-small); }
 .workspace-canvas { min-width: 0; }
 .workspace-tabs { display: flex; min-width: 0; gap: var(--space-2); margin: 0 0 var(--space-3); overflow-x: auto; padding: 2px 2px var(--space-2); }
 .workspace-tab {
@@ -1177,7 +1177,6 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
 .projects-feedback { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin: 20px 0; }
 .projects-feedback p { font-size: 15px; }
 .projects-feedback[role="alert"] { color: var(--error); }
-.projects-freshness { margin: 20px 0 12px; font-size: 14px; }
 .project-list { display: grid; gap: 16px; margin: 0; padding: 0; list-style: none; }
 .project-item, .project-empty { min-width: 0; padding: 24px; background: var(--surface-translucent); border: 1px solid var(--rule); border-radius: var(--radius-panel); box-shadow: var(--panel-shadow); backdrop-filter: blur(var(--surface-blur)); transition: background-color var(--motion-panel) var(--ease-standard), border-color var(--motion-panel) var(--ease-standard), box-shadow var(--motion-panel) var(--ease-standard); }
 .project-title-row { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
@@ -1694,7 +1693,6 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
   .workspace[data-phone="true"] { display: flex; height: 100%; min-height: 0; flex-direction: column; gap: var(--space-2); padding: var(--space-3); }
   .workspace[data-phone="true"] .workspace-heading { flex: 0 0 auto; }
   .workspace[data-phone="true"] .workspace-heading h2 { margin: 0; font-size: var(--type-subheading); }
-  .workspace[data-phone="true"] .workspace-guidance { margin: 0; font-size: var(--type-caption); }
   .workspace[data-phone="true"] .workspace-canvas { display: flex; flex: 1; min-height: 0; height: auto; touch-action: pan-y pinch-zoom; }
   .workspace[data-phone="true"] .workspace-view-content { touch-action: pan-y pinch-zoom; }
   .workspace[data-phone="true"] .workspace-window:not([hidden]):not(.workspace-window-minimized) { position: relative; inset: auto; width: 100%; height: auto; min-height: 0; flex: 1; }
@@ -2392,7 +2390,6 @@ a.task-chip:hover { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--glass-e
 .presence-mode-card[aria-pressed="true"] { background: color-mix(in srgb, var(--tone) 16%, transparent); box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--tone) 80%, transparent), 0 0 22px -8px var(--tone); }
 .presence-mode-card:disabled { cursor: wait; }
 .presence-mode-name { font-weight: 650; }
-.presence-mode-note { grid-column: 2; color: var(--text-muted); font-size: 13px; }
 .presence-instructions-heading { margin: 22px 0 4px; font-size: 16px; }
 .presence-instructions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
 .presence-instruction label { display: inline-flex; align-items: center; gap: 8px; font-weight: 650; }
@@ -3025,7 +3022,6 @@ a.task-chip:hover { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--glass-e
 .mobile-menu-link:active { background: var(--glass-pressed); }
 .mobile-menu-sheet:focus { outline: none; }
 .mobile-menu-link[aria-current="page"] { background: var(--glass-selected); box-shadow: var(--glass-selected-glow); }
-.mobile-menu-hint { margin: 8px 14px 0; color: var(--text-muted); font-size: var(--type-caption); }
 @keyframes mobile-sheet-in { from { opacity: 0; translate: 0 36px; } }
 @keyframes mobile-drop { from { opacity: 0; translate: 0 -10px; } }
 @keyframes mobile-fade { from { opacity: 0; } }

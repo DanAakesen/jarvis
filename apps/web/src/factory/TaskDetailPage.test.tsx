@@ -238,7 +238,7 @@ describe('task window', () => {
     expect(screen.queryByRole('button', { name: 'Steer' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Pause' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Recover' })).toBeNull();
-    expect(screen.getByText('Review the task history before taking further action.')).not.toBeNull();
+    expect(screen.queryByText('Review the task history before taking further action.')).toBeNull();
     expect(screen.getByText('Live updates connected')).not.toBeNull();
     expect(streamHarness.lastEventIds.get('42')).toBe('24');
     expect(fetchMock).toHaveBeenCalledWith(

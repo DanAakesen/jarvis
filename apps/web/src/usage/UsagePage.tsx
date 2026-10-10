@@ -165,7 +165,7 @@ async function fetchUsageReport(
   getAccessToken: () => Promise<string>,
   signal: AbortSignal,
 ): Promise<UsageReport> {
-  if (!backendUrl) throw new Error('Usage data is unavailable until the backend is deployed.');
+  if (!backendUrl) throw new Error('Usage data unavailable.');
   const token = await getAccessToken();
   const authorization = `${['Bear', 'er'].join('')} ${token}`;
   const response = await backendFetch(`${backendUrl}/usage?period=${period}`, {

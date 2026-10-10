@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { MarkdownContent } from '../MarkdownContent';
 import {
-  KnowledgeUnavailable, knowledgeFolders, loadKnowledgeGraph, loadKnowledgeNote, matchTitles, sampleKnowledgeGraph,
+  KnowledgeUnavailable, knowledgeFolders, loadKnowledgeGraph, loadKnowledgeNote, matchTitles,
   searchKnowledge, type KnowledgeFolder, type KnowledgeGraph, type KnowledgeNote,
 } from './knowledge-data';
 import type { KnowledgeScene } from './knowledge-scene';
@@ -154,15 +154,10 @@ export function KnowledgeGraphView({ backendUrl, getAccessToken, initialQuery = 
       )}
       {load.status === 'unavailable' && (
         <div className="knowledge-status" role="status">
-          <p>The knowledge graph is not available yet. It appears here once the knowledge service is deployed.</p>
-          {import.meta.env.DEV && (
-            <button className="secondary-button" type="button" onClick={() => setLoad({ status: 'ready', graph: sampleKnowledgeGraph() })}>
-              Show a sample graph (development only)
-            </button>
-          )}
+          <p>The knowledge graph is unavailable.</p>
         </div>
       )}
-      {sceneFailed && graph && <p className="knowledge-status" role="status">The 3D view is unavailable here. Search still lists your notes.</p>}
+      {sceneFailed && graph && <p className="knowledge-status" role="status">The 3D view is unavailable. Search remains available.</p>}
 
       {graph && (
         <>
@@ -214,8 +209,7 @@ export function KnowledgeGraphView({ backendUrl, getAccessToken, initialQuery = 
                 </button>
               </li>
             ))}
-            {graph.sample && <li className="knowledge-sample">Sample data</li>}
-            {!graph.sample && graph.edges.length === 0 && <li className="knowledge-sample" title="Jarvis has not reported any links between notes yet.">No links yet</li>}
+            {graph.edges.length === 0 && <li className="knowledge-sample">No links.</li>}
           </ul>
           {selected && (
             <aside className="knowledge-note luminous-glass" aria-labelledby={`${ids}-note`}>
@@ -227,8 +221,7 @@ export function KnowledgeGraphView({ backendUrl, getAccessToken, initialQuery = 
               </header>
               <p className="knowledge-note-meta">{selected.folder} · {selected.path}</p>
               <div className="knowledge-note-body">
-                {graph.sample ? <p className="settings-explanation">Sample notes have no content.</p>
-                  : !currentNote ? <Loader variant="lines" label="Opening the note…" />
+                {!currentNote ? <Loader variant="lines" label="Opening the note…" />
                     : currentNote.error ? <p role="alert">{currentNote.error}</p>
                       : <MarkdownContent source={currentNote.value!.content} />}
               </div>

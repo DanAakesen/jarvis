@@ -84,10 +84,10 @@ function voiceUrl(backendUrl: string | null, language: VoiceLanguage): string {
     if (!backendUrl) throw new TypeError();
     url = new URL(backendUrl);
   } catch {
-    throw new Error('Voice is unavailable until the backend is configured.');
+    throw new Error('Voice unavailable. Try again.');
   }
   if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.search || url.hash) {
-    throw new Error('Voice is unavailable until the backend is configured.');
+    throw new Error('Voice unavailable. Try again.');
   }
   url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
   url.pathname = `${url.pathname.replace(/\/+$/u, '')}/voice${language === 'da' ? '/da' : ''}`;

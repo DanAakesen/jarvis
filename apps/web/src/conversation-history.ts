@@ -110,7 +110,7 @@ async function chatResponse(
   onDeliveryUncertain?: () => void,
   signal?: AbortSignal,
 ): Promise<Response> {
-  if (!config.backendUrl) throw new Error('Chat is unavailable until the backend is deployed.');
+  if (!config.backendUrl) throw new Error('Chat unavailable. Try again.');
   const token = signal
     ? await waitForChatSetup(() => accessToken(client, config), signal)
     : await accessToken(client, config);
@@ -308,7 +308,7 @@ export async function loadConversationHistory(
   before?: string,
 ): Promise<ConversationHistoryPage> {
   const token = await accessToken(client, config);
-  if (!config.backendUrl) throw new Error('Conversation history is unavailable until the backend is deployed.');
+  if (!config.backendUrl) throw new Error('Conversation history unavailable. Try again.');
 
   const url = new URL(`${config.backendUrl.replace(/\/+$/, '')}/conversation/history`);
   url.searchParams.set('limit', '50');
@@ -346,7 +346,7 @@ export async function loadImageArtifactUrl(
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(artifactId)) {
     throw new Error('Jarvis returned an invalid image artifact reference.');
   }
-  if (!config.backendUrl) throw new Error('Image artifacts are unavailable until the backend is deployed.');
+  if (!config.backendUrl) throw new Error('Image artifacts unavailable. Try again.');
   const token = await accessToken(client, config);
   let response: Response;
   try {

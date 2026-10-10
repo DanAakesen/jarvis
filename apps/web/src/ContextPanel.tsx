@@ -52,7 +52,7 @@ export function ContextPanelProvider({ children }: { children: ReactNode }) {
 export function ContextPanel({ closeIcon, resizeHandle }: { closeIcon: ReactNode; resizeHandle?: ReactNode }) {
   const { content, isOpen, close } = useContextPanel();
   const message = content.status === 'empty'
-    ? content.message ?? 'No relevant information is available yet.'
+    ? content.message ?? 'No relevant information.'
     : content.status === 'loading'
       ? content.message ?? 'Loading contextual information…'
       : content.status === 'view' || content.status === 'custom'

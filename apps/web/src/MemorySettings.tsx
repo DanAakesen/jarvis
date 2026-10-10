@@ -208,7 +208,7 @@ export function MemorySettings({ backendUrl, getAccessToken }: { backendUrl: str
     <div className="memory-settings">
       <h3 className="settings-subheading">What Jarvis remembers about you</h3>
       {unavailable ? (
-        <p className="settings-unavailable" role="status">Memory is not available yet. It appears here once the memory service is deployed.</p>
+        <p className="settings-unavailable" role="status">Memory unavailable.</p>
       ) : (
         <>
           <div className="settings-field memory-search">
@@ -227,7 +227,7 @@ export function MemorySettings({ backendUrl, getAccessToken }: { backendUrl: str
                 </div>
               )}
               {list.status === 'ready' && list.value.length === 0 && (
-                <p className="settings-explanation">{debounced ? 'Nothing matches this search.' : 'Jarvis has not remembered anything about you yet.'}</p>
+                <p className="settings-explanation">{debounced ? 'Nothing matches this search.' : 'No memories.'}</p>
               )}
               {list.status === 'ready' && list.value.length > 0 && (
                 <ul className="memory-list" aria-label="Memories">

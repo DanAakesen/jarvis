@@ -28,7 +28,7 @@ async function requestSleepState(
   method: 'GET' | 'PUT',
   state?: SleepState,
 ): Promise<SleepState> {
-  if (!config.backendUrl) throw new Error('Backend scaling is unavailable until the backend is deployed.');
+  if (!config.backendUrl) throw new Error('Backend scaling unavailable.');
   const url = new URL(`${config.backendUrl.replace(/\/+$/, '')}/operations/sleep`);
   let response: Response;
   try {
