@@ -684,6 +684,16 @@ describe('task dispatcher', () => {
     expect(store.endTaskSessions).toHaveBeenCalledWith('42', 'Paused');
   });
 
+  it('refuses pause of an ended finishing session rather than creating an unresumable task', async () => {
+    const store = idleStore();
+    const { dispatcher, transition } = harness(store, undefined, { ...controlTask, latestSessionEndReason: 'done' });
+    await expect(dispatcher.control('42', { action: 'pause' })).resolves.toEqual({
+      kind: 'invalid-transition', reason: 'Delivery is finishing; try again when it completes',
+    });
+    expect(transition).not.toHaveBeenCalled();
+    expect(store.endTaskSessions).not.toHaveBeenCalled();
+  });
+
   it('reports unreachable cancellation without changing state or exposing provider errors', async () => {
     const store = { ...idleStore(), getControlTarget: vi.fn(async () => controlTarget) };
     const { dispatcher, cancel, transition } = harness(store);

@@ -457,6 +457,7 @@ export class TaskDispatcher implements TaskController {
           latestTask.pullRequest?.state !== 'open' && !finishingDelivery) {
         return { kind: 'runtime-unknown' as const };
       }
+      if (command.action === 'pause' && !target) return { kind: 'session-ended' as const };
       if (task.state === 'Running' && target?.sessionStatus === 'Active' && target.invocationId) {
         if (command.action === 'pause') return { kind: 'state-changed' as const, state: latestTask.state };
         try {
@@ -477,7 +478,7 @@ export class TaskDispatcher implements TaskController {
     if (cancellation.kind === 'runtime-unknown') return {
       kind: 'unavailable', reason: 'No task runtime session or completed delivery evidence could be found',
     };
-    if (cancellation.kind === 'merge-pending') return {
+    if (cancellation.kind === 'merge-pending' || cancellation.kind === 'session-ended') return {
       kind: 'invalid-transition', reason: 'Delivery is finishing; try again when it completes',
     };
     if (cancellation.kind === 'state-changed') {

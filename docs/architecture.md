@@ -687,7 +687,9 @@ without an active turn use the existing task-policy lock: pending policy merges
 return 409, “Delivery is finishing; try again when it completes”; otherwise
 cancel transitions to Cancelled and ends sessions, while pause uses
 PauseRequested → Paused and retains the idle session. No invocation cancellation
-is sent for an already completed turn. Missing runtime and completion evidence
+is sent for an already completed turn. Pause also returns the finishing-delivery
+409 if the session has already ended, avoiding a Paused task with no resumable
+session; cancel remains available. Missing runtime and completion evidence
 returns an explicit 503; active-invocation cancellation failure returns a
 sanitized 502 without transitioning. Terminal tasks return 409 naming their
 state. HTTP controls and model tools relay the same safe reasons. No migration,
