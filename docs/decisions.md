@@ -19,6 +19,16 @@ The nine design areas and where each stands. **Confirmed** = Dan's requirement o
 
 ## Decision log
 
+P9-55 (10 October 2026): reuse `settingsOptionsForCatalogue` for settings-tool
+discovery parity with `GET /settings`, and derive field guidance and numeric
+bounds from the existing patch schema. Filter settings, options and fields
+together for the requested area. Keep existing update validation and Now gates;
+generate bounded refusal hints from known fields and catalogue values, never
+submitted values. Both settings tools remain sensitive and always registered,
+so one shared discovery instruction can name them. No migration, App permission,
+dependency or web change is needed. Verified offline; live model use remains
+unverified.
+
 P9-52 (10 October 2026): keep generated window readback in the existing
 owner-scoped, bounded workspace command records, not SQL. Register `read_window`
 in core even when HTML storage is unavailable, prefer page-reported content,
@@ -322,6 +332,7 @@ Windows/Chrome/Jev speedup remains live acceptance.
 
 | Date | Decision | Rationale and evidence | Status |
 | --- | --- | --- | --- |
+| 2026-10-10 | P9-73 uses one additive phone dock gap above the safe area, enables edge-to-edge viewports and adds a minimal standalone manifest reusing the app icon. | `max(gap, inset)` leaves no gap above a nonzero inset. Chromium/WebKit fixtures measured 16px with zero inset and 50px with 34px inset; desktop geometry is unchanged. Root ownership lets body-portalled toasts share the phone token. | Implemented and browser-checked with fixtures; physical iPhone and installed Home Screen acceptance remain unverified |
 | 2026-10-10 | P9-50 reconciles issue, task, PR and merge-commit deployment through a read-only Factory tool. Require closed issue, merged PR and matching successful deployment for “delivered”; preserve partial results and warnings on failed reads. Recover/resume of closed, merged or superseded legacy work requires `confirm: true` on the Dan-only controls route. | Issue #627 records duplicate recovery caused by an unlinked legacy task. Reuse task/release stores, existing GitHub readers and permissions; do not silently link legacy matches, infer delivery from an unrelated SHA, or allow the resume tool to bypass the gate. No migration or web change. Focused tests cover explicit body supersession, ambiguous queries, partial failures, qualified closing references and exact-SHA deployment; unverifiable restart safety returns 503. | Implemented offline; live acceptance pending |
 | 2026-10-10 | P9-51 treats completed-turn delivery as known runtime state, not runtime unavailability. Cancel/pause recheck state and pending merges under the existing policy lock; never cancel a completed invocation. Derive finishing activity from persisted turns and relay safe control reasons to HTTP and tools. | Issue #628 reproduces a Running task after its turn/session finished. Preserve the pending-merge guard and terminal states, retain pause's idle session, refuse pause with finishing 409 when no resumable session remains, and distinguish invocation failure from cleanup failure. Reuse P9-50 readers and existing contracts; no migration, App permission or web change. | Implemented offline; live SQL/Foundry acceptance pending |
 | 2026-10-08 | P9-33 exposes explicit vault-note deletion through the shared sensitive tool registry. Reuse the GitHub App Contents-write client and require a present-mode Now confirmation naming the exact path; recheck the note SHA after approval, then remove its index rows and invalidate the graph cache. | Existing Contents API SHA protection, `TeamsNotificationService.runConfirmed`, and `VaultIndexStore.deleteFiles` cover the provider, approval and cleanup boundaries. No migration or web change is needed; focused fake-GitHub tests cover approval gating, concurrent edits, commit metadata, index removal and graph invalidation. | Implemented offline; live GitHub App access remains unverified |

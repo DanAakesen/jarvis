@@ -548,6 +548,149 @@ const settingsPatchSchema = {
   },
 };
 
+interface SettingField {
+  path: string;
+  type: string | readonly string[];
+  allowedValues?: readonly unknown[];
+  minimum?: number;
+  maximum?: number;
+  minLength?: number;
+  maxLength?: number;
+  pattern?: string;
+  nowConfirmation: boolean;
+}
+
+interface FieldSchema {
+  type: string | readonly string[];
+  enum?: readonly unknown[];
+  minimum?: number;
+  maximum?: number;
+  minLength?: number;
+  maxLength?: number;
+  pattern?: string;
+  properties?: Record<string, FieldSchema>;
+}
+
+const settingsFieldSchemas = settingsPatchSchema.properties.settings.properties as unknown as Record<string, FieldSchema>;
+
+const modelFieldRoles: Record<string, ModelRole> = {
+  'jarvis.model': 'chat',
+  'jarvis.reasoning': 'chat',
+  'voice.englishModel': 'voice',
+  'voice.speechToTextModel': 'transcription',
+  'codex.model': 'codex',
+  'codex.reasoning': 'codex',
+  'copilot.model': 'copilot',
+};
+
+export function settingsFieldsForCatalogue(catalogue: ModelCatalogue, current: Settings): SettingField[] {
+  const fields: SettingField[] = [];
+  const visit = (properties: Record<string, FieldSchema>, prefix = '') => {
+    for (const [key, schema] of Object.entries(properties)) {
+      const path = prefix ? `${prefix}.${key}` : key;
+      if (schema.properties) {
+        visit(schema.properties, path);
+        continue;
+      }
+      const role = path.startsWith('roles.') ? path.split('.')[1] as ModelRole : modelFieldRoles[path];
+      const modelField = key === 'model' || key === 'englishModel' || key === 'speechToTextModel';
+      const allowedValues = role
+        ? modelField ? modelsForRole(catalogue, role)
+          : [
+            ...(path === 'codex.reasoning' ? ['default'] : []),
+            ...reasoningForModel(catalogue, role, current.roles[role].model),
+          ]
+        : schema.enum ?? (schema.type === 'boolean' ? [true, false] : undefined);
+      const { type, minimum, maximum, minLength, maxLength, pattern } = schema;
+      fields.push({
+        path, type, ...(allowedValues ? { allowedValues } : {}),
+        ...(minimum === undefined ? {} : { minimum }),
+        ...(maximum === undefined ? {} : { maximum }),
+        ...(minLength === undefined ? {} : { minLength }),
+        ...(maxLength === undefined ? {} : { maxLength }),
+        ...(pattern === undefined ? {} : { pattern }),
+        nowConfirmation: Boolean(role) || path === 'global.visionDailyBudgetUsd',
+      });
+    }
+  };
+  visit(settingsFieldSchemas);
+  return fields;
+}
+
+export function settingsPatchRefusal(value: unknown, catalogue: ModelCatalogue, current: Settings): string {
+  const fields = settingsFieldsForCatalogue(catalogue, current);
+  const hint = (path: string, field = fields.find((entry) => entry.path === path)) => {
+    const allowed = field?.allowedValues
+      ? `Valid values: ${field.allowedValues.map((entry) => JSON.stringify(entry)).join(', ')}.`
+      : field ? `Use ${Array.isArray(field.type) ? field.type.join(' or ') : field.type}${
+        field.minimum === undefined ? '' : ` from ${field.minimum} to ${field.maximum}`
+      }${field.maxLength === undefined ? '' : ` with at most ${field.maxLength} characters`}${
+        field.pattern ? ` matching ${field.pattern}` : ''
+      }; read get_settings for the field constraints.`
+        : 'Read get_settings for supported fields.';
+    return `Invalid settings key ${path}. ${allowed}`.slice(0, 500);
+  };
+  const shapeError = (input: unknown, properties: Record<string, FieldSchema>, prefix: string): string | null => {
+    if (!isObject(input) || Object.keys(input).length === 0) {
+      return `Invalid settings key ${prefix || 'settings'}. Provide a non-empty object. Valid keys: ${Object.keys(properties).join(', ')}.`;
+    }
+    for (const [key, entry] of Object.entries(input)) {
+      const path = prefix ? `${prefix}.${key}` : key;
+      if (!Object.hasOwn(properties, key)) {
+        // Never echo arbitrary input keys, which may themselves contain private text.
+        return `Invalid settings key ${prefix ? `${prefix}.` : ''}[unsupported key]. Valid keys: ${Object.keys(properties).join(', ')}.`.slice(0, 500);
+      }
+      const schema = properties[key]!;
+      if (schema.properties) {
+        const error = shapeError(entry, schema.properties, path);
+        if (error) return error;
+      }
+    }
+    return null;
+  };
+  const shape = shapeError(value, settingsFieldSchemas, '');
+  if (shape) return shape.slice(0, 500);
+  const patch = value as SettingsPatch;
+  for (const [area, entries] of Object.entries(patch)) {
+    if (area === 'roles') continue;
+    for (const [key, entry] of Object.entries(entries)) {
+      if (area === 'appearance' && entry === null &&
+          (clearableAppearanceKeys as readonly string[]).includes(key)) continue;
+      if (!validSetting(area as keyof Settings, key, entry, catalogue)) {
+        if (area === 'personality' && key === 'modeInstructions') {
+          const mode = Object.keys(entry as Record<string, unknown>).find((mode) =>
+            !validInstruction((entry as Record<string, unknown>)[mode]));
+          if (mode) return hint(`personality.modeInstructions.${mode}`);
+        }
+        return hint(`${area}.${key}`);
+      }
+    }
+  }
+  const normalized = withRoleSettings(patch);
+  for (const role of modelRoles) {
+    const update = normalized.roles?.[role];
+    if (!update) continue;
+    const model = update.model ?? current.roles[role].model;
+    const pathFor = (key: 'model' | 'reasoningEffort') =>
+      patch.roles?.[role]?.[key] !== undefined ? `roles.${role}.${key}`
+        : Object.entries(modelFieldRoles).find(([path, mapped]) =>
+          mapped === role && (key === 'model' ? path.endsWith('Model') || path.endsWith('.model') : path.endsWith('.reasoning')))?.[0]
+          ?? `roles.${role}.${key}`;
+    if (!modelsForRole(catalogue, role).includes(model)) return hint(pathFor('model'));
+    if (!isRolePatch(role, update, current.roles[role], catalogue)) {
+      const path = pathFor('reasoningEffort');
+      return hint(path, {
+        path, type: 'string', nowConfirmation: true,
+        allowedValues: [
+          ...(path === 'codex.reasoning' ? ['default'] : []),
+          ...reasoningForModel(catalogue, role, model),
+        ],
+      });
+    }
+  }
+  return 'Invalid settings. Read get_settings for supported fields and values.';
+}
+
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
