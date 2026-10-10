@@ -19,7 +19,7 @@ const boardColumns: readonly { id: FactoryBoardColumnId; label: string }[] = [
   { id: 'done', label: 'Done' },
 ];
 const workerLabels = ['Jarvis', 'Copilot', 'Codex', 'Dan'] as const;
-const linkedIssuePattern = /\b(?:fixes|closes|resolves)\s+#(\d+)\b/giu;
+const linkedIssuePattern = /\b(?:fixes|closes|resolves)\s+(?:#(\d+)|([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+)#(\d+)|https:\/\/github\.com\/([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+)\/issues\/(\d+))\b/giu;
 const decisionLabel = 'needs-decision';
 const deferredLabel = 'deferred';
 const closedIssueWindowMs = 14 * 24 * 60 * 60 * 1000;
@@ -53,6 +53,20 @@ export interface FactoryBoardSource {
 
 export interface FactoryBoardReader {
   read(repository: string, token: string, closedSince: string): Promise<FactoryBoardSource>;
+  searchIssues?(repository: string, token: string, query: string, field?: 'title' | 'body'): Promise<{ numbers: number[]; incomplete: boolean }>;
+  issuePullRequests?(repository: string, token: string, issue: number): Promise<number[]>;
+  readPullRequest?(repository: string, token: string, number: number): Promise<WorkPullRequest>;
+}
+
+export interface WorkPullRequest {
+  number: number;
+  url: string;
+  state: 'open' | 'closed' | 'merged';
+  draft: boolean;
+  checks: 'pending' | 'passed' | 'failed';
+  mergeSha: string | null;
+  linkedIssues: number[];
+  checksIncomplete?: boolean;
 }
 
 function record(value: unknown): Record<string, unknown> | null {
@@ -189,7 +203,90 @@ async function readPages(
 }
 
 export function createGitHubFactoryBoardReader(fetchImpl: typeof fetch = fetch): FactoryBoardReader {
+  function root(repository: string): string {
+    if (!repositoryPattern.test(repository)) throw new Error('Invalid repository');
+    return `/repos/${repository.split('/').map(encodeURIComponent).join('/')}`;
+  }
+  async function get(path: string, token: string): Promise<unknown> {
+    return readResponse(await fetchImpl(`${githubApi}${path}`, {
+      headers: { Accept: 'application/vnd.github+json', Authorization: `${['Bear', 'er'].join('')} ${token}`,
+        'X-GitHub-Api-Version': '2022-11-28' },
+      signal: AbortSignal.timeout(10_000), redirect: 'error',
+    }));
+  }
   return {
+    async searchIssues(repository, token, query, field = 'title') {
+      root(repository);
+      const data = record(await get(`/search/issues?${new URLSearchParams({
+        q: `repo:${repository} is:issue "${query.replace(/["\\]/gu, ' ')}" in:${field}`,
+        per_page: '100',
+      })}`, token));
+      if (!data || !Array.isArray(data.items) || data.items.length > 100 ||
+          !Number.isSafeInteger(data.total_count) || (data.total_count as number) < 0) {
+        throw new Error('GitHub search response is invalid');
+      }
+      const items = data.items.map(record);
+      const numbers = items.map((item) => item?.number);
+      if (numbers.some((number) => !Number.isSafeInteger(number) || (number as number) < 1)) {
+        throw new Error('GitHub search response is invalid');
+      }
+      if (items.some((item) => !item || 'pull_request' in item ||
+          item.repository_url !== `${githubApi}/repos/${repository}` ||
+          item.html_url !== `https://github.com/${repository}/issues/${item.number}`)) {
+        throw new Error('GitHub search returned work outside the selected repository');
+      }
+      return { numbers: (numbers as number[]).slice(0, 10),
+        incomplete: data.incomplete_results === true || (data.total_count as number) > 10 };
+    },
+    async issuePullRequests(repository, token, issue) {
+      const events = await readPages(fetchImpl, `${root(repository)}/issues/${issue}/timeline`, token,
+        AbortSignal.timeout(25_000));
+      return [...new Set(events.flatMap((value) => {
+        const event = record(value);
+        const source = record(record(event?.source)?.issue);
+        if (event?.event !== 'cross-referenced' || !record(source?.pull_request) ||
+            typeof source?.html_url !== 'string' ||
+            !source.html_url.startsWith(`https://github.com/${repository}/pull/`) ||
+            !Number.isSafeInteger(source.number)) return [];
+        return [source.number as number];
+      }))];
+    },
+    async readPullRequest(repository, token, number) {
+      const path = root(repository);
+      const raw = record(await get(`${path}/pulls/${number}`, token));
+      const parsed = pullRequestFromGitHub(raw);
+      const head = record(raw?.head)?.sha;
+      if (!raw || raw.number !== number || parsed.url !== `https://github.com/${repository}/pull/${number}` ||
+          (raw.state !== 'open' && raw.state !== 'closed') ||
+          typeof raw.merged !== 'boolean' || typeof head !== 'string' || !/^[a-f0-9]{40}$/iu.test(head) ||
+          (raw.merge_commit_sha !== null && (typeof raw.merge_commit_sha !== 'string' ||
+            !/^[a-f0-9]{40}$/iu.test(raw.merge_commit_sha)))) throw new Error('Invalid pull request');
+      const [checks, status] = await Promise.all([
+        get(`${path}/commits/${head}/check-runs?per_page=100`, token).then(record).catch(() => null),
+        get(`${path}/commits/${head}/status`, token).then(record).catch(() => null),
+      ]);
+      const runs = Array.isArray(checks?.check_runs) ? checks.check_runs.map(record) : [];
+      const checksIncomplete = !checks || !Array.isArray(checks.check_runs) ||
+        !Number.isSafeInteger(checks.total_count) || checks.total_count !== runs.length ||
+        runs.some((run) => !run || !['queued', 'in_progress', 'completed', 'waiting', 'pending', 'requested']
+          .includes(String(run.status)) ||
+          (run.status === 'completed' && !['success', 'neutral', 'skipped', 'failure', 'cancelled',
+            'timed_out', 'action_required', 'startup_failure', 'stale'].includes(String(run.conclusion)))) ||
+        !status || !Array.isArray(status.statuses) || !Number.isSafeInteger(status.total_count) ||
+        status.total_count !== status.statuses.length ||
+        !['pending', 'success', 'failure', 'error'].includes(String(status.state));
+      const failed = status?.state === 'failure' || status?.state === 'error' ||
+        runs.some((run) => ['failure', 'cancelled', 'timed_out', 'action_required', 'startup_failure']
+          .includes(String(run?.conclusion)));
+      const passed = !checksIncomplete && (runs.length > 0 || (status?.total_count as number) > 0) &&
+        (status?.total_count === 0 || status?.state === 'success') &&
+        runs.every((run) => run?.status === 'completed' && ['success', 'neutral', 'skipped'].includes(String(run.conclusion)));
+      return { number, url: parsed.url, state: raw.merged ? 'merged' : raw.state,
+        draft: parsed.draft, mergeSha: raw.merged ? raw.merge_commit_sha as string | null : null,
+        linkedIssues: [...linkedIssueNumbers(parsed.body, repository)],
+        ...(checksIncomplete ? { checksIncomplete: true } : {}),
+        checks: failed ? 'failed' : passed ? 'passed' : 'pending' };
+    },
     async read(repository, token, closedSince) {
       if (!repositoryPattern.test(repository) || !token || token.length > 4096 ||
           !Number.isFinite(Date.parse(closedSince))) {
@@ -285,8 +382,13 @@ export class FactoryBoardCache {
   }
 }
 
-export function linkedIssueNumbers(body: string | null): Set<number> {
-  return new Set(Array.from(body?.matchAll(linkedIssuePattern) ?? [], (match) => Number(match[1])));
+export function linkedIssueNumbers(body: string | null, repository?: string): Set<number> {
+  return new Set(Array.from(body?.matchAll(linkedIssuePattern) ?? []).flatMap((match) => {
+    const referencedRepo = match[2] ?? match[4];
+    if (referencedRepo && referencedRepo.toLowerCase() !== repository?.toLowerCase()) return [];
+    const number = Number(match[1] ?? match[3] ?? match[5]);
+    return Number.isSafeInteger(number) && number > 0 ? [number] : [];
+  }));
 }
 
 export function desiredFactoryBoardStatus(

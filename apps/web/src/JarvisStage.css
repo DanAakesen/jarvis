@@ -37,6 +37,13 @@
   box-shadow: 0 0 50px color-mix(in srgb, var(--stage-orb) 17%, transparent);
   content: "";
   transform: translate(-50%, -50%);
+  animation: stage-fallback-breathe 11s ease-in-out infinite;
+}
+
+@keyframes stage-fallback-breathe {
+  0%, 100% { opacity: .82; scale: .96; }
+  46% { opacity: 1; scale: 1.04; }
+  72% { opacity: .9; scale: .99; }
 }
 
 .jarvis-stage canvas {
@@ -62,13 +69,20 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .jarvis-stage-fallback {
+  .jarvis-stage-fallback,
+  .jarvis-stage[data-failed="true"]::after {
     transition: none;
+    animation: none;
   }
 }
 
+:root[data-motion="reduced"] .jarvis-stage[data-failed="true"]::after { animation: none; }
+
 @media (max-width: 700px), (max-height: 500px) and (pointer: coarse) {
   .jarvis-stage[data-failed="true"]::after { width: clamp(140px, 36vw, 240px); }
+  .app-shell[data-phone="true"][data-voice-active="true"] .jarvis-stage[data-failed="true"]::after {
+    top: auto; bottom: var(--jarvis-orb-dock-bottom); width: calc(2 * var(--jarvis-orb-dock-radius)); transform: translateX(-50%);
+  }
   .jarvis-stage-fallback { padding: 8px 10px; }
 }
 

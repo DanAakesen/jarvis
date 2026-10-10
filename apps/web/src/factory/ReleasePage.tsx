@@ -205,7 +205,7 @@ export function ReleasePage({ backendUrl, getAccessToken }: AreaProps) {
       }
     };
     if (!backendUrl) {
-      void Promise.resolve().then(() => handleError(new Error('Release data is unavailable until the backend is deployed.')));
+      void Promise.resolve().then(() => handleError(new Error('Release data unavailable.')));
     } else if (!projectId || !/^[1-9]\d{0,18}$/u.test(projectId)) {
       void Promise.resolve().then(() => handleError(new Error('This project is not available.')));
     } else {
@@ -276,7 +276,6 @@ export function ReleasePage({ backendUrl, getAccessToken }: AreaProps) {
         <div className="release-section-heading">
           <div>
             <h2 id="graph-heading">Git history</h2>
-            <p>Branches and recent commits are fetched from GitHub when this view is opened or refreshed.</p>
           </div>
           {data.graph && <p className="release-freshness">Fetched {formatDate(data.graph.fetchedAt)}</p>}
         </div>
@@ -311,7 +310,6 @@ export function ReleasePage({ backendUrl, getAccessToken }: AreaProps) {
           ) : (
             <>
               <h2 id="selected-release-heading">Release not found</h2>
-              <p>This release is not present in the current project records.</p>
             </>
           )}
         </section>
@@ -320,7 +318,7 @@ export function ReleasePage({ backendUrl, getAccessToken }: AreaProps) {
       <section className="release-section" aria-labelledby="releases-heading">
         <h2 id="releases-heading">Releases</h2>
         {data.releases.length === 0
-          ? <p className="release-feedback">No release has been recorded for this project yet. Releases appear after a default-branch push is received by the GitHub webhook.</p>
+          ? <p className="release-feedback">No releases recorded.</p>
           : (
             <ul className="release-record-list">
               {data.releases.map((release) => (
@@ -428,7 +426,7 @@ export function ReleaseRedirectPage({ backendUrl, getAccessToken }: AreaProps) {
       }
     };
     if (!backendUrl) {
-      void Promise.resolve().then(() => handleError(new Error('Release data is unavailable until the backend is deployed.')));
+      void Promise.resolve().then(() => handleError(new Error('Release data unavailable.')));
     } else if (!releaseId || !/^[1-9]\d{0,18}$/u.test(releaseId)) {
       void Promise.resolve().then(() => handleError(new Error('This release is not available.')));
     } else {

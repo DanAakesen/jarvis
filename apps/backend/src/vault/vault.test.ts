@@ -13,7 +13,7 @@ import type {
 } from '../database/memory-store.js';
 import { MemoryEmbeddingHttpError, type MemoryEmbedder } from '../core/memory-embeddings.js';
 import { createGitHubVaultClient, VAULT_BRANCH, VAULT_REPOSITORY } from './github-client.js';
-import { createVaultModule } from './index.js';
+import { createVaultModule, KNOWLEDGE_NOTE_EXCLUSIONS } from './index.js';
 import { buildApp } from '../app.js';
 import { coreModule } from '../core/index.js';
 import { loadConfig } from '../config.js';
@@ -613,6 +613,39 @@ describe('GitHub vault', () => {
     const id = (path: string) => createHash('sha256').update(path).digest('hex');
     expect(graph.edges).toEqual([{ source: id('People/Alex.md'), target: id('Work/Project.md'), type: 'link' }]);
   });
+  it('excludes tooling from graph and note counts but keeps it indexed and searchable', async () => {
+    const remote = Object.fromEntries([
+      'Work/Fixture.md', 'General/skills-overview.md', 'Personal/Templates/Fixture.md',
+      'Work/skills/references/Fixture.md', 'General/tools/Skills/Fixture.md',
+      'Work/Fixture.template.md', 'Personal/Fixture.TEMPLATE.MD',
+    ].map((path) => [path, { sha: sha('a'), content: '# Fixture\n\nFixture body.' }]));
+    const index = new FakeIndexStore();
+    const { module } = moduleFor({ remote, index, apiMemoryStore: {} as MemoryStore });
+    await module.synchronize(signal());
+    // Previously indexed paths are also excluded defensively.
+    for (const path of ['skills/Fixture.md', '.github/Fixture.md']) {
+      await index.replaceFile(path, sha('b'), [{ heading: 'Fixture', content: 'Fixture body.' }], []);
+    }
+    expect(KNOWLEDGE_NOTE_EXCLUSIONS.map(({ glob }) => glob)).toEqual([
+      '**/skills/**', '**/*.template.md', '.github/**',
+    ]);
+    const app = memoryApiApp(module);
+    const graph = (await app.inject({ url: '/knowledge/graph', headers: apiAuthorization })).json();
+    expect(graph.nodes.map((node: { path: string }) => node.path).sort()).toEqual([
+      'General/skills-overview.md', 'Personal/Templates/Fixture.md', 'Work/Fixture.md',
+    ]);
+    expect((await app.inject({ url: '/memory/status', headers: apiAuthorization })).json().notesByFolder)
+      .toEqual({ People: 0, Work: 1, Personal: 1, General: 1 });
+    expect(await index.files('text-embedding-3-small')).toHaveLength(9);
+    index.termSearch.mockResolvedValue([{
+      path: 'Work/skills/references/Fixture.md', heading: 'Fixture', content: 'Fixture body.',
+    }]);
+    const search = await tool(module, 'vault_search').execute(
+      { query: 'fixture' }, {} as FastifyRequest, signal(),
+    ) as { results: Array<{ path: string }> };
+    expect(search.results.map(({ path }) => path)).toContain('Work/skills/references/Fixture.md');
+  });
+
   it('falls back to text similarity when the database stores no embeddings', async () => {
     const remote = {
       'Work/Azure.md': { sha: sha('a'), content: '# Azure\n\nFoundry agents and hosted runners.' },

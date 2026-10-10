@@ -17,6 +17,8 @@ import { createConversationStore } from './conversation-store.js';
 import { createMemoryStore, createVaultIndexStore } from './memory-store.js';
 import { createTaskStatusNotificationStore } from './task-status-notification-store.js';
 import { createBackgroundJobStore } from './background-job-store.js';
+import { WorkspaceHtmlArtifactNotFound, WorkspaceHtmlArtifactStore, workspaceHtmlSizeLimit } from './workspace-html-artifact-store.js';
+import { FolioStore } from './folio-store.js';
 import {
   createTaskEventArchive,
   type TaskEventArchiveBlobStore,
@@ -35,9 +37,10 @@ const administrator = new sql.ConnectionPool({ ...configuration, database: 'mast
 const pool = new sql.ConnectionPool({ ...configuration, database });
 const core = '0001_core_tables.sql';
 const tablesInSchema = [
-  'activity', 'artifacts', 'background_job_steps', 'background_jobs', 'credential_status',
-  'deployment_failure_receipts', 'deployments', 'folio_items', 'jarvis_sessions', 'memories',
-  'memory_deletions', 'memory_history', 'messages', 'phone_sessions', 'projects', 'pull_requests', 'releases',
+  'activity', 'artifacts', 'background_job_steps', 'background_jobs', 'conversation_attachments',
+  'credential_status', 'deployment_failure_receipts', 'deployments', 'folio_items', 'jarvis_sessions',
+  'memories', 'memory_deletions', 'memory_history', 'messages', 'phone_sessions', 'projects',
+  'pull_requests', 'releases',
   'sandbox_sessions', 'sandbox_turns', 'settings', 'task_event_archives', 'task_events', 'task_status_notifications',
   'tasks', 'teams_confirmations', 'teams_conversations', 'tool_calls', 'usage', 'vault_chunks', 'vault_links',
   'webhook_deliveries', 'workflow_runs', 'workspace_artifacts',
@@ -136,6 +139,55 @@ describe('committed domain schema (groups 1-8)', () => {
       'IX_task_events_task_id_at', 'IX_tasks_state_next_attempt_at', 'IX_workflow_runs_project_head_sha',
       'UX_activity_alert_key',
     ]);
+  });
+
+  it('revises HTML artifacts atomically, retains every version and leaves Folio/pins intact', async () => {
+    const owner = randomUUID();
+    const otherOwner = randomUUID();
+    const store = new WorkspaceHtmlArtifactStore(pool);
+    const folio = new FolioStore(pool);
+    const signal = new AbortController().signal;
+    const html = '<!doctype html><html><head></head><body>Original</body></html>';
+    const sources = [{ title: 'Source', url: 'https://example.com' }];
+    const artifact = await store.create(owner, 'Original report', html, sources, signal);
+    const folioId = `html_app:${artifact.id}` as const;
+    await folio.record(owner, {
+      id: folioId, kind: 'html_app', sourceId: artifact.id, title: artifact.title,
+      promptSummary: artifact.title, createdAt: artifact.createdAt,
+    }, signal);
+    await store.setPinned(artifact.id, owner, true, signal);
+    await folio.update(owner, folioId, { pinned: true }, signal);
+    const beforeFolio = await folio.get(owner, folioId, signal);
+    const beforeArtifact = await store.readVersion(artifact.id, owner, signal);
+
+    const revisions = await Promise.all([
+      store.update(artifact.id, owner, html.replace('Original', 'Monthly'), signal, 'Monthly report'),
+      store.update(artifact.id, owner, html.replace('Original', 'Annual'), signal),
+    ]);
+    expect(revisions.map((revision) => revision.version).sort()).toEqual([2, 3]);
+    for (const revision of revisions) {
+      expect(revision).toMatchObject({ id: artifact.id, pinned: true, sources, createdAt: artifact.createdAt });
+      expect(revision.id).toBe(revision.id.toLowerCase());
+      expect(await store.readVersion(artifact.id, owner, signal, revision.version)).toEqual(revision);
+    }
+    const historical = await store.readVersion(artifact.id, owner, signal, 1);
+    expect(historical).toMatchObject({ id: artifact.id, title: 'Original report', html, sources, version: 1, pinned: true });
+    expect(await folio.get(owner, folioId, signal)).toEqual(beforeFolio);
+
+    const beforeRefusal = await store.readVersion(artifact.id, owner, signal);
+    await expect(store.update(artifact.id, otherOwner, html, signal)).rejects.toBeInstanceOf(WorkspaceHtmlArtifactNotFound);
+    await expect(store.update(randomUUID(), owner, html, signal)).rejects.toBeInstanceOf(WorkspaceHtmlArtifactNotFound);
+    await expect(store.readVersion(artifact.id, otherOwner, signal, 1)).rejects.toBeInstanceOf(WorkspaceHtmlArtifactNotFound);
+    await expect(store.update(artifact.id, owner, 'x'.repeat(workspaceHtmlSizeLimit + 1), signal))
+      .rejects.toThrow('Invalid workspace HTML artifact');
+    expect(await store.readVersion(artifact.id, owner, signal)).toEqual(beforeRefusal);
+
+    const replaced = await store.update(artifact.id, owner, html, signal, undefined, []);
+    expect(replaced).toMatchObject({ version: 4, sources: [], pinned: true, title: beforeRefusal.title });
+    expect(beforeArtifact.version).toBe(1);
+    const history = await pool.request().input('id', sql.UniqueIdentifier, artifact.id)
+      .query<{ count: number }>('SELECT COUNT(*) AS count FROM dbo.workspace_html_artifact_versions WHERE artifact_id = @id');
+    expect(history.recordset[0]?.count).toBe(3);
   });
 
   it('persists background-job steps, marks interrupted work failed, and prunes after 30 days', async () => {

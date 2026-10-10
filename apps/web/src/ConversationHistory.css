@@ -180,6 +180,7 @@
 .voice-end-control:disabled { color: var(--disabled-text); cursor: wait; }
 .voice-end-glyph { width: 12px; height: 12px; flex: 0 0 auto; border-radius: 3px; background: var(--state-unavailable); }
 .voice-end-control:disabled .voice-end-glyph { background: var(--disabled-text); }
+@media (min-width: 701px) and (not ((max-height: 500px) and (pointer: coarse))) {
 .app-shell[data-voice-active="true"] { position: fixed; inset: 0; display: block; width: 100vw; height: 100vh; height: 100dvh; min-height: 0; overflow: hidden; }
 .app-shell[data-voice-active="true"]::before { animation: aurora-drift var(--motion-ambient) var(--ease-standard) infinite alternate; }
 .app-shell[data-voice-active="true"] .app-topbar,
@@ -205,6 +206,7 @@
 .app-shell[data-voice-active="true"] .workspace-canvas-layered,
 .app-shell[data-voice-active="true"] .workspace-canvas-has-maximized { height: min(68vh, 680px); min-height: 320px; }
 .app-shell[data-voice-active="true"] .workspace-canvas-tiled .workspace-window { min-height: 220px; }
+}
 .streaming-reply, .interrupted-reply { overflow-wrap: anywhere; }
 .streaming-reply .markdown-content { display: contents; }
 .streaming-reply .markdown-content > p:last-child { display: inline; }
@@ -252,11 +254,23 @@
   .app-shell[data-voice-active="false"] .workspace[data-phone="true"] .workspace-window-conversation:not(.workspace-window-maximized) { flex: 0 1 auto; align-self: flex-end; max-height: min(46dvh, 420px); }
   .workspace[data-phone="true"] .workspace-conversation-content { touch-action: pan-y pinch-zoom; }
   .workspace[data-phone="true"] .workspace-window-conversation .workspace-icon-control { width: 44px; min-width: 44px; height: 44px; min-height: 44px; }
-  .app-shell[data-voice-active="true"] { --phone-dock-height: var(--voice-bar-height, 60px); --phone-dock-bottom: max(16px, env(safe-area-inset-bottom)); }
+  .app-shell[data-voice-active="true"] { --phone-dock-height: var(--voice-bar-height, 60px); }
+  .app-shell[data-phone="true"][data-voice-active="true"] { --dock-space: var(--voice-dock-top); }
+  .app-shell[data-phone="true"][data-voice-active="true"] .jarvis-page { z-index: 43; pointer-events: none; }
+  .app-shell[data-phone="true"][data-voice-active="true"] .conversation-history { display: contents; }
+  .app-shell[data-phone="true"][data-voice-active="true"] .conversation-input[data-voice-active="true"] { position: static; width: auto; max-width: none; margin: 0; padding: 0; border: 0; background: transparent; box-shadow: none; backdrop-filter: none; }
+  .app-shell[data-phone="true"][data-voice-active="true"] .conversation-input::before,
+  .app-shell[data-phone="true"][data-voice-active="true"] .conversation-input::after { content: none; }
+  .app-shell[data-phone="true"][data-voice-active="true"] .voice-controls[data-active="true"] { position: fixed; inset: auto 12px var(--phone-dock-bottom); z-index: 43; display: block; width: auto; height: calc(var(--voice-dock-top) - var(--phone-dock-bottom)); background: transparent; backdrop-filter: none; pointer-events: none; }
   .app-shell[data-voice-active="true"] .voice-bar,
-  .app-shell[data-voice-active="true"][data-voice-has-windows="true"] .voice-bar { bottom: var(--phone-dock-bottom); left: 50%; width: max-content; max-width: calc(100vw - 24px); transform: translateX(-50%); }
+  .app-shell[data-voice-active="true"][data-voice-has-windows="true"] .voice-bar { bottom: var(--phone-dock-bottom); left: calc((100vw + env(safe-area-inset-left) - env(safe-area-inset-right)) / 2); width: max-content; max-width: calc(100vw - env(safe-area-inset-left) - env(safe-area-inset-right) - 24px); transform: translateX(-50%); }
+  .app-shell[data-phone="true"][data-voice-active="true"] .voice-bar { position: absolute; bottom: 0; left: 50%; pointer-events: auto; }
+  .app-shell[data-phone="true"][data-voice-active="true"] .workspace { height: 100%; min-height: 0; margin: 0; padding: 0; border: 0; background: transparent; box-shadow: none; backdrop-filter: none; }
+  .app-shell[data-phone="true"][data-voice-active="true"] .workspace-heading,
+  .app-shell[data-phone="true"][data-voice-active="true"] .workspace-guidance,
+  .app-shell[data-phone="true"][data-voice-active="true"] .workspace-empty { display: none; }
   .voice-end-control { padding-inline: 10px 12px; }
-  .app-shell[data-voice-active="true"][data-voice-has-windows="true"] .workspace-shell-area:not([hidden]) { position: fixed; top: max(68px, calc(env(safe-area-inset-top) + 56px)); right: 12px; bottom: var(--voice-dock-top, calc(var(--phone-dock-bottom) + var(--phone-dock-height) + var(--voice-status-height, 0px) + 20px)); left: 12px; width: auto; height: auto; overflow: hidden; }
+  .app-shell[data-phone="true"][data-voice-active="true"][data-voice-has-windows="true"] .workspace-shell-area:not([hidden]) { position: fixed; z-index: 42; top: calc(env(safe-area-inset-top) + 68px); right: calc(env(safe-area-inset-right) + 12px); bottom: var(--voice-dock-top, calc(var(--phone-dock-bottom) + var(--phone-dock-height) + var(--voice-status-height, 0px) + 20px)); left: calc(env(safe-area-inset-left) + 12px); width: auto; height: auto; overflow: hidden; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -561,12 +575,10 @@
 @media (min-resolution: 1.5dppx) { .conversation-messages .conversation-message[data-speaker], .conversation-message.live-turn { border-width: 1.5px; } }
 
 /* Chat bar life (Dan, 8 October). Idle: one thin light runs a lap of the rim every few seconds, starting slow and
-   accelerating, then rests. Placeholder: a rotating invitation types in, rests, a light passes over it, then the next. */
+   accelerating, then rests. */
 
 .conversation-history .composer > textarea, .conversation-history .composer > .composer-prompt { grid-row: 1; grid-column: 1; }
 .conversation-history .composer textarea::placeholder { color: transparent; }
 .composer-prompt { align-self: center; min-width: 0; padding: 0 2px; overflow: hidden; color: var(--text-muted); font-size: var(--type-body); line-height: 24px;
   text-overflow: ellipsis; white-space: nowrap; pointer-events: none; transition: opacity var(--motion-state) var(--ease-standard); }
 .conversation-history .composer:focus-within .composer-prompt { opacity: .55; }
-/* The invitation's light sweep is slower than the live turn's: an unhurried pass, twice. */
-.composer-prompt .live-phrase[data-typed] { animation-duration: 2.4s; }

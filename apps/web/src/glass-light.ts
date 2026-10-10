@@ -1,8 +1,9 @@
 import { useEffect } from 'react';
 
 const litSurfaces = [
-  '.workspace-window', '.kanban-card', '.kanban-column', '.settings-section', '.settings-activity .panel', '.signin-card',
+  '.workspace-window', '.kanban-card', '.kanban-column', '.settings-section', '.settings-activity .panel',
   '.area-sidebar', '.context-panel', '.app-topbar', '.area-rail', '.conversation-input.luminous-glass', '.task-release-bar',
+  '.signin-button',
 ].join(', ');
 
 /** Glass surfaces catch a soft light where the pointer is; only the innermost surface under the pointer is lit. */

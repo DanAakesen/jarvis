@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
 import { MarkdownContent } from '../MarkdownContent';
 import {
-  KnowledgeUnavailable, knowledgeFolders, loadKnowledgeGraph, loadKnowledgeNote, matchTitles, sampleKnowledgeGraph,
+  KnowledgeUnavailable, knowledgeFolders, loadKnowledgeGraph, loadKnowledgeNote, matchTitles,
   searchKnowledge, type KnowledgeFolder, type KnowledgeGraph, type KnowledgeNote,
 } from './knowledge-data';
 import type { KnowledgeScene } from './knowledge-scene';
@@ -12,6 +12,36 @@ type Load = { status: 'loading' } | { status: 'unavailable' } | { status: 'error
 
 const reducedMotion = () => (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false) ||
   document.documentElement.dataset.motion === 'reduced';
+
+function NoteReader({ children }: { children: ReactNode }) {
+  const viewport = useRef<HTMLDivElement>(null);
+  const content = useRef<HTMLDivElement>(null);
+  const [more, setMore] = useState(false);
+  const update = useCallback(() => {
+    const element = viewport.current;
+    setMore(!!element && element.scrollHeight - element.clientHeight - element.scrollTop > 2);
+  }, []);
+
+  useEffect(() => {
+    const frame = requestAnimationFrame(update);
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(update);
+    if (viewport.current) observer?.observe(viewport.current);
+    if (content.current) observer?.observe(content.current);
+    return () => { cancelAnimationFrame(frame); observer?.disconnect(); };
+  }, [update]);
+
+  return (
+    <div className="knowledge-note-reader" data-more={more || undefined}>
+      <div ref={viewport} className="knowledge-note-body" role="region" aria-label="Note content" tabIndex={0} onScroll={update}>
+        <div ref={content}>{children}</div>
+      </div>
+      {more && <button className="knowledge-note-scroll" type="button" onClick={() => {
+        const element = viewport.current;
+        element?.scrollBy({ top: element.clientHeight * 0.8, behavior: reducedMotion() ? 'instant' : 'smooth' });
+      }}>Scroll down <span aria-hidden="true">↓</span></button>}
+    </div>
+  );
+}
 
 /**
  * Dan's vault as a 3D star cloud (P7-43): every note a star coloured by folder, links as fine lines. Search lights up the
@@ -154,15 +184,10 @@ export function KnowledgeGraphView({ backendUrl, getAccessToken, initialQuery = 
       )}
       {load.status === 'unavailable' && (
         <div className="knowledge-status" role="status">
-          <p>The knowledge graph is not available yet. It appears here once the knowledge service is deployed.</p>
-          {import.meta.env.DEV && (
-            <button className="secondary-button" type="button" onClick={() => setLoad({ status: 'ready', graph: sampleKnowledgeGraph() })}>
-              Show a sample graph (development only)
-            </button>
-          )}
+          <p>The knowledge graph is unavailable.</p>
         </div>
       )}
-      {sceneFailed && graph && <p className="knowledge-status" role="status">The 3D view is unavailable here. Search still lists your notes.</p>}
+      {sceneFailed && graph && <p className="knowledge-status" role="status">The 3D view is unavailable. Search remains available.</p>}
 
       {graph && (
         <>
@@ -214,8 +239,7 @@ export function KnowledgeGraphView({ backendUrl, getAccessToken, initialQuery = 
                 </button>
               </li>
             ))}
-            {graph.sample && <li className="knowledge-sample">Sample data</li>}
-            {!graph.sample && graph.edges.length === 0 && <li className="knowledge-sample" title="Jarvis has not reported any links between notes yet.">No links yet</li>}
+            {graph.edges.length === 0 && <li className="knowledge-sample">No links.</li>}
           </ul>
           {selected && (
             <aside className="knowledge-note luminous-glass" aria-labelledby={`${ids}-note`}>
@@ -225,24 +249,24 @@ export function KnowledgeGraphView({ backendUrl, getAccessToken, initialQuery = 
                   <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="m6 6 12 12M18 6 6 18" /></svg>
                 </button>
               </header>
-              <p className="knowledge-note-meta">{selected.folder} · {selected.path}</p>
-              <div className="knowledge-note-body">
-                {graph.sample ? <p className="settings-explanation">Sample notes have no content.</p>
-                  : !currentNote ? <Loader variant="lines" label="Opening the note…" />
+              <NoteReader key={selected.id}>
+                <p className="knowledge-note-meta">{selected.folder} · {selected.path}</p>
+                {!currentNote ? <Loader variant="lines" label="Opening the note…" />
                     : currentNote.error ? <p role="alert">{currentNote.error}</p>
-                      : <MarkdownContent source={currentNote.value!.content} />}
-              </div>
-              {currentNote?.value?.githubUrl && <a className="knowledge-note-link" href={currentNote.value.githubUrl} target="_blank" rel="noreferrer">Open in GitHub</a>}
-              {neighbours.length > 0 && (
-                <>
-                  <h4 className="knowledge-note-subheading">Connected notes</h4>
-                  <ul className="knowledge-neighbours">
-                    {neighbours.map((node) => (
-                      <li key={node.id}><button type="button" data-folder={node.folder} onClick={() => open(node.id)}><span className="knowledge-dot" aria-hidden="true" />{node.title}</button></li>
-                    ))}
-                  </ul>
-                </>
-              )}
+                      : currentNote.value!.content ? <MarkdownContent source={currentNote.value!.content} />
+                        : <p>This note is empty.</p>}
+                {currentNote?.value?.githubUrl && <a className="knowledge-note-link" href={currentNote.value.githubUrl} target="_blank" rel="noreferrer">Open in GitHub</a>}
+                {neighbours.length > 0 && (
+                  <>
+                    <h4 className="knowledge-note-subheading">Connected notes</h4>
+                    <ul className="knowledge-neighbours">
+                      {neighbours.map((node) => (
+                        <li key={node.id}><button type="button" data-folder={node.folder} onClick={() => open(node.id)}><span className="knowledge-dot" aria-hidden="true" />{node.title}</button></li>
+                      ))}
+                    </ul>
+                  </>
+                )}
+              </NoteReader>
             </aside>
           )}
         </>

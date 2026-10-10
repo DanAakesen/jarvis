@@ -587,7 +587,6 @@ export function ConversationHistory({
           <MarkdownContent source={turn.partialReply} />
         </div>}
         <p className="chat-error" role="alert">{turn.error}</p>
-        <p className="chat-guidance">If a reply is interrupted, check the conversation and task status before sending again.</p>
       </div>
     );
   }
@@ -677,7 +676,6 @@ export function ConversationHistory({
           <div className="conversation-greeting visually-hidden">
             {/* Dan, 8 October: no greeting card; screen readers still hear that the conversation is empty. */}
             <h2>What’s on your mind?</h2>
-            <p>Make a plan, explore an idea, or pick up where you left off.</p>
           </div>
         ) : (
           <>
@@ -768,7 +766,6 @@ export function ConversationHistory({
         {turnError && (
           <div>
             <p className="chat-error" role="alert">{turnError}</p>
-            <p className="chat-guidance">If a reply is interrupted, check the conversation and task status before sending again.</p>
           </div>
         )}
         {sending && streamedText && <p className="chat-status" role="status" aria-live="polite">Jarvis is replying…</p>}
@@ -866,7 +863,7 @@ export function ConversationHistory({
           aria-describedby="chat-guidance"
         />
         {/* The visible invitation; the native placeholder stays for assistive technology but is drawn transparent. */}
-        {!draft && !hasSent && <span className="composer-prompt" aria-hidden="true"><LivePhrase phase="prompt" interval={9000} typeSpeed={70} /></span>}
+        {!draft && !hasSent && <span className="composer-prompt" aria-hidden="true">Ask Jarvis</span>}
         <ConversationMoreMenu className="composer-more" language={language} onLanguageChange={setLanguage} actions={attachActions} align="end" />
         <button className="composer-send" type="submit" disabled={!draft.trim()} aria-label="Send" title="Send message">
           <ConversationIcon name="send" />

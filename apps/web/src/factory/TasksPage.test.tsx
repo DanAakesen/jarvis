@@ -336,7 +336,7 @@ describe('Factory task board', () => {
     });
     renderFactory();
 
-    expect((await screen.findByRole('alert')).textContent).toMatch(/Task data is unavailable/);
+    expect((await screen.findByRole('alert')).textContent).toContain('Task data could not be loaded. Try again.');
     expect(screen.getByRole('button', { name: 'Retry tasks' })).not.toBeNull();
   });
 

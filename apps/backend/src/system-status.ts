@@ -26,6 +26,7 @@ export interface SystemStatusProbes {
 
 export interface SystemStatusReader {
   read(): Promise<SystemStatus>;
+  peek?(): SystemStatus | undefined;
   refresh(): Promise<SystemStatus>;
   recordError(route: string | undefined, statusCode: number): void;
   recordSmoke(report: SystemSmokeStatus): void;
@@ -140,6 +141,7 @@ export function createSystemStatusReader(
   let pending: Promise<SystemStatus> | undefined;
   let lastError: { occurredAt: string; route: string | null; statusCode: number } | undefined;
   let latestSmoke: SystemSmokeStatus | undefined;
+  let latest: SystemStatus | undefined;
 
   const readProbe = async (id: SystemStatusSubsystem): Promise<SystemStatusEntry> => {
     const checkedAt = new Date(now()).toISOString();
@@ -178,6 +180,16 @@ export function createSystemStatusReader(
   };
 
   return {
+    peek() {
+      return latest ? {
+        ...latest,
+        ...(latestSmoke ? { smoke: latestSmoke } : {}),
+        entries: latest.entries.map((entry) => entry.id === 'last_error' && lastError
+          ? { id: entry.id, status: 'degraded', checkedAt: lastError.occurredAt,
+            details: { statusCode: lastError.statusCode } }
+          : entry),
+      } : latestSmoke ? { checkedAt: latestSmoke.checkedAt, entries: [], smoke: latestSmoke } : undefined;
+    },
     async read() {
       const timestamp = now();
       if (cached && timestamp < cached.expiresAt) return cached.value;
@@ -189,6 +201,7 @@ export function createSystemStatusReader(
           ...(latestSmoke ? { smoke: latestSmoke } : {}),
         };
         cached = { expiresAt: timestamp + ttlMs, value };
+        latest = value;
         return value;
       }).finally(() => { pending = undefined; });
       return pending;

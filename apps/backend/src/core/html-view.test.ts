@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { loadConfig } from '../config.js';
 import type { TokenVerifier } from '../auth/verify.js';
-import type { WorkspaceHtmlArtifactStore } from '../database/workspace-html-artifact-store.js';
+import { WorkspaceHtmlArtifactNotFound, type WorkspaceHtmlArtifactStore } from '../database/workspace-html-artifact-store.js';
+import type { FolioStore } from '../database/folio-store.js';
+import { ToolFailure } from './tool-registry.js';
 import { buildApp } from '../app.js';
 import type { BackendModule } from '../modules.js';
 import type { ToolCallStore } from './tool-calls.js';
@@ -29,12 +31,17 @@ function appFor(options: {
   readonly connected?: boolean;
   readonly create?: WorkspaceHtmlArtifactStore['create'];
   readonly read?: WorkspaceHtmlArtifactStore['read'];
+  readonly readVersion?: WorkspaceHtmlArtifactStore['readVersion'];
+  readonly update?: WorkspaceHtmlArtifactStore['update'];
+  readonly mappedView?: { viewId: string; artifactId: string };
   readonly setPinned?: WorkspaceHtmlArtifactStore['setPinned'];
 } = {}) {
   const create = options.create ?? vi.fn(async () => artifact);
   const read = options.read ?? vi.fn(async () => artifact);
+  const readVersion = options.readVersion ?? vi.fn(async () => ({ ...artifact, version: 1 }));
+  const update = options.update ?? vi.fn(async () => ({ ...artifact, version: 2, pinned: true }));
   const setPinned = options.setPinned ?? vi.fn(async (_id: string, _owner: string, pinned: boolean) => pinned);
-  const artifacts = { create, read, setPinned } as unknown as WorkspaceHtmlArtifactStore;
+  const artifacts = { create, read, readVersion, update, setPinned } as unknown as WorkspaceHtmlArtifactStore;
   const execute = vi.fn(async () => ({ opened: true }));
   const pcModule: BackendModule = {
     id: 'pc-test',
@@ -48,10 +55,12 @@ function appFor(options: {
   };
   const workspaceCommands = {
     isConnected: vi.fn(() => options.connected ?? true),
+    htmlView: vi.fn(() => options.mappedView),
     execute: vi.fn(async () => {}),
     dispose: vi.fn(),
   };
   const record = vi.fn(async () => {});
+  const folioRecord = vi.fn(async () => {});
   const auth: TokenVerifier = async (token) => {
     if (token === 'agent.e30.sig') {
       return { kind: 'jarvis-agent', objectId: ownerId, tenantId: config.auth.tenantId };
@@ -63,12 +72,12 @@ function appFor(options: {
   };
   const app = buildApp(config, undefined, {
     auth,
-    modules: [coreModule, createHtmlViewModule(artifacts), pcModule],
+    modules: [coreModule, createHtmlViewModule(artifacts, { record: folioRecord } as unknown as FolioStore), pcModule],
     toolCallStore: { record } as unknown as ToolCallStore,
     workspaceCommands: workspaceCommands as never,
   });
   appInstances.push(app);
-  return { app, create, read, setPinned, execute, workspaceCommands, record };
+  return { app, create, read, readVersion, update, setPinned, execute, workspaceCommands, record, folioRecord };
 }
 
 afterEach(async () => {
@@ -76,6 +85,146 @@ afterEach(async () => {
 });
 
 describe('HTML workspace app routes and tool', () => {
+  const toolHeaders = { ...authorization('agent.e30.sig'), 'x-jarvis-message-id': '42' };
+
+  it.each([
+    { artifactId },
+    { viewId: `html-${artifactId.replaceAll('-', '')}` },
+    { viewId: 'research-existing', version: 1 },
+  ])('reads bounded untrusted content and sources using %j', async (payload) => {
+    const fixture = appFor({ mappedView: payload.viewId === 'research-existing'
+      ? { viewId: 'research-existing', artifactId } : undefined });
+    const response = await fixture.app.inject({
+      method: 'POST', url: '/tools/read_html_view', headers: toolHeaders, payload,
+    });
+    expect(response.json()).toMatchObject({ outcome: 'ok', result: {
+      artifactId, title: artifact.title, html, sources: artifact.sources, version: 1,
+    } });
+    expect(fixture.readVersion).toHaveBeenCalledWith(artifactId, ownerId, expect.any(AbortSignal), payload.version);
+    expect(fixture.record).toHaveBeenCalledWith(expect.objectContaining({
+      arguments: { redacted: true }, result: { redacted: true },
+    }));
+  });
+
+  it('updates the original research window without recreating the artifact, Folio or pin', async () => {
+    const fixture = appFor({ mappedView: { viewId: 'research-existing', artifactId } });
+    const response = await fixture.app.inject({
+      method: 'POST', url: '/tools/update_html_view', headers: toolHeaders, payload: { artifactId, html },
+    });
+    expect(response.json()).toMatchObject({ outcome: 'ok', result: { artifactId, version: 2 } });
+    expect(fixture.update).toHaveBeenCalledWith(artifactId, ownerId, html, expect.any(AbortSignal), undefined, undefined);
+    expect(fixture.workspaceCommands.execute).toHaveBeenCalledWith(ownerId, expect.objectContaining({
+      operation: 'update', viewId: 'research-existing',
+      view: expect.objectContaining({ title: artifact.title, data: { artifactId } }),
+    }), expect.any(AbortSignal));
+    expect(fixture.create).not.toHaveBeenCalled();
+    expect(fixture.folioRecord).not.toHaveBeenCalled();
+    expect(fixture.setPinned).not.toHaveBeenCalled();
+    expect(fixture.record).toHaveBeenCalledWith(expect.objectContaining({
+      arguments: { redacted: true }, result: { redacted: true },
+    }));
+  });
+
+  it('replaces title and sources only when supplied and uses the canonical window', async () => {
+    const update = vi.fn(async () => ({ ...artifact, title: 'Monthly totals', sources: [], version: 3 }));
+    const fixture = appFor({ update });
+    const response = await fixture.app.inject({
+      method: 'POST', url: '/tools/update_html_view', headers: toolHeaders,
+      payload: { artifactId, title: 'Monthly totals', html, sources: [] },
+    });
+    expect(response.json()).toMatchObject({ outcome: 'ok', result: { version: 3 } });
+    expect(update).toHaveBeenCalledWith(artifactId, ownerId, html, expect.any(AbortSignal), 'Monthly totals', []);
+    expect(fixture.workspaceCommands.execute).toHaveBeenCalledWith(ownerId, expect.objectContaining({
+      operation: 'update', viewId: `html-${artifactId.replaceAll('-', '')}`,
+      view: expect.objectContaining({ title: 'Monthly totals' }),
+    }), expect.any(AbortSignal));
+  });
+
+  it.each([
+    { html: '<html><body>Missing doctype</body></html>' },
+    { html: '<!doctype html><html><head><base href="https://example.com"></head><body></body></html>' },
+    { html: '<!doctype html><html><head><script src="https://example.com/app.js"></script></head><body></body></html>' },
+    { html: 'x'.repeat(512 * 1024 + 1) },
+    { html: `<!doctype html><body>${'é'.repeat(256 * 1024)}</body>` },
+    { sources: [{ title: 'Unsafe', url: 'http://example.com' }] },
+    { sources: Array.from({ length: 51 }, () => artifact.sources[0]) },
+    { title: '' },
+    { sources: null },
+    { extra: 'not allowed' },
+  ])('refuses invalid updates without writes (%#)', async (invalid) => {
+    const fixture = appFor();
+    const response = await fixture.app.inject({
+      method: 'POST', url: '/tools/update_html_view', headers: toolHeaders,
+      payload: { artifactId, html, ...invalid },
+    });
+    expect(response.json()).toMatchObject({ outcome: 'refused', result: { refused: expect.any(String) } });
+    expect(fixture.update).not.toHaveBeenCalled();
+    expect(fixture.workspaceCommands.execute).not.toHaveBeenCalled();
+  });
+
+  it.each(['unknown', 'another owner'])('refuses reads and updates for %s artifacts', async () => {
+    const fixture = appFor({
+      readVersion: vi.fn(async () => { throw new WorkspaceHtmlArtifactNotFound(); }),
+      update: vi.fn(async () => { throw new WorkspaceHtmlArtifactNotFound(); }),
+    });
+    for (const [tool, payload] of [
+      ['read_html_view', { artifactId }],
+      ['update_html_view', { artifactId, html }],
+    ] as const) {
+      const response = await fixture.app.inject({ method: 'POST', url: `/tools/${tool}`, headers: toolHeaders, payload });
+      expect(response.json()).toMatchObject({ outcome: 'refused', result: { refused: expect.stringContaining('not found') } });
+    }
+    expect(fixture.workspaceCommands.execute).not.toHaveBeenCalled();
+  });
+
+  it.each(['read_html_view', 'update_html_view'])('refuses user callers for agent-only %s', async (tool) => {
+    const fixture = appFor();
+    const response = await fixture.app.inject({
+      method: 'POST', url: `/tools/${tool}`,
+      headers: { ...authorization('user.e30.sig'), 'x-jarvis-message-id': '42' },
+      payload: tool === 'read_html_view' ? { artifactId } : { artifactId, html },
+    });
+    expect(response.json()).toMatchObject({ outcome: 'refused' });
+    expect(fixture.readVersion).not.toHaveBeenCalled();
+    expect(fixture.update).not.toHaveBeenCalled();
+  });
+
+  it.each([{}, { artifactId, viewId: 'example' }, { viewId: 'unknown' }, { artifactId, version: 0 }])(
+    'refuses invalid read selectors %j', async (payload) => {
+      const fixture = appFor();
+      const response = await fixture.app.inject({ method: 'POST', url: '/tools/read_html_view', headers: toolHeaders, payload });
+      expect(response.json()).toMatchObject({ outcome: 'refused' });
+      expect(fixture.readVersion).not.toHaveBeenCalled();
+    },
+  );
+
+  it('refuses oversized stored content and disconnected updates', async () => {
+    const fixture = appFor({
+      connected: false,
+      readVersion: vi.fn(async () => { throw new TypeError('Stored workspace HTML exceeds 512 KB'); }),
+    });
+    expect((await fixture.app.inject({
+      method: 'POST', url: '/tools/read_html_view', headers: toolHeaders, payload: { artifactId },
+    })).json()).toMatchObject({ outcome: 'refused', result: { refused: expect.stringContaining('512 KB') } });
+    expect((await fixture.app.inject({
+      method: 'POST', url: '/tools/update_html_view', headers: toolHeaders, payload: { artifactId, html },
+    })).json()).toMatchObject({ outcome: 'refused' });
+    expect(fixture.update).not.toHaveBeenCalled();
+  });
+
+  it('reports a saved version without false success when the window refuses delivery', async () => {
+    const fixture = appFor();
+    fixture.workspaceCommands.execute.mockRejectedValueOnce(new ToolFailure('Private window text'));
+    const response = await fixture.app.inject({
+      method: 'POST', url: '/tools/update_html_view', headers: toolHeaders, payload: { artifactId, html },
+    });
+    expect(response.json()).toMatchObject({ outcome: 'error', result: {
+      error: expect.stringContaining(`HTML app ${artifactId} version 2 was saved`),
+    } });
+    expect(response.body).not.toContain('Private window text');
+    expect(fixture.update).toHaveBeenCalledOnce();
+  });
+
   it('describes bounded, self-contained visual apps for the sandbox CSP', () => {
     const fixture = appFor();
     const description = fixture.app.jarvisTools.get('create_html_view')?.description ?? '';

@@ -366,12 +366,13 @@ describe('Workspace', () => {
     expect(screen.queryByRole('article', { name: 'Research summary' })).toBeNull();
   });
 
-  it('reserves phone content space above the conditional voice dock and leaves no-content voice centred', () => {
+  it('reserves phone content space above the voice dock even without an open window', () => {
     const styles = readFileSync('src/ConversationHistory.css', 'utf8');
     const phone = styles.slice(styles.indexOf('@media (max-width: 700px)'));
     const statusStyles = readFileSync('src/VoiceControls.css', 'utf8');
     expect(statusStyles).toContain('.voice-status-region { bottom: calc(var(--phone-dock-bottom) + var(--phone-dock-height) + 12px); }');
     expect(phone).toContain('--phone-dock-height: var(--voice-bar-height, 60px);');
+    expect(phone).toContain('.app-shell[data-phone="true"][data-voice-active="true"] { --dock-space: var(--voice-dock-top); }');
     expect(phone).toContain('[data-voice-has-windows="true"] .voice-bar { bottom: var(--phone-dock-bottom);');
     expect(phone).not.toContain('voice-orb');
     const workspaceStyles = readFileSync('src/styles.css', 'utf8');
@@ -383,7 +384,7 @@ describe('Workspace', () => {
     render(<Workspace views={[]} />);
 
     expect(screen.getByRole('heading', { name: 'Workspace' })).not.toBeNull();
-    expect(screen.getByText('No temporary views are open. Views created during this session will appear here.')).not.toBeNull();
+    expect(screen.getByText('No views are open.')).not.toBeNull();
     expect(screen.queryByRole('group', { name: 'Workspace arrangement' })).toBeNull();
   });
 
@@ -606,7 +607,7 @@ describe('Workspace', () => {
       { id: 'interrupted', title: 'Interrupted view', content: { status: 'interrupted', message: 'Generation stopped. Some results are available.', content: <p>Partial result</p>, resume } },
     ]} />);
 
-    expect(screen.getByText('This view has no content yet.')).not.toBeNull();
+    expect(screen.getByText('No content.')).not.toBeNull();
     expect(screen.getByText('Loading view…').closest('[role="status"]')).not.toBeNull();
     expect(screen.getByText('The source is unavailable.').getAttribute('role')).toBe('alert');
     expect(screen.getByText('Partial result')).not.toBeNull();

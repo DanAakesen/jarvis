@@ -62,13 +62,13 @@ describe('Folio', () => {
     expect(calls).toContain(`DELETE /folio/${encodeURIComponent(report.id)}`);
   });
 
-  it('explains an empty Folio and offers retry on failure', async () => {
+  it('shows an empty Folio and offers retry on failure', async () => {
     let fail = true;
     vi.stubGlobal('fetch', vi.fn(async () => fail ? json({ error: 'Folio is unavailable' }, 503) : json({ items: [] })));
     render(<FolioPane backendUrl="https://api.example.com" getAccessToken={getAccessToken} open onClose={() => {}} refreshKey={0} />);
     expect(await screen.findByText('The Folio is unavailable right now.')).not.toBeNull();
     fail = false;
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
-    expect(await screen.findByText(/will gather here/)).not.toBeNull();
+    expect(await screen.findByText('No saved items.')).not.toBeNull();
   });
 });

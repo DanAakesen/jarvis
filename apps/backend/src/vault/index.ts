@@ -33,6 +33,14 @@ import {
 
 const folderNames = new Set(['People', 'Work', 'Personal', 'General']);
 const skippedFolders = new Set(['.obsidian', '.github', '.codex', '.vscode']);
+/** Presentation-only exclusions; vault indexing and Jarvis search remain unchanged. */
+export const KNOWLEDGE_NOTE_EXCLUSIONS = [
+  { glob: '**/skills/**', pattern: /(?:^|\/)skills\//iu },
+  { glob: '**/*.template.md', pattern: /\.template\.md$/iu },
+  { glob: '.github/**', pattern: /^\.github\//iu },
+] as const;
+const isKnowledgeNotePath = (path: string) => isRoutedNotePath(path) &&
+  !KNOWLEDGE_NOTE_EXCLUSIONS.some(({ pattern }) => pattern.test(path));
 const maxQueryLength = 500;
 const maxPathLength = 180;
 const maxReasonLength = 120;
@@ -767,7 +775,7 @@ export function createVaultModule(options: {
   ): Promise<KnowledgeGraph> {
     const embeddingModel = await activeEmbeddingModel(await activeEmbedder());
     const files = (await options.indexStore.graphFiles(signal))
-      .filter(({ path }) => isRoutedNotePath(path))
+      .filter(({ path }) => isKnowledgeNotePath(path))
       .slice(0, maxGraphNodes);
     const paths = files.map(({ path }) => path);
     const pathSet = new Set(paths);
@@ -1411,7 +1419,7 @@ export function createVaultModule(options: {
         for (const file of await options.indexStore.files(
           await activeEmbeddingModel(await activeEmbedder()), AbortSignal.timeout(10_000),
         )) {
-          const folder = isRoutedNotePath(file.path) ? safeFolder(file.path) : undefined;
+          const folder = isKnowledgeNotePath(file.path) ? safeFolder(file.path) : undefined;
           if (folder) counts[folder] = (counts[folder] ?? 0) + 1;
         }
         return {

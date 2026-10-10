@@ -407,6 +407,23 @@ The separate daily web-research count includes successful, refused, and failed c
 
 ## Shared UI direction (4 October 2026; confirmed, implementation in progress)
 
+P9-73 requires the phone composer on Home and Knowledge, and the voice dock,
+to clear the bottom safe area by at least 12px even when the inset is zero.
+Feedback and windows must not overlap those controls. Portrait and landscape
+respect all safe-area edges; desktop remains unchanged. Home Screen launch uses
+a minimal standalone Jarvis manifest and the existing app icon.
+
+P9-74 excludes skill tooling, `.template.md` files and `.github` files from the
+Knowledge graph and displayed note counts, without changing Jarvis vault search.
+Notes render Markdown without raw front matter, including after leading comments
+or a BOM. Long notes scroll with a bottom fade and visible scroll control; titles
+and paths wrap.
+
+P9-71 shares one subtle cyan selected treatment across phone menu rows, desktop
+navigation, top-bar toggles, tabs and segmented choices. Weight or icon shape
+reinforces selection; current-page and toggle semantics, visible keyboard focus,
+touch feedback and readable light/dark contrast are required.
+
 The confirmed requirements and proposed feature placement are in [ui.md](ui.md).
 Jarvis has one typing shell with expandable navigation and context panels, and a
 fullscreen voice workspace with a runtime-state-driven orb. Jarvis can create and
@@ -503,7 +520,7 @@ Under-orb status uses bright white text with a soft glow and contrast shadow, wi
 Dan approved these after a gap audit. They are planned, not built.
 
 - **Model control per role.** Settings lists the models actually deployed on the Foundry account and lets Dan pick one per role: chat, vision, research, voice, transcription, embedding, Codex and Copilot, each with a reasoning effort the model supports. Dan can add or remove Foundry deployments from Settings with a confirmation, and Claude models are allowed as the chat model. Jarvis can read and change these settings by voice or chat; model and budget changes need confirmation. Voice tuning (turn detection, barge-in, reply length), research depth, memory and retrieval thresholds, and timeouts are also adjustable. ([#495](https://github.com/DanAakesen/jarvis/issues/495)–[#507](https://github.com/DanAakesen/jarvis/issues/507))
-- **Folio.** Everything Jarvis researched or pulled up (reports, generated apps, images, knowledge-graph views) is kept in the Folio. A rail icon opens a left pane where Dan can search, filter by kind, pin, and reopen items; Jarvis can find and reopen them too ("pull up the Ignite research again"). ([#519](https://github.com/DanAakesen/jarvis/issues/519))
+- **Folio.** Everything Jarvis researched or pulled up (reports, generated apps, images, knowledge-graph views) is kept in the Folio. A rail icon opens a left pane where Dan can search, filter by kind, pin, and reopen items; Jarvis can find and reopen them too ("pull up the Ignite research again"). Jarvis can also rename, pin/unpin or remove one entry by id or unique query; ambiguous matches require Dan to choose. Removal requires Now approval naming the item while Dan is present and retains its source artifact and history. ([#519](https://github.com/DanAakesen/jarvis/issues/519), [#633](https://github.com/DanAakesen/jarvis/issues/633))
 - **Routines.** Task recipes (saved PC/browser action sequences Jarvis can replay) are renamed Routines and can be edited and renamed. ([#529](https://github.com/DanAakesen/jarvis/issues/529))
 - **Connected features.** Persisted background jobs, the jobs chip, the knowledge graph page, wake-word events, renew-credential, a system status page including the PC bridge, watch mode for screen and camera sharing, phone-call status, complete cost coverage, and conversation search.
 - **Show work (P9-41).** Chat and voice publish a short, safe activity description while selected tools run. Successful vault reads/searches update one knowledge graph, repository tools update one bounded, redacted Code view per turn, task creation/steering/retry focus the Factory card, and calendar/mail tools show their staged preview without bypassing confirmation. `presentation.showWork` defaults on and is suppressed in `on_the_move`; presentation is best effort and never blocks or fails a tool. The backend contract is implemented; status-line rendering, Code rendering, graph highlighting, and focus animation belong to the UI session.

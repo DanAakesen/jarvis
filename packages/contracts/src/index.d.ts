@@ -324,6 +324,10 @@ export interface WorkspaceSnapshotWindow {
   region?: WorkspaceWindowRegion;
   pinned?: boolean;
   front?: boolean;
+  /** Untrusted page-reported text, at most 8 KiB UTF-8. */
+  content?: string;
+  /** Untrusted selected text, at most 2 KiB UTF-8. */
+  selection?: string;
 }
 
 export interface WorkspaceSnapshot {
@@ -526,6 +530,7 @@ export const folioPatchSchema: Readonly<Record<string, unknown>>;
 export const folioDeleteSchema: Readonly<Record<string, unknown>>;
 export const folioSearchToolSchema: Readonly<Record<string, unknown>>;
 export const folioOpenToolSchema: Readonly<Record<string, unknown>>;
+export const folioManageToolSchema: Readonly<Record<string, unknown>>;
 export function isFolioItem(value: unknown): value is FolioItem;
 export const htmlArtifactFrameSchema: Readonly<Record<string, unknown>>;
 export function isHtmlArtifact(value: unknown): value is HtmlArtifact;
@@ -744,3 +749,39 @@ export interface SystemStatus {
   entries: readonly SystemStatusEntry[];
   smoke?: SystemSmokeStatus;
 }
+export interface SystemHealthComponent {
+  id: string;
+  status: SystemStatusValue;
+  detail: string;
+  checkedAt: string | null;
+  recovery: { tool: 'retry_job' | 'renew_credential' | 'get_deployment_status' | 'get_work_status';
+    description: string }[];
+}
+export interface SystemHealth {
+  components: SystemHealthComponent[];
+}
+export interface WorkStatusInput {
+  issueNumber?: number;
+  taskId?: string;
+  query?: string;
+  project?: string;
+}
+export interface WorkStatus {
+  verdict: 'delivered' | 'in_progress' | 'needs_attention' | 'not_started';
+  project: { id: string; name: string; repo: string } | null;
+  issue: { number: number; url: string; title: string; state: 'open' | 'closed'; labels: string[] } | null;
+  tasks: { id: string; issueNumber: number | null; title: string; state: string; activity: string | null;
+    attemptCount: number; linked: boolean }[];
+  pullRequests: { number: number; url: string; state: 'open' | 'closed' | 'merged'; draft: boolean;
+    merged: boolean;
+    checks: 'pending' | 'passed' | 'failed'; mergeSha: string | null }[];
+  deployments: { sha: string; status: 'verified' | 'failed' | 'pending' | 'unknown';
+    source: 'release' | 'actions'; url: string | null }[];
+  warnings: string[];
+  partial: boolean;
+}
+export type IssueAttachmentInput = {
+  attachmentIds?: string[];
+  publish?: 'description' | 'public';
+};
+export const issueAttachmentFields: Readonly<Record<'attachmentIds' | 'publish', object>>;

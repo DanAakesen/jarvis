@@ -49,7 +49,7 @@ export function readNavigateCommand(command: unknown): NavigateRequest | null {
 }
 
 export function resolveNavigation({ page, section, taskId }: NavigateRequest): NavigateTarget {
-  if (notYet.has(page)) return { ok: false, reason: `The ${page} page is not available yet.` };
+  if (notYet.has(page)) return { ok: false, reason: `The ${page} page is unavailable.` };
   // The Folio is a pane over the current page rather than a page of its own.
   if (page === 'folio') return section === undefined && taskId === undefined ? { ok: true, pane: 'folio' } : { ok: false, reason: 'The Folio has no sections.' };
   const path = pages[page];

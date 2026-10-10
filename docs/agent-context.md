@@ -308,6 +308,31 @@ returns a profile and defines `__JARVIS_CONFIG__` with a placeholder backend
 URL. For settings, serve a mock `/settings` response from that harness only.
 P1-11 was inspected at 390 and 1280 px; save and disabled actions were exercised.
 
+P9-73 fixture checks used Chromium and WebKit at 390×844, 1280×900 and
+844×390 in light/dark, replacing served CSS `env()` values only in the scratch
+harness to simulate zero/34px bottom, 47px portrait top and landscape side insets.
+Composer gaps measured 16px/50px on Home and Knowledge; desktop geometry matched
+the baseline. Signed-out headers also cleared the portrait notch and landscape
+side inset. Draft, More/Escape, restored-window sheets and voice entry/exit were exercised with
+scratch-only auth/API/voice fixtures. Before/after captures are in
+`docs/ui/screenshots/p9-73/`. These are not physical iPhone, browser-toolbar,
+installed Home Screen or live microphone/provider verification.
+
+P9-72 uses the same scratch-only auth/API browser approach with a voice-client
+fixture. Chromium/WebKit checks at 390×844 and 1280×900 cover light/dark,
+voice entry/exit, More/Escape, phone menu dismissal and Settings scrolling.
+The phone voice container measures about 212px rather than 844px; its background
+and backdrop filter are absent and its pointer events are disabled. The 60px
+bar remains interactive. Before/after fixture captures and measurements are in
+`docs/ui/screenshots/p9-72/`; these are not live audio or physical-device evidence.
+P9-74 used the same scratch-only auth/API approach in Chromium and WebKit at
+390×844 and 1280×900 in light/dark. Synthetic fixture notes reproduced raw YAML
+before the change and verified its removal, wrapped titles/paths, the scroll cue,
+button and keyboard scrolling to the final paragraph, close/reset and note-load
+errors. Normal and reduced-motion scrolling passed; no page exceptions or horizontal overflow
+were observed. Before/after captures: `docs/ui/screenshots/p9-74/`. No live vault
+or physical-device behavior was inspected.
+
 P7-15's conversation image preview was inspected in Chromium at 1280×900 and
 390×844 using scratch-only signed-in and API fixtures. The existing history
 rendered the image artifact with its accessible name and caption; the image fit

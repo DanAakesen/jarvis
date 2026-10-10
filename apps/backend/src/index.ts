@@ -107,6 +107,8 @@ import { createPhoneCallModule } from './phone/calls.js';
 import { parsePhoneAllowlist } from './phone/caller.js';
 import { createImageGenerationModule } from './core/image-generation.js';
 import { WorkspaceArtifactStore } from './database/workspace-artifact-store.js';
+import { attachmentRetentionDays, ConversationAttachmentStore } from './database/conversation-attachment-store.js';
+import { startConversationAttachmentCleanupJob } from './core/conversation-attachment-cleanup.js';
 import { WorkspaceHtmlArtifactStore } from './database/workspace-html-artifact-store.js';
 import { createHtmlViewModule } from './core/html-view.js';
 import { createFolioModule } from './core/folio.js';
@@ -422,6 +424,16 @@ try {
       storageAccount: archiveStorageAccount,
     })
     : undefined;
+  const conversationAttachments = database && archiveStorageAccount &&
+    workspaceArtifactServiceClient && workspaceArtifacts
+    ? new ConversationAttachmentStore({
+      pool: database.pool,
+      container: workspaceArtifactServiceClient.getContainerClient('artifacts'),
+      storageAccount: archiveStorageAccount,
+      artifacts: workspaceArtifacts,
+      retentionDays: attachmentRetentionDays(),
+    })
+    : undefined;
   const clientFor = (agentName: string) => {
     if (!config.foundryEndpoints || !credential) throw new Error('Foundry runner is not configured');
     let client = foundryClients.get(agentName);
@@ -588,6 +600,29 @@ try {
       if (!token) throw new Error('Foundry screen identity unavailable');
       return token.token;
     })
+    : undefined;
+  const attachmentVision = database && settingsStore && screenVisionModel && usageStore?.recordFoundryUsage
+    ? async (image: Buffer, contentType: string, signal: AbortSignal) => {
+      const settings = await readSettings(settingsStore, await modelCatalogue.read());
+      const role = settings.roles.vision;
+      const result = await screenVisionModel.describe({
+        image,
+        contentType: contentType as 'image/jpeg' | 'image/png' | 'image/webp',
+        model: role.model,
+        reasoningEffort: role.reasoningEffort,
+        signal,
+      });
+      const description = result.description.trim().slice(0, 5_000);
+      if (!description) throw new Error('Vision returned an empty description');
+      await usageStore.recordFoundryUsage!({
+        role: 'vision',
+        model: role.model,
+        inputTokens: result.inputTokens,
+        outputTokens: result.outputTokens,
+        eventId: randomUUID(),
+      });
+      return description;
+    }
     : undefined;
   const pcBridgeModule = createPcBridgeModule({
     ...(screenVisionModel ? { pcActVisionModel: screenVisionModel } : {}),
@@ -928,6 +963,9 @@ try {
     },
   }, deployedCommit && /^[\da-f]{7,64}$/iu.test(deployedCommit) ? deployedCommit.toLowerCase() : undefined);
   const app = buildApp(config, logger, {
+    ...(workspaceHtmlArtifactStore ? { workspaceHtmlArtifacts: workspaceHtmlArtifactStore } : {}),
+    ...(conversationAttachments ? { conversationAttachments } : {}),
+    ...(attachmentVision ? { attachmentVision } : {}),
     modules,
     systemStatusReader,
     systemSmokeProbes,
@@ -977,6 +1015,16 @@ try {
             await job.fail('Re-embedding failed').catch(() => undefined);
             logger.warn(safeErrorFields(error), 'memory.embedding_backfill_failed');
           });
+          if (conversationAttachments) {
+            let stopAttachmentCleanup: (() => void) | undefined;
+            app.addHook('onClose', async () => { stopAttachmentCleanup?.(); });
+            app.addHook('onReady', async () => {
+              stopAttachmentCleanup = startConversationAttachmentCleanupJob(
+                conversationAttachments,
+                () => logger.warn('conversation_attachments.cleanup_failed'),
+              );
+            });
+          }
         activeEmbeddingReindex = { controller, pending };
         const clearActive = () => {
           if (activeEmbeddingReindex?.controller === controller) activeEmbeddingReindex = undefined;

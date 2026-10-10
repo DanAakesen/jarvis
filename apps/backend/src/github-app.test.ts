@@ -349,7 +349,7 @@ describe('GitHub App installation tokens', () => {
     });
   });
 
-  it('issues a read-only contents, issues, and pull-requests token for repository discussions', async () => {
+  it('issues read-only repository, checks and statuses permissions for discussions and work status', async () => {
     const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
     const now = Date.parse('2026-10-04T09:00:00.000Z');
     const fetchImpl = vi.fn<typeof fetch>()
@@ -370,7 +370,32 @@ describe('GitHub App installation tokens', () => {
     const [, tokenOptions] = fetchImpl.mock.calls[1]!;
     expect(JSON.parse(String(tokenOptions?.body))).toEqual({
       repositories: ['repo'],
-      permissions: { contents: 'read', issues: 'read', pull_requests: 'read' },
+      permissions: { contents: 'read', issues: 'read', pull_requests: 'read', checks: 'read', statuses: 'read' },
+    });
+  });
+
+  it('issues a checks-read-only token for pull-request check inspection', async () => {
+    const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
+    const now = Date.parse('2026-10-04T09:00:00.000Z');
+    const fetchImpl = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ id: 123 }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        token: 'ghs_checks-read-token',
+        expires_at: new Date(now + 60 * 60 * 1000).toISOString(),
+      }), { status: 201 }));
+    const issuer = createGitHubAppTokenIssuer({
+      appId: '123456',
+      getPrivateKey: async () => privateKey.export({ type: 'pkcs8', format: 'pem' }).toString(),
+      fetch: fetchImpl,
+      now: () => now,
+    });
+
+    await issuer.issueForChecks('DanAakesen/repo');
+
+    const [, tokenOptions] = fetchImpl.mock.calls[1]!;
+    expect(JSON.parse(String(tokenOptions?.body))).toEqual({
+      repositories: ['repo'],
+      permissions: { checks: 'read' },
     });
   });
 

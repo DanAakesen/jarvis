@@ -16,10 +16,10 @@ import { phoneDeviceQuery } from './presence-store';
 import { onVoiceWake, reportWakeOutcome } from './wake-store';import './VoiceControls.css';
 
 const initialMessage = 'Start voice with the input orb. Your browser asks for microphone access when voice starts; Jarvis only hears you after the voice session is connected.';
-const cameraGuidance = 'Choose Turn on camera in More options, then ask Jarvis to look.';
-const screenGuidance = 'Choose Share screen in More options, then ask Jarvis to look.';
-const sessionPendingGuidance = 'Available once the voice session is connected.';
-const wakeNeedsClick = 'Heard “Wake up Jarvis”. Click the orb once to start: the browser only plays sound after you have used this page.';
+const cameraGuidance = 'Camera is off. Turn it on in More.';
+const screenGuidance = 'Screen sharing is off. Turn it on in More.';
+const sessionPendingGuidance = 'Voice is connecting.';
+const wakeNeedsClick = 'Heard “Wake up Jarvis”. Click the orb to start voice.';
 /** How long a wake waits for the bridge to bring the Jarvis tab forward. */
 const wakeVisibleWait = 4_000;
 function MenuGlyph({ name }: { name: 'microphone' | 'microphone-off' | 'screen' | 'camera' }) {

@@ -68,7 +68,7 @@ export function NowFeedPanel({
     const refresh = async () => {
       const currentRequest = ++requestNumber;
       try {
-        if (!config.backendUrl) throw new Error('Activity is unavailable until the backend is deployed.');
+        if (!config.backendUrl) throw new Error('Activity unavailable.');
         const result = await loadNowFeed(config.backendUrl, getAccessToken, controller.signal);
         if (active && currentRequest === requestNumber) setFeed(result);
       } catch (error) {

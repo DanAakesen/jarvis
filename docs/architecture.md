@@ -33,6 +33,12 @@ Jarvis is one backend with a shared core and one module per area, a static web a
 
 ## Web skeleton and configuration
 
+- P9-73 enables `viewport-fit=cover` and serves `/manifest.webmanifest` with
+  standalone display, the existing SVG icon and dark launch colours. Phone-only
+  `--phone-dock-bottom` is shared at the root so body-portalled toasts inherit it;
+  composer, voice and window clearance use it within the existing `100dvh` shell.
+  No service worker, backend contract or migration is added.
+
 - P8-05 keeps the conversation screen viewport-bound within the P8-04 shell.
   `ConversationHistory` owns the draft, language, chat turn and typing/voice
   visibility; `VoiceControls` owns the browser voice client and reports active
@@ -164,6 +170,20 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   Timeouts, cancellation, disconnects, stale sessions and partial failures are
   returned as refused/error results; command-delivered views and geometry are not
   persisted.
+  P9-52 retains the last successfully sent generated view per owner/viewId in
+  the broker's existing 128-command cache; eviction and process teardown discard
+  it. Definitively refused replacements do not supersede earlier cached views.
+  The always-registered, sensitive `read_window` tool prefers the latest
+  owner snapshot's optional content (8 KiB UTF-8) and selection (2 KiB), then
+  falls back to this cache. Its untrusted text is capped at 8 KiB, with 50
+  list/table rows or 100 timeline events; charts retain supplied series names,
+  units and points within that cap. HTML views reuse the owner-scoped artifact
+  store injected into the shared app; parse5 extracts static body/SVG text
+  without executing scripts, loading resources or returning markup. CSS-driven
+  and script-rendered visibility is not evaluated. Plain/code and page text
+  retain whitespace and entities; literal angle brackets become `‹`/`›` rather
+  than being parsed as HTML. Page text reporting remains
+  the separate UI task #640; old snapshots still validate.
   On non-conversation signed-in routes, the shell keeps the command stream
   mounted in a hidden Now panel while the workspace controller remains active.
   Ordinary renderers use fixed React elements and declarative data. P8-41 adds
@@ -233,6 +253,15 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   oldest first, and updating an existing pin preserves its timestamp. The shared
   contracts enforce the workspace view-ID format, view shape and bounded
   response; the UI session owns calling these routes.
+  P9-57 registers sensitive `pins_list` and `pin_restore` alongside these routes
+  when pin storage is available. Owner/agent calls read only the owner's store:
+  listing returns at most 20 metadata entries oldest first; restore accepts
+  exactly one view ID or case-insensitive title query, refusing unknown or
+  ambiguous matches. Stored views are revalidated with `isWorkspaceCommand`
+  against registered tools before acknowledged create/update and focus commands.
+  Restore refuses without a connected owner workspace; pin/unpin remain
+  page-owned. Titles are untrusted and tool audits redact arguments/results.
+  No migration, permission, dependency or web change is needed.
   The web dispatcher at `apps/web/src/Workspace.tsx:391` must handle the P9-40
   and P9-45 union members in the UI change before the combined feature can build
   or deploy.
@@ -397,13 +426,14 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   settings store. Appearance is bounded to light/dark/system; colors use
   `#RRGGBB`, background uses the named visual presets, glow is 0–1, motion and
   density use closed catalogs, and radius is 0–24. The registered `set_theme`
-  Jarvis tool validates its token patch and writes through `SettingsStore`;
-  the existing dispatcher records `ok`, `refused`, or sanitized `error`
-  outcomes. Successful calls return the accepted token patch. These values use
-  the existing JSON-scalar settings rows, without a migration. Window/view state
-  remains client-owned and is not stored. Applying tool-originated changes to an
-  already-open client without reload depends on the P8-13 consumer and remains
-  unverified.
+  Jarvis tool maps its token patch through the same settings validation and write
+  path as `update_settings`; colour `null` removes one override and `reset: true`
+  removes all three. The existing dispatcher records `ok`, `refused`, or
+  sanitized `error` outcomes. Successful calls return the accepted token patch.
+  These values use the existing JSON-scalar settings rows, without a migration.
+  Window/view state remains client-owned and is not stored. Applying tool-originated
+  changes to an already-open client without reload depends on the P8-13 consumer
+  and remains unverified.
   The SQL adapter is injected only when database configuration exists; the API
   returns 503 without it. Dan-only `GET /models` reads Foundry deployments
   through ARM with the backend managed identity's account-scoped Reader role.
@@ -464,6 +494,13 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   compatibility alias for the chat role and shares the same confirmation and
   validation path. These tools reuse the existing settings store and contracts;
   no migration or web change is required.
+  P9-55 adds the same catalogue-derived options as `GET /settings` and a
+  schema-derived `fields` guide with key paths, types, allowed values, numeric
+  bounds and Now-confirmation flags. Optional `area` selects roles, voice,
+  research, memory, timeouts, appearance or personality and filters all three
+  output sections. Invalid updates retain the existing validator but return
+  bounded field-specific hints without submitted values. The shared instructions
+  advise discovery before uncertain updates; both tools are always registered.
   P9-34 adds a bounded home-location setting (`city`, latitude and longitude) to
   that same store and registers `weather` through the shared tool registry.
   Open-Meteo geocodes named places and returns a validated current observation
@@ -665,6 +702,47 @@ includes the new correction in the recovery prompt and task history.
 A stale or invalid transition returns 409, unavailable runtime state returns
 503, and remote failures are sanitized. The board and detail page share one state-aware
 controls component.
+
+P9-51 derives `Finishing delivery` activity from the latest completed sandbox
+turn while the task remains Running, including ended sessions. Task detail/list,
+Now context and P9-50's work-status reader share that activity. Cancel and pause
+without an active turn use the existing task-policy lock: pending policy merges
+return 409, “Delivery is finishing; try again when it completes”; otherwise
+cancel transitions to Cancelled and ends sessions, while pause uses
+PauseRequested → Paused and retains the idle session. No invocation cancellation
+is sent for an already completed turn. Pause also returns the finishing-delivery
+409 if the session has already ended, avoiding a Paused task with no resumable
+session; cancel remains available. Missing runtime and completion evidence
+returns an explicit 503; active-invocation cancellation failure returns a
+sanitized 502 without transitioning. Terminal tasks return 409 naming their
+state. HTTP controls and model tools relay the same safe reasons. No migration,
+new contract schema, App permission or web change is needed.
+
+P9-50 adds read-only `get_work_status` to the Factory tool registry. It combines
+task detail/list reads, GitHub issue and PR evidence, release records and the
+existing Actions deployment reader. “Delivered” requires a closed issue, a
+merged PR and successful deployment evidence for that PR's merge commit;
+an unrelated latest deployment cannot prove delivery. Missing or failed reads
+produce a partial answer with sanitized warnings. Repository and issue text is
+untrusted evidence, and the sensitive tool excludes private inputs/results from
+generic tool-call persistence.
+Repository-read installation tokens request the App's existing Checks and
+Statuses read grants so PR checks do not depend on write tokens or new permissions.
+If multiple merged PRs implement the issue, each requires matching deployment
+evidence so an older successful release cannot conceal a newer undelivered fix.
+Exact title/task-code matches and explicit “Supersedes Factory task” references
+help identify legacy work without rewriting its issue link. Ambiguous matches
+remain warnings rather than an invented authoritative link.
+
+Before recover/resume, the backend checks for a closed linked issue, a merged
+PR, or completed matching work superseding an unlinked legacy task. Such work
+requires explicit `confirm: true` on the Dan-only controls route; otherwise
+the route returns 409 with a reason. The resume tool cannot bypass this gate.
+Unverifiable restart safety returns 503 rather than starting duplicate work.
+Steering an idle-expired session uses recovery and therefore shares this gate;
+ordinary steering of a live session is unchanged.
+No migration, GitHub write operation, App permission or web change is required;
+the existing UI displays the refusal as an error until it gains an override prompt.
 
 P1-08's web board uses the authenticated project and task APIs for filters and
 task creation, requesting at most 100 newest matching tasks at a time. It opens
@@ -991,6 +1069,34 @@ Dan-only `GET /status` returns the shared `SystemStatus` contract with one
 `checkedAt` per subsystem. The backend caches the snapshot for 60 seconds and
 sets a private 30-second HTTP cache. `get_status_summary` reads the same snapshot
 and combines health counts with the existing Now-feed counts.
+
+P9-62 adds always-registered `get_system_health`, returning the shared
+`SystemHealth` contract: 26 fixed-order components with status, safe detail,
+nullable evidence timestamp and available recovery tool descriptions.
+`SystemStatusReader.peek` never starts or refreshes probes, even after cache
+expiry or error invalidation. Cached subsystem, smoke and work evidence older
+than five minutes becomes unknown; its timestamp remains visible. Credentials
+come from the existing metadata store, with expired credentials down and expiry
+within seven days degraded. Missing metadata is unknown. The latest stored
+production deployment or Deploy workflow result comes from Jarvis's release
+store, not a live GitHub call. It reports recorded evidence, not deployment
+freshness or exact-commit delivery.
+
+Background health uses a single aggregate over retained jobs updated in the
+last hour, returning a count capped at 1,000 and retry eligibility without
+loading job text. The SQL request is cancelled at the response deadline; stores
+without the aggregate report unknown. Work lookups
+record only a safe verdict; self-diagnosis never invokes the potentially costly
+work-status reader. Per-minute in-memory buckets count invalid tool arguments
+and execution failures over the last hour, capped at 1,000 and reset on restart.
+HTTP and reflex execution failures contribute; HTTP schema refusals contribute
+to invalid-argument counts. Stored-state reads have a shared five-second
+response deadline and failed reads remain unknown. No raw provider details,
+job text, project/repository text, credentials or work warnings are returned.
+Recovery references are filtered through the current tool registry; only
+eligible research retries, Codex renewal, deployment lookup and work lookup
+are offered. Recovery still uses each existing tool's validation/approval.
+`get_status_summary` is unchanged; no migration or GitHub App permission changes.
 
 The database check runs a bounded `SELECT 1`; Foundry chat, voice and embedding
 entries compare configuration and the cached ARM catalogue, without claiming a
@@ -1508,6 +1614,19 @@ automatically retried because their completion may be uncertain.
 
 ### Vault knowledge graph (P7-43)
 
+P9-74 keeps tooling out of the graph and displayed note counts using the
+documented `KNOWLEDGE_NOTE_EXCLUSIONS` constant in
+`apps/backend/src/vault/index.ts`: `**/skills/**`, `**/*.template.md`, and
+`.github/**` (case-insensitive). Filtering happens before the graph node cap
+and before `/memory/status` folder counts. Indexing and Jarvis vault search
+are unchanged; excluded indexed files remain searchable.
+
+The web reader hides a delimited front-matter block after leading whitespace,
+BOMs or HTML comments, without parsing YAML, so malformed properties are also
+hidden. Remaining Markdown uses the existing safe renderer. The path, content
+and connected notes share a keyboard-focusable scroll region with a bottom fade
+and a labelled scroll control while more content remains.
+
 Migration `0027_vault_knowledge_graph.sql` stores wiki-link and Markdown-link
 targets alongside each source note's chunks and records the index timestamp.
 Replacing a note updates both chunks and links atomically; deleting a note removes
@@ -1936,6 +2055,21 @@ App key rotation remain operator workflows; their renew endpoints return 400.
 Local fake-provider checks cover this contract; live Key Vault/GitHub/Foundry
 verification and the SQL Server contract suite remain separate checks.
 
+#### Agent-initiated credential renewal (P9-59)
+
+The always-registered sensitive `renew_credential` tool accepts only
+`codex-login`. It requires Now confirmation before calling the same forced
+renewal callback and credential-status store as the owner-only Settings route.
+The result contains only the renewal outcome, persisted credential status, a
+safe next step, and a matching user-facing confirmation. A failed login tells
+Dan to sign in to the Jarvis-only Codex account again; busy and uncertain
+outcomes direct him to wait or check status instead of claiming success.
+Missing renewal, status storage, or Now confirmation is refused without
+starting renewal. The shared dispatcher redacts tool arguments and results from
+tool-call records; no token, code, provider response, or exception text is
+returned or logged. The shared capability instruction names the tool because
+it is registered in core for every backend configuration.
+
 ### Idle SQL path audit (P5-13)
 
 This inventory is a source-level measurement of code paths and configured
@@ -2047,6 +2181,52 @@ workspace contract and browser preview. Live hosted Codex generation, Azure
 role assignment, Blob upload and deployed rendering remain unverified. Video
 generation is deferred separately. Artifact retention is unresolved and no
 automatic deletion is implemented.
+
+### P9-66 conversation attachments
+
+The authenticated, owner-only `/conversation/attachments` multipart route accepts
+one file, checks its extension, declared MIME type, magic bytes and size, and
+stores sanitized bytes under `attachments/` in the existing private `artifacts`
+container. Images are decoded and re-encoded before storage so EXIF/location
+metadata is removed. PDF, DOCX, XLSX and text formats are parsed within bounded
+input, output and time limits; images are described by the existing vision role.
+Extraction errors produce a failed attachment state and a content-free warning,
+not a failed chat turn.
+
+`dbo.conversation_attachments` stores owner-scoped metadata, bounded extracted
+text or image description and expiry. Unsent uploads expire after 24 hours;
+sent files use the 1–90 day `CONVERSATION_ATTACHMENT_RETENTION_DAYS` setting
+(default 30). Hourly cleanup removes expired blobs before their rows. Dan can
+attach up to five unlinked uploads to a saved chat message; the hosted agent
+receives bounded file context as untrusted data and may use the sensitive
+`attachment_list`/`attachment_read` tools for details in chat or voice. Owners
+receive only short-lived private read URLs. File bytes, extracted text and
+descriptions are excluded from ordinary logs and tool-call audit records.
+Offline route, store, extraction, tool-parity and agent tests cover the flow;
+live model and Azure Blob acceptance remain unverified.
+
+### P9-67 private-by-default issue attachments
+
+`create_issue` and the sensitive `issue_comment` tool accept up to five owned,
+sent attachment IDs. The default `publish: description` adds cached vision
+descriptions and extracted error text as fenced, untrusted data; file bytes stay
+in private storage. Text and filenames pass the existing issue secret checks.
+Both writes reuse the ten-minute, one-shot, later-message confirmation gate.
+
+Explicit `publish: public` accepts one image per confirmation. The backend first
+shows its private image through the acknowledged workspace image renderer and
+returns a public-repository warning. The later exact phrase must include
+`publish <filename>` after the confirmation code. It rechecks the attachment,
+re-encodes it without EXIF, and uses the App's existing Contents-write scope to
+commit `issue-attachments/<issue>/<sha256>.<ext>` on the target repository's
+dedicated `issue-attachments` branch, created from its default branch on first
+use and never merged. A raw GitHub Markdown image is embedded in a confirmed
+comment (also after a public-mode issue creation). Existing hash-matched images
+are reused. Partial/uncertain writes require checking GitHub before retrying.
+No migration, infrastructure, Python agent or web change; live chat, Blob and
+GitHub publication acceptance remain unverified.
+The existing renderer acknowledges workspace creation, not successful image
+loading; verifying on-screen loading requires the deferred web work (#649).
 
 P2-13 compares task-branch commits before and after each agent turn. An
 `end_turn` without a new task-branch commit emits `session_question` with the
@@ -2203,6 +2383,27 @@ which act only with transient user activation.
 
 ### Folio (P9-25)
 
+P9-53 adds sensitive agent-only `read_html_view` and `update_html_view` tools.
+Reads accept exactly one artifact ID or window ID and an optional positive
+version. Canonical `html-<compact artifact UUID>` windows resolve directly;
+research windows resolve from the broker's bounded cache of applied, owner-scoped
+HTML commands. All content is untrusted data and excluded from tool audits.
+Updates reuse create's HTML validation and 512 KiB UTF-8/50 HTTPS source limits.
+One SQL transaction locks the owned artifact, archives its previous content in
+`workspace_html_artifact_versions`, increments `version_number`, and replaces
+HTML plus any supplied title/sources. Omitted metadata is retained in SQL,
+including during concurrent revisions. No versions are pruned by this path.
+Artifact identity, creation time, Folio records and pin state remain unchanged.
+Historical reads join the current artifact to enforce ownership.
+
+After commit, an acknowledged workspace `update` targets the original cached
+window or canonical HTML window, never a new window. Delivery failure reports
+the saved artifact/version rather than claiming display success. No migration,
+App permission or web change is introduced. The existing `HtmlAppView` fetch
+depends only on artifact ID: same-ID updates do not reload its iframe yet.
+Visual refresh acceptance therefore needs separately authorized renderer work;
+backend command acknowledgement alone does not verify refreshed HTML.
+
 Migration `0035_folio.sql` adds an owner-scoped `dbo.folio_items` index over
 research reports, HTML apps, generated images and knowledge-graph views. New
 reports record their topic summary, HTML apps their title, generated images
@@ -2221,6 +2422,18 @@ then focuses it. `PATCH /folio/:id` pins or renames an item. Confirmed
 and its history remain available. The shared sensitive tools `folio_search`
 and `folio_open` provide the same owner-scoped search and broker-backed reopen
 behavior to Jarvis without retaining search arguments or results in tool audit.
+P9-56 adds sensitive `folio_manage` with a plain root object schema: exactly one
+`id` or `query`, `action` (`rename`, `pin`, `unpin`, `delete`), and `title` only
+for rename. It shares unique-query resolution with `folio_open` and reuses
+`FolioStore.update/delete`; ambiguity asks Dan to choose with bounded untrusted
+titles. Reversible changes need no approval. Deletion fails closed if presence
+or Now approval is unavailable, refuses away/on-the-move states, and uses the
+existing `runConfirmed('delete', ...)` flow naming the title and id. Duplicate
+pending deletions are refused; after approval, presence and the title are
+rechecked before removing the Folio index entry. Source artifacts/history are
+retained and no deleted entry is returned by Folio search. Outputs mark titles
+as untrusted; arguments and results are redacted from the tool audit. No
+migration, GitHub App permission, dependency or web change is needed.
 The Folio rail and pane are a separate UI task.
 
 ### Sandbox credentials
@@ -2249,6 +2462,8 @@ Every GitHub credential Jarvis uses, checked with Dan on 4 October 2026. Each to
 Azure sign-in from GitHub Actions uses OpenID Connect and stores no secret. The Codex credential is a ChatGPT login (Key Vault `codex-login`), not a GitHub token. Removed on 4 October 2026: the unused `COPILOT_ASSIGNMENT_TOKEN` (former P0-12 coordinator) and an unused fine-grained token named `Jarvis`.
 
 ### GitHub App
+
+P9-54 adds read-only pull request, diff, review-thread, check and failed-job log tools to the backend Factory module. They use the default Jarvis repository or the same registered-project resolver as `repo_*`, with repository-scoped pull-request, Checks-read and Actions-read installation tokens. Diff patches, review output, API responses and log tails are bounded; log tails redact token-like values before returning, and every tool response warns that provider content is untrusted. No new permission, persistence, route, or migration is required.
 
 [`github-app-manifest.json`](github-app-manifest.json) prepares a private App with contents, pull-request, issues, workflows and repository-creation write access, and commit statuses, checks, Actions, environments and deployments read access. It subscribes to `check_run`, `deployment_status`, `issue_comment`, `issues`, `pull_request`, `push`, and `workflow_run`. The permission set is limited to the operations in P3-02, P3-03 and P7-45; repository metadata read is GitHub's required baseline. P10-02 adds issue operations and the `issues` webhook handler; P10-01 granted Issues write on 8 October 2026 and the `issues` subscription is enabled, so these paths can run live.
 
@@ -2444,6 +2659,18 @@ existing memory-capture setting. Realtime voice uses it directly; the agent-only
 `GET /agent/settings` route returns the same block for chat, which adds it to its
 language-specific prompt after loading that settings snapshot. Both surfaces
 continue to use the backend tool registry and confirmation results.
+That block is bounded by one shared contract, `agents/jarvis/limits.json`: the
+agent refuses settings above `capabilityInstructionsMaxCodePoints` (20,000) and
+the backend tests require the block to stay within
+`capabilityInstructionsBudgetCodePoints` (15,000) and to use only BMP characters,
+so TypeScript and Python count the same. The backend schema constant is tied to
+the file by a test, and the image copies it (`.dockerignore`, `Dockerfile`).
+A failed chat turn emits `event: error` with a short diagnostic `code`
+(for example `capability_instructions_too_large`, `settings_http_503`,
+`error_<exception class>`), never message text. The backend accepts only
+`[a-z0-9_]{1,64}` codes and logs the code in the `failure` field of
+`conversation.reply_failed` (`Chat agent failed (<code>)`); the user
+still sees the same honest failure message (L129).
 The agent gets a token for `api://<jarvis-api>/.default`
 from its platform identity through `DefaultAzureCredential`; OpenAI uses the same
 credential when no API key is set. Claude requests use
@@ -2622,6 +2849,13 @@ The accepted [stage reference](reference/ui-stage-prototype/README.md) uses Thre
 The accepted [stage reference](reference/ui-stage-prototype/README.md) is reference-only. Production `apps/web` now depends on `three@0.180.0` and dev-only `@types/three@0.180.0`; the standalone prototype lockfile remains outside the root workspaces. The production Jarvis page lazy-loads `JarvisStage`, which dynamically imports the scene. Other routes do not mount the renderer or orb. The production bundle retains the Three.js MIT notice.
 
 The scene owns its renderer, geometry, materials, reflector target, animation frame, visibility/resize/context-loss listeners and disposal. It builds live room geometry and independently rotating rear mechanisms, renders the floor through Three.js `Reflector`, and positions room lights from the live orb. Theme changes apply a dark/light palette to the same geometry and reflector. The camera and platform remain stable across typing/voice and workspace changes; only the orb changes placement for content. Existing HTML chat/workspace/voice controls remain above the canvas.
+
+P9-72 restores phone voice placement from the registered CSS orb-dock lengths,
+including updates to measured bar/status height under reduced motion. Phone
+voice retains the current route and ordinary shell scrolling; only the compact
+dock receives pointer input. Desktop fullscreen voice rules remain desktop-only.
+Phone wall panels extend above the viewport so their upper curved edge cannot
+expose the ambient background below the header.
 
 P8-29 (#362, implemented offline in draft PR #377) keeps the same scene mounted and wires its presentation to existing contracts. `JarvisStage` reads authenticated runtime activity through `useJarvisActivity` and observes explicit voice-active state; voice entry does not reconstruct the renderer. `VoiceControls` forwards the existing decoded response-playback level through `PlaybackAudioLevelContext` to the scene's stable setter. No microphone analysis, new activity producer, simulated production selector or extra DOM wrapper is introduced. Visual dormancy is independent of backend sleep and microphone/readiness state.
 

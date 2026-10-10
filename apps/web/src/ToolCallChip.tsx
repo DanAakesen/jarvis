@@ -67,12 +67,6 @@ const livePhrases = {
     'Unrolling the maps…', 'Calling it up…', 'Straightening the shelves…', 'Bringing it in…', 'One moment, sir…',
     'Polishing the glass…', 'Nearly there…', 'Putting the kettle on…', 'Sorting the post…',
   ],
-  // The chat bar's invitation (Dan, 8 October): it types in, rests, a light passes over it, then the next one.
-  prompt: [
-    'Ask me anything, sir…', 'What shall we tackle?', 'Say the word and I’ll get on it…', 'What’s next on the list?',
-    'Need something looked up?', 'Shall I check on the Factory?', 'Plan it, research it, remember it…', 'Tell me what you need…',
-    'Draft, fix or find something?', 'Where were we?', 'A question, a task, a hunch?', 'Shall I pull something up?',
-  ],
 } as const;
 
 function shuffled(phrases: readonly string[], avoidFirst?: string) {

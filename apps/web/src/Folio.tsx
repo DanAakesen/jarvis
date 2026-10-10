@@ -63,7 +63,7 @@ export function FolioPane({ backendUrl, getAccessToken, open, onClose, refreshKe
   const search = useRef<HTMLInputElement>(null);
 
   const call = useCallback(async (path: string, init?: { method?: 'POST' | 'PATCH' | 'DELETE'; body?: unknown; signal?: AbortSignal }) => {
-    if (!backendUrl) throw new Error('The Folio is unavailable until the backend is deployed.');
+    if (!backendUrl) throw new Error('The Folio is unavailable.');
     const token = await getAccessToken();
     return backendFetch(`${backendUrl.replace(/\/+$/u, '')}${path}`, {
       method: init?.method ?? 'GET',
@@ -89,7 +89,7 @@ export function FolioPane({ backendUrl, getAccessToken, open, onClose, refreshKe
     if (kind) params.set('kind', kind);
     if (before) params.set('before', before);
     const response = await call(`/folio${params.size ? `?${params}` : ''}`, { signal });
-    if (response.status === 404) throw new Error('The Folio is not available on this backend yet.');
+    if (response.status === 404) throw new Error('The Folio is unavailable.');
     if (!response.ok) throw new Error(response.status === 503 ? 'The Folio is unavailable right now.' : `The Folio could not be loaded (${response.status}).`);
     const body: unknown = await response.json();
     const items = typeof body === 'object' && body !== null && Array.isArray((body as { items?: unknown }).items)
@@ -235,7 +235,7 @@ export function FolioPane({ backendUrl, getAccessToken, open, onClose, refreshKe
             </div>
           ) : (
             <div className="folio-state" role="status">
-              <p>Reports, apps, images and graphs Jarvis pulls up will gather here, so you can reopen them any time.</p>
+              <p>No saved items.</p>
             </div>
           ))}
           {groups.map((group) => (

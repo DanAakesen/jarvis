@@ -4,6 +4,7 @@ import { MemoryRouter } from 'react-router-dom';
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from './App';
+import { getSignInGreeting } from './sign-in-greeting';
 
 const {
   createAuthClient,
@@ -134,9 +135,9 @@ describe('Jarvis routes', () => {
 
   it('disables sign-in until a backend is deployed', () => {
     render(<MemoryRouter><App config={{ ...__JARVIS_CONFIG__, backendUrl: null }} /></MemoryRouter>);
-    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Jarvis is taking shape');
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe(getSignInGreeting());
     expect(screen.getByRole('button', { name: 'Sign in with Microsoft' })).toHaveProperty('disabled', true);
-    expect(screen.getByText('Sign-in is unavailable until the backend is deployed.')).not.toBeNull();
+    expect(screen.getByText('Sign-in is unavailable until the backend is configured.')).not.toBeNull();
   });
 
   it('syncs reduced-motion and visibility preferences for CSS behavior', async () => {
@@ -168,6 +169,42 @@ describe('Jarvis routes', () => {
     expect(document.documentElement.dataset.documentVisibility).toBeUndefined();
   });
 
+  it('keeps the signed-out screen text to a personal greeting and one Microsoft sign-in action', async () => {
+    render(<MemoryRouter><App config={config} /></MemoryRouter>);
+    const greeting = await screen.findByRole('heading', { level: 1 });
+    const button = await screen.findByRole('button', { name: 'Sign in with Microsoft' });
+    expect(greeting.textContent).toBe(getSignInGreeting());
+    expect(button.textContent).toBe('Sign in');
+    expect(button.classList.contains('luminous-glass')).toBe(true);
+    expect(button.classList.contains('primary-button')).toBe(false);
+    expect(button.querySelector('.signin-mark')?.getAttribute('aria-hidden')).toBe('true');
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.queryByText('Not signed in.')).toBeNull();
+    expect(screen.queryByText(/Your personal AI platform/)).toBeNull();
+  });
+
+  it('does not flash the sign-in screen while silent account restoration is pending', async () => {
+    let restore!: (profile: { name: string } | null) => void;
+    restoreProfile.mockReturnValue(new Promise((resolve) => { restore = resolve; }));
+    render(<MemoryRouter><App config={config} /></MemoryRouter>);
+
+    await waitFor(() => expect(restoreProfile).toHaveBeenCalled());
+    expect(screen.queryByRole('heading', { level: 1 })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Sign in with Microsoft' })).toBeNull();
+    expect(screen.getByText('Checking for an existing sign-in…')).not.toBeNull();
+
+    restore({ name: 'Test User' });
+    expect(await screen.findByRole('textbox', { name: 'Message Jarvis' })).not.toBeNull();
+    expect(screen.queryByRole('button', { name: 'Sign in with Microsoft' })).toBeNull();
+  });
+
+  it('uses local time for the personal greeting', () => {
+    expect(getSignInGreeting(new Date(2026, 0, 1, 4))).toBe('Good evening, Dan.');
+    expect(getSignInGreeting(new Date(2026, 0, 1, 5))).toBe('Good morning, Dan.');
+    expect(getSignInGreeting(new Date(2026, 0, 1, 12))).toBe('Good afternoon, Dan.');
+    expect(getSignInGreeting(new Date(2026, 0, 1, 18))).toBe('Good evening, Dan.');
+  });
+
   it('sends the page to Microsoft sign-in and waits while it navigates away', async () => {
     const user = userEvent.setup();
     signIn.mockResolvedValue(undefined);
@@ -177,26 +214,34 @@ describe('Jarvis routes', () => {
     await user.click(button);
 
     expect(signIn).toHaveBeenCalledWith(expect.anything(), config);
-    expect((await screen.findByRole('button', { name: 'Signing in…' })).hasAttribute('disabled')).toBe(true);
-    expect(screen.getByRole('status').textContent).toBe('Opening Microsoft sign-in…');
+    expect(button.hasAttribute('disabled')).toBe(true);
+    expect(button.textContent).toContain('Sign in');
+    expect(screen.getByText('Opening Microsoft sign-in…')).not.toBeNull();
   });
 
   it('shows the backend refusal and does not show a name for an unauthorized account', async () => {
     restoreProfile.mockRejectedValue(new Error("This Microsoft account isn't allowed to use Jarvis."));
     render(<MemoryRouter><App config={config} /></MemoryRouter>);
 
-    expect((await screen.findByRole('alert')).textContent).toBe("This Microsoft account isn't allowed to use Jarvis.");
+    expect((await screen.findByRole('alert')).textContent).toBe('Sign-in needs attention.');
     expect(screen.queryByRole('heading', { name: /Welcome,/ })).toBeNull();
   });
 
-  it('shows a sign-in start failure', async () => {
+  it('shows a concise failure and retries through the same Microsoft sign-in action', async () => {
     const user = userEvent.setup();
-    signIn.mockRejectedValue(new Error('Microsoft sign-in did not complete. Try again.'));
+    signIn.mockRejectedValueOnce(new Error('provider details')).mockResolvedValue(undefined);
     render(<MemoryRouter><App config={config} /></MemoryRouter>);
 
-    await user.click(await screen.findByRole('button', { name: 'Sign in with Microsoft' }));
+    const button = await screen.findByRole('button', { name: 'Sign in with Microsoft' });
+    expect(screen.queryByRole('alert')).toBeNull();
+    await user.click(button);
 
-    expect((await screen.findByRole('alert')).textContent).toBe('Microsoft sign-in did not complete. Try again.');
+    expect((await screen.findByRole('alert')).textContent).toBe('Sign-in failed.');
+    expect(button.textContent).toBe('Retry');
+    await user.click(button);
+    expect(signIn).toHaveBeenCalledTimes(2);
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(button).toHaveProperty('disabled', true);
   });
 
   it('recovers from an unknown address through the home link', async () => {
@@ -204,7 +249,7 @@ describe('Jarvis routes', () => {
     render(<MemoryRouter initialEntries={['/unknown/nested']}><App /></MemoryRouter>);
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Page not found');
     await user.click(screen.getByRole('link', { name: 'Return to Jarvis' }));
-    expect((await screen.findByRole('heading', { level: 1 })).textContent).toBe('Jarvis is taking shape');
+    expect((await screen.findByRole('heading', { level: 1 })).textContent).toBe(getSignInGreeting());
   });
 
   it('restores the verified name from an existing sign-in', async () => {
@@ -324,6 +369,28 @@ describe('App shell', () => {
     })));
     await screen.findByText('No tasks are running.');
     expect(screen.queryByText('Waking Jarvis…')).toBeNull();
+  });
+
+  it('keeps phone voice on the current page and leaves header controls available through entry and exit', async () => {
+    vi.stubGlobal('matchMedia', vi.fn((query: string) => ({
+      matches: query.includes('max-width: 700px'),
+      media: query, addEventListener: vi.fn(), removeEventListener: vi.fn(),
+    })));
+    const user = userEvent.setup();
+    await renderSignedIn('/settings');
+    const heading = await screen.findByRole('heading', { level: 1, name: 'Settings' });
+    const shell = document.querySelector('.app-shell')!;
+    expect(shell.getAttribute('data-phone')).toBe('true');
+    await user.click(screen.getByRole('button', { name: 'Start voice' }));
+    expect(shell.getAttribute('data-voice-active')).toBe('true');
+    expect(screen.getByRole('heading', { level: 1, name: 'Settings' })).toBe(heading);
+    await user.click(screen.getByRole('button', { name: 'Menu' }));
+    expect(screen.getByRole('button', { name: 'Menu' }).getAttribute('aria-expanded')).toBe('true');
+    await user.keyboard('{Escape}');
+    await user.click(screen.getByRole('button', { name: 'End voice' }));
+    expect(shell.getAttribute('data-voice-active')).toBe('false');
+    expect(screen.getByRole('textbox', { name: 'Message Jarvis' })).not.toBeNull();
+    expect(screen.getByRole('heading', { level: 1, name: 'Settings' })).toBe(heading);
   });
 
   it('enters fullscreen voice immediately and restores the typing shell when voice ends', async () => {
@@ -726,6 +793,47 @@ describe('App shell', () => {
     expect(screen.getByRole('link', { name: 'Settings' }).getAttribute('href')).toBe('/settings');
   });
 
+  it('marks only the current desktop area as the page', async () => {
+    const user = userEvent.setup();
+    await renderSignedIn();
+    const areas = screen.getByRole('navigation', { name: 'Areas' });
+    const home = within(areas).getByRole('link', { name: 'Conversation' });
+    const usage = within(areas).getByRole('link', { name: 'Usage' });
+    expect(home.getAttribute('aria-current')).toBe('page');
+    expect(usage.hasAttribute('aria-current')).toBe(false);
+    await user.click(usage);
+    expect(usage.getAttribute('aria-current')).toBe('page');
+    expect(home.hasAttribute('aria-current')).toBe(false);
+    expect(areas.querySelectorAll('[aria-current="page"]')).toHaveLength(1);
+  });
+
+  it('keeps phone menu expansion and current page in sync after navigation and Escape', async () => {
+    vi.stubGlobal('matchMedia', vi.fn((query: string) => ({
+      matches: query.includes('max-width: 700px'),
+      media: query, addEventListener: vi.fn(), removeEventListener: vi.fn(),
+    })));
+    const user = userEvent.setup();
+    await renderSignedIn();
+    const menu = screen.getByRole('button', { name: 'Menu' });
+    expect(menu.getAttribute('aria-expanded')).toBe('false');
+    expect(menu.getAttribute('aria-controls')).toBe('mobile-menu');
+    await user.click(menu);
+    expect(menu.getAttribute('aria-expanded')).toBe('true');
+    const sheet = screen.getByRole('dialog', { name: 'Go to' });
+    const home = within(sheet).getByRole('link', { name: 'Jarvis' });
+    const usage = within(sheet).getByRole('link', { name: 'Usage' });
+    expect(home.getAttribute('aria-current')).toBe('page');
+    expect(usage.hasAttribute('aria-current')).toBe(false);
+    await user.click(usage);
+    expect(menu.getAttribute('aria-expanded')).toBe('false');
+    await user.click(menu);
+    expect(usage.getAttribute('aria-current')).toBe('page');
+    expect(home.hasAttribute('aria-current')).toBe(false);
+    expect(sheet.querySelectorAll('[aria-current="page"]')).toHaveLength(1);
+    await user.keyboard('{Escape}');
+    expect(menu.getAttribute('aria-expanded')).toBe('false');
+  });
+
   it('shows only the brand in the top bar, with open windows as tabs beside it and no breadcrumb', async () => {
     const user = userEvent.setup();
     await renderSignedIn();
@@ -813,15 +921,21 @@ describe('App shell', () => {
     await renderSignedIn();
 
     const toggle = screen.getByRole('button', { name: 'Toggle contextual panel' });
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    expect(toggle.getAttribute('aria-controls')).toBe('context-panel');
     await user.click(toggle);
     expect(toggle.getAttribute('aria-expanded')).toBe('true');
     expect(screen.getByRole('heading', { name: 'Context' })).not.toBeNull();
-    expect(screen.getByText('No relevant information is available yet.')).not.toBeNull();
+    expect(screen.getByText('No relevant information.')).not.toBeNull();
     expect(screen.getByRole('heading', { name: 'Welcome, Dan Aakesen' })).not.toBeNull();
     await user.click(screen.getByRole('button', { name: 'Close context panel' }));
     expect(toggle.getAttribute('aria-expanded')).toBe('false');
     expect(screen.queryByRole('heading', { name: 'Context' })).toBeNull();
     expect(document.activeElement).toBe(toggle);
+    await user.keyboard(' ');
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+    await user.keyboard(' ');
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
   });
 
   it('enables chat and explains the other unavailable main-page actions', async () => {

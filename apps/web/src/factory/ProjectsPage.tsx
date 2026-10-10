@@ -135,7 +135,7 @@ function validateProjectValues(values: ProjectValues): string | null {
 
 function projectError(operation: 'load' | 'save' | 'manage', status: number): Error {
   if (status === 401) return new Error('Your Microsoft sign-in needs attention. Sign in again.');
-  if (status === 503) return new Error('Project or repository data is unavailable until its backend service is connected.');
+  if (status === 503) return new Error('Project or repository data unavailable.');
   if (status === 502) return new Error('GitHub repository data is unavailable. Try again.');
   if (status === 409) return new Error('This repository is already assigned to a project. Archived repositories remain reserved.');
   if (status === 404 && operation === 'manage') return new Error('This repository is no longer available through the GitHub App.');
@@ -241,7 +241,7 @@ export function ProjectsPage({ backendUrl, getAccessToken }: ProjectsPageProps) 
   const [repositoryState, setRepositoryState] = useState<LoadState>(backendUrl ? 'loading' : 'error');
   const [repositoryError, setRepositoryError] = useState('');
   const [runningCounts, setRunningCounts] = useState<Record<string, number>>({});
-  const [error, setError] = useState(backendUrl ? '' : 'Projects are unavailable until the backend is deployed.');
+  const [error, setError] = useState(backendUrl ? '' : 'Projects unavailable.');
   const [taskError, setTaskError] = useState('');
   const [manageError, setManageError] = useState('');
   const [manageMessage, setManageMessage] = useState('');
@@ -252,7 +252,7 @@ export function ProjectsPage({ backendUrl, getAccessToken }: ProjectsPageProps) 
   const requestKey = `${backendUrl ?? ''}:${reloadKey}`;
   const visibleState: LoadState = !backendUrl ? 'error' :
     settledRequestKey === requestKey ? state : 'loading';
-  const visibleError = backendUrl ? error : 'Projects are unavailable until the backend is deployed.';
+  const visibleError = backendUrl ? error : 'Projects unavailable.';
 
   useEffect(() => {
     let active = true;
@@ -324,7 +324,6 @@ export function ProjectsPage({ backendUrl, getAccessToken }: ProjectsPageProps) 
 
   return (
     <CollapsibleSection storageKey="settings.projects" className="projects-page" id="projects" headingId="projects-heading" title="Projects">
-      <p className="settings-explanation">Manage repositories and the defaults used for new tasks. Changes do not alter running tasks.</p>
       <div className="projects-toolbar">
         {visibleState === 'ready' && (
           <button className="secondary-button" type="button" onClick={retry}>Refresh projects and repositories</button>
@@ -343,11 +342,9 @@ export function ProjectsPage({ backendUrl, getAccessToken }: ProjectsPageProps) 
           {taskError && <p className="projects-feedback" role="status">{taskError}</p>}
           {manageMessage && <p className="projects-feedback" role="status">{manageMessage}</p>}
           {manageError && <p className="projects-feedback" role="alert">{manageError}</p>}
-          <p className="projects-freshness">Running task counts update when you refresh this page. Open a project&apos;s release view for its latest recorded build and deployment state.</p>
           {projects.length === 0 ? (
             <section className="project-empty" aria-labelledby="empty-projects-heading">
               <h3 id="empty-projects-heading">No managed projects</h3>
-              <p>Register an existing repository below or configure New projects defaults in Settings.</p>
               <Link className="home-link" to="/settings">New project defaults</Link>
             </section>
           ) : (
@@ -387,7 +384,7 @@ export function ProjectsPage({ backendUrl, getAccessToken }: ProjectsPageProps) 
               </div>
             )}
             {repositoryState === 'ready' && otherRepositories.length === 0 && (
-              <p className="projects-feedback">All repositories in the GitHub App installation are managed.</p>
+              <p className="projects-feedback">No repositories to add.</p>
             )}
             {otherRepositories.length > 0 && (
               <ul className="repository-list" aria-label="Repositories not managed by Jarvis">
@@ -429,7 +426,7 @@ export function ProjectSettingsPage({ backendUrl, getAccessToken }: ProjectsPage
   const [state, setState] = useState<LoadState>('loading');
   const [values, setValues] = useState<ProjectValues>(emptyValues);
   const [savedValues, setSavedValues] = useState<ProjectValues | null>(null);
-  const [error, setError] = useState(!backendUrl ? 'Project settings are unavailable until the backend is deployed.' : '');
+  const [error, setError] = useState(!backendUrl ? 'Project settings unavailable.' : '');
   const [message, setMessage] = useState(pageNotice(location.state));
   const [saving, setSaving] = useState(false);
   const [showArchiveConfirmation, setShowArchiveConfirmation] = useState(false);
@@ -442,7 +439,7 @@ export function ProjectSettingsPage({ backendUrl, getAccessToken }: ProjectsPage
   const visibleState: LoadState = !backendUrl || invalidProjectId ? 'error' :
     settledRequestKey === requestKey ? state : 'loading';
   const visibleError = !backendUrl
-    ? 'Project settings are unavailable until the backend is deployed.'
+    ? 'Project settings unavailable.'
     : invalidProjectId ? 'This project address is invalid.' : error;
 
   useEffect(() => {
@@ -501,7 +498,7 @@ export function ProjectSettingsPage({ backendUrl, getAccessToken }: ProjectsPage
       const nextValues = toProjectValues(result);
       setValues(nextValues);
       setSavedValues(nextValues);
-      setMessage('Saved. These defaults apply to new tasks only; running tasks keep their current settings.');
+      setMessage('Saved for new tasks.');
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Project settings could not be saved. Try again.');
     } finally {
@@ -535,7 +532,7 @@ export function ProjectSettingsPage({ backendUrl, getAccessToken }: ProjectsPage
   return (
     <section className="project-settings-page" aria-labelledby="project-settings-heading">
       <h1 id="project-settings-heading">Project settings</h1>
-      <p>These defaults apply to new tasks only. Running tasks keep their current settings.</p>
+      <p>Applies to new tasks only.</p>
       {visibleState === 'error' ? (
         <div className="projects-feedback" role="alert">
           <p>{visibleError}</p>
@@ -660,7 +657,7 @@ export function CreateProjectDialog({ backendUrl, getAccessToken, onClose, onAdd
   onAdded: (repository: string) => void;
 }) {
   const [state, setState] = useState<LoadState>(backendUrl ? 'loading' : 'error');
-  const [error, setError] = useState(backendUrl ? '' : 'Projects are unavailable until the backend is deployed.');
+  const [error, setError] = useState(backendUrl ? '' : 'Projects unavailable.');
   const [repositories, setRepositories] = useState<ExistingRepository[]>([]);
   const [reloadKey, setReloadKey] = useState(0);
   const [managing, setManaging] = useState('');
@@ -722,7 +719,7 @@ export function CreateProjectDialog({ backendUrl, getAccessToken, onClose, onAdd
               {backendUrl && <button className="secondary-button" type="button" onClick={() => { setState('loading'); setReloadKey((value) => value + 1); }}>Retry</button>}
             </div>
           )}
-          {state === 'ready' && repositories.length === 0 && <p>Every repository in the GitHub App installation is already a project.</p>}
+          {state === 'ready' && repositories.length === 0 && <p>No repositories to add.</p>}
           {state === 'ready' && repositories.length > 0 && (
             <ul className="project-dialog-repositories" aria-label="Repositories you can add">
               {repositories.map((repository) => (
@@ -745,12 +742,8 @@ export function CreateProjectDialog({ backendUrl, getAccessToken, onClose, onAdd
           <h3>Start a new repository</h3>
           <div className="task-form-field">
             <label htmlFor="new-project-idea">What should Jarvis build?</label>
-            <textarea id="new-project-idea" rows={3} maxLength={2_000} value={idea} onChange={(event) => setIdea(event.target.value)}
-              aria-describedby="new-project-help" />
+            <textarea id="new-project-idea" rows={3} maxLength={2_000} value={idea} onChange={(event) => setIdea(event.target.value)} />
           </div>
-          <p id="new-project-help" className="settings-explanation">
-            Jarvis creates and registers the repository using your New projects defaults in Settings. This opens the conversation.
-          </p>
           <div className="task-dialog-actions">
             <button className="primary-button" type="submit" disabled={!idea.trim()}>Ask Jarvis to create it</button>
           </div>

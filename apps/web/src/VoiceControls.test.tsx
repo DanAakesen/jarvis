@@ -492,7 +492,7 @@ describe('VoiceControls', () => {
       render(<JarvisActivityProvider><VoiceControls client={{} as PublicClientApplication} config={config} /><WakeProbe /></JarvisActivityProvider>);
       act(() => { publishVoiceWake(wake()); });
       expect(clients.instances).toHaveLength(0);
-      expect(screen.getByText(/Click the orb once to start/)).not.toBeNull();
+      expect(screen.getByText(/Click the orb to start voice/)).not.toBeNull();
       expect(screen.getByLabelText('Wake status').textContent).toMatch(/^needs-click/);
 
       act(() => { publishVoiceWake(new Date(Date.now() - 120_000).toISOString()); });

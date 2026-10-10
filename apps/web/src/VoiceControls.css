@@ -72,18 +72,17 @@
     --voice-anchor-x: 50vw;
     --voice-anchor-y: 46vh;
     --voice-anchor-radius: min(28vw, 16vh);
-    --voice-status-width: calc(100vw - 24px);
+    --voice-status-width: calc(100vw - env(safe-area-inset-left) - env(safe-area-inset-right) - 24px);
   }
   .voice-status-region { bottom: calc(var(--phone-dock-bottom) + var(--phone-dock-height) + 12px); }
-  /* With a phone window open, a compact orb docks between the window and the bar with the status
-     beneath it. The stage reads these lengths to place the orb; the window ends above the orb. */
-  .app-shell[data-voice-active="true"][data-voice-has-windows="true"] {
+  /* Phone voice stays below foreground content, including when no window is open. */
+  .app-shell[data-phone="true"][data-voice-active="true"] {
     --jarvis-orb-dock-radius: clamp(22px, min(11vw, 6vh), 44px);
     --jarvis-orb-dock-bottom: calc(var(--phone-dock-bottom) + var(--phone-dock-height) + var(--voice-status-height, 0px) + 24px);
     --voice-dock-top: calc(var(--jarvis-orb-dock-bottom) + 2 * var(--jarvis-orb-dock-radius) + 8px);
   }
-  .app-shell[data-voice-has-windows="true"] .voice-status-region { bottom: auto; }
-  .app-shell[data-voice-has-windows="true"] .voice-status { max-height: 30vh; padding: 6px 14px; }
+  .app-shell[data-phone="true"][data-voice-active="true"] .voice-status-region { top: calc(2 * var(--jarvis-orb-dock-radius) + 8px); bottom: auto; left: 50%; pointer-events: none; }
+  .app-shell[data-phone="true"][data-voice-active="true"] .voice-status { max-height: 20dvh; padding: 6px 14px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -119,9 +119,9 @@ export function TaskReleaseBar({
     if (!projectId) {
       return () => controller.abort();
     } else if (!backendUrl) {
-      void Promise.resolve().then(() => setError('Release data is unavailable until the backend is deployed.'));
+      void Promise.resolve().then(() => setError('Release data unavailable.'));
     } else if (!idPattern.test(projectId)) {
-      void Promise.resolve().then(() => setError('Select an active project to load release context.'));
+      void Promise.resolve().then(() => setError('Select a project.'));
     } else {
       void fetchReleaseView(backendUrl, projectId, getAccessToken, controller.signal).then((data: unknown) => {
         if (controller.signal.aborted) return;
@@ -143,13 +143,13 @@ export function TaskReleaseBar({
         <section className="release-trail release-trail-empty" aria-label="Project release context">
           <span className="release-trail-icon"><TrailIcon name="repo" /></span>
           <div className="release-trail-line" aria-hidden="true"><span /><span /><span /><span /></div>
-          <p>Choose a project to see its commit trail.</p>
+          <p>No project selected.</p>
         </section>
       );
     }
     return (
       <section className="task-release-bar" aria-label="Project release context">
-        <p>Select a project to view its release and commit context.</p>
+        <p>No project selected.</p>
       </section>
     );
   }
@@ -161,7 +161,7 @@ export function TaskReleaseBar({
           {currentResult?.status === 'error'
             ? currentResult.message
             : !backendUrl
-              ? 'Release data is unavailable until the backend is deployed.'
+              ? 'Release data unavailable.'
               : <Loader variant="inline" announce={false} label="Loading project release context…" />}
         </p>
         {currentResult?.status === 'error' && backendUrl && (

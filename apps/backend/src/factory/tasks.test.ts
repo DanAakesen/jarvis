@@ -7,6 +7,7 @@ import type {
   RunningTaskContextSnapshot, TaskController, TaskDetail, TaskEventMessage, TaskRecord, TaskStore,
 } from './task-store.js';
 import type { GitHubAppTokenIssuer } from '../github-app.js';
+import type { ProjectStore } from './projects.js';
 
 const config = { ...loadConfig({}), logLevel: 'silent' as const };
 const headers = { authorization: ['Bearer', ['e30', 'e30', 'sig'].join('.')].join(' ') };
@@ -104,8 +105,16 @@ function fixture(
   };
   const app = buildApp(config, undefined, {
     taskStore: store,
+    projectStore: { list: vi.fn(async () => [{
+      id: '7', name: 'Jarvis', repo: 'DanAakesen/jarvis', default_branch: 'main',
+      default_agent: 'codex', policy: 'deliver_pr', merge_rules: null,
+      sandbox_size: '1x2', tech: 'node', max_parallel_tasks: 1, active: true,
+    }]) } as unknown as ProjectStore,
     ...(taskController ? { taskController } : {}),
-    ...(githubAppTokenIssuer ? { githubAppTokenIssuer } : {}),
+    githubAppTokenIssuer: githubAppTokenIssuer ?? {
+      issueForRepositoryRead: vi.fn(async () => 'read-token'),
+    } as unknown as GitHubAppTokenIssuer,
+    factoryBoardReader: { read: vi.fn(), searchIssues: vi.fn(async () => ({ numbers: [], incomplete: false })) },
     eventHub,
     auth,
   });
@@ -286,6 +295,21 @@ describe('factory tasks API', () => {
     expect((await app.inject({
       method: 'POST', url: '/factory/tasks/42/controls', headers, payload: { action: 'delete' },
     })).statusCode).toBe(400);
+  });
+
+  it.each([
+    { kind: 'invalid-transition' as const, reason: 'Delivery is finishing; try again when it completes', status: 409 },
+    { kind: 'invalid-transition' as const, reason: 'Task is already Done', status: 409 },
+    { kind: 'invalid-transition' as const, reason: 'Task is already Cancelled', status: 409 },
+    { kind: 'failed' as const, reason: 'Task runtime could not be reached to cancel the active invocation', status: 502 },
+    { kind: 'unavailable' as const, reason: 'No task runtime session or completed delivery evidence could be found', status: 503 },
+  ])('relays explicit control reason: $reason', async ({ kind, reason, status }) => {
+    const { app } = fixture({}, undefined, { control: vi.fn(async () => ({ kind, reason })) });
+    const response = await app.inject({
+      method: 'POST', url: '/factory/tasks/42/controls', headers, payload: { action: 'cancel' },
+    });
+    expect(response.statusCode).toBe(status);
+    expect(response.json()).toEqual({ error: reason });
   });
 
   it('mints a task repository token only for its runner session', async () => {

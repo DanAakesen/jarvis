@@ -156,13 +156,32 @@ are pending; no fake task data is shown. P1-07 shows unbuilt actions as explaine
 disabled controls; see below. Unknown addresses have a return link. A skip link
 and visible keyboard focus support navigation. Dan's page designs remain to be selected.
 
-## Sign-in (P0-09)
+## Sign-in (P0-09; simplified in P9-69, refined in P9-75)
 
-The home page keeps the neutral, single-column shell and presents one Microsoft
-sign-in action. Disable it with an explanation until the backend is configured;
-show pending and refusal feedback beside the action. After `/me` verifies the
-session, show the returned name as the page headline. Do not expose account
-tokens, email addresses, or unverified identity claims in the interface.
+The orb remains unobstructed and is the signed-out screen's hero. Place the
+single device-local greeting and **Sign in** action (accessible name
+**Sign in with Microsoft**) below the stage on desktop and in the lower third
+above the safe area on phones. The action reuses the shared luminous-glass
+surface, complete refracted rim, and semantic cool/warm tokens; it is not a
+filled primary pill. Do not add a card, supporting copy, idle status, or a
+second headline.
+
+When Jarvis is idle, the warm core breathes and drifts, separate ring layers
+turn at distinct speeds, and small warm lights travel along the existing stage
+lines. Keep the cyan shell and all active voice/activity states recognizable.
+Pointer or available device-orientation input produces only a slight, eased
+stage tilt. Reduced motion keeps a still warm glow with no travelling light;
+hidden tabs pause the renderer. Compact viewports start at the existing lowest
+quality tier (0.7 backing scale, 256px reflection, 35% particle count) and only
+recover after sustained smooth frames; ambient rendering remains capped at 30 fps.
+
+Complete silent account restoration before showing the interactive screen. A
+failure adds one short inline message and changes the same action to **Retry**.
+Keep the existing 140 ms delayed loader, theme behavior, and reduced-motion
+support. Disable the action with an accessible explanation until the backend
+is configured. After `/me` verifies the session, show the returned name as the
+page headline. Do not expose account tokens, email addresses, or unverified
+identity claims in the interface.
 
 ## App shell (P1-07)
 
@@ -171,6 +190,8 @@ visual direction. The header contains the Jarvis home link, area navigation
 (Software Factory only) and a separate Settings entry. The current page is marked with a
 surface fill and full outline, never a lone edge. Navigation appears only after
 sign-in; the header wraps on narrow screens.
+P9-71 supersedes this initial selection treatment with the shared tint and
+non-colour cues described in the current shell guidance below.
 
 - **Database wake (P1-14):** one shared, polite status message in the top bar
   (P8-37) reads “Waking Jarvis…” while the backend reports a resume wait.
@@ -417,6 +438,11 @@ P8-11 implements phone view switching on the existing client controller.
 
 ### Phone workspace (P8-11)
 
+P9-73 keeps phone docks one comfortable gap above the bottom safe area, shared
+by typing and voice; feedback and windows clear that dock. The shell and fixed
+phone sheets also respect the top and landscape side insets. Canonical spacing
+lives in `styles.css`; desktop geometry is unchanged.
+
 At 700px and below, one non-minimised view occupies the main space above the
 floating composer. Named view buttons switch foreground; left/right swipes on
 non-interactive content and Left/Right/Home/End on those buttons are alternatives.
@@ -431,8 +457,10 @@ P8-23 keeps the microphone and inspection actions in the orb's control group
 with End voice. Long runtime status text stays within the dock without covering
 those controls. The dock expands only while the microphone is ready and at
 narrow widths where those controls wrap, keeping End voice above the workspace.
-With no non-minimised content, the orb returns to the centre with its controls
-below it. Typing never shows the large orb. Camera and sharing move behind a
+P9-72 keeps phone voice docked even without a non-minimised window, and starting
+voice preserves the current page and header. The dock has no foreground veil or
+viewport-sized hit target; only its compact controls and status accept input.
+The phone header is a straight, unblurred surface. Typing never shows the large orb. Camera and sharing move behind a
 labelled phone disclosure; Settings stays at the right of the one-line top bar.
 Escape closes the disclosure and returns focus before ending voice.
 
@@ -717,7 +745,7 @@ Dan requested one issue and one implementation PR for the shell, input and messa
 
 ### P8-37 implementation note
 
-- **Shell:** the footer row is removed from the grid (`--rail-size` + one content row; rail spans `2 / -1`). Selected rail, sidebar, Settings and phone view-switcher items use `--glass-selected` with `--glass-selected-glow` — a complete illuminated surface and ring, not an edge accent. Rail, sidebar and context pane gain a faint `--glass-shell-sheen` over the existing translucent surfaces.
+- **Shell:** the footer row is removed from the grid (`--rail-size` + one content row; rail spans `2 / -1`). The original selected rail, sidebar, Settings and phone view-switcher treatment used `--glass-selected` with `--glass-selected-glow`; P9-71 supersedes that treatment below. Rail, sidebar and context pane gain a faint `--glass-shell-sheen` over the existing translucent surfaces.
 - **Status:** `DatabaseWakeStatus` renders a compact `.topbar-status` pill first in the top-bar actions; phones show the pulsing mark with the label kept for assistive technology and as a tooltip. Reduced motion stops the pulse.
 - **Composer:** one `luminous-glass` pill (radius 30px) holding orb │ paperclip │ multiline text │ More │ Send (paper-plane). Neutral `--rule` hairline dividers separate groups. The paperclip reuses `ConversationMoreMenu` with no Language row for the existing screen/camera visual-context actions.
 - **Message window:** the shared workspace window for view `conversation`, styled `luminous-glass` with a visually hidden title and round borderless controls. Tiled, it sits bottom-centred above the composer at up to `min(860px, 100%)` wide and `min(44vh, 460px)` tall (phones `min(46dvh, 420px)`). Maximise, minimise tabs, layered drag/resize and focus are the workspace's own behavior. Typing-mode Jarvis now stacks the workspace above the composer, so workspace windows are visible on desktop as well as phones. No title, orb, separator or avatars. Dan's messages sit right with a warm `--message-dan-tint`; Jarvis replies sit left with the existing `--surface-translucent` plus `--message-jarvis-tint`; both are limited to `min(88%, 62ch)`. Author names remain in visually hidden text and `data-speaker`.
@@ -775,7 +803,8 @@ Dan supplied a reference image and iterated live. Canonical values live in `styl
 - **Tab bar:** a strip of glass tabs under the top bar. Minimise on any window (except the docked conversation, which tucks into the chat bar) throws a copy of the window up into its tab, which lands with a warm glow. A tab restores the window; its × closes it. Open task windows come back as tabs after a reload (saved in the browser). The bar takes no space when empty, and pages keep a constant top gutter for it so nothing moves.
 - **Chat everywhere:** the chat stays mounted on every page. Off the home page the chat bar and its conversation fly into a living orb at the foot of the rail. Pressing the orb pops the bar out bottom-centre over the current page; the orb or Escape tucks it back, and changing page parks it again. Returning home restores the normal position. Starting voice from another page returns home, because voice is the full room.
 - **Chat bar:** shorter (40 px orb) and narrower (740 px). The paperclip is gone: Look at screen and Look at camera moved into the ⋯ menu beside Language. One divider with room on both sides separates the orb from the message. Send is a small glass lens that warms to amber when there is a message, and its arrow lifts on hover. Hovering or focusing the orb wakes it: the amber core speeds up and brightens, the shell warms and a ripple breathes outwards.
-- **Rail:** the current area is shown on the icon itself (brighter, slightly larger, cyan glow) with no tile behind it.
+- **Rail (P9-71):** the current area uses the same subtle cyan wash as the phone menu and top-bar toggles, with a readable cyan icon and stronger stroke rather than a glow or outlined tile.
+- **Selection (P9-71, 10 October):** navigation, top-bar toggles, workspace tabs and segmented choices share the role-named `--state-selected-*` tokens in `apps/web/src/styles.css`, derived from the existing focus/text palette. Selected text gains weight and selected icons gain stroke weight or size; neither an outline nor colour alone marks selection. Hover deepens the tint and press deepens it again; focus keeps its separate visible ring. A closed toggle returns to its transparent resting surface. Presence keeps its mode label and tone dot when closed; opening its menu uses the shared cyan selection treatment. Text and indicators meet 4.5:1 and 3:1 respectively in light/dark, including hover and press.
 - **Presence:** a chip in the top bar shows the live mode (Present cyan, Away amber, On the move neutral) and switches it from a small glass menu. Settings has a Presence section with three mode cards and one instruction per mode beside the base instruction in Personality. Without the presence service the chip is hidden and Settings says the modes are not available yet.
 - **Memory:** a Settings section to browse, search and filter (People, Work, Personal, General) what Jarvis knows, with sync status and counts. Choosing an entry shows it beside the list with its history, a Save correction action (vault notes link to the resulting commit) and Forget. Forget explains the outcome first: memories Jarvis keeps are forgotten at once; vault notes need approval in the conversation, and the page reports when approval is pending, refused while away, or unavailable.
 - **Top bar (7 October):** the brand, then every open window as a Chrome-style tab (the conversation has none; the orb brings it back), then a tab per background job, the presence chip and the controls. There is no breadcrumb. Tabs share the glass hover of every icon button; the front window's tab uses the selected surface. An empty tab area shows nothing.
@@ -784,6 +813,7 @@ Dan supplied a reference image and iterated live. Canonical values live in `styl
 - **Modals:** one Modal component, rendered at the document root near the top of the viewport, with an X, Escape and click-outside to close.
 - **Job tabs (P8-43):** each background job is a tab in the top bar strip: a cyan progress ring with the short title and step (or "N running"), a peek with the current step, elapsed time and Cancel; a green ✓ pulse when ready while the result window grows out of the chip (it waits in the chip with Open while Dan is Away or On the move); amber with the reason, Retry and Dismiss when it fails. Research progress windows start as tabs while the chip tracks them.
 - **Knowledge (P7-43):** a rail page and a window Jarvis opens with `show_knowledge`, showing Dan's vault as a 3D star cloud. Stars are coloured by folder (People blue, Work amber, Personal green, General violet) and sized by connections, with fine additive lines for links and fainter lines for similarity. Since 8 October it is a flat 2D map (Dan found the spinning 3D cloud too much in his face): every note lies on one plane seen straight on, dragging pans and the wheel zooms, and stars are crisp with only a faint halo. It never goes fully still: each note floats a few pixels on its own slow orbit with its links following, each star breathes, and every second or two one link lights up and fades. It stops drawing off-screen or hidden; reduced motion keeps it still. Search lights the matches, dims the rest and flies the camera to them; the accessible results list, labels and a glass note reader (front matter stripped, GitHub link, connected notes) sit over it. One draw call for stars and one for lines, at 30 fps. Development builds can show a labelled sample graph when the service is missing.
+- **Knowledge reader (P9-74):** hide properties, including malformed YAML after leading comments. Titles and paths wrap. The path, Markdown and connected notes share one keyboard-focusable scroll region; a bottom fade and labelled Scroll down button appear only while content remains below. The button scrolls directly under reduced motion.
 - **Room colour:** the room's amber strips, ring accents, floor arcs, the lamp by the orb and the 3D orb's brain all use the bright `--glass-glow-warm` amber of the chat orb. Strips and ring inlays are thin, unlit lines so they stay crisp.
 - **Voice keeps the shell (7 October):** on desktop, voice no longer hides the top bar, tabs, job tabs, rail or panels; they stay over the full-screen voice room, windows float across it as while typing, and only the chat bar becomes the voice bar.
 - **Bubbles (7 October):** no fill; Dan's rim is cool cyan and Jarvis's is bright amber. Jarvis's live bubble has an amber light running round its rim while it works; once done, only the newest reply's rim breathes a soft amber glow. The conversation has no tab (the orb and handle bring it back). The Kanban page no longer has its own "Ask Jarvis" composer; the rail orb is the one way to chat off the home page, and an empty conversation shows no greeting card. Jump to latest is a compact glass pill.

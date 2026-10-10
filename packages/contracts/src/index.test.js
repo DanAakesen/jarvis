@@ -13,6 +13,7 @@ import {
   folioKinds,
   folioItemSchema,
   folioSearchResponseSchema,
+  folioManageToolSchema,
   isFolioItem,
   htmlArtifactByteLimit,
   htmlArtifactFrameSchema,
@@ -118,6 +119,20 @@ test('workspace snapshots accept old clients and validate optional current and p
 });
 
 const source = { id: 'factory.tasks', status: 'complete' };
+
+test('workspace snapshot text is optional and bounded by UTF-8 bytes', () => {
+  const snapshot = { windows: [{ viewId: 'report', title: 'Report' }], contextPanelOpen: false };
+  const withText = (fields) => ({ ...snapshot, windows: [{ ...snapshot.windows[0], ...fields }] });
+  assert.equal(isWorkspaceSnapshot(snapshot), true);
+  assert.equal(isWorkspaceSnapshot(withText({ content: '', selection: '' })), true);
+  assert.equal(isWorkspaceSnapshot(withText({ content: 'x'.repeat(8192), selection: 'x'.repeat(2048) })), true);
+  assert.equal(isWorkspaceSnapshot(withText({ content: '😀'.repeat(2048), selection: '😀'.repeat(512) })), true);
+  for (const fields of [
+    { content: 'x'.repeat(8193) }, { selection: 'x'.repeat(2049) },
+    { content: '😀'.repeat(2049) }, { selection: '😀'.repeat(513) },
+    { content: 42 }, { selection: null }, { unknown: 'text' },
+  ]) assert.equal(isWorkspaceSnapshot(withText(fields)), false);
+});
 const listView = (overrides = {}) => ({
   version: generatedViewVersion,
   title: 'Running tasks',
@@ -185,6 +200,13 @@ test('Folio contracts use bounded searchable item metadata and closed item kinds
   assert.equal(isFolioItem(item), true);
   assert.equal(isFolioItem({ ...item, kind: 'conversation' }), false);
   assert.equal(isFolioItem({ ...item, promptSummary: ' Research ' }), false);
+  assert.equal(folioManageToolSchema.type, 'object');
+  assert.deepEqual(folioManageToolSchema.required, ['action']);
+  assert.deepEqual(folioManageToolSchema.properties.action.enum, ['rename', 'pin', 'unpin', 'delete']);
+  assert.equal(folioManageToolSchema.properties.title.maxLength, 200);
+  assert.equal(folioManageToolSchema.properties.query.maxLength, 120);
+  assert.equal(folioManageToolSchema.additionalProperties, false);
+  for (const keyword of ['oneOf', 'anyOf', 'allOf']) assert.equal(folioManageToolSchema[keyword], undefined);
 });
 
 test('clipboard contracts bound UTF-8 text and keep read/write result shapes exact', () => {
@@ -1010,4 +1032,11 @@ test('validates bounded background job details and history steps', () => {
   assert.equal(isBackgroundJobDetails({ job, steps: Array(101).fill(step), retryable: true }), false);
   assert.equal(isBackgroundJobDetails({ job, steps: [step], retryable: true, extra: true }), false);
   assert.equal(isBackgroundJobDetails({ job: { ...job, status: 'done' }, steps: [step], retryable: true }), false);
+});
+test('issue attachments default to descriptions and bound explicit publication inputs', async () => {
+  const { issueAttachmentFields } = await import('./index.js');
+  assert.equal(issueAttachmentFields.publish.default, 'description');
+  assert.deepEqual(issueAttachmentFields.publish.enum, ['description', 'public']);
+  assert.equal(issueAttachmentFields.attachmentIds.maxItems, 5);
+  assert.equal(issueAttachmentFields.attachmentIds.uniqueItems, true);
 });

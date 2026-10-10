@@ -56,6 +56,40 @@ function contrast(first: Color, second: Color): number {
 }
 
 describe('shared glass tokens', () => {
+  it('enables edge-to-edge phone viewports and a standalone Home Screen app using the existing icon', () => {
+    const html = readFileSync('index.html', 'utf8');
+    const manifest = JSON.parse(readFileSync('public/manifest.webmanifest', 'utf8'));
+    expect(html).toContain('content="width=device-width, initial-scale=1.0, viewport-fit=cover"');
+    expect(html).toContain('<link rel="manifest" href="/manifest.webmanifest"');
+    expect(html).toContain(`<meta name="theme-color" content="${manifest.theme_color}"`);
+    expect(html).toContain('name="apple-mobile-web-app-capable" content="yes"');
+    expect(manifest).toMatchObject({
+      name: 'Jarvis', display: 'standalone', start_url: '/', background_color: '#20252c',
+      icons: [{ src: '/favicon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any' }],
+    });
+    const hosting = JSON.parse(readFileSync('public/staticwebapp.config.json', 'utf8'));
+    expect(hosting.navigationFallback.exclude).toContain('/manifest.webmanifest');
+  });
+
+  it('shares an additive phone safe-area gap across the composer, voice, feedback and window dock', () => {
+    const styles = readFileSync('src/styles.css', 'utf8');
+    const history = readFileSync('src/ConversationHistory.css', 'utf8');
+    const voice = readFileSync('src/VoiceControls.css', 'utf8');
+    const toasts = readFileSync('src/ConversationToast.css', 'utf8');
+    expect(styles).toContain('@media (max-width: 700px), (max-height: 500px) and (pointer: coarse) {\n  :root { --phone-dock-bottom: calc(env(safe-area-inset-bottom) + 16px); }');
+    expect(ruleDeclaration(styles, /\.app-shell\.app-signed-out\s*\{([^}]*)\}/, 'padding')).toBe('env(safe-area-inset-top) calc(env(safe-area-inset-right) + 20px) env(safe-area-inset-bottom) calc(env(safe-area-inset-left) + 20px)');
+    expect(ruleDeclaration(styles, /\.app-shell\[data-phone="true"\]\s*\{([^}]*)\}/, '--dock-space')).toBe('calc(68px + var(--phone-dock-bottom))');
+    expect(ruleDeclaration(styles, /\.app-shell\[data-phone="true"\]\[data-home="true"\] \.jarvis-page\s*\{([^}]*)\}/, 'padding-bottom')).toBe('var(--phone-dock-bottom)');
+    expect(ruleDeclaration(styles, /\.app-shell\[data-phone="true"\]\[data-home="false"\]:not\(\.app-signed-out\) \.jarvis-page\s*\{([^}]*)\}/, 'bottom')).toBe('var(--phone-dock-bottom)');
+    expect(history).toContain('bottom: var(--phone-dock-bottom)');
+    expect(history).not.toContain('--phone-dock-bottom:');
+    expect(voice).toContain('bottom: calc(var(--phone-dock-bottom) + var(--phone-dock-height) + 12px)');
+    expect(toasts).toContain('bottom: calc(var(--phone-dock-bottom) + 88px)');
+    expect(ruleDeclaration(styles, /\.app-shell\[data-phone="true"\]\s*\{([^}]*)\}/, 'padding')).toBe('env(safe-area-inset-top) env(safe-area-inset-right) 0 env(safe-area-inset-left)');
+    expect(ruleDeclaration(styles, /\.app-shell\s*\{([^}]*)\}/, 'height')).toBe('100vh');
+    expect(styles).toContain('height: 100dvh;');
+  });
+
   it('keeps text, muted text, and icon contrast on glass surfaces in both appearances', () => {
     const source = readFileSync('src/styles.css', 'utf8');
     const appSource = readFileSync('src/App.tsx', 'utf8');
@@ -102,6 +136,19 @@ describe('shared glass tokens', () => {
         }
       }
     }
+  });
+
+  it('keeps sign-in copy below the orb with a keyboard-visible glass action', () => {
+    const source = readFileSync('src/styles.css', 'utf8');
+    const layout = /\.signin\s*\{([^}]*)\}/;
+    const action = /\.signin-button\s*\{([^}]*)\}/;
+
+    expect(ruleDeclaration(source, layout, 'align-content')).toBe('end');
+    expect(ruleDeclaration(source, action, 'min-height')).toBe('52px');
+    expect(ruleDeclaration(source, action, 'background')).toContain('var(--surface-translucent)');
+    expect(source.match(action)?.[1]).toMatch(/(?:^|;\s*)color:\s*var\(--text\);/);
+    expect(source).toContain('.signin-button:focus-visible { outline: 3px solid var(--focus);');
+    expect(source).toContain('.app-shell.app-signed-out:has(.signin) .signin { padding-bottom: var(--space-4); }');
   });
 
   it('keeps rendered conversation paragraphs on the primary text role', () => {
@@ -151,6 +198,29 @@ describe('shared glass tokens', () => {
     expect(jarvisMessage).toBe('var(--surface-translucent)');
   });
 
+  it('bounds phone voice to a transparent non-intercepting dock and keeps fullscreen rules desktop-only', () => {
+    const history = readFileSync('src/ConversationHistory.css', 'utf8');
+    const voice = readFileSync('src/VoiceControls.css', 'utf8');
+    const styles = readFileSync('src/styles.css', 'utf8');
+    const dock = /\.app-shell\[data-phone="true"\]\[data-voice-active="true"\] \.voice-controls\[data-active="true"\]\s*\{([^}]*)\}/;
+    expect(ruleDeclaration(history, dock, 'inset')).toBe('auto 12px var(--phone-dock-bottom)');
+    expect(ruleDeclaration(history, dock, 'height')).toBe('calc(var(--voice-dock-top) - var(--phone-dock-bottom))');
+    expect(ruleDeclaration(history, dock, 'pointer-events')).toBe('none');
+    expect(ruleDeclaration(history, dock, 'z-index')).toBe('43');
+    expect(ruleDeclaration(history, dock, 'background')).toBe('transparent');
+    expect(ruleDeclaration(history, dock, 'backdrop-filter')).toBe('none');
+    expect(history).toContain('@media (min-width: 701px) and (not ((max-height: 500px) and (pointer: coarse))) {\n.app-shell[data-voice-active="true"]');
+    expect(voice).toContain('.app-shell[data-phone="true"][data-voice-active="true"] {\n    --jarvis-orb-dock-radius:');
+    expect(history).toContain('.conversation-input::after { content: none; }');
+    expect(history).toContain('.workspace { height: 100%; min-height: 0; margin: 0; padding: 0; border: 0; background: transparent; box-shadow: none; backdrop-filter: none; }');
+    expect(styles).toContain('.app-topbar { border-radius: 0; background: var(--stage-slab); box-shadow: none; backdrop-filter: none; }');
+    expect(styles).toContain('.app-shell[data-phone="true"][data-voice-active="false"]:has(.shell-main .loader.loader-block) .jarvis-page .conversation-input,');
+    const scene = readFileSync('src/jarvis-stage-scene.ts', 'utf8');
+    expect(scene).toContain("getPropertyValue('--jarvis-orb-dock-radius')");
+    expect(scene).toContain("getPropertyValue('--jarvis-orb-dock-bottom')");
+    expect(scene).toContain('panel.position.y = mobile ? 15.7 : 7.7;');
+  });
+
   it('keeps fallback and the compact voice bar readable over the stage on narrow screens', () => {
     const stageStyles = readFileSync('src/JarvisStage.css', 'utf8');
     const historyStyles = readFileSync('src/ConversationHistory.css', 'utf8');
@@ -193,19 +263,63 @@ describe('shared glass tokens', () => {
     }
   });
 
-  it('removes the bottom shell bar and marks selection with complete illuminated surfaces', () => {
+  it('removes the bottom shell bar and shares subtle selection without outlined slabs', () => {
     const source = readFileSync('src/styles.css', 'utf8');
     const historyStyles = readFileSync('src/ConversationHistory.css', 'utf8');
 
     expect(source).not.toContain('.bottom-bar');
     expect(historyStyles).not.toContain('.bottom-bar');
     expect(ruleDeclaration(source, /\.app-shell\s*\{([^}]*)\}/, 'grid-template-rows')).toBe('var(--rail-size) minmax(0, 1fr)');
-    // The rail marks its current area on the icon itself (Dan, 6 October); the sidebar keeps the lit surface.
-    expect(ruleDeclaration(source, /\.rail-link\[aria-current="page"\]\s*\{([^}]*)\}/, 'background')).toBe('transparent');
-    expect(ruleDeclaration(source, /\.rail-link\[aria-current="page"\] svg\s*\{([^}]*)\}/, 'filter')).toContain('drop-shadow');
-    for (const selector of [/\.sidebar-link\[aria-current="page"\]\s*\{([^}]*)\}/]) {
-      expect(ruleDeclaration(source, selector, 'background')).toBe('var(--glass-selected)');
-      expect(ruleDeclaration(source, selector, 'box-shadow')).toBe('var(--glass-selected-glow)');
+    expect(ruleDeclaration(source, /\.rail-link\[aria-current="page"\] svg\s*\{([^}]*)\}/, 'stroke-width')).toBe('2.1');
+    for (const selector of [
+      /\.rail-link\[aria-current="page"\]\s*\{([^}]*)\}/,
+      /\.sidebar-link\[aria-current="page"\]\s*\{([^}]*)\}/,
+      /\.mobile-menu-link\[aria-current="page"\]\s*\{([^}]*)\}/,
+      /\.camera-control-button\[aria-pressed="true"\], \.topbar-icon-button\[aria-expanded="true"\], \.settings-link\[aria-current="page"\]\s*\{([^}]*)\}/,
+      /\.workspace-view-switcher \.workspace-tab\[aria-current="true"\]\s*\{([^}]*)\}/,
+      /\.workspace-arrangement-options \[aria-pressed="true"\]\s*\{([^}]*)\}/,
+      /\.folio-kind\[aria-pressed="true"\]\s*\{([^}]*)\}/,
+      /\.usage-segmented button\[aria-pressed="true"\]\s*\{([^}]*)\}/,
+      /\.advanced-segmented button\[aria-pressed="true"\]\s*\{([^}]*)\}/,
+    ]) {
+      expect(ruleDeclaration(source, selector, 'background')).toBe('var(--state-selected-bg)');
+      expect(ruleDeclaration(source, selector, 'color')).toBe('var(--state-selected-fg)');
+      expect(ruleDeclaration(source, selector, 'box-shadow')).toBe('none');
+    }
+    expect(ruleDeclaration(source, /\.presence-chip-trigger\[aria-expanded="true"\]\s*\{([^}]*)\}/, 'background')).toBe('var(--state-selected-bg)');
+    expect(ruleDeclaration(source, /\.workspace-tab-item\[data-state="front"\]\s*\{([^}]*)\}/, 'background')).toBe('var(--state-selected-bg)');
+    expect(ruleDeclaration(source, /\.mobile-menu-link\[aria-current="page"\]\s*\{([^}]*)\}/, 'font-weight')).toBe('750');
+    expect(source).toContain('--selection-hover: var(--state-selected-hover)');
+    expect(source).toContain('--selection-pressed: var(--state-selected-pressed)');
+    expect(source).toContain('background: var(--selection-pressed, var(--glass-pressed))');
+    expect(source).toContain('@media (hover: hover)');
+    expect(source).toMatch(/\.app-shell :is\(\.rail-link,[^{}]+\):active:not\(:disabled\) \{\s*background: var\(--selection-pressed, var\(--glass-pressed\)\);/);
+    expect(source).toMatch(/@media \(hover: hover\) \{\s*\.app-shell :is\(\.rail-link,[^{}]+\):hover:not\(:disabled\)/);
+    expect(source).toContain('@media (pointer: coarse) { .presence-chip-trigger { min-width: 44px; min-height: 44px; justify-content: center; } }');
+  });
+
+  it('keeps selected text at 4.5:1 and indicators at 3:1 in both themes and interaction states', () => {
+    const source = readFileSync('src/styles.css', 'utf8');
+    expect(tokenValue(source, ':root', '--state-selected-fg')).toBe('color-mix(in srgb, var(--focus) 40%, var(--text))');
+    expect(tokenValue(source, ':root', '--state-selected-indicator')).toBe('var(--state-selected-fg)');
+    for (const selector of [':root', ':root\\[data-theme="dark"\\]']) {
+      const focus = parseColor(tokenValue(source, selector, '--focus')).color;
+      const text = parseColor(tokenValue(source, selector, '--text')).color;
+      const selected = composite(focus, .4, text);
+      for (const name of ['--page', '--surface', '--surface-muted', '--surface-translucent', '--stage-background', '--stage-floor']) {
+        const surface = parseColor(tokenValue(source, selector, name));
+        for (const backdrop of [[0, 0, 0], [255, 255, 255]] as Color[]) {
+          const rendered = composite(surface.color, surface.alpha, backdrop);
+          for (const token of ['--state-selected-bg', '--state-selected-hover', '--state-selected-pressed']) {
+            const value = tokenValue(source, ':root', token);
+            expect(value).toMatch(/^color-mix\(in srgb, var\(--state-selected-indicator\) \d+%, transparent\)$/);
+            const alpha = Number(value.match(/(\d+)%/)![1]) / 100;
+            const background = composite(selected, alpha, rendered);
+            expect(contrast(selected, background), `${selector} ${name} ${token}`).toBeGreaterThanOrEqual(4.5);
+            expect(contrast(selected, background)).toBeGreaterThanOrEqual(3);
+          }
+        }
+      }
     }
   });
 });
