@@ -28,6 +28,7 @@ Status as of 8 October 2026.
 ## Jarvis: conversation and voice
 
 | Feature | What Dan can do | Surface | Where | Status | Verified live | Tasks |
+| Read workspace windows | Ask Jarvis to read a chart, timeline, list/table or HTML report by window title/focus; bounded untrusted text prefers page content and falls back to owner-scoped generated views | Voice/chat | Workspace | Built backend/contracts offline; page content reporting depends on #640; live acceptance unverified | | P9-52 |
 | --- | --- | --- | --- | --- | --- | --- |
 | Sign-in | Sign in with his Microsoft account; everyone else is refused | Screen | All pages | Live |  | P0-08, P0-09 |
 | Chat | Open at the latest messages with typing focus; Enter/Send steers a reply in progress, retaining its partial response as interrupted; tool execution continues until the next round boundary picks up new messages; Ctrl+Enter adds to the removable FIFO queue, whose bubbles show Queued and captured language with an accessible count; queued turns advance after success or error; failed-turn feedback and next drafts survive; thinking precedes open-surface Markdown streaming; history refresh dedupes saved messages by ID. Send, language and voice entry remain available during replies; starting voice leaves the chat reply streaming into history. The queue is local to the mounted conversation, not persisted across navigation/reload. | Screen | Main page | Live | 2026-10-08 | P4-03, P4-06, P4-09, P8-05, P8-21, P8-24, P8-25, P8-26, P8-35 |

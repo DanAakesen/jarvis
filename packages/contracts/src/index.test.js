@@ -118,6 +118,20 @@ test('workspace snapshots accept old clients and validate optional current and p
 });
 
 const source = { id: 'factory.tasks', status: 'complete' };
+
+test('workspace snapshot text is optional and bounded by UTF-8 bytes', () => {
+  const snapshot = { windows: [{ viewId: 'report', title: 'Report' }], contextPanelOpen: false };
+  const withText = (fields) => ({ ...snapshot, windows: [{ ...snapshot.windows[0], ...fields }] });
+  assert.equal(isWorkspaceSnapshot(snapshot), true);
+  assert.equal(isWorkspaceSnapshot(withText({ content: '', selection: '' })), true);
+  assert.equal(isWorkspaceSnapshot(withText({ content: 'x'.repeat(8192), selection: 'x'.repeat(2048) })), true);
+  assert.equal(isWorkspaceSnapshot(withText({ content: '😀'.repeat(2048), selection: '😀'.repeat(512) })), true);
+  for (const fields of [
+    { content: 'x'.repeat(8193) }, { selection: 'x'.repeat(2049) },
+    { content: '😀'.repeat(2049) }, { selection: '😀'.repeat(513) },
+    { content: 42 }, { selection: null }, { unknown: 'text' },
+  ]) assert.equal(isWorkspaceSnapshot(withText(fields)), false);
+});
 const listView = (overrides = {}) => ({
   version: generatedViewVersion,
   title: 'Running tasks',

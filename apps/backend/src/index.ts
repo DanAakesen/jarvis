@@ -928,6 +928,7 @@ try {
     },
   }, deployedCommit && /^[\da-f]{7,64}$/iu.test(deployedCommit) ? deployedCommit.toLowerCase() : undefined);
   const app = buildApp(config, logger, {
+    ...(workspaceHtmlArtifactStore ? { workspaceHtmlArtifacts: workspaceHtmlArtifactStore } : {}),
     modules,
     systemStatusReader,
     systemSmokeProbes,
