@@ -39,6 +39,7 @@ function fakeGitHub(initial: Record<string, RemoteFile> = {}, conflicts = 0) {
   const files = new Map(Object.entries(initial));
   const calls: Array<{ url: string; method: string; body?: Record<string, unknown> }> = [];
   let conflictCount = conflicts;
+  let writeCount = 0;
   const fetcher = vi.fn<typeof fetch>(async (input, init) => {
     const url = String(input);
     const method = init?.method ?? 'GET';
@@ -139,7 +140,8 @@ function fakeGitHub(initial: Record<string, RemoteFile> = {}, conflicts = 0) {
       return response({ message: 'Conflict' }, 409);
     }
     const content = Buffer.from(body.content, 'base64').toString('utf8');
-    const nextSha = sha('f');
+    const nextSha = writeCount === 0 ? sha('f') : sha('1');
+    writeCount += 1;
     files.set(path, { sha: nextSha, content });
     return response({ commit: { sha: nextSha } }, 201);
   });
@@ -222,6 +224,7 @@ function moduleFor(options: {
   readonly conflicts?: number;
   readonly apiMemoryStore?: MemoryStore;
   readonly memorySettings?: Partial<Settings['memory']>;
+  readonly log?: NonNullable<Parameters<typeof createVaultModule>[0]['log']>;
 } = {}) {
   const github = fakeGitHub(options.remote, options.conflicts);
   const indexStore = options.index ?? new FakeIndexStore();
@@ -251,6 +254,7 @@ function moduleFor(options: {
     ...(options.apiMemoryStore ? { apiMemoryStore: options.apiMemoryStore } : {}),
     ...(options.embedder ? { embedder: options.embedder } : {}),
     ...(settingsStore ? { settingsStore } : {}),
+    ...(options.log ? { log: options.log } : {}),
   });
   return { github, indexStore, module, tokenIssuer, memoryStore };
 }
@@ -769,6 +773,214 @@ describe('GitHub vault', () => {
     });
     expect((await forbidden.inject({ url: '/knowledge/graph', headers: apiAuthorization })).statusCode).toBe(403);
     expect((await forbidden.inject({ url: '/knowledge/search?q=project', headers: apiAuthorization })).statusCode).toBe(403);
+  });
+
+  it('lists, reads, creates and edits owner notes, then refreshes the index', async () => {
+    const log = vi.fn();
+    const { github, indexStore, module } = moduleFor({
+      remote: {
+        'AGENTS.md': { sha: sha('a'), content: '# Routing\nPeople Work Personal General' },
+        '.github/agent-state/routing.md': {
+          sha: sha('b'), content: 'Route notes to People/, Work/, Personal/ and General/.',
+        },
+        'People/Alex.md': { sha: sha('c'), content: '# Alex\n\nProject engineer.' },
+        'General/Old.md': { sha: sha('d'), content: '# Old\n\nArchived note.' },
+      },
+      log,
+    });
+    await module.synchronize(signal());
+    const app = memoryApiApp(module);
+
+    const firstPage = await app.inject({ url: '/notes?limit=1', headers: apiAuthorization });
+    expect(firstPage.json()).toMatchObject({ limit: 1, offset: 0, hasMore: true });
+    expect(firstPage.json().notes).toHaveLength(1);
+    const list = await app.inject({
+      url: '/notes?query=engineer&folder=People&limit=1', headers: apiAuthorization,
+    });
+    expect(list.statusCode).toBe(200);
+    expect(list.json()).toEqual({
+      notes: [{
+        path: 'People/Alex.md', title: 'Alex', folder: 'People',
+        updatedAt: '2026-10-07T12:00:00.000Z',
+      }],
+      limit: 1, offset: 0, hasMore: false,
+    });
+    const detail = await app.inject({
+      url: '/notes/note?path=People%2FAlex.md', headers: apiAuthorization,
+    });
+    expect(detail.statusCode).toBe(200);
+    expect(detail.json()).toEqual({
+      path: 'People/Alex.md',
+      content: '# Alex\n\nProject engineer.',
+      sha: sha('c'),
+      url: `https://github.com/${VAULT_REPOSITORY}/blob/${VAULT_BRANCH}/People/Alex.md`,
+    });
+    expect((await app.inject({
+      url: '/notes/note?path=General%2Fmissing.md', headers: apiAuthorization,
+    })).statusCode).toBe(404);
+
+    const created = await app.inject({
+      method: 'POST',
+      url: '/notes',
+      headers: apiAuthorization,
+      payload: { path: 'General/New-note.md', content: '# New note\n\nFresh phrase.' },
+    });
+    expect(created.statusCode).toBe(200);
+    expect(created.json()).toMatchObject({
+      path: 'General/New-note.md',
+      commit: sha('f'),
+      url: `https://github.com/${VAULT_REPOSITORY}/commit/${sha('f')}`,
+    });
+    expect(github.calls.find(({ method }) => method === 'PUT')?.body).toMatchObject({
+      message: 'jarvis: edited in Notes',
+      branch: VAULT_BRANCH,
+    });
+    const existing = await app.inject({
+      method: 'POST', url: '/notes', headers: apiAuthorization,
+      payload: { path: 'General/New-note.md', content: '# Duplicate' },
+    });
+    expect(existing.statusCode).toBe(409);
+    expect(existing.json()).toMatchObject({ currentSha: sha('f'), content: '# New note\n\nFresh phrase.' });
+    expect(github.calls.filter(({ method }) => method === 'PUT')).toHaveLength(1);
+
+    await module.synchronize(signal());
+    expect(indexStore.entry('General/New-note.md')).toBeDefined();
+    const search = await app.inject({ url: '/knowledge/search?q=fresh+phrase', headers: apiAuthorization });
+    expect(search.statusCode).toBe(200);
+    expect(search.json().hits).toHaveLength(1);
+    expect((await app.inject({ url: '/knowledge/graph', headers: apiAuthorization })).json().nodes)
+      .toEqual(expect.arrayContaining([expect.objectContaining({ path: 'General/New-note.md', title: 'New note' })]));
+
+    const saved = await app.inject({
+      method: 'PUT',
+      url: '/notes/note',
+      headers: apiAuthorization,
+      payload: {
+        path: 'General/New-note.md',
+        content: '# New note\n\nRevised phrase.\n',
+        sha: sha('f'),
+      },
+    });
+    expect(saved.statusCode).toBe(200);
+    expect(github.files.get('General/New-note.md')?.content).toBe('# New note\n\nRevised phrase.\n');
+    expect(github.calls.filter(({ method }) => method === 'PUT')[1]?.body).toMatchObject({
+      sha: sha('f'),
+      message: 'jarvis: edited in Notes',
+      branch: VAULT_BRANCH,
+    });
+    await module.synchronize(signal());
+    expect(indexStore.entry('General/New-note.md')?.chunks[0]?.content).toBe('Revised phrase.');
+    expect((await app.inject({
+      url: '/knowledge/search?q=revised+phrase', headers: apiAuthorization,
+    })).json().hits).toHaveLength(1);
+    expect(log.mock.calls.filter(([event]) => event === 'vault.write').map(([, fields]) => fields))
+      .toEqual([
+        { outcome: 'ok', folder: 'General' },
+        { outcome: 'error', folder: 'General' },
+        { outcome: 'ok', folder: 'General' },
+      ]);
+    expect(JSON.stringify(log.mock.calls)).not.toContain('Revised phrase');
+    expect(JSON.stringify(log.mock.calls)).not.toContain('Fresh phrase');
+  });
+
+  it('restricts note routes to the owner and rejects unsafe note writes', async () => {
+    const { github, module } = moduleFor({
+      remote: {
+        'AGENTS.md': { sha: sha('a'), content: '# Routing\nGeneral' },
+        '.github/agent-state/routing.md': { sha: sha('b'), content: 'Route notes to General/.' },
+        'General/decision.md': { sha: sha('c'), content: '# Decision\n\nCurrent.' },
+      },
+    });
+    await module.synchronize(signal());
+    const app = memoryApiApp(module);
+    const forbidden = memoryApiApp(module, {
+      auth: async () => ({
+        objectId: 'not-dan', tenantId: apiConfig.auth.tenantId, displayName: 'Other',
+      }),
+    });
+    expect((await forbidden.inject({ url: '/notes', headers: apiAuthorization })).statusCode).toBe(403);
+    expect((await forbidden.inject({
+      url: '/notes/note?path=General%2Fdecision.md', headers: apiAuthorization,
+    })).statusCode).toBe(403);
+    expect((await forbidden.inject({
+      method: 'POST', url: '/notes', headers: apiAuthorization,
+      payload: { path: 'General/new.md', content: 'Note.' },
+    })).statusCode).toBe(403);
+    expect((await forbidden.inject({
+      method: 'PUT', url: '/notes/note', headers: apiAuthorization,
+      payload: { path: 'General/decision.md', content: 'Changed.', sha: sha('c') },
+    })).statusCode).toBe(403);
+
+    expect((await app.inject({
+      url: '/notes/note?path=General%2Fimage.png', headers: apiAuthorization,
+    })).statusCode).toBe(400);
+    expect((await app.inject({
+      url: '/notes/note?path=People%2FAlex.md', headers: apiAuthorization,
+    })).statusCode).toBe(400);
+    const outsideFolder = await app.inject({
+      method: 'POST', url: '/notes', headers: apiAuthorization,
+      payload: { path: 'Work/project.md', content: '# Project' },
+    });
+    expect(outsideFolder.statusCode).toBe(400);
+    const tooLarge = await app.inject({
+      method: 'POST', url: '/notes', headers: apiAuthorization,
+      payload: { path: 'General/large.md', content: 'é'.repeat(131_073) },
+    });
+    expect(tooLarge.statusCode).toBe(400);
+    const secret = await app.inject({
+      method: 'POST', url: '/notes', headers: apiAuthorization,
+      payload: { path: 'General/secret.md', content: 'password: example-value' },
+    });
+    expect(secret.statusCode).toBe(400);
+    const binaryText = await app.inject({
+      method: 'POST', url: '/notes', headers: apiAuthorization,
+      payload: { path: 'General/binary.md', content: 'before\u0000after' },
+    });
+    expect(binaryText.statusCode).toBe(400);
+    expect(github.calls.some(({ method }) => method === 'PUT')).toBe(false);
+  });
+
+  it('refuses stale and racing note edits with the latest version and no retry', async () => {
+    const path = 'General/decision.md';
+    const { github, module } = moduleFor({
+      conflicts: 1,
+      remote: {
+        'AGENTS.md': { sha: sha('a'), content: '# Routing\nGeneral' },
+        '.github/agent-state/routing.md': { sha: sha('b'), content: 'Route notes to General/.' },
+        [path]: { sha: sha('c'), content: '# Decision\n\nLoaded.' },
+      },
+    });
+    await module.synchronize(signal());
+    const app = memoryApiApp(module);
+    const loaded = await app.inject({
+      url: '/notes/note?path=General%2Fdecision.md', headers: apiAuthorization,
+    });
+    expect(loaded.statusCode).toBe(200);
+    github.set(path, { sha: sha('d'), content: '# Decision\n\nChanged elsewhere.' });
+
+    const stale = await app.inject({
+      method: 'PUT', url: '/notes/note', headers: apiAuthorization,
+      payload: { path, content: '# Decision\n\nAttempted stale save.', sha: loaded.json().sha },
+    });
+    expect(stale.statusCode).toBe(409);
+    expect(stale.json()).toMatchObject({
+      currentSha: sha('d'), content: '# Decision\n\nChanged elsewhere.',
+    });
+    expect(github.calls.filter(({ method }) => method === 'PUT')).toHaveLength(0);
+
+    const latest = await app.inject({
+      url: '/notes/note?path=General%2Fdecision.md', headers: apiAuthorization,
+    });
+    const racing = await app.inject({
+      method: 'PUT', url: '/notes/note', headers: apiAuthorization,
+      payload: { path, content: '# Decision\n\nAttempted racing save.', sha: latest.json().sha },
+    });
+    expect(racing.statusCode).toBe(409);
+    expect(racing.json()).toMatchObject({
+      currentSha: sha('e'), content: 'The note changed concurrently.',
+    });
+    expect(github.calls.filter(({ method }) => method === 'PUT')).toHaveLength(1);
+    expect(github.files.get(path)?.content).toBe('The note changed concurrently.');
   });
 
   it('opens or updates the knowledge graph through the workspace command broker', async () => {

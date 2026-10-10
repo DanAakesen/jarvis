@@ -58,6 +58,8 @@ const maxMemoryApiResults = 50;
 const maxMemoryApiOffset = 10_000;
 const maxMemoryApiHistory = 10;
 const maxMemoryApiHistoryBytes = 512 * 1024;
+const maxNotesApiResults = 100;
+const maxNotesApiOffset = 10_000;
 const maxGraphNodes = 2_000;
 const maxGraphEdges = 8_000;
 const maxLinksPerNote = 512;
@@ -294,6 +296,13 @@ function vaultApiItem(path: string, content: string, updatedAt: Date): MemoryApi
     updatedAt: updatedAt.toISOString(),
     source: { type: 'github', url: noteUrl(path) },
   };
+}
+
+function vaultNoteTitle(path: string, heading: string): string {
+  const title = heading.trim();
+  return title && title !== 'Introduction'
+    ? title.split(' > ', 1)[0]!
+    : posix.basename(path).replace(/\.md$/iu, '').replace(/[-_]/gu, ' ');
 }
 
 function shouldRedact(value: string): boolean {
@@ -983,6 +992,48 @@ export function createVaultModule(options: {
     throw new Error('Vault write did not complete');
   }
 
+  async function validateNoteWrite(
+    pathValue: unknown,
+    contentValue: unknown,
+    reasonValue: unknown,
+    signal: AbortSignal,
+  ) {
+    const path = validatePath(pathValue);
+    if (typeof contentValue !== 'string' || !contentValue.trim() ||
+        contentValue.length > MAX_VAULT_FILE_BYTES) {
+      throw new ToolRefusal('The vault content is invalid. Nothing was written.');
+    }
+    const content = contentValue;
+    if (content.includes('\0') || Buffer.from(content, 'utf8').toString('utf8') !== content ||
+        Buffer.byteLength(content, 'utf8') > MAX_VAULT_FILE_BYTES) {
+      throw new ToolRefusal('Vault notes are limited to 256 KB per write. Nothing was written.');
+    }
+    const reason = reasonValue === undefined
+      ? 'edited in Notes'
+      : validateText(reasonValue, 'write reason', maxReasonLength);
+    if (hasControlCharacters(reason)) {
+      throw new ToolRefusal('The vault write reason must be one line. Nothing was written.');
+    }
+    const rules = await loadRoutingRules(signal);
+    const folder = safeFolder(path);
+    if (!folder || !rules.folders.has(folder)) {
+      throw new ToolRefusal('That folder is not allowed by the vault routing rules. Nothing was written.');
+    }
+    assertCaptureIsSafe(reason, `${content}\n${reason}`);
+    return { path, content, reason, folder };
+  }
+
+  function indexAfterNoteWrite(): void {
+    graphCache = undefined;
+    const signal = AbortSignal.timeout(10 * 60_000);
+    const refresh = synchronization
+      ? synchronization.catch(() => undefined).then(() => synchronize(signal))
+      : synchronize(signal);
+    void refresh.catch(() => {
+      log('vault.index', { outcome: 'error', added: 0, changed: 0, removed: 0 });
+    });
+  }
+
   async function deleteNote(path: string, expectedSha: string, signal: AbortSignal): Promise<string> {
     const latest = await options.client.read(path, signal);
     if (!latest) throw new ToolRefusal('The vault note no longer exists. Nothing was deleted.');
@@ -1351,6 +1402,284 @@ export function createVaultModule(options: {
         required: ['q'],
         additionalProperties: false,
       };
+      const notesQuerySchema = {
+        type: 'object',
+        properties: {
+          query: { type: 'string', minLength: 1, maxLength: maxQueryLength, pattern: '\\S' },
+          folder: { type: 'string', enum: [...folderNames] },
+          limit: { type: 'integer', minimum: 1, maximum: maxNotesApiResults },
+          offset: { type: 'integer', minimum: 0, maximum: maxNotesApiOffset },
+        },
+        additionalProperties: false,
+      };
+      const noteListItemSchema = {
+        type: 'object',
+        properties: {
+          path: { type: 'string', minLength: 1, maxLength: maxPathLength },
+          title: { type: 'string', minLength: 1, maxLength: 200 },
+          folder: { type: 'string', enum: [...folderNames] },
+          updatedAt: { type: 'string', format: 'date-time' },
+        },
+        required: ['path', 'title', 'folder', 'updatedAt'],
+        additionalProperties: false,
+      };
+      const noteListResponseSchema = {
+        type: 'object',
+        properties: {
+          notes: { type: 'array', maxItems: maxNotesApiResults, items: noteListItemSchema },
+          limit: { type: 'integer', minimum: 1, maximum: maxNotesApiResults },
+          offset: { type: 'integer', minimum: 0, maximum: maxNotesApiOffset },
+          hasMore: { type: 'boolean' },
+        },
+        required: ['notes', 'limit', 'offset', 'hasMore'],
+        additionalProperties: false,
+      };
+      const notePathQuerySchema = {
+        type: 'object',
+        properties: { path: { type: 'string', minLength: 1, maxLength: maxPathLength } },
+        required: ['path'],
+        additionalProperties: false,
+      };
+      const noteResponseSchema = {
+        type: 'object',
+        properties: {
+          path: { type: 'string', minLength: 1, maxLength: maxPathLength },
+          content: { type: 'string', maxLength: MAX_VAULT_FILE_BYTES },
+          sha: { type: 'string', pattern: '^[\\da-f]{40}$' },
+          url: { type: 'string', format: 'uri' },
+        },
+        required: ['path', 'content', 'sha', 'url'],
+        additionalProperties: false,
+      };
+      const noteConflictSchema = {
+        type: 'object',
+        properties: {
+          error: { type: 'string' },
+          currentSha: { type: ['string', 'null'], pattern: '^[\\da-f]{40}$' },
+          content: { type: ['string', 'null'], maxLength: MAX_VAULT_FILE_BYTES },
+        },
+        required: ['error', 'currentSha', 'content'],
+        additionalProperties: false,
+      };
+      const noteWriteBodySchema = {
+        type: 'object',
+        properties: {
+          path: { type: 'string', minLength: 1, maxLength: maxPathLength },
+          content: { type: 'string', minLength: 1, maxLength: MAX_VAULT_FILE_BYTES },
+          reason: { type: 'string', minLength: 1, maxLength: maxReasonLength },
+        },
+        required: ['path', 'content'],
+        additionalProperties: false,
+      };
+      const noteEditBodySchema = {
+        ...noteWriteBodySchema,
+        properties: {
+          ...noteWriteBodySchema.properties,
+          sha: { type: 'string', pattern: '^[\\da-fA-F]{40}$' },
+        },
+        required: ['path', 'content', 'sha'],
+      };
+      const noteWriteErrorSchema = {
+        type: 'object',
+        properties: { error: { type: 'string' } },
+        required: ['error'],
+        additionalProperties: false,
+      };
+
+      app.get<{
+        Querystring: { query?: string; folder?: string; limit?: number; offset?: number };
+      }>('/notes', {
+        schema: {
+          querystring: notesQuerySchema,
+          response: {
+            200: noteListResponseSchema, 400: apiError, 403: apiError, 503: noteWriteErrorSchema,
+          },
+        },
+      }, async (request, reply) => {
+        if (!ownerOnly(request, reply)) return;
+        if (indexStatus !== 'ready') return reply.code(503).send({ error: 'Vault index is not ready' });
+        const limit = request.query.limit ?? 50;
+        const offset = request.query.offset ?? 0;
+        const signal = AbortSignal.timeout(30_000);
+        try {
+          const rules = await loadRoutingRules(signal);
+          const files = await options.indexStore.graphFiles(signal);
+          const { query, folder } = request.query;
+          const matchingPaths = query === undefined
+            ? undefined
+            : new Set((await options.indexStore.searchByTerms(
+              queryTerms(query), maxMarkdownFiles, signal,
+            )).map(({ path }) => path));
+          const normalizedQuery = query?.toLowerCase();
+          const candidates = files.flatMap((file) => {
+            let path: string;
+            try {
+              path = validatePath(file.path);
+            } catch {
+              return [];
+            }
+            const noteFolder = safeFolder(path);
+            if (!noteFolder || !rules.folders.has(noteFolder) || (folder && noteFolder !== folder)) return [];
+            if (matchingPaths && !matchingPaths.has(path) &&
+                !`${path} ${file.title}`.toLowerCase().includes(normalizedQuery!)) return [];
+            return [{
+              path,
+              title: vaultNoteTitle(path, file.title),
+              folder: noteFolder,
+              updatedAt: file.updatedAt.toISOString(),
+            }];
+          }).sort((left, right) => left.path < right.path ? -1 : left.path > right.path ? 1 : 0);
+          return {
+            notes: candidates.slice(offset, offset + limit),
+            limit,
+            offset,
+            hasMore: candidates.length > offset + limit,
+          };
+        } catch {
+          return reply.code(503).send({ error: 'Vault notes are temporarily unavailable' });
+        }
+      });
+
+      app.get<{ Querystring: { path: string } }>('/notes/note', {
+        schema: {
+          querystring: notePathQuerySchema,
+          response: { 200: noteResponseSchema, 400: apiError, 403: apiError, 404: apiError, 503: noteWriteErrorSchema },
+        },
+      }, async (request, reply) => {
+        if (!ownerOnly(request, reply)) return;
+        const signal = AbortSignal.timeout(30_000);
+        try {
+          const path = validatePath(request.query.path);
+          const rules = await loadRoutingRules(signal);
+          if (!rules.folders.has(safeFolder(path) ?? '')) {
+            return reply.code(400).send({ error: 'That folder is not allowed by the vault routing rules' });
+          }
+          const note = await options.client.read(path, signal);
+          if (!note) return reply.code(404).send({ error: 'Vault note not found' });
+          return { path, content: note.content, sha: note.sha, url: noteUrl(path) };
+        } catch (error) {
+          if (error instanceof ToolRefusal) return reply.code(400).send({ error: error.message });
+          return reply.code(503).send({ error: 'Vault notes are temporarily unavailable' });
+        }
+      });
+
+      app.post<{
+        Body: { path: string; content: string; reason?: string };
+      }>('/notes', {
+        schema: {
+          body: noteWriteBodySchema,
+          response: {
+            200: { type: 'object', properties: {
+              path: { type: 'string' }, commit: { type: 'string', pattern: '^[\\da-f]{40}$' },
+              url: { type: 'string', format: 'uri' },
+            }, required: ['path', 'commit', 'url'], additionalProperties: false },
+            400: noteWriteErrorSchema, 403: apiError, 409: noteConflictSchema, 503: noteWriteErrorSchema,
+          },
+        },
+      }, async (request, reply) => {
+        if (!ownerOnly(request, reply)) return;
+        let folder: string | undefined;
+        const logWrite = (outcome: VaultLogFields['outcome']) =>
+          log('vault.write', { outcome, ...(folder ? { folder } : {}) });
+        const signal = AbortSignal.timeout(30_000);
+        try {
+          const note = await validateNoteWrite(
+            request.body.path, request.body.content, request.body.reason, signal,
+          );
+          folder = note.folder;
+          const current = await options.client.read(note.path, signal);
+          if (current) {
+            logWrite('error');
+            return reply.code(409).send({
+              error: 'A note already exists at this path',
+              currentSha: current.sha,
+              content: current.content,
+            });
+          }
+          let commit: string;
+          try {
+            commit = await options.client.write(note.path, note.content, `jarvis: ${note.reason}`, undefined, signal);
+          } catch (error) {
+            if (!(error instanceof VaultWriteConflictError)) throw error;
+            const latest = await options.client.read(note.path, signal);
+            logWrite('error');
+            return reply.code(409).send({
+              error: 'A note already exists at this path',
+              currentSha: latest?.sha ?? null,
+              content: latest?.content ?? null,
+            });
+          }
+          indexAfterNoteWrite();
+          logWrite('ok');
+          return { path: note.path, commit, url: commitUrl(commit) };
+        } catch (error) {
+          logWrite(error instanceof ToolRefusal ? 'refused' : 'error');
+          if (error instanceof ToolRefusal) return reply.code(400).send({ error: error.message });
+          return reply.code(503).send({ error: 'Vault note could not be created' });
+        }
+      });
+
+      app.put<{
+        Body: { path: string; content: string; sha: string; reason?: string };
+      }>('/notes/note', {
+        schema: {
+          body: noteEditBodySchema,
+          response: {
+            200: { type: 'object', properties: {
+              path: { type: 'string' }, commit: { type: 'string', pattern: '^[\\da-f]{40}$' },
+              url: { type: 'string', format: 'uri' },
+            }, required: ['path', 'commit', 'url'], additionalProperties: false },
+            400: noteWriteErrorSchema, 403: apiError, 404: apiError, 409: noteConflictSchema, 503: noteWriteErrorSchema,
+          },
+        },
+      }, async (request, reply) => {
+        if (!ownerOnly(request, reply)) return;
+        let folder: string | undefined;
+        const logWrite = (outcome: VaultLogFields['outcome']) =>
+          log('vault.write', { outcome, ...(folder ? { folder } : {}) });
+        const signal = AbortSignal.timeout(30_000);
+        try {
+          const note = await validateNoteWrite(
+            request.body.path, request.body.content, request.body.reason, signal,
+          );
+          folder = note.folder;
+          const current = await options.client.read(note.path, signal);
+          if (!current) {
+            logWrite('error');
+            return reply.code(404).send({ error: 'Vault note not found' });
+          }
+          if (current.sha !== request.body.sha.toLowerCase()) {
+            logWrite('error');
+            return reply.code(409).send({
+              error: 'The note changed since it was loaded',
+              currentSha: current.sha,
+              content: current.content,
+            });
+          }
+          let commit: string;
+          try {
+            commit = await options.client.write(
+              note.path, note.content, `jarvis: ${note.reason}`, current.sha, signal,
+            );
+          } catch (error) {
+            if (!(error instanceof VaultWriteConflictError)) throw error;
+            const latest = await options.client.read(note.path, signal);
+            logWrite('error');
+            return reply.code(409).send({
+              error: 'The note changed since it was loaded',
+              currentSha: latest?.sha ?? null,
+              content: latest?.content ?? null,
+            });
+          }
+          indexAfterNoteWrite();
+          logWrite('ok');
+          return { path: note.path, commit, url: commitUrl(commit) };
+        } catch (error) {
+          logWrite(error instanceof ToolRefusal ? 'refused' : 'error');
+          if (error instanceof ToolRefusal) return reply.code(400).send({ error: error.message });
+          return reply.code(503).send({ error: 'Vault note could not be edited' });
+        }
+      });
 
       app.get('/knowledge/graph', {
         schema: { response: { 200: graphResponseSchema, 403: apiError, 503: apiError } },
