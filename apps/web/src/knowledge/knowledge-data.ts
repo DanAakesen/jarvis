@@ -98,7 +98,8 @@ export async function loadKnowledgeNote(backendUrl: string, getAccessToken: () =
     title: text(note.title ?? note.key, 200) || id,
     folder: text(note.folder, 40) || 'General',
     // Obsidian front matter (tags, created, icon) is metadata, not reading material.
-    content: text(note.content ?? note.snippet, 200_000).replace(/^\uFEFF?---\r?\n[\s\S]*?\r?\n---\r?\n?/u, '').trimStart(),
+    content: text(note.content ?? note.snippet, 200_000)
+      .replace(/^(?:\s|<!--[\s\S]*?-->)*---[ \t]*\r?\n[\s\S]*?\r?\n---[ \t]*(?:\r?\n|$)/u, '').trimStart(),
     updatedAt: typeof note.updatedAt === 'string' ? note.updatedAt : null,
     githubUrl: url,
   };

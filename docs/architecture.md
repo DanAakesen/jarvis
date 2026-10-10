@@ -1576,6 +1576,19 @@ automatically retried because their completion may be uncertain.
 
 ### Vault knowledge graph (P7-43)
 
+P9-74 keeps tooling out of the graph and displayed note counts using the
+documented `KNOWLEDGE_NOTE_EXCLUSIONS` constant in
+`apps/backend/src/vault/index.ts`: `**/skills/**`, `**/*.template.md`, and
+`.github/**` (case-insensitive). Filtering happens before the graph node cap
+and before `/memory/status` folder counts. Indexing and Jarvis vault search
+are unchanged; excluded indexed files remain searchable.
+
+The web reader hides a delimited front-matter block after leading whitespace,
+BOMs or HTML comments, without parsing YAML, so malformed properties are also
+hidden. Remaining Markdown uses the existing safe renderer. The path, content
+and connected notes share a keyboard-focusable scroll region with a bottom fade
+and a labelled scroll control while more content remains.
+
 Migration `0027_vault_knowledge_graph.sql` stores wiki-link and Markdown-link
 targets alongside each source note's chunks and records the index timestamp.
 Replacing a note updates both chunks and links atomically; deleting a note removes

@@ -559,6 +559,8 @@ P8-02 allocated P8-04 through P8-13 to frontend work in PR #233. Backend tasks t
 | P9-73 | [#650](https://github.com/DanAakesen/jarvis/issues/650) | Phone chat bar clears the home indicator | Shared additive safe-area dock spacing, signed-in/out top/landscape insets and standalone manifest; Chromium/WebKit fixture checks at phone/desktop sizes in light/dark, zero/34px bottom insets. Before/after screenshots; 412 web tests, lint/build and CodeQL pass. Physical iPhone/Home Screen acceptance pending | — | Complete |
 >>>>>>> origin/main
 
+| P9-74 | [#655](https://github.com/DanAakesen/jarvis/issues/655) | Knowledge notes hide metadata and scroll; graph/count exclude tooling | Fixture regressions for front matter, leading comments, BOM, malformed YAML and scrolling; graph/count exclusions preserve Jarvis search. Chromium/WebKit phone/desktop light/dark fixture captures; web/vault tests and lint/build pass. Final main sync and automated review pending | — | In progress |
+
 ### Confirm before P0
 
 1. Stack choices ([stack overview](docs/architecture.md#stack-overview)): all confirmed on 3 October 2026, including Fastify.
