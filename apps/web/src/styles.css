@@ -1900,11 +1900,6 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
 .signin-button:active:not(:disabled) { transform: translateY(1px); }
 .signin-button:focus-visible { outline: 3px solid var(--focus); outline-offset: 4px; }
 .signin-button:disabled { border-color: var(--control-rule); color: var(--disabled-text); cursor: not-allowed; opacity: .72; }
-.signin-mark { position: relative; width: 14px; height: 14px; flex: 0 0 auto; border: 1px solid color-mix(in srgb, var(--glass-edge-warm) 68%, var(--glass-rim-light)); border-radius: 50%; box-shadow: 0 0 10px -2px var(--glass-edge-warm); }
-.signin-mark::after { position: absolute; inset: 3px; border-radius: 50%; background: var(--glass-edge-warm); box-shadow: 0 0 7px var(--glass-edge-warm); content: ""; animation: signin-ember 8s ease-in-out infinite; }
-@keyframes signin-ember { 0%, 64%, 100% { opacity: .72; transform: scale(.82); } 78% { opacity: 1; transform: scale(1.18); } }
-:root[data-motion="reduced"] .signin-mark::after { animation: none; }
-@media (prefers-reduced-motion: reduce) { .signin-mark::after { animation: none; } }
 
 /* ---------------------------------------------------------------------------------------------
    Living surfaces: glass catches light where the pointer is, pages assemble as they open, and a
