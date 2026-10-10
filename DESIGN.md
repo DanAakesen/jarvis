@@ -171,8 +171,9 @@ turn at distinct speeds, and small warm lights travel along the existing stage
 lines. Keep the cyan shell and all active voice/activity states recognizable.
 Pointer or available device-orientation input produces only a slight, eased
 stage tilt. Reduced motion keeps a still warm glow with no travelling light;
-hidden tabs pause the renderer. The phone pixel ratio and ambient frame rate
-remain capped by the existing stage-quality policy.
+hidden tabs pause the renderer. Compact viewports start at the existing lowest
+quality tier (0.7 backing scale, 256px reflection, 35% particle count) and only
+recover after sustained smooth frames; ambient rendering remains capped at 30 fps.
 
 Complete silent account restoration before showing the interactive screen. A
 failure adds one short inline message and changes the same action to **Retry**.

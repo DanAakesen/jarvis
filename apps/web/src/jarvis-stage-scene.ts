@@ -7,9 +7,9 @@ import { createOrbMotion } from './jarvis-orb-motion';
 import type { JarvisOrbState } from './voice-presentation';
 import type { VoiceSignals } from './voice-stage-context';
 import {
+  initialJarvisStageQualityLevel,
   nextJarvisStageQualityLevel,
   resolveJarvisStageQuality,
-  type JarvisStageQualityLevel,
 } from './jarvis-stage-quality';
 
 export type JarvisStageOptions = {
@@ -140,7 +140,9 @@ function createJarvisStageSceneWithRenderer(
   let elapsed = 0;
   let previous = performance.now();
   let current = initialOptions;
-  let qualityLevel: JarvisStageQualityLevel = renderer.capabilities.maxTextureSize < 4096 ? 1 : 0;
+  const compactViewport = window.innerWidth <= 700 ||
+    (window.innerHeight <= 500 && (window.matchMedia?.('(pointer: coarse)').matches ?? false));
+  let qualityLevel = initialJarvisStageQualityLevel(renderer.capabilities.maxTextureSize, compactViewport);
   let qualityFrameCount = 0;
   let qualityFrameTime = 0;
   let qualityWindowStarted = performance.now();
