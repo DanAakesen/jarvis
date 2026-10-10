@@ -489,7 +489,7 @@ export function isWorkspaceSnapshot(value) {
     Array.isArray(value.windows) && value.windows.length <= 32 &&
     value.windows.every((window) => isObject(window) &&
       Object.keys(window).every((key) =>
-        ['viewId', 'title', 'state', 'placement', 'region', 'pinned', 'front'].includes(key)) &&
+        ['viewId', 'title', 'state', 'placement', 'region', 'pinned', 'front', 'content', 'selection'].includes(key)) &&
       typeof window.viewId === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(window.viewId) &&
       boundedString(window.title, 200, 1) &&
       (window.state === undefined || ['open', 'minimised'].includes(window.state)) &&
@@ -497,7 +497,11 @@ export function isWorkspaceSnapshot(value) {
       (!Object.hasOwn(window, 'region') ||
         window.placement === 'region' && workspaceWindowRegions.includes(window.region)) &&
       (window.pinned === undefined || typeof window.pinned === 'boolean') &&
-      (window.front === undefined || typeof window.front === 'boolean')) &&
+      (window.front === undefined || typeof window.front === 'boolean') &&
+      (window.content === undefined || typeof window.content === 'string' &&
+        new TextEncoder().encode(window.content).byteLength <= 8 * 1024) &&
+      (window.selection === undefined || typeof window.selection === 'string' &&
+        new TextEncoder().encode(window.selection).byteLength <= 2 * 1024)) &&
     typeof value.contextPanelOpen === 'boolean' &&
     (value.frame === undefined || isHtmlArtifactFrame(value.frame)) &&
     (value.view === undefined || isWorkspaceView(value.view));
