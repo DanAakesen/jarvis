@@ -118,6 +118,8 @@ function fixture() {
     projectStore,
     taskStore,
     githubIssueClient,
+    githubAppTokenIssuer: { issueForRepositoryRead: vi.fn(async () => 'read-token') } as unknown as NonNullable<import('../app.js').BuildAppOptions['githubAppTokenIssuer']>,
+    factoryBoardReader: { read: vi.fn(), searchIssues: vi.fn(async () => ({ numbers: [], incomplete: false })) },
     conversationStore,
     taskController,
     toolCallStore: { record },
@@ -136,6 +138,7 @@ afterEach(async () => {
 describe('Software Factory Jarvis tools', () => {
   it('registers every project and task tool for discovery and English voice', async () => {
     const names = [
+      'get_work_status',
       'create_issue', 'confirm_create_issue', 'start_issue',
       'list_projects', 'update_project', 'archive_project', 'confirm_project_archive',
       'list_tasks', 'get_task', 'list_releases', 'get_release', 'get_deployment_status',
@@ -274,7 +277,7 @@ describe('Software Factory Jarvis tools', () => {
       });
     }
 
-    expect(projectStore.list).toHaveBeenCalledTimes(3);
+    expect(projectStore.list).toHaveBeenCalledTimes(4);
     expect(projectStore.update).toHaveBeenCalledWith('7', {
       name: 'Jarvis updated', description: 'The project description', default_agent: 'copilot',
     });
