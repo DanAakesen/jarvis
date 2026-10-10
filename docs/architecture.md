@@ -470,7 +470,10 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   remains unverified.
   uses the Voice Live-supported `mai-transcribe` model. Codex and Copilot expose
   provider-specific model and reasoning allowlists through the same settings
-  options. Factory task starts prefer per-task model/reasoning overrides to the
+  options. The Codex list mirrors Codex's own catalogue (`gpt-6.1-sol`,
+  `gpt-6-astra`, `gpt-6-sol`, `gpt-6-luna`, `gpt-5.6-sol/terra/luna`);
+  Chat and Research options are the live Foundry deployments, now including
+  `gpt-6-astra` and `gpt-6.1-sol` (Bicep). Factory task starts prefer per-task model/reasoning overrides to the
   corresponding role settings, then pass the effective choices to the runner.
   Codex applies both through ACP config options; Copilot receives its model and
   reasoning effort as CLI arguments. `default` omits the setting; Codex's
@@ -1572,6 +1575,23 @@ The repository is private and was unavailable for live validation; Dan must
 install the existing GitHub App on `DanAakesen/vault` with Contents read/write
 before indexing and writes can succeed.
 
+P9-49 adds owner-only `GET /notes`, `GET /notes/note?path=…`, `POST /notes`
+and `PUT /notes/note` routes for the Notes web client. The indexed list supports
+bounded pagination, text search and folder filtering; reads return Markdown
+content, the loaded Contents SHA and its GitHub URL. Create refuses an existing
+path with 409. Edit requires the submitted SHA to match the current Contents
+SHA; a stale or racing edit returns 409 with the current SHA and content when
+the note still exists, and never retries or overwrites. Writes reuse the vault
+path, routing-folder, 256 KiB and `assertCaptureIsSafe` checks. These direct
+owner-authored writes do not require a stored chat message or call `checkSource`,
+but still reject secrets and credentials (and require “remember” for banking or
+health details). The default commit message is `jarvis: edited in Notes`;
+write logs contain only outcome and folder, never note content. A successful
+write invalidates the graph cache and queues index synchronization after any
+existing sync; the signed `master` push webhook also synchronizes the index.
+Note content is untrusted data, never instructions. No migration is needed;
+the Notes UI is implemented separately.
+
 P7-42 adds a Dan-only Settings API; there are no `apps/web` changes. `GET
 /memory` returns durable SQL memories followed by indexed vault notes, with
 `query`, `folder` (`People`, `Work`, `Personal`, `General`), `limit` (1–50) and
@@ -2211,6 +2231,11 @@ receive only short-lived private read URLs. File bytes, extracted text and
 descriptions are excluded from ordinary logs and tool-call audit records.
 Offline route, store, extraction, tool-parity and agent tests cover the flow;
 live model and Azure Blob acceptance remain unverified.
+
+### P9-76 decision provider (Jev or Microsoft-Decision-1)
+
+Reflex classification (chat and voice), the browser agent, task recipes and PC action planning all make typed decisions: a request with model, a state and named 
+oul/choice/score questions, answered with nswers[<name>]. Typesafe's Jev and Microsoft-Decision-1 (Foundry) accept that same request, so core/decision-provider.ts resolves a DecisionTarget (endpoint, model value, bearer token) and the four call sites use it instead of a fixed Jev key. The decisions.provider setting (jev default, or microsoft) is read at most every three seconds; a failed read keeps the last value. Jev keeps its Key Vault key and jev-latest. Microsoft uses the backend identity (token for https://cognitiveservices.azure.com/.default; Cognitive Services User on the Foundry account is enough) and the decision-1 deployment at <foundry host>/providers/microsoft/v1/systemone. The deployment name cannot contain microsoft (reserved word). Which Foundry host serves that route was not documented, so the resolver tries the services.ai host and then the cognitiveservices host and remembers the one that does not answer 404. If the chosen provider cannot produce a target, callers act as if no decision was made (reflex falls back to the main agent); the backend never silently switches provider. Results and failures carry provider, and the allowlisted eflex.decision log records it beside the confidence bucket and latency so the providers can be compared in Log Analytics. decision.provider_unavailable (provider only) is logged at most once a minute. Limits: Decision-1 is text-only with a 32K-token context, and the subscription quota is 60 requests a minute; the confidence thresholds (0.9 and 0.5) were tuned for Jev and are not yet recalibrated.
 
 ### P9-67 private-by-default issue attachments
 

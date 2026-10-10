@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { jevKeyResolver } from './decision-provider.js';
 import type { FastifyRequest } from 'fastify';
 import { createToolRegistry } from './tool-registry.js';
 import {
@@ -173,7 +174,7 @@ describe('Jev reflex classifier', () => {
     expect(createReflexTargets([workspaceCommandTool], [], undefined, { ...snapshot, contextPanelOpen: true })
       .at(-1)?.arguments).toMatchObject({ operation: 'context-panel', action: 'close' });
     const fetcher = vi.fn<typeof fetch>(async () => response(targets[0]!.choice));
-    await createJevReflexClassifier(async () => 'fake-key', fetcher)
+    await createJevReflexClassifier(jevKeyResolver('fake-key'), fetcher)
       .classify('open the tasks window', 'en', targets, new AbortController().signal);
     expect(String(fetcher.mock.calls[0]?.[1]?.body)).toContain('Tasks');
     expect(String(fetcher.mock.calls[0]?.[1]?.body)).toContain('Project board');
@@ -210,7 +211,7 @@ describe('Jev reflex classifier', () => {
     const tools = createToolRegistry([{ id: 'factory', tools: [tool(true), tool(false)] }]);
     const targets = createReflexTargets(tools.list(), ['12']);
     const fetcher = vi.fn<typeof fetch>(async () => response());
-    const classifier = createJevReflexClassifier(async () => 'fake-key', fetcher);
+    const classifier = createJevReflexClassifier(jevKeyResolver('fake-key'), fetcher);
 
     const decision = await classifier.classify('Jarvis, pause task 12', 'en', targets, new AbortController().signal);
 
@@ -234,6 +235,49 @@ describe('Jev reflex classifier', () => {
     expect(String(fetcher.mock.calls[0]?.[1]?.body)).not.toContain('delete_task');
   });
 
+  it('sends the decision to the selected provider target and tags the result with it', async () => {
+    const tools = createToolRegistry([{ id: 'factory', tools: [tool(true)] }]);
+    const targets = createReflexTargets(tools.list(), ['12']);
+    const fetcher = vi.fn<typeof fetch>(async () => response());
+    const microsoft = async () => ({
+      provider: 'microsoft' as const,
+      endpoint: 'https://foundry.example.test/providers/microsoft/v1/systemone',
+      model: 'decision-1',
+      token: 'entra-token',
+    });
+
+    const decision = await createJevReflexClassifier(microsoft, fetcher)
+      .classify('Jarvis, pause task 12', 'en', targets, new AbortController().signal);
+
+    expect(decision).toMatchObject({ provider: 'microsoft', target: { tool: { name: 'pause_task' } } });
+    expect(fetcher).toHaveBeenCalledWith('https://foundry.example.test/providers/microsoft/v1/systemone', expect.objectContaining({
+      headers: expect.objectContaining({ Authorization: ['Bear', 'er'].join('') + ' entra-token' }),
+      body: expect.stringContaining('"model":"decision-1"'),
+    }));
+    expect(String(fetcher.mock.calls[0]?.[1]?.body)).not.toContain('jev-latest');
+  });
+
+  it('tags a failed decision with the provider that failed and makes no request without a target', async () => {
+    const tools = createToolRegistry([{ id: 'factory', tools: [tool(true)] }]);
+    const targets = createReflexTargets(tools.list(), ['12']);
+    const microsoft = async () => ({
+      provider: 'microsoft' as const,
+      endpoint: 'https://foundry.example.test/providers/microsoft/v1/systemone',
+      model: 'decision-1',
+      token: 'entra-token',
+    });
+
+    const failed = await createJevReflexClassifier(microsoft, async () => new Response(null, { status: 503 }))
+      .classify('Jarvis, pause task 12', 'en', targets, new AbortController().signal);
+    const fetcher = vi.fn<typeof fetch>();
+    const unavailable = await createJevReflexClassifier(async () => undefined, fetcher)
+      .classify('Jarvis, pause task 12', 'en', targets, new AbortController().signal);
+
+    expect(failed).toEqual({ failure: 'http_503', provider: 'microsoft' });
+    expect(unavailable).toBeNull();
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
   it('classifies a new partial command and checks final transcripts against the ledger', async () => {
     const tools = createToolRegistry([{ id: 'factory', tools: [tool(true)] }]);
     const targets = createReflexTargets(tools.list(), ['12']);
@@ -243,7 +287,7 @@ describe('Jev reflex classifier', () => {
         completeCommand: 0.99,
         contradictedAction: 'action-1',
       }));
-    const classifier = createJevReflexClassifier(async () => 'fake-key', fetcher);
+    const classifier = createJevReflexClassifier(jevKeyResolver('fake-key'), fetcher);
     const signal = new AbortController().signal;
 
     await expect(classifier.classify(
@@ -286,7 +330,7 @@ describe('Jev reflex classifier', () => {
   });
 
   it('does not undo an action on a low-confidence contradiction Choice', async () => {
-    const classifier = createJevReflexClassifier(async () => 'fake-key', async () =>
+    const classifier = createJevReflexClassifier(jevKeyResolver('fake-key'), async () =>
       response('main_agent', 0.99, {
         completeCommand: 0.99,
         contradictedAction: 'action-1',
@@ -360,12 +404,12 @@ describe('Jev reflex classifier', () => {
   it('returns typed Jev failures while preserving low-confidence and missing-key fallthrough', async () => {
     const tools = createToolRegistry([{ id: 'factory', tools: [tool(true)] }]);
     const targets = createReflexTargets(tools.list(), ['12']);
-    const lowConfidence = createJevReflexClassifier(async () => 'fake-key', async () => response('target_0', 0.4));
-    const malformed = createJevReflexClassifier(async () => 'fake-key', async () =>
+    const lowConfidence = createJevReflexClassifier(jevKeyResolver('fake-key'), async () => response('target_0', 0.4));
+    const malformed = createJevReflexClassifier(jevKeyResolver('fake-key'), async () =>
       new Response(JSON.stringify({ answers: {} }), { headers: { 'content-type': 'application/json' } }));
-    const missingKey = createJevReflexClassifier(async () => undefined, vi.fn());
-    const rejected = createJevReflexClassifier(async () => 'fake-key', async () => new Response(null, { status: 503 }));
-    const networkError = createJevReflexClassifier(async () => 'fake-key', async () => {
+    const missingKey = createJevReflexClassifier(jevKeyResolver(undefined), vi.fn());
+    const rejected = createJevReflexClassifier(jevKeyResolver('fake-key'), async () => new Response(null, { status: 503 }));
+    const networkError = createJevReflexClassifier(jevKeyResolver('fake-key'), async () => {
       throw new Error('private fetch details');
     });
     const signal = new AbortController().signal;
@@ -375,12 +419,12 @@ describe('Jev reflex classifier', () => {
       confidence: 0.4,
     });
     await expect(malformed.classify('Pause task 12', 'en', targets, signal))
-      .resolves.toEqual({ failure: 'invalid_answer' });
+      .resolves.toMatchObject({ failure: 'invalid_answer' });
     await expect(missingKey.classify('Pause task 12', 'en', targets, signal)).resolves.toBeNull();
     await expect(rejected.classify('Pause task 12', 'en', targets, signal))
-      .resolves.toEqual({ failure: 'http_503' });
+      .resolves.toMatchObject({ failure: 'http_503' });
     await expect(networkError.classify('Pause task 12', 'en', targets, signal))
-      .resolves.toEqual({ failure: 'network_error' });
+      .resolves.toMatchObject({ failure: 'network_error' });
   });
 
   it.each([
@@ -390,21 +434,21 @@ describe('Jev reflex classifier', () => {
     [429, 'rate_limited'],
     [502, 'http_502'],
   ] as const)('classifies Jev HTTP %s as %s', async (status, failure) => {
-    const classifier = createJevReflexClassifier(async () => 'fake-key', async () =>
+    const classifier = createJevReflexClassifier(jevKeyResolver('fake-key'), async () =>
       new Response(null, { status }));
 
     await expect(classifier.classify('Pause task 12', 'en', [], new AbortController().signal))
-      .resolves.toEqual({ failure });
+      .resolves.toMatchObject({ failure });
   });
 
   it('returns timeout when Jev exceeds its request deadline', async () => {
     const fetcher = vi.fn<typeof fetch>((_input, init) => new Promise((_resolve, reject) => {
       init?.signal?.addEventListener('abort', () => reject(new Error('request aborted')), { once: true });
     }));
-    const classifier = createJevReflexClassifier(async () => 'fake-key', fetcher);
+    const classifier = createJevReflexClassifier(jevKeyResolver('fake-key'), fetcher);
 
     await expect(classifier.classify('Pause task 12', 'en', [], new AbortController().signal))
-      .resolves.toEqual({ failure: 'timeout' });
+      .resolves.toMatchObject({ failure: 'timeout' });
   });
 
   it('retries one rate-limited response only when Retry-After fits the bounded wait', async () => {
@@ -413,7 +457,7 @@ describe('Jev reflex classifier', () => {
     const fetcher = vi.fn()
       .mockResolvedValueOnce(new Response(null, { status: 429, headers: { 'retry-after': '0' } }))
       .mockResolvedValueOnce(response());
-    const classifier = createJevReflexClassifier(async () => 'fake-key', fetcher);
+    const classifier = createJevReflexClassifier(jevKeyResolver('fake-key'), fetcher);
 
     await expect(classifier.classify('Pause task 12', 'en', targets, new AbortController().signal))
       .resolves.toMatchObject({ target: { tool: { name: 'pause_task' } } });
@@ -423,7 +467,7 @@ describe('Jev reflex classifier', () => {
   it('measures offline simple-request classification under the 500 ms target', async () => {
     const tools = createToolRegistry([{ id: 'factory', tools: [tool(true)] }]);
     const classifier = createJevReflexClassifier(
-      async () => 'fake-key',
+      jevKeyResolver('fake-key'),
       async () => response('main_agent'),
     );
     const started = performance.now();

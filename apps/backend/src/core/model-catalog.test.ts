@@ -105,10 +105,12 @@ describe('Foundry model catalogue', () => {
     const catalogue = fallbackModelCatalogue();
 
     expect(modelsForRole(catalogue, 'codex')).toEqual(codexModels);
-    expect(modelsForRole(catalogue, 'codex')).toContain('gpt-5.3-codex');
+    expect(modelsForRole(catalogue, 'codex')).toContain('gpt-6.1-sol');
+    expect(modelsForRole(catalogue, 'codex')).toContain('gpt-6-astra');
+    expect(modelsForRole(catalogue, 'codex')).not.toContain('gpt-5.3-codex');
     expect(modelsForRole(catalogue, 'copilot')).toEqual(copilotModels);
     expect(modelsForRole(catalogue, 'copilot')).toContain('claude-sonnet-4.6');
-    expect(reasoningForModel(catalogue, 'codex', 'gpt-5.5'))
+    expect(reasoningForModel(catalogue, 'codex', 'gpt-6.1-sol'))
       .toEqual(['none', 'minimal', 'low', 'medium', 'high', 'xhigh']);
     expect(reasoningForModel(catalogue, 'copilot', 'gpt-5.4')).toEqual(['none', 'low', 'medium', 'high']);
     expect(reasoningForModel(catalogue, 'copilot', 'unsupported-model')).toEqual([]);

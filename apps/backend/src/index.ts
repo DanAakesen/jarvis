@@ -32,6 +32,12 @@ import { coreModule } from './core/index.js';
 import { conversationModule } from './core/conversation.js';
 import { createJevReflexClassifier } from './core/reflex.js';
 import {
+  createCachedDecisionProviderReader,
+  createDecisionResolver,
+  microsoftDecisionDeployment,
+  microsoftDecisionScope,
+} from './core/decision-provider.js';
+import {
   createBrowserAgent,
   createBrowserAgentModule,
   createFoundryBrowserTextModel,
@@ -297,15 +303,44 @@ try {
       .finally(() => { jevApiKeyRequest = undefined; });
     return jevApiKeyRequest;
   };
-  const reflexClassifier = createJevReflexClassifier(getJevApiKey);
-  const pcActPlanner = jevSecretClient ? createJevPcActPlanner(getJevApiKey) : undefined;
+  const decisionHosts = [config.foundryEndpoints?.admin, config.foundryEndpoints?.runtime, config.foundryProjectEndpoint]
+    .flatMap((value) => {
+      try { return value ? [new URL(value).origin] : []; } catch { return []; }
+    })
+    .filter((origin, index, all) => all.indexOf(origin) === index);
+  let decisionUnavailableLoggedAt = 0;
+  const decisions = createDecisionResolver({
+    getProvider: createCachedDecisionProviderReader(async () =>
+      settingsStore ? (await readSettings(settingsStore)).decisions.provider : undefined),
+    getJevApiKey,
+    ...(credential && decisionHosts.length > 0 ? {
+      microsoft: {
+        hosts: decisionHosts,
+        deployment: microsoftDecisionDeployment,
+        getToken: async (signal?: AbortSignal) => {
+          const token = await credential.getToken(microsoftDecisionScope, signal ? { abortSignal: signal } : {});
+          if (!token) throw new Error('Foundry decision identity unavailable');
+          return token.token;
+        },
+      },
+    } : {}),
+    onUnavailable: (provider) => {
+      const now = Date.now();
+      if (now - decisionUnavailableLoggedAt < 60_000) return;
+      decisionUnavailableLoggedAt = now;
+      logger.warn({ provider }, 'decision.provider_unavailable');
+    },
+  });
+  const reflexClassifier = createJevReflexClassifier(decisions.resolve, decisions.fetch);
+  const decisionsAvailable = Boolean(jevSecretClient || (credential && decisionHosts.length > 0));
+  const pcActPlanner = decisionsAvailable ? createJevPcActPlanner(decisions.resolve, decisions.fetch) : undefined;
   const recipeStore = database ? createRecipeStore(database.pool) : undefined;
-  const recipes = recipeStore && jevSecretClient
-    ? { store: recipeStore, planner: createJevRecipePlanner(getJevApiKey) }
+  const recipes = recipeStore && decisionsAvailable
+    ? { store: recipeStore, planner: createJevRecipePlanner(decisions.resolve, decisions.fetch) }
     : undefined;
-  const browserAgent = jevSecretClient && config.foundryProjectEndpoint && credential
+  const browserAgent = decisionsAvailable && config.foundryProjectEndpoint && credential
     ? createBrowserAgent(
-      createJevBrowserPlanner(getJevApiKey),
+      createJevBrowserPlanner(decisions.resolve, decisions.fetch),
       createFoundryBrowserTextModel(config.foundryProjectEndpoint, async (scope, signal) => {
         const token = await credential.getToken(scope, { abortSignal: signal });
         if (!token) throw new Error('Foundry browser identity unavailable');
@@ -971,7 +1006,7 @@ try {
     systemSmokeProbes,
     modelCatalogue,
     ...(modelDeploymentWorkflow ? { modelDeploymentWorkflow } : {}),
-    ...(jevSecretClient ? { reflexClassifier } : {}),
+    ...(decisionsAvailable ? { reflexClassifier } : {}),
     ...(browserAgent ? { browserAgent } : {}),
     ...(database ? { databaseStatus: () => database.isWaking() } : {}),
     ...(releaseViewStore ? { releaseViewStore } : {}),

@@ -165,6 +165,20 @@ describe('structured log export', () => {
     expect(records.join('')).not.toContain('private');
     expect(JSON.stringify(sink.trackTrace.mock.calls)).not.toContain('private');
   });
+  it('exports only a known decision provider on reflex decisions and unavailability warnings', () => {
+    const records: string[] = [];
+    const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });
+    const logger = createLogger({ logLevel: 'info' }, { ...sdk, trackTrace: vi.fn() }, output);
+    logger.info({ source: 'chat', provider: 'microsoft', reason: 'http_503' }, 'reflex.decision');
+    logger.info({ source: 'chat', provider: 'provider-secret' }, 'reflex.decision');
+    logger.warn({ provider: 'jev', token: 'token-secret' }, 'decision.provider_unavailable');
+    logger.warn({ provider: 'provider-secret' }, 'decision.provider_unavailable');
+    expect(JSON.parse(records[0]!)).toMatchObject({ msg: 'reflex.decision', provider: 'microsoft', reason: 'http_503' });
+    expect(JSON.parse(records[1]!)).not.toHaveProperty('provider');
+    expect(JSON.parse(records[2]!)).toMatchObject({ msg: 'decision.provider_unavailable', provider: 'jev' });
+    expect(JSON.parse(records[3]!)).not.toHaveProperty('provider');
+    expect(records.join('')).not.toContain('secret');
+  });
   it.each(['chat', 'voice-partial', 'voice-final'])('exports bounded %s reflex decisions without transcripts or arguments', (source) => {
     const records: string[] = [];
     const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });

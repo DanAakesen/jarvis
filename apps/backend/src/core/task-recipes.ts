@@ -5,6 +5,7 @@ import {
   isJevFailure, jevChoiceConfidenceThreshold, jevFailureFromStatus,
   logJevFailure, reflexSourceForRequest, type JevFailure,
 } from './jev.js';
+import type { DecisionProviderId, DecisionTarget, DecisionTargetResolver } from './decision-provider.js';
 import { closeIntentFor, isSafeKeySequence, type KeySequence } from './keyboard-actions.js';
 import { ToolFailure, ToolRefusal } from './tool-registry.js';
 
@@ -32,6 +33,7 @@ export interface RecipeStore {
 export interface RecipeChoice {
   readonly choice: string;
   readonly confidence: number;
+  readonly provider?: DecisionProviderId;
 }
 export interface RecipePlanner {
   select(input: {
@@ -179,12 +181,12 @@ export async function createRecipeSession(
   function confident(choice: RecipeChoice | JevFailure | null, start: number): RecipeChoice {
     signal.throwIfAborted();
     if (isJevFailure(choice)) {
-      logJevFailure(request, reflexSourceForRequest(request), start, choice.failure);
-      throw new ToolRefusal('Jev could not return a valid recipe decision. Please try again.');
+      logJevFailure(request, reflexSourceForRequest(request), start, choice.failure, choice.provider);
+      throw new ToolRefusal('The decision provider could not return a valid recipe decision. Please try again.');
     }
     if (!choice || !Number.isFinite(choice.confidence) ||
         choice.confidence < jevChoiceConfidenceThreshold || choice.confidence > 1) {
-      throw new ToolRefusal('Jev is not confident enough to replay this task. Please clarify the goal.');
+      throw new ToolRefusal('The decision provider is not confident enough to replay this task. Please clarify the goal.');
     }
     return choice;
   }
@@ -278,24 +280,34 @@ export async function createRecipeSession(
 }
 
 export function createJevRecipePlanner(
-  getApiKey: () => Promise<string | undefined>, fetcher: typeof fetch = fetch,
+  resolveTarget: DecisionTargetResolver, fetcher: typeof fetch = fetch,
 ): RecipePlanner {
   async function choose(state: unknown, criteria: Record<string, string>, instructions: string,
     signal: AbortSignal): Promise<RecipeChoice | JevFailure | null> {
     const deadline = AbortSignal.any([signal, AbortSignal.timeout(1_200)]);
+    let decision: DecisionTarget | undefined;
     try {
-      const apiKey = await withAbort(getApiKey(), deadline);
-      if (!apiKey?.trim() || apiKey.length > 10_000 || /[\r\n]/u.test(apiKey) || deadline.aborted) return null;
+      decision = await withAbort(resolveTarget(deadline), deadline);
+    } catch {
+      return { failure: deadline.aborted ? 'timeout' : 'invalid_answer' };
+    }
+    if (!decision || deadline.aborted) return null;
+    const result = await chooseWith(decision, deadline, state, criteria, instructions);
+    return result === null ? null : { ...result, provider: decision.provider };
+  }
+  async function chooseWith(decision: DecisionTarget, deadline: AbortSignal, state: unknown,
+    criteria: Record<string, string>, instructions: string): Promise<RecipeChoice | JevFailure | null> {
+    try {
       const body = JSON.stringify({
-        model: 'jev-latest', state,
+        model: decision.model, state,
         questions: { recipe: { type: 'choice', instructions, criteria } },
       });
       if (Buffer.byteLength(body) > 512 * 1024) return { failure: 'invalid_answer' };
       let response: Response;
       try {
-        response = await fetcher('https://api.typesafe.ai/v1/systemone', {
+        response = await fetcher(decision.endpoint, {
           method: 'POST', redirect: 'error', signal: deadline,
-          headers: { Authorization: ['Bearer', apiKey].join(' '), 'Content-Type': 'application/json', Accept: 'application/json' },
+          headers: { Authorization: ['Bearer', decision.token].join(' '), 'Content-Type': 'application/json', Accept: 'application/json' },
           body,
         });
       } catch {

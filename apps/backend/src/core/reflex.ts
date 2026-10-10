@@ -13,9 +13,8 @@ import {
   reflexConfirmationThreshold,
   type JevFailure,
 } from './jev.js';
+import type { DecisionProviderId, DecisionTarget, DecisionTargetResolver } from './decision-provider.js';
 
-const endpoint = 'https://api.typesafe.ai/v1/systemone';
-const model = 'jev-latest';
 const requestTimeoutMs = 1_200;
 const maxResponseBytes = 256 * 1024;
 export interface ReflexTarget {
@@ -33,6 +32,8 @@ export interface ReflexClassification {
   readonly completeCommand?: boolean;
   readonly contradictedAction?: string | null;
   readonly target: ReflexTarget | null;
+  /** Which decision provider answered (for comparing providers in the logs). */
+  readonly provider?: DecisionProviderId;
 }
 
 export interface ReflexContext {
@@ -214,19 +215,20 @@ async function readBounded(response: Response): Promise<unknown> {
 }
 
 export function createJevReflexClassifier(
-  getApiKey: () => Promise<string | undefined>,
+  resolveTarget: DecisionTargetResolver,
   fetcher: typeof fetch = fetch,
 ): ReflexClassifier {
-  return {
-    async classify(text, language, targets, signal, context) {
-      if (typeof text !== 'string' || !text.trim() || text.length > 20_000 || signal.aborted) return null;
-      let apiKey: string | undefined;
-      try {
-        apiKey = await getApiKey();
-      } catch {
-        return null;
-      }
-      if (!apiKey || !apiKey.trim() || apiKey.length > 10_000 || /[\r\n]/u.test(apiKey)) return null;
+  const decideWith = async (
+    decision: DecisionTarget,
+    text: string,
+    language: 'da' | 'en',
+    targets: readonly ReflexTarget[],
+    signal: AbortSignal,
+    context?: ReflexContext,
+  ): Promise<ReflexClassification | JevFailure | null> => {
+    const endpoint = decision.endpoint;
+    const model = decision.model;
+    const apiKey = decision.token;
 
       const choices: Record<string, string> = { main_agent: 'Use the main Jarvis agent.' };
       for (const target of targets) {
@@ -395,6 +397,20 @@ export function createJevReflexClassifier(
         }),
         target,
       };
+  };
+
+  return {
+    async classify(text, language, targets, signal, context) {
+      if (typeof text !== 'string' || !text.trim() || text.length > 20_000 || signal.aborted) return null;
+      let decision: DecisionTarget | undefined;
+      try {
+        decision = await resolveTarget(signal);
+      } catch {
+        return null;
+      }
+      if (!decision) return null;
+      const result = await decideWith(decision, text, language, targets, signal, context);
+      return result === null ? null : { ...result, provider: decision.provider };
     },
   };
 }
@@ -528,10 +544,12 @@ export function logReflexDecision(
   signal: AbortSignal,
   action: ReflexActionResult | null,
   reason?: string,
+  provider: DecisionProviderId | undefined = classification?.provider,
 ): void {
   const confidence = classification?.confidence ?? 0;
   request.log.info({
     source,
+    ...(provider ? { provider } : {}),
     addressed: classification?.addressed ?? false,
     intent: classification?.intent ?? 'other',
     tool: classification?.target?.tool.name ?? 'none',

@@ -56,7 +56,7 @@ const events = new Set([
   'conversation.reply_failed', 'voice.connection_failed', 'voice.upstream_closed', 'voice.upstream_error',
   'voice.upstream_event_error', 'voice.turn_timing', 'pc_bridge.command_timing', 'pc_bridge.wake_word',
   'credentials.codex_renewal', 'dispatcher.start_failed',
-  'tool.invalid_arguments',
+  'tool.invalid_arguments', 'decision.provider_unavailable',
 ]);
 
 // Apply an allowlist before either stdout or Application Insights sees a record.
@@ -95,6 +95,9 @@ const reflexReasons = new Set([
 ]);
 
 function safeFields(input: Record<string, unknown>): Record<string, unknown> {
+  if (input.msg === 'decision.provider_unavailable') {
+    return ['jev', 'microsoft'].includes(String(input.provider)) ? { provider: input.provider } : {};
+  }
   if (input.msg === 'tool.invalid_arguments') {
     const fields: Record<string, unknown> = {};
     if (typeof input.tool === 'string' && /^[A-Za-z0-9_-]{1,64}$/u.test(input.tool)) fields.tool = input.tool;
@@ -128,6 +131,7 @@ function safeFields(input: Record<string, unknown>): Record<string, unknown> {
   if (input.msg === 'reflex.decision') {
     if (['chat', 'voice-partial', 'voice-final'].includes(String(input.source))) fields.source = input.source;
     if (['action', 'question', 'other'].includes(String(input.intent))) fields.intent = input.intent;
+    if (['jev', 'microsoft'].includes(String(input.provider))) fields.provider = input.provider;
     if (['<0.5', '0.5–0.8', '>0.8'].includes(String(input.confidence))) fields.confidence = input.confidence;
     for (const key of ['addressed', 'completeCommand', 'executed']) {
       if (typeof input[key] === 'boolean') fields[key] = input[key];

@@ -18,8 +18,10 @@ import {
   jevFailureFromStatus,
   logJevFailure,
   reflexSourceForRequest,
+  tagJevFailure,
   type JevFailure,
 } from './jev.js';
+import type { DecisionTarget, DecisionTargetResolver } from './decision-provider.js';
 import {
   closeIntentFor,
   commonShortcutsFor,
@@ -42,8 +44,6 @@ declare module 'fastify' {
   }
 }
 
-const jevEndpoint = 'https://api.typesafe.ai/v1/systemone';
-const jevModel = 'jev-latest';
 const jevTimeoutMs = 1_200;
 const maxResponseBytes = 256 * 1024;
 const maxSteps = 20;
@@ -404,22 +404,19 @@ function createJevQuestions(
 }
 
 export function createJevBrowserPlanner(
-  getApiKey: () => Promise<string | undefined>,
+  resolveTarget: DecisionTargetResolver,
   fetcher: typeof fetch = fetch,
 ): BrowserJevPlanner {
-  return {
-    async decide(input, signal) {
-      if (!input.goal.trim() || input.goal.length > maxGoalLength || signal.aborted ||
-          secretRequest(input.goal)) return null;
-      const requestSignal = AbortSignal.any([signal, AbortSignal.timeout(jevTimeoutMs)]);
-      let apiKey: string | undefined;
-      try {
-        apiKey = await withAbort(getApiKey(), requestSignal);
-      } catch {
-        return null;
-      }
-      if (!apiKey || !apiKey.trim() || apiKey.length > 10_000 || /[\r\n]/u.test(apiKey) || requestSignal.aborted) return null;
-
+  const decideWith = async (
+    decision: DecisionTarget,
+    input: BrowserDecisionInput,
+    signal: AbortSignal,
+    requestSignal: AbortSignal,
+  ): Promise<BrowserDecision | JevFailure | null> => {
+    const jevEndpoint = decision.endpoint;
+    const jevModel = decision.model;
+    const apiKey = decision.token;
+    {
       const keyboardOptions = keySequencesFor('chrome', input.goal);
       const focusedTextValues = quotedSelections(input.goal)
         .filter(value => !secretRequest(value) && !oneTimeCode(value) && !luhnCardNumber(value));
@@ -568,6 +565,22 @@ export function createJevBrowserPlanner(
         confidence: Math.min(confidence, target.confidence),
         targetIndex,
       };
+    }
+  };
+
+  return {
+    async decide(input, signal) {
+      if (!input.goal.trim() || input.goal.length > maxGoalLength || signal.aborted ||
+          secretRequest(input.goal)) return null;
+      const requestSignal = AbortSignal.any([signal, AbortSignal.timeout(jevTimeoutMs)]);
+      let decision: DecisionTarget | undefined;
+      try {
+        decision = await withAbort(resolveTarget(requestSignal), requestSignal);
+      } catch {
+        return null;
+      }
+      if (!decision || requestSignal.aborted) return null;
+      return tagJevFailure(await decideWith(decision, input, signal, requestSignal), decision.provider);
     },
   };
 }
@@ -1093,13 +1106,13 @@ export function createBrowserAgent(
         }
       }
       if (isJevFailure(result)) {
-        logJevFailure(request, reflexSourceForRequest(request), jevStartedAt, result.failure);
-        throw new ToolRefusal('Jev could not return a valid browser decision. Please try again.');
+        logJevFailure(request, reflexSourceForRequest(request), jevStartedAt, result.failure, result.provider);
+        throw new ToolRefusal('The decision provider could not return a valid browser decision. Please try again.');
       }
       const decision = result;
       if (!decision || !validProbability(decision.confidence) ||
           decision.confidence < jevChoiceConfidenceThreshold) {
-        throw new ToolRefusal('Jev is not confident enough to choose the next browser action. Please clarify the goal or ask Jarvis to continue.');
+        throw new ToolRefusal('The decision provider is not confident enough to choose the next browser action. Please clarify the goal or ask Jarvis to continue.');
       }
       if (decision.operation === 'blocked') {
         throw new ToolRefusal('BLOCKED: This browser action is unsafe or unclear. Please tell Jarvis what to do next.');
@@ -1173,7 +1186,7 @@ export function createBrowserAgent(
         }
         const text = await textModel.generateText({ goal: input.goal, target, ...vision }, signal);
         if (!text) {
-          throw new ToolRefusal('Jev could not safely determine text to enter. Please provide a non-sensitive value.');
+          throw new ToolRefusal('The decision provider could not safely determine text to enter. Please provide a non-sensitive value.');
         }
         if (oneTimeCode(text) || luhnCardNumber(text)) {
           throw new ToolRefusal('BLOCKED: Jarvis never types passwords, payment-card numbers, or one-time codes. Please complete that step yourself.');
