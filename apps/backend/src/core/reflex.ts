@@ -416,7 +416,10 @@ export async function executeReflexAction(
   });
   let outcome: ToolCallOutcome = 'ok';
   let result: unknown;
-  const presentation = startWorkPresentation(target.tool.name, target.arguments, request, randomUUID(), messageId, signal);
+  const presentation = startWorkPresentation(
+    target.tool.name, target.arguments, request, randomUUID(), messageId, signal,
+    request.routeOptions.url?.includes('/voice') ? 'voice' : 'chat',
+  );
   try {
     result = await target.tool.execute(target.arguments, request, signal);
     const serialized = JSON.stringify(result);
