@@ -207,6 +207,24 @@ describe('read_window', () => {
     broker.dispose();
   });
 
+  it('retains the previous readable view when every tab refuses a replacement', async () => {
+    const broker = new WorkspaceCommandBroker();
+    let applied = true;
+    const connection = broker.connect(ownerId, (event, data) => {
+      if (event === 'workspace-command') broker.acknowledge(ownerId, connection.sessionId,
+        data.command.commandId, applied, applied ? undefined : 'Window already exists');
+      return true;
+    });
+    const view: GeneratedView = { ...base, renderer: 'text', data: { format: 'plain', content: 'Visible' } };
+    await broker.execute(ownerId, { commandId: 'original', operation: 'create', viewId: 'report', view }, new AbortController().signal);
+    applied = false;
+    await expect(broker.execute(ownerId, { commandId: 'replacement', operation: 'create', viewId: 'report',
+      view: { ...view, data: { format: 'plain', content: 'Never shown' } } }, new AbortController().signal)).rejects.toThrow();
+    expect(broker.view(ownerId, 'report')).toEqual(view);
+    connection.close();
+    broker.dispose();
+  });
+
   it('preserves literal code, entities and whitespace without returning raw markup', async () => {
     const { send, readWindow } = fixture();
     await send({ ...base, renderer: 'code', data: {

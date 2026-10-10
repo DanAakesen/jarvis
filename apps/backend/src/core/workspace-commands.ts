@@ -110,7 +110,7 @@ export class WorkspaceCommandBroker {
 
   view(ownerId: string, viewId: string): GeneratedView | undefined {
     for (const record of [...(this.records.get(ownerId)?.values() ?? [])].reverse()) {
-      if (record.view?.viewId === viewId) return structuredClone(record.view.view);
+      if (record.state !== 'refused' && record.view?.viewId === viewId) return structuredClone(record.view.view);
     }
     return undefined;
   }
@@ -204,9 +204,6 @@ export class WorkspaceCommandBroker {
       if (!connection.send('workspace-command', { command, expiresAt })) {
         this.decline(record, connection.sessionId, 'error', 'The workspace could not accept the command for delivery.');
       } else if (command.operation === 'create' || command.operation === 'update') {
-        for (const previous of ownerRecords.values()) {
-          if (previous !== record && previous.view?.viewId === command.viewId) delete previous.view;
-        }
         record.view = { viewId: command.viewId, view: structuredClone(command.view) };
       }
     }

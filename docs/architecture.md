@@ -166,7 +166,8 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   persisted.
   P9-52 retains the last successfully sent generated view per owner/viewId in
   the broker's existing 128-command cache; eviction and process teardown discard
-  it. The always-registered, sensitive `read_window` tool prefers the latest
+  it. Definitively refused replacements do not supersede earlier cached views.
+  The always-registered, sensitive `read_window` tool prefers the latest
   owner snapshot's optional content (8 KiB UTF-8) and selection (2 KiB), then
   falls back to this cache. Its untrusted text is capped at 8 KiB, with 50
   list/table rows or 100 timeline events; charts retain supplied series names,
