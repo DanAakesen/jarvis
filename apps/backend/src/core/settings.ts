@@ -638,9 +638,7 @@ export function settingsPatchRefusal(value: unknown, catalogue: ModelCatalogue, 
       const path = prefix ? `${prefix}.${key}` : key;
       if (!Object.hasOwn(properties, key)) {
         // Never echo arbitrary input keys, which may themselves contain private text.
-        const safeKey = /^[A-Za-z][A-Za-z0-9_-]{0,39}$/.test(key) &&
-          !/^(?:sk-|gh[pousr]_|github_pat_|AKIA|eyJ)/.test(key) ? key : '[unsupported key]';
-        return `Invalid settings key ${prefix ? `${prefix}.` : ''}${safeKey}. Valid keys: ${Object.keys(properties).join(', ')}.`.slice(0, 500);
+        return `Invalid settings key ${prefix ? `${prefix}.` : ''}[unsupported key]. Valid keys: ${Object.keys(properties).join(', ')}.`.slice(0, 500);
       }
       const schema = properties[key]!;
       if (schema.properties) {

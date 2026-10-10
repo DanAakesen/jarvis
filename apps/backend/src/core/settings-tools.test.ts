@@ -158,9 +158,10 @@ describe('Jarvis settings tools', () => {
       [{ voice: { defaultLanguage: 'de' } }, 'voice.defaultLanguage', '"da", "en"'],
       [{ appearance: { theme: 'blue' } }, 'appearance.theme', '"light", "dark", "system"'],
       [{ voice: { maxSpokenReplyTokens: 0 } }, 'voice.maxSpokenReplyTokens', 'from 1 to 4096'],
-      [{ memory: { unsupported: 'private-value' } }, 'memory.unsupported', 'similarityThreshold'],
+      [{ memory: { unsupported: 'private-value' } }, 'memory.[unsupported key]', 'similarityThreshold'],
+      [{ memory: { privateTokenIdentifier: 'private-value' } }, 'memory.[unsupported key]', 'similarityThreshold'],
       [{ memory: { 'private text in key': 'private-value' } }, 'memory.[unsupported key]', 'similarityThreshold'],
-      [{ roles: { unknown: { model: 'private-value' } } }, 'roles.unknown', 'chat'],
+      [{ roles: { unknown: { model: 'private-value' } } }, 'roles.[unsupported key]', 'chat'],
       [{ roles: { chat: {} } }, 'roles.chat', 'reasoningEffort'],
       [{ roles: { chat: { model: 'gpt-6-luna', reasoningEffort: 'default' } } }, 'roles.chat.reasoningEffort', '"xhigh"'],
       [{ roles: { chat: { model: 'missing' } } }, 'roles.chat.model', 'gpt-5.6-luna'],
@@ -177,6 +178,7 @@ describe('Jarvis settings tools', () => {
       expect(JSON.stringify(body)).toContain(path);
       expect(JSON.stringify(body)).toContain(valid.replaceAll('"', '\\"'));
       expect(JSON.stringify(body)).not.toContain('private-value');
+      expect(JSON.stringify(body)).not.toContain('privateTokenIdentifier');
       expect(settingsStore.write).not.toHaveBeenCalled();
       expect(record).toHaveBeenCalledWith(expect.objectContaining({
         arguments: { redacted: true }, result: { redacted: true },
