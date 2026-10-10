@@ -879,6 +879,36 @@ test('validates conversation visibility actions without accepting unrelated fiel
   assert.equal(isWorkspaceCommand({ ...command, action: 'show', viewId: 'conversation' }), false);
 });
 
+test('validates exact current-session actions and values', () => {
+  const command = { commandId: 'session-1', operation: 'session' };
+  const actions = { language: ['da', 'en'], voice: ['end'], camera: ['front', 'rear', 'off'] };
+  const values = ['da', 'en', 'end', 'front', 'rear', 'off', 'start', 'de', '', null, true, 1, {}, [], undefined];
+  assert.equal(workspaceCommandSchema.properties.operation.enum.includes('session'), true);
+  assert.deepEqual(workspaceCommandSchema.properties.value.enum, ['da', 'en', 'end', 'front', 'rear', 'off']);
+  for (const [action, validValues] of Object.entries(actions)) {
+    assert.equal(workspaceCommandSchema.properties.action.enum.includes(action), true);
+    for (const value of values) {
+      assert.equal(isWorkspaceCommand({ ...command, action, value }), validValues.includes(value),
+        `${action}: ${JSON.stringify(value)}`);
+    }
+    for (const value of validValues) {
+      const valid = { ...command, action, value };
+      assert.equal(isWorkspaceCommand(valid), true);
+      for (const key of Object.keys(valid)) {
+        const missing = { ...valid };
+        delete missing[key];
+        assert.equal(isWorkspaceCommand(missing), false, key);
+      }
+      for (const extra of [{ extra: true }, { viewId: 'conversation' }, { page: 'settings' }]) {
+        assert.equal(isWorkspaceCommand({ ...valid, ...extra }), false);
+      }
+    }
+  }
+  for (const action of ['show', 'open', 'microphone', '', null, undefined]) {
+    assert.equal(isWorkspaceCommand({ ...command, action, value: 'end' }), false);
+  }
+});
+
 test('validates exact navigation keys, settings sections and bounded factory task/issue selectors', () => {
   const command = { commandId: 'navigate-1', operation: 'navigate' };
   assert.deepEqual(workspaceNavigationPages, [

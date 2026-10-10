@@ -5,6 +5,9 @@ import { capabilityInstructions } from './capability-instructions.js';
 describe('shared navigation capability instructions', () => {
   it.each([true, false])('includes canonical destinations and aliases with automatic capture %s', (automaticCapture) => {
     const instructions = capabilityInstructions({ automaticCapture });
+    expect(instructions).toContain('operation "session": language da/en, voice end, or camera front/rear/off');
+    expect(instructions).toContain('not saved defaults; wait for application, relay refusals');
+    expect(instructions).toContain('tell Dan to grant browser permission if missing');
     expect(instructions).toContain('operation "conversation" and action "show"');
     expect(instructions).toContain('hide the transcript, use action "hide"');
     expect(instructions).toContain('This reversible view change needs no confirmation');

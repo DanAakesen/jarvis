@@ -6,6 +6,7 @@ import { ToolFailure, ToolRefusal } from './tool-registry.js';
 import { isWorkspaceReflexOperation, WorkspaceCommandBroker, workspaceCommandTool } from './workspace-commands.js';
 import { workspaceNavigationPages, type WorkspaceCommand } from '@jarvis/contracts';
 import { executeReflexAction, reflexTargets, registerChatReflex, undoPartialReflexAction } from './reflex.js';
+import { toModelToolSchema } from '../voice/realtime.js';
 
 const config = { ...loadConfig({}), logLevel: 'silent' as const };
 const ownerId = config.auth.ownerObjectId;
@@ -41,6 +42,98 @@ function fixture() {
 }
 
 describe('workspace command delivery', () => {
+  it('keeps the session tool schema a plain model-facing object', () => {
+    const schema = toModelToolSchema(workspaceCommandTool.inputSchema);
+    expect(schema).toHaveProperty('type', 'object');
+    for (const key of ['oneOf', 'anyOf', 'allOf', 'not']) expect(schema).not.toHaveProperty(key);
+    expect(schema).toMatchObject({
+      required: ['commandId', 'operation'], additionalProperties: false,
+      properties: {
+        operation: { enum: expect.arrayContaining(['session']) },
+        action: { enum: expect.arrayContaining(['language', 'voice', 'camera']) },
+        value: { type: 'string', enum: ['da', 'en', 'end', 'front', 'rear', 'off'] },
+      },
+    });
+    expect(workspaceCommandTool.description).toContain('current session, not saved defaults');
+    expect(workspaceCommandTool.description).toContain('backend never requests browser permissions');
+    expect(workspaceCommandTool.description).toContain('tell Dan to grant permission in the browser');
+  });
+
+  it.each([
+    { action: 'language', value: 'da' }, { action: 'language', value: 'en' },
+    { action: 'voice', value: 'end' },
+    { action: 'camera', value: 'front' }, { action: 'camera', value: 'rear' }, { action: 'camera', value: 'off' },
+  ])('applies session $action $value only after the page acknowledges it', async (fields) => {
+    const { app, broker } = fixture();
+    const command = { commandId: 'session-applied', operation: 'session', ...fields };
+    let delivered!: WorkspaceCommand;
+    const connection = broker.connect(ownerId, (event, data) => {
+      if (event === 'workspace-command') delivered = data.command;
+      return true;
+    });
+    let settled = false;
+    const pending = app.inject({
+      method: 'POST', url: '/tools/workspace_command', headers: agentHeaders, payload: command,
+    }).then((response) => { settled = true; return response; });
+    await vi.waitFor(() => expect(delivered).toEqual(command));
+    expect(settled).toBe(false);
+    expect(isWorkspaceReflexOperation(command)).toBe(true);
+    const ack = await app.inject({
+      method: 'POST', url: `/now/workspace/commands/${command.commandId}/ack`, headers: userHeaders,
+      payload: { sessionId: connection.sessionId, applied: true },
+    });
+    expect(ack.statusCode).toBe(204);
+    expect((await pending).json()).toMatchObject({ outcome: 'ok', result: { applied: true, ...command } });
+    connection.close();
+  });
+
+  it.each([
+    { action: 'camera', value: 'rear', reason: 'Grant camera permission in the browser first.' },
+    { action: 'language', value: 'da', reason: 'Grant microphone permission in the browser first.' },
+    { action: 'voice', value: 'end', reason: 'Voice mode is not active in this tab.' },
+  ])('relays the page refusal reason for session $action', async ({ reason, ...fields }) => {
+    const { app, broker } = fixture();
+    const command = { commandId: 'session-refused', operation: 'session', ...fields };
+    let delivered!: WorkspaceCommand;
+    const connection = broker.connect(ownerId, (event, data) => {
+      if (event === 'workspace-command') delivered = data.command;
+      return true;
+    });
+    const pending = app.inject({
+      method: 'POST', url: '/tools/workspace_command', headers: agentHeaders, payload: command,
+    });
+    await vi.waitFor(() => expect(delivered).toEqual(command));
+    const ack = await app.inject({
+      method: 'POST', url: `/now/workspace/commands/${command.commandId}/ack`, headers: userHeaders,
+      payload: { sessionId: connection.sessionId, applied: false, reason },
+    });
+    expect(ack.statusCode).toBe(204);
+    expect((await pending).json()).toMatchObject({
+      outcome: 'refused', result: { refused: reason }, confirmation: expect.stringContaining(reason),
+    });
+    connection.close();
+  });
+
+  it.each([
+    {}, { action: 'camera' }, { value: 'da' }, { action: 'open', value: 'front' },
+    { action: 'language', value: 'de' }, { action: 'language', value: 'end' },
+    { action: 'voice', value: 'start' }, { action: 'voice', value: 'off' },
+    { action: 'camera', value: 'en' }, { action: 'camera', value: null },
+    { action: 'camera', value: 'rear', extra: true },
+    { action: 'language', value: 'da', page: 'settings' },
+  ])('refuses invalid session arguments before delivery: %j', async (fields) => {
+    const { app, broker } = fixture();
+    const send = vi.fn(() => true);
+    broker.connect(ownerId, send);
+    const response = await app.inject({
+      method: 'POST', url: '/tools/workspace_command', headers: agentHeaders,
+      payload: { commandId: 'session-invalid', operation: 'session', ...fields },
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({ outcome: 'refused' });
+    expect(send).not.toHaveBeenCalled();
+  });
+
   it('resolves HTML artifact/window references only from owner-scoped applied commands', async () => {
     const broker = new WorkspaceCommandBroker();
     const artifactId = '56a2b0bd-af47-46b5-8e15-c6e9a718ae93';
