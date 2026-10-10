@@ -191,8 +191,10 @@ export function createJarvisStageOrb() {
         // Livelier (Dan, 8 October): a second, faster train of signals fires along the filaments, a slow heartbeat lifts
         // the whole core in dormancy, and thinking, tools, listening and speech each push it visibly further.
         float fire=pow(.5+.5*sin(vUv.x*15.+uTime*(1.6+uTool*4.+uThink*2.)),18.)*(.55+uTool*.9+uThink*.6);
-        float heart=pow(.5+.5*sin(uTime*1.25),3.);
-        float energy=mix(.5,.85,max(uAwake,uIgnite))*(.82+.3*heart)+uSurge*.3+uSpeak*uAudioLevel*.75+uThink*.38+uTool*.3+uListen*uInput*.55;
+        float idle=1.-smoothstep(.02,.22,max(uAwake,uIgnite));
+        float breath=.5+.5*sin(uTime*.38+sin(uTime*.09)*.72);
+        float heart=pow(max(0.,sin(uTime*.72+sin(uTime*.13)*.58)),12.);
+        float energy=mix(.5,.85,max(uAwake,uIgnite))*(.82+.3*heart+idle*(.18+.22*breath))+uSurge*.3+uSpeak*uAudioLevel*.75+uThink*.38+uTool*.3+uListen*uInput*.55;
         vec3 c=mix(uWarm*vec3(1.,.8,.7),uWarm,max(pulse,fire));
         gl_FragColor=vec4(c*(1.25+pulse*.7+fire*1.1),min(1.,energy*(.66+pulse*.28+fire*.5)));}`,
   });

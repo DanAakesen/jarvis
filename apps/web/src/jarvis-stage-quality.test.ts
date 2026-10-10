@@ -15,6 +15,10 @@ describe('Jarvis stage render quality', () => {
     });
   });
 
+  it('caps desktop pixel ratio while preserving the 30 fps ambient stage budget', () => {
+    expect(resolveJarvisStageQuality(1280, 900, 3, 8192, 0).pixelRatio).toBe(1.2);
+  });
+
   it('reduces effects and renderer resolution at lower quality levels', () => {
     expect(resolveJarvisStageQuality(1440, 900, 2, 4096, 2)).toEqual({
       pixelRatio: 0.84,

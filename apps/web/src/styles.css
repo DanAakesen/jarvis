@@ -1885,21 +1885,29 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
 .settings-save:has(.settings-feedback:empty) { padding-left: var(--space-2); }
 
 /* ---------------------------------------------------------------------------------------------
-   Sign-in: one personal greeting and one action over the existing room.
+   Sign-in: the greeting and glass action sit below the clear stage.
    --------------------------------------------------------------------------------------------- */
-.signin { display: grid; width: 100%; height: 100%; min-height: 0; align-content: center; justify-items: center; gap: var(--space-3); padding: var(--space-5); text-align: center; }
-.signin h1 { margin: 0; font-size: clamp(26px, 3vw, 34px); line-height: 1.1; }
+.signin { display: grid; width: 100%; height: 100%; min-height: 0; align-content: end; justify-items: center; gap: var(--space-3); padding: 0 var(--space-5) calc(48px + env(safe-area-inset-bottom)); text-align: center; }
+.signin h1 { margin: 0; color: var(--text); font-size: clamp(26px, 3vw, 34px); line-height: 1.1; text-shadow: 0 2px 16px var(--stage-background); }
 .signin-error { margin: 0; color: var(--text-muted); font-size: var(--type-small); }
 .signin-loader.loader-inline .loader-core { width: 46px; height: 46px; }
-.signin-button { display: inline-flex; min-width: 160px; min-height: 52px; align-items: center; justify-content: center; gap: var(--space-2); margin: 0; border-radius: var(--radius-pill); box-shadow: 0 0 24px -6px var(--primary-action); }
-.signin-button:hover:not(:disabled) { box-shadow: 0 0 34px -4px var(--primary-action); }
+.signin-button { position: relative; display: inline-flex; min-width: 160px; min-height: 52px; align-items: center; justify-content: center; gap: var(--space-2); margin: 0; padding: 0 var(--space-5); border-color: color-mix(in srgb, var(--glass-edge-warm) 38%, var(--glass-edge-cool)); border-radius: var(--radius-pill); background: color-mix(in srgb, var(--surface-translucent) 78%, transparent); color: var(--text); font: inherit; font-weight: 650; cursor: pointer; box-shadow: 0 10px 28px -18px var(--glass-edge-warm), inset 0 1px 0 var(--glass-rim-light); transition: background-color var(--motion-press) var(--ease-standard), box-shadow var(--motion-press) var(--ease-standard), transform var(--motion-press) var(--ease-standard); }
+.signin-button:hover:not(:disabled) { background: color-mix(in srgb, var(--surface-translucent) 90%, transparent); box-shadow: var(--glass-selected-glow), inset 0 1px 0 var(--glass-rim-light); transform: translateY(-1px); }
+.signin-button:active:not(:disabled) { transform: translateY(1px); }
+.signin-button:focus-visible { outline: 3px solid var(--focus); outline-offset: 4px; }
+.signin-button:disabled { border-color: var(--control-rule); color: var(--disabled-text); cursor: not-allowed; opacity: .72; }
+.signin-mark { position: relative; width: 14px; height: 14px; flex: 0 0 auto; border: 1px solid color-mix(in srgb, var(--glass-edge-warm) 68%, var(--glass-rim-light)); border-radius: 50%; box-shadow: 0 0 10px -2px var(--glass-edge-warm); }
+.signin-mark::after { position: absolute; inset: 3px; border-radius: 50%; background: var(--glass-edge-warm); box-shadow: 0 0 7px var(--glass-edge-warm); content: ""; animation: signin-ember 8s ease-in-out infinite; }
+@keyframes signin-ember { 0%, 64%, 100% { opacity: .72; transform: scale(.82); } 78% { opacity: 1; transform: scale(1.18); } }
+:root[data-motion="reduced"] .signin-mark::after { animation: none; }
+@media (prefers-reduced-motion: reduce) { .signin-mark::after { animation: none; } }
 
 /* ---------------------------------------------------------------------------------------------
    Living surfaces: glass catches light where the pointer is, pages assemble as they open, and a
    surface Jarvis is acting on glows so Dan can see it change.
    --------------------------------------------------------------------------------------------- */
 :is(.workspace-window, .kanban-column, .kanban-card, .settings-section, .settings-activity .panel, .area-sidebar,
-  .context-panel, .app-topbar, .area-rail, .conversation-input.luminous-glass, .task-release-bar)[data-lit] {
+  .context-panel, .app-topbar, .area-rail, .conversation-input.luminous-glass, .task-release-bar, .signin-button)[data-lit] {
   background-image: radial-gradient(circle 140px at var(--light-x, 50%) var(--light-y, 50%),
     color-mix(in srgb, var(--glass-rim-light) 26%, transparent), transparent 72%);
 }
@@ -2391,8 +2399,8 @@ a.task-chip:hover { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--glass-e
 .app-shell.app-signed-out:has(.signin) .app-topbar { display: none; }
 .app-shell.app-signed-out:has(.signin) .shell-main { grid-row: 1; width: 100%; max-width: none; height: 100%; min-height: 0; padding: 0; overflow: hidden; }
 .app-shell.app-signed-out:has(.signin) .jarvis-stage-fallback { display: none; }
-@media (max-width: 700px) {
-  .app-shell.app-signed-out:has(.signin) .signin { align-content: end; padding-bottom: calc(16px + 14vh); }
+@media (max-width: 700px), (max-height: 500px) and (pointer: coarse) {
+  .app-shell.app-signed-out:has(.signin) .signin { padding-bottom: var(--space-4); }
 }
 /* Tab bar v2 (Dan, 7 October): always present under the top bar and listing every open window. The window in front
    is lit, minimised windows are dimmed, and an empty bar says where windows will appear. */

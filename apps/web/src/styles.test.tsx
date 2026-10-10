@@ -138,6 +138,19 @@ describe('shared glass tokens', () => {
     }
   });
 
+  it('keeps sign-in copy below the orb with a keyboard-visible glass action', () => {
+    const source = readFileSync('src/styles.css', 'utf8');
+    const layout = /\.signin\s*\{([^}]*)\}/;
+    const action = /\.signin-button\s*\{([^}]*)\}/;
+
+    expect(ruleDeclaration(source, layout, 'align-content')).toBe('end');
+    expect(ruleDeclaration(source, action, 'min-height')).toBe('52px');
+    expect(ruleDeclaration(source, action, 'background')).toContain('var(--surface-translucent)');
+    expect(source.match(action)?.[1]).toMatch(/(?:^|;\s*)color:\s*var\(--text\);/);
+    expect(source).toContain('.signin-button:focus-visible { outline: 3px solid var(--focus);');
+    expect(source).toContain('.app-shell.app-signed-out:has(.signin) .signin { padding-bottom: var(--space-4); }');
+  });
+
   it('keeps rendered conversation paragraphs on the primary text role', () => {
     const source = readFileSync('src/ConversationHistory.css', 'utf8');
 

@@ -156,13 +156,24 @@ are pending; no fake task data is shown. P1-07 shows unbuilt actions as explaine
 disabled controls; see below. Unknown addresses have a return link. A skip link
 and visible keyboard focus support navigation. Dan's page designs remain to be selected.
 
-## Sign-in (P0-09; simplified in P9-69)
+## Sign-in (P0-09; simplified in P9-69, refined in P9-75)
 
-The signed-out screen keeps the room and orb as its background. Its only visible
-content is one device-local time greeting for Dan and one primary action,
-**Sign in** (accessible name **Sign in with Microsoft**); there is no card,
-supporting copy, or idle status. Center the content on desktop and place the
-phone action in the lower third above the safe area without page scrolling.
+The orb remains unobstructed and is the signed-out screen's hero. Place the
+single device-local greeting and **Sign in** action (accessible name
+**Sign in with Microsoft**) below the stage on desktop and in the lower third
+above the safe area on phones. The action reuses the shared luminous-glass
+surface, complete refracted rim, and semantic cool/warm tokens; it is not a
+filled primary pill. Do not add a card, supporting copy, idle status, or a
+second headline.
+
+When Jarvis is idle, the warm core breathes and drifts, separate ring layers
+turn at distinct speeds, and small warm lights travel along the existing stage
+lines. Keep the cyan shell and all active voice/activity states recognizable.
+Pointer or available device-orientation input produces only a slight, eased
+stage tilt. Reduced motion keeps a still warm glow with no travelling light;
+hidden tabs pause the renderer. The phone pixel ratio and ambient frame rate
+remain capped by the existing stage-quality policy.
+
 Complete silent account restoration before showing the interactive screen. A
 failure adds one short inline message and changes the same action to **Retry**.
 Keep the existing 140 ms delayed loader, theme behavior, and reduced-motion
