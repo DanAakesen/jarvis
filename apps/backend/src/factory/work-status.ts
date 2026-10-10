@@ -258,3 +258,9 @@ export async function taskRestartReason(app: FastifyInstance, taskId: string): P
   if (status.partial) return 'work_status_unverified';
   return null;
 }
+
+export async function steeringRestartsTask(app: FastifyInstance, taskId: string): Promise<boolean> {
+  if (!app.taskStore) throw new Error('Task safety unavailable');
+  const task = await app.taskStore.get(taskId, 1, 0);
+  return task?.latestSessionEndReason === 'idle_expired';
+}

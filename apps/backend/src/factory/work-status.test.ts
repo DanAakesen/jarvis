@@ -301,6 +301,38 @@ describe('get_work_status evidence and restart safety', () => {
     expect(calls.length).toBeGreaterThan(1);
     for (const call of calls) expect(call).toEqual(['42', 1, 0]);
   });
+  it.each(['closed', 'merged', 'superseded'] as const)('blocks expired-session steering recovery for %s work', async (kind) => {
+    const f = fixture(); f.tasks[0]!.latestSessionEndReason = 'idle_expired';
+    if (kind === 'merged') f.issue.state = 'open';
+    if (kind === 'superseded') {
+      f.tasks[0]!.issueNumber = null;
+      f.issue.body = 'Supersedes Factory task 42.';
+    }
+    const response = await f.app.inject({ method: 'POST', url: '/factory/tasks/42/controls', headers,
+      payload: { action: 'steer', message: 'Continue' } });
+    expect(response.statusCode).toBe(409); expect(f.control).not.toHaveBeenCalled();
+    const confirmed = await f.app.inject({ method: 'POST', url: '/factory/tasks/42/controls', headers,
+      payload: { action: 'steer', message: 'Continue', confirm: true } });
+    expect(confirmed.statusCode).toBe(200);
+    expect(f.control).toHaveBeenCalledWith('42', { action: 'steer', message: 'Continue' });
+  });
+  it('model steering cannot bypass expired-session recovery safety', async () => {
+    const f = fixture(); f.tasks[0]!.latestSessionEndReason = 'idle_expired';
+    const response = await f.app.inject({ method: 'POST', url: '/tools/steer_task', headers,
+      payload: { taskId: '42', message: 'Continue' } });
+    expect(response.json().outcome).toBe('refused'); expect(f.control).not.toHaveBeenCalled();
+  });
+  it('ordinary live steering stays unchanged even for closed linked work', async () => {
+    const f = fixture(); f.tasks[0]!.latestSessionEndReason = 'idle';
+    const response = await f.app.inject({ method: 'POST', url: '/factory/tasks/42/controls', headers,
+      payload: { action: 'steer', message: 'Correct this' } });
+    expect(response.statusCode).toBe(200);
+    expect(f.control).toHaveBeenCalledWith('42', { action: 'steer', message: 'Correct this' });
+    expect(f.github.readIssue).not.toHaveBeenCalled();
+    const tool = await f.app.inject({ method: 'POST', url: '/tools/steer_task', headers,
+      payload: { taskId: '42', message: 'Correct this' } });
+    expect(tool.json().outcome).toBe('ok');
+  });
   it.each([{}, { issueNumber: 8, taskId: '42' }, { query: '' }, { issueNumber: 0 }, { taskId: '0' },
     { taskId: '9223372036854775808' }, { query: 'x'.repeat(101) }])('rejects invalid selector %j', async (payload) => {
     const f = fixture();

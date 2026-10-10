@@ -10,7 +10,7 @@ import { settingsOptions } from '../core/settings.js';
 import { modelsForRole, reasoningForModel } from '../core/model-catalog.js';
 import type { ModelCatalogue } from '@jarvis/contracts';
 import { createGitHubActionsRunClient } from '../github/actions-runs.js';
-import { getWorkStatus, taskRestartReason, workStatusSchema } from './work-status.js';
+import { getWorkStatus, steeringRestartsTask, taskRestartReason, workStatusSchema } from './work-status.js';
 import type { WorkStatusInput } from '@jarvis/contracts';
 import {
   createJarvisIssue,
@@ -373,7 +373,7 @@ async function controlTask(
   assertSqlBigInt(taskId);
   if (action === 'steer' && !message?.trim()) throw new Error('Invalid steering message');
   const controller = requireStore(request.server.taskController, 'Task controls');
-  if (action === 'resume') {
+  if (action === 'resume' || (action === 'steer' && await steeringRestartsTask(request.server, taskId))) {
     const reason = await taskRestartReason(request.server, taskId);
     if (reason) throw new ToolRefusal(`Task restart refused: ${reason}. Dan must review it in task controls; model tools cannot confirm.`);
   }

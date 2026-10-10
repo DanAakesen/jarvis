@@ -687,6 +687,8 @@ PR, or completed matching work superseding an unlinked legacy task. Such work
 requires explicit `confirm: true` on the Dan-only controls route; otherwise
 the route returns 409 with a reason. The resume tool cannot bypass this gate.
 Unverifiable restart safety returns 503 rather than starting duplicate work.
+Steering an idle-expired session uses recovery and therefore shares this gate;
+ordinary steering of a live session is unchanged.
 No migration, GitHub write operation, App permission or web change is required;
 the existing UI displays the refusal as an error until it gains an override prompt.
 

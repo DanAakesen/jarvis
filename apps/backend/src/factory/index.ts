@@ -18,7 +18,7 @@ import type {
   CreateTaskInput, RecordTaskEventInput, TaskControlCommand, TaskEventMessage, TaskListFilters,
 } from './task-store.js';
 import { factoryTools } from './tools.js';
-import { taskRestartReason } from './work-status.js';
+import { steeringRestartsTask, taskRestartReason } from './work-status.js';
 import { repositoryTools } from './repository-tools.js';
 import { registerReleaseViewRoutes } from './release-view.js';
 import {
@@ -347,7 +347,13 @@ export const factoryModule: BackendModule = {
       if (request.body.action === 'steer' && !request.body.message?.trim()) {
         return reply.code(400).send({ error: 'Steering message cannot be empty' });
       }
-      if (request.body.action === 'resume' || request.body.action === 'recover') {
+      let steeringRestarts = false;
+      if (request.body.action === 'steer') {
+        try { steeringRestarts = await steeringRestartsTask(app, request.params.id); }
+        catch { return reply.code(503).send({ error: 'Task restart safety could not be verified',
+          reason: 'work_status_unverified' }); }
+      }
+      if (request.body.action === 'resume' || request.body.action === 'recover' || steeringRestarts) {
         const reason = await taskRestartReason(app, request.params.id);
         if (reason === 'task_not_found') return reply.code(404).send({ error: 'Task not found', reason });
         if (reason === 'work_status_unverified') {
@@ -356,9 +362,9 @@ export const factoryModule: BackendModule = {
         if (reason && (request.body.confirm !== true ||
             !request.principal || request.agentPrincipal)) {
           const explanations: Record<string, string> = {
-            issue_closed: 'This task’s linked issue is closed. Recover/resume requires confirm: true.',
-            pull_request_merged: 'This task’s linked pull request is merged. Recover/resume requires confirm: true.',
-            superseded_legacy_task: 'This unlinked task has been superseded by completed work. Recover/resume requires confirm: true.',
+            issue_closed: 'This task’s linked issue is closed. Restarting (recover, resume or expired-session steering) requires confirm: true.',
+            pull_request_merged: 'This task’s linked pull request is merged. Restarting (recover, resume or expired-session steering) requires confirm: true.',
+            superseded_legacy_task: 'This unlinked task has been superseded by completed work. Restarting (recover, resume or expired-session steering) requires confirm: true.',
           };
           return reply.code(409).send({ error: explanations[reason] ?? 'Task restart requires Dan’s explicit confirmation.', reason,
             confirmationRequired: true });
