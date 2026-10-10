@@ -78,7 +78,7 @@ export function JarvisStage({
       : null;
     observer?.observe(appShell!, {
       attributes: true,
-      attributeFilter: ['data-voice-active', 'data-voice-has-windows'],
+      attributeFilter: ['data-voice-active', 'data-voice-has-windows', 'style'],
     });
     const onMotionChange = (event: MediaQueryListEvent) => {
       reduce = event.matches;

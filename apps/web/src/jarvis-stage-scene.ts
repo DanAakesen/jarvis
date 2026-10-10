@@ -245,6 +245,7 @@ function createJarvisStageSceneWithRenderer(
   const chamber = new THREE.Group();
   anchor.add(chamber);
   const panelCount = 12;
+  const chamberPanels: THREE.Mesh[] = [];
   const start = Math.PI * 0.38;
   const span = Math.PI * 1.24;
   for (let index = 0; index < panelCount; index += 1) {
@@ -256,6 +257,7 @@ function createJarvisStageSceneWithRenderer(
     );
     panel.position.y = 7.7;
     chamber.add(panel);
+    chamberPanels.push(panel);
     const edge = angle + width;
     const rib = new THREE.Mesh(new RoundedBoxGeometry(0.1, 15.6, 0.18, 2, 0.025), metal);
     rib.position.set(Math.sin(edge) * 14.84, 7.5, Math.cos(edge) * 14.84);
@@ -476,16 +478,23 @@ function createJarvisStageSceneWithRenderer(
     camera.updateProjectionMatrix();
     camera.updateMatrixWorld(true);
     anchor.scale.setScalar(mobile ? 0.7 : 1);
+    // Extend the phone walls above the viewport instead of exposing a curved ambient-background band.
+    for (const panel of chamberPanels) {
+      panel.scale.y = mobile ? 2 : 1;
+      panel.position.y = mobile ? 15.7 : 7.7;
+    }
     anchor.updateMatrixWorld(true);
     cameraRay.set(0, 1 - 0.46 * 2, 0.5).unproject(camera).sub(camera.position).normalize();
     const rearWorld = camera.position.clone().addScaledVector(cameraRay, (-5 - camera.position.z) / cameraRay.z);
     architecture.position.copy(anchor.worldToLocal(rearWorld));
     architecture.quaternion.copy(camera.quaternion);
 
-    // The orb stays where it is on every screen (Dan, 8 October): windows and controls move around it, never the orb.
+    const dock = mobile && current.voiceActive ? getComputedStyle(host.closest('.app-shell') ?? host) : null;
+    const dockRadius = Number.parseFloat(dock?.getPropertyValue('--jarvis-orb-dock-radius') ?? '') || 0;
+    const dockBottom = Number.parseFloat(dock?.getPropertyValue('--jarvis-orb-dock-bottom') ?? '') || 0;
     const screenX = 0.5;
-    const screenY = 0.46;
-    const pixelRadius = mobile
+    const screenY = dockRadius > 0 ? (height - dockBottom - dockRadius) / height : 0.46;
+    const pixelRadius = dockRadius > 0 ? dockRadius : mobile
       ? Math.min(width * 0.28, height * 0.16)
       : Math.min(width * 0.18, height * 0.18);
     cameraRay.set(screenX * 2 - 1, 1 - screenY * 2, 0.5).unproject(camera).sub(camera.position).normalize();

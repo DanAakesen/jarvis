@@ -23,9 +23,14 @@ export function MobileMenu({ open, onClose, onFolio, onContext }: {
   useEffect(() => {
     if (!open) return;
     sheet.current?.focus({ preventScroll: true });
-    const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') onClose(); };
-    document.addEventListener('keydown', onKey);
-    return () => document.removeEventListener('keydown', onKey);
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        onClose();
+      }
+    };
+    document.addEventListener('keydown', onKey, true);
+    return () => document.removeEventListener('keydown', onKey, true);
   }, [onClose, open]);
   return (
     <div className="mobile-menu" hidden={!open}>

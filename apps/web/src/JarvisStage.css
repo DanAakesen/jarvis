@@ -69,6 +69,9 @@
 
 @media (max-width: 700px), (max-height: 500px) and (pointer: coarse) {
   .jarvis-stage[data-failed="true"]::after { width: clamp(140px, 36vw, 240px); }
+  .app-shell[data-phone="true"][data-voice-active="true"] .jarvis-stage[data-failed="true"]::after {
+    top: auto; bottom: var(--jarvis-orb-dock-bottom); width: calc(2 * var(--jarvis-orb-dock-radius)); transform: translateX(-50%);
+  }
   .jarvis-stage-fallback { padding: 8px 10px; }
 }
 
