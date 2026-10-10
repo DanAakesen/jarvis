@@ -207,7 +207,8 @@ export const coreModule: BackendModule = {
         request.raw.once('aborted', abortOnRequest);
         reply.raw.once('close', abortOnClose);
         const presentation = startWorkPresentation(tool.name, request.body, request, activityId,
-          messageId ?? (typeof voiceItemHeader === 'string' ? voiceItemHeader : activityId), controller.signal);
+          messageId ?? (typeof voiceItemHeader === 'string' ? voiceItemHeader : activityId), controller.signal,
+          voiceItemHeader !== undefined || phoneSessionId !== undefined ? 'voice' : 'chat');
         let outcome: ToolCallOutcome = 'ok';
         let result: unknown;
         try {
