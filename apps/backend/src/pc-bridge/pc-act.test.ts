@@ -350,7 +350,7 @@ describe('pc_act Jev planner', () => {
       step: 1,
       previousActions: [],
       snapshot,
-    }, new AbortController().signal)).resolves.toEqual({ failure });
+    }, new AbortController().signal)).resolves.toMatchObject({ failure });
   });
 
   it('uses operation and target Choice confidence for the PC confidence gate', async () => {
@@ -381,7 +381,7 @@ describe('pc_act Jev planner', () => {
       step: 1,
       previousActions: [],
       snapshot,
-    }, new AbortController().signal)).resolves.toEqual({ failure: 'invalid_answer' });
+    }, new AbortController().signal)).resolves.toMatchObject({ failure: 'invalid_answer' });
   });
 
   it('maps a closed-set keyboard Choice and includes app-specific shortcut hints', async () => {

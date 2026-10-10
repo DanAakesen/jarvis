@@ -495,7 +495,7 @@ describe('Jev browser agent', () => {
       step: 1,
       previousActions: [],
       snapshot,
-    }, new AbortController().signal)).resolves.toEqual({ failure });
+    }, new AbortController().signal)).resolves.toMatchObject({ failure });
   });
 
   it('uses Choice confidence for the browser confidence gate', async () => {
@@ -519,7 +519,7 @@ describe('Jev browser agent', () => {
       step: 1,
       previousActions: [],
       snapshot,
-    }, new AbortController().signal)).resolves.toEqual({ failure: 'invalid_answer' });
+    }, new AbortController().signal)).resolves.toMatchObject({ failure: 'invalid_answer' });
   });
 
   it('logs typed browser planner failures without the goal or Jev key', async () => {

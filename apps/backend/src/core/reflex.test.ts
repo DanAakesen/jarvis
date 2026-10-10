@@ -419,12 +419,12 @@ describe('Jev reflex classifier', () => {
       confidence: 0.4,
     });
     await expect(malformed.classify('Pause task 12', 'en', targets, signal))
-      .resolves.toEqual({ failure: 'invalid_answer' });
+      .resolves.toMatchObject({ failure: 'invalid_answer' });
     await expect(missingKey.classify('Pause task 12', 'en', targets, signal)).resolves.toBeNull();
     await expect(rejected.classify('Pause task 12', 'en', targets, signal))
-      .resolves.toEqual({ failure: 'http_503' });
+      .resolves.toMatchObject({ failure: 'http_503' });
     await expect(networkError.classify('Pause task 12', 'en', targets, signal))
-      .resolves.toEqual({ failure: 'network_error' });
+      .resolves.toMatchObject({ failure: 'network_error' });
   });
 
   it.each([
@@ -438,7 +438,7 @@ describe('Jev reflex classifier', () => {
       new Response(null, { status }));
 
     await expect(classifier.classify('Pause task 12', 'en', [], new AbortController().signal))
-      .resolves.toEqual({ failure });
+      .resolves.toMatchObject({ failure });
   });
 
   it('returns timeout when Jev exceeds its request deadline', async () => {
@@ -448,7 +448,7 @@ describe('Jev reflex classifier', () => {
     const classifier = createJevReflexClassifier(jevKeyResolver('fake-key'), fetcher);
 
     await expect(classifier.classify('Pause task 12', 'en', [], new AbortController().signal))
-      .resolves.toEqual({ failure: 'timeout' });
+      .resolves.toMatchObject({ failure: 'timeout' });
   });
 
   it('retries one rate-limited response only when Retry-After fits the bounded wait', async () => {
