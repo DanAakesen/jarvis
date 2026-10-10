@@ -19,6 +19,17 @@ The nine design areas and where each stands. **Confirmed** = Dan's requirement o
 
 ## Decision log
 
+P9-59 (10 October 2026): register the sensitive `renew_credential` tool in the
+always-present core module and reuse the route's forced Codex-renewal callback
+and credential-status store. Require `runConfirmed('other', ...)` before any
+renewal side effect; refuse unknown names and missing renewal, status, or Now
+services. Relay persisted status and only static outcome-specific next steps,
+including the sign-in instruction on definitive failure. Keep audit arguments
+and results redacted, and name this tool in shared instructions only because
+core always registers it. No contract, migration, App permission, or web change
+is required. Focused tool, refusal, confirmation, parity, and redaction tests
+pass offline; live Now/Foundry and human sign-in acceptance remain unverified.
+
 P9-57 (10 October 2026): reuse `WorkspacePinStore.list` and the existing
 acknowledged workspace broker for owner-scoped saved-pin discovery and restore.
 Keep the tools read/restore-only: pin/unpin remain page-owned. Return bounded
