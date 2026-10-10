@@ -3198,7 +3198,7 @@ a.task-chip:hover { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--glass-e
   --selection-pressed: var(--state-selected-pressed);
 }
 @media (hover: hover) {
-  :is(.rail-link, .sidebar-link, .topbar-icon-button, .camera-control-button, .settings-link,
+  .app-shell :is(.rail-link, .sidebar-link, .topbar-icon-button, .camera-control-button, .settings-link,
     .presence-chip-trigger, .presence-option, .presence-mode-card, .mobile-menu-link,
     .workspace-tab, .workspace-tab-item, .workspace-arrangement-options button,
     .folio-kind, .usage-segmented button, .advanced-segmented button):hover:not(:disabled) {
@@ -3206,7 +3206,7 @@ a.task-chip:hover { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--glass-e
     box-shadow: none;
   }
 }
-:is(.rail-link, .sidebar-link, .topbar-icon-button, .camera-control-button, .settings-link,
+.app-shell :is(.rail-link, .sidebar-link, .topbar-icon-button, .camera-control-button, .settings-link,
   .presence-chip-trigger, .presence-option, .presence-mode-card, .mobile-menu-link,
   .workspace-tab, .workspace-tab-item, .workspace-arrangement-options button,
   .folio-kind, .usage-segmented button, .advanced-segmented button):active:not(:disabled) {

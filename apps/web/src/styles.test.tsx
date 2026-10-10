@@ -280,6 +280,8 @@ describe('shared glass tokens', () => {
     expect(source).toContain('--selection-pressed: var(--state-selected-pressed)');
     expect(source).toContain('background: var(--selection-pressed, var(--glass-pressed))');
     expect(source).toContain('@media (hover: hover)');
+    expect(source).toMatch(/\.app-shell :is\(\.rail-link,[^{}]+\):active:not\(:disabled\) \{\s*background: var\(--selection-pressed, var\(--glass-pressed\)\);/);
+    expect(source).toMatch(/@media \(hover: hover\) \{\s*\.app-shell :is\(\.rail-link,[^{}]+\):hover:not\(:disabled\)/);
     expect(source).toContain('@media (pointer: coarse) { .presence-chip-trigger { min-width: 44px; min-height: 44px; justify-content: center; } }');
   });
 
