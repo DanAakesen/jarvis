@@ -435,6 +435,7 @@ export async function executeReflexAction(
       result = { error: 'Tool execution failed' };
     }
   } finally {
+    if (outcome === 'error') request.server.systemHealthDiagnostics.record('failed');
     presentation.finish(result, outcome === 'ok');
   }
   try {
