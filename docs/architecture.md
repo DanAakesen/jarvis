@@ -2295,6 +2295,18 @@ then focuses it. `PATCH /folio/:id` pins or renames an item. Confirmed
 and its history remain available. The shared sensitive tools `folio_search`
 and `folio_open` provide the same owner-scoped search and broker-backed reopen
 behavior to Jarvis without retaining search arguments or results in tool audit.
+P9-56 adds sensitive `folio_manage` with a plain root object schema: exactly one
+`id` or `query`, `action` (`rename`, `pin`, `unpin`, `delete`), and `title` only
+for rename. It shares unique-query resolution with `folio_open` and reuses
+`FolioStore.update/delete`; ambiguity asks Dan to choose with bounded untrusted
+titles. Reversible changes need no approval. Deletion fails closed if presence
+or Now approval is unavailable, refuses away/on-the-move states, and uses the
+existing `runConfirmed('delete', ...)` flow naming the title and id. Duplicate
+pending deletions are refused; after approval, presence and the title are
+rechecked before removing the Folio index entry. Source artifacts/history are
+retained and no deleted entry is returned by Folio search. Outputs mark titles
+as untrusted; arguments and results are redacted from the tool audit. No
+migration, GitHub App permission, dependency or web change is needed.
 The Folio rail and pane are a separate UI task.
 
 ### Sandbox credentials

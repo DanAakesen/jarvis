@@ -19,6 +19,16 @@ The nine design areas and where each stands. **Confirmed** = Dan's requirement o
 
 ## Decision log
 
+P9-56 (10 October 2026): reuse the Folio route stores for Jarvis rename,
+pin/unpin and removal, preserving the existing index-only deletion semantics:
+source artifacts and history remain available, but Folio no longer lists the
+entry. Deletion uses the existing item-naming Now approval service and fails
+closed without verified present status; recheck presence and title after
+approval. Keep action alternatives in execution code, not root schema
+combinators (L121). The shared instruction names no optional tool; returned
+titles are untrusted and audit content is redacted. Acceptance paths are tested
+offline; live model/Now use remains unverified.
+
 P9-55 (10 October 2026): reuse `settingsOptionsForCatalogue` for settings-tool
 discovery parity with `GET /settings`, and derive field guidance and numeric
 bounds from the existing patch schema. Filter settings, options and fields

@@ -336,6 +336,11 @@ export const folioOpenToolSchema = Object.freeze({
   maxProperties: 1,
   additionalProperties: false,
 });
+export const folioManageToolSchema = Object.freeze(object({
+  ...folioOpenToolSchema.properties,
+  action: { type: 'string', enum: ['rename', 'pin', 'unpin', 'delete'] },
+  title: folioPatchSchema.properties.title,
+}, ['action']));
 const htmlArtifactFrameSchemaValue = object({
   widthPx: { type: 'integer', minimum: 1, maximum: 8192 },
   heightPx: { type: 'integer', minimum: 1, maximum: 8192 },
