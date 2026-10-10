@@ -19,6 +19,19 @@ The nine design areas and where each stands. **Confirmed** = Dan's requirement o
 
 ## Decision log
 
+P9-66 (10 October 2026): keep conversation uploads in the existing private
+`artifacts` Blob container under `attachments/`, with SQL-owned metadata and
+owner-only short-lived read URLs. Re-encode images with Sharp to remove metadata;
+use pdfjs-dist for bounded PDF text, fast-xml-parser for bounded OOXML text, and
+the existing fflate for Office ZIP containers. The multipart plugin enforces
+request/file parsing limits. Store only bounded extracted text or image
+descriptions, mark extraction failures on the attachment, and expose content to
+the agent solely as explicitly untrusted context or through sensitive,
+redacted-read tools. Use 24-hour expiry for unsent uploads and configurable
+1–90-day retention (default 30) for sent files. Offline route, extraction,
+migration, retention and tool-parity checks pass; live model and Blob behavior
+remain unverified.
+
 P9-59 (10 October 2026): register the sensitive `renew_credential` tool in the
 always-present core module and reuse the route's forced Codex-renewal callback
 and credential-status store. Require `runConfirmed('other', ...)` before any
@@ -826,6 +839,7 @@ Mistakes made so far and the rule that prevents each one.
 | **L126** | One huge ACP line hung a Factory task for an hour | Task 10 (8 October, the calendar-approval change Jarvis requested) went silent at 03:37 right after Codex ran `cat` on several large docs, and failed on the runner's 60-minute timeout. The runner spawned Codex with asyncio's default 64 KiB stream limit; the tool-output ACP message was one longer line, so `readline()` raised, the unobserved reader task died, nobody drained stdout and Codex blocked writing. The ACP pipe now allows 32 MiB lines, and an over-limit line is dropped with an `acp_message_dropped` event while reading continues. Lesson: stream readers on agent pipes must survive oversized messages; a dead reader must never look like a busy agent. |
 | **L127** | The research smoke probe timed out at random | After L125, the deploy for #591 still failed its smoke gate: the research dry run (a real Codex call through the runner) was cancelled at its 20-second budget, while a normal call takes 15-25 s (it passed in 21 s at 04:29). The probe now has 45 s, the gate's request 60 s, and the workflow prints each check's id and status to the log so a failed gate names its check. Lesson: size a probe's timeout from observed latency with headroom, and make a gate say which check failed. |
 | **L128** | Wake word: a 10-second gap before the chime | Dan heard the chime about 10 s after saying "Wake up Jarvis". A timing probe with Speech SDK 1.52.0, his `.table` model and real-time push audio showed the keyword detected at once, but `KeywordRecognizer.Dispose()` blocked for 10.01 s because the bridge never stopped the recognition session after a detection. Calling `StopRecognitionAsync()` before disposing cut that to 0.13 s. Always stop a Speech SDK recognizer before disposing it, and time detection and teardown separately when diagnosing latency. |
+| **L129** | File and screenshot contents are untrusted prompt data | P9-66 sends extracted document text or a bounded image description to the hosted agent so Jarvis can answer file questions. | Treat all file-derived content as data, label it untrusted, keep it out of logs and tool-call audits, and expose further reads only through owner-scoped sensitive tools. |
 | **L124** | Folio ids came back upper case from SQL | After #564 deployed, `GET /folio` returned 503 for Dan: migration 0035 built `item_id` as `kind:` + `CONVERT(nvarchar(36), id)`, which SQL Server renders in upper case, while the store only accepts lower-case GUIDs, so every stored item failed validation. Same root cause as #536's job ids. Migration 0036 lower-cases existing ids and the store normalises ids on every read and write. Lesson: never build or compare GUID text from SQL Server without `LOWER()`; tests against the real database must assert the id shape round-trips. |
 | **L125** | The Google smoke probe used an endpoint Jarvis has no scope for | Every deploy after P9-39 (#562) failed its smoke gate with Google "down", while Dan's calendar tools worked. The probe read `/users/me/calendarList`, which needs `calendar.readonly`; Jarvis holds only `calendar.events` (infra/setup-google.ps1), so it always got 403. The probe now reads one primary-calendar event, the same endpoint and scope the calendar tools use. Lesson: a health probe must exercise the feature's own endpoint and scopes, and a new gate should be checked against a known-good system before it blocks deploys. |
 

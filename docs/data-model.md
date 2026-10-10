@@ -1,6 +1,6 @@
 # Data model
 
-Version 1, updated 8 October 2026 for P6-22, P7-01, P7-02, P7-03, P7-08, P7-13, P7-15, P7-22, P7-37, P7-40, P7-44, P8-45 and P9-30. Scope: the Jarvis core, background jobs, Software Factory, Teams calling, notification and browser-confirmation state, Google Calendar/Gmail tools, the GitHub vault's derived search index, long-term memory, image metadata, generated HTML report artifacts and explicitly pinned workspace views. Azure SQL is the source of truth for operational records; Dan's private GitHub vault is the source of truth for durable knowledge. Blob Storage holds large files referenced from SQL. Requirements: [PRODUCT.md](../PRODUCT.md); system: [architecture.md](architecture.md).
+Version 1, updated 10 October 2026 for P6-22, P7-01, P7-02, P7-03, P7-08, P7-13, P7-15, P7-22, P7-37, P7-40, P7-44, P8-45, P9-30 and P9-66. Scope: the Jarvis core, background jobs, Software Factory, Teams calling, notification and browser-confirmation state, Google Calendar/Gmail tools, the GitHub vault's derived search index, long-term memory, image metadata, generated HTML report artifacts, explicitly pinned workspace views and private conversation attachments. Azure SQL is the source of truth for operational records; Dan's private GitHub vault is the source of truth for durable knowledge. Blob Storage holds large files referenced from SQL. Requirements: [PRODUCT.md](../PRODUCT.md); system: [architecture.md](architecture.md).
 
 ## Migration infrastructure
 
@@ -65,6 +65,13 @@ deletion while retention is unresolved. `0018_tool_call_refused_outcome.sql` exp
 existing tool-call outcome constraint to include runtime `refused` records, which
 the Usage page includes in its daily per-tool count. Its down migration refuses
 to restore the old constraint while refused rows exist.
+P9-66 adds `dbo.conversation_attachments` in migration `0039`, with a reversible
+down batch. Rows are owner-scoped, optionally link to one saved message, and
+store only bounded text/description, a SHA-256 digest, and a private
+`attachments/` blob name. Uploads not sent expire after 24 hours; linked
+attachments expire after configurable 1–90 days (default 30). The hourly cleanup
+deletes expired blobs before rows; the owner can also delete an attachment
+immediately. Attachment history exposes only ID, name, content type and size.
 P7-40 adds group 11 in `0021_vault_memory_index.sql`: heading chunks indexed by
 vault path and blob SHA, with an optional `vector(1536)` column when available.
 P7-44 adds nullable `embedding_json` to `memories` and `vault_chunks` in

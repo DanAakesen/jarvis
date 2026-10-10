@@ -2,6 +2,7 @@ import { Writable } from 'node:stream';
 import type { AddressInfo } from 'node:net';
 import type { ServerResponse } from 'node:http';
 import type { FastifyRequest } from 'fastify';
+import sharp from 'sharp';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { buildApp, type BuildAppOptions } from '../app.js';
 import { loadConfig } from '../config.js';
@@ -248,6 +249,66 @@ describe('conversation routes', () => {
     });
     expect(response.statusCode).toBe(415);
     expect(saveUpload).not.toHaveBeenCalled();
+  });
+
+  it('marks extraction failures without failing a valid upload', async () => {
+    const id = '7b96c6a9-9f80-4a8b-8a73-51517fe37512';
+    const complete = vi.fn();
+    const saveUpload = vi.fn(async () => ({
+      id, name: 'screen.png', contentType: 'image/png', size: 1,
+    }));
+    const app = createApp(undefined, {
+      conversationAttachments: { saveUpload, complete } as never,
+      attachmentVision: async () => { throw new Error('private model error'); },
+    });
+    const boundary = 'jarvis-image-test';
+    const png = await sharp({ create: { width: 1, height: 1, channels: 3, background: '#fff' } })
+      .png().toBuffer();
+    const prefix = Buffer.from([
+      `--${boundary}`,
+      'Content-Disposition: form-data; name="file"; filename="screen.png"',
+      'Content-Type: image/png',
+      '',
+      '',
+    ].join('\r\n'));
+    const payload = Buffer.concat([
+      prefix,
+      png,
+      Buffer.from(`\r\n--${boundary}--\r\n`),
+    ]);
+    const response = await app.inject({
+      method: 'POST',
+      url: '/conversation/attachments',
+      headers: { ...headers, 'content-type': `multipart/form-data; boundary=${boundary}` },
+      payload,
+    });
+    expect(response.statusCode).toBe(201);
+    expect(response.json()).toMatchObject({ id, status: 'failed' });
+    expect(complete).toHaveBeenCalledWith(id, config.auth.ownerObjectId, { status: 'failed' });
+  });
+
+  it('returns owner-only short-lived URLs and deletes attachments', async () => {
+    const id = '7b96c6a9-9f80-4a8b-8a73-51517fe37512';
+    const readUrl = vi.fn(async () => 'https://private.invalid/signed');
+    const remove = vi.fn(async () => true);
+    const app = createApp(undefined, {
+      conversationAttachments: { readUrl, delete: remove } as never,
+    });
+    const urlResponse = await app.inject({
+      method: 'GET',
+      url: `/conversation/attachments/${id}/url`,
+      headers,
+    });
+    expect(urlResponse.statusCode).toBe(200);
+    expect(urlResponse.headers['cache-control']).toBe('no-store');
+    expect(urlResponse.json()).toEqual({ url: 'https://private.invalid/signed' });
+    const deleteResponse = await app.inject({
+      method: 'DELETE',
+      url: `/conversation/attachments/${id}`,
+      headers,
+    });
+    expect(deleteResponse.statusCode).toBe(204);
+    expect(remove).toHaveBeenCalledWith(config.auth.ownerObjectId, id);
   });
 
   it('interrupts streamed text, saves it as interrupted, and restarts once with the steering message', async () => {

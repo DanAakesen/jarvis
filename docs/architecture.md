@@ -2154,6 +2154,29 @@ role assignment, Blob upload and deployed rendering remain unverified. Video
 generation is deferred separately. Artifact retention is unresolved and no
 automatic deletion is implemented.
 
+### P9-66 conversation attachments
+
+The authenticated, owner-only `/conversation/attachments` multipart route accepts
+one file, checks its extension, declared MIME type, magic bytes and size, and
+stores sanitized bytes under `attachments/` in the existing private `artifacts`
+container. Images are decoded and re-encoded before storage so EXIF/location
+metadata is removed. PDF, DOCX, XLSX and text formats are parsed within bounded
+input, output and time limits; images are described by the existing vision role.
+Extraction errors produce a failed attachment state and a content-free warning,
+not a failed chat turn.
+
+`dbo.conversation_attachments` stores owner-scoped metadata, bounded extracted
+text or image description and expiry. Unsent uploads expire after 24 hours;
+sent files use the 1–90 day `CONVERSATION_ATTACHMENT_RETENTION_DAYS` setting
+(default 30). Hourly cleanup removes expired blobs before their rows. Dan can
+attach up to five unlinked uploads to a saved chat message; the hosted agent
+receives bounded file context as untrusted data and may use the sensitive
+`attachment_list`/`attachment_read` tools for details in chat or voice. Owners
+receive only short-lived private read URLs. File bytes, extracted text and
+descriptions are excluded from ordinary logs and tool-call audit records.
+Offline route, store, extraction, tool-parity and agent tests cover the flow;
+live model and Azure Blob acceptance remain unverified.
+
 P2-13 compares task-branch commits before and after each agent turn. An
 `end_turn` without a new task-branch commit emits `session_question` with the
 last agent message. The backend records the question and moves a Running or
