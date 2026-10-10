@@ -6,6 +6,14 @@ export interface ConversationAgentInput {
   readonly text: string;
   readonly language: 'da' | 'en';
   readonly screenContext?: string;
+  readonly attachments?: readonly {
+    readonly id: string;
+    readonly name: string;
+    readonly contentType: string;
+    readonly size: number;
+    readonly status: 'uploaded' | 'ready' | 'failed';
+    readonly context: string;
+  }[];
   readonly reflexNote?: string;
   readonly steering?: boolean;
 }

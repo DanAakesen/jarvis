@@ -18,6 +18,7 @@ export interface ScreenVisionResult {
 export interface ScreenVisionModel {
   describe(input: {
     readonly image: Buffer;
+    readonly contentType?: 'image/jpeg' | 'image/png' | 'image/webp';
     readonly model: string;
     readonly reasoningEffort?: string;
     readonly signal: AbortSignal;

@@ -14,7 +14,9 @@ import type {
   ConversationSession,
   ConversationStore,
   ConversationToolCall,
+  ConversationAttachmentReference,
 } from '../core/conversation-store.js';
+import { InvalidConversationAttachmentsError } from '../core/conversation-store.js';
 
 const conversationSearchSetupPath = fileURLToPath(
   new URL('../../../../db/migrations/setup/0032_conversation_search.sql', import.meta.url),
@@ -94,6 +96,69 @@ function messageFromRow(row: MessageRow): ConversationMessage {
   };
 }
 
+interface HistoryAttachmentRow extends ConversationAttachmentReference {
+  message_id: string;
+}
+
+async function addMessageWithAttachments(
+  pool: sql.ConnectionPool,
+  input: Parameters<ConversationStore['addMessage']>[0],
+): Promise<ConversationMessage | null> {
+  const ids = input.attachmentIds ?? [];
+  if (input.role !== 'dan' || ids.length > 5 ||
+      new Set(ids).size !== ids.length ||
+      ids.some((id) => !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u.test(id)) ||
+      !input.attachmentOwnerObjectId ||
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu.test(input.attachmentOwnerObjectId) ||
+      !Number.isInteger(input.attachmentRetentionDays) ||
+      input.attachmentRetentionDays! < 1 || input.attachmentRetentionDays! > 90) {
+    throw new InvalidConversationAttachmentsError();
+  }
+  const transaction = new sql.Transaction(pool);
+  await transaction.begin(sql.ISOLATION_LEVEL.SERIALIZABLE);
+  try {
+    const messageResult = await transaction.request()
+      .input('sessionId', sql.BigInt, BigInt(input.sessionId))
+      .input('role', sql.NVarChar(16), input.role)
+      .input('text', sql.NVarChar(sql.MAX), input.text)
+      .input('model', sql.NVarChar(100), input.model)
+      .input('language', sql.NVarChar(8), input.language ?? null)
+      .input('interrupted', sql.Bit, input.interrupted ?? false)
+      .input('sourceItemId', sql.NVarChar(128), input.sourceItemId ?? null)
+      .input('allowEndedSession', sql.Bit, input.allowEndedSession ?? false)
+      .query<MessageRow>(`INSERT INTO dbo.messages
+          (jarvis_session_id, role, text, model, language, interrupted, source_item_id)
+        OUTPUT CONVERT(varchar(20), INSERTED.id) AS id,
+          CONVERT(varchar(20), INSERTED.jarvis_session_id) AS session_id,
+          INSERTED.role, INSERTED.text, INSERTED.model, INSERTED.at
+        SELECT id, @role, @text, @model, @language, @interrupted, @sourceItemId
+        FROM dbo.jarvis_sessions
+        WHERE id = @sessionId AND (ended_at IS NULL OR @allowEndedSession = 1);`);
+    const row = messageResult.recordset[0];
+    if (!row) {
+      await transaction.commit();
+      return null;
+    }
+    const attachRequest = transaction.request()
+      .input('messageId', sql.BigInt, BigInt(row.id))
+      .input('owner', sql.UniqueIdentifier, input.attachmentOwnerObjectId)
+      .input('retentionDays', sql.Int, input.attachmentRetentionDays);
+    ids.forEach((id, index) => attachRequest.input(`id${index}`, sql.VarChar(36), id));
+    const linked = await attachRequest.query<{ id: string }>(`UPDATE dbo.conversation_attachments WITH (UPDLOCK, HOLDLOCK)
+      SET message_id = @messageId, expires_at = DATEADD(day, @retentionDays, SYSUTCDATETIME())
+      OUTPUT INSERTED.id
+      WHERE owner_object_id = @owner AND message_id IS NULL
+        AND status IN (N'ready', N'failed') AND expires_at > SYSUTCDATETIME()
+        AND id IN (${ids.map((_, index) => `@id${index}`).join(', ')});`);
+    if (linked.recordset.length !== ids.length) throw new InvalidConversationAttachmentsError();
+    await transaction.commit();
+    return messageFromRow(row);
+  } catch (error) {
+    try { await transaction.rollback(); } catch { /* Preserve the original attachment error. */ }
+    throw error;
+  }
+}
+
 export function createConversationStore(pool: sql.ConnectionPool): ConversationStore {
   let initialized = false;
   let fullTextSearchAvailable = false;
@@ -171,6 +236,7 @@ export function createConversationStore(pool: sql.ConnectionPool): ConversationS
     },
 
     async addMessage(input) {
+      if (input.attachmentIds?.length) return addMessageWithAttachments(pool, input);
       const result = await pool.request()
         .input('sessionId', sql.BigInt, BigInt(input.sessionId))
         .input('role', sql.NVarChar(16), input.role)
@@ -276,9 +342,16 @@ export function createConversationStore(pool: sql.ConnectionPool): ConversationS
               ELSE NULL END AS artifact_id
           FROM dbo.tool_calls AS tc
           INNER JOIN @history AS h ON h.id = tc.message_id
-          ORDER BY tc.message_id, tc.id;`);
+          ORDER BY tc.message_id, tc.id;
+
+          SELECT CONVERT(varchar(20), ca.message_id) AS message_id,
+            ca.id, ca.file_name AS name, ca.content_type AS contentType, ca.size_bytes AS size
+          FROM dbo.conversation_attachments AS ca
+          INNER JOIN @history AS h ON h.id = ca.message_id
+          ORDER BY ca.message_id, ca.created_at, ca.id;`);
       const messageRows = (result.recordsets[0] ?? []) as HistoryRow[];
       const toolCallRows = (result.recordsets[1] ?? []) as ToolCallRow[];
+      const attachmentRows = (result.recordsets[2] ?? []) as HistoryAttachmentRow[];
       const hasMore = messageRows.length > limit;
       const pageRows = hasMore ? messageRows.slice(1) : messageRows;
       const callsByMessage = new Map<string, ConversationToolCall[]>();
@@ -303,6 +376,8 @@ export function createConversationStore(pool: sql.ConnectionPool): ConversationS
         interrupted: row.interrupted,
         voiceMinutes: row.voice_minutes,
         toolCalls: callsByMessage.get(row.id) ?? [],
+        attachments: attachmentRows.filter((attachment) => attachment.message_id === row.id)
+          .map(({ id, name, contentType, size }) => ({ id, name, contentType, size })),
       }));
       return {
         messages,

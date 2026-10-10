@@ -2,6 +2,7 @@ import { Writable } from 'node:stream';
 import type { AddressInfo } from 'node:net';
 import type { ServerResponse } from 'node:http';
 import type { FastifyRequest } from 'fastify';
+import sharp from 'sharp';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { buildApp, type BuildAppOptions } from '../app.js';
 import { loadConfig } from '../config.js';
@@ -29,6 +30,7 @@ const history = {
     interrupted: false,
     voiceMinutes: null,
     toolCalls: [{ id: '90', tool: 'factory_create_task', outcome: 'refused' as const, taskId: null }],
+    attachments: [],
   }],
   nextCursor: null,
 };
@@ -110,6 +112,7 @@ describe('conversation routes', () => {
       conversationStore: store,
       conversationAgent: chatAgent,
     });
+
     apps.push(app);
 
     const response = await app.inject({
@@ -145,6 +148,167 @@ describe('conversation routes', () => {
       model: null,
       language: 'da',
     });
+  });
+
+  it('links owner-owned attachments to the Dan message and forwards untrusted summaries', async () => {
+    const store = storeFixture();
+    const id = '7b96c6a9-9f80-4a8b-8a73-51517fe37512';
+    const attachments = {
+      retentionDays: 30,
+      getModelContext: vi.fn(async () => [{
+        id, name: 'notes.txt', contentType: 'text/plain', size: 24,
+        status: 'ready' as const, context: 'Quarterly results.',
+      }]),
+    };
+    const chatAgent = { stream: vi.fn(async function* () { yield 'The file says quarterly results.'; }) };
+    const app = createApp(store, {
+      conversationAgent: chatAgent,
+      conversationAttachments: attachments as never,
+    });
+    const response = await app.inject({
+      method: 'POST',
+      url: '/conversation/sessions/41/turns',
+      headers,
+      payload: { text: 'Summarize this file', attachmentIds: [id] },
+    });
+    expect(response.statusCode).toBe(200);
+    expect(attachments.getModelContext).toHaveBeenCalledWith(config.auth.ownerObjectId, [id]);
+    expect(store.addMessage).toHaveBeenCalledWith(expect.objectContaining({
+      role: 'dan',
+      attachmentIds: [id],
+      attachmentOwnerObjectId: config.auth.ownerObjectId,
+      attachmentRetentionDays: 30,
+    }));
+    expect(chatAgent.stream).toHaveBeenCalledWith(expect.objectContaining({
+      attachments: [{
+        id, name: 'notes.txt', contentType: 'text/plain', size: 24,
+        status: 'ready', context: 'Quarterly results.',
+      }],
+    }), headers.authorization, expect.any(AbortSignal));
+  });
+
+  it('refuses to link an attachment that does not belong to the owner', async () => {
+    const store = storeFixture();
+    const attachments = {
+      retentionDays: 30,
+      getModelContext: vi.fn(async () => []),
+    };
+    const app = createApp(store, {
+      conversationAttachments: attachments as never,
+      conversationAgent: { stream: vi.fn(async function* () { yield 'unused'; }) },
+    });
+    const response = await app.inject({
+      method: 'POST',
+      url: '/conversation/sessions/41/turns',
+      headers,
+      payload: { text: 'Read this', attachmentIds: ['7b96c6a9-9f80-4a8b-8a73-51517fe37512'] },
+    });
+    expect(response.statusCode).toBe(400);
+    expect(store.addMessage).not.toHaveBeenCalled();
+  });
+
+  it('returns 403 for a non-owner attachment upload before reading its body', async () => {
+    const saveUpload = vi.fn();
+    const app = createApp(undefined, {
+      conversationAttachments: { saveUpload } as never,
+      auth: async () => ({
+        objectId: '00000000-0000-4000-8000-000000000002',
+        tenantId: config.auth.tenantId,
+        displayName: 'Other user',
+      }),
+    });
+    const response = await app.inject({
+      method: 'POST',
+      url: '/conversation/attachments',
+      headers: { ...headers, 'content-type': 'multipart/form-data; boundary=x' },
+    });
+    expect(response.statusCode).toBe(403);
+    expect(saveUpload).not.toHaveBeenCalled();
+  });
+
+  it('refuses SVG uploads on the route and never stores them', async () => {
+    const saveUpload = vi.fn();
+    const app = createApp(undefined, { conversationAttachments: { saveUpload } as never });
+    const boundary = 'jarvis-attachment-test';
+    const response = await app.inject({
+      method: 'POST',
+      url: '/conversation/attachments',
+      headers: {
+        ...headers,
+        'content-type': `multipart/form-data; boundary=${boundary}`,
+      },
+      payload: [
+        `--${boundary}`,
+        'Content-Disposition: form-data; name="file"; filename="screen.svg"',
+        'Content-Type: image/svg+xml',
+        '',
+        '<svg xmlns="http://www.w3.org/2000/svg"></svg>',
+        `--${boundary}--`,
+        '',
+      ].join('\r\n'),
+    });
+    expect(response.statusCode).toBe(415);
+    expect(saveUpload).not.toHaveBeenCalled();
+  });
+
+  it('marks extraction failures without failing a valid upload', async () => {
+    const id = '7b96c6a9-9f80-4a8b-8a73-51517fe37512';
+    const complete = vi.fn();
+    const saveUpload = vi.fn(async () => ({
+      id, name: 'screen.png', contentType: 'image/png', size: 1,
+    }));
+    const app = createApp(undefined, {
+      conversationAttachments: { saveUpload, complete } as never,
+      attachmentVision: async () => { throw new Error('private model error'); },
+    });
+    const boundary = 'jarvis-image-test';
+    const png = await sharp({ create: { width: 1, height: 1, channels: 3, background: '#fff' } })
+      .png().toBuffer();
+    const prefix = Buffer.from([
+      `--${boundary}`,
+      'Content-Disposition: form-data; name="file"; filename="screen.png"',
+      'Content-Type: image/png',
+      '',
+      '',
+    ].join('\r\n'));
+    const payload = Buffer.concat([
+      prefix,
+      png,
+      Buffer.from(`\r\n--${boundary}--\r\n`),
+    ]);
+    const response = await app.inject({
+      method: 'POST',
+      url: '/conversation/attachments',
+      headers: { ...headers, 'content-type': `multipart/form-data; boundary=${boundary}` },
+      payload,
+    });
+    expect(response.statusCode).toBe(201);
+    expect(response.json()).toMatchObject({ id, status: 'failed' });
+    expect(complete).toHaveBeenCalledWith(id, config.auth.ownerObjectId, { status: 'failed' });
+  });
+
+  it('returns owner-only short-lived URLs and deletes attachments', async () => {
+    const id = '7b96c6a9-9f80-4a8b-8a73-51517fe37512';
+    const readUrl = vi.fn(async () => 'https://private.invalid/signed');
+    const remove = vi.fn(async () => true);
+    const app = createApp(undefined, {
+      conversationAttachments: { readUrl, delete: remove } as never,
+    });
+    const urlResponse = await app.inject({
+      method: 'GET',
+      url: `/conversation/attachments/${id}/url`,
+      headers,
+    });
+    expect(urlResponse.statusCode).toBe(200);
+    expect(urlResponse.headers['cache-control']).toBe('no-store');
+    expect(urlResponse.json()).toEqual({ url: 'https://private.invalid/signed' });
+    const deleteResponse = await app.inject({
+      method: 'DELETE',
+      url: `/conversation/attachments/${id}`,
+      headers,
+    });
+    expect(deleteResponse.statusCode).toBe(204);
+    expect(remove).toHaveBeenCalledWith(config.auth.ownerObjectId, id);
   });
 
   it('interrupts streamed text, saves it as interrupted, and restarts once with the steering message', async () => {

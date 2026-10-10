@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import Fastify, { LogController } from 'fastify';
 import cors from '@fastify/cors';
+import multipart from '@fastify/multipart';
 import type { Logger } from 'pino';
 import type { SystemSmokeCheckId } from '@jarvis/contracts';
 import type { BackgroundJobEvent, JarvisActivityEvent, JarvisVoiceWakeEvent } from '@jarvis/contracts';
@@ -45,6 +46,7 @@ import type { GitHubIssueClient } from './github/issues.js';
 import { recordIssueTaskProgress } from './factory/issues.js';
 import { WorkspaceCommandBroker } from './core/workspace-commands.js';
 import type { WorkspaceHtmlArtifactStore } from './database/workspace-html-artifact-store.js';
+import type { ConversationAttachmentStore } from './database/conversation-attachment-store.js';
 import { createTaskStatusNotificationHandler } from './factory/task-status-notifications.js';
 import type { ModelDeploymentWorkflow } from './core/model-deployments.js';
 import {
@@ -81,6 +83,10 @@ export interface BuildAppOptions {
   readonly nowEventHub?: NowFeedEventHub;
   readonly jarvisActivityHub?: JarvisActivityHub;
   readonly conversationStore?: ConversationStore;
+  readonly conversationAttachments?: ConversationAttachmentStore;
+  readonly attachmentVision?: {
+    (image: Buffer, contentType: string, signal: AbortSignal): Promise<string>;
+  };
   readonly onConversationSessionEnded?: (sessionId: string) => void;
   readonly sandboxHeartbeat?: SandboxHeartbeat;
   readonly conversationAgent?: ConversationAgent;
@@ -125,6 +131,8 @@ declare module 'fastify' {
     nowEventHub: NowFeedEventHub;
     jarvisActivityHub: JarvisActivityHub;
     conversationStore: ConversationStore | null;
+    conversationAttachments: ConversationAttachmentStore | null;
+    attachmentVision: BuildAppOptions['attachmentVision'] | null;
     onConversationSessionEnded: (sessionId: string) => void;
     sandboxHeartbeat: SandboxHeartbeat | null;
     conversationAgent: ConversationAgent | null;
@@ -174,6 +182,9 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
     allowedHeaders: ['Authorization', 'Content-Type', 'Last-Event-ID'],
     credentials: false,
     strictPreflight: true,
+  });
+  app.register(multipart, {
+    limits: { files: 1, fields: 0, parts: 1, fileSize: 20 * 1024 * 1024 },
   });
   app.addHook('onResponse', async (request, reply) => {
     request.log.info({
@@ -247,6 +258,8 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
   app.decorate('renewCodexCredential', options.renewCodexCredential ?? null);
   app.decorate('usageStore', options.usageStore ?? null);
   app.decorate('conversationStore', options.conversationStore ?? null);
+  app.decorate('conversationAttachments', options.conversationAttachments ?? null);
+  app.decorate('attachmentVision', options.attachmentVision ?? null);
   app.decorate('sandboxHeartbeat', options.sandboxHeartbeat ?? null);
   if (options.sandboxHeartbeat) {
     app.addHook('onClose', async () => { await options.sandboxHeartbeat!.stop(); });

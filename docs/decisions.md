@@ -19,6 +19,19 @@ The nine design areas and where each stands. **Confirmed** = Dan's requirement o
 
 ## Decision log
 
+P9-66 (10 October 2026): keep conversation uploads in the existing private
+`artifacts` Blob container under `attachments/`, with SQL-owned metadata and
+owner-only short-lived read URLs. Re-encode images with Sharp to remove metadata;
+use pdfjs-dist for bounded PDF text, fast-xml-parser for bounded OOXML text, and
+the existing fflate for Office ZIP containers. The multipart plugin enforces
+request/file parsing limits. Store only bounded extracted text or image
+descriptions, mark extraction failures on the attachment, and expose content to
+the agent solely as explicitly untrusted context or through sensitive,
+redacted-read tools. Use 24-hour expiry for unsent uploads and configurable
+1–90-day retention (default 30) for sent files. Offline route, extraction,
+migration, retention and tool-parity checks pass; live model and Blob behavior
+remain unverified.
+
 P9-59 (10 October 2026): register the sensitive `renew_credential` tool in the
 always-present core module and reuse the route's forced Codex-renewal callback
 and credential-status store. Require `runConfirmed('other', ...)` before any
@@ -841,6 +854,7 @@ Mistakes made so far and the rule that prevents each one.
 | **L127** | The research smoke probe timed out at random | After L125, the deploy for #591 still failed its smoke gate: the research dry run (a real Codex call through the runner) was cancelled at its 20-second budget, while a normal call takes 15-25 s (it passed in 21 s at 04:29). The probe now has 45 s, the gate's request 60 s, and the workflow prints each check's id and status to the log so a failed gate names its check. Lesson: size a probe's timeout from observed latency with headroom, and make a gate say which check failed. |
 | **L128** | Wake word: a 10-second gap before the chime | Dan heard the chime about 10 s after saying "Wake up Jarvis". A timing probe with Speech SDK 1.52.0, his `.table` model and real-time push audio showed the keyword detected at once, but `KeywordRecognizer.Dispose()` blocked for 10.01 s because the bridge never stopped the recognition session after a detection. Calling `StopRecognitionAsync()` before disposing cut that to 0.13 s. Always stop a Speech SDK recognizer before disposing it, and time detection and teardown separately when diagnosing latency. |
 | **L129** | The chat agent rejected every reply because the shared instructions grew past 10,000 characters | On 10 October, "hi" in the chat returned "Jarvis could not finish the reply". The backend log only said `conversation.reply_failed` / "Chat agent failed"; the hosted agent swallows the exception (`except Exception: yield "event: error"`), so the cause was invisible in Log Analytics. It was `capabilityInstructions` (the shared tool guidance sent with `GET /agent/settings`): 11,362 characters after the P9-5x tool additions, while `agents/jarvis/jarvis_tools.py` rejected anything over 10,000 as "invalid Jarvis settings" and the agent failed ~9 ms after reading settings. Every capability line added raises the risk and no test connected the two limits. The agent limit is now 20,000, `capability-instructions.test.ts` fails above 15,000, and some redundant wording was trimmed. When a chat turn fails with only "Chat agent failed", check the instruction length and the agent's settings validation first. Two services enforced the same budget in different languages without a shared test, and a generic catch hid the cause. |
+| **L130** | File and screenshot contents are untrusted prompt data | P9-66 sends extracted document text or a bounded image description to the hosted agent so Jarvis can answer file questions. | Treat all file-derived content as data, label it untrusted, keep it out of logs and tool-call audits, and expose further reads only through owner-scoped sensitive tools. |
 | **L124** | Folio ids came back upper case from SQL | After #564 deployed, `GET /folio` returned 503 for Dan: migration 0035 built `item_id` as `kind:` + `CONVERT(nvarchar(36), id)`, which SQL Server renders in upper case, while the store only accepts lower-case GUIDs, so every stored item failed validation. Same root cause as #536's job ids. Migration 0036 lower-cases existing ids and the store normalises ids on every read and write. Lesson: never build or compare GUID text from SQL Server without `LOWER()`; tests against the real database must assert the id shape round-trips. |
 | **L125** | The Google smoke probe used an endpoint Jarvis has no scope for | Every deploy after P9-39 (#562) failed its smoke gate with Google "down", while Dan's calendar tools worked. The probe read `/users/me/calendarList`, which needs `calendar.readonly`; Jarvis holds only `calendar.events` (infra/setup-google.ps1), so it always got 403. The probe now reads one primary-calendar event, the same endpoint and scope the calendar tools use. Lesson: a health probe must exercise the feature's own endpoint and scopes, and a new gate should be checked against a known-good system before it blocks deploys. |
 
