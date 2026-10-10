@@ -47,7 +47,7 @@ describe('workspace command delivery', () => {
     const command: WorkspaceCommand = {
       commandId: 'html-reference', operation: 'update', viewId: 'research-existing',
       view: { version: 1, title: 'Report', renderer: 'html-app',
-        source: { id: 'research', status: 'complete' }, data: { artifactId } },
+        source: { id: 'research', status: 'complete' }, data: { artifactId: artifactId.toUpperCase() } },
     };
     const connection = broker.connect(ownerId, () => true);
     const pending = broker.execute(ownerId, command, new AbortController().signal);
@@ -56,6 +56,7 @@ describe('workspace command delivery', () => {
     await pending;
     expect(broker.htmlView(ownerId, { viewId: command.viewId })).toEqual({ viewId: command.viewId, artifactId });
     expect(broker.htmlView(ownerId, { artifactId })).toEqual({ viewId: command.viewId, artifactId });
+    expect(broker.htmlView(ownerId, { artifactId: artifactId.toUpperCase() })).toEqual({ viewId: command.viewId, artifactId });
     expect(broker.htmlView('another-owner', { artifactId })).toBeUndefined();
     connection.close();
   });

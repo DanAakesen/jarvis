@@ -111,7 +111,7 @@ export class WorkspaceCommandBroker {
     for (const record of [...(this.records.get(ownerId)?.values() ?? [])].reverse()) {
       if (record.state === 'applied' && record.htmlView &&
           (selector.viewId === undefined || record.htmlView.viewId === selector.viewId) &&
-          (selector.artifactId === undefined || record.htmlView.artifactId === selector.artifactId)) {
+          (selector.artifactId === undefined || record.htmlView.artifactId === selector.artifactId.toLowerCase())) {
         return record.htmlView;
       }
     }
@@ -164,7 +164,7 @@ export class WorkspaceCommandBroker {
     const record: CommandRecord = {
       fingerprint: digest,
       ...((command.operation === 'create' || command.operation === 'update') && command.view.renderer === 'html-app'
-        ? { htmlView: { viewId: command.viewId, artifactId: command.view.data.artifactId } }
+        ? { htmlView: { viewId: command.viewId, artifactId: command.view.data.artifactId.toLowerCase() } }
         : {}),
       sessionIds: new Set(ownerConnections.keys()),
       declined: new Map(),
