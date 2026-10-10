@@ -10,6 +10,7 @@ import type {
   ConversationSteeringMessage,
 } from './conversation-store.js';
 import { InvalidConversationAttachmentsError } from './conversation-store.js';
+import { ChatAgentError } from './chat-agent.js';
 import { ToolRefusal, type JarvisTool } from './tool-registry.js';
 import {
   AttachmentInputError,
@@ -747,7 +748,10 @@ export const conversationModule: BackendModule = {
             publishActivity('interrupted');
           } else {
             request.log.warn(
-              { failure: error instanceof Error ? error.message.slice(0, 120) : 'unknown' },
+              {
+                failure: error instanceof Error ? error.message.slice(0, 120) : 'unknown',
+                ...(error instanceof ChatAgentError && error.code ? { code: error.code } : {}),
+              },
               'conversation.reply_failed',
             );
             publishActivity('failed');

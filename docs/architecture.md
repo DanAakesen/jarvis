@@ -2636,6 +2636,17 @@ existing memory-capture setting. Realtime voice uses it directly; the agent-only
 `GET /agent/settings` route returns the same block for chat, which adds it to its
 language-specific prompt after loading that settings snapshot. Both surfaces
 continue to use the backend tool registry and confirmation results.
+That block is bounded by one shared contract, `agents/jarvis/limits.json`: the
+agent refuses settings above `capabilityInstructionsMaxCodePoints` (20,000) and
+the backend tests require the block to stay within
+`capabilityInstructionsBudgetCodePoints` (15,000) and to use only BMP characters,
+so TypeScript and Python count the same. The backend schema constant is tied to
+the file by a test, and the image copies it (`.dockerignore`, `Dockerfile`).
+A failed chat turn emits `event: error` with a short diagnostic `code`
+(for example `capability_instructions_too_large`, `settings_http_503`,
+`error_<exception class>`), never message text. The backend accepts only
+`[a-z0-9_]{1,64}` codes and logs them on `conversation.reply_failed`; the user
+still sees the same honest failure message (L129).
 The agent gets a token for `api://<jarvis-api>/.default`
 from its platform identity through `DefaultAzureCredential`; OpenAI uses the same
 credential when no API key is set. Claude requests use

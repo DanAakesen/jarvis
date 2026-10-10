@@ -1,6 +1,7 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { workspaceNavigationPages, workspaceSettingsSections } from '@jarvis/contracts';
-import { capabilityInstructions } from './capability-instructions.js';
+import { capabilityInstructions, CAPABILITY_INSTRUCTIONS_MAX_CODE_POINTS } from './capability-instructions.js';
 
 describe('shared navigation capability instructions', () => {
   it.each([true, false])('includes canonical destinations and aliases with automatic capture %s', (automaticCapture) => {
@@ -41,9 +42,25 @@ describe('shared navigation capability instructions', () => {
 
 describe('shared capability instruction budget', () => {
   // The hosted chat agent rejects the whole settings payload (and so every text reply) when
-  // capabilityInstructions exceeds its limit (agents/jarvis/jarvis_tools.py, 20_000). Fail here
-  // long before that so a new capability line cannot silently break chat (L129).
-  it.each([true, false])('stays well under the agent limit with automatic capture %s', (automaticCapture) => {
-    expect(capabilityInstructions({ automaticCapture }).length).toBeLessThanOrEqual(15_000);
+  // capabilityInstructions exceeds its limit. agents/jarvis/limits.json is the single source for
+  // both services (L129): the agent reads it, and these tests tie the backend to the same file.
+  const limits = JSON.parse(readFileSync(
+    new URL('../../../../agents/jarvis/limits.json', import.meta.url), 'utf8',
+  )) as { capabilityInstructionsMaxCodePoints: number; capabilityInstructionsBudgetCodePoints: number };
+  const codePoints = (text: string) => Array.from(text).length;
+
+  it('keeps the budget below the hard limit and the backend constant equal to the shared file', () => {
+    expect(CAPABILITY_INSTRUCTIONS_MAX_CODE_POINTS).toBe(limits.capabilityInstructionsMaxCodePoints);
+    expect(limits.capabilityInstructionsBudgetCodePoints).toBeLessThan(limits.capabilityInstructionsMaxCodePoints);
+  });
+
+  it.each([true, false])('stays within the headroom budget with automatic capture %s', (automaticCapture) => {
+    expect(codePoints(capabilityInstructions({ automaticCapture })))
+      .toBeLessThanOrEqual(limits.capabilityInstructionsBudgetCodePoints);
+  });
+
+  it.each([true, false])('uses only BMP characters so TypeScript and Python count the same with automatic capture %s', (automaticCapture) => {
+    const text = capabilityInstructions({ automaticCapture });
+    expect(codePoints(text)).toBe(text.length);
   });
 });

@@ -45,8 +45,24 @@ function parseEvents(buffer: string): { events: { event: string; data: string }[
   return { events, pending };
 }
 
+export class ChatAgentError extends Error {
+  constructor(readonly code: string | undefined) {
+    super(code ? `Chat agent failed (${code})` : 'Chat agent failed');
+    this.name = 'ChatAgentError';
+  }
+}
+
+// Only a short lowercase code from the agent is trusted; anything else (provider text) is dropped.
+function errorCode(data: string): string | undefined {
+  try {
+    const payload: unknown = JSON.parse(data);
+    const code = typeof payload === 'object' && payload !== null && 'code' in payload ? payload.code : undefined;
+    return typeof code === 'string' && /^[a-z0-9_]{1,64}$/u.test(code) ? code : undefined;
+  } catch { return undefined; }
+}
+
 function deltaFromEvent(event: { event: string; data: string }): string | undefined {
-  if (event.event === 'error') throw new Error('Chat agent failed');
+  if (event.event === 'error') throw new ChatAgentError(errorCode(event.data));
   if (event.event !== 'delta') return undefined;
   let payload: unknown;
   try { payload = JSON.parse(event.data); } catch { throw new Error('Invalid chat response'); }

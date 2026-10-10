@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { buildApp, type BuildAppOptions } from '../app.js';
 import { loadConfig } from '../config.js';
 import { createLogger } from '../logging.js';
+import { ChatAgentError } from './chat-agent.js';
 import type { ConversationStore } from './conversation-store.js';
 import type { ReflexClassifier } from './reflex.js';
 import type { ToolCallStore } from './tool-calls.js';
@@ -736,6 +737,40 @@ describe('conversation routes', () => {
     expect(response.statusCode).toBe(200);
     expect(response.body).toContain('event: error');
     expect(response.body).not.toContain('provider detail');
+    expect(store.addMessage).toHaveBeenCalledTimes(1);
+  });
+
+  it('logs the agent failure code, not its content, and keeps the user-facing message honest', async () => {
+    const store = storeFixture();
+    const logged: string[] = [];
+    const chatAgent = {
+      stream: vi.fn(async function* () {
+        throw new ChatAgentError('capability_instructions_too_large');
+        yield 'unreachable';
+      }),
+    };
+    const app = buildApp(config, createLogger(config, {
+      trackTrace: vi.fn(), flush: vi.fn(async () => {}), shutdown: vi.fn(async () => {}),
+    }, new Writable({ write(chunk, _encoding, done) { logged.push(String(chunk)); done(); } })), {
+      auth,
+      conversationStore: store,
+      conversationAgent: chatAgent,
+    });
+    apps.push(app);
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/conversation/sessions/41/turns',
+      headers,
+      payload: { text: 'Hello' },
+    });
+
+    expect(response.body).toContain('event: error');
+    expect(response.body).toContain('Jarvis could not finish the reply.');
+    expect(response.body).not.toContain('capability_instructions_too_large');
+    const entry = logged.map((line) => JSON.parse(line) as Record<string, unknown>)
+      .find((item) => item.msg === 'conversation.reply_failed');
+    expect(entry).toMatchObject({ code: 'capability_instructions_too_large' });
     expect(store.addMessage).toHaveBeenCalledTimes(1);
   });
 

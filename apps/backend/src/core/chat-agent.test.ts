@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  ChatAgentError,
   createFoundryInvocationConversationAgent,
   createFoundryInvocationsEndpoint,
   FOUNDRY_AGENT_SCOPE,
@@ -136,6 +137,30 @@ describe('Foundry Invocations chat agent', () => {
       }
     }).rejects.toThrow('Chat agent failed');
     expect(chunks).toEqual([]);
+  });
+
+  it('surfaces only a short diagnostic code from an agent error', async () => {
+    const run = async (data: string) => {
+      const { agent } = createAgent(vi.fn(async () => streamedResponse([`event: error\ndata: ${data}\n\n`])));
+      try {
+        for await (const chunk of agent.stream(input, delegatedAuthorization, new AbortController().signal)) {
+          void chunk;
+        }
+      } catch (error) { return error; }
+      return undefined;
+    };
+
+    const coded = await run('{"code":"capability_instructions_too_large"}');
+    expect(coded).toBeInstanceOf(ChatAgentError);
+    expect(coded).toMatchObject({ code: 'capability_instructions_too_large' });
+    expect((coded as Error).message).toBe('Chat agent failed (capability_instructions_too_large)');
+
+    for (const unsafe of ['{"code":"Provider: secret key!"}', '{"error":"provider details"}', '{}', 'not json']) {
+      const error = await run(unsafe) as ChatAgentError;
+      expect(error).toBeInstanceOf(ChatAgentError);
+      expect(error.code).toBeUndefined();
+      expect(error.message).toBe('Chat agent failed');
+    }
   });
 
   it('rejects a missing Foundry token before making a request', async () => {
