@@ -36,6 +36,10 @@ export interface WorkspaceHtmlArtifact {
   readonly pinned: boolean;
 }
 
+export interface WorkspaceHtmlArtifactVersion extends WorkspaceHtmlArtifact {
+  readonly version: number;
+}
+
 export class WorkspaceHtmlArtifactNotFound extends Error {
   constructor() {
     super('Workspace HTML artifact was not found');
@@ -50,6 +54,7 @@ interface WorkspaceHtmlArtifactRow {
   sources_json: string;
   created_at: Date | string;
   pinned: boolean;
+  version_number: number;
 }
 
 function isHtmlSource(value: unknown): value is WorkspaceHtmlSource {
@@ -78,7 +83,7 @@ function mapArtifact(row: WorkspaceHtmlArtifactRow): WorkspaceHtmlArtifact {
     throw new Error('Stored workspace HTML sources are invalid');
   }
   return {
-    id: row.id,
+    id: row.id.toLowerCase(),
     kind: 'html',
     title: row.title,
     html: row.html,
@@ -131,21 +136,107 @@ export class WorkspaceHtmlArtifactStore {
   }
 
   async read(id: string, ownerObjectId: string, signal: AbortSignal): Promise<WorkspaceHtmlArtifact> {
+    const artifact = await this.readVersion(id, ownerObjectId, signal);
+    return { id: artifact.id, kind: artifact.kind, title: artifact.title, html: artifact.html,
+      sources: artifact.sources, createdAt: artifact.createdAt, pinned: artifact.pinned };
+  }
+
+  async readVersion(
+    id: string, ownerObjectId: string, signal: AbortSignal, version?: number,
+  ): Promise<WorkspaceHtmlArtifactVersion> {
     if (!uuid.test(id) || !ownerUuid.test(ownerObjectId)) throw new WorkspaceHtmlArtifactNotFound();
+    if (version !== undefined && (!Number.isSafeInteger(version) || version < 1 || version > 2_147_483_647)) {
+      throw new WorkspaceHtmlArtifactNotFound();
+    }
     const request = databaseReadRequest(this.pool)
       .input('id', sql.UniqueIdentifier, id)
-      .input('owner', sql.UniqueIdentifier, ownerObjectId);
+      .input('owner', sql.UniqueIdentifier, ownerObjectId)
+      .input('version', sql.Int, version ?? null);
     const cancel = () => { request.cancel(); };
     signal.addEventListener('abort', cancel, { once: true });
     try {
-      const { recordset } = await request.query<WorkspaceHtmlArtifactRow>(`SELECT id, title, html, sources_json, created_at, pinned
-        FROM dbo.workspace_html_artifacts WHERE id = @id AND owner_object_id = @owner;`);
+      const { recordset } = await request.query<WorkspaceHtmlArtifactRow>(`SELECT id, title, html, sources_json, created_at, pinned, version_number
+        FROM dbo.workspace_html_artifacts WHERE id = @id AND owner_object_id = @owner
+          AND (@version IS NULL OR version_number = @version)
+        UNION ALL
+        SELECT artifact.id, history.title, history.html, history.sources_json, artifact.created_at,
+          artifact.pinned, history.version_number
+        FROM dbo.workspace_html_artifact_versions AS history
+        JOIN dbo.workspace_html_artifacts AS artifact ON artifact.id = history.artifact_id
+        WHERE artifact.id = @id AND artifact.owner_object_id = @owner AND history.version_number = @version;`);
       signal.throwIfAborted();
-      const row = recordset[0];
+      const row = recordset?.[0];
       if (!row) throw new WorkspaceHtmlArtifactNotFound();
-      return mapArtifact(row);
+      if (Buffer.byteLength(row.html, 'utf8') > workspaceHtmlSizeLimit) {
+        throw new TypeError('Stored workspace HTML exceeds 512 KB');
+      }
+      return { ...mapArtifact(row), version: row.version_number };
     } finally {
       signal.removeEventListener('abort', cancel);
+    }
+  }
+
+  async update(
+    id: string,
+    ownerObjectId: string,
+    html: string,
+    signal: AbortSignal,
+    title?: string,
+    sources?: readonly WorkspaceHtmlSource[],
+  ): Promise<WorkspaceHtmlArtifactVersion> {
+    if (!uuid.test(id) || !ownerUuid.test(ownerObjectId)) throw new WorkspaceHtmlArtifactNotFound();
+    const size = typeof html === 'string' ? Buffer.byteLength(html, 'utf8') : 0;
+    if (typeof html !== 'string' || !html.trim() || !isWellFormedUtf16(html) ||
+        size < 1 || size > workspaceHtmlSizeLimit ||
+        title !== undefined && (typeof title !== 'string' || !title.trim() || title !== title.trim() || title.length > 200) ||
+        sources !== undefined && (!Array.isArray(sources) || sources.length > 50 || !sources.every(isHtmlSource))) {
+      throw new TypeError('Invalid workspace HTML artifact');
+    }
+    const transaction = new sql.Transaction(this.pool);
+    try {
+      signal.throwIfAborted();
+      await transaction.begin();
+      const request = transaction.request()
+        .input('id', sql.UniqueIdentifier, id)
+        .input('owner', sql.UniqueIdentifier, ownerObjectId)
+        .input('html', sql.NVarChar(sql.MAX), html)
+        .input('size', sql.Int, size)
+        .input('title', sql.NVarChar(200), title ?? null)
+        .input('sources', sql.NVarChar(sql.MAX), sources === undefined ? null : JSON.stringify(sources));
+      const cancel = () => { request.cancel(); };
+      signal.addEventListener('abort', cancel, { once: true });
+      let artifact: WorkspaceHtmlArtifactVersion;
+      try {
+        signal.throwIfAborted();
+        const { recordset } = await request.query<WorkspaceHtmlArtifactRow>(`DECLARE @version int;
+          SELECT @version = version_number FROM dbo.workspace_html_artifacts WITH (UPDLOCK, HOLDLOCK)
+            WHERE id = @id AND owner_object_id = @owner;
+          IF @version IS NOT NULL
+          BEGIN
+            INSERT dbo.workspace_html_artifact_versions
+              (artifact_id, version_number, title, html, size_bytes, sources_json)
+            SELECT id, version_number, title, html, size_bytes, sources_json
+              FROM dbo.workspace_html_artifacts WHERE id = @id AND owner_object_id = @owner;
+            UPDATE dbo.workspace_html_artifacts
+              SET title = COALESCE(@title, title), html = @html, size_bytes = @size,
+                sources_json = COALESCE(@sources, sources_json),
+                version_number = version_number + 1, repair_attempted = 0
+              OUTPUT inserted.id, inserted.title, inserted.html, inserted.sources_json,
+                inserted.created_at, inserted.pinned, inserted.version_number
+              WHERE id = @id AND owner_object_id = @owner;
+          END;`);
+        signal.throwIfAborted();
+        const row = recordset?.[0];
+        if (!row) throw new WorkspaceHtmlArtifactNotFound();
+        artifact = { ...mapArtifact(row), version: row.version_number };
+      } finally {
+        signal.removeEventListener('abort', cancel);
+      }
+      await transaction.commit();
+      return artifact;
+    } catch (error) {
+      await transaction.rollback().catch(() => {});
+      throw error;
     }
   }
 

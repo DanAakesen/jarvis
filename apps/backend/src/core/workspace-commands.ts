@@ -41,6 +41,7 @@ interface WorkspaceConnection {
 interface CommandRecord {
   view?: { viewId: string; view: GeneratedView };
   readonly fingerprint: string;
+  readonly htmlView?: { viewId: string; artifactId: string };
   /** Every tab the command was delivered to; the first tab that applies it settles the command. */
   readonly sessionIds: Set<string>;
   /** Tabs that refused, failed, or disconnected; once all have, the command is refused. */
@@ -108,6 +109,17 @@ export class WorkspaceCommandBroker {
     return latest?.snapshot;
   }
 
+  htmlView(ownerId: string, selector: { viewId?: string; artifactId?: string }): { viewId: string; artifactId: string } | undefined {
+    for (const record of [...(this.records.get(ownerId)?.values() ?? [])].reverse()) {
+      if (record.state === 'applied' && record.htmlView &&
+          (selector.viewId === undefined || record.htmlView.viewId === selector.viewId) &&
+          (selector.artifactId === undefined || record.htmlView.artifactId === selector.artifactId.toLowerCase())) {
+        return record.htmlView;
+      }
+    }
+    return undefined;
+  }
+
   view(ownerId: string, viewId: string): GeneratedView | undefined {
     for (const record of [...(this.records.get(ownerId)?.values() ?? [])].reverse()) {
       if (record.state !== 'refused' && record.view?.viewId === viewId) return structuredClone(record.view.view);
@@ -160,6 +172,9 @@ export class WorkspaceCommandBroker {
     const promise = new Promise<void>((accept, decline) => { resolve = accept; reject = decline; });
     const record: CommandRecord = {
       fingerprint: digest,
+      ...((command.operation === 'create' || command.operation === 'update') && command.view.renderer === 'html-app'
+        ? { htmlView: { viewId: command.viewId, artifactId: command.view.data.artifactId.toLowerCase() } }
+        : {}),
       sessionIds: new Set(ownerConnections.keys()),
       declined: new Map(),
       acknowledgements: new Map(),

@@ -2217,6 +2217,27 @@ which act only with transient user activation.
 
 ### Folio (P9-25)
 
+P9-53 adds sensitive agent-only `read_html_view` and `update_html_view` tools.
+Reads accept exactly one artifact ID or window ID and an optional positive
+version. Canonical `html-<compact artifact UUID>` windows resolve directly;
+research windows resolve from the broker's bounded cache of applied, owner-scoped
+HTML commands. All content is untrusted data and excluded from tool audits.
+Updates reuse create's HTML validation and 512 KiB UTF-8/50 HTTPS source limits.
+One SQL transaction locks the owned artifact, archives its previous content in
+`workspace_html_artifact_versions`, increments `version_number`, and replaces
+HTML plus any supplied title/sources. Omitted metadata is retained in SQL,
+including during concurrent revisions. No versions are pruned by this path.
+Artifact identity, creation time, Folio records and pin state remain unchanged.
+Historical reads join the current artifact to enforce ownership.
+
+After commit, an acknowledged workspace `update` targets the original cached
+window or canonical HTML window, never a new window. Delivery failure reports
+the saved artifact/version rather than claiming display success. No migration,
+App permission or web change is introduced. The existing `HtmlAppView` fetch
+depends only on artifact ID: same-ID updates do not reload its iframe yet.
+Visual refresh acceptance therefore needs separately authorized renderer work;
+backend command acknowledgement alone does not verify refreshed HTML.
+
 Migration `0035_folio.sql` adds an owner-scoped `dbo.folio_items` index over
 research reports, HTML apps, generated images and knowledge-graph views. New
 reports record their topic summary, HTML apps their title, generated images
