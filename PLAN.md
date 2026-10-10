@@ -559,7 +559,7 @@ P8-02 allocated P8-04 through P8-13 to frontend work in PR #233. Backend tasks t
 | P9-73 | [#650](https://github.com/DanAakesen/jarvis/issues/650) | Phone chat bar clears the home indicator | Shared additive safe-area dock spacing, signed-in/out top/landscape insets and standalone manifest; Chromium/WebKit fixture checks at phone/desktop sizes in light/dark, zero/34px bottom insets. Before/after screenshots; 412 web tests, lint/build and CodeQL pass. Physical iPhone/Home Screen acceptance pending | — | Complete |
 >>>>>>> origin/main
 
-| P9-74 | [#655](https://github.com/DanAakesen/jarvis/issues/655) | Knowledge notes hide metadata and scroll; graph/count exclude tooling | Fixture regressions for front matter, leading comments, BOM, malformed YAML and scrolling; graph/count exclusions preserve Jarvis search. Chromium/WebKit phone/desktop light/dark fixture captures; web/vault tests and lint/build pass. Final main sync and automated review pending | — | In progress |
+| P9-74 | [#655](https://github.com/DanAakesen/jarvis/issues/655) | Knowledge notes hide metadata and scroll; graph/count exclude tooling | Implemented with fixture regressions and Chromium/WebKit phone/desktop light/dark before/after captures; normal/reduced-motion scroll controls verified. 421 web tests plus final 14 Knowledge tests, 27 vault tests and lint/build pass. Main synced; fallback review clean. CodeQL backtracking finding fixed, but rerun timed out: final security confirmation pending. No live vault or physical-device verification | — | In progress |
 
 ### Confirm before P0
 
