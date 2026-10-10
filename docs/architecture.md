@@ -2027,6 +2027,21 @@ App key rotation remain operator workflows; their renew endpoints return 400.
 Local fake-provider checks cover this contract; live Key Vault/GitHub/Foundry
 verification and the SQL Server contract suite remain separate checks.
 
+#### Agent-initiated credential renewal (P9-59)
+
+The always-registered sensitive `renew_credential` tool accepts only
+`codex-login`. It requires Now confirmation before calling the same forced
+renewal callback and credential-status store as the owner-only Settings route.
+The result contains only the renewal outcome, persisted credential status, a
+safe next step, and a matching user-facing confirmation. A failed login tells
+Dan to sign in to the Jarvis-only Codex account again; busy and uncertain
+outcomes direct him to wait or check status instead of claiming success.
+Missing renewal, status storage, or Now confirmation is refused without
+starting renewal. The shared dispatcher redacts tool arguments and results from
+tool-call records; no token, code, provider response, or exception text is
+returned or logged. The shared capability instruction names the tool because
+it is registered in core for every backend configuration.
+
 ### Idle SQL path audit (P5-13)
 
 This inventory is a source-level measurement of code paths and configured

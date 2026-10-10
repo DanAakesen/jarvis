@@ -16,6 +16,7 @@ describe('shared navigation capability instructions', () => {
       expect(instructions).toContain(`"${alias}"`);
     }
     expect(instructions).toContain('section is settings-only; taskId and issueNumber are factory-only');
+    expect(instructions).toContain('use renew_credential with name "codex-login"');
     expect(instructions).toContain('issueNumber as a positive integer');
     expect(instructions).toContain('task recipes means "routines"');
     expect(instructions).not.toContain('"knowledge-graph"');
