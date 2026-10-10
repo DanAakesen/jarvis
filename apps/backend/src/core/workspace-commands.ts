@@ -9,6 +9,7 @@ import {
   type WorkspaceSseEvent,
   type WorkspaceCommand,
   type WorkspaceSnapshot,
+  type GeneratedView,
 } from '@jarvis/contracts';
 import type { BackendModule } from '../modules.js';
 import { generatedViewValidationOptions } from './generated-view-validation.js';
@@ -38,6 +39,7 @@ interface WorkspaceConnection {
 }
 
 interface CommandRecord {
+  view?: { viewId: string; view: GeneratedView };
   readonly fingerprint: string;
   readonly htmlView?: { viewId: string; artifactId: string };
   /** Every tab the command was delivered to; the first tab that applies it settles the command. */
@@ -114,6 +116,13 @@ export class WorkspaceCommandBroker {
           (selector.artifactId === undefined || record.htmlView.artifactId === selector.artifactId.toLowerCase())) {
         return record.htmlView;
       }
+    }
+    return undefined;
+  }
+
+  view(ownerId: string, viewId: string): GeneratedView | undefined {
+    for (const record of [...(this.records.get(ownerId)?.values() ?? [])].reverse()) {
+      if (record.state !== 'refused' && record.view?.viewId === viewId) return structuredClone(record.view.view);
     }
     return undefined;
   }
@@ -209,6 +218,8 @@ export class WorkspaceCommandBroker {
     for (const connection of [...ownerConnections.values()]) {
       if (!connection.send('workspace-command', { command, expiresAt })) {
         this.decline(record, connection.sessionId, 'error', 'The workspace could not accept the command for delivery.');
+      } else if (command.operation === 'create' || command.operation === 'update') {
+        record.view = { viewId: command.viewId, view: structuredClone(command.view) };
       }
     }
     return this.waitFor(promise, signal);
@@ -252,6 +263,7 @@ export class WorkspaceCommandBroker {
       for (const sessionId of [...ownerConnections.keys()]) this.disconnect(ownerId, sessionId);
     }
     this.connections.clear();
+    this.records.clear();
   }
 
   /** One tab declined; the command fails only when every tab it went to has declined. */
@@ -310,6 +322,8 @@ export function registerWorkspaceCommandRoutes(app: FastifyInstance): void {
                 region: { type: 'string', enum: ['left', 'right', 'top', 'bottom', 'centre', 'full'] },
                 pinned: { type: 'boolean' },
                 front: { type: 'boolean' },
+                content: { type: 'string', maxLength: 8 * 1024 },
+                selection: { type: 'string', maxLength: 2 * 1024 },
               },
               required: ['viewId', 'title'], additionalProperties: false,
             },

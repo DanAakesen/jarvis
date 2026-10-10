@@ -164,6 +164,20 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   Timeouts, cancellation, disconnects, stale sessions and partial failures are
   returned as refused/error results; command-delivered views and geometry are not
   persisted.
+  P9-52 retains the last successfully sent generated view per owner/viewId in
+  the broker's existing 128-command cache; eviction and process teardown discard
+  it. Definitively refused replacements do not supersede earlier cached views.
+  The always-registered, sensitive `read_window` tool prefers the latest
+  owner snapshot's optional content (8 KiB UTF-8) and selection (2 KiB), then
+  falls back to this cache. Its untrusted text is capped at 8 KiB, with 50
+  list/table rows or 100 timeline events; charts retain supplied series names,
+  units and points within that cap. HTML views reuse the owner-scoped artifact
+  store injected into the shared app; parse5 extracts static body/SVG text
+  without executing scripts, loading resources or returning markup. CSS-driven
+  and script-rendered visibility is not evaluated. Plain/code and page text
+  retain whitespace and entities; literal angle brackets become `‹`/`›` rather
+  than being parsed as HTML. Page text reporting remains
+  the separate UI task #640; old snapshots still validate.
   On non-conversation signed-in routes, the shell keeps the command stream
   mounted in a hidden Now panel while the workspace controller remains active.
   Ordinary renderers use fixed React elements and declarative data. P8-41 adds
