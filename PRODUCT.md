@@ -419,6 +419,11 @@ Notes render Markdown without raw front matter, including after leading comments
 or a BOM. Long notes scroll with a bottom fade and visible scroll control; titles
 and paths wrap.
 
+P9-71 shares one subtle cyan selected treatment across phone menu rows, desktop
+navigation, top-bar toggles, tabs and segmented choices. Weight or icon shape
+reinforces selection; current-page and toggle semantics, visible keyboard focus,
+touch feedback and readable light/dark contrast are required.
+
 The confirmed requirements and proposed feature placement are in [ui.md](ui.md).
 Jarvis has one typing shell with expandable navigation and context panels, and a
 fullscreen voice workspace with a runtime-state-driven orb. Jarvis can create and
