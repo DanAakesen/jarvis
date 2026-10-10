@@ -232,5 +232,66 @@ export function createGitHubActionsLogClient(
       }
       return { content: Buffer.concat(logs), jobs: names };
     },
+    async downloadFailedJobLog(repository: string, jobId: number, signal?: AbortSignal): Promise<FailedJobLogs> {
+      if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/u.test(repository) || !positiveSafeInteger(jobId)) {
+        throw new Error('GitHub Actions job is invalid');
+      }
+      const [owner, name] = repository.split('/');
+      if (!owner || !name) throw new Error('GitHub Actions repository is invalid');
+      const token = await tokenIssuer.issueForActions(repository);
+      const base = `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/actions/jobs`;
+      const headers = {
+        Accept: 'application/vnd.github+json',
+        Authorization: `${['Bear', 'er'].join('')} ${token}`,
+        'X-GitHub-Api-Version': '2022-11-28',
+      };
+      const jobResponse = await fetchImpl(
+        `${githubApi}${base}/${jobId}`,
+        { headers, signal: requestSignal(signal), redirect: 'error' },
+      );
+      if (!jobResponse.ok) throw new Error('GitHub Actions job is unavailable');
+      let decoded: unknown;
+      try {
+        decoded = JSON.parse((await readBounded(jobResponse, maxJobsResponseBytes)).toString('utf8')) as unknown;
+      } catch {
+        throw new Error('GitHub Actions job response is invalid');
+      }
+      const job = object(decoded);
+      if (job?.id !== jobId || !positiveSafeInteger(job.run_id) || typeof job.name !== 'string' ||
+        job.name.length === 0 || job.name.length > 255 ||
+        (job.conclusion !== 'failure' && job.conclusion !== 'timed_out' &&
+          job.conclusion !== 'startup_failure')) {
+        throw new Error('GitHub Actions job is not a failed job');
+      }
+      const apiResponse = await fetchImpl(
+        `${githubApi}${base}/${jobId}/logs`,
+        { headers, signal: requestSignal(signal), redirect: 'manual' },
+      );
+      let response = apiResponse;
+      if (apiResponse.status >= 300 && apiResponse.status < 400) {
+        const location = apiResponse.headers.get('location');
+        if (!location) throw new Error('GitHub job log response is invalid');
+        const downloadUrl = new URL(location, `${githubApi}${base}/${jobId}/logs`);
+        if (downloadUrl.protocol !== 'https:' || !allowedLogHost(downloadUrl.hostname) ||
+          downloadUrl.username || downloadUrl.password || downloadUrl.hash || downloadUrl.port) {
+          throw new Error('GitHub job log response is invalid');
+        }
+        response = await fetchImpl(downloadUrl, {
+          headers: { Accept: 'application/zip' },
+          signal: requestSignal(signal),
+          redirect: 'error',
+        });
+      }
+      if (!response.ok) throw new Error('GitHub job log is unavailable');
+      const finalUrl = response.url ? new URL(response.url) : undefined;
+      if (finalUrl && (finalUrl.protocol !== 'https:' ||
+        (finalUrl.hostname !== 'api.github.com' && !allowedLogHost(finalUrl.hostname)))) {
+        throw new Error('GitHub job log response is invalid');
+      }
+      const log = extractJobLog(await readBounded(response, maxJobLogArchiveBytes));
+      const content = Buffer.concat([Buffer.from(`===== ${job.name} =====\n`), log, Buffer.from('\n')]);
+      if (content.length > maxCheckLogBytes) throw new Error('GitHub failed job log exceeds the size limit');
+      return { content, jobs: [job.name] };
+    },
   };
 }

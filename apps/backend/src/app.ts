@@ -43,6 +43,7 @@ import type { TaskStatusNotificationStore } from './database/task-status-notific
 import type { GitHubIssueClient } from './github/issues.js';
 import { recordIssueTaskProgress } from './factory/issues.js';
 import { WorkspaceCommandBroker } from './core/workspace-commands.js';
+import type { WorkspaceHtmlArtifactStore } from './database/workspace-html-artifact-store.js';
 import { createTaskStatusNotificationHandler } from './factory/task-status-notifications.js';
 import type { ModelDeploymentWorkflow } from './core/model-deployments.js';
 import {
@@ -90,6 +91,7 @@ export interface BuildAppOptions {
   readonly phoneSessionStore?: PhoneSessionStore | null;
   readonly taskStatusNotificationStore?: TaskStatusNotificationStore | null;
   readonly workspaceCommands?: WorkspaceCommandBroker;
+  readonly workspaceHtmlArtifacts?: Pick<WorkspaceHtmlArtifactStore, 'read'>;
   readonly systemStatusReader?: SystemStatusReader;
   readonly systemSmokeProbes?: Partial<Record<SystemSmokeCheckId, SystemStatusProbe>>;
 }
@@ -132,6 +134,7 @@ declare module 'fastify' {
     phoneSessionStore: PhoneSessionStore | null;
     taskStatusNotificationStore: TaskStatusNotificationStore | null;
     workspaceCommands: WorkspaceCommandBroker;
+    workspaceHtmlArtifacts: Pick<WorkspaceHtmlArtifactStore, 'read'> | null;
     backgroundJobs: BackgroundJobRegistry;
     onEmbeddingModelChanged: ((jobs: BackgroundJobRegistry) => Promise<void>) | null;
     systemStatusReader: SystemStatusReader;
@@ -232,6 +235,7 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
   app.decorate('onConversationSessionEnded', options.onConversationSessionEnded ?? (() => {}));
   const workspaceCommands = options.workspaceCommands ?? new WorkspaceCommandBroker();
   app.decorate('workspaceCommands', workspaceCommands);
+  app.decorate('workspaceHtmlArtifacts', options.workspaceHtmlArtifacts ?? null);
   app.addHook('onClose', async () => { workspaceCommands.dispose(); });
   app.decorate('settingsStore', options.settingsStore ?? null);
   app.decorate('modelCatalogue', options.modelCatalogue ?? { read: async () => fallbackModelCatalogue() });

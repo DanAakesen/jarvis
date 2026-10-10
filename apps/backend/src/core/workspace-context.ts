@@ -22,7 +22,8 @@ function quotedTitle(title: string): string {
 export function workspaceContext(snapshot?: WorkspaceSnapshot): string {
   if (!snapshot) return 'Dan is looking at: unavailable (no workspace snapshot; no tab connected or reported). Say so instead of guessing.';
   const view = snapshot.view;
-  const focused = snapshot.windows.find((window) => window.viewId === view?.focusedViewId);
+  const focused = snapshot.windows.find((window) => window.viewId === view?.focusedViewId) ??
+    snapshot.windows.find((window) => window.front);
   const windows = (focused ? [focused, ...snapshot.windows.filter((window) => window !== focused)] : snapshot.windows)
     .slice(0, 8).map((window) =>
       `${quotedTitle(window.title)} [viewId=${window.viewId}]${window === focused ? ' (focused)' : ''}`);

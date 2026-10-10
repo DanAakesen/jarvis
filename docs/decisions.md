@@ -19,6 +19,37 @@ The nine design areas and where each stands. **Confirmed** = Dan's requirement o
 
 ## Decision log
 
+P9-52 (10 October 2026): keep generated window readback in the existing
+owner-scoped, bounded workspace command records, not SQL. Register `read_window`
+in core even when HTML storage is unavailable, prefer page-reported content,
+and expose only bounded untrusted text through a sensitive tool. Reuse parse5
+and the existing owner-authorized HTML artifact store for static report text;
+never execute scripts or fetch resources to read a report. Preserve the
+existing chart contract: units are returned when supplied in series names or
+point labels, not invented as a new field. No migration or App permission is
+needed. Backend/contracts verified offline; UI reporting (#640), live model
+use and dynamically rendered report text remain unverified.
+P9-53 (10 October 2026): revise HTML apps/reports through owner-scoped,
+agent-only read/update tools using the existing artifact history table and
+workspace update contract. Archive previous content and increment its version
+inside a row-locked SQL transaction; retain all history on this path and preserve
+omitted metadata, Folio records and pins. Read historical versions to support
+rollback by submitting their HTML/title/sources as another revision. Keep tool
+names in tool descriptions, with one tool-name-free shared instruction bullet
+because the HTML module is conditionally registered. Applied broker commands
+provide a bounded research-window/artifact mapping; canonical HTML windows need
+no mapping. Tests cover tools, redacted audits and SQL persistence. Backend-only
+scope is preserved: the current web iframe does not refetch same-ID updates,
+so visual refresh acceptance remains blocked on separately authorized web work.
+No migration, new dependency or App permission is needed.
+P9-54 (10 October 2026): keep pull-request and CI inspection read-only. Reuse
+the registered-project resolver and repository-scoped GitHub App tokens, and
+expose bounded diffs, resolved review-thread state, check summaries and
+sanitized failed-job log tails. Do not add persistence or App permissions;
+changes remain with the confirmed issue or running-task flow. Fake-backed
+offline tests cover responses and redaction; live GitHub acceptance remains
+pending.
+
 P9-43 (8 October 2026): reuse the workspace broker's latest connected-owner
 snapshot for per-turn model awareness; do not persist screen or view content.
 Keep `view` optional for old clients, validate current/previous destinations,

@@ -33,5 +33,7 @@ describe('shared navigation capability instructions', () => {
     expect(instructions).toContain('Charts support line, bar or area, with 1–5 named series of x/y points and up to 1,000 points total');
     expect(instructions).toContain('Timelines use events in order');
     expect(instructions).toContain('Use a self-contained HTML app view for richer visuals');
+    expect(instructions).toContain('read and revise that artifact with the supplied tools instead of creating another');
+    expect(instructions).not.toContain('update_html_view');
   });
 });

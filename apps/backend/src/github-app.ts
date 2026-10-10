@@ -4,6 +4,7 @@ import { SignJWT } from 'jose';
 export interface GitHubAppTokenIssuer {
   issue(repository: string): Promise<string>;
   issueForActions(repository: string): Promise<string>;
+  issueForChecks(repository: string): Promise<string>;
   issueForContents(repository: string): Promise<string>;
   issueForRepositoryRead(repository: string): Promise<string>;
   issueForContentsWrite(repository: string): Promise<string>;
@@ -334,6 +335,7 @@ export function createGitHubAppTokenIssuer({
   return {
     issue: (repository) => issue(repository, { contents: 'write', pull_requests: 'write' }),
     issueForActions: (repository) => issue(repository, { actions: 'read' }),
+    issueForChecks: (repository) => issue(repository, { checks: 'read' }),
     issueForContents: (repository) => issue(repository, { contents: 'read' }),
     issueForRepositoryRead: (repository) => issue(repository, {
       contents: 'read', issues: 'read', pull_requests: 'read', checks: 'read', statuses: 'read',

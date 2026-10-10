@@ -144,10 +144,12 @@ describe('Software Factory Jarvis tools', () => {
       'list_tasks', 'get_task', 'list_releases', 'get_release', 'get_deployment_status',
       'create_task', 'set_task_model', 'retry_task', 'steer_task', 'pause_task', 'resume_task', 'cancel_task',
       'list_capabilities', 'repo_overview', 'repo_list', 'repo_read', 'repo_search', 'repo_issues',
+      'pr_get', 'pr_diff', 'pr_reviews', 'checks_list', 'ci_log',
       'create_project', 'manage_repository',
     ];
     const repositoryNames = [
       'list_capabilities', 'repo_overview', 'repo_list', 'repo_read', 'repo_search', 'repo_issues',
+      'pr_get', 'pr_diff', 'pr_reviews', 'checks_list', 'ci_log',
     ];
     expect(factoryModule.tools.map(({ name }) => name)).toEqual(names);
     const capabilities = capabilityInstructions(defaultSettings.memory);

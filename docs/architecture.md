@@ -164,6 +164,20 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   Timeouts, cancellation, disconnects, stale sessions and partial failures are
   returned as refused/error results; command-delivered views and geometry are not
   persisted.
+  P9-52 retains the last successfully sent generated view per owner/viewId in
+  the broker's existing 128-command cache; eviction and process teardown discard
+  it. Definitively refused replacements do not supersede earlier cached views.
+  The always-registered, sensitive `read_window` tool prefers the latest
+  owner snapshot's optional content (8 KiB UTF-8) and selection (2 KiB), then
+  falls back to this cache. Its untrusted text is capped at 8 KiB, with 50
+  list/table rows or 100 timeline events; charts retain supplied series names,
+  units and points within that cap. HTML views reuse the owner-scoped artifact
+  store injected into the shared app; parse5 extracts static body/SVG text
+  without executing scripts, loading resources or returning markup. CSS-driven
+  and script-rendered visibility is not evaluated. Plain/code and page text
+  retain whitespace and entities; literal angle brackets become `‹`/`›` rather
+  than being parsed as HTML. Page text reporting remains
+  the separate UI task #640; old snapshots still validate.
   On non-conversation signed-in routes, the shell keeps the command stream
   mounted in a hidden Now panel while the workspace controller remains active.
   Ordinary renderers use fixed React elements and declarative data. P8-41 adds
@@ -2229,6 +2243,27 @@ which act only with transient user activation.
 
 ### Folio (P9-25)
 
+P9-53 adds sensitive agent-only `read_html_view` and `update_html_view` tools.
+Reads accept exactly one artifact ID or window ID and an optional positive
+version. Canonical `html-<compact artifact UUID>` windows resolve directly;
+research windows resolve from the broker's bounded cache of applied, owner-scoped
+HTML commands. All content is untrusted data and excluded from tool audits.
+Updates reuse create's HTML validation and 512 KiB UTF-8/50 HTTPS source limits.
+One SQL transaction locks the owned artifact, archives its previous content in
+`workspace_html_artifact_versions`, increments `version_number`, and replaces
+HTML plus any supplied title/sources. Omitted metadata is retained in SQL,
+including during concurrent revisions. No versions are pruned by this path.
+Artifact identity, creation time, Folio records and pin state remain unchanged.
+Historical reads join the current artifact to enforce ownership.
+
+After commit, an acknowledged workspace `update` targets the original cached
+window or canonical HTML window, never a new window. Delivery failure reports
+the saved artifact/version rather than claiming display success. No migration,
+App permission or web change is introduced. The existing `HtmlAppView` fetch
+depends only on artifact ID: same-ID updates do not reload its iframe yet.
+Visual refresh acceptance therefore needs separately authorized renderer work;
+backend command acknowledgement alone does not verify refreshed HTML.
+
 Migration `0035_folio.sql` adds an owner-scoped `dbo.folio_items` index over
 research reports, HTML apps, generated images and knowledge-graph views. New
 reports record their topic summary, HTML apps their title, generated images
@@ -2275,6 +2310,8 @@ Every GitHub credential Jarvis uses, checked with Dan on 4 October 2026. Each to
 Azure sign-in from GitHub Actions uses OpenID Connect and stores no secret. The Codex credential is a ChatGPT login (Key Vault `codex-login`), not a GitHub token. Removed on 4 October 2026: the unused `COPILOT_ASSIGNMENT_TOKEN` (former P0-12 coordinator) and an unused fine-grained token named `Jarvis`.
 
 ### GitHub App
+
+P9-54 adds read-only pull request, diff, review-thread, check and failed-job log tools to the backend Factory module. They use the default Jarvis repository or the same registered-project resolver as `repo_*`, with repository-scoped pull-request, Checks-read and Actions-read installation tokens. Diff patches, review output, API responses and log tails are bounded; log tails redact token-like values before returning, and every tool response warns that provider content is untrusted. No new permission, persistence, route, or migration is required.
 
 [`github-app-manifest.json`](github-app-manifest.json) prepares a private App with contents, pull-request, issues, workflows and repository-creation write access, and commit statuses, checks, Actions, environments and deployments read access. It subscribes to `check_run`, `deployment_status`, `issue_comment`, `issues`, `pull_request`, `push`, and `workflow_run`. The permission set is limited to the operations in P3-02, P3-03 and P7-45; repository metadata read is GitHub's required baseline. P10-02 adds issue operations and the `issues` webhook handler; P10-01 granted Issues write on 8 October 2026 and the `issues` subscription is enabled, so these paths can run live.
 

@@ -324,6 +324,10 @@ export interface WorkspaceSnapshotWindow {
   region?: WorkspaceWindowRegion;
   pinned?: boolean;
   front?: boolean;
+  /** Untrusted page-reported text, at most 8 KiB UTF-8. */
+  content?: string;
+  /** Untrusted selected text, at most 2 KiB UTF-8. */
+  selection?: string;
 }
 
 export interface WorkspaceSnapshot {
