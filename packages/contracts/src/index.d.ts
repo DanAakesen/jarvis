@@ -530,6 +530,7 @@ export const folioPatchSchema: Readonly<Record<string, unknown>>;
 export const folioDeleteSchema: Readonly<Record<string, unknown>>;
 export const folioSearchToolSchema: Readonly<Record<string, unknown>>;
 export const folioOpenToolSchema: Readonly<Record<string, unknown>>;
+export const folioManageToolSchema: Readonly<Record<string, unknown>>;
 export function isFolioItem(value: unknown): value is FolioItem;
 export const htmlArtifactFrameSchema: Readonly<Record<string, unknown>>;
 export function isHtmlArtifact(value: unknown): value is HtmlArtifact;
@@ -747,4 +748,24 @@ export interface SystemStatus {
   checkedAt: string;
   entries: readonly SystemStatusEntry[];
   smoke?: SystemSmokeStatus;
+}
+export interface WorkStatusInput {
+  issueNumber?: number;
+  taskId?: string;
+  query?: string;
+  project?: string;
+}
+export interface WorkStatus {
+  verdict: 'delivered' | 'in_progress' | 'needs_attention' | 'not_started';
+  project: { id: string; name: string; repo: string } | null;
+  issue: { number: number; url: string; title: string; state: 'open' | 'closed'; labels: string[] } | null;
+  tasks: { id: string; issueNumber: number | null; title: string; state: string; activity: string | null;
+    attemptCount: number; linked: boolean }[];
+  pullRequests: { number: number; url: string; state: 'open' | 'closed' | 'merged'; draft: boolean;
+    merged: boolean;
+    checks: 'pending' | 'passed' | 'failed'; mergeSha: string | null }[];
+  deployments: { sha: string; status: 'verified' | 'failed' | 'pending' | 'unknown';
+    source: 'release' | 'actions'; url: string | null }[];
+  warnings: string[];
+  partial: boolean;
 }

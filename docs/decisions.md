@@ -19,6 +19,26 @@ The nine design areas and where each stands. **Confirmed** = Dan's requirement o
 
 ## Decision log
 
+P9-56 (10 October 2026): reuse the Folio route stores for Jarvis rename,
+pin/unpin and removal, preserving the existing index-only deletion semantics:
+source artifacts and history remain available, but Folio no longer lists the
+entry. Deletion uses the existing item-naming Now approval service and fails
+closed without verified present status; recheck presence and title after
+approval. Keep action alternatives in execution code, not root schema
+combinators (L121). The shared instruction names no optional tool; returned
+titles are untrusted and audit content is redacted. Acceptance paths are tested
+offline; live model/Now use remains unverified.
+
+P9-55 (10 October 2026): reuse `settingsOptionsForCatalogue` for settings-tool
+discovery parity with `GET /settings`, and derive field guidance and numeric
+bounds from the existing patch schema. Filter settings, options and fields
+together for the requested area. Keep existing update validation and Now gates;
+generate bounded refusal hints from known fields and catalogue values, never
+submitted values. Both settings tools remain sensitive and always registered,
+so one shared discovery instruction can name them. No migration, App permission,
+dependency or web change is needed. Verified offline; live model use remains
+unverified.
+
 P9-52 (10 October 2026): keep generated window readback in the existing
 owner-scoped, bounded workspace command records, not SQL. Register `read_window`
 in core even when HTML storage is unavailable, prefer page-reported content,
@@ -322,6 +342,8 @@ Windows/Chrome/Jev speedup remains live acceptance.
 
 | Date | Decision | Rationale and evidence | Status |
 | --- | --- | --- | --- |
+| 2026-10-10 | P9-73 uses one additive phone dock gap above the safe area, enables edge-to-edge viewports and adds a minimal standalone manifest reusing the app icon. | `max(gap, inset)` leaves no gap above a nonzero inset. Chromium/WebKit fixtures measured 16px with zero inset and 50px with 34px inset; desktop geometry is unchanged. Root ownership lets body-portalled toasts share the phone token. | Implemented and browser-checked with fixtures; physical iPhone and installed Home Screen acceptance remain unverified |
+| 2026-10-10 | P9-50 reconciles issue, task, PR and merge-commit deployment through a read-only Factory tool. Require closed issue, merged PR and matching successful deployment for “delivered”; preserve partial results and warnings on failed reads. Recover/resume of closed, merged or superseded legacy work requires `confirm: true` on the Dan-only controls route. | Issue #627 records duplicate recovery caused by an unlinked legacy task. Reuse task/release stores, existing GitHub readers and permissions; do not silently link legacy matches, infer delivery from an unrelated SHA, or allow the resume tool to bypass the gate. No migration or web change. Focused tests cover explicit body supersession, ambiguous queries, partial failures, qualified closing references and exact-SHA deployment; unverifiable restart safety returns 503. | Implemented offline; live acceptance pending |
 | 2026-10-08 | P9-33 exposes explicit vault-note deletion through the shared sensitive tool registry. Reuse the GitHub App Contents-write client and require a present-mode Now confirmation naming the exact path; recheck the note SHA after approval, then remove its index rows and invalidate the graph cache. | Existing Contents API SHA protection, `TeamsNotificationService.runConfirmed`, and `VaultIndexStore.deleteFiles` cover the provider, approval and cleanup boundaries. No migration or web change is needed; focused fake-GitHub tests cover approval gating, concurrent edits, commit metadata, index removal and graph invalidation. | Implemented offline; live GitHub App access remains unverified |
 | 2026-10-08 | P9-31 adds `get_usage` through the existing agent-only tool registry and usage store. Reuse the shared usage period/entry contracts, support the current UTC day, and group spend by role/source and model without hiding estimated or unverified costs. Redact the financial result from durable generic tool-call audit records; add no migration or web changes. | `UsageStore.list` already bounds and groups persisted usage, including active sandbox estimates and cost coverage. Backend tests cover today’s UTC interval, per-area/model aggregation, cost status, tool registration and sensitive audit redaction. | Implemented offline; live provider billing remains unverified |
 | 2026-10-07 | P9-22 exposes owner-authenticated `/phone/status` and a 20-call history through the existing shared contracts and `phone_sessions` table. Keep phone calling dormant unless Dan provisions Teams/ACS and a Teams Phone number; status configuration is not a provider health check. Do not return caller or call IDs, and do not add a migration or web changes. | P6-22 keeps Teams unprovisioned in production; P7-01 records that no phone number was purchased. Backend tests cover owner auth, unavailable history, sanitized failure, bounded history and status mapping. No Azure CLI/live Azure access was available, so current number, ACS resource and callback delivery remain unverified. | Implemented offline; production setup and live callbacks unverified |

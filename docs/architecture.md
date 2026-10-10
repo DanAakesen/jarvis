@@ -33,6 +33,12 @@ Jarvis is one backend with a shared core and one module per area, a static web a
 
 ## Web skeleton and configuration
 
+- P9-73 enables `viewport-fit=cover` and serves `/manifest.webmanifest` with
+  standalone display, the existing SVG icon and dark launch colours. Phone-only
+  `--phone-dock-bottom` is shared at the root so body-portalled toasts inherit it;
+  composer, voice and window clearance use it within the existing `100dvh` shell.
+  No service worker, backend contract or migration is added.
+
 - P8-05 keeps the conversation screen viewport-bound within the P8-04 shell.
   `ConversationHistory` owns the draft, language, chat turn and typing/voice
   visibility; `VoiceControls` owns the browser voice client and reports active
@@ -478,6 +484,13 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   compatibility alias for the chat role and shares the same confirmation and
   validation path. These tools reuse the existing settings store and contracts;
   no migration or web change is required.
+  P9-55 adds the same catalogue-derived options as `GET /settings` and a
+  schema-derived `fields` guide with key paths, types, allowed values, numeric
+  bounds and Now-confirmation flags. Optional `area` selects roles, voice,
+  research, memory, timeouts, appearance or personality and filters all three
+  output sections. Invalid updates retain the existing validator but return
+  bounded field-specific hints without submitted values. The shared instructions
+  advise discovery before uncertain updates; both tools are always registered.
   P9-34 adds a bounded home-location setting (`city`, latitude and longitude) to
   that same store and registers `weather` through the shared tool registry.
   Open-Meteo geocodes named places and returns a validated current observation
@@ -679,6 +692,32 @@ includes the new correction in the recovery prompt and task history.
 A stale or invalid transition returns 409, unavailable runtime state returns
 503, and remote failures are sanitized. The board and detail page share one state-aware
 controls component.
+
+P9-50 adds read-only `get_work_status` to the Factory tool registry. It combines
+task detail/list reads, GitHub issue and PR evidence, release records and the
+existing Actions deployment reader. “Delivered” requires a closed issue, a
+merged PR and successful deployment evidence for that PR's merge commit;
+an unrelated latest deployment cannot prove delivery. Missing or failed reads
+produce a partial answer with sanitized warnings. Repository and issue text is
+untrusted evidence, and the sensitive tool excludes private inputs/results from
+generic tool-call persistence.
+Repository-read installation tokens request the App's existing Checks and
+Statuses read grants so PR checks do not depend on write tokens or new permissions.
+If multiple merged PRs implement the issue, each requires matching deployment
+evidence so an older successful release cannot conceal a newer undelivered fix.
+Exact title/task-code matches and explicit “Supersedes Factory task” references
+help identify legacy work without rewriting its issue link. Ambiguous matches
+remain warnings rather than an invented authoritative link.
+
+Before recover/resume, the backend checks for a closed linked issue, a merged
+PR, or completed matching work superseding an unlinked legacy task. Such work
+requires explicit `confirm: true` on the Dan-only controls route; otherwise
+the route returns 409 with a reason. The resume tool cannot bypass this gate.
+Unverifiable restart safety returns 503 rather than starting duplicate work.
+Steering an idle-expired session uses recovery and therefore shares this gate;
+ordinary steering of a live session is unchanged.
+No migration, GitHub write operation, App permission or web change is required;
+the existing UI displays the refusal as an error until it gains an override prompt.
 
 P1-08's web board uses the authenticated project and task APIs for filters and
 task creation, requesting at most 100 newest matching tasks at a time. It opens
@@ -2256,6 +2295,18 @@ then focuses it. `PATCH /folio/:id` pins or renames an item. Confirmed
 and its history remain available. The shared sensitive tools `folio_search`
 and `folio_open` provide the same owner-scoped search and broker-backed reopen
 behavior to Jarvis without retaining search arguments or results in tool audit.
+P9-56 adds sensitive `folio_manage` with a plain root object schema: exactly one
+`id` or `query`, `action` (`rename`, `pin`, `unpin`, `delete`), and `title` only
+for rename. It shares unique-query resolution with `folio_open` and reuses
+`FolioStore.update/delete`; ambiguity asks Dan to choose with bounded untrusted
+titles. Reversible changes need no approval. Deletion fails closed if presence
+or Now approval is unavailable, refuses away/on-the-move states, and uses the
+existing `runConfirmed('delete', ...)` flow naming the title and id. Duplicate
+pending deletions are refused; after approval, presence and the title are
+rechecked before removing the Folio index entry. Source artifacts/history are
+retained and no deleted entry is returned by Folio search. Outputs mark titles
+as untrusted; arguments and results are redacted from the tool audit. No
+migration, GitHub App permission, dependency or web change is needed.
 The Folio rail and pane are a separate UI task.
 
 ### Sandbox credentials

@@ -13,6 +13,7 @@ import {
   folioKinds,
   folioItemSchema,
   folioSearchResponseSchema,
+  folioManageToolSchema,
   isFolioItem,
   htmlArtifactByteLimit,
   htmlArtifactFrameSchema,
@@ -199,6 +200,13 @@ test('Folio contracts use bounded searchable item metadata and closed item kinds
   assert.equal(isFolioItem(item), true);
   assert.equal(isFolioItem({ ...item, kind: 'conversation' }), false);
   assert.equal(isFolioItem({ ...item, promptSummary: ' Research ' }), false);
+  assert.equal(folioManageToolSchema.type, 'object');
+  assert.deepEqual(folioManageToolSchema.required, ['action']);
+  assert.deepEqual(folioManageToolSchema.properties.action.enum, ['rename', 'pin', 'unpin', 'delete']);
+  assert.equal(folioManageToolSchema.properties.title.maxLength, 200);
+  assert.equal(folioManageToolSchema.properties.query.maxLength, 120);
+  assert.equal(folioManageToolSchema.additionalProperties, false);
+  for (const keyword of ['oneOf', 'anyOf', 'allOf']) assert.equal(folioManageToolSchema[keyword], undefined);
 });
 
 test('clipboard contracts bound UTF-8 text and keep read/write result shapes exact', () => {

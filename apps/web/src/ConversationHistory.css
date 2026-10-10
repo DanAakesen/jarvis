@@ -252,11 +252,11 @@
   .app-shell[data-voice-active="false"] .workspace[data-phone="true"] .workspace-window-conversation:not(.workspace-window-maximized) { flex: 0 1 auto; align-self: flex-end; max-height: min(46dvh, 420px); }
   .workspace[data-phone="true"] .workspace-conversation-content { touch-action: pan-y pinch-zoom; }
   .workspace[data-phone="true"] .workspace-window-conversation .workspace-icon-control { width: 44px; min-width: 44px; height: 44px; min-height: 44px; }
-  .app-shell[data-voice-active="true"] { --phone-dock-height: var(--voice-bar-height, 60px); --phone-dock-bottom: max(16px, env(safe-area-inset-bottom)); }
+  .app-shell[data-voice-active="true"] { --phone-dock-height: var(--voice-bar-height, 60px); }
   .app-shell[data-voice-active="true"] .voice-bar,
-  .app-shell[data-voice-active="true"][data-voice-has-windows="true"] .voice-bar { bottom: var(--phone-dock-bottom); left: 50%; width: max-content; max-width: calc(100vw - 24px); transform: translateX(-50%); }
+  .app-shell[data-voice-active="true"][data-voice-has-windows="true"] .voice-bar { bottom: var(--phone-dock-bottom); left: calc((100vw + env(safe-area-inset-left) - env(safe-area-inset-right)) / 2); width: max-content; max-width: calc(100vw - env(safe-area-inset-left) - env(safe-area-inset-right) - 24px); transform: translateX(-50%); }
   .voice-end-control { padding-inline: 10px 12px; }
-  .app-shell[data-voice-active="true"][data-voice-has-windows="true"] .workspace-shell-area:not([hidden]) { position: fixed; top: max(68px, calc(env(safe-area-inset-top) + 56px)); right: 12px; bottom: var(--voice-dock-top, calc(var(--phone-dock-bottom) + var(--phone-dock-height) + var(--voice-status-height, 0px) + 20px)); left: 12px; width: auto; height: auto; overflow: hidden; }
+  .app-shell[data-voice-active="true"][data-voice-has-windows="true"] .workspace-shell-area:not([hidden]) { position: fixed; top: calc(env(safe-area-inset-top) + 68px); right: calc(env(safe-area-inset-right) + 12px); bottom: var(--voice-dock-top, calc(var(--phone-dock-bottom) + var(--phone-dock-height) + var(--voice-status-height, 0px) + 20px)); left: calc(env(safe-area-inset-left) + 12px); width: auto; height: auto; overflow: hidden; }
 }
 
 @media (prefers-reduced-motion: reduce) {

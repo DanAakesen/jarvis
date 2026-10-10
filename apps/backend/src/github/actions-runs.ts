@@ -115,15 +115,17 @@ export function createGitHubActionsRunClient(
       repository: string,
       branch: string,
       signal?: AbortSignal,
+      sha?: string,
     ): Promise<GitHubActionsDeploymentRun | null> {
       if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/u.test(repository) ||
-        !branch.trim() || branch.length > 255) {
+        !branch.trim() || branch.length > 255 || (sha !== undefined && !/^[0-9a-f]{40}$/iu.test(sha))) {
         throw new Error('GitHub Actions repository or branch is invalid');
       }
       const [owner, name] = repository.split('/');
       if (!owner || !name) throw new Error('GitHub Actions repository is invalid');
       const token = await tokenIssuer.issueForActions(repository);
       const query = new URLSearchParams({ branch, per_page: '100' });
+      if (sha) query.set('head_sha', sha);
       const response = await fetchImpl(
         `${githubApi}/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/actions/runs?${query}`,
         {
@@ -144,7 +146,8 @@ export function createGitHubActionsRunClient(
       }
       const runs = value.workflow_runs
         .map((run) => parseRun(run, repository, branch))
-        .filter((run): run is GitHubActionsDeploymentRun => run !== null)
+        .filter((run): run is GitHubActionsDeploymentRun => run !== null &&
+          (sha === undefined || run.headSha.toLowerCase() === sha.toLowerCase()))
         .sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt) || right.id - left.id);
       return runs[0] ?? null;
     },
