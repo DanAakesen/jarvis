@@ -19,6 +19,17 @@ The nine design areas and where each stands. **Confirmed** = Dan's requirement o
 
 ## Decision log
 
+P9-57 (10 October 2026): reuse `WorkspacePinStore.list` and the existing
+acknowledged workspace broker for owner-scoped saved-pin discovery and restore.
+Keep the tools read/restore-only: pin/unpin remain page-owned. Return bounded
+oldest-first metadata, resolve exactly one view ID or unique case-insensitive
+title query, and ask Dan to choose ambiguous matches. Revalidate stored views
+with `isWorkspaceCommand` and current registered tools before create/update,
+then focus; refuse when no owner workspace is connected. Use plain root object
+schemas (L121), one tool-name-free shared instruction, untrusted title markers
+and redacted audits. No migration, App permission or web change is required.
+Acceptance paths are verified offline; live model/browser use remains unverified.
+
 P9-56 (10 October 2026): reuse the Folio route stores for Jarvis rename,
 pin/unpin and removal, preserving the existing index-only deletion semantics:
 source artifacts and history remain available, but Folio no longer lists the
