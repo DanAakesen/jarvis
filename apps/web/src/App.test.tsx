@@ -185,7 +185,7 @@ describe('Jarvis routes', () => {
     expect(button.textContent).toBe('Sign in');
     expect(button.classList.contains('luminous-glass')).toBe(true);
     expect(button.classList.contains('primary-button')).toBe(false);
-    expect(button.querySelector('.signin-mark')?.getAttribute('aria-hidden')).toBe('true');
+    expect(button.querySelector('.signin-mark')).toBeNull();
     expect(screen.queryByRole('alert')).toBeNull();
     expect(screen.queryByText('Not signed in.')).toBeNull();
     expect(screen.queryByText(/Your personal AI platform/)).toBeNull();

@@ -23,7 +23,6 @@ export function SignInPage({ session }: { session: SignInSession }) {
       <button className="signin-button luminous-glass" type="button" onClick={() => { void session.signIn(); }}
         disabled={pending || unavailable} aria-label="Sign in with Microsoft" aria-busy={pending}
         aria-describedby={unavailable ? 'signin-unavailable' : undefined}>
-        <span className="signin-mark" aria-hidden="true" />
         {state === 'error' ? 'Retry' : 'Sign in'}
         {pending && <Loader variant="core" size="inline" announce={false} label="Opening Microsoft sign-in…" />}
       </button>
