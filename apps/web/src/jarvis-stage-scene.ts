@@ -166,6 +166,8 @@ function createJarvisStageSceneWithRenderer(
   const warm = new THREE.MeshBasicMaterial({ color: palette.warm, transparent: true, opacity: 0.85 });
   // Thin amber lines are flat and unlit, so they stay crisp instead of blooming.
   const warmLine = new THREE.MeshBasicMaterial({ color: palette.warm });
+  // Rear-ring inlays keep the floor's amber colour without distance fog dulling it.
+  const warmInlay = new THREE.MeshBasicMaterial({ color: palette.warm, fog: false, toneMapped: false });
   const metal = standard('metal', { metalness: 0.88, roughness: 0.24 });
   const darkMetal = standard('wall', {
     metalness: 0.62, roughness: 0.42, side: THREE.DoubleSide,
@@ -326,7 +328,7 @@ function createJarvisStageSceneWithRenderer(
       moving.add(arc);
       // The accent section carries a fine, crisp amber inlay on its face instead of a thick orange band (Dan, 7 October).
       if (section === index || section === (index + 2) % 4) {
-        const inlay = new THREE.Mesh(new THREE.TorusGeometry(radius, 0.009, 4, 88, Math.PI * 0.34), warmLine);
+        const inlay = new THREE.Mesh(new THREE.TorusGeometry(radius, 0.014, 6, 88, Math.PI * 0.34), warmInlay);
         inlay.position.z = tube + 0.004;
         arc.add(inlay);
       }
@@ -457,6 +459,7 @@ function createJarvisStageSceneWithRenderer(
     themeColors.orb.set(palette.orb);
     warm.color.set(palette.warm);
     warmLine.color.set(palette.warm);
+    warmInlay.color.set(palette.warm);
     amberLight.color.set(palette.warm);
     orbVisual.uniforms.uWarm.value.set(palette.warm);
   }

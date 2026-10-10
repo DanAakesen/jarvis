@@ -1115,3 +1115,18 @@ regression; live acceptance is pending.
   toggle semantics. Before/after captures are in `docs/ui/screenshots/p9-71/`.
 - **Status:** implemented offline; physical-device and live-service checks are
   not claimed.
+
+## 2026-10-10: Orb inlay vibrancy and Folio navigation
+
+- **Decision (Dan):** rear-ring orange inlays match the floor's vibrant amber.
+  Keep the existing warm token and a fine profile; bypass distance fog and tone
+  mapping for ring inlays only. Floor lighting, cyan geometry and motion remain
+  unchanged.
+- **Decision (Dan):** choosing a page dismisses Folio, including the current
+  page, home/Settings links, the phone menu and Jarvis navigation. An area with
+  multiple pages can replace it with its own navigation. History changes also
+  dismiss the pane without reopening it on return.
+- **Evidence:** focused navigation regressions and stage tests; local Chromium
+  desktop/phone checks in both themes. Fixture captures and limitations are
+  recorded in `docs/ui/screenshots/orb-folio-polish/README.md`.
+- **Status:** implemented locally; production acceptance follows merge.
