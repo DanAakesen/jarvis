@@ -891,19 +891,26 @@ describe('App shell', () => {
     }
   });
 
-  it('closes the Folio on desktop page selection, including the current page and home links', async () => {
+  it.each([
+    ['Software Factory', '/'],
+    ['Knowledge', '/'],
+    ['Usage', '/'],
+    ['Usage', '/usage'],
+    ['Conversation', '/usage'],
+    ['Conversation', '/'],
+    ['Jarvis home', '/'],
+    ['Settings', '/'],
+  ])('closes the Folio when selecting %s from %s on desktop', async (name, path) => {
     const user = userEvent.setup();
-    await renderSignedIn();
+    await renderSignedIn(path);
     const shell = document.querySelector('.app-shell')!;
     const folio = screen.getByRole('button', { name: 'Folio' });
-    for (const name of ['Software Factory', 'Knowledge', 'Usage', 'Usage', 'Conversation', 'Conversation', 'Jarvis home', 'Settings']) {
-      await user.click(folio);
-      expect(shell.getAttribute('data-folio-open')).toBe('true');
-      await user.click(screen.getByRole('link', { name }));
-      expect(shell.getAttribute('data-folio-open')).toBe('false');
-      expect(shell.getAttribute('data-navigation-open')).toBe('false');
-      expect(folio.getAttribute('aria-pressed')).toBe('false');
-    }
+    await user.click(folio);
+    expect(shell.getAttribute('data-folio-open')).toBe('true');
+    await user.click(screen.getByRole('link', { name }));
+    expect(shell.getAttribute('data-folio-open')).toBe('false');
+    expect(shell.getAttribute('data-navigation-open')).toBe('false');
+    expect(folio.getAttribute('aria-pressed')).toBe('false');
   });
 
   it('closes the Folio when a phone menu selects the same page or a different page', async () => {
