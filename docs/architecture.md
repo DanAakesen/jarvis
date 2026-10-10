@@ -33,6 +33,12 @@ Jarvis is one backend with a shared core and one module per area, a static web a
 
 ## Web skeleton and configuration
 
+- P9-73 enables `viewport-fit=cover` and serves `/manifest.webmanifest` with
+  standalone display, the existing SVG icon and dark launch colours. Phone-only
+  `--phone-dock-bottom` is shared at the root so body-portalled toasts inherit it;
+  composer, voice and window clearance use it within the existing `100dvh` shell.
+  No service worker, backend contract or migration is added.
+
 - P8-05 keeps the conversation screen viewport-bound within the P8-04 shell.
   `ConversationHistory` owns the draft, language, chat turn and typing/voice
   visibility; `VoiceControls` owns the browser voice client and reports active

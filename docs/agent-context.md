@@ -308,6 +308,15 @@ returns a profile and defines `__JARVIS_CONFIG__` with a placeholder backend
 URL. For settings, serve a mock `/settings` response from that harness only.
 P1-11 was inspected at 390 and 1280 px; save and disabled actions were exercised.
 
+P9-73 fixture checks used Chromium and WebKit at 390×844, 1280×900 and
+844×390 in light/dark, replacing served CSS `env()` values only in the scratch
+harness to simulate zero/34px bottom, 47px portrait top and landscape side insets.
+Composer gaps measured 16px/50px on Home and Knowledge; desktop geometry matched
+the baseline. Draft, More/Escape and voice entry/exit were exercised with
+scratch-only auth/API/voice fixtures. Before/after captures are in
+`docs/ui/screenshots/p9-73/`. These are not physical iPhone, browser-toolbar,
+installed Home Screen or live microphone/provider verification.
+
 P7-15's conversation image preview was inspected in Chromium at 1280×900 and
 390×844 using scratch-only signed-in and API fixtures. The existing history
 rendered the image artifact with its accessible name and caption; the image fit

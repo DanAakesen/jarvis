@@ -56,6 +56,39 @@ function contrast(first: Color, second: Color): number {
 }
 
 describe('shared glass tokens', () => {
+  it('enables edge-to-edge phone viewports and a standalone Home Screen app using the existing icon', () => {
+    const html = readFileSync('index.html', 'utf8');
+    const manifest = JSON.parse(readFileSync('public/manifest.webmanifest', 'utf8'));
+    expect(html).toContain('content="width=device-width, initial-scale=1.0, viewport-fit=cover"');
+    expect(html).toContain('<link rel="manifest" href="/manifest.webmanifest"');
+    expect(html).toContain(`<meta name="theme-color" content="${manifest.theme_color}"`);
+    expect(html).toContain('name="apple-mobile-web-app-capable" content="yes"');
+    expect(manifest).toMatchObject({
+      name: 'Jarvis', display: 'standalone', start_url: '/', background_color: '#20252c',
+      icons: [{ src: '/favicon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any' }],
+    });
+    const hosting = JSON.parse(readFileSync('public/staticwebapp.config.json', 'utf8'));
+    expect(hosting.navigationFallback.exclude).toContain('/manifest.webmanifest');
+  });
+
+  it('shares an additive phone safe-area gap across the composer, voice, feedback and window dock', () => {
+    const styles = readFileSync('src/styles.css', 'utf8');
+    const history = readFileSync('src/ConversationHistory.css', 'utf8');
+    const voice = readFileSync('src/VoiceControls.css', 'utf8');
+    const toasts = readFileSync('src/ConversationToast.css', 'utf8');
+    expect(styles).toContain('@media (max-width: 700px), (max-height: 500px) and (pointer: coarse) {\n  :root { --phone-dock-bottom: calc(env(safe-area-inset-bottom) + 16px); }');
+    expect(ruleDeclaration(styles, /\.app-shell\[data-phone="true"\]\s*\{([^}]*)\}/, '--dock-space')).toBe('calc(68px + var(--phone-dock-bottom))');
+    expect(ruleDeclaration(styles, /\.app-shell\[data-phone="true"\]\[data-home="true"\] \.jarvis-page\s*\{([^}]*)\}/, 'padding-bottom')).toBe('var(--phone-dock-bottom)');
+    expect(ruleDeclaration(styles, /\.app-shell\[data-phone="true"\]\[data-home="false"\]:not\(\.app-signed-out\) \.jarvis-page\s*\{([^}]*)\}/, 'bottom')).toBe('var(--phone-dock-bottom)');
+    expect(history).toContain('bottom: var(--phone-dock-bottom)');
+    expect(history).not.toContain('--phone-dock-bottom:');
+    expect(voice).toContain('bottom: calc(var(--phone-dock-bottom) + var(--phone-dock-height) + 12px)');
+    expect(toasts).toContain('bottom: calc(var(--phone-dock-bottom) + 88px)');
+    expect(ruleDeclaration(styles, /\.app-shell\[data-phone="true"\]\s*\{([^}]*)\}/, 'padding')).toBe('env(safe-area-inset-top) env(safe-area-inset-right) 0 env(safe-area-inset-left)');
+    expect(ruleDeclaration(styles, /\.app-shell\s*\{([^}]*)\}/, 'height')).toBe('100vh');
+    expect(styles).toContain('height: 100dvh;');
+  });
+
   it('keeps text, muted text, and icon contrast on glass surfaces in both appearances', () => {
     const source = readFileSync('src/styles.css', 'utf8');
     const appSource = readFileSync('src/App.tsx', 'utf8');

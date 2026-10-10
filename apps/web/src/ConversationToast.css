@@ -37,9 +37,10 @@
   .conversation-toast .conversation-toast-dismiss { flex-basis: 44px; width: 44px; height: 44px; }
   .conversation-toast .conversation-toast-action { min-height: 44px; }
 }
-@media (max-width: 700px) {
+@media (max-width: 700px), (max-height: 500px) and (pointer: coarse) {
   /* Keep phone voice/composer controls tappable below transient feedback. */
-  .conversation-toast-stack { bottom: calc(max(20px, env(safe-area-inset-bottom)) + 88px); }
+  .conversation-toast-stack { right: calc(env(safe-area-inset-right) + 12px); bottom: calc(var(--phone-dock-bottom) + 88px); max-width: calc(100vw - env(safe-area-inset-left) - env(safe-area-inset-right) - 24px); }
+  .conversation-toast { max-width: 100%; }
 }
 @media (prefers-reduced-motion: reduce) { .conversation-toast { animation: none; } }
 

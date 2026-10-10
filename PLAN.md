@@ -549,6 +549,8 @@ P8-02 allocated P8-04 through P8-13 to frontend work in PR #233. Backend tasks t
 | P9-53 | [#630](https://github.com/DanAakesen/jarvis/issues/630) | Revise existing HTML reports/apps instead of creating another; backend and contracts scope only | Agent-only owner-scoped reads by artifact/window and optional historical version; atomic revisions preserve id, Folio, pins and omitted title/sources, archive prior content, and send an acknowledged workspace update. Shared create validation and sensitive audit apply. Offline backend and SQL checks; live acceptance pending. Existing web iframe does not refetch same-id updates; renderer refresh needs separately authorized web work | — | Complete |
 | P9-54 | [#631](https://github.com/DanAakesen/jarvis/issues/631) | Jarvis inspects pull requests, review threads, checks and failing build logs | Backend and contracts only; default and registered repositories only; bounded outputs, sanitized logs, fake-response coverage; read-only | — | Complete |
 
+| P9-73 | [#650](https://github.com/DanAakesen/jarvis/issues/650) | Phone chat bar clears the home indicator | Shared additive safe-area dock spacing, top/landscape insets and standalone manifest; Chromium/WebKit fixture checks at phone/desktop sizes in light/dark, zero/34px bottom insets. Before/after screenshots; physical iPhone/Home Screen acceptance pending | — | In progress |
+
 ### Confirm before P0
 
 1. Stack choices ([stack overview](docs/architecture.md#stack-overview)): all confirmed on 3 October 2026, including Fastify.
