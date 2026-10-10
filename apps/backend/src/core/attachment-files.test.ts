@@ -3,6 +3,28 @@ import sharp from 'sharp';
 import { describe, expect, it } from 'vitest';
 import { extractAttachment, validateAttachmentFile } from './attachment-files.js';
 
+function pdfWithText(text: string): Buffer {
+  const content = `BT /F1 12 Tf 10 10 Td (${text}) Tj ET`;
+  const objects = [
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 100] /Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>',
+    `<< /Length ${Buffer.byteLength(content)} >>\nstream\n${content}\nendstream`,
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+  ];
+  let document = '%PDF-1.4\n';
+  const offsets = [0];
+  for (const [index, object] of objects.entries()) {
+    offsets.push(Buffer.byteLength(document));
+    document += `${index + 1} 0 obj\n${object}\nendobj\n`;
+  }
+  const xrefOffset = Buffer.byteLength(document);
+  document += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+  for (const offset of offsets.slice(1)) document += `${String(offset).padStart(10, '0')} 00000 n \n`;
+  document += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`;
+  return Buffer.from(document);
+}
+
 describe('conversation attachment files', () => {
   it('rejects extensions and magic bytes that do not match, and refuses SVG and HTML', async () => {
     await expect(validateAttachmentFile({
@@ -62,6 +84,16 @@ describe('conversation attachment files', () => {
     await expect(extractAttachment({
       fileName: 'notes.txt', contentType: 'text/plain', bytes: Buffer.from('hello'), extension: 'txt',
     }, AbortSignal.timeout(1_000))).resolves.toBe('hello');
+  });
+
+  it('extracts PDF page text within the bounded parser', async () => {
+    const validated = await validateAttachmentFile({
+      fileName: 'report.pdf',
+      contentType: 'application/pdf',
+      bytes: pdfWithText('Quarterly results'),
+    });
+    await expect(extractAttachment(validated, AbortSignal.timeout(5_000)))
+      .resolves.toContain('Quarterly results');
   });
 
   it('extracts first-sheet XLSX cell text', async () => {

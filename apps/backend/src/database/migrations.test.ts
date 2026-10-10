@@ -67,6 +67,7 @@ describe('committed SQL manifest', () => {
       '0036_folio_lowercase_ids.sql',
       '0037_task_github_issues.sql',
       '0038_workspace_pins.sql',
+      '0039_conversation_attachments.sql',
     ]);
     for (const migration of migrations) await expect(readDownMigration(migration.name)).resolves.toMatchObject({ name: migration.name });
   });
@@ -88,6 +89,19 @@ describe('committed SQL manifest', () => {
     expect(migration?.sql).toContain('IX_workspace_pins_owner_pinned_at');
     await expect(readDownMigration('0038_workspace_pins.sql')).resolves.toMatchObject({
       sql: expect.stringContaining('DROP TABLE dbo.workspace_pins'),
+    });
+  });
+  it('stores private owner-scoped conversation attachments with bounded text and reversible cleanup', async () => {
+    const migration = (await readMigrations()).find(({ name }) => name === '0039_conversation_attachments.sql');
+    expect(migration?.sql).toContain('CREATE TABLE dbo.conversation_attachments');
+    expect(migration?.sql).toContain('message_id bigint NULL');
+    expect(migration?.sql).toContain("id = LOWER(id)");
+    expect(migration?.sql).toContain("blob_name LIKE N'attachments/%'");
+    expect(migration?.sql).toContain("status IN (N'uploaded', N'ready', N'failed')");
+    expect(migration?.sql).toContain('expires_at datetime2(7) NOT NULL');
+    expect(migration?.sql).toContain('LEN(extracted_text) <= 100000');
+    await expect(readDownMigration('0039_conversation_attachments.sql')).resolves.toMatchObject({
+      sql: expect.stringContaining('DROP TABLE dbo.conversation_attachments'),
     });
   });
   it('stores JSON embeddings only when SQL vector support is unavailable', async () => {

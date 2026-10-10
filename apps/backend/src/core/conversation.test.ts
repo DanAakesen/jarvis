@@ -206,6 +206,50 @@ describe('conversation routes', () => {
     expect(store.addMessage).not.toHaveBeenCalled();
   });
 
+  it('returns 403 for a non-owner attachment upload before reading its body', async () => {
+    const saveUpload = vi.fn();
+    const app = createApp(undefined, {
+      conversationAttachments: { saveUpload } as never,
+      auth: async () => ({
+        objectId: '00000000-0000-4000-8000-000000000002',
+        tenantId: config.auth.tenantId,
+        displayName: 'Other user',
+      }),
+    });
+    const response = await app.inject({
+      method: 'POST',
+      url: '/conversation/attachments',
+      headers: { ...headers, 'content-type': 'multipart/form-data; boundary=x' },
+    });
+    expect(response.statusCode).toBe(403);
+    expect(saveUpload).not.toHaveBeenCalled();
+  });
+
+  it('refuses SVG uploads on the route and never stores them', async () => {
+    const saveUpload = vi.fn();
+    const app = createApp(undefined, { conversationAttachments: { saveUpload } as never });
+    const boundary = 'jarvis-attachment-test';
+    const response = await app.inject({
+      method: 'POST',
+      url: '/conversation/attachments',
+      headers: {
+        ...headers,
+        'content-type': `multipart/form-data; boundary=${boundary}`,
+      },
+      payload: [
+        `--${boundary}`,
+        'Content-Disposition: form-data; name="file"; filename="screen.svg"',
+        'Content-Type: image/svg+xml',
+        '',
+        '<svg xmlns="http://www.w3.org/2000/svg"></svg>',
+        `--${boundary}--`,
+        '',
+      ].join('\r\n'),
+    });
+    expect(response.statusCode).toBe(415);
+    expect(saveUpload).not.toHaveBeenCalled();
+  });
+
   it('interrupts streamed text, saves it as interrupted, and restarts once with the steering message', async () => {
     let nextMessageId = 41;
     const steeringMessage = { id: '43', text: 'Continue in English.', language: 'en' as const };
