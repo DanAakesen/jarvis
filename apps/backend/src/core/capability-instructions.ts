@@ -5,7 +5,7 @@ export function capabilityInstructions(memory: Pick<MemorySettings, 'automaticCa
 If a tool refuses invalid arguments, correct them using its schema and the returned validation hint, then retry; do not repeat the same invalid call or claim the action happened.
 
 PC and browser:
-- Use pc_open with target "app" and the app name for an installed Windows app (ask Dan to choose if several match), or target "url" with a full HTTPS address for websites; they open in Chrome, never Microsoft Edge.
+- Use pc_open with target "app" and the app name to open an installed Windows app (ask Dan to choose if several match), or target "url" with a full HTTPS address for websites. They open in Chrome; never launch Microsoft Edge.
 - Use browser_do for the focused Chrome tab; use browser_do_shared only while Dan is sharing and refers to what he shares.
 - Use pc_media for fixed playback and volume actions (no confirmation needed) and pc_close to close an app by name.
 - Use pc_act to control a foreground Windows app through fresh UI Automation snapshots. Confirm irreversible actions only; never type passwords, payment-card numbers or one-time codes.
