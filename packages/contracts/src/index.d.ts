@@ -530,6 +530,7 @@ export const folioPatchSchema: Readonly<Record<string, unknown>>;
 export const folioDeleteSchema: Readonly<Record<string, unknown>>;
 export const folioSearchToolSchema: Readonly<Record<string, unknown>>;
 export const folioOpenToolSchema: Readonly<Record<string, unknown>>;
+export const folioManageToolSchema: Readonly<Record<string, unknown>>;
 export function isFolioItem(value: unknown): value is FolioItem;
 export const htmlArtifactFrameSchema: Readonly<Record<string, unknown>>;
 export function isHtmlArtifact(value: unknown): value is HtmlArtifact;
