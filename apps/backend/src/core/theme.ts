@@ -58,7 +58,7 @@ function settingsPatch(value: unknown): SettingsPatch {
     ...(reset === true ? { accent: null, 'accent-secondary': null, 'surface-tint': null } : {}),
   };
   return {
-    appearance: appearance as SettingsPatch['appearance'],
+    appearance: appearance as NonNullable<SettingsPatch['appearance']>,
   };
 }
 
