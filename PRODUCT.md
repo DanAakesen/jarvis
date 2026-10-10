@@ -407,6 +407,12 @@ The separate daily web-research count includes successful, refused, and failed c
 
 ## Shared UI direction (4 October 2026; confirmed, implementation in progress)
 
+P9-73 requires the phone composer on Home and Knowledge, and the voice dock,
+to clear the bottom safe area by at least 12px even when the inset is zero.
+Feedback and windows must not overlap those controls. Portrait and landscape
+respect all safe-area edges; desktop remains unchanged. Home Screen launch uses
+a minimal standalone Jarvis manifest and the existing app icon.
+
 The confirmed requirements and proposed feature placement are in [ui.md](ui.md).
 Jarvis has one typing shell with expandable navigation and context panels, and a
 fullscreen voice workspace with a runtime-state-driven orb. Jarvis can create and

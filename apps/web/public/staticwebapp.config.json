@@ -12,6 +12,7 @@
     "exclude": [
       "/assets/*",
       "/favicon.svg",
+      "/manifest.webmanifest",
       "/redirect.html"
     ]
   }

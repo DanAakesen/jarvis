@@ -417,6 +417,11 @@ P8-11 implements phone view switching on the existing client controller.
 
 ### Phone workspace (P8-11)
 
+P9-73 keeps phone docks one comfortable gap above the bottom safe area, shared
+by typing and voice; feedback and windows clear that dock. The shell and fixed
+phone sheets also respect the top and landscape side insets. Canonical spacing
+lives in `styles.css`; desktop geometry is unchanged.
+
 At 700px and below, one non-minimised view occupies the main space above the
 floating composer. Named view buttons switch foreground; left/right swipes on
 non-interactive content and Left/Right/Home/End on those buttons are alternatives.
