@@ -2,17 +2,62 @@
 
 from __future__ import annotations
 
+import base64
+import binascii
+import contextvars
 import json
 import re
 from datetime import datetime
 from typing import Any
+
+from state import ModelImage
+
+MAX_JPEG_BYTES = 1_000_000
+current_visual_result: contextvars.ContextVar[dict[str, Any] | None] = contextvars.ContextVar(
+    "current_visual_result", default=None
+)
+
+
+class ImageInputRejected(RuntimeError):
+    """Provider rejected image input before output or tool execution."""
+
+    def __init__(self, reason: str = "image_rejected") -> None:
+        super().__init__("Image input unavailable")
+        self.reason = reason
+
+
+def resolved_visual_image(value: Any, context: dict[str, str | None] | None) -> ModelImage:
+    if (
+        not isinstance(value, dict)
+        or set(value) != {"frameId", "imageBase64", "mimeType", "detail"}
+        or context is None
+        or value.get("frameId") != context.get("frameId")
+        or context.get("frameId") is None
+        or value.get("mimeType") != "image/jpeg"
+        or not isinstance(value.get("detail"), str)
+        or value.get("detail") not in {"low", "auto"}
+        or not isinstance(value.get("imageBase64"), str)
+        or not 1 <= len(value["imageBase64"]) <= 4 * ((MAX_JPEG_BYTES + 2) // 3)
+    ):
+        raise ValueError("Invalid resolved visual context")
+    try:
+        image = base64.b64decode(value["imageBase64"], validate=True)
+    except (ValueError, binascii.Error) as exc:
+        raise ValueError("Invalid resolved visual context") from exc
+    if (
+        not 4 <= len(image) <= MAX_JPEG_BYTES
+        or not image.startswith(b"\xff\xd8")
+        or not image.endswith(b"\xff\xd9")
+    ):
+        raise ValueError("Invalid resolved visual context")
+    return ModelImage(value["imageBase64"], value["detail"])
 
 
 def visual_context(value: Any) -> dict[str, str | None] | None:
     if (
         not isinstance(value, dict)
         or not {"source", "capturedAt", "description"} <= set(value)
-        or set(value) - {"source", "capturedAt", "description", "question", "turnId"}
+        or set(value) - {"source", "capturedAt", "description", "question", "turnId", "frameId"}
     ):
         return None
     source, captured_at, description = (
@@ -42,6 +87,13 @@ def visual_context(value: Any) -> dict[str, str | None] | None:
                 or not re.fullmatch(r"[A-Za-z0-9_-]{1,128}", value["turnId"])
             )
         )
+        or (
+            "frameId" in value
+            and (
+                not isinstance(value["frameId"], str)
+                or not re.fullmatch(r"[A-Za-z0-9_-]{1,128}", value["frameId"])
+            )
+        )
     ):
         return None
     try:
@@ -57,6 +109,8 @@ def visual_context(value: Any) -> dict[str, str | None] | None:
         )
     if "turnId" in value:
         result["turnId"] = value["turnId"]
+    if "frameId" in value:
+        result["frameId"] = value["frameId"]
     return result
 
 

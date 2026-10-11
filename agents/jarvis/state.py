@@ -76,11 +76,20 @@ class ApplicationTurn:
 
 
 @dataclass(frozen=True, slots=True)
+class ModelImage:
+    """Ephemeral JPEG supplied only to the current model invocation."""
+
+    image_base64: str = field(repr=False)
+    detail: Literal["low", "auto"] = "low"
+
+
+@dataclass(frozen=True, slots=True)
 class ModelMessage:
     """One bounded message supplied to the model backend."""
 
     role: Literal["user", "assistant"]
     content: str
+    images: tuple[ModelImage, ...] = field(default=(), repr=False)
 
 
 @dataclass(frozen=True, slots=True)

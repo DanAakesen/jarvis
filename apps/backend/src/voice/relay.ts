@@ -34,6 +34,7 @@ import { createVoiceStatusAnnouncer } from './status-updates.js';
 import { isJevFailure } from '../core/jev.js';
 import type { DecisionProviderId } from '../core/decision-provider.js';
 import type { VisionWatchService } from '../vision/watch.js';
+import type { FrameStore } from '../vision/frame-store.js';
 import {
   VOICE_PHRASE_HINTS,
   type PartialSpeechRecognizer,
@@ -53,6 +54,7 @@ const CONNECTION_TIMEOUT_MS = 10_000;
 const MAX_QUEUED_PARTIAL_AUDIO_BYTES = 256_000;
 const SHARED_SCREEN_CONTEXT_TIMEOUT_MS = 15_000;
 const CAMERA_CONTEXT_TIMEOUT_MS = 12_000;
+const IMAGE_ACCEPTANCE_TIMEOUT_MS = 1_500;
 const MAX_FRAME_RETRY_AFTER_MS = 86_400_000;
 const CAMERA_UNAVAILABLE_REASONS = new Set([
   'frame_rate_limited', 'daily_limit', 'capture_failed', 'camera_off', 'permission_denied',
@@ -165,12 +167,20 @@ export interface VoiceRelayOptions {
   readonly createPartialRecognizer?: PartialSpeechRecognizerFactory;
   readonly registerPhoneMediaRoute?: (app: FastifyInstance) => void;
   readonly visionWatch?: Pick<VisionWatchService, 'registerVoice'>;
+  readonly frameStore?: Pick<FrameStore, 'bind' | 'consume' | 'discard' | 'forgetSession'>;
+  readonly reserveImageBudget?: (input: {
+    readonly sessionId: string;
+    readonly itemId: string;
+    readonly model: string;
+    readonly signal: AbortSignal;
+  }) => Promise<boolean>;
 }
 
 type SharedScreenContext = {
   readonly screenDescription: string;
   readonly sharedWindowTitle?: string;
   readonly visualContext?: VisualContext;
+  readonly frameId?: string;
 };
 
 type PendingSharedScreenContext = {
@@ -304,6 +314,8 @@ function registerVoiceRoute(
   getToken: VoiceRelayOptions['getToken'],
   createPartialRecognizer?: PartialSpeechRecognizerFactory,
   visionWatch?: VoiceRelayOptions['visionWatch'],
+  frameStore?: VoiceRelayOptions['frameStore'],
+  reserveImageBudget?: VoiceRelayOptions['reserveImageBudget'],
 ): void {
   app.get(path, { websocket: true }, (browser, request) => {
     if (request.principal === null) {
@@ -381,6 +393,8 @@ function registerVoiceRoute(
     };
     let unregisterVisionVoice: (() => void) | undefined;
     const closeAnnouncements = () => {
+      clearCameraImage();
+      if (sessionId) frameStore?.forgetSession(sessionId);
       unregisterVisionVoice?.();
       unregisterVisionVoice = undefined;
       unsubscribeAwayMode?.();
@@ -405,6 +419,14 @@ function registerVoiceRoute(
     let cameraItemSettled = false;
     let cameraGeneration = 0;
     let lastCameraVisualContext: VisualContext | undefined;
+    let pendingImage: {
+      itemId: string;
+      eventId: string;
+      settle: (accepted: boolean) => void;
+    } | undefined;
+    let attachedImageItemId: string | undefined;
+    const attemptedImageItems = new Set<string>();
+    const imageEventIds = new Set<string>();
     const cameraUnavailableInstructions = () =>
       'No fresh camera image is available for this turn. Do not claim to see a live image. ' +
       'Earlier visual context is cached evidence only at its labelled capture time, not current facts. ' +
@@ -888,12 +910,24 @@ function registerVoiceRoute(
           if (sharedContextWait.cancelled || controller.signal.aborted || endRequested ||
               cameraItemId !== providerItemId || generation !== cameraGeneration) return;
           if (!reflexCompleted) {
-            const visualContext = context?.visualContext;
+            let visualContext = context?.visualContext;
             if (visualContext) {
               await transcriptQueue;
               if (sharedContextWait.cancelled || controller.signal.aborted || endRequested ||
                   cameraItemId !== providerItemId || generation !== cameraGeneration) return;
               const sourceMessage = savedUserMessages.get(itemId);
+              if (sourceMessage && context?.frameId) {
+                const accepted = await attachCameraImage(context.frameId, providerItemId, sourceMessage.id);
+                visualContext = {
+                  ...visualContext, visualPath: accepted ? 'image' : 'caption',
+                  visualReason: accepted ? 'image_accepted' : 'image_unavailable',
+                };
+                if (sharedContextWait.cancelled || controller.signal.aborted || endRequested ||
+                    cameraItemId !== providerItemId || generation !== cameraGeneration) {
+                  clearCameraImage();
+                  return;
+                }
+              }
               visualPersistenceFailed = true;
               if (!sourceMessage || !store.setVisualContext || !await store.setVisualContext({
                 sessionId: sessionId!, messageId: sourceMessage.id, visualContext,
@@ -904,12 +938,23 @@ function registerVoiceRoute(
               if (generation !== cameraGeneration || cameraItemId !== providerItemId ||
                   controller.signal.aborted || endRequested) return;
               lastCameraVisualContext = visualContext;
-              cameraInstructions = visualContextText(visualContext);
+              browser.send(JSON.stringify({
+                type: 'jarvis.visual_context', itemId: providerItemId,
+                visualPath: visualContext.visualPath, visualReason: visualContext.visualReason,
+              }));
+              cameraInstructions = (visualContext.visualPath === 'image'
+                ? 'An original image was accepted for this turn. Inspect that image for the spoken question. '
+                : 'Only caption observations were supplied to this voice model; no original image was attached. ') +
+                visualContextText(visualContext);
             } else {
               cameraInstructions = cameraUnavailableInstructions();
             }
             if (cameraTurn && (controller.signal.aborted || endRequested ||
                 cameraItemId !== providerItemId || generation !== cameraGeneration)) return;
+          } else if (context?.frameId && sessionId) {
+            frameStore?.discard(context.frameId, {
+              ownerObjectId: request.principal!.objectId, sessionId, turnId: providerItemId,
+            });
           }
           bufferedCameraContext = undefined;
           cameraItemSettled = true;
@@ -1119,6 +1164,80 @@ function registerVoiceRoute(
       upstream.send(JSON.stringify(message), (error) => {
         if (error) close(1011, 'Voice connection failed');
         else sent?.();
+      });
+    };
+
+    const clearCameraImage = () => {
+      pendingImage?.settle(false);
+      if (attachedImageItemId) {
+        deleteCameraImage(attachedImageItemId);
+        attachedImageItemId = undefined;
+      }
+    };
+
+    const deleteCameraImage = (itemId: string) => {
+      const eventId = `image_delete_${randomUUID().replaceAll('-', '')}`;
+      imageEventIds.add(eventId);
+      sendUpstream({ type: 'conversation.item.delete', item_id: itemId, event_id: eventId });
+    };
+
+    const attachCameraImage = async (frameId: string, itemId: string, messageId: string): Promise<boolean> => {
+      const generation = cameraGeneration;
+      const identity = { ownerObjectId: request.principal!.objectId, sessionId: sessionId!, turnId: itemId };
+      if (!frameStore || !reserveImageBudget) return false;
+      const budgetController = new AbortController();
+      const abort = () => budgetController.abort();
+      controller.signal.addEventListener('abort', abort, { once: true });
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      let allowed = false;
+      try {
+        allowed = await Promise.race([
+          reserveImageBudget({ sessionId: sessionId!, itemId, model: voiceModel, signal: budgetController.signal }),
+          new Promise<boolean>((resolve) => {
+            timer = setTimeout(() => { budgetController.abort(); resolve(false); }, IMAGE_ACCEPTANCE_TIMEOUT_MS);
+            timer.unref();
+          }),
+        ]);
+      } catch { /* Unknown budget must not trigger image inference. */ }
+      finally {
+        if (timer) clearTimeout(timer);
+        controller.signal.removeEventListener('abort', abort);
+      }
+      if (!allowed || controller.signal.aborted || endRequested || !cameraOn ||
+          generation !== cameraGeneration || cameraItemId !== itemId ||
+          !frameStore.bind(frameId, { ...identity, messageId })) {
+        frameStore.discard(frameId, identity);
+        return false;
+      }
+      const image = frameStore.consume(frameId, { ...identity, messageId });
+      if (!image) return false;
+      clearCameraImage();
+      const imageItemId = `image_${randomUUID().replaceAll('-', '')}`;
+      const eventId = `image_event_${randomUUID().replaceAll('-', '')}`;
+      attemptedImageItems.add(imageItemId);
+      imageEventIds.add(eventId);
+      return new Promise<boolean>((resolve) => {
+        let finished = false;
+        const deadline = setTimeout(() => settle(false), IMAGE_ACCEPTANCE_TIMEOUT_MS);
+        deadline.unref();
+        const settle = (accepted: boolean) => {
+          if (finished) return;
+          finished = true;
+          clearTimeout(deadline);
+          pendingImage = undefined;
+          if (accepted) attachedImageItemId = imageItemId;
+          else deleteCameraImage(imageItemId);
+          resolve(accepted);
+        };
+        pendingImage = { itemId: imageItemId, eventId, settle };
+        try {
+          sendUpstream({
+            type: 'conversation.item.create', event_id: eventId,
+            item: { id: imageItemId, type: 'message', role: 'user',
+              content: [{ type: 'input_image', image_url: `data:image/jpeg;base64,${image.toString('base64')}` }] },
+          });
+        } catch { settle(false); }
+        finally { image.fill(0); }
       });
     };
 
@@ -1453,6 +1572,7 @@ function registerVoiceRoute(
         }
         if (cameraOn === event.on) return;
         cameraOn = event.on;
+        if (!cameraOn) clearCameraImage();
         bufferedCameraContext = undefined;
         if (!cameraOn && pendingSharedScreenContext && cameraItemId === pendingSharedScreenContext.itemId) {
           finishSharedScreenContextWait(null);
@@ -1499,7 +1619,7 @@ function registerVoiceRoute(
         const now = Date.now();
         const description = event.description;
         const sharedWindowTitle = event.sharedWindowTitle;
-        const visualContext = normalizeVisualContext({
+        const normalizedContext = normalizeVisualContext({
           source: event.source === undefined ? 'screen' : event.source,
           capturedAt: event.capturedAt === undefined ? new Date(now).toISOString() : event.capturedAt,
           description,
@@ -1507,7 +1627,9 @@ function registerVoiceRoute(
           ...(event.itemId !== undefined ? { turnId: event.itemId } : {}),
         });
         if (!configured || upstream?.readyState !== WebSocket.OPEN || typeof description !== 'string' ||
-            !visualContext ||
+            !normalizedContext ||
+            (event.frameId !== undefined && (typeof event.frameId !== 'string' ||
+              !/^[A-Za-z0-9_-]{1,128}$/u.test(event.frameId))) ||
             (cameraOn && event.source === 'camera' &&
               (event.itemId === undefined || event.capturedAt === undefined || event.question === undefined)) ||
             (sharedWindowTitle !== undefined &&
@@ -1522,9 +1644,34 @@ function registerVoiceRoute(
           close(1008, 'Invalid screen context');
           return;
         }
+        const canAttemptImage = Boolean(english && reserveImageBudget && frameStore && event.source === 'camera' &&
+          cameraOn && !cameraItemSettled && event.itemId === cameraItemId &&
+          pendingSharedScreenContext?.itemId === event.itemId);
+        const discardedFrame = !canAttemptImage && typeof event.frameId === 'string' && sessionId
+          ? frameStore?.discard(event.frameId, {
+            ownerObjectId: request.principal!.objectId,
+            sessionId,
+            ...(typeof event.itemId === 'string' ? { turnId: event.itemId } : {}),
+          })
+          : false;
+        const visualContext: VisualContext = {
+          ...normalizedContext,
+          visualPath: 'caption',
+          visualReason: event.frameId === undefined ? 'frame_missing' :
+            discardedFrame ? 'image_input_unverified' : 'frame_unavailable',
+        };
+        const publishVisualPath = () => browser.send(JSON.stringify({
+          type: 'jarvis.visual_context',
+          ...(typeof event.itemId === 'string' ? { itemId: event.itemId } : {}),
+          visualPath: visualContext.visualPath,
+          visualReason: visualContext.visualReason,
+        }));
         if (event.source === 'camera' && event.itemId !== undefined) {
           if (!cameraOn || cameraItemSettled || (cameraItemId && cameraItemId !== event.itemId)) return;
           if (now - lastScreenContextAt < 3_000) {
+            if (typeof event.frameId === 'string' && sessionId) frameStore?.discard(event.frameId, {
+              ownerObjectId: request.principal!.objectId, sessionId, turnId: event.itemId as string,
+            });
             browser.send(JSON.stringify({
               type: 'jarvis.screen.context.unavailable', itemId: event.itemId,
               reason: 'frame_rate_limited', retryAfterMs: 3_000,
@@ -1534,7 +1681,10 @@ function registerVoiceRoute(
             return;
           }
           lastScreenContextAt = now;
-          const context: SharedScreenContext = { screenDescription: visualContext.description, visualContext };
+          const context: SharedScreenContext = {
+            screenDescription: visualContext.description, visualContext,
+            ...(canAttemptImage && typeof event.frameId === 'string' ? { frameId: event.frameId } : {}),
+          };
           if (pendingSharedScreenContext?.itemId === event.itemId) finishSharedScreenContextWait(context);
           else bufferedCameraContext = { itemId: event.itemId as string, context };
           return;
@@ -1549,6 +1699,7 @@ function registerVoiceRoute(
           return;
         }
         lastScreenContextAt = now;
+        publishVisualPath();
         transcriptQueue = transcriptQueue.then(async () => {
           if (!latestDanMessage) {
             pendingVisualContext = visualContext;
@@ -1598,6 +1749,7 @@ function registerVoiceRoute(
         return;
       }
       if (event?.type === 'response.cancel') {
+      clearCameraImage();
         cameraGeneration += 1;
         finishSharedScreenContextWait(null, true);
         cameraItemSettled = true;
@@ -1697,6 +1849,24 @@ function registerVoiceRoute(
         const upstreamEventTypes = new Set<string>();
         upstream.on('message', (data, binary) => {
           const event = parseVoiceEvent(data, binary);
+          if (event?.type === 'conversation.item.created') {
+            const item = event.item as { id?: unknown } | undefined;
+            if (typeof item?.id === 'string' && attemptedImageItems.has(item.id)) {
+              if (pendingImage?.itemId === item.id) pendingImage.settle(true);
+              else if (attachedImageItemId !== item.id) deleteCameraImage(item.id);
+              return;
+            }
+          }
+          if (event?.type === 'conversation.item.deleted' && typeof event.item_id === 'string' &&
+              attemptedImageItems.has(event.item_id)) return;
+          if (event?.type === 'error') {
+            const detail = event.error as { event_id?: unknown } | undefined;
+            if (pendingImage && detail?.event_id === pendingImage.eventId) {
+              pendingImage.settle(false);
+              return;
+            }
+            if (typeof detail?.event_id === 'string' && imageEventIds.has(detail.event_id)) return;
+          }
           if (!english && event?.type === 'session.created') {
             const session = event.session as { turn_detection?: Record<string, unknown> } | undefined;
             previousTurnDetection ??= session?.turn_detection;
@@ -1717,7 +1887,7 @@ function registerVoiceRoute(
               /^[a-z_.]{1,80}$/u.test(event.type)) upstreamEventTypes.add(event.type);
           if (event?.type === 'error') {
             const detail = (event as { error?: { code?: unknown; message?: unknown; type?: unknown } }).error;
-            const text = [detail?.type, detail?.code, detail?.message]
+            const text = [detail?.type, detail?.code]
               .filter((part): part is string => typeof part === 'string').join(': ');
             request.log.warn({
               failure: text.replace(/[^A-Za-z0-9 .:,'()_-]/gu, ' ').slice(0, 120) || 'unknown',
@@ -1729,6 +1899,7 @@ function registerVoiceRoute(
             receiveTranscriptionDelta(event);
           }
           if (event?.type === 'input_audio_buffer.speech_started') {
+            clearCameraImage();
             cameraGeneration += 1;
             finishSharedScreenContextWait(null, true);
             bufferedCameraContext = undefined;
@@ -1792,6 +1963,7 @@ function registerVoiceRoute(
             if (microphoneActive) publishActivity('thinking');
           }
           if (event?.type === 'response.done' || event?.type === 'response.cancelled') {
+            clearCameraImage();
             responseCreateActive = false;
             assistantResponding = false;
             flushQueuedToolOutputs();
@@ -1924,6 +2096,8 @@ export function createVoiceRelayModule(options: VoiceRelayOptions): BackendModul
           options.getToken,
           options.createPartialRecognizer,
           options.visionWatch,
+          options.frameStore,
+          options.reserveImageBudget,
         );
       }
       if (options.connect) {
@@ -1938,6 +2112,8 @@ export function createVoiceRelayModule(options: VoiceRelayOptions): BackendModul
           options.getToken,
           options.createPartialRecognizer,
           options.visionWatch,
+          options.frameStore,
+          options.reserveImageBudget,
         );
       } else if (options.connectDanish) {
         registerVoiceRoute(
@@ -1949,6 +2125,8 @@ export function createVoiceRelayModule(options: VoiceRelayOptions): BackendModul
           options.getToken,
           options.createPartialRecognizer,
           options.visionWatch,
+          options.frameStore,
+          options.reserveImageBudget,
         );
       }
     },

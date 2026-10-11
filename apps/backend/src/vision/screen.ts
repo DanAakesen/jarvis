@@ -1,6 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import type { BackendModule } from '../modules.js';
 import { readSettings } from '../core/settings.js';
+import { DKK_PER_USD, foundryTokenCosts } from '../core/usage-pricing.js';
+import type { VisionWatchUsageStore } from './watch.js';
+import type { FrameStore } from './frame-store.js';
 
 export const MAX_SCREEN_FRAME_BYTES = 1_000_000;
 const MAX_SCREEN_FRAME_BASE64_BYTES = Math.ceil(MAX_SCREEN_FRAME_BYTES / 3) * 4;
@@ -21,6 +24,7 @@ export interface ScreenFrameVisionResult extends ScreenVisionResult {
   readonly capturedAt: string;
   readonly question: string | null;
   readonly turnId?: string;
+  readonly frameId?: string;
 }
 
 export interface ScreenVisionModel {
@@ -42,11 +46,14 @@ export interface ScreenVisionModel {
 }
 
 export interface ScreenFrameUsageStore {
+  reserveImage?(input: { readonly sessionId: string; readonly eventId: string;
+    readonly limitDkk: number; readonly at: Date }): Promise<'reserved' | 'limit' | 'inactive'>;
   reserveFrame(input: {
     readonly sessionId: string;
     readonly eventId: string;
     readonly dailyCap: number;
     readonly at: Date;
+    readonly limitDkk?: number;
   }): Promise<'reserved' | 'rate-limited' | 'limit' | 'inactive'>;
   recordTokens(input: {
     readonly sessionId: string;
@@ -94,6 +101,7 @@ export class ScreenVisionService {
     private readonly model: ScreenVisionModel,
     private readonly usage: ScreenFrameUsageStore,
     private readonly now: () => number = Date.now,
+    private readonly budgetUsage?: VisionWatchUsageStore,
   ) {}
 
   requestReceivedAt(): Date {
@@ -110,6 +118,7 @@ export class ScreenVisionService {
     readonly question?: string;
     readonly turnId?: string;
     readonly capturedAt?: Date;
+    readonly limitUsd?: number;
   }): Promise<ScreenFrameVisionResult> {
     const question = normalizeScreenQuestion(input.question);
     const turnId = normalizeScreenTurnId(input.turnId);
@@ -120,11 +129,17 @@ export class ScreenVisionService {
     const now = this.now();
     const eventId = randomUUID();
     const at = new Date(now);
+    if (this.budgetUsage && (input.limitUsd === undefined || !Number.isFinite(input.limitUsd) ||
+        input.limitUsd < 0 || input.limitUsd > 100 ||
+        !foundryTokenCosts(input.model, 32_768, 500))) {
+      throw new ScreenVisionError(503, 'Screen inspection budget or pricing is unavailable.');
+    }
     const reservation = await this.usage.reserveFrame({
       sessionId: input.sessionId,
       eventId,
       dailyCap: input.dailyCap,
       at,
+      ...(this.budgetUsage ? { limitDkk: input.limitUsd! * DKK_PER_USD } : {}),
     });
     if (reservation === 'inactive') {
       throw new ScreenVisionError(404, 'Active conversation session not found.');
@@ -177,6 +192,12 @@ export class ScreenVisionService {
     }
   }
 
+  async reserveImage(sessionId: string, limitUsd: number): Promise<boolean> {
+    if (!this.usage.reserveImage || !Number.isFinite(limitUsd) || limitUsd < 0 || limitUsd > 100) return false;
+    return await this.usage.reserveImage({ sessionId, eventId: `image:${randomUUID()}`,
+      limitDkk: limitUsd * DKK_PER_USD, at: new Date(this.now()) }) === 'reserved';
+  }
+
 }
 
 export function validSessionId(value: string): boolean {
@@ -197,11 +218,42 @@ export function decodeFrame(value: unknown): Buffer {
   return image;
 }
 
-export function createScreenVisionModule(service: ScreenVisionService): BackendModule {
+export function createScreenVisionModule(service: ScreenVisionService, frameStore?: FrameStore): BackendModule {
   return {
     id: 'screen-vision',
     tools: [],
     registerRoutes: async (app) => {
+      app.addHook('onClose', async () => { frameStore?.close(); });
+      app.post<{ Body: { frameId: string; sessionId: string; messageId: string; turnId?: string } }>(
+        '/screen/frames/resolve', {
+          bodyLimit: 1_024,
+          schema: { body: { type: 'object', properties: {
+            frameId: { type: 'string', pattern: '^[A-Za-z0-9_-]{1,128}$', maxLength: 128 },
+            sessionId: { type: 'string', pattern: '^[1-9][0-9]{0,18}$' },
+            messageId: { type: 'string', pattern: '^[1-9][0-9]{0,18}$' },
+            turnId: { type: 'string', pattern: '^[A-Za-z0-9_-]{1,128}$' },
+          }, required: ['frameId', 'sessionId', 'messageId'], additionalProperties: false } },
+        }, async (request, reply) => {
+          reply.header('Cache-Control', 'no-store');
+          const principal = request.principal;
+          if (!principal || principal.objectId.toLowerCase() !== app.ownerObjectId.toLowerCase()) {
+            return reply.code(403).send({ error: 'Unauthorized' });
+          }
+          const { frameId, sessionId, messageId, turnId } = request.body;
+          if (!validSessionId(sessionId) || !validSessionId(messageId) ||
+              await app.conversationStore?.getMessageSessionId?.(messageId) !== sessionId) {
+            return reply.code(404).send({ error: 'Frame unavailable' });
+          }
+          const session = await app.conversationStore?.getSession(sessionId);
+          if (!session || session.endedAt) return reply.code(404).send({ error: 'Frame unavailable' });
+          const image = frameStore?.consume(frameId, { ownerObjectId: principal.objectId,
+            sessionId, messageId, ...(turnId === undefined ? {} : { turnId }) });
+          if (!image) return reply.code(404).send({ error: 'Frame unavailable' });
+          try {
+            reply.type('image/jpeg');
+            await reply.send(image);
+          } finally { image.fill(0); }
+        });
       const frameRequests = new WeakMap<object, { capturedAt: Date; question?: string; turnId?: string }>();
       app.post<{
         Body: { sessionId: string; frame: string; question?: string; turnId?: string };
@@ -254,6 +306,7 @@ export function createScreenVisionModule(service: ScreenVisionService): BackendM
                 capturedAt: { type: 'string', format: 'date-time' },
                 question: { type: ['string', 'null'], maxLength: MAX_SCREEN_QUESTION_CHARACTERS },
                 turnId: { type: 'string', pattern: '^[A-Za-z0-9_-]{1,128}$', maxLength: 128 },
+                frameId: { type: 'string', pattern: '^[A-Za-z0-9_-]{32}$', maxLength: 32 },
               },
               required: ['description', 'inputTokens', 'outputTokens', 'capturedAt', 'question'],
               additionalProperties: false,
@@ -279,10 +332,17 @@ export function createScreenVisionModule(service: ScreenVisionService): BackendM
         const frameRequest = frameRequests.get(request);
         frameRequests.delete(request);
         if (!request.principal) return reply.code(401).send({ error: 'Unauthorized' });
+        if (request.principal.objectId.toLowerCase() !== app.ownerObjectId.toLowerCase()) {
+          return reply.code(403).send({ error: 'Unauthorized' });
+        }
         const { sessionId, frame: encodedFrame } = request.body;
         request.body.frame = '';
         if (!validSessionId(sessionId)) return reply.code(400).send({ error: 'Invalid conversation session ID.' });
         if (!app.settingsStore) return reply.code(503).send({ error: 'Screen inspection is unavailable.' });
+        if (frameStore) {
+          const session = await app.conversationStore?.getSession(sessionId);
+          if (!session || session.endedAt) return reply.code(404).send({ error: 'Active conversation session not found.' });
+        }
 
         let image: Buffer;
         try {
@@ -307,10 +367,24 @@ export function createScreenVisionModule(service: ScreenVisionService): BackendM
             model: settings.roles.vision.model,
             reasoningEffort: settings.roles.vision.reasoningEffort,
             dailyCap: settings.global.screenShareDailyFrameCap,
+            limitUsd: settings.global.visionDailyBudgetUsd,
             signal: controller.signal,
             ...frameRequest,
           });
-          return reply.send(result);
+          let frameId: string | undefined;
+          // The existing pending hold covers a bounded main-agent image call; unknown prices use captions.
+          const imageCosts = foundryTokenCosts(settings.roles.chat.model, 32_768, 4_096);
+          if (frameStore && imageCosts && imageCosts.inputDkk + imageCosts.outputDkk <= 0.1 &&
+              !controller.signal.aborted) {
+            try {
+              if (await service.reserveImage(sessionId, settings.global.visionDailyBudgetUsd)) {
+                frameId = await frameStore.put({ image, ownerObjectId: request.principal.objectId, sessionId,
+                  capturedAt: Date.parse(result.capturedAt),
+                  ...(frameRequest?.turnId === undefined ? {} : { turnId: frameRequest.turnId }) });
+              }
+            } catch { /* Keep the working caption path when image preprocessing fails. */ }
+          }
+          return reply.send({ ...result, ...(frameId === undefined ? {} : { frameId }) });
         } catch (error) {
           if (error instanceof ScreenVisionError) {
             return reply.code(error.statusCode).send({

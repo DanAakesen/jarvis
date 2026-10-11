@@ -11,6 +11,8 @@ import { ChatAgentError } from './chat-agent.js';
 import type { ConversationStore } from './conversation-store.js';
 import type { ReflexClassifier } from './reflex.js';
 import type { ToolCallStore } from './tool-calls.js';
+import { createConversationModule } from './conversation.js';
+import { FrameStore } from '../vision/frame-store.js';
 
 const config = loadConfig({});
 const apps: ReturnType<typeof buildApp>[] = [];
@@ -83,6 +85,66 @@ afterEach(async () => { await Promise.all(apps.splice(0).map((app) => app.close(
 const headers = { authorization: ['Bearer', 'a.b.c'].join(' ') };
 
 describe('conversation routes', () => {
+  it('binds an image to the authorized immutable Dan message and persists no frame handle', async () => {
+    const frames = new FrameStore();
+    const frameId = await frames.put({ ownerObjectId: config.auth.ownerObjectId,
+      sessionId: '41', turnId: 'capture', image: await sharp({
+        create: { width: 20, height: 20, channels: 3, background: 'red' },
+      }).jpeg().toBuffer() });
+    const setVisualContext = vi.fn(async () => true);
+    const store = storeFixture({ setVisualContext });
+    const visualContext = { source: 'screen' as const, capturedAt: '2026-10-11T19:30:00Z',
+      description: 'A red square.', frameId, turnId: 'capture' };
+    const agent = { stream: vi.fn(async function* (input: import('./chat-agent.js').ConversationAgentInput) {
+      expect(frames.consume(frameId, { ownerObjectId: config.auth.ownerObjectId,
+        sessionId: '41', messageId: input.messageId, turnId: 'capture' })).toBeInstanceOf(Buffer);
+      input.onVisualResult?.({ visualPath: 'image' });
+      yield 'A red square.';
+    }) };
+    try {
+      const app = createApp(store, { modules: [createConversationModule(frames)], conversationAgent: agent });
+      const response = await app.inject({ method: 'POST', url: '/conversation/sessions/41/turns',
+        headers, payload: { text: 'What is this?', visualContext } });
+      expect(response.statusCode).toBe(200);
+      expect(response.body).toContain('"visualPath":"image"');
+      const saved = store.addMessage.mock.calls[0]![0]!.visualContext!;
+      expect(saved).not.toHaveProperty('frameId');
+      expect(setVisualContext).toHaveBeenCalledWith(expect.objectContaining({
+        visualContext: expect.objectContaining({ visualPath: 'image' }),
+      }));
+    } finally { frames.close(); }
+  });
+
+  it.each(['a'.repeat(31), 'shortmissing', 'a'.repeat(128)])('continues with caption for unavailable frame %s and rejects caller path metadata', async (frameId) => {
+    const store = storeFixture();
+    const agent = { stream: vi.fn(async function* () { yield 'Caption answer.'; }) };
+    const app = createApp(store, { conversationAgent: agent });
+    const visualContext = { source: 'screen' as const, capturedAt: '2026-10-11T19:30:00Z',
+      description: 'A chart.', frameId };
+    expect((await app.inject({ method: 'POST', url: '/conversation/sessions/41/turns', headers,
+      payload: { text: 'What?', visualContext } })).statusCode).toBe(200);
+    expect(agent.stream.mock.calls[0]![0]!.visualContext).not.toHaveProperty('frameId');
+    expect((await app.inject({ method: 'POST', url: '/conversation/sessions/41/turns', headers,
+      payload: { text: 'What?', visualContext: { ...visualContext, visualPath: 'image' } } })).statusCode).toBe(400);
+  });
+
+  it('never replies twice to a completed visual turn replay', async () => {
+    let sourceItemId: string | undefined;
+    const store = storeFixture({
+      getDanMessageIdBySourceItemId: vi.fn(async (id) => sourceItemId === id ? '42' : null),
+      addMessage: vi.fn(async (input) => {
+        if (input.sourceItemId) sourceItemId = input.sourceItemId;
+        return message;
+      }),
+    });
+    const agent = { stream: vi.fn(async function* () { yield 'One answer.'; }) };
+    const app = createApp(store, { conversationAgent: agent });
+    const payload = { text: 'What?', visualContext: { source: 'screen',
+      capturedAt: '2026-10-11T19:30:00Z', description: 'A chart.', frameId: 'a'.repeat(32) } };
+    expect((await app.inject({ method: 'POST', url: '/conversation/sessions/41/turns', headers, payload })).statusCode).toBe(200);
+    expect((await app.inject({ method: 'POST', url: '/conversation/sessions/41/turns', headers, payload })).statusCode).toBe(409);
+    expect(agent.stream).toHaveBeenCalledOnce();
+  });
   it('persists camera provenance, forwards it unchanged, and exposes additive history metadata', async () => {
     const visualContext = {
       source: 'camera' as const, capturedAt: '2026-10-11T19:30:00Z', description: 'A red mug.',
@@ -169,6 +231,8 @@ describe('conversation routes', () => {
     expect(response.body).toContain('event: done');
     expect(chatAgent.stream).toHaveBeenCalledWith({
       messageId: '42',
+      sessionId: '41',
+      onVisualResult: expect.any(Function),
       turnId: '42',
       text: 'Hej Jarvis',
       language: 'da',

@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { Readable } from 'node:stream';
 import type { FastifyRequest } from 'fastify';
 import type { ConversationSearchPage } from '@jarvis/contracts';
@@ -30,7 +30,9 @@ import {
 } from './reflex.js';
 import { isJevFailure } from './jev.js';
 import type { DecisionProviderId } from './decision-provider.js';
-import { normalizeVisualContext, visualContextSchema, type VisualContext } from './visual-context.js';
+import { normalizeVisualContext, visualContextSchema, persistedVisualContextSchema,
+  persistedVisualContext, type VisualContext } from './visual-context.js';
+import type { FrameStore } from '../vision/frame-store.js';
 
 const maxSqlBigInt = 9_223_372_036_854_775_807n;
 const chatReflexBudgetMs = 800;
@@ -236,7 +238,7 @@ const historySchema = {
           voiceMinutes: { type: ['number', 'null'], minimum: 0 },
           metadata: {
             type: 'object',
-            properties: { visualContext: visualContextSchema },
+            properties: { visualContext: persistedVisualContextSchema },
             required: ['visualContext'],
             additionalProperties: false,
           },
@@ -368,7 +370,8 @@ async function runChatReflex(
   }
 }
 
-export const conversationModule: BackendModule = {
+export function createConversationModule(frameStore?: FrameStore): BackendModule {
+return {
   id: 'conversation',
   tools: [conversationSearchTool, attachmentListTool, attachmentReadTool],
   registerRoutes: async (app) => {
@@ -600,6 +603,9 @@ export const conversationModule: BackendModule = {
       const authorization = request.headers.authorization;
       if (!authorization) return reply.code(401).send({ error: 'Unauthorized' });
       if (activeTurns.has(sessionId)) return reply.code(409).send({ error: 'A chat turn is already active' });
+      const visualTurnKey = visualContext?.turnId ?? visualContext?.frameId;
+      const sourceItemId = visualTurnKey === undefined ? undefined
+        : `screen:chat:${createHash('sha256').update(`${sessionId}:${visualTurnKey}`).digest('hex')}`;
       const activeTurn: ActiveChatTurn = {
         sessionId,
         rootMessageId: '',
@@ -615,13 +621,18 @@ export const conversationModule: BackendModule = {
 
       let userMessage;
       try {
+        if (sourceItemId && await store.getDanMessageIdBySourceItemId(sourceItemId)) {
+          activeTurns.delete(sessionId);
+          return reply.code(409).send({ error: 'This visual turn has already been received' });
+        }
         userMessage = await store.addMessage({
           sessionId,
           role: 'dan',
           text,
           model: null,
           language: session.language,
-          ...(visualContext ? { visualContext } : {}),
+          ...(sourceItemId === undefined ? {} : { sourceItemId }),
+          ...(visualContext ? { visualContext: persistedVisualContext(visualContext) } : {}),
           ...(attachmentIds.length > 0 ? {
             attachmentIds,
             attachmentOwnerObjectId: request.principal!.objectId,
@@ -641,6 +652,20 @@ export const conversationModule: BackendModule = {
       }
       activeTurn.rootMessageId = userMessage.id;
       activeTurn.consumedThrough = userMessage.id;
+      let agentVisualContext = visualContext;
+      let visualResult: import('./chat-agent.js').ConversationVisualResult | undefined;
+      if (visualContext?.frameId) {
+        const authorized = request.principal &&
+          request.principal.objectId.toLowerCase() === app.ownerObjectId.toLowerCase() &&
+          frameStore?.bind(visualContext.frameId, {
+            ownerObjectId: request.principal.objectId, sessionId, messageId: userMessage.id,
+            ...(visualContext.turnId === undefined ? {} : { turnId: visualContext.turnId }),
+          });
+        if (!authorized) {
+          agentVisualContext = persistedVisualContext(visualContext);
+          visualResult = { visualPath: 'caption', visualReason: 'frame_unavailable' };
+        }
+      }
 
       const controller = new AbortController();
       const activityId = randomUUID();
@@ -697,8 +722,9 @@ export const conversationModule: BackendModule = {
                 language: turnLanguage,
                 turnId: activeTurn.rootMessageId,
                 ...(isSteering ? { steering: true } : {}),
-                ...(!isSteering && visualContext !== undefined
-                  ? { visualContext }
+                ...(!isSteering && agentVisualContext !== undefined
+                  ? { visualContext: agentVisualContext, sessionId,
+                    onVisualResult: (result: import('./chat-agent.js').ConversationVisualResult) => { visualResult = result; } }
                   : {}),
                 ...(!isSteering && attachmentContext.length > 0
                   ? { attachments: attachmentContext }
@@ -763,6 +789,15 @@ export const conversationModule: BackendModule = {
               throw new Error('Chat turn was interrupted without a steering message');
             }
             if (!partial.trim()) throw new Error('Chat response was empty');
+            if (!isSteering && visualContext) {
+              const metadata = { ...persistedVisualContext(visualContext),
+                visualPath: visualResult?.visualPath ?? 'caption' as const,
+                ...(visualResult?.visualReason ? { visualReason: visualResult.visualReason } :
+                  visualResult ? {} : { visualReason: 'legacy_agent' }) };
+              if (store.setVisualContext) await store.setVisualContext({
+                sessionId, messageId: userMessage.id, visualContext: metadata,
+              });
+            }
             const assistantMessage = await store.addMessage({
               sessionId,
               role: 'jarvis',
@@ -773,7 +808,12 @@ export const conversationModule: BackendModule = {
             if (!assistantMessage) throw new Error('Chat session ended');
             publishActivity('ended');
             logChatLatency(request, 'turn_complete', turnStartedAt);
-            yield streamEvent('done', assistantMessage);
+            yield streamEvent('done', { ...assistantMessage,
+              ...(visualContext ? {
+                visualPath: visualResult?.visualPath ?? 'caption',
+                ...(visualResult?.visualReason ? { visualReason: visualResult.visualReason } :
+                  visualResult ? {} : { visualReason: 'legacy_agent' }),
+              } : {}) });
             break;
           }
         } catch (error) {
@@ -1066,3 +1106,6 @@ export const conversationModule: BackendModule = {
     });
   },
 };
+}
+
+export const conversationModule = createConversationModule();

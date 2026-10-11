@@ -1547,10 +1547,10 @@ browser timing includes independent completion verification.
 
 ### Act on the shared Chrome tab (P7-19)
 
-P9-81's per-turn visual contracts are:
+P9-81/P9-82's per-turn visual contracts are:
 
 - `POST /screen/frames`: `{sessionId, frame, question?, turnId?}` returns
-  `{description, capturedAt, question, turnId?, inputTokens, outputTokens}`.
+  `{description, capturedAt, question, turnId?, frameId?, inputTokens, outputTokens}`.
   `question` is trimmed, limited to 500 Unicode code points before trimming and
   rejected with HTTP 400 above that bound, never silently truncated. Omitted
   or blank questions return `question: null` and use the generic prompt.
@@ -1559,6 +1559,14 @@ P9-81's per-turn visual contracts are:
   unchanged, with 1–128 ASCII letters, digits, `_` or `-`; voice clients use the
   transcription `itemId` as `turnId`.
   Questions are untrusted data and never logged.
+  `frameId` is an opaque, server-generated, 32-character unpadded base64url
+  encoding of 24 cryptographically random bytes (`[A-Za-z0-9_-]{32}`).
+  Clients accept opaque strings matching `[A-Za-z0-9_-]{1,128}` and never parse
+  them. The handle references only a process-memory JPEG, at most 768 pixels
+  on its long side, quality 70, with metadata stripped. It expires within
+  60 seconds, is bound to the authenticated owner/session/turn, and is
+  single-use. Replacement, expiry, consumption and shutdown zero the stored
+  buffer; frames are never written to SQL, Blob, logs or telemetry.
 - HTTP 429 is `{error, code: "frame_rate_limited" | "daily_limit",
   retryAfterMs?}`. The three-second window and configured daily cap remain;
   `frame_rate_limited` supplies a conservative `retryAfterMs: 3000`;
@@ -1567,12 +1575,17 @@ P9-81's per-turn visual contracts are:
   never imply a new capture or answer a new detail question from an old answer.
 - `POST /conversation/sessions/:sessionId/turns`: send
   `{text, visualContext: {source: "camera" | "screen", capturedAt, question,
-  description, turnId?}}`
+  description, frameId?, turnId?}}`
   using the result and the actual selected source. Send either `visualContext`
   or legacy `screenContext`, not both. For chat pacing/capture failure, send
   the text turn without fresh `visualContext`; the agent restores the previous
   same-session record with its original question/time. Do not relabel an old
   record as a new capture.
+  There is only one optional `visualContext` object, never a top-level image
+  or `frameId`. `turnId` remains legacy correlation. The UI captures when a
+  queued turn actually executes, not when enqueued; that behavior is owned by
+  the separate web session. Missing, expired, foreign or already-consumed
+  handles do not fail the text turn: continue with the caption.
 - Camera on is consent for a fresh frame every chat and voice turn, not a
   phrase-matched request; camera off sends nothing. The separate UI session
   supplies those frames through the same `/screen/frames` service for voice.
@@ -1581,7 +1594,7 @@ P9-81's per-turn visual contracts are:
   client. Camera-off or superseded results are ignored.
 - Voice signals `{type: "jarvis.camera.state", on: boolean}` per connection,
   default off. Camera results send `{type: "jarvis.screen.context", itemId,
-  description, capturedAt, question, source: "camera"}`; failure sends
+  description, capturedAt, question, source: "camera", frameId?}`; failure sends
   `{type: "jarvis.screen.context.unavailable", itemId, reason, retryAfterMs?}`.
   Only the most recent pending item can release a hold. Late results for a
   different item or an already answered/timed-out item are ignored without
@@ -1604,6 +1617,66 @@ P9-81's per-turn visual contracts are:
   voice also carries its last successfully saved camera result into later
   no-fresh-image responses as explicitly historical evidence. Image bytes
   are never stored.
+  P9-82 adds server-owned `visualPath: "image" | "caption"` and a bounded
+  `visualReason` to that visual metadata. Clients cannot assert the path.
+  An image path means the actual frame was accepted for the answering request;
+  a handle alone is not evidence of attachment. Image rejection, missing or
+  expired handles and unavailable capability/pricing continue through #702's
+  caption path without another reply.
+  The chat `done` event also exposes the server-selected `visualPath` and
+  optional `visualReason`; voice exposes the equivalent `jarvis.visual_context`
+  event with its owning `itemId`.
+
+The hosted chat adapter sends JPEG image parts as Foundry Responses
+`input_image` with a `data:image/jpeg;base64,...` URL and `detail: low`, or
+Anthropic's base64 image source when that chat provider is selected. Provider
+storage is disabled where the API supports it; application history contains
+only text and compact provenance. A provider's image-specific request rejection
+may retry with the caption only before output or tool side effects. Normal
+provider failures must not masquerade as image rejection or false success.
+Deployed acceptance is not yet verified; see P9-82 in the decision log.
+The backend binds a handle only after the authorized Dan message is created.
+The hosted agent resolves it through `POST /screen/frames/resolve` with
+delegated owner authorization and `{frameId, sessionId, messageId, turnId?}`;
+`turnId` here is capture correlation, not the agent's SQL root-turn ID.
+This no-store endpoint rechecks the active session and message membership,
+returns one bounded JPEG, and consumes/zeroes the stored buffer. A failed
+resolution continues with the caption. The browser's turn payload never
+contains the resolved JPEG. Retries of a visual chat turn use hashed
+session/capture correlation (or the handle when correlation is absent) and
+cannot create another reply.
+Admission reuses the shared UTC-day vision ledger and its serialized budget
+lock. On-demand pacing remains three seconds and the daily capture cap remains
+300 (or the configured lower cap). Conservative pending allowances remain
+charged when actual cost cannot be verified; they are budget reservations,
+not a claim of billed image cost. Unknown or over-allowance chat-model pricing
+selects the caption instead. Provider input totals include text as well as
+image tokens where separate image attribution is unavailable.
+Input/output totals are reported by the agent; generic chat usage remains
+the actual token/billing record. The existing SQL metric constraint is unchanged:
+image admission uses a tagged zero-quantity `input_tokens` reservation carrying
+the conservative allowance, not an invented image token count. Separate image
+token attribution/reconciliation remains incomplete. The vision budget includes
+the conservative image allowance without
+counting another camera capture or silently spending above the cap.
+The current realtime relay stays on the caption path until deployed image
+acceptance is verified. It accepts the additive `frameId` on the correlated
+event, discards only the matching owner's/session's/item's frame, and reports
+`{type: "jarvis.visual_context", itemId?, visualPath: "caption",
+visualReason}` to the browser before releasing #702's single response.
+`image_input_unverified` distinguishes this deployment gate from
+`frame_unavailable`. No `input_image` is sent on this gated path. Both EN and
+the current DA realtime configuration use that fallback; the hosted chat
+adapter's Danish image tests are not proof of DA realtime image support.
+The relay also has a guarded integration seam for an image-budget admission
+callback. When admitted, it binds/consumes the same item's frame, sends
+`conversation.item.create` with a server-generated user item containing
+`input_image`, waits for that item's `conversation.item.created` acknowledgement,
+and only then releases the single `response.create`. A correlated provider
+error or 1.5-second acknowledgement deadline selects the caption instead;
+late acknowledgements and completed/cancelled images are deleted. This seam
+is mock-tested, not enabled by the production composition until deployed
+acceptance and realtime image pricing/budget admission are verified.
 
 While Dan is sharing, chat captures a fresh frame for a deictic browser request;
 the authenticated chat turn binds its bounded description and selected display
