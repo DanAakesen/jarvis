@@ -8,6 +8,7 @@ import type { PublicConfig } from '../config/public-config';
 import type { WorkspaceCommand } from '@jarvis/contracts';
 import { ActivityPanel } from './ActivityPanel';
 import { WorkspaceCommandContext } from './workspace-command-state';
+import type { SessionCommandResult } from './session-commands';
 import type { NowFeed, NowFeedStreamStatus } from './activity';
 import {
   dismissNowActivity,
@@ -27,7 +28,7 @@ export function NowFeedPanel({
   client: PublicClientApplication;
   config: PublicConfig;
   getAccessToken: () => Promise<string>;
-  applyWorkspaceCommand: (command: WorkspaceCommand, trustedBlobHost?: string) => boolean;
+  applyWorkspaceCommand: (command: WorkspaceCommand, trustedBlobHost?: string) => boolean | Promise<SessionCommandResult>;
 }) {
   const { applyRuntimeActivity, clearRuntimeActivities } = useJarvisActivity();
   const [feed, setFeed] = useState<NowFeed>({ status: 'loading' });
@@ -116,8 +117,14 @@ export function NowFeedPanel({
               reason = 'The workspace command expired before application.';
             } else {
               try {
-                applied = applyWorkspaceCommandRef.current(command, commandBlobHost ?? trustedBlobHost);
-                if (!applied) reason = 'The requested view or workspace operation is no longer available.';
+                const result = await applyWorkspaceCommandRef.current(command, commandBlobHost ?? trustedBlobHost);
+                if (typeof result === 'boolean') {
+                  applied = result;
+                  if (!applied) reason = 'The requested view or workspace operation is no longer available.';
+                } else {
+                  applied = result.applied;
+                  if (!result.applied) reason = result.reason;
+                }
               } catch {
                 outcome = 'error';
                 reason = 'The workspace failed while applying the command.';

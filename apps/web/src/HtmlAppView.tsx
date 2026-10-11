@@ -7,7 +7,7 @@ import { Loader } from './Loader';
 import { reportFrameReadback } from './window-readback';
 import { htmlAppDocument, minAppHeight, readHtmlAppMessage, readHtmlArtifact } from './html-app-document';
 
-type Load = { status: 'loading' } | { status: 'error'; message: string; retry: boolean } | { status: 'ready'; artifact: HtmlArtifact; document: string };
+type Load = { key: string } & ({ status: 'loading' } | { status: 'error'; message: string; retry: boolean } | { status: 'ready'; artifact: HtmlArtifact; document: string });
 
 const themeTokens = { text: '--text', muted: '--text-muted', accent: '--glass-edge-cool', 'accent-warm': '--glass-glow-warm', error: '--error' } as const;
 
@@ -21,16 +21,18 @@ function hostTheme() {
 }
 
 /** A model-written HTML app or research report in a sandboxed frame (P8-41, #429). */
-export function HtmlAppView({ artifactId, title }: { artifactId: string; title: string }) {
+export function HtmlAppView({ artifactId, title, updatedAt }: { artifactId: string; title: string; updatedAt?: string | undefined }) {
   const backend = useKnowledgeBackend();
   const intents = useConversationIntents();
   const frame = useRef<HTMLIFrameElement>(null);
-  const [load, setLoad] = useState<Load>({ status: 'loading' });
   const [attempt, setAttempt] = useState(0);
+  // A new view revision invalidates old HTML immediately, without changing window identity.
+  const loadKey = JSON.stringify([artifactId, updatedAt, backend?.backendUrl, attempt]);
+  const [load, setLoad] = useState<Load>({ key: loadKey, status: 'loading' });
   const [height, setHeight] = useState(minAppHeight * 3);
   const [notice, setNotice] = useState('');
 
-  const call = useCallback(async (init?: { method: 'PATCH'; body: unknown } | { method: 'POST'; path: string; body: unknown }) => {
+  const call = useCallback(async (init?: { method: 'PATCH'; body: unknown } | { method: 'POST'; path: string; body: unknown }, signal?: AbortSignal) => {
     if (!backend?.backendUrl) throw new Error('unavailable');
     const base = `${backend.backendUrl.replace(/\/+$/u, '')}/factory/workspace-artifacts/html`;
     const url = init?.method === 'POST' ? `${base}/${init.path}` : `${base}/${encodeURIComponent(artifactId)}`;
@@ -43,26 +45,28 @@ export function HtmlAppView({ artifactId, title }: { artifactId: string; title: 
       },
       ...(init ? { body: JSON.stringify(init.body) } : {}),
       cache: 'no-store',
+      ...(signal ? { signal } : {}),
     });
   }, [artifactId, backend]);
 
   useEffect(() => {
     let active = true;
     if (!backend?.backendUrl) return () => { active = false; };
-    void call().then(async (response) => {
+    const controller = new AbortController();
+    void call(undefined, controller.signal).then(async (response) => {
       if (response.status === 404) throw Object.assign(new Error('This report or app is no longer available.'), { final: true });
       if (!response.ok) throw new Error('Jarvis could not load this window. Try again.');
       const artifact = readHtmlArtifact(await response.json());
       // SQL Server returns uniqueidentifiers in upper case; the view carries lower case.
       if (!artifact || artifact.id.toLowerCase() !== artifactId.toLowerCase()) throw Object.assign(new Error('Jarvis returned a report it could not show safely.'), { final: true });
-      if (active) setLoad({ status: 'ready', artifact, document: htmlAppDocument(artifact.html, hostTheme()) });
+      if (active) setLoad({ key: loadKey, status: 'ready', artifact, document: htmlAppDocument(artifact.html, hostTheme()) });
     }).catch((reason: unknown) => {
       if (!active) return;
       const message = reason instanceof Error && reason.message !== 'unavailable' ? reason.message : 'Jarvis could not load this window. Try again.';
-      setLoad({ status: 'error', message, retry: !(reason as { final?: boolean } | null)?.final });
+      setLoad({ key: loadKey, status: 'error', message, retry: !(reason as { final?: boolean } | null)?.final });
     });
-    return () => { active = false; };
-  }, [artifactId, attempt, backend?.backendUrl, call]);
+    return () => { active = false; controller.abort(); };
+  }, [artifactId, loadKey, backend?.backendUrl, call]);
 
   // A replaced or removed document must not keep reporting the previous report's text (#687 refresh).
   const documentText = load.status === 'ready' ? load.document : null;
@@ -112,12 +116,12 @@ export function HtmlAppView({ artifactId, title }: { artifactId: string; title: 
   }, [call, intents]);
 
   if (!backend?.backendUrl) return <p className="html-app-state" role="status">This window opens in the Jarvis workspace.</p>;
-  if (load.status === 'loading') return <Loader variant="lines" label={`Opening ${title}…`} />;
+  if (load.key !== loadKey || load.status === 'loading') return <Loader variant="lines" label={`Opening ${title}…`} />;
   if (load.status === 'error') {
     return (
       <div className="html-app-state" role="alert">
         <p>{load.message}</p>
-        {load.retry && <button className="secondary-button" type="button" onClick={() => { setLoad({ status: 'loading' }); setAttempt((value) => value + 1); }}>Retry</button>}
+        {load.retry && <button className="secondary-button" type="button" onClick={() => { setAttempt((value) => value + 1); }}>Retry</button>}
       </div>
     );
   }
