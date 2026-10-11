@@ -85,6 +85,86 @@ afterEach(async () => { await Promise.all(apps.splice(0).map((app) => app.close(
 const headers = { authorization: ['Bearer', 'a.b.c'].join(' ') };
 
 describe('conversation routes', () => {
+  it.each([
+    { outcome: 'image', path: 'image', reason: 'image_accepted' },
+    { outcome: 'rejected', path: 'caption', reason: 'image_rejected' },
+    { outcome: 'caption', path: 'caption', reason: 'image_unavailable' },
+    { outcome: 'legacy', path: 'caption', reason: 'legacy_agent' },
+    { outcome: 'unavailable', path: 'caption', reason: 'frame_unavailable' },
+    { outcome: 'screen', path: 'caption', reason: 'legacy_agent' },
+    { outcome: 'none', path: undefined, reason: undefined },
+    { outcome: 'failed', path: undefined, reason: undefined },
+  ])('logs the final $outcome chat visual result once before done, without content', async ({ outcome, path, reason }) => {
+    const records: string[] = [];
+    const ordering: string[] = [];
+    const sink = { trackTrace: vi.fn(), flush: vi.fn(async () => {}), shutdown: vi.fn(async () => {}) };
+    const output = new Writable({ write(chunk: Buffer, _encoding, done) {
+      const record = JSON.parse(chunk.toString()) as { msg: string };
+      if (record.msg === 'visual.path') ordering.push('visual.path');
+      records.push(chunk.toString());
+      done();
+    } });
+    const agent = { stream: vi.fn(async function* (input: import('./chat-agent.js').ConversationAgentInput) {
+      if (outcome === 'image' || outcome === 'rejected') {
+        input.onVisualResult?.({ visualPath: 'caption', visualReason: 'image_unavailable' });
+        input.onVisualResult?.(outcome === 'image' ? { visualPath: 'image' } :
+          { visualPath: 'caption', visualReason: 'image_rejected' });
+      }
+      if (outcome === 'caption') input.onVisualResult?.({ visualPath: 'caption' });
+      if (outcome === 'failed') throw new Error('Agent failed');
+      yield 'private-answer';
+    }) };
+    const app = buildApp(config, createLogger(config, sink, output), {
+      auth, conversationStore: storeFixture(), conversationAgent: agent,
+    });
+    apps.push(app);
+    app.addHook('onRequest', async (_request, reply) => {
+      const write = reply.raw.write.bind(reply.raw);
+      vi.spyOn(reply.raw, 'write').mockImplementation((...args) => {
+        if (String(args[0]).includes('event: done')) ordering.push('done');
+        return write(...args);
+      });
+    });
+    const response = await app.inject({
+      method: 'POST', url: '/conversation/sessions/41/turns', headers,
+      payload: {
+        text: 'private-prompt',
+        ...(outcome === 'none' ? {} : outcome === 'screen' ? { screenContext: 'private-description' } : {
+          visualContext: {
+            source: 'camera', capturedAt: '2026-10-11T19:30:00Z', description: 'private-description',
+            question: 'private-question', ...(outcome === 'unavailable' ? { frameId: 'private-frame' } : {}),
+          },
+        }),
+      },
+    });
+    expect(response.statusCode).toBe(200);
+    const visualRecords = records.map((record) => JSON.parse(record) as Record<string, unknown>)
+      .filter((record) => record.msg === 'visual.path');
+    const traces = sink.trackTrace.mock.calls.map(([trace]) => trace)
+      .filter((trace) => trace.message === 'visual.path');
+    if (path === undefined) {
+      expect(visualRecords).toEqual([]);
+      expect(traces).toEqual([]);
+      expect(ordering).toEqual(outcome === 'failed' ? [] : ['done']);
+    } else {
+      expect(visualRecords).toEqual([{
+        level: 30, time: expect.any(Number), service: 'jarvis-backend',
+        msg: 'visual.path', path, reason, channel: 'chat', latencyMs: expect.any(Number),
+      }]);
+      expect(traces).toEqual([expect.objectContaining({
+        message: 'visual.path',
+        properties: { service: 'jarvis-backend', path, reason, channel: 'chat', latencyMs: expect.any(Number) },
+      })]);
+      expect(ordering).toEqual(['visual.path', 'done']);
+      expect(JSON.stringify(visualRecords) + JSON.stringify(traces)).not.toContain('private');
+      if (outcome === 'caption') {
+        const done = response.body.split('event: done\ndata: ')[1]!.split('\n')[0]!;
+        expect(JSON.parse(done)).toHaveProperty('visualPath', 'caption');
+        expect(JSON.parse(done)).not.toHaveProperty('visualReason');
+      }
+    }
+  });
+
   it('binds an image to the authorized immutable Dan message and persists no frame handle', async () => {
     const frames = new FrameStore();
     const frameId = await frames.put({ ownerObjectId: config.auth.ownerObjectId,

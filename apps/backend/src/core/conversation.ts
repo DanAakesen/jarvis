@@ -808,6 +808,16 @@ return {
             if (!assistantMessage) throw new Error('Chat session ended');
             publishActivity('ended');
             logChatLatency(request, 'turn_complete', turnStartedAt);
+            if (visualContext) {
+              request.log.info({
+                path: visualResult?.visualPath ?? 'caption',
+                reason: visualResult?.visualReason ??
+                  (visualResult?.visualPath === 'image' ? 'image_accepted' :
+                    visualResult ? 'image_unavailable' : 'legacy_agent'),
+                channel: 'chat',
+                latencyMs: Math.max(0, performance.now() - turnStartedAt),
+              }, 'visual.path');
+            }
             yield streamEvent('done', { ...assistantMessage,
               ...(visualContext ? {
                 visualPath: visualResult?.visualPath ?? 'caption',

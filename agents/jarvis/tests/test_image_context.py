@@ -27,6 +27,7 @@ from model_client import image_input_rejected
 from state import ConversationHistory, ModelImage, ModelMessage
 from visual_context import (
     MAX_JPEG_BYTES,
+    current_image_reservation,
     current_visual_result,
     resolved_visual_image,
     visual_context,
@@ -136,7 +137,7 @@ async def test_oversized_image_prompt_falls_back_before_image_request():
         await model.close()
     assert len(transport.responses.requests) == 1
     assert JPEG not in json.dumps(transport.responses.requests[0])
-    assert result["visualReason"] == "daily_limit"
+    assert result["visualReason"] == "image_context_limit"
 
 
 @pytest.mark.asyncio
@@ -151,12 +152,16 @@ async def test_tool_followup_does_not_resend_or_recharge_image():
     result = {"visualPath": "caption"}
     token = current_visual_result.set(result)
     message_token = current_message_id.set("42")
+    reservation_token = current_image_reservation.set({
+        "sessionId": "41", "itemId": "frame_item",
+    })
     try:
         assert [text async for text in model.complete_chat(
             [ModelMessage("user", "Caption", (ModelImage(JPEG),))], "en"
         )] == []
     finally:
         current_message_id.reset(message_token)
+        current_image_reservation.reset(reservation_token)
         current_visual_result.reset(token)
         await model.close()
     assert len(transport.responses.requests) == 2
@@ -164,6 +169,29 @@ async def test_tool_followup_does_not_resend_or_recharge_image():
     assert JPEG not in json.dumps(transport.responses.requests[1])
     assert result["inputTokens"] == 100
     assert result["outputTokens"] == 20
+    usages = [
+        json.loads(request.content) for request in backend.requests
+        if request.url.path == "/usage/foundry"
+    ]
+    assert usages[0]["imageReservation"] == {"sessionId": "41", "itemId": "frame_item"}
+    assert "imageReservation" not in usages[1]
+
+
+@pytest.mark.asyncio
+async def test_unknown_image_usage_keeps_reservation_pending_without_a_fabricated_report():
+    backend = FakeBackend()
+    event = completed()
+    event.response.usage = SimpleNamespace(input_tokens=None, output_tokens=None)
+    model, _ = client([event], backend=backend)
+    reservation_token = current_image_reservation.set({"sessionId": "41", "itemId": "frame_item"})
+    try:
+        assert [text async for text in model.complete_chat(
+            [ModelMessage("user", "Caption", (ModelImage(JPEG),))], "en"
+        )] == []
+    finally:
+        current_image_reservation.reset(reservation_token)
+        await model.close()
+    assert not [request for request in backend.requests if request.url.path == "/usage/foundry"]
 
 
 @pytest.mark.asyncio
@@ -235,6 +263,67 @@ async def test_resolver_mock_transport_wipes_bytes_on_every_exit(monkeypatch, ou
         image = await chat_runtime.resolve_frame_image("a.b.c", VISUAL, "41", "42", 10)
         assert bool(image) == (outcome == "valid")
     assert buffers and all(not any(buffer) for buffer in buffers)
+
+
+@pytest.mark.parametrize("status,reason", [
+    (429, "budget_exhausted"), (503, "budget_unavailable"),
+])
+def test_budget_denial_survives_image_resolution_into_chat_done(monkeypatch, status, reason):
+    from jarvis_tools import current_chat_session_id
+
+    async def context(*args):
+        current_chat_session_id.set("41")
+        return []
+
+    def handle(request):
+        assert json.loads(request.content)["turnId"] == "legacy-turn"
+        return httpx.Response(status, json={
+            "error": "private provider text", "code": reason, "turnId": "legacy-turn",
+        })
+
+    original_client = httpx.AsyncClient
+    monkeypatch.setattr(chat_runtime, "backend_settings_from_environment", lambda: (
+        "https://backend.test", "scope"
+    ))
+    monkeypatch.setattr(chat_runtime.httpx, "AsyncClient", lambda **kwargs: original_client(
+        **kwargs, transport=httpx.MockTransport(handle)
+    ))
+    app, model = app_with(context)
+    with TestClient(app) as browser:
+        response = browser.post("/invocations", json={
+            "messageId": "42", "sessionId": "41", "text": "What is this?", "language": "en",
+            "delegatedAuthorization": AUTHORIZATION, "visualContext": VISUAL,
+        })
+    done = json.loads(response.text.split("event: done\ndata: ", 1)[1].split("\n", 1)[0])
+    assert done == {"visualPath": "caption", "visualReason": reason}
+    assert not model.messages[-1].images
+    assert "private provider text" not in response.text
+    assert "frame_1" not in response.text
+
+
+@pytest.mark.parametrize("body", [
+    b"not JSON", json.dumps({"code": "unexpected_private_code"}).encode(),
+    json.dumps({"code": []}).encode(),
+    json.dumps({"code": "budget_exhausted", "error": "x" * 1_024}).encode(),
+])
+@pytest.mark.asyncio
+async def test_resolver_ignores_untyped_or_oversized_budget_denials(monkeypatch, body):
+    original_client = httpx.AsyncClient
+    monkeypatch.setattr(chat_runtime, "backend_settings_from_environment", lambda: (
+        "https://backend.test", "scope"
+    ))
+    monkeypatch.setattr(chat_runtime.httpx, "AsyncClient", lambda **kwargs: original_client(
+        **kwargs, transport=httpx.MockTransport(lambda request: httpx.Response(
+            429, headers={"content-type": "application/json"}, content=body,
+        ))
+    ))
+    result = {"visualPath": "caption", "visualReason": "frame_unavailable"}
+    token = current_visual_result.set(result)
+    try:
+        assert await chat_runtime.resolve_frame_image("a.b.c", VISUAL, "41", "42", 10) is None
+    finally:
+        current_visual_result.reset(token)
+    assert result["visualReason"] == "frame_unavailable"
 
 
 class ProviderRejection(Exception):
@@ -464,6 +553,7 @@ def test_done_reports_accepted_image_usage_without_handle(monkeypatch):
 
     async def complete(messages, language, **kwargs):
         assert messages[-1].images
+        assert current_image_reservation.get() == {"sessionId": "41", "itemId": "frame_1"}
         current_visual_result.get().update({
             "visualPath": "image", "model": "gpt-6-luna",
             "inputTokens": 100, "outputTokens": 20,
@@ -483,6 +573,7 @@ def test_done_reports_accepted_image_usage_without_handle(monkeypatch):
     }
     assert "frame_1" not in response.text
     assert JPEG not in response.text
+    assert current_image_reservation.get() is None
 
 
 @pytest.mark.parametrize("available", [True, False])

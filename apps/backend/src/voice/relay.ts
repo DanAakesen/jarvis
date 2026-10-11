@@ -59,6 +59,7 @@ const MAX_FRAME_RETRY_AFTER_MS = 86_400_000;
 const CAMERA_UNAVAILABLE_REASONS = new Set([
   'frame_rate_limited', 'daily_limit', 'capture_failed', 'camera_off', 'permission_denied',
   'not_supported', 'session_ended', 'vision_failed', 'timeout', 'budget_exhausted',
+  'budget_unavailable',
 ]);
 
 function sharedBrowserIntent(text: string): boolean {
@@ -174,6 +175,15 @@ export interface VoiceRelayOptions {
     readonly model: string;
     readonly signal: AbortSignal;
   }) => Promise<boolean>;
+  readonly recordImageUsage?: (input: {
+    readonly sessionId: string;
+    readonly itemId: string;
+    readonly model: string;
+    readonly inputTokens?: number;
+    readonly outputTokens?: number;
+    readonly imageTokens?: number;
+    readonly signal: AbortSignal;
+  }) => Promise<void>;
 }
 
 type SharedScreenContext = {
@@ -181,6 +191,7 @@ type SharedScreenContext = {
   readonly sharedWindowTitle?: string;
   readonly visualContext?: VisualContext;
   readonly frameId?: string;
+  readonly unavailableReason?: string;
 };
 
 type PendingSharedScreenContext = {
@@ -316,6 +327,7 @@ function registerVoiceRoute(
   visionWatch?: VoiceRelayOptions['visionWatch'],
   frameStore?: VoiceRelayOptions['frameStore'],
   reserveImageBudget?: VoiceRelayOptions['reserveImageBudget'],
+  recordImageUsage?: VoiceRelayOptions['recordImageUsage'],
 ): void {
   app.get(path, { websocket: true }, (browser, request) => {
     if (request.principal === null) {
@@ -427,6 +439,18 @@ function registerVoiceRoute(
     let attachedImageItemId: string | undefined;
     const attemptedImageItems = new Set<string>();
     const imageEventIds = new Set<string>();
+    let pendingImageUsageItem: string | undefined;
+    let responseImageUsageItem: string | undefined;
+    const imageUsageResponses = new Map<string, string>();
+    const releaseImageBudget = (itemId: string) => {
+      if (!recordImageUsage || !sessionId) return;
+      void recordImageUsage({
+        sessionId, itemId, model: voiceModel, inputTokens: 0, outputTokens: 0,
+        imageTokens: 0, signal: controller.signal,
+      }).catch(() => request.log.warn({
+        failure: 'image_usage_unavailable', language,
+      }, 'voice.upstream_event_error'));
+    };
     const cameraUnavailableInstructions = () =>
       'No fresh camera image is available for this turn. Do not claim to see a live image. ' +
       'Earlier visual context is cached evidence only at its labelled capture time, not current facts. ' +
@@ -447,7 +471,7 @@ function registerVoiceRoute(
       clearTimeout(pending.timer);
       pending.cancelled = cancelled;
       if (pending.itemId === cameraItemId) cameraItemSettled = true;
-      if (context && !context.visualContext) request.sharedScreenContext = context;
+      if (context && !context.visualContext && !context.unavailableReason) request.sharedScreenContext = context;
       pending.resolve(context);
     };
     const waitForSharedScreenContext = (itemId: string, camera = false): PendingSharedScreenContext => {
@@ -917,10 +941,10 @@ function registerVoiceRoute(
                   cameraItemId !== providerItemId || generation !== cameraGeneration) return;
               const sourceMessage = savedUserMessages.get(itemId);
               if (sourceMessage && context?.frameId) {
-                const accepted = await attachCameraImage(context.frameId, providerItemId, sourceMessage.id);
+                const imageReason = await attachCameraImage(context.frameId, providerItemId, sourceMessage.id);
                 visualContext = {
-                  ...visualContext, visualPath: accepted ? 'image' : 'caption',
-                  visualReason: accepted ? 'image_accepted' : 'image_unavailable',
+                  ...visualContext, visualPath: imageReason === 'image_accepted' ? 'image' : 'caption',
+                  visualReason: imageReason,
                 };
                 if (sharedContextWait.cancelled || controller.signal.aborted || endRequested ||
                     cameraItemId !== providerItemId || generation !== cameraGeneration) {
@@ -942,12 +966,28 @@ function registerVoiceRoute(
                 type: 'jarvis.visual_context', itemId: providerItemId,
                 visualPath: visualContext.visualPath, visualReason: visualContext.visualReason,
               }));
+              request.log.info({
+                path: visualContext.visualPath, reason: visualContext.visualReason,
+                channel: `voice-${language}`, latencyMs: performance.now() - startedAt,
+              }, 'visual.path');
               cameraInstructions = (visualContext.visualPath === 'image'
                 ? 'An original image was accepted for this turn. Inspect that image for the spoken question. '
                 : 'Only caption observations were supplied to this voice model; no original image was attached. ') +
                 visualContextText(visualContext);
             } else {
               cameraInstructions = cameraUnavailableInstructions();
+              const visualReason = context?.unavailableReason ?? 'timeout';
+              browser.send(JSON.stringify({
+                type: 'jarvis.visual_context', itemId: providerItemId,
+                visualPath: 'caption', visualReason,
+              }));
+              browser.send(JSON.stringify({
+                type: 'jarvis.screen.context.unavailable', itemId: providerItemId, reason: visualReason,
+              }));
+              request.log.info({
+                path: 'caption', reason: visualReason,
+                channel: `voice-${language}`, latencyMs: performance.now() - startedAt,
+              }, 'visual.path');
             }
             if (cameraTurn && (controller.signal.aborted || endRequested ||
                 cameraItemId !== providerItemId || generation !== cameraGeneration)) return;
@@ -1169,6 +1209,10 @@ function registerVoiceRoute(
 
     const clearCameraImage = () => {
       pendingImage?.settle(false);
+      if (pendingImageUsageItem) {
+        releaseImageBudget(pendingImageUsageItem);
+        pendingImageUsageItem = undefined;
+      }
       if (attachedImageItemId) {
         deleteCameraImage(attachedImageItemId);
         attachedImageItemId = undefined;
@@ -1181,53 +1225,72 @@ function registerVoiceRoute(
       sendUpstream({ type: 'conversation.item.delete', item_id: itemId, event_id: eventId });
     };
 
-    const attachCameraImage = async (frameId: string, itemId: string, messageId: string): Promise<boolean> => {
+    const attachCameraImage = async (frameId: string, itemId: string, messageId: string): Promise<string> => {
       const generation = cameraGeneration;
       const identity = { ownerObjectId: request.principal!.objectId, sessionId: sessionId!, turnId: itemId };
-      if (!frameStore || !reserveImageBudget) return false;
+      if (!frameStore || !reserveImageBudget) return 'image_input_unverified';
+      if (!frameStore.bind(frameId, { ...identity, messageId })) return 'frame_unavailable';
       const budgetController = new AbortController();
       const abort = () => budgetController.abort();
       controller.signal.addEventListener('abort', abort, { once: true });
       let timer: ReturnType<typeof setTimeout> | undefined;
       let allowed = false;
+      let budgetFailed = false;
       try {
         allowed = await Promise.race([
           reserveImageBudget({ sessionId: sessionId!, itemId, model: voiceModel, signal: budgetController.signal }),
           new Promise<boolean>((resolve) => {
-            timer = setTimeout(() => { budgetController.abort(); resolve(false); }, IMAGE_ACCEPTANCE_TIMEOUT_MS);
+            timer = setTimeout(() => {
+              budgetFailed = true;
+              budgetController.abort();
+              resolve(false);
+            }, IMAGE_ACCEPTANCE_TIMEOUT_MS);
             timer.unref();
           }),
         ]);
-      } catch { /* Unknown budget must not trigger image inference. */ }
+      } catch { budgetFailed = true; }
       finally {
         if (timer) clearTimeout(timer);
         controller.signal.removeEventListener('abort', abort);
       }
       if (!allowed || controller.signal.aborted || endRequested || !cameraOn ||
-          generation !== cameraGeneration || cameraItemId !== itemId ||
-          !frameStore.bind(frameId, { ...identity, messageId })) {
+          generation !== cameraGeneration || cameraItemId !== itemId) {
         frameStore.discard(frameId, identity);
-        return false;
+        if (allowed) releaseImageBudget(itemId);
+        const reason = budgetFailed ? 'budget_unavailable' : !allowed ? 'budget_exhausted' : 'frame_unavailable';
+        if (!controller.signal.aborted && !endRequested && cameraItemId === itemId &&
+            generation === cameraGeneration) browser.send(JSON.stringify({
+          type: 'jarvis.screen.context.unavailable', itemId, reason,
+        }));
+        return reason;
       }
       const image = frameStore.consume(frameId, { ...identity, messageId });
-      if (!image) return false;
+      if (!image) {
+        releaseImageBudget(itemId);
+        return 'frame_unavailable';
+      }
       clearCameraImage();
+      pendingImageUsageItem = itemId;
       const imageItemId = `image_${randomUUID().replaceAll('-', '')}`;
       const eventId = `image_event_${randomUUID().replaceAll('-', '')}`;
       attemptedImageItems.add(imageItemId);
       imageEventIds.add(eventId);
-      return new Promise<boolean>((resolve) => {
+      return new Promise<string>((resolve) => {
         let finished = false;
-        const deadline = setTimeout(() => settle(false), IMAGE_ACCEPTANCE_TIMEOUT_MS);
+        const deadline = setTimeout(() => settle(false, 'image_timeout'), IMAGE_ACCEPTANCE_TIMEOUT_MS);
         deadline.unref();
-        const settle = (accepted: boolean) => {
+        const settle = (accepted: boolean, reason = 'image_rejected') => {
           if (finished) return;
           finished = true;
           clearTimeout(deadline);
           pendingImage = undefined;
           if (accepted) attachedImageItemId = imageItemId;
-          else deleteCameraImage(imageItemId);
-          resolve(accepted);
+          else {
+            deleteCameraImage(imageItemId);
+            pendingImageUsageItem = undefined;
+            releaseImageBudget(itemId);
+          }
+          resolve(accepted ? 'image_accepted' : reason);
         };
         pendingImage = { itemId: imageItemId, eventId, settle };
         try {
@@ -1251,6 +1314,8 @@ function registerVoiceRoute(
       pendingResponseCreate = undefined;
       responseCreateActive = true;
       assistantResponding = true;
+      responseImageUsageItem = pendingImageUsageItem;
+      pendingImageUsageItem = undefined;
       const response = next.response as Record<string, unknown> | undefined;
       const instructions = typeof response?.instructions === 'string' ? response.instructions :
         createRealtimeSessionUpdate(
@@ -1610,8 +1675,9 @@ function registerVoiceRoute(
             return;
           }
           if (cameraItemSettled || (cameraItemId && cameraItemId !== event.itemId)) return;
-          if (pendingSharedScreenContext?.itemId === event.itemId) finishSharedScreenContextWait(null);
-          else bufferedCameraContext = { itemId: event.itemId, context: null };
+          const context = { screenDescription: '', unavailableReason: event.reason as string };
+          if (pendingSharedScreenContext?.itemId === event.itemId) finishSharedScreenContextWait(context);
+          else bufferedCameraContext = { itemId: event.itemId, context };
         } else if (pendingSharedScreenContext) finishSharedScreenContextWait(null);
         return;
       }
@@ -1645,8 +1711,7 @@ function registerVoiceRoute(
           return;
         }
         const canAttemptImage = Boolean(english && reserveImageBudget && frameStore && event.source === 'camera' &&
-          cameraOn && !cameraItemSettled && event.itemId === cameraItemId &&
-          pendingSharedScreenContext?.itemId === event.itemId);
+          cameraOn && !cameraItemSettled && (!cameraItemId || event.itemId === cameraItemId));
         const discardedFrame = !canAttemptImage && typeof event.frameId === 'string' && sessionId
           ? frameStore?.discard(event.frameId, {
             ownerObjectId: request.principal!.objectId,
@@ -1900,6 +1965,7 @@ function registerVoiceRoute(
           }
           if (event?.type === 'input_audio_buffer.speech_started') {
             clearCameraImage();
+            pendingImageUsageItem = undefined;
             cameraGeneration += 1;
             finishSharedScreenContextWait(null, true);
             bufferedCameraContext = undefined;
@@ -1958,12 +2024,42 @@ function registerVoiceRoute(
             turnTiming.firstAudioDeltaMs = elapsedSinceSpeechStopped() ?? null;
           }
           if (event?.type === 'response.created') {
+            const response = event.response as { id?: unknown } | undefined;
+            if (responseImageUsageItem && typeof response?.id === 'string' &&
+                response.id.length <= 128) {
+              imageUsageResponses.set(response.id, responseImageUsageItem);
+              responseImageUsageItem = undefined;
+            }
             responseCreateActive = true;
             assistantResponding = true;
             if (microphoneActive) publishActivity('thinking');
           }
           if (event?.type === 'response.done' || event?.type === 'response.cancelled') {
-            clearCameraImage();
+            const response = event.response as {
+              id?: unknown;
+              usage?: { input_tokens?: unknown; output_tokens?: unknown;
+                input_token_details?: { image_tokens?: unknown };
+                input_tokens_details?: { image_tokens?: unknown } };
+            } | undefined;
+            const usageItem = typeof response?.id === 'string' ? imageUsageResponses.get(response.id) : undefined;
+            if (usageItem && recordImageUsage && sessionId) {
+              imageUsageResponses.delete(response!.id as string);
+              const tokens = (value: unknown) => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
+                ? value : undefined;
+              const inputTokens = tokens(response?.usage?.input_tokens);
+              const outputTokens = tokens(response?.usage?.output_tokens);
+              const imageTokens = tokens(response?.usage?.input_token_details?.image_tokens ??
+                response?.usage?.input_tokens_details?.image_tokens);
+              void recordImageUsage({
+                sessionId, itemId: usageItem, model: voiceModel, signal: controller.signal,
+                ...(inputTokens === undefined ? {} : { inputTokens }),
+                ...(outputTokens === undefined ? {} : { outputTokens }),
+                ...(imageTokens === undefined ? {} : { imageTokens }),
+              }).catch(() => request.log.warn({
+                failure: 'image_usage_unavailable', language,
+              }, 'voice.upstream_event_error'));
+            }
+            if (!pendingImage && !pendingImageUsageItem) clearCameraImage();
             responseCreateActive = false;
             assistantResponding = false;
             flushQueuedToolOutputs();
@@ -2098,6 +2194,7 @@ export function createVoiceRelayModule(options: VoiceRelayOptions): BackendModul
           options.visionWatch,
           options.frameStore,
           options.reserveImageBudget,
+          options.recordImageUsage,
         );
       }
       if (options.connect) {
@@ -2114,6 +2211,7 @@ export function createVoiceRelayModule(options: VoiceRelayOptions): BackendModul
           options.visionWatch,
           options.frameStore,
           options.reserveImageBudget,
+          options.recordImageUsage,
         );
       } else if (options.connectDanish) {
         registerVoiceRoute(
@@ -2127,6 +2225,7 @@ export function createVoiceRelayModule(options: VoiceRelayOptions): BackendModul
           options.visionWatch,
           options.frameStore,
           options.reserveImageBudget,
+          options.recordImageUsage,
         );
       }
     },

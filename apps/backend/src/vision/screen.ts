@@ -1,7 +1,8 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import type { BackendModule } from '../modules.js';
 import { readSettings } from '../core/settings.js';
 import { DKK_PER_USD, foundryTokenCosts } from '../core/usage-pricing.js';
+import { voiceLiveModels } from '../core/model-catalog.js';
 import type { VisionWatchUsageStore } from './watch.js';
 import type { FrameStore } from './frame-store.js';
 
@@ -47,14 +48,17 @@ export interface ScreenVisionModel {
 
 export interface ScreenFrameUsageStore {
   reserveImage?(input: { readonly sessionId: string; readonly eventId: string;
-    readonly limitDkk: number; readonly at: Date }): Promise<'reserved' | 'limit' | 'inactive'>;
+    readonly limitDkk: number; readonly at: Date; readonly model?: string }): Promise<'reserved' | 'limit' | 'inactive'>;
+  recordImageTokens?(input: { readonly sessionId: string; readonly eventId: string; readonly model: string;
+    readonly inputTokens: number; readonly outputTokens: number; readonly role?: 'chat' | 'voice';
+    readonly imageOnly?: boolean }): Promise<void>;
   reserveFrame(input: {
     readonly sessionId: string;
     readonly eventId: string;
     readonly dailyCap: number;
     readonly at: Date;
     readonly limitDkk?: number;
-  }): Promise<'reserved' | 'rate-limited' | 'limit' | 'inactive'>;
+  }): Promise<'reserved' | 'rate-limited' | 'limit' | 'budget-exhausted' | 'inactive'>;
   recordTokens(input: {
     readonly sessionId: string;
     readonly eventId: string;
@@ -72,7 +76,7 @@ export class ScreenVisionError extends Error {
   constructor(
     readonly statusCode: number,
     message: string,
-    readonly code?: 'frame_rate_limited' | 'daily_limit',
+    readonly code?: 'frame_rate_limited' | 'daily_limit' | 'budget_exhausted',
     readonly retryAfterMs?: number,
   ) {
     super(message);
@@ -147,6 +151,9 @@ export class ScreenVisionService {
     if (reservation === 'limit') {
       throw new ScreenVisionError(429, 'The daily screen-inspection limit has been reached.', 'daily_limit');
     }
+    if (reservation === 'budget-exhausted') {
+      throw new ScreenVisionError(429, 'The daily vision budget has been exhausted.', 'budget_exhausted');
+    }
     if (reservation === 'rate-limited') {
       throw new ScreenVisionError(429, 'Please wait before inspecting another screen frame.', 'frame_rate_limited', 3_000);
     }
@@ -192,12 +199,66 @@ export class ScreenVisionService {
     }
   }
 
-  async reserveImage(sessionId: string, limitUsd: number): Promise<boolean> {
-    if (!this.usage.reserveImage || !Number.isFinite(limitUsd) || limitUsd < 0 || limitUsd > 100) return false;
-    return await this.usage.reserveImage({ sessionId, eventId: `image:${randomUUID()}`,
-      limitDkk: limitUsd * DKK_PER_USD, at: new Date(this.now()) }) === 'reserved';
+  async reserveImage(input: {
+    readonly sessionId: string; readonly itemId: string; readonly model: string;
+    readonly limitUsd: number; readonly signal?: AbortSignal;
+  }): Promise<boolean> {
+    const costs = foundryTokenCosts(input.model, 32_768, 4_096);
+    if (!this.usage.reserveImage || !validSessionId(input.sessionId) || !validImageItemId(input.itemId) ||
+        !Number.isFinite(input.limitUsd) || input.limitUsd < 0 || input.limitUsd > 100 ||
+        (!isRealtimeImageModel(input.model) && (!costs || costs.inputDkk + costs.outputDkk > 0.1))) {
+      throw new Error('Image budget or pricing is unavailable');
+    }
+    if (input.signal?.aborted) throw new Error('Image budget admission was cancelled');
+    if (input.limitUsd === 0) return false;
+    try {
+      const outcome = await this.usage.reserveImage({
+        sessionId: input.sessionId, eventId: imageUsageEventId(input.sessionId, input.itemId), model: input.model,
+        limitDkk: input.limitUsd * DKK_PER_USD, at: new Date(this.now()),
+      });
+      if (outcome === 'inactive' || input.signal?.aborted) throw new Error('Image budget admission is unavailable');
+      return outcome === 'reserved';
+    } catch { throw new Error('Image budget admission is unavailable'); }
   }
 
+  async recordImageUsage(input: {
+    readonly sessionId: string; readonly itemId: string; readonly model: string;
+    readonly inputTokens?: number; readonly outputTokens?: number; readonly imageTokens?: number;
+    readonly signal?: AbortSignal;
+  }): Promise<void> {
+    if (!this.usage.recordImageTokens || !validSessionId(input.sessionId) || !validImageItemId(input.itemId)) return;
+    if (isRealtimeImageModel(input.model)) {
+      // Realtime totals mix audio/text/image. Only actual image attribution can replace the hold.
+      const imageTokens = input.imageTokens ??
+        (input.inputTokens === 0 && input.outputTokens === 0 ? 0 : undefined);
+      if (!Number.isSafeInteger(imageTokens) || imageTokens! < 0 || imageTokens! > 10_000_000) return;
+      await this.usage.recordImageTokens({ sessionId: input.sessionId,
+        eventId: imageUsageEventId(input.sessionId, input.itemId), model: input.model,
+        inputTokens: imageTokens!, outputTokens: 0, role: 'voice', imageOnly: true });
+      return;
+    }
+    if (
+        !Number.isSafeInteger(input.inputTokens) || input.inputTokens! < 0 || input.inputTokens! > 10_000_000 ||
+        !Number.isSafeInteger(input.outputTokens) || input.outputTokens! < 0 || input.outputTokens! > 10_000_000 ||
+        (input.inputTokens !== 0 || input.outputTokens !== 0) &&
+          !foundryTokenCosts(input.model, input.inputTokens!, input.outputTokens!)) return;
+    // Existing metrics bill the whole first image response once; modality counts are not invented.
+    await this.usage.recordImageTokens({ sessionId: input.sessionId,
+      eventId: imageUsageEventId(input.sessionId, input.itemId), model: input.model,
+      inputTokens: input.inputTokens!, outputTokens: input.outputTokens!, role: 'voice' });
+  }
+}
+
+export function validImageItemId(value: string): boolean {
+  return /^[A-Za-z0-9_-]{1,128}$/u.test(value);
+}
+
+function isRealtimeImageModel(model: string): boolean {
+  return voiceLiveModels.some((allowed) => allowed === model);
+}
+
+export function imageUsageEventId(sessionId: string, itemId: string): string {
+  return `image:${createHash('sha256').update(`${sessionId}:${itemId}`).digest('hex')}`;
 }
 
 export function validSessionId(value: string): boolean {
@@ -250,8 +311,21 @@ export function createScreenVisionModule(service: ScreenVisionService, frameStor
             sessionId, messageId, ...(turnId === undefined ? {} : { turnId }) });
           if (!image) return reply.code(404).send({ error: 'Frame unavailable' });
           try {
+            if (!app.settingsStore) return reply.code(503).send({
+              error: 'Image budget unavailable', code: 'budget_unavailable',
+              ...(turnId === undefined ? {} : { turnId }),
+            });
+            const settings = await readSettings(app.settingsStore, await app.modelCatalogue.read());
+            if (!await service.reserveImage({ sessionId, itemId: frameId, model: settings.roles.chat.model,
+              limitUsd: settings.global.visionDailyBudgetUsd })) {
+              return reply.code(429).send({ error: 'Image budget unavailable', code: 'budget_exhausted',
+                ...(turnId === undefined ? {} : { turnId }) });
+            }
             reply.type('image/jpeg');
             await reply.send(image);
+          } catch {
+            return reply.code(503).send({ error: 'Image budget unavailable', code: 'budget_unavailable',
+              ...(turnId === undefined ? {} : { turnId }) });
           } finally { image.fill(0); }
         });
       const frameRequests = new WeakMap<object, { capturedAt: Date; question?: string; turnId?: string }>();
@@ -318,7 +392,8 @@ export function createScreenVisionModule(service: ScreenVisionService, frameStor
               type: 'object',
               properties: {
                 error: { type: 'string' },
-                code: { type: 'string', enum: ['frame_rate_limited', 'daily_limit'] },
+                code: { type: 'string', enum: ['frame_rate_limited', 'daily_limit', 'budget_exhausted'] },
+                turnId: { type: 'string', pattern: '^[A-Za-z0-9_-]{1,128}$', maxLength: 128 },
                 retryAfterMs: { type: 'integer', minimum: 0 },
               },
               required: ['error', 'code'],
@@ -372,16 +447,11 @@ export function createScreenVisionModule(service: ScreenVisionService, frameStor
             ...frameRequest,
           });
           let frameId: string | undefined;
-          // The existing pending hold covers a bounded main-agent image call; unknown prices use captions.
-          const imageCosts = foundryTokenCosts(settings.roles.chat.model, 32_768, 4_096);
-          if (frameStore && imageCosts && imageCosts.inputDkk + imageCosts.outputDkk <= 0.1 &&
-              !controller.signal.aborted) {
+          if (frameStore && !controller.signal.aborted) {
             try {
-              if (await service.reserveImage(sessionId, settings.global.visionDailyBudgetUsd)) {
-                frameId = await frameStore.put({ image, ownerObjectId: request.principal.objectId, sessionId,
-                  capturedAt: Date.parse(result.capturedAt),
-                  ...(frameRequest?.turnId === undefined ? {} : { turnId: frameRequest.turnId }) });
-              }
+              frameId = await frameStore.put({ image, ownerObjectId: request.principal.objectId, sessionId,
+                capturedAt: Date.parse(result.capturedAt),
+                ...(frameRequest?.turnId === undefined ? {} : { turnId: frameRequest.turnId }) });
             } catch { /* Keep the working caption path when image preprocessing fails. */ }
           }
           return reply.send({ ...result, ...(frameId === undefined ? {} : { frameId }) });
@@ -391,6 +461,7 @@ export function createScreenVisionModule(service: ScreenVisionService, frameStor
               error: error.message,
               ...(error.code === undefined ? {} : { code: error.code }),
               ...(error.retryAfterMs === undefined ? {} : { retryAfterMs: error.retryAfterMs }),
+              ...(frameRequest?.turnId === undefined ? {} : { turnId: frameRequest.turnId }),
             });
           }
           return reply.code(503).send({ error: 'Screen inspection is unavailable.' });

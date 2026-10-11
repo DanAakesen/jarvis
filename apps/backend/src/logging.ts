@@ -52,7 +52,7 @@ const events = new Set([
   'voice.partials_unavailable', 'chat.latency', 'memory.embedding', 'vault.index', 'vault.write',
   'pc_act.step',
   'reflex.decision',
-  'vision.watch',
+  'vision.watch', 'visual.path',
   'conversation.reply_failed', 'voice.connection_failed', 'voice.upstream_closed', 'voice.upstream_error',
   'voice.upstream_event_error', 'voice.turn_timing', 'pc_bridge.command_timing', 'pc_bridge.wake_word',
   'credentials.codex_renewal', 'dispatcher.start_failed',
@@ -93,8 +93,26 @@ const reflexReasons = new Set([
   'already_executed', 'shared_context_required', 'billing', 'auth', 'rate_limited', 'timeout',
   'invalid_answer', 'network_error',
 ]);
+const visualPathReasons = new Set([
+  'image_attached', 'image_request_accepted', 'image_context_limit',
+  'image_accepted', 'image_rejected', 'image_timeout', 'image_unavailable',
+  'frame_unavailable', 'frame_missing', 'budget_exhausted', 'budget_unavailable', 'legacy_agent',
+  'image_input_unverified', 'timeout', 'daily_limit', 'frame_rate_limited', 'capture_failed',
+  'camera_off', 'permission_denied', 'not_supported', 'session_ended', 'vision_failed',
+]);
 
 function safeFields(input: Record<string, unknown>): Record<string, unknown> {
+  if (input.msg === 'visual.path') {
+    const fields: Record<string, unknown> = {};
+    if (input.path === 'image' || input.path === 'caption') fields.path = input.path;
+    if (typeof input.reason === 'string' && visualPathReasons.has(input.reason)) fields.reason = input.reason;
+    if (input.channel === 'chat' || input.channel === 'voice-en' || input.channel === 'voice-da') {
+      fields.channel = input.channel;
+    }
+    if (typeof input.latencyMs === 'number' && Number.isFinite(input.latencyMs) &&
+        input.latencyMs >= 0 && input.latencyMs <= 600_000) fields.latencyMs = input.latencyMs;
+    return fields;
+  }
   if (input.msg === 'decision.provider_unavailable') {
     return ['jev', 'microsoft'].includes(String(input.provider)) ? { provider: input.provider } : {};
   }

@@ -1359,6 +1359,17 @@ also need the stored message ID from P4-03, supplied by the caller in P4-06.
 
 ### Screen sharing and camera (P7-05/P7-08)
 
+P9-83 verification: run `npm test --workspace @jarvis/backend -- src/voice/relay.test.ts`
+for real local WebSocket image acknowledgement/fallback/correlation regressions.
+These use fake upstream providers, not Azure. After deploy the coordinator must
+inspect `visual.path` for `channel` values `chat`, `voice-en` and `voice-da` and
+confirm `path: image` using a non-private fixture. EN and production DA both use
+the realtime connector; the hosted DA fallback remains caption-only. Verify
+the configured deployment's modality-specific tariff and reported image tokens
+before treating reservations as billed image cost. Cloud agents must not run
+Azure capability probes. No new migration or shared instruction-budget change
+is introduced.
+
 The backend uses the existing `FOUNDRY_PROJECT_ENDPOINT` and managed identity;
 Bicep already grants that identity `Foundry User`, so these features add no Azure
 resource, credential, or provisioning script. Migration `0015_screen_frame_usage`

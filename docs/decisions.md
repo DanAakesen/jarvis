@@ -19,6 +19,53 @@ The nine design areas and where each stands. **Confirmed** = Dan's requirement o
 
 ## Decision log
 
+P9-83 (#705, 11 October 2026) supersedes P9-82's unset realtime budget callback
+and unresolved Danish architecture notes below. Production `/voice` and
+`/voice/da` both use the same backend-owned Voice Live realtime connector and
+configured voice deployment (`gpt-realtime-2.1` by default), not a Danish
+transcribe → chat → TTS pipeline. Preserve the L103 session shape and #702's
+item-correlated, single `response.create` hold. The provisioned hosted Danish
+bridge is only a fallback when that connector is absent; it remains honestly
+caption-only.
+
+The relay sends an original `input_image` only after private-handle binding and
+budget admission. A matching item acknowledgement selects `image_accepted`;
+correlated rejection or the 1.5-second acknowledgement deadline selects
+`image_rejected` or `image_timeout`, deletes the image item and supplies caption
+observations. Late results cannot create another reply. Capture budget denial
+and image admission denial surface as turn-correlated `budget_exhausted` with
+typed unavailable feedback; unknown admission is `budget_unavailable`.
+Buffers are zeroed after sending, and image history remains text-only.
+
+Reuse the shared UTC-day vision ledger and its conservative pending allowance;
+capture counts once toward the 300-frame cap. Chat reserves at authorized
+frame resolution and reconciles the first image request's provider totals
+without double billing. Voice records provider-reported image token quantities,
+never prices audio/text totals as image tokens. No realtime image tariff is
+hardcoded: the provider image-token quantity is actual, while both realtime
+models retain their conservative unverified allowance charged to the daily
+budget until the coordinator verifies Azure pricing. A web-search list-price
+claim was not adopted because direct source retrieval was unavailable and it
+did not establish the deployed Azure tariff. Missing provider
+usage after inference also keeps that hold; missing usage is not evidence of
+zero cost. Known no-inference rejections/cancellations release the reservation.
+
+`visual.path` is allowlisted to path, bounded reason, channel and latency only.
+It strips content and all identifiers, including request logger bindings.
+The coordinator must inspect `chat`, `voice-en` and `voice-da` events after
+deploy and confirm acceptance with a non-private fixture. Offline request,
+acknowledgement, fallback and accounting tests are implementation evidence,
+**not a live capability probe**. Cloud agents have not accessed Azure or
+verified selected-model image support, provider billing, microphone timing or
+deployed SQL behavior. No new migration, tool schema or capability instruction
+is required; L120/L121 and `agents/jarvis/limits.json` remain unchanged.
+Final offline evidence: 114 relay tests, 119 logging/conversation tests, 143
+accounting tests and 246 Python tests passed, alongside backend build and scoped
+ESLint/Ruff checks. A compiled private-frame smoke verified owner binding,
+single-use consumption and zeroing. Secret scanning found no secrets. The final
+automated validation request could not run because its time limit had been
+reached; this is not a successful automated review or full final CodeQL result.
+
 P9-82 (11 October 2026): camera-on consent includes sending the actual frame to
 the answering model, not just a vision caption. Keep #702's question-aware
 caption as the fallback. Frames belong in bounded process memory only, with a
