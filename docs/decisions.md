@@ -25,8 +25,8 @@ and graph cover safe Markdown paths at the root and at any depth; folder and
 routing-rule gates no longer restrict access. The additive `/notes/tree` is
 derived from the complete Git tree and cached with the vault index; Git's
 implicit-directory model means writing the first note creates its parent path.
-Writes, edits and deletes reject any dot-prefixed segment (including the
-existing skipped `.git`, `.github`, `.obsidian`, `.codex` and `.vscode` trees);
+Writes, edits and deletes reject any dot-prefixed segment (including `.git` and
+the skipped `.github`, `.obsidian`, `.codex` and `.vscode` trees);
 note content stays untrusted data, never instructions. Owner auth, safe-path
 validation, 256 KiB writes, secret checks, stored-Dan-message checks for agent
 writes, SHA conflict protection and confirmed deletion remain. Contracts add

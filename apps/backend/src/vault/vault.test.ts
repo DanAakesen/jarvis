@@ -889,6 +889,7 @@ describe('GitHub vault', () => {
       ]);
     expect(JSON.stringify(log.mock.calls)).not.toContain('Revised phrase');
     expect(JSON.stringify(log.mock.calls)).not.toContain('Fresh phrase');
+    expect(JSON.stringify(log.mock.calls)).not.toContain('General/New-note.md');
   });
 
   it('covers root, arbitrary top-level and deep notes with the cached full-vault tree', async () => {
@@ -1002,7 +1003,12 @@ describe('GitHub vault', () => {
       directories: expect.arrayContaining(['Invoices', 'Records', 'Records/2026', 'Records/2026/Q4']),
       rootNoteCount: 2,
     });
-    expect(indexStore.entry('.github/workflows/ignored.md')).toBeUndefined();
+    for (const path of [
+      '.git/ignored.md', '.github/workflows/ignored.md', '.obsidian/ignored.md',
+      '.codex/ignored.md', '.vscode/ignored.md',
+    ]) {
+      expect(indexStore.entry(path)).toBeUndefined();
+    }
     const forbidden = memoryApiApp(module, {
       auth: async () => ({
         objectId: 'not-dan', tenantId: apiConfig.auth.tenantId, displayName: 'Other',
