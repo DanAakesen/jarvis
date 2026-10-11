@@ -55,6 +55,9 @@ describe('SQL conversation store', () => {
         COL_LENGTH(N'dbo.messages', N'metadata') AS metadata_column FROM dbo.messages WHERE id = @id`);
     expect(afterDown.recordset[0]).toEqual({ text: 'Final transcript', metadata_column: null });
     await expect(applyMigrations(pool, migrations)).resolves.toEqual([down.name]);
+    await pool.request().input('sessionId', sql.BigInt, BigInt(session.id))
+      .query(`DELETE FROM dbo.messages WHERE jarvis_session_id = @sessionId;
+        DELETE FROM dbo.jarvis_sessions WHERE id = @sessionId;`);
   });
   it('writes sessions and messages, pages history with tool/task references, and closes idempotently', async () => {
     const store = createConversationStore(pool);

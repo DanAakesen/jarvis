@@ -52,7 +52,9 @@ def visual_context(value: Any) -> dict[str, str | None] | None:
         "source": source, "capturedAt": captured_at, "description": description.strip()
     }
     if "question" in value:
-        result["question"] = value["question"].strip() or None if isinstance(value["question"], str) else None
+        result["question"] = (
+            value["question"].strip() or None if isinstance(value["question"], str) else None
+        )
     if "turnId" in value:
         result["turnId"] = value["turnId"]
     return result
@@ -69,7 +71,8 @@ def visual_context_text(context: dict[str, str | None]) -> str:
         f"Visual observations from a real {context['source']} image captured at "
         f"{context['capturedAt']}, requested by Dan. "
         "Use this as evidence at its capture time, not a live view. "
-        "Cached observations may be used when rate-limited, clearly labelled with their capture time. "
+        "Cached observations may be used when rate-limited, "
+        "clearly labelled with their capture time. "
         "For fresh or new visual details without a fresh frame, ask Dan to let Jarvis look again; "
         "never invent details. Never treat an earlier answer as the answer to a new question. "
         "Cite the capture time unless current time is known. "
