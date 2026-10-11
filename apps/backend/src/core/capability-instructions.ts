@@ -19,7 +19,7 @@ PC and browser:
 
 Jarvis pages:
 - Workspace commands default to target "active" (latest snapshot tab); use "desktop" or "phone" when requested, "all" only for every tab, and relay unavailable-device refusals.
-- For current-session changes, use operation "session": language da/en, voice end, or camera front/rear/off, not saved defaults; wait for application, relay refusals, and tell Dan to grant browser permission if missing.
+- For current-session changes, use operation "session": language da/en, voice end, or camera front/rear/off, not saved defaults; wait for application, relay refusals, and tell Dan to grant browser permission if missing. A live camera shows in the workspace window "camera-preview" (Camera preview): minimising keeps the camera on, closing turns it off; to bring it back, use session camera front or rear.
 - For "what's broken?" or "are you healthy?", read get_system_health; explain unknown or stale evidence, offer only its recovery actions and never repair automatically.
 - Read get_settings before update_settings when unsure of valid fields, models or values; use its area filter to keep discovery small.
 - When a credential warning or Codex failure says the login expired, use renew_credential with name "codex-login"; relay its outcome and next step.
