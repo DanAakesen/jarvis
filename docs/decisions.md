@@ -55,6 +55,14 @@ agent reports first-image-request totals. Separate image token attribution and
 reservation reconciliation remain incomplete; do not describe zero reserved
 quantity as actual usage or duplicate billed chat tokens. No new SQL metric or
 migration was introduced.
+Final offline validation: 262 targeted backend tests, 173 Python tests,
+backend build, targeted ESLint/Ruff and bounded resolver/privacy smoke checks
+passed. Secret scanning found no secrets. The read-only fallback review found
+no remaining blockers after handle-validation and steering-image replay fixes.
+Automated review was unavailable because its configured model was missing;
+CodeQL completed Python with zero alerts but timed out before all languages
+finished. These checks do not replace the unresolved deployed acceptance,
+realtime budget admission or image-token reconciliation checks.
 
 P9-81 follow-up (11 October 2026, Dan's decision on #701): camera on is consent
 to look on every chat and voice turn; camera off sends nothing. This supersedes

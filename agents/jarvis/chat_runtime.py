@@ -294,9 +294,9 @@ async def resolve_frame_image(
                 ).split(";", 1)[0].lower() != "image/jpeg":
                     return None
                 async for chunk in response.aiter_bytes():
-                    image.extend(chunk)
-                    if len(image) > MAX_JPEG_BYTES:
+                    if len(image) + len(chunk) > MAX_JPEG_BYTES:
                         return None
+                    image.extend(chunk)
         return resolved_visual_image({
             "frameId": context["frameId"], "mimeType": "image/jpeg", "detail": "low",
             "imageBase64": base64.b64encode(image).decode("ascii"),
@@ -477,8 +477,6 @@ def register_chat_invocation(
                                 match.group(1), visual, chat_session_id,
                                 message_id, backend_http_timeout,
                             )
-                            if current_image is not None:
-                                visual_result.pop("visualReason", None)
                         except asyncio.CancelledError:
                             raise
                         except Exception:
