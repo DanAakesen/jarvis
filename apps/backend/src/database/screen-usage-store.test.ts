@@ -76,13 +76,14 @@ describe('SQL screen and watch usage store', () => {
     expect(request.input).toHaveBeenCalledWith('outputDkk', expect.anything(), 0);
     expect(request.query).toHaveBeenCalledOnce();
   });
-  it('uses the estimated realtime image rate without applying text or audio output rates', async () => {
+  it('records actual realtime image counts while retaining the unverified hold, never pricing audio totals', async () => {
     const { request, store } = fixture();
     await store.recordImageTokens!({ sessionId: '42', eventId: `image:${'a'.repeat(64)}`,
       model: 'gpt-realtime-2.1', inputTokens: 100, outputTokens: 0, role: 'voice', imageOnly: true });
-    expect(request.input).toHaveBeenCalledWith('inputUsd', expect.anything(), 0.0005);
-    expect(request.input).toHaveBeenCalledWith('inputDkk', expect.anything(), 0.00328925);
-    expect(request.input).toHaveBeenCalledWith('outputDkk', expect.anything(), 0);
+    expect(request.input).toHaveBeenCalledWith('inputUsd', expect.anything(), null);
+    expect(request.input).toHaveBeenCalledWith('inputDkk', expect.anything(), null);
+    expect(request.input).toHaveBeenCalledWith('outputDkk', expect.anything(), null);
+    expect(request.input).toHaveBeenCalledWith('costStatus', expect.anything(), 'unverified');
     expect(request.input).toHaveBeenCalledWith('inputTokens', expect.anything(), 100);
     expect(request.input).toHaveBeenCalledWith('outputTokens', expect.anything(), 0);
     await store.recordImageTokens!({ sessionId: '42', eventId: `image:${'b'.repeat(64)}`,
@@ -90,6 +91,7 @@ describe('SQL screen and watch usage store', () => {
     expect(request.query).toHaveBeenCalledTimes(2);
     expect(request.input).toHaveBeenLastCalledWith('costStatus', expect.anything(), 'unverified');
     expect(request.input).toHaveBeenCalledWith('inputDkk', expect.anything(), null);
+    expect(request.query.mock.calls[0]![0]).toContain('cost_dkk = COALESCE(@inputDkk, cost_dkk)');
     expect(request.query.mock.calls[1]![0]).toContain("IF @costStatus = N'estimated'");
   });
   it('admits the on-demand image hold against the shared budget under the same atomic lock', async () => {

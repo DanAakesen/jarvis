@@ -265,6 +265,67 @@ async def test_resolver_mock_transport_wipes_bytes_on_every_exit(monkeypatch, ou
     assert buffers and all(not any(buffer) for buffer in buffers)
 
 
+@pytest.mark.parametrize("status,reason", [
+    (429, "budget_exhausted"), (503, "budget_unavailable"),
+])
+def test_budget_denial_survives_image_resolution_into_chat_done(monkeypatch, status, reason):
+    from jarvis_tools import current_chat_session_id
+
+    async def context(*args):
+        current_chat_session_id.set("41")
+        return []
+
+    def handle(request):
+        assert json.loads(request.content)["turnId"] == "legacy-turn"
+        return httpx.Response(status, json={
+            "error": "private provider text", "code": reason, "turnId": "legacy-turn",
+        })
+
+    original_client = httpx.AsyncClient
+    monkeypatch.setattr(chat_runtime, "backend_settings_from_environment", lambda: (
+        "https://backend.test", "scope"
+    ))
+    monkeypatch.setattr(chat_runtime.httpx, "AsyncClient", lambda **kwargs: original_client(
+        **kwargs, transport=httpx.MockTransport(handle)
+    ))
+    app, model = app_with(context)
+    with TestClient(app) as browser:
+        response = browser.post("/invocations", json={
+            "messageId": "42", "sessionId": "41", "text": "What is this?", "language": "en",
+            "delegatedAuthorization": AUTHORIZATION, "visualContext": VISUAL,
+        })
+    done = json.loads(response.text.split("event: done\ndata: ", 1)[1].split("\n", 1)[0])
+    assert done == {"visualPath": "caption", "visualReason": reason}
+    assert not model.messages[-1].images
+    assert "private provider text" not in response.text
+    assert "frame_1" not in response.text
+
+
+@pytest.mark.parametrize("body", [
+    b"not JSON", json.dumps({"code": "unexpected_private_code"}).encode(),
+    json.dumps({"code": []}).encode(),
+    json.dumps({"code": "budget_exhausted", "error": "x" * 1_024}).encode(),
+])
+@pytest.mark.asyncio
+async def test_resolver_ignores_untyped_or_oversized_budget_denials(monkeypatch, body):
+    original_client = httpx.AsyncClient
+    monkeypatch.setattr(chat_runtime, "backend_settings_from_environment", lambda: (
+        "https://backend.test", "scope"
+    ))
+    monkeypatch.setattr(chat_runtime.httpx, "AsyncClient", lambda **kwargs: original_client(
+        **kwargs, transport=httpx.MockTransport(lambda request: httpx.Response(
+            429, headers={"content-type": "application/json"}, content=body,
+        ))
+    ))
+    result = {"visualPath": "caption", "visualReason": "frame_unavailable"}
+    token = current_visual_result.set(result)
+    try:
+        assert await chat_runtime.resolve_frame_image("a.b.c", VISUAL, "41", "42", 10) is None
+    finally:
+        current_visual_result.reset(token)
+    assert result["visualReason"] == "frame_unavailable"
+
+
 class ProviderRejection(Exception):
     status_code = 400
     body = {"error": {"message": "This model does not support image input"}}

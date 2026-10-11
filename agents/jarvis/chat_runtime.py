@@ -290,6 +290,25 @@ async def resolve_frame_image(
                     **({"turnId": context["turnId"]} if context.get("turnId") else {}),
                 },
             ) as response:
+                content_type = response.headers.get("content-type", "").split(";", 1)[0].lower()
+                if response.status_code in {429, 503} and content_type == "application/json":
+                    async for chunk in response.aiter_bytes():
+                        if len(image) + len(chunk) > 1_024:
+                            return None
+                        image.extend(chunk)
+                    try:
+                        denial = json.loads(image)
+                    except (ValueError, UnicodeDecodeError):
+                        return None
+                    reason = denial.get("code") if isinstance(denial, dict) else None
+                    result = current_visual_result.get()
+                    if (
+                        isinstance(reason, str)
+                        and reason in {"budget_exhausted", "budget_unavailable"}
+                        and result is not None
+                    ):
+                        result["visualReason"] = reason
+                    return None
                 if response.status_code != 200 or response.headers.get(
                     "content-type", ""
                 ).split(";", 1)[0].lower() != "image/jpeg":

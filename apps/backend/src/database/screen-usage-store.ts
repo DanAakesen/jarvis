@@ -1,7 +1,7 @@
 import sql from 'mssql';
 import type { ScreenFrameUsageStore } from '../vision/screen.js';
 import type { VisionWatchUsageStore } from '../vision/watch.js';
-import { foundryTokenCosts, realtimeImageCosts } from '../core/usage-pricing.js';
+import { foundryTokenCosts } from '../core/usage-pricing.js';
 import { databaseReadRequest } from './wake-retry.js';
 
 /**
@@ -246,10 +246,11 @@ export function createScreenFrameUsageStore(pool: sql.ConnectionPool): ScreenFra
     async recordImageTokens({ sessionId, eventId, model, inputTokens, outputTokens, role, imageOnly }) {
       const costs = inputTokens === 0 && outputTokens === 0
         ? { inputDkk: 0, outputDkk: 0, inputUsd: 0, outputUsd: 0 }
-        : imageOnly ? realtimeImageCosts(model, inputTokens) : foundryTokenCosts(model, inputTokens, outputTokens);
+        : imageOnly ? null : foundryTokenCosts(model, inputTokens, outputTokens);
       if (!/^image:[0-9a-f]{64}$/u.test(eventId) ||
           !Number.isSafeInteger(inputTokens) || inputTokens < 0 || inputTokens > 10_000_000 ||
-          !Number.isSafeInteger(outputTokens) || outputTokens < 0 || outputTokens > 10_000_000) {
+          !Number.isSafeInteger(outputTokens) || outputTokens < 0 || outputTokens > 10_000_000 ||
+          (imageOnly && outputTokens !== 0)) {
         throw new Error('Invalid image usage');
       }
       if (!costs && !imageOnly) return;

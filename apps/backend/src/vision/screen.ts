@@ -1,7 +1,8 @@
 import { createHash, randomUUID } from 'node:crypto';
 import type { BackendModule } from '../modules.js';
 import { readSettings } from '../core/settings.js';
-import { DKK_PER_USD, foundryTokenCosts, isRealtimeImageModel } from '../core/usage-pricing.js';
+import { DKK_PER_USD, foundryTokenCosts } from '../core/usage-pricing.js';
+import { voiceLiveModels } from '../core/model-catalog.js';
 import type { VisionWatchUsageStore } from './watch.js';
 import type { FrameStore } from './frame-store.js';
 
@@ -250,6 +251,10 @@ export class ScreenVisionService {
 
 export function validImageItemId(value: string): boolean {
   return /^[A-Za-z0-9_-]{1,128}$/u.test(value);
+}
+
+function isRealtimeImageModel(model: string): boolean {
+  return voiceLiveModels.some((allowed) => allowed === model);
 }
 
 export function imageUsageEventId(sessionId: string, itemId: string): string {

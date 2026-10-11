@@ -60,6 +60,12 @@ acknowledgement, fallback and accounting tests are implementation evidence,
 verified selected-model image support, provider billing, microphone timing or
 deployed SQL behavior. No new migration, tool schema or capability instruction
 is required; L120/L121 and `agents/jarvis/limits.json` remain unchanged.
+Final offline evidence: 114 relay tests, 119 logging/conversation tests, 143
+accounting tests and 246 Python tests passed, alongside backend build and scoped
+ESLint/Ruff checks. A compiled private-frame smoke verified owner binding,
+single-use consumption and zeroing. Secret scanning found no secrets. The final
+automated validation request could not run because its time limit had been
+reached; this is not a successful automated review or full final CodeQL result.
 
 P9-82 (11 October 2026): camera-on consent includes sending the actual frame to
 the answering model, not just a vision caption. Keep #702's question-aware

@@ -161,7 +161,7 @@ describe('screen vision endpoint', () => {
       expect(reserveImage).toHaveBeenCalledWith(expect.objectContaining({ model, limitDkk: 6.5785 }));
     },
   );
-  it('prices only reported realtime image tokens, never whole audio/output totals', async () => {
+  it('records only reported realtime image tokens, never whole audio/output totals', async () => {
     const recordImageTokens = vi.fn(async () => {});
     const service = new ScreenVisionService({ describe: vi.fn() }, {
       reserveFrame: vi.fn(), recordTokens: vi.fn(), recordImageTokens,
