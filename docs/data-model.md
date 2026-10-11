@@ -4,6 +4,14 @@ Version 1, updated 10 October 2026 for P6-22, P7-01, P7-02, P7-03, P7-08, P7-13,
 
 ## Migration infrastructure
 
+P9-81 adds nullable `dbo.messages.metadata` in migration
+`0040_message_visual_context.sql`, with a paired down batch. Its visual record
+contains `source` (`camera` or `screen`), ISO `capturedAt`, bounded answered
+`question`, optional turn correlation and a description bounded to 5,000
+characters. It is owned by the conversation turn and follows
+message retention/deletion; no image bytes are stored and questions are never logged. History
+returns this additive metadata for grounded agent follow-ups.
+
 Issue #7 adds `dbo.schema_migrations`, an internal deployment ledger separate
 from the nine domain groups: `name nvarchar(255)` primary key, `checksum char(64)`
 (SHA-256 of committed file bytes), and `applied_at datetime2(7)` defaulting to
@@ -241,6 +249,7 @@ erDiagram
         bigint jarvis_session_id FK
         string role "dan | jarvis"
         string text
+        json metadata "nullable; bounded visual provenance"
         string model "for example gpt-5.6-luna"
         int input_tokens
         int output_tokens

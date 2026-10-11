@@ -4,6 +4,15 @@ import { workspaceNavigationPages, workspaceSettingsSections } from '@jarvis/con
 import { capabilityInstructions, CAPABILITY_INSTRUCTIONS_MAX_CODE_POINTS } from './capability-instructions.js';
 
 describe('shared navigation capability instructions', () => {
+  it('treats prior images as timestamped evidence and asks to look again without fresh details', () => {
+    const instructions = capabilityInstructions({ automaticCapture: false });
+    expect(instructions).toContain('real camera or screen images at the stated capture time');
+    expect(instructions).toContain('the image I looked at N minutes ago');
+    expect(instructions).toContain('only when the current time is known; otherwise cite its capture time');
+    expect(instructions).toContain('Never invent elapsed time');
+    expect(instructions).toContain('without a fresh frame ask Dan to let Jarvis look again');
+    expect(instructions).toContain('Never invent visual details');
+  });
   it.each([true, false])('includes canonical destinations and aliases with automatic capture %s', (automaticCapture) => {
     const instructions = capabilityInstructions({ automaticCapture });
     expect(instructions).toContain('target "active" (latest snapshot tab)');

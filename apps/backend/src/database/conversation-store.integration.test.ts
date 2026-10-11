@@ -3,7 +3,7 @@ import sql from 'mssql';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createConversationStore } from './conversation-store.js';
 import { loadDatabaseConfig } from './config.js';
-import { applyMigrations, readMigrations } from './migrations.js';
+import { applyMigrations, readDownMigration, readMigrations, revertMigration } from './migrations.js';
 
 const configuration = loadDatabaseConfig();
 if (!configuration || process.env.NODE_ENV !== 'test' || configuration.server !== '127.0.0.1') {
@@ -31,6 +31,34 @@ afterAll(async () => {
 });
 
 describe('SQL conversation store', () => {
+  it('retains the last bounded visual result on the existing message without retaining image bytes', async () => {
+    const store = createConversationStore(pool);
+    const session = await store.createSession({ channel: 'voice', language: 'en' });
+    const visualContext = { source: 'camera' as const, capturedAt: '2026-10-11T19:30:00Z', description: 'A red mug.' };
+    const dan = await store.addMessage({ sessionId: session.id, role: 'dan', text: 'Look again', model: null, visualContext });
+    expect(dan?.metadata).toEqual({ visualContext });
+    if (!dan) throw new Error('Dan message missing');
+    const replacement = { ...visualContext, description: 'A blue mug.' };
+    await expect(store.setVisualContext!({ sessionId: session.id, messageId: dan.id, visualContext: replacement })).resolves.toBe(true);
+    await expect(store.setVisualContext!({ sessionId: '9223372036854775807', messageId: dan.id, visualContext })).resolves.toBe(false);
+    await store.updateMessage!(dan.id, 'Final transcript');
+    const page = await store.getHistory({ limit: 1 });
+    expect(page.messages[0]).toMatchObject({ id: dan.id, text: 'Final transcript', metadata: { visualContext: replacement } });
+    const row = await pool.request().input('id', sql.BigInt, BigInt(dan.id))
+      .query<{ metadata: string }>('SELECT metadata FROM dbo.messages WHERE id = @id');
+    expect(JSON.parse(row.recordset[0]!.metadata)).toEqual({ visualContext: replacement });
+    const migrations = await readMigrations();
+    const down = await readDownMigration('0040_message_visual_context.sql');
+    await expect(revertMigration(pool, migrations, down)).resolves.toBe(down.name);
+    const afterDown = await pool.request().input('id', sql.BigInt, BigInt(dan.id))
+      .query<{ text: string; metadata_column: number | null }>(`SELECT text,
+        COL_LENGTH(N'dbo.messages', N'metadata') AS metadata_column FROM dbo.messages WHERE id = @id`);
+    expect(afterDown.recordset[0]).toEqual({ text: 'Final transcript', metadata_column: null });
+    await expect(applyMigrations(pool, migrations)).resolves.toEqual([down.name]);
+    await pool.request().input('sessionId', sql.BigInt, BigInt(session.id))
+      .query(`DELETE FROM dbo.messages WHERE jarvis_session_id = @sessionId;
+        DELETE FROM dbo.jarvis_sessions WHERE id = @sessionId;`);
+  });
   it('writes sessions and messages, pages history with tool/task references, and closes idempotently', async () => {
     const store = createConversationStore(pool);
     const session = await store.createSession({ channel: 'chat', language: 'da' });
