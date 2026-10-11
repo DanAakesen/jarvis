@@ -12,6 +12,32 @@ function fixture(queryResult = { recordset: [], recordsets: [], rowsAffected: []
 }
 
 describe('SQL conversation store', () => {
+  it('restores visual metadata from saved history and drops malformed metadata', async () => {
+    const visualContext = { source: 'camera' as const, capturedAt: '2026-10-11T19:30:00Z', description: 'A red mug.' };
+    const row = {
+      id: '42', session_id: '41', role: 'dan', text: 'Look', model: null,
+      at: new Date(), channel: 'chat', language: 'en', interrupted: false, voice_minutes: null,
+      metadata: JSON.stringify({ visualContext }),
+    };
+    const { store, query } = fixture({ recordset: [], recordsets: [[row], [], []], rowsAffected: [] });
+    expect((await store.getHistory({ limit: 10 })).messages[0]?.metadata).toEqual({ visualContext });
+    expect(query.mock.calls[0]?.[0]).toContain('m.metadata');
+    row.metadata = '{"broken"';
+    expect((await store.getHistory({ limit: 10 })).messages[0]?.metadata).toBeUndefined();
+  });
+  it('stores bounded visual metadata and binds voice updates to the existing Dan message and session', async () => {
+    const visualContext = { source: 'camera' as const, capturedAt: '2026-10-11T19:30:00Z', description: 'A red mug.' };
+    const { store, input, query } = fixture({ recordset: [], recordsets: [], rowsAffected: [1] });
+    await store.addMessage({ sessionId: '41', role: 'dan', text: 'Look', model: null, visualContext });
+    expect(input).toHaveBeenCalledWith('metadata', sql.NVarChar(sql.MAX), JSON.stringify({ visualContext }));
+    expect(query.mock.calls[0]?.[0]).toContain('INSERTED.metadata');
+    await expect(store.setVisualContext!({ sessionId: '41', messageId: '42', visualContext })).resolves.toBe(true);
+    expect(query.mock.calls[1]?.[0]).toContain("id = @messageId AND jarvis_session_id = @sessionId AND role = N'dan'");
+    await expect(store.addMessage({
+      sessionId: '41', role: 'dan', text: 'Look', model: null,
+      visualContext: { ...visualContext, description: 'x'.repeat(5_001) },
+    })).rejects.toThrow('Invalid visual context');
+  });
   it('resolves a watch instruction to its stored Dan message session', async () => {
     const { store, input, query } = fixture({
       recordset: [{ session_id: '42' }], recordsets: [], rowsAffected: [],

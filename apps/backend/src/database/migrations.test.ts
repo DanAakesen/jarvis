@@ -13,6 +13,15 @@ async function directory() {
 afterEach(async () => { await Promise.all(directories.splice(0).map((path) => rm(path, { recursive: true }))); });
 
 describe('committed SQL manifest', () => {
+  it('adds reversible bounded message metadata with same-batch references compiled dynamically', async () => {
+    const migration = (await readMigrations()).find(({ name }) => name === '0040_message_visual_context.sql');
+    expect(migration?.sql).toContain('ALTER TABLE dbo.messages ADD metadata nvarchar(max) NULL');
+    expect(migration?.sql).toContain("EXEC(N'ALTER TABLE dbo.messages");
+    expect(migration?.sql).toContain('DATALENGTH(metadata) <= 64000');
+    await expect(readDownMigration('0040_message_visual_context.sql')).resolves.toMatchObject({
+      sql: expect.stringContaining('DROP COLUMN metadata'),
+    });
+  });
   it('finds committed migrations at the repository root without a directory override', async () => {
     expect(defaultMigrationsDirectory).toMatch(/\/db\/migrations\/$/);
     await expect(readMigrations()).resolves.toBeInstanceOf(Array);
@@ -68,6 +77,7 @@ describe('committed SQL manifest', () => {
       '0037_task_github_issues.sql',
       '0038_workspace_pins.sql',
       '0039_conversation_attachments.sql',
+      '0040_message_visual_context.sql',
     ]);
     for (const migration of migrations) await expect(readDownMigration(migration.name)).resolves.toMatchObject({ name: migration.name });
   });

@@ -1,4 +1,5 @@
 import { normalizeFoundryProjectEndpoint } from '../voice/relay.js';
+import type { VisualContext } from './visual-context.js';
 
 export interface ConversationAgentInput {
   readonly messageId: string;
@@ -6,6 +7,7 @@ export interface ConversationAgentInput {
   readonly text: string;
   readonly language: 'da' | 'en';
   readonly screenContext?: string;
+  readonly visualContext?: VisualContext;
   readonly attachments?: readonly {
     readonly id: string;
     readonly name: string;

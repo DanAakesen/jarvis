@@ -30,6 +30,7 @@ import {
 } from './reflex.js';
 import { isJevFailure } from './jev.js';
 import type { DecisionProviderId } from './decision-provider.js';
+import { normalizeVisualContext, visualContextSchema, type VisualContext } from './visual-context.js';
 
 const maxSqlBigInt = 9_223_372_036_854_775_807n;
 const chatReflexBudgetMs = 800;
@@ -233,6 +234,12 @@ const historySchema = {
           model: { type: ['string', 'null'] },
           interrupted: { type: 'boolean' },
           voiceMinutes: { type: ['number', 'null'], minimum: 0 },
+          metadata: {
+            type: 'object',
+            properties: { visualContext: visualContextSchema },
+            required: ['visualContext'],
+            additionalProperties: false,
+          },
           at: { type: 'string', format: 'date-time' },
           toolCalls: {
             type: 'array',
@@ -504,6 +511,7 @@ export const conversationModule: BackendModule = {
         text: string;
         attachmentIds?: string[];
         screenContext?: string;
+        visualContext?: VisualContext;
         sharedScreenContext?: { screenDescription: string; sharedWindowTitle?: string };
       };
     }>('/conversation/sessions/:sessionId/turns', {
@@ -521,6 +529,7 @@ export const conversationModule: BackendModule = {
               items: { type: 'string', pattern: '^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$' },
             },
             screenContext: { type: 'string', minLength: 1, maxLength: 5_000 },
+            visualContext: visualContextSchema,
             sharedScreenContext: {
               type: 'object',
               properties: {
@@ -548,6 +557,19 @@ export const conversationModule: BackendModule = {
       if (!text) return reply.code(400).send({ error: 'Message text cannot be empty' });
       if (request.body.screenContext !== undefined && !request.body.screenContext.trim()) {
         return reply.code(400).send({ error: 'Screen context cannot be empty' });
+      }
+      if (request.body.visualContext !== undefined && request.body.screenContext !== undefined) {
+        return reply.code(400).send({ error: 'Send visualContext or legacy screenContext, not both' });
+      }
+      const visualContext = request.body.visualContext !== undefined
+        ? normalizeVisualContext(request.body.visualContext)
+        : request.body.screenContext !== undefined
+          ? normalizeVisualContext({
+            source: 'screen', capturedAt: new Date().toISOString(), description: request.body.screenContext,
+          })
+          : undefined;
+      if (request.body.visualContext !== undefined && !visualContext) {
+        return reply.code(400).send({ error: 'Invalid visual context' });
       }
       const attachmentIds = request.body.attachmentIds ?? [];
       if (attachmentIds.length > 0 && !app.conversationAttachments) {
@@ -592,6 +614,7 @@ export const conversationModule: BackendModule = {
           text,
           model: null,
           language: session.language,
+          ...(visualContext ? { visualContext } : {}),
           ...(attachmentIds.length > 0 ? {
             attachmentIds,
             attachmentOwnerObjectId: request.principal!.objectId,
@@ -667,8 +690,8 @@ export const conversationModule: BackendModule = {
                 language: turnLanguage,
                 turnId: activeTurn.rootMessageId,
                 ...(isSteering ? { steering: true } : {}),
-                ...(!isSteering && request.body.screenContext !== undefined
-                  ? { screenContext: request.body.screenContext }
+                ...(!isSteering && visualContext !== undefined
+                  ? { visualContext }
                   : {}),
                 ...(!isSteering && attachmentContext.length > 0
                   ? { attachments: attachmentContext }

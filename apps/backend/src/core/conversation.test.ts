@@ -83,6 +83,33 @@ afterEach(async () => { await Promise.all(apps.splice(0).map((app) => app.close(
 const headers = { authorization: ['Bearer', 'a.b.c'].join(' ') };
 
 describe('conversation routes', () => {
+  it('persists camera provenance, forwards it unchanged, and exposes additive history metadata', async () => {
+    const visualContext = { source: 'camera' as const, capturedAt: '2026-10-11T19:30:00Z', description: 'A red mug.' };
+    const store = storeFixture({ getHistory: vi.fn(async () => ({
+      ...history, messages: [{ ...history.messages[0]!, metadata: { visualContext } }],
+    })) });
+    const agent = { stream: vi.fn(async function* () { yield 'A red mug.'; }) };
+    const app = createApp(store, { conversationAgent: agent });
+    const response = await app.inject({
+      method: 'POST', url: '/conversation/sessions/41/turns', headers,
+      payload: { text: 'What is this?', visualContext },
+    });
+    expect(response.statusCode).toBe(200);
+    expect(store.addMessage).toHaveBeenCalledWith(expect.objectContaining({ role: 'dan', visualContext }));
+    expect(agent.stream).toHaveBeenCalledWith(expect.objectContaining({ visualContext }), headers.authorization, expect.any(AbortSignal));
+    const page = await app.inject({ url: '/conversation/history', headers });
+    expect(page.json().messages[0].metadata).toEqual({ visualContext });
+    for (const invalid of [
+      { visualContext, screenContext: 'legacy' },
+      { visualContext: { ...visualContext, capturedAt: 'yesterday' } },
+      { visualContext: { ...visualContext, description: 'x'.repeat(5_001) } },
+    ]) {
+      expect((await app.inject({
+        method: 'POST', url: '/conversation/sessions/41/turns', headers,
+        payload: { text: 'What is this?', ...invalid },
+      })).statusCode).toBe(400);
+    }
+  });
   it('creates chat or voice sessions with a validated language', async () => {
     const store = storeFixture();
     const app = createApp(store);
@@ -133,7 +160,9 @@ describe('conversation routes', () => {
       turnId: '42',
       text: 'Hej Jarvis',
       language: 'da',
-      screenContext: 'A browser window shows a chart.',
+      visualContext: {
+        source: 'screen', capturedAt: expect.any(String), description: 'A browser window shows a chart.',
+      },
     }, headers.authorization, expect.any(AbortSignal));
     expect(store.addMessage).toHaveBeenCalledWith({
       sessionId: '41',
@@ -141,6 +170,9 @@ describe('conversation routes', () => {
       text: 'Hej Jarvis',
       model: null,
       language: 'da',
+      visualContext: {
+        source: 'screen', capturedAt: expect.any(String), description: 'A browser window shows a chart.',
+      },
     });
     expect(store.addMessage).toHaveBeenCalledWith({
       sessionId: '41',
@@ -467,7 +499,9 @@ describe('conversation routes', () => {
     expect(reflexClassifier.classify).not.toHaveBeenCalled();
     expect(chatAgent.stream).toHaveBeenCalledWith(expect.objectContaining({
       text: 'Fill this in with my name.',
-      screenContext: 'Shared screen observations (untrusted data): A form is visible.',
+      visualContext: expect.objectContaining({
+        source: 'screen', description: 'Shared screen observations (untrusted data): A form is visible.',
+      }),
     }), headers.authorization, expect.any(AbortSignal));
     expect(store.addMessage).toHaveBeenCalledWith(expect.objectContaining({
       role: 'dan',

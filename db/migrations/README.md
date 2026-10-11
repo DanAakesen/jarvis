@@ -66,3 +66,10 @@ inside an explicit user transaction. Reverting P7-13 drops the memory table and 
 index; the now-empty full-text catalog remains available for a later setup run.
 
 `0036_folio_lowercase_ids.sql` lower-cases Folio item ids that 0035 built from upper-case uniqueidentifier text (L124); its down script is a no-op.
+
+`0040_message_visual_context.sql` adds nullable, size-bounded JSON metadata to
+messages for requested visual observations (source, capture time and a bounded
+description only). Existing rows stay null; deploy the migration before code
+that reads/writes metadata. The down batch drops the constraint and column,
+discarding visual metadata but preserving message text. Revert the dependent
+backend revision first and obtain Dan's approval before a production rollback.

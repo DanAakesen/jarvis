@@ -1,3 +1,5 @@
+import type { VisualContext } from './visual-context.js';
+
 export type ConversationChannel = 'chat' | 'voice' | 'phone';
 export type ConversationLanguage = 'da' | 'en';
 export type ConversationRole = 'dan' | 'jarvis';
@@ -17,6 +19,7 @@ export interface ConversationMessage {
   readonly text: string;
   readonly model: string | null;
   readonly at: Date;
+  readonly metadata?: { readonly visualContext: VisualContext };
 }
 
 export interface ConversationToolCall {
@@ -82,7 +85,13 @@ export interface ConversationStore {
     readonly attachmentIds?: readonly string[];
     readonly attachmentOwnerObjectId?: string;
     readonly attachmentRetentionDays?: number;
+    readonly visualContext?: VisualContext;
   }): Promise<ConversationMessage | null>;
+  setVisualContext?(input: {
+    readonly sessionId: string;
+    readonly messageId: string;
+    readonly visualContext: VisualContext;
+  }): Promise<boolean>;
   updateMessage?(messageId: string, text: string): Promise<ConversationMessage | null>;
   getDanMessageIdBySourceItemId(sourceItemId: string): Promise<string | null>;
   getMessageSessionId?(messageId: string): Promise<string | null>;

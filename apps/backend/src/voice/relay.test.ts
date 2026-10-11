@@ -96,6 +96,7 @@ function appFor(
       model: null,
       at: new Date('2026-10-03T12:00:01Z'),
     })),
+    setVisualContext: vi.fn(async () => true),
     getHistory: vi.fn(async () => ({ messages: [], nextCursor: null })),
   } satisfies ConversationStore,
   settingsStore?: SettingsStore,
@@ -943,6 +944,10 @@ describe('backend-relayed Voice Live WebSocket', () => {
         received.push(event);
         if (event.type === 'input_audio_buffer.append') sendTimedPartialTranscript(socket, itemId);
         if (event.type === 'response.create') {
+          if (String((event.response as Record<string, unknown> | undefined)?.instructions).includes('provenance-labelled')) {
+            socket.send(JSON.stringify({ type: 'response.done', response: {} }));
+            return;
+          }
           socket.send(JSON.stringify({ type: 'response.created' }));
           socket.send(JSON.stringify({ type: 'response.audio_transcript.delta', delta: 'Paused' }));
           socket.send(JSON.stringify({ type: 'response.audio.delta', delta: 'AQID' }));
@@ -967,6 +972,12 @@ describe('backend-relayed Voice Live WebSocket', () => {
     const address = app.server.address() as AddressInfo;
     const browser = await openBrowser(`ws://127.0.0.1:${address.port}/voice`);
     await vi.waitFor(() => expect(received.some((event) => event.type === 'session.update')).toBe(true));
+    const visualContext = {
+      source: 'camera', capturedAt: '2026-10-11T19:30:00Z', description: 'A mug beside the task board.',
+    };
+    browser.send(JSON.stringify({ type: 'jarvis.screen.context', ...visualContext }));
+    await vi.waitFor(() => expect(received.some((event) => event.type === 'conversation.item.create' &&
+      JSON.stringify(event).includes('A mug beside the task board.'))).toBe(true));
     browser.send(JSON.stringify({ type: 'input_audio_buffer.append', audio: 'AQID' }));
 
     await vi.waitFor(() => expect(services.taskController.control).toHaveBeenCalledWith(
@@ -976,6 +987,14 @@ describe('backend-relayed Voice Live WebSocket', () => {
       event.type === 'conversation.item.input_audio_transcription.completed',
     )).toBe(false);
     expect(conversationStore.addMessage).toHaveBeenCalledTimes(1);
+    expect(conversationStore.addMessage).toHaveBeenCalledWith(expect.objectContaining({ visualContext }));
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 3_050);
+    const updatedVisual = { ...visualContext, description: 'A blue mug beside the task board.' };
+    browser.send(JSON.stringify({ type: 'jarvis.screen.context', ...updatedVisual }));
+    await vi.waitFor(() => expect(conversationStore.setVisualContext).toHaveBeenCalledWith({
+      sessionId: '41', messageId: '42', visualContext: updatedVisual,
+    }));
+    clock.mockRestore();
     expect(classifier.classify).toHaveBeenCalledWith(
       'Jarvis, pause task 12.',
       'en',
@@ -1485,9 +1504,11 @@ describe('backend-relayed Voice Live WebSocket', () => {
     expect(records.join('')).not.toContain(voiceToken);
   });
 
-  it('sends an ephemeral, validated screen description into the active voice response', async () => {
+  it.each(['screen', 'camera'] as const)('retains %s provenance without fake transcript rows and attaches it to the current Dan turn', async (source) => {
     const forwarded: Record<string, unknown>[] = [];
+    let provider: WebSocket | undefined;
     const upstreamUrl = await echoServer((socket) => {
+      provider = socket;
       socket.on('message', (data) => forwarded.push(JSON.parse(data.toString()) as Record<string, unknown>));
     });
 
@@ -1511,14 +1532,64 @@ describe('backend-relayed Voice Live WebSocket', () => {
     browser.send(JSON.stringify({
       type: 'jarvis.screen.context',
       description: 'A window shows a chart.',
+      ...(source === 'camera' ? { source, capturedAt: '2026-10-11T19:30:00Z' } : {}),
     }));
     await vi.waitFor(() => expect(forwarded.some((event) =>
       event.type === 'response.create' &&
-      String((event.response as Record<string, unknown> | undefined)?.instructions).includes('A window shows a chart.'),
+      String((event.response as Record<string, unknown> | undefined)?.instructions).includes('provenance-labelled'),
     )).toBe(true));
 
     expect(conversationStore.addMessage).not.toHaveBeenCalled();
-    expect(forwarded.filter((event) => event.type === 'conversation.item.create')).toEqual([]);
+    expect(JSON.stringify(forwarded.filter((event) => event.type === 'conversation.item.create')))
+      .toContain(`from a real ${source} image captured at`);
+    expect(JSON.stringify(forwarded.filter((event) => event.type === 'conversation.item.create')))
+      .toContain('A window shows a chart.');
+    if (source === 'camera') expect(JSON.stringify(forwarded)).toContain('2026-10-11T19:30:00Z');
+    provider!.send(JSON.stringify({
+      type: 'conversation.item.input_audio_transcription.completed',
+      item_id: 'look-turn', transcript: 'What do you see?',
+    }));
+    await vi.waitFor(() => expect(conversationStore.addMessage).toHaveBeenCalledWith(expect.objectContaining({
+      role: 'dan', text: 'What do you see?',
+      visualContext: expect.objectContaining({ source, description: 'A window shows a chart.' }),
+    })));
+    const now = Date.now();
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(now + 3_050);
+    browser.send(JSON.stringify({
+      type: 'jarvis.screen.context', description: 'New observation.',
+      source: 'camera', capturedAt: '2026-10-11T19:32:00Z',
+    }));
+    await vi.waitFor(() => expect(conversationStore.setVisualContext).toHaveBeenCalledWith({
+      sessionId: '41', messageId: '42',
+      visualContext: { source: 'camera', capturedAt: '2026-10-11T19:32:00Z', description: 'New observation.' },
+    }));
+    clock.mockRestore();
+  });
+
+  it.each([
+    { source: 'web' }, { source: null }, { capturedAt: 'yesterday' },
+    { capturedAt: null }, { description: 'x'.repeat(5_001) },
+  ])('rejects invalid voice visual provenance %#', async (invalid) => {
+    const upstreamUrl = await echoServer(() => {});
+    const { app, conversationStore } = appFor((token, signal) => new WebSocket(upstreamUrl, {
+      headers: { Authorization: ['Bearer', token].join(' ') }, signal,
+    }));
+    await app.listen({ host: '127.0.0.1', port: 0 });
+    const address = app.server.address() as AddressInfo;
+    const browser = new WebSocket(`ws://127.0.0.1:${address.port}/voice`, [
+      VOICE_SUBPROTOCOL, `jarvis.auth.${browserToken}`,
+    ], { headers: { origin: 'http://localhost:5173' } });
+    browsers.push(browser);
+    const ready = new Promise<void>((resolve) => browser.on('message', (data) => {
+      if (JSON.parse(data.toString()).type === 'jarvis.session.ready') resolve();
+    }));
+    await once(browser, 'open');
+    await ready;
+    const closed = once(browser, 'close');
+    browser.send(JSON.stringify({ type: 'jarvis.screen.context', description: 'A mug.', ...invalid }));
+    expect((await closed)[0]).toBe(1008);
+    expect(conversationStore.addMessage).not.toHaveBeenCalled();
+    expect(conversationStore.setVisualContext).not.toHaveBeenCalled();
   });
 
   it.each(['browser_do_shared', 'browser_do'] as const)(
@@ -1588,7 +1659,7 @@ describe('backend-relayed Voice Live WebSocket', () => {
         }
         if (event.type === 'response.create') {
           const instructions = (event.response as { instructions?: string } | undefined)?.instructions;
-          if (instructions?.includes('A contact form with a name field.')) {
+          if (instructions?.includes('provenance-labelled')) {
             markContextReceived(instructions);
             socket.send(JSON.stringify({
               type: 'response.function_call_arguments.done',
@@ -1605,7 +1676,8 @@ describe('backend-relayed Voice Live WebSocket', () => {
           }
           return;
         }
-        if (event.type === 'conversation.item.create') {
+        if (event.type === 'conversation.item.create' &&
+            (event.item as Record<string, unknown>)?.type === 'function_call_output') {
           markToolOutput(event.item as Record<string, unknown>);
         }
       });
@@ -1635,7 +1707,7 @@ describe('backend-relayed Voice Live WebSocket', () => {
       sharedWindowTitle: 'Contact form - Chrome',
       description: 'A contact form with a name field.',
     }));
-    await expect(contextReceived).resolves.toContain('Contact form - Chrome');
+    await expect(contextReceived).resolves.toContain('provenance-labelled');
     await toolStarted;
     await progressSpoken;
 

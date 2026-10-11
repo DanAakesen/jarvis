@@ -5,7 +5,9 @@ import { readSettings } from '../core/settings.js';
 export const MAX_SCREEN_FRAME_BYTES = 1_000_000;
 const MAX_SCREEN_FRAME_BASE64_BYTES = Math.ceil(MAX_SCREEN_FRAME_BYTES / 3) * 4;
 const MAX_SCREEN_DESCRIPTION_CHARACTERS = 5_000;
+export const MAX_SCREEN_QUESTION_CHARACTERS = 500;
 export const SCREEN_FRAME_BODY_LIMIT = MAX_SCREEN_FRAME_BASE64_BYTES + 1_024;
+export const SCREEN_QUESTION_FRAME_BODY_LIMIT = SCREEN_FRAME_BODY_LIMIT + MAX_SCREEN_QUESTION_CHARACTERS * 6;
 
 export interface ScreenVisionResult {
   readonly description: string;
@@ -15,6 +17,10 @@ export interface ScreenVisionResult {
   readonly costUsd?: number;
 }
 
+export interface ScreenFrameVisionResult extends ScreenVisionResult {
+  readonly capturedAt: string;
+}
+
 export interface ScreenVisionModel {
   describe(input: {
     readonly image: Buffer;
@@ -22,6 +28,7 @@ export interface ScreenVisionModel {
     readonly model: string;
     readonly reasoningEffort?: string;
     readonly signal: AbortSignal;
+    readonly question?: string;
     readonly watch?: {
       readonly source: 'screen' | 'camera';
       readonly previousSummary: string;
@@ -62,6 +69,14 @@ export class ScreenVisionError extends Error {
   }
 }
 
+export function normalizeScreenQuestion(value: unknown): string | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value !== 'string' || value.length > MAX_SCREEN_QUESTION_CHARACTERS) {
+    throw new ScreenVisionError(400, 'A screen question must be a string of at most 500 characters.');
+  }
+  return value.trim() || undefined;
+}
+
 export class ScreenVisionService {
   constructor(
     private readonly model: ScreenVisionModel,
@@ -76,7 +91,9 @@ export class ScreenVisionService {
     readonly reasoningEffort?: string;
     readonly dailyCap: number;
     readonly signal: AbortSignal;
-  }): Promise<ScreenVisionResult> {
+    readonly question?: string;
+  }): Promise<ScreenFrameVisionResult> {
+    const question = normalizeScreenQuestion(input.question);
     if (!Number.isInteger(input.dailyCap) || input.dailyCap < 1 || input.dailyCap > 300) {
       throw new ScreenVisionError(503, 'Screen inspection settings are unavailable.');
     }
@@ -105,6 +122,7 @@ export class ScreenVisionService {
         model: input.model,
         ...(input.reasoningEffort === undefined ? {} : { reasoningEffort: input.reasoningEffort }),
         signal: input.signal,
+        ...(question === undefined ? {} : { question }),
       });
       if (!result.description.trim() || result.description.length > MAX_SCREEN_DESCRIPTION_CHARACTERS ||
           !Number.isSafeInteger(result.inputTokens) || result.inputTokens < 0 ||
@@ -130,6 +148,7 @@ export class ScreenVisionService {
         description: result.description.trim(),
         inputTokens: result.inputTokens,
         outputTokens: result.outputTokens,
+        capturedAt: at.toISOString(),
       };
     } catch {
       throw new ScreenVisionError(503, 'Jarvis could not inspect the shared screen.');
@@ -161,16 +180,32 @@ export function createScreenVisionModule(service: ScreenVisionService): BackendM
     id: 'screen-vision',
     tools: [],
     registerRoutes: async (app) => {
+      const questions = new WeakMap<object, string>();
       app.post<{
-        Body: { sessionId: string; frame: string };
+        Body: { sessionId: string; frame: string; question?: string };
       }>('/screen/frames', {
-        bodyLimit: SCREEN_FRAME_BODY_LIMIT,
+        bodyLimit: SCREEN_QUESTION_FRAME_BODY_LIMIT,
+        preValidation: async (request, reply) => {
+          const body: unknown = request.body;
+          if (typeof body !== 'object' || body === null || Array.isArray(body)) return;
+          // Validate before AJV can coerce values; keep question data out of the request body.
+          const question = (body as Record<string, unknown>)['question'];
+          delete (body as Record<string, unknown>)['question'];
+          try {
+            const normalized = normalizeScreenQuestion(question);
+            if (normalized !== undefined) questions.set(request, normalized);
+          } catch {
+            reply.header('Cache-Control', 'no-store');
+            return reply.code(400).send({ error: 'A screen question must be a string of at most 500 characters.' });
+          }
+        },
         schema: {
           body: {
             type: 'object',
             properties: {
               sessionId: { type: 'string', pattern: '^[1-9][0-9]{0,18}$', maxLength: 19 },
               frame: { type: 'string', minLength: 4, maxLength: MAX_SCREEN_FRAME_BASE64_BYTES },
+              question: { type: 'string', maxLength: MAX_SCREEN_QUESTION_CHARACTERS },
             },
             required: ['sessionId', 'frame'],
             additionalProperties: false,
@@ -182,8 +217,9 @@ export function createScreenVisionModule(service: ScreenVisionService): BackendM
                 description: { type: 'string', minLength: 1, maxLength: MAX_SCREEN_DESCRIPTION_CHARACTERS },
                 inputTokens: { type: 'integer', minimum: 0 },
                 outputTokens: { type: 'integer', minimum: 0 },
+                capturedAt: { type: 'string', format: 'date-time' },
               },
-              required: ['description', 'inputTokens', 'outputTokens'],
+              required: ['description', 'inputTokens', 'outputTokens', 'capturedAt'],
               additionalProperties: false,
             },
             400: { type: 'object', properties: { error: { type: 'string' } }, required: ['error'], additionalProperties: false },
@@ -195,6 +231,8 @@ export function createScreenVisionModule(service: ScreenVisionService): BackendM
         },
       }, async (request, reply) => {
         reply.header('Cache-Control', 'no-store');
+        const question = questions.get(request);
+        questions.delete(request);
         if (!request.principal) return reply.code(401).send({ error: 'Unauthorized' });
         const { sessionId, frame: encodedFrame } = request.body;
         request.body.frame = '';
@@ -225,6 +263,7 @@ export function createScreenVisionModule(service: ScreenVisionService): BackendM
             reasoningEffort: settings.roles.vision.reasoningEffort,
             dailyCap: settings.global.screenShareDailyFrameCap,
             signal: controller.signal,
+            ...(question === undefined ? {} : { question }),
           });
           return reply.send(result);
         } catch (error) {
