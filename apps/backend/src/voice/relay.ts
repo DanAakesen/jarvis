@@ -404,6 +404,14 @@ function registerVoiceRoute(
     let cameraItemId: string | undefined;
     let cameraItemSettled = false;
     let cameraGeneration = 0;
+    let lastCameraVisualContext: VisualContext | undefined;
+    const cameraUnavailableInstructions = () =>
+      'No fresh camera image is available for this turn. Do not claim to see a live image. ' +
+      'Earlier visual context is cached evidence only at its labelled capture time, not current facts. ' +
+      'Answer the spoken question where possible; explain missing fresh visual evidence and ask Dan to try again if needed. ' +
+      (lastCameraVisualContext
+        ? `The following is the last successfully saved camera context, not the answer to the current question:\n${visualContextText(lastCameraVisualContext)}`
+        : '');
     const supersededCameraItems = new Set<string>();
     let bufferedCameraContext: { itemId: string; context: SharedScreenContext | null } | undefined;
     let previousTurnDetection: Record<string, unknown> | undefined;
@@ -893,11 +901,12 @@ function registerVoiceRoute(
                 throw new Error('Visual context was not stored');
               }
               visualPersistenceFailed = false;
+              if (generation !== cameraGeneration || cameraItemId !== providerItemId ||
+                  controller.signal.aborted || endRequested) return;
+              lastCameraVisualContext = visualContext;
               cameraInstructions = visualContextText(visualContext);
             } else {
-              cameraInstructions = 'No fresh camera image is available for this turn. Do not claim to see a live image. ' +
-                'Earlier visual context is cached evidence only at its labelled capture time, not current facts. ' +
-                'Answer the spoken question where possible; explain missing fresh visual evidence and ask Dan to try again if needed.';
+              cameraInstructions = cameraUnavailableInstructions();
             }
             if (cameraTurn && (controller.signal.aborted || endRequested ||
                 cameraItemId !== providerItemId || generation !== cameraGeneration)) return;
@@ -976,8 +985,7 @@ function registerVoiceRoute(
             cameraItemSettled = true;
             sendResponseCreate({
               type: 'response.create',
-              response: { instructions: 'No fresh camera evidence could be supplied for this turn. ' +
-                'Do not claim to see a live image; earlier visual context is cached only at its capture time. Ask Dan to try again if fresh visual evidence is needed.' },
+              response: { instructions: cameraUnavailableInstructions() },
             });
           } else sendResponseCreate({ type: 'response.create' });
         }
@@ -1268,7 +1276,7 @@ function registerVoiceRoute(
         noteMicrophoneAudio(message.data, message.binary);
         const event = parseVoiceEvent(message.data, message.binary);
         if (event?.type === 'response.create') {
-          sendResponseCreate(event);
+          if (!cameraOn) sendResponseCreate(event);
           continue;
         }
         upstream?.send(message.data, { binary: message.binary }, (error) => {
@@ -1500,6 +1508,8 @@ function registerVoiceRoute(
         });
         if (!configured || upstream?.readyState !== WebSocket.OPEN || typeof description !== 'string' ||
             !visualContext ||
+            (cameraOn && event.source === 'camera' &&
+              (event.itemId === undefined || event.capturedAt === undefined || event.question === undefined)) ||
             (sharedWindowTitle !== undefined &&
               (typeof sharedWindowTitle !== 'string' || !sharedWindowTitle.trim() ||
                 sharedWindowTitle.length > 300 ||

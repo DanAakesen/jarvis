@@ -1563,7 +1563,7 @@ P9-81's per-turn visual contracts are:
   retryAfterMs?}`. The three-second window and configured daily cap remain;
   `frame_rate_limited` supplies a conservative `retryAfterMs: 3000`;
   `daily_limit` does not promise a short retry.
-  a rate-limited turn may use prior metadata with its old question/time label,
+  A rate-limited turn may use prior metadata with its old question/time label,
   never imply a new capture or answer a new detail question from an old answer.
 - `POST /conversation/sessions/:sessionId/turns`: send
   `{text, visualContext: {source: "camera" | "screen", capturedAt, question,
@@ -1576,11 +1576,17 @@ P9-81's per-turn visual contracts are:
 - Camera on is consent for a fresh frame every chat and voice turn, not a
   phrase-matched request; camera off sends nothing. The separate UI session
   supplies those frames through the same `/screen/frames` service for voice.
+  Capture is driven by the final transcription item, not partial speech:
+  the relay records its `itemId` before forwarding that transcription to the
+  client. Camera-off or superseded results are ignored.
 - Voice signals `{type: "jarvis.camera.state", on: boolean}` per connection,
   default off. Camera results send `{type: "jarvis.screen.context", itemId,
   description, capturedAt, question, source: "camera"}`; failure sends
   `{type: "jarvis.screen.context.unavailable", itemId, reason, retryAfterMs?}`.
-  A late result for a different transcription item is ignored.
+  Only the most recent pending item can release a hold. Late results for a
+  different item or an already answered/timed-out item are ignored without
+  another response or socket closure. The UI sends unavailable after about
+  ten seconds, before the relay's twelve-second deadline.
   Camera-enabled normal model replies wait up to twelve seconds for that
   correlated result/unavailable outcome, then create exactly one response
   with labelled untrusted observations or explicit no-fresh-image guidance.
@@ -1590,11 +1596,14 @@ P9-81's per-turn visual contracts are:
 - Unavailable reasons are `frame_rate_limited`, `daily_limit`, `capture_failed`,
   `camera_off`, `permission_denied`, `not_supported`, `session_ended`,
   `vision_failed`, `timeout` or `budget_exhausted`. Pacing emits unavailable,
-  never closes the voice socket; malformed payloads still close with 1008.
+  never closes the voice socket; optional `retryAfterMs` is a safe integer
+  from 0 to 86,400,000. Malformed payloads still close with 1008.
 - History exposes `metadata.visualContext` on the owning Dan message.
   Description and answered question remain untrusted even when the source is a
   real image. Cached results retain their original question and capture time;
-  image bytes are never stored.
+  voice also carries its last successfully saved camera result into later
+  no-fresh-image responses as explicitly historical evidence. Image bytes
+  are never stored.
 
 While Dan is sharing, chat captures a fresh frame for a deictic browser request;
 the authenticated chat turn binds its bounded description and selected display
