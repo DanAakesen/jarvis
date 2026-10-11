@@ -268,6 +268,16 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   actions use the shared P9-42 argument-refusal path. The reversible action needs
   no confirmation. The UI session owns applying it and hiding the transcript by
   default on phones; those behaviors and live acceptance remain pending.
+- P9-60 adds the additive `session` operation to that same plain-root contract:
+  `language` accepts `da`/`en`, `voice` accepts `end`, and `camera` accepts
+  `front`/`rear`/`off`. The shared guard enforces exact action/value pairs and
+  fields; the existing broker waits for applied/refused acknowledgements and
+  returns the page's refusal reason. These affect the current session, not saved
+  defaults. The backend never requests browser permissions; missing camera or
+  microphone permission is refused by the page, and Jarvis tells Dan to grant it.
+  No migration, event channel or App permission is added. UI handlers (#641) must
+  land first, with coordinator confirmation before merge; live acceptance remains
+  unverified.
 - P8-45 adds explicit owner-only `GET /workspace/pins`,
   `PUT /workspace/pins/:viewId` and `DELETE /workspace/pins/:viewId` routes.
   Migration 0038 stores only the pinned view ID, validated generated-view JSON
@@ -322,6 +332,15 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   owner-authenticated `POST /now/workspace/state`. The broker keeps one snapshot per
   open `/now/events` session, uses the most recently reported one, and drops a
   tab's snapshot when that tab disconnects.
+  P9-65 (UI half of P9-61) adds an optional `device: { kind: 'desktop' | 'phone' | 'tablet', label? }`
+  to every snapshot and an optional `target: 'active' | 'desktop' | 'phone' | 'all'`
+  on every `WorkspaceCommand`. The page classifies itself as a phone (the phone shell
+  media query), a tablet (touch-first, no hover) or a desktop, and refuses a command
+  named for another kind with an explanatory acknowledgement instead of applying it.
+  `active`, `all` and no target apply where the broker delivers them. An older
+  backend that answers 400 to the unknown `device` field gets one retry without it,
+  and later snapshots to that backend omit it. Broker routing is P9-61 (#638) and
+  is not implemented yet, so end-to-end targeting is unverified.
   P9-43 adds optional `view` metadata for page, Settings section, Factory
   task/issue, focused window, Folio pane and previous destination. Shared guards
   and the owner route validate it while accepting older snapshots. The existing

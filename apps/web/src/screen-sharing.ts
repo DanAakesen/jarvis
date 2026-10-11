@@ -15,6 +15,8 @@ export interface ScreenShareController {
   start(onError?: (message: string) => void): Promise<void>;
   stop(): void;
   inspect(sessionId: string, feedback?: 'inline' | 'caller'): Promise<VisionContext>;
+  /** One JPEG frame (base64) of the live share, used by watch mode; rejects when nothing is shared. */
+  captureFrame?(): Promise<string>;
   /** Camera only: which way the camera faces, and a switch between front and back (phones). */
   readonly facing?: 'user' | 'environment';
   switchCamera?(): Promise<void>;
@@ -89,6 +91,25 @@ function readBlob(video: HTMLVideoElement, source: VisionCaptureSource): Promise
       else resolve(blob);
     }, 'image/jpeg', 0.65);
   });
+}
+
+async function captureStreamFrame(stream: MediaStream, source: VisionCaptureSource): Promise<string> {
+  const video = document.createElement('video');
+  video.muted = true;
+  video.playsInline = true;
+  video.srcObject = stream;
+  try {
+    await video.play();
+    const bytes = new Uint8Array(await (await readBlob(video, source)).arrayBuffer());
+    try {
+      return encodeBase64(bytes);
+    } finally {
+      bytes.fill(0);
+    }
+  } finally {
+    video.pause();
+    video.srcObject = null;
+  }
 }
 
 function useVisionCapture(
@@ -268,6 +289,14 @@ function useVisionCapture(
     }
   }, [config.backendUrl, getAccessToken, label, source]);
 
+  const captureFrame = useCallback(async () => {
+    const stream = streamRef.current;
+    if (!stream || stream.getVideoTracks().every((track) => track.readyState !== 'live')) {
+      throw new Error(`The ${label === 'camera' ? 'camera' : 'screen'} is not being shared.`);
+    }
+    return captureStreamFrame(stream, source);
+  }, [label, source]);
+
   // Front and back cameras on a phone: stop the current stream and start again facing the other way.
   const switchCamera = useCallback(async () => {
     const next = facingRef.current === 'user' ? 'environment' : 'user';
@@ -290,8 +319,8 @@ function useVisionCapture(
   }, [startCapture, stop]);
 
   return source === 'camera'
-    ? { sharing, starting, inspecting, error, start, stop, inspect, facing, switchCamera, selectFacing }
-    : { sharing, starting, inspecting, error, start, stop, inspect };
+    ? { sharing, starting, inspecting, error, start, stop, inspect, captureFrame, facing, switchCamera, selectFacing }
+    : { sharing, starting, inspecting, error, start, stop, inspect, captureFrame };
 }
 
 export function useScreenShare(config: PublicConfig, getAccessToken: () => Promise<string>): ScreenShareController {
