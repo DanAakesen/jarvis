@@ -288,6 +288,22 @@ Verified in Codex cloud for P0-02:
 | Run web app | `npm run dev` in the repository root; open `http://localhost:5173` |
 | Watch web tests | `npm run test:watch --workspace @jarvis/web` |
 
+The Windows UI checkout can use its existing dependency junction and run from
+`apps\web`: `node ..\..\node_modules\typescript\bin\tsc --noEmit -p .`,
+`node ..\..\node_modules\vitest\vitest.mjs run --maxWorkers=1 --silent` and
+`node ..\..\node_modules\vite\bin\vite.js build`. Keep Vitest module isolation
+enabled for combined suites; `--no-isolate` contaminates mocked shell/Factory
+modules between files. Local en-DK formatting differs from existing tests'
+English date/decimal literals; report those separately, not as Notes failures.
+
+P9-77 browser acceptance must intercept all vault writes in a scratch fixture
+harness. Do not use real notes or production writes as screenshot evidence.
+Cover the default graph, star/search selection into the editable popup,
+section/title creation, source/preview, successive blob-SHA saves, 409
+comparison, dirty close/note-switch/links/history/reload and phone dock clearance.
+Notes is now a data-router route: component tests that mount it must provide
+`createMemoryRouter`/`RouterProvider`, not a plain `MemoryRouter`.
+
 The web starts with the bootstrap identities and the public production backend
 origin in `apps/web/config.json` (optional `VITE_BACKEND_URL` override). With a
 backend URL, MSAL signs in against the configured tenant and calls authenticated

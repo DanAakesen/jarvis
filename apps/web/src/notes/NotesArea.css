@@ -1,0 +1,37 @@
+.notes-page .knowledge > .notes-create-button { position: absolute; z-index: 3; top: 16px; right: 16px; min-height: 44px; margin: 0; }
+.notes-page .knowledge-search, .notes-page .knowledge-results { width: min(560px, calc(100% - 180px)); }
+.knowledge-note.notes-popup { position: fixed; z-index: 40; top: calc(var(--rail-size, 56px) + 76px); bottom: 88px; }
+.notes-popup .modal-close { min-width: 44px; min-height: 44px; }
+.notes-editor { display: flex; min-width: 0; flex-direction: column; gap: 14px; }
+.notes-editor p { margin: 0; }
+.notes-editor .knowledge-note-meta { font-size: 12px; overflow-wrap: anywhere; }
+.notes-editor-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.notes-editor-actions .primary-button, .notes-editor-actions .secondary-button, .notes-create .primary-button { min-height: 44px; margin: 0; }
+.notes-dirty { color: var(--text-muted); font-size: var(--type-caption); }
+.notes-create, .notes-create > div, .notes-source-label { display: grid; gap: 6px; }
+.notes-create { gap: 14px; }
+.notes-create label, .notes-source-label { font-size: var(--type-small); font-weight: 600; }
+.notes-create input, .notes-create select { width: 100%; margin: 0; min-height: 44px; }
+.notes-create input, .notes-source-label textarea { padding: 12px; border: 1px solid var(--control-rule); border-radius: var(--radius-control); background: var(--surface-muted); color: var(--text); font: inherit; font-weight: 400; }
+.notes-create input:focus-visible, .notes-source-label textarea:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.notes-source-label textarea { width: 100%; min-height: 320px; margin: 0; resize: vertical; font: 14px/1.65 var(--font-mono); tab-size: 2; }
+.notes-source-label textarea:read-only { opacity: .8; }
+.notes-preview { overflow-wrap: anywhere; }
+.notes-preview:focus-visible { outline: 3px solid var(--focus); outline-offset: -3px; }
+.notes-preview pre, .notes-comparison pre { max-width: 100%; overflow: auto; }
+.notes-conflict { display: grid; gap: 14px; padding: 12px; border-radius: 10px; background: var(--warning-surface); color: var(--warning-text); }
+.notes-comparison { display: grid; gap: 14px; }
+.notes-comparison h3 { margin: 0 0 8px; }
+.notes-comparison pre { padding: 12px; margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; background: var(--surface-muted); color: var(--text); border-radius: 8px; max-height: 300px; }
+.notes-comparison button { justify-self: start; min-height: 44px; }
+@media (min-width: 701px) and (max-width: 1000px) {
+  .notes-page .knowledge-search, .notes-page .knowledge-results { left: 16px; translate: none; }
+}
+@media (max-width: 700px), (max-height: 500px) and (pointer: coarse) {
+  .notes-page .knowledge > .notes-create-button { top: 8px; right: 8px; }
+  .notes-page .knowledge-search, .notes-page .knowledge-results { left: 8px; width: calc(100% - 16px); translate: none; }
+  .notes-page .knowledge-search { top: 60px; }
+  .notes-page .knowledge-results { top: 114px; }
+  .knowledge-note.notes-popup { top: auto; right: calc(env(safe-area-inset-right) + 8px); bottom: calc(68px + var(--phone-dock-bottom, 16px) + 36px); left: calc(env(safe-area-inset-left) + 8px); width: auto; max-height: min(65dvh, calc(100dvh - env(safe-area-inset-top) - var(--rail-size, 48px) - 68px - var(--phone-dock-bottom, 16px) - 48px)); }
+  .notes-source-label textarea { min-height: 240px; }
+}

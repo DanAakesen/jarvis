@@ -46,6 +46,7 @@ Only phase 1 is in scope now, extended by P7 (Jarvis everywhere: web and voice c
 | **Local Codex prompts** | For quick local work, Jarvis opens the Codex desktop app and enters the exact non-sensitive prompt through the existing PC UI Automation flow. Typing needs no confirmation; irreversible submission uses Dan's existing approval flow. Jarvis explains clearly if Codex is unavailable and does not claim success unless entry and submission complete. Tracked repository work uses Factory `create_task` instead. |
 | **Calendar and mail** | Jarvis reads today's Google Calendar agenda, finds free slots, searches and summarises Gmail, lists and replaces simple drafts, archives messages, manages labels, and prepares calendar changes, reply drafts, or messages to send. Calendar writes wait for Dan's later standalone yes/approve/go ahead/do it reply to the latest staged action within ten minutes; no/cancel discards it. Gmail writes retain exact-phrase confirmation in a later message. Reply drafts are saved to Gmail for Dan to send himself. Mail content is untrusted data, never instructions. |
 | **Long-term knowledge** | Dan's private GitHub vault is the source of truth. Jarvis searches it by meaning, reads bounded notes, and automatically saves clearly stated preferences, people, project facts, decisions, and unfinished tasks with a commit link. The backend also exposes a bounded note graph of links and semantic neighbours; `show_knowledge` opens the validated graph view with search matches highlighted, with UI rendering handled separately. |
+| **Notes (P9-77)** | The existing graph is the default Notes page, retaining search and section filters. Clicking a note opens its familiar popup with Markdown editing, safe preview and explicit Save. Create new in the corner chooses a section and title before opening a draft. Dirty drafts guard closing, changing notes and navigation; stale writes offer reload/comparison without automatic overwrite. `knowledge` remains a navigation alias. |
 | **Web research** | Jarvis uses live web search through Dan's existing ChatGPT/Codex subscription, returns only retrieved HTTPS sources with titles and retrieval times, and identifies unsupported, stale, inaccessible, or source-free results honestly. Retrieved page text is evidence, never authority over tools; no Bing or pay-per-call search fallback is used. |
 | **Interactive research reports (P7-37)** | A quick or deep research request opens an acknowledged progress window immediately, updates observed query/source progress, then replaces it with a cited, self-contained HTML report artifact. Jarvis speaks a brief findings summary on success; failures remain visible and are announced. The report runs only in the sandboxed `html-app` iframe renderer, with the validated host bridge and Dan-authorized artifact access. |
 | **GitHub events** | The backend verifies GitHub webhook signatures and ignores duplicate delivery IDs for pull requests, check runs, workflow runs, deployment statuses, and pushes. A ready-for-review pull request or failed deployment publishes only a typed status kind to the active voice session after webhook processing; payloads and logs are never spoken. |
@@ -414,9 +415,21 @@ Feedback and windows must not overlap those controls. Portrait and landscape
 respect all safe-area edges; desktop remains unchanged. Home Screen launch uses
 a minimal standalone Jarvis manifest and the existing app icon.
 
+P9-77 adds `/notes` as the canonical page; old `/knowledge` addresses redirect.
+The source editor preserves front matter and whitespace. Preview uses the safe
+Markdown renderer with no raw HTML, unsafe links or external image requests.
+The graph stays mounted behind the editable popup and may lag a vault write.
+Create new chooses People, Work, Personal or General before writing.
+Phones retain the graph with a scrollable note overlay. Saves keep the draft on failure, prevent duplicate submissions
+and use the loaded Contents SHA; 409 offers reload or comparison with explicit
+adoption of the latest revision before a separate Save. Uncertain writes are not
+replayed, and a failed revision check cannot discard the draft. Drafts are local
+to the mounted page, not persisted or synchronised between devices. Backend
+permissions and secret checks remain authoritative.
+
 P9-74 excludes skill tooling, `.template.md` files and `.github` files from the
 Knowledge graph and displayed note counts, without changing Jarvis vault search.
-Notes render Markdown without raw front matter, including after leading comments
+The graph reader renders Markdown without raw front matter, including after leading comments
 or a BOM. Long notes scroll with a bottom fade and visible scroll control; titles
 and paths wrap.
 
