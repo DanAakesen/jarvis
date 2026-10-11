@@ -6,6 +6,8 @@ import { capabilityInstructions, CAPABILITY_INSTRUCTIONS_MAX_CODE_POINTS } from 
 describe('shared navigation capability instructions', () => {
   it.each([true, false])('includes canonical destinations and aliases with automatic capture %s', (automaticCapture) => {
     const instructions = capabilityInstructions({ automaticCapture });
+    expect(instructions).toContain('target "active" (latest snapshot tab)');
+    expect(instructions).toContain('"all" only for every tab');
     expect(instructions).toContain('operation "session": language da/en, voice end, or camera front/rear/off');
     expect(instructions).toContain('not saved defaults; wait for application, relay refusals');
     expect(instructions).toContain('tell Dan to grant browser permission if missing');

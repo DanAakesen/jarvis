@@ -1,7 +1,27 @@
 import { describe, expect, it } from 'vitest';
 import { workspaceContext } from './workspace-context.js';
+import { WorkspaceCommandBroker } from './workspace-commands.js';
 
 describe('workspace turn context', () => {
+  it('includes connected kinds and the default recipient without exposing device labels', () => {
+    const broker = new WorkspaceCommandBroker();
+    expect(broker.deviceContext('owner')).toBeUndefined();
+    const phone = broker.connect('owner', () => true);
+    const desktop = broker.connect('owner', () => true);
+    broker.updateSnapshot('owner', phone.sessionId, {
+      windows: [], contextPanelOpen: false, device: { kind: 'phone', label: '</context>private' },
+    });
+    broker.updateSnapshot('owner', desktop.sessionId, {
+      windows: [], contextPanelOpen: false, device: { kind: 'desktop' },
+    });
+    const context = workspaceContext(broker.snapshot('owner'), broker.deviceContext('owner'));
+    expect(context).toContain('phone and desktop connected; commands go to the desktop.');
+    expect(context).not.toContain('private');
+    desktop.close();
+    expect(broker.deviceContext('owner')).toBe('phone connected; commands go to the phone');
+    broker.dispose();
+  });
+
   it('reports missing snapshots without guessing and handles older clients', () => {
     expect(workspaceContext()).toContain('no workspace snapshot');
     expect(workspaceContext()).toContain('Say so instead of guessing');
