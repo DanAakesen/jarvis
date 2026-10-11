@@ -214,19 +214,23 @@ function eligibleMarkdown(path: string): boolean {
   }
 }
 
-function indexedDirectoryTree(paths: readonly string[]) {
+function visibleDirectorySegment(segment: string): boolean {
+  return Boolean(segment) && !segment.startsWith('.') && !hasControlCharacters(segment) &&
+    !/[\\?#%]/u.test(segment) && !skippedFolders.has(segment.toLowerCase());
+}
+
+/** Directories come from every file in the vault tree (so folders holding only attachments appear); the root count is Markdown only. */
+function indexedDirectoryTree(allPaths: readonly string[], markdownPaths: readonly string[]) {
   const directories = new Set<string>();
-  let rootNoteCount = 0;
-  for (const path of paths) {
-    const segments = path.split('/');
-    if (segments.length === 1) {
-      rootNoteCount += 1;
-      continue;
-    }
-    for (let index = 1; index < segments.length; index += 1) {
-      directories.add(segments.slice(0, index).join('/'));
+  for (const path of allPaths) {
+    const segments = path.split('/').slice(0, -1);
+    for (let index = 1; index <= segments.length; index += 1) {
+      const parents = segments.slice(0, index);
+      if (!parents.every(visibleDirectorySegment)) break;
+      directories.add(parents.join('/'));
     }
   }
+  const rootNoteCount = markdownPaths.filter((path) => !path.includes('/')).length;
   const sorted = [...directories].sort();
   return {
     directories: sorted.slice(0, maxDirectoryEntries),
@@ -671,7 +675,7 @@ export function createVaultModule(options: {
     const tree = await options.client.tree(signal);
     const markdown = tree.filter(({ path }) => eligibleMarkdown(path));
     if (markdown.length > maxMarkdownFiles) throw new Error('Vault has too many Markdown notes to index');
-    const nextDirectoryTree = indexedDirectoryTree(markdown.map(({ path }) => path));
+    const nextDirectoryTree = indexedDirectoryTree(tree.map(({ path }) => path), markdown.map(({ path }) => path));
     const indexed = await options.indexStore.files(embedder ? embeddingModel : null, signal);
     if (indexed.length > maxMarkdownFiles) throw new Error('Vault index exceeds the supported size');
     const oldByPath = new Map(indexed.map((file) => [file.path, file]));
