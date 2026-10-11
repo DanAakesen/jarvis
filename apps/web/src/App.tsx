@@ -41,6 +41,7 @@ import { CollapsibleSection } from './CollapsibleSection';
 import { MobileCaption, MobileMenu } from './MobileShell';
 import { flyChat } from './chat-flight';
 import { readWorkspaceFrame } from './workspace-frame';
+import { readWorkspaceDevice } from './workspace-device';
 import { JobsChip } from './JobsChip';
 import { hasRunningJob, useJobs } from './jobs-store';
 import { KnowledgeBackendContext } from './knowledge/knowledge-context';
@@ -227,7 +228,7 @@ function ShellLayout({ signedIn, config, session, camera, screenShare }: {
     ...(viewHistory.previous ? { previous: viewHistory.previous } : {}),
   }), [folioOpen, frontViewId, location, viewHistory.previous]);
   const workspaceCommands = useMemo(() => ({
-    snapshot: { windows: openWindows, contextPanelOpen: contextPanel.isOpen, ...(frame ? { frame } : {}), ...(signedIn ? { view } : {}) },
+    snapshot: { windows: openWindows, contextPanelOpen: contextPanel.isOpen, device: readWorkspaceDevice(), ...(frame ? { frame } : {}), ...(signedIn ? { view } : {}) },
     dispatch: (command: Parameters<WorkspaceController['dispatch']>[0], trustedBlobHost?: string) => {
       const navigateRequest = readNavigateCommand(command);
       if (navigateRequest) return navigateTo(navigateRequest);

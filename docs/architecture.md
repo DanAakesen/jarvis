@@ -321,6 +321,15 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   owner-authenticated `POST /now/workspace/state`. The broker keeps one snapshot per
   open `/now/events` session, uses the most recently reported one, and drops a
   tab's snapshot when that tab disconnects.
+  P9-65 (UI half of P9-61) adds an optional `device: { kind: 'desktop' | 'phone' | 'tablet', label? }`
+  to every snapshot and an optional `target: 'active' | 'desktop' | 'phone' | 'all'`
+  on every `WorkspaceCommand`. The page classifies itself as a phone (the phone shell
+  media query), a tablet (touch-first, no hover) or a desktop, and refuses a command
+  named for another kind with an explanatory acknowledgement instead of applying it.
+  `active`, `all` and no target apply where the broker delivers them. An older
+  backend that answers 400 to the unknown `device` field gets one retry without it,
+  and later snapshots to that backend omit it. Broker routing is P9-61 (#638) and
+  is not implemented yet, so end-to-end targeting is unverified.
   P9-43 adds optional `view` metadata for page, Settings section, Factory
   task/issue, focused window, Folio pane and previous destination. Shared guards
   and the owner route validate it while accepting older snapshots. The existing

@@ -1175,6 +1175,16 @@ regression; live acceptance is pending.
   in `docs/ui/screenshots/composer-sizing/README.md`.
 - **Status:** implemented locally; production acceptance follows deployment.
 
+## P9-65: report device kind and honour command targets
+
+- **Decision:** Snapshots carry `device.kind`; the tab refuses commands whose
+  `target` names another kind, and retries once without `device` against
+  backends that reject it.
+- **Why:** The UI half must ship before the P9-61 broker so a command for the
+  phone is never applied on the desktop and old backends keep working.
+- **Status:** implemented with unit tests; broker routing and live phone/desktop
+  acceptance remain unverified until #638 lands.
+
 ## 2026-10-11: Chat attachments reuse the More menu (#649)
 
 - **Decision:** attach, paste and drop add files to the existing composer. The
