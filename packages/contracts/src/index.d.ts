@@ -214,6 +214,28 @@ export interface GeneratedKnowledgeGraphData {
   highlight: string[];
 }
 
+export interface VaultNoteListItem {
+  path: string;
+  title: string;
+  /** First path segment, or an empty string for a root note. */
+  folder: string;
+  /** Full parent directory path, or an empty string for a root note. */
+  directory: string;
+  updatedAt: string;
+}
+
+export interface VaultKnowledgeGraphNode extends VaultNoteListItem {
+  id: string;
+  degree: number;
+}
+
+export interface VaultDirectoryTree {
+  directories: string[];
+  rootNoteCount: number;
+  truncated: boolean;
+  updatedAt: string;
+}
+
 export interface GeneratedCodeData {
   repo: string;
   path: string;

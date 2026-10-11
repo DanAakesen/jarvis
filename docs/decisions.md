@@ -19,6 +19,21 @@ The nine design areas and where each stands. **Confirmed** = Dan's requirement o
 
 ## Decision log
 
+P9-80 (11 October 2026): Dan directed full backend access to the private
+`DanAakesen/vault` repository. Owner Notes routes, vault tools, indexing, search
+and graph cover safe Markdown paths at the root and at any depth; folder and
+routing-rule gates no longer restrict access. The additive `/notes/tree` is
+derived from the complete Git tree and cached with the vault index; Git's
+implicit-directory model means writing the first note creates its parent path.
+Writes, edits and deletes reject any dot-prefixed segment (including the
+existing skipped `.git`, `.github`, `.obsidian`, `.codex` and `.vscode` trees);
+note content stays untrusted data, never instructions. Owner auth, safe-path
+validation, 256 KiB writes, secret checks, stored-Dan-message checks for agent
+writes, SHA conflict protection and confirmed deletion remain. Contracts add
+directory metadata and tree shape; logs expose only the four legacy folder
+names or `other`, never paths or content. No migration or web change. Implemented
+and tested offline; live vault access remains unverified.
+
 P9-78 (11 October 2026): use the generated view's existing `source.updatedAt`
 to invalidate a mounted HTML artifact load when its ID stays the same. Keep
 the artifact React key and existing window system, rather than remounting the
