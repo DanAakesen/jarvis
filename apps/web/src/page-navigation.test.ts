@@ -13,7 +13,8 @@ describe('page navigation', () => {
   it('maps pages, Settings sections and tasks to routes', () => {
     expect(resolveNavigation({ page: 'home' })).toEqual({ ok: true, path: '/' });
     expect(resolveNavigation({ page: 'factory' })).toEqual({ ok: true, path: '/factory/kanban' });
-    expect(resolveNavigation({ page: 'knowledge' })).toEqual({ ok: true, path: '/knowledge' });
+    expect(resolveNavigation({ page: 'knowledge' })).toEqual({ ok: true, path: '/notes' });
+    expect(resolveNavigation({ page: 'notes' })).toEqual({ ok: true, path: '/notes' });
     expect(resolveNavigation({ page: 'settings', section: 'routines' }))
       .toEqual({ ok: true, path: '/settings', anchorId: 'task-recipes-heading' });
     expect(resolveNavigation({ page: 'factory', taskId: '42' })).toEqual({ ok: true, path: '/factory/kanban', taskId: '42' });
@@ -30,8 +31,12 @@ describe('page navigation', () => {
   });
 
   it('names the page Dan is looking at and builds a valid snapshot view', () => {
-    expect(['/', '/factory/kanban', '/factory/tasks/42', '/settings', '/usage', '/knowledge', '/nowhere'].map(pageForPath))
-      .toEqual(['home', 'factory', 'factory', 'settings', 'usage', 'knowledge', 'home']);
+    expect(['/', '/factory/kanban', '/factory/tasks/42', '/settings', '/usage', '/notes', '/knowledge', '/nowhere'].map(pageForPath))
+      .toEqual(['home', 'factory', 'factory', 'settings', 'usage', 'notes', 'knowledge', 'home']);
+    expect(isWorkspaceSnapshot({
+      windows: [], contextPanelOpen: false,
+      view: { page: pageForPath('/notes'), previous: { page: 'knowledge' } },
+    })).toBe(true);
     expect(isWorkspaceSnapshot({
       windows: [{ viewId: 'task-42', title: 'Task 42' }], contextPanelOpen: false,
       view: { page: 'factory', taskId: '42', folioOpen: false, focusedViewId: 'task-42', previous: { page: 'settings', section: 'voice' } },

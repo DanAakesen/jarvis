@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter, useNavigate } from 'react-router-dom';
-import type { ReactNode } from 'react';
+import { createMemoryRouter, RouterProvider, useNavigate } from 'react-router-dom';
+import { useState, type ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from './App';
 import { getSignInGreeting } from './sign-in-greeting';
@@ -94,6 +94,13 @@ beforeEach(() => {
 });
 
 const mediaDevicesDescriptor = Object.getOwnPropertyDescriptor(navigator, 'mediaDevices');
+
+function MemoryRouter({ children, initialEntries = ['/'], initialIndex }: { children: ReactNode; initialEntries?: string[]; initialIndex?: number }) {
+  const [router] = useState(() => createMemoryRouter([{ path: '*', element: children }], {
+    initialEntries, ...(initialIndex === undefined ? {} : { initialIndex }),
+  }));
+  return <RouterProvider router={router} />;
+}
 
 function HistoryControls() {
   const navigate = useNavigate();
@@ -788,17 +795,55 @@ describe('App shell', () => {
     expect(screen.queryByRole('heading', { name: 'Tasks' })).toBeNull();
   });
 
-  it('offers the Software Factory, Knowledge and Usage areas with a settings entry', async () => {
+  it('offers the Software Factory, Notes and Usage areas with a settings entry', async () => {
     await renderSignedIn();
 
     const areas = screen.getByRole('navigation', { name: 'Areas' });
     expect(within(areas).getAllByRole('link').map((link) => link.getAttribute('aria-label'))).toEqual([
       'Conversation',
       'Software Factory',
-      'Knowledge',
+      'Notes',
       'Usage',
     ]);
     expect(screen.getByRole('link', { name: 'Settings' }).getAttribute('href')).toBe('/settings');
+  });
+
+  it.each(['/notes', '/knowledge', '/knowledge/old'])('publishes canonical Notes snapshots from %s and keeps the rail canonical', async path => {
+    const workspace = streamWorkspaceCommands();
+    await renderSignedIn(path);
+    await screen.findByRole('heading', { name: 'Notes', level: 1 });
+    const link = screen.getByRole('link', { name: 'Notes' });
+    expect(link.getAttribute('href')).toBe('/notes');
+    expect(link.getAttribute('aria-current')).toBe('page');
+    expect(screen.queryByRole('heading', { name: 'Page not found' })).toBeNull();
+    await waitFor(() => expect(activityStream).not.toBeNull());
+    workspace.ready();
+    await waitFor(() => expect(fetchMock.mock.calls.some(([url, init]) =>
+      String(url).endsWith('/now/workspace/state') &&
+      (JSON.parse(String(init?.body)) as { view?: { page: string } }).view?.page === 'notes',
+    )).toBe(true));
+  });
+
+  it('refuses Jarvis page navigation while a Notes draft is unsaved instead of acknowledging a blocked move', async () => {
+    streamWorkspaceCommands();
+    await renderSignedIn('/notes');
+    await waitFor(() => expect(activityStream).not.toBeNull());
+    fireEvent.click(screen.getByRole('button', { name: 'Create new' }));
+    fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Fixture draft' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Start writing' }));
+    act(() => {
+      activityStream!.enqueue(new TextEncoder().encode(
+        `event: workspace-ready\ndata: ${JSON.stringify({ sessionId: '12345678-1234-4234-8234-123456789abc' })}\n\n` +
+        `event: workspace-command\ndata: ${JSON.stringify({
+          command: { commandId: 'notes-unsaved', operation: 'navigate', page: 'usage' }, expiresAt: Date.now() + 5_000,
+        })}\n\n`,
+      ));
+    });
+    await waitFor(() => expect(fetchMock.mock.calls.find(([url]) => String(url).endsWith('/commands/notes-unsaved/ack'))).toBeTruthy());
+    const ack = fetchMock.mock.calls.find(([url]) => String(url).endsWith('/commands/notes-unsaved/ack'))!;
+    expect(JSON.parse(String(ack[1]?.body))).toMatchObject({ applied: false });
+    expect((screen.getByRole('textbox', { name: 'Markdown' }) as HTMLTextAreaElement).value).toBe('# Fixture draft\n\n');
+    expect(screen.getByRole('link', { name: 'Notes' }).getAttribute('aria-current')).toBe('page');
   });
 
   it('marks only the current desktop area as the page', async () => {
@@ -893,7 +938,7 @@ describe('App shell', () => {
 
   it.each([
     ['Software Factory', '/'],
-    ['Knowledge', '/'],
+    ['Notes', '/'],
     ['Usage', '/'],
     ['Usage', '/usage'],
     ['Conversation', '/usage'],

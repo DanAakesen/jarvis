@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { MarkdownContent } from '../MarkdownContent';
 import {
-  KnowledgeUnavailable, knowledgeFolders, loadKnowledgeGraph, loadKnowledgeNote, matchTitles,
-  searchKnowledge, type KnowledgeFolder, type KnowledgeGraph, type KnowledgeNote,
+  connectedNotes, KnowledgeUnavailable, knowledgeFolders, loadKnowledgeGraph, loadKnowledgeNote, matchTitles,
+  searchKnowledge, type KnowledgeFolder, type KnowledgeGraph, type KnowledgeNode, type KnowledgeNote,
 } from './knowledge-data';
 import type { KnowledgeScene } from './knowledge-scene';
 import { useKnowledgeBackend } from './knowledge-context';
@@ -13,7 +13,7 @@ type Load = { status: 'loading' } | { status: 'unavailable' } | { status: 'error
 const reducedMotion = () => (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false) ||
   document.documentElement.dataset.motion === 'reduced';
 
-function NoteReader({ children }: { children: ReactNode }) {
+export function KnowledgeNoteReader({ children }: { children: ReactNode }) {
   const viewport = useRef<HTMLDivElement>(null);
   const content = useRef<HTMLDivElement>(null);
   const [more, setMore] = useState(false);
@@ -47,12 +47,17 @@ function NoteReader({ children }: { children: ReactNode }) {
  * Dan's vault as a 3D star cloud (P7-43): every note a star coloured by folder, links as fine lines. Search lights up the
  * matches and flies to them; a star opens its note. Used by the Knowledge page and by the window Jarvis opens.
  */
-export function KnowledgeGraphView({ backendUrl, getAccessToken, initialQuery = '', initialHighlight, compact = false }: {
+export function KnowledgeGraphView({ backendUrl, getAccessToken, initialQuery = '', initialHighlight, compact = false,
+  onOpenNote, selectedPath, refreshKey = 0, children }: {
   backendUrl: string | null;
   getAccessToken: () => Promise<string>;
   initialQuery?: string;
   initialHighlight?: readonly string[];
   compact?: boolean;
+  onOpenNote?: (node: KnowledgeNode, graph: KnowledgeGraph) => void;
+  selectedPath?: string;
+  refreshKey?: number;
+  children?: ReactNode;
 }) {
   const ids = useId();
   const host = useRef<HTMLDivElement>(null);
@@ -71,7 +76,7 @@ export function KnowledgeGraphView({ backendUrl, getAccessToken, initialQuery = 
     setHits(initialHighlight ? [...initialHighlight] : []);
   }
   const [searching, setSearching] = useState(false);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [localSelectedId, setSelectedId] = useState<string | null>(null);
   // Browsing: one folder can be isolated from the legend; its notes list beside the search.
   const [folder, setFolder] = useState<KnowledgeFolder | null>(null);
   const [note, setNote] = useState<{ id: string; value: KnowledgeNote | null; error: string } | null>(null);
@@ -79,6 +84,14 @@ export function KnowledgeGraphView({ backendUrl, getAccessToken, initialQuery = 
   const [labels, setLabels] = useState<{ id: string; x: number; y: number }[]>([]);
   const graph = load.status === 'ready' ? load.graph : null;
   const nodesById = useMemo(() => new Map(graph?.nodes.map((node) => [node.id, node]) ?? []), [graph]);
+  const selectedId = onOpenNote ? graph?.nodes.find(node => node.path === selectedPath)?.id ?? null : localSelectedId;
+  const open = useCallback((nodeId: string) => {
+    const node = nodesById.get(nodeId);
+    if (onOpenNote) { if (node && graph) onOpenNote(node, graph); }
+    else setSelectedId(nodeId);
+  }, [graph, nodesById, onOpenNote]);
+  const openRef = useRef(open);
+  useLayoutEffect(() => { openRef.current = open; }, [open]);
 
   useEffect(() => {
     let active = true;
@@ -95,7 +108,7 @@ export function KnowledgeGraphView({ backendUrl, getAccessToken, initialQuery = 
         : { status: 'error', message: reason instanceof Error ? reason.message : 'Jarvis could not load your knowledge.' });
     });
     return () => { active = false; controller.abort(); };
-  }, [backendUrl, getAccessToken, reload]);
+  }, [backendUrl, getAccessToken, reload, refreshKey]);
 
   // The scene is loaded on demand (three.js stays out of the main bundle) and rebuilt only for a new graph.
   useEffect(() => {
@@ -106,7 +119,7 @@ export function KnowledgeGraphView({ backendUrl, getAccessToken, initialQuery = 
       if (disposed) return;
       try {
         scene.current = createKnowledgeScene(element, graph, {
-          onSelect: (id) => setSelectedId(id),
+          onSelect: (id) => openRef.current(id),
           onHover: setHover,
           onLabels: (next) => setLabels((current) => JSON.stringify(current) === JSON.stringify(next) ? current : next),
         }, reducedMotion());
@@ -152,7 +165,7 @@ export function KnowledgeGraphView({ backendUrl, getAccessToken, initialQuery = 
   useEffect(() => {
     let active = true;
     const node = selectedId ? nodesById.get(selectedId) : undefined;
-    if (!selectedId || !node || !backendUrl || graph?.sample) return () => { active = false; };
+    if (onOpenNote || !selectedId || !node || !backendUrl || graph?.sample) return () => { active = false; };
     const controller = new AbortController();
     void loadKnowledgeNote(backendUrl, getAccessToken, node, controller.signal).then((value) => {
       if (active) setNote({ id: selectedId, value, error: '' });
@@ -160,15 +173,10 @@ export function KnowledgeGraphView({ backendUrl, getAccessToken, initialQuery = 
       if (active) setNote({ id: selectedId, value: null, error: 'This note could not be opened. Try again.' });
     });
     return () => { active = false; controller.abort(); };
-  }, [backendUrl, getAccessToken, graph?.sample, nodesById, selectedId]);
+  }, [backendUrl, getAccessToken, graph?.sample, nodesById, selectedId, onOpenNote]);
 
-  const open = useCallback((id: string) => setSelectedId(id), []);
   const selected = selectedId ? nodesById.get(selectedId) : undefined;
-  const neighbours = useMemo(() => {
-    if (!graph || !selectedId) return [];
-    return graph.edges.flatMap((edge) => edge.source === selectedId ? [edge.target] : edge.target === selectedId ? [edge.source] : [])
-      .filter((id, index, list) => list.indexOf(id) === index).slice(0, 12).flatMap((id) => nodesById.get(id) ?? []);
-  }, [graph, nodesById, selectedId]);
+  const neighbours = useMemo(() => connectedNotes(graph, selectedId), [graph, selectedId]);
   const counts = useMemo(() => new Map(knowledgeFolders.map((folder) => [folder, graph?.nodes.filter((node) => node.folder === folder).length ?? 0])), [graph]);
   const currentNote = note && note.id === selectedId ? note : null;
 
@@ -241,7 +249,7 @@ export function KnowledgeGraphView({ backendUrl, getAccessToken, initialQuery = 
             ))}
             {graph.edges.length === 0 && <li className="knowledge-sample">No links.</li>}
           </ul>
-          {selected && (
+          {selected && !onOpenNote && (
             <aside className="knowledge-note luminous-glass" aria-labelledby={`${ids}-note`}>
               <header className="knowledge-note-heading">
                 <h3 id={`${ids}-note`}><span className="knowledge-dot" data-folder={selected.folder} aria-hidden="true" />{selected.title}</h3>
@@ -249,7 +257,7 @@ export function KnowledgeGraphView({ backendUrl, getAccessToken, initialQuery = 
                   <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="m6 6 12 12M18 6 6 18" /></svg>
                 </button>
               </header>
-              <NoteReader key={selected.id}>
+              <KnowledgeNoteReader key={selected.id}>
                 <p className="knowledge-note-meta">{selected.folder} · {selected.path}</p>
                 {!currentNote ? <Loader variant="lines" label="Opening the note…" />
                     : currentNote.error ? <p role="alert">{currentNote.error}</p>
@@ -266,11 +274,12 @@ export function KnowledgeGraphView({ backendUrl, getAccessToken, initialQuery = 
                     </ul>
                   </>
                 )}
-              </NoteReader>
+              </KnowledgeNoteReader>
             </aside>
           )}
         </>
       )}
+      {children}
     </section>
   );
 }

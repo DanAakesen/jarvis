@@ -8,6 +8,12 @@ export interface KnowledgeGraph { nodes: KnowledgeNode[]; edges: KnowledgeEdge[]
 export interface KnowledgeNote { id: string; title: string; folder: string; content: string; updatedAt: string | null; githubUrl: string | null }
 
 export const knowledgeFolders: readonly KnowledgeFolder[] = ['People', 'Work', 'Personal', 'General'];
+export function connectedNotes(graph: KnowledgeGraph | null, id: string | null): KnowledgeNode[] {
+  if (!graph || !id) return [];
+  const nodes = new Map(graph.nodes.map(node => [node.id, node]));
+  return graph.edges.flatMap(edge => edge.source === id ? [edge.target] : edge.target === id ? [edge.source] : [])
+    .filter((value, index, list) => list.indexOf(value) === index).slice(0, 12).flatMap(value => nodes.get(value) ?? []);
+}
 const maxNodes = 4000;
 const maxEdges = 20000;
 const unavailableStatuses = new Set([404, 405, 501]);
@@ -87,7 +93,7 @@ export function vaultMemoryId(path: string) {
   return `vault_${btoa(binary).replace(/\+/gu, '-').replace(/\//gu, '_').replace(/=+$/u, '')}`;
 }
 
-function withoutFrontMatter(content: string) {
+export function withoutFrontMatter(content: string) {
   let start = 0;
   while (start < content.length) {
     while (start < content.length && /\s/u.test(content[start]!)) start += 1;

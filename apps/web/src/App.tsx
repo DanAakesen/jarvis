@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { flushSync } from 'react-dom';
-import { Link, NavLink, Outlet, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
+import { Link, Navigate, NavLink, Outlet, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import type { HtmlArtifactFrame, JarvisActivityEvent, WorkspaceCommand, WorkspaceSnapshot, WorkspaceView as LookingAtView, WorkspaceViewLocation } from '@jarvis/contracts';
 import type { PublicConfig } from '../config/public-config';
 import { useJarvisActivity } from './activity-context';
@@ -35,7 +35,7 @@ import { useGlassLight } from './glass-light';
 import { TaskDetailPage } from './factory/TaskDetailPage';
 import { InputOrbCore } from './InputOrbCore';
 import { TaskWindowsContext, readTaskWindows, saveTaskWindows, taskWindowViewId, type TaskWindowEntry } from './task-windows';
-import { pageForPath, readConversationCommand, readNavigateCommand, resolveNavigation, revealWhenReady, useVisibleSettingsSection, type NavigateRequest } from './page-navigation';
+import { NavigationGuardContext, pageForPath, readConversationCommand, readNavigateCommand, resolveNavigation, revealWhenReady, useVisibleSettingsSection, type NavigateRequest } from './page-navigation';
 import { FolioPane } from './Folio';
 import { CollapsibleSection } from './CollapsibleSection';
 import { MobileCaption, MobileMenu } from './MobileShell';
@@ -195,10 +195,12 @@ function ShellLayout({ signedIn, config, session, camera, screenShare }: {
   const openTaskRef = useRef<(taskId: string) => void>(() => {});
   const conversationWindowRef = useRef<{ open: boolean; setOpen: (open: boolean) => boolean } | null>(null);
   const cancelReveal = useRef<() => void>(() => {});
+  const navigationGuard = useRef(false);
   const navigateTo = useCallback((request: NavigateRequest) => {
     const target = resolveNavigation(request);
     if (!target.ok) return false;
     if (target.pane === 'folio') { setFolioOpen(true); return true; }
+    if (pathnameRef.current !== target.path && navigationGuard.current) return false;
     closePagePanels();
     if (pathnameRef.current !== target.path) navigate(target.path);
     if (target.taskId) openTaskRef.current(target.taskId);
@@ -544,7 +546,7 @@ function ShellLayout({ signedIn, config, session, camera, screenShare }: {
           </NavLink>
           {areas.map((area) => (
             <NavLink key={area.id} className="rail-link" to={`/${area.path}`} aria-label={area.label} onClick={() => { setFolioOpen(false); setNavigationOpen(area.navigation.length > 1); }}>
-              <ShellIcon name={area.id === 'factory' ? 'factory' : area.id === 'knowledge' ? 'knowledge' : 'usage'} /><span className="visually-hidden">{area.label}</span>
+              <ShellIcon name={area.id === 'factory' ? 'factory' : area.id === 'notes' ? 'knowledge' : 'usage'} /><span className="visually-hidden">{area.label}</span>
             </NavLink>
           ))}
           <button className={`rail-link rail-folio${folioOpen ? ' active' : ''}`} type="button" aria-label="Folio" aria-pressed={folioOpen}
@@ -646,7 +648,9 @@ function ShellLayout({ signedIn, config, session, camera, screenShare }: {
           <SessionCommandRegistryContext.Provider value={sessionCommands}>
           <VoiceWorkspaceContext.Provider value={{ onVoiceActiveChange }}>
             <ConversationWindowContext.Provider value={conversationWindow}>
-              <Outlet />
+              <NavigationGuardContext.Provider value={navigationGuard}>
+                <Outlet />
+              </NavigationGuardContext.Provider>
               {/* The chat stays mounted on every page, so a conversation or voice session survives navigation. */}
               {signedIn && session.profile && (
                 <JarvisPage
@@ -795,6 +799,7 @@ export function App({ config = defaultConfig }: { config?: PublicConfig }) {
                 } />
               ))}
               <Route path="settings" element={<SettingsRoute config={config} session={session} />} />
+              <Route path="knowledge/*" element={<Navigate to="/notes" replace />} />
             </Route>
             <Route path="*" element={<NotFoundPage />} />
           </Route>

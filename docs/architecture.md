@@ -33,6 +33,24 @@ Jarvis is one backend with a shared core and one module per area, a static web a
 
 ## Web skeleton and configuration
 
+- P9-77 mounts `NotesArea` at `/notes`, redirecting `/knowledge/*` with replace.
+  The existing `KnowledgeGraphView` remains the default, with its search and
+  section filters. Notes owns the transient Markdown draft, preview and save
+  state in a floating reader. An optional graph selection callback opens the
+  editable reader instead of fetching the read-only memory representation;
+  generated graph windows retain their original reader. The Notes popup is
+  body-portalled, like existing modals, so page transforms and short-phone
+  document scrolling cannot move its close control or cover the dock.
+  Create new chooses
+  a section/title and opens a draft without writing until Save. Bootstrap uses React Router's data
+  router so `useBlocker` can guard links and browser history. A shell-owned
+  navigation-guard ref refuses Jarvis route changes immediately while a draft
+  is dirty or saving, rather than acknowledging a blocked move. `beforeunload`
+  protects reload/external navigation. Chat, voice and the stage keep their
+  existing mounted owners. The #685 navigation contract includes canonical
+  `notes`, which this page publishes in snapshots. `knowledge` remains accepted
+  for compatibility; `show_knowledge` keeps its existing graph renderer.
+
 - P9-73 enables `viewport-fit=cover` and serves `/manifest.webmanifest` with
   standalone display, the existing SVG icon and dark launch colours. Phone-only
   `--phone-dock-bottom` is shared at the root so body-portalled toasts inherit it;
@@ -1633,8 +1651,22 @@ health details). The default commit message is `jarvis: edited in Notes`;
 write logs contain only outcome and folder, never note content. A successful
 write invalidates the graph cache and queues index synchronization after any
 existing sync; the signed `master` push webhook also synchronizes the index.
-Note content is untrusted data, never instructions. No migration is needed;
-the Notes UI is implemented separately.
+Note content is untrusted data, never instructions. No migration is needed.
+
+P9-77 implements the Notes web client locally against these routes. Read/write
+responses, paths, UTF-8 size, revision tokens and GitHub links are validated;
+requests have a 60-second deadline including token acquisition. Reads are
+cancellable and stale responses cannot replace a newer selection.
+Source and writes preserve Markdown exactly; preview reuses `MarkdownContent`.
+A successful write returns a commit SHA, not the Contents SHA for another
+edit, so the client rereads the note before permitting more edits. A changed
+post-save revision enters comparison; a confirmed write with failed reread is
+reported as saved but read-only until reload. Network/5xx or malformed write
+responses retain a read-only uncertain draft, never claim success and never
+replay the write automatically. 409 retains the draft and permits reload with
+discard confirmation, or explicit adoption of the latest SHA followed by a
+separate Save. Failed note switches/reloads keep the previous draft until a
+new read succeeds. No draft storage, package, permission or migration is added.
 
 P7-42 adds a Dan-only Settings API; there are no `apps/web` changes. `GET
 /memory` returns durable SQL memories followed by indexed vault notes, with

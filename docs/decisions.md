@@ -1214,3 +1214,57 @@ regression; live acceptance is pending.
 - **Evidence:** offline Vitest tests; Chromium at 1280×900 and 390×844 with
   stubbed auth and API. Live backend, Blob and provider acceptance remain pending.
 - **Status:** implemented offline.
+
+## 2026-10-10: Notes source editor (P9-77, #683)
+
+- **Decision (Dan):** the local UI session builds Notes after #626 merges.
+  Rename the Knowledge page to Notes; use plain Markdown source with a Preview
+  toggle and `knowledge` as an alias. Dan subsequently rejected the list-first
+  interpretation: the normal graph is the default, clicking a note opens the
+  familiar editable popup, and Create new in the corner chooses a section
+  before writing. There is no Notes/Graph view switch.
+- **Implementation:** reuse graph search, section filters and connected notes.
+  Open exact source through the Notes API, retaining the original floating
+  reader treatment with Edit Markdown, Preview and explicit Save. Section/title
+  creation opens a draft in that popup. Source preserves whitespace and front
+  matter; preview reuses the safe renderer and hides reader properties.
+- **Save safety:** guard dirty/saving navigation and duplicate saves. Retain
+  drafts on failed reads or writes; show 409 comparison rather than overwriting.
+  Explicitly adopting the latest Contents SHA still requires a separate Save.
+  Reread after a confirmed write because its commit SHA is not an edit token.
+  Uncertain writes remain read-only until checked and are never auto-replayed.
+- **Routing:** use React Router's data router for the real links/history
+  blocker. Refuse Jarvis page changes immediately while dirty/saving so the
+  workspace broker does not receive false success.
+- **Previous list-first evidence (not acceptance of the correction):**
+  typecheck, focused ESLint, production build and 130 Notes/router/graph tests passed.
+  The isolated full web run passed 513 tests; three unchanged date/decimal
+  expectations fail under this machine's en-DK locale. Chromium fixtures cover
+  1440/1280 px desktop, 390/320 px phones and 844x390 touch landscape in
+  light/dark, including reduced motion, keyboard focus, history/link/reload
+  guards, saves/conflicts, visible Graph controls and editor scroll clearance.
+  WebGL-disabled workflow fixtures do not verify hardware graph/room motion
+  or a physical phone keyboard.
+- **Contract integration (11 October):** merged #685 (`9e8d834b`) into the UI
+  checkout and switched `/notes` snapshots to canonical `notes`, including
+  after legacy-address redirects. Keep `knowledge` accepted and
+  `show_knowledge` unchanged. Command/snapshot guard smoke and the 130 focused
+  web tests pass; the full contract suite is unavailable locally because
+  Fastify is missing. Backend deployment is not verified here.
+- **Graph-first evidence:** typecheck, focused lint/build and the 131-test
+  Notes/router/graph integration run pass. All 18 Notes workflow cases pass
+  after adding keyboard-close and latest-draft star-selection guards. Chromium
+  fixtures cover light/dark desktop, 320 px phone and 844x390 reduced-motion
+  touch landscape, with intercepted saves/creation/conflicts. The real
+  desktop graph canvas survives editing; portalled popups clear the dock and
+  retain reachable close controls when short-phone documents scroll.
+  The shared signed-in browser confirms the normal graph is the default.
+- **Status:** Dan approved shipping the graph-first correction on 11 October;
+  current main is integrated. The exact Notes-only release tree passes
+  typecheck, focused lint, build and 132 Notes/router/graph tests. Chromium
+  fixtures pass at 1440x1000 dark and 1280x900 light desktop, 320x700 light
+  phone and 844x390 dark reduced-motion touch landscape. Initial concurrent
+  test timeout and mobile fixture failures passed on isolated reruns.
+  CI/deployment, post-deploy review and physical-phone keyboard acceptance remain.
+  Fixture checks use synthetic sign-in, notes and intercepted writes, not
+  live vault edits.
