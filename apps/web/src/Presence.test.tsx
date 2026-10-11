@@ -17,9 +17,20 @@ describe('presence modes', () => {
     vi.stubGlobal('fetch', fetchMock);
     render(<PresenceChip backendUrl="https://api.example.com" getAccessToken={getAccessToken} />);
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Presence: Present. Change mode' }));
+    const trigger = await screen.findByRole('button', { name: 'Presence: Present. Change mode' });
+    expect(trigger.getAttribute('aria-expanded')).toBe('false');
+    fireEvent.click(trigger);
+    expect(trigger.getAttribute('aria-expanded')).toBe('true');
+    expect(screen.getByRole('group', { name: 'Presence mode' }).id).toBe(trigger.getAttribute('aria-controls'));
+    expect(screen.getByRole('button', { name: 'Present' }).getAttribute('aria-pressed')).toBe('true');
+    expect(screen.getByRole('button', { name: 'On the move' }).getAttribute('aria-pressed')).toBe('false');
+    fireEvent.keyDown(trigger, { key: 'Escape' });
+    expect(trigger.getAttribute('aria-expanded')).toBe('false');
+    expect(document.activeElement).toBe(trigger);
+    fireEvent.click(trigger);
     fireEvent.click(screen.getByRole('button', { name: 'On the move' }));
     expect(await screen.findByRole('button', { name: 'Presence: On the move. Change mode' })).not.toBeNull();
+    expect(trigger.getAttribute('aria-expanded')).toBe('false');
     expect(fetchMock).toHaveBeenCalledWith('https://api.example.com/presence', expect.objectContaining({ method: 'PUT', body: JSON.stringify({ mode: 'on_the_move' }) }));
 
     act(() => publishPresenceMode('away'));

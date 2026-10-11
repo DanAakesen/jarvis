@@ -32,6 +32,12 @@ import { coreModule } from './core/index.js';
 import { conversationModule } from './core/conversation.js';
 import { createJevReflexClassifier } from './core/reflex.js';
 import {
+  createCachedDecisionProviderReader,
+  createDecisionResolver,
+  microsoftDecisionDeployment,
+  microsoftDecisionScope,
+} from './core/decision-provider.js';
+import {
   createBrowserAgent,
   createBrowserAgentModule,
   createFoundryBrowserTextModel,
@@ -107,6 +113,8 @@ import { createPhoneCallModule } from './phone/calls.js';
 import { parsePhoneAllowlist } from './phone/caller.js';
 import { createImageGenerationModule } from './core/image-generation.js';
 import { WorkspaceArtifactStore } from './database/workspace-artifact-store.js';
+import { attachmentRetentionDays, ConversationAttachmentStore } from './database/conversation-attachment-store.js';
+import { startConversationAttachmentCleanupJob } from './core/conversation-attachment-cleanup.js';
 import { WorkspaceHtmlArtifactStore } from './database/workspace-html-artifact-store.js';
 import { createHtmlViewModule } from './core/html-view.js';
 import { createFolioModule } from './core/folio.js';
@@ -295,15 +303,44 @@ try {
       .finally(() => { jevApiKeyRequest = undefined; });
     return jevApiKeyRequest;
   };
-  const reflexClassifier = createJevReflexClassifier(getJevApiKey);
-  const pcActPlanner = jevSecretClient ? createJevPcActPlanner(getJevApiKey) : undefined;
+  const decisionHosts = [config.foundryEndpoints?.admin, config.foundryEndpoints?.runtime, config.foundryProjectEndpoint]
+    .flatMap((value) => {
+      try { return value ? [new URL(value).origin] : []; } catch { return []; }
+    })
+    .filter((origin, index, all) => all.indexOf(origin) === index);
+  let decisionUnavailableLoggedAt = 0;
+  const decisions = createDecisionResolver({
+    getProvider: createCachedDecisionProviderReader(async () =>
+      settingsStore ? (await readSettings(settingsStore)).decisions.provider : undefined),
+    getJevApiKey,
+    ...(credential && decisionHosts.length > 0 ? {
+      microsoft: {
+        hosts: decisionHosts,
+        deployment: microsoftDecisionDeployment,
+        getToken: async (signal?: AbortSignal) => {
+          const token = await credential.getToken(microsoftDecisionScope, signal ? { abortSignal: signal } : {});
+          if (!token) throw new Error('Foundry decision identity unavailable');
+          return token.token;
+        },
+      },
+    } : {}),
+    onUnavailable: (provider) => {
+      const now = Date.now();
+      if (now - decisionUnavailableLoggedAt < 60_000) return;
+      decisionUnavailableLoggedAt = now;
+      logger.warn({ provider }, 'decision.provider_unavailable');
+    },
+  });
+  const reflexClassifier = createJevReflexClassifier(decisions.resolve, decisions.fetch);
+  const decisionsAvailable = Boolean(jevSecretClient || (credential && decisionHosts.length > 0));
+  const pcActPlanner = decisionsAvailable ? createJevPcActPlanner(decisions.resolve, decisions.fetch) : undefined;
   const recipeStore = database ? createRecipeStore(database.pool) : undefined;
-  const recipes = recipeStore && jevSecretClient
-    ? { store: recipeStore, planner: createJevRecipePlanner(getJevApiKey) }
+  const recipes = recipeStore && decisionsAvailable
+    ? { store: recipeStore, planner: createJevRecipePlanner(decisions.resolve, decisions.fetch) }
     : undefined;
-  const browserAgent = jevSecretClient && config.foundryProjectEndpoint && credential
+  const browserAgent = decisionsAvailable && config.foundryProjectEndpoint && credential
     ? createBrowserAgent(
-      createJevBrowserPlanner(getJevApiKey),
+      createJevBrowserPlanner(decisions.resolve, decisions.fetch),
       createFoundryBrowserTextModel(config.foundryProjectEndpoint, async (scope, signal) => {
         const token = await credential.getToken(scope, { abortSignal: signal });
         if (!token) throw new Error('Foundry browser identity unavailable');
@@ -420,6 +457,16 @@ try {
       serviceClient: workspaceArtifactServiceClient,
       container: workspaceArtifactServiceClient.getContainerClient('artifacts'),
       storageAccount: archiveStorageAccount,
+    })
+    : undefined;
+  const conversationAttachments = database && archiveStorageAccount &&
+    workspaceArtifactServiceClient && workspaceArtifacts
+    ? new ConversationAttachmentStore({
+      pool: database.pool,
+      container: workspaceArtifactServiceClient.getContainerClient('artifacts'),
+      storageAccount: archiveStorageAccount,
+      artifacts: workspaceArtifacts,
+      retentionDays: attachmentRetentionDays(),
     })
     : undefined;
   const clientFor = (agentName: string) => {
@@ -588,6 +635,29 @@ try {
       if (!token) throw new Error('Foundry screen identity unavailable');
       return token.token;
     })
+    : undefined;
+  const attachmentVision = database && settingsStore && screenVisionModel && usageStore?.recordFoundryUsage
+    ? async (image: Buffer, contentType: string, signal: AbortSignal) => {
+      const settings = await readSettings(settingsStore, await modelCatalogue.read());
+      const role = settings.roles.vision;
+      const result = await screenVisionModel.describe({
+        image,
+        contentType: contentType as 'image/jpeg' | 'image/png' | 'image/webp',
+        model: role.model,
+        reasoningEffort: role.reasoningEffort,
+        signal,
+      });
+      const description = result.description.trim().slice(0, 5_000);
+      if (!description) throw new Error('Vision returned an empty description');
+      await usageStore.recordFoundryUsage!({
+        role: 'vision',
+        model: role.model,
+        inputTokens: result.inputTokens,
+        outputTokens: result.outputTokens,
+        eventId: randomUUID(),
+      });
+      return description;
+    }
     : undefined;
   const pcBridgeModule = createPcBridgeModule({
     ...(screenVisionModel ? { pcActVisionModel: screenVisionModel } : {}),
@@ -929,12 +999,14 @@ try {
   }, deployedCommit && /^[\da-f]{7,64}$/iu.test(deployedCommit) ? deployedCommit.toLowerCase() : undefined);
   const app = buildApp(config, logger, {
     ...(workspaceHtmlArtifactStore ? { workspaceHtmlArtifacts: workspaceHtmlArtifactStore } : {}),
+    ...(conversationAttachments ? { conversationAttachments } : {}),
+    ...(attachmentVision ? { attachmentVision } : {}),
     modules,
     systemStatusReader,
     systemSmokeProbes,
     modelCatalogue,
     ...(modelDeploymentWorkflow ? { modelDeploymentWorkflow } : {}),
-    ...(jevSecretClient ? { reflexClassifier } : {}),
+    ...(decisionsAvailable ? { reflexClassifier } : {}),
     ...(browserAgent ? { browserAgent } : {}),
     ...(database ? { databaseStatus: () => database.isWaking() } : {}),
     ...(releaseViewStore ? { releaseViewStore } : {}),
@@ -978,6 +1050,16 @@ try {
             await job.fail('Re-embedding failed').catch(() => undefined);
             logger.warn(safeErrorFields(error), 'memory.embedding_backfill_failed');
           });
+          if (conversationAttachments) {
+            let stopAttachmentCleanup: (() => void) | undefined;
+            app.addHook('onClose', async () => { stopAttachmentCleanup?.(); });
+            app.addHook('onReady', async () => {
+              stopAttachmentCleanup = startConversationAttachmentCleanupJob(
+                conversationAttachments,
+                () => logger.warn('conversation_attachments.cleanup_failed'),
+              );
+            });
+          }
         activeEmbeddingReindex = { controller, pending };
         const clearActive = () => {
           if (activeEmbeddingReindex?.controller === controller) activeEmbeddingReindex = undefined;

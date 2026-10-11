@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import Fastify, { LogController } from 'fastify';
 import cors from '@fastify/cors';
+import multipart from '@fastify/multipart';
 import type { Logger } from 'pino';
 import type { SystemSmokeCheckId } from '@jarvis/contracts';
 import type { BackgroundJobEvent, JarvisActivityEvent, JarvisVoiceWakeEvent } from '@jarvis/contracts';
@@ -30,6 +31,7 @@ import type { SettingsStore } from './core/settings.js';
 import { fallbackModelCatalogue, type ModelCatalogueReader } from './core/model-catalog.js';
 import type { NowFeedEventHub, NowFeedStore, NowFeedUpdate } from './core/now.js';
 import type { CredentialStatusStore } from './credentials/credential-status.js';
+import { SystemHealthDiagnostics } from './core/system-health.js';
 import type { runCodexRenewalOnce } from './credentials/codex-renewal.js';
 import type { UsageStore } from './core/usage.js';
 import type { BackgroundJobStore } from './database/background-job-store.js';
@@ -44,6 +46,7 @@ import type { GitHubIssueClient } from './github/issues.js';
 import { recordIssueTaskProgress } from './factory/issues.js';
 import { WorkspaceCommandBroker } from './core/workspace-commands.js';
 import type { WorkspaceHtmlArtifactStore } from './database/workspace-html-artifact-store.js';
+import type { ConversationAttachmentStore } from './database/conversation-attachment-store.js';
 import { createTaskStatusNotificationHandler } from './factory/task-status-notifications.js';
 import type { ModelDeploymentWorkflow } from './core/model-deployments.js';
 import {
@@ -80,6 +83,10 @@ export interface BuildAppOptions {
   readonly nowEventHub?: NowFeedEventHub;
   readonly jarvisActivityHub?: JarvisActivityHub;
   readonly conversationStore?: ConversationStore;
+  readonly conversationAttachments?: ConversationAttachmentStore;
+  readonly attachmentVision?: {
+    (image: Buffer, contentType: string, signal: AbortSignal): Promise<string>;
+  };
   readonly onConversationSessionEnded?: (sessionId: string) => void;
   readonly sandboxHeartbeat?: SandboxHeartbeat;
   readonly conversationAgent?: ConversationAgent;
@@ -124,6 +131,8 @@ declare module 'fastify' {
     nowEventHub: NowFeedEventHub;
     jarvisActivityHub: JarvisActivityHub;
     conversationStore: ConversationStore | null;
+    conversationAttachments: ConversationAttachmentStore | null;
+    attachmentVision: BuildAppOptions['attachmentVision'] | null;
     onConversationSessionEnded: (sessionId: string) => void;
     sandboxHeartbeat: SandboxHeartbeat | null;
     conversationAgent: ConversationAgent | null;
@@ -138,6 +147,7 @@ declare module 'fastify' {
     backgroundJobs: BackgroundJobRegistry;
     onEmbeddingModelChanged: ((jobs: BackgroundJobRegistry) => Promise<void>) | null;
     systemStatusReader: SystemStatusReader;
+    systemHealthDiagnostics: SystemHealthDiagnostics;
     systemSmokeReader: SystemSmokeReader;
   }
 }
@@ -173,6 +183,9 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
     credentials: false,
     strictPreflight: true,
   });
+  app.register(multipart, {
+    limits: { files: 1, fields: 0, parts: 1, fileSize: 20 * 1024 * 1024 },
+  });
   app.addHook('onResponse', async (request, reply) => {
     request.log.info({
       method: request.method,
@@ -184,6 +197,7 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
   const systemStatusReader = options.systemStatusReader ??
     createSystemStatusReader({}, process.env.JARVIS_DEPLOYED_COMMIT);
   app.decorate('systemStatusReader', systemStatusReader);
+  app.decorate('systemHealthDiagnostics', new SystemHealthDiagnostics());
   app.decorate('systemSmokeReader', createSystemSmokeReader(
     systemStatusReader,
     options.systemSmokeProbes ?? {},
@@ -244,6 +258,8 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
   app.decorate('renewCodexCredential', options.renewCodexCredential ?? null);
   app.decorate('usageStore', options.usageStore ?? null);
   app.decorate('conversationStore', options.conversationStore ?? null);
+  app.decorate('conversationAttachments', options.conversationAttachments ?? null);
+  app.decorate('attachmentVision', options.attachmentVision ?? null);
   app.decorate('sandboxHeartbeat', options.sandboxHeartbeat ?? null);
   if (options.sandboxHeartbeat) {
     app.addHook('onClose', async () => { await options.sandboxHeartbeat!.stop(); });

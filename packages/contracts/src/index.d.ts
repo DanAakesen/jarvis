@@ -375,7 +375,7 @@ export function isWorkspaceView(value: unknown): value is WorkspaceView;
 export function isWorkspaceSnapshot(value: unknown): value is WorkspaceSnapshot;
 
 export const workspaceNavigationPages: readonly [
-  'home', 'factory', 'settings', 'usage', 'knowledge', 'folio', 'status',
+  'home', 'factory', 'settings', 'usage', 'notes', 'knowledge', 'folio', 'status',
 ];
 export type WorkspaceNavigationPage = typeof workspaceNavigationPages[number];
 export const workspaceSettingsSections: readonly [
@@ -752,6 +752,17 @@ export interface SystemStatus {
   entries: readonly SystemStatusEntry[];
   smoke?: SystemSmokeStatus;
 }
+export interface SystemHealthComponent {
+  id: string;
+  status: SystemStatusValue;
+  detail: string;
+  checkedAt: string | null;
+  recovery: { tool: 'retry_job' | 'renew_credential' | 'get_deployment_status' | 'get_work_status';
+    description: string }[];
+}
+export interface SystemHealth {
+  components: SystemHealthComponent[];
+}
 export interface WorkStatusInput {
   issueNumber?: number;
   taskId?: string;
@@ -772,3 +783,8 @@ export interface WorkStatus {
   warnings: string[];
   partial: boolean;
 }
+export type IssueAttachmentInput = {
+  attachmentIds?: string[];
+  publish?: 'description' | 'public';
+};
+export const issueAttachmentFields: Readonly<Record<'attachmentIds' | 'publish', object>>;

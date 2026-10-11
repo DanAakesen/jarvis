@@ -23,6 +23,13 @@ export const workStatusSchema = {
 
 export async function getWorkStatus(app: FastifyInstance, input: WorkStatusInput,
   signal: AbortSignal = AbortSignal.timeout(60_000)): Promise<WorkStatus> {
+  const status = await readWorkStatus(app, input, signal);
+  app.systemHealthDiagnostics.recordWork(status);
+  return status;
+}
+
+async function readWorkStatus(app: FastifyInstance, input: WorkStatusInput,
+  signal: AbortSignal = AbortSignal.timeout(60_000)): Promise<WorkStatus> {
   signal = AbortSignal.any([signal, AbortSignal.timeout(60_000)]);
   const warnings: string[] = [];
   const result: WorkStatus = { verdict: 'needs_attention', project: null, issue: null, tasks: [],

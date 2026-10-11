@@ -80,7 +80,7 @@ describe('set_theme tool', () => {
     const refused = await unavailable.app.inject({
       method: 'POST', url: '/tools/set_theme', headers, payload: { tokens: { appearance: 'dark' } },
     });
-    expect(refused.json()).toMatchObject({ outcome: 'refused', result: { refused: 'Theme preferences are unavailable.' } });
+    expect(refused.json()).toMatchObject({ outcome: 'refused', result: { refused: 'Settings are unavailable.' } });
     expect(unavailable.record).toHaveBeenCalledWith(expect.objectContaining({ outcome: 'refused' }));
 
     const failure = fixture(createStore(async () => { throw new Error('private SQL detail'); }));
@@ -92,18 +92,61 @@ describe('set_theme tool', () => {
     expect(failure.record).toHaveBeenCalledWith(expect.objectContaining({ outcome: 'error' }));
   });
 
-  it('rejects invalid tokens before recording or writing them', async () => {
-    const write = vi.fn<SettingsStore['write']>(async () => {});
-    const { app, record } = fixture(createStore(write));
-    const response = await app.inject({
+  it('clears a colour with null and resets all colour overrides', async () => {
+    const store = createStore();
+    const { app } = fixture(store, async () => ({
+      objectId: config.auth.ownerObjectId,
+      tenantId: config.auth.tenantId,
+      displayName: 'Dan',
+    }));
+    const set = await app.inject({
       method: 'POST',
       url: '/tools/set_theme',
       headers,
-      payload: { tokens: { appearance: 'dark', accent: 'red', background: 'unregistered' } },
+      payload: { tokens: { accent: '#a1b2c3', 'accent-secondary': '#123456', 'surface-tint': '#abcdef' } },
+    });
+    expect(set.json()).toMatchObject({ outcome: 'ok' });
+
+    const clear = await app.inject({
+      method: 'POST',
+      url: '/tools/set_theme',
+      headers,
+      payload: { tokens: { accent: null } },
+    });
+    expect(clear.json()).toMatchObject({ outcome: 'ok', result: { tokens: { accent: null } } });
+    const partial = await app.inject({ url: '/settings', headers });
+    expect(partial.json().settings.appearance).not.toHaveProperty('accent');
+    expect(partial.json().settings.appearance).toMatchObject({
+      'accent-secondary': '#123456',
+      'surface-tint': '#abcdef',
     });
 
-    expect(response.statusCode).toBe(200);
-    expect(response.json()).toMatchObject({ outcome: 'refused', result: { refused: expect.stringContaining('Invalid arguments:') } });
+    const reset = await app.inject({
+      method: 'POST',
+      url: '/tools/set_theme',
+      headers,
+      payload: { tokens: { reset: true } },
+    });
+    expect(reset.json()).toMatchObject({
+      outcome: 'ok',
+      result: { tokens: { reset: true, accent: null, 'accent-secondary': null, 'surface-tint': null } },
+    });
+    const cleared = await app.inject({ url: '/settings', headers });
+    for (const key of ['accent', 'accent-secondary', 'surface-tint']) {
+      expect(cleared.json().settings.appearance).not.toHaveProperty(key);
+    }
+  });
+
+  it('rejects invalid hex and null for non-clearable appearance tokens', async () => {
+    const write = vi.fn<SettingsStore['write']>(async () => {});
+    const { app, record } = fixture(createStore(write));
+    for (const tokens of [{ accent: 'red' }, { appearance: null }, { background: null }, { radius: null }]) {
+      const response = await app.inject({
+        method: 'POST', url: '/tools/set_theme', headers, payload: { tokens },
+      });
+      expect(response.statusCode).toBe(200);
+      expect(response.json(), JSON.stringify(tokens)).toMatchObject({ outcome: 'refused' });
+    }
     expect(write).not.toHaveBeenCalled();
     expect(record).not.toHaveBeenCalled();
   });

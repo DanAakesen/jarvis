@@ -188,6 +188,7 @@ describe('SQL conversation store', () => {
           interrupted: false,
           at: new Date('2026-10-03T12:01:00Z'),
           toolCalls: [{ id: '90', tool: 'factory_create_task', outcome: 'ok', taskId: '77' }],
+          attachments: [],
         },
         {
           id: '12',
@@ -207,6 +208,7 @@ describe('SQL conversation store', () => {
               artifactId: '7b96c6a9-9f80-4a8b-8a73-51517fe37512',
             },
           ],
+          attachments: [],
         },
       ],
       nextCursor: '11',

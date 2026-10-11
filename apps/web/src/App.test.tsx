@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, useNavigate } from 'react-router-dom';
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from './App';
@@ -95,6 +95,14 @@ beforeEach(() => {
 
 const mediaDevicesDescriptor = Object.getOwnPropertyDescriptor(navigator, 'mediaDevices');
 
+function HistoryControls() {
+  const navigate = useNavigate();
+  return <>
+    <button onClick={() => navigate(-1)}>Previous page</button>
+    <button onClick={() => navigate(1)}>Next page</button>
+  </>;
+}
+
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
@@ -175,6 +183,9 @@ describe('Jarvis routes', () => {
     const button = await screen.findByRole('button', { name: 'Sign in with Microsoft' });
     expect(greeting.textContent).toBe(getSignInGreeting());
     expect(button.textContent).toBe('Sign in');
+    expect(button.classList.contains('luminous-glass')).toBe(true);
+    expect(button.classList.contains('primary-button')).toBe(false);
+    expect(button.querySelector('.signin-mark')).toBeNull();
     expect(screen.queryByRole('alert')).toBeNull();
     expect(screen.queryByText('Not signed in.')).toBeNull();
     expect(screen.queryByText(/Your personal AI platform/)).toBeNull();
@@ -790,6 +801,47 @@ describe('App shell', () => {
     expect(screen.getByRole('link', { name: 'Settings' }).getAttribute('href')).toBe('/settings');
   });
 
+  it('marks only the current desktop area as the page', async () => {
+    const user = userEvent.setup();
+    await renderSignedIn();
+    const areas = screen.getByRole('navigation', { name: 'Areas' });
+    const home = within(areas).getByRole('link', { name: 'Conversation' });
+    const usage = within(areas).getByRole('link', { name: 'Usage' });
+    expect(home.getAttribute('aria-current')).toBe('page');
+    expect(usage.hasAttribute('aria-current')).toBe(false);
+    await user.click(usage);
+    expect(usage.getAttribute('aria-current')).toBe('page');
+    expect(home.hasAttribute('aria-current')).toBe(false);
+    expect(areas.querySelectorAll('[aria-current="page"]')).toHaveLength(1);
+  });
+
+  it('keeps phone menu expansion and current page in sync after navigation and Escape', async () => {
+    vi.stubGlobal('matchMedia', vi.fn((query: string) => ({
+      matches: query.includes('max-width: 700px'),
+      media: query, addEventListener: vi.fn(), removeEventListener: vi.fn(),
+    })));
+    const user = userEvent.setup();
+    await renderSignedIn();
+    const menu = screen.getByRole('button', { name: 'Menu' });
+    expect(menu.getAttribute('aria-expanded')).toBe('false');
+    expect(menu.getAttribute('aria-controls')).toBe('mobile-menu');
+    await user.click(menu);
+    expect(menu.getAttribute('aria-expanded')).toBe('true');
+    const sheet = screen.getByRole('dialog', { name: 'Go to' });
+    const home = within(sheet).getByRole('link', { name: 'Jarvis' });
+    const usage = within(sheet).getByRole('link', { name: 'Usage' });
+    expect(home.getAttribute('aria-current')).toBe('page');
+    expect(usage.hasAttribute('aria-current')).toBe(false);
+    await user.click(usage);
+    expect(menu.getAttribute('aria-expanded')).toBe('false');
+    await user.click(menu);
+    expect(usage.getAttribute('aria-current')).toBe('page');
+    expect(home.hasAttribute('aria-current')).toBe(false);
+    expect(sheet.querySelectorAll('[aria-current="page"]')).toHaveLength(1);
+    await user.keyboard('{Escape}');
+    expect(menu.getAttribute('aria-expanded')).toBe('false');
+  });
+
   it('shows only the brand in the top bar, with open windows as tabs beside it and no breadcrumb', async () => {
     const user = userEvent.setup();
     await renderSignedIn();
@@ -839,6 +891,93 @@ describe('App shell', () => {
     }
   });
 
+  it.each([
+    ['Software Factory', '/'],
+    ['Knowledge', '/'],
+    ['Usage', '/'],
+    ['Usage', '/usage'],
+    ['Conversation', '/usage'],
+    ['Conversation', '/'],
+    ['Jarvis home', '/'],
+    ['Settings', '/'],
+  ])('closes the Folio when selecting %s from %s on desktop', async (name, path) => {
+    const user = userEvent.setup();
+    await renderSignedIn(path);
+    const shell = document.querySelector('.app-shell')!;
+    const folio = screen.getByRole('button', { name: 'Folio' });
+    await user.click(folio);
+    expect(shell.getAttribute('data-folio-open')).toBe('true');
+    await user.click(screen.getByRole('link', { name }));
+    expect(shell.getAttribute('data-folio-open')).toBe('false');
+    expect(shell.getAttribute('data-navigation-open')).toBe('false');
+    expect(folio.getAttribute('aria-pressed')).toBe('false');
+  });
+
+  it('closes the Folio when a phone menu selects the same page or a different page', async () => {
+    vi.stubGlobal('matchMedia', vi.fn((query: string) => ({
+      matches: query.includes('max-width: 700px'),
+      media: query, addEventListener: vi.fn(), removeEventListener: vi.fn(),
+    })));
+    const user = userEvent.setup();
+    await renderSignedIn();
+    const menu = screen.getByRole('button', { name: 'Menu' });
+    const shell = document.querySelector('.app-shell')!;
+    for (const page of ['Jarvis', 'Usage', 'Usage', 'Settings']) {
+      await user.click(menu);
+      await user.click(within(screen.getByRole('dialog', { name: 'Go to' })).getByRole('button', { name: 'Folio' }));
+      expect(shell.getAttribute('data-folio-open')).toBe('true');
+      await user.click(menu);
+      await user.click(within(screen.getByRole('dialog', { name: 'Go to' })).getByRole('link', { name: page }));
+      expect(shell.getAttribute('data-folio-open')).toBe('false');
+      expect(menu.getAttribute('aria-expanded')).toBe('false');
+    }
+  });
+
+  it('closes the Folio for Jarvis navigation even when the page does not change', async () => {
+    const user = userEvent.setup();
+    streamWorkspaceCommands();
+    await renderSignedIn();
+    await waitFor(() => expect(activityStream).not.toBeNull());
+    act(() => {
+      activityStream!.enqueue(new TextEncoder().encode(
+        `event: workspace-ready\ndata: ${JSON.stringify({ sessionId: '12345678-1234-4234-8234-123456789abc' })}\n\n`,
+      ));
+    });
+    const shell = document.querySelector('.app-shell')!;
+    for (const [index, page] of ['home', 'usage'].entries()) {
+      await user.click(screen.getByRole('button', { name: 'Folio' }));
+      expect(shell.getAttribute('data-folio-open')).toBe('true');
+      const commandId = `leave-folio-${index}`;
+      act(() => {
+        activityStream!.enqueue(new TextEncoder().encode(
+          `event: workspace-command\ndata: ${JSON.stringify({
+            command: { commandId, operation: 'navigate', page },
+            expiresAt: Date.now() + 5_000,
+          })}\n\n`,
+        ));
+      });
+      await waitFor(() => expect(shell.getAttribute('data-folio-open')).toBe('false'));
+      expect(document.activeElement?.closest('#folio-pane')).toBeNull();
+      await waitFor(() => expect(fetchMock.mock.calls.find(([url]) => String(url).endsWith(`/commands/${commandId}/ack`))).toBeTruthy());
+    }
+  });
+
+  it('does not reopen the Folio after history navigation returns to its previous page', async () => {
+    const user = userEvent.setup();
+    restoreProfile.mockResolvedValue({ name: 'Dan Aakesen' });
+    render(<MemoryRouter initialEntries={['/', '/usage']} initialIndex={1}>
+      <App config={config} /><HistoryControls />
+    </MemoryRouter>);
+    await screen.findByRole('navigation', { name: 'Areas' });
+    await user.click(screen.getByRole('button', { name: 'Folio' }));
+    const shell = document.querySelector('.app-shell')!;
+    expect(shell.getAttribute('data-folio-open')).toBe('true');
+    await user.click(screen.getByRole('button', { name: 'Previous page' }));
+    expect(shell.getAttribute('data-folio-open')).toBe('false');
+    await user.click(screen.getByRole('button', { name: 'Next page' }));
+    expect(shell.getAttribute('data-folio-open')).toBe('false');
+  });
+
   it('turns the camera on from the chat More menu and off from the live line', async () => {
     const user = userEvent.setup();
     let stopped = false;
@@ -877,6 +1016,8 @@ describe('App shell', () => {
     await renderSignedIn();
 
     const toggle = screen.getByRole('button', { name: 'Toggle contextual panel' });
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    expect(toggle.getAttribute('aria-controls')).toBe('context-panel');
     await user.click(toggle);
     expect(toggle.getAttribute('aria-expanded')).toBe('true');
     expect(screen.getByRole('heading', { name: 'Context' })).not.toBeNull();
@@ -886,6 +1027,10 @@ describe('App shell', () => {
     expect(toggle.getAttribute('aria-expanded')).toBe('false');
     expect(screen.queryByRole('heading', { name: 'Context' })).toBeNull();
     expect(document.activeElement).toBe(toggle);
+    await user.keyboard(' ');
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+    await user.keyboard(' ');
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
   });
 
   it('enables chat and explains the other unavailable main-page actions', async () => {

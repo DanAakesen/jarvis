@@ -198,7 +198,14 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   refused/failed/cancelled tools. No arguments, transcripts, or result bodies
   enter the status line. Selected query/path/task subjects are redacted.
   `presentation.showWork` defaults to true, persists as `presentation.show_work`,
-  and is suppressed in `on_the_move`. Settings/presence reads are bounded to
+  and is suppressed in `on_the_move`. Surface policy (10 Oct): the dispatcher
+  passes `voice` when a call carries `X-Jarvis-Voice-Item-ID` or a phone-session
+  header and `chat` otherwise (direct reflex execution uses its route); `chat`
+  presents nothing, because the chat answer already carries the data and an
+  explicit "show me" goes through the view tools, while `voice` presents as
+  below. Google results render as plain text (the text renderer escapes on
+  output): calendar lookups as an agenda in the calendar's time zone, others as
+  indented JSON. Settings/presence reads are bounded to
   250 ms and fail closed for presentation only; tools never wait for those reads
   or workspace acknowledgements.
   Successful vault tools reuse `show_knowledge`'s graph payload builder and
@@ -216,7 +223,7 @@ Jarvis is one backend with a shared core and one module per area, a static web a
 - P9-40 extends that same registered tool and broker with `navigate`; no new
   event channel, route or persistence is added. `packages/contracts` exports
   `workspaceNavigationPages` (`home`, `factory`, `settings`, `usage`,
-  `knowledge`, `folio`, `status`) and `workspaceSettingsSections`
+  `notes`, `knowledge` (kept; opens the graph), `folio`, `status`) and `workspaceSettingsSections`
   (`appearance`, `jarvis`, `personality`, `voice`, `presence`, `memory`,
   `coding`, `projects`, `routines`, `credentials`, `backend`). The command requires
   `commandId`, `operation: 'navigate'` and `page`; `section` is settings-only,
@@ -436,13 +443,14 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   settings store. Appearance is bounded to light/dark/system; colors use
   `#RRGGBB`, background uses the named visual presets, glow is 0–1, motion and
   density use closed catalogs, and radius is 0–24. The registered `set_theme`
-  Jarvis tool validates its token patch and writes through `SettingsStore`;
-  the existing dispatcher records `ok`, `refused`, or sanitized `error`
-  outcomes. Successful calls return the accepted token patch. These values use
-  the existing JSON-scalar settings rows, without a migration. Window/view state
-  remains client-owned and is not stored. Applying tool-originated changes to an
-  already-open client without reload depends on the P8-13 consumer and remains
-  unverified.
+  Jarvis tool maps its token patch through the same settings validation and write
+  path as `update_settings`; colour `null` removes one override and `reset: true`
+  removes all three. The existing dispatcher records `ok`, `refused`, or
+  sanitized `error` outcomes. Successful calls return the accepted token patch.
+  These values use the existing JSON-scalar settings rows, without a migration.
+  Window/view state remains client-owned and is not stored. Applying tool-originated
+  changes to an already-open client without reload depends on the P8-13 consumer
+  and remains unverified.
   The SQL adapter is injected only when database configuration exists; the API
   returns 503 without it. Dan-only `GET /models` reads Foundry deployments
   through ARM with the backend managed identity's account-scoped Reader role.
@@ -472,7 +480,10 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   remains unverified.
   uses the Voice Live-supported `mai-transcribe` model. Codex and Copilot expose
   provider-specific model and reasoning allowlists through the same settings
-  options. Factory task starts prefer per-task model/reasoning overrides to the
+  options. The Codex list mirrors Codex's own catalogue (`gpt-6.1-sol`,
+  `gpt-6-astra`, `gpt-6-sol`, `gpt-6-luna`, `gpt-5.6-sol/terra/luna`);
+  Chat and Research options are the live Foundry deployments, now including
+  `gpt-6-astra` and `gpt-6.1-sol` (Bicep). Factory task starts prefer per-task model/reasoning overrides to the
   corresponding role settings, then pass the effective choices to the runner.
   Codex applies both through ACP config options; Copilot receives its model and
   reasoning effort as CLI arguments. `default` omits the setting; Codex's
@@ -1079,6 +1090,34 @@ Dan-only `GET /status` returns the shared `SystemStatus` contract with one
 sets a private 30-second HTTP cache. `get_status_summary` reads the same snapshot
 and combines health counts with the existing Now-feed counts.
 
+P9-62 adds always-registered `get_system_health`, returning the shared
+`SystemHealth` contract: 26 fixed-order components with status, safe detail,
+nullable evidence timestamp and available recovery tool descriptions.
+`SystemStatusReader.peek` never starts or refreshes probes, even after cache
+expiry or error invalidation. Cached subsystem, smoke and work evidence older
+than five minutes becomes unknown; its timestamp remains visible. Credentials
+come from the existing metadata store, with expired credentials down and expiry
+within seven days degraded. Missing metadata is unknown. The latest stored
+production deployment or Deploy workflow result comes from Jarvis's release
+store, not a live GitHub call. It reports recorded evidence, not deployment
+freshness or exact-commit delivery.
+
+Background health uses a single aggregate over retained jobs updated in the
+last hour, returning a count capped at 1,000 and retry eligibility without
+loading job text. The SQL request is cancelled at the response deadline; stores
+without the aggregate report unknown. Work lookups
+record only a safe verdict; self-diagnosis never invokes the potentially costly
+work-status reader. Per-minute in-memory buckets count invalid tool arguments
+and execution failures over the last hour, capped at 1,000 and reset on restart.
+HTTP and reflex execution failures contribute; HTTP schema refusals contribute
+to invalid-argument counts. Stored-state reads have a shared five-second
+response deadline and failed reads remain unknown. No raw provider details,
+job text, project/repository text, credentials or work warnings are returned.
+Recovery references are filtered through the current tool registry; only
+eligible research retries, Codex renewal, deployment lookup and work lookup
+are offered. Recovery still uses each existing tool's validation/approval.
+`get_status_summary` is unchanged; no migration or GitHub App permission changes.
+
 The database check runs a bounded `SELECT 1`; Foundry chat, voice and embedding
 entries compare configuration and the cached ARM catalogue, without claiming a
 successful model invocation. Vault status aggregates note/chunk counts, latest
@@ -1545,6 +1584,23 @@ SHA conflict retry, sensitive-data refusal and webhook signature verification.
 The repository is private and was unavailable for live validation; Dan must
 install the existing GitHub App on `DanAakesen/vault` with Contents read/write
 before indexing and writes can succeed.
+
+P9-49 adds owner-only `GET /notes`, `GET /notes/note?path=…`, `POST /notes`
+and `PUT /notes/note` routes for the Notes web client. The indexed list supports
+bounded pagination, text search and folder filtering; reads return Markdown
+content, the loaded Contents SHA and its GitHub URL. Create refuses an existing
+path with 409. Edit requires the submitted SHA to match the current Contents
+SHA; a stale or racing edit returns 409 with the current SHA and content when
+the note still exists, and never retries or overwrites. Writes reuse the vault
+path, routing-folder, 256 KiB and `assertCaptureIsSafe` checks. These direct
+owner-authored writes do not require a stored chat message or call `checkSource`,
+but still reject secrets and credentials (and require “remember” for banking or
+health details). The default commit message is `jarvis: edited in Notes`;
+write logs contain only outcome and folder, never note content. A successful
+write invalidates the graph cache and queues index synchronization after any
+existing sync; the signed `master` push webhook also synchronizes the index.
+Note content is untrusted data, never instructions. No migration is needed;
+the Notes UI is implemented separately.
 
 P7-42 adds a Dan-only Settings API; there are no `apps/web` changes. `GET
 /memory` returns durable SQL memories followed by indexed vault notes, with
@@ -2036,6 +2092,21 @@ App key rotation remain operator workflows; their renew endpoints return 400.
 Local fake-provider checks cover this contract; live Key Vault/GitHub/Foundry
 verification and the SQL Server contract suite remain separate checks.
 
+#### Agent-initiated credential renewal (P9-59)
+
+The always-registered sensitive `renew_credential` tool accepts only
+`codex-login`. It requires Now confirmation before calling the same forced
+renewal callback and credential-status store as the owner-only Settings route.
+The result contains only the renewal outcome, persisted credential status, a
+safe next step, and a matching user-facing confirmation. A failed login tells
+Dan to sign in to the Jarvis-only Codex account again; busy and uncertain
+outcomes direct him to wait or check status instead of claiming success.
+Missing renewal, status storage, or Now confirmation is refused without
+starting renewal. The shared dispatcher redacts tool arguments and results from
+tool-call records; no token, code, provider response, or exception text is
+returned or logged. The shared capability instruction names the tool because
+it is registered in core for every backend configuration.
+
 ### Idle SQL path audit (P5-13)
 
 This inventory is a source-level measurement of code paths and configured
@@ -2147,6 +2218,57 @@ workspace contract and browser preview. Live hosted Codex generation, Azure
 role assignment, Blob upload and deployed rendering remain unverified. Video
 generation is deferred separately. Artifact retention is unresolved and no
 automatic deletion is implemented.
+
+### P9-66 conversation attachments
+
+The authenticated, owner-only `/conversation/attachments` multipart route accepts
+one file, checks its extension, declared MIME type, magic bytes and size, and
+stores sanitized bytes under `attachments/` in the existing private `artifacts`
+container. Images are decoded and re-encoded before storage so EXIF/location
+metadata is removed. PDF, DOCX, XLSX and text formats are parsed within bounded
+input, output and time limits; images are described by the existing vision role.
+Extraction errors produce a failed attachment state and a content-free warning,
+not a failed chat turn.
+
+`dbo.conversation_attachments` stores owner-scoped metadata, bounded extracted
+text or image description and expiry. Unsent uploads expire after 24 hours;
+sent files use the 1–90 day `CONVERSATION_ATTACHMENT_RETENTION_DAYS` setting
+(default 30). Hourly cleanup removes expired blobs before their rows. Dan can
+attach up to five unlinked uploads to a saved chat message; the hosted agent
+receives bounded file context as untrusted data and may use the sensitive
+`attachment_list`/`attachment_read` tools for details in chat or voice. Owners
+receive only short-lived private read URLs. File bytes, extracted text and
+descriptions are excluded from ordinary logs and tool-call audit records.
+Offline route, store, extraction, tool-parity and agent tests cover the flow;
+live model and Azure Blob acceptance remain unverified.
+
+### P9-76 decision provider (Jev or Microsoft-Decision-1)
+
+Reflex classification (chat and voice), the browser agent, task recipes and PC action planning all make typed decisions: a request with model, a state and named 
+oul/choice/score questions, answered with nswers[<name>]. Typesafe's Jev and Microsoft-Decision-1 (Foundry) accept that same request, so core/decision-provider.ts resolves a DecisionTarget (endpoint, model value, bearer token) and the four call sites use it instead of a fixed Jev key. The decisions.provider setting (jev default, or microsoft) is read at most every three seconds; a failed read keeps the last value. Jev keeps its Key Vault key and jev-latest. Microsoft uses the backend identity (token for https://cognitiveservices.azure.com/.default; Cognitive Services User on the Foundry account is enough) and the decision-1 deployment at <foundry host>/providers/microsoft/v1/systemone. The deployment name cannot contain microsoft (reserved word). Which Foundry host serves that route was not documented, so the resolver tries the services.ai host and then the cognitiveservices host and remembers the one that does not answer 404. If the chosen provider cannot produce a target, callers act as if no decision was made (reflex falls back to the main agent); the backend never silently switches provider. Results and failures carry provider, and the allowlisted eflex.decision log records it beside the confidence bucket and latency so the providers can be compared in Log Analytics. decision.provider_unavailable (provider only) is logged at most once a minute. Limits: Decision-1 is text-only with a 32K-token context, and the subscription quota is 60 requests a minute; the confidence thresholds (0.9 and 0.5) were tuned for Jev and are not yet recalibrated.
+
+### P9-67 private-by-default issue attachments
+
+`create_issue` and the sensitive `issue_comment` tool accept up to five owned,
+sent attachment IDs. The default `publish: description` adds cached vision
+descriptions and extracted error text as fenced, untrusted data; file bytes stay
+in private storage. Text and filenames pass the existing issue secret checks.
+Both writes reuse the ten-minute, one-shot, later-message confirmation gate.
+
+Explicit `publish: public` accepts one image per confirmation. The backend first
+shows its private image through the acknowledged workspace image renderer and
+returns a public-repository warning. The later exact phrase must include
+`publish <filename>` after the confirmation code. It rechecks the attachment,
+re-encodes it without EXIF, and uses the App's existing Contents-write scope to
+commit `issue-attachments/<issue>/<sha256>.<ext>` on the target repository's
+dedicated `issue-attachments` branch, created from its default branch on first
+use and never merged. A raw GitHub Markdown image is embedded in a confirmed
+comment (also after a public-mode issue creation). Existing hash-matched images
+are reused. Partial/uncertain writes require checking GitHub before retrying.
+No migration, infrastructure, Python agent or web change; live chat, Blob and
+GitHub publication acceptance remain unverified.
+The existing renderer acknowledges workspace creation, not successful image
+loading; verifying on-screen loading requires the deferred web work (#649).
 
 P2-13 compares task-branch commits before and after each agent turn. An
 `end_turn` without a new task-branch commit emits `session_question` with the
@@ -2579,6 +2701,18 @@ existing memory-capture setting. Realtime voice uses it directly; the agent-only
 `GET /agent/settings` route returns the same block for chat, which adds it to its
 language-specific prompt after loading that settings snapshot. Both surfaces
 continue to use the backend tool registry and confirmation results.
+That block is bounded by one shared contract, `agents/jarvis/limits.json`: the
+agent refuses settings above `capabilityInstructionsMaxCodePoints` (20,000) and
+the backend tests require the block to stay within
+`capabilityInstructionsBudgetCodePoints` (15,000) and to use only BMP characters,
+so TypeScript and Python count the same. The backend schema constant is tied to
+the file by a test, and the image copies it (`.dockerignore`, `Dockerfile`).
+A failed chat turn emits `event: error` with a short diagnostic `code`
+(for example `capability_instructions_too_large`, `settings_http_503`,
+`error_<exception class>`), never message text. The backend accepts only
+`[a-z0-9_]{1,64}` codes and logs the code in the `failure` field of
+`conversation.reply_failed` (`Chat agent failed (<code>)`); the user
+still sees the same honest failure message (L129).
 The agent gets a token for `api://<jarvis-api>/.default`
 from its platform identity through `DefaultAzureCredential`; OpenAI uses the same
 credential when no API key is set. Claude requests use

@@ -43,8 +43,8 @@ function fixture(options: { setting?: boolean; mode?: 'present' | 'on_the_move';
     return true;
   });
   const request = { server: app } as FastifyRequest;
-  const start = (tool: string, input: unknown = {}, turn = '101', signal = new AbortController().signal) =>
-    startWorkPresentation(tool, input, request, randomUUID(), turn, signal);
+  const start = (tool: string, input: unknown = {}, turn = '101', signal = new AbortController().signal, surface: 'chat' | 'voice' = 'voice') =>
+    startWorkPresentation(tool, input, request, randomUUID(), turn, signal, surface);
   return { app, events, commands, start, connection };
 }
 
@@ -150,8 +150,58 @@ describe('best-effort work presentation', () => {
     const { start, commands } = fixture();
     start(tool).finish({ status: 'awaiting_confirmation', summary: '<draft>\npassword=private-value', confirmationCode: '12345678' }, true);
     await settled();
-    expect(commands[0]).toMatchObject({ view: { renderer: 'text', data: { format: 'plain', content: '&lt;draft&gt;\npassword=[REDACTED]' } } });
+    expect(commands[0]).toMatchObject({ view: { renderer: 'text', data: { format: 'plain', content: '<draft>\npassword=[REDACTED]' } } });
     expect(JSON.stringify(commands)).not.toMatch(/12345678|private-value/u);
+  });
+
+  it('shows calendar results as a readable agenda in the calendar time zone, never escaped JSON', async () => {
+    const { start, commands } = fixture();
+    start('calendar_list_events').finish({
+      timeZone: 'Europe/Copenhagen',
+      events: [
+        { id: 'abc', subject: 'Hente "Brænde"', start: '2026-10-10T19:00:00.000Z', end: '2026-10-10T20:00:00.000Z' },
+        { id: 'def', subject: 'Fix loft opening', start: '2026-10-11T08:00:00.000Z', end: '2026-10-11T09:00:00.000Z', location: 'Home' },
+        { id: 'ghi', subject: 'Holiday', start: '2026-10-12', end: '2026-10-13', allDay: true },
+      ],
+      truncated: true,
+    }, true);
+    await settled();
+    const content = (commands[0] as { view: { data: { content: string } } }).view.data.content;
+    expect(content).toContain('21:00–22:00 · Hente "Brænde"');
+    expect(content).toContain('10:00–11:00 · Fix loft opening (Home)');
+    expect(content).toContain('All day · Holiday');
+    expect(content).toContain('More events exist than are shown.');
+    expect(content).not.toMatch(/&quot;|&amp;|"id"|abc|def/u);
+  });
+
+  it('falls back to readable unescaped JSON for other Google results', async () => {
+    const { start, commands } = fixture();
+    start('mail_search').finish({ messages: [{ subject: 'Hello & welcome', from: 'a@example.test' }] }, true);
+    await settled();
+    const content = (commands[0] as { view: { data: { content: string } } }).view.data.content;
+    expect(content).toContain('"subject": "Hello & welcome"');
+    expect(content).not.toMatch(/&quot;|&amp;/u);
+  });
+
+  it.each(['calendar_list_events', 'repo_read', 'vault_search', 'web_search'])(
+    'opens nothing on its own in chat for %s; the chat answer carries the data',
+    async (tool) => {
+      const { start, events, commands } = fixture();
+      start(tool, { query: 'x', path: 'a.ts' }, '101', new AbortController().signal, 'chat')
+        .finish({ timeZone: 'UTC', events: [], content: 'code', results: [] }, true);
+      await settled();
+      expect(events).toEqual([]);
+      expect(commands).toEqual([]);
+    },
+  );
+  it.each(['calendar_list_events', 'repo_read'])('still opens its window in voice for %s', async (tool) => {
+    const { start, events, commands } = fixture();
+    start(tool, { path: 'a.ts' }).finish(
+      { timeZone: 'UTC', events: [], repository: 'DanAakesen/jarvis', path: 'a.ts', content: 'code' }, true,
+    );
+    await settled();
+    expect(events.map((event) => event.type)).toEqual(['work-started', 'work-finished']);
+    expect(commands[0]).toMatchObject({ operation: 'create' });
   });
 
   it.each([{ setting: false }, { mode: 'on_the_move' as const }])('suppresses status and views for %j', async (options) => {
@@ -221,7 +271,7 @@ describe('best-effort work presentation', () => {
     const request = {
       server: app,
       principal: { objectId: app.ownerObjectId },
-      routeOptions: { url: '/conversation/sessions/41/turns' },
+      routeOptions: { url: '/voice/sessions/41/turns' },
       compileValidationSchema: () => () => true,
     } as unknown as FastifyRequest;
     const result = await executeReflexAction({
@@ -241,7 +291,7 @@ describe('best-effort work presentation', () => {
 });
 
 describe('shared chat and voice dispatcher integration', () => {
-  it.each(['chat', 'voice'] as const)('publishes paired details for %s without awaiting the workspace', async (source) => {
+  it.each(['chat', 'voice'] as const)('publishes paired details only for voice, not chat (%s) without awaiting the workspace', async (source) => {
     const toolModule: BackendModule = {
       id: 'work-test',
       tools: [{
@@ -271,6 +321,11 @@ describe('shared chat and voice dispatcher integration', () => {
     expect(response.statusCode).toBe(200);
     expect(response.json()).toMatchObject({ outcome: 'ok', confirmation: 'Done: repo_read succeeded.' });
     await settled();
+    const presented = (list: unknown[]) => list.filter((event) => (event as { type: string }).type.startsWith('work-'));
+    if (source === 'chat') {
+      expect(presented(events)).toEqual([]);
+      return;
+    }
     expect(events).toContainEqual(expect.objectContaining({ type: 'work-started', kind: 'repo_read', text: 'Reading your code src/a.ts' }));
     expect(events).toContainEqual(expect.objectContaining({ type: 'work-finished' }));
     const before = events.length;

@@ -92,6 +92,48 @@ describe('settings API', () => {
     },
   );
 
+  it('defaults the decision provider to Jev and persists either provider with its options', async () => {
+    const { store, values } = createStore();
+    const app = fixture(store);
+    expect(settingsStoreKeys).toContain('decisions.provider');
+    expect((await readSettings(store)).decisions).toEqual({ provider: 'jev' });
+    for (const provider of ['microsoft', 'jev']) {
+      const settings = { decisions: { provider } };
+      expect(validateSettingsPatch(settings)).toEqual(settings);
+      const saved = await app.inject({
+        method: 'PATCH', url: '/settings', headers: authorization, payload: { settings },
+      });
+      expect(saved.statusCode).toBe(200);
+      expect(saved.json().settings.decisions).toEqual(settings.decisions);
+      expect(values['decisions.provider']).toBe(JSON.stringify(provider));
+      const read = (await app.inject({ url: '/settings', headers: authorization })).json();
+      expect(read.settings.decisions).toEqual(settings.decisions);
+      expect(read.options.decisionProviders).toEqual(['jev', 'microsoft']);
+    }
+  });
+
+  it.each([
+    {}, null, [], 'jev', { provider: 'openai' }, { provider: 'Jev' }, { provider: null }, { provider: 1 },
+    { provider: true }, { provider: 'jev', unknown: true },
+  ])('rejects malformed decision provider patches without coercion: %j', async (decisions) => {
+    const { store, values } = createStore();
+    const app = fixture(store);
+    expect(validateSettingsPatch({ decisions })).toBeNull();
+    const response = await app.inject({
+      method: 'PATCH', url: '/settings', headers: authorization, payload: { settings: { decisions } },
+    });
+    expect(response.statusCode).toBe(400);
+    expect(values).toEqual({});
+  });
+
+  it.each(['null', '"openai"', '1', '{}', 'invalid'])(
+    'ignores invalid stored decision providers: %s', async (stored) => {
+      const { store, values } = createStore();
+      values['decisions.provider'] = stored;
+      expect((await readSettings(store)).decisions).toEqual({ provider: 'jev' });
+    },
+  );
+
   it('requires authentication and reports unavailable persistence', async () => {
     const denied = fixture();
     expect((await denied.inject({ url: '/settings' })).statusCode).toBe(401);
@@ -323,9 +365,10 @@ describe('settings API', () => {
     const app = fixture(store);
     const initial = await app.inject({ url: '/settings', headers: authorization });
 
-    expect(initial.json().options.codexModels).toContain('gpt-5.3-codex');
+    expect(initial.json().options.codexModels).toContain('gpt-6.1-sol');
+    expect(initial.json().options.codexModels).not.toContain('gpt-5.3-codex');
     expect(initial.json().options.copilotModels).toContain('claude-sonnet-4.6');
-    expect(initial.json().options.roles.codex.reasoningEffortsByModel['gpt-5.5'])
+    expect(initial.json().options.roles.codex.reasoningEffortsByModel['gpt-6.1-sol'])
       .toContain('xhigh');
     expect(initial.json().options.roles.copilot.reasoningEffortsByModel['gpt-5.4'])
       .toEqual(['none', 'low', 'medium', 'high']);
@@ -333,14 +376,14 @@ describe('settings API', () => {
     const saved = await app.inject({
       method: 'PATCH', url: '/settings', headers: authorization,
       payload: { settings: { roles: {
-        codex: { model: 'gpt-5.5', reasoningEffort: 'xhigh' },
+        codex: { model: 'gpt-6.1-sol', reasoningEffort: 'xhigh' },
         copilot: { model: 'claude-sonnet-4.6', reasoningEffort: 'high' },
       } } },
     });
 
     expect(saved.statusCode).toBe(200);
     expect(saved.json().settings.roles).toMatchObject({
-      codex: { model: 'gpt-5.5', reasoningEffort: 'xhigh' },
+      codex: { model: 'gpt-6.1-sol', reasoningEffort: 'xhigh' },
       copilot: { model: 'claude-sonnet-4.6', reasoningEffort: 'high' },
     });
   });

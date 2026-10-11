@@ -1,4 +1,5 @@
 import type { FastifyRequest } from 'fastify';
+import { jevKeyResolver } from './decision-provider.js';
 import { describe, expect, it, vi } from 'vitest';
 import {
   createBrowserAgent,
@@ -401,7 +402,7 @@ describe('browser task recipes', () => {
 describe('Jev browser agent', () => {
   it('selects an operation and observed target in one Jev request', async () => {
     const fetcher = vi.fn<typeof fetch>(async () => jevResponse('click'));
-    const planner = createJevBrowserPlanner(async () => 'fake-key', fetcher);
+    const planner = createJevBrowserPlanner(jevKeyResolver('fake-key'), fetcher);
     const decision = await planner.decide({
       goal: 'Click Send message',
       step: 2,
@@ -434,7 +435,7 @@ describe('Jev browser agent', () => {
   });
 
   it('restricts selected values to user-quoted options in the Jev decision', async () => {
-    const planner = createJevBrowserPlanner(async () => 'fake-key', async () =>
+    const planner = createJevBrowserPlanner(jevKeyResolver('fake-key'), async () =>
       jevResponse('select', 'element_2', 'selection_0'));
     await expect(planner.decide({
       goal: 'Select "Denmark"',
@@ -452,7 +453,7 @@ describe('Jev browser agent', () => {
 
   it('maps keyboard and focused typing through closed-set Jev Choice arguments', async () => {
     const keysFetcher = vi.fn<typeof fetch>(async () => jevResponse('keys', 'none', 'none', 0.99, 'keys_0'));
-    const keysPlanner = createJevBrowserPlanner(async () => 'fake-key', keysFetcher);
+    const keysPlanner = createJevBrowserPlanner(jevKeyResolver('fake-key'), keysFetcher);
     await expect(keysPlanner.decide({
       goal: 'Press Ctrl+P to open a file',
       step: 1,
@@ -469,7 +470,7 @@ describe('Jev browser agent', () => {
     expect(body.state.commonShortcuts).toContain('Ctrl+L focuses the address and search bar');
     expect(body.questions.key_sequence.criteria.keys_0).toBe('Ctrl+P');
 
-    const typePlanner = createJevBrowserPlanner(async () => 'fake-key', async () =>
+    const typePlanner = createJevBrowserPlanner(jevKeyResolver('fake-key'), async () =>
       jevResponse('type_focused', 'none', 'none', 0.99, 'none', 'value_0'));
     await expect(typePlanner.decide({
       goal: 'Type "Daft Punk" into the focused search box',
@@ -487,18 +488,18 @@ describe('Jev browser agent', () => {
     [429, 'rate_limited'],
     [503, 'http_503'],
   ] as const)('returns typed Jev HTTP failure %s as %s', async (status, failure) => {
-    const planner = createJevBrowserPlanner(async () => 'fake-key', async () => new Response(null, { status }));
+    const planner = createJevBrowserPlanner(jevKeyResolver('fake-key'), async () => new Response(null, { status }));
 
     await expect(planner.decide({
       goal: 'Click Send message',
       step: 1,
       previousActions: [],
       snapshot,
-    }, new AbortController().signal)).resolves.toEqual({ failure });
+    }, new AbortController().signal)).resolves.toMatchObject({ failure });
   });
 
   it('uses Choice confidence for the browser confidence gate', async () => {
-    const planner = createJevBrowserPlanner(async () => 'fake-key', async () =>
+    const planner = createJevBrowserPlanner(jevKeyResolver('fake-key'), async () =>
       jevResponse('click', 'element_1', 'none', 0.89));
 
     await expect(planner.decide({
@@ -510,7 +511,7 @@ describe('Jev browser agent', () => {
   });
 
   it('returns invalid_answer for an unlisted selection Choice', async () => {
-    const planner = createJevBrowserPlanner(async () => 'fake-key', async () =>
+    const planner = createJevBrowserPlanner(jevKeyResolver('fake-key'), async () =>
       jevResponse('select', 'element_2', 'selection_9'));
 
     await expect(planner.decide({
@@ -518,7 +519,7 @@ describe('Jev browser agent', () => {
       step: 1,
       previousActions: [],
       snapshot,
-    }, new AbortController().signal)).resolves.toEqual({ failure: 'invalid_answer' });
+    }, new AbortController().signal)).resolves.toMatchObject({ failure: 'invalid_answer' });
   });
 
   it('logs typed browser planner failures without the goal or Jev key', async () => {

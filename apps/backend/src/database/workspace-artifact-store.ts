@@ -178,9 +178,20 @@ export class WorkspaceArtifactStore {
     }
   }
 
-  private async signedReadUrl(blobName: string, signal: AbortSignal): Promise<string> {
+  async privateReadUrl(blobName: string, signal: AbortSignal): Promise<string> {
+    if (!/^attachments\/[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u.test(blobName)) {
+      throw new Error('Private attachment reference is invalid');
+    }
+    return this.signedReadUrl(blobName, signal, 5 * 60 * 1_000);
+  }
+
+  private async signedReadUrl(
+    blobName: string,
+    signal: AbortSignal,
+    lifetimeMs = 60 * 60 * 1_000,
+  ): Promise<string> {
     const startsOn = new Date(Date.now() - 2 * 60 * 1000);
-    const expiresOn = new Date(Date.now() + 60 * 60 * 1000);
+    const expiresOn = new Date(Date.now() + lifetimeMs);
     const key = await this.options.serviceClient.getUserDelegationKey(startsOn, expiresOn, {
       abortSignal: signal,
     });

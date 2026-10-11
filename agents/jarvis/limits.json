@@ -1,0 +1,4 @@
+{
+  "capabilityInstructionsMaxCodePoints": 20000,
+  "capabilityInstructionsBudgetCodePoints": 15000
+}

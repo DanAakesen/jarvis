@@ -19,6 +19,42 @@ The nine design areas and where each stands. **Confirmed** = Dan's requirement o
 
 ## Decision log
 
+P9-67 (10 October 2026): issue attachments default to fenced descriptions and
+transcribed text from P9-66's private store. All issue/comment writes are staged
+and checked for secrets. Public publication is one image at a time, requires an
+acknowledged private chat preview, warns that anyone can read it, and requires a
+later confirmation naming the file. GitHub has no issue image-upload API: reuse
+Contents write for EXIF-free, content-addressed images on the never-merged
+`issue-attachments` branch and embed raw GitHub image URLs in comments. Public
+Git history is not governed by private attachment retention. No migration,
+new dependency, App permission or web change; live acceptance remains pending.
+Workspace acknowledgement confirms preview creation only; image-load/visibility
+acknowledgement remains a web limitation for #649, outside this backend task.
+
+P9-66 (10 October 2026): keep conversation uploads in the existing private
+`artifacts` Blob container under `attachments/`, with SQL-owned metadata and
+owner-only short-lived read URLs. Re-encode images with Sharp to remove metadata;
+use pdfjs-dist for bounded PDF text, fast-xml-parser for bounded OOXML text, and
+the existing fflate for Office ZIP containers. The multipart plugin enforces
+request/file parsing limits. Store only bounded extracted text or image
+descriptions, mark extraction failures on the attachment, and expose content to
+the agent solely as explicitly untrusted context or through sensitive,
+redacted-read tools. Use 24-hour expiry for unsent uploads and configurable
+1–90-day retention (default 30) for sent files. Offline route, extraction,
+migration, retention and tool-parity checks pass; live model and Blob behavior
+remain unverified.
+
+P9-59 (10 October 2026): register the sensitive `renew_credential` tool in the
+always-present core module and reuse the route's forced Codex-renewal callback
+and credential-status store. Require `runConfirmed('other', ...)` before any
+renewal side effect; refuse unknown names and missing renewal, status, or Now
+services. Relay persisted status and only static outcome-specific next steps,
+including the sign-in instruction on definitive failure. Keep audit arguments
+and results redacted, and name this tool in shared instructions only because
+core always registers it. No contract, migration, App permission, or web change
+is required. Focused tool, refusal, confirmation, parity, and redaction tests
+pass offline; live Now/Foundry and human sign-in acceptance remain unverified.
+
 P9-57 (10 October 2026): reuse `WorkspacePinStore.list` and the existing
 acknowledged workspace broker for owner-scoped saved-pin discovery and restore.
 Keep the tools read/restore-only: pin/unpin remain page-owned. Return bounded
@@ -29,6 +65,13 @@ then focus; refuse when no owner workspace is connected. Use plain root object
 schemas (L121), one tool-name-free shared instruction, untrusted title markers
 and redacted audits. No migration, App permission or web change is required.
 Acceptance paths are verified offline; live model/browser use remains unverified.
+P9-58 (10 October 2026): keep `set_theme` as a compatibility tool, but route its
+flat appearance tokens through the shared `applySettingsPatch` validation and
+write path used by `update_settings`. Colour `null` clears one override and
+`reset: true` clears all three. Preserve the existing settings rows and omit
+cleared colours from effective settings; no migration, App permission, contract,
+or web change is required. Backend tool and HTTP tests verify the behavior
+offline; live model use remains unverified.
 P9-74 (10 October 2026): hide note front matter rather than introduce a YAML
 parser or property editor. Strip delimited metadata after leading comments,
 whitespace and BOMs, including malformed YAML. Keep the note path, Markdown and
@@ -161,6 +204,20 @@ and deleting legacy `recipe.<hash>` records in the existing settings store; no
 database migration is needed. Expose `task_routines` and `/routines`, retaining
 `task_recipes` and `/recipes` as one-release aliases. The web UI remains outside
 this backend change.
+
+P9-62 (10 October 2026): make self-diagnosis read-only and cache-only for
+integration probes. Keep a last status snapshot separate from its refresh TTL;
+mark subsystem, smoke and work evidence older than five minutes unknown. Use
+fixed safe reasons rather than returning arbitrary source detail or private
+text. Reuse credential/job/release stores, with a cancellable job-failure
+aggregate that returns no private text; cache only work verdicts and bounded
+hourly tool-event counts in process. Return 26 fixed-order components, nullable
+missing timestamps and registry-gated existing recovery actions; renewal also
+requires its runtime callback and Now approval service. Do not infer
+delivery from recorded deployment status, auto-repair, add a migration or expand
+App permissions. Focused offline tests verify statuses, expiry, missing/stale
+sources, no probe calls, sanitisation, ordering and recovery gating; live model,
+SQL and provider acceptance remain pending.
 
 P9-20 (7 October 2026): expose one owner-authenticated, cached `/status`
 snapshot using the shared contracts; reuse it in `get_status_summary`. Keep
@@ -360,8 +417,12 @@ Windows/Chrome/Jev speedup remains live acceptance.
 | Date | Decision | Rationale and evidence | Status |
 | --- | --- | --- | --- |
 | 2026-10-10 | P9-73 uses one additive phone dock gap above the safe area, enables edge-to-edge viewports and adds a minimal standalone manifest reusing the app icon. | `max(gap, inset)` leaves no gap above a nonzero inset. Chromium/WebKit fixtures measured 16px with zero inset and 50px with 34px inset; desktop geometry is unchanged. Root ownership lets body-portalled toasts share the phone token. | Implemented and browser-checked with fixtures; physical iPhone and installed Home Screen acceptance remain unverified |
+| 2026-10-10 | P9-49 adds owner-only REST access to list, read, create and edit Markdown notes in the private GitHub vault. Creates refuse existing paths; edits compare the loaded Contents SHA and return 409 with the latest note when stale instead of retrying or overwriting. | Reuse the vault's routing, path, 256 KiB and secret-safety checks, but do not require a stored chat message for the owner's direct edit. Commit to `master`, log only outcome/folder, and synchronize the derived index after writes. No migration or web change; the Notes UI is separate. | Implemented and tested offline; live GitHub access and Notes UI acceptance remain pending |
 | 2026-10-10 | P9-50 reconciles issue, task, PR and merge-commit deployment through a read-only Factory tool. Require closed issue, merged PR and matching successful deployment for “delivered”; preserve partial results and warnings on failed reads. Recover/resume of closed, merged or superseded legacy work requires `confirm: true` on the Dan-only controls route. | Issue #627 records duplicate recovery caused by an unlinked legacy task. Reuse task/release stores, existing GitHub readers and permissions; do not silently link legacy matches, infer delivery from an unrelated SHA, or allow the resume tool to bypass the gate. No migration or web change. Focused tests cover explicit body supersession, ambiguous queries, partial failures, qualified closing references and exact-SHA deployment; unverifiable restart safety returns 503. | Implemented offline; live acceptance pending |
 | 2026-10-10 | P9-51 treats completed-turn delivery as known runtime state, not runtime unavailability. Cancel/pause recheck state and pending merges under the existing policy lock; never cancel a completed invocation. Derive finishing activity from persisted turns and relay safe control reasons to HTTP and tools. | Issue #628 reproduces a Running task after its turn/session finished. Preserve the pending-merge guard and terminal states, retain pause's idle session, refuse pause with finishing 409 when no resumable session remains, and distinguish invocation failure from cleanup failure. Reuse P9-50 readers and existing contracts; no migration, App permission or web change. | Implemented offline; live SQL/Foundry acceptance pending |
+| 2026-10-10 | Windows open on their own only in voice; typed chat answers inline and opens a window only when Dan asks. Dan's rule, applied to every tool through one parameter on `startWorkPresentation` (`chat` presents nothing, `voice` presents as before), not per-tool exceptions. | The Calendar window showed escaped JSON (`&quot;`) beside a chat answer that already read well: the backend HTML-escaped plain text that the renderer escapes again. Chat already has the tool chip and the written answer; voice has no visible answer. Plain text is no longer escaped and calendar results render as an agenda. An explicit "show me" still uses the view tools; the capability instructions say so. | Implemented; verified by backend tests, live check pending |
+| 2026-10-10 | `gpt-6-astra` and `gpt-6.1-sol` are deployed in Foundry (Global Standard, capacity 50, also in `infra/main.bicep`) so they appear in the Chat and Research pickers, and the Codex list is replaced by Codex's own current catalogue (`gpt-6.1-sol`, `gpt-6-astra`, `gpt-6-sol`, `gpt-6-luna`, `gpt-5.6-sol/terra/luna`, plus `default`). Defaults and Dan's saved choices are unchanged; he picks per role. | Dan: luna for every role is not good; wants Astra and GPT-6.1 for research and voice, and the Codex models were old. Chat and Research options come from live Foundry deployments, so deploying is the change; the Codex list was hard-coded (`gpt-5.5`, `gpt-5.4`, `gpt-5.3-codex`). English speech-to-speech stays on `gpt-realtime-2.1`, the newest realtime model; the Danish voice answers through the Chat model. Codex reasoning efforts stay at the shared enum (up to `xhigh`); Codex also offers `max` and `ultra`, not exposed yet. | Deployed and Succeeded; live chat with each model not verified from here |
+| 2026-10-10 | Decisions are scored by a selectable provider: Jev (default) or Microsoft-Decision-1, chosen by the `decisions.provider` setting for reflex, browser, recipe and PC decisions together. Dan can switch in Settings or by asking Jarvis; nothing switches provider automatically. | Dan wants to test Microsoft's new decision model against Jev himself. The two accept the same request (`model`, `state`, typed questions), so one target resolver replaces the fixed Jev key. Microsoft's speed and accuracy figures are vendor-run and disputed, our measured Jev time is about 274 ms (voice) and 398 ms (chat) p50, and the confidence thresholds are tuned for Jev, so the setting defaults to Jev and the providers are compared on our own `reflex.decision` logs (now with `provider`). Deployment `decision-1` (name cannot contain "microsoft"; quota 60 requests a minute) is in Bicep; Foundry host for the route is tried in two forms until one answers. | Implemented; live check on both providers pending |
 | 2026-10-08 | P9-33 exposes explicit vault-note deletion through the shared sensitive tool registry. Reuse the GitHub App Contents-write client and require a present-mode Now confirmation naming the exact path; recheck the note SHA after approval, then remove its index rows and invalidate the graph cache. | Existing Contents API SHA protection, `TeamsNotificationService.runConfirmed`, and `VaultIndexStore.deleteFiles` cover the provider, approval and cleanup boundaries. No migration or web change is needed; focused fake-GitHub tests cover approval gating, concurrent edits, commit metadata, index removal and graph invalidation. | Implemented offline; live GitHub App access remains unverified |
 | 2026-10-08 | P9-31 adds `get_usage` through the existing agent-only tool registry and usage store. Reuse the shared usage period/entry contracts, support the current UTC day, and group spend by role/source and model without hiding estimated or unverified costs. Redact the financial result from durable generic tool-call audit records; add no migration or web changes. | `UsageStore.list` already bounds and groups persisted usage, including active sandbox estimates and cost coverage. Backend tests cover today’s UTC interval, per-area/model aggregation, cost status, tool registration and sensitive audit redaction. | Implemented offline; live provider billing remains unverified |
 | 2026-10-07 | P9-22 exposes owner-authenticated `/phone/status` and a 20-call history through the existing shared contracts and `phone_sessions` table. Keep phone calling dormant unless Dan provisions Teams/ACS and a Teams Phone number; status configuration is not a provider health check. Do not return caller or call IDs, and do not add a migration or web changes. | P6-22 keeps Teams unprovisioned in production; P7-01 records that no phone number was purchased. Backend tests cover owner auth, unavailable history, sanitized failure, bounded history and status mapping. No Azure CLI/live Azure access was available, so current number, ACS resource and callback delivery remain unverified. | Implemented offline; production setup and live callbacks unverified |
@@ -808,6 +869,8 @@ Mistakes made so far and the rule that prevents each one.
 | **L126** | One huge ACP line hung a Factory task for an hour | Task 10 (8 October, the calendar-approval change Jarvis requested) went silent at 03:37 right after Codex ran `cat` on several large docs, and failed on the runner's 60-minute timeout. The runner spawned Codex with asyncio's default 64 KiB stream limit; the tool-output ACP message was one longer line, so `readline()` raised, the unobserved reader task died, nobody drained stdout and Codex blocked writing. The ACP pipe now allows 32 MiB lines, and an over-limit line is dropped with an `acp_message_dropped` event while reading continues. Lesson: stream readers on agent pipes must survive oversized messages; a dead reader must never look like a busy agent. |
 | **L127** | The research smoke probe timed out at random | After L125, the deploy for #591 still failed its smoke gate: the research dry run (a real Codex call through the runner) was cancelled at its 20-second budget, while a normal call takes 15-25 s (it passed in 21 s at 04:29). The probe now has 45 s, the gate's request 60 s, and the workflow prints each check's id and status to the log so a failed gate names its check. Lesson: size a probe's timeout from observed latency with headroom, and make a gate say which check failed. |
 | **L128** | Wake word: a 10-second gap before the chime | Dan heard the chime about 10 s after saying "Wake up Jarvis". A timing probe with Speech SDK 1.52.0, his `.table` model and real-time push audio showed the keyword detected at once, but `KeywordRecognizer.Dispose()` blocked for 10.01 s because the bridge never stopped the recognition session after a detection. Calling `StopRecognitionAsync()` before disposing cut that to 0.13 s. Always stop a Speech SDK recognizer before disposing it, and time detection and teardown separately when diagnosing latency. |
+| **L129** | The chat agent rejected every reply because the shared instructions grew past 10,000 characters | On 10 October, "hi" in the chat returned "Jarvis could not finish the reply". The backend log only said `conversation.reply_failed` / "Chat agent failed"; the hosted agent swallows the exception (`except Exception: yield "event: error"`), so the cause was invisible in Log Analytics. It was `capabilityInstructions` (the shared tool guidance sent with `GET /agent/settings`): 11,362 characters after the P9-5x tool additions, while `agents/jarvis/jarvis_tools.py` rejected anything over 10,000 as "invalid Jarvis settings" and the agent failed ~9 ms after reading settings. Every capability line added raises the risk and no test connected the two limits. The agent limit is now 20,000 and the budget lives in one shared file, `agents/jarvis/limits.json` (hard limit 20,000, headroom budget 15,000 code points): the agent reads it, and `capability-instructions.test.ts` checks the backend constant, the budget and BMP-only text against it. A failed chat turn now emits `event: error` with a short diagnostic `code` (for example `capability_instructions_too_large`), which the backend logs in the `failure` field of `conversation.reply_failed` as `Chat agent failed (<code>)`, with no message text. Some redundant wording was also trimmed. When a chat turn fails, filter Log Analytics for `conversation.reply_failed` and read `failure`. Two services enforced the same budget in different languages without a shared test, and a generic catch hid the cause. |
+| **L130** | File and screenshot contents are untrusted prompt data | P9-66 sends extracted document text or a bounded image description to the hosted agent so Jarvis can answer file questions. | Treat all file-derived content as data, label it untrusted, keep it out of logs and tool-call audits, and expose further reads only through owner-scoped sensitive tools. |
 | **L124** | Folio ids came back upper case from SQL | After #564 deployed, `GET /folio` returned 503 for Dan: migration 0035 built `item_id` as `kind:` + `CONVERT(nvarchar(36), id)`, which SQL Server renders in upper case, while the store only accepts lower-case GUIDs, so every stored item failed validation. Same root cause as #536's job ids. Migration 0036 lower-cases existing ids and the store normalises ids on every read and write. Lesson: never build or compare GUID text from SQL Server without `LOWER()`; tests against the real database must assert the id shape round-trips. |
 | **L125** | The Google smoke probe used an endpoint Jarvis has no scope for | Every deploy after P9-39 (#562) failed its smoke gate with Google "down", while Dan's calendar tools worked. The probe read `/users/me/calendarList`, which needs `calendar.readonly`; Jarvis holds only `calendar.events` (infra/setup-google.ps1), so it always got 403. The probe now reads one primary-calendar event, the same endpoint and scope the calendar tools use. Lesson: a health probe must exercise the feature's own endpoint and scopes, and a new gate should be checked against a known-good system before it blocks deploys. |
 
@@ -1057,3 +1120,44 @@ regression; live acceptance is pending.
   ambient-background edge. Dock lengths reuse P9-73 safe-area spacing.
 - **Status:** implemented and browser-checked offline; physical iPhone and live
   microphone/provider verification remain open.
+
+## 2026-10-10: P9-71 shared cyan selection
+
+- **Decision:** navigation, top-bar toggles, tabs and segmented choices use one
+  subtle cyan tint and readable foreground from canonical `--state-selected-*`
+  roles. Weight or stronger icon strokes reinforce selection without a selected
+  outline/glow. Presence mode colours remain separate from the open-menu state.
+- **Evidence:** fixture Chromium/WebKit checks at 390×844 and 1280×900 in both
+  themes exercise keyboard, touch, hover, press and reduced motion. CSS regressions
+  verify selected text/indicator contrast; component tests assert current-page and
+  toggle semantics. Before/after captures are in `docs/ui/screenshots/p9-71/`.
+- **Status:** implemented offline; physical-device and live-service checks are
+  not claimed.
+
+## 2026-10-10: Orb inlay vibrancy and Folio navigation
+
+- **Decision (Dan):** rear-ring orange inlays match the floor's vibrant amber.
+  Keep the existing warm token and a fine profile; bypass distance fog and tone
+  mapping for ring inlays only. Floor lighting, cyan geometry and motion remain
+  unchanged.
+- **Decision (Dan):** choosing a page dismisses Folio, including the current
+  page, home/Settings links, the phone menu and Jarvis navigation. An area with
+  multiple pages can replace it with its own navigation. History changes also
+  dismiss the pane without reopening it on return.
+- **Evidence:** focused navigation regressions and stage tests; local Chromium
+  desktop/phone checks in both themes. Fixture captures and limitations are
+  recorded in `docs/ui/screenshots/orb-folio-polish/README.md`.
+- **Status:** implemented locally; production acceptance follows merge.
+
+## 2026-10-10: Composer follows enlarged conversation
+
+- **Decision (Dan):** desktop typing keeps the composer aligned with both edges
+  of the visible maximised conversation, on home and when chat floats over
+  another page. Restore/minimise/close return to the normal width; phones,
+  voice and unrelated maximised windows do not trigger expansion.
+- **Implementation:** derive the local chat-width token from the existing
+  conversation window class and shell attributes, without a second state owner.
+- **Evidence:** local Chromium fixture measurements, keyboard/window controls,
+  hide/reopen and repeated toggles, with desktop light/dark and phone captures
+  in `docs/ui/screenshots/composer-sizing/README.md`.
+- **Status:** implemented locally; production acceptance follows deployment.

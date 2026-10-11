@@ -9,7 +9,7 @@ import { ToolRefusal, type JarvisTool } from './tool-registry.js';
 const getSettingsSchema = {
   type: 'object',
   properties: {
-    area: { type: 'string', enum: ['roles', 'voice', 'research', 'memory', 'timeouts', 'appearance', 'personality'] },
+    area: { type: 'string', enum: ['roles', 'voice', 'research', 'memory', 'timeouts', 'appearance', 'personality', 'decisions'] },
   },
   additionalProperties: false,
 } as const;
@@ -88,6 +88,7 @@ export const getSettingsTool: JarvisTool = {
       timeouts: ['timeoutSettings'],
       appearance: ['themes', 'backgrounds', 'themeMotions', 'themeDensities'],
       personality: ['personalityTones', 'personalityResponseStyles'],
+      decisions: ['decisionProviders'],
     } as const;
     if (area === undefined) return { settings, options, fields };
     if (typeof area !== 'string' || !Object.hasOwn(optionKeys, area)) {

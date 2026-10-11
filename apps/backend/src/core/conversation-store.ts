@@ -27,12 +27,20 @@ export interface ConversationToolCall {
   readonly artifactId?: string;
 }
 
+export interface ConversationAttachmentReference {
+  readonly id: string;
+  readonly name: string;
+  readonly contentType: string;
+  readonly size: number;
+}
+
 export interface ConversationHistoryMessage extends ConversationMessage {
   readonly channel: ConversationChannel;
   readonly language: ConversationLanguage;
   readonly interrupted: boolean;
   readonly voiceMinutes: number | null;
   readonly toolCalls: readonly ConversationToolCall[];
+  readonly attachments: readonly ConversationAttachmentReference[];
 }
 
 export interface ConversationSteeringMessage {
@@ -71,6 +79,9 @@ export interface ConversationStore {
     readonly interrupted?: boolean;
     readonly sourceItemId?: string;
     readonly allowEndedSession?: boolean;
+    readonly attachmentIds?: readonly string[];
+    readonly attachmentOwnerObjectId?: string;
+    readonly attachmentRetentionDays?: number;
   }): Promise<ConversationMessage | null>;
   updateMessage?(messageId: string, text: string): Promise<ConversationMessage | null>;
   getDanMessageIdBySourceItemId(sourceItemId: string): Promise<string | null>;
@@ -89,4 +100,11 @@ export interface ConversationStore {
     readonly after: string;
     readonly limit: number;
   }): Promise<readonly ConversationSteeringMessage[]>;
+}
+
+export class InvalidConversationAttachmentsError extends Error {
+  constructor() {
+    super('One or more attachments are unavailable.');
+    this.name = 'InvalidConversationAttachmentsError';
+  }
 }

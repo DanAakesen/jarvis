@@ -912,7 +912,7 @@ test('validates exact current-session actions and values', () => {
 test('validates exact navigation keys, settings sections and bounded factory task/issue selectors', () => {
   const command = { commandId: 'navigate-1', operation: 'navigate' };
   assert.deepEqual(workspaceNavigationPages, [
-    'home', 'factory', 'settings', 'usage', 'knowledge', 'folio', 'status',
+    'home', 'factory', 'settings', 'usage', 'notes', 'knowledge', 'folio', 'status',
   ]);
   assert.deepEqual(workspaceSettingsSections, [
     'appearance', 'jarvis', 'personality', 'voice', 'presence', 'memory',
@@ -1062,4 +1062,11 @@ test('validates bounded background job details and history steps', () => {
   assert.equal(isBackgroundJobDetails({ job, steps: Array(101).fill(step), retryable: true }), false);
   assert.equal(isBackgroundJobDetails({ job, steps: [step], retryable: true, extra: true }), false);
   assert.equal(isBackgroundJobDetails({ job: { ...job, status: 'done' }, steps: [step], retryable: true }), false);
+});
+test('issue attachments default to descriptions and bound explicit publication inputs', async () => {
+  const { issueAttachmentFields } = await import('./index.js');
+  assert.equal(issueAttachmentFields.publish.default, 'description');
+  assert.deepEqual(issueAttachmentFields.publish.enum, ['description', 'public']);
+  assert.equal(issueAttachmentFields.attachmentIds.maxItems, 5);
+  assert.equal(issueAttachmentFields.attachmentIds.uniqueItems, true);
 });
