@@ -155,6 +155,42 @@ describe('live Now panel', () => {
     view.unmount();
   });
 
+  it('acknowledges a session command only after its asynchronous action resolves, carrying the refusal reason', async () => {
+    loadNowFeed.mockResolvedValue(feed);
+    acknowledgeWorkspaceCommand.mockResolvedValue(undefined);
+    streamNowFeed.mockImplementation(async ({ onWorkspaceReady, onWorkspaceCommand, signal }) => {
+      streamCallbacks.onWorkspaceReady = onWorkspaceReady;
+      streamCallbacks.onWorkspaceCommand = onWorkspaceCommand;
+      await new Promise<void>((resolve) => signal.addEventListener('abort', () => resolve(), { once: true }));
+    });
+    let finish: (value: { applied: false; reason: string }) => void = () => {};
+    const applyWorkspaceCommand = vi.fn(() => new Promise<{ applied: false; reason: string }>((resolve) => { finish = resolve; }));
+    const view = render(
+      <MemoryRouter>
+        <NowFeedPanel client={client} config={config} getAccessToken={getAccessToken} applyWorkspaceCommand={applyWorkspaceCommand} />
+      </MemoryRouter>,
+    );
+    await waitFor(() => expect(streamCallbacks.onWorkspaceReady).not.toBeNull());
+    streamCallbacks.onWorkspaceReady?.('12345678-1234-4234-8234-123456789abc');
+    streamCallbacks.onWorkspaceCommand?.(
+      { commandId: 'session-camera', operation: 'session', action: 'camera', value: 'rear' },
+      Date.now() + 5_000,
+    );
+    await waitFor(() => expect(applyWorkspaceCommand).toHaveBeenCalled());
+    expect(acknowledgeWorkspaceCommand).not.toHaveBeenCalled();
+    finish({ applied: false, reason: 'Camera access has not been allowed in this browser.' });
+    await waitFor(() => expect(acknowledgeWorkspaceCommand).toHaveBeenCalledWith(
+      'https://api.example.com',
+      'session-camera',
+      '12345678-1234-4234-8234-123456789abc',
+      false,
+      getAccessToken,
+      'refused',
+      'Camera access has not been allowed in this browser.',
+    ));
+    view.unmount();
+  });
+
   it('persists dismissal before hiding the activity item and refreshes the snapshot', async () => {
     const user = userEvent.setup();
     loadNowFeed.mockResolvedValue(feed);
