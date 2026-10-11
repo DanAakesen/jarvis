@@ -2431,10 +2431,21 @@ Historical reads join the current artifact to enforce ownership.
 After commit, an acknowledged workspace `update` targets the original cached
 window or canonical HTML window, never a new window. Delivery failure reports
 the saved artifact/version rather than claiming display success. No migration,
-App permission or web change is introduced. The existing `HtmlAppView` fetch
-depends only on artifact ID: same-ID updates do not reload its iframe yet.
-Visual refresh acceptance therefore needs separately authorized renderer work;
-backend command acknowledgement alone does not verify refreshed HTML.
+App permission or web change is introduced by P9-53.
+
+P9-78 passes the existing generated-view `source.updatedAt` into `HtmlAppView`.
+The load identity includes artifact ID, update timestamp, backend URL and retry
+attempt. A new identity immediately replaces stale HTML with the existing loading
+state, then fetches the latest owner-authorized artifact with `cache: no-store`.
+Cleanup aborts obsolete loads; an active-load guard also ignores responses from
+transports that complete after cancellation. A failed revision uses the existing
+error/retry state instead of presenting old HTML as refreshed. The React key
+remains the artifact ID, preserving renderer height and workspace window identity,
+geometry, Folio and pins. No contract, sandbox, CSP, bridge or styling changes.
+Focused tests and Chromium desktop/phone light/dark fixtures verify refresh and
+recovery offline; production acceptance remains pending. Broker acknowledgement
+still confirms that the UI applied the view update, not that the iframe finished
+loading.
 
 Migration `0035_folio.sql` adds an owner-scoped `dbo.folio_items` index over
 research reports, HTML apps, generated images and knowledge-graph views. New

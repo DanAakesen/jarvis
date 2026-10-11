@@ -4,6 +4,8 @@ Phase 1 delivers the Software Factory. Requirements and page specifications are 
 
 ## Current focus
 
+- **HTML report refresh (#686):** Codex is completing the independent renderer wiring for same-artifact updates, obsolete-load cancellation and retry. The shell and locally reserved UI tasks stay unchanged; #667's backend conflict repair is separate and remains gated on #641.
+
 - **Composer sizing (Dan, 10 October):** desktop chat input follows the visible maximised conversation width on home and other pages, returning to its normal width on restore/minimise/close. Phone and voice sizing stay unchanged. Local fixture measurements and captures are recorded in `docs/ui/screenshots/composer-sizing/README.md`; production acceptance follows deployment. This correction ships separately from unfinished #430.
 
 - **Local UI polish (Dan, 10 October):** orb-ring inlays retain bright amber at the rear of the room; Folio closes on page selection, including same-page desktop/phone links and Jarvis navigation. These corrections ship separately from unfinished #430 window layout/pins. Current phone polish is retained from `main`; live production acceptance follows merge.
@@ -573,6 +575,7 @@ P8-02 allocated P8-04 through P8-13 to frontend work in PR #233. Backend tasks t
 | P9-74 | [#655](https://github.com/DanAakesen/jarvis/issues/655) | Knowledge notes hide metadata and scroll; graph/count exclude tooling | Implemented with fixture regressions and Chromium/WebKit phone/desktop light/dark before/after captures; normal/reduced-motion scroll controls verified. 421 web tests plus final 14 Knowledge tests, 27 vault tests and lint/build pass. Main synced; fallback review clean. CodeQL backtracking finding fixed, but rerun timed out: final security confirmation pending. No live vault or physical-device verification | — | Complete |
 | P9-75 | [#669](https://github.com/DanAakesen/jarvis/issues/669) | Keep the sign-in greeting and action clear of the orb; make the idle stage warmer and alive | Reuse luminous glass and existing palette; keep sign-in restore/retry and active voice states intact. Fixture-only Chromium/WebKit checks at phone portrait/landscape and desktop sizes, light/dark, reduced motion and failure recovery; record motion and measured render cost | P9-69, P9-72, P9-73 | Complete |
 | P9-76 | [#681](https://github.com/DanAakesen/jarvis/issues/681) | Choose the decision provider: Jev or Microsoft-Decision-1 | One provider abstraction for reflex, browser, recipe and PC decisions; `decisions.provider` setting (default Jev) in Settings and settings tools; `provider` on `reflex.decision`; Microsoft-Decision-1 deployed as `decision-1` (Bicep) | P9-66 | Complete |
+| P9-78 | [#686](https://github.com/DanAakesen/jarvis/issues/686) | Refresh revised HTML reports in their existing window | The generated view's existing update timestamp reloads the owner-authorized artifact; stale loads are cancelled and ignored, failed revisions offer retry, and window identity/geometry remain unchanged. Focused web tests, lint/build and Chromium desktop/phone light/dark fixtures pass; production acceptance remains pending. No schema, permission or styling change | P9-53 | In progress |
 
 ### Confirm before P0
 
