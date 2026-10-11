@@ -100,7 +100,6 @@ describe('window readback', () => {
 
   it('runs the frame bridge: visible text and selection out, form values and hidden parts never', async () => {
     document.body.innerHTML = '<p>Report body</p><input value="typed secret"><p style="display:none">gone</p><script>1</script>';
-    
     const html = htmlAppDocument('', { scheme: 'dark', tokens: {} });
     const script = html.slice(html.indexOf('<script>') + 8, html.indexOf('</script>'));
     const messages: unknown[] = [];
