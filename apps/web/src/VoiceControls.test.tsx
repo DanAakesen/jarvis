@@ -218,7 +218,7 @@ describe('VoiceControls', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'More options' }));
     expect(screen.getAllByRole('menuitem').map((item) => item.textContent)).toEqual([
-      'Language', 'Mute microphone', 'Look at screen', 'Stop sharing screen', 'Turn on camera',
+      'Language', 'Mute microphone', 'Look at screen', 'Watch the screen', 'Stop sharing screen', 'Turn on camera',
     ]);
     expect(screen.getByRole('menuitem', { name: 'Look at screen' }).getAttribute('aria-disabled')).toBeNull();
     const cameraItem = screen.getByRole('menuitem', { name: 'Turn on camera' });

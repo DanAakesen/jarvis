@@ -88,7 +88,7 @@ export async function waitForChatSetup<T>(operation: () => Promise<T>, signal: A
   }
 }
 
-async function accessToken(client: PublicClientApplication, config: PublicConfig): Promise<string> {
+export async function accessToken(client: PublicClientApplication, config: PublicConfig): Promise<string> {
   const account = client.getActiveAccount() ?? client.getAllAccounts()[0];
   if (!account) throw new Error('Your Microsoft sign-in needs attention. Sign in again.');
 
