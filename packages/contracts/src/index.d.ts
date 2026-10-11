@@ -330,8 +330,19 @@ export interface WorkspaceSnapshotWindow {
   selection?: string;
 }
 
+export type WorkspaceDeviceKind = 'desktop' | 'phone' | 'tablet';
+export type WorkspaceCommandTarget = 'active' | 'desktop' | 'phone' | 'all';
+export interface WorkspaceDevice {
+  kind: WorkspaceDeviceKind;
+  label?: string;
+}
+export const workspaceDeviceKinds: readonly WorkspaceDeviceKind[];
+export const workspaceCommandTargets: readonly WorkspaceCommandTarget[];
+
 export interface WorkspaceSnapshot {
   windows: readonly WorkspaceSnapshotWindow[];
+  /** The kind of device this tab runs on; older pages omit it. */
+  device?: WorkspaceDevice;
   contextPanelOpen: boolean;
   frame?: HtmlArtifactFrame;
   view?: WorkspaceView;
@@ -384,7 +395,8 @@ export const workspaceSettingsSections: readonly [
 ];
 export type WorkspaceSettingsSection = typeof workspaceSettingsSections[number];
 
-export type WorkspaceCommand =
+/** `target` is optional on every operation and addresses a device kind; the broker routes it (P9-61). */
+export type WorkspaceCommand = { target?: WorkspaceCommandTarget } & (
   | { commandId: string; operation: 'navigate'; page: 'settings'; section?: WorkspaceSettingsSection }
   | { commandId: string; operation: 'navigate'; page: 'factory'; taskId?: string; issueNumber?: number }
   | { commandId: string; operation: 'navigate'; page: Exclude<WorkspaceNavigationPage, 'settings' | 'factory'> }
@@ -399,7 +411,7 @@ export type WorkspaceCommand =
   | { commandId: string; operation: 'minimise-all' | 'restore-all' | 'close-all' }
   | { commandId: string; operation: 'pin' | 'unpin'; viewId: string }
   | { commandId: string; operation: 'context-panel'; action: 'open'; view?: GeneratedView }
-  | { commandId: string; operation: 'context-panel'; action: 'close' | 'toggle' };
+  | { commandId: string; operation: 'context-panel'; action: 'close' | 'toggle' });
 
 export interface WebResearchSource {
   title: string;

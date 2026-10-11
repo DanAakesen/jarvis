@@ -8,6 +8,7 @@ import type { PublicConfig } from '../config/public-config';
 import type { WorkspaceCommand } from '@jarvis/contracts';
 import { ActivityPanel } from './ActivityPanel';
 import { WorkspaceCommandContext } from './workspace-command-state';
+import { isCommandForThisDevice, readWorkspaceDeviceKind } from './workspace-device';
 import type { NowFeed, NowFeedStreamStatus } from './activity';
 import {
   dismissNowActivity,
@@ -114,6 +115,8 @@ export function NowFeedPanel({
               reason = 'The workspace command was cancelled before application.';
             } else if (expiresAt <= Date.now()) {
               reason = 'The workspace command expired before application.';
+            } else if (!isCommandForThisDevice(command)) {
+              reason = `The workspace command is addressed to the ${command.target} device, not this ${readWorkspaceDeviceKind()}.`;
             } else {
               try {
                 applied = applyWorkspaceCommandRef.current(command, commandBlobHost ?? trustedBlobHost);

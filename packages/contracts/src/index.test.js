@@ -1040,3 +1040,18 @@ test('issue attachments default to descriptions and bound explicit publication i
   assert.equal(issueAttachmentFields.attachmentIds.maxItems, 5);
   assert.equal(issueAttachmentFields.attachmentIds.uniqueItems, true);
 });
+
+test('workspace snapshots report a device kind and commands may name a target', () => {
+  const snapshot = { windows: [], contextPanelOpen: false };
+  for (const kind of ['desktop', 'phone', 'tablet']) {
+    assert.equal(isWorkspaceSnapshot({ ...snapshot, device: { kind, label: 'My device' } }), true);
+  }
+  assert.equal(isWorkspaceSnapshot({ ...snapshot, device: { kind: 'watch' } }), false);
+  assert.equal(isWorkspaceSnapshot({ ...snapshot, device: { kind: 'phone', extra: 1 } }), false);
+  assert.equal(isWorkspaceSnapshot({ ...snapshot, device: { kind: 'phone', label: '' } }), false);
+  for (const target of ['active', 'desktop', 'phone', 'all']) {
+    assert.equal(isWorkspaceCommand({ commandId: 'c1', operation: 'minimise-all', target }), true);
+  }
+  assert.equal(isWorkspaceCommand({ commandId: 'c1', operation: 'minimise-all', target: 'tablet' }), false);
+  assert.equal(isWorkspaceCommand({ commandId: 'c1', operation: 'minimise-all' }), true);
+});

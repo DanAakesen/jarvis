@@ -40,13 +40,15 @@ import { CollapsibleSection } from './CollapsibleSection';
 import { MobileCaption, MobileMenu } from './MobileShell';
 import { flyChat } from './chat-flight';
 import { readWorkspaceFrame } from './workspace-frame';
+import { readWorkspaceDevice } from './workspace-device';
 import { JobsChip } from './JobsChip';
 import { hasRunningJob, useJobs } from './jobs-store';
 import { KnowledgeBackendContext } from './knowledge/knowledge-context';
 import { PresenceChip, PresenceSettings } from './Presence';
 import { MemorySettings } from './MemorySettings';
 
-/** Interim research progress: unning from P9-46 (#613) on; older backends sent partial for it. */
+/** Interim research progress: 
+unning from P9-46 (#613) on; older backends sent partial for it. */
 const researchInProgress = (status: string) => status === 'running' || status === 'partial';
 
 const sidebarLimits = { min: 160, max: 420 };
@@ -221,7 +223,7 @@ function ShellLayout({ signedIn, config, session, camera, screenShare }: {
     ...(viewHistory.previous ? { previous: viewHistory.previous } : {}),
   }), [folioOpen, frontViewId, location, viewHistory.previous]);
   const workspaceCommands = useMemo(() => ({
-    snapshot: { windows: openWindows, contextPanelOpen: contextPanel.isOpen, ...(frame ? { frame } : {}), ...(signedIn ? { view } : {}) },
+    snapshot: { windows: openWindows, contextPanelOpen: contextPanel.isOpen, device: readWorkspaceDevice(), ...(frame ? { frame } : {}), ...(signedIn ? { view } : {}) },
     dispatch: (command: Parameters<WorkspaceController['dispatch']>[0], trustedBlobHost?: string) => {
       const navigateRequest = readNavigateCommand(command);
       if (navigateRequest) return navigateTo(navigateRequest);
