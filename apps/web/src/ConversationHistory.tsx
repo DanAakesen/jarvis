@@ -13,6 +13,7 @@ import { ConversationMoreMenu, type MoreMenuAction } from './ConversationMoreMen
 import { ConversationToast } from './ConversationToast';
 import { VoiceControls } from './VoiceControls';
 import { useVoiceWorkspace } from './voice-workspace-state';
+import { useSessionCommandRegistry } from './session-commands';
 import { WorkspaceCommandContext } from './workspace-command-state';
 import { conversationViewId, useConversationWindow } from './conversation-window-state';
 import { MarkdownContent } from './MarkdownContent';
@@ -171,6 +172,8 @@ export function ConversationHistory({
   const [historyErrorId, setHistoryErrorId] = useState(0);
   const [reload, setReload] = useState(0);
   const [language, setLanguage] = useState<'da' | 'en'>('en');
+  const sessionCommands = useSessionCommandRegistry();
+  useEffect(() => sessionCommands?.register({ setLanguage }), [sessionCommands]);
   const [session, setSession] = useState<ChatSession | null>(null);
   const { latestActivity, workText } = useJarvisActivity();
   // Tools used in the current chat turn, collected from runtime activity as they start and finish.
