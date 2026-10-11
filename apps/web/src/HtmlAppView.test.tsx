@@ -1,7 +1,7 @@
 import { act, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ConversationIntentContext, type ConversationIntentController } from './conversation-intents';
-import { HtmlAppView } from './HtmlAppView';
+import { GeneratedViewRenderer } from './GeneratedViewRenderer';
 import { KnowledgeBackendContext } from './knowledge/knowledge-context';
 
 const artifactId = '12345678-1234-4234-8234-123456789abc';
@@ -9,17 +9,20 @@ const artifact = { id: artifactId.toUpperCase(), kind: 'html', title: 'Man City 
   sources: [{ title: 'BBC', url: 'https://www.bbc.co.uk/sport' }], createdAt: '2026-10-08T16:40:00.000Z', pinned: false };
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
 
-function renderView(fetchMock: ReturnType<typeof vi.fn>) {
+function renderView(fetchMock: ReturnType<typeof vi.fn>, updatedAt?: string) {
   vi.stubGlobal('fetch', fetchMock);
   const intents: ConversationIntentController = { pending: [], sendMessage: vi.fn(), focusVoiceStart: vi.fn(), consume: vi.fn() };
-  render(
-    <KnowledgeBackendContext.Provider value={{ backendUrl: 'https://api.example.com', getAccessToken: async () => 'token' }}>
+  const backend = { backendUrl: 'https://api.example.com', getAccessToken: async () => 'token' };
+  const view = (revision?: string) => (
+    <KnowledgeBackendContext.Provider value={backend}>
       <ConversationIntentContext.Provider value={intents}>
-        <HtmlAppView artifactId={artifactId} title="Research: Man City verdict" />
+        <GeneratedViewRenderer view={{ version: 1, renderer: 'html-app', title: 'Research: Man City verdict',
+          source: { id: 'html_generation', status: 'complete', ...(revision ? { updatedAt: revision } : {}) }, data: { artifactId }, actions: [] }} />
       </ConversationIntentContext.Provider>
-    </KnowledgeBackendContext.Provider>,
+    </KnowledgeBackendContext.Provider>
   );
-  return intents;
+  const rendered = render(view(updatedAt));
+  return { intents, update: (revision?: string) => rendered.rerender(view(revision)), unmount: rendered.unmount };
 }
 
 function post(source: MessageEventSource | null, data: unknown) {
@@ -30,7 +33,7 @@ afterEach(() => { vi.unstubAllGlobals(); Reflect.deleteProperty(navigator, 'user
 
 describe('HtmlAppView', () => {
   it('loads the artifact into a scripts-only sandbox with the CSP and handles validated bridge messages', async () => {
-    const intents = renderView(vi.fn(async () => json(artifact)));
+    const { intents } = renderView(vi.fn(async () => json(artifact)));
     const frame = await screen.findByTitle('Man City verdict') as HTMLIFrameElement;
     expect(frame.getAttribute('sandbox')).toBe('allow-scripts');
     expect(frame.getAttribute('srcdoc')).toContain("default-src 'none'");
@@ -60,5 +63,61 @@ describe('HtmlAppView', () => {
     renderView(fetchMock);
     (await screen.findByRole('button', { name: 'Retry' })).click();
     await waitFor(() => expect(screen.getByTitle('Man City verdict')).not.toBeNull());
+  });
+
+  it('refreshes a same-ID revision, retains frame sizing and does not reload an unchanged revision', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(json(artifact)).mockResolvedValue(json({ ...artifact, html: '<h1>Revised verdict</h1>' }));
+    const { update } = renderView(fetchMock, '2026-10-08T16:40:00.000Z');
+    const frame = await screen.findByTitle('Man City verdict') as HTMLIFrameElement;
+    post(frame.contentWindow, { jarvisBridge: 1, type: 'resize', height: 900 });
+
+    update('2026-10-11T10:00:00.000Z');
+    expect(screen.queryByTitle('Man City verdict')).toBeNull();
+    const revised = await screen.findByTitle('Man City verdict') as HTMLIFrameElement;
+    expect(revised.srcdoc).toContain('Revised verdict');
+    expect(revised.style.height).toBe('900px');
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
+      `https://api.example.com/factory/workspace-artifacts/html/${artifactId}`,
+      `https://api.example.com/factory/workspace-artifacts/html/${artifactId}`,
+    ]);
+
+    update('2026-10-11T10:00:00.000Z');
+    await act(async () => {});
+    expect(screen.getByTitle('Man City verdict')).toBe(revised);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('cancels obsolete loads and ignores their responses even if the transport still completes them', async () => {
+    let oldResponse!: (response: Response) => void;
+    const fetchMock = vi.fn().mockImplementationOnce(() => new Promise<Response>((resolve) => { oldResponse = resolve; }))
+      .mockResolvedValue(json({ ...artifact, html: '<h1>Newest revision</h1>' }));
+    const { update, unmount } = renderView(fetchMock, '2026-10-08T16:40:00.000Z');
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    const obsoleteSignal = fetchMock.mock.calls[0]![1].signal as AbortSignal;
+    update('2026-10-11T10:00:00.000Z');
+    expect(obsoleteSignal.aborted).toBe(true);
+    const frame = await screen.findByTitle('Man City verdict') as HTMLIFrameElement;
+    expect(frame.srcdoc).toContain('Newest revision');
+    await act(async () => { oldResponse(json(artifact)); });
+    expect(frame.srcdoc).toContain('Newest revision');
+    expect(frame.srcdoc).not.toContain('<h1>Verdict</h1>');
+    const latestSignal = fetchMock.mock.calls[1]![1].signal as AbortSignal;
+    unmount();
+    expect(latestSignal.aborted).toBe(true);
+  });
+
+  it('hides stale HTML after a failed revision load and retries the requested update', async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(json(artifact))
+      .mockResolvedValueOnce(json({ error: 'busy' }, 503))
+      .mockResolvedValue(json({ ...artifact, html: '<h1>Updated after retry</h1>' }));
+    const { update } = renderView(fetchMock);
+    await screen.findByTitle('Man City verdict');
+    update('2026-10-11T10:00:00.000Z');
+    (await screen.findByRole('button', { name: 'Retry' })).click();
+    expect(screen.queryByTitle('Man City verdict')).toBeNull();
+    const frame = await screen.findByTitle('Man City verdict') as HTMLIFrameElement;
+    expect(frame.srcdoc).toContain('Updated after retry');
+    expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 });

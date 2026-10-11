@@ -19,6 +19,16 @@ The nine design areas and where each stands. **Confirmed** = Dan's requirement o
 
 ## Decision log
 
+P9-78 (11 October 2026): use the generated view's existing `source.updatedAt`
+to invalidate a mounted HTML artifact load when its ID stays the same. Keep
+the artifact React key and existing window system, rather than remounting the
+whole window or adding a contract field. Hide obsolete HTML during the load,
+abort/ignore superseded responses and reuse the existing retry state. This closes
+P9-53's renderer refresh gap without changing the approved design or the six
+locally reserved UI tasks. Focused tests, web lint/build and Chromium fixtures at
+1280×900 and 390×844 in light/dark, including reduced motion, pass offline;
+production refresh remains unverified. No new dependency or permission.
+
 P9-67 (10 October 2026): issue attachments default to fenced descriptions and
 transcribed text from P9-66's private store. All issue/comment writes are staged
 and checked for secrets. Public publication is one image at a time, requires an
