@@ -39,7 +39,9 @@ Contents write for EXIF-free, content-addressed images on the never-merged
 Git history is not governed by private attachment retention. No migration,
 new dependency, App permission or web change; live acceptance remains pending.
 Workspace acknowledgement confirms preview creation only; image-load/visibility
-acknowledgement remains a web limitation for #649, outside this backend task.
+acknowledgement remains a web limitation for #649, outside this backend task
+(#649 now shows the image with a public-repository note in chat; it still cannot
+acknowledge on-screen loading to the backend).
 
 P9-66 (10 October 2026): keep conversation uploads in the existing private
 `artifacts` Blob container under `attachments/`, with SQL-owned metadata and
@@ -1158,3 +1160,19 @@ regression; live acceptance is pending.
   hide/reopen and repeated toggles, with desktop light/dark and phone captures
   in `docs/ui/screenshots/composer-sizing/README.md`.
 - **Status:** implemented locally; production acceptance follows deployment.
+
+## 2026-10-11: Chat attachments reuse the More menu (#649)
+
+- **Decision:** attach, paste and drop add files to the existing composer. The
+  attach control is an **Attach file or photo** item in the shared More menu (the
+  paperclip was removed on 6 October), so no new composer button, window
+  arrangement control or layout change is introduced.
+- **Rules:** five files, 10 MB images and 20 MB other files, checked in the
+  browser and again by the backend. Send waits for uploads. A message with files
+  queues rather than steers. Files open only through short-lived signed URLs.
+  Jarvis's public-publication confirmation shows the image with a visible
+  "This repository is public" note.
+- **Evidence:** offline Vitest tests; Chromium at 1280×900 and 390×844 with
+  stubbed auth and API. Live backend, Blob and provider acceptance remain pending.
+- **Status:** implemented offline.
+

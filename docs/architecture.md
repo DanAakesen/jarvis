@@ -2238,6 +2238,37 @@ descriptions are excluded from ordinary logs and tool-call audit records.
 Offline route, store, extraction, tool-parity and agent tests cover the flow;
 live model and Azure Blob acceptance remain unverified.
 
+### P9-68 chat attachments (web)
+
+`chat-attachments.ts`, `useChatAttachments.ts` and `ChatAttachments.tsx` own the
+browser side of P9-66/P9-67; `ConversationHistory` only wires them into the
+composer and transcript. Files arrive from the More menu's **Attach file or
+photo** item (the system picker; phones offer photos, camera and files), from a
+clipboard paste in the message box (a pasted screenshot is named
+`screenshot-<time>.png`; pasted text is untouched) or from a drop on the
+conversation. The browser checks extension, size (images 10 MB, others 20 MB) and
+count (five) before uploading, then sends each file as its own authenticated
+`POST /conversation/attachments` multipart request using XMLHttpRequest for
+upload progress. The backend repeats every check and remains authoritative.
+Chips show name, type, size, progress, a "Jarvis couldn't read this file" note
+when extraction failed, and per-file errors; removal aborts an upload or deletes
+the private file. Send stays disabled while an upload runs; failed uploads are
+never sent. Sending passes `attachmentIds` on the existing turn request. Messages
+with files queue instead of steering, because steering carries text only; if the
+turn is not saved the files return to the composer. Uploads older than 23 hours
+are not sent (the backend expires unsent files at 24 hours).
+
+History and live messages list their files; opening one requests
+`GET /conversation/attachments/:id/url` on demand and opens the signed Azure Blob
+URL in a new tab (or a link if the browser blocks the tab). A 404 shows an
+"expired or removed" state. When Jarvis's reply contains the P9-67 confirmation
+phrase `confirm <code> publish <filename>` and the earlier message carries that
+image, the reply also shows the image and a "This repository is public" note
+before Dan approves. If the preview cannot load, the note says not to approve.
+No backend, contract, migration or infrastructure change. Offline Vitest and
+Chromium checks (stubbed auth/API) cover the flow; live backend, Blob and
+provider acceptance remain unverified.
+
 ### P9-76 decision provider (Jev or Microsoft-Decision-1)
 
 Reflex classification (chat and voice), the browser agent, task recipes and PC action planning all make typed decisions: a request with model, a state and named 
