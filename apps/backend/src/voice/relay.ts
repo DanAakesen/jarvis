@@ -1028,7 +1028,9 @@ function registerVoiceRoute(
         ...next,
         response: {
           ...response,
-          instructions: `${instructions}\n${workspaceContext(app.workspaceCommands.snapshot(app.ownerObjectId))}`,
+          instructions: `${instructions}\n${workspaceContext(
+            app.workspaceCommands.snapshot(app.ownerObjectId), app.workspaceCommands.deviceContext(app.ownerObjectId),
+          )}`,
         },
       });
     };
