@@ -8,6 +8,8 @@ describe('shared navigation capability instructions', () => {
     const instructions = capabilityInstructions({ automaticCapture: false });
     expect(instructions).toContain('real camera or screen images at the stated capture time');
     expect(instructions).toContain('the image I looked at N minutes ago');
+    expect(instructions).toContain('only when the current time is known; otherwise cite its capture time');
+    expect(instructions).toContain('Never invent elapsed time');
     expect(instructions).toContain('without a fresh frame ask Dan to let Jarvis look again');
     expect(instructions).toContain('Never invent visual details');
   });

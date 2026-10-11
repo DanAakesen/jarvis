@@ -4,7 +4,7 @@ Phase 1 delivers the Software Factory. Requirements and page specifications are 
 
 ## Current focus
 
-- **P9-81 (#701):** Question-aware on-demand vision and retained visual grounding in backend/agent only. Preserve watch mode, image/usage limits and legacy clients; add focused route, history and agent regressions. UI question forwarding/fresh-frame selection and live camera acceptance belong to the separate UI task.
+- **P9-81 (#701):** Backend/agent question-aware vision and retained grounding implemented with focused route, history and voice regressions. Vision tests (57, including 18 watch regressions), backend/agent checks, build, lint and secret scan pass offline. Final automated review hit the session time limit; read-only review found no blocking defects. SQL integration execution and live camera acceptance remain unverified. Next: CI/review and the separate UI question/fresh-frame task.
 
 - **HTML report refresh (#686):** Codex is completing the independent renderer wiring for same-artifact updates, obsolete-load cancellation and retry. The shell and locally reserved UI tasks stay unchanged; #667's backend conflict repair is separate and remains gated on #641.
 

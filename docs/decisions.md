@@ -31,7 +31,10 @@ New/detail questions without a fresh image ask for another look; an earlier
 real observation must not be called ungrounded. Legacy clients remain supported.
 Migration 0040 has a paired down batch (L120); schemas remain plain root
 objects (L121), and shared guidance stays within `agents/jarvis/limits.json`.
-Offline validation and UI/live acceptance are recorded separately.
+Focused vision/backend/agent tests, build, lint and secret scanning passed
+offline; a read-only review found no blocking defects. Final automated
+validation reached the session time limit. Isolated SQL integration execution
+and UI/live acceptance remain unverified.
 
 P9-80 (11 October 2026): Dan directed full backend access to the private
 `DanAakesen/vault` repository. Owner Notes routes, vault tools, indexing, search
