@@ -1679,11 +1679,11 @@ the authorized bound frame is resolved. Its first image-request usage replaces
 the conservative hold with provider totals and known estimated costs, rather
 than adding duplicate generic chat billing rows.
 Voice admission is wired in production for both realtime routes. Reported image
-tokens are recorded separately from audio/text totals. `gpt-realtime-2.1` uses
-an explicitly estimated USD 5 per million image input tokens from the
-[provider model page](https://developers.openai.com/api/docs/models/gpt-realtime-2.1),
-not a verified Azure Voice Live tariff or bill. Unknown mini pricing retains the
-conservative allowance and unverified cost status. Missing usage after inference
+tokens are recorded separately from audio/text totals. Neither realtime model
+uses an invented tariff: actual image token quantities replace the pending
+zero quantity while cost retains the conservative allowance and unverified
+status until the coordinator establishes the Azure image tariff.
+Missing usage after inference
 likewise retains the hold for its UTC day. Images rejected or discarded before response creation release their
 no-inference reservation. No SQL metric or migration is added.
 

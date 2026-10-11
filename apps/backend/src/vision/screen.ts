@@ -311,7 +311,10 @@ export function createScreenVisionModule(service: ScreenVisionService, frameStor
             sessionId, messageId, ...(turnId === undefined ? {} : { turnId }) });
           if (!image) return reply.code(404).send({ error: 'Frame unavailable' });
           try {
-            if (!app.settingsStore) return reply.code(503).send({ error: 'Image budget unavailable' });
+            if (!app.settingsStore) return reply.code(503).send({
+              error: 'Image budget unavailable', code: 'budget_unavailable',
+              ...(turnId === undefined ? {} : { turnId }),
+            });
             const settings = await readSettings(app.settingsStore, await app.modelCatalogue.read());
             if (!await service.reserveImage({ sessionId, itemId: frameId, model: settings.roles.chat.model,
               limitUsd: settings.global.visionDailyBudgetUsd })) {

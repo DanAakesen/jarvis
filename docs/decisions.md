@@ -41,13 +41,12 @@ Reuse the shared UTC-day vision ledger and its conservative pending allowance;
 capture counts once toward the 300-frame cap. Chat reserves at authorized
 frame resolution and reconciles the first image request's provider totals
 without double billing. Voice records provider-reported image token quantities,
-never prices audio/text totals as image tokens. Until the coordinator verifies
-the Azure realtime image tariff, `gpt-realtime-2.1` costs use the explicitly
-estimated USD 5 per million image-input-token list price from the
-[OpenAI model page](https://developers.openai.com/api/docs/models/gpt-realtime-2.1).
-That source was returned by web search; direct retrieval was unavailable.
-It is not a confirmed Azure tariff or bill. Unknown mini pricing retains the
-conservative unverified allowance charged to the daily budget. Missing provider
+never prices audio/text totals as image tokens. No realtime image tariff is
+hardcoded: the provider image-token quantity is actual, while both realtime
+models retain their conservative unverified allowance charged to the daily
+budget until the coordinator verifies Azure pricing. A web-search list-price
+claim was not adopted because direct source retrieval was unavailable and it
+did not establish the deployed Azure tariff. Missing provider
 usage after inference also keeps that hold; missing usage is not evidence of
 zero cost. Known no-inference rejections/cancellations release the reservation.
 
