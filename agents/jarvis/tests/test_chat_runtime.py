@@ -378,6 +378,7 @@ def test_chat_accepts_timestamped_camera_context() -> None:
         })
     assert response.status_code == 200
     assert model.messages[0].content == visual_context_text(record)
+    assert "without a fresh frame, ask Dan to let Jarvis look again" in model.messages[0].content
     assert model.messages[-1] == ModelMessage("user", "What is this?")
 
 

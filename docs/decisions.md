@@ -34,7 +34,9 @@ objects (L121), and shared guidance stays within `agents/jarvis/limits.json`.
 Focused vision/backend/agent tests, build, lint and secret scanning passed
 offline; a read-only review found no blocking defects. Final automated
 validation reached the session time limit. Isolated SQL integration execution
-and UI/live acceptance remain unverified.
+and UI/live acceptance remain unverified. Direct hosted-voice bridge translation
+of realtime conversation items also remains unverified; DA/EN realtime paths
+and hosted text-history grounding have offline regression coverage.
 
 P9-80 (11 October 2026): Dan directed full backend access to the private
 `DanAakesen/vault` repository. Owner Notes routes, vault tools, indexing, search
