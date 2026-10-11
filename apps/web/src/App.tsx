@@ -40,13 +40,15 @@ import { CollapsibleSection } from './CollapsibleSection';
 import { MobileCaption, MobileMenu } from './MobileShell';
 import { flyChat } from './chat-flight';
 import { readWorkspaceFrame } from './workspace-frame';
+import { readPageWindows, useReadback } from './window-readback';
 import { JobsChip } from './JobsChip';
 import { hasRunningJob, useJobs } from './jobs-store';
 import { KnowledgeBackendContext } from './knowledge/knowledge-context';
 import { PresenceChip, PresenceSettings } from './Presence';
 import { MemorySettings } from './MemorySettings';
 
-/** Interim research progress: unning from P9-46 (#613) on; older backends sent partial for it. */
+/** Interim research progress: 
+unning from P9-46 (#613) on; older backends sent partial for it. */
 const researchInProgress = (status: string) => status === 'running' || status === 'partial';
 
 const sidebarLimits = { min: 160, max: 420 };
@@ -220,8 +222,16 @@ function ShellLayout({ signedIn, config, session, camera, screenShare }: {
     ...(frontViewId ? { focusedViewId: frontViewId } : {}),
     ...(viewHistory.previous ? { previous: viewHistory.previous } : {}),
   }), [folioOpen, frontViewId, location, viewHistory.previous]);
+  // The page and Folio pane Dan is reading, reported as windows with their text (P9-63).
+  const pageKey = `${viewPage}|${viewSection ?? ''}|${folioOpen}`;
+  const pageReadback = useReadback(() => ({ key: pageKey, windows: readPageWindows(viewPage, viewSection, folioOpen) }), signedIn, pageKey);
+  const pageWindows = pageReadback?.key === pageKey ? pageReadback.windows : undefined;
+  const snapshotWindows = useMemo(
+    () => pageWindows?.length ? [...openWindows, ...pageWindows].slice(0, 32) : openWindows,
+    [openWindows, pageWindows],
+  );
   const workspaceCommands = useMemo(() => ({
-    snapshot: { windows: openWindows, contextPanelOpen: contextPanel.isOpen, ...(frame ? { frame } : {}), ...(signedIn ? { view } : {}) },
+    snapshot: { windows: snapshotWindows, contextPanelOpen: contextPanel.isOpen, ...(frame ? { frame } : {}), ...(signedIn ? { view } : {}) },
     dispatch: (command: Parameters<WorkspaceController['dispatch']>[0], trustedBlobHost?: string) => {
       const navigateRequest = readNavigateCommand(command);
       if (navigateRequest) return navigateTo(navigateRequest);
@@ -253,7 +263,7 @@ function ShellLayout({ signedIn, config, session, camera, screenShare }: {
     minimiseAll: () => workspaceController.current?.minimiseAll(),
     hasVisibleViews: () => workspaceController.current?.hasVisibleViews() ?? false,
     isViewVisible: (viewId: string) => workspaceController.current?.isViewVisible?.(viewId) ?? false,
-  }), [contextPanel, frame, navigateTo, openWindows, signedIn, view]);
+  }), [contextPanel, frame, navigateTo, signedIn, snapshotWindows, view]);
   const applyWorkspaceCommand = useCallback((command: WorkspaceCommand, trustedBlobHost?: string) => {
     let applied = false;
     flushSync(() => { applied = workspaceCommands.dispatch(command, trustedBlobHost); });

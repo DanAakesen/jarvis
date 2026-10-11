@@ -182,8 +182,19 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   without executing scripts, loading resources or returning markup. CSS-driven
   and script-rendered visibility is not evaluated. Plain/code and page text
   retain whitespace and entities; literal angle brackets become `‹`/`›` rather
-  than being parsed as HTML. Page text reporting remains
-  the separate UI task #640; old snapshots still validate.
+  than being parsed as HTML. P9-63 (#640) adds the web reporting:
+  `window-readback.ts` debounces (400 ms, like the frame) text, selection and
+  frame reports into the snapshot. Task and other workspace windows report the
+  readable text of their content area (form controls, hidden parts, scripts and
+  frames skipped; credential-shaped text redacted); chart series (names carry
+  units) and timeline events come from the generated data; HTML reports send
+  visible text and selection through a new bounded `readback` message of the
+  existing sandbox bridge, accepted only from the report's own frame and
+  cleared when its document is replaced. The Settings section Dan is reading
+  (never credentials), Graph and Notes pages, and the open Folio pane join the
+  snapshot as `page-settings`, `page-knowledge`, `page-notes` and `folio-pane`
+  windows. Content is at most 8 KiB and selection 2 KiB per window; old
+  snapshots still validate.
   On non-conversation signed-in routes, the shell keeps the command stream
   mounted in a hidden Now panel while the workspace controller remains active.
   Ordinary renderers use fixed React elements and declarative data. P8-41 adds
@@ -2235,7 +2246,8 @@ live model and Azure Blob acceptance remain unverified.
 ### P9-76 decision provider (Jev or Microsoft-Decision-1)
 
 Reflex classification (chat and voice), the browser agent, task recipes and PC action planning all make typed decisions: a request with model, a state and named 
-oul/choice/score questions, answered with nswers[<name>]. Typesafe's Jev and Microsoft-Decision-1 (Foundry) accept that same request, so core/decision-provider.ts resolves a DecisionTarget (endpoint, model value, bearer token) and the four call sites use it instead of a fixed Jev key. The decisions.provider setting (jev default, or microsoft) is read at most every three seconds; a failed read keeps the last value. Jev keeps its Key Vault key and jev-latest. Microsoft uses the backend identity (token for https://cognitiveservices.azure.com/.default; Cognitive Services User on the Foundry account is enough) and the decision-1 deployment at <foundry host>/providers/microsoft/v1/systemone. The deployment name cannot contain microsoft (reserved word). Which Foundry host serves that route was not documented, so the resolver tries the services.ai host and then the cognitiveservices host and remembers the one that does not answer 404. If the chosen provider cannot produce a target, callers act as if no decision was made (reflex falls back to the main agent); the backend never silently switches provider. Results and failures carry provider, and the allowlisted eflex.decision log records it beside the confidence bucket and latency so the providers can be compared in Log Analytics. decision.provider_unavailable (provider only) is logged at most once a minute. Limits: Decision-1 is text-only with a 32K-token context, and the subscription quota is 60 requests a minute; the confidence thresholds (0.9 and 0.5) were tuned for Jev and are not yet recalibrated.
+oul/choice/score questions, answered with nswers[<name>]. Typesafe's Jev and Microsoft-Decision-1 (Foundry) accept that same request, so core/decision-provider.ts resolves a DecisionTarget (endpoint, model value, bearer token) and the four call sites use it instead of a fixed Jev key. The decisions.provider setting (jev default, or microsoft) is read at most every three seconds; a failed read keeps the last value. Jev keeps its Key Vault key and jev-latest. Microsoft uses the backend identity (token for https://cognitiveservices.azure.com/.default; Cognitive Services User on the Foundry account is enough) and the decision-1 deployment at <foundry host>/providers/microsoft/v1/systemone. The deployment name cannot contain microsoft (reserved word). Which Foundry host serves that route was not documented, so the resolver tries the services.ai host and then the cognitiveservices host and remembers the one that does not answer 404. If the chosen provider cannot produce a target, callers act as if no decision was made (reflex falls back to the main agent); the backend never silently switches provider. Results and failures carry provider, and the allowlisted 
+eflex.decision log records it beside the confidence bucket and latency so the providers can be compared in Log Analytics. decision.provider_unavailable (provider only) is logged at most once a minute. Limits: Decision-1 is text-only with a 32K-token context, and the subscription quota is 60 requests a minute; the confidence thresholds (0.9 and 0.5) were tuned for Jev and are not yet recalibrated.
 
 ### P9-67 private-by-default issue attachments
 
