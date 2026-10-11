@@ -4,6 +4,7 @@ import { backendFetch } from './backend-request';
 import { useConversationIntents } from './conversation-intents';
 import { useKnowledgeBackend } from './knowledge/knowledge-context';
 import { Loader } from './Loader';
+import { reportFrameReadback } from './window-readback';
 import { htmlAppDocument, minAppHeight, readHtmlAppMessage, readHtmlArtifact } from './html-app-document';
 
 type Load = { key: string } & ({ status: 'loading' } | { status: 'error'; message: string; retry: boolean } | { status: 'ready'; artifact: HtmlArtifact; document: string });
@@ -67,6 +68,13 @@ export function HtmlAppView({ artifactId, title, updatedAt }: { artifactId: stri
     return () => { active = false; controller.abort(); };
   }, [artifactId, loadKey, backend?.backendUrl, call]);
 
+  // A replaced or removed document must not keep reporting the previous report's text (#687 refresh).
+  const documentText = load.status === 'ready' ? load.document : null;
+  useEffect(() => {
+    const element = frame.current;
+    return () => { if (element) reportFrameReadback(element, null); };
+  }, [documentText]);
+
   useEffect(() => {
     const onMessage = (event: MessageEvent) => {
       if (!frame.current || event.source !== frame.current.contentWindow || event.origin !== 'null') return;
@@ -78,6 +86,9 @@ export function HtmlAppView({ artifactId, title, updatedAt }: { artifactId: stri
       switch (message.type) {
         case 'resize':
           setHeight(message.height);
+          return;
+        case 'readback':
+          reportFrameReadback(frame.current, message);
           return;
         case 'ask':
           if (!clicked) return;

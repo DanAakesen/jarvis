@@ -5,6 +5,7 @@ import { isWorkspaceCommand, type GeneratedView, type WorkspaceCommand, type Wor
 import { GeneratedViewRenderer } from './GeneratedViewRenderer';
 import { flyWindowAway, flyWindowToTab } from './window-fly-away';
 import { Loader } from './Loader';
+import { readElement, useReadback, type WindowReadback } from './window-readback';
 import type { SessionCommand, SessionCommandResult } from './session-commands';
 export type { WorkspaceCommand } from '@jarvis/contracts';
 
@@ -203,9 +204,22 @@ export const Workspace = forwardRef<WorkspaceController, {
   const visibleViews = useMemo(() => openViews.filter((view) => !minimizedViewIds.has(view.id)), [minimizedViewIds, openViews]);
   const foreground = visibleViews.find((view) => view.id === foregroundViewId) ?? visibleViews[0];
 
+  // What each window shows (P9-63), read after the content settles and sent with the snapshot.
+  const reported = useMemo(() => openViews.slice(0, 32), [openViews]);
+  const readback = useReadback(() => {
+    const result: Record<string, WindowReadback> = {};
+    for (const view of reported) {
+      const element = windowElements.current.get(view.id);
+      // Jarvis already holds the conversation transcript; windows only report what the backend does not own.
+      const body = view.presentation === 'conversation' ? null : element?.querySelector('.workspace-view-content');
+      const found = body ? readElement(body, view.content.status === 'generated' ? view.content.view : undefined) : undefined;
+      if (found) result[view.id] = found;
+    }
+    return result;
+  }, Boolean(onOpenWindowsChange), reported.map(({ id }) => id).join('\n'));
   useEffect(() => {
-    onOpenWindowsChange?.(openViews.slice(0, 32).map(({ id, title }) => ({ viewId: id, title })));
-  }, [onOpenWindowsChange, openViews]);
+    onOpenWindowsChange?.(reported.map(({ id, title }) => ({ viewId: id, title, ...readback?.[id] })));
+  }, [onOpenWindowsChange, readback, reported]);
   const frontId = (phone ? foreground?.id : visibleViews.at(-1)?.id) ?? null;
   useEffect(() => { onFrontViewChange?.(frontId); }, [frontId, onFrontViewChange]);
 

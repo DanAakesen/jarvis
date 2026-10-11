@@ -7,6 +7,8 @@ import { isHtmlArtifact, type HtmlArtifact } from '@jarvis/contracts';
 export const htmlAppCsp = "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: https:; font-src data:; connect-src 'none'; form-action 'none'; base-uri 'none'";
 
 export const maxAskLength = 2_000;
+export const maxReadbackLength = 16_384;
+export const maxReadbackSelectionLength = 4_096;
 export const minAppHeight = 160;
 export const maxAppHeight = 20_000;
 
@@ -15,7 +17,8 @@ export type HtmlAppMessage =
   | { type: 'ask'; text: string }
   | { type: 'pin' }
   | { type: 'unpin' }
-  | { type: 'resize'; height: number };
+  | { type: 'resize'; height: number }
+  | { type: 'readback'; content: string; selection: string };
 
 /** The `jarvis` object inside the frame: link clicks, questions, pinning and auto-height all go through postMessage. */
 const bridgeScript = `(function () {
@@ -45,6 +48,38 @@ const bridgeScript = `(function () {
     lastHeight = height;
     post({ type: 'resize', height: height });
   };
+  // Visible text and the selection, for Jarvis's read_window. Form controls, hidden parts and scripts are never read.
+  var skipped = /^(SCRIPT|STYLE|TEMPLATE|NOSCRIPT|INPUT|TEXTAREA|SELECT|OPTION|IFRAME|CANVAS|OBJECT|EMBED)$/;
+  var editable = function (node) { return node && node.closest && node.closest('input,textarea,select,[contenteditable]'); };
+  var visibleText = function (root, parts, size) {
+    for (var node = root.firstChild; node && size.n < ${maxReadbackLength}; node = node.nextSibling) {
+      if (node.nodeType === 3) { parts.push(node.nodeValue); size.n += node.nodeValue.length; }
+      else if (node.nodeType === 1 && !skipped.test(node.tagName) && !node.hidden && node.getAttribute('aria-hidden') !== 'true') {
+        var style = getComputedStyle(node);
+        if (style.display === 'none' || style.visibility === 'hidden') continue;
+        visibleText(node, parts, size);
+        parts.push(' ');
+      }
+    }
+    return parts;
+  };
+  var lastReadback = '';
+  var readback = function () {
+    if (!document.body) return;
+    var content = visibleText(document.body, [], { n: 0 }).join('').replace(/\\s+/g, ' ').trim().slice(0, ${maxReadbackLength});
+    var selected = window.getSelection ? window.getSelection() : null;
+    var selection = selected && !selected.isCollapsed && !editable(document.activeElement) && !editable(selected.anchorNode && selected.anchorNode.parentElement)
+      ? String(selected).slice(0, ${maxReadbackSelectionLength}) : '';
+    var key = content + '\\u0000' + selection;
+    if (key === lastReadback) return;
+    lastReadback = key;
+    post({ type: 'readback', content: content, selection: selection });
+  };
+  var readbackTimer = 0;
+  var scheduleReadback = function () { clearTimeout(readbackTimer); readbackTimer = setTimeout(readback, 400); };
+  addEventListener('load', scheduleReadback);
+  document.addEventListener('selectionchange', scheduleReadback);
+  if (typeof MutationObserver === 'function') new MutationObserver(scheduleReadback).observe(document.documentElement, { childList: true, subtree: true, characterData: true });
   addEventListener('load', report);
   if (typeof ResizeObserver === 'function') new ResizeObserver(report).observe(document.documentElement);
   setTimeout(report, 0);
@@ -93,6 +128,11 @@ export function readHtmlAppMessage(value: unknown): HtmlAppMessage | null {
     case 'pin':
     case 'unpin':
       return { type: message.type };
+    case 'readback':
+      return typeof message.content === 'string' && message.content.length <= maxReadbackLength &&
+        typeof message.selection === 'string' && message.selection.length <= maxReadbackSelectionLength
+        ? { type: 'readback', content: message.content, selection: message.selection }
+        : null;
     case 'resize':
       return typeof message.height === 'number' && Number.isFinite(message.height)
         ? { type: 'resize', height: Math.min(maxAppHeight, Math.max(minAppHeight, Math.round(message.height))) }

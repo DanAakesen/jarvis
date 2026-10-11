@@ -41,6 +41,7 @@ import { CollapsibleSection } from './CollapsibleSection';
 import { MobileCaption, MobileMenu } from './MobileShell';
 import { flyChat } from './chat-flight';
 import { readWorkspaceFrame } from './workspace-frame';
+import { readPageWindows, useReadback } from './window-readback';
 import { readWorkspaceDevice } from './workspace-device';
 import { JobsChip } from './JobsChip';
 import { hasRunningJob, useJobs } from './jobs-store';
@@ -227,8 +228,16 @@ function ShellLayout({ signedIn, config, session, camera, screenShare }: {
     ...(frontViewId ? { focusedViewId: frontViewId } : {}),
     ...(viewHistory.previous ? { previous: viewHistory.previous } : {}),
   }), [folioOpen, frontViewId, location, viewHistory.previous]);
+  // The page and Folio pane Dan is reading, reported as windows with their text (P9-63).
+  const pageKey = `${viewPage}|${viewSection ?? ''}|${folioOpen}`;
+  const pageReadback = useReadback(() => ({ key: pageKey, windows: readPageWindows(viewPage, viewSection, folioOpen) }), signedIn, pageKey);
+  const pageWindows = pageReadback?.key === pageKey ? pageReadback.windows : undefined;
+  const snapshotWindows = useMemo(
+    () => pageWindows?.length ? [...openWindows, ...pageWindows].slice(0, 32) : openWindows,
+    [openWindows, pageWindows],
+  );
   const workspaceCommands = useMemo(() => ({
-    snapshot: { windows: openWindows, contextPanelOpen: contextPanel.isOpen, device: readWorkspaceDevice(), ...(frame ? { frame } : {}), ...(signedIn ? { view } : {}) },
+    snapshot: { windows: snapshotWindows, contextPanelOpen: contextPanel.isOpen, device: readWorkspaceDevice(), ...(frame ? { frame } : {}), ...(signedIn ? { view } : {}) },
     dispatch: (command: Parameters<WorkspaceController['dispatch']>[0], trustedBlobHost?: string) => {
       const navigateRequest = readNavigateCommand(command);
       if (navigateRequest) return navigateTo(navigateRequest);
@@ -261,7 +270,7 @@ function ShellLayout({ signedIn, config, session, camera, screenShare }: {
     hasVisibleViews: () => workspaceController.current?.hasVisibleViews() ?? false,
     isViewVisible: (viewId: string) => workspaceController.current?.isViewVisible?.(viewId) ?? false,
     applySession: (command: Parameters<typeof applySessionCommand>[0]) => applySessionCommand(command, sessionCommands, cameraRef.current),
-  }), [contextPanel, frame, navigateTo, openWindows, sessionCommands, signedIn, view]);
+  }), [contextPanel, frame, navigateTo, sessionCommands, signedIn, snapshotWindows, view]);
   const applyWorkspaceCommand = useCallback((command: WorkspaceCommand, trustedBlobHost?: string): boolean | Promise<SessionCommandResult> => {
     if (command.operation === 'session') return workspaceCommands.applySession(command);
     let applied = false;
