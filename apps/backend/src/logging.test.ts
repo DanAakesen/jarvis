@@ -239,17 +239,17 @@ describe('structured log export', () => {
     const sink = { ...sdk, trackTrace: vi.fn() };
     const logger = createLogger({ logLevel: 'info' }, sink, output);
     logger.info({
-      outcome: 'ok', added: 3, changed: 1, removed: 2, folders: ['Work', 'People', 'Work'],
+      outcome: 'ok', added: 3, changed: 1, removed: 2, folders: ['Work', 'Customers', 'Work'],
       path: 'Work/private-note.md', content: 'note-secret',
     }, 'vault.index');
     logger.info({
-      outcome: 'ok', folder: 'People', path: 'People/private-note.md', content: 'note-secret',
+      outcome: 'ok', folder: 'Customers', path: 'Customers/private-note.md', content: 'note-secret',
     }, 'vault.write');
 
     expect(JSON.parse(records[0]!)).toMatchObject({
-      outcome: 'ok', added: 3, changed: 1, removed: 2, folders: ['Work', 'People'], msg: 'vault.index',
+      outcome: 'ok', added: 3, changed: 1, removed: 2, folders: ['Work', 'other'], msg: 'vault.index',
     });
-    expect(JSON.parse(records[1]!)).toMatchObject({ outcome: 'ok', folder: 'People', msg: 'vault.write' });
+    expect(JSON.parse(records[1]!)).toMatchObject({ outcome: 'ok', folder: 'other', msg: 'vault.write' });
     expect(records.join('')).not.toContain('private-note');
     expect(records.join('')).not.toContain('note-secret');
     expect(JSON.stringify(sink.trackTrace.mock.calls)).not.toContain('note-secret');

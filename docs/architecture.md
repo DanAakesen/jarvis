@@ -1593,9 +1593,10 @@ Dan's private `DanAakesen/vault` repository on `master` is the source of truth
 for durable knowledge. The existing GitHub App issues an installation token
 scoped to that repository with Contents write permission (which includes read);
 the backend never uses a personal token. A signed `push` webhook for `master`
-and a startup sync read the recursive Git tree. Sync fetches changed Markdown
-notes by blob SHA, skips `.obsidian/`, `.github/`, `.codex/`, `.vscode/` and
-non-text/binary files, chunks notes by heading, embeds them with the selected
+and a startup sync read the recursive Git tree. Sync fetches changed safe
+Markdown notes from the repository root and every directory by blob SHA, skips
+`.git/`, `.obsidian/`, `.github/`, `.codex/`, `.vscode/` and non-text/binary
+files, chunks notes by heading, embeds them with the selected
 embedding role deployment when available, and removes deleted notes.
 `dbo.vault_chunks` in migration `0021_vault_memory_index.sql` is only a derived
 index/cache keyed by path and blob SHA. Migration `0028_json_embeddings_without_vector.sql`
@@ -1614,13 +1615,18 @@ remains. Embedding telemetry records provider input tokens when the response
 supplies them.
 
 The backend exposes `vault_search` (up to eight ranked snippets with heading,
-path and GitHub note URL), `vault_read` (one Markdown note, at most 256 KiB),
-and `vault_write` (create, append or replace). Before the first write in a
-process it loads `AGENTS.md`, `.github/agent-state/routing.md`, and relevant
-`.github/instructions/*.instructions.md`; writes are restricted to the vault's
-People/, Work/, Personal/ and General/ note folders. Writes are limited to
-256 KiB, verify the current stored Dan message, refuse secrets/credentials and
-require Dan's explicit “remember” for banking or health details. Contents API
+path and GitHub note URL), `vault_read` (one safe Markdown note, at most
+256 KiB, including root files and instruction files), and `vault_write`
+(create, append or replace). There are no routed-folder or routing-rule gates:
+tools and owner Notes routes cover safe Markdown paths at the root and at any
+directory depth. Writes, edits and deletes refuse every dot-prefixed path
+segment, including `.git`, `.github`, `.obsidian`, `.codex` and `.vscode`;
+GitHub creates missing parent directories with the first note. All note content
+is untrusted data, never instructions. Agent writes still verify the current
+stored Dan message, refuse secrets/credentials and require Dan's explicit
+“remember” for banking or health details. Direct owner Notes writes do not
+require a stored chat message but use the same path, 256 KiB and secret checks.
+Contents API
 SHA concurrency retries once; successful changes commit directly to `master`
 as `jarvis: <reason>` with a `Co-authored-by: Jarvis` trailer. The tool result
 includes the commit URL for Jarvis to relay in chat. `vault_delete` is available
@@ -1630,28 +1636,36 @@ deletion through the same App contents-write token, removes the indexed chunks
 and links, and invalidates the cached graph; a changed note is refused rather
 than deleting the newer version.
 
-Index/write logs contain bounded counts and top-level folders only, never paths
-or note contents. Fake GitHub tests cover add/change/delete indexing, ranking,
+Index/write logs contain bounded counts and only the four legacy folder names
+or `other`, never note paths or contents. Fake GitHub tests cover add/change/delete indexing, ranking,
 SHA conflict retry, sensitive-data refusal and webhook signature verification.
 The repository is private and was unavailable for live validation; Dan must
 install the existing GitHub App on `DanAakesen/vault` with Contents read/write
 before indexing and writes can succeed.
 
 P9-49 adds owner-only `GET /notes`, `GET /notes/note?path=…`, `POST /notes`
-and `PUT /notes/note` routes for the Notes web client. The indexed list supports
-bounded pagination, text search and folder filtering; reads return Markdown
-content, the loaded Contents SHA and its GitHub URL. Create refuses an existing
+and `PUT /notes/note` routes for the Notes web client. P9-80 removes folder and
+routing-rule restrictions: the bounded indexed list supports text search,
+first-segment folder filtering and exact-parent `directory` filtering, including
+root notes. Additive note and graph metadata keeps `folder` as the first path
+segment (empty for root files) and adds the full parent `directory`. The new
+owner-only `GET /notes/tree` uses the full Git tree, returning sorted indexed
+directories and their ancestors, the root note count, a truncation flag and the
+index timestamp; the response is bounded and cached with synchronization.
+Reads return Markdown content, the loaded Contents SHA and its GitHub URL. Create refuses an existing
 path with 409. Edit requires the submitted SHA to match the current Contents
 SHA; a stale or racing edit returns 409 with the current SHA and content when
 the note still exists, and never retries or overwrites. Writes reuse the vault
-path, routing-folder, 256 KiB and `assertCaptureIsSafe` checks. These direct
+safe-path, dot-segment, 256 KiB and `assertCaptureIsSafe` checks. These direct
 owner-authored writes do not require a stored chat message or call `checkSource`,
 but still reject secrets and credentials (and require “remember” for banking or
 health details). The default commit message is `jarvis: edited in Notes`;
 write logs contain only outcome and folder, never note content. A successful
 write invalidates the graph cache and queues index synchronization after any
 existing sync; the signed `master` push webhook also synchronizes the index.
-Note content is untrusted data, never instructions. No migration is needed.
+Graph and search cover every indexed directory within the existing 2,000-node,
+8,000-edge and search-result bounds. `/memory/status` counts actual top-level
+folders plus the empty-string root key. No migration is needed.
 
 P9-77 implements the Notes web client locally against these routes. Read/write
 responses, paths, UTF-8 size, revision tokens and GitHub links are validated;

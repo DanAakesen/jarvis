@@ -13,7 +13,7 @@ import type {
 } from '../database/memory-store.js';
 import { MemoryEmbeddingHttpError, type MemoryEmbedder } from '../core/memory-embeddings.js';
 import { createGitHubVaultClient, VAULT_BRANCH, VAULT_REPOSITORY } from './github-client.js';
-import { createVaultModule, KNOWLEDGE_NOTE_EXCLUSIONS } from './index.js';
+import { createVaultModule } from './index.js';
 import { buildApp } from '../app.js';
 import { coreModule } from '../core/index.js';
 import { loadConfig } from '../config.js';
@@ -617,7 +617,7 @@ describe('GitHub vault', () => {
     const id = (path: string) => createHash('sha256').update(path).digest('hex');
     expect(graph.edges).toEqual([{ source: id('People/Alex.md'), target: id('Work/Project.md'), type: 'link' }]);
   });
-  it('excludes tooling from graph and note counts but keeps it indexed and searchable', async () => {
+  it('includes every indexed Markdown directory in the graph and folder counts', async () => {
     const remote = Object.fromEntries([
       'Work/Fixture.md', 'General/skills-overview.md', 'Personal/Templates/Fixture.md',
       'Work/skills/references/Fixture.md', 'General/tools/Skills/Fixture.md',
@@ -626,20 +626,20 @@ describe('GitHub vault', () => {
     const index = new FakeIndexStore();
     const { module } = moduleFor({ remote, index, apiMemoryStore: {} as MemoryStore });
     await module.synchronize(signal());
-    // Previously indexed paths are also excluded defensively.
+    // The skipped GitHub metadata tree stays excluded even if stale rows exist.
     for (const path of ['skills/Fixture.md', '.github/Fixture.md']) {
       await index.replaceFile(path, sha('b'), [{ heading: 'Fixture', content: 'Fixture body.' }], []);
     }
-    expect(KNOWLEDGE_NOTE_EXCLUSIONS.map(({ glob }) => glob)).toEqual([
-      '**/skills/**', '**/*.template.md', '.github/**',
-    ]);
     const app = memoryApiApp(module);
     const graph = (await app.inject({ url: '/knowledge/graph', headers: apiAuthorization })).json();
     expect(graph.nodes.map((node: { path: string }) => node.path).sort()).toEqual([
-      'General/skills-overview.md', 'Personal/Templates/Fixture.md', 'Work/Fixture.md',
+      'General/skills-overview.md', 'General/tools/Skills/Fixture.md',
+      'Personal/Fixture.TEMPLATE.MD', 'Personal/Templates/Fixture.md',
+      'Work/Fixture.md', 'Work/Fixture.template.md', 'Work/skills/references/Fixture.md',
+      'skills/Fixture.md',
     ]);
     expect((await app.inject({ url: '/memory/status', headers: apiAuthorization })).json().notesByFolder)
-      .toEqual({ People: 0, Work: 1, Personal: 1, General: 1 });
+      .toEqual({ '': 0, People: 0, Work: 3, Personal: 2, General: 2, skills: 1 });
     expect(await index.files('text-embedding-3-small')).toHaveLength(9);
     index.termSearch.mockResolvedValue([{
       path: 'Work/skills/references/Fixture.md', heading: 'Fixture', content: 'Fixture body.',
@@ -801,7 +801,7 @@ describe('GitHub vault', () => {
     expect(list.statusCode).toBe(200);
     expect(list.json()).toEqual({
       notes: [{
-        path: 'People/Alex.md', title: 'Alex', folder: 'People',
+        path: 'People/Alex.md', title: 'Alex', folder: 'People', directory: 'People',
         updatedAt: '2026-10-07T12:00:00.000Z',
       }],
       limit: 1, offset: 0, hasMore: false,
@@ -889,6 +889,132 @@ describe('GitHub vault', () => {
       ]);
     expect(JSON.stringify(log.mock.calls)).not.toContain('Revised phrase');
     expect(JSON.stringify(log.mock.calls)).not.toContain('Fresh phrase');
+    expect(JSON.stringify(log.mock.calls)).not.toContain('General/New-note.md');
+  });
+
+  it('covers root, arbitrary top-level and deep notes with the cached full-vault tree', async () => {
+    const remote = {
+      'README.md': { sha: sha('a'), content: '# Root note\n\nRoot inventory.' },
+      'Customers/Client.md': { sha: sha('b'), content: '# Client\n\nCustomer record.' },
+      'Meetings/2026/Planning/Quarterly.md': { sha: sha('c'), content: '# Quarterly\n\nMeeting record.' },
+      '_agent-log/trace.md': { sha: sha('d'), content: '# Trace\n\nAgent record.' },
+      'People/Alex.md': { sha: sha('e'), content: '# Alex\n\nPerson record.' },
+      'Work/Project.md': { sha: sha('f'), content: '# Project\n\nWork record.' },
+      'Personal/Notes.md': { sha: sha('1'), content: '# Personal\n\nPersonal record.' },
+      'General/Notes.md': { sha: sha('2'), content: '# General\n\nGeneral record.' },
+      '.git/ignored.md': { sha: sha('3'), content: '# Git internals' },
+      '.github/workflows/ignored.md': { sha: sha('4'), content: '# Workflow metadata' },
+      '.obsidian/ignored.md': { sha: sha('5'), content: '# Obsidian metadata' },
+      '.codex/ignored.md': { sha: sha('6'), content: '# Codex metadata' },
+      '.vscode/ignored.md': { sha: sha('7'), content: '# VS Code metadata' },
+    };
+    const { indexStore, module } = moduleFor({ remote });
+    await module.synchronize(signal());
+    const app = memoryApiApp(module);
+
+    const tree = await app.inject({ url: '/notes/tree', headers: apiAuthorization });
+    expect(tree.statusCode).toBe(200);
+    expect(tree.json()).toMatchObject({
+      directories: [
+        'Customers', 'General', 'Meetings', 'Meetings/2026', 'Meetings/2026/Planning',
+        'People', 'Personal', 'Work', '_agent-log',
+      ],
+      rootNoteCount: 1,
+      truncated: false,
+    });
+    expect((await app.inject({
+      url: `/notes?${new URLSearchParams({ folder: 'Customers' })}`, headers: apiAuthorization,
+    })).json().notes).toEqual([expect.objectContaining({
+      path: 'Customers/Client.md', folder: 'Customers', directory: 'Customers',
+    })]);
+    expect((await app.inject({
+      url: `/notes?${new URLSearchParams({ directory: 'Meetings/2026/Planning' })}`,
+      headers: apiAuthorization,
+    })).json().notes).toEqual([expect.objectContaining({
+      path: 'Meetings/2026/Planning/Quarterly.md', folder: 'Meetings', directory: 'Meetings/2026/Planning',
+    })]);
+    expect((await app.inject({
+      url: `/notes?${new URLSearchParams({ folder: '', directory: '' })}`,
+      headers: apiAuthorization,
+    })).json().notes).toEqual([expect.objectContaining({
+      path: 'README.md', folder: '', directory: '',
+    })]);
+
+    const createdNotes = [
+      { path: 'new-root.md', term: 'rootunique' },
+      { path: 'Invoices/Invoice.md', term: 'invoiceunique' },
+      { path: 'Records/2026/Q4/Invoice.md', term: 'deepunique' },
+    ];
+    for (const { path, term } of createdNotes) {
+      const created = await app.inject({
+        method: 'POST',
+        url: '/notes',
+        headers: apiAuthorization,
+        payload: { path, content: `# ${term}\n\n${term} first.` },
+      });
+      expect(created.statusCode).toBe(200);
+      const loaded = await app.inject({
+        url: `/notes/note?path=${encodeURIComponent(path)}`,
+        headers: apiAuthorization,
+      });
+      expect(loaded.statusCode).toBe(200);
+      const stale = await app.inject({
+        method: 'PUT',
+        url: '/notes/note',
+        headers: apiAuthorization,
+        payload: { path, content: 'Stale replacement.', sha: sha('0') },
+      });
+      expect(stale.statusCode).toBe(409);
+      expect(stale.json()).toMatchObject({ currentSha: created.json().commit, content: `# ${term}\n\n${term} first.` });
+      const saved = await app.inject({
+        method: 'PUT',
+        url: '/notes/note',
+        headers: apiAuthorization,
+        payload: { path, content: `# ${term}\n\n${term} revised.`, sha: loaded.json().sha },
+      });
+      expect(saved.statusCode).toBe(200);
+    }
+
+    await vi.waitFor(() => {
+      for (const { path } of createdNotes) expect(indexStore.entry(path)).toBeDefined();
+    });
+    await module.synchronize(signal());
+    for (const { path, term } of createdNotes) {
+      const listing = await app.inject({
+        url: `/notes?${new URLSearchParams({ directory: path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : '' })}`,
+        headers: apiAuthorization,
+      });
+      expect(listing.json().notes).toEqual(expect.arrayContaining([expect.objectContaining({ path })]));
+      const search = await app.inject({
+        url: `/knowledge/search?q=${encodeURIComponent(term)}`,
+        headers: apiAuthorization,
+      });
+      expect(search.json().hits).toEqual(expect.arrayContaining([
+        expect.objectContaining({ nodeId: createHash('sha256').update(path).digest('hex') }),
+      ]));
+      const graph = await app.inject({ url: '/knowledge/graph', headers: apiAuthorization });
+      expect(graph.json().nodes).toEqual(expect.arrayContaining([expect.objectContaining({
+        path,
+        folder: path.includes('/') ? path.split('/')[0] : '',
+        directory: path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : '',
+      })]));
+    }
+    expect((await app.inject({ url: '/notes/tree', headers: apiAuthorization })).json()).toMatchObject({
+      directories: expect.arrayContaining(['Invoices', 'Records', 'Records/2026', 'Records/2026/Q4']),
+      rootNoteCount: 2,
+    });
+    for (const path of [
+      '.git/ignored.md', '.github/workflows/ignored.md', '.obsidian/ignored.md',
+      '.codex/ignored.md', '.vscode/ignored.md',
+    ]) {
+      expect(indexStore.entry(path)).toBeUndefined();
+    }
+    const forbidden = memoryApiApp(module, {
+      auth: async () => ({
+        objectId: 'not-dan', tenantId: apiConfig.auth.tenantId, displayName: 'Other',
+      }),
+    });
+    expect((await forbidden.inject({ url: '/notes/tree', headers: apiAuthorization })).statusCode).toBe(403);
   });
 
   it('restricts note routes to the owner and rejects unsafe note writes', async () => {
@@ -924,12 +1050,23 @@ describe('GitHub vault', () => {
     })).statusCode).toBe(400);
     expect((await app.inject({
       url: '/notes/note?path=People%2FAlex.md', headers: apiAuthorization,
-    })).statusCode).toBe(400);
-    const outsideFolder = await app.inject({
+    })).statusCode).toBe(404);
+    const dotDirectory = await app.inject({
       method: 'POST', url: '/notes', headers: apiAuthorization,
-      payload: { path: 'Work/project.md', content: '# Project' },
+      payload: { path: '.github/workflows/new.md', content: '# Workflow' },
     });
-    expect(outsideFolder.statusCode).toBe(400);
+    expect(dotDirectory.statusCode).toBe(400);
+    for (const path of [
+      '../root.md', '/absolute.md', 'C:/absolute.md', 'Customers//empty.md',
+      'Customers\\nested.md', 'Customers/readme.txt', 'Customers/../root.md',
+      'Customers/file?.md', 'Customers/file#.md', 'Customers/file%.md',
+    ]) {
+      const unsafe = await app.inject({
+        method: 'POST', url: '/notes', headers: apiAuthorization,
+        payload: { path, content: '# Unsafe' },
+      });
+      expect(unsafe.statusCode, path).toBe(400);
+    }
     const tooLarge = await app.inject({
       method: 'POST', url: '/notes', headers: apiAuthorization,
       payload: { path: 'General/large.md', content: 'é'.repeat(131_073) },
@@ -1095,7 +1232,7 @@ describe('GitHub vault', () => {
     });
     expect(tokenIssuer.issueForContentsWrite).toHaveBeenCalledOnce();
     expect(github.calls.filter(({ url }) => new URL(url).pathname === `/repos/${VAULT_REPOSITORY}/git/trees/${VAULT_BRANCH}`))
-      .toHaveLength(1);
+      .toHaveLength(0);
   });
 
   it('deletes a vault note only after Now approval and removes it from the index and graph', async () => {
@@ -1212,15 +1349,33 @@ describe('GitHub vault', () => {
     expect(credential.github.calls.some(({ method }) => method === 'PUT')).toBe(false);
   });
 
-  it('refuses paths outside the vault routing folders and writes larger than 256 KB', async () => {
+  it('allows arbitrary safe tool paths while requiring a stored Dan message and rejecting dot paths', async () => {
+    const emptySource = moduleFor();
+    const noMessage = { ...request, headers: {} } as FastifyRequest;
+    await expect(tool(emptySource.module, 'vault_write').execute({
+      path: 'Customers/Agent/deep.md', content: 'Fact.', reason: 'capture', automaticCapture: false,
+    }, noMessage, signal())).rejects.toThrow('There is no stored Dan message');
+    expect(emptySource.memoryStore.getSourceMessage).not.toHaveBeenCalled();
+    expect(emptySource.github.calls.some(({ method }) => method === 'PUT')).toBe(false);
+
     const module = moduleFor();
     await expect(tool(module.module, 'vault_write').execute({
       path: '../General/note.md', content: 'Fact.', reason: 'capture', automaticCapture: true,
     }, request, signal())).rejects.toThrow('Markdown path');
     await expect(tool(module.module, 'vault_write').execute({
+      path: '.github/workflows/new.md', content: 'Fact.', reason: 'capture', automaticCapture: true,
+    }, request, signal())).rejects.toThrow('dot-directories');
+    await expect(tool(module.module, 'vault_write').execute({
       path: 'General/note.md', content: 'x'.repeat(256 * 1024 + 1), reason: 'capture', automaticCapture: true,
     }, request, signal())).rejects.toThrow('vault content is invalid');
     expect(module.github.calls).toHaveLength(0);
+
+    await expect(tool(module.module, 'vault_write').execute({
+      path: 'Customers/Agent/deep.md',
+      content: 'Fact in an arbitrary nested location.',
+      reason: 'capture',
+      automaticCapture: false,
+    }, request, signal())).resolves.toMatchObject({ path: 'Customers/Agent/deep.md' });
   });
 
   it('refuses an append that would make an existing note exceed 256 KB', async () => {

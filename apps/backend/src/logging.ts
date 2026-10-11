@@ -196,13 +196,15 @@ function safeFields(input: Record<string, unknown>): Record<string, unknown> {
       if (Number.isSafeInteger(value) && Number(value) >= 0 && Number(value) <= 10_000) fields[key] = value;
     }
     if (Array.isArray(input.folders)) {
-      fields.folders = [...new Set(input.folders.filter((folder) =>
-        ['People', 'Work', 'Personal', 'General'].includes(String(folder))))].slice(0, 4);
+      fields.folders = [...new Set(input.folders.map((folder) =>
+        ['People', 'Work', 'Personal', 'General'].includes(String(folder))
+          ? String(folder) : 'other'))].slice(0, 5);
     }
   }
   if (input.msg === 'vault.write') {
     if (['ok', 'error', 'refused'].includes(String(input.outcome))) fields.outcome = input.outcome;
-    if (['People', 'Work', 'Personal', 'General'].includes(String(input.folder))) fields.folder = input.folder;
+    fields.folder = ['People', 'Work', 'Personal', 'General'].includes(String(input.folder))
+      ? input.folder : 'other';
   }
   if (input.msg === 'vision.watch') {
     if (input.source === 'screen' || input.source === 'camera') fields.source = input.source;
