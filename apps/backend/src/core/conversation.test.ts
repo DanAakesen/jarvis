@@ -84,7 +84,10 @@ const headers = { authorization: ['Bearer', 'a.b.c'].join(' ') };
 
 describe('conversation routes', () => {
   it('persists camera provenance, forwards it unchanged, and exposes additive history metadata', async () => {
-    const visualContext = { source: 'camera' as const, capturedAt: '2026-10-11T19:30:00Z', description: 'A red mug.' };
+    const visualContext = {
+      source: 'camera' as const, capturedAt: '2026-10-11T19:30:00Z', description: 'A red mug.',
+      question: 'What colour?', turnId: 'item_A-1',
+    };
     const store = storeFixture({ getHistory: vi.fn(async () => ({
       ...history, messages: [{ ...history.messages[0]!, metadata: { visualContext } }],
     })) });
@@ -103,6 +106,15 @@ describe('conversation routes', () => {
       { visualContext, screenContext: 'legacy' },
       { visualContext: { ...visualContext, capturedAt: 'yesterday' } },
       { visualContext: { ...visualContext, description: 'x'.repeat(5_001) } },
+      { visualContext: { ...visualContext, question: 123 } },
+      { visualContext: { ...visualContext, question: false } },
+      { visualContext: { ...visualContext, question: ['coercion'] } },
+      { visualContext: { ...visualContext, question: 'x'.repeat(501) } },
+      { visualContext: { ...visualContext, question: '😀'.repeat(501) } },
+      { visualContext: { ...visualContext, turnId: 123 } },
+      { visualContext: { ...visualContext, turnId: null } },
+      { visualContext: { ...visualContext, turnId: 'x'.repeat(129) } },
+      { visualContext: { ...visualContext, turnId: 'item.123' } },
     ]) {
       expect((await app.inject({
         method: 'POST', url: '/conversation/sessions/41/turns', headers,

@@ -515,6 +515,13 @@ export const conversationModule: BackendModule = {
         sharedScreenContext?: { screenDescription: string; sharedWindowTitle?: string };
       };
     }>('/conversation/sessions/:sessionId/turns', {
+      preValidation: async (request, reply) => {
+        const body: unknown = request.body;
+        if (typeof body !== 'object' || body === null || !Object.hasOwn(body, 'visualContext')) return;
+        if (!normalizeVisualContext((body as Record<string, unknown>).visualContext)) {
+          return reply.code(400).send({ error: 'Invalid visual context' });
+        }
+      },
       schema: {
         params: { type: 'object', properties: { sessionId: idSchema }, required: ['sessionId'], additionalProperties: false },
         body: {

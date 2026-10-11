@@ -205,6 +205,8 @@ async def load_verified_history(
             if record and (latest_visual is None or int(message["id"]) > latest_visual[0]):
                 latest_visual = (int(message["id"]), record)
         visual_text = visual_context_text(latest_visual[1]) if latest_visual else ""
+        if len(visual_text) > MAX_CONTEXT_CHARACTERS:
+            visual_text = ""
         previous = [
             message for message in messages
             if isinstance(message, dict)

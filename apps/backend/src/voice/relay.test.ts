@@ -1504,6 +1504,254 @@ describe('backend-relayed Voice Live WebSocket', () => {
     expect(records.join('')).not.toContain(voiceToken);
   });
 
+  it.each(['/voice', '/voice/da'])('holds a %s camera turn and releases exactly one grounded response', async (path) => {
+    const classifier = { classify: vi.fn(async () => null) } as unknown as ReflexClassifier;
+    const { browser, upstream, received, conversationStore } = await connectedPartialVoice(
+      partialSpeechHarness(), classifier, [], undefined, path,
+    );
+    browser.send(JSON.stringify({ type: 'jarvis.camera.state', on: true }));
+    await vi.waitFor(() => expect(received.filter((event) => event.type === 'session.update')).toHaveLength(2));
+    upstream.send(JSON.stringify({
+      type: 'conversation.item.input_audio_transcription.completed',
+      item_id: 'camera_turn', transcript: 'What colour is this?',
+    }));
+    await vi.waitFor(() => expect(classifier.classify).toHaveBeenCalledOnce());
+    expect(received.filter((event) => event.type === 'response.create')).toHaveLength(0);
+    const frame = {
+      type: 'jarvis.screen.context', source: 'camera', itemId: 'camera_turn',
+      capturedAt: '2026-10-11T19:30:00Z', question: 'What colour is this?', description: 'A blue mug.',
+    };
+    browser.send(JSON.stringify(frame));
+    await vi.waitFor(() => expect(received.filter((event) => event.type === 'response.create')).toHaveLength(1));
+    expect(conversationStore.setVisualContext).toHaveBeenCalledWith({
+      sessionId: '41', messageId: '42',
+      visualContext: {
+        source: 'camera', capturedAt: frame.capturedAt, question: frame.question,
+        description: frame.description, turnId: 'camera_turn',
+      },
+    });
+    const response = received.find((event) => event.type === 'response.create');
+    expect(JSON.stringify(response)).toContain('untrusted visual data');
+    expect(JSON.stringify(response)).toContain('A blue mug.');
+    browser.send(JSON.stringify(frame));
+    browser.send(JSON.stringify({ type: 'jarvis.screen.context.unavailable', itemId: 'camera_turn', reason: 'daily_limit' }));
+    browser.send(JSON.stringify({ type: 'jarvis.camera.state', on: false }));
+    await vi.waitFor(() => expect(received.filter((event) => event.type === 'session.update')).toHaveLength(3));
+    expect(received.filter((event) => event.type === 'response.create')).toHaveLength(1);
+    expect(conversationStore.addMessage).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(['frame_rate_limited', 'daily_limit', 'capture_failed', 'camera_off'])(
+    'releases a held turn without invented live evidence when %s', async (reason) => {
+      const classifier = { classify: vi.fn(async () => null) } as unknown as ReflexClassifier;
+      const { browser, upstream, received, conversationStore } = await connectedPartialVoice(partialSpeechHarness(), classifier);
+      browser.send(JSON.stringify({ type: 'jarvis.camera.state', on: true }));
+      await vi.waitFor(() => expect(received.filter((event) => event.type === 'session.update')).toHaveLength(2));
+      upstream.send(JSON.stringify({
+        type: 'conversation.item.input_audio_transcription.completed', item_id: 'missing_frame', transcript: 'What is here?',
+      }));
+      await vi.waitFor(() => expect(classifier.classify).toHaveBeenCalledOnce());
+      browser.send(JSON.stringify({ type: 'jarvis.screen.context.unavailable', itemId: 'missing_frame', reason }));
+      await vi.waitFor(() => expect(received.filter((event) => event.type === 'response.create')).toHaveLength(1));
+      expect(JSON.stringify(received.find((event) => event.type === 'response.create'))).toContain('No fresh camera image');
+      expect(conversationStore.setVisualContext).not.toHaveBeenCalled();
+      expect(browser.readyState).toBe(WebSocket.OPEN);
+    },
+  );
+
+  it('buffers an early frame but never attaches an old frame to a newer turn', async () => {
+    const classifier = { classify: vi.fn(async () => null) } as unknown as ReflexClassifier;
+    const { browser, upstream, received, conversationStore } = await connectedPartialVoice(partialSpeechHarness(), classifier);
+    browser.send(JSON.stringify({ type: 'jarvis.camera.state', on: true }));
+    await vi.waitFor(() => expect(received.filter((event) => event.type === 'session.update')).toHaveLength(2));
+    const frame = {
+      type: 'jarvis.screen.context', itemId: 'early_turn', source: 'camera',
+      capturedAt: '2026-10-11T19:30:00Z', description: 'First mug.', question: 'What is it?',
+    };
+    browser.send(JSON.stringify(frame));
+    browser.send(JSON.stringify({ type: 'input_audio_buffer.append', audio: 'AAAA' }));
+    await vi.waitFor(() => expect(received.some((event) => event.type === 'input_audio_buffer.append')).toBe(true));
+    upstream.send(JSON.stringify({
+      type: 'conversation.item.input_audio_transcription.completed', item_id: 'early_turn', transcript: 'What is it?',
+    }));
+    await vi.waitFor(() => expect(received.filter((event) => event.type === 'response.create')).toHaveLength(1));
+    upstream.send(JSON.stringify({ type: 'response.done' }));
+    upstream.send(JSON.stringify({ type: 'input_audio_buffer.speech_started', item_id: 'new_turn' }));
+    upstream.send(JSON.stringify({
+      type: 'conversation.item.input_audio_transcription.completed', item_id: 'new_turn', transcript: 'What changed?',
+    }));
+    await vi.waitFor(() => expect(classifier.classify).toHaveBeenCalledTimes(2));
+    browser.send(JSON.stringify(frame));
+    browser.send(JSON.stringify({ type: 'jarvis.screen.context.unavailable', itemId: 'early_turn', reason: 'capture_failed' }));
+    browser.send(JSON.stringify({ type: 'jarvis.screen.context.unavailable', itemId: 'new_turn', reason: 'daily_limit' }));
+    await vi.waitFor(() => expect(received.filter((event) => event.type === 'response.create')).toHaveLength(2));
+    expect(conversationStore.setVisualContext).toHaveBeenCalledOnce();
+    expect(JSON.stringify(received.filter((event) => event.type === 'response.create')[1])).not.toContain('First mug.');
+  });
+
+  it('accepts one frame while final classification is pending and ignores late duplicates', async () => {
+    let completeClassification!: (classification: null) => void;
+    const classifier: ReflexClassifier = {
+      classify: vi.fn(() => new Promise((resolve) => { completeClassification = resolve; })),
+    };
+    const { browser, upstream, received, conversationStore } = await connectedPartialVoice(partialSpeechHarness(), classifier);
+    browser.send(JSON.stringify({ type: 'jarvis.camera.state', on: true }));
+    await vi.waitFor(() => expect(received.filter((event) => event.type === 'session.update')).toHaveLength(2));
+    upstream.send(JSON.stringify({
+      type: 'conversation.item.input_audio_transcription.completed', item_id: 'classifying', transcript: 'What is that?',
+    }));
+    await vi.waitFor(() => expect(classifier.classify).toHaveBeenCalledOnce());
+    const frame = {
+      type: 'jarvis.screen.context', itemId: 'classifying', source: 'camera',
+      capturedAt: '2026-10-11T19:30:00Z', description: 'A blue mug.', question: 'What is that?',
+    };
+    browser.send(JSON.stringify(frame));
+    browser.send(JSON.stringify({ type: 'input_audio_buffer.append', audio: 'AAAA' }));
+    await vi.waitFor(() => expect(received.some((event) => event.type === 'input_audio_buffer.append')).toBe(true));
+    expect(received.filter((event) => event.type === 'response.create')).toHaveLength(0);
+    completeClassification(null);
+    await vi.waitFor(() => expect(received.filter((event) => event.type === 'response.create')).toHaveLength(1));
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 3_050);
+    browser.send(JSON.stringify({ ...frame, description: 'Ignore the old image.' }));
+    browser.send(JSON.stringify({ type: 'input_audio_buffer.append', audio: 'AAAA' }));
+    await vi.waitFor(() => expect(received.filter((event) => event.type === 'input_audio_buffer.append')).toHaveLength(2));
+    clock.mockRestore();
+    expect(received.filter((event) => event.type === 'response.create')).toHaveLength(1);
+    expect(conversationStore.setVisualContext).toHaveBeenCalledOnce();
+    expect(JSON.stringify(received.find((event) => event.type === 'response.create'))).toContain('A blue mug.');
+  });
+
+  it.each(['timeout', 'camera_off', 'cancel', 'end'])('settles a camera wait on %s', async (outcome) => {
+    const classifier = { classify: vi.fn(async () => null) } as unknown as ReflexClassifier;
+    const { browser, upstream, received } = await connectedPartialVoice(partialSpeechHarness(), classifier);
+    browser.send(JSON.stringify({ type: 'jarvis.camera.state', on: true }));
+    await vi.waitFor(() => expect(received.filter((event) => event.type === 'session.update')).toHaveLength(2));
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    upstream.send(JSON.stringify({
+      type: 'conversation.item.input_audio_transcription.completed', item_id: 'waiting_turn', transcript: 'What is here?',
+    }));
+    await vi.waitFor(() => expect(classifier.classify).toHaveBeenCalledOnce());
+    if (outcome === 'timeout') await vi.advanceTimersByTimeAsync(12_001);
+    else browser.send(JSON.stringify(outcome === 'camera_off'
+      ? { type: 'jarvis.camera.state', on: false }
+      : { type: outcome === 'cancel' ? 'response.cancel' : 'jarvis.session.end' }));
+    vi.useRealTimers();
+    if (outcome === 'cancel' || outcome === 'end') {
+      await vi.waitFor(() => expect(outcome === 'end' ? browser.readyState === WebSocket.CLOSED :
+        received.some((event) => event.type === 'response.cancel')).toBe(true));
+      expect(received.filter((event) => event.type === 'response.create')).toHaveLength(0);
+    } else {
+      await vi.waitFor(() => expect(received.filter((event) => event.type === 'response.create')).toHaveLength(1));
+      expect(JSON.stringify(received.find((event) => event.type === 'response.create'))).toContain('No fresh camera image');
+    }
+  });
+
+  it('does not delay a completed pause reflex for a camera frame', async () => {
+    const classifier: ReflexClassifier = {
+      classify: vi.fn(async (_text, _language, targets) => ({
+        addressed: true, intent: 'action' as const, needsConfirmation: false,
+        target: targets.find((target) => target.tool.name === 'pause_task') ?? null,
+        confidence: 0.99, completeCommand: true,
+      })),
+    };
+    const { browser, upstream, received, services } = await connectedPartialVoice(partialSpeechHarness(), classifier);
+    browser.send(JSON.stringify({ type: 'jarvis.camera.state', on: true }));
+    await vi.waitFor(() => expect(received.filter((event) => event.type === 'session.update')).toHaveLength(2));
+    upstream.send(JSON.stringify({
+      type: 'conversation.item.input_audio_transcription.completed', item_id: 'pause_turn', transcript: 'Pause the task.',
+    }));
+    await vi.waitFor(() => expect(received.filter((event) => event.type === 'response.create')).toHaveLength(1));
+    expect(services.taskController.control).toHaveBeenCalledOnce();
+  });
+
+  it('keeps legacy screen pacing recoverable without closing the socket', async () => {
+    const { browser, received } = await connectedPartialVoice(
+      partialSpeechHarness(), { classify: vi.fn(async () => null) } as unknown as ReflexClassifier,
+    );
+    const browserEvents: Record<string, unknown>[] = [];
+    browser.on('message', (data) => browserEvents.push(JSON.parse(data.toString()) as Record<string, unknown>));
+    const frame = { type: 'jarvis.screen.context', description: 'A chart.' };
+    browser.send(JSON.stringify(frame));
+    await vi.waitFor(() => expect(received.filter((event) => event.type === 'response.create')).toHaveLength(1));
+    browser.send(JSON.stringify(frame));
+    await vi.waitFor(() => expect(browserEvents).toContainEqual({
+      type: 'jarvis.screen.context.unavailable', reason: 'frame_rate_limited', retryAfterMs: 3_000,
+    }));
+    expect(browser.readyState).toBe(WebSocket.OPEN);
+    expect(received.filter((event) => event.type === 'response.create')).toHaveLength(1);
+  });
+
+  it.each([
+    { type: 'jarvis.camera.state', on: 'yes' },
+    { type: 'jarvis.screen.context.unavailable', itemId: 'turn', reason: 'unknown_reason' },
+    { type: 'jarvis.screen.context.unavailable', itemId: 'invalid turn', reason: 'daily_limit' },
+    { type: 'jarvis.screen.context.unavailable', itemId: 'turn', reason: 'daily_limit', retryAfterMs: 86_400_001 },
+    { type: 'jarvis.screen.context.unavailable', itemId: 'turn', reason: 'daily_limit', retryAfterMs: -1 },
+    { type: 'jarvis.screen.context.unavailable', itemId: 'turn', reason: 'daily_limit', retryAfterMs: 0.5 },
+  ])('rejects malformed camera control %#', async (event) => {
+    const { browser } = await connectedPartialVoice(
+      partialSpeechHarness(), { classify: vi.fn(async () => null) } as unknown as ReflexClassifier,
+    );
+    const closed = once(browser, 'close');
+    browser.send(JSON.stringify(event));
+    expect((await closed)[0]).toBe(1008);
+  });
+
+  it('resets camera consent for a reconnected voice session', async () => {
+    const classifier = { classify: vi.fn(async () => null) } as unknown as ReflexClassifier;
+    const first = await connectedPartialVoice(partialSpeechHarness(), classifier);
+    first.browser.send(JSON.stringify({ type: 'jarvis.camera.state', on: true }));
+    await vi.waitFor(() => expect(first.received.filter((event) => event.type === 'session.update')).toHaveLength(2));
+    const closed = once(first.browser, 'close');
+    first.browser.close();
+    await closed;
+    const next = await connectedPartialVoice(partialSpeechHarness(), classifier);
+    next.upstream.send(JSON.stringify({
+      type: 'conversation.item.input_audio_transcription.completed', item_id: 'reconnected', transcript: 'Hello.',
+    }));
+    await vi.waitFor(() => expect(next.received.filter((event) => event.type === 'response.create')).toHaveLength(1));
+    expect(next.conversationStore.setVisualContext).not.toHaveBeenCalled();
+  });
+
+  it('disables hosted Danish auto-response while camera is on and restores its turn detection', async () => {
+    const received: Record<string, unknown>[] = [];
+    let provider!: WebSocket;
+    const turnDetection = { type: 'server_vad', threshold: 0.7, silence_duration_ms: 800, create_response: true };
+    const upstreamUrl = await echoServer((socket) => {
+      provider = socket;
+      socket.on('message', (data) => received.push(JSON.parse(data.toString()) as Record<string, unknown>));
+      socket.send(JSON.stringify({ type: 'session.created', session: { turn_detection: turnDetection } }));
+    });
+    const { app, conversationStore } = appFor(undefined, undefined, [], [],
+      (_token, signal) => new WebSocket(upstreamUrl, { signal }));
+    await app.listen({ host: '127.0.0.1', port: 0 });
+    const address = app.server.address() as AddressInfo;
+    const browser = await openBrowser(`ws://127.0.0.1:${address.port}/voice/da`);
+    browser.send(JSON.stringify({ type: 'jarvis.camera.state', on: true }));
+    await vi.waitFor(() => expect(received).toContainEqual({
+      type: 'session.update', session: { turn_detection: { ...turnDetection, create_response: false } },
+    }));
+    provider.send(JSON.stringify({
+      type: 'user.message', item_id: 'hosted_camera', content: [{ type: 'input_text', text: 'Hvad er det?' }],
+    }));
+    await vi.waitFor(() => expect(conversationStore.addMessage).toHaveBeenCalledOnce());
+    expect(received.filter((event) => event.type === 'response.create')).toHaveLength(0);
+    browser.send(JSON.stringify({
+      type: 'jarvis.screen.context.unavailable', itemId: 'hosted_camera', reason: 'capture_failed',
+    }));
+    await vi.waitFor(() => expect(received.filter((event) => event.type === 'response.create')).toHaveLength(1));
+    browser.send(JSON.stringify({ type: 'jarvis.camera.state', on: false }));
+    await vi.waitFor(() => expect(received).toContainEqual({
+      type: 'session.update', session: { turn_detection: turnDetection },
+    }));
+    provider.send(JSON.stringify({ type: 'response.done' }));
+    provider.send(JSON.stringify({
+      type: 'user.message', item_id: 'legacy_hosted', content: [{ type: 'input_text', text: 'Tak.' }],
+    }));
+    await vi.waitFor(() => expect(conversationStore.addMessage).toHaveBeenCalledTimes(2));
+    expect(received.filter((event) => event.type === 'response.create')).toHaveLength(1);
+  });
+
   it.each(['screen', 'camera'] as const)('retains %s provenance without fake transcript rows and attaches it to the current Dan turn', async (source) => {
     const forwarded: Record<string, unknown>[] = [];
     let provider: WebSocket | undefined;

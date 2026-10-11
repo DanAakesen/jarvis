@@ -19,13 +19,32 @@ The nine design areas and where each stands. **Confirmed** = Dan's requirement o
 
 ## Decision log
 
+P9-81 follow-up (11 October 2026, Dan's decision on #701): camera on is consent
+to look on every chat and voice turn; camera off sends nothing. This supersedes
+the earlier explicit-request-only camera contract, not screen sharing or watch
+mode. Keep the existing three-second session rate limit and daily frame cap;
+return typed pacing errors rather than silently dropping images or closing a
+voice call. Retain the answered question alongside bounded visual provenance,
+and label cached observations by their original question and server receipt
+time. Never reuse an old answer as the answer to a new question.
+Camera-enabled voice waits for the matching transcription item’s result,
+unavailable reason or a roughly twelve-second deadline, then creates exactly
+one normal reply; reflex-completed actions are not delayed. Existing realtime
+English and Danish configurations already disable automatic response creation;
+keep that baseline while adding the correlated wait. UI capture remains owned
+by the separate session; this PR changes backend/agent contracts only.
+Question bounds count Unicode code points before trimming and reject anything
+above 500 with HTTP 400. Echo normalized question and caller correlation;
+capture time is recorded at the server request hook, before parsing/settings/model
+work, not after inference.
+
 P9-81 (11 October 2026): on-demand vision accepts an optional bounded question
 as untrusted data, with trusted model instructions asking for precise counts,
 text and colours. Generic inspection and continuous watching keep their existing
 prompts and limits. The capture time is the backend frame-acceptance time, not
 an asserted device timestamp. Retain only the bounded visual description,
-source and capture time in conversation turn metadata under the turn's
-retention; never persist image bytes or log questions. Restored context labels
+source, answered question and capture time in conversation turn metadata under
+the turn's retention; never persist image bytes or log questions. Restored context labels
 the observation as a real image while keeping its contents untrusted.
 New/detail questions without a fresh image ask for another look; an earlier
 real observation must not be called ungrounded. Legacy clients remain supported.

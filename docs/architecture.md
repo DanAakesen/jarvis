@@ -1547,21 +1547,54 @@ browser timing includes independent completion verification.
 
 ### Act on the shared Chrome tab (P7-19)
 
-P9-81's additive on-demand contracts are:
+P9-81's per-turn visual contracts are:
 
-- `POST /screen/frames`: `{sessionId, frame, question?}` returns
-  `{description, capturedAt, inputTokens, outputTokens}`. Omit `question` for
-  the existing generic description; do not send it to watch mode.
+- `POST /screen/frames`: `{sessionId, frame, question?, turnId?}` returns
+  `{description, capturedAt, question, turnId?, inputTokens, outputTokens}`.
+  `question` is trimmed, limited to 500 Unicode code points before trimming and
+  rejected with HTTP 400 above that bound, never silently truncated. Omitted
+  or blank questions return `question: null` and use the generic prompt.
+  `capturedAt` is server request-receipt time in ISO 8601 UTC, not device time
+  or model-completion time. `turnId` is optional client correlation, echoed
+  unchanged, with 1–128 ASCII letters, digits, `_` or `-`; voice clients use the
+  transcription `itemId` as `turnId`.
+  Questions are untrusted data and never logged.
+- HTTP 429 is `{error, code: "frame_rate_limited" | "daily_limit",
+  retryAfterMs?}`. The three-second window and configured daily cap remain;
+  `frame_rate_limited` supplies a conservative `retryAfterMs: 3000`;
+  `daily_limit` does not promise a short retry.
+  a rate-limited turn may use prior metadata with its old question/time label,
+  never imply a new capture or answer a new detail question from an old answer.
 - `POST /conversation/sessions/:sessionId/turns`: send
-  `{text, visualContext: {source: "camera" | "screen", capturedAt, description}}`
+  `{text, visualContext: {source: "camera" | "screen", capturedAt, question,
+  description, turnId?}}`
   using the result and the actual selected source. Send either `visualContext`
-  or legacy `screenContext`, not both.
-- Voice sends `{type: "jarvis.screen.context", description, source?, capturedAt?}`;
-  the frame upload accepts the same optional question as chat. Provider
-  conversation context keeps the provenance-labelled observation for later
-  voice responses, separately from spoken transcript text.
+  or legacy `screenContext`, not both. For chat pacing/capture failure, send
+  the text turn without fresh `visualContext`; the agent restores the previous
+  same-session record with its original question/time. Do not relabel an old
+  record as a new capture.
+- Camera on is consent for a fresh frame every chat and voice turn, not a
+  phrase-matched request; camera off sends nothing. The separate UI session
+  supplies those frames through the same `/screen/frames` service for voice.
+- Voice signals `{type: "jarvis.camera.state", on: boolean}` per connection,
+  default off. Camera results send `{type: "jarvis.screen.context", itemId,
+  description, capturedAt, question, source: "camera"}`; failure sends
+  `{type: "jarvis.screen.context.unavailable", itemId, reason, retryAfterMs?}`.
+  A late result for a different transcription item is ignored.
+  Camera-enabled normal model replies wait up to twelve seconds for that
+  correlated result/unavailable outcome, then create exactly one response
+  with labelled untrusted observations or explicit no-fresh-image guidance.
+  Completed reflex actions do not wait. Camera off preserves existing screen
+  inspection behavior. Both realtime language configurations already set
+  `turn_detection.create_response: false`; preserve that baseline.
+- Unavailable reasons are `frame_rate_limited`, `daily_limit`, `capture_failed`,
+  `camera_off`, `permission_denied`, `not_supported`, `session_ended`,
+  `vision_failed`, `timeout` or `budget_exhausted`. Pacing emits unavailable,
+  never closes the voice socket; malformed payloads still close with 1008.
 - History exposes `metadata.visualContext` on the owning Dan message.
-  Description text remains untrusted even when its source is a real image.
+  Description and answered question remain untrusted even when the source is a
+  real image. Cached results retain their original question and capture time;
+  image bytes are never stored.
 
 While Dan is sharing, chat captures a fresh frame for a deictic browser request;
 the authenticated chat turn binds its bounded description and selected display
@@ -2789,7 +2822,7 @@ Proven 2 October 2026 in a separate prototype ([voice report](reference/voice-pr
 | Runtime activity (P8-16, P9-18) | Shared contracts define the `mode`, `now`, `voice-wake`, `job`, `jarvis-activity`, `workspace-ready`, `workspace-command`, and `workspace-cancel` payloads on owner-authenticated `/now/events`. The typed backend SSE helper emits those frames; `sseHeaders` carries Fastify/CORS headers across the hijacked stream. The voice orb, top bar and workspace consume the same stream. | Contract guards and authenticated SSE tests cover event payloads and framing. Existing activity transitions, cancellation/disconnect behavior and payload privacy remain unchanged; live Entra/Foundry and physical audio remain unverified. |
 | English status updates (P7-12) | The relay subscribes to committed task transitions and typed status kinds emitted after verified GitHub webhook processing for ready-for-review pull requests and failed deployments. It merges duplicate kinds over 500 ms, then speaks fixed wording only when Dan and Jarvis are idle and no tool call is active; a queued update is retried when Dan stops speaking. `get_status_summary` exposes bounded Now-feed counts, applies Away-mode visibility, and never returns activity text or logs. | Fake event-hub, webhook receiver, tool-route and relay tests cover filtering, duplicate deliveries, redaction and deferral. Live voice audio and production webhook delivery remain unverified. |
 | Voice persistence | The authenticated relay creates one `jarvis_sessions` row, stores completed user/assistant transcript events in `messages`, and ends the session with its connected duration recorded as `voice`/`minutes` usage. Stop waits for the final usage write before refreshing history. | Focused backend/web tests cover transcript extraction, duplicate transcript IDs, usage persistence, end acknowledgement and history refresh. SQL Server and live Voice Live verification remain unverified. |
-| Visual inspection (P7-05/P7-08/P9-81) | The browser captures a JPEG from the explicitly selected `getDisplayMedia` stream or, after Dan turns the camera on and grants permission, `getUserMedia`, only for an explicit chat/voice request. Authenticated `POST /screen/frames` accepts `{sessionId, frame, question?}`; the optional question must be a string of at most 500 characters, is trimmed, and is untrusted data, never logged. A blank question preserves generic inspection. The service preserves the active-session check, JPEG/1 MiB bound, 3-second interval, daily frame cap (default 300, range 1–300), usage reservation and 5,000-character description cap. With a question, trusted model instructions request precise counts, text or colours and forbid following image/question instructions. The response adds ISO `capturedAt` from backend frame acceptance. Chat accepts `visualContext: {source, capturedAt, description}`; legacy `screenContext` remains supported. Voice `jarvis.screen.context` accepts optional `source` and `capturedAt` alongside `description`. Migration 0040 retains only bounded provenance in `messages.metadata` with the turn; restored agent/voice context labels the real image and treats the description as untrusted. Legacy context defaults to screen and receipt time. New/detail questions without a fresh frame ask to look again. P7-19 display labels remain transient; no image bytes enter storage, logs, transcripts or task events. Watch mode is unchanged. | Offline route/model, turn/history and agent/voice regressions verify the additive contracts, grounded follow-ups and existing limits. UI question forwarding/fresh-frame selection and live camera/vision acceptance remain separate. Screen and camera share `screen_frames` usage; estimated DKK uses the documented Global Standard rates. Voice/session end and teardown stop media; camera also stops after five minutes. |
+| Visual inspection (P7-05/P7-08/P9-81) | Explicit screen requests and every chat/voice turn while camera is on use the same bounded JPEG `/screen/frames` service. Camera off sends nothing. The per-turn contract above defines bounded question echo, receipt-time `capturedAt`, turn correlation and typed 429 errors. Preserve active-session checks, JPEG/1 MiB bound, 3-second interval, daily frame cap (default 300, range 1–300), usage reservation and 5,000-character description cap. Camera-enabled voice waits for the matching result/unavailable outcome before one model reply; completed reflexes bypass the wait. Migration 0040 retains bounded source/time/question/description provenance in `messages.metadata`; cached context is labelled by the original question and capture time, never presented as a fresh answer. Legacy context remains supported; P7-19 display labels stay transient. No image bytes enter storage, logs, transcripts or task events; questions are never logged. Watch mode is unchanged. | Offline regressions cover route/model/history and voice wait/correlation boundaries. UI per-turn capture, physical camera/voice and live model acceptance remain separate. Screen and camera share `screen_frames` usage and estimated DKK. Voice/session end and teardown stop media; camera also stops after five minutes. |
 | Speech to text | MAI Transcribe, language `da`, project and agent names as phrase hints (L15) | 0–1.8 % word errors |
 | Jarvis model | `gpt-5.6-luna`, reasoning `none`, strict action rules (L16) | ≈0.003 DKK per command |
 | Voices | English: `en-GB-Ryan:DragonHDLatestNeural`. Danish: `en-US-Harper:MAI-Voice-2` locked to `da-DK` with `voice_locale`. Language toggle in the UI. | Chosen by Dan from samples |
