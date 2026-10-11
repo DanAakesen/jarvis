@@ -48,6 +48,19 @@ describe('SQL conversation store', () => {
     await expect(fixture().store.getMessageSessionId!('7')).resolves.toBeNull();
   });
 
+  it('guards replayed visual source items under a SQL range lock without persisting handles', async () => {
+    const { store, query, input } = fixture();
+    await store.addMessage({ sessionId: '41', role: 'dan', text: 'Look', model: null,
+      sourceItemId: `screen:chat:${'a'.repeat(64)}`,
+      visualContext: { source: 'screen', capturedAt: '2026-10-11T19:30:00Z',
+        description: 'A chart.', frameId: 'a'.repeat(32), visualPath: 'caption' } });
+    expect(query.mock.calls[0]![0]).toContain('dbo.messages WITH (UPDLOCK, HOLDLOCK)');
+    expect(query.mock.calls[0]![0]).toContain('source_item_id = @sourceItemId');
+    const metadata = input.mock.calls.find((call) => call[0] === 'metadata')![2] as string;
+    expect(JSON.parse(metadata).visualContext).not.toHaveProperty('frameId');
+    expect(JSON.parse(metadata).visualContext.visualPath).toBe('caption');
+  });
+
   it('loads only the latest Dan text in the watched session', async () => {
     const { store, input, query } = fixture({
       recordset: [{ text: 'Did the build finish?' }], recordsets: [], rowsAffected: [],

@@ -32,6 +32,34 @@ function streamedResponse(chunks: string[]) {
 }
 
 describe('Foundry Invocations chat agent', () => {
+  it('forwards only a private handle and reports bounded final visual metadata', async () => {
+    const onVisualResult = vi.fn();
+    const visualContext = { source: 'screen' as const, capturedAt: '2026-10-11T19:30:00Z',
+      description: 'A chart.', frameId: 'a'.repeat(32) };
+    const fetcher = vi.fn<typeof fetch>(async () => streamedResponse([
+      'event: delta\ndata: {"text":"A chart"}\n\n',
+      'event: done\ndata: {"visualPath":"image","visualReason":"image_attached","model":"gpt-6-luna","inputTokens":100,"outputTokens":20}\n\n',
+    ]));
+    const { agent } = createAgent(fetcher);
+    for await (const chunk of agent.stream({ ...input, sessionId: '41', visualContext, onVisualResult },
+      delegatedAuthorization, new AbortController().signal)) { expect(chunk).toBe('A chart'); }
+    expect(onVisualResult).toHaveBeenCalledWith({ visualPath: 'image', visualReason: 'image_attached',
+      model: 'gpt-6-luna', inputTokens: 100, outputTokens: 20 });
+    const body = JSON.parse(fetcher.mock.calls[0]![1]!.body as string);
+    expect(body.visualContext).toEqual(visualContext);
+    expect(body).not.toHaveProperty('onVisualResult');
+    expect(body).not.toHaveProperty('image');
+  });
+  it.each([true, -1, 10_000_001, 1.5, '100', null])('drops invalid usage metadata %s', async (value) => {
+    const onVisualResult = vi.fn();
+    const { agent } = createAgent(vi.fn(async () => streamedResponse([
+      `event: done\ndata: ${JSON.stringify({ visualPath: 'image',
+        inputTokens: value, outputTokens: value, model: 'bad\nmodel' })}\n\n`,
+    ])));
+    for await (const chunk of agent.stream({ ...input, onVisualResult },
+      delegatedAuthorization, new AbortController().signal)) { expect(chunk).toBeUndefined(); }
+    expect(onVisualResult).toHaveBeenCalledWith({ visualPath: 'image' });
+  });
   it('builds the documented invocation endpoint', () => {
     expect(createFoundryInvocationsEndpoint(projectEndpoint, 'jarvis').toString()).toBe(
       'https://resource.services.ai.azure.com/api/projects/jarvis/agents/jarvis/endpoint/protocols/invocations?api-version=v1',

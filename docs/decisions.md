@@ -19,6 +19,51 @@ The nine design areas and where each stands. **Confirmed** = Dan's requirement o
 
 ## Decision log
 
+P9-82 (11 October 2026): camera-on consent includes sending the actual frame to
+the answering model, not just a vision caption. Keep #702's question-aware
+caption as the fallback. Frames belong in bounded process memory only, with a
+60-second, owner/session/turn-bound, single-use handle; no image history,
+SQL/Blob storage, logs or telemetry. No migration is needed.
+
+Capability evidence at implementation start: the configured default chat
+deployment is `gpt-5.6-luna`; its existing adapter uses Foundry Responses.
+L112 records a successful live JPEG probe against the separate `gpt-6-luna`
+vision deployment, not the selected chat model. This does **not** verify image
+acceptance by the chat deployment. Earlier decisions claiming realtime cannot
+accept images are not evidence for `gpt-realtime-2.1` on the deployed Voice Live
+API. Both deployed acceptance probes remain unverified: cloud agents must not
+access Azure (`docs/agent-context.md`, Development workflow). Offline provider
+request tests must be distinguished from a live probe. The coordinator must
+probe a small non-private fixture with the selected deployment/API and record
+acceptance or rejection before claiming deployed direct-image support.
+
+The Danish production relay currently shares English's realtime path (L103);
+the hosted Danish agent is a fallback only. Do not silently replace that
+architecture with the issue's assumed transcribe/chat/TTS pipeline. Cover the
+hosted chat adapter in both languages and report the realtime limitation.
+Realtime direct-image injection has an offline-tested acknowledgement/error
+handshake behind explicit budget admission; the production callback remains
+unset. The deployed EN/DA result is therefore still the caption path, reported
+as `visualPath: "caption"`, not evidence that image input is unsupported.
+P9-82 remains in progress until the coordinator verifies both selected-model
+acceptance and the intended Danish answering architecture. No instruction or
+tool-schema change is needed; existing capability limits remain unchanged.
+Image admission uses the existing allowed `input_tokens` metric with a tagged
+zero-quantity conservative cost reservation, included in the shared vision
+budget. Actual model usage is recorded by the existing chat reporter and the
+agent reports first-image-request totals. Separate image token attribution and
+reservation reconciliation remain incomplete; do not describe zero reserved
+quantity as actual usage or duplicate billed chat tokens. No new SQL metric or
+migration was introduced.
+Final offline validation: 262 targeted backend tests, 173 Python tests,
+backend build, targeted ESLint/Ruff and bounded resolver/privacy smoke checks
+passed. Secret scanning found no secrets. The read-only fallback review found
+no remaining blockers after handle-validation and steering-image replay fixes.
+Automated review was unavailable because its configured model was missing;
+CodeQL completed Python with zero alerts but timed out before all languages
+finished. These checks do not replace the unresolved deployed acceptance,
+realtime budget admission or image-token reconciliation checks.
+
 P9-81 follow-up (11 October 2026, Dan's decision on #701): camera on is consent
 to look on every chat and voice turn; camera off sends nothing. This supersedes
 the earlier explicit-request-only camera contract, not screen sharing or watch

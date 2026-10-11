@@ -17,7 +17,7 @@ import type {
   ConversationAttachmentReference,
 } from '../core/conversation-store.js';
 import { InvalidConversationAttachmentsError } from '../core/conversation-store.js';
-import { normalizeVisualContext } from '../core/visual-context.js';
+import { normalizeVisualContext, persistedVisualContext } from '../core/visual-context.js';
 
 const conversationSearchSetupPath = fileURLToPath(
   new URL('../../../../db/migrations/setup/0032_conversation_search.sql', import.meta.url),
@@ -90,7 +90,7 @@ function sessionFromRow(row: SessionRow): ConversationSession {
 function messageFromRow(row: MessageRow): ConversationMessage {
   let visualContext;
   try {
-    visualContext = row.metadata ? normalizeVisualContext(JSON.parse(row.metadata).visualContext) : undefined;
+    visualContext = row.metadata ? normalizeVisualContext(JSON.parse(row.metadata).visualContext, true) : undefined;
   } catch { /* Ignore malformed legacy metadata. */ }
   return {
     id: row.id,
@@ -141,7 +141,11 @@ async function addMessageWithAttachments(
           INSERTED.role, INSERTED.text, INSERTED.model, INSERTED.at, INSERTED.metadata
         SELECT id, @role, @text, @model, @language, @interrupted, @sourceItemId, @metadata
         FROM dbo.jarvis_sessions
-        WHERE id = @sessionId AND (ended_at IS NULL OR @allowEndedSession = 1);`);
+        WHERE id = @sessionId AND (ended_at IS NULL OR @allowEndedSession = 1)
+          AND (@sourceItemId IS NULL OR @sourceItemId NOT LIKE N'screen:chat:%' OR NOT EXISTS (
+            SELECT 1 FROM dbo.messages WITH (UPDLOCK, HOLDLOCK)
+            WHERE source_item_id = @sourceItemId AND role = N'dan'
+          ));`);
     const row = messageResult.recordset[0];
     if (!row) {
       await transaction.commit();
@@ -169,9 +173,9 @@ async function addMessageWithAttachments(
 
 function messageMetadata(input: Parameters<ConversationStore['addMessage']>[0]): string | null {
   if (input.visualContext === undefined) return null;
-  const visualContext = normalizeVisualContext(input.visualContext);
+  const visualContext = normalizeVisualContext(input.visualContext, true);
   if (input.role !== 'dan' || !visualContext) throw new TypeError('Invalid visual context');
-  return JSON.stringify({ visualContext });
+  return JSON.stringify({ visualContext: persistedVisualContext(visualContext) });
 }
 
 export function createConversationStore(pool: sql.ConnectionPool): ConversationStore {
@@ -269,7 +273,11 @@ export function createConversationStore(pool: sql.ConnectionPool): ConversationS
             INSERTED.role, INSERTED.text, INSERTED.model, INSERTED.at, INSERTED.metadata
           SELECT id, @role, @text, @model, @language, @interrupted, @sourceItemId, @metadata
           FROM dbo.jarvis_sessions
-          WHERE id = @sessionId AND (ended_at IS NULL OR @allowEndedSession = 1);`);
+          WHERE id = @sessionId AND (ended_at IS NULL OR @allowEndedSession = 1)
+            AND (@sourceItemId IS NULL OR @sourceItemId NOT LIKE N'screen:chat:%' OR NOT EXISTS (
+              SELECT 1 FROM dbo.messages WITH (UPDLOCK, HOLDLOCK)
+              WHERE source_item_id = @sourceItemId AND role = N'dan'
+            ));`);
       const row = result.recordset[0];
       return row ? messageFromRow(row) : null;
     },

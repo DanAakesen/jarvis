@@ -3,6 +3,7 @@ import type { VisualContext } from './visual-context.js';
 
 export interface ConversationAgentInput {
   readonly messageId: string;
+  readonly sessionId?: string;
   readonly turnId?: string;
   readonly text: string;
   readonly language: 'da' | 'en';
@@ -18,6 +19,15 @@ export interface ConversationAgentInput {
   }[];
   readonly reflexNote?: string;
   readonly steering?: boolean;
+  readonly onVisualResult?: (result: ConversationVisualResult) => void;
+}
+
+export interface ConversationVisualResult {
+  readonly visualPath: 'image' | 'caption';
+  readonly visualReason?: string;
+  readonly model?: string;
+  readonly inputTokens?: number;
+  readonly outputTokens?: number;
 }
 
 export interface ConversationAgent {
@@ -94,6 +104,7 @@ export function createFoundryInvocationConversationAgent(
   const url = createFoundryInvocationsEndpoint(projectEndpoint, agentName);
   return {
     async *stream(input, authorization, signal) {
+      const { onVisualResult, ...payload } = input;
       const requestSignal = AbortSignal.any([signal, AbortSignal.timeout(requestTimeoutMs)]);
       const token = await getToken(FOUNDRY_AGENT_SCOPE, requestSignal);
       if (typeof token !== 'string' || !token.trim() || /[\r\n]/u.test(token)) {
@@ -107,7 +118,7 @@ export function createFoundryInvocationConversationAgent(
           Accept: 'text/event-stream',
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ ...input, delegatedAuthorization: authorization }),
+        body: JSON.stringify({ ...payload, delegatedAuthorization: authorization }),
         signal: requestSignal,
       });
       if (!response.ok || !response.body ||
@@ -120,6 +131,24 @@ export function createFoundryInvocationConversationAgent(
       let buffer = '';
       let receivedBytes = 0;
       let completed = false;
+      const finish = (event: { event: string; data: string }) => {
+        if (event.event !== 'done') return;
+        completed = true;
+        try {
+          const result = JSON.parse(event.data) as Record<string, unknown>;
+          if (result.visualPath === 'image' || result.visualPath === 'caption') {
+            onVisualResult?.({ visualPath: result.visualPath,
+              ...(typeof result.model === 'string' && /^[A-Za-z0-9][A-Za-z0-9: ._-]{0,127}$/u.test(result.model)
+                ? { model: result.model } : {}),
+              ...(Number.isSafeInteger(result.inputTokens) && (result.inputTokens as number) >= 0 &&
+                (result.inputTokens as number) <= 10_000_000 ? { inputTokens: result.inputTokens as number } : {}),
+              ...(Number.isSafeInteger(result.outputTokens) && (result.outputTokens as number) >= 0 &&
+                (result.outputTokens as number) <= 10_000_000 ? { outputTokens: result.outputTokens as number } : {}),
+              ...(typeof result.visualReason === 'string' && /^[a-z0-9_]{1,64}$/u.test(result.visualReason)
+                ? { visualReason: result.visualReason } : {}) });
+          }
+        } catch { /* Legacy completion has no visual metadata. */ }
+      };
       try {
         while (true) {
           const { done, value } = await reader.read();
@@ -129,7 +158,7 @@ export function createFoundryInvocationConversationAgent(
           buffer += decoder.decode(value, { stream: true });
           const parsed = parseEvents(buffer);
           for (const event of parsed.events) {
-            if (event.event === 'done') completed = true;
+            finish(event);
             const delta = deltaFromEvent(event);
             if (delta !== undefined) yield delta;
           }
@@ -138,7 +167,7 @@ export function createFoundryInvocationConversationAgent(
         buffer += decoder.decode();
         const finalEvents = parseEvents(`${buffer}\n\n`).events;
         for (const event of finalEvents) {
-          if (event.event === 'done') completed = true;
+          finish(event);
           const delta = deltaFromEvent(event);
           if (delta !== undefined) yield delta;
         }

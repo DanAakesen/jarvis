@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Writable } from 'node:stream';
+import sharp from 'sharp';
+import { FrameStore } from './frame-store.js';
+import type { ConversationStore } from '../core/conversation-store.js';
+import type { VisionWatchUsageStore } from './watch.js';
 import { buildApp } from '../app.js';
 import { createLogger } from '../logging.js';
 import { loadConfig } from '../config.js';
@@ -68,6 +72,74 @@ function createFixture(options: {
 }
 
 describe('screen vision endpoint', () => {
+  it('returns a server handle and serves JPEG only to the bound authenticated Dan message', async () => {
+    const frames = new FrameStore();
+    const image = await sharp({ create: { width: 1024, height: 900, channels: 3, background: 'red' } }).jpeg().toBuffer();
+    const captured: Buffer[] = [];
+    const model: ScreenVisionModel = { describe: async ({ image }) => {
+      captured.push(image);
+      return { description: 'A red square.', inputTokens: 1, outputTokens: 1 };
+    } };
+    const usage: ScreenFrameUsageStore = { reserveFrame: async () => 'reserved',
+      reserveImage: async () => 'reserved', recordTokens: async () => {} };
+    const session = { id: '41', channel: 'chat' as const, language: 'en' as const,
+      startedAt: new Date(), endedAt: null };
+    const conversations = { getSession: async () => session,
+      getMessageSessionId: async (messageId: string) => messageId === '42' ? '41' : '99' } as ConversationStore;
+    const app = buildApp(config, undefined, { auth: async () => ({
+      objectId: config.auth.ownerObjectId, tenantId: config.auth.tenantId, displayName: 'Dan',
+    }), settingsStore: { read: async () => ({}), write: async () => {} }, conversationStore: conversations,
+      modules: [createScreenVisionModule(new ScreenVisionService(model, usage), frames)] });
+    apps.push(app);
+    const result = await app.inject({ method: 'POST', url: '/screen/frames', headers: authorization,
+      payload: { sessionId: '41', frame: image.toString('base64'), turnId: 'capture' } });
+    expect(result.statusCode).toBe(200);
+    const frameId = result.json().frameId as string;
+    expect(frameId).toMatch(/^[A-Za-z0-9_-]{32}$/u);
+    expect(captured[0]!.every((byte) => byte === 0)).toBe(true);
+    frames.bind(frameId, { ownerObjectId: config.auth.ownerObjectId,
+      sessionId: '41', turnId: 'capture', messageId: '42' });
+    const resolve = (messageId: string, sessionId = '41') => app.inject({
+      method: 'POST', url: '/screen/frames/resolve', headers: authorization,
+      payload: { frameId, sessionId, messageId, turnId: 'capture' },
+    });
+    expect((await resolve('99')).statusCode).toBe(404);
+    expect((await resolve('42', '99')).statusCode).toBe(404);
+    const response = await resolve('42');
+    expect(response.statusCode).toBe(200);
+    expect(response.headers['cache-control']).toBe('no-store');
+    expect(response.headers['content-type']).toBe('image/jpeg');
+    const metadata = await sharp(response.rawPayload).metadata();
+    expect(metadata.width).toBe(768);
+    expect((await resolve('42')).statusCode).toBe(404);
+    expect((await app.inject({ method: 'POST', url: '/screen/frames/resolve', headers: authorization,
+      payload: { frameId: 'shortmissing', sessionId: '41', messageId: '42' } })).statusCode).toBe(404);
+    image.fill(0);
+  });
+
+  it.each(['limit', 'rate-limited', 'inactive'] as const)('blocks caption/image inference on budget %s', async (outcome) => {
+    const describe = vi.fn();
+    const reserveFrame = vi.fn(async () => outcome);
+    const budget: VisionWatchUsageStore = { reserveWatchFrame: async () => ({ outcome, usedDkk: 0 }),
+      readWatchBudget: async () => 0, recordTokens: async () => {} };
+    const service = new ScreenVisionService({ describe }, { reserveFrame, recordTokens: async () => {} }, Date.now, budget);
+    await expect(service.describe({ sessionId: '41', image: Buffer.from([0xff, 0xd8, 0xff, 0xd9]),
+      model: 'gpt-6-luna', dailyCap: 300, limitUsd: 1, signal: new AbortController().signal })).rejects.toThrow();
+    expect(reserveFrame).toHaveBeenCalledWith(expect.objectContaining({ limitDkk: 6.5785 }));
+    expect(describe).not.toHaveBeenCalled();
+  });
+
+  it('fails unknown-price or missing-budget calls before reserving or inferring', async () => {
+    const describe = vi.fn();
+    const reserveFrame = vi.fn();
+    const budget: VisionWatchUsageStore = { reserveWatchFrame: vi.fn(), readWatchBudget: async () => 0,
+      recordTokens: async () => {} };
+    const service = new ScreenVisionService({ describe }, { reserveFrame, recordTokens: async () => {} }, Date.now, budget);
+    await expect(service.describe({ sessionId: '41', image: Buffer.alloc(1), model: 'unknown',
+      dailyCap: 300, limitUsd: 1, signal: new AbortController().signal })).rejects.toThrow('pricing');
+    expect(reserveFrame).not.toHaveBeenCalled();
+    expect(describe).not.toHaveBeenCalled();
+  });
   it('records request receipt before delayed settings and inference', async () => {
     const receipt = 1_800_000_000_000;
     let now = receipt;

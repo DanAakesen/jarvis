@@ -29,7 +29,8 @@ import { createTaskEventArchive, createTaskEventArchiveJob } from './database/ta
 import { createEventHub } from './core/event-hub.js';
 import type { TaskEventHub, TaskEventMessage } from './factory/task-store.js';
 import { coreModule } from './core/index.js';
-import { conversationModule } from './core/conversation.js';
+import { createConversationModule } from './core/conversation.js';
+import { FrameStore } from './vision/frame-store.js';
 import { createJevReflexClassifier } from './core/reflex.js';
 import {
   createCachedDecisionProviderReader,
@@ -675,8 +676,9 @@ try {
     } : {}),
     onStatusError: (error) => logger.warn(safeErrorFields(error), 'pc_bridge.status_update_failed'),
   });
+  const frameStore = new FrameStore();
   const modules: BackendModule[] = [
-    coreModule, conversationModule, factoryModule, createSleepModule(containerAppScaler),
+    coreModule, createConversationModule(frameStore), factoryModule, createSleepModule(containerAppScaler),
     createRecipeModule(recipeStore),
     ...(vaultModule ? [vaultModule] : []),
     ...(webResearchModule ? [webResearchModule] : []),
@@ -763,12 +765,13 @@ try {
   let visionWatch: VisionWatchService | undefined;
   if (database && settingsStore && screenVisionModel) {
     const visionUsage = createScreenFrameUsageStore(database.pool);
-    modules.push(createScreenVisionModule(new ScreenVisionService(screenVisionModel, visionUsage)));
+    modules.push(createScreenVisionModule(new ScreenVisionService(screenVisionModel, visionUsage, Date.now, visionUsage), frameStore));
     visionWatch = new VisionWatchService(screenVisionModel, visionUsage, createConversationStore(database.pool));
     modules.push(createVisionWatchModule(visionWatch));
   }
   if ((config.voiceLiveEndpoint || config.foundryProjectEndpoint) && credential) {
     modules.push(createVoiceRelayModule({
+      frameStore,
       ...(visionWatch ? { visionWatch } : {}),
       getToken: async (scope, signal) => {
         const token = await credential.getToken(scope, { abortSignal: signal });
@@ -1018,7 +1021,10 @@ try {
       settingsStore: settingsStore,
       ...(conversationStore ? { conversationStore } : {}),
       ...(taskStatusNotificationStore ? { taskStatusNotificationStore } : {}),
-      ...(visionWatch ? { onConversationSessionEnded: (sessionId: string) => visionWatch?.forgetSession(sessionId) } : {}),
+      onConversationSessionEnded: (sessionId: string) => {
+        visionWatch?.forgetSession(sessionId);
+        frameStore.forgetSession(sessionId);
+      },
       taskStore,
       ...(githubAppTokenIssuer ? { githubAppTokenIssuer } : {}),
       ...(githubIssueClient ? { githubIssueClient, issueProgressBoardUrl: config.staticWebAppOrigin } : {}),

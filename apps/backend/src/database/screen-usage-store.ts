@@ -22,7 +22,54 @@ function utcDay(value: Date): { start: Date; end: Date } {
 
 export function createScreenFrameUsageStore(pool: sql.ConnectionPool): ScreenFrameUsageStore & VisionWatchUsageStore {
   return {
-    async reserveFrame({ sessionId, eventId, dailyCap, at }) {
+    async reserveImage({ sessionId, eventId, limitDkk, at }) {
+      if (!Number.isFinite(limitDkk) || limitDkk < 0 || limitDkk > 99_999_999.9999 ||
+          !Number.isFinite(at.getTime()) || !/^image:[0-9a-f-]{36}$/u.test(eventId)) {
+        throw new Error('Invalid image reservation');
+      }
+      const { start, end } = utcDay(at);
+      const transaction = new sql.Transaction(pool);
+      try {
+        await transaction.begin(sql.ISOLATION_LEVEL.SERIALIZABLE);
+        const result = await transaction.request()
+          .input('sessionId', sql.BigInt, BigInt(sessionId))
+          .input('eventId', sql.NVarChar(300), `screen:${eventId}`)
+          .input('limitDkk', sql.Decimal(12, 4), Math.floor(limitDkk * 10_000) / 10_000)
+          .input('pendingCostDkk', sql.Decimal(12, 4), WATCH_FRAME_PENDING_COST_DKK)
+          .input('dayStart', sql.DateTime2, start).input('dayEnd', sql.DateTime2, end)
+          .input('at', sql.DateTime2, at)
+          .input('lockResource', sql.NVarChar(255), `jarvis.screen-frame-cap:${start.toISOString().slice(0, 10)}`)
+          .query<{ outcome: 'reserved' | 'limit' | 'inactive' }>(`
+            DECLARE @lock_result int;
+            EXEC @lock_result = sys.sp_getapplock @Resource = @lockResource,
+              @LockMode = 'Exclusive', @LockOwner = 'Transaction', @LockTimeout = 5000;
+            IF @lock_result < 0 THROW 51000, 'Image usage lock unavailable', 1;
+            IF NOT EXISTS (SELECT 1 FROM dbo.jarvis_sessions WITH (UPDLOCK, HOLDLOCK)
+              WHERE id = @sessionId AND ended_at IS NULL)
+              SELECT N'inactive' AS outcome;
+            ELSE IF (SELECT COALESCE(SUM(cost_dkk), 0) FROM dbo.usage WITH (UPDLOCK, HOLDLOCK)
+              WHERE source = N'jarvis_model' AND (metric = N'screen_frames' OR
+                (metric = N'input_tokens' AND source_event_id LIKE N'screen:image:%'))
+                AND at >= @dayStart AND at < @dayEnd) + @pendingCostDkk > @limitDkk
+              SELECT N'limit' AS outcome;
+            ELSE BEGIN
+              INSERT INTO dbo.usage (jarvis_session_id, source, metric, quantity, cost_dkk, source_event_id, at)
+              VALUES (@sessionId, N'jarvis_model', N'input_tokens', 0, @pendingCostDkk, @eventId, @at);
+              SELECT N'reserved' AS outcome;
+            END;`);
+        const outcome = result.recordset[0]?.outcome;
+        if (!outcome || !['reserved', 'limit', 'inactive'].includes(outcome)) throw new Error('Invalid image admission');
+        await transaction.commit();
+        return outcome;
+      } catch {
+        try { await transaction.rollback(); } catch { /* Keep a sanitized persistence failure. */ }
+        throw new Error('Image usage could not be reserved');
+      }
+    },
+    async reserveFrame({ sessionId, eventId, dailyCap, at, limitDkk }) {
+      if (limitDkk !== undefined && (!Number.isFinite(limitDkk) || limitDkk < 0 || limitDkk > 99_999_999.9999)) {
+        throw new Error('Invalid screen frame budget');
+      }
       const { start, end } = utcDay(at);
       const transaction = new sql.Transaction(pool);
       try {
@@ -32,6 +79,7 @@ export function createScreenFrameUsageStore(pool: sql.ConnectionPool): ScreenFra
           .input('eventId', sql.NVarChar(300), `screen:${eventId}`)
           .input('dailyCap', sql.Int, dailyCap)
           .input('pendingCostDkk', sql.Decimal(12, 4), WATCH_FRAME_PENDING_COST_DKK)
+          .input('limitDkk', sql.Decimal(12, 4), limitDkk === undefined ? null : Math.floor(limitDkk * 10_000) / 10_000)
           .input('dayStart', sql.DateTime2, start)
           .input('dayEnd', sql.DateTime2, end)
           .input('at', sql.DateTime2, at)
@@ -57,6 +105,14 @@ export function createScreenFrameUsageStore(pool: sql.ConnectionPool): ScreenFra
                 AND (source_event_id IS NULL OR source_event_id NOT LIKE N'screen:watch:%')
             )
               SELECT CAST(N'rate-limited' AS nvarchar(20)) AS outcome;
+            ELSE IF @limitDkk IS NOT NULL AND (
+              SELECT COALESCE(SUM(cost_dkk), 0)
+              FROM dbo.usage WITH (UPDLOCK, HOLDLOCK)
+              WHERE source = N'jarvis_model' AND (metric = N'screen_frames' OR
+                (metric = N'input_tokens' AND source_event_id LIKE N'screen:image:%'))
+                AND at >= @dayStart AND at < @dayEnd
+            ) + @pendingCostDkk > @limitDkk
+              SELECT CAST(N'limit' AS nvarchar(10)) AS outcome;
             ELSE IF (
               SELECT COUNT_BIG(*)
               FROM dbo.usage WITH (UPDLOCK, HOLDLOCK)
@@ -112,7 +168,8 @@ export function createScreenFrameUsageStore(pool: sql.ConnectionPool): ScreenFra
             DECLARE @usedDkk decimal(38,4) = (
               SELECT COALESCE(SUM(cost_dkk), 0)
               FROM dbo.usage WITH (UPDLOCK, HOLDLOCK)
-              WHERE source = N'jarvis_model' AND metric = N'screen_frames'
+              WHERE source = N'jarvis_model' AND (metric = N'screen_frames' OR
+                (metric = N'input_tokens' AND source_event_id LIKE N'screen:image:%'))
                 AND at >= @dayStart AND at < @dayEnd
             );
             IF NOT EXISTS (
@@ -159,7 +216,8 @@ export function createScreenFrameUsageStore(pool: sql.ConnectionPool): ScreenFra
           .input('dayEnd', sql.DateTime2, end)
           .query<{ usedDkk: number }>(`SELECT COALESCE(SUM(cost_dkk), 0) AS usedDkk
             FROM dbo.usage
-            WHERE source = N'jarvis_model' AND metric = N'screen_frames'
+            WHERE source = N'jarvis_model' AND (metric = N'screen_frames' OR
+              (metric = N'input_tokens' AND source_event_id LIKE N'screen:image:%'))
               AND at >= @dayStart AND at < @dayEnd;`);
         const usedDkk = result.recordset[0]?.usedDkk;
         if (usedDkk === undefined || !Number.isFinite(usedDkk) || usedDkk < 0) {

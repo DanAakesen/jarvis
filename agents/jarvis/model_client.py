@@ -34,6 +34,7 @@ from jarvis_tools import (
 )
 from model_contract import StreamingModelClient
 from state import ModelMessage, ModelSettings
+from visual_context import ImageInputRejected, current_visual_result
 
 FOUNDRY_TOKEN_SCOPE = "https://ai.azure.com/.default"
 DEFAULT_SYSTEM_PROMPT = INSTRUCTIONS
@@ -201,6 +202,22 @@ def anthropic_messages(messages: Sequence[dict[str, Any]]) -> list[dict[str, Any
     for message in messages:
         role = message.get("role")
         content = message.get("content")
+        if isinstance(content, list):
+            content = [
+                {"type": "text", "text": block["text"]}
+                if block.get("type") == "input_text"
+                else {
+                    "type": "image",
+                    "source": {
+                        "type": "base64",
+                        "media_type": "image/jpeg",
+                        "data": block["image_url"].removeprefix("data:image/jpeg;base64,"),
+                    },
+                }
+                if block.get("type") == "input_image"
+                else block
+                for block in content
+            ]
         if role not in {"user", "assistant"} or not isinstance(content, (str, list)):
             raise ValueError("Invalid Claude conversation message")
         if normalized and normalized[-1]["role"] == role:
@@ -222,6 +239,39 @@ def anthropic_messages(messages: Sequence[dict[str, Any]]) -> list[dict[str, Any
         else:
             normalized.append({"role": role, "content": content})
     return normalized
+
+
+def image_input_rejected(exc: BaseException) -> bool:
+    """Only explicit request-validation failures permit a caption-only retry."""
+    if getattr(exc, "status_code", None) not in {400, 422}:
+        return False
+    body = getattr(exc, "body", None)
+    error = body.get("error", body) if isinstance(body, dict) else None
+    if not isinstance(error, dict):
+        return False
+    code = str(error.get("code", "")).lower()
+    message = str(error.get("message", "")).lower()
+    return code in {"unsupported_image", "invalid_image", "invalid_image_format"} or (
+        "image" in message
+        and any(part in message for part in ("unsupported", "not support", "invalid image"))
+    )
+
+
+def model_message_input(message: ModelMessage) -> dict[str, Any]:
+    content: Any = message.content
+    if message.images:
+        content = [
+            {"type": "input_text", "text": message.content},
+            *[
+                {
+                    "type": "input_image",
+                    "image_url": f"data:image/jpeg;base64,{image.image_base64}",
+                    "detail": image.detail,
+                }
+                for image in message.images
+            ],
+        ]
+    return {"role": message.role, "content": content}
 
 
 def anthropic_assistant_content(message: Any) -> list[dict[str, Any]]:
@@ -349,11 +399,29 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
         self, messages: Sequence[ModelMessage], *, settings: ModelSettings | None = None
     ) -> AsyncIterator[str]:
         """Run the Jarvis tool loop and stream the spoken text of each model round."""
-        async with aclosing(
-            self._complete(messages, self._system_prompt, settings, role="voice")
-        ) as response:
-            async for delta in response:
-                yield delta
+        has_image = any(message.images for message in messages)
+        role = "chat" if has_image else "voice"
+        if has_image and settings is None:
+            settings = await self.session_settings()
+        try:
+            async with aclosing(
+                self._complete(messages, self._system_prompt, settings, role=role)
+            ) as response:
+                async for delta in response:
+                    yield delta
+        except ImageInputRejected as exc:
+            visual_result = current_visual_result.get()
+            if visual_result is not None:
+                visual_result["visualReason"] = exc.reason
+            async with aclosing(
+                self._complete(
+                    tuple(ModelMessage(message.role, message.content) for message in messages),
+                    self._system_prompt, settings, role=role,
+                    allow_anthropic=has_image,
+                )
+            ) as response:
+                async for delta in response:
+                    yield delta
 
     async def complete_chat(
         self,
@@ -373,11 +441,25 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                 + reflex_note
                 + " Relay the result honestly and acknowledge briefly. Do not repeat the action."
             )
-        async with aclosing(self._complete(
-            messages, instructions, settings, load_settings=settings is None, role="chat",
-        )) as response:
-            async for delta in response:
-                yield delta
+        try:
+            async with aclosing(self._complete(
+                messages, instructions, settings, load_settings=settings is None, role="chat",
+            )) as response:
+                async for delta in response:
+                    yield delta
+        except ImageInputRejected as exc:
+            visual_result = current_visual_result.get()
+            if visual_result is not None:
+                visual_result["visualReason"] = exc.reason
+            caption_messages = tuple(
+                ModelMessage(message.role, message.content) for message in messages
+            )
+            async with aclosing(self._complete(
+                caption_messages, instructions, settings,
+                load_settings=settings is None, role="chat",
+            )) as response:
+                async for delta in response:
+                    yield delta
 
     async def _complete(
         self,
@@ -387,6 +469,7 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
         *,
         load_settings: bool = False,
         role: str,
+        allow_anthropic: bool = False,
     ) -> AsyncIterator[str]:
         with _tracer.start_as_current_span(
             "chat",
@@ -418,7 +501,9 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                     await asyncio.gather(*setup_tasks, return_exceptions=True)
                     raise
                 model_name = settings.model if settings is not None else self.model_name
-                use_anthropic = role == "chat" and is_claude_model(model_name)
+                use_anthropic = (
+                    role == "chat" or allow_anthropic or any(message.images for message in messages)
+                ) and is_claude_model(model_name)
                 span.set_attribute(
                     "gen_ai.provider.name", "Anthropic" if use_anthropic else "Azure OpenAI"
                 )
@@ -443,10 +528,7 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                                 ),
                             }
                         )
-                    model_input.extend(
-                        {"role": message.role, "content": message.content}
-                        for message in messages
-                    )
+                    model_input.extend(model_message_input(message) for message in messages)
                     tools = model_tools(catalogue)
                     prompt_span.set_attribute("message.count", len(model_input))
                     prompt_span.set_attribute("tool.count", len(tools))
@@ -475,6 +557,42 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                     if phase_setter is not None and turn_id is not None:
                         await phase_setter("model")
                     await append_steering()
+                    image_request = round_number == 1 and any(
+                        message.images for message in messages
+                    )
+                    if round_number == 1 and any(message.images for message in messages):
+                        text_input = [
+                            {
+                                "role": item["role"],
+                                "content": (
+                                    [
+                                        block for block in item["content"]
+                                        if block.get("type") != "input_image"
+                                    ] if isinstance(item["content"], list) else item["content"]
+                                ),
+                            }
+                            for item in model_input
+                        ]
+                        prompt_bytes = len(json.dumps(
+                            {"instructions": instructions, "input": text_input, "tools": tools},
+                            ensure_ascii=False,
+                        ).encode("utf-8"))
+                        if prompt_bytes > 28_000:
+                            image_request = False
+                            model_input = [
+                                {
+                                    **item,
+                                    "content": [
+                                        block for block in item["content"]
+                                        if block.get("type") != "input_image"
+                                    ],
+                                }
+                                if isinstance(item.get("content"), list) else item
+                                for item in model_input
+                            ]
+                            visual_result = current_visual_result.get()
+                            if visual_result is not None:
+                                visual_result["visualReason"] = "daily_limit"
                     started = time.monotonic()
                     first_text_ms: int | None = None
                     final = None
@@ -503,6 +621,7 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                             }
                             if tools:
                                 anthropic_request["tools"] = anthropic_tools(tools)
+                            accepted = False
                             try:
                                 with latency_span("messages_create"):
                                     stream = self._anthropic_client.messages.stream(
@@ -511,6 +630,13 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                                 async with stream:
                                     async for text in stream.text_stream:
                                         if text:
+                                            accepted = True
+                                            visual_result = current_visual_result.get()
+                                            if (
+                                                image_request and visual_result is not None
+                                            ):
+                                                visual_result["visualPath"] = "image"
+                                                visual_result["model"] = model_name
                                             if first_text_ms is None:
                                                 first_text_ms = int(
                                                     (time.monotonic() - started) * 1000
@@ -522,6 +648,11 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                                             yield text
                                     final = await stream.get_final_message()
                             except Exception as exc:
+                                if (
+                                    not accepted and image_request
+                                    and image_input_rejected(exc)
+                                ):
+                                    raise ImageInputRejected() from None
                                 logger.warning(
                                     "Foundry Claude model request failed; error=%s",
                                     type(exc).__name__,
@@ -530,10 +661,25 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                                     "Foundry Claude model response did not complete"
                                 ) from exc
                         else:
-                            with latency_span("responses_create"):
-                                stream = await self._client.responses.create(**request)
+                            try:
+                                with latency_span("responses_create"):
+                                    stream = await self._client.responses.create(**request)
+                            except Exception as exc:
+                                if (
+                                    image_request
+                                    and image_input_rejected(exc)
+                                ):
+                                    raise ImageInputRejected() from None
+                                raise
+                            received_output = False
                             async with stream:
                                 async for event in stream:
+                                    if event.type.startswith("response.output_"):
+                                        received_output = True
+                                        visual_result = current_visual_result.get()
+                                        if image_request and visual_result is not None:
+                                            visual_result["visualPath"] = "image"
+                                            visual_result["model"] = model_name
                                     if (
                                         event.type == "response.output_text.delta"
                                         and event.delta
@@ -553,6 +699,20 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                                     elif event.type in {
                                         "error", "response.failed", "response.incomplete"
                                     }:
+                                        error = getattr(event, "error", None)
+                                        if error is None:
+                                            error = getattr(
+                                                getattr(event, "response", None), "error", None
+                                            )
+                                        code = getattr(error, "code", None)
+                                        if (
+                                            image_request and not received_output
+                                            and code in {
+                                                "unsupported_image", "invalid_image",
+                                                "invalid_image_format",
+                                            }
+                                        ):
+                                            raise ImageInputRejected() from None
                                         raise RuntimeError(
                                             "Foundry model response did not complete"
                                         )
@@ -571,6 +731,18 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                     usage = final.usage
                     input_tokens = getattr(usage, "input_tokens", None)
                     output_tokens = getattr(usage, "output_tokens", None)
+                    visual_result = current_visual_result.get()
+                    if (
+                        image_request and visual_result is not None
+                    ):
+                        visual_result["visualPath"] = "image"
+                        visual_result.pop("visualReason", None)
+                        visual_result["model"] = model_name
+                        for key, tokens in (
+                            ("inputTokens", input_tokens), ("outputTokens", output_tokens)
+                        ):
+                            if type(tokens) is int and 0 <= tokens <= 10_000_000:
+                                visual_result[key] = visual_result.get(key, 0) + tokens
                     reporter = getattr(self._tools, "record_model_usage", None)
                     if (
                         callable(reporter)
@@ -606,6 +778,19 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                         int((time.monotonic() - started) * 1000),
                         len(calls),
                     )
+                    model_input = [
+                        {
+                            **item,
+                            "content": [
+                                block for block in item["content"]
+                                if block.get("type") != "input_image"
+                            ],
+                        }
+                        if isinstance(item, dict) and isinstance(item.get("content"), list)
+                        else item
+                        for item in model_input
+                    ]
+
                     if not calls:
                         if await append_steering():
                             continue
@@ -649,6 +834,16 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                             )
                     if use_anthropic and tool_results:
                         model_input.append({"role": "user", "content": tool_results})
+                    if round_number == 1 and any(message.images for message in messages):
+                        model_input.append({
+                            "role": "user",
+                            "content": (
+                                "The image was supplied only in the first model round. "
+                                "Continue using the caption, your previous observations and tool "
+                                "results; no fresh image is attached. "
+                                "Do not invent new visual details."
+                            ),
+                        })
                     await append_steering()
                 raise RuntimeError("Jarvis tool loop exceeded its round limit")
             except (asyncio.CancelledError, GeneratorExit):
