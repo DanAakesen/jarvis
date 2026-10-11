@@ -176,6 +176,10 @@ export async function resolveNowConfirmation(
   }
 }
 
+// Backends from before device targeting (P9-61) reject the unknown `device` field with a 400; remember that per
+// backend so later snapshots go without it.
+const backendsWithoutDevice = new Set<string>();
+
 export async function publishWorkspaceSnapshot(
   backendUrl: string,
   sessionId: string,
@@ -183,12 +187,19 @@ export async function publishWorkspaceSnapshot(
   getAccessToken: () => Promise<string>,
   signal: AbortSignal,
 ): Promise<void> {
-  const response = await authorizedRequest(backendUrl, '/now/workspace/state', getAccessToken, {
+  const send = (body: WorkspaceSnapshot) => authorizedRequest(backendUrl, '/now/workspace/state', getAccessToken, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ sessionId, ...snapshot }),
+    body: JSON.stringify({ sessionId, ...body }),
     signal,
   });
+  const { device, ...withoutDevice } = snapshot;
+  let response = await send(device && !backendsWithoutDevice.has(backendUrl) ? snapshot : withoutDevice);
+  if (response.status === 400 && device && !backendsWithoutDevice.has(backendUrl)) {
+    await response.body?.cancel().catch(() => {});
+    response = await send(withoutDevice);
+    if (response.ok) backendsWithoutDevice.add(backendUrl);
+  }
   if (!response.ok) {
     await response.body?.cancel().catch(() => {});
     throw responseError(response.status);

@@ -6,6 +6,7 @@ import { useJarvisActivity } from './activity-context';
 import { JarvisActivityProvider } from './activity-provider';
 import { VoiceStageContext } from './voice-stage-context';
 import { VoiceControls } from './VoiceControls';
+import { SessionCommandRegistryContext, applySessionCommand, createSessionCommandRegistry } from './session-commands';
 import { publishVoiceWake, resetWakeForTests, useWakeStatus } from './wake-store';
 
 const clients = vi.hoisted(() => ({
@@ -97,6 +98,25 @@ beforeEach(() => {
 });
 
 describe('VoiceControls', () => {
+  it('ends the running voice session from an agent session command and refuses when none is running', async () => {
+    const registry = createSessionCommandRegistry();
+    const end = { commandId: 'end-1', operation: 'session', action: 'voice', value: 'end' } as const;
+    render(
+      <SessionCommandRegistryContext.Provider value={registry}>
+        <JarvisActivityProvider>
+          <VoiceControls client={{} as PublicClientApplication} config={config} language="en" />
+        </JarvisActivityProvider>
+      </SessionCommandRegistryContext.Provider>,
+    );
+    expect(await applySessionCommand(end, registry, undefined)).toMatchObject({ applied: false });
+    const { instance, listen } = startVoice();
+    listen();
+    await expect(act(() => applySessionCommand(end, registry, undefined))).resolves.toEqual({ applied: true });
+    expect(instance.client.stop).toHaveBeenCalledOnce();
+    expect(screen.queryByRole('group', { name: 'Voice controls' })).toBeNull();
+    expect(await applySessionCommand(end, registry, undefined)).toMatchObject({ applied: false });
+  });
+
   it('starts voice with the microphone in one gesture, mutes and stops the active session', () => {
     const onSessionEnded = vi.fn();
     render(
@@ -218,7 +238,7 @@ describe('VoiceControls', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'More options' }));
     expect(screen.getAllByRole('menuitem').map((item) => item.textContent)).toEqual([
-      'Language', 'Mute microphone', 'Look at screen', 'Stop sharing screen', 'Turn on camera',
+      'Language', 'Mute microphone', 'Look at screen', 'Watch the screen', 'Stop sharing screen', 'Turn on camera',
     ]);
     expect(screen.getByRole('menuitem', { name: 'Look at screen' }).getAttribute('aria-disabled')).toBeNull();
     const cameraItem = screen.getByRole('menuitem', { name: 'Turn on camera' });

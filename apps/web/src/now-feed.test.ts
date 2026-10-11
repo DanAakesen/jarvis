@@ -4,6 +4,7 @@ import {
   dismissNowActivity,
   loadNowFeed,
   NowFeedStreamError,
+  publishWorkspaceSnapshot,
   resolveNowConfirmation,
   streamNowFeed,
 } from './now-feed';
@@ -287,5 +288,28 @@ describe('Now feed client', () => {
       signal: new AbortController().signal,
     })).rejects.toBeInstanceOf(NowFeedStreamError);
     expect(fetchMock).toHaveBeenCalledOnce();
+  });
+});
+
+describe('workspace snapshot device compatibility', () => {
+  it('retries without the device for an older backend and then stops sending it', async () => {
+    const snapshot = { windows: [], contextPanelOpen: false, device: { kind: 'phone' as const } };
+    fetchMock.mockResolvedValueOnce(new Response('{}', { status: 400 }))
+      .mockResolvedValue(new Response(null, { status: 204 }));
+    const signal = new AbortController().signal;
+    await publishWorkspaceSnapshot('https://old.example.com', 'session', snapshot, getAccessToken, signal);
+    await publishWorkspaceSnapshot('https://old.example.com', 'session', snapshot, getAccessToken, signal);
+    const bodies = fetchMock.mock.calls.map(([, init]) => JSON.parse(String(init?.body)));
+    expect(bodies).toHaveLength(3);
+    expect(bodies[0].device).toEqual({ kind: 'phone' });
+    expect(bodies[1]).not.toHaveProperty('device');
+    expect(bodies[2]).not.toHaveProperty('device');
+  });
+
+  it('keeps reporting the error when the snapshot is rejected for another reason', async () => {
+    const snapshot = { windows: [], contextPanelOpen: false, device: { kind: 'desktop' as const } };
+    fetchMock.mockResolvedValue(new Response('{}', { status: 400 }));
+    await expect(publishWorkspaceSnapshot('https://new.example.com', 's', snapshot, getAccessToken, new AbortController().signal))
+      .rejects.toThrow('HTTP 400');
   });
 });

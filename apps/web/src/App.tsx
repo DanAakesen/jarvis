@@ -25,6 +25,7 @@ import { backendFetch } from './backend-request';
 import { Workspace, PHONE_LAYOUT_MEDIA_QUERY, type WorkspaceController, type WorkspaceView } from './Workspace';
 import { ConversationWindowContext, conversationViewId } from './conversation-window-state';
 import { WorkspaceCommandContext, useWorkspaceCommands } from './workspace-command-state';
+import { SessionCommandRegistryContext, applySessionCommand, createSessionCommandRegistry, type SessionCommandResult } from './session-commands';
 import { BackendSleepControl } from './BackendSleepControl';
 import { VoiceWorkspaceContext } from './voice-workspace-state';
 import { readVoiceWorkspacePreference } from './voice-workspace-preference';
@@ -40,13 +41,16 @@ import { CollapsibleSection } from './CollapsibleSection';
 import { MobileCaption, MobileMenu } from './MobileShell';
 import { flyChat } from './chat-flight';
 import { readWorkspaceFrame } from './workspace-frame';
+import { readPageWindows, useReadback } from './window-readback';
+import { readWorkspaceDevice } from './workspace-device';
 import { JobsChip } from './JobsChip';
 import { hasRunningJob, useJobs } from './jobs-store';
 import { KnowledgeBackendContext } from './knowledge/knowledge-context';
 import { PresenceChip, PresenceSettings } from './Presence';
 import { MemorySettings } from './MemorySettings';
 
-/** Interim research progress: unning from P9-46 (#613) on; older backends sent partial for it. */
+/** Interim research progress: 
+unning from P9-46 (#613) on; older backends sent partial for it. */
 const researchInProgress = (status: string) => status === 'running' || status === 'partial';
 
 const sidebarLimits = { min: 160, max: 420 };
@@ -142,6 +146,10 @@ function ShellLayout({ signedIn, config, session, camera, screenShare }: {
     setOpenWindows((current) => JSON.stringify(current) === JSON.stringify(windows) ? current : windows);
   }, []);
   const [voiceActive, setVoiceActive] = useState(false);
+  const sessionCommands = useMemo(() => createSessionCommandRegistry(), []);
+  // The camera controller changes identity on every render; read it when a command arrives instead of re-publishing the workspace.
+  const cameraRef = useRef(camera);
+  useEffect(() => { cameraRef.current = camera; }, [camera]);
   // The window Jarvis's generated reports and apps open in (size, theme, tokens), refreshed when any of it changes.
   const [frame, setFrame] = useState<HtmlArtifactFrame | null>(null);
   useEffect(() => {
@@ -220,8 +228,16 @@ function ShellLayout({ signedIn, config, session, camera, screenShare }: {
     ...(frontViewId ? { focusedViewId: frontViewId } : {}),
     ...(viewHistory.previous ? { previous: viewHistory.previous } : {}),
   }), [folioOpen, frontViewId, location, viewHistory.previous]);
+  // The page and Folio pane Dan is reading, reported as windows with their text (P9-63).
+  const pageKey = `${viewPage}|${viewSection ?? ''}|${folioOpen}`;
+  const pageReadback = useReadback(() => ({ key: pageKey, windows: readPageWindows(viewPage, viewSection, folioOpen) }), signedIn, pageKey);
+  const pageWindows = pageReadback?.key === pageKey ? pageReadback.windows : undefined;
+  const snapshotWindows = useMemo(
+    () => pageWindows?.length ? [...openWindows, ...pageWindows].slice(0, 32) : openWindows,
+    [openWindows, pageWindows],
+  );
   const workspaceCommands = useMemo(() => ({
-    snapshot: { windows: openWindows, contextPanelOpen: contextPanel.isOpen, ...(frame ? { frame } : {}), ...(signedIn ? { view } : {}) },
+    snapshot: { windows: snapshotWindows, contextPanelOpen: contextPanel.isOpen, device: readWorkspaceDevice(), ...(frame ? { frame } : {}), ...(signedIn ? { view } : {}) },
     dispatch: (command: Parameters<WorkspaceController['dispatch']>[0], trustedBlobHost?: string) => {
       const navigateRequest = readNavigateCommand(command);
       if (navigateRequest) return navigateTo(navigateRequest);
@@ -253,8 +269,10 @@ function ShellLayout({ signedIn, config, session, camera, screenShare }: {
     minimiseAll: () => workspaceController.current?.minimiseAll(),
     hasVisibleViews: () => workspaceController.current?.hasVisibleViews() ?? false,
     isViewVisible: (viewId: string) => workspaceController.current?.isViewVisible?.(viewId) ?? false,
-  }), [contextPanel, frame, navigateTo, openWindows, signedIn, view]);
-  const applyWorkspaceCommand = useCallback((command: WorkspaceCommand, trustedBlobHost?: string) => {
+    applySession: (command: Parameters<typeof applySessionCommand>[0]) => applySessionCommand(command, sessionCommands, cameraRef.current),
+  }), [contextPanel, frame, navigateTo, sessionCommands, signedIn, snapshotWindows, view]);
+  const applyWorkspaceCommand = useCallback((command: WorkspaceCommand, trustedBlobHost?: string): boolean | Promise<SessionCommandResult> => {
+    if (command.operation === 'session') return workspaceCommands.applySession(command);
     let applied = false;
     flushSync(() => { applied = workspaceCommands.dispatch(command, trustedBlobHost); });
     return applied;
@@ -625,6 +643,7 @@ function ShellLayout({ signedIn, config, session, camera, screenShare }: {
         <JarvisStage theme={themePreference.resolvedTheme} appearance={themePreference.appearance}>
         <KnowledgeBackendContext.Provider value={knowledgeBackend}>
         <WorkspaceCommandContext.Provider value={workspaceCommands}>
+          <SessionCommandRegistryContext.Provider value={sessionCommands}>
           <VoiceWorkspaceContext.Provider value={{ onVoiceActiveChange }}>
             <ConversationWindowContext.Provider value={conversationWindow}>
               <Outlet />
@@ -659,6 +678,7 @@ function ShellLayout({ signedIn, config, session, camera, screenShare }: {
               </div>
             )}
           </VoiceWorkspaceContext.Provider>
+          </SessionCommandRegistryContext.Provider>
         </WorkspaceCommandContext.Provider>
         </KnowledgeBackendContext.Provider>
         </JarvisStage>
@@ -707,7 +727,8 @@ function SettingsActivity({ client, config, getAccessToken }: {
   getAccessToken: () => Promise<string>;
 }) {
   const workspace = useWorkspaceCommands();
-  const applyWorkspaceCommand = useCallback((command: WorkspaceCommand, trustedBlobHost?: string) => {
+  const applyWorkspaceCommand = useCallback((command: WorkspaceCommand, trustedBlobHost?: string): boolean | Promise<SessionCommandResult> => {
+    if (command.operation === 'session') return workspace.applySession?.(command) ?? Promise.resolve<SessionCommandResult>({ applied: false, reason: 'Session commands are unavailable.' });
     let applied = false;
     flushSync(() => { applied = workspace.dispatch(command, trustedBlobHost); });
     return applied;

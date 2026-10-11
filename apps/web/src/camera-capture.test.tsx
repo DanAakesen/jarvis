@@ -26,6 +26,7 @@ function cameraStream() {
 function CameraHarness({ onError }: { onError?: (message: string) => void } = {}) {
   const camera = useCamera(config, async () => 'fixture-token');
   const [description, setDescription] = useState('');
+  const [watchFrame, setWatchFrame] = useState('');
   return (
     <section>
       <button type="button" onClick={() => void camera.start(onError)} disabled={camera.starting}>
@@ -35,7 +36,13 @@ function CameraHarness({ onError }: { onError?: (message: string) => void } = {}
         disabled={!camera.sharing || camera.inspecting}>
         Request camera frame
       </button>
+      <button type="button" onClick={() => void camera.captureFrame?.().then(setWatchFrame, (reason: Error) => setWatchFrame(reason.message))}>
+        Capture watch frame
+      </button>
+      {watchFrame && <p data-testid="watch-frame">{watchFrame}</p>}
       <button type="button" onClick={camera.stop}>Stop camera</button>
+      <button type="button" onClick={() => void camera.selectFacing?.('environment', onError)}>Face rear</button>
+      <button type="button" onClick={() => void camera.selectFacing?.('user', onError)}>Face front</button>
       <p role="status">{camera.sharing ? 'Camera is on' : 'Camera is off'}</p>
       {description && <p>{description}</p>}
       {camera.error && <p role="alert">{camera.error}</p>}
@@ -64,6 +71,27 @@ afterEach(() => {
 });
 
 describe('camera frame capture', () => {
+  it('faces the camera a requested way on the existing capture, restarting only when the facing changes', async () => {
+    const getUserMedia = vi.fn(async () => cameraStream().stream);
+    Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: { getUserMedia } });
+    render(<CameraHarness />);
+    fireEvent.click(screen.getByRole('button', { name: 'Face rear' }));
+    await screen.findByText('Camera is on');
+    expect(getUserMedia).toHaveBeenCalledTimes(1);
+    expect(getUserMedia).toHaveBeenLastCalledWith(expect.objectContaining({
+      video: expect.objectContaining({ facingMode: { ideal: 'environment' } }),
+    }));
+    fireEvent.click(screen.getByRole('button', { name: 'Face rear' }));
+    await act(async () => { await Promise.resolve(); });
+    expect(getUserMedia).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole('button', { name: 'Face front' }));
+    await vi.waitFor(() => expect(getUserMedia).toHaveBeenCalledTimes(2));
+    expect(getUserMedia).toHaveBeenLastCalledWith(expect.objectContaining({
+      video: expect.objectContaining({ facingMode: { ideal: 'user' } }),
+    }));
+    await screen.findByText('Camera is on');
+  });
+
   it('reports a denied permission to the caller without starting or sending capture', async () => {
     const onError = vi.fn();
     Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: {
@@ -132,6 +160,33 @@ describe('camera frame capture', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Stop camera' }));
     expect(track.stop).toHaveBeenCalledOnce();
     expect(screen.getByRole('status').textContent).toBe('Camera is off');
+  });
+
+  it('captures a watch frame locally only while the camera is on, without calling the backend', async () => {
+    const { stream } = cameraStream();
+    Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: { getUserMedia: vi.fn(async () => stream) } });
+    Object.defineProperty(HTMLVideoElement.prototype, 'videoWidth', { configurable: true, get: () => 640 });
+    Object.defineProperty(HTMLVideoElement.prototype, 'videoHeight', { configurable: true, get: () => 480 });
+    Object.defineProperty(HTMLMediaElement.prototype, 'play', { configurable: true, value: vi.fn(async () => {}) });
+    Object.defineProperty(HTMLMediaElement.prototype, 'pause', { configurable: true, value: vi.fn() });
+    Object.defineProperty(HTMLCanvasElement.prototype, 'getContext', {
+      configurable: true, value: vi.fn(() => ({ drawImage: vi.fn() })),
+    });
+    Object.defineProperty(HTMLCanvasElement.prototype, 'toBlob', {
+      configurable: true,
+      value: vi.fn((callback: BlobCallback) => callback(new Blob([Uint8Array.from([0xff, 0xd8, 0xff, 0xd9])], { type: 'image/jpeg' }))),
+    });
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    render(<CameraHarness />);
+
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Capture watch frame' })); });
+    expect(screen.getByTestId('watch-frame').textContent).toBe('The camera is not being shared.');
+
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Turn camera on' })); });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Capture watch frame' })); });
+    expect(screen.getByTestId('watch-frame').textContent).toBe(Buffer.from([0xff, 0xd8, 0xff, 0xd9]).toString('base64'));
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it('stops a camera stream that resolves after its owner unmounts', async () => {

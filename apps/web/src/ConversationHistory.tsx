@@ -8,17 +8,23 @@ import { useJarvisActivity } from './activity-context';
 import { PHONE_LAYOUT_MEDIA_QUERY } from './Workspace';
 import type { PublicConfig } from '../config/public-config';
 import { sharedScreenContext, type CameraController, type ScreenShareController } from './screen-sharing';
+import { formatWatchBudget, useVisionWatch } from './vision-watch';
 import { ConversationHandle } from './ConversationHandle';
 import { ConversationMoreMenu, type MoreMenuAction } from './ConversationMoreMenu';
 import { ConversationToast } from './ConversationToast';
 import { VoiceControls } from './VoiceControls';
 import { useVoiceWorkspace } from './voice-workspace-state';
+import { useSessionCommandRegistry } from './session-commands';
 import { WorkspaceCommandContext } from './workspace-command-state';
 import { conversationViewId, useConversationWindow } from './conversation-window-state';
 import { MarkdownContent } from './MarkdownContent';
 import { useConversationIntents } from './conversation-intents';
+import { ComposerAttachments, MessageAttachments, PublicImageConfirmation } from './ChatAttachments';
+import { ATTACHMENT_ACCEPT, MAX_ATTACHMENTS, publicPublicationImage, type ChatAttachment } from './chat-attachments';
+import { useChatAttachments } from './useChatAttachments';
 import { Loader } from './Loader';
 import {
+  accessToken,
   createChatSession,
   loadImageArtifactUrl,
   loadConversationHistory,
@@ -33,7 +39,7 @@ import {
 
 const maxTaskId = 9_223_372_036_854_775_807n;
 
-type QueuedMessage = { id: number; text: string; language: 'da' | 'en' };
+type QueuedMessage = { id: number; text: string; language: 'da' | 'en'; attachments?: ChatAttachment[] };
 const followThreshold = 32;
 const draftKey = 'jarvis.chat.draft';
 
@@ -49,7 +55,7 @@ function writeDraft(value: string) {
   } catch { /* The draft then lasts only while the page is open. */ }
 }
 
-function ConversationIcon({ name }: { name: 'screen' | 'camera' | 'send' | 'latest' }) {
+function ConversationIcon({ name }: { name: 'screen' | 'camera' | 'send' | 'latest' | 'attach' }) {
   const common = { 'aria-hidden': true as const, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
   switch (name) {
     case 'screen':
@@ -60,6 +66,8 @@ function ConversationIcon({ name }: { name: 'screen' | 'camera' | 'send' | 'late
       return <svg {...common}><path d="M12 19V5M5.5 11.5 12 5l6.5 6.5" /></svg>;
     case 'latest':
       return <svg {...common}><path d="M12 5v14m-6-6 6 6 6-6" /></svg>;
+    case 'attach':
+      return <svg {...common}><path d="m20 11.5-7.8 7.8a5 5 0 0 1-7.1-7.1l8.5-8.5a3.3 3.3 0 0 1 4.7 4.7l-8.5 8.5a1.7 1.7 0 0 1-2.4-2.4l7.8-7.8" /></svg>;
   }
 }
 
@@ -74,9 +82,10 @@ function relativeTime(at: string, now: number): string {
   return formatter.format(Math.round(seconds / 86400), 'day');
 }
 
-function asHistoryMessage(message: ChatMessage, language: 'da' | 'en'): ConversationHistoryMessage {
+function asHistoryMessage(message: ChatMessage, language: 'da' | 'en', attachments?: ChatAttachment[]): ConversationHistoryMessage {
   return {
     ...message,
+    ...(attachments?.length ? { attachments } : {}),
     channel: 'chat',
     language,
     interrupted: false,
@@ -171,6 +180,8 @@ export function ConversationHistory({
   const [historyErrorId, setHistoryErrorId] = useState(0);
   const [reload, setReload] = useState(0);
   const [language, setLanguage] = useState<'da' | 'en'>('en');
+  const sessionCommands = useSessionCommandRegistry();
+  useEffect(() => sessionCommands?.register({ setLanguage }), [sessionCommands]);
   const [session, setSession] = useState<ChatSession | null>(null);
   const { latestActivity, workText } = useJarvisActivity();
   // Tools used in the current chat turn, collected from runtime activity as they start and finish.
@@ -196,6 +207,9 @@ export function ConversationHistory({
   const [failedTurns, setFailedTurns] = useState<FailedTurn[]>([]);
   const [streamedText, setStreamedText] = useState('');
   const [turnError, setTurnError] = useState('');
+  const watchToken = useCallback(() => accessToken(client, config), [client, config]);
+  const screenWatch = useVisionWatch(config, watchToken, screenShare, 'screen', session?.id ?? null, setTurnError);
+  const cameraWatch = useVisionWatch(config, watchToken, camera, 'camera', session?.id ?? null, setTurnError);
   const [steering, setSteering] = useState(false);
   const [visionContext, setVisionContext] = useState<{
     sessionId: string;
@@ -214,6 +228,11 @@ export function ConversationHistory({
   const { key: locationKey, pathname: locationPath } = useLocation();
   const seenLocationKey = useRef(locationKey);
   const input = useRef<HTMLTextAreaElement>(null);
+  const fileInput = useRef<HTMLInputElement>(null);
+  const dragDepth = useRef(0);
+  const [fileDrag, setFileDrag] = useState(false);
+  const attachments = useChatAttachments(client, config);
+  const { ready: readyFiles, uploading: uploadingFiles, take: takeFiles, restore: restoreFiles, discard: discardFiles, add: addFiles } = attachments;
   const transcript = useRef<HTMLDivElement>(null);
   const followedTranscript = useRef<HTMLDivElement | null>(null);
   const inputBar = useRef<HTMLDivElement>(null);
@@ -398,15 +417,18 @@ export function ConversationHistory({
     }
   }
 
-  const submitText = useCallback((value: string, queueOnly = false) => {
-    const text = value.trim();
-    if (!text || voiceActive) return;
+  const submitText = useCallback((value: string, queueOnly = false, withFiles = false) => {
+    if (voiceActive || (withFiles && uploadingFiles)) return;
+    const hasFiles = withFiles && readyFiles > 0;
+    const text = value.trim() || (hasFiles ? 'Please look at the attached files.' : '');
+    if (!text) return;
     const currentCameraContext = session !== null && visionContext?.source === 'camera' &&
       visionContext.sessionId === session.id && session.language === language;
     if (isCameraRequest(text) && !camera?.sharing && !currentCameraContext) {
       setTurnError('Turn on the camera from the top bar before asking Jarvis to inspect a frame.');
       return;
     }
+    const files = hasFiles ? takeFiles() : [];
     draftValue.current = '';
     setDraft('');
     setTurnError('');
@@ -415,9 +437,10 @@ export function ConversationHistory({
     followLatest.current = true;
     setAtLatest(true);
     revealHistory();
-    const queued = { id: ++nextQueueId.current, text, language };
+    const queued: QueuedMessage = { id: ++nextQueueId.current, text, language, ...(files.length ? { attachments: files } : {}) };
     const activeSession = turnSession.current;
-    if (sending && !queueOnly && activeSession) {
+    // Steering carries text only, so a message with files waits in the queue instead.
+    if (sending && !queueOnly && activeSession && files.length === 0) {
       setSteering(true);
       void steerChatTurn(client, config, activeSession, text, language).then((message) => {
         setMessages((current) => mergeMessages(current, [asHistoryMessage(message, message.language)]));
@@ -437,7 +460,7 @@ export function ConversationHistory({
       return;
     }
     setQueue((current) => [...current, queued]);
-  }, [camera?.sharing, client, config, language, revealHistory, sending, session, visionContext, voiceActive]);
+  }, [camera?.sharing, client, config, language, readyFiles, revealHistory, sending, session, takeFiles, uploadingFiles, visionContext, voiceActive]);
 
   useEffect(() => {
     const intent = conversationIntents.pending[0];
@@ -452,11 +475,12 @@ export function ConversationHistory({
 
   function sendMessage(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    submitText(draftValue.current);
+    submitText(draftValue.current, false, true);
   }
 
   const runTurn = useCallback(async (queued: QueuedMessage) => {
     const { text, language } = queued;
+    const queuedFiles = queued.attachments ?? [];
     const controller = new AbortController();
     turnController.current = controller;
     turnSession.current = null;
@@ -520,7 +544,7 @@ export function ConversationHistory({
           userMessageSaved = true;
           messageId = message.id;
           setActiveMessage(null);
-          setMessages((current) => mergeMessages(current, [asHistoryMessage(message, activeSession.language)]));
+          setMessages((current) => mergeMessages(current, [asHistoryMessage(message, activeSession.language, queuedFiles)]));
         },
         (delta) => {
           partialReply += delta;
@@ -541,6 +565,7 @@ export function ConversationHistory({
           setStreamedText('');
           setSteering(false);
         },
+        ...(queuedFiles.length ? [queuedFiles.map((file) => file.id)] as const : []),
       );
       setMessages((current) => mergeMessages(current, [asHistoryMessage(assistant, activeSession.language)]));
       setStreamedText('');
@@ -558,9 +583,12 @@ export function ConversationHistory({
       if (userMessageSaved) {
         setStreamedText('');
         setReload((value) => value + 1);
-      } else if (!draftValue.current) {
-        draftValue.current = text;
-        setDraft(text);
+      } else {
+        if (!draftValue.current) {
+          draftValue.current = text;
+          setDraft(text);
+        }
+        restoreFiles(queuedFiles);
       }
 
     } finally {
@@ -570,7 +598,7 @@ export function ConversationHistory({
       turnInFlight.current = false;
       setSending(false);
     }
-  }, [session, visionContext, client, config, camera, screenShare]);
+  }, [session, visionContext, client, config, camera, screenShare, restoreFiles]);
 
   useEffect(() => {
     if (sending || voiceActive || turnInFlight.current || queue.length === 0) return;
@@ -644,12 +672,24 @@ export function ConversationHistory({
       onSelect: () => { if (screenShare.sharing) screenShare.stop(); else void screenShare.start(); },
       disabled: screenShare.starting,
     }] : []),
+    ...(screenShare?.sharing && (session || screenWatch.watching) ? [{
+      id: 'screen-watch',
+      label: screenWatch.watching ? `Stop watching the screen${formatWatchBudget(screenWatch.budget) ? ` · ${formatWatchBudget(screenWatch.budget)}` : ''}` : 'Watch the screen',
+      icon: <ConversationIcon name="screen" />,
+      onSelect: () => { if (screenWatch.watching) screenWatch.stop(); else screenWatch.start(); },
+    }] : []),
     ...(camera ? [{
       id: 'share-camera',
       label: camera.sharing ? 'Turn camera off' : camera.starting ? 'Starting camera…' : 'Turn camera on',
       icon: <ConversationIcon name="camera" />,
       onSelect: () => { if (camera.sharing) camera.stop(); else void camera.start(); },
       disabled: camera.starting,
+    }] : []),
+    ...(camera?.sharing && (session || cameraWatch.watching) ? [{
+      id: 'camera-watch',
+      label: cameraWatch.watching ? `Stop watching the camera${formatWatchBudget(cameraWatch.budget) ? ` · ${formatWatchBudget(cameraWatch.budget)}` : ''}` : 'Watch the camera',
+      icon: <ConversationIcon name="camera" />,
+      onSelect: () => { if (cameraWatch.watching) cameraWatch.stop(); else cameraWatch.start(); },
     }] : []),
     ...(camera?.sharing && camera.switchCamera && navigator.maxTouchPoints > 0 ? [{
       id: 'switch-camera',
@@ -659,8 +699,43 @@ export function ConversationHistory({
       disabled: camera.starting,
     }] : []),
   ];
-  // Sharing is the only visual control; to have Jarvis look, Dan simply asks in the conversation.
-  const attachActions: MoreMenuAction[] = captureActions;
+  // Files, photos and screenshots join the same menu; paste and drop work without it. On a phone the system picker
+  // offers the photo library, the camera and files.
+  const attachActions: MoreMenuAction[] = [{
+    id: 'attach-file',
+    label: 'Attach file or photo',
+    icon: <ConversationIcon name="attach" />,
+    onSelect: () => fileInput.current?.click(),
+    disabled: attachments.full,
+    ...(attachments.full ? { description: `Up to ${MAX_ATTACHMENTS} files per message. Remove one to add another.` } : {}),
+  }, ...captureActions];
+
+  const hasFiles = (event: { dataTransfer: DataTransfer | null }) => Array.from(event.dataTransfer?.types ?? []).includes('Files');
+  const fileDragHandlers = voiceActive ? {} : {
+    onDragEnter: (event: React.DragEvent) => {
+      if (!hasFiles(event)) return;
+      event.preventDefault();
+      dragDepth.current += 1;
+      setFileDrag(true);
+    },
+    onDragOver: (event: React.DragEvent) => {
+      if (!hasFiles(event)) return;
+      event.preventDefault();
+      event.dataTransfer.dropEffect = 'copy';
+    },
+    onDragLeave: (event: React.DragEvent) => {
+      if (!hasFiles(event)) return;
+      dragDepth.current = Math.max(0, dragDepth.current - 1);
+      if (dragDepth.current === 0) setFileDrag(false);
+    },
+    onDrop: (event: React.DragEvent) => {
+      if (!hasFiles(event)) return;
+      event.preventDefault();
+      dragDepth.current = 0;
+      setFileDrag(false);
+      addFiles(Array.from(event.dataTransfer.files));
+    },
+  };
 
   const latestButton = !atLatest && (
     <button className="conversation-latest" type="button" onClick={jumpToLatest}>
@@ -685,7 +760,7 @@ export function ConversationHistory({
               </button>
             )}
             <ol className="conversation-messages" aria-label="Messages between Dan and Jarvis">
-              {messages.map((message) => {
+              {messages.map((message, index) => {
                 const voiceUsageText = message.channel === 'voice' && message.voiceMinutes != null &&
                   !displayedVoiceUsage.has(message.sessionId)
                   ? ` · ${new Intl.NumberFormat(undefined, { maximumFractionDigits: 2 }).format(message.voiceMinutes)} voice minutes`
@@ -699,6 +774,11 @@ export function ConversationHistory({
                       ? <MarkdownContent source={message.text} />
                       : <p>{message.text}</p>}
                     {message.interrupted && <p className="interrupted-label">Interrupted</p>}
+                    {message.attachments?.length ? <MessageAttachments client={client} config={config} attachments={message.attachments} /> : null}
+                    {message.role === 'jarvis' && (() => {
+                      const image = publicPublicationImage(message.text, messages.slice(0, index));
+                      return image ? <PublicImageConfirmation client={client} config={config} attachment={image} /> : null;
+                    })()}
                     {/* Only the time, tucked onto the bubble's top-right edge and shown on hover; voice usage is read out to screen readers. */}
                     <div className="message-metadata">
                       <time dateTime={message.at} title={new Date(message.at).toLocaleString()}>
@@ -732,6 +812,7 @@ export function ConversationHistory({
         {activeMessage && <div className="conversation-message" data-speaker="dan">
           <strong className="message-author visually-hidden">Dan</strong>
           <p>{activeMessage.text}</p>
+          {activeMessage.attachments?.length ? <MessageAttachments client={client} config={config} attachments={activeMessage.attachments} /> : null}
           <p className="queued-state">Sending · {activeMessage.language === 'da' ? 'Danish' : 'English'}</p>
         </div>}
         {sending && (
@@ -780,13 +861,17 @@ export function ConversationHistory({
                 <p className="queued-state">Queued · {message.language === 'da' ? 'Danish' : 'English'}</p>
                 <button className="queue-remove" type="button"
                   aria-label={`Remove queued message: ${message.text}`}
-                  onClick={() => setQueue((current) => current.filter((item) => item.id !== message.id))}>
+                  onClick={() => {
+                    discardFiles((message.attachments ?? []).map((file) => file.id));
+                    setQueue((current) => current.filter((item) => item.id !== message.id));
+                  }}>
                   <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
                     <path d="m6 6 12 12M18 6 6 18" />
                   </svg>
                 </button>
               </div>
               <p>{message.text}</p>
+              {message.attachments?.length ? <p className="queued-state">{`${message.attachments.length} ${message.attachments.length === 1 ? 'file' : 'files'} attached`}</p> : null}
             </li>
           ))}
         </ol>}
@@ -795,7 +880,7 @@ export function ConversationHistory({
 
   return (
     <section className="conversation-history" data-turn-active={sending || undefined} aria-label="Conversation"
-      data-history-hosted={hosted || undefined}>
+      data-history-hosted={hosted || undefined} data-file-drag={fileDrag || undefined} {...fileDragHandlers}>
       {/* Hosted history lives in the shared workspace window; this element keeps the overview mounted in place. */}
       <div ref={hosted ? undefined : transcript} className={hosted ? 'conversation-dock' : 'conversation-transcript'}
         hidden={voiceActive} tabIndex={hosted ? undefined : 0} aria-label={hosted ? undefined : 'Conversation history'}
@@ -849,15 +934,22 @@ export function ConversationHistory({
             setDraft(event.target.value);
           }}
           onFocus={showLatest}
+          onPaste={(event) => {
+            // A pasted screenshot or copied file becomes an attachment; pasted text keeps its normal behavior.
+            const files = Array.from(event.clipboardData?.files ?? []);
+            if (files.length === 0 || event.clipboardData.getData('text/plain')) return;
+            event.preventDefault();
+            addFiles(files);
+          }}
           onKeyDown={(event) => {
             if (event.key === 'Enter' && (event.ctrlKey || event.metaKey) && !event.nativeEvent.isComposing) {
               event.preventDefault();
-              submitText(draftValue.current, true);
+              submitText(draftValue.current, true, true);
               return;
             }
             if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
               event.preventDefault();
-              submitText(draftValue.current);
+              submitText(draftValue.current, false, true);
             }
           }}
           aria-describedby="chat-guidance"
@@ -865,9 +957,18 @@ export function ConversationHistory({
         {/* The visible invitation; the native placeholder stays for assistive technology but is drawn transparent. */}
         {!draft && !hasSent && <span className="composer-prompt" aria-hidden="true">Ask Jarvis</span>}
         <ConversationMoreMenu className="composer-more" language={language} onLanguageChange={setLanguage} actions={attachActions} align="end" />
-        <button className="composer-send" type="submit" disabled={!draft.trim()} aria-label="Send" title="Send message">
+        <button className="composer-send" type="submit" disabled={uploadingFiles || (!draft.trim() && readyFiles === 0)}
+          aria-label="Send" title={uploadingFiles ? 'Waiting for uploads to finish' : 'Send message'}>
           <ConversationIcon name="send" />
         </button>
+        <input ref={fileInput} className="visually-hidden" type="file" multiple accept={ATTACHMENT_ACCEPT} tabIndex={-1}
+          aria-label="Attach files" data-testid="attachment-input"
+          onChange={(event) => {
+            addFiles(Array.from(event.target.files ?? []));
+            event.target.value = '';
+          }} />
+        <ComposerAttachments items={attachments.items} problems={attachments.problems} onRemove={attachments.remove} />
+        {fileDrag && <p className="composer-drop-hint" aria-hidden="true">Drop files to attach them</p>}
         <p id="chat-guidance" className="visually-hidden">
           Enter to send or steer the active reply; Ctrl+Enter queues. Shift+Enter adds a new line.
         </p>

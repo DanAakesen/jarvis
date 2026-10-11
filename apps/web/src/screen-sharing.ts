@@ -15,9 +15,13 @@ export interface ScreenShareController {
   start(onError?: (message: string) => void): Promise<void>;
   stop(): void;
   inspect(sessionId: string, feedback?: 'inline' | 'caller'): Promise<VisionContext>;
+  /** One JPEG frame (base64) of the live share, used by watch mode; rejects when nothing is shared. */
+  captureFrame?(): Promise<string>;
   /** Camera only: which way the camera faces, and a switch between front and back (phones). */
   readonly facing?: 'user' | 'environment';
   switchCamera?(): Promise<void>;
+  /** Faces the camera the given way, starting it when it is off. Never asks for more than `start` does. */
+  selectFacing?(facing: 'user' | 'environment', onError?: (message: string) => void): Promise<boolean>;
 }
 
 export interface VisionContext {
@@ -89,6 +93,25 @@ function readBlob(video: HTMLVideoElement, source: VisionCaptureSource): Promise
   });
 }
 
+async function captureStreamFrame(stream: MediaStream, source: VisionCaptureSource): Promise<string> {
+  const video = document.createElement('video');
+  video.muted = true;
+  video.playsInline = true;
+  video.srcObject = stream;
+  try {
+    await video.play();
+    const bytes = new Uint8Array(await (await readBlob(video, source)).arrayBuffer());
+    try {
+      return encodeBase64(bytes);
+    } finally {
+      bytes.fill(0);
+    }
+  } finally {
+    video.pause();
+    video.srcObject = null;
+  }
+}
+
 function useVisionCapture(
   config: PublicConfig,
   getAccessToken: () => Promise<string>,
@@ -121,21 +144,22 @@ function useVisionCapture(
     setStarting(false);
   }, []);
 
-  const start = useCallback(async (onError?: (message: string) => void) => {
+  const startCapture = useCallback(async (onError?: (message: string) => void): Promise<boolean> => {
     setError('');
     const fail = (message: string) => {
       // The initiating control owns feedback: toast callers must not leave a second inline alert.
       if (onError) onError(message);
       else setError(message);
     };
-    if (streamRef.current || startPendingRef.current) return;
+    if (streamRef.current) return true;
+    if (startPendingRef.current) return false;
     if (source === 'camera' && !navigator.mediaDevices?.getUserMedia) {
       fail('Camera access is not available in this browser.');
-      return;
+      return false;
     }
     if (source === 'screen' && !navigator.mediaDevices?.getDisplayMedia) {
       fail('Screen sharing is not available in this browser.');
-      return;
+      return false;
     }
 
     const requestId = ++startRequestRef.current;
@@ -150,24 +174,26 @@ function useVisionCapture(
         : await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
       if (requestId !== startRequestRef.current) {
         for (const track of stream.getTracks()) track.stop();
-        return;
+        return false;
       }
       const track = stream.getVideoTracks().find(({ readyState }) => readyState === 'live');
       if (!track) {
         for (const streamTrack of stream.getTracks()) streamTrack.stop();
         fail(`No live ${label} video is available.`);
-        return;
+        return false;
       }
       streamRef.current = stream;
       track.addEventListener('ended', stop, { once: true });
       if (source === 'camera') timeoutRef.current = setTimeout(stop, CAMERA_TIMEOUT_MS);
       setSharing(true);
+      return true;
     } catch {
       if (requestId === startRequestRef.current) {
         fail(source === 'camera'
           ? 'Camera access was not started. Allow camera access and try again.'
           : 'Screen sharing was not started. Choose a window or screen and try again.');
       }
+      return false;
     } finally {
       if (requestId === startRequestRef.current) {
         startPendingRef.current = false;
@@ -175,6 +201,10 @@ function useVisionCapture(
       }
     }
   }, [label, source, stop]);
+
+  const start = useCallback(async (onError?: (message: string) => void) => {
+    await startCapture(onError);
+  }, [startCapture]);
 
   useEffect(() => () => {
     startRequestRef.current += 1;
@@ -259,6 +289,14 @@ function useVisionCapture(
     }
   }, [config.backendUrl, getAccessToken, label, source]);
 
+  const captureFrame = useCallback(async () => {
+    const stream = streamRef.current;
+    if (!stream || stream.getVideoTracks().every((track) => track.readyState !== 'live')) {
+      throw new Error(`The ${label === 'camera' ? 'camera' : 'screen'} is not being shared.`);
+    }
+    return captureStreamFrame(stream, source);
+  }, [label, source]);
+
   // Front and back cameras on a phone: stop the current stream and start again facing the other way.
   const switchCamera = useCallback(async () => {
     const next = facingRef.current === 'user' ? 'environment' : 'user';
@@ -269,9 +307,20 @@ function useVisionCapture(
     await start();
   }, [start, stop]);
 
+  const selectFacing = useCallback(async (next: 'user' | 'environment', onError?: (message: string) => void) => {
+    const changed = facingRef.current !== next;
+    facingRef.current = next;
+    setFacing(next);
+    if (streamRef.current) {
+      if (!changed) return true;
+      stop();
+    }
+    return startCapture(onError);
+  }, [startCapture, stop]);
+
   return source === 'camera'
-    ? { sharing, starting, inspecting, error, start, stop, inspect, facing, switchCamera }
-    : { sharing, starting, inspecting, error, start, stop, inspect };
+    ? { sharing, starting, inspecting, error, start, stop, inspect, captureFrame, facing, switchCamera, selectFacing }
+    : { sharing, starting, inspecting, error, start, stop, inspect, captureFrame };
 }
 
 export function useScreenShare(config: PublicConfig, getAccessToken: () => Promise<string>): ScreenShareController {

@@ -852,3 +852,17 @@ The Folio is where everything Jarvis has pulled up lives afterwards. It replaces
 - **Open:** a click reopens the item as a workspace window, or focuses it when already open. Rows offer pin, rename and delete (delete asks first).
 - **Jarvis:** "pull up the Ignite research again" reopens the best match and highlights it in the pane when the pane is open.
 - **States:** loading skeleton rows, an empty state that explains what will appear here, a no-results state with a clear-search action, and an error state with retry.
+
+## Chat attachments (#649)
+
+Attachments reuse the composer glass. **Attach file or photo** is the first
+item after Language in the More menu; paste and drop work without it, and a
+drop shows a focus-coloured rim and "Drop files to attach them". Pending files are
+chips under the message row: thumbnail or file glyph, name, type · size, a
+progress bar while uploading, a note when Jarvis cannot read the file, error text
+and a 44px Remove button. Sent files appear as compact glass buttons on the
+message and open on demand; an expired file is disabled with an explanation. A
+publication confirmation adds the image and a warm warning surface stating
+that the repository is public. Text, not colour alone, conveys every state; no
+new animation is introduced.
+

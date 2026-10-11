@@ -9,9 +9,11 @@ import { InputOrbCore } from './InputOrbCore';
 import { VoiceOrbStatus } from './VoiceOrbStatus';
 import { BrowserVoiceClient, type MicrophoneState, type VoiceLanguage, type VoiceStatus } from './voice-client';
 import { languageName } from './voice-language';
+import { useSessionCommandRegistry } from './session-commands';
 import { voicePresentation } from './voice-presentation';
 import { VoiceStageContext } from './voice-stage-context';
 import type { CameraController, ScreenShareController } from './screen-sharing';
+import { formatWatchBudget, useVisionWatch } from './vision-watch';
 import { phoneDeviceQuery } from './presence-store';
 import { onVoiceWake, reportWakeOutcome } from './wake-store';import './VoiceControls.css';
 
@@ -78,6 +80,7 @@ export function VoiceControls({
   const [microphone, setMicrophone] = useState<MicrophoneState>('off');
   const [muted, setMuted] = useState(false);
   const stopButton = useRef<HTMLButtonElement>(null);
+  const stopWaiters = useRef(new Set<() => void>());
   const voiceBar = useRef<HTMLDivElement>(null);
   const voiceStatus = useRef<HTMLDivElement>(null);
   const [screenSessionId, setScreenSessionId] = useState<string | null>(null);
@@ -86,6 +89,10 @@ export function VoiceControls({
     setNotification({ message, error, id: performance.now() });
   }, []);
   const dismissNotification = useCallback(() => setNotification(null), []);
+  const watchToken = useCallback(() => accessToken(authClient, config), [authClient, config]);
+  const watchStopped = useCallback((message: string) => notify(message, true), [notify]);
+  const screenWatch = useVisionWatch(config, watchToken, screenShare, 'screen', screenSessionId, watchStopped);
+  const cameraWatch = useVisionWatch(config, watchToken, camera, 'camera', screenSessionId, watchStopped);
 
   const [localLanguage, setLocalLanguage] = useState<VoiceLanguage>(language);
   const [sessionLanguage, setSessionLanguage] = useState<VoiceLanguage | null>(null);
@@ -207,6 +214,8 @@ export function VoiceControls({
           if (nextStatus === 'error' && wakeSession.current) reportWakeOutcome(wakeSession.current, 'error', nextMessage);
           wakeSession.current = null;
           client.current = null;
+          for (const done of stopWaiters.current) done();
+          stopWaiters.current.clear();
           stage.setSignals(null);
           setSessionLanguage(null);
           screenSessionIdRef.current = null;
@@ -318,6 +327,17 @@ export function VoiceControls({
   const stop = () => {
     client.current?.stop();
   };
+  const sessionCommands = useSessionCommandRegistry();
+  useEffect(() => sessionCommands?.register({
+    endVoice: async () => {
+      if (!client.current) return false;
+      const ended = new Promise<void>((resolve) => { stopWaiters.current.add(resolve); });
+      client.current.stop();
+      // Bounded so a stuck teardown cannot leave the command unacknowledged.
+      await Promise.race([ended, new Promise<void>((resolve) => setTimeout(resolve, 5_000))]);
+      return true;
+    },
+  }), [sessionCommands]);
 
   const toggleMute = () => {
     const nextMuted = !muted;
@@ -331,6 +351,13 @@ export function VoiceControls({
     icon: <MenuGlyph name="screen" />,
     onSelect: () => { void inspectAndSendVision('screen'); },
     disabled: !screenSessionId || pending || screenShare.inspecting,
+    ...(!screenSessionId || pending ? { description: sessionPendingGuidance } : {}),
+  }, {
+    id: 'screen-watch',
+    label: screenWatch.watching ? `Stop watching the screen${formatWatchBudget(screenWatch.budget) ? ` · ${formatWatchBudget(screenWatch.budget)}` : ''}` : 'Watch the screen',
+    icon: <MenuGlyph name="screen" />,
+    onSelect: () => { if (screenWatch.watching) screenWatch.stop(); else screenWatch.start(); },
+    disabled: !screenSessionId || pending,
     ...(!screenSessionId || pending ? { description: sessionPendingGuidance } : {}),
   }, {
     id: 'stop-screen',
@@ -352,6 +379,13 @@ export function VoiceControls({
     icon: <MenuGlyph name="camera" />,
     onSelect: () => { void inspectAndSendVision('camera'); },
     disabled: !screenSessionId || pending || camera.inspecting,
+    ...(!screenSessionId || pending ? { description: sessionPendingGuidance } : {}),
+  }, {
+    id: 'camera-watch',
+    label: cameraWatch.watching ? `Stop watching the camera${formatWatchBudget(cameraWatch.budget) ? ` · ${formatWatchBudget(cameraWatch.budget)}` : ''}` : 'Watch the camera',
+    icon: <MenuGlyph name="camera" />,
+    onSelect: () => { if (cameraWatch.watching) cameraWatch.stop(); else cameraWatch.start(); },
+    disabled: !screenSessionId || pending,
     ...(!screenSessionId || pending ? { description: sessionPendingGuidance } : {}),
   }, {
     id: 'stop-camera',

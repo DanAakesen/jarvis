@@ -107,6 +107,38 @@ describe('live Now panel', () => {
     view.unmount();
   });
 
+  it('refuses a command addressed to another device kind without applying it', async () => {
+    loadNowFeed.mockResolvedValue(feed);
+    acknowledgeWorkspaceCommand.mockResolvedValue(undefined);
+    streamNowFeed.mockImplementation(async ({ onWorkspaceReady, onWorkspaceCommand, signal }) => {
+      streamCallbacks.onWorkspaceReady = onWorkspaceReady;
+      streamCallbacks.onWorkspaceCommand = onWorkspaceCommand;
+      await new Promise<void>((resolve) => signal.addEventListener('abort', () => resolve(), { once: true }));
+    });
+    const applyWorkspaceCommand = vi.fn(() => true);
+    const view = render(
+      <MemoryRouter>
+        <NowFeedPanel client={client} config={config} getAccessToken={getAccessToken} applyWorkspaceCommand={applyWorkspaceCommand} />
+      </MemoryRouter>,
+    );
+
+    await waitFor(() => expect(streamCallbacks.onWorkspaceReady).not.toBeNull());
+    streamCallbacks.onWorkspaceReady?.('12345678-1234-4234-8234-123456789abc');
+    // jsdom matches no media query, so this tab reports as a desktop.
+    streamCallbacks.onWorkspaceCommand?.({ commandId: 'to-phone', operation: 'minimise-all', target: 'phone' }, Date.now() + 5_000);
+    await waitFor(() => expect(acknowledgeWorkspaceCommand).toHaveBeenCalledWith(
+      'https://api.example.com',
+      'to-phone',
+      '12345678-1234-4234-8234-123456789abc',
+      false,
+      getAccessToken,
+      'refused',
+      'The workspace command is addressed to the phone device, not this desktop.',
+    ));
+    expect(applyWorkspaceCommand).not.toHaveBeenCalled();
+    view.unmount();
+  });
+
   it('applies an authenticated workspace command before acknowledging it', async () => {
     loadNowFeed.mockResolvedValue(feed);
     acknowledgeWorkspaceCommand.mockResolvedValue(undefined);
@@ -152,6 +184,42 @@ describe('live Now panel', () => {
       undefined,
     ));
     expect(applyWorkspaceCommand).toHaveBeenCalledWith(command, undefined);
+    view.unmount();
+  });
+
+  it('acknowledges a session command only after its asynchronous action resolves, carrying the refusal reason', async () => {
+    loadNowFeed.mockResolvedValue(feed);
+    acknowledgeWorkspaceCommand.mockResolvedValue(undefined);
+    streamNowFeed.mockImplementation(async ({ onWorkspaceReady, onWorkspaceCommand, signal }) => {
+      streamCallbacks.onWorkspaceReady = onWorkspaceReady;
+      streamCallbacks.onWorkspaceCommand = onWorkspaceCommand;
+      await new Promise<void>((resolve) => signal.addEventListener('abort', () => resolve(), { once: true }));
+    });
+    let finish: (value: { applied: false; reason: string }) => void = () => {};
+    const applyWorkspaceCommand = vi.fn(() => new Promise<{ applied: false; reason: string }>((resolve) => { finish = resolve; }));
+    const view = render(
+      <MemoryRouter>
+        <NowFeedPanel client={client} config={config} getAccessToken={getAccessToken} applyWorkspaceCommand={applyWorkspaceCommand} />
+      </MemoryRouter>,
+    );
+    await waitFor(() => expect(streamCallbacks.onWorkspaceReady).not.toBeNull());
+    streamCallbacks.onWorkspaceReady?.('12345678-1234-4234-8234-123456789abc');
+    streamCallbacks.onWorkspaceCommand?.(
+      { commandId: 'session-camera', operation: 'session', action: 'camera', value: 'rear' },
+      Date.now() + 5_000,
+    );
+    await waitFor(() => expect(applyWorkspaceCommand).toHaveBeenCalled());
+    expect(acknowledgeWorkspaceCommand).not.toHaveBeenCalled();
+    finish({ applied: false, reason: 'Camera access has not been allowed in this browser.' });
+    await waitFor(() => expect(acknowledgeWorkspaceCommand).toHaveBeenCalledWith(
+      'https://api.example.com',
+      'session-camera',
+      '12345678-1234-4234-8234-123456789abc',
+      false,
+      getAccessToken,
+      'refused',
+      'Camera access has not been allowed in this browser.',
+    ));
     view.unmount();
   });
 

@@ -879,6 +879,36 @@ test('validates conversation visibility actions without accepting unrelated fiel
   assert.equal(isWorkspaceCommand({ ...command, action: 'show', viewId: 'conversation' }), false);
 });
 
+test('validates exact current-session actions and values', () => {
+  const command = { commandId: 'session-1', operation: 'session' };
+  const actions = { language: ['da', 'en'], voice: ['end'], camera: ['front', 'rear', 'off'] };
+  const values = ['da', 'en', 'end', 'front', 'rear', 'off', 'start', 'de', '', null, true, 1, {}, [], undefined];
+  assert.equal(workspaceCommandSchema.properties.operation.enum.includes('session'), true);
+  assert.deepEqual(workspaceCommandSchema.properties.value.enum, ['da', 'en', 'end', 'front', 'rear', 'off']);
+  for (const [action, validValues] of Object.entries(actions)) {
+    assert.equal(workspaceCommandSchema.properties.action.enum.includes(action), true);
+    for (const value of values) {
+      assert.equal(isWorkspaceCommand({ ...command, action, value }), validValues.includes(value),
+        `${action}: ${JSON.stringify(value)}`);
+    }
+    for (const value of validValues) {
+      const valid = { ...command, action, value };
+      assert.equal(isWorkspaceCommand(valid), true);
+      for (const key of Object.keys(valid)) {
+        const missing = { ...valid };
+        delete missing[key];
+        assert.equal(isWorkspaceCommand(missing), false, key);
+      }
+      for (const extra of [{ extra: true }, { viewId: 'conversation' }, { page: 'settings' }]) {
+        assert.equal(isWorkspaceCommand({ ...valid, ...extra }), false);
+      }
+    }
+  }
+  for (const action of ['show', 'open', 'microphone', '', null, undefined]) {
+    assert.equal(isWorkspaceCommand({ ...command, action, value: 'end' }), false);
+  }
+});
+
 test('validates exact navigation keys, settings sections and bounded factory task/issue selectors', () => {
   const command = { commandId: 'navigate-1', operation: 'navigate' };
   assert.deepEqual(workspaceNavigationPages, [
@@ -1039,4 +1069,19 @@ test('issue attachments default to descriptions and bound explicit publication i
   assert.deepEqual(issueAttachmentFields.publish.enum, ['description', 'public']);
   assert.equal(issueAttachmentFields.attachmentIds.maxItems, 5);
   assert.equal(issueAttachmentFields.attachmentIds.uniqueItems, true);
+});
+
+test('workspace snapshots report a device kind and commands may name a target', () => {
+  const snapshot = { windows: [], contextPanelOpen: false };
+  for (const kind of ['desktop', 'phone', 'tablet']) {
+    assert.equal(isWorkspaceSnapshot({ ...snapshot, device: { kind, label: 'My device' } }), true);
+  }
+  assert.equal(isWorkspaceSnapshot({ ...snapshot, device: { kind: 'watch' } }), false);
+  assert.equal(isWorkspaceSnapshot({ ...snapshot, device: { kind: 'phone', extra: 1 } }), false);
+  assert.equal(isWorkspaceSnapshot({ ...snapshot, device: { kind: 'phone', label: '' } }), false);
+  for (const target of ['active', 'desktop', 'phone', 'all']) {
+    assert.equal(isWorkspaceCommand({ commandId: 'c1', operation: 'minimise-all', target }), true);
+  }
+  assert.equal(isWorkspaceCommand({ commandId: 'c1', operation: 'minimise-all', target: 'tablet' }), false);
+  assert.equal(isWorkspaceCommand({ commandId: 'c1', operation: 'minimise-all' }), true);
 });

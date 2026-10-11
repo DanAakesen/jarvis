@@ -17,7 +17,7 @@ const pages: Record<string, string> = {
 };
 // Pages Jarvis may name that this build does not have yet; they are refused rather than sent to a missing route.
 const notYet = new Set(['status']);
-const settingsAnchors: Record<string, string> = {
+export const settingsAnchors: Record<string, string> = {
   appearance: 'appearance-settings-heading',
   jarvis: 'jarvis-settings-heading',
   personality: 'personality-settings-heading',

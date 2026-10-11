@@ -488,9 +488,19 @@ export function isWorkspaceView(value) {
     (value.previous === undefined || isWorkspaceLocation(value.previous));
 }
 
+export const workspaceDeviceKinds = Object.freeze(['desktop', 'phone', 'tablet']);
+export const workspaceCommandTargets = Object.freeze(['active', 'desktop', 'phone', 'all']);
+
+function isWorkspaceDevice(value) {
+  return isObject(value) && Object.keys(value).every((key) => ['kind', 'label'].includes(key)) &&
+    workspaceDeviceKinds.includes(value.kind) &&
+    (value.label === undefined || boundedString(value.label, 60, 1));
+}
+
 export function isWorkspaceSnapshot(value) {
   return isObject(value) &&
-    Object.keys(value).every((key) => ['windows', 'contextPanelOpen', 'frame', 'view'].includes(key)) &&
+    Object.keys(value).every((key) => ['windows', 'contextPanelOpen', 'frame', 'view', 'device'].includes(key)) &&
+    (value.device === undefined || isWorkspaceDevice(value.device)) &&
     Array.isArray(value.windows) && value.windows.length <= 32 &&
     value.windows.every((window) => isObject(window) &&
       Object.keys(window).every((key) =>
@@ -516,7 +526,8 @@ export const workspaceCommandSchema = Object.freeze({
   type: 'object',
   properties: {
     commandId: workspaceCommandId,
-    operation: { type: 'string', enum: ['create', 'update', 'show', 'close', 'minimise', 'restore', 'focus', 'move', 'resize', 'layout', 'context-panel', 'navigate', 'conversation', 'place', 'arrange', 'minimise-all', 'restore-all', 'close-all', 'pin', 'unpin'] },
+    target: { enum: workspaceCommandTargets },
+    operation: { type: 'string', enum: ['create', 'update', 'show', 'close', 'minimise', 'restore', 'focus', 'move', 'resize', 'layout', 'context-panel', 'navigate', 'conversation', 'session', 'place', 'arrange', 'minimise-all', 'restore-all', 'close-all', 'pin', 'unpin'] },
     page: { type: 'string', enum: [...workspaceNavigationPages] },
     section: { type: 'string', enum: [...workspaceSettingsSections] },
     taskId: { type: 'string', pattern: '^[1-9][0-9]{0,18}$', maxLength: 19 },
@@ -531,7 +542,8 @@ export const workspaceCommandSchema = Object.freeze({
     width: { type: 'number', minimum: 0.32, maximum: 0.92 },
     height: { type: 'number', minimum: 0.34, maximum: 0.92 },
     arrangement: { enum: ['tiled', 'layered'] },
-    action: { enum: ['open', 'close', 'toggle', 'show', 'hide'] },
+    action: { enum: ['open', 'close', 'toggle', 'show', 'hide', 'language', 'voice', 'camera'] },
+    value: { type: 'string', enum: ['da', 'en', 'end', 'front', 'rear', 'off'] },
   },
   required: ['commandId', 'operation'],
   additionalProperties: false,
@@ -952,7 +964,8 @@ export function isWorkspacePinsResponse(value, options = {}) {
 export function isWorkspaceCommand(value, options = {}) {
   if (!isObject(value) ||
     typeof value.commandId !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/.test(value.commandId)) return false;
-  const hasOnly = (...keys) => Object.keys(value).every((key) => ['commandId', 'operation', ...keys].includes(key));
+  const hasOnly = (...keys) => Object.keys(value).every((key) => ['commandId', 'operation', 'target', ...keys].includes(key));
+  if (value.target !== undefined && !workspaceCommandTargets.includes(value.target)) return false;
   switch (value.operation) {
     case 'navigate':
       return hasOnly('page', 'section', 'taskId', 'issueNumber') && workspaceNavigationPages.includes(value.page) &&
@@ -963,6 +976,11 @@ export function isWorkspaceCommand(value, options = {}) {
           value.page === 'factory' && Number.isSafeInteger(value.issueNumber) && value.issueNumber > 0);
     case 'conversation':
       return hasOnly('action') && ['show', 'hide'].includes(value.action);
+    case 'session':
+      return hasOnly('action', 'value') && (
+        value.action === 'language' && ['da', 'en'].includes(value.value) ||
+        value.action === 'voice' && value.value === 'end' ||
+        value.action === 'camera' && ['front', 'rear', 'off'].includes(value.value));
     case 'create':
     case 'update':
       return hasOnly('viewId', 'view') &&
