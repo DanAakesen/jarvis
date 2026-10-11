@@ -1147,3 +1147,9 @@ regression; live acceptance is pending.
   hide/reopen and repeated toggles, with desktop light/dark and phone captures
   in `docs/ui/screenshots/composer-sizing/README.md`.
 - **Status:** implemented locally; production acceptance follows deployment.
+
+## 2026-10-11 — Notes page on the new /notes routes (P9-77, #683)
+
+- **Decision:** The `knowledge` area becomes `notes` (`apps/web/src/notes/`). `/notes` is the list/editor, `/notes/graph` the unchanged graph view, and `/knowledge` plus the Jarvis `knowledge` page alias redirect to the graph; `notes` is a new Jarvis page. The editor is plain Markdown source with a preview toggle. Saves send the loaded `sha`; a 409 offers reload, compare, or keeping the draft on top of the latest `sha`. Unsaved edits are guarded by a confirm prompt on in-page and link navigation plus `beforeunload`.
+- **Evidence:** Vitest in `apps/web/src/notes/notes.test.tsx`; scratch Chromium at 1280×800 and 390×844 against a mocked in-memory vault (not the live backend/provider).
+- **Status:** implemented locally; live-backend acceptance follows deployment.

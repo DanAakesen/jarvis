@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { flushSync } from 'react-dom';
-import { Link, NavLink, Outlet, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
+import { Link, NavLink, Navigate, Outlet, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import type { HtmlArtifactFrame, JarvisActivityEvent, WorkspaceCommand, WorkspaceSnapshot, WorkspaceView as LookingAtView, WorkspaceViewLocation } from '@jarvis/contracts';
 import type { PublicConfig } from '../config/public-config';
 import { useJarvisActivity } from './activity-context';
@@ -46,13 +46,14 @@ import { KnowledgeBackendContext } from './knowledge/knowledge-context';
 import { PresenceChip, PresenceSettings } from './Presence';
 import { MemorySettings } from './MemorySettings';
 
-/** Interim research progress: unning from P9-46 (#613) on; older backends sent partial for it. */
+/** Interim research progress: 
+unning from P9-46 (#613) on; older backends sent partial for it. */
 const researchInProgress = (status: string) => status === 'running' || status === 'partial';
 
 const sidebarLimits = { min: 160, max: 420 };
 const contextLimits = { min: 220, max: 560 };
 
-type ShellIconName = 'home' | 'factory' | 'knowledge' | 'usage' | 'navigation' | 'screen' | 'camera' | 'context' | 'settings' | 'close' | 'folio';
+type ShellIconName = 'home' | 'factory' | 'notes' | 'usage' | 'navigation' | 'screen' | 'camera' | 'context' | 'settings' | 'close' | 'folio';
 
 function activityLabel(event: JarvisActivityEvent | null): string {
   if (!event) return 'Jarvis is working';
@@ -81,8 +82,8 @@ function ShellIcon({ name }: { name: ShellIconName }) {
       return <svg {...common}><path d="m3 10 9-7 9 7" /><path d="M5 9v12h14V9M9 21v-7h6v7" /></svg>;
     case 'factory':
       return <svg {...common}><path d="M3 21V9l6 3V8l6 4V5h6v16Z" /><path d="M7 17h1m4 0h1m4 0h1m-10-4h1m4 0h1m4-8h1" /></svg>;
-    case 'knowledge':
-      return <svg {...common}><circle cx="6" cy="7" r="2.2" /><circle cx="17.5" cy="5.5" r="1.8" /><circle cx="12.5" cy="13" r="2.4" /><circle cx="5.5" cy="18" r="1.7" /><circle cx="18.5" cy="18.5" r="2" /><path d="m8 8.3 2.6 3M15.9 6.6l-2.4 4.3M10.4 14.4l-3.4 2.6M14.6 14.4l2.5 2.6M7.9 6.7l7.8-1" /></svg>;
+    case 'notes':
+      return <svg {...common}><path d="M6 3h9l4 4v14H6Z" /><path d="M15 3v4h4M9 12h7M9 16h7" /></svg>;
     case 'usage':
       return <svg {...common}><path d="M4 20V11m5 9V5m5 15v-7m5 7V8" /><path d="M2 21h20" /></svg>;
     case 'navigation':
@@ -526,7 +527,7 @@ function ShellLayout({ signedIn, config, session, camera, screenShare }: {
           </NavLink>
           {areas.map((area) => (
             <NavLink key={area.id} className="rail-link" to={`/${area.path}`} aria-label={area.label} onClick={() => { setFolioOpen(false); setNavigationOpen(area.navigation.length > 1); }}>
-              <ShellIcon name={area.id === 'factory' ? 'factory' : area.id === 'knowledge' ? 'knowledge' : 'usage'} /><span className="visually-hidden">{area.label}</span>
+              <ShellIcon name={area.id === 'factory' ? 'factory' : area.id === 'notes' ? 'notes' : 'usage'} /><span className="visually-hidden">{area.label}</span>
             </NavLink>
           ))}
           <button className={`rail-link rail-folio${folioOpen ? ' active' : ''}`} type="button" aria-label="Folio" aria-pressed={folioOpen}
@@ -773,6 +774,7 @@ export function App({ config = defaultConfig }: { config?: PublicConfig }) {
                   <Component backendUrl={config.backendUrl} getAccessToken={session.getAccessToken} />
                 } />
               ))}
+              <Route path="knowledge/*" element={<Navigate to="/notes/graph" replace />} />
               <Route path="settings" element={<SettingsRoute config={config} session={session} />} />
             </Route>
             <Route path="*" element={<NotFoundPage />} />

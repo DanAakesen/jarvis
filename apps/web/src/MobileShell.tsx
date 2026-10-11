@@ -8,7 +8,7 @@ import { NavLink } from 'react-router-dom';
 const pages = [
   { to: '/', label: 'Jarvis', end: true },
   { to: '/factory/kanban', label: 'Software Factory' },
-  { to: '/knowledge', label: 'Knowledge' },
+  { to: '/notes', label: 'Notes' },
   { to: '/usage', label: 'Usage' },
   { to: '/settings', label: 'Settings' },
 ] as const;

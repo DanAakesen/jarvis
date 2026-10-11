@@ -788,14 +788,14 @@ describe('App shell', () => {
     expect(screen.queryByRole('heading', { name: 'Tasks' })).toBeNull();
   });
 
-  it('offers the Software Factory, Knowledge and Usage areas with a settings entry', async () => {
+  it('offers the Software Factory, Notes and Usage areas with a settings entry', async () => {
     await renderSignedIn();
 
     const areas = screen.getByRole('navigation', { name: 'Areas' });
     expect(within(areas).getAllByRole('link').map((link) => link.getAttribute('aria-label'))).toEqual([
       'Conversation',
       'Software Factory',
-      'Knowledge',
+      'Notes',
       'Usage',
     ]);
     expect(screen.getByRole('link', { name: 'Settings' }).getAttribute('href')).toBe('/settings');
@@ -893,7 +893,7 @@ describe('App shell', () => {
 
   it.each([
     ['Software Factory', '/'],
-    ['Knowledge', '/'],
+    ['Notes', '/'],
     ['Usage', '/'],
     ['Usage', '/usage'],
     ['Conversation', '/usage'],

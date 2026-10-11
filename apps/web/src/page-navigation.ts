@@ -13,7 +13,8 @@ const pages: Record<string, string> = {
   factory: '/factory/kanban',
   settings: '/settings',
   usage: '/usage',
-  knowledge: '/knowledge',
+  notes: '/notes',
+  knowledge: '/notes/graph',
 };
 // Pages Jarvis may name that this build does not have yet; they are refused rather than sent to a missing route.
 const notYet = new Set(['status']);
@@ -94,7 +95,7 @@ export function revealWhenReady(find: () => Element | null, reducedMotion: boole
 }
 
 const pagePrefixes: readonly [string, WorkspaceNavigationPage][] = [
-  ['/factory', 'factory'], ['/settings', 'settings'], ['/usage', 'usage'], ['/knowledge', 'knowledge'],
+  ['/factory', 'factory'], ['/settings', 'settings'], ['/usage', 'usage'], ['/notes/graph', 'knowledge'], ['/notes', 'notes'], ['/knowledge', 'knowledge'],
 ];
 
 /** The shell page for a route, for the `view` Dan is looking at (P9-43). */
