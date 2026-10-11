@@ -5,6 +5,7 @@ import { isWorkspaceCommand, type GeneratedView, type WorkspaceCommand, type Wor
 import { GeneratedViewRenderer } from './GeneratedViewRenderer';
 import { flyWindowAway, flyWindowToTab } from './window-fly-away';
 import { Loader } from './Loader';
+import type { SessionCommand, SessionCommandResult } from './session-commands';
 export type { WorkspaceCommand } from '@jarvis/contracts';
 
 export type WorkspaceViewContent =
@@ -34,6 +35,8 @@ export interface WorkspaceController {
   hasVisibleViews: () => boolean;
   /** True when the view is open, not minimised and, on phones, the foreground view. */
   isViewVisible?: (viewId: string) => boolean;
+  /** Applies a current-session command (language, voice, camera) and resolves once the UI action has finished. */
+  applySession?: (command: SessionCommand) => Promise<SessionCommandResult>;
   snapshot?: WorkspaceSnapshot;
 }
 

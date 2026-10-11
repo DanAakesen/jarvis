@@ -38,7 +38,7 @@ export function GeneratedViewRenderer({  view,
 
   switch (view.renderer) {
     case 'html-app':
-      return <HtmlAppView key={view.data.artifactId} artifactId={view.data.artifactId} title={view.title} />;
+      return <HtmlAppView key={view.data.artifactId} artifactId={view.data.artifactId} title={view.title} updatedAt={view.source.updatedAt} />;
     case 'code':
       return <CodeView data={view.data} title={view.title} />;
     case 'knowledge-graph':
