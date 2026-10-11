@@ -8,6 +8,7 @@ import { useJarvisActivity } from './activity-context';
 import { PHONE_LAYOUT_MEDIA_QUERY } from './Workspace';
 import type { PublicConfig } from '../config/public-config';
 import { sharedScreenContext, type CameraController, type ScreenShareController } from './screen-sharing';
+import { formatWatchBudget, useVisionWatch } from './vision-watch';
 import { ConversationHandle } from './ConversationHandle';
 import { ConversationMoreMenu, type MoreMenuAction } from './ConversationMoreMenu';
 import { ConversationToast } from './ConversationToast';
@@ -23,6 +24,7 @@ import { ATTACHMENT_ACCEPT, MAX_ATTACHMENTS, publicPublicationImage, type ChatAt
 import { useChatAttachments } from './useChatAttachments';
 import { Loader } from './Loader';
 import {
+  accessToken,
   createChatSession,
   loadImageArtifactUrl,
   loadConversationHistory,
@@ -205,6 +207,9 @@ export function ConversationHistory({
   const [failedTurns, setFailedTurns] = useState<FailedTurn[]>([]);
   const [streamedText, setStreamedText] = useState('');
   const [turnError, setTurnError] = useState('');
+  const watchToken = useCallback(() => accessToken(client, config), [client, config]);
+  const screenWatch = useVisionWatch(config, watchToken, screenShare, 'screen', session?.id ?? null, setTurnError);
+  const cameraWatch = useVisionWatch(config, watchToken, camera, 'camera', session?.id ?? null, setTurnError);
   const [steering, setSteering] = useState(false);
   const [visionContext, setVisionContext] = useState<{
     sessionId: string;
@@ -667,12 +672,24 @@ export function ConversationHistory({
       onSelect: () => { if (screenShare.sharing) screenShare.stop(); else void screenShare.start(); },
       disabled: screenShare.starting,
     }] : []),
+    ...(screenShare?.sharing && (session || screenWatch.watching) ? [{
+      id: 'screen-watch',
+      label: screenWatch.watching ? `Stop watching the screen${formatWatchBudget(screenWatch.budget) ? ` · ${formatWatchBudget(screenWatch.budget)}` : ''}` : 'Watch the screen',
+      icon: <ConversationIcon name="screen" />,
+      onSelect: () => { if (screenWatch.watching) screenWatch.stop(); else screenWatch.start(); },
+    }] : []),
     ...(camera ? [{
       id: 'share-camera',
       label: camera.sharing ? 'Turn camera off' : camera.starting ? 'Starting camera…' : 'Turn camera on',
       icon: <ConversationIcon name="camera" />,
       onSelect: () => { if (camera.sharing) camera.stop(); else void camera.start(); },
       disabled: camera.starting,
+    }] : []),
+    ...(camera?.sharing && (session || cameraWatch.watching) ? [{
+      id: 'camera-watch',
+      label: cameraWatch.watching ? `Stop watching the camera${formatWatchBudget(cameraWatch.budget) ? ` · ${formatWatchBudget(cameraWatch.budget)}` : ''}` : 'Watch the camera',
+      icon: <ConversationIcon name="camera" />,
+      onSelect: () => { if (cameraWatch.watching) cameraWatch.stop(); else cameraWatch.start(); },
     }] : []),
     ...(camera?.sharing && camera.switchCamera && navigator.maxTouchPoints > 0 ? [{
       id: 'switch-camera',

@@ -13,6 +13,7 @@ import { useSessionCommandRegistry } from './session-commands';
 import { voicePresentation } from './voice-presentation';
 import { VoiceStageContext } from './voice-stage-context';
 import type { CameraController, ScreenShareController } from './screen-sharing';
+import { formatWatchBudget, useVisionWatch } from './vision-watch';
 import { phoneDeviceQuery } from './presence-store';
 import { onVoiceWake, reportWakeOutcome } from './wake-store';import './VoiceControls.css';
 
@@ -88,6 +89,10 @@ export function VoiceControls({
     setNotification({ message, error, id: performance.now() });
   }, []);
   const dismissNotification = useCallback(() => setNotification(null), []);
+  const watchToken = useCallback(() => accessToken(authClient, config), [authClient, config]);
+  const watchStopped = useCallback((message: string) => notify(message, true), [notify]);
+  const screenWatch = useVisionWatch(config, watchToken, screenShare, 'screen', screenSessionId, watchStopped);
+  const cameraWatch = useVisionWatch(config, watchToken, camera, 'camera', screenSessionId, watchStopped);
 
   const [localLanguage, setLocalLanguage] = useState<VoiceLanguage>(language);
   const [sessionLanguage, setSessionLanguage] = useState<VoiceLanguage | null>(null);
@@ -348,6 +353,13 @@ export function VoiceControls({
     disabled: !screenSessionId || pending || screenShare.inspecting,
     ...(!screenSessionId || pending ? { description: sessionPendingGuidance } : {}),
   }, {
+    id: 'screen-watch',
+    label: screenWatch.watching ? `Stop watching the screen${formatWatchBudget(screenWatch.budget) ? ` · ${formatWatchBudget(screenWatch.budget)}` : ''}` : 'Watch the screen',
+    icon: <MenuGlyph name="screen" />,
+    onSelect: () => { if (screenWatch.watching) screenWatch.stop(); else screenWatch.start(); },
+    disabled: !screenSessionId || pending,
+    ...(!screenSessionId || pending ? { description: sessionPendingGuidance } : {}),
+  }, {
     id: 'stop-screen',
     label: 'Stop sharing screen',
     icon: <MenuGlyph name="screen" />,
@@ -367,6 +379,13 @@ export function VoiceControls({
     icon: <MenuGlyph name="camera" />,
     onSelect: () => { void inspectAndSendVision('camera'); },
     disabled: !screenSessionId || pending || camera.inspecting,
+    ...(!screenSessionId || pending ? { description: sessionPendingGuidance } : {}),
+  }, {
+    id: 'camera-watch',
+    label: cameraWatch.watching ? `Stop watching the camera${formatWatchBudget(cameraWatch.budget) ? ` · ${formatWatchBudget(cameraWatch.budget)}` : ''}` : 'Watch the camera',
+    icon: <MenuGlyph name="camera" />,
+    onSelect: () => { if (cameraWatch.watching) cameraWatch.stop(); else cameraWatch.start(); },
+    disabled: !screenSessionId || pending,
     ...(!screenSessionId || pending ? { description: sessionPendingGuidance } : {}),
   }, {
     id: 'stop-camera',
