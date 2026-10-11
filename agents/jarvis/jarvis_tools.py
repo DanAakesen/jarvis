@@ -497,6 +497,7 @@ class BackendToolClient:
         input_tokens: int,
         output_tokens: int,
         event_id: str,
+        image_reservation: dict[str, str] | None = None,
     ) -> None:
         """Record provider-reported model usage without sending conversation content."""
         try:
@@ -511,6 +512,7 @@ class BackendToolClient:
                     "inputTokens": input_tokens,
                     "outputTokens": output_tokens,
                     "eventId": event_id,
+                    **({"imageReservation": image_reservation} if image_reservation else {}),
                 },
             ) as response:
                 if response.status_code != 204:

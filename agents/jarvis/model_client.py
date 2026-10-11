@@ -34,7 +34,7 @@ from jarvis_tools import (
 )
 from model_contract import StreamingModelClient
 from state import ModelMessage, ModelSettings
-from visual_context import ImageInputRejected, current_visual_result
+from visual_context import ImageInputRejected, current_image_reservation, current_visual_result
 
 FOUNDRY_TOKEN_SCOPE = "https://ai.azure.com/.default"
 DEFAULT_SYSTEM_PROMPT = INSTRUCTIONS
@@ -592,7 +592,7 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                             ]
                             visual_result = current_visual_result.get()
                             if visual_result is not None:
-                                visual_result["visualReason"] = "daily_limit"
+                                visual_result["visualReason"] = "image_context_limit"
                     started = time.monotonic()
                     first_text_ms: int | None = None
                     final = None
@@ -760,6 +760,10 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                                 input_tokens=input_tokens,
                                 output_tokens=output_tokens,
                                 event_id=str(uuid4()),
+                                **(
+                                    {"image_reservation": current_image_reservation.get()}
+                                    if image_request and current_image_reservation.get() else {}
+                                ),
                             )
                         except asyncio.CancelledError:
                             raise

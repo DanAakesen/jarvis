@@ -11,6 +11,7 @@ import type {
 import type { CodexToolUsageCount } from './tool-calls.js';
 import type { JarvisTool } from './tool-registry.js';
 import { ToolFailure } from './tool-registry.js';
+import { validImageItemId, validSessionId } from '../vision/screen.js';
 
 export type {
   UsageEntry,
@@ -32,6 +33,7 @@ export interface FoundryModelUsage {
   inputTokens: number;
   outputTokens: number;
   eventId: string;
+  imageReservation?: { sessionId: string; itemId: string };
 }
 
 export interface UsageStore {
@@ -121,6 +123,12 @@ function summarizeSpend(entries: UsageEntry[], key: (entry: UsageEntry) => strin
 function validFoundryUsage(value: unknown): value is FoundryModelUsage {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) return false;
   const usage = value as Record<string, unknown>;
+  if (usage.imageReservation !== undefined) {
+    const image = usage.imageReservation as Record<string, unknown> | null;
+    if (usage.role !== 'chat' || !image || typeof image !== 'object' ||
+        typeof image.sessionId !== 'string' || !validSessionId(image.sessionId) ||
+        typeof image.itemId !== 'string' || !validImageItemId(image.itemId)) return false;
+  }
   return ['chat', 'voice', 'vision', 'research', 'embeddings'].includes(String(usage.role)) &&
     typeof usage.model === 'string' && /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u.test(usage.model) &&
     Number.isSafeInteger(usage.inputTokens) && Number(usage.inputTokens) >= 0 &&
@@ -195,6 +203,10 @@ export async function registerUsageRoutes(app: FastifyInstance) {
           inputTokens: { type: 'integer', minimum: 0, maximum: 10_000_000 },
           outputTokens: { type: 'integer', minimum: 0, maximum: 10_000_000 },
           eventId: { type: 'string', format: 'uuid' },
+          imageReservation: { type: 'object', properties: {
+            sessionId: { type: 'string', pattern: '^[1-9][0-9]{0,18}$' },
+            itemId: { type: 'string', pattern: '^[A-Za-z0-9_-]{1,128}$' },
+          }, required: ['sessionId', 'itemId'], additionalProperties: false },
         },
         required: ['role', 'model', 'inputTokens', 'outputTokens', 'eventId'],
         additionalProperties: false,

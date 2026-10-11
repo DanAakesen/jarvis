@@ -12,6 +12,71 @@ vi.mock('applicationinsights', () => ({
 }));
 
 describe('structured log export', () => {
+  it.each(['chat', 'voice-en', 'voice-da'])('exports visual path metadata for %s without identifiers or content', (channel) => {
+    const records: string[] = [];
+    const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });
+    const sink = { ...sdk, trackTrace: vi.fn() };
+    const logger = createLogger({ logLevel: 'info' }, sink, output).child({
+      reqId: '00000000-0000-0000-0000-000000000000',
+    });
+    const fields = { path: 'image', reason: 'image_accepted', channel, latencyMs: 42 };
+    logger.info({
+      ...fields, frameId: 'private-frame', turnId: 'private-turn', sessionId: '41', messageId: '42',
+      image: 'private-image', description: 'private-description', question: 'private-question',
+      text: 'private-text', url: 'https://example.com/private', method: 'POST', route: '/private',
+      responseTime: 42, statusCode: 200, port: 3000, error: new Error('private-error'),
+    }, 'visual.path');
+    expect(JSON.parse(records[0]!)).toEqual({
+      level: 30, time: expect.any(Number), service: 'jarvis-backend', msg: 'visual.path', ...fields,
+    });
+    expect(sink.trackTrace).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
+      message: 'visual.path', properties: { service: 'jarvis-backend', ...fields },
+    }));
+    expect(records.join('') + JSON.stringify(sink.trackTrace.mock.calls)).not.toContain('private');
+  });
+
+  it.each([
+    'image_attached', 'image_request_accepted', 'image_context_limit',
+    'image_accepted', 'image_rejected', 'image_timeout', 'image_unavailable',
+    'frame_unavailable', 'frame_missing', 'budget_exhausted', 'budget_unavailable', 'legacy_agent',
+    'image_input_unverified', 'timeout', 'daily_limit', 'frame_rate_limited', 'capture_failed',
+    'camera_off', 'permission_denied', 'not_supported', 'session_ended', 'vision_failed',
+  ])('exports only the explicit visual reason %s', (reason) => {
+    const records: string[] = [];
+    const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });
+    const sink = { ...sdk, trackTrace: vi.fn() };
+    createLogger({ logLevel: 'info' }, sink, output).info({ path: 'caption', reason }, 'visual.path');
+    expect(JSON.parse(records[0]!)).toEqual({
+      level: 30, time: expect.any(Number), service: 'jarvis-backend', msg: 'visual.path', path: 'caption', reason,
+    });
+    expect(sink.trackTrace).toHaveBeenCalledWith(expect.objectContaining({
+      message: 'visual.path', properties: { service: 'jarvis-backend', path: 'caption', reason },
+    }));
+  });
+
+  it('rejects arbitrary visual metadata and invalid timings at both export boundaries', () => {
+    const records: string[] = [];
+    const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });
+    const sink = { ...sdk, trackTrace: vi.fn() };
+    const logger = createLogger({ logLevel: 'info' }, sink, output);
+    for (const latencyMs of [-1, 600_001, Infinity, -Infinity, NaN, '42', null, undefined]) {
+      logger.info({ path: 'private', reason: 'arbitrary_code', channel: 'voice', latencyMs }, 'visual.path');
+      expect(JSON.parse(records.at(-1)!)).toEqual({
+        level: 30, time: expect.any(Number), service: 'jarvis-backend', msg: 'visual.path',
+      });
+      expect(sink.trackTrace).toHaveBeenLastCalledWith(expect.objectContaining({
+        message: 'visual.path', properties: { service: 'jarvis-backend' },
+      }));
+    }
+    for (const latencyMs of [0, 42.5, 600_000]) {
+      logger.info({ latencyMs }, 'visual.path');
+      expect(JSON.parse(records.at(-1)!)).toHaveProperty('latencyMs', latencyMs);
+      expect(sink.trackTrace).toHaveBeenLastCalledWith(expect.objectContaining({
+        properties: { service: 'jarvis-backend', latencyMs },
+      }));
+    }
+  });
+
   it('exports tool argument diagnostics without argument content or unsafe metadata', () => {
     const records: string[] = [];
     const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });

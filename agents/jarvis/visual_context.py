@@ -16,6 +16,9 @@ MAX_JPEG_BYTES = 1_000_000
 current_visual_result: contextvars.ContextVar[dict[str, Any] | None] = contextvars.ContextVar(
     "current_visual_result", default=None
 )
+current_image_reservation: contextvars.ContextVar[dict[str, str] | None] = contextvars.ContextVar(
+    "current_image_reservation", default=None
+)
 
 
 class ImageInputRejected(RuntimeError):

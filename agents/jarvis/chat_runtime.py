@@ -38,6 +38,7 @@ from model_contract import StreamingModelClient
 from state import ModelMessage
 from visual_context import (
     MAX_JPEG_BYTES,
+    current_image_reservation,
     current_visual_result,
     resolved_visual_image,
     visual_context,
@@ -461,6 +462,7 @@ def register_chat_invocation(
                 if visual is not None else None
             )
             visual_token = current_visual_result.set(visual_result)
+            image_reservation_token = current_image_reservation.set(None)
             output_bytes = 0
             steering_fetcher_token = None
             phase_setter_token = None
@@ -483,6 +485,9 @@ def register_chat_invocation(
                             current_image = None
                     if current_image is not None:
                         visual_result.pop("visualReason", None)
+                        current_image_reservation.set({
+                            "sessionId": chat_session_id, "itemId": visual["frameId"],
+                        })
                 if chat_session_id is not None:
                     cursor = turn_id
 
@@ -641,6 +646,7 @@ def register_chat_invocation(
                 current_chat_turn_id.reset(chat_turn_token)
                 current_chat_session_id.reset(chat_session_token)
                 current_visual_result.reset(visual_token)
+                current_image_reservation.reset(image_reservation_token)
 
         return StreamingResponse(
             events(),

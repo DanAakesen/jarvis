@@ -1,6 +1,7 @@
 import sql from 'mssql';
 import type { ScreenFrameUsageStore } from '../vision/screen.js';
 import type { VisionWatchUsageStore } from '../vision/watch.js';
+import { foundryTokenCosts, realtimeImageCosts } from '../core/usage-pricing.js';
 import { databaseReadRequest } from './wake-retry.js';
 
 /**
@@ -13,6 +14,8 @@ import { databaseReadRequest } from './wake-retry.js';
  * it if model/pricing/context changes or unusually token-dense input is allowed.
  */
 export const WATCH_FRAME_PENDING_COST_DKK = 0.1;
+// The same unverified allowance admits bounded realtime images. Audio/output
+// totals never replace it; missing image attribution or pricing retains it.
 
 function utcDay(value: Date): { start: Date; end: Date } {
   const start = new Date(Date.UTC(value.getUTCFullYear(), value.getUTCMonth(), value.getUTCDate()));
@@ -22,9 +25,9 @@ function utcDay(value: Date): { start: Date; end: Date } {
 
 export function createScreenFrameUsageStore(pool: sql.ConnectionPool): ScreenFrameUsageStore & VisionWatchUsageStore {
   return {
-    async reserveImage({ sessionId, eventId, limitDkk, at }) {
+    async reserveImage({ sessionId, eventId, limitDkk, at, model }) {
       if (!Number.isFinite(limitDkk) || limitDkk < 0 || limitDkk > 99_999_999.9999 ||
-          !Number.isFinite(at.getTime()) || !/^image:[0-9a-f-]{36}$/u.test(eventId)) {
+          !Number.isFinite(at.getTime()) || !/^image:(?:[0-9a-f-]{36}|[0-9a-f]{64})$/u.test(eventId)) {
         throw new Error('Invalid image reservation');
       }
       const { start, end } = utcDay(at);
@@ -34,6 +37,7 @@ export function createScreenFrameUsageStore(pool: sql.ConnectionPool): ScreenFra
         const result = await transaction.request()
           .input('sessionId', sql.BigInt, BigInt(sessionId))
           .input('eventId', sql.NVarChar(300), `screen:${eventId}`)
+          .input('model', sql.NVarChar(128), model ?? null)
           .input('limitDkk', sql.Decimal(12, 4), Math.floor(limitDkk * 10_000) / 10_000)
           .input('pendingCostDkk', sql.Decimal(12, 4), WATCH_FRAME_PENDING_COST_DKK)
           .input('dayStart', sql.DateTime2, start).input('dayEnd', sql.DateTime2, end)
@@ -47,14 +51,20 @@ export function createScreenFrameUsageStore(pool: sql.ConnectionPool): ScreenFra
             IF NOT EXISTS (SELECT 1 FROM dbo.jarvis_sessions WITH (UPDLOCK, HOLDLOCK)
               WHERE id = @sessionId AND ended_at IS NULL)
               SELECT N'inactive' AS outcome;
+            ELSE IF EXISTS (SELECT 1 FROM dbo.usage WITH (UPDLOCK, HOLDLOCK)
+              WHERE jarvis_session_id = @sessionId AND source = N'jarvis_model'
+                AND metric = N'input_tokens' AND source_event_id = @eventId AND model = @model)
+              SELECT N'reserved' AS outcome;
             ELSE IF (SELECT COALESCE(SUM(cost_dkk), 0) FROM dbo.usage WITH (UPDLOCK, HOLDLOCK)
               WHERE source = N'jarvis_model' AND (metric = N'screen_frames' OR
-                (metric = N'input_tokens' AND source_event_id LIKE N'screen:image:%'))
+                (metric IN (N'input_tokens', N'output_tokens') AND source_event_id LIKE N'screen:image:%'))
                 AND at >= @dayStart AND at < @dayEnd) + @pendingCostDkk > @limitDkk
               SELECT N'limit' AS outcome;
             ELSE BEGIN
-              INSERT INTO dbo.usage (jarvis_session_id, source, metric, quantity, cost_dkk, source_event_id, at)
-              VALUES (@sessionId, N'jarvis_model', N'input_tokens', 0, @pendingCostDkk, @eventId, @at);
+              INSERT INTO dbo.usage
+                (jarvis_session_id, source, metric, quantity, cost_dkk, cost_status, role, model, source_event_id, at)
+              VALUES (@sessionId, N'jarvis_model', N'input_tokens', 0, @pendingCostDkk,
+                N'unverified', N'vision', @model, @eventId, @at);
               SELECT N'reserved' AS outcome;
             END;`);
         const outcome = result.recordset[0]?.outcome;
@@ -84,7 +94,7 @@ export function createScreenFrameUsageStore(pool: sql.ConnectionPool): ScreenFra
           .input('dayEnd', sql.DateTime2, end)
           .input('at', sql.DateTime2, at)
           .input('lockResource', sql.NVarChar(255), `jarvis.screen-frame-cap:${start.toISOString().slice(0, 10)}`)
-          .query<{ outcome: 'reserved' | 'rate-limited' | 'limit' | 'inactive' }>(`DECLARE @lock_result int;
+          .query<{ outcome: 'reserved' | 'rate-limited' | 'limit' | 'budget-exhausted' | 'inactive' }>(`DECLARE @lock_result int;
             EXEC @lock_result = sys.sp_getapplock
               @Resource = @lockResource,
               @LockMode = 'Exclusive',
@@ -109,10 +119,10 @@ export function createScreenFrameUsageStore(pool: sql.ConnectionPool): ScreenFra
               SELECT COALESCE(SUM(cost_dkk), 0)
               FROM dbo.usage WITH (UPDLOCK, HOLDLOCK)
               WHERE source = N'jarvis_model' AND (metric = N'screen_frames' OR
-                (metric = N'input_tokens' AND source_event_id LIKE N'screen:image:%'))
+                (metric IN (N'input_tokens', N'output_tokens') AND source_event_id LIKE N'screen:image:%'))
                 AND at >= @dayStart AND at < @dayEnd
             ) + @pendingCostDkk > @limitDkk
-              SELECT CAST(N'limit' AS nvarchar(10)) AS outcome;
+              SELECT CAST(N'budget-exhausted' AS nvarchar(20)) AS outcome;
             ELSE IF (
               SELECT COUNT_BIG(*)
               FROM dbo.usage WITH (UPDLOCK, HOLDLOCK)
@@ -129,8 +139,12 @@ export function createScreenFrameUsageStore(pool: sql.ConnectionPool): ScreenFra
                 (@sessionId, N'jarvis_model', N'screen_frames', 1, @pendingCostDkk, @eventId, @at);
               SELECT CAST(N'reserved' AS nvarchar(10)) AS outcome;
             END;`);
+        const outcome = result.recordset[0]?.outcome;
+        if (!outcome || !['reserved', 'rate-limited', 'limit', 'budget-exhausted', 'inactive'].includes(outcome)) {
+          throw new Error('Invalid screen admission');
+        }
         await transaction.commit();
-        return result.recordset[0]?.outcome ?? 'inactive';
+        return outcome;
       } catch {
         try { await transaction.rollback(); } catch { /* Preserve the sanitized store error. */ }
         throw new Error('Screen usage could not be reserved');
@@ -169,7 +183,7 @@ export function createScreenFrameUsageStore(pool: sql.ConnectionPool): ScreenFra
               SELECT COALESCE(SUM(cost_dkk), 0)
               FROM dbo.usage WITH (UPDLOCK, HOLDLOCK)
               WHERE source = N'jarvis_model' AND (metric = N'screen_frames' OR
-                (metric = N'input_tokens' AND source_event_id LIKE N'screen:image:%'))
+                (metric IN (N'input_tokens', N'output_tokens') AND source_event_id LIKE N'screen:image:%'))
                 AND at >= @dayStart AND at < @dayEnd
             );
             IF NOT EXISTS (
@@ -217,7 +231,7 @@ export function createScreenFrameUsageStore(pool: sql.ConnectionPool): ScreenFra
           .query<{ usedDkk: number }>(`SELECT COALESCE(SUM(cost_dkk), 0) AS usedDkk
             FROM dbo.usage
             WHERE source = N'jarvis_model' AND (metric = N'screen_frames' OR
-              (metric = N'input_tokens' AND source_event_id LIKE N'screen:image:%'))
+              (metric IN (N'input_tokens', N'output_tokens') AND source_event_id LIKE N'screen:image:%'))
               AND at >= @dayStart AND at < @dayEnd;`);
         const usedDkk = result.recordset[0]?.usedDkk;
         if (usedDkk === undefined || !Number.isFinite(usedDkk) || usedDkk < 0) {
@@ -226,6 +240,62 @@ export function createScreenFrameUsageStore(pool: sql.ConnectionPool): ScreenFra
         return usedDkk;
       } catch {
         throw new Error('Watch budget could not be read');
+      }
+    },
+
+    async recordImageTokens({ sessionId, eventId, model, inputTokens, outputTokens, role, imageOnly }) {
+      const costs = inputTokens === 0 && outputTokens === 0
+        ? { inputDkk: 0, outputDkk: 0, inputUsd: 0, outputUsd: 0 }
+        : imageOnly ? realtimeImageCosts(model, inputTokens) : foundryTokenCosts(model, inputTokens, outputTokens);
+      if (!/^image:[0-9a-f]{64}$/u.test(eventId) ||
+          !Number.isSafeInteger(inputTokens) || inputTokens < 0 || inputTokens > 10_000_000 ||
+          !Number.isSafeInteger(outputTokens) || outputTokens < 0 || outputTokens > 10_000_000) {
+        throw new Error('Invalid image usage');
+      }
+      if (!costs && !imageOnly) return;
+      const transaction = new sql.Transaction(pool);
+      try {
+        await transaction.begin();
+        await transaction.request()
+          .input('sessionId', sql.BigInt, BigInt(sessionId))
+          .input('eventId', sql.NVarChar(300), `screen:${eventId}`)
+          .input('model', sql.NVarChar(128), model)
+          .input('role', sql.NVarChar(24), role ?? 'vision')
+          .input('inputTokens', sql.Decimal(19, 6), inputTokens)
+          .input('outputTokens', sql.Decimal(19, 6), outputTokens)
+          .input('inputDkk', sql.Decimal(19, 8), costs?.inputDkk ?? null)
+          .input('outputDkk', sql.Decimal(19, 8), costs?.outputDkk ?? null)
+          .input('inputUsd', sql.Decimal(19, 8), costs?.inputUsd ?? null)
+          .input('outputUsd', sql.Decimal(19, 8), costs?.outputUsd ?? null)
+          .input('costStatus', sql.NVarChar(16), costs ? 'estimated' : 'unverified')
+          .query(`DECLARE @frameAt datetime2(7), @lockResource nvarchar(255), @lock_result int;
+            SELECT @frameAt = at FROM dbo.usage WITH (READCOMMITTEDLOCK)
+            WHERE jarvis_session_id = @sessionId AND source = N'jarvis_model'
+              AND metric = N'input_tokens' AND source_event_id = @eventId AND model = @model;
+            IF @frameAt IS NULL THROW 51000, 'Image reservation was not found', 1;
+            SET @lockResource = N'jarvis.screen-frame-cap:' + CONVERT(nvarchar(10), @frameAt, 23);
+            EXEC @lock_result = sys.sp_getapplock @Resource = @lockResource,
+              @LockMode = 'Exclusive', @LockOwner = 'Transaction', @LockTimeout = 5000;
+            IF @lock_result < 0 THROW 51000, 'Image usage lock unavailable', 1;
+            IF EXISTS (SELECT 1 FROM dbo.usage WITH (UPDLOCK, HOLDLOCK)
+              WHERE jarvis_session_id = @sessionId AND source = N'jarvis_model'
+                AND metric = N'input_tokens' AND source_event_id = @eventId AND cost_status = N'unverified')
+            BEGIN
+              UPDATE dbo.usage SET quantity = @inputTokens, cost_dkk = COALESCE(@inputDkk, cost_dkk),
+                cost_usd = COALESCE(@inputUsd, cost_usd), cost_status = @costStatus, role = @role
+              WHERE jarvis_session_id = @sessionId AND source = N'jarvis_model'
+                AND metric = N'input_tokens' AND source_event_id = @eventId;
+              IF @costStatus = N'estimated'
+              INSERT INTO dbo.usage
+                (jarvis_session_id, source, metric, quantity, cost_dkk, cost_usd,
+                  cost_status, role, model, source_event_id, at)
+              VALUES (@sessionId, N'jarvis_model', N'output_tokens', @outputTokens, @outputDkk,
+                @outputUsd, N'estimated', @role, @model, @eventId, @frameAt);
+            END;`);
+        await transaction.commit();
+      } catch {
+        try { await transaction.rollback(); } catch { /* Retain the pending hold on persistence failure. */ }
+        throw new Error('Image usage could not be recorded');
       }
     },
 

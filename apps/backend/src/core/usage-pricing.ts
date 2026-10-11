@@ -21,3 +21,16 @@ export function foundryTokenCosts(model: string, inputTokens: number, outputToke
     outputUsd: roundCost(outputDkk / DKK_PER_USD),
   };
 }
+
+export function isRealtimeImageModel(model: string): boolean {
+  return model === 'gpt-realtime-2.1' || model === 'gpt-realtime-2.1-mini';
+}
+
+export function realtimeImageCosts(model: string, imageTokens: number) {
+  // Provider list-price estimate, not verified Azure billing:
+  // https://developers.openai.com/api/docs/models/gpt-realtime-2.1
+  // No exact mini image rate is established; its hold must remain pending.
+  if (model !== 'gpt-realtime-2.1') return null;
+  const inputUsd = roundCost(imageTokens * 5 / 1_000_000);
+  return { inputDkk: roundCost(inputUsd * DKK_PER_USD), inputUsd, outputDkk: 0, outputUsd: 0 };
+}

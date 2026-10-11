@@ -763,15 +763,25 @@ try {
   }
   if (workspacePinStore) modules.push(createWorkspacePinsModule(workspacePinStore));
   let visionWatch: VisionWatchService | undefined;
+  let screenVision: ScreenVisionService | undefined;
   if (database && settingsStore && screenVisionModel) {
     const visionUsage = createScreenFrameUsageStore(database.pool);
-    modules.push(createScreenVisionModule(new ScreenVisionService(screenVisionModel, visionUsage, Date.now, visionUsage), frameStore));
+    screenVision = new ScreenVisionService(screenVisionModel, visionUsage, Date.now, visionUsage);
+    modules.push(createScreenVisionModule(screenVision, frameStore));
     visionWatch = new VisionWatchService(screenVisionModel, visionUsage, createConversationStore(database.pool));
     modules.push(createVisionWatchModule(visionWatch));
   }
   if ((config.voiceLiveEndpoint || config.foundryProjectEndpoint) && credential) {
     modules.push(createVoiceRelayModule({
       frameStore,
+      ...(screenVision && settingsStore ? {
+        reserveImageBudget: async (input) => {
+          if (input.signal.aborted) throw new Error('Image budget admission was cancelled');
+          const settings = await readSettings(settingsStore, await modelCatalogue.read());
+          return await screenVision!.reserveImage({ ...input, limitUsd: settings.global.visionDailyBudgetUsd });
+        },
+        recordImageUsage: (input) => screenVision!.recordImageUsage(input),
+      } : {}),
       ...(visionWatch ? { visionWatch } : {}),
       getToken: async (scope, signal) => {
         const token = await credential.getToken(scope, { abortSignal: signal });

@@ -33,10 +33,64 @@ describe('SQL screen and watch usage store', () => {
       limitDkk: 1, at })).toBe('reserved');
     const query = request.query.mock.calls[0]![0] as string;
     expect(query).toContain("N'input_tokens', 0, @pendingCostDkk");
-    expect(query).toContain("metric = N'input_tokens' AND source_event_id LIKE N'screen:image:%'");
+    expect(query).toContain("metric IN (N'input_tokens', N'output_tokens') AND source_event_id LIKE N'screen:image:%'");
     expect(query).toContain('sys.sp_getapplock');
     expect(query).not.toContain('COUNT_BIG');
     expect(query).not.toContain('DATEADD(millisecond');
+    expect(query.indexOf('ELSE IF EXISTS')).toBeLessThan(query.indexOf('SUM(cost_dkk)'));
+    expect(query).toContain('source_event_id = @eventId AND model = @model');
+  });
+  it('reconciles an image hold exactly once, retains its admission day, and charges both token metrics', async () => {
+    const { request, transaction, store } = fixture();
+    await store.recordImageTokens!({ sessionId: '42', eventId: `image:${'a'.repeat(64)}`,
+      model: 'gpt-6-luna', inputTokens: 100, outputTokens: 20 });
+    expect(request.input).toHaveBeenCalledWith('inputDkk', expect.anything(), 0.00006579);
+    expect(request.input).toHaveBeenCalledWith('outputDkk', expect.anything(), 0.00006579);
+    const query = request.query.mock.calls[0]![0] as string;
+    expect(query).toContain("cost_status = N'unverified'");
+    expect(query).toContain('SET quantity = @inputTokens, cost_dkk = COALESCE(@inputDkk, cost_dkk)');
+    expect(query).toContain("@outputUsd, N'estimated', @role, @model, @eventId, @frameAt");
+    expect(query).toContain('sys.sp_getapplock');
+    expect(query).not.toContain('SYSUTCDATETIME');
+    expect(transaction.commit).toHaveBeenCalledOnce();
+    await store.recordImageTokens!({ sessionId: '42', eventId: `image:${'a'.repeat(64)}`,
+      model: 'unknown', inputTokens: 100, outputTokens: 20 });
+    expect(request.query).toHaveBeenCalledOnce();
+  });
+  it('rejects invalid image usage and sanitizes failed reconciliation without releasing the hold', async () => {
+    const { request, transaction, store } = fixture();
+    const imageUsage = { sessionId: '42', eventId: `image:${'a'.repeat(64)}`,
+      model: 'gpt-6-luna', inputTokens: 100, outputTokens: 20 };
+    await expect(store.recordImageTokens!({ ...imageUsage, inputTokens: NaN })).rejects.toThrow('Invalid image usage');
+    expect(transaction.begin).not.toHaveBeenCalled();
+    request.query.mockRejectedValue(new Error('private SQL data'));
+    await expect(store.recordImageTokens!(imageUsage)).rejects.toThrow('Image usage could not be recorded');
+    expect(transaction.rollback).toHaveBeenCalledOnce();
+    expect(transaction.commit).not.toHaveBeenCalled();
+  });
+  it('releases a confirmed no-inference image hold without requiring model pricing', async () => {
+    const { request, store } = fixture();
+    await store.recordImageTokens!({ sessionId: '42', eventId: `image:${'a'.repeat(64)}`,
+      model: 'gpt-realtime-2.1', inputTokens: 0, outputTokens: 0 });
+    expect(request.input).toHaveBeenCalledWith('inputDkk', expect.anything(), 0);
+    expect(request.input).toHaveBeenCalledWith('outputDkk', expect.anything(), 0);
+    expect(request.query).toHaveBeenCalledOnce();
+  });
+  it('uses the estimated realtime image rate without applying text or audio output rates', async () => {
+    const { request, store } = fixture();
+    await store.recordImageTokens!({ sessionId: '42', eventId: `image:${'a'.repeat(64)}`,
+      model: 'gpt-realtime-2.1', inputTokens: 100, outputTokens: 0, role: 'voice', imageOnly: true });
+    expect(request.input).toHaveBeenCalledWith('inputUsd', expect.anything(), 0.0005);
+    expect(request.input).toHaveBeenCalledWith('inputDkk', expect.anything(), 0.00328925);
+    expect(request.input).toHaveBeenCalledWith('outputDkk', expect.anything(), 0);
+    expect(request.input).toHaveBeenCalledWith('inputTokens', expect.anything(), 100);
+    expect(request.input).toHaveBeenCalledWith('outputTokens', expect.anything(), 0);
+    await store.recordImageTokens!({ sessionId: '42', eventId: `image:${'b'.repeat(64)}`,
+      model: 'gpt-realtime-2.1-mini', inputTokens: 100, outputTokens: 0, role: 'voice', imageOnly: true });
+    expect(request.query).toHaveBeenCalledTimes(2);
+    expect(request.input).toHaveBeenLastCalledWith('costStatus', expect.anything(), 'unverified');
+    expect(request.input).toHaveBeenCalledWith('inputDkk', expect.anything(), null);
+    expect(request.query.mock.calls[1]![0]).toContain("IF @costStatus = N'estimated'");
   });
   it('admits the on-demand image hold against the shared budget under the same atomic lock', async () => {
     const { request, store } = fixture();
@@ -44,6 +98,8 @@ describe('SQL screen and watch usage store', () => {
     expect(request.input).toHaveBeenCalledWith('limitDkk', expect.anything(), 0);
     const query = request.query.mock.calls[0]![0] as string;
     expect(query).toContain('ELSE IF @limitDkk IS NOT NULL');
+    expect(query).toContain("N'budget-exhausted'");
+    expect(query).toContain("N'limit' AS nvarchar(10)");
     expect(query).toContain(') + @pendingCostDkk > @limitDkk');
     expect(query.indexOf(') + @pendingCostDkk > @limitDkk')).toBeLessThan(query.indexOf('INSERT INTO dbo.usage'));
   });
@@ -174,7 +230,7 @@ describe('SQL screen and watch usage store', () => {
     expect(await store.readWatchBudget(at)).toBe(2.1234);
     const query = request.query.mock.calls[0]![0] as string;
     expect(query).toContain('COALESCE(SUM(cost_dkk), 0)');
-    expect(query).toContain("metric = N'input_tokens' AND source_event_id LIKE N'screen:image:%'");
+    expect(query).toContain("metric IN (N'input_tokens', N'output_tokens') AND source_event_id LIKE N'screen:image:%'");
     expect(query).toContain('at >= @dayStart AND at < @dayEnd');
     expect(query).not.toContain('jarvis_session_id');
     expect(query).toContain("source_event_id LIKE N'screen:image:%'");

@@ -27,7 +27,7 @@ Jarvis is one backend with a shared core and one module per area, a static web a
 | Jarvis agent and runner | Python 3.12 (Foundry hosted agents support Python or C#). `agents/jarvis` (P4-01): Python 3.12.14 image, `azure-ai-agentserver-invocations` 1.2.0 voice host, `openai` 3.24.0 Responses API, `anthropic` 1.12.0 Foundry Messages API, `azure-identity` 1.26.0, `httpx` 0.28.1; hash-locked `requirements.txt` | Agent ported and checked offline and as a local container in P4-01; Foundry deployment completed in P4-08; P4-09 registers chat through the public Invocations handler |
 | Coding sandbox | Foundry Hosted Agents, Invocations protocol, one session per task; Container Apps Jobs as fallback | Proven |
 | Agent protocol | ACP for both agents: Copilot CLI `--acp` (preview); Codex via `codex-acp`; CLI versions pinned (L13) | Proven |
-| Voice | Danish: Voice Live voice bridge, MAI Transcribe, Harper. English: `gpt-realtime-2.1` speech to speech, Ryan HD. Browser traffic uses an authenticated backend WebSocket relay; provider credentials stay server-side. | Relay design selected; local mock spike verified, Azure interoperability unverified |
+| Voice | EN and DA use backend-owned Voice Live realtime (`gpt-realtime-2.1` by default), MAI Transcribe and Ryan HD/Harper respectively. The hosted Danish bridge is a fallback only. Browser traffic uses an authenticated backend WebSocket relay; provider credentials stay server-side. | Realtime camera hand-off built and mock-verified; deployed image acceptance remains unverified |
 | Build and release | GitHub Actions: full build, tests, releases, deployments; Project board synchronizes issue/PR status | Jarvis coordinator removed at Dan's request. Project board script/workflow and existing environment retained. PR merges require Dan or explicit agent authorization; P3-03 receives signed webhooks, P3-04 maps them to group 5, P3-05 processes failed task-PR checks, and P3-07 creates one default-branch release per project/SHA with runs and deployments linked by SHA. |
 | Testing | Web/backend: Vitest 5.0.3; web: jsdom 30.1.1, React Testing Library 16.3.3; lint: ESLint 10.12.0, typescript-eslint 8.71.0. Python pytest; PC bridge: .NET 10, xUnit; SQL container tests | Web/backend implemented in P0-02/P0-03; PC bridge policy and protocol have offline CI tests; live Windows execution remains unverified |
 
@@ -1547,7 +1547,7 @@ browser timing includes independent completion verification.
 
 ### Act on the shared Chrome tab (P7-19)
 
-P9-81/P9-82's per-turn visual contracts are:
+P9-81/P9-82/P9-83's per-turn visual contracts are:
 
 - `POST /screen/frames`: `{sessionId, frame, question?, turnId?}` returns
   `{description, capturedAt, question, turnId?, frameId?, inputTokens, outputTokens}`.
@@ -1608,7 +1608,7 @@ P9-81/P9-82's per-turn visual contracts are:
   `turn_detection.create_response: false`; preserve that baseline.
 - Unavailable reasons are `frame_rate_limited`, `daily_limit`, `capture_failed`,
   `camera_off`, `permission_denied`, `not_supported`, `session_ended`,
-  `vision_failed`, `timeout` or `budget_exhausted`. Pacing emits unavailable,
+  `vision_failed`, `timeout`, `budget_exhausted` or `budget_unavailable`. Pacing emits unavailable,
   never closes the voice socket; optional `retryAfterMs` is a safe integer
   from 0 to 86,400,000. Malformed payloads still close with 1008.
 - History exposes `metadata.visualContext` on the owning Dan message.
@@ -1626,6 +1626,25 @@ P9-81/P9-82's per-turn visual contracts are:
   The chat `done` event also exposes the server-selected `visualPath` and
   optional `visualReason`; voice exposes the equivalent `jarvis.visual_context`
   event with its owning `itemId`.
+  EN and production DA attach a budget-admitted `input_image` before the single
+  `response.create`. A matching `conversation.item.created` acknowledgement
+  selects `image_accepted`; a correlated error selects `image_rejected`, and
+  no acknowledgement within 1.5 seconds selects `image_timeout`. Rejection and
+  timeout delete the image item and use the caption. Late acknowledgements are
+  deleted, not treated as new turns. Buffers are zeroed immediately after send.
+  Budget denial selects `budget_exhausted` and also emits a typed unavailable
+  event with the same `itemId`; unknown admission selects `budget_unavailable`.
+  Capture-time unavailable reasons survive the hold and appear in
+  `jarvis.visual_context`, rather than silently disappearing into a caption.
+  The hosted DA fallback remains caption-only, explicitly
+  `image_input_unverified`.
+
+`visual.path` records the final selected path for visual chat and voice turns.
+Its export allowlist is exactly `path` (`image` or `caption`), bounded `reason`,
+`channel` (`chat`, `voice-en`, `voice-da`) and finite `latencyMs`; even inherited
+request identifiers are removed. It contains no question, caption, frame,
+session or item identifier. Coordinator acceptance uses these events after
+deployment; offline provider mocks do not establish live image support.
 
 The hosted chat adapter sends JPEG image parts as Foundry Responses
 `input_image` with a `data:image/jpeg;base64,...` URL and `detail: low`, or
@@ -1652,31 +1671,31 @@ charged when actual cost cannot be verified; they are budget reservations,
 not a claim of billed image cost. Unknown or over-allowance chat-model pricing
 selects the caption instead. Provider input totals include text as well as
 image tokens where separate image attribution is unavailable.
-Input/output totals are reported by the agent; generic chat usage remains
-the actual token/billing record. The existing SQL metric constraint is unchanged:
-image admission uses a tagged zero-quantity `input_tokens` reservation carrying
-the conservative allowance, not an invented image token count. Separate image
-token attribution/reconciliation remains incomplete. The vision budget includes
-the conservative image allowance without
-counting another camera capture or silently spending above the cap.
-The current realtime relay stays on the caption path until deployed image
-acceptance is verified. It accepts the additive `frameId` on the correlated
-event, discards only the matching owner's/session's/item's frame, and reports
-`{type: "jarvis.visual_context", itemId?, visualPath: "caption",
-visualReason}` to the browser before releasing #702's single response.
-`image_input_unverified` distinguishes this deployment gate from
-`frame_unavailable`. No `input_image` is sent on this gated path. Both EN and
-the current DA realtime configuration use that fallback; the hosted chat
-adapter's Danish image tests are not proof of DA realtime image support.
-The relay also has a guarded integration seam for an image-budget admission
-callback. When admitted, it binds/consumes the same item's frame, sends
+Input/output totals are reported by the chat agent. Image admission is keyed
+idempotently by session and image item, using the existing `input_tokens` metric
+and the same UTC-day budget lock. Capture counts only once toward the 300-frame
+cap; image admission does not add a second capture. Chat admission happens when
+the authorized bound frame is resolved. Its first image-request usage replaces
+the conservative hold with provider totals and known estimated costs, rather
+than adding duplicate generic chat billing rows.
+Voice admission is wired in production for both realtime routes. Reported image
+tokens are recorded separately from audio/text totals. `gpt-realtime-2.1` uses
+an explicitly estimated USD 5 per million image input tokens from the
+[provider model page](https://developers.openai.com/api/docs/models/gpt-realtime-2.1),
+not a verified Azure Voice Live tariff or bill. Unknown mini pricing retains the
+conservative allowance and unverified cost status. Missing usage after inference
+likewise retains the hold for its UTC day. Images rejected or discarded before response creation release their
+no-inference reservation. No SQL metric or migration is added.
+
+When admitted, the relay binds/consumes the same item's frame, sends
 `conversation.item.create` with a server-generated user item containing
 `input_image`, waits for that item's `conversation.item.created` acknowledgement,
 and only then releases the single `response.create`. A correlated provider
 error or 1.5-second acknowledgement deadline selects the caption instead;
-late acknowledgements and completed/cancelled images are deleted. This seam
-is mock-tested, not enabled by the production composition until deployed
-acceptance and realtime image pricing/budget admission are verified.
+late acknowledgements and completed/cancelled images are deleted. An image
+queued behind an earlier response is retained until its own response ends.
+The production composition supplies admission and reconciliation callbacks;
+local mocks establish protocol behavior, not deployed model acceptance.
 
 While Dan is sharing, chat captures a fresh frame for a deictic browser request;
 the authenticated chat turn binds its bounded description and selected display
@@ -2894,8 +2913,8 @@ Proven 2 October 2026 in a separate prototype ([voice report](reference/voice-pr
 | Area | Design | Evidence |
 | --- | --- | --- |
 | Browser connection | The composer orb explicitly connects to the selected authenticated `/voice` or `/voice/da` WebSocket using its delegated API token in the WebSocket subprotocol. Readiness never opens capture: a separate Enable microphone action captures and sends mono 24 kHz PCM. Explicit active/muted protocol events start/stop parallel Speech recognition; reconnect returns to microphone-off readiness. Provider credentials never enter the browser or URL. | Browser-client tests cover relay selection, warm-up ordering, explicit activation, mute signaling, permission denial, interruption, stop during activation, and reconnect. Real microphone/audio-device behavior and Azure interoperability remain unverified. |
-| Danish path | Browser → authenticated backend `/voice/da` WebSocket → provisioned Voice Live voice agent → Foundry hosted Jarvis agent over the voice bridge (preview) → backend tools | Every hosted `jarvis` version carries `voiceLiveCompatible: "true"` metadata and declares both `invocations` (chat) and `invocations_ws` (voice bridge); without them Foundry rejects the wrapper. The client connects to the voice wrapper (`/endpoint/protocols/voice`), waits for `session.created`, and then waits for explicit microphone activation. The wrapper owns its session configuration and greeting; the Bridge Protocol `session.start`/`/diag` warm-up applies only to direct hosted-agent connections. The hash-locked provisioner configures MAI Transcribe (`mai-transcribe`, `da`, phrase list) and Harper (`da-DK`); the backend uses `da-DK` Azure Speech interim hypotheses in parallel while unmuted. The Voice Live final message remains authoritative and reconciles the existing P7-20 ledger. Project names from bounded running-task context augment the default phrase hints. P7-20 briefly switched Danish to `gpt-4o-mini-transcribe`, which broke live Danish sessions on 5 October (L92); Voice Live now uses MAI for both final-transcript paths. Live voice provisioning, Azure interoperability, and browser round-trip remain unverified; the hosted Jarvis agent is deployed by P4-08. |
-| English session | At session start, the backend reads the `voice` role and places the selected deployment (`gpt-realtime-2.1` or `gpt-realtime-2.1-mini`) in the Voice Live URL; it reads the `transcription` role for `input_audio_transcription.model`. It also configures Ryan HD (`en-GB-Ryan:DragonHDLatestNeural`), British butler defaults, PCM audio, and the composed tool schemas. New relays snapshot saved personality and voice settings; `createRealtimeSessionUpdate` applies barge-in and maximum spoken tokens to both session types and bounded server-VAD threshold/padding/silence values to its server-VAD configuration. English keeps `azure_semantic_vad_en` at threshold 0.6, 300 ms prefix padding and 500 ms silence. The live Danish hosted agent owns a separate provisioned configuration. The browser cannot replace session configuration or submit tool results. | Local mock tests verify role selection, server-owned session settings, saved voice tuning and client event handling; real browser audio and live Voice Live behavior remain unverified. |
+| Danish path | Production (L103): Browser → authenticated backend `/voice/da` WebSocket → the same configured Voice Live realtime model as English (`gpt-realtime-2.1` by default) → backend tools. This is not a transcribe → chat → TTS pipeline. | Both routes use the realtime connector and backend-owned session configuration, with Danish server VAD, MAI transcription and Harper locked to `da-DK`. Parallel `da-DK` Azure Speech hypotheses feed the reflex ledger; the Voice Live final transcript remains authoritative. P9-83 uses the same budget-gated image acknowledgement and single-response hold for both languages. Only when the realtime connector is absent does `/voice/da` use the provisioned hosted voice-agent bridge; that wrapper owns session configuration, uses `invocations_ws` and remains caption-only. Offline tests cover realtime DA image acceptance, rejection, timeout and budget denial; deployed image acceptance remains unverified. |
+| Realtime sessions | At session start, the backend reads the `voice` role and places the selected deployment (`gpt-realtime-2.1` or `gpt-realtime-2.1-mini`) in the Voice Live URL; it reads the `transcription` role for `input_audio_transcription.model`. English uses Ryan HD (`en-GB-Ryan:DragonHDLatestNeural`) and British butler defaults; Danish uses Harper and `da-DK`. Both use PCM audio and composed tool schemas. New relays snapshot saved personality and voice settings; `createRealtimeSessionUpdate` applies barge-in and maximum spoken tokens and bounded server-VAD settings. English keeps `azure_semantic_vad_en` at threshold 0.6, 300 ms prefix padding and 500 ms silence. Only the hosted Danish fallback owns a separate provisioned configuration. The browser cannot replace session configuration or submit tool results. | Local mock tests verify role selection, server-owned session settings, saved voice tuning and client event handling; real browser audio and live image acceptance remain unverified. |
 | Reflex (P7-04) | Chat turns and completed English Voice Live transcripts pass through the backend Jev client (`POST https://api.typesafe.ai/v1/systemone`, `jev-latest`) before the main responder. The client has a 1.2 s timeout, one 429 retry only when `Retry-After` is at most 500 ms, and a 256 KiB response cap. Calibrated Choice confidence gates actions at 0.9; address and complete-command Noul values also use 0.9, while confirmation-required uses 0.5. The minimum of intent and route Choice confidence is the action confidence; there is no self-rated Score question. Billing (402), auth (401/403), rate-limit (429), timeout, other HTTP status, invalid-answer, and network failures are typed and logged in `reflex.decision`; logs never contain the key or transcript. The backend reads `jev-api-key` from Key Vault using its managed identity. A direct call requires Dan's authenticated request, an addressed high-confidence action, no confirmation flag, a registered `reflexSafe` tool, validated arguments, and available audit storage. Safe tool results become trusted handoff instructions so the main model acknowledges but does not repeat the action. | Fake-provider backend tests cover classification, confidence gating, typed failures, safe target filtering, fallback, retry, handoff, and final-transcript sequencing. Live Jev/Key Vault, Danish voice routing, and Azure Voice Live remain unverified. |
 | Streaming clause reflex (P7-20/P7-24) | Voice Live deltas and parallel Azure Speech full interim hypotheses (Foundry AIServices custom subdomain; Entra managed identity; 24 kHz mono PCM) enter the same bounded stable-clause and per-turn Jev path (up to eight requests per turn), with prior executions attached. Speech recognition runs only while the mic is active and unmuted; `da-DK`/`en-GB` use fixed phrase hints plus up to 20 running-project names. Only high-confidence, complete partial actions (currently pause, allow-listed Edge launch, and HTTP(S) open/navigation) execute early. Unsafe and confirmation-requiring actions wait for the Voice Live final. That final remains the source of truth: it replaces an early message, reconciles the in-memory ledger and attempts supported undo on contradiction. No audio or interim hypotheses are stored; Speech failure logs `voice.partials_unavailable` and leaves final-transcript reflexes working. Browser launch/navigation uses the existing PC bridge `pc_open` executor pending P7-17. | Fake-recognizer and fake-stream tests cover action-before-final, duplicate suppression, confirmation gating, contradiction undo, final message replacement, Speech failure fallback and mute stop. `voice.reflex_metrics` records Voice Live delta count, Speech hypothesis count, stable-clause count, first-action latency, speech-stopped-to-first-transcript-word, and speech-stopped-to-first-output-audio. `voice.turn_timing` logs one content-free event per turn with speech-stopped-relative transcript, Jev, tool, first-audio and response-done timings. These are offline fake timings, not live acoustic measurements. Live account RBAC, Speech delivery, Jev latency, first spoken-word timing and Danish/English PC action timing remain coordinator acceptance. |
 | Live partial Speech STT (P7-24) | Azure Speech continuous recognition reuses the Foundry AIServices account's custom subdomain and backend managed identity. Voice phrases are Jarvis, Google, København, Chrome, GitHub, Copilot, Codex and Teams, plus bounded running-project names. Recognition ends on mute, voice end or disconnect; no key or audio is stored. | Fake recognizer lifecycle tests and local backend/web checks pass. Azure retail price API reference dated 5 October 2026: Azure Speech-to-text S1 is $1.00 per audio hour; this is a list-price reference, not a verified account meter. Live Danish/English recognition and managed-identity authorization remain unverified. |

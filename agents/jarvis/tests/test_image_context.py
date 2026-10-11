@@ -27,6 +27,7 @@ from model_client import image_input_rejected
 from state import ConversationHistory, ModelImage, ModelMessage
 from visual_context import (
     MAX_JPEG_BYTES,
+    current_image_reservation,
     current_visual_result,
     resolved_visual_image,
     visual_context,
@@ -136,7 +137,7 @@ async def test_oversized_image_prompt_falls_back_before_image_request():
         await model.close()
     assert len(transport.responses.requests) == 1
     assert JPEG not in json.dumps(transport.responses.requests[0])
-    assert result["visualReason"] == "daily_limit"
+    assert result["visualReason"] == "image_context_limit"
 
 
 @pytest.mark.asyncio
@@ -151,12 +152,16 @@ async def test_tool_followup_does_not_resend_or_recharge_image():
     result = {"visualPath": "caption"}
     token = current_visual_result.set(result)
     message_token = current_message_id.set("42")
+    reservation_token = current_image_reservation.set({
+        "sessionId": "41", "itemId": "frame_item",
+    })
     try:
         assert [text async for text in model.complete_chat(
             [ModelMessage("user", "Caption", (ModelImage(JPEG),))], "en"
         )] == []
     finally:
         current_message_id.reset(message_token)
+        current_image_reservation.reset(reservation_token)
         current_visual_result.reset(token)
         await model.close()
     assert len(transport.responses.requests) == 2
@@ -164,6 +169,29 @@ async def test_tool_followup_does_not_resend_or_recharge_image():
     assert JPEG not in json.dumps(transport.responses.requests[1])
     assert result["inputTokens"] == 100
     assert result["outputTokens"] == 20
+    usages = [
+        json.loads(request.content) for request in backend.requests
+        if request.url.path == "/usage/foundry"
+    ]
+    assert usages[0]["imageReservation"] == {"sessionId": "41", "itemId": "frame_item"}
+    assert "imageReservation" not in usages[1]
+
+
+@pytest.mark.asyncio
+async def test_unknown_image_usage_keeps_reservation_pending_without_a_fabricated_report():
+    backend = FakeBackend()
+    event = completed()
+    event.response.usage = SimpleNamespace(input_tokens=None, output_tokens=None)
+    model, _ = client([event], backend=backend)
+    reservation_token = current_image_reservation.set({"sessionId": "41", "itemId": "frame_item"})
+    try:
+        assert [text async for text in model.complete_chat(
+            [ModelMessage("user", "Caption", (ModelImage(JPEG),))], "en"
+        )] == []
+    finally:
+        current_image_reservation.reset(reservation_token)
+        await model.close()
+    assert not [request for request in backend.requests if request.url.path == "/usage/foundry"]
 
 
 @pytest.mark.asyncio
@@ -464,6 +492,7 @@ def test_done_reports_accepted_image_usage_without_handle(monkeypatch):
 
     async def complete(messages, language, **kwargs):
         assert messages[-1].images
+        assert current_image_reservation.get() == {"sessionId": "41", "itemId": "frame_1"}
         current_visual_result.get().update({
             "visualPath": "image", "model": "gpt-6-luna",
             "inputTokens": 100, "outputTokens": 20,
@@ -483,6 +512,7 @@ def test_done_reports_accepted_image_usage_without_handle(monkeypatch):
     }
     assert "frame_1" not in response.text
     assert JPEG not in response.text
+    assert current_image_reservation.get() is None
 
 
 @pytest.mark.parametrize("available", [True, False])
