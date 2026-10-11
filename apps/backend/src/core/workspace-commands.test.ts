@@ -52,11 +52,13 @@ describe('workspace command delivery', () => {
         operation: { enum: expect.arrayContaining(['session']) },
         action: { enum: expect.arrayContaining(['language', 'voice', 'camera']) },
         value: { type: 'string', enum: ['da', 'en', 'end', 'front', 'rear', 'off'] },
+        target: { enum: ['active', 'desktop', 'phone', 'all'] },
       },
     });
     expect(workspaceCommandTool.description).toContain('current session, not saved defaults');
     expect(workspaceCommandTool.description).toContain('backend never requests browser permissions');
     expect(workspaceCommandTool.description).toContain('tell Dan to grant permission in the browser');
+    expect(workspaceCommandTool.description).toContain('Target defaults to active');
   });
 
   it.each([
@@ -310,7 +312,7 @@ describe('workspace command delivery', () => {
 
   it('broadcasts navigation only to owner tabs and waits for an authenticated applied acknowledgement', async () => {
     const { app, broker } = fixture();
-    const command = { commandId: 'navigate-settings', operation: 'navigate', page: 'settings', section: 'voice' };
+    const command = { commandId: 'navigate-settings', operation: 'navigate', page: 'settings', section: 'voice', target: 'all' };
     const delivered: WorkspaceCommand[] = [];
     let onDelivery!: () => void;
     const delivery = new Promise<void>((resolve) => { onDelivery = resolve; });
@@ -558,7 +560,177 @@ describe('workspace command delivery', () => {
     }
   });
 
-  it('delivers every command to all open tabs and refuses only when every tab refuses', async () => {
+  it.each([undefined, 'active', 'desktop', 'phone', 'all'] as const)(
+    'routes target %s and counts acknowledgements only from recipients', async (target) => {
+      const broker = new WorkspaceCommandBroker();
+      const desktopSend = vi.fn(() => true);
+      const phoneSend = vi.fn(() => true);
+      const desktop = broker.connect(ownerId, desktopSend);
+      const phone = broker.connect(ownerId, phoneSend);
+      broker.updateSnapshot(ownerId, phone.sessionId, {
+        windows: [], contextPanelOpen: false, device: { kind: 'phone' },
+      });
+      broker.updateSnapshot(ownerId, desktop.sessionId, {
+        windows: [], contextPanelOpen: false, device: { kind: 'desktop' },
+      });
+      const command: WorkspaceCommand = {
+        commandId: 'targeted', operation: 'minimise-all', ...(target ? { target } : {}),
+      };
+      let settled = false;
+      const pending = broker.execute(ownerId, command, new AbortController().signal)
+        .then(() => { settled = true; });
+      expect(desktopSend).toHaveBeenCalledTimes(target === 'phone' ? 0 : 1);
+      expect(phoneSend).toHaveBeenCalledTimes(target === 'phone' || target === 'all' ? 1 : 0);
+      if (target !== 'all') {
+        const other = target === 'phone' ? desktop : phone;
+        expect(broker.acknowledge(ownerId, other.sessionId, command.commandId, false, 'Wrong tab.').status).toBe('stale');
+        expect(broker.acknowledge(ownerId, other.sessionId, command.commandId, true).status).toBe('stale');
+        other.close();
+        await Promise.resolve();
+        expect(settled).toBe(false);
+      }
+      const recipient = target === 'phone' ? phone : desktop;
+      expect(broker.acknowledge(ownerId, recipient.sessionId, command.commandId, true).status).toBe('accepted');
+      await pending;
+      broker.dispose();
+    },
+  );
+
+  it('follows changing snapshots and falls back after the active tab disconnects', async () => {
+    const broker = new WorkspaceCommandBroker();
+    const firstSend = vi.fn(() => true);
+    const secondSend = vi.fn(() => true);
+    const first = broker.connect(ownerId, firstSend);
+    const second = broker.connect(ownerId, secondSend);
+    for (const [index, active] of [first, second, first].entries()) {
+      broker.updateSnapshot(ownerId, active.sessionId, { windows: [], contextPanelOpen: false });
+      const commandId = `active-${index}`;
+      const pending = broker.execute(ownerId, { commandId, operation: 'minimise-all' }, new AbortController().signal);
+      expect(active === first ? firstSend : secondSend).toHaveBeenLastCalledWith(
+        'workspace-command', expect.objectContaining({ command: expect.objectContaining({ commandId }) }),
+      );
+      broker.acknowledge(ownerId, active.sessionId, commandId, true);
+      await pending;
+    }
+    first.close();
+    expect(broker.deviceContext(ownerId)).toBe('unknown device connected; commands go to the unknown device');
+    const pending = broker.execute(ownerId, { commandId: 'fallback', operation: 'minimise-all' }, new AbortController().signal);
+    broker.acknowledge(ownerId, second.sessionId, 'fallback', true);
+    await expect(pending).resolves.toBeUndefined();
+    broker.dispose();
+  });
+
+  it('selects one legacy tab without snapshots, while all includes unknown devices', async () => {
+    const broker = new WorkspaceCommandBroker();
+    const firstSend = vi.fn(() => true);
+    const secondSend = vi.fn(() => true);
+    const first = broker.connect(ownerId, firstSend);
+    const second = broker.connect(ownerId, secondSend);
+    const active = broker.execute(ownerId, { commandId: 'legacy', operation: 'minimise-all' }, new AbortController().signal);
+    expect(firstSend).toHaveBeenCalledTimes(1);
+    expect(secondSend).not.toHaveBeenCalled();
+    broker.acknowledge(ownerId, first.sessionId, 'legacy', true);
+    await active;
+    broker.updateSnapshot(ownerId, second.sessionId, { windows: [], contextPanelOpen: false, device: { kind: 'phone' } });
+    const all = broker.execute(ownerId, { commandId: 'legacy-all', operation: 'minimise-all', target: 'all' }, new AbortController().signal);
+    expect(firstSend).toHaveBeenCalledTimes(2);
+    expect(secondSend).toHaveBeenCalledTimes(1);
+    broker.acknowledge(ownerId, first.sessionId, 'legacy-all', true);
+    await all;
+    broker.dispose();
+  });
+
+  it('targets only the latest tab of a named kind and preserves recipients on replay', async () => {
+    const broker = new WorkspaceCommandBroker();
+    const sends = [vi.fn(() => true), vi.fn(() => true)];
+    const tabs = sends.map((send) => broker.connect(ownerId, send));
+    for (const tab of tabs) {
+      broker.updateSnapshot(ownerId, tab.sessionId, { windows: [], contextPanelOpen: false, device: { kind: 'phone' } });
+    }
+    const command: WorkspaceCommand = { commandId: 'phone-tab', operation: 'minimise-all', target: 'phone' };
+    const pending = broker.execute(ownerId, command, new AbortController().signal);
+    broker.updateSnapshot(ownerId, tabs[0]!.sessionId, { windows: [], contextPanelOpen: false, device: { kind: 'phone' } });
+    const replay = broker.execute(ownerId, command, new AbortController().signal);
+    expect(sends[0]).not.toHaveBeenCalled();
+    expect(sends[1]).toHaveBeenCalledTimes(1);
+    expect(broker.acknowledge(ownerId, tabs[0]!.sessionId, command.commandId, true).status).toBe('stale');
+    broker.acknowledge(ownerId, tabs[1]!.sessionId, command.commandId, true);
+    await Promise.all([pending, replay]);
+    broker.dispose();
+  });
+
+  it('cancels only the delivered-to tab even after the active snapshot changes', async () => {
+    const broker = new WorkspaceCommandBroker();
+    const firstSend = vi.fn(() => true);
+    const secondSend = vi.fn(() => true);
+    const first = broker.connect(ownerId, firstSend);
+    const second = broker.connect(ownerId, secondSend);
+    const controller = new AbortController();
+    const pending = broker.execute(ownerId, { commandId: 'cancel-target', operation: 'minimise-all' }, controller.signal);
+    const failure = expect(pending).rejects.toBeInstanceOf(ToolFailure);
+    broker.updateSnapshot(ownerId, second.sessionId, { windows: [], contextPanelOpen: false });
+    controller.abort();
+    await failure;
+    expect(firstSend).toHaveBeenLastCalledWith('workspace-cancel', { commandId: 'cancel-target' });
+    expect(secondSend).not.toHaveBeenCalled();
+    first.close();
+    broker.dispose();
+  });
+
+  it('fails when the sole recipient disconnects instead of rerouting to another tab', async () => {
+    const broker = new WorkspaceCommandBroker();
+    const first = broker.connect(ownerId, () => true);
+    const otherSend = vi.fn(() => true);
+    broker.connect(ownerId, otherSend);
+    const pending = broker.execute(ownerId, { commandId: 'lost-target', operation: 'minimise-all' }, new AbortController().signal);
+    const failure = expect(pending).rejects.toBeInstanceOf(ToolFailure);
+    first.close();
+    await failure;
+    expect(otherSend).not.toHaveBeenCalled();
+    broker.dispose();
+  });
+
+  it('refuses a disconnected kind and lists connected kinds without untrusted labels', async () => {
+    const { app, broker } = fixture();
+    const send = vi.fn(() => true);
+    const phone = broker.connect(ownerId, send);
+    const desktop = broker.connect(ownerId, send);
+    const tablet = broker.connect(ownerId, send);
+    broker.connect(ownerId, send);
+    for (const [connection, kind] of [[phone, 'phone'], [desktop, 'desktop'], [tablet, 'tablet']] as const) {
+      expect((await app.inject({
+        method: 'POST', url: '/now/workspace/state', headers: userHeaders,
+        payload: { sessionId: connection.sessionId, windows: [], contextPanelOpen: false, device: { kind, label: 'private device label' } },
+      })).statusCode).toBe(204);
+    }
+    phone.close();
+    const refusal = await app.inject({
+      method: 'POST', url: '/tools/workspace_command', headers: agentHeaders,
+      payload: { commandId: 'missing-phone', operation: 'minimise-all', target: 'phone' },
+    });
+    expect(refusal.json()).toMatchObject({
+      outcome: 'refused', result: { refused: 'No phone workspace is connected. Connected devices: desktop, tablet, unknown device.' },
+    });
+    expect(send).not.toHaveBeenCalled();
+    broker.dispose();
+    await expect(broker.execute(ownerId, {
+      commandId: 'no-desktop', operation: 'minimise-all', target: 'desktop',
+    }, new AbortController().signal)).rejects.toThrow('Connected devices: none.');
+  });
+
+  it.each([{ kind: 'watch' }, { kind: 'phone', label: '' }, { kind: 'phone', label: 'x'.repeat(61) }, { kind: 'phone', label: {} }])(
+    'rejects invalid snapshot device %j', async (device) => {
+      const { app, broker } = fixture();
+      const connection = broker.connect(ownerId, () => true);
+      expect((await app.inject({
+        method: 'POST', url: '/now/workspace/state', headers: userHeaders,
+        payload: { sessionId: connection.sessionId, windows: [], contextPanelOpen: false, device },
+      })).statusCode).toBe(400);
+      expect(broker.snapshot(ownerId)).toBeUndefined();
+    },
+  );
+
+  it('delivers explicit all commands to all open tabs and refuses only when every tab refuses', async () => {
     const broker = new WorkspaceCommandBroker();
     const deliveries: Array<{ tab: string; commandId: string }> = [];
     const tab = (name: string) => {
@@ -574,7 +746,7 @@ describe('workspace command delivery', () => {
     const second = tab('second');
     expect(broker.isConnected(ownerId)).toBe(true);
 
-    const shown = broker.execute(ownerId, { commandId: 'show-both', operation: 'layout', arrangement: 'tiled' },
+    const shown = broker.execute(ownerId, { commandId: 'show-both', operation: 'layout', arrangement: 'tiled', target: 'all' },
       new AbortController().signal);
     expect(deliveries.filter(({ commandId }) => commandId === 'show-both').map(({ tab: name }) => name))
       .toEqual(['first', 'second']);
@@ -582,13 +754,13 @@ describe('workspace command delivery', () => {
     expect(broker.acknowledge(ownerId, second.sessionId, 'show-both', true).status).toBe('accepted');
     await expect(shown).resolves.toBeUndefined();
 
-    const refused = broker.execute(ownerId, { commandId: 'refuse-both', operation: 'show', viewId: 'missing' },
+    const refused = broker.execute(ownerId, { commandId: 'refuse-both', operation: 'show', viewId: 'missing', target: 'all' },
       new AbortController().signal);
     broker.acknowledge(ownerId, first.sessionId, 'refuse-both', false, 'View no longer exists.');
     broker.acknowledge(ownerId, second.sessionId, 'refuse-both', false, 'View no longer exists.');
     await expect(refused).rejects.toBeInstanceOf(ToolRefusal);
 
-    const survived = broker.execute(ownerId, { commandId: 'one-left', operation: 'layout', arrangement: 'layered' },
+    const survived = broker.execute(ownerId, { commandId: 'one-left', operation: 'layout', arrangement: 'layered', target: 'all' },
       new AbortController().signal);
     first.close();
     expect(broker.acknowledge(ownerId, second.sessionId, 'one-left', true).status).toBe('accepted');

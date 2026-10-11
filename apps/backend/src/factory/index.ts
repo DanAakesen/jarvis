@@ -527,7 +527,9 @@ export const factoryModule: BackendModule = {
       if (!store) return reply.code(503).send({ error: 'Task service unavailable' });
       return sendBounded(reply, {
         ...await store.getRunningContext(),
-        workspaceContext: workspaceContext(app.workspaceCommands.snapshot(app.ownerObjectId)),
+        workspaceContext: workspaceContext(
+          app.workspaceCommands.snapshot(app.ownerObjectId), app.workspaceCommands.deviceContext(app.ownerObjectId),
+        ),
       });
     });
 

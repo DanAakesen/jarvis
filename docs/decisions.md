@@ -1182,8 +1182,23 @@ regression; live acceptance is pending.
   backends that reject it.
 - **Why:** The UI half must ship before the P9-61 broker so a command for the
   phone is never applied on the desktop and old backends keep working.
-- **Status:** implemented with unit tests; broker routing and live phone/desktop
-  acceptance remain unverified until #638 lands.
+- **Status:** UI implemented first with unit tests; P9-61 adds offline-tested broker
+  routing. Live phone/desktop acceptance remains unverified.
+
+## P9-61 (11 October 2026) — Route workspace commands to the intended tab
+
+- **Decision:** Reuse the existing device/target contracts and owner-authenticated
+  broker. Default `active` selects the latest-snapshot connection; with no reports,
+  select the first connection for older pages. Named `desktop`/`phone` selects
+  the latest-reporting matching tab, never broadcasts or falls back to another kind.
+  Explicit `all` retains broadcast, including unknown-device pages.
+- **Why:** Snapshot context and default delivery must refer to the same tab.
+  Missing kinds refuse with connected kinds; device labels stay out of context and
+  refusal text. Freeze recipients when delivering so only those tabs can acknowledge
+  or receive cancellation, even if later snapshots change the active tab.
+- **Status:** UI device reporting (#642/#689) shipped first, as confirmed in #638.
+  Backend routing, snapshot compatibility and guidance are tested offline.
+  No migration, new App permission or web edit; live multi-device acceptance pending.
 
 ## 2026-10-11: Chat attachments reuse the More menu (#649)
 
@@ -1199,7 +1214,6 @@ regression; live acceptance is pending.
 - **Evidence:** offline Vitest tests; Chromium at 1280×900 and 390×844 with
   stubbed auth and API. Live backend, Blob and provider acceptance remain pending.
 - **Status:** implemented offline.
-
 
 ## 2026-10-10: Notes source editor (P9-77, #683)
 

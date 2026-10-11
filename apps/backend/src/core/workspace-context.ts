@@ -19,7 +19,8 @@ function quotedTitle(title: string): string {
     (character) => `\\u${character.charCodeAt(0).toString(16).padStart(4, '0')}`);
 }
 
-export function workspaceContext(snapshot?: WorkspaceSnapshot): string {
+export function workspaceContext(snapshot?: WorkspaceSnapshot, devices?: string): string {
+  if (devices) return `${devices}. ${workspaceContext(snapshot)}`;
   if (!snapshot) return 'Dan is looking at: unavailable (no workspace snapshot; no tab connected or reported). Say so instead of guessing.';
   const view = snapshot.view;
   const focused = snapshot.windows.find((window) => window.viewId === view?.focusedViewId) ??

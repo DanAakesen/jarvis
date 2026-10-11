@@ -183,11 +183,12 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   after the returned promise resolves, with a refusal reason on failure.
   Commands never prompt for permissions.
 - P8-15 registers one sensitive `workspace_command` Jarvis tool with the shared
-  generated-view/operation schema. An in-memory broker delivers each command to
-  every open, owner-authenticated `/now/events` session (every signed-in tab,
-  7 October), bounds pending work and deduplicates command IDs. The first tab to
-  apply a command settles it; the command is refused only when every tab refuses or
-  disconnects. Hijacked event streams copy the Fastify reply headers so CORS survives. The event carries only validated JSON; the browser
+  generated-view/operation schema. The in-memory broker bounds pending work and
+  deduplicates command IDs. P9-61 routes commands to the latest-snapshot
+  owner-authenticated `/now/events` session by default; explicit `all` retains
+  broadcast. Only delivered-to tabs can acknowledge: the first application settles
+  it, and failure waits for all recipients to decline or disconnect.
+  Hijacked event streams copy the Fastify reply headers so CORS survives. The event carries only validated JSON; the browser
   dispatches through the current `WorkspaceCommandContext` controller and posts
   an owner-authenticated acknowledgement to
   `POST /now/workspace/commands/:commandId/ack` after applying or refusing it.
@@ -281,7 +282,7 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   backend change does not implement those UI behaviors or claim live acceptance.
 - P9-45 adds `conversation` with `action: 'show' | 'hide'` to the same flat
   `workspace_command` contract and guard. It reuses the owner-authenticated,
-  all-tab broker without a new event channel or persistence; the tool waits for
+  targeted broker without a new event channel or persistence; the tool waits for
   the UI's applied/refused acknowledgement and relays refusal reasons. Invalid
   actions use the shared P9-42 argument-refusal path. The reversible action needs
   no confirmation. The UI session owns applying it and hiding the transcript by
@@ -357,8 +358,15 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   named for another kind with an explanatory acknowledgement instead of applying it.
   `active`, `all` and no target apply where the broker delivers them. An older
   backend that answers 400 to the unknown `device` field gets one retry without it,
-  and later snapshots to that backend omit it. Broker routing is P9-61 (#638) and
-  is not implemented yet, so end-to-end targeting is unverified.
+  and later snapshots to that backend omit it. P9-61 (#638) accepts the existing
+  device contract and routes `active` (also omitted target) to the latest snapshot
+  tab, falling back to the first connection if none has reported. `desktop` and
+  `phone` select the latest-reporting tab of that kind or refuse with the connected
+  kinds; `all` broadcasts. Unknown-device tabs remain eligible for `active` and
+  `all`. Recipient IDs stay fixed across command replay, acknowledgement and
+  cancellation. Chat's `/factory/context` and voice response instructions include
+  connected kinds and the default recipient, never device labels. The UI half
+  shipped first; routing is tested offline, with live multi-device acceptance pending.
   P9-43 adds optional `view` metadata for page, Settings section, Factory
   task/issue, focused window, Folio pane and previous destination. Shared guards
   and the owner route validate it while accepting older snapshots. The existing

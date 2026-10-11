@@ -5,6 +5,7 @@ import {
   isWorkspaceCommand,
   isWorkspaceSnapshot,
   workspaceCommandSchema,
+  workspaceDeviceKinds,
   workspaceViewSchema,
   type WorkspaceSseEvent,
   type WorkspaceCommand,
@@ -81,7 +82,7 @@ function fingerprint(command: WorkspaceCommand): string {
 }
 
 export class WorkspaceCommandBroker {
-  /** Every open signed-in tab per owner; commands go to all of them. */
+  /** Every open signed-in tab per owner. */
   private readonly connections = new Map<string, Map<string, WorkspaceConnection>>();
   private readonly records = new Map<string, Map<string, CommandRecord>>();
   private snapshotClock = 0;
@@ -100,13 +101,25 @@ export class WorkspaceCommandBroker {
 
   /** The most recently reported tab layout, which is the tab Dan is most likely looking at. */
   snapshot(ownerId: string): WorkspaceSnapshot | undefined {
+    return this.latestConnection(this.connections.get(ownerId)?.values() ?? [])?.snapshot;
+  }
+
+  deviceContext(ownerId: string): string | undefined {
+    const connections = [...(this.connections.get(ownerId)?.values() ?? [])];
+    if (!connections.length) return undefined;
+    const kinds = [...new Set(connections.map((connection) => connection.snapshot?.device?.kind ?? 'unknown device'))];
+    const active = this.latestConnection(connections)?.snapshot?.device?.kind ?? 'unknown device';
+    return `${kinds.join(' and ')} connected; commands go to the ${active}`;
+  }
+
+  private latestConnection(connections: Iterable<WorkspaceConnection>): WorkspaceConnection | undefined {
     let latest: WorkspaceConnection | undefined;
-    for (const connection of this.connections.get(ownerId)?.values() ?? []) {
-      if (connection.snapshot && (!latest || (connection.snapshotAt ?? 0) > (latest.snapshotAt ?? 0))) {
+    for (const connection of connections) {
+      if (!latest || (connection.snapshotAt ?? 0) > (latest.snapshotAt ?? 0)) {
         latest = connection;
       }
     }
-    return latest?.snapshot;
+    return latest;
   }
 
   htmlView(ownerId: string, selector: { viewId?: string; artifactId?: string }): { viewId: string; artifactId: string } | undefined {
@@ -142,7 +155,9 @@ export class WorkspaceCommandBroker {
     if (signal.aborted) throw new ToolFailure('Workspace command was cancelled before delivery.');
     const ownerConnections = this.connections.get(ownerId);
     if (!ownerConnections || ownerConnections.size === 0) {
-      throw new ToolRefusal('No active signed-in workspace is connected.');
+      throw new ToolRefusal(command.target === 'desktop' || command.target === 'phone'
+        ? `No ${command.target} workspace is connected. Connected devices: none.`
+        : 'No active signed-in workspace is connected.');
     }
 
     let ownerRecords = this.records.get(ownerId);
@@ -155,6 +170,17 @@ export class WorkspaceCommandBroker {
     if (existing) {
       if (existing.fingerprint !== digest) throw new ToolRefusal('This command ID was already used for a different workspace operation.');
       return this.waitFor(existing.promise, signal);
+    }
+
+    const target = command.target ?? 'active';
+    const candidates = [...ownerConnections.values()].filter((connection) =>
+      target === 'active' || target === 'all' || connection.snapshot?.device?.kind === target);
+    const latest = this.latestConnection(candidates);
+    const recipients = target === 'all' ? candidates : latest ? [latest] : [];
+    if (!recipients.length) {
+      const kinds = [...new Set([...ownerConnections.values()]
+        .map((connection) => connection.snapshot?.device?.kind ?? 'unknown device'))];
+      throw new ToolRefusal(`No ${target} workspace is connected. Connected devices: ${kinds.join(', ')}.`);
     }
 
     let pending = 0;
@@ -175,7 +201,7 @@ export class WorkspaceCommandBroker {
       ...((command.operation === 'create' || command.operation === 'update') && command.view.renderer === 'html-app'
         ? { htmlView: { viewId: command.viewId, artifactId: command.view.data.artifactId.toLowerCase() } }
         : {}),
-      sessionIds: new Set(ownerConnections.keys()),
+      sessionIds: new Set(recipients.map((connection) => connection.sessionId)),
       declined: new Map(),
       acknowledgements: new Map(),
       promise,
@@ -215,7 +241,7 @@ export class WorkspaceCommandBroker {
       settleError(new ToolFailure('The workspace could not accept the command for delivery.'), 'error');
       return this.waitFor(promise, signal);
     }
-    for (const connection of [...ownerConnections.values()]) {
+    for (const connection of recipients) {
       if (!connection.send('workspace-command', { command, expiresAt })) {
         this.decline(record, connection.sessionId, 'error', 'The workspace could not accept the command for delivery.');
       } else if (command.operation === 'create' || command.operation === 'update') {
@@ -329,6 +355,14 @@ export function registerWorkspaceCommandRoutes(app: FastifyInstance): void {
             },
           },
           contextPanelOpen: { type: 'boolean' },
+          device: {
+            type: 'object',
+            properties: {
+              kind: { type: 'string', enum: workspaceDeviceKinds },
+              label: { type: 'string', minLength: 1, maxLength: 60 },
+            },
+            required: ['kind'], additionalProperties: false,
+          },
           frame: htmlArtifactFrameSchema,
           view: workspaceViewSchema,
         },
@@ -405,7 +439,8 @@ export function isWorkspaceReflexOperation(args: Readonly<Record<string, unknown
 
 export const workspaceCommandTool: BackendModule['tools'][number] = {
   name: 'workspace_command',
-  description: 'Show or hide Dan’s conversation transcript, navigate his visible shell page (home, factory board or task/issue, settings section, usage, notes, knowledge, folio, status), create, update, show, close, minimise, restore, focus, move, resize, or arrange a temporary workspace view, or change its context panel. Use operation session to change the current session, not saved defaults: action language with value da or en, action voice with value end, or action camera with value front, rear or off. The page applies session changes; the backend never requests browser permissions. If the page refuses for missing camera or microphone permission, relay its reason and tell Dan to grant permission in the browser. For visual "show me", "visualise", chart or timeline requests, create a view with renderer chart or timeline; chart data uses kind line, bar or area and 1–5 named series of x/y points, up to 1,000 points total. Timeline views use data.events in the given order; each event needs a title and at or label (or both), with optional description. Use label (1–40 characters) for seasons or periods such as "2009/10"; use at (RFC 3339 date-time or YYYY-MM-DD) for precise dates. Use an HTML view for richer visuals. Conversation visibility is reversible and needs no confirmation. Supply a unique commandId. Navigation section is settings-only; taskId and positive integer issueNumber are factory-only. Success requires a tab to acknowledge applying the command; relay its refusal reason.',
+  description: 'Target defaults to active: the tab with the latest snapshot, or the first connected tab if none has reported. Use desktop or phone for the latest-reporting tab of that kind, or all to broadcast. An unavailable kind is refused with the connected devices. ' +
+    'Show or hide Dan’s conversation transcript, navigate his visible shell page (home, factory board or task/issue, settings section, usage, notes, knowledge, folio, status), create, update, show, close, minimise, restore, focus, move, resize, or arrange a temporary workspace view, or change its context panel. Use operation session to change the current session, not saved defaults: action language with value da or en, action voice with value end, or action camera with value front, rear or off. The page applies session changes; the backend never requests browser permissions. If the page refuses for missing camera or microphone permission, relay its reason and tell Dan to grant permission in the browser. For visual "show me", "visualise", chart or timeline requests, create a view with renderer chart or timeline; chart data uses kind line, bar or area and 1–5 named series of x/y points, up to 1,000 points total. Timeline views use data.events in the given order; each event needs a title and at or label (or both), with optional description. Use label (1–40 characters) for seasons or periods such as "2009/10"; use at (RFC 3339 date-time or YYYY-MM-DD) for precise dates. Use an HTML view for richer visuals. Conversation visibility is reversible and needs no confirmation. Supply a unique commandId. Navigation section is settings-only; taskId and positive integer issueNumber are factory-only. Success requires a tab to acknowledge applying the command; relay its refusal reason.',
   inputSchema: workspaceCommandSchema,
   sensitive: true,
   async execute(input, request, signal) {
