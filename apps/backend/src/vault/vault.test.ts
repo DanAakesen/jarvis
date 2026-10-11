@@ -907,6 +907,7 @@ describe('GitHub vault', () => {
       '.obsidian/ignored.md': { sha: sha('5'), content: '# Obsidian metadata' },
       '.codex/ignored.md': { sha: sha('6'), content: '# Codex metadata' },
       '.vscode/ignored.md': { sha: sha('7'), content: '# VS Code metadata' },
+      'Attachments/Receipts/scan.pdf': { sha: sha('8'), content: 'binary' },
     };
     const { indexStore, module } = moduleFor({ remote });
     await module.synchronize(signal());
@@ -916,8 +917,8 @@ describe('GitHub vault', () => {
     expect(tree.statusCode).toBe(200);
     expect(tree.json()).toMatchObject({
       directories: [
-        'Customers', 'General', 'Meetings', 'Meetings/2026', 'Meetings/2026/Planning',
-        'People', 'Personal', 'Work', '_agent-log',
+        'Attachments', 'Attachments/Receipts', 'Customers', 'General', 'Meetings', 'Meetings/2026',
+        'Meetings/2026/Planning', 'People', 'Personal', 'Work', '_agent-log',
       ],
       rootNoteCount: 1,
       truncated: false,
