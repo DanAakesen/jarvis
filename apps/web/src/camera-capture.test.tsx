@@ -41,6 +41,8 @@ function CameraHarness({ onError }: { onError?: (message: string) => void } = {}
       </button>
       {watchFrame && <p data-testid="watch-frame">{watchFrame}</p>}
       <button type="button" onClick={camera.stop}>Stop camera</button>
+      <button type="button" onClick={() => void camera.selectFacing?.('environment', onError)}>Face rear</button>
+      <button type="button" onClick={() => void camera.selectFacing?.('user', onError)}>Face front</button>
       <p role="status">{camera.sharing ? 'Camera is on' : 'Camera is off'}</p>
       {description && <p>{description}</p>}
       {camera.error && <p role="alert">{camera.error}</p>}
@@ -69,6 +71,27 @@ afterEach(() => {
 });
 
 describe('camera frame capture', () => {
+  it('faces the camera a requested way on the existing capture, restarting only when the facing changes', async () => {
+    const getUserMedia = vi.fn(async () => cameraStream().stream);
+    Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: { getUserMedia } });
+    render(<CameraHarness />);
+    fireEvent.click(screen.getByRole('button', { name: 'Face rear' }));
+    await screen.findByText('Camera is on');
+    expect(getUserMedia).toHaveBeenCalledTimes(1);
+    expect(getUserMedia).toHaveBeenLastCalledWith(expect.objectContaining({
+      video: expect.objectContaining({ facingMode: { ideal: 'environment' } }),
+    }));
+    fireEvent.click(screen.getByRole('button', { name: 'Face rear' }));
+    await act(async () => { await Promise.resolve(); });
+    expect(getUserMedia).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole('button', { name: 'Face front' }));
+    await vi.waitFor(() => expect(getUserMedia).toHaveBeenCalledTimes(2));
+    expect(getUserMedia).toHaveBeenLastCalledWith(expect.objectContaining({
+      video: expect.objectContaining({ facingMode: { ideal: 'user' } }),
+    }));
+    await screen.findByText('Camera is on');
+  });
+
   it('reports a denied permission to the caller without starting or sending capture', async () => {
     const onError = vi.fn();
     Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: {

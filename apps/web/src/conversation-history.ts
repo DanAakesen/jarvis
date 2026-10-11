@@ -1,6 +1,7 @@
 import type { PublicClientApplication } from '@azure/msal-browser';
 import type { PublicConfig } from '../config/public-config';
 import { backendFetch } from './backend-request';
+import type { ChatAttachment } from './chat-attachments';
 
 export interface ConversationHistoryToolCall {
   id: string;
@@ -22,6 +23,7 @@ export interface ConversationHistoryMessage {
   voiceMinutes?: number | null;
   at: string;
   toolCalls: ConversationHistoryToolCall[];
+  attachments?: ChatAttachment[];
 }
 
 export interface ConversationHistoryPage {
@@ -59,7 +61,10 @@ function isHistoryPage(value: unknown): value is ConversationHistoryPage {
         !(message.voiceMinutes === undefined || message.voiceMinutes === null ||
           (typeof message.voiceMinutes === 'number' && Number.isFinite(message.voiceMinutes) && message.voiceMinutes >= 0)) ||
         typeof message.at !== 'string' || Number.isNaN(Date.parse(message.at)) ||
-        !Array.isArray(message.toolCalls)) return false;
+        !Array.isArray(message.toolCalls) ||
+        !(message.attachments === undefined || (Array.isArray(message.attachments) && message.attachments.every((file) =>
+          isRecord(file) && typeof file.id === 'string' && typeof file.name === 'string' &&
+          typeof file.contentType === 'string' && typeof file.size === 'number')))) return false;
     return message.toolCalls.every((call) =>
       isRecord(call) && typeof call.id === 'string' && typeof call.tool === 'string' &&
       (call.outcome === 'ok' || call.outcome === 'refused' || call.outcome === 'error') &&
@@ -195,6 +200,7 @@ export async function sendChatTurn(
   sharedScreenContext?: { screenDescription: string; sharedWindowTitle?: string },
   signal?: AbortSignal,
   onInterrupted?: (message: ChatMessage) => void,
+  attachmentIds?: readonly string[],
 ): Promise<ChatMessage> {
   const response = await chatResponse(
     client,
@@ -202,6 +208,7 @@ export async function sendChatTurn(
     `/conversation/sessions/${session.id}/turns`,
     {
       text,
+      ...(attachmentIds?.length ? { attachmentIds } : {}),
       ...(screenContext === undefined ? {} : { screenContext }),
       ...(sharedScreenContext === undefined ? {} : { sharedScreenContext }),
     },

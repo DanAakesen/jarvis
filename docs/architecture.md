@@ -158,6 +158,12 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   maximised state is memory-only. The shell passes the component's typed
   `WorkspaceController` dispatch through `WorkspaceCommandContext` to the active
   page. P8-14 supplies bounded declarative view data and fixed React renderers.
+- P9-64 web `session` commands (language, end voice, camera front/rear/off) go
+  through `apps/web/src/session-commands.ts`: the conversation and voice
+  controls register handlers in a registry owned by the shell, the camera comes
+  from the shell's existing capture state, and `NowFeedPanel` acknowledges only
+  after the returned promise resolves, with a refusal reason on failure.
+  Commands never prompt for permissions.
 - P8-15 registers one sensitive `workspace_command` Jarvis tool with the shared
   generated-view/operation schema. An in-memory broker delivers each command to
   every open, owner-authenticated `/now/events` session (every signed-in tab,
@@ -2232,10 +2238,42 @@ descriptions are excluded from ordinary logs and tool-call audit records.
 Offline route, store, extraction, tool-parity and agent tests cover the flow;
 live model and Azure Blob acceptance remain unverified.
 
+### P9-68 chat attachments (web)
+
+`chat-attachments.ts`, `useChatAttachments.ts` and `ChatAttachments.tsx` own the
+browser side of P9-66/P9-67; `ConversationHistory` only wires them into the
+composer and transcript. Files arrive from the More menu's **Attach file or
+photo** item (the system picker; phones offer photos, camera and files), from a
+clipboard paste in the message box (a pasted screenshot is named
+`screenshot-<time>.png`; pasted text is untouched) or from a drop on the
+conversation. The browser checks extension, size (images 10 MB, others 20 MB) and
+count (five) before uploading, then sends each file as its own authenticated
+`POST /conversation/attachments` multipart request using XMLHttpRequest for
+upload progress. The backend repeats every check and remains authoritative.
+Chips show name, type, size, progress, a "Jarvis couldn't read this file" note
+when extraction failed, and per-file errors; removal aborts an upload or deletes
+the private file. Send stays disabled while an upload runs; failed uploads are
+never sent. Sending passes `attachmentIds` on the existing turn request. Messages
+with files queue instead of steering, because steering carries text only; if the
+turn is not saved the files return to the composer. Uploads older than 23 hours
+are not sent (the backend expires unsent files at 24 hours).
+
+History and live messages list their files; opening one requests
+`GET /conversation/attachments/:id/url` on demand and opens the signed Azure Blob
+URL in a new tab (or a link if the browser blocks the tab). A 404 shows an
+"expired or removed" state. When Jarvis's reply contains the P9-67 confirmation
+phrase `confirm <code> publish <filename>` and the earlier message carries that
+image, the reply also shows the image and a "This repository is public" note
+before Dan approves. If the preview cannot load, the note says not to approve.
+No backend, contract, migration or infrastructure change. Offline Vitest and
+Chromium checks (stubbed auth/API) cover the flow; live backend, Blob and
+provider acceptance remain unverified.
+
 ### P9-76 decision provider (Jev or Microsoft-Decision-1)
 
 Reflex classification (chat and voice), the browser agent, task recipes and PC action planning all make typed decisions: a request with model, a state and named 
-oul/choice/score questions, answered with nswers[<name>]. Typesafe's Jev and Microsoft-Decision-1 (Foundry) accept that same request, so core/decision-provider.ts resolves a DecisionTarget (endpoint, model value, bearer token) and the four call sites use it instead of a fixed Jev key. The decisions.provider setting (jev default, or microsoft) is read at most every three seconds; a failed read keeps the last value. Jev keeps its Key Vault key and jev-latest. Microsoft uses the backend identity (token for https://cognitiveservices.azure.com/.default; Cognitive Services User on the Foundry account is enough) and the decision-1 deployment at <foundry host>/providers/microsoft/v1/systemone. The deployment name cannot contain microsoft (reserved word). Which Foundry host serves that route was not documented, so the resolver tries the services.ai host and then the cognitiveservices host and remembers the one that does not answer 404. If the chosen provider cannot produce a target, callers act as if no decision was made (reflex falls back to the main agent); the backend never silently switches provider. Results and failures carry provider, and the allowlisted eflex.decision log records it beside the confidence bucket and latency so the providers can be compared in Log Analytics. decision.provider_unavailable (provider only) is logged at most once a minute. Limits: Decision-1 is text-only with a 32K-token context, and the subscription quota is 60 requests a minute; the confidence thresholds (0.9 and 0.5) were tuned for Jev and are not yet recalibrated.
+oul/choice/score questions, answered with nswers[<name>]. Typesafe's Jev and Microsoft-Decision-1 (Foundry) accept that same request, so core/decision-provider.ts resolves a DecisionTarget (endpoint, model value, bearer token) and the four call sites use it instead of a fixed Jev key. The decisions.provider setting (jev default, or microsoft) is read at most every three seconds; a failed read keeps the last value. Jev keeps its Key Vault key and jev-latest. Microsoft uses the backend identity (token for https://cognitiveservices.azure.com/.default; Cognitive Services User on the Foundry account is enough) and the decision-1 deployment at <foundry host>/providers/microsoft/v1/systemone. The deployment name cannot contain microsoft (reserved word). Which Foundry host serves that route was not documented, so the resolver tries the services.ai host and then the cognitiveservices host and remembers the one that does not answer 404. If the chosen provider cannot produce a target, callers act as if no decision was made (reflex falls back to the main agent); the backend never silently switches provider. Results and failures carry provider, and the allowlisted 
+eflex.decision log records it beside the confidence bucket and latency so the providers can be compared in Log Analytics. decision.provider_unavailable (provider only) is logged at most once a minute. Limits: Decision-1 is text-only with a 32K-token context, and the subscription quota is 60 requests a minute; the confidence thresholds (0.9 and 0.5) were tuned for Jev and are not yet recalibrated.
 
 ### P9-67 private-by-default issue attachments
 
@@ -2431,10 +2469,21 @@ Historical reads join the current artifact to enforce ownership.
 After commit, an acknowledged workspace `update` targets the original cached
 window or canonical HTML window, never a new window. Delivery failure reports
 the saved artifact/version rather than claiming display success. No migration,
-App permission or web change is introduced. The existing `HtmlAppView` fetch
-depends only on artifact ID: same-ID updates do not reload its iframe yet.
-Visual refresh acceptance therefore needs separately authorized renderer work;
-backend command acknowledgement alone does not verify refreshed HTML.
+App permission or web change is introduced by P9-53.
+
+P9-78 passes the existing generated-view `source.updatedAt` into `HtmlAppView`.
+The load identity includes artifact ID, update timestamp, backend URL and retry
+attempt. A new identity immediately replaces stale HTML with the existing loading
+state, then fetches the latest owner-authorized artifact with `cache: no-store`.
+Cleanup aborts obsolete loads; an active-load guard also ignores responses from
+transports that complete after cancellation. A failed revision uses the existing
+error/retry state instead of presenting old HTML as refreshed. The React key
+remains the artifact ID, preserving renderer height and workspace window identity,
+geometry, Folio and pins. No contract, sandbox, CSP, bridge or styling changes.
+Focused tests and Chromium desktop/phone light/dark fixtures verify refresh and
+recovery offline; production acceptance remains pending. Broker acknowledgement
+still confirms that the UI applied the view update, not that the iframe finished
+loading.
 
 Migration `0035_folio.sql` adds an owner-scoped `dbo.folio_items` index over
 research reports, HTML apps, generated images and knowledge-graph views. New

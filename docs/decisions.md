@@ -19,6 +19,16 @@ The nine design areas and where each stands. **Confirmed** = Dan's requirement o
 
 ## Decision log
 
+P9-78 (11 October 2026): use the generated view's existing `source.updatedAt`
+to invalidate a mounted HTML artifact load when its ID stays the same. Keep
+the artifact React key and existing window system, rather than remounting the
+whole window or adding a contract field. Hide obsolete HTML during the load,
+abort/ignore superseded responses and reuse the existing retry state. This closes
+P9-53's renderer refresh gap without changing the approved design or the six
+locally reserved UI tasks. Focused tests, web lint/build and Chromium fixtures at
+1280×900 and 390×844 in light/dark, including reduced motion, pass offline;
+production refresh remains unverified. No new dependency or permission.
+
 P9-67 (10 October 2026): issue attachments default to fenced descriptions and
 transcribed text from P9-66's private store. All issue/comment writes are staged
 and checked for secrets. Public publication is one image at a time, requires an
@@ -29,7 +39,9 @@ Contents write for EXIF-free, content-addressed images on the never-merged
 Git history is not governed by private attachment retention. No migration,
 new dependency, App permission or web change; live acceptance remains pending.
 Workspace acknowledgement confirms preview creation only; image-load/visibility
-acknowledgement remains a web limitation for #649, outside this backend task.
+acknowledgement remains a web limitation for #649, outside this backend task
+(#649 now shows the image with a public-repository note in chat; it still cannot
+acknowledge on-screen loading to the backend).
 
 P9-66 (10 October 2026): keep conversation uploads in the existing private
 `artifacts` Blob container under `attachments/`, with SQL-owned metadata and
@@ -416,6 +428,7 @@ Windows/Chrome/Jev speedup remains live acceptance.
 
 | Date | Decision | Rationale and evidence | Status |
 | --- | --- | --- | --- |
+| 2026-10-11 | P9-64 (#641) handles the shared `workspace_command` operation `session` in the web UI: `language` (da/en), `voice` (end) and `camera` (front/rear/off). The shared contract gains only the additive `session` operation, `action` values and `value` field, matching the reviewed #667 specification, so this UI ships before that backend PR. Commands never prompt: the camera starts only when `navigator.permissions` already reports `granted` (otherwise refused with a reason), and facing reuses the one camera capture (`selectFacing`, which backs the existing front/back switch). The acknowledgement waits for the actual action (stream restart, voice stopped within 5 s); failures carry a bounded refusal reason. | Language and voice owners register narrow handlers in `session-commands.ts`; the camera comes from the existing shell capture state. No new controls, windows or second capture system. Unit, panel and capture tests cover each action, unknown values and each permission state. | Implemented offline; desktop/phone browser and live backend acceptance pending #667 |
 | 2026-10-10 | P9-73 uses one additive phone dock gap above the safe area, enables edge-to-edge viewports and adds a minimal standalone manifest reusing the app icon. | `max(gap, inset)` leaves no gap above a nonzero inset. Chromium/WebKit fixtures measured 16px with zero inset and 50px with 34px inset; desktop geometry is unchanged. Root ownership lets body-portalled toasts share the phone token. | Implemented and browser-checked with fixtures; physical iPhone and installed Home Screen acceptance remain unverified |
 | 2026-10-10 | P9-49 adds owner-only REST access to list, read, create and edit Markdown notes in the private GitHub vault. Creates refuse existing paths; edits compare the loaded Contents SHA and return 409 with the latest note when stale instead of retrying or overwriting. | Reuse the vault's routing, path, 256 KiB and secret-safety checks, but do not require a stored chat message for the owner's direct edit. Commit to `master`, log only outcome/folder, and synchronize the derived index after writes. No migration or web change; the Notes UI is separate. | Implemented and tested offline; live GitHub access and Notes UI acceptance remain pending |
 | 2026-10-10 | P9-50 reconciles issue, task, PR and merge-commit deployment through a read-only Factory tool. Require closed issue, merged PR and matching successful deployment for “delivered”; preserve partial results and warnings on failed reads. Recover/resume of closed, merged or superseded legacy work requires `confirm: true` on the Dan-only controls route. | Issue #627 records duplicate recovery caused by an unlinked legacy task. Reuse task/release stores, existing GitHub readers and permissions; do not silently link legacy matches, infer delivery from an unrelated SHA, or allow the resume tool to bypass the gate. No migration or web change. Focused tests cover explicit body supersession, ambiguous queries, partial failures, qualified closing references and exact-SHA deployment; unverifiable restart safety returns 503. | Implemented offline; live acceptance pending |
@@ -1147,3 +1160,19 @@ regression; live acceptance is pending.
   hide/reopen and repeated toggles, with desktop light/dark and phone captures
   in `docs/ui/screenshots/composer-sizing/README.md`.
 - **Status:** implemented locally; production acceptance follows deployment.
+
+## 2026-10-11: Chat attachments reuse the More menu (#649)
+
+- **Decision:** attach, paste and drop add files to the existing composer. The
+  attach control is an **Attach file or photo** item in the shared More menu (the
+  paperclip was removed on 6 October), so no new composer button, window
+  arrangement control or layout change is introduced.
+- **Rules:** five files, 10 MB images and 20 MB other files, checked in the
+  browser and again by the backend. Send waits for uploads. A message with files
+  queues rather than steers. Files open only through short-lived signed URLs.
+  Jarvis's public-publication confirmation shows the image with a visible
+  "This repository is public" note.
+- **Evidence:** offline Vitest tests; Chromium at 1280×900 and 390×844 with
+  stubbed auth and API. Live backend, Blob and provider acceptance remain pending.
+- **Status:** implemented offline.
+
