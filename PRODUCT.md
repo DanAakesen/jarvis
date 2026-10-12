@@ -1,5 +1,15 @@
 # Product
 
+## Chat loading correction (12 October 2026)
+
+Show the conversation window as soon as the signed-in shell is ready; do not
+wait for history data to create it. Load messages inside that same frame with
+visible loading text and placeholders, not in the empty stage. Empty history
+and first-load failures remain inside the window with Retry where needed.
+Refreshing existing history keeps the messages visible. Phone minimise/show
+behaviour remains intentional. Saved-window pins and their idle recovery
+belong to the separate #430 release.
+
 ## Camera UI release (12 October 2026)
 
 Dan accepted the camera conversation and authorised shipping #695 at 21:20,

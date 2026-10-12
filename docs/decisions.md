@@ -6,6 +6,22 @@ Verified pure consumer semantics at original HEAD 9e193554c9c8c7c23a788ed3d2b058
 
 The first checkpoint reused server owner/Google client for inactive calendar reads with explicit denied/partial/stale coverage. Current consent documents calendar.events and L125 records calendarList denial. Coordinator verified primary CalendarList:list fields/tokens and maxResults up to 250; calendar.calendarlist.readonly is the least-privilege additional scope. Owner consent stays a separate manual gate; no scope/credential changes or sandbox tokens. Only complete synthetic-tested snapshots enter the owner/range cache. The expanded services above resolve source-rule evidence while full model/live acceptance stays open.
 
+## Chat loading and release split (12 October 2026)
+
+Dan requested a visible chat window before messages finish loading, rather than
+an empty stage followed by a window appearing later. Keep one shell-hosted frame for
+loading, empty history, first-load Retry and ready messages; preserve existing
+messages during refresh. Loading placeholders belong inside the transcript.
+This supersedes earlier hidden initial-history loading descriptions.
+
+The coordinator confirmed the release split after camera #750 merged:
+chat-only correction first; all saved-pin infrastructure and its bounded
+idle/HMR recovery with #430 next. The pin failure exists in the local #430
+draft, not on main, so adding pin infrastructure to PR2 would expand its scope.
+The isolated chat candidate passes types, scoped lint/build, 122 relevant tests
+and desktop/phone synthetic workflows. One unchanged Windows-locale test is
+excluded locally; CI remains the release gate. Live outage causes are unproven.
+
 ## Camera UI release (12 October 2026)
 
 Dan authorised shipping #695 at 21:20, relayed by the coordinator, after accepting

@@ -1,5 +1,19 @@
 # Design
 
+## Chat loading correction (12 October 2026)
+
+The glass chat frame appears before its messages. Loading messages, empty
+history and first-load Retry occupy its transcript area; the frame does not
+disappear or get replaced when data arrives. Existing messages remain during
+refresh. This supersedes earlier hidden initial-history loading descriptions.
+The hosted transcript exposes `aria-busy`; the composer remains usable.
+
+The isolated chat-only candidate was inspected in Chromium at 1480x1000
+dark/ordinary motion and 320x700 light/touch/reduced motion, including held
+history, first-load failure and Retry. The same DOM frame survives each
+transition. These are intercepted responses, not a live backend outage.
+No new chat movement, sizing, density, pin or arrange changes ship here.
+
 ## Camera UI release (12 October 2026)
 
 Dan approved #695 shipping at 21:20; this supersedes earlier parked-camera

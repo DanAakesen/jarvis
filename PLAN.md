@@ -1,5 +1,19 @@
 # Project plan
 
+## Overnight UI release sequence (12 October 2026)
+
+Camera #750 is merged; production deployment is in progress. The next isolated
+PR contains only immediate chat-frame availability and message loading/recovery
+inside it. TypeScript, zero-warning scoped lint, production build and 122
+App/history tests pass locally (one unchanged Windows-locale case excluded).
+Desktop dark and 320px light/touch/reduced-motion Chromium workflows pass with
+held and failed history responses.
+
+Per the coordinator's split decision, saved-pin infrastructure and idle/HMR
+recovery ship with the whole #430 window release, not with this correction.
+Next: chat-only PR, coordinator merge on green, then #430 to unblock #621.
+Keep Notes, floating-chat and report-appearance drafts separate.
+
 ## Camera UI release (12 October 2026)
 
 #695/P9-79 is approved for shipping by Dan at 21:20, via the coordinator.
