@@ -395,11 +395,14 @@
 @media (prefers-reduced-motion: reduce) { .tool-chip .assembling-j-block, .tool-chip[data-state="running"]::after { animation: none; } }
 :root[data-motion="reduced"] :is(.tool-chip .assembling-j-block, .tool-chip[data-state="running"]::after) { animation: none; }
 
-/* Sharing is live: a quiet line above the message so Dan always knows what Jarvis can see, with Stop beside it. */
-.composer-live { display: flex; grid-column: 1 / -1; grid-row: 1; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 2px 4px 0; color: var(--text-muted); font-size: 12.5px; }
+.composer-live { display: grid; grid-column: 1 / -1; grid-row: 2; gap: 6px; min-width: 0; margin: 4px 0 0; color: var(--text-muted); font-size: 12.5px; }
 .composer-live-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--error); box-shadow: 0 0 8px var(--error); animation: kanban-live 2s ease-in-out infinite; }
-.composer-live-stop { min-height: 26px; padding: 0 10px; border: 0; border-radius: var(--radius-pill); background: var(--glass-hover); color: var(--text); font: inherit; font-weight: 600; cursor: pointer; }
+.composer-live-stop { min-height: 44px; padding: 0 10px; border: 0; border-radius: var(--radius-pill); background: var(--glass-hover); color: var(--text); font: inherit; font-weight: 600; cursor: pointer; }
 .composer-live-stop:hover { background: var(--error-wash); }
+.composer-live-stop:disabled { opacity: .6; cursor: default; }
+.composer-live-stop:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+.composer-live-stop:active:not(:disabled) { background: var(--glass-hover); transform: scale(.97); }
+.conversation-input[data-voice-active="false"]:has(.composer-live) .action-row { align-self: start; }
 .composer-live-stop:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 @media (prefers-reduced-motion: reduce) { .composer-live-dot { animation: none; } }
 /* A turn whose tools ran but Jarvis has not replied yet: a slim Jarvis-side row of chips. */
@@ -414,6 +417,9 @@
   color: var(--text-muted); font-size: 11px; line-height: 16px; white-space: nowrap; pointer-events: none;
 }
 .conversation-message .message-metadata:has(> time:only-child:empty) { display: none; }
+.conversation-message[data-speaker="dan"] > .message-visual-status {
+  margin-top: var(--space-2); color: var(--text-muted); font-size: var(--type-small); white-space: normal;
+}
 /* More air between Dan's and Jarvis's bubbles; consecutive bubbles from one speaker stay close. */
 .conversation-message[data-speaker="dan"] + .conversation-message[data-speaker="jarvis"],
 .conversation-message[data-speaker="jarvis"] + .conversation-message[data-speaker="dan"],
@@ -580,6 +586,7 @@
    accelerating, then rests. */
 
 .conversation-history .composer > textarea, .conversation-history .composer > .composer-prompt { grid-row: 1; grid-column: 1; }
+.conversation-history .composer > .composer-more, .conversation-history .composer > .composer-send { grid-row: 1; }
 .conversation-history .composer textarea::placeholder { color: transparent; }
 .composer-prompt { align-self: center; min-width: 0; padding: 0 2px; overflow: hidden; color: var(--text-muted); font-size: var(--type-body); line-height: 24px;
   text-overflow: ellipsis; white-space: nowrap; pointer-events: none; transition: opacity var(--motion-state) var(--ease-standard); }

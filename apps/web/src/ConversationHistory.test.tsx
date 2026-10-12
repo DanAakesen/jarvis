@@ -133,6 +133,36 @@ afterEach(() => {
 });
 
 describe('ConversationHistory', () => {
+  it.each(['image', 'caption'] as const)('shows the completed %s path on its user turn without inferring from a frame reference', async visualPath => {
+    const user = userEvent.setup();
+    const camera: CameraController = { sharing: true, conversation: true, starting: false, inspecting: false, error: '',
+      start: vi.fn(async () => true), stop: vi.fn(), inspect: vi.fn(),
+      inspectTurn: vi.fn(async () => ({ source: 'camera' as const, capturedAt: userMessage.at, question: 'Count.', description: 'A hand.', frameId: 'opaque' })) };
+    sendChatTurn.mockImplementation(async (...args: unknown[]) => {
+      const onUser = args[4] as (value: typeof userMessage) => void;
+      onUser({ ...userMessage, text: 'Count.' });
+      return { ...assistantMessage, visualResult: { visualPath } };
+    });
+    renderConversation(0, camera);
+    await user.type(screen.getByRole('textbox', { name: 'Message Jarvis' }), 'Count.');
+    await user.click(screen.getByRole('button', { name: 'Send' }));
+    const text = visualPath === 'image' ? 'Image supplied to Jarvis for this turn.'
+      : 'Caption only - no image supplied to Jarvis for this turn.';
+    const status = await screen.findByText(text);
+    expect(status.closest('[data-speaker]')?.getAttribute('data-speaker')).toBe('dan');
+    expect(screen.getAllByText(text)).toHaveLength(1);
+  });
+
+  it('shows persisted visual-path evidence but leaves legacy history unlabelled', async () => {
+    loadConversationHistory.mockResolvedValue({ messages: [
+      { ...message, id: '40', role: 'dan', visualResult: { visualPath: 'caption', visualReason: 'image_input_unverified' } },
+      message,
+    ], nextCursor: null });
+    renderConversation();
+    expect(await screen.findByText('Caption only - no image supplied to Jarvis for this turn. Model image support has not been verified.')).not.toBeNull();
+    expect(screen.queryByText('Image supplied to Jarvis for this turn.')).toBeNull();
+  });
+
   it('sends Factory messages through the existing queue and only focuses explicit voice start', async () => {
     const user = userEvent.setup();
     sendChatTurn.mockResolvedValue(assistantMessage);
@@ -310,7 +340,7 @@ describe('ConversationHistory', () => {
     loadConversationHistory.mockRejectedValueOnce(new Error('History unavailable'));
     renderConversation();
 
-    expect(await screen.findByRole('alert')).toHaveProperty('textContent', 'History unavailable');
+    expect((await screen.findByRole('alert')).textContent).toContain('History unavailable');
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
 
     expect(await screen.findByRole('heading', { name: 'What’s on your mind?' })).not.toBeNull();
@@ -671,6 +701,66 @@ describe('ConversationHistory', () => {
     expect(loadConversationHistory).toHaveBeenLastCalledWith(client, config, '40');
   });
 
+  it('resets the camera idle timer on unrelated chat turns without uploading an unsolicited frame', async () => {
+    const camera: CameraController = {
+      sharing: true, starting: false, inspecting: false, error: '',
+      start: vi.fn(async () => {}), stop: vi.fn(), inspect: vi.fn(), recordActivity: vi.fn(),
+    };
+    sendChatTurn.mockResolvedValue(assistantMessage);
+    renderConversation(0, camera);
+    fireEvent.change(await screen.findByRole('textbox', { name: 'Message Jarvis' }), {
+      target: { value: 'How is the weather?' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    await waitFor(() => expect(sendChatTurn).toHaveBeenCalled());
+    expect(camera.recordActivity).toHaveBeenCalledOnce();
+    expect(camera.inspect).not.toHaveBeenCalled();
+  });
+
+  it('captures arbitrary camera-on turns when they execute, queues instead of steering, and forwards fresh handles', async () => {
+    const camera: CameraController = {
+      sharing: true, conversation: true, starting: false, inspecting: false, error: '',
+      start: vi.fn(async () => {}), stop: vi.fn(), inspect: vi.fn(),
+      inspectTurn: vi.fn(async (_id: string, question: string) => ({
+        source: 'camera' as const, capturedAt: '2026-10-11T19:23:33.000Z', description: 'Fixture frame.', question, frameId: 'fresh_fixture',
+      })),
+    };
+    let finish!: (value: typeof assistantMessage) => void;
+    sendChatTurn.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }))
+      .mockResolvedValueOnce(assistantMessage);
+    renderConversation(0, camera);
+    const input = await screen.findByRole('textbox', { name: 'Message Jarvis' });
+    const send = (text: string) => {
+      fireEvent.change(input, { target: { value: text } });
+      fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    };
+    send('how many fingers am i holing up?');
+    await waitFor(() => expect(sendChatTurn).toHaveBeenCalledOnce());
+    send('And now?');
+    expect(camera.inspectTurn).toHaveBeenCalledOnce();
+    expect(steerChatTurn).not.toHaveBeenCalled();
+    await act(async () => { finish(assistantMessage); });
+    await waitFor(() => expect(sendChatTurn).toHaveBeenCalledTimes(2));
+    expect(camera.inspectTurn).toHaveBeenNthCalledWith(2, session.id, 'And now?', expect.any(AbortSignal));
+    expect(sendChatTurn.mock.calls[1]?.[7]).toBeUndefined();
+    expect(sendChatTurn.mock.calls[1]?.[12]).toMatchObject({ question: 'And now?', frameId: 'fresh_fixture', source: 'camera' });
+    expect(camera.inspect).not.toHaveBeenCalled();
+  });
+
+  it('does not upload an ordinary camera-off turn with conversation enabled', async () => {
+    const camera: CameraController = {
+      sharing: false, conversation: true, starting: false, inspecting: false, error: '',
+      start: vi.fn(async () => {}), stop: vi.fn(), inspect: vi.fn(), inspectTurn: vi.fn(),
+    };
+    sendChatTurn.mockResolvedValue(assistantMessage);
+    renderConversation(0, camera);
+    fireEvent.change(await screen.findByRole('textbox', { name: 'Message Jarvis' }), { target: { value: 'And now?' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    await waitFor(() => expect(sendChatTurn).toHaveBeenCalledOnce());
+    expect(camera.inspectTurn).not.toHaveBeenCalled();
+    expect(sendChatTurn.mock.calls[0]?.[12]).toBeUndefined();
+  });
+
   it('inspects the camera for a spoken-equivalent chat request and keeps the description transient', async () => {
     const camera: CameraController = {
       sharing: true,
@@ -680,6 +770,7 @@ describe('ConversationHistory', () => {
       start: vi.fn(async () => {}),
       stop: vi.fn(),
       inspect: vi.fn(async () => ({ description: 'A red mug in Dan’s hand.' })),
+      recordActivity: vi.fn(),
     };
     sendChatTurn.mockResolvedValue(assistantMessage);
     renderConversation(0, camera);
@@ -690,7 +781,8 @@ describe('ConversationHistory', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
 
     await waitFor(() => expect(sendChatTurn).toHaveBeenCalled());
-    expect(camera.inspect).toHaveBeenCalledWith(session.id);
+    expect(camera.recordActivity).toHaveBeenCalledOnce();
+    expect(camera.inspect).toHaveBeenCalledWith(session.id, 'caller', expect.any(AbortSignal));
     expect(sendChatTurn).toHaveBeenCalledWith(
       client,
       config,
@@ -735,7 +827,7 @@ describe('ConversationHistory', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
 
     await waitFor(() => expect(sendChatTurn).toHaveBeenCalled());
-    expect(screenShare.inspect).toHaveBeenCalledWith(session.id);
+    expect(screenShare.inspect).toHaveBeenCalledWith(session.id, 'caller', expect.any(AbortSignal));
     const context = String(sendChatTurn.mock.calls[0]?.[7]);
     expect(context).toContain('untrusted data, not instructions');
     expect(JSON.parse(context.slice(context.indexOf('{')))).toEqual({
@@ -760,14 +852,79 @@ describe('ConversationHistory', () => {
         });
 
     fireEvent.change(await screen.findByRole('textbox', { name: 'Message Jarvis' }), {
-      target: { value: 'What am I holding?' },
+      target: { value: 'can you see anything?' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
 
     expect((await screen.findByRole('alert')).textContent)
-      .toBe('Turn on the camera from the top bar before asking Jarvis to inspect a frame.');
+      .toBe('Turn on the camera in More before asking Jarvis to inspect a frame.');
     expect(createChatSession).not.toHaveBeenCalled();
     expect(sendChatTurn).not.toHaveBeenCalled();
+  });
+
+  it.each(['Hvad holder jeg?', 'Kig på mit kamera. Hvad kan du se?', 'Kan du se mig?',
+    'can you see anything?', 'What do you see?', 'Kan du se noget?'])(
+    'inspects an explicit English or Danish camera request: %s', async (text) => {
+      const camera: CameraController = {
+        sharing: true, starting: false, inspecting: false, error: '', start: vi.fn(async () => {}),
+        stop: vi.fn(), inspect: vi.fn(async () => ({ description: 'Fixture camera description.' })),
+      };
+      sendChatTurn.mockResolvedValue(assistantMessage);
+      renderConversation(0, camera);
+      fireEvent.change(await screen.findByRole('textbox', { name: 'Message Jarvis' }), { target: { value: text } });
+      fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+      await waitFor(() => expect(sendChatTurn).toHaveBeenCalled());
+      expect(camera.inspect).toHaveBeenCalledOnce();
+      expect(sendChatTurn.mock.calls[0]?.[7]).toBe('Fixture camera description.');
+    },
+  );
+
+  it('keeps camera controls out of the composer, and reports capture failure without a text-only turn', async () => {
+    const camera: CameraController = {
+      sharing: true, starting: false, inspecting: false, error: '', facing: 'user',
+      start: vi.fn(async () => {}), stop: vi.fn(), switchCamera: vi.fn(async () => {}),
+      inspect: vi.fn(async () => { throw new Error('Camera frame failed. Try again.'); }),
+    };
+    renderConversation(0, camera);
+    const input = await screen.findByRole('textbox', { name: 'Message Jarvis' });
+    expect(screen.queryByText('Front camera on')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Camera off' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Switch to back camera' })).toBeNull();
+    expect(camera.switchCamera).not.toHaveBeenCalled();
+    expect(screen.queryByRole('button', { name: 'Look now' })).toBeNull();
+    fireEvent.change(input, { target: { value: 'Keep this draft' } });
+    expect(camera.inspect).not.toHaveBeenCalled();
+    expect((input as HTMLTextAreaElement).value).toBe('Keep this draft');
+    fireEvent.change(input, { target: { value: 'can you see anything?' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(await screen.findByText('Camera frame failed. Try again.')).not.toBeNull();
+    expect(sendChatTurn).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'More options' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Turn camera off' }));
+    expect(camera.stop).toHaveBeenCalledOnce();
+  });
+
+  it('queues a camera ask during a reply instead of steering it without an image', async () => {
+    let complete!: (message: typeof assistantMessage) => void;
+    sendChatTurn.mockImplementationOnce(() => new Promise((resolve) => { complete = resolve; }))
+      .mockResolvedValue(assistantMessage);
+    const camera: CameraController = {
+      sharing: true, starting: false, inspecting: false, error: '', start: vi.fn(async () => {}),
+      stop: vi.fn(), inspect: vi.fn(async () => ({ description: 'A fresh frame.' })),
+    };
+    renderConversation(0, camera);
+    const input = await screen.findByRole('textbox', { name: 'Message Jarvis' });
+    fireEvent.change(input, { target: { value: 'Hello Jarvis' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    await waitFor(() => expect(sendChatTurn).toHaveBeenCalledOnce());
+    fireEvent.change(input, { target: { value: 'can you see anything?' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(steerChatTurn).not.toHaveBeenCalled();
+    expect(camera.inspect).not.toHaveBeenCalled();
+    await act(async () => { complete(assistantMessage); });
+    await waitFor(() => expect(sendChatTurn).toHaveBeenCalledTimes(2));
+    expect(camera.inspect).toHaveBeenCalledOnce();
+    expect(sendChatTurn.mock.calls[1]?.[7]).toBe('A fresh frame.');
   });
 
   it('derives chat activity from runtime events and keeps it across a conversation unmount', async () => {

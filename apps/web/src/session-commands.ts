@@ -52,6 +52,18 @@ async function cameraPermitted(): Promise<boolean> {
   }
 }
 
+export async function openCameraPreview(camera: CameraController): Promise<SessionCommandResult> {
+  if (camera.sharing) return applied;
+  if (camera.starting) return refuse('The camera is still starting. Try again in a moment.');
+  if (!(await cameraPermitted())) {
+    return refuse('Camera access has not been allowed in this browser. Dan needs to turn the camera on himself first.');
+  }
+  let failure = '';
+  const started = await camera.start((message) => { failure = message; });
+  return started === true || !failure && camera.sharing
+    ? applied : refuse(failure || 'The camera did not start.');
+}
+
 async function applyCamera(value: SessionCommand['value'], camera: CameraController | undefined): Promise<SessionCommandResult> {
   if (!camera) return refuse('The camera is not available in this window.');
   if (value === 'off') {

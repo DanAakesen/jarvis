@@ -10,6 +10,7 @@ import { ContextPanel, ContextPanelProvider } from './ContextPanel';
 import { ConversationIntentProvider } from './ConversationIntentProvider';
 import type { CameraController, ScreenShareController } from './screen-sharing';
 import { useCamera, useScreenShare } from './screen-sharing';
+import { CameraPreview, cameraPreviewViewId } from './CameraPreview';
 import { useContextPanel } from './context-panel-state';
 import { DatabaseWakeStatus } from './DatabaseWakeStatus';
 import { JarvisPage } from './JarvisPage';
@@ -25,7 +26,7 @@ import { backendFetch } from './backend-request';
 import { Workspace, PHONE_LAYOUT_MEDIA_QUERY, type WorkspaceController, type WorkspaceView } from './Workspace';
 import { ConversationWindowContext, conversationViewId } from './conversation-window-state';
 import { WorkspaceCommandContext, useWorkspaceCommands } from './workspace-command-state';
-import { SessionCommandRegistryContext, applySessionCommand, createSessionCommandRegistry, type SessionCommandResult } from './session-commands';
+import { SessionCommandRegistryContext, applySessionCommand, openCameraPreview, createSessionCommandRegistry, type SessionCommandResult } from './session-commands';
 import { BackendSleepControl } from './BackendSleepControl';
 import { VoiceWorkspaceContext } from './voice-workspace-state';
 import { readVoiceWorkspacePreference } from './voice-workspace-preference';
@@ -275,6 +276,10 @@ function ShellLayout({ signedIn, config, session, camera, screenShare }: {
   }), [contextPanel, frame, navigateTo, sessionCommands, signedIn, snapshotWindows, view]);
   const applyWorkspaceCommand = useCallback((command: WorkspaceCommand, trustedBlobHost?: string): boolean | Promise<SessionCommandResult> => {
     if (command.operation === 'session') return workspaceCommands.applySession(command);
+    if ((command.operation === 'show' || command.operation === 'restore' || command.operation === 'focus') &&
+        command.viewId === cameraPreviewViewId && !cameraRef.current.sharing && !cameraRef.current.starting) {
+      return openCameraPreview(cameraRef.current);
+    }
     let applied = false;
     flushSync(() => { applied = workspaceCommands.dispatch(command, trustedBlobHost); });
     return applied;
@@ -405,8 +410,25 @@ function ShellLayout({ signedIn, config, session, camera, screenShare }: {
       initialGeometry: { x: 0.1, y: 0.36, width: 0.8, height: 0.64, columns: 2 },
       content: { status: 'ready' as const, content: <div ref={setConversationHost} className="conversation-window-host" /> },
     }] : []),
+    ...(camera.sharing || camera.starting || camera.error ? [{
+      id: cameraPreviewViewId,
+      title: 'Camera preview',
+      presentation: 'camera-preview' as const,
+      initialGeometry: { x: 0.7, y: 0.02, width: 0.29, height: 0.42, columns: 1 },
+      onClose: camera.stop,
+      content: { status: 'ready' as const, content: <CameraPreview camera={camera} /> },
+    }] : []),
     ...taskViews,
-  ], [conversationAvailable, taskViews]);
+  ], [camera, conversationAvailable, taskViews]);
+  const cameraLifecycle = useRef(false);
+  useLayoutEffect(() => {
+    const active = Boolean(camera.sharing || camera.starting || camera.error);
+    const stoppedWithError = !camera.sharing && !camera.starting && Boolean(camera.error);
+    if (active && (!cameraLifecycle.current || stoppedWithError)) {
+      workspaceController.current?.dispatch({ commandId: 'camera-preview-open', operation: 'restore', viewId: cameraPreviewViewId });
+    }
+    cameraLifecycle.current = active;
+  }, [camera.error, camera.sharing, camera.starting]);
   const conversationLifecycle = useRef({ available: false, hiddenForVoice: false });
   useLayoutEffect(() => {
     const lifecycle = conversationLifecycle.current;
@@ -750,12 +772,14 @@ function SettingsActivity({ client, config, getAccessToken }: {
 // Vite inlines __JARVIS_CONFIG__ as an object literal. Read it once: a new object per render
 // recreated the MSAL client and re-ran sign-in restore in a loop (L65).
 const defaultConfig: PublicConfig = __JARVIS_CONFIG__;
+// The deployed camera protocol accepts upload-only image handles in chat and voice.
+const cameraConversationDeployed = true;
 
 export function App({ config = defaultConfig }: { config?: PublicConfig }) {
   useGlassLight();
   const session = useSignIn(config);
   const signedIn = session.state === 'signed-in' && session.profile !== null;
-  const camera = useCamera(config, session.getAccessToken);
+  const camera = useCamera(config, session.getAccessToken, cameraConversationDeployed);
   const stopCamera = camera.stop;
   const screenShare = useScreenShare(config, session.getAccessToken);
   const stopScreenShare = screenShare.stop;

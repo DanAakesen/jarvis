@@ -8,10 +8,13 @@ import { useJarvisActivity } from './activity-context';
 import { PHONE_LAYOUT_MEDIA_QUERY } from './Workspace';
 import type { PublicConfig } from '../config/public-config';
 import { sharedScreenContext, type CameraController, type ScreenShareController } from './screen-sharing';
+import { isCameraRequest, isScreenRequest } from './vision-request';
+import { visualResultText, type VisualTurnContext } from './visual-context';
 import { formatWatchBudget, useVisionWatch } from './vision-watch';
 import { ConversationHandle } from './ConversationHandle';
 import { ConversationMoreMenu, type MoreMenuAction } from './ConversationMoreMenu';
 import { ConversationToast } from './ConversationToast';
+import { CameraObservationToast } from './CameraPreview';
 import { VoiceControls } from './VoiceControls';
 import { useVoiceWorkspace } from './voice-workspace-state';
 import { useSessionCommandRegistry } from './session-commands';
@@ -142,14 +145,6 @@ function ConversationImageArtifact({
   );
 }
 
-function isCameraRequest(text: string) {
-  return /\b(?:what am i holding|what(?:'s| is) in my hand|look at (?:my|the) camera|what can you see)\b/iu.test(text);
-}
-
-function isScreenRequest(text: string) {
-  return /\b(?:look at (?:my|the) screen|what(?:'s| is) on (?:my|the) screen)\b/iu.test(text);
-}
-
 function isSharedBrowserRequest(text: string) {
   return /\b(?:do|act|use|fill|complete|submit|book|buy|purchase|send|delete|choose|select|find|search|compare|open|click|type|enter|apply)\b.{0,80}\b(?:here|this|that|it|these|those)\b|\b(?:here|this|that|it|these|those)\b.{0,80}\b(?:do|act|use|fill|complete|submit|book|buy|purchase|send|delete|choose|select|find|search|compare|open|click|type|enter|apply)\b/iu.test(text);
 
@@ -178,6 +173,7 @@ export function ConversationHistory({
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [historyError, setHistoryError] = useState('');
   const [historyErrorId, setHistoryErrorId] = useState(0);
+  const [historyErrorSource, setHistoryErrorSource] = useState<'latest' | 'older'>('latest');
   const [reload, setReload] = useState(0);
   const [language, setLanguage] = useState<'da' | 'en'>('en');
   const sessionCommands = useSessionCommandRegistry();
@@ -211,12 +207,6 @@ export function ConversationHistory({
   const screenWatch = useVisionWatch(config, watchToken, screenShare, 'screen', session?.id ?? null, setTurnError);
   const cameraWatch = useVisionWatch(config, watchToken, camera, 'camera', session?.id ?? null, setTurnError);
   const [steering, setSteering] = useState(false);
-  const [visionContext, setVisionContext] = useState<{
-    sessionId: string;
-    description: string;
-    sharedWindowTitle?: string;
-    source: 'camera' | 'screen';
-  } | null>(null);
   const [voiceActive, setVoiceActive] = useState(false);
   const [voiceRefresh, setVoiceRefresh] = useState(0);
   const [now, setNow] = useState(() => Date.now());
@@ -387,6 +377,7 @@ export function ConversationHistory({
     }).catch((reason: unknown) => {
       if (!active) return;
       setHistoryError(reason instanceof Error ? reason.message : 'Jarvis could not load conversation history.');
+      setHistoryErrorSource('latest');
       setHistoryErrorId((value) => value + 1);
     }).finally(() => {
       if (active) setLoading(false);
@@ -411,6 +402,7 @@ export function ConversationHistory({
       setNextCursor(page.nextCursor);
     } catch (reason) {
       setHistoryError(reason instanceof Error ? reason.message : 'Jarvis could not load older conversation history.');
+      setHistoryErrorSource('older');
       setHistoryErrorId((value) => value + 1);
     } finally {
       setLoadingOlder(false);
@@ -422,10 +414,11 @@ export function ConversationHistory({
     const hasFiles = withFiles && readyFiles > 0;
     const text = value.trim() || (hasFiles ? 'Please look at the attached files.' : '');
     if (!text) return;
-    const currentCameraContext = session !== null && visionContext?.source === 'camera' &&
-      visionContext.sessionId === session.id && session.language === language;
-    if (isCameraRequest(text) && !camera?.sharing && !currentCameraContext) {
-      setTurnError('Turn on the camera from the top bar before asking Jarvis to inspect a frame.');
+    camera?.recordActivity?.();
+    const cameraRequest = Boolean(camera?.conversation && camera.sharing) ||
+      (isCameraRequest(text) && !isScreenRequest(text));
+    if (cameraRequest && !camera?.sharing) {
+      setTurnError('Turn on the camera in More before asking Jarvis to inspect a frame.');
       return;
     }
     const files = hasFiles ? takeFiles() : [];
@@ -440,7 +433,8 @@ export function ConversationHistory({
     const queued: QueuedMessage = { id: ++nextQueueId.current, text, language, ...(files.length ? { attachments: files } : {}) };
     const activeSession = turnSession.current;
     // Steering carries text only, so a message with files waits in the queue instead.
-    if (sending && !queueOnly && activeSession && files.length === 0) {
+    const visualRequest = cameraRequest || isScreenRequest(text) || (screenShare?.sharing && isSharedBrowserRequest(text));
+    if (sending && !queueOnly && activeSession && files.length === 0 && !visualRequest) {
       setSteering(true);
       void steerChatTurn(client, config, activeSession, text, language).then((message) => {
         setMessages((current) => mergeMessages(current, [asHistoryMessage(message, message.language)]));
@@ -460,7 +454,7 @@ export function ConversationHistory({
       return;
     }
     setQueue((current) => [...current, queued]);
-  }, [camera?.sharing, client, config, language, readyFiles, revealHistory, sending, session, takeFiles, uploadingFiles, visionContext, voiceActive]);
+  }, [camera, client, config, language, readyFiles, revealHistory, screenShare?.sharing, sending, takeFiles, uploadingFiles, voiceActive]);
 
   useEffect(() => {
     const intent = conversationIntents.pending[0];
@@ -494,12 +488,13 @@ export function ConversationHistory({
     let messageId: string | undefined;
     let partialReply = '';
     let contextForTurn: string | undefined;
+    let visualForTurn: VisualTurnContext | undefined;
     let sharedContextForTurn: { screenDescription: string; sharedWindowTitle?: string } | undefined;
     try {
-      const cameraContextReady = session?.language === language && visionContext?.source === 'camera' &&
-        visionContext.sessionId === session.id;
-      if (isCameraRequest(text) && !camera?.sharing && !cameraContextReady) {
-        throw new Error('Turn on the camera from the top bar before asking Jarvis to inspect a frame.');
+      const cameraRequest = Boolean(camera?.conversation && camera.sharing) ||
+        (isCameraRequest(text) && !isScreenRequest(text));
+      if (cameraRequest && !camera?.sharing) {
+        throw new Error('Turn on the camera in More before asking Jarvis to inspect a frame.');
       }
       const activeSession = session?.language === language
         ? session
@@ -507,26 +502,16 @@ export function ConversationHistory({
       controller.signal.throwIfAborted();
       setSession(activeSession);
       turnSession.current = activeSession;
-      const currentVisionContext = visionContext?.sessionId === activeSession.id ? visionContext : null;
-      contextForTurn = currentVisionContext
-        ? currentVisionContext.source === 'screen'
-          ? sharedScreenContext(currentVisionContext.description, currentVisionContext.sharedWindowTitle)
-          : currentVisionContext.description
-        : undefined;
-      if (isSharedBrowserRequest(text) && currentVisionContext?.source === 'screen') {
-        sharedContextForTurn = {
-          screenDescription: currentVisionContext.description,
-          ...(currentVisionContext.sharedWindowTitle === undefined
-            ? {}
-            : { sharedWindowTitle: currentVisionContext.sharedWindowTitle }),
-        };
-      }
-      setVisionContext(null);
-      if (isCameraRequest(text) && camera?.sharing && currentVisionContext?.source !== 'camera') {
-        contextForTurn = (await waitForChatSetup(() => camera.inspect(activeSession.id), controller.signal)).description;
-      } else if ((isScreenRequest(text) || isSharedBrowserRequest(text)) && screenShare?.sharing &&
-          (isSharedBrowserRequest(text) || currentVisionContext?.source !== 'screen')) {
-        const context = await waitForChatSetup(() => screenShare.inspect(activeSession.id), controller.signal);
+      if (cameraRequest && camera?.sharing) {
+        const inspectTurn = camera.inspectTurn;
+        if (camera.conversation) {
+          if (!inspectTurn) throw new Error('Camera conversation inspection is unavailable.');
+          visualForTurn = await waitForChatSetup(() => inspectTurn(activeSession.id, text, controller.signal), controller.signal);
+        } else {
+          contextForTurn = (await waitForChatSetup(() => camera.inspect(activeSession.id, 'caller', controller.signal), controller.signal)).description;
+        }
+      } else if ((isScreenRequest(text) || isSharedBrowserRequest(text)) && screenShare?.sharing) {
+        const context = await waitForChatSetup(() => screenShare.inspect(activeSession.id, 'caller', controller.signal), controller.signal);
         contextForTurn = sharedScreenContext(context.description, context.sharedWindowTitle);
         if (isSharedBrowserRequest(text)) {
           sharedContextForTurn = {
@@ -535,6 +520,9 @@ export function ConversationHistory({
           };
         }
       }
+      const visualArguments: [attachmentIds?: readonly string[] | undefined, visualContext?: VisualTurnContext | undefined] = visualForTurn
+        ? [queuedFiles.length ? queuedFiles.map((file) => file.id) : undefined, visualForTurn]
+        : queuedFiles.length ? [queuedFiles.map((file) => file.id)] : [];
       const assistant = await sendChatTurn(
         client,
         config,
@@ -565,9 +553,10 @@ export function ConversationHistory({
           setStreamedText('');
           setSteering(false);
         },
-        ...(queuedFiles.length ? [queuedFiles.map((file) => file.id)] as const : []),
+        ...visualArguments,
       );
-      setMessages((current) => mergeMessages(current, [asHistoryMessage(assistant, activeSession.language)]));
+      setMessages((current) => mergeMessages(current.map(message => message.id === messageId && assistant.visualResult
+        ? { ...message, visualResult: assistant.visualResult } : message), [asHistoryMessage(assistant, activeSession.language)]));
       setStreamedText('');
       setReload((value) => value + 1);
     } catch (reason) {
@@ -598,7 +587,7 @@ export function ConversationHistory({
       turnInFlight.current = false;
       setSending(false);
     }
-  }, [session, visionContext, client, config, camera, screenShare, restoreFiles]);
+  }, [session, client, config, camera, screenShare, restoreFiles]);
 
   useEffect(() => {
     if (sending || voiceActive || turnInFlight.current || queue.length === 0) return;
@@ -774,6 +763,8 @@ export function ConversationHistory({
                       ? <MarkdownContent source={message.text} />
                       : <p>{message.text}</p>}
                     {message.interrupted && <p className="interrupted-label">Interrupted</p>}
+                    {message.role === 'dan' && message.visualResult &&
+                      <p className="message-visual-status">{visualResultText(message.visualResult)}</p>}
                     {message.attachments?.length ? <MessageAttachments client={client} config={config} attachments={message.attachments} /> : null}
                     {message.role === 'jarvis' && (() => {
                       const image = publicPublicationImage(message.text, messages.slice(0, index));
@@ -972,27 +963,24 @@ export function ConversationHistory({
         <p id="chat-guidance" className="visually-hidden">
           Enter to send or steer the active reply; Ctrl+Enter queues. Shift+Enter adds a new line.
         </p>
-        {(screenShare?.sharing || camera?.sharing) && (
-          <p className="composer-live" role="status">
-            <span className="composer-live-dot" aria-hidden="true" />
-            <span>{screenShare?.sharing && camera?.sharing ? 'Screen and camera shared with Jarvis' : screenShare?.sharing ? 'Screen shared with Jarvis' : 'Camera on for Jarvis'}</span>
-            {screenShare?.sharing && <button type="button" className="composer-live-stop" onClick={() => screenShare.stop()}>Stop screen</button>}
-            {camera?.sharing && <button type="button" className="composer-live-stop" onClick={() => camera.stop()}>Camera off</button>}
-          </p>
-        )}
+        {screenShare?.sharing && <div className="composer-live">
+          {screenShare?.sharing && <div className="camera-status">
+            <span role="status">Screen shared with Jarvis</span>
+            <button type="button" className="composer-live-stop" onClick={() => screenShare.stop()}>Stop screen</button>
+          </div>}
+        </div>}
         {screenShare?.error && <p className="composer-status chat-error" role="alert">{screenShare.error}</p>}
-        {camera?.error && <p className="composer-status chat-error" role="alert">{camera.error}</p>}
         {(screenShare?.inspecting || camera?.inspecting) &&
           <p className="composer-status" role="status">{camera?.inspecting ? 'Looking at camera…' : 'Looking at screen…'}</p>}
-        {visionContext && visionContext.sessionId === session?.id &&
-          <p className="composer-status" role="status">{visionContext.source === 'camera' ? 'Camera' : 'Screen'} context is ready for the next message; it will not be saved in conversation history.</p>}
       </form>
       </div>
       {historyError && (
         <ConversationToast notification={{ id: historyErrorId, message: historyError, error: true }}
           onDismiss={dismissHistoryError} voiceActive={voiceActive}
-          action={{ label: 'Retry', onSelect: messages.length === 0 ? retry : () => void loadOlder() }} />
+          action={{ label: 'Retry', onSelect: historyErrorSource === 'latest' ? retry : () => void loadOlder() }} />
       )}
+      {!voiceActive && camera?.observationNotice &&
+        <CameraObservationToast key={camera.observationNotice} message={camera.observationNotice} />}
     </section>
   );
 }

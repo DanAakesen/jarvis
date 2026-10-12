@@ -8,6 +8,8 @@ import { VoiceStageContext } from './voice-stage-context';
 import { VoiceControls } from './VoiceControls';
 import { SessionCommandRegistryContext, applySessionCommand, createSessionCommandRegistry } from './session-commands';
 import { publishVoiceWake, resetWakeForTests, useWakeStatus } from './wake-store';
+import type { VisualResult } from './visual-context';
+import { VisionInspectionError } from './screen-sharing';
 
 const clients = vi.hoisted(() => ({
   instances: [] as Array<{
@@ -16,7 +18,9 @@ const clients = vi.hoisted(() => ({
       start: ReturnType<typeof vi.fn>;
       stop: ReturnType<typeof vi.fn>;
       setMuted: ReturnType<typeof vi.fn>;
+      setCameraState: ReturnType<typeof vi.fn>;
       sendScreenContext: ReturnType<typeof vi.fn>;
+      sendScreenContextUnavailable: ReturnType<typeof vi.fn>;
       retryMicrophone: ReturnType<typeof vi.fn>;
       playbackLevel: ReturnType<typeof vi.fn>;
       inputLevel: ReturnType<typeof vi.fn>;
@@ -28,7 +32,9 @@ vi.mock('./voice-client', () => ({
   BrowserVoiceClient: class {
     readonly start = vi.fn();
     readonly setMuted = vi.fn();
+    readonly setCameraState = vi.fn();
     readonly sendScreenContext = vi.fn();
+    readonly sendScreenContextUnavailable = vi.fn();
     readonly retryMicrophone = vi.fn(async () => {});
     readonly playbackLevel = vi.fn(() => 0.4);
     readonly inputLevel = vi.fn(() => 0.2);
@@ -77,6 +83,10 @@ type Options = {
   onStatus: (status: string, message: string) => void;
   onMicrophoneState: (state: string) => void;
   onSessionReady: (sessionId: string) => void;
+  onVisionRequest: (source: 'camera' | 'screen', transcript: string, itemId?: string) => void;
+  onVisionLimit: (limit: { itemId: string; code: 'frame_rate_limited' | 'daily_limit' | 'budget_exhausted' | 'budget_unavailable' }) => void;
+  onVisualResult: (result: VisualResult & { itemId?: string }) => void;
+  onVisualResultError: (itemId?: string) => void;
 };
 
 function startVoice() {
@@ -98,6 +108,229 @@ beforeEach(() => {
 });
 
 describe('VoiceControls', () => {
+  it('reports only matching voice visual-path evidence and ignores stale or uncorrelated results', async () => {
+    const camera = { sharing: true, conversation: true, starting: false, inspecting: false, error: '',
+      start: vi.fn(async () => {}), stop: vi.fn(), inspect: vi.fn(), inspectTurn: vi.fn(async () => ({
+        source: 'camera' as const, capturedAt: '2026-10-11T19:23:33.000Z', question: 'And now?',
+        description: 'Current caption.', frameId: 'private_handle',
+      })) };
+    const props = { client: {} as PublicClientApplication, config };
+    const view = render(<VoiceControls {...props} camera={camera} />);
+    const { options, listen } = startVoice();
+    listen();
+    act(() => options.onSessionReady('42'));
+    await act(async () => { options.onVisionRequest('camera', 'And now?', 'current-item'); });
+    expect(screen.queryByText('Image supplied to Jarvis for this turn.')).toBeNull();
+    act(() => options.onVisualResult({ visualPath: 'image', itemId: 'stale-item' }));
+    act(() => options.onVisualResult({ visualPath: 'image' }));
+    expect(screen.queryByText('Image supplied to Jarvis for this turn.')).toBeNull();
+    act(() => options.onVisualResultError('stale-item'));
+    expect(screen.queryByText('Jarvis could not confirm the visual input for this turn.')).toBeNull();
+    act(() => options.onVisualResultError('current-item'));
+    expect(screen.getByText('Jarvis could not confirm the visual input for this turn.')).not.toBeNull();
+    act(() => options.onVisualResult({ visualPath: 'caption', visualReason: 'image_input_unverified', itemId: 'current-item' }));
+    expect(screen.getByText('Caption only - no image supplied to Jarvis for this turn. Model image support has not been verified.')).not.toBeNull();
+    act(() => options.onVisualResult({ visualPath: 'image', itemId: 'current-item' }));
+    expect(screen.queryByText('Image supplied to Jarvis for this turn.')).toBeNull();
+    await act(async () => { options.onVisionRequest('camera', 'And now?', 'next-item'); });
+    view.rerender(<VoiceControls {...props} camera={{ ...camera, sharing: false }} />);
+    view.rerender(<VoiceControls {...props} camera={camera} />);
+    act(() => options.onVisualResult({ visualPath: 'image', itemId: 'next-item' }));
+    expect(screen.queryByText('Image supplied to Jarvis for this turn.')).toBeNull();
+  });
+
+  it.each(['switch', 'reconnect'] as const)('ignores visual evidence after a camera %s', async transition => {
+    const camera = { sharing: true, conversation: true, starting: false, inspecting: false, error: '',
+      start: vi.fn(async () => {}), stop: vi.fn(), inspect: vi.fn(), inspectTurn: vi.fn(async () => ({
+        source: 'camera' as const, capturedAt: '2026-10-11T19:23:33.000Z', description: 'Current caption.',
+      })) };
+    const props = { client: {} as PublicClientApplication, config };
+    const view = render(<VoiceControls {...props} camera={camera} />);
+    const { options, listen } = startVoice();
+    listen();
+    act(() => options.onSessionReady('42'));
+    await act(async () => { options.onVisionRequest('camera', 'And now?', 'current-item'); });
+    if (transition === 'switch') {
+      const previewStream: MediaStream = Object.assign(new EventTarget(), {
+        id: 'switched-stream', active: true, onaddtrack: null, onremovetrack: null,
+        addTrack: vi.fn(), removeTrack: vi.fn(), clone: vi.fn<() => MediaStream>(),
+        getAudioTracks: () => [], getVideoTracks: () => [], getTracks: () => [], getTrackById: () => null,
+      });
+      view.rerender(<VoiceControls {...props} camera={{ ...camera, previewStream }} />);
+    }
+    else act(() => options.onStatus('reconnecting', 'Reconnecting.'));
+    act(() => options.onVisualResult({ visualPath: 'image', itemId: 'current-item' }));
+    expect(screen.queryByText('Image supplied to Jarvis for this turn.')).toBeNull();
+  });
+
+  it.each(['en', 'da'] as const)('attaches fresh image context to correlated %s turns and synchronises camera state', async (language) => {
+    const visual = { source: 'camera' as const, capturedAt: '2026-10-11T19:23:33.000Z',
+      question: 'And now?', description: 'Four fingers.', frameId: 'single_use_fixture' };
+    const camera = { sharing: false, conversation: true, starting: false, inspecting: false, error: '',
+      start: vi.fn(async () => {}), stop: vi.fn(), inspect: vi.fn(), inspectTurn: vi.fn(async () => visual) };
+    const props = { client: {} as PublicClientApplication, config, language };
+    const view = render(<VoiceControls {...props} camera={camera} />);
+    const { instance, options, listen } = startVoice();
+    expect(instance.client.setCameraState).toHaveBeenLastCalledWith(false);
+    listen();
+    act(() => options.onSessionReady('42'));
+    view.rerender(<VoiceControls {...props} camera={{ ...camera, sharing: true }} />);
+    expect(instance.client.setCameraState).toHaveBeenLastCalledWith(true);
+    await act(async () => { options.onVisionRequest('camera', 'And now?', 'item-1'); });
+    expect(camera.inspectTurn).toHaveBeenCalledWith('42', 'And now?', expect.any(AbortSignal), 'item-1');
+    expect(instance.client.sendScreenContext).toHaveBeenCalledWith('Four fingers.', undefined, 'item-1', visual);
+    expect(camera.inspect).not.toHaveBeenCalled();
+    act(() => options.onVisionLimit({ itemId: 'item-1', code: 'frame_rate_limited' }));
+    expect(screen.getByText('Voice camera is rate-limited. Jarvis has no fresh frame for this turn.')).not.toBeNull();
+    act(() => options.onVisionLimit({ itemId: 'obsolete-item', code: 'daily_limit' }));
+    expect(screen.queryByText('Daily camera limit reached in voice. Jarvis has no fresh frame for this turn.')).toBeNull();
+    await act(async () => { options.onVisionRequest('camera', 'And now?', 'item-1'); });
+    expect(camera.inspectTurn).toHaveBeenCalledOnce();
+    fireEvent.click(screen.getByRole('button', { name: 'More options' }));
+    expect(screen.queryByRole('menuitem', { name: 'Look at camera' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'More options' }));
+    view.rerender(<VoiceControls {...props} camera={camera} />);
+    expect(instance.client.setCameraState).toHaveBeenLastCalledWith(false);
+  });
+
+  it.each(['budget_exhausted', 'budget_unavailable'] as const)('shows only the current camera item %s without echoing a relay event', async code => {
+    const camera = { sharing: true, conversation: true, starting: false, inspecting: false, error: '',
+      start: vi.fn(async () => {}), stop: vi.fn(), inspect: vi.fn(), inspectTurn: vi.fn(async () => ({
+        source: 'camera' as const, capturedAt: '2026-10-11T19:23:33.000Z', description: 'Current caption.',
+      })) };
+    render(<VoiceControls client={{} as PublicClientApplication} config={config} camera={camera} />);
+    const { instance, options, listen } = startVoice();
+    listen();
+    act(() => options.onSessionReady('42'));
+    await act(async () => { options.onVisionRequest('camera', 'And now?', 'current-item'); });
+    const text = code === 'budget_exhausted'
+      ? 'Camera image budget reached in voice. No image was supplied for this turn.'
+      : 'Camera image budget could not be checked. No image was supplied for this turn.';
+    act(() => options.onVisionLimit({ itemId: 'obsolete-item', code }));
+    expect(screen.queryByText(text)).toBeNull();
+    act(() => options.onVisionLimit({ itemId: 'current-item', code }));
+    expect(screen.getByText(text)).not.toBeNull();
+    expect(instance.client.sendScreenContextUnavailable).not.toHaveBeenCalled();
+    expect(instance.client.sendScreenContext).toHaveBeenCalledOnce();
+    act(() => options.onVisualResult({ itemId: 'current-item', visualPath: 'caption', visualReason: code }));
+    act(() => options.onVisionLimit({ itemId: 'current-item', code }));
+    expect(screen.queryByText(text)).toBeNull();
+  });
+
+  it('releases a voice hold with the typed capture budget denial and no cached image', async () => {
+    const camera = { sharing: true, conversation: true, starting: false, inspecting: false, error: '',
+      start: vi.fn(async () => {}), stop: vi.fn(), inspect: vi.fn(),
+      inspectTurn: vi.fn(async () => { throw new VisionInspectionError('Daily vision budget reached.', 429, 'budget_exhausted'); }) };
+    render(<VoiceControls client={{} as PublicClientApplication} config={config} camera={camera} />);
+    const { instance, options, listen } = startVoice();
+    listen();
+    act(() => options.onSessionReady('42'));
+    await act(async () => { options.onVisionRequest('camera', 'And now?', 'budget-item'); });
+    expect(instance.client.sendScreenContextUnavailable).toHaveBeenCalledExactlyOnceWith({
+      itemId: 'budget-item', reason: 'budget_exhausted',
+    });
+    expect(instance.client.sendScreenContext).not.toHaveBeenCalled();
+    expect(screen.getByText('Daily vision budget reached.')).not.toBeNull();
+  });
+
+  it('releases a correlated voice hold after ten seconds and ignores a late frame', async () => {
+    vi.useFakeTimers();
+    try {
+      let finish!: (value: { source: 'camera'; description: string; capturedAt: string }) => void;
+      const camera = { sharing: true, conversation: true, starting: false, inspecting: false, error: '',
+        start: vi.fn(async () => {}), stop: vi.fn(), inspect: vi.fn(),
+        inspectTurn: vi.fn(() => new Promise<{ source: 'camera'; description: string; capturedAt: string }>((resolve) => { finish = resolve; })) };
+      render(<VoiceControls client={{} as PublicClientApplication} config={config} camera={camera} />);
+      const { instance, options, listen } = startVoice();
+      listen();
+      act(() => options.onSessionReady('42'));
+      act(() => options.onVisionRequest('camera', 'And now?', 'item-timeout'));
+      await act(async () => { await vi.advanceTimersByTimeAsync(10_000); });
+      expect(instance.client.sendScreenContextUnavailable).toHaveBeenCalledWith({ itemId: 'item-timeout', reason: 'timeout' });
+      expect(screen.getByText('Camera inspection timed out. Jarvis has no fresh frame for this turn.')).not.toBeNull();
+      await act(async () => { finish({ source: 'camera', description: 'Too late.', capturedAt: '2026-10-11T19:23:33.000Z' }); });
+      expect(instance.client.sendScreenContext).not.toHaveBeenCalled();
+      expect(instance.client.sendScreenContextUnavailable).toHaveBeenCalledOnce();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('keeps a camera-on voice turn intact when screen inspection is requested', async () => {
+    const visual = { source: 'camera' as const, question: 'And now?', capturedAt: '2026-10-11T19:23:33.000Z', description: 'Current frame.' };
+    let finish!: (value: typeof visual) => void;
+    const camera = { sharing: true, conversation: true, starting: false, inspecting: false, error: '',
+      start: vi.fn(async () => {}), stop: vi.fn(), inspect: vi.fn(),
+      inspectTurn: vi.fn<(session: string, question: string, signal?: AbortSignal) => Promise<typeof visual>>(() =>
+        new Promise<typeof visual>((resolve) => { finish = resolve; })) };
+    const screenShare = { sharing: true, starting: false, inspecting: false, error: '',
+      start: vi.fn(async () => {}), stop: vi.fn(), inspect: vi.fn(async () => ({ description: 'Shared screen.' })) };
+    render(<VoiceControls client={{} as PublicClientApplication} config={config} camera={camera} screenShare={screenShare} />);
+    const { instance, options, listen } = startVoice();
+    listen();
+    act(() => options.onSessionReady('42'));
+    act(() => options.onVisionRequest('camera', 'And now?', 'camera-turn'));
+    fireEvent.click(screen.getByRole('button', { name: 'More options' }));
+    expect(screen.getByRole('menuitem', { name: 'Look at screen' }).getAttribute('aria-disabled')).toBe('true');
+    expect(screen.getByText('Turn off the camera to inspect the shared screen in voice.')).not.toBeNull();
+    await act(async () => { options.onVisionRequest('screen', 'Look at screen', 'screen-turn'); });
+    expect(screenShare.inspect).not.toHaveBeenCalled();
+    expect(camera.inspectTurn.mock.calls[0]?.[2]?.aborted).toBe(false);
+    await act(async () => { finish(visual); });
+    expect(instance.client.sendScreenContext).toHaveBeenCalledWith('Current frame.', undefined, 'camera-turn', visual);
+    expect(instance.client.sendScreenContextUnavailable).not.toHaveBeenCalled();
+  });
+
+  it.each(['success', 'failure'] as const)('cancels legacy screen inspection on camera activation without sending late %s', async outcome => {
+    let finish!: (value: { description: string }) => void;
+    let fail!: (reason: Error) => void;
+    const screenShare = { sharing: true, starting: false, inspecting: false, error: '',
+      start: vi.fn(async () => {}), stop: vi.fn(), inspect: vi.fn<(session: string, feedback?: string, signal?: AbortSignal) => Promise<{ description: string }>>(() =>
+        new Promise<{ description: string }>((resolve, reject) => { finish = resolve; fail = reject; })) };
+    const camera = { sharing: false, conversation: true, starting: false, inspecting: false, error: '',
+      start: vi.fn(async () => {}), stop: vi.fn(), inspect: vi.fn() };
+    const props = { client: {} as PublicClientApplication, config, screenShare };
+    const view = render(<VoiceControls {...props} camera={camera} />);
+    const { instance, options, listen } = startVoice();
+    listen();
+    act(() => options.onSessionReady('42'));
+    act(() => options.onVisionRequest('screen', 'Look at screen', 'screen-turn'));
+    view.rerender(<VoiceControls {...props} camera={{ ...camera, sharing: true }} />);
+    expect(screenShare.inspect.mock.calls[0]?.[2]?.aborted).toBe(true);
+    await act(async () => {
+      if (outcome === 'success') finish({ description: 'Obsolete screen.' });
+      else fail(new Error('Obsolete screen failure.'));
+    });
+    expect(instance.client.sendScreenContext).not.toHaveBeenCalled();
+    expect(instance.client.sendScreenContextUnavailable).not.toHaveBeenCalled();
+    expect(screen.queryByText('Obsolete screen failure.')).toBeNull();
+  });
+
+  it('cancels obsolete voice inspection and refuses missing item correlation', async () => {
+    const visual = { source: 'camera' as const, capturedAt: '2026-10-11T19:23:33.000Z', description: 'Current frame.' };
+    let late!: (value: typeof visual) => void;
+    const camera = { sharing: true, conversation: true, starting: false, inspecting: false, error: '',
+      start: vi.fn(async () => {}), stop: vi.fn(), inspect: vi.fn(),
+      inspectTurn: vi.fn().mockImplementationOnce(() => new Promise<typeof visual>((resolve) => { late = resolve; }))
+        .mockResolvedValueOnce(visual) };
+    render(<VoiceControls client={{} as PublicClientApplication} config={config} camera={camera} />);
+    const { instance, options, listen } = startVoice();
+    listen();
+    act(() => options.onSessionReady('42'));
+    act(() => options.onVisionRequest('camera', 'First?', 'item-old'));
+    await act(async () => { options.onVisionRequest('camera', 'Next?', 'item-new'); });
+    expect(camera.inspectTurn.mock.calls[0]?.[2].aborted).toBe(true);
+    await act(async () => { late(visual); });
+    expect(instance.client.sendScreenContext).toHaveBeenCalledOnce();
+    expect(instance.client.sendScreenContext.mock.calls[0]?.[2]).toBe('item-new');
+    expect(instance.client.sendScreenContextUnavailable).not.toHaveBeenCalled();
+    await act(async () => { options.onVisionRequest('camera', 'Duplicate old turn?', 'item-old'); });
+    expect(camera.inspectTurn).toHaveBeenCalledTimes(2);
+    await act(async () => { options.onVisionRequest('camera', 'Missing?'); });
+    expect(screen.getByText('The voice turn has no camera correlation ID or question. No frame was sent.')).not.toBeNull();
+    expect(camera.inspectTurn).toHaveBeenCalledTimes(2);
+  });
+
   it('ends the running voice session from an agent session command and refuses when none is running', async () => {
     const registry = createSessionCommandRegistry();
     const end = { commandId: 'end-1', operation: 'session', action: 'voice', value: 'end' } as const;
@@ -245,7 +478,7 @@ describe('VoiceControls', () => {
     expect(cameraItem.getAttribute('aria-disabled')).toBeNull();
     fireEvent.click(screen.getByRole('menuitem', { name: 'Look at screen' }));
     expect(screen.queryByRole('menu')).toBeNull();
-    expect(screenShare.inspect).toHaveBeenCalledWith('42', 'caller');
+    expect(screenShare.inspect).toHaveBeenCalledWith('42', 'caller', expect.any(AbortSignal));
   });
 
   it('starts screen and camera capture from More without inspecting a frame, then offers stop controls', async () => {
@@ -475,10 +708,97 @@ describe('VoiceControls', () => {
     act(() => options.onSessionReady('42'));
     options.onVisionRequest('camera', 'What am I holding?');
 
-    await waitFor(() => expect(camera.inspect).toHaveBeenCalledWith('42', 'caller'));
+    await waitFor(() => expect(camera.inspect).toHaveBeenCalledWith('42', 'caller', expect.any(AbortSignal)));
     expect(instance.client.sendScreenContext).toHaveBeenCalledWith('A red mug.', undefined);
     act(() => options.onStatus('stopped', 'Voice is off.'));
     expect(camera.stop).toHaveBeenCalledOnce();
+  });
+
+  it('uses the current camera when it is enabled after voice starts', async () => {
+    const initialCamera = { sharing: false, starting: false, inspecting: false, error: '',
+      start: vi.fn(async () => {}), stop: vi.fn(), inspect: vi.fn(async () => ({ description: 'Old camera.' })) };
+    const enabledCamera = { ...initialCamera, sharing: true, facing: 'environment' as const,
+      stop: vi.fn(), inspect: vi.fn(async () => ({ description: 'Current camera.' })) };
+    const view = render(<VoiceControls client={{} as PublicClientApplication} config={config} camera={initialCamera} />);
+    const { instance, options, listen } = startVoice();
+    listen();
+    act(() => options.onSessionReady('42'));
+    view.rerender(<VoiceControls client={{} as PublicClientApplication} config={config} camera={enabledCamera} />);
+    const onVisionRequest = (instance.options as { onVisionRequest: (source: 'camera') => void }).onVisionRequest;
+    await act(async () => { onVisionRequest('camera'); });
+    expect(enabledCamera.inspect).toHaveBeenCalledWith('42', 'caller', expect.any(AbortSignal));
+    expect(initialCamera.inspect).not.toHaveBeenCalled();
+    expect(instance.client.sendScreenContext).toHaveBeenCalledWith('Current camera.', undefined);
+    expect(screen.queryByText('Back camera on')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Camera off' })).toBeNull();
+    act(() => options.onStatus('stopped', 'Voice is off.'));
+    expect(enabledCamera.stop).toHaveBeenCalledOnce();
+    expect(initialCamera.stop).not.toHaveBeenCalled();
+  });
+
+  it('resets camera idle shutdown on speech and unrelated turns using the current capture only', () => {
+    const camera = { sharing: true, starting: false, inspecting: false, error: '',
+      start: vi.fn(async () => {}), stop: vi.fn(), inspect: vi.fn(), recordActivity: vi.fn() };
+    const view = render(<VoiceControls client={{} as PublicClientApplication} config={config} camera={camera} />);
+    const { instance, options, listen } = startVoice();
+    const onUserTurn = (instance.options as { onUserTurn: (text: string) => void }).onUserTurn;
+    listen();
+    expect(camera.recordActivity).toHaveBeenCalledOnce();
+    act(() => onUserTurn('How is the weather?'));
+    expect(camera.recordActivity).toHaveBeenCalledTimes(2);
+    const current = { ...camera, recordActivity: vi.fn() };
+    view.rerender(<VoiceControls client={{} as PublicClientApplication} config={config} camera={current} />);
+    act(() => onUserTurn('Tell me more.'));
+    expect(current.recordActivity).toHaveBeenCalledOnce();
+    expect(camera.recordActivity).toHaveBeenCalledTimes(2);
+    act(() => options.onStatus('stopped', 'Voice is off.'));
+    act(() => onUserTurn('Late transcript.'));
+    expect(current.recordActivity).toHaveBeenCalledOnce();
+  });
+
+  it('reports camera failure to Dan and the voice transport rather than claiming it saw a frame', async () => {
+    const camera = { sharing: true, starting: false, inspecting: false, error: '', facing: 'user' as const,
+      start: vi.fn(async () => {}), stop: vi.fn(), inspect: vi.fn(async () => { throw new Error('Fixture capture failed.'); }) };
+    render(<VoiceControls client={{} as PublicClientApplication} config={config} camera={camera} />);
+    const { instance, options, listen } = startVoice();
+    listen();
+    act(() => options.onSessionReady('42'));
+    const onVisionRequest = (instance.options as { onVisionRequest: (source: 'camera') => void }).onVisionRequest;
+    act(() => onVisionRequest('camera'));
+    expect(await screen.findByText('Fixture capture failed.')).not.toBeNull();
+    expect(instance.client.sendScreenContext).not.toHaveBeenCalled();
+    expect(instance.client.sendScreenContextUnavailable).toHaveBeenCalledOnce();
+    expect(screen.queryByRole('button', { name: 'Look now' })).toBeNull();
+  });
+
+  it('makes a missing vision session visible instead of silently dropping the request', async () => {
+    render(<VoiceControls client={{} as PublicClientApplication} config={config} />);
+    const { instance, listen } = startVoice();
+    listen();
+    const onVisionRequest = (instance.options as { onVisionRequest: (source: 'camera') => void }).onVisionRequest;
+    act(() => onVisionRequest('camera'));
+    expect(await screen.findByText('Voice is not ready to inspect a frame. Wait for the connection and try again.')).not.toBeNull();
+    expect(instance.client.sendScreenContext).not.toHaveBeenCalled();
+  });
+
+  it('does not forward an obsolete capture failure after a newer request succeeds', async () => {
+    let failFirst!: (reason: Error) => void;
+    const camera = { sharing: true, starting: false, inspecting: false, error: '',
+      start: vi.fn(async () => {}), stop: vi.fn(),
+      inspect: vi.fn().mockImplementationOnce(() => new Promise((_resolve, reject) => { failFirst = reject; }))
+        .mockResolvedValueOnce({ description: 'Latest frame.' }) };
+    render(<VoiceControls client={{} as PublicClientApplication} config={config} camera={camera} />);
+    const { instance, options, listen } = startVoice();
+    listen();
+    act(() => options.onSessionReady('42'));
+    const onVisionRequest = (instance.options as { onVisionRequest: (source: 'camera') => void }).onVisionRequest;
+    act(() => onVisionRequest('camera'));
+    await act(async () => { onVisionRequest('camera'); });
+    await act(async () => { failFirst(new Error('Superseded capture.')); });
+    expect(instance.client.sendScreenContext).toHaveBeenCalledOnce();
+    expect(instance.client.sendScreenContext).toHaveBeenCalledWith('Latest frame.', undefined);
+    expect(instance.client.sendScreenContextUnavailable).not.toHaveBeenCalled();
+    expect(screen.queryByText('Superseded capture.')).toBeNull();
   });
 
   describe('wake word', () => {

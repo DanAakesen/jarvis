@@ -85,6 +85,166 @@ afterEach(() => {
 });
 
 describe('BrowserVoiceClient', () => {
+  it('accepts only typed relay visual-path evidence and projects no image data', async () => {
+    const sockets: MockSocket[] = [];
+    const onVisualResult = vi.fn();
+    const onVisualResultError = vi.fn();
+    const client = new BrowserVoiceClient({
+      backendUrl: 'https://api.example.com', getAccessToken: async () => 'token', onStatus: () => {},
+      onVisualResult, onVisualResultError, createAudio: () => audioAdapter(),
+      createSocket: (url, protocols) => { const socket = new MockSocket(url, protocols); sockets.push(socket); return socket; },
+    });
+    clients.push(client);
+    client.start();
+    await until(() => sockets[0]?.readyState === 1);
+    const socket = sockets[0]!;
+    for (const value of [
+      { visualPath: 'video' }, { visualPath: 'image', itemId: 'invalid item' },
+      { visualPath: 'caption', visualReason: 'x'.repeat(65) }, { frameId: 'reference-alone' },
+    ]) socket.receive({ type: 'jarvis.visual_context', ...value });
+    expect(onVisualResult).not.toHaveBeenCalled();
+    expect(onVisualResultError).toHaveBeenCalledTimes(4);
+    socket.receive({ type: 'jarvis.visual_context', itemId: 'item_1', visualPath: 'caption',
+      visualReason: 'image_input_unverified', frameId: 'private-handle', frame: 'private-image' });
+    expect(onVisualResult).toHaveBeenLastCalledWith({ itemId: 'item_1', visualPath: 'caption', visualReason: 'image_input_unverified' });
+    socket.receive({ type: 'jarvis.visual_context', itemId: 'item_2', visualPath: 'image' });
+    expect(onVisualResult).toHaveBeenLastCalledWith({ itemId: 'item_2', visualPath: 'image' });
+    expect(socket.readyState).toBe(1);
+  });
+
+  it.each([
+    ['en', 'budget_exhausted'], ['da', 'budget_exhausted'],
+    ['en', 'budget_unavailable'], ['da', 'budget_unavailable'],
+  ] as const)('preserves correlated %s voice %s feedback without echoing it', async (language, reason) => {
+    const sockets: MockSocket[] = [];
+    const onVisionLimit = vi.fn();
+    const client = new BrowserVoiceClient({
+      backendUrl: 'https://api.example.com', getAccessToken: async () => 'token', language,
+      onStatus: () => {}, onVisionLimit, createAudio: () => audioAdapter(),
+      createSocket: (url, protocols) => { const socket = new MockSocket(url, protocols); sockets.push(socket); return socket; },
+    });
+    clients.push(client);
+    client.setCameraState(true);
+    client.start();
+    await until(() => sockets[0]?.readyState === 1);
+    const socket = sockets[0]!;
+    socket.receive({ type: 'jarvis.session.ready', sessionId: '41' });
+    const sent = socket.sent.length;
+    socket.receive({ type: 'jarvis.screen.context.unavailable', itemId: 'invalid item', reason });
+    socket.receive({ type: 'jarvis.screen.context.unavailable', itemId: 'current_item', reason, retryAfterMs: -1 });
+    expect(onVisionLimit).not.toHaveBeenCalled();
+    socket.receive({ type: 'jarvis.screen.context.unavailable', itemId: 'current_item', reason });
+    expect(onVisionLimit).toHaveBeenCalledExactlyOnceWith({ itemId: 'current_item', code: reason });
+    expect(socket.sent).toHaveLength(sent);
+    if (reason === 'budget_exhausted') {
+      client.sendScreenContextUnavailable({ itemId: 'current_item', reason });
+      expect(socket.sent.at(-1)).toEqual({ type: 'jarvis.screen.context.unavailable', itemId: 'current_item', reason });
+    }
+    client.setCameraState(false);
+    socket.receive({ type: 'jarvis.screen.context.unavailable', itemId: 'current_item', reason });
+    expect(onVisionLimit).toHaveBeenCalledOnce();
+    expect(socket.readyState).toBe(1);
+  });
+
+  it.each(['en', 'da'] as const)('prepares correlated camera turns and resends camera state after %s reconnect', async (language) => {
+    const sockets: MockSocket[] = [];
+    const onUserTurn = vi.fn();
+    const onVisionRequest = vi.fn();
+    const onVisionLimit = vi.fn();
+    const client = new BrowserVoiceClient({
+      backendUrl: 'https://api.example.com',
+      getAccessToken: async () => 'token',
+      language,
+      onStatus: () => {},
+      onUserTurn,
+      onVisionRequest,
+      onVisionLimit,
+      createAudio: () => audioAdapter(),
+      delay: async () => {},
+      createSocket: (url, protocols) => {
+        const socket = new MockSocket(url, protocols);
+        sockets.push(socket);
+        return socket;
+      },
+    });
+    clients.push(client);
+    client.setCameraState(true);
+    client.start();
+    await until(() => sockets[0]?.readyState === 1);
+    const first = sockets[0];
+    if (!first) throw new Error('Voice socket was not created.');
+    first.receive({ type: 'jarvis.session.ready', sessionId: '41' });
+    expect(first.sent.at(-1)).toEqual({ type: 'jarvis.camera.state', on: true });
+    client.setCameraState(true);
+    expect(first.sent.filter((event) => event.type === 'jarvis.camera.state')).toHaveLength(1);
+    first.receive({ type: 'conversation.item.input_audio_transcription.completed', item_id: 'item_fingers',
+      transcript: 'How many fingers am I holding up?' });
+    first.receive({ type: 'conversation.item.input_audio_transcription.completed', item_id: 'item_followup',
+      transcript: 'And now?' });
+    expect(onUserTurn.mock.calls).toEqual([
+      ['How many fingers am I holding up?', 'item_fingers'],
+      ['And now?', 'item_followup'],
+    ]);
+    expect(onVisionRequest.mock.calls).toEqual([
+      ['camera', 'How many fingers am I holding up?', 'item_fingers'],
+      ['camera', 'And now?', 'item_followup'],
+    ]);
+    const visual = {
+      source: 'camera' as const, capturedAt: '2026-10-11T20:06:00.000Z',
+      question: 'How many fingers am I holding up?', frameId: 'opaque_frame-123',
+    };
+    client.sendScreenContext('Three fingers.', undefined, 'item_fingers', visual);
+    client.sendScreenContextUnavailable({ itemId: 'item_followup', reason: 'frame_rate_limited' });
+    expect(first.sent.at(-2)).toEqual({
+      type: 'jarvis.screen.context', description: 'Three fingers.', itemId: 'item_fingers', ...visual,
+    });
+    expect(first.sent.at(-1)).toEqual({
+      type: 'jarvis.screen.context.unavailable', itemId: 'item_followup', reason: 'frame_rate_limited',
+    });
+    expect(first.readyState).toBe(1);
+    first.receive({ type: 'jarvis.screen.context.unavailable', itemId: 'item_followup',
+      reason: 'frame_rate_limited', retryAfterMs: 3_000 });
+    expect(onVisionLimit).toHaveBeenCalledWith({ itemId: 'item_followup', code: 'frame_rate_limited', retryAfterMs: 3_000 });
+    first.receive({ type: 'jarvis.screen.context.unavailable', itemId: 'item_followup',
+      reason: 'daily_limit', retryAfterMs: -1 });
+    expect(onVisionLimit).toHaveBeenCalledOnce();
+    expect(() => client.sendScreenContext('Image.', undefined, 'item.bad')).toThrow(/not ready/);
+    const sentCount = first.sent.length;
+    expect(() => client.sendScreenContext('Image.', undefined, undefined, visual)).toThrow(/not ready/);
+    expect(() => client.sendScreenContext('Image.', undefined, 'item_fingers', { ...visual, frameId: 'bad/id' }))
+      .toThrow(/invalid image reference/);
+    expect(() => client.sendScreenContext('Image.', undefined, 'item_fingers', { ...visual, capturedAt: 'invalid' }))
+      .toThrow(/valid capture time/);
+    expect(first.sent).toHaveLength(sentCount);
+    client.sendScreenContext(undefined, undefined, 'item_fingers', visual);
+    expect(first.sent.at(-1)).toEqual({ type: 'jarvis.screen.context', itemId: 'item_fingers', ...visual });
+    expect(first.sent.at(-1)).not.toHaveProperty('description');
+    expect(() => client.sendScreenContext(undefined)).toThrow(/not ready/);
+    first.disconnect();
+    await until(() => sockets[1]?.readyState === 1);
+    const second = sockets[1];
+    if (!second) throw new Error('Voice socket did not reconnect.');
+    second.receive({ type: 'jarvis.session.ready', sessionId: '42' });
+    expect(second.sent.at(-1)).toEqual({ type: 'jarvis.camera.state', on: true });
+    client.setCameraState(false);
+    expect(second.sent.at(-1)).toEqual({ type: 'jarvis.camera.state', on: false });
+    second.receive({ type: 'jarvis.screen.context.unavailable', itemId: 'item_weather', reason: 'daily_limit' });
+    expect(onVisionLimit).toHaveBeenCalledOnce();
+    onVisionRequest.mockClear();
+    second.receive({ type: 'conversation.item.input_audio_transcription.completed', item_id: 'item_weather',
+      transcript: 'How is the weather?' });
+    expect(onVisionRequest).not.toHaveBeenCalled();
+    second.receive({ type: 'conversation.item.input_audio_transcription.completed', item_id: 'item_camera_off',
+      transcript: 'What do you see?' });
+    expect(onVisionRequest).not.toHaveBeenCalled();
+    client.sendScreenContextUnavailable({ itemId: 'item_weather', reason: 'vision_failed' });
+    expect(second.sent.at(-1)).toEqual({
+      type: 'jarvis.screen.context.unavailable', itemId: 'item_weather', reason: 'vision_failed',
+    });
+    expect(() => client.sendScreenContext('Image.', undefined, ' ')).toThrow(/not ready/);
+    expect(() => client.sendScreenContextUnavailable({ itemId: 'x'.repeat(129), reason: 'capture_failed' })).toThrow(/not ready/);
+  });
+
   it('requests the microphone from Start voice and captures automatically after the handshake', async () => {
     const statuses: string[] = [];
     const microphone: string[] = [];
@@ -183,17 +343,19 @@ describe('BrowserVoiceClient', () => {
     expect(onSessionEnded).toHaveBeenCalledOnce();
   });
 
-  it('routes requested camera and screen frames without forwarding unrelated transcripts', async () => {
+  it.each(['en', 'da'] as const)('routes camera and screen requests through the %s voice transport', async (language) => {
     let socket: MockSocket | undefined;
     const onSessionReady = vi.fn();
     const onVisionRequest = vi.fn();
+    const onUserTurn = vi.fn();
     const client = new BrowserVoiceClient({
       backendUrl: 'https://api.example.com',
       getAccessToken: async () => 'token',
-      language: 'en',
+      language,
       onStatus: () => {},
       onSessionReady,
       onVisionRequest,
+      onUserTurn,
       createAudio: () => audioAdapter(),
       createSocket: (url, protocols) => {
         socket = new MockSocket(url, protocols);
@@ -215,7 +377,19 @@ describe('BrowserVoiceClient', () => {
     });
     socket?.receive({
       type: 'conversation.item.input_audio_transcription.completed',
+      transcript: 'can you see anything?',
+    });
+    socket?.receive({
+      type: 'conversation.item.input_audio_transcription.completed',
+      transcript: 'Kan du se noget?',
+    });
+    socket?.receive({
+      type: 'conversation.item.input_audio_transcription.completed',
       transcript: 'Could you look at my screen?',
+    });
+    socket?.receive({
+      type: 'conversation.item.input_audio_transcription.completed',
+      transcript: 'Hvad kan du se på min skærm?',
     });
     socket?.receive({
       type: 'conversation.item.input_audio_transcription.completed',
@@ -228,10 +402,18 @@ describe('BrowserVoiceClient', () => {
     client.sendScreenContext('A form with a name field.', 'Contact form - Chrome');
 
     expect(onSessionReady).toHaveBeenCalledWith('41');
+    expect(socket?.sent.some((event) => event.type === 'jarvis.camera.state')).toBe(false);
+    expect(onUserTurn).toHaveBeenCalledTimes(8);
+    expect(onUserTurn).toHaveBeenLastCalledWith('How is the weather?');
+    socket?.receive({ type: 'conversation.item.input_audio_transcription.completed', transcript: '   ' });
+    expect(onUserTurn).toHaveBeenCalledTimes(8);
     expect(onVisionRequest.mock.calls).toEqual([
       ['camera', 'What am I holding?'],
       ['camera', 'Hvad holder jeg?'],
+      ['camera', 'can you see anything?'],
+      ['camera', 'Kan du se noget?'],
       ['screen', 'Could you look at my screen?'],
+      ['screen', 'Hvad kan du se på min skærm?'],
       ['screen', 'Fill this in with my name and submit after I confirm.'],
     ]);
     expect(socket?.sent.at(-1)).toEqual({

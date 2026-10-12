@@ -1,5 +1,25 @@
 # Architecture
 
+## Camera UI release (12 October 2026)
+
+Dan's 21:20 release approval supersedes earlier held-opt-in descriptions below.
+The browser camera owner uses `/screen/frames` with `mode: 'handle'` for camera
+conversation only. It validates `frameId`, `capturedAt`, question echo and
+optional turn correlation, and sends description-free `visualContext` to chat
+or `jarvis.screen.context` to the current EN/DA voice item. The deployed backend
+owns image delivery and same-frame caption fallback; the UI trusts only the
+returned visual-path evidence, never the presence of a handle.
+
+Frame-only results never enter the caption cache. Handles stay single-use,
+owner/session/turn-bound and expire after sixty seconds. Legacy `inspect()`
+remains caption-first and validates its description. Existing deadlines,
+cancellation, explicit limit errors and voice single-response correlation remain.
+Camera preview owns no upload loop and uses the existing workspace lifecycle;
+user turns, not rendering/docking, reset the ten-minute idle timer.
+Coordinator-reported live chat image input is accepted by Dan; live voice image
+delivery and physical-device acceptance are not inferred from synthetic checks.
+
+
 Jarvis is one backend with a shared core and one module per area, a static web app, Foundry agents for Jarvis and the coding sandboxes, and GitHub for code, CI, and releases. Phase 1 builds only the core and the Software Factory area. P0-01 provides the monorepo folders. P0-02 and P0-03 implement the web and backend skeletons. Statuses below distinguish implementation, design, and prototype evidence.
 
 - Requirements: [PRODUCT.md](../PRODUCT.md). Feature summaries: [features.md](features.md). Phases and tasks: [PLAN.md](../PLAN.md). Decisions and learnings (L1–L78): [decisions.md](decisions.md).

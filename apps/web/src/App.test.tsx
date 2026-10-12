@@ -32,6 +32,7 @@ const {
     sendChatTurn: vi.fn(),
     makeAuthClient,
     voiceSessions: [] as Array<{
+      setCameraState: (on: boolean) => void;
       options: {
         onStatus: (status: string, message: string) => void;
         onSessionEnded?: () => void;
@@ -55,7 +56,7 @@ vi.mock('./voice-client', () => ({
       onStatus: (status: string, message: string) => void;
       onSessionEnded?: () => void;
     }) {
-      voiceSessions.push({ options });
+      voiceSessions.push({ options, setCameraState: this.setCameraState });
     }
     start() { this.options.onStatus('ready', 'Microphone is off.'); }
     stop() {
@@ -67,6 +68,8 @@ vi.mock('./voice-client', () => ({
     inputLevel = () => 0;
     setMuted = vi.fn();
     sendScreenContext = vi.fn();
+    setCameraState = vi.fn();
+    sendScreenContextUnavailable = vi.fn();
   },
 }));
 
@@ -94,6 +97,7 @@ beforeEach(() => {
 });
 
 const mediaDevicesDescriptor = Object.getOwnPropertyDescriptor(navigator, 'mediaDevices');
+const permissionsDescriptor = Object.getOwnPropertyDescriptor(navigator, 'permissions');
 
 function MemoryRouter({ children, initialEntries = ['/'], initialIndex }: { children: ReactNode; initialEntries?: string[]; initialIndex?: number }) {
   const [router] = useState(() => createMemoryRouter([{ path: '*', element: children }], {
@@ -115,6 +119,8 @@ afterEach(() => {
   vi.restoreAllMocks();
   if (mediaDevicesDescriptor) Object.defineProperty(navigator, 'mediaDevices', mediaDevicesDescriptor);
   else Reflect.deleteProperty(navigator, 'mediaDevices');
+  if (permissionsDescriptor) Object.defineProperty(navigator, 'permissions', permissionsDescriptor);
+  else Reflect.deleteProperty(navigator, 'permissions');
 });
 
 describe('Jarvis routes', () => {
@@ -457,14 +463,14 @@ describe('App shell', () => {
     ));
     return {
       ready: () => act(() => { publish('workspace-ready', { sessionId: '12345678-1234-4234-8234-123456789abc' }); }),
-      command: async (commandId: string, operation: string) => {
+      command: async (commandId: string, operation: string, viewId = 'conversation') => {
         act(() => {
           publish('workspace-command', {
-            command: { commandId, operation, viewId: 'conversation' }, expiresAt: Date.now() + 5_000,
+            command: { commandId, operation, viewId }, expiresAt: Date.now() + 5_000,
           });
         });
         await waitFor(() => expect(ack(commandId)).toBeTruthy());
-        return JSON.parse(String(ack(commandId)![1]!.body)) as { applied: boolean };
+        return JSON.parse(String(ack(commandId)![1]!.body)) as { applied: boolean; reason?: string };
       },
     };
   }
@@ -710,21 +716,6 @@ describe('App shell', () => {
     await user.click(screen.getByRole('button', { name: 'End voice' }));
     expect(historyWindow.hasAttribute('inert')).toBe(false);
     expect(screen.queryByRole('button', { name: 'Restore Conversation' })).toBeNull();
-  });
-
-  it('keeps camera and screen sharing out of the top bar and in the chat More menu', async () => {
-    const user = userEvent.setup();
-    Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: { getDisplayMedia: vi.fn(), getUserMedia: vi.fn() } });
-    try {
-      await renderSignedIn();
-      const topbar = document.querySelector('.topbar-actions') as HTMLElement;
-      expect(within(topbar).queryByRole('button', { name: /share screen|camera/i })).toBeNull();
-      await user.click(screen.getByRole('button', { name: 'More options' }));
-      expect(screen.getByRole('menuitem', { name: 'Share screen' })).not.toBeNull();
-      expect(screen.getByRole('menuitem', { name: 'Turn camera on' })).not.toBeNull();
-    } finally {
-      Reflect.deleteProperty(navigator, 'mediaDevices');
-    }
   });
   it('offers no screen sharing where the browser cannot share the screen (phones)', async () => {
     const user = userEvent.setup();
@@ -1023,39 +1014,117 @@ describe('App shell', () => {
     expect(shell.getAttribute('data-folio-open')).toBe('false');
   });
 
-  it('turns the camera on from the chat More menu and off from the live line', async () => {
+  it('keeps camera and screen sharing out of the top bar and in the chat More menu', async () => {
     const user = userEvent.setup();
+    Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: { getDisplayMedia: vi.fn(), getUserMedia: vi.fn() } });
+    try {
+      await renderSignedIn();
+      const topbar = document.querySelector('.topbar-actions') as HTMLElement;
+      expect(within(topbar).queryByRole('button', { name: /share screen|camera/i })).toBeNull();
+      await user.click(screen.getByRole('button', { name: 'More options' }));
+      expect(screen.getByRole('menuitem', { name: 'Share screen' })).not.toBeNull();
+      expect(screen.getByRole('menuitem', { name: 'Turn camera on' })).not.toBeNull();
+    } finally {
+      Reflect.deleteProperty(navigator, 'mediaDevices');
+    }
+  });
+
+  it('opens a local camera preview, docks it without stopping capture, and lets Jarvis restore and close it', async () => {
+    const user = userEvent.setup();
+    const workspace = streamWorkspaceCommands();
+    vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue();
+    vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => {});
     let stopped = false;
     const track = {
       get readyState() { return stopped ? 'ended' : 'live'; },
       stop: vi.fn(() => { stopped = true; }),
       addEventListener: vi.fn(),
+      getSettings: () => ({ facingMode: 'user' }),
     } as unknown as MediaStreamTrack;
     const stream = {
       getTracks: () => [track],
       getVideoTracks: () => [track],
     } as unknown as MediaStream;
-    const getUserMedia = vi.fn(async () => stream);
+    const getUserMedia = vi.fn(async () => { stopped = false; return stream; });
     Object.defineProperty(navigator, 'mediaDevices', {
       configurable: true,
       value: { getUserMedia },
     });
     await renderSignedIn();
+    await waitFor(() => expect(activityStream).not.toBeNull());
+    workspace.ready();
+    const input = screen.getByRole('textbox', { name: 'Message Jarvis' });
+    await user.type(input, 'Keep my draft');
 
     await user.click(screen.getByRole('button', { name: 'More options' }));
     await user.click(screen.getByRole('menuitem', { name: 'Turn camera on' }));
-    expect(await screen.findByText('Camera on for Jarvis')).not.toBeNull();
-    const activeCamera = screen.getByRole('button', { name: 'Camera off' });
+    expect(await screen.findByText('Front camera on')).not.toBeNull();
+    const preview = screen.getByRole('article', { name: 'Camera preview' });
+    const video = within(preview).getByLabelText('Live camera preview') as HTMLVideoElement;
+    expect(video.srcObject).toBe(stream);
+    expect(input.closest('.conversation-input')?.querySelector('.camera-status')).toBeNull();
+    expect(within(preview).getByRole('button', { name: 'Camera off' })).not.toBeNull();
     expect(getUserMedia).toHaveBeenCalledWith({
       video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: { ideal: 'user' } },
       audio: false,
     });
-    await user.click(activeCamera);
+    await waitFor(() => expect(fetchMock.mock.calls.some(([url, init]) => String(url).endsWith('/now/workspace/state') &&
+      JSON.parse(String(init?.body)).windows.some((window: { viewId: string; title: string }) =>
+        window.viewId === 'camera-preview' && window.title === 'Camera preview'))).toBe(true));
+    await user.click(within(preview).getByRole('button', { name: 'Minimise Camera preview' }));
+    expect(preview.getAttribute('aria-hidden')).toBe('true');
+    expect(track.stop).not.toHaveBeenCalled();
+    expect(video.srcObject).toBe(stream);
+    expect(await workspace.command('restore-camera', 'restore', 'camera-preview')).toMatchObject({ applied: true });
+    expect(preview.getAttribute('aria-hidden')).toBeNull();
+    expect(await workspace.command('close-camera', 'close', 'camera-preview')).toMatchObject({ applied: true });
     expect(track.stop).toHaveBeenCalledOnce();
+    expect(screen.queryByRole('article', { name: 'Camera preview' })).toBeNull();
+    expect((input as HTMLTextAreaElement).value).toBe('Keep my draft');
     expect(screen.queryByText('Activity, sharing and backend')).toBeNull();
-    expect(screen.queryByText('Camera on for Jarvis')).toBeNull();
+    expect(screen.queryByText('Front camera on')).toBeNull();
+    expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith('/screen/frames'))).toBe(false);
+    await user.click(screen.getByRole('button', { name: 'More options' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Turn camera on' }));
+    expect(await screen.findByRole('article', { name: 'Camera preview' })).not.toBeNull();
+    await user.click(screen.getByRole('button', { name: 'Start voice' }));
+    expect(voiceSessions[0]?.setCameraState).toHaveBeenCalledWith(true);
+    await user.click(screen.getByRole('button', { name: 'Camera off' }));
+    await waitFor(() => expect(voiceSessions[0]?.setCameraState).toHaveBeenLastCalledWith(false));
+    expect(screen.queryByRole('article', { name: 'Camera preview' })).toBeNull();
+    await user.click(screen.getByRole('button', { name: 'End voice' }));
   });
 
+  it.each(['granted', 'prompt'] as const)('lets Jarvis open a closed Camera preview only with %s permission', async permission => {
+    const workspace = streamWorkspaceCommands();
+    vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue();
+    vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => {});
+    const track = { readyState: 'live', stop: vi.fn(), addEventListener: vi.fn(), getSettings: () => ({}) } as unknown as MediaStreamTrack;
+    const stream = { getTracks: () => [track], getVideoTracks: () => [track] } as unknown as MediaStream;
+    const getUserMedia = vi.fn(async () => stream);
+    Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: { getUserMedia } });
+    Object.defineProperty(navigator, 'permissions', { configurable: true,
+      value: { query: vi.fn(async () => ({ state: permission })) } });
+    await renderSignedIn();
+    await waitFor(() => expect(activityStream).not.toBeNull());
+    workspace.ready();
+    const result = await workspace.command('open-closed-camera', 'show', 'camera-preview');
+    expect(result.applied).toBe(permission === 'granted');
+    if (permission === 'granted') {
+      expect(await screen.findByRole('article', { name: 'Camera preview' })).not.toBeNull();
+      expect(getUserMedia).toHaveBeenCalledOnce();
+      expect(getUserMedia).toHaveBeenCalledWith(expect.objectContaining({
+        video: expect.objectContaining({ facingMode: { ideal: 'user' } }),
+      }));
+      expect(screen.getByText('Camera on - direction unavailable')).not.toBeNull();
+      expect(await workspace.command('close-reopened-camera', 'close', 'camera-preview')).toMatchObject({ applied: true });
+      expect(track.stop).toHaveBeenCalledOnce();
+    } else {
+      expect(screen.queryByRole('article', { name: 'Camera preview' })).toBeNull();
+      expect(getUserMedia).not.toHaveBeenCalled();
+      expect(result).toMatchObject({ reason: expect.stringContaining('Camera access') });
+    }
+  });
   it('opens and closes the contextual shell panel without replacing page content', async () => {
     const user = userEvent.setup();
     await renderSignedIn();

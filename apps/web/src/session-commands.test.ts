@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { CameraController } from './screen-sharing';
-import { applySessionCommand, createSessionCommandRegistry, type SessionCommand } from './session-commands';
+import { applySessionCommand, openCameraPreview, createSessionCommandRegistry, type SessionCommand } from './session-commands';
 
 const originalPermissions = Object.getOwnPropertyDescriptor(navigator, 'permissions');
 
@@ -30,6 +30,32 @@ afterEach(() => {
 });
 
 describe('session commands', () => {
+  it('opens the preview without requiring a reported facing direction or starting another live capture', async () => {
+    permission('granted');
+    const off = camera({ start: vi.fn(async () => true) });
+    expect(await openCameraPreview(off)).toEqual({ applied: true });
+    expect(off.start).toHaveBeenCalledOnce();
+    expect(off.selectFacing).not.toHaveBeenCalled();
+    const live = camera({ sharing: true });
+    expect(await openCameraPreview(live)).toEqual({ applied: true });
+    expect(live.start).not.toHaveBeenCalled();
+  });
+  it.each(['prompt', 'denied', 'throws', 'missing'] as const)('refuses to open a preview when camera permission is %s', async (state) => {
+    permission(state);
+    const off = camera();
+    expect(await openCameraPreview(off)).toMatchObject({ applied: false, reason: expect.stringContaining('Camera access') });
+    expect(off.start).not.toHaveBeenCalled();
+  });
+  it('reports preview startup failure or cancellation and refuses duplicate pending starts', async () => {
+    permission('granted');
+    const busy = camera({ starting: true });
+    expect(await openCameraPreview(busy)).toMatchObject({ applied: false });
+    expect(busy.start).not.toHaveBeenCalled();
+    expect(await openCameraPreview(camera({ start: vi.fn(async () => false) })))
+      .toEqual({ applied: false, reason: 'The camera did not start.' });
+    const failed = camera({ start: vi.fn(async (onError) => { onError?.('No camera available.'); return false; }) });
+    expect(await openCameraPreview(failed)).toEqual({ applied: false, reason: 'No camera available.' });
+  });
   it('changes the chat language through the registered handler and refuses unknown values or no conversation', async () => {
     const registry = createSessionCommandRegistry();
     const setLanguage = vi.fn();
