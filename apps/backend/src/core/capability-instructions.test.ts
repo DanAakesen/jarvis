@@ -100,7 +100,9 @@ describe('shared capability instruction budget', () => {
       '../factory/dispatcher.ts',
       '../factory/new-project.ts',
       '../github/checks-loop.ts',
+      '../core/visual-context.ts',
       '../../../../agents/jarvis/jarvis_tools.py',
+      '../../../../agents/jarvis/visual_context.py',
     ];
     for (const source of sources) {
       expect(readFileSync(new URL(source, import.meta.url), 'utf8')).not.toMatch(/\bJarvis (?:will|could not)\b/iu);
