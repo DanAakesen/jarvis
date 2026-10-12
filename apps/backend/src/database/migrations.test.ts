@@ -78,6 +78,7 @@ describe('committed SQL manifest', () => {
       '0038_workspace_pins.sql',
       '0039_conversation_attachments.sql',
       '0040_message_visual_context.sql',
+      '0041_daily_owner_schema.sql',
     ]);
     for (const migration of migrations) await expect(readDownMigration(migration.name)).resolves.toMatchObject({ name: migration.name });
   });

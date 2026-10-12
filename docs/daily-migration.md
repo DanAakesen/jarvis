@@ -42,6 +42,8 @@ Re-inventory the current Sites D1 schema (31 tables at review) and retained R2 o
 
 ### [P12-03: Daily SQL schema & owner mapping](https://github.com/DanAakesen/jarvis/issues/718)
 
+Sequentially released after closed #716; parked #717 is not a dependency. [Explicit source-table/field mapping and reconciliation limits](daily-schema-mapping.md) distinguish supplied schema definitions from live schema/export evidence. P12-03 adds only empty owner-bound SQL tables and an inactive authenticated-owner read boundary; no import, downstream service, device auth, UI or Daily activation.
+
 **NEW DAILY CAPABILITY — permanent** · Integration contract & protected inventory
 
 Owner-bound health / food / coaching / Google-feed tables; stable IDs, revisions, soft deletes and idempotency. Allocate migration numbers against current main.
@@ -169,6 +171,10 @@ Verify data manifests, one-user access/denial, retries/exact-once meals, four vi
 **TEMPORARY — migration-only.** Deprecate legacy operation only after complete verified migration and protected rollback/retention gates. Remove temporary export/import/staging/comparison tooling when eligible; preserve permanent ingestion, queues, processors, SQL/Blob, services, regression tests and required backups/evidence. Never delete or modify original repository/data. Credential/access changes still require their normal explicit confirmation.
 
 ## Staged rollout and evidence gates
+
+Standing execution direction: the approved migration proceeds under the coordinator's dependency/gate releases without another generic permission request. The protected #717 export blocker and all evidence/privacy/release gates remain; no worker independently dispatches blocked work or merges its own PR.
+
+Standing UI requirement (recorded on #730/#731/#732/#726): every migrated React/rich UI must fully match current Jarvis layout and styling. Current DESIGN.md, canonical `apps/web/src/styles.css` tokens, shared components, themes/density/motion settings and native phone/workspace patterns are authoritative. Preserve capabilities/data semantics while restyling/recomposing legacy Daily visuals; do not carry its separate navy/plum/card skin, add a second theme or replace shell/voice/window management. Generated/ad-hoc views receive safe trusted Jarvis theme context through the existing bridge without widened permissions. Mobile-first real-browser visual acceptance belongs to those UI issues; P12-03 does no frontend implementation.
 
 1. Contract-only/default-off: synthetic tests, unchanged current Jarvis when disabled; no private exports, production writes or actual Daily views.
 2. Private inventory/backup and owner-bound schema/services: protected export is complete and untruncated with counts/checksums/retained-object coverage. Every source record has an import or explicit exclusion decision; no fabricated expired raw objects.

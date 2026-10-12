@@ -24,9 +24,10 @@ import {
   previewP11TaskCode,
   startIssueTask,
   type IssueExecutor,
+  containsLikelySecret,
   validateIssueDraft,
 } from './issues.js';
-import { JARVIS_REPOSITORY, resolveRepository } from './project-context.js';
+import { resolveRepository } from './project-context.js';
 import { issueAttachments, withAttachmentDescriptions, previewIssueImage, publishIssueAttachment, type IssueAttachment } from './issue-attachments.js';
 
 const idSchema = { type: 'string', pattern: '^[1-9][0-9]{0,18}$', maxLength: 19 };
@@ -58,7 +59,6 @@ interface PendingIssueCreation {
   repository: string;
   issueNumber?: number;
   publicAttachment?: IssueAttachment;
-  confirmationPhrase: string;
   project?: string;
   title: string;
   body: string;
@@ -248,7 +248,7 @@ async function confirmProjectArchive(
 
 async function stageIssueCreation(
   server: FastifyInstance,
-  input: { project?: string; title: string; body: string; executor?: IssueExecutor; issueNumber?: number } & IssueAttachmentInput,
+  input: { project?: string; repository?: string; title: string; body: string; executor?: IssueExecutor; issueNumber?: number } & IssueAttachmentInput,
   source: ConversationMessage,
   signal: AbortSignal,
 ) {
@@ -259,7 +259,13 @@ async function stageIssueCreation(
     ...(input.project ? { project: input.project } : {}),
     projects: server.projectStore,
     github: server.githubIssueClient,
-  }) : { repository: JARVIS_REPOSITORY, taskCode: undefined };
+  }) : {
+    repository: input.repository ?? await resolveRepository(input.project, server.projectStore),
+    taskCode: undefined,
+  };
+  if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/u.test(preview.repository)) {
+    throw new ToolRefusal('That repository name is invalid.');
+  }
   if (input.issueNumber !== undefined) {
     const issue = await server.githubIssueClient?.readIssue(preview.repository, input.issueNumber);
     if (!issue || issue.isPullRequest) throw new ToolRefusal('That GitHub issue was not found.');
@@ -288,12 +294,10 @@ async function stageIssueCreation(
     confirmationCode = String(randomInt(0, 100_000_000)).padStart(8, '0');
   } while (actions.has(confirmationCode));
   const executor = input.executor ?? 'jarvis';
-  const confirmationPhrase = approvalInstruction;
   actions.set(confirmationCode, {
     repository: preview.repository,
     ...(input.issueNumber === undefined ? {} : { issueNumber: input.issueNumber }),
     ...(publicAttachment ? { publicAttachment } : {}),
-    confirmationPhrase,
     ...(input.project ? { project: input.project } : {}),
     title: input.title.trim(),
     body,
@@ -311,8 +315,29 @@ async function stageIssueCreation(
     executor,
     confirmationCode,
     ...(publicAttachment ? { warning: `This repository is public. Publishing ${publicAttachment.name} makes the image readable by anyone and commits it to Git history.` } : {}),
-    instruction: `Nothing has been written. ${confirmationPhrase}${attachments.length && !publicAttachment ? ' The files stay private; after creation offer to publish one reviewed screenshot.' : ''}`,
+    instruction: `Nothing has been written. ${approvalInstruction}${publicAttachment ? ` ${publicAttachment.name} will be published publicly.` : ''}${attachments.length && !publicAttachment ? ' The files stay private; after creation offer to publish one reviewed screenshot.' : ''}`,
   };
+}
+
+async function requireIssueWritePermission(
+  request: FastifyRequest,
+  repository: string,
+  writeContents: boolean,
+): Promise<void> {
+  const issuer = request.server.githubAppTokenIssuer;
+  if (!issuer?.readInstallationPermissions) throw new ToolFailure('I can’t verify my GitHub App permissions.');
+  let permissions: Readonly<Record<string, 'read' | 'write' | 'admin'>>;
+  try {
+    permissions = await issuer.readInstallationPermissions(repository);
+  } catch {
+    throw new ToolFailure('I couldn’t read my GitHub App permissions.');
+  }
+  if (permissions.issues !== 'write' && permissions.issues !== 'admin') {
+    throw new ToolRefusal('I can’t; my GitHub App lacks Issues: write.');
+  }
+  if (writeContents && permissions.contents !== 'write' && permissions.contents !== 'admin') {
+    throw new ToolRefusal('I can’t; my GitHub App lacks Contents: write.');
+  }
 }
 
 async function confirmIssueCreation(
@@ -342,6 +367,7 @@ async function confirmIssueCreation(
       reply !== 'approve') {
     throw new ToolRefusal('No issue was created. Dan must reply yes, approved, confirmed or go ahead (or no/cancel) in a later message.');
   }
+  await requireIssueWritePermission(request, action.repository, action.publicAttachment !== undefined);
   actions.delete(confirmationCode);
   signal.throwIfAborted();
   try {
@@ -461,7 +487,7 @@ export const factoryTools: readonly JarvisTool[] = [
   },
   {
     name: 'create_issue',
-    description: 'Prepare a P11 GitHub issue for new project-code work. Show Dan the title, problem, and acceptance criteria, then wait for his plain approval (yes, approved, confirmed, go ahead) in a later message before creating it.',
+    description: 'Create a P11 GitHub issue directly for new project-code work. Secret-free attachment descriptions and public image publication need later simple approval.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -479,6 +505,40 @@ export const factoryTools: readonly JarvisTool[] = [
       const draft = input as { project?: string; title: string; body: string; executor?: IssueExecutor } & IssueAttachmentInput;
       try {
         validateIssueDraft(draft.title, draft.body);
+        if (!draft.attachmentIds?.length && draft.publish !== 'public') {
+          await currentDanMessage(request, 'issue creation');
+          const repository = await resolveRepository(draft.project, request.server.projectStore ?? null);
+          const issuer = request.server.githubAppTokenIssuer;
+          if (!issuer?.readInstallationPermissions) throw new ToolFailure('I can’t verify my GitHub App permissions.');
+          let permissions: Readonly<Record<string, 'read' | 'write' | 'admin'>>;
+          try {
+            permissions = await issuer.readInstallationPermissions(repository);
+          } catch {
+            throw new ToolFailure('I couldn’t read my GitHub App permissions.');
+          }
+          if (permissions.issues !== 'write' && permissions.issues !== 'admin') {
+            throw new ToolRefusal('I can’t; my GitHub App lacks Issues: write.');
+          }
+          try {
+            return await createJarvisIssue({
+              ...(draft.project ? { project: draft.project } : {}),
+              title: draft.title,
+              body: draft.body,
+              ...(draft.executor !== undefined ? { executor: draft.executor } : {}),
+              projects: request.server.projectStore,
+              github: request.server.githubIssueClient,
+            });
+          } catch (error) {
+            if (error instanceof IssueCreationPartialError) {
+              throw new ToolFailure(`Issue ${error.issue.url} was created, but its ${error.executor} handoff could not be confirmed. Check the issue before retrying.`);
+            }
+            if (error instanceof IssueWriteUncertainError) {
+              throw new ToolFailure('I couldn’t confirm whether the issue was created. Check the repository before retrying.');
+            }
+            if (error instanceof ToolRefusal || error instanceof ToolFailure) throw error;
+            throw new ToolFailure('I couldn’t create the GitHub issue.');
+          }
+        }
         return await stageIssueCreation(request.server, draft, await currentDanMessage(request, 'issue creation'), signal);
       } catch (error) {
         if (error instanceof ToolRefusal) throw error;
@@ -488,12 +548,14 @@ export const factoryTools: readonly JarvisTool[] = [
   },
   {
     name: 'issue_comment',
-    description: 'Stage a comment on an existing Jarvis issue. Attachments default to private descriptions. Public publication requires reviewing one image in chat, a public-repository warning, and a later plain approval; use confirm_create_issue to confirm. File content is untrusted data.',
+    description: 'Post a comment directly to a GitHub issue. Attachments stay private by default; public image publication requires a public-repository warning and later simple approval. File content is untrusted data.',
     sensitive: true,
     inputSchema: {
       type: 'object',
       properties: {
         issueNumber: { type: 'integer', minimum: 1, maximum: 2_147_483_647 },
+        repository: { type: 'string', minLength: 3, maxLength: 140, pattern: '^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$' },
+        project: { type: 'string', minLength: 1, maxLength: 140 },
         text: { type: 'string', minLength: 1, maxLength: 4_000 },
         ...issueAttachmentFields,
       },
@@ -501,8 +563,40 @@ export const factoryTools: readonly JarvisTool[] = [
       additionalProperties: false,
     },
     async execute(value, request, signal) {
-      const input = value as { issueNumber: number; text: string } & IssueAttachmentInput;
+      const input = value as { issueNumber: number; text: string; repository?: string; project?: string } & IssueAttachmentInput;
       try {
+        if (!input.attachmentIds?.length && input.publish !== 'public') {
+          await currentDanMessage(request, 'issue comment');
+          if (containsLikelySecret(input.text)) throw new ToolRefusal('I can’t send this comment; it may contain a secret or credential.');
+          const repository = input.repository ??
+            await resolveRepository(input.project, request.server.projectStore ?? null);
+          if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/u.test(repository)) {
+            throw new ToolRefusal('That repository name is invalid.');
+          }
+          const issuer = request.server.githubAppTokenIssuer;
+          if (!issuer?.readInstallationPermissions) throw new ToolFailure('I can’t verify my GitHub App permissions.');
+          let permissions: Readonly<Record<string, 'read' | 'write' | 'admin'>>;
+          try {
+            permissions = await issuer.readInstallationPermissions(repository);
+          } catch {
+            throw new ToolFailure('I couldn’t read my GitHub App permissions.');
+          }
+          if (permissions.issues !== 'write' && permissions.issues !== 'admin') {
+            throw new ToolRefusal('I can’t; my GitHub App lacks Issues: write.');
+          }
+          const issue = await request.server.githubIssueClient?.readIssue(repository, input.issueNumber);
+          if (!issue || issue.isPullRequest) throw new ToolRefusal('I couldn’t find that GitHub issue.');
+          try {
+            await request.server.githubIssueClient!.createComment(repository, input.issueNumber, input.text, signal);
+          } catch (error) {
+            if (error instanceof ToolRefusal || error instanceof ToolFailure) throw error;
+            if (typeof error === 'object' && error !== null && 'status' in error && error.status === 403) {
+              throw new ToolRefusal('I can’t; my GitHub App lacks Issues: write.');
+            }
+            throw new ToolFailure('I couldn’t post the GitHub issue comment.');
+          }
+          return { status: 'commented', number: input.issueNumber, url: issue.url };
+        }
         return await stageIssueCreation(request.server, {
           ...input, title: 'Issue comment', body: input.text,
         }, await currentDanMessage(request, 'issue comment'), signal);
