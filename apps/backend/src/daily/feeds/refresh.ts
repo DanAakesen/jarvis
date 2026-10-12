@@ -1,7 +1,7 @@
 import type { FastifyRequest } from 'fastify';
 import { resolveDailyOwner } from '../owner.js';
 import { text } from '../nutrition/model.js';
-import { DailyCalendarFeed, timedConflicts, type CalendarRange, type CalendarEvent } from './calendars.js';
+import { DailyCalendarFeed, timedConflicts, validateCalendarRange, type CalendarRange, type CalendarEvent } from './calendars.js';
 import { DailyGmailFeed } from './gmail.js';
 import { DailyFeedStore, boundedSource, type FeedItem, type SourceAttempt } from './store.js';
 
@@ -15,6 +15,7 @@ export class DailyFeedRefresh {
   async refresh(request: FastifyRequest, runId: string, range: CalendarRange, explicitIntent: boolean, signal: AbortSignal): Promise<RefreshState> {
     const owner = resolveDailyOwner(request); text(runId); signal.throwIfAborted();
     if (explicitIntent !== true) throw new TypeError('Trusted explicit manual refresh intent required');
+    validateCalendarRange(range);
     const store = this.storeFor(request);
     if (await store.completed(runId,signal)) return { runId,state: 'completed' };
     const active = this.running.get(owner); if (active) return { runId: active,state: 'running' };

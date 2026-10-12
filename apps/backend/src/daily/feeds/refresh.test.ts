@@ -1,14 +1,42 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { FastifyRequest } from 'fastify';
 import { DailyFeedRefresh } from './refresh.js';
-import type { DailyCalendarFeed } from './calendars.js';
-import type { DailyGmailFeed } from './gmail.js';
+import { DailyCalendarFeed, type CalendarRange } from './calendars.js';
+import { DailyGmailFeed, type MailSemanticModel } from './gmail.js';
+import type { GoogleApiClient } from '../../google/api-client.js';
 import { boundedSource, type DailyFeedStore, type RefreshRun } from './store.js';
 const owner = '11111111-1111-4111-8111-111111111111';
 const request = { server: { ownerObjectId: owner },principal: { objectId: owner } } as unknown as FastifyRequest;
 const now = '2026-10-12T12:00:00Z'; const signal = () => new AbortController().signal;
 const range = { from: '2026-10-12T00:00:00Z',to: '2026-10-13T00:00:00Z' };
 describe('owner-bound bounded manual refresh lifecycle', () => {
+  it.each([undefined,null,[],{}, { from: range.from }, { to: range.to },
+    { ...range,from: 123 }, { ...range,to: 'invalid' }, { ...range,from: '2026-02-30T00:00:00Z' },
+    { ...range,to: range.from }, { from: range.to,to: range.from }, { ...range,extra: true },
+    { from: range.from,to: new Date(Date.parse(range.from) + 62 * 86400_000 + 1).toISOString() },
+  ])('rejects invalid caller range %# before either feed/model or any storage work', async (input) => {
+    const read = vi.fn<GoogleApiClient['request']>(); const complete = vi.fn<MailSemanticModel['complete']>();
+    const calendars = new DailyCalendarFeed({ request: read });
+    const gmail = new DailyGmailFeed({ request: read },{ strictSchema: true,toolFree: true,complete });
+    const ingest = vi.fn(); const completed = vi.fn();
+    const storeFor = vi.fn(() => ({ completed,ingest }) as unknown as DailyFeedStore);
+    const runner = new DailyFeedRefresh(calendars,gmail,storeFor);
+    await expect(runner.refresh(request,'invalid',input as CalendarRange,true,signal())).rejects.toThrow();
+    await expect(calendars.refresh(request,input as CalendarRange,signal())).rejects.toThrow();
+    for (const operation of [read,complete,storeFor,completed,ingest]) expect(operation).not.toHaveBeenCalled();
+  });
+  it.each([1,62 * 86400_000])('accepts exact valid duration %s without consuming cooldown on invalid input', async (duration) => {
+    const validRange = { from: range.from,to: new Date(Date.parse(range.from) + duration).toISOString() };
+    const read = vi.fn<GoogleApiClient['request']>(async () => ({ items: [] }));
+    const calendars = new DailyCalendarFeed({ request: read });
+    const gmailRead = vi.fn(async () => ({ status: 'ok',threads: [],orders: [] }));
+    const ingest = vi.fn(async () => undefined);
+    const runner = new DailyFeedRefresh(calendars,{ read: gmailRead } as unknown as DailyGmailFeed,
+      () => ({ completed: async () => false,ingest }) as unknown as DailyFeedStore,() => Date.parse(now));
+    await expect(runner.refresh(request,'run',{} as CalendarRange,true,signal())).rejects.toThrow();
+    expect(await runner.refresh(request,'run',validRange,true,signal())).toMatchObject({ state: 'completed',sources: [{ status: 'ok' },{ status: 'ok' }] });
+    expect(read).toHaveBeenCalledTimes(1); expect(gmailRead).toHaveBeenCalledTimes(1); expect(ingest).toHaveBeenCalledTimes(1);
+  });
   it.each(['items','bytes','nodes'])('records oversized calendar %s independently of healthy Gmail', async (limit) => {
     const events = Array.from({ length: limit === 'items' ? 1001 : limit === 'nodes' ? 600 : 100 },(_,i) => ({ calendarId: 'synthetic',id: String(i),title: limit === 'bytes' ? '界'.repeat(2000) : 'Synthetic',start: { date: '2026-10-12' },end: { date: '2026-10-13' } }));
     const ingest = vi.fn(async (run: RefreshRun) => { expect(run.sources.map((source) => boundedSource(source,run.capturedAt))).toEqual(run.sources); });

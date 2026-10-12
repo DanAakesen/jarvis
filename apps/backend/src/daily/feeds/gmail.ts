@@ -160,7 +160,7 @@ export class DailyGmailFeed {
           const sentAt = new Date(Number(row.internalDate)).toISOString(); const payload = object(row.payload); const from = header(payload, 'from');
           const sender = (from.match(/<([^>]+)>/u)?.[1] ?? from).trim().toLowerCase(); text(sender,320);
           const labels = row.labelIds === undefined ? [] : row.labelIds; if (!Array.isArray(labels) || labels.length > 100 || labels.some((label) => typeof label !== 'string' || label.length > 256)) throw new TypeError('Invalid mail labels');
-          const message: Message = { messageId, sentAt, sender, direction: sender === account ? 'outgoing' : 'incoming', body: bodyText(payload) };
+          const message: Message = { messageId, sentAt, sender, direction: labels.includes('SENT') || sender === account ? 'outgoing' : 'incoming', body: bodyText(payload) };
           return { message, payload, labels: labels.slice(0,30) as string[], name: from.includes('<') ? from.slice(0,from.indexOf('<')).replace(/^"|"$/gu,'').trim() || null : null };
         }).sort((a,b) => Date.parse(a.message.sentAt) - Date.parse(b.message.sentAt));
         const latest = parsed.at(-1)!; const input: ClassificationInput = { threadId: id, subject: header(latest.payload, 'subject') || 'Untitled email', messages: parsed.map((row) => row.message) };
