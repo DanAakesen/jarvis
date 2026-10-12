@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { FastifyRequest } from 'fastify';
-import { DailyCalendarFeed } from './calendars.js';
+import { DailyCalendarFeed, timedConflicts, weekCalendar, weekEvent } from './calendars.js';
 import { GoogleApiError, type GoogleApiClient } from '../../google/api-client.js';
 
 const owner = '11111111-1111-4111-8111-111111111111';
@@ -10,6 +10,15 @@ const range = { from: '2026-10-12T00:00:00Z', to: '2026-10-13T00:00:00Z' };
 const signal = () => new AbortController().signal;
 const event = (id: string) => ({ id, summary: 'Synthetic event', start: { date: '2026-10-12' }, end: { date: '2026-10-13' } });
 describe('inactive owner-bound Daily calendar reads', () => {
+  it('excludes source week-number entries and counts only timed overlaps', () => {
+    for (const title of ['Week numbers','Week calendar','Uge kalender','Uge numre','ugenummer']) expect(weekCalendar(title)).toBe(true);
+    expect(weekEvent('Uge 42 af 2026')).toBe(true); expect(weekEvent('Week 42 of 2026')).toBe(true); expect(weekEvent('Week planning meeting')).toBe(false);
+    const timed = (id: string,start: string,end: string) => ({ calendarId: 'synthetic',id,title: 'Synthetic',start: { dateTime: start,timeZone: null },end: { dateTime: end,timeZone: null } });
+    const first = timed('01','2026-10-12T10:00:00Z','2026-10-12T11:00:00Z');
+    const second = timed('02','2026-10-12T10:30:00Z','2026-10-12T11:30:00Z');
+    const adjacent = timed('03','2026-10-12T11:30:00Z','2026-10-12T12:00:00Z');
+    expect(timedConflicts([first,second,adjacent,{ calendarId: 'synthetic',id: 'all-day',title: 'Synthetic',start: { date: '2026-10-12' },end: { date: '2026-10-13' } }])).toEqual({ pairs: [[first,second]],truncated: false });
+  });
   it('enumerates visible/hidden calendars and event pages with calendar-qualified IDs, GET only', async () => {
     const read = vi.fn<GoogleApiClient['request']>(async (_api, path, options) => {
       expect(options.method).toBe('GET'); expect(options.body).toBeUndefined();

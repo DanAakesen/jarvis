@@ -7,6 +7,7 @@ export interface CalendarRange { from: string; to: string }
 export interface CalendarEntry { id: string; title: string; timeZone: string | null }
 export interface CalendarEvent {
   calendarId: string; id: string; title: string;
+  calendarName?: string; location?: string | null; status?: string;
   start: { date: string } | { dateTime: string; timeZone: string | null };
   end: { date: string } | { dateTime: string; timeZone: string | null };
 }
@@ -15,6 +16,17 @@ export interface CalendarSnapshot {
   status: 'complete' | 'partial' | 'unavailable'; freshness: 'fresh' | 'stale' | 'unknown';
   capturedAt: string | null; checkedAt: string; calendars: CalendarEntry[]; events: CalendarEvent[];
   issues: { kind: Failure; calendarId?: string }[];
+}
+export function weekCalendar(title: string): boolean { return /week numbers|week calendar|uge kalender|uge numre|ugenummer/iu.test(title); }
+export function weekEvent(title: string): boolean { return /^(?:week|uge)\s+\d{1,2}(?:\s+(?:of|af)\s+\d{4})?$/iu.test(title.trim()); }
+export function timedConflicts(events: readonly CalendarEvent[]): { pairs: [CalendarEvent,CalendarEvent][]; truncated: boolean } {
+  if (events.length > 2000) throw new TypeError('Calendar conflict range exceeds limits');
+  const timed = events.filter((event) => 'dateTime' in event.start && 'dateTime' in event.end).map((event) => ({ event,start: Date.parse((event.start as { dateTime: string }).dateTime),end: Date.parse((event.end as { dateTime: string }).dateTime) })).sort((a,b) => a.start-b.start);
+  const pairs: [CalendarEvent,CalendarEvent][] = [];
+  for (let i = 0; i < timed.length; i++) for (let j = i + 1; j < timed.length && timed[j]!.start < timed[i]!.end; j++) {
+    if (timed[j]!.end > timed[i]!.start) { if (pairs.length >= 200) return { pairs,truncated: true }; pairs.push([timed[i]!.event,timed[j]!.event]); }
+  }
+  return { pairs,truncated: false };
 }
 function record(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid calendar response');
@@ -75,8 +87,10 @@ export class DailyCalendarFeed {
         const items = response.items ?? []; if (!Array.isArray(items) || items.length > 100) throw new Error('Invalid calendar list');
         for (const item of items) {
           const row = record(item); const id = bounded(row.id);
+          if (row.deleted === true) continue;
           if (calendars.has(id)) throw new Error('Duplicate calendar'); calendars.add(id);
-          result.calendars.push({ id, title: row.summary === undefined ? '' : bounded(row.summary), timeZone: row.timeZone === undefined ? null : bounded(row.timeZone, 128) });
+          const title = row.summary === undefined || row.summary === null || row.summary === '' ? '' : bounded(row.summary);
+          if (!weekCalendar(title)) result.calendars.push({ id, title, timeZone: row.timeZone === undefined ? null : bounded(row.timeZone, 128) });
         }
         if (response.nextPageToken === undefined) break;
         pageToken = bounded(response.nextPageToken, 4096); if (tokens.has(pageToken)) throw new Error('Repeated calendar page'); tokens.add(pageToken);
@@ -95,8 +109,11 @@ export class DailyCalendarFeed {
               const row = record(item); const id = bounded(row.id);
               if (events.has(id)) throw new Error('Duplicate event'); events.add(id);
               if (row.status === 'cancelled') continue;
+              const title = row.summary === undefined || row.summary === null || typeof row.summary === 'string' && !row.summary.trim() ? 'Untitled event' : bounded(row.summary, 2000); if (weekEvent(title)) continue;
               if (result.events.length >= 2000) { result.issues.push({ kind: 'coverage-limit', calendarId: calendar.id }); break; }
-              result.events.push({ calendarId: calendar.id, id, title: row.summary === undefined ? '' : bounded(row.summary, 2000), start: boundary(row.start), end: boundary(row.end) });
+              result.events.push({ calendarId: calendar.id, id, title: title.trim(),calendarName: calendar.title.trim() || calendar.id,
+                location: row.location === undefined || row.location === null || row.location === '' ? null : bounded(row.location,2000).trim() || null,
+                status: row.status === undefined || row.status === null ? 'confirmed' : bounded(row.status,256),start: boundary(row.start), end: boundary(row.end) });
             }
             if (response.nextPageToken === undefined) break;
             token = bounded(response.nextPageToken, 4096); if (seenTokens.has(token)) throw new Error('Repeated event page'); seenTokens.add(token);

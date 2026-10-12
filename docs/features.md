@@ -294,4 +294,4 @@ P12-03 adds only the empty owner-bound persistence schema and inactive exact-key
 
 [Approved scope and existing issue URLs](daily-migration.md). No TickTick integration or original Daily repository/data deletion.
 
-P12-10 has an inactive synthetic-tested calendar enumeration/cache checkpoint with explicit denied/partial/stale coverage. Full Google attention, waiting/delivery/suppression parity remains blocked pending nonsensitive source rules and verified existing scopes; no runtime registration, OAuth expansion or live-provider acceptance is claimed.
+P12-10 has inactive source-contract-based Gmail/calendar services, exact waiting/order selectors, owner-local mapped snapshots/suppressions and bounded manual refresh with denied/partial/stale states. Semantic extraction requires an approved existing protected strict-schema/tool-free capability; absent capability is unavailable. Source contracts are supplied, while model capability/consent/live/private/phone parity remain open. No registered feeds, broadened OAuth or live-provider success is claimed.
