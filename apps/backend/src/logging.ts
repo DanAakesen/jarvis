@@ -96,7 +96,7 @@ const reflexReasons = new Set([
   'invalid_answer', 'network_error',
 ]);
 const visualPathReasons = new Set([
-  'image_attached', 'image_request_accepted', 'image_context_limit', 'context_failure',
+  'image_attached', 'image_request_accepted', 'image_context_limit',
   'image_accepted', 'image_rejected', 'image_timeout', 'image_unavailable',
   'frame_unavailable', 'frame_missing', 'budget_exhausted', 'budget_unavailable', 'legacy_agent',
   'image_input_unverified', 'timeout', 'daily_limit', 'frame_rate_limited', 'capture_failed',

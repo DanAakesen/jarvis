@@ -445,6 +445,7 @@ function registerVoiceRoute(
       settle: (accepted: boolean, reason?: string) => void;
     } | undefined;
     let attachedImageItemId: string | undefined;
+    let attachedImageTurnId: string | undefined;
     const attemptedImageItems = new Set<string>();
     const imageEventIds = new Set<string>();
     let pendingImageUsageItem: string | undefined;
@@ -970,7 +971,6 @@ function registerVoiceRoute(
                   frameStore?.discard(context.frameId, {
                     ownerObjectId: request.principal!.objectId, sessionId: sessionId!, turnId: providerItemId,
                   });
-                  clearCameraImage();
                   return;
                 }
                 if (imageReason === 'image_accepted') {
@@ -979,8 +979,8 @@ function registerVoiceRoute(
                   });
                 } else if (captionFrame && !visualContext.description) {
                   const caption = await captionCameraFrame(context.frameId, providerItemId, sourceMessage.id);
-                  if (caption) {
-                    captionMs = caption.captionMs;
+                  captionMs = caption?.captionMs;
+                  if (caption?.description) {
                     visualContext = { ...visualContext, description: caption.description };
                   } else {
                     visualContext = undefined;
@@ -1032,6 +1032,7 @@ function registerVoiceRoute(
               request.log.info({
                 path: 'caption', reason: visualReason,
                 channel: `voice-${language}`, latencyMs: performance.now() - startedAt,
+                ...(captionMs === undefined ? {} : { captionMs }),
               }, 'visual.path');
             }
             if (cameraTurn && (controller.signal.aborted || endRequested ||
@@ -1270,6 +1271,7 @@ function registerVoiceRoute(
       if (attachedImageItemId) {
         deleteCameraImage(attachedImageItemId);
         attachedImageItemId = undefined;
+        attachedImageTurnId = undefined;
       }
     };
 
@@ -1281,7 +1283,7 @@ function registerVoiceRoute(
 
     const captionCameraFrame = async (
       frameId: string, itemId: string, messageId: string,
-    ): Promise<{ description: string; captionMs: number } | undefined> => {
+    ): Promise<{ description?: string; captionMs: number } | undefined> => {
       const identity = { ownerObjectId: request.principal!.objectId, sessionId: sessionId!, turnId: itemId, messageId };
       const metadata = frameStore?.metadata(frameId, identity);
       const image = frameStore?.consume(frameId, identity);
@@ -1290,6 +1292,7 @@ function registerVoiceRoute(
         return undefined;
       }
       const abortController = new AbortController();
+      const startedAt = performance.now();
       captionController = abortController;
       const abort = () => abortController.abort();
       controller.signal.addEventListener('abort', abort, { once: true });
@@ -1310,10 +1313,12 @@ function registerVoiceRoute(
         ]);
         const description = result.description.trim();
         if (!description || Array.from(description).length > 5_000 ||
-            !Number.isFinite(result.captionMs) || result.captionMs < 0 || result.captionMs > 600_000) return undefined;
+            !Number.isFinite(result.captionMs) || result.captionMs < 0 || result.captionMs > 600_000) {
+          return { captionMs: Math.min(600_000, Math.max(0, performance.now() - startedAt)) };
+        }
         return { description, captionMs: result.captionMs };
       } catch {
-        return undefined;
+        return { captionMs: Math.min(600_000, Math.max(0, performance.now() - startedAt)) };
       } finally {
         if (timer) clearTimeout(timer);
         if (cancel) abortController.signal.removeEventListener('abort', cancel);
@@ -1329,7 +1334,7 @@ function registerVoiceRoute(
       const identity = { ownerObjectId: request.principal!.objectId, sessionId: sessionId!, turnId: itemId };
       if (!frameStore) return 'frame_unavailable';
       if (!frameStore.bind(frameId, { ...identity, messageId })) return 'frame_unavailable';
-      if (!reserveImageBudget || !english && !captionFrame) return 'image_input_unverified';
+      if (!english || !reserveImageBudget) return 'image_input_unverified';
       const budgetController = new AbortController();
       const abort = () => budgetController.abort();
       controller.signal.addEventListener('abort', abort, { once: true });
@@ -1385,7 +1390,10 @@ function registerVoiceRoute(
           finished = true;
           clearTimeout(deadline);
           pendingImage = undefined;
-          if (accepted) attachedImageItemId = imageItemId;
+          if (accepted) {
+            attachedImageItemId = imageItemId;
+            attachedImageTurnId = itemId;
+          }
           else {
             deleteCameraImage(imageItemId);
             pendingImageUsageItem = undefined;
@@ -2035,7 +2043,7 @@ function registerVoiceRoute(
               const code = typeof detail.code === 'string' ? detail.code : '';
               const message = typeof detail.message === 'string' ? detail.message.slice(0, 1_000) : '';
               const reason = /context.*(?:length|limit)|too_many_tokens/iu.test(code)
-                ? 'context_failure'
+                ? 'image_context_limit'
                 : /unsupported.*image|image.*unsupported/iu.test(code) ||
                     /(?:image|input_image).{0,80}(?:not supported|unsupported)|(?:not supported|unsupported).{0,80}(?:image|input_image)/iu.test(message)
                   ? 'image_input_unverified' : 'image_rejected';
@@ -2154,8 +2162,8 @@ function registerVoiceRoute(
                 input_tokens_details?: { image_tokens?: unknown } };
             } | undefined;
             const usageItem = typeof response?.id === 'string' ? imageUsageResponses.get(response.id) : undefined;
+            if (usageItem) imageUsageResponses.delete(response!.id as string);
             if (usageItem && recordImageUsage && sessionId) {
-              imageUsageResponses.delete(response!.id as string);
               const tokens = (value: unknown) => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
                 ? value : undefined;
               const inputTokens = tokens(response?.usage?.input_tokens);
@@ -2171,7 +2179,11 @@ function registerVoiceRoute(
                 failure: 'image_usage_unavailable', language,
               }, 'voice.upstream_event_error'));
             }
-            if (!pendingImage && !pendingImageUsageItem) clearCameraImage();
+            if (usageItem && attachedImageTurnId === usageItem && attachedImageItemId) {
+              deleteCameraImage(attachedImageItemId);
+              attachedImageItemId = undefined;
+              attachedImageTurnId = undefined;
+            }
             responseCreateActive = false;
             assistantResponding = false;
             flushQueuedToolOutputs();
