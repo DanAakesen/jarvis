@@ -16,12 +16,23 @@ const key = (column: string, parameter: string) => `${column}=@${parameter} AND 
 const sources: FeedSource[] = ['Gmail','GoogleCalendar'];
 export const MAX_SOURCE_ITEMS = 1000;
 export const MAX_SOURCE_BYTES = 480 * 1024;
+/** Fixed two-source envelope: each subtree keeps canonicalJson's 10000-node /
+ * 16-depth guards. Aggregate bounds are their sum plus five envelope nodes
+ * (20005 nodes / depth 18), not nutrition's smaller single-tree budget.
+ * Called after run shape validation; bytes remain identical for prior runs. */
+export function canonicalFeedRun(run: RefreshRun): string {
+  text(run.runId); instant(run.capturedAt);
+  if (Object.keys(run).some((field) => !['runId','capturedAt','sources'].includes(field)) || !Array.isArray(run.sources) || run.sources.length !== 2 ||
+      new Set(run.sources.map((source) => source.source)).size !== 2 || run.sources.some((source) => !sources.includes(source.source))) throw new TypeError('Both in-scope sources required');
+  return `{"capturedAt":${canonicalJson(run.capturedAt)},"runId":${canonicalJson(run.runId)},"sources":[${run.sources.map((source) => canonicalJson(source)).join(',')}]}`;
+}
 /** Reserve room for both sources and run metadata; reject independently before SQL. */
 export function boundedSource(source: SourceAttempt, capturedAt?: string): SourceAttempt {
-  if (source.items.length > MAX_SOURCE_ITEMS || Buffer.byteLength(canonicalJson(source), 'utf8') > MAX_SOURCE_BYTES ||
-      source.items.some((item) => Buffer.byteLength(canonicalJson(item.content), 'utf8') > 32000)) {
-    return { source: source.source, status: 'error', items: [], errorCode: 'coverage-limit' };
-  }
+  const exceeded = (): SourceAttempt => ({ source: source.source,status: 'error',items: [],errorCode: 'coverage-limit' });
+  try {
+    if (source.items.length > MAX_SOURCE_ITEMS || Buffer.byteLength(canonicalJson(source), 'utf8') > MAX_SOURCE_BYTES ||
+        source.items.some((item) => Buffer.byteLength(canonicalJson(item.content), 'utf8') > 32000)) return exceeded();
+  } catch { return exceeded(); }
   if (capturedAt !== undefined) {
     const other: SourceAttempt = { source: source.source === 'Gmail' ? 'GoogleCalendar' : 'Gmail',status: 'ok',items: [],errorCode: null };
     try { validate({ runId: 'source-preflight',capturedAt,sources: [source,other] }); }
@@ -60,7 +71,7 @@ function validate(run: RefreshRun): void {
       }
     }
   }
-  if (Buffer.byteLength(canonicalJson(run), 'utf8') > 1024 * 1024) throw new TypeError('Feed run exceeds limits');
+  if (Buffer.byteLength(canonicalFeedRun(run), 'utf8') > 1024 * 1024) throw new TypeError('Feed run exceeds limits');
 }
 /** No registered routes/tools; only existing server owner, mapped tables and synthetic tests. */
 export class DailyFeedStore {
@@ -83,7 +94,7 @@ export class DailyFeedStore {
   }
   async ingest(input: RefreshRun, signal: AbortSignal): Promise<void> {
     validate(input); input = structuredClone(input);
-    const checksum = createHash('sha256').update(canonicalJson(input)).digest('hex'); const now = this.now(); instant(now);
+    const checksum = createHash('sha256').update(canonicalFeedRun(input)).digest('hex'); const now = this.now(); instant(now);
     await this.transaction(signal, async (transaction) => {
       const existing = (await this.query(this.request(transaction).input('id', sql.NVarChar(256), input.runId),
         'SELECT id,checksum FROM daily.attention_runs WITH (UPDLOCK,HOLDLOCK) WHERE owner_object_id=@owner AND idempotency_key=@id;', signal)).recordset[0];

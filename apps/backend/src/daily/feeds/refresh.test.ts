@@ -9,8 +9,8 @@ const request = { server: { ownerObjectId: owner },principal: { objectId: owner 
 const now = '2026-10-12T12:00:00Z'; const signal = () => new AbortController().signal;
 const range = { from: '2026-10-12T00:00:00Z',to: '2026-10-13T00:00:00Z' };
 describe('owner-bound bounded manual refresh lifecycle', () => {
-  it.each(['items','bytes'])('records oversized calendar %s independently of healthy Gmail', async (limit) => {
-    const events = Array.from({ length: limit === 'items' ? 1001 : 100 },(_,i) => ({ calendarId: 'synthetic',id: String(i),title: limit === 'bytes' ? '界'.repeat(2000) : 'Synthetic',start: { date: '2026-10-12' },end: { date: '2026-10-13' } }));
+  it.each(['items','bytes','nodes'])('records oversized calendar %s independently of healthy Gmail', async (limit) => {
+    const events = Array.from({ length: limit === 'items' ? 1001 : limit === 'nodes' ? 600 : 100 },(_,i) => ({ calendarId: 'synthetic',id: String(i),title: limit === 'bytes' ? '界'.repeat(2000) : 'Synthetic',start: { date: '2026-10-12' },end: { date: '2026-10-13' } }));
     const ingest = vi.fn(async (run: RefreshRun) => { expect(run.sources.map((source) => boundedSource(source,run.capturedAt))).toEqual(run.sources); });
     const runner = new DailyFeedRefresh({ refresh: async () => ({ status: 'complete',freshness: 'fresh',events,issues: [] }) } as unknown as DailyCalendarFeed,
       { read: async () => ({ status: 'ok',threads: [],orders: [] }) } as unknown as DailyGmailFeed,() => ({ completed: async () => false,ingest }) as unknown as DailyFeedStore,() => Date.parse(now));

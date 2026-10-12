@@ -1,10 +1,11 @@
-import { randomUUID } from 'node:crypto';
+import { createHash,randomUUID } from 'node:crypto';
 import sql from 'mssql';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { FastifyRequest } from 'fastify';
 import { loadDatabaseConfig } from './config.js';
 import { applyMigrations, readMigrations } from './migrations.js';
-import { DailyFeedStore, type RefreshRun, type FeedItem } from '../daily/feeds/store.js';
+import { DailyFeedStore,MAX_SOURCE_BYTES,canonicalFeedRun,type RefreshRun,type FeedItem } from '../daily/feeds/store.js';
+import { canonicalJson } from '../daily/nutrition/model.js';
 import type { Thread, Order } from '../daily/feeds/attention.js';
 import { DailyFeedRefresh } from '../daily/feeds/refresh.js';
 import type { DailyCalendarFeed } from '../daily/feeds/calendars.js';
@@ -26,13 +27,13 @@ beforeAll(async () => { await admin.connect(); await admin.request().batch(`CREA
 beforeEach(async () => { await pool.request().batch('DELETE daily.attention_items; DELETE daily.attention_source_snapshots; DELETE daily.attention_runs; DELETE daily.gmail_suppressions; DELETE daily.order_suppressions;'); });
 afterAll(async () => { await pool.close(); if (admin.connected) await admin.request().batch(`IF DB_ID(N'${database}') IS NOT NULL BEGIN ALTER DATABASE [${database}] SET SINGLE_USER WITH ROLLBACK IMMEDIATE; DROP DATABASE [${database}]; END;`); await admin.close(); });
 describe('Daily feed snapshots and suppressions on real isolated SQL Server', () => {
-  it.each(['items','bytes'])('persists healthy Gmail and retains last calendar snapshot on calendar %s overflow', async (limit) => {
+  it.each(['items','bytes','nodes'])('persists healthy Gmail and retains last calendar snapshot on calendar %s overflow', async (limit) => {
     const initial = run('initial'); initial.sources[1]!.items = [{ type: 'event',id: 'synthetic:retained',title: 'Retained synthetic',content: {
       type: 'event',id: 'synthetic:retained',calendarId: 'synthetic',allDay: true,startsAt: '2026-10-12T00:00:00Z',endsAt: '2026-10-13T00:00:00Z',
     } }];
     await store().ingest(initial,signal());
     const capturedAt = '2026-10-12T12:01:00.000Z';
-    const events = Array.from({ length: limit === 'items' ? 1001 : 100 },(_,i) => ({ calendarId: 'synthetic',id: String(i),title: limit === 'bytes' ? '界'.repeat(2000) : 'Synthetic',start: { date: '2026-10-12' },end: { date: '2026-10-13' } }));
+    const events = Array.from({ length: limit === 'items' ? 1001 : limit === 'nodes' ? 600 : 100 },(_,i) => ({ calendarId: 'synthetic',id: String(i),title: limit === 'bytes' ? '界'.repeat(2000) : 'Synthetic',start: { date: '2026-10-12' },end: { date: '2026-10-13' } }));
     const refresh = new DailyFeedRefresh({ refresh: async () => ({ status: 'complete',freshness: 'fresh',issues: [],events }) } as unknown as DailyCalendarFeed,
       { read: async () => ({ status: 'ok',capturedAt,threads: [thread],orders: [],error: null }) } as unknown as DailyGmailFeed,
       () => store(owner,() => capturedAt),() => Date.parse(capturedAt));
@@ -41,6 +42,28 @@ describe('Daily feed snapshots and suppressions on real isolated SQL Server', ()
     expect(views[0]).toMatchObject({ status: 'Current',capturedAt,items: [{ id: '01' }] });
     expect(views[1]).toMatchObject({ status: 'Stale',capturedAt: now,attemptedAt: capturedAt,error: 'coverage-limit',items: [{ id: 'synthetic:retained' }] });
     expect((await pool.request().query('SELECT COUNT(*) AS count FROM daily.attention_runs')).recordset[0].count).toBe(2);
+  });
+  it('commits two individually valid large source trees and retains checksum/replay compatibility', async () => {
+    const input = run('combined',Array.from({ length: 120 },(_,i) => item({ ...thread,id: `thread-${i}`,threadId: `thread-${i}`,
+      labels: Array.from({ length: 30 },(_,label) => `synthetic-${label}`) })));
+    input.sources[1]!.items = Array.from({ length: 350 },(_,i) => ({ type: 'event',id: `synthetic:${i}`,title: 'Synthetic',content: {
+      type: 'event',id: `synthetic:${i}`,calendarId: 'synthetic',providerEventId: String(i),title: 'Synthetic',calendarName: 'Synthetic',location: null,status: 'confirmed',
+      start: { date: '2026-10-12' },end: { date: '2026-10-13' },startsAt: '2026-10-12T00:00:00Z',endsAt: '2026-10-13T00:00:00Z',allDay: true,
+    } }));
+    for (const source of input.sources) {
+      expect(() => canonicalJson(source)).not.toThrow(); expect(Buffer.byteLength(canonicalJson(source),'utf8')).toBeLessThan(MAX_SOURCE_BYTES);
+    }
+    expect(() => canonicalJson(input)).toThrow('JSON exceeds limits');
+    expect(Buffer.byteLength(canonicalFeedRun(input),'utf8')).toBeLessThan(1024 * 1024);
+    await store().ingest(input,signal()); await store().ingest(input,signal());
+    const views = await store().sources(signal());
+    expect(views.map((view) => view.status)).toEqual(['Current','Current']);
+    expect(views.map((view) => view.items.length)).toEqual([120,350]);
+    expect((await pool.request().query('SELECT COUNT(*) AS count FROM daily.attention_runs')).recordset[0].count).toBe(1);
+    expect((await pool.request().query('SELECT checksum FROM daily.attention_runs')).recordset[0].checksum).toBe(createHash('sha256').update(canonicalFeedRun(input)).digest('hex'));
+    const small = run('compatible'); await store().ingest(small,signal());
+    const saved = (await pool.request().input('id',sql.NVarChar(256),small.runId).query('SELECT checksum FROM daily.attention_runs WHERE id=@id')).recordset[0];
+    expect(saved.checksum).toBe(createHash('sha256').update(canonicalJson(small)).digest('hex'));
   });
   it('commits concurrent duplicate runs once per owner and refuses changed checksums/padded keys', async () => {
     expect((await store().sources(signal())).map((source) => source.status)).toEqual(['Missing','Missing']);
