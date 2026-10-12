@@ -3,7 +3,7 @@ import { resolveDailyOwner } from '../owner.js';
 import { text } from '../nutrition/model.js';
 import { DailyCalendarFeed, timedConflicts, type CalendarRange, type CalendarEvent } from './calendars.js';
 import { DailyGmailFeed } from './gmail.js';
-import { DailyFeedStore, type FeedItem, type SourceAttempt } from './store.js';
+import { DailyFeedStore, boundedSource, type FeedItem, type SourceAttempt } from './store.js';
 
 export interface RefreshState { runId: string; state: 'running' | 'completed' | 'limited'; sources?: { source: string; status: string; error: string | null }[] }
 /** Awaited manual execution; no source workflow dispatch, scheduler, tools or API routes. */
@@ -48,6 +48,7 @@ export class DailyFeedRefresh {
           }) }
           : { ...google,errorCode: identityTooLong ? 'coverage-limit' : result.issues[0]?.kind || 'incomplete' };
       }
+      gmail = boundedSource(gmail,capturedAt); google = boundedSource(google,capturedAt);
       await store.ingest({ runId,capturedAt,sources: [gmail,google] },signal);
       return { runId,state: 'completed',sources: [gmail,google].map((source) => ({ source: source.source,status: source.status,error: source.errorCode })) };
     } finally { this.running.delete(owner); }

@@ -14,12 +14,27 @@ export interface RefreshRun { runId: string; capturedAt: string; sources: Source
 export interface SourceView { source: FeedSource; status: 'Missing' | 'Stale' | 'Current'; capturedAt: string | null; attemptedAt: string | null; error: string | null; items: FeedItem[] }
 const key = (column: string, parameter: string) => `${column}=@${parameter} AND DATALENGTH(${column})=DATALENGTH(@${parameter})`;
 const sources: FeedSource[] = ['Gmail','GoogleCalendar'];
+export const MAX_SOURCE_ITEMS = 1000;
+export const MAX_SOURCE_BYTES = 480 * 1024;
+/** Reserve room for both sources and run metadata; reject independently before SQL. */
+export function boundedSource(source: SourceAttempt, capturedAt?: string): SourceAttempt {
+  if (source.items.length > MAX_SOURCE_ITEMS || Buffer.byteLength(canonicalJson(source), 'utf8') > MAX_SOURCE_BYTES ||
+      source.items.some((item) => Buffer.byteLength(canonicalJson(item.content), 'utf8') > 32000)) {
+    return { source: source.source, status: 'error', items: [], errorCode: 'coverage-limit' };
+  }
+  if (capturedAt !== undefined) {
+    const other: SourceAttempt = { source: source.source === 'Gmail' ? 'GoogleCalendar' : 'Gmail',status: 'ok',items: [],errorCode: null };
+    try { validate({ runId: 'source-preflight',capturedAt,sources: [source,other] }); }
+    catch { return { source: source.source,status: 'error',items: [],errorCode: 'invalid-response' }; }
+  }
+  return source;
+}
 function validate(run: RefreshRun): void {
   text(run.runId); instant(run.capturedAt);
   if (Object.keys(run).some((field) => !['runId','capturedAt','sources'].includes(field)) || !Array.isArray(run.sources) || run.sources.length !== 2 || new Set(run.sources.map((source) => source.source)).size !== 2) throw new TypeError('Both in-scope sources must report independently');
   for (const source of run.sources) {
     if (Object.keys(source).some((field) => !['source','status','items','errorCode'].includes(field))) throw new TypeError('Invalid source fields');
-    if (!sources.includes(source.source) || !['ok','error'].includes(source.status) || !Array.isArray(source.items) || source.items.length > 1000 ||
+    if (!sources.includes(source.source) || !['ok','error'].includes(source.status) || !Array.isArray(source.items) || source.items.length > MAX_SOURCE_ITEMS || Buffer.byteLength(canonicalJson(source), 'utf8') > MAX_SOURCE_BYTES ||
         source.status === 'error' && source.items.length !== 0 || source.status === 'ok' && source.errorCode !== null || source.status === 'error' && source.errorCode === null) throw new TypeError('Invalid source attempt');
     if (source.errorCode !== null && !['scope-denied','connection-expired','incomplete','semantic-unavailable','invalid-response','provider-unavailable','coverage-limit','busy','refresh-limited'].includes(source.errorCode)) throw new TypeError('Invalid sanitized feed error');
     const identities = new Set<string>();
@@ -28,7 +43,7 @@ function validate(run: RefreshRun): void {
       text(item.id); if (typeof item.title !== 'string' || item.title.length > 4000) throw new TypeError('Invalid feed title');
       if (source.source === 'Gmail' ? !['thread','order_update'].includes(item.type) : item.type !== 'event') throw new TypeError('Excluded feed type');
       if (identities.has(`${item.type}:${item.id}`)) throw new TypeError('Duplicate feed identity'); identities.add(`${item.type}:${item.id}`);
-      if (!item.content || typeof item.content !== 'object' || Array.isArray(item.content) || canonicalJson(item.content).length > 32000) throw new TypeError('Invalid feed content');
+      if (!item.content || typeof item.content !== 'object' || Array.isArray(item.content) || Buffer.byteLength(canonicalJson(item.content), 'utf8') > 32000) throw new TypeError('Invalid feed content');
       if (item.type === 'thread') {
         const thread = item.content as Thread;
         if (thread.id !== item.id || thread.threadId !== item.id || thread.type !== 'thread') throw new TypeError('Thread identity mismatch');
@@ -45,7 +60,7 @@ function validate(run: RefreshRun): void {
       }
     }
   }
-  if (canonicalJson(run).length > 1024 * 1024) throw new TypeError('Feed run exceeds limits');
+  if (Buffer.byteLength(canonicalJson(run), 'utf8') > 1024 * 1024) throw new TypeError('Feed run exceeds limits');
 }
 /** No registered routes/tools; only existing server owner, mapped tables and synthetic tests. */
 export class DailyFeedStore {

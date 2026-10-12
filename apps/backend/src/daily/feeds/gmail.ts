@@ -1,4 +1,5 @@
 import type { FastifyRequest } from 'fastify';
+import { createHash } from 'node:crypto';
 import { GoogleApiError, type GoogleApiClient } from '../../google/api-client.js';
 import { resolveDailyOwner } from '../owner.js';
 import { instant, text } from '../nutrition/model.js';
@@ -9,6 +10,7 @@ export interface ClassificationInput { threadId: string; subject: string; messag
 /** Server-owned protected-model capability; never a tool argument or provider key. */
 export interface MailSemanticModel {
   readonly strictSchema: true; readonly toolFree: true;
+  cacheIdentity?(): Promise<string>;
   complete(input: { purpose: 'attention' | 'order'; instructions: string; data: ClassificationInput; schema: Record<string, unknown>; tools: readonly never[]; maxOutputTokens: 1024 }, signal: AbortSignal): Promise<unknown>;
 }
 export class MailSemanticUnavailable extends Error { constructor() { super('Protected mail semantic capability unavailable'); } }
@@ -89,29 +91,67 @@ function bodyText(payload: Record<string, unknown>): string {
 export interface GmailResult { status: 'ok' | 'error'; capturedAt: string; threads: Thread[]; orders: Order[]; error: 'scope-denied' | 'connection-expired' | 'incomplete' | 'semantic-unavailable' | 'invalid-response' | 'provider-unavailable' | null }
 /** Existing connected account is obtained from Google profile; no caller email/owner. */
 export class DailyGmailFeed {
+  // Private process-local staging only; restart loses progress, never invents coverage.
+  private readonly scans = new Map<string, { version: string; ids: Set<string>; pages: Set<string>; token?: string; listed: boolean; rows: Map<string, Record<string, unknown>>; bytes: number; cache: Map<string, Record<string, unknown>> }>();
+  private readonly running = new Set<string>();
   constructor(private readonly api: GoogleApiClient, private readonly model?: MailSemanticModel) {}
   async read(request: FastifyRequest, now: string, signal: AbortSignal): Promise<GmailResult> {
-    resolveDailyOwner(request); instant(now); signal.throwIfAborted();
+    const owner = resolveDailyOwner(request); instant(now); signal.throwIfAborted();
+    if (this.running.has(owner)) return { status: 'error', capturedAt: now, threads: [], orders: [], error: 'incomplete' };
+    this.running.add(owner);
     const deadline = AbortSignal.any([signal, AbortSignal.timeout(60_000)]);
     const result: GmailResult = { status: 'ok', capturedAt: now, threads: [], orders: [], error: null };
     try {
       if (!this.model || this.model.strictSchema !== true || this.model.toolFree !== true) throw new MailSemanticUnavailable();
       const profile = await this.api.request('gmail', '/users/me/profile', { method: 'GET', signal: deadline });
-      const account = string(profile.emailAddress, 320).trim().toLowerCase(); const ids = new Set<string>(); const pages = new Set<string>(); let token: string | undefined;
-      for (let page = 0; ; page++) {
-        if (page >= 5) { result.error = 'incomplete'; break; }
+      const account = string(profile.emailAddress, 320).trim().toLowerCase();
+      const history = string(profile.historyId);
+      if (!/^\d{1,32}$/u.test(history)) throw new TypeError('Invalid mailbox history generation');
+      const identity = await this.model.cacheIdentity?.() ?? 'fixed-injected-model';
+      deadline.throwIfAborted();
+      const version = JSON.stringify([account, history, identity, now.slice(0,10)]);
+      let scan = this.scans.get(owner);
+      if (!scan || scan.version !== version) {
+        if (!this.scans.has(owner) && this.scans.size >= 4) this.scans.delete(this.scans.keys().next().value!);
+        scan = { version, ids: new Set(), pages: new Set(), listed: false, rows: new Map(), bytes: 0, cache: new Map() }; this.scans.set(owner, scan);
+      }
+      // The profile history generation pins pagination and cached classifications.
+      // A changing mailbox restarts rather than combining inconsistent generations.
+      for (let page = 0; !scan.listed && page < 5; page++) {
+        const token = scan.token;
         const query = new URLSearchParams({ q: 'in:anywhere newer_than:180d -category:promotions -category:social', maxResults: '100' }); if (token) query.set('pageToken', token);
         const response = await this.api.request('gmail', `/users/me/threads?${query}`, { method: 'GET', signal: deadline }); deadline.throwIfAborted();
         const rows = response.threads === undefined ? [] : response.threads; if (!Array.isArray(rows) || rows.length > 100) throw new TypeError('Invalid thread list');
-        for (const row of rows) ids.add(string(object(row).id));
-        if (response.nextPageToken === undefined) break;
-        token = string(response.nextPageToken, 4096); if (pages.has(token)) throw new TypeError('Repeated mail page'); pages.add(token);
+        for (const row of rows) scan.ids.add(string(object(row).id));
+        if (scan.ids.size > 10000) throw new MailCoverageLimit('Mailbox exceeds staging bounds');
+        if (response.nextPageToken === undefined) { scan.listed = true; break; }
+        const next = string(response.nextPageToken, 4096); if (scan.pages.has(next)) throw new TypeError('Repeated mail page');
+        if (scan.pages.size >= 100) throw new MailCoverageLimit('Mailbox exceeds staging page bounds');
+        scan.pages.add(next); scan.token = next;
       }
+      if (!scan.listed) throw new MailCoverageLimit('Scan continuation required');
+      let fetched = 0;
+      for (const id of scan.ids) {
+        if (scan.rows.has(id)) continue;
+        if (fetched++ >= 100) throw new MailCoverageLimit('Scan continuation required');
+        const row = await this.api.request('gmail', `/users/me/threads/${encodeURIComponent(id)}?format=full`, { method: 'GET', signal: deadline }); deadline.throwIfAborted();
+        const bytes = Buffer.byteLength(JSON.stringify(row), 'utf8');
+        if (bytes > 200000 || scan.bytes + bytes > 8 * 1024 * 1024) throw new MailCoverageLimit('Mailbox exceeds staging bytes');
+        scan.rows.set(id, structuredClone(row)); scan.bytes += bytes;
+      }
+      const classify = async (purpose: 'attention' | 'order', input: ClassificationInput) => {
+        const key = createHash('sha256').update(JSON.stringify([purpose,input])).digest('hex');
+        const cached = scan.cache.get(key); if (cached) return structuredClone(cached);
+        if (++classifications > 50) throw new MailCoverageLimit('Classification continuation required');
+        const value = await semantic(this.model,purpose,input,deadline);
+        if (scan.cache.size >= 2000) throw new MailCoverageLimit('Classification cache exceeds bounds');
+        scan.cache.set(key,structuredClone(value)); return value;
+      };
       // Sequential work bounds provider/model concurrency to one, unlike the legacy producer.
       const orderUpdates: Order[] = [];
       let classifications = 0;
-      for (const id of ids) {
-        const response = await this.api.request('gmail', `/users/me/threads/${encodeURIComponent(id)}?format=full`, { method: 'GET', signal: deadline }); deadline.throwIfAborted();
+      for (const id of scan.ids) {
+        const response = scan.rows.get(id)!; deadline.throwIfAborted();
         if (response.id !== id || !Array.isArray(response.messages) || !response.messages.length || response.messages.length > 100) throw new TypeError('Invalid full thread');
         const messageIds = new Set<string>();
         const parsed = response.messages.map((raw) => {
@@ -126,8 +166,7 @@ export class DailyGmailFeed {
         const latest = parsed.at(-1)!; const input: ClassificationInput = { threadId: id, subject: header(latest.payload, 'subject') || 'Untitled email', messages: parsed.map((row) => row.message) };
         if (input.subject.length > 4000 || latest.name !== null && latest.name.length > 2000) throw new MailCoverageLimit('Mail metadata exceeds limits');
         if (orderCandidate(input, now)) {
-          if (++classifications > 50) throw new MailCoverageLimit('Classification budget exhausted');
-          const order = await semantic(this.model, 'order', input, deadline);
+          const order = await classify('order', input);
           if (order.isOrder && order.updatedAt !== null) {
             const company = order.company as string; const number = order.orderNumber as string;
             const companyKey = company.toLowerCase().replace(/\b(?:ab|aps|a\/s|as|ltd|limited|inc|gmbh)\b/gu,'').replace(/[^a-z0-9]+/gu,'');
@@ -138,8 +177,7 @@ export class DailyGmailFeed {
         }
         if (Date.parse(now) - Date.parse(latest.message.sentAt) < 24 * 3600000) continue;
         if (latest.labels.some((label) => ['CATEGORY_PROMOTIONS','CATEGORY_SOCIAL'].includes(label)) || /^(no-?reply|do-?not-?reply|notifications?|mailer-daemon)@/iu.test(latest.message.sender) || header(latest.payload,'list-unsubscribe') || /^(bulk|list|junk)$/iu.test(header(latest.payload,'precedence'))) continue;
-        if (++classifications > 50) throw new MailCoverageLimit('Classification budget exhausted');
-        const classification = await semantic(this.model, 'attention', input, deadline);
+        const classification = await classify('attention', input);
         if (classification.excludedCategory || !classification.senderIsHuman || ['resolved','none'].includes(classification.semanticState as string)) continue;
         result.threads.push({ type: 'thread', id, threadId: id, title: input.subject, latestMessageId: latest.message.messageId, latestMessageAt: latest.message.sentAt,
           latestIncomingAt: parsed.filter((row) => row.message.direction === 'incoming').at(-1)?.message.sentAt ?? null, latestDirection: latest.message.direction,
@@ -153,10 +191,25 @@ export class DailyGmailFeed {
         if (!old || Date.parse(order.updatedAt) >= Date.parse(old.updatedAt)) grouped.set(order.id,{ ...order, deliveryDetail: order.deliveryDetail || old?.deliveryDetail || null });
       }
       result.orders = mergeOrders([...grouped.values()].filter((order) => order.statusLabel !== null && order.statusLabel.length > 0 && ['received','processing','shipped','ready_for_pickup','delayed','delivered','cancelled','refunded'].includes(order.status))); deadline.throwIfAborted();
-      if (result.error) result.status = 'error'; return result;
+      {
+        const end = await this.api.request('gmail','/users/me/profile',{ method: 'GET',signal: deadline }); deadline.throwIfAborted();
+        if (end.historyId !== history || string(end.emailAddress,320).trim().toLowerCase() !== account) {
+          this.scans.delete(owner); throw new MailCoverageLimit('Mailbox changed during scan');
+        }
+      }
+      if ((await this.model.cacheIdentity?.() ?? 'fixed-injected-model') !== identity) {
+        this.scans.delete(owner); throw new MailCoverageLimit('Model selection changed during scan');
+      }
+      // Re-enumerate the rolling window next time, while reusing only this
+      // unchanged mailbox/model generation's full rows and semantic results.
+      scan.ids = new Set(); scan.pages = new Set(); delete scan.token; scan.listed = false;
+      return result;
     } catch (error) {
       if (signal.aborted) throw signal.reason;
+      // Expired pagination/invalid provider state must be retryable from a fresh
+      // enumeration, not an indefinitely poisoned continuation token.
+      if (!(error instanceof MailCoverageLimit) && !(error instanceof MailSemanticUnavailable) && !deadline.aborted) this.scans.delete(owner);
       return { ...result, status: 'error', threads: [], orders: [], error: error instanceof GoogleApiError ? error.kind === 'forbidden' ? 'scope-denied' : error.kind === 'credentials-expired' ? 'connection-expired' : 'provider-unavailable' : error instanceof MailSemanticUnavailable ? 'semantic-unavailable' : error instanceof MailCoverageLimit ? 'incomplete' : deadline.aborted ? 'provider-unavailable' : 'invalid-response' };
-    }
+    } finally { this.running.delete(owner); }
   }
 }
