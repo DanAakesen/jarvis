@@ -782,11 +782,15 @@ async function writeHandler(
       if (!labelSet) {
         const existing = object(await githubJson(`${base}/issues/${number}`, token, signal));
         const existingLabels = existing?.labels;
-        if (!Array.isArray(existingLabels) || existingLabels.length > 30 ||
-            existingLabels.some((label) => typeof object(label)?.name !== 'string')) {
+        const existingNames = Array.isArray(existingLabels)
+          ? existingLabels.map((label) => object(label)?.name)
+          : null;
+        if (!existingNames || existingNames.length > 30 ||
+            existingNames.some((label) => typeof label !== 'string' ||
+              Buffer.byteLength(label) > 200 || containsLikelySecret(label))) {
           throw new ToolRefusal('I can’t safely add or remove labels because I can’t preserve the complete existing label set.');
         }
-        labelSet = labels(existingLabels);
+        labelSet = existingNames as string[];
         labelSet = [...new Set([...labelSet.filter((label) => !remove.includes(label)), ...add])];
       }
       if (labelSet.length > 30) throw new ToolRefusal('I can set up to 30 issue labels at once.');

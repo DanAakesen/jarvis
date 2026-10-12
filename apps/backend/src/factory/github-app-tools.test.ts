@@ -158,9 +158,10 @@ describe('GitHub App capability tools', () => {
   });
 
   it('includes the full existing label set when applying additions', async () => {
+    const unicodeLabel = '🚀'.repeat(30);
     const fetchImpl = vi.fn<typeof fetch>()
       .mockResolvedValueOnce(Response.json({
-        labels: [{ name: 'first' }, { name: 'second' }, { name: 'third' }],
+        labels: [{ name: 'first' }, { name: 'second' }, { name: unicodeLabel }],
       }))
       .mockResolvedValueOnce(Response.json({ number: 700 }));
     const { app } = fixture(fetchImpl, { issues: 'write' });
@@ -170,7 +171,7 @@ describe('GitHub App capability tools', () => {
 
     expect(response.json().outcome).toBe('ok');
     expect(JSON.parse(String(fetchImpl.mock.calls[1]?.[1]?.body))).toEqual({
-      labels: ['first', 'second', 'third', 'fourth'],
+      labels: ['first', 'second', unicodeLabel, 'fourth'],
     });
   });
 
