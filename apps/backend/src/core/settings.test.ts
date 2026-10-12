@@ -648,7 +648,7 @@ describe('settings API', () => {
       tone: 'warm',
       responseStyle: 'detailed',
       customInstructions,
-      modeInstructions: { present: '', away: '', on_the_move: '' },
+      modeInstructions: defaultSettings.personality.modeInstructions,
     });
     expect(values).toEqual({
       'personality.tone': '"warm"',
@@ -677,7 +677,7 @@ describe('settings API', () => {
       tone: 'british_butler',
       responseStyle: 'concise',
       customInstructions: '',
-      modeInstructions: { present: '', away: '', on_the_move: '' },
+      modeInstructions: defaultSettings.personality.modeInstructions,
     });
   });
 
@@ -714,6 +714,23 @@ describe('settings API', () => {
     });
     expect((await app.inject({ url: '/settings', headers: authorization })).json().settings.personality.modeInstructions)
       .toEqual(modeInstructions);
+  });
+
+  it('uses built-in instructions for stored empty modes without rewriting them', async () => {
+    const { store, values } = createStore();
+    const write = vi.spyOn(store, 'write');
+    values['personality.modeInstructions.present'] = '""';
+    values['personality.modeInstructions.away'] = '"   "';
+    values['personality.modeInstructions.on_the_move'] = JSON.stringify('Keep directions short.');
+    const before = { ...values };
+
+    const settings = await readSettings(store);
+    expect(settings.personality.modeInstructions).toEqual({
+      ...defaultSettings.personality.modeInstructions,
+      on_the_move: 'Keep directions short.',
+    });
+    expect(values).toEqual(before);
+    expect(write).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -876,7 +893,7 @@ describe('settings API', () => {
         tone: 'direct',
         responseStyle: 'balanced',
         customInstructions: 'Prefer plain language.',
-        modeInstructions: { present: '', away: '', on_the_move: 'Keep directions short.' },
+        modeInstructions: { ...defaultSettings.personality.modeInstructions, on_the_move: 'Keep directions short.' },
       },
       awayMode: true,
       mode: 'on_the_move',

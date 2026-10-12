@@ -31,6 +31,7 @@ COPY --from=build /app/packages/contracts/package.json ./packages/contracts/pack
 COPY --from=build /app/packages/contracts/src/index.js ./packages/contracts/src/index.js
 COPY --from=build /app/apps/backend/dist ./apps/backend/dist
 COPY db/migrations ./db/migrations
+COPY agents/jarvis/presence-instructions.json ./agents/jarvis/presence-instructions.json
 COPY docs/features.md ./apps/backend/feature-index.md
 USER node
 EXPOSE 3000

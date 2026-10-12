@@ -15,10 +15,11 @@ import { createLogger } from '../logging.js';
 import { coreModule } from '../core/index.js';
 import type { ConversationStore } from '../core/conversation-store.js';
 import type { SettingsStore } from '../core/settings.js';
-import type { AwayModeStore, AwayModeState } from '../core/away-mode.js';
+import { defaultAwayModeState, type AwayModeStore, type AwayModeState } from '../core/away-mode.js';
 import type { ToolCallStore } from '../core/tool-calls.js';
 import { ToolRefusal } from '../core/tool-registry.js';
 import { workspaceContext } from '../core/workspace-context.js';
+import { modeContext } from '../core/presence-instructions.js';
 import type { ReflexClassifier } from '../core/reflex.js';
 import type { WorkspaceCommand } from '@jarvis/contracts';
 import type { PartialSpeechRecognizerFactory } from './speech-recognizer.js';
@@ -555,7 +556,7 @@ describe('backend-relayed Voice Live WebSocket', () => {
     upstream!.send(JSON.stringify({ type: 'input_audio_buffer.speech_stopped' }));
     await vi.waitFor(() => expect(received.some((event) => event.type === 'response.create')).toBe(true));
     expect(received.find((event) => event.type === 'response.create')).toMatchObject({
-      response: { instructions: `Speak this exact status update to Dan, verbatim: Task 1 is done.\n${workspaceContext()}` },
+      response: { instructions: `Speak this exact status update to Dan, verbatim: Task 1 is done.\n${modeContext(defaultAwayModeState)}\n${workspaceContext()}` },
     });
   });
 
@@ -601,7 +602,7 @@ describe('backend-relayed Voice Live WebSocket', () => {
       expect(received.find((event) => event.type === 'response.create')).toEqual({
         type: 'response.create',
         response: {
-          instructions: `Speak this exact status update to Dan, verbatim: The download has finished.\n${workspaceContext()}`,
+          instructions: `Speak this exact status update to Dan, verbatim: The download has finished.\n${modeContext(defaultAwayModeState)}\n${workspaceContext()}`,
           tools: [],
           tool_choice: 'none',
         },
@@ -705,7 +706,7 @@ describe('backend-relayed Voice Live WebSocket', () => {
       expect(received[0]).toEqual({
         type: 'response.create',
         response: {
-          instructions: `Speak this exact status update to Dan, verbatim: Downloadet er færdigt.\n${workspaceContext()}`,
+          instructions: `Speak this exact status update to Dan, verbatim: Downloadet er færdigt.\n${modeContext(defaultAwayModeState)}\n${workspaceContext()}`,
           tools: [],
           tool_choice: 'none',
         },
@@ -3001,6 +3002,8 @@ describe('backend-relayed Voice Live WebSocket', () => {
     const instructions = (updates[1]?.session as { instructions: string }).instructions;
     expect(instructions).toContain("Dan's current mode: On the move since 2026-10-06T12:15:00.000Z.");
     expect(instructions).toContain(JSON.stringify('Keep directions short.'));
+    expect(instructions).toContain('one very short sentence');
+    expect(instructions).toContain('never ask him to paste, type, copy, open or read anything');
   });
 
   it('snapshots the selected voice and transcription roles when an English session starts', async () => {

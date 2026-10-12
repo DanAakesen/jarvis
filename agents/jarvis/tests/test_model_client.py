@@ -16,6 +16,7 @@ import pytest
 
 import model_client
 from jarvis_tools import (
+    INSTRUCTIONS,
     BackendToolClient,
     BackendUnavailable,
     current_chat_phase_setter,
@@ -152,6 +153,83 @@ def test_personalized_instructions_include_mode_instructions_and_brief_speech() 
     assert '"Use Teams."' in away
     assert "spoken replies use one short sentence" in away
     assert "Dan's current mode: Present since an unknown time." in present
+
+
+@pytest.mark.parametrize("mode", ["present", "away", "on_the_move"])
+@pytest.mark.parametrize("base", [CHAT_INSTRUCTIONS["en"], CHAT_INSTRUCTIONS["da"], INSTRUCTIONS])
+def test_builtin_presence_behavior_is_salient_with_empty_or_custom_preferences(mode, base) -> None:
+    from jarvis_tools import BUILT_IN_MODE_INSTRUCTIONS
+
+    for custom in ("", "Use a warmer tone."):
+        instructions = personalize_instructions(
+            base, ModelSettings("deployment", "none", mode=mode, mode_instructions={mode: custom})
+        )
+        statement = next(
+            line for line in instructions.splitlines() if line.startswith("Dan's current mode:")
+        )
+        assert BUILT_IN_MODE_INSTRUCTIONS[mode] in statement
+        assert json.dumps(custom) in instructions
+        if mode == "on_the_move":
+            assert "one very short sentence" in statement
+            assert "never ask him to paste, type, copy, open or read anything" in statement
+            assert "or look at a screen" in statement
+            assert "single-word confirmations" in statement
+            assert "say 'read it'" in statement
+
+
+@pytest.mark.asyncio
+async def test_mode_change_refreshes_tool_loop_and_next_voice_turn() -> None:
+    class PresenceBackend(FakeBackend):
+        mode = "present"
+
+        def handle(self, request: httpx.Request) -> httpx.Response:
+            if request.url.path == "/agent/settings":
+                self.requests.append(request)
+                return httpx.Response(200, json={
+                    "model": "deployment", "reasoningEffort": "none", "mode": self.mode,
+                    "capabilityInstructions": "Shared backend capability block.",
+                })
+            if request.url.path == "/tools/set_presence_mode":
+                self.mode = json.loads(request.content)["mode"]
+                self.requests.append(request)
+                return httpx.Response(200, json={
+                    "tool": "set_presence_mode", "outcome": "ok", "result": {"mode": self.mode},
+                })
+            return super().handle(request)
+
+    call = FakeItem(
+        type="function_call", call_id="mode_1", name="set_presence_mode",
+        arguments='{"mode":"on_the_move"}',
+    )
+    backend = PresenceBackend(catalogue=[{
+        "name": "set_presence_mode", "description": "Change presence mode.",
+        "inputSchema": {
+            "type": "object", "properties": {"mode": {"type": "string"}}, "required": ["mode"],
+        },
+    }])
+    model, transport = client([], rounds=[
+        [completed(call)], [completed()], [completed()],
+    ], backend=backend)
+    pinned = ModelSettings("deployment", "none", mode="present")
+    token = current_message_id.set("42")
+    try:
+        assert [chunk async for chunk in model.complete(
+            [ModelMessage("user", "I am driving")], settings=pinned,
+        )] == []
+        assert [chunk async for chunk in model.complete(
+            [ModelMessage("user", "What is waiting?")], settings=pinned,
+        )] == []
+    finally:
+        current_message_id.reset(token)
+        await model.close()
+    first, switched, next_turn = transport.responses.requests
+    assert "Dan's current mode: Present" in first["instructions"]
+    for request in (switched, next_turn):
+        assert "Dan's current mode: On the move" in request["instructions"]
+        assert "Dan's current mode: Present" not in request["instructions"]
+        assert (
+            "never ask him to paste, type, copy, open or read anything" in request["instructions"]
+        )
 
 
 def test_personalized_instructions_know_the_jarvis_repository_and_added_projects() -> None:

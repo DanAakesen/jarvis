@@ -1,6 +1,7 @@
 import { defaultAwayModeState, presenceModes } from './away-mode.js';
 import { JARVIS_REPOSITORY, projectContext } from '../factory/project-context.js';
 import { capabilityInstructions, CAPABILITY_INSTRUCTIONS_MAX_CODE_POINTS } from './capability-instructions.js';
+import { builtInModeInstructions } from './presence-instructions.js';
 import {
   homeLocationSettingsSchema, isModelCatalogue, modelRoles, reasoningEfforts, researchDepths, researchSettingsBounds,
   memorySettingsBounds, memorySettingsSchema, researchSettingsSchema,
@@ -118,7 +119,7 @@ export const defaultSettings: Settings = {
     tone: 'british_butler',
     responseStyle: 'concise',
     customInstructions: '',
-    modeInstructions: { present: '', away: '', on_the_move: '' },
+    modeInstructions: { ...builtInModeInstructions },
   },
   voice: {
     speechToTextModel: 'mai-transcribe',
@@ -768,7 +769,9 @@ function mergeSettings(stored: Partial<Settings>, catalogue: ModelCatalogue = fa
       const value = (values as Record<string, unknown>)[key];
       if (validSetting(area, key, value, catalogue)) {
         if (area === 'personality' && key === 'modeInstructions') {
-          Object.assign(merged.personality.modeInstructions, value);
+          for (const [mode, instruction] of Object.entries(value as Settings['personality']['modeInstructions'])) {
+            if (instruction.trim()) merged.personality.modeInstructions[mode as keyof typeof builtInModeInstructions] = instruction;
+          }
         } else {
           (merged[area] as Record<string, unknown>)[key] = value;
         }
