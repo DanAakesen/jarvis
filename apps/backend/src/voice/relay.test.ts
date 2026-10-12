@@ -1541,7 +1541,7 @@ describe('backend-relayed Voice Live WebSocket', () => {
     expect(received.filter((event) => event.type === 'response.create')).toHaveLength(0);
     const frame = {
       type: 'jarvis.screen.context', source: 'camera', itemId: 'camera_turn',
-      capturedAt: '2026-10-11T19:30:00Z', question: 'What colour is this?', description: 'A blue mug.',
+      capturedAt: new Date().toISOString(), question: 'What colour is this?', description: 'A blue mug.',
     };
     browser.send(JSON.stringify(frame));
     await vi.waitFor(() => expect(received.filter((event) => event.type === 'response.create')).toHaveLength(1));
@@ -1555,6 +1555,9 @@ describe('backend-relayed Voice Live WebSocket', () => {
     const response = received.find((event) => event.type === 'response.create');
     expect(JSON.stringify(response)).toContain('untrusted visual data');
     expect(JSON.stringify(response)).toContain('A blue mug.');
+    expect(JSON.stringify(response)).toContain('fresh visual observation');
+    expect(JSON.stringify(response)).toContain('Do not mention a capture time, UTC timestamp');
+    if (path === '/voice/da') expect(JSON.stringify(response)).toContain('Answer in Danish');
     browser.send(JSON.stringify(frame));
     browser.send(JSON.stringify({ type: 'jarvis.screen.context.unavailable', itemId: 'camera_turn', reason: 'daily_limit' }));
     browser.send(JSON.stringify({ type: 'jarvis.camera.state', on: false }));
@@ -1563,10 +1566,44 @@ describe('backend-relayed Voice Live WebSocket', () => {
     expect(conversationStore.addMessage).toHaveBeenCalledTimes(1);
   });
 
-  it.each(['frame_rate_limited', 'daily_limit', 'budget_exhausted', 'capture_failed', 'camera_off'])(
-    'releases a held turn without invented live evidence when %s', async (reason) => {
+  it.each(['/voice', '/voice/da'])(
+    'labels a reused visual observation as earlier in %s', async (path) => {
       const classifier = { classify: vi.fn(async () => null) } as unknown as ReflexClassifier;
-      const { browser, upstream, received, conversationStore } = await connectedPartialVoice(partialSpeechHarness(), classifier);
+      const { browser, upstream, received, conversationStore } = await connectedPartialVoice(
+        partialSpeechHarness(), classifier, [], undefined, path,
+      );
+      browser.send(JSON.stringify({ type: 'jarvis.camera.state', on: true }));
+      await vi.waitFor(() => expect(received.filter((event) => event.type === 'session.update')).toHaveLength(2));
+      upstream.send(JSON.stringify({
+        type: 'conversation.item.input_audio_transcription.completed',
+        item_id: 'earlier_turn', transcript: 'What colour is this?',
+      }));
+      await vi.waitFor(() => expect(classifier.classify).toHaveBeenCalledOnce());
+      const capturedAt = new Date(Date.now() - 120_000).toISOString();
+      browser.send(JSON.stringify({
+        type: 'jarvis.screen.context', source: 'camera', itemId: 'earlier_turn',
+        capturedAt, question: 'What colour is this?', description: 'A blue mug.',
+      }));
+      await vi.waitFor(() => expect(received.filter((event) => event.type === 'response.create')).toHaveLength(1));
+      const prompt = JSON.stringify(received.find((event) => event.type === 'response.create'));
+      expect(prompt).toContain('offer to look again');
+      expect(prompt).toContain(path === '/voice/da'
+        ? 'This is an earlier look from for cirka 2 minutter siden'
+        : 'This is an earlier look from about 2 minutes ago');
+      expect(conversationStore.setVisualContext).toHaveBeenCalledWith(expect.objectContaining({
+        visualContext: expect.objectContaining({ capturedAt, question: 'What colour is this?' }),
+      }));
+    },
+  );
+
+  it.each(['/voice', '/voice/da'].flatMap((path) =>
+    ['frame_rate_limited', 'daily_limit', 'budget_exhausted', 'capture_failed', 'camera_off']
+      .map((reason) => ({ path, reason }))))(
+    'releases a held %s turn without invented visual evidence when %s', async ({ path, reason }) => {
+      const classifier = { classify: vi.fn(async () => null) } as unknown as ReflexClassifier;
+      const { browser, upstream, received, conversationStore } = await connectedPartialVoice(
+        partialSpeechHarness(), classifier, [], undefined, path,
+      );
       const visible: Record<string, unknown>[] = [];
       browser.on('message', (data) => visible.push(JSON.parse(data.toString()) as Record<string, unknown>));
       browser.send(JSON.stringify({ type: 'jarvis.camera.state', on: true }));
@@ -1577,7 +1614,14 @@ describe('backend-relayed Voice Live WebSocket', () => {
       await vi.waitFor(() => expect(classifier.classify).toHaveBeenCalledOnce());
       browser.send(JSON.stringify({ type: 'jarvis.screen.context.unavailable', itemId: 'missing_frame', reason }));
       await vi.waitFor(() => expect(received.filter((event) => event.type === 'response.create')).toHaveLength(1));
-      expect(JSON.stringify(received.find((event) => event.type === 'response.create'))).toContain('No fresh camera image');
+      const instructions = JSON.stringify(received.find((event) => event.type === 'response.create'));
+      if (path === '/voice/da') {
+        expect(instructions).toContain('Jeg kunne ikke se et brugbart billede');
+        expect(instructions).toContain('tilbyd at prøve igen');
+      } else {
+        expect(instructions).toContain('I could not see a usable image or real description');
+        expect(instructions).toContain('offer to look again');
+      }
       expect(conversationStore.setVisualContext).not.toHaveBeenCalled();
       await vi.waitFor(() => expect(visible).toContainEqual({
         type: 'jarvis.visual_context', itemId: 'missing_frame', visualPath: 'caption', visualReason: reason,
@@ -1630,7 +1674,9 @@ describe('backend-relayed Voice Live WebSocket', () => {
         type: 'jarvis.visual_context', itemId: 'private_turn',
         visualPath: 'caption', visualReason: 'image_input_unverified',
       }));
-      expect(JSON.stringify(received)).toContain('no original image was attached');
+      expect(JSON.stringify(received)).toContain(path === '/voice/da'
+        ? 'brug kun tekstbeskrivelsen'
+        : 'use only the text description');
       expect(JSON.stringify(received)).not.toContain('input_image');
       expect(JSON.stringify(received)).not.toContain(frameId);
       expect(JSON.stringify(conversationStore.setVisualContext.mock.calls)).not.toContain(frameId);
@@ -1868,7 +1914,8 @@ describe('backend-relayed Voice Live WebSocket', () => {
     }
     if (unavailable) {
       expect(conversationStore.setVisualContext).not.toHaveBeenCalled();
-      expect(JSON.stringify(received.find((event) => event.type === 'response.create'))).toContain('No fresh camera image');
+      expect(JSON.stringify(received.find((event) => event.type === 'response.create')))
+        .toContain('could not see a usable image or real description');
       const visualEvent = records.map((line) => JSON.parse(line) as Record<string, unknown>)
         .find((event) => event.msg === 'visual.path');
       if (captionFrame.mock.calls.length) {
@@ -2266,8 +2313,8 @@ describe('backend-relayed Voice Live WebSocket', () => {
     expect(unavailableResponse).not.toContain('First mug.');
     expect(unavailableResponse).not.toContain('What is it?');
     expect(unavailableResponse).not.toContain('2026-10-11T19:30:00Z');
-    expect(unavailableResponse).toContain('No fresh camera image');
-    expect(unavailableResponse).toContain('Do not use an earlier caption to answer the current visual question');
+    expect(unavailableResponse).toContain('could not see a usable image or real description');
+    expect(unavailableResponse).toContain('offer to look again');
   });
 
   it('accepts one frame while final classification is pending and ignores late duplicates', async () => {
@@ -2320,7 +2367,8 @@ describe('backend-relayed Voice Live WebSocket', () => {
     await vi.waitFor(() => expect(received.filter((event) => event.type === 'response.create')).toHaveLength(1));
     expect(browser.readyState).toBe(WebSocket.OPEN);
     expect(conversationStore.setVisualContext).not.toHaveBeenCalled();
-    expect(JSON.stringify(received.find((event) => event.type === 'response.create'))).toContain('No fresh camera image');
+    expect(JSON.stringify(received.find((event) => event.type === 'response.create')))
+      .toContain('could not see a usable image or real description');
   });
 
   it.each(['timeout', 'camera_off', 'cancel', 'end'])('settles a camera wait on %s', async (outcome) => {
@@ -2344,7 +2392,8 @@ describe('backend-relayed Voice Live WebSocket', () => {
       expect(received.filter((event) => event.type === 'response.create')).toHaveLength(0);
     } else {
       await vi.waitFor(() => expect(received.filter((event) => event.type === 'response.create')).toHaveLength(1));
-      expect(JSON.stringify(received.find((event) => event.type === 'response.create'))).toContain('No fresh camera image');
+      expect(JSON.stringify(received.find((event) => event.type === 'response.create')))
+        .toContain('could not see a usable image or real description');
       if (outcome === 'timeout') {
         browser.send(JSON.stringify({
           type: 'jarvis.screen.context', itemId: 'waiting_turn', source: 'camera',
@@ -2513,7 +2562,7 @@ describe('backend-relayed Voice Live WebSocket', () => {
         expect(conversationStore.setVisualContext.mock.calls[0]?.[0].visualContext.description)
           .toBe('Et krus fra det rigtige billede.');
       } else expect(JSON.stringify(received)).not.toContain('input_image');
-      expect(JSON.stringify(received)).toContain('no original image was attached');
+      expect(JSON.stringify(received)).toContain('brug kun tekstbeskrivelsen');
     }
     browser.send(JSON.stringify({ type: 'jarvis.camera.state', on: false }));
     await vi.waitFor(() => expect(received).toContainEqual({
@@ -2552,10 +2601,11 @@ describe('backend-relayed Voice Live WebSocket', () => {
     });
     await once(browser, 'open');
     await expect(ready).resolves.toMatchObject({ type: 'jarvis.session.ready', sessionId: '41' });
+    const capturedAt = new Date().toISOString();
     browser.send(JSON.stringify({
       type: 'jarvis.screen.context',
       description: 'A window shows a chart.',
-      ...(source === 'camera' ? { source, capturedAt: '2026-10-11T19:30:00Z' } : {}),
+      ...(source === 'camera' ? { source, capturedAt } : {}),
     }));
     await vi.waitFor(() => expect(forwarded.some((event) =>
       event.type === 'response.create' &&
@@ -2564,17 +2614,22 @@ describe('backend-relayed Voice Live WebSocket', () => {
 
     expect(conversationStore.addMessage).not.toHaveBeenCalled();
     expect(JSON.stringify(forwarded.filter((event) => event.type === 'conversation.item.create')))
-      .toContain(`from a real ${source} image captured at`);
+      .toContain('fresh visual observation');
+    expect(JSON.stringify(forwarded.filter((event) => event.type === 'conversation.item.create')))
+      .not.toContain(`captured at ${capturedAt}`);
     expect(JSON.stringify(forwarded.filter((event) => event.type === 'conversation.item.create')))
       .toContain('A window shows a chart.');
-    if (source === 'camera') expect(JSON.stringify(forwarded)).toContain('2026-10-11T19:30:00Z');
+    if (source === 'camera') expect(JSON.stringify(forwarded)).not.toContain(capturedAt);
     provider!.send(JSON.stringify({
       type: 'conversation.item.input_audio_transcription.completed',
       item_id: 'look-turn', transcript: 'What do you see?',
     }));
     await vi.waitFor(() => expect(conversationStore.addMessage).toHaveBeenCalledWith(expect.objectContaining({
       role: 'dan', text: 'What do you see?',
-      visualContext: expect.objectContaining({ source, description: 'A window shows a chart.' }),
+      visualContext: expect.objectContaining({
+        source, description: 'A window shows a chart.',
+        ...(source === 'camera' ? { capturedAt } : {}),
+      }),
     })));
     const now = Date.now();
     const clock = vi.spyOn(Date, 'now').mockReturnValue(now + 3_050);

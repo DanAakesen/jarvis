@@ -19,6 +19,17 @@ The nine design areas and where each stands. **Confirmed** = Dan's requirement o
 
 ## Decision log
 
+P9-87 (#714, 12 October 2026, user-directed): classify visual observations in
+prompt builders using the build-time clock and turn/question correlation.
+Fresh observations answer directly without volunteered capture times; reused or
+older observations are labelled as earlier with an ordinary-language age, and
+missing frames/descriptions are reported plainly with an offer to look again.
+When asked, provenance and `visualPath` determine truthful answers about capture
+time and image-versus-description delivery; never claim continuous video.
+Preserve stored provenance, logs and untrusted-data quoting; do not rewrite
+generated text or change the UI. Keep shared capability guidance within
+`agents/jarvis/limits.json`. No migration or schema change (L120/L121).
+
 P9-85 (#710, 12 October 2026, Dan-directed): remove the sequential caption call
 from camera turns. `POST /screen/frames` accepts additive `mode: "handle"` and
 returns `frameId`, receipt-time `capturedAt`, `question` (echo or null) and optional

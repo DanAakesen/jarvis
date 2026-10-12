@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import json
+from datetime import datetime, timezone
 from types import SimpleNamespace
 
 import httpx
@@ -65,14 +66,21 @@ def test_handle_only_chat_attaches_image_without_caption_call(monkeypatch):
     monkeypatch.setattr(chat_runtime, "resolve_frame_image", resolve)
     monkeypatch.setattr(chat_runtime, "resolve_frame_caption", caption)
     app, model = app_with(lambda *_args: _empty_context())
+    visual = {**HANDLE_VISUAL, "capturedAt": datetime.now(timezone.utc).isoformat()}
     with TestClient(app) as browser:
         response = browser.post("/invocations", json={
             "messageId": "42", "sessionId": "41", "text": "What is this?", "language": "en",
-            "delegatedAuthorization": AUTHORIZATION, "visualContext": HANDLE_VISUAL,
+            "delegatedAuthorization": AUTHORIZATION, "visualContext": visual,
         })
     assert response.status_code == 200
     assert model.messages[-1] == ModelMessage("user", "What is this?", (ModelImage(JPEG),))
-    assert "No caption was produced" in model.messages[0].content
+    assert "This turn's original image is attached" in model.messages[0].content
+    assert (
+        "Inspect it and answer Dan's current question naturally and directly"
+        in model.messages[0].content
+    )
+    assert "visualPath=image" in model.messages[0].content
+    assert "Do not mention a capture time, UTC timestamp" in model.messages[0].content
     assert JPEG not in response.text
     assert current_visual_fallback.get() is None
 
@@ -182,7 +190,7 @@ def test_handle_only_resolver_failure_uses_real_caption_or_explicit_absence(
     evidence = "\n".join(message.content for message in model.messages)
     assert ("A real blue cup." in evidence) == caption_available
     if not caption_available:
-        assert "No image or real caption was available" in evidence
+        assert "No usable image or real visual description is available" in evidence
     done = json.loads(response.text.split("event: done\ndata: ", 1)[1].split("\n", 1)[0])
     assert done["visualPath"] == "caption"
     assert done["visualReason"] == reason
@@ -913,10 +921,12 @@ def test_history_restores_visual_provenance_with_trusted_path_fields(monkeypatch
         lambda **kwargs: original(transport=httpx.MockTransport(handle), **kwargs),
     )
     result = asyncio.run(chat_runtime.load_verified_history("token", "42", "Follow up", "en"))
-    assert any(message.content == visual_context_text(VISUAL) for message in result)
+    expected = visual_context_text({**VISUAL, "visualPath": "image"})
+    assert any(message.content == expected for message in result)
     assert all(not message.images for message in result)
     assert all("frame_1" not in message.content for message in result)
-    assert visual_context({**VISUAL, "visualPath": "image"}) is None
+    assert visual_context({**VISUAL, "visualPath": "image"})["visualPath"] == "image"
+    assert visual_context({**VISUAL, "visualPath": []}) is None
 
 
 def test_history_never_retains_image_parts():
