@@ -65,6 +65,11 @@ describe('voice and chat tool parity', () => {
       capabilityInstructions(defaultSettings.memory).match(/\b[a-z][a-z0-9]*(?:_[a-z0-9]+)+\b/g) ?? [],
     );
     mentionedNames.delete('on_the_move');
+    // github_read and github_write take an operation enum; the instructions name those operations.
+    for (const tool of catalogue.filter(({ name }) => name === 'github_read' || name === 'github_write')) {
+      const operations = (tool.inputSchema as { properties: { operation: { enum: string[] } } }).properties.operation.enum;
+      for (const operation of operations) mentionedNames.delete(operation);
+    }
     expect([...mentionedNames].filter((name) => !toolNames.has(name)).sort()).toEqual([]);
   });
 
