@@ -1,5 +1,14 @@
 # Architecture
 
+## Chat loading correction (12 October 2026)
+
+`ConversationHistory` marks the shell-hosted view available independently of
+message count. Its existing portal hosts loading, empty, error/Retry and ready
+states inside the same workspace article; existing messages remain visible
+during refresh. Transcript `aria-busy` follows initial/older-history requests.
+The history API, authentication, transport and composer lifetime are unchanged.
+Saved-pin client/restoration and window operations remain in separate #430.
+
 ## Camera UI release (12 October 2026)
 
 Dan's 21:20 release approval supersedes earlier held-opt-in descriptions below.

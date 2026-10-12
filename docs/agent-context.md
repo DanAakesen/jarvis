@@ -1,5 +1,19 @@
 # Agent context
 
+## Chat loading correction (12 October 2026)
+
+Camera #750 merged. The coordinator confirmed PR2 is chat loading only; do not
+pull saved-pin infrastructure into it. PR3 is the whole #430, including tested
+pin-load recovery. Continue on `ui/shell-iteration`, preserve the dirty local
+drafts, and keep the port-5173 server running.
+
+The isolated chat candidate passes `tsc -b apps/web`, scoped ESLint with
+`--max-warnings 0`, Vite build and App/ConversationHistory suites: 122 pass,
+one unchanged Windows decimal-format baseline excluded. Synthetic Chromium
+checks cover pending history, first-load error/Retry and stable frame identity
+at 1480x1000 dark and 320x700 light/touch/reduced motion. No live-outage claim.
+The coordinator merges on green; no backend or dependency changes.
+
 ## Camera UI release (12 October 2026)
 
 Dan approved shipping #695 at 21:20 via the coordinator; earlier release holds

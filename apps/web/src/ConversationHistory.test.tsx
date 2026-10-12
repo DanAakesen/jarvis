@@ -9,6 +9,7 @@ import type { CameraController, ScreenShareController } from './screen-sharing';
 import { JarvisActivityProvider } from './activity-provider';
 import { useJarvisActivity } from './activity-context';
 import { VoiceWorkspaceContext } from './voice-workspace-state';
+import { ConversationWindowContext } from './conversation-window-state';
 import type { VoiceClientOptions } from './voice-client';
 
 const { loadConversationHistory, loadImageArtifactUrl, createChatSession, sendChatTurn, steerChatTurn, voiceSessions } = vi.hoisted(() => ({
@@ -323,6 +324,32 @@ describe('ConversationHistory', () => {
     expect(document.querySelector('.loader-core')).toBeNull();
     resolve?.({ messages: [], nextCursor: null });
     expect(await screen.findByRole('heading', { name: 'What’s on your mind?' })).not.toBeNull();
+  });
+
+  it('makes shell history available immediately and loads messages inside its window', async () => {
+    let resolve!: (page: { messages: []; nextCursor: null }) => void;
+    loadConversationHistory.mockReturnValue(new Promise(done => { resolve = done; }));
+    const host = document.createElement('div');
+    document.body.append(host);
+    const setAvailable = vi.fn();
+    render(
+      <ConversationWindowContext.Provider value={{ element: host, setAvailable, open: true, setOpen: vi.fn() }}>
+        <JarvisActivityProvider><MemoryRouter><VoiceWorkspaceContext.Provider value={{ onVoiceActiveChange: vi.fn() }}>
+          <ConversationHistory client={client} config={config} />
+        </VoiceWorkspaceContext.Provider></MemoryRouter></JarvisActivityProvider>
+      </ConversationWindowContext.Provider>,
+    );
+    expect(setAvailable).toHaveBeenLastCalledWith(true);
+    expect(host.querySelector('.skeleton-lines')).not.toBeNull();
+    expect(host.textContent).toContain('Loading messages...');
+    expect(screen.getByLabelText('Conversation history').getAttribute('aria-busy')).toBe('true');
+    expect(document.querySelector('.conversation-dock .skeleton-lines')).toBeNull();
+    expect(screen.getByRole('textbox', { name: 'Message Jarvis' })).not.toBeNull();
+    await act(async () => resolve({ messages: [], nextCursor: null }));
+    expect(setAvailable).toHaveBeenLastCalledWith(true);
+    expect(host.textContent).toContain('No messages yet.');
+    expect(screen.getByLabelText('Conversation history').getAttribute('aria-busy')).toBe('false');
+    host.remove();
   });
 
   it.each([{ messages: [] }, { messages: [message] }])('focuses the composer and scrolls to the latest message on load', async ({ messages }) => {

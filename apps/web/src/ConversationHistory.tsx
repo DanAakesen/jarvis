@@ -240,7 +240,7 @@ export function ConversationHistory({
 
   useEffect(() => () => { turnController.current?.abort(); }, []);
   const lastMessageId = messages.at(-1)?.id;
-  const windowed = messages.length > 0 || sending || queue.length > 0 || failedTurns.length > 0 || activeMessage !== null || Boolean(turnError);
+  const windowed = conversationWindow !== null || messages.length > 0 || sending || queue.length > 0 || failedTurns.length > 0 || activeMessage !== null || Boolean(turnError);
   const hosted = windowed && conversationWindow !== null;
   const setConversationAvailable = conversationWindow?.setAvailable;
   useLayoutEffect(() => { setConversationAvailable?.(windowed); }, [setConversationAvailable, windowed]);
@@ -734,9 +734,18 @@ export function ConversationHistory({
   );
   const transcriptContent = (
     <>
-        {loading ? (
-          <Loader variant="lines" label="Loading conversation history…" />
-        ) : historyError && messages.length === 0 ? null : messages.length === 0 && !sending && queue.length === 0 && failedTurns.length === 0 ? (
+        {loading && messages.length === 0 ? (
+          <div className="conversation-loading">
+            <p>Loading messages...</p>
+            <Loader variant="lines" label="Loading conversation history…" />
+          </div>
+        ) : historyError && messages.length === 0 ? (
+          <div className="conversation-history-error" role="alert">
+            <p>{historyError}</p>
+            <button type="button" className="history-button" onClick={retry}>Retry</button>
+          </div>
+        ) : messages.length === 0 && !sending && queue.length === 0 && failedTurns.length === 0 ? (
+          conversationWindow ? <p className="conversation-empty">No messages yet.</p> :
           <div className="conversation-greeting visually-hidden">
             {/* Dan, 8 October: no greeting card; screen readers still hear that the conversation is empty. */}
             <h2>What’s on your mind?</h2>
@@ -875,6 +884,7 @@ export function ConversationHistory({
       {/* Hosted history lives in the shared workspace window; this element keeps the overview mounted in place. */}
       <div ref={hosted ? undefined : transcript} className={hosted ? 'conversation-dock' : 'conversation-transcript'}
         hidden={voiceActive} tabIndex={hosted ? undefined : 0} aria-label={hosted ? undefined : 'Conversation history'}
+        aria-busy={hosted ? undefined : loading || loadingOlder}
         onScroll={hosted ? undefined : updateFollow}>
       {hosted ? null : transcriptContent}
       {children}
@@ -883,6 +893,7 @@ export function ConversationHistory({
       {hosted && conversationWindow.element && createPortal(
         <>
           <div ref={transcript} className="conversation-transcript" tabIndex={0} aria-label="Conversation history"
+            aria-busy={loading || loadingOlder}
             onScroll={updateFollow}>
             {transcriptContent}
           </div>
@@ -974,7 +985,7 @@ export function ConversationHistory({
           <p className="composer-status" role="status">{camera?.inspecting ? 'Looking at camera…' : 'Looking at screen…'}</p>}
       </form>
       </div>
-      {historyError && (
+      {historyError && messages.length > 0 && (
         <ConversationToast notification={{ id: historyErrorId, message: historyError, error: true }}
           onDismiss={dismissHistoryError} voiceActive={voiceActive}
           action={{ label: 'Retry', onSelect: historyErrorSource === 'latest' ? retry : () => void loadOlder() }} />
