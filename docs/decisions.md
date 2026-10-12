@@ -19,6 +19,30 @@ The nine design areas and where each stands. **Confirmed** = Dan's requirement o
 
 ## Decision log
 
+P9-85 (#710, 12 October 2026, Dan-directed): remove the sequential caption call
+from camera turns. `POST /screen/frames` accepts additive `mode: "handle"` and
+returns `frameId`, receipt-time `capturedAt`, `question` (echo or null) and optional
+`turnId`, without a description. Chat `visualContext` and camera-on
+`jarvis.screen.context` accept a handle without a description; legacy clients
+keep caption-first behavior. Do not change the selected chat model, low reasoning
+effort, hosted-session affinity or the unverified image-budget hold.
+
+Keep a single-use image resolution plus one same-message caption fallback within
+the original 60-second private frame lifetime. Only real image delivery failure
+may invoke the vision model; missing/expired frames or failed captions require
+explicit no-image guidance, never a made-up caption. Preserve owner/session/turn
+binding, frame pacing/caps, budget accounting, the voice one-response hold and
+content-free `visual.path` events, adding `captionMs` for fallback work. Image-only
+history records are not cached visual evidence. Release image holds only for
+confirmed pre-inference refusal; retain them for unknown failures, timeout or
+cancellation. Upload-only capture has zero inference cost; fallback captions
+reserve/account their own usage without another frame count. No migration is needed: 0040
+already stores bounded JSON metadata; 0041 remains free (L120). Schema alternatives
+are validated in code with plain root objects (L121); shared capability
+instructions and their limits are unchanged. Offline checks do not establish live
+provider acceptance or latency; the UI switch and deployed verification belong
+to the coordinator/separate web session.
+
 P9-86 (12 October 2026, user-directed): Jarvis speaks as himself in the first
 person in chat and voice, in English and Danish. When discussing
 `DanAakesen/jarvis`, he owns its code, PRs, issues, deployments and Software

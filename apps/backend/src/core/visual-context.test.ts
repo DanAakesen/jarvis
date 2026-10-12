@@ -1,9 +1,18 @@
 import { describe, expect, it } from 'vitest';
-import { normalizeVisualContext, visualContextText } from './visual-context.js';
+import { normalizeVisualContext, persistedVisualContext, visualContextText } from './visual-context.js';
 
 const visual = { source: 'camera', capturedAt: '2026-10-11T19:30:00Z', description: 'A red mug.' };
 
 describe('visual provenance boundary', () => {
+  it('accepts description-free handles but never promotes their persisted metadata to cached evidence', () => {
+    const context = { source: 'camera' as const, capturedAt: visual.capturedAt, frameId: 'private_frame' };
+    expect(normalizeVisualContext(context)).toEqual(context);
+    const metadata = persistedVisualContext(context);
+    expect(normalizeVisualContext(metadata)).toBeUndefined();
+    expect(normalizeVisualContext(metadata, true)).toEqual(metadata);
+    expect(visualContextText(metadata)).toContain('no visual observations are available');
+    expect(visualContextText(metadata)).not.toContain('Cached observations');
+  });
   it('retains the actual capture timestamp and quotes observations as data', () => {
     expect(normalizeVisualContext(visual)).toEqual(visual);
     expect(visualContextText(visual as never)).toContain('from a real camera image captured at 2026-10-11T19:30:00Z, requested by Dan');

@@ -12,6 +12,9 @@ interface StoredFrame extends FrameIdentity {
   readonly expiresAt: number;
   readonly timer: ReturnType<typeof setTimeout>;
   messageId?: string;
+  resolved?: boolean;
+  readonly capturedAt?: number;
+  readonly question?: string;
 }
 
 export class FrameStore {
@@ -30,7 +33,7 @@ export class FrameStore {
     }
   }
 
-  async put(input: FrameIdentity & { readonly image: Buffer; readonly capturedAt?: number }): Promise<string> {
+  async put(input: FrameIdentity & { readonly image: Buffer; readonly capturedAt?: number; readonly question?: string }): Promise<string> {
     if (this.closed) throw new Error('Private frame store closed');
     if (this.pending >= 8) throw new Error('Private frame preprocessing busy');
     this.pending++;
@@ -64,6 +67,8 @@ export class FrameStore {
     timer.unref();
     this.frames.set(frameId, { ownerObjectId: input.ownerObjectId, sessionId: input.sessionId,
       ...(input.turnId === undefined ? {} : { turnId: input.turnId }),
+      ...(input.capturedAt === undefined ? {} : { capturedAt: input.capturedAt }),
+      ...(input.question === undefined ? {} : { question: input.question }),
       image, expiresAt, timer });
     return frameId;
   }
@@ -81,6 +86,23 @@ export class FrameStore {
     const image = Buffer.from(frame.image);
     this.remove(frameId);
     return image;
+  }
+
+  resolve(frameId: string, identity: FrameIdentity & { readonly messageId: string }): Buffer | undefined {
+    const frame = this.authorized(frameId, identity);
+    if (!frame || frame.messageId !== identity.messageId || frame.resolved) return undefined;
+    frame.resolved = true;
+    return Buffer.from(frame.image);
+  }
+
+  metadata(frameId: string, identity: FrameIdentity & { readonly messageId: string }):
+    { readonly capturedAt?: number; readonly question?: string } | undefined {
+    const frame = this.authorized(frameId, identity);
+    if (!frame || frame.messageId !== identity.messageId) return undefined;
+    return {
+      ...(frame.capturedAt === undefined ? {} : { capturedAt: frame.capturedAt }),
+      ...(frame.question === undefined ? {} : { question: frame.question }),
+    };
   }
 
   discard(frameId: string, identity: FrameIdentity): boolean {

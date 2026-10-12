@@ -237,6 +237,68 @@ describe('conversation routes', () => {
     } finally { frames.close(); }
   });
 
+  it('persists real deferred-caption evidence for a description-free handle without retaining the handle', async () => {
+    const frames = new FrameStore();
+    const frameId = await frames.put({ ownerObjectId: config.auth.ownerObjectId,
+      sessionId: '41', turnId: 'capture', image: await sharp({
+        create: { width: 20, height: 20, channels: 3, background: 'red' },
+      }).jpeg().toBuffer() });
+    const setVisualContext = vi.fn(async () => true);
+    const store = storeFixture({ setVisualContext });
+    const visualContext = { source: 'screen' as const, capturedAt: '2026-10-11T19:30:00Z', frameId, turnId: 'capture' };
+    const agent = { stream: vi.fn(async function* (input: import('./chat-agent.js').ConversationAgentInput) {
+      expect(input.visualContext).toEqual(visualContext);
+      input.onVisualResult?.({ visualPath: 'caption', visualReason: 'image_rejected',
+        description: 'A real red square.', captionMs: 25 });
+      yield 'A red square.';
+    }) };
+    try {
+      const app = createApp(store, { modules: [createConversationModule(frames)], conversationAgent: agent });
+      const response = await app.inject({ method: 'POST', url: '/conversation/sessions/41/turns',
+        headers, payload: { text: 'What is this?', visualContext } });
+      expect(response.statusCode).toBe(200);
+      const saved = store.addMessage.mock.calls[0]![0]!.visualContext!;
+      expect(saved).not.toHaveProperty('description');
+      expect(saved).not.toHaveProperty('frameId');
+      expect(setVisualContext).toHaveBeenCalledWith({ sessionId: '41', messageId: '42',
+        visualContext: { source: 'screen', capturedAt: visualContext.capturedAt, turnId: 'capture',
+          description: 'A real red square.', visualPath: 'caption', visualReason: 'image_rejected' } });
+    } finally { frames.close(); }
+  });
+
+  it.each(['image', 'failure', 'another-message'] as const)(
+    'discards the owned retained frame after %s but never discards a frame bound to another message', async (outcome) => {
+      const frames = new FrameStore();
+      const identity = { ownerObjectId: config.auth.ownerObjectId, sessionId: '41', turnId: 'capture', messageId: '42' };
+      const frameId = await frames.put({ ...identity, image: await sharp({
+        create: { width: 20, height: 20, channels: 3, background: 'red' },
+      }).jpeg().toBuffer() });
+      if (outcome === 'another-message') frames.bind(frameId, { ...identity, messageId: '99' });
+      const store = storeFixture();
+      const visualContext = { source: 'camera' as const, capturedAt: '2026-10-11T19:30:00Z', frameId, turnId: 'capture' };
+      const agent = { stream: vi.fn(async function* (input: import('./chat-agent.js').ConversationAgentInput) {
+        if (outcome !== 'another-message') {
+          const image = frames.resolve(frameId, identity);
+          expect(image).toBeInstanceOf(Buffer);
+          image!.fill(0);
+          expect(frames.metadata(frameId, identity)).toBeDefined();
+          if (outcome === 'failure') throw new Error('Provider unavailable');
+          input.onVisualResult?.({ visualPath: 'image' });
+        }
+        yield 'Image response.';
+      }) };
+      try {
+        const app = createApp(store, { modules: [createConversationModule(frames)], conversationAgent: agent });
+        const response = await app.inject({ method: 'POST', url: '/conversation/sessions/41/turns',
+          headers, payload: { text: 'What is this?', visualContext } });
+        expect(response.statusCode).toBe(200);
+        if (outcome === 'failure') expect(response.body).toContain('event: error');
+        else expect(response.body).toContain('Image response.');
+        if (outcome === 'another-message') expect(frames.metadata(frameId, { ...identity, messageId: '99' })).toBeDefined();
+        else expect(frames.consume(frameId, identity)).toBeUndefined();
+      } finally { frames.close(); }
+    });
+
   it.each(['a'.repeat(31), 'shortmissing', 'a'.repeat(128)])('continues with caption for unavailable frame %s and rejects caller path metadata', async (frameId) => {
     const store = storeFixture();
     const agent = { stream: vi.fn(async function* () { yield 'Caption answer.'; }) };
@@ -249,6 +311,41 @@ describe('conversation routes', () => {
     expect((await app.inject({ method: 'POST', url: '/conversation/sessions/41/turns', headers,
       payload: { text: 'What?', visualContext: { ...visualContext, visualPath: 'image' } } })).statusCode).toBe(400);
   });
+
+  it.each(['missing', 'expired', 'foreign'] as const)(
+    'keeps a description-free %s handle for authenticated resolver failure rather than invalid agent input', async (outcome) => {
+      let now = Date.now();
+      const frames = new FrameStore(60_000, 128, () => now);
+      let frameId = 'missing_frame';
+      if (outcome !== 'missing') {
+        frameId = await frames.put({ ownerObjectId: outcome === 'foreign' ? 'foreign-owner' : config.auth.ownerObjectId,
+          sessionId: '41', turnId: 'capture', image: await sharp({
+            create: { width: 20, height: 20, channels: 3, background: 'red' },
+          }).jpeg().toBuffer() });
+        if (outcome === 'expired') now += 60_000;
+      }
+      const setVisualContext = vi.fn(async () => true);
+      const store = storeFixture({ setVisualContext });
+      const visualContext = { source: 'camera' as const, capturedAt: '2026-10-11T19:30:00Z', frameId, turnId: 'capture' };
+      const agent = { stream: vi.fn(async function* (input: import('./chat-agent.js').ConversationAgentInput) {
+        expect(input.visualContext).toEqual(visualContext);
+        expect(frames.resolve(frameId, { ownerObjectId: config.auth.ownerObjectId,
+          sessionId: '41', messageId: input.messageId, turnId: 'capture' })).toBeUndefined();
+        input.onVisualResult?.({ visualPath: 'caption', visualReason: 'frame_unavailable' });
+        yield 'No image or caption is available. Please let me look again.';
+      }) };
+      try {
+        const app = createApp(store, { modules: [createConversationModule(frames)], conversationAgent: agent });
+        const response = await app.inject({ method: 'POST', url: '/conversation/sessions/41/turns',
+          headers, payload: { text: 'What is this?', visualContext } });
+        expect(response.statusCode).toBe(200);
+        expect(response.body).toContain('No image or caption is available');
+        expect(store.addMessage.mock.calls[0]![0]!.visualContext).not.toHaveProperty('frameId');
+        expect(setVisualContext).toHaveBeenCalledWith({ sessionId: '41', messageId: '42',
+          visualContext: { source: 'camera', capturedAt: visualContext.capturedAt, turnId: 'capture',
+            visualPath: 'caption', visualReason: 'frame_unavailable' } });
+      } finally { frames.close(); }
+    });
 
   it('never replies twice to a completed visual turn replay', async () => {
     let sourceItemId: string | undefined;

@@ -34,7 +34,12 @@ from jarvis_tools import (
 )
 from model_contract import StreamingModelClient
 from state import ModelMessage, ModelSettings
-from visual_context import ImageInputRejected, current_image_reservation, current_visual_result
+from visual_context import (
+    ImageInputRejected,
+    current_image_reservation,
+    current_visual_fallback,
+    current_visual_result,
+)
 
 FOUNDRY_TOKEN_SCOPE = "https://ai.azure.com/.default"
 DEFAULT_SYSTEM_PROMPT = INSTRUCTIONS
@@ -424,9 +429,10 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
             visual_result = current_visual_result.get()
             if visual_result is not None:
                 visual_result["visualReason"] = exc.reason
+            caption_messages = await self._caption_messages(messages, exc, role)
             async with aclosing(
                 self._complete(
-                    tuple(ModelMessage(message.role, message.content) for message in messages),
+                    caption_messages,
                     self._system_prompt, settings, role=role,
                     allow_anthropic=has_image,
                 )
@@ -462,15 +468,38 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
             visual_result = current_visual_result.get()
             if visual_result is not None:
                 visual_result["visualReason"] = exc.reason
-            caption_messages = tuple(
-                ModelMessage(message.role, message.content) for message in messages
-            )
+            caption_messages = await self._caption_messages(messages, exc, "chat")
             async with aclosing(self._complete(
                 caption_messages, instructions, settings,
                 load_settings=settings is None, role="chat",
             )) as response:
                 async for delta in response:
                     yield delta
+
+    async def _caption_messages(
+        self, messages: Sequence[ModelMessage], rejection: ImageInputRejected, role: str,
+    ) -> tuple[ModelMessage, ...]:
+        reservation = current_image_reservation.get()
+        reporter = getattr(self._tools, "record_model_usage", None)
+        if reservation and rejection.model and callable(reporter):
+            try:
+                await reporter(
+                    role=role, model=rejection.model, input_tokens=0, output_tokens=0,
+                    event_id=str(uuid4()), image_reservation=reservation,
+                )
+                current_image_reservation.set(None)
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                logger.warning("Rejected image hold was not released; error=%s", type(exc).__name__)
+        caption_messages = tuple(
+            ModelMessage(message.role, message.content) for message in messages
+        )
+        fallback = current_visual_fallback.get()
+        if fallback is not None:
+            evidence = ModelMessage("user", await fallback(rejection.reason))
+            caption_messages = (*caption_messages[:-1], evidence, caption_messages[-1])
+        return caption_messages
 
     async def _complete(
         self,
@@ -589,21 +618,7 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                             ensure_ascii=False,
                         ).encode("utf-8"))
                         if prompt_bytes > 28_000:
-                            image_request = False
-                            model_input = [
-                                {
-                                    **item,
-                                    "content": [
-                                        block for block in item["content"]
-                                        if block.get("type") != "input_image"
-                                    ],
-                                }
-                                if isinstance(item.get("content"), list) else item
-                                for item in model_input
-                            ]
-                            visual_result = current_visual_result.get()
-                            if visual_result is not None:
-                                visual_result["visualReason"] = "image_context_limit"
+                            raise ImageInputRejected("image_context_limit", model=model_name)
                     started = time.monotonic()
                     first_text_ms: int | None = None
                     final = None
@@ -663,7 +678,7 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                                     not accepted and image_request
                                     and image_input_rejected(exc)
                                 ):
-                                    raise ImageInputRejected() from None
+                                    raise ImageInputRejected(model=model_name) from None
                                 logger.warning(
                                     "Foundry Claude model request failed; error=%s",
                                     type(exc).__name__,
@@ -680,7 +695,7 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                                     image_request
                                     and image_input_rejected(exc)
                                 ):
-                                    raise ImageInputRejected() from None
+                                    raise ImageInputRejected(model=model_name) from None
                                 raise
                             received_output = False
                             async with stream:
@@ -723,7 +738,7 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                                                 "invalid_image_format",
                                             }
                                         ):
-                                            raise ImageInputRejected() from None
+                                            raise ImageInputRejected(model=model_name) from None
                                         raise RuntimeError(
                                             "Foundry model response did not complete"
                                         )
@@ -854,7 +869,7 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                             "role": "user",
                             "content": (
                                 "The image was supplied only in the first model round. "
-                                "Continue using the caption, your previous observations and tool "
+                                "Continue using your previous observations and tool "
                                 "results; no fresh image is attached. "
                                 "Do not invent new visual details."
                             ),

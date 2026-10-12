@@ -39,6 +39,7 @@ from state import ModelMessage
 from visual_context import (
     MAX_JPEG_BYTES,
     current_image_reservation,
+    current_visual_fallback,
     current_visual_result,
     resolved_visual_image,
     visual_context,
@@ -215,7 +216,9 @@ async def load_verified_history(
                 and isinstance(metadata.get("visualContext"), dict)
                 else None
             )
-            if record and (latest_visual is None or int(message["id"]) > latest_visual[0]):
+            if record and record.get("description") and (
+                latest_visual is None or int(message["id"]) > latest_visual[0]
+            ):
                 latest_visual = (int(message["id"]), record)
         visual_text = visual_context_text(latest_visual[1]) if latest_visual else ""
         if len(visual_text) > MAX_CONTEXT_CHARACTERS:
@@ -323,6 +326,45 @@ async def resolve_frame_image(
         }, context)
     finally:
         image[:] = b"\0" * len(image)
+
+
+async def resolve_frame_caption(
+    token: str, context: dict[str, str | None], session_id: str,
+    message_id: str, http_timeout_seconds: int,
+) -> dict[str, Any] | None:
+    backend_url, _ = backend_settings_from_environment()
+    body = bytearray()
+    async with httpx.AsyncClient(
+        timeout=http_timeout_seconds, follow_redirects=False
+    ) as client:
+        async with client.stream(
+            "POST", f"{backend_url}/screen/frames/caption",
+            headers={"Authorization": " ".join(("Bear" + "er", token))},
+            json={
+                "frameId": context["frameId"], "sessionId": session_id,
+                "messageId": message_id,
+                **({"turnId": context["turnId"]} if context.get("turnId") else {}),
+            },
+        ) as response:
+            if response.status_code != 200 or response.headers.get(
+                "content-type", ""
+            ).split(";", 1)[0].lower() != "application/json":
+                return None
+            async for chunk in response.aiter_bytes():
+                if len(body) + len(chunk) > 64 * 1024:
+                    return None
+                body.extend(chunk)
+    value = json.loads(body)
+    if not isinstance(value, dict):
+        return None
+    description, caption_ms = value.get("description"), value.get("captionMs")
+    if (
+        not isinstance(description, str) or not description.strip() or len(description) > 5_000
+        or isinstance(caption_ms, bool) or not isinstance(caption_ms, (int, float))
+        or not 0 <= caption_ms <= http_timeout_seconds * 1_000
+    ):
+        return None
+    return {"description": description.strip(), "captionMs": caption_ms}
 
 
 def register_chat_invocation(
@@ -487,6 +529,7 @@ def register_chat_invocation(
             )
             visual_token = current_visual_result.set(visual_result)
             image_reservation_token = current_image_reservation.set(None)
+            visual_fallback_token = current_visual_fallback.set(None)
             output_bytes = 0
             steering_fetcher_token = None
             phase_setter_token = None
@@ -495,6 +538,43 @@ def register_chat_invocation(
             try:
                 yield ": connected\n\n"
                 current_image = None
+                fallback_text = None
+                if visual is not None and visual.get("frameId") and not visual.get("description"):
+                    async def fallback(reason: str) -> str:
+                        nonlocal fallback_text
+                        if fallback_text is not None:
+                            return fallback_text
+                        visual_result.update({"visualPath": "caption", "visualReason": reason})
+                        started = time.monotonic()
+                        caption = None
+                        if chat_session_id is not None:
+                            try:
+                                caption = await resolve_frame_caption(
+                                    match.group(1), visual, chat_session_id,
+                                    message_id, backend_http_timeout,
+                                )
+                            except asyncio.CancelledError:
+                                raise
+                            except Exception:
+                                caption = None
+                            visual_result["captionMs"] = round(
+                                (time.monotonic() - started) * 1_000, 2
+                            )
+                        if caption is not None:
+                            visual_result.update(caption)
+                            fallback_text = visual_context_text({
+                                **visual, "description": caption["description"],
+                            })
+                        else:
+                            fallback_text = (
+                                "No image or real caption was available for Dan's requested "
+                                f"{visual['source']} frame captured at {visual['capturedAt']}. "
+                                "Say that I could not see this frame. Do not invent a caption "
+                                "or use an earlier frame as evidence for this turn."
+                            )
+                        return fallback_text
+
+                    current_visual_fallback.set(fallback)
                 if current_image is None and visual is not None and visual.get("frameId"):
                     visual_result["visualReason"] = "frame_unavailable"
                     if chat_session_id is not None:
@@ -512,6 +592,8 @@ def register_chat_invocation(
                         current_image_reservation.set({
                             "sessionId": chat_session_id, "itemId": visual["frameId"],
                         })
+                    elif current_visual_fallback.get() is not None:
+                        await current_visual_fallback.get()(visual_result["visualReason"])
                 if chat_session_id is not None:
                     cursor = turn_id
 
@@ -615,6 +697,8 @@ def register_chat_invocation(
                             + attachment_context,
                         ),
                     )
+                if fallback_text is not None:
+                    messages = (*messages, ModelMessage("user", fallback_text))
                 messages = (
                     *messages, ModelMessage(
                         "user", current_text, (current_image,) if current_image else ()
@@ -643,6 +727,7 @@ def register_chat_invocation(
                 done = (
                     {key: visual_result[key] for key in (
                         "visualPath", "visualReason", "model", "inputTokens", "outputTokens",
+                        "description", "captionMs",
                     )
                      if key in visual_result}
                     if visual_result is not None else {}
@@ -673,6 +758,7 @@ def register_chat_invocation(
                 current_chat_session_id.reset(chat_session_token)
                 current_visual_result.reset(visual_token)
                 current_image_reservation.reset(image_reservation_token)
+                current_visual_fallback.reset(visual_fallback_token)
                 current_chat_phase_timings.reset(timing_token)
 
         return StreamingResponse(

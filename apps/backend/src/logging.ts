@@ -96,7 +96,7 @@ const reflexReasons = new Set([
   'invalid_answer', 'network_error',
 ]);
 const visualPathReasons = new Set([
-  'image_attached', 'image_request_accepted', 'image_context_limit',
+  'image_attached', 'image_request_accepted', 'image_context_limit', 'context_failure',
   'image_accepted', 'image_rejected', 'image_timeout', 'image_unavailable',
   'frame_unavailable', 'frame_missing', 'budget_exhausted', 'budget_unavailable', 'legacy_agent',
   'image_input_unverified', 'timeout', 'daily_limit', 'frame_rate_limited', 'capture_failed',
@@ -113,6 +113,8 @@ function safeFields(input: Record<string, unknown>): Record<string, unknown> {
     }
     if (typeof input.latencyMs === 'number' && Number.isFinite(input.latencyMs) &&
         input.latencyMs >= 0 && input.latencyMs <= 600_000) fields.latencyMs = input.latencyMs;
+    if (typeof input.captionMs === 'number' && Number.isFinite(input.captionMs) &&
+        input.captionMs >= 0 && input.captionMs <= 600_000) fields.captionMs = input.captionMs;
     return fields;
   }
   if (input.msg === 'chat.agent_session') {

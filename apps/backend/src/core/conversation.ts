@@ -662,6 +662,7 @@ return {
       let agentVisualContext = visualContext;
       let visualResult: ConversationVisualResult | undefined;
       let agentPhaseTimings: AgentPhaseTimings | undefined;
+      let boundVisualFrame = false;
       if (visualContext?.frameId) {
         const authorized = request.principal &&
           request.principal.objectId.toLowerCase() === app.ownerObjectId.toLowerCase() &&
@@ -669,8 +670,9 @@ return {
             ownerObjectId: request.principal.objectId, sessionId, messageId: userMessage.id,
             ...(visualContext.turnId === undefined ? {} : { turnId: visualContext.turnId }),
           });
+        boundVisualFrame = Boolean(authorized);
         if (!authorized) {
-          agentVisualContext = persistedVisualContext(visualContext);
+          agentVisualContext = visualContext.description ? persistedVisualContext(visualContext) : visualContext;
           visualResult = { visualPath: 'caption', visualReason: 'frame_unavailable' };
         }
       }
@@ -812,6 +814,8 @@ return {
             if (!partial.trim()) throw new Error('Chat response was empty');
             if (!isSteering && visualContext) {
               const metadata = { ...persistedVisualContext(visualContext),
+                ...(visualResult?.visualPath === 'caption' && visualResult.description
+                  ? { description: visualResult.description } : {}),
                 visualPath: visualResult?.visualPath ?? 'caption' as const,
                 ...(visualResult?.visualReason ? { visualReason: visualResult.visualReason } :
                   visualResult ? {} : { visualReason: 'legacy_agent' }) };
@@ -837,6 +841,7 @@ return {
                     visualResult ? 'image_unavailable' : 'legacy_agent'),
                 channel: 'chat',
                 latencyMs: Math.max(0, performance.now() - turnStartedAt),
+                ...(visualResult?.captionMs === undefined ? {} : { captionMs: visualResult.captionMs }),
               }, 'visual.path');
             }
             yield streamEvent('done', { ...assistantMessage,
@@ -862,6 +867,10 @@ return {
             });
           }
         } finally {
+          if (boundVisualFrame && visualContext?.frameId && request.principal) {
+            frameStore?.discard(visualContext.frameId, { ownerObjectId: request.principal.objectId, sessionId,
+              ...(visualContext.turnId === undefined ? {} : { turnId: visualContext.turnId }) });
+          }
           activeTurn.roundController = null;
           if (activeTurns.get(sessionId) === activeTurn) activeTurns.delete(sessionId);
           if (!activityFinished) publishActivity(controller.signal.aborted ? 'interrupted' : 'ended');

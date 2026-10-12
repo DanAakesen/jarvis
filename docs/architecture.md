@@ -1547,10 +1547,15 @@ browser timing includes independent completion verification.
 
 ### Act on the shared Chrome tab (P7-19)
 
-P9-81/P9-82/P9-83's per-turn visual contracts are:
+P9-81/P9-82/P9-83/P9-85's per-turn visual contracts are:
 
 - `POST /screen/frames`: `{sessionId, frame, question?, turnId?}` returns
   `{description, capturedAt, question, turnId?, frameId?, inputTokens, outputTokens}`.
+  Add `mode: "handle"` for upload-only hand-off: validate, downscale and privately
+  store the frame, returning `{frameId, capturedAt, question, turnId?}` without
+  calling the vision model or returning a description/token counts. Omit `mode`
+  for the unchanged legacy caption-first response. Both modes share pacing and
+  the daily capture cap.
   `question` is trimmed, limited to 500 Unicode code points before trimming and
   rejected with HTTP 400 above that bound, never silently truncated. Omitted
   or blank questions return `question: null` and use the generic prompt.
@@ -1565,9 +1570,11 @@ P9-81/P9-82/P9-83's per-turn visual contracts are:
   them. The handle references only a process-memory JPEG, at most 768 pixels
   on its long side, quality 70, with metadata stripped. It expires within
   60 seconds, is bound to the authenticated owner/session/turn, and is
-  single-use. Replacement, expiry, consumption and shutdown zero the stored
+  single-use for image delivery. A private copy remains available for one
+  same-message caption fallback until the original expiry; it cannot be resolved
+  as an image again. Replacement, expiry, final consumption and shutdown zero the stored
   buffer; frames are never written to SQL, Blob, logs or telemetry.
-- HTTP 429 is `{error, code: "frame_rate_limited" | "daily_limit",
+- HTTP 429 is `{error, code: "frame_rate_limited" | "daily_limit" | "budget_exhausted",
   retryAfterMs?}`. The three-second window and configured daily cap remain;
   `frame_rate_limited` supplies a conservative `retryAfterMs: 3000`;
   `daily_limit` does not promise a short retry.
@@ -1575,17 +1582,22 @@ P9-81/P9-82/P9-83's per-turn visual contracts are:
   never imply a new capture or answer a new detail question from an old answer.
 - `POST /conversation/sessions/:sessionId/turns`: send
   `{text, visualContext: {source: "camera" | "screen", capturedAt, question,
-  description, frameId?, turnId?}}`
+  description?, frameId?, turnId?}}`
   using the result and the actual selected source. Send either `visualContext`
   or legacy `screenContext`, not both. For chat pacing/capture failure, send
   the text turn without fresh `visualContext`; the agent restores the previous
   same-session record with its original question/time. Do not relabel an old
   record as a new capture.
+  `description` is optional only when `frameId` is supplied. Without a handle,
+  the legacy nonblank 1–5000-character description remains required. A handle-only
+  turn sends Dan's message and image to the answering model without a prior
+  caption call.
   There is only one optional `visualContext` object, never a top-level image
   or `frameId`. `turnId` remains legacy correlation. The UI captures when a
   queued turn actually executes, not when enqueued; that behavior is owned by
   the separate web session. Missing, expired, foreign or already-consumed
-  handles do not fail the text turn: continue with the caption.
+  handles do not fail the text turn: attempt a real caption of that stored frame,
+  or explicitly state that no image/caption was available.
 - Camera on is consent for a fresh frame every chat and voice turn, not a
   phrase-matched request; camera off sends nothing. The separate UI session
   supplies those frames through the same `/screen/frames` service for voice.
@@ -1594,7 +1606,7 @@ P9-81/P9-82/P9-83's per-turn visual contracts are:
   client. Camera-off or superseded results are ignored.
 - Voice signals `{type: "jarvis.camera.state", on: boolean}` per connection,
   default off. Camera results send `{type: "jarvis.screen.context", itemId,
-  description, capturedAt, question, source: "camera", frameId?}`; failure sends
+  description?, capturedAt, question, source: "camera", frameId?}`; failure sends
   `{type: "jarvis.screen.context.unavailable", itemId, reason, retryAfterMs?}`.
   Only the most recent pending item can release a hold. Late results for a
   different item or an already answered/timed-out item are ignored without
@@ -1606,6 +1618,9 @@ P9-81/P9-82/P9-83's per-turn visual contracts are:
   Completed reflex actions do not wait. Camera off preserves existing screen
   inspection behavior. Both realtime language configurations already set
   `turn_detection.create_response: false`; preserve that baseline.
+  Camera-on events may omit `description` when they carry `frameId`. Image
+  rejection, timeout or budget failure triggers a caption of the same private
+  frame before releasing the one-response hold, not a speculative caption.
 - Unavailable reasons are `frame_rate_limited`, `daily_limit`, `capture_failed`,
   `camera_off`, `permission_denied`, `not_supported`, `session_ended`,
   `vision_failed`, `timeout`, `budget_exhausted` or `budget_unavailable`. Pacing emits unavailable,
@@ -1613,7 +1628,8 @@ P9-81/P9-82/P9-83's per-turn visual contracts are:
   from 0 to 86,400,000. Malformed payloads still close with 1008.
 - History exposes `metadata.visualContext` on the owning Dan message.
   Description and answered question remain untrusted even when the source is a
-  real image. Cached results retain their original question and capture time;
+  real image. Image-only metadata has no invented description and is not
+  restored as cached visual evidence. Cached captions retain their original question and capture time;
   voice also carries its last successfully saved camera result into later
   no-fresh-image responses as explicitly historical evidence. Image bytes
   are never stored.
@@ -1641,7 +1657,8 @@ P9-81/P9-82/P9-83's per-turn visual contracts are:
 
 `visual.path` records the final selected path for visual chat and voice turns.
 Its export allowlist is exactly `path` (`image` or `caption`), bounded `reason`,
-`channel` (`chat`, `voice-en`, `voice-da`) and finite `latencyMs`; even inherited
+`channel` (`chat`, `voice-en`, `voice-da`), finite `latencyMs` and optional
+nonnegative `captionMs` when fallback ran; even inherited
 request identifiers are removed. It contains no question, caption, frame,
 session or item identifier. Coordinator acceptance uses these events after
 deployment; offline provider mocks do not establish live image support.
@@ -1659,8 +1676,20 @@ The hosted agent resolves it through `POST /screen/frames/resolve` with
 delegated owner authorization and `{frameId, sessionId, messageId, turnId?}`;
 `turnId` here is capture correlation, not the agent's SQL root-turn ID.
 This no-store endpoint rechecks the active session and message membership,
-returns one bounded JPEG, and consumes/zeroes the stored buffer. A failed
-resolution continues with the caption. The browser's turn payload never
+returns one bounded JPEG, retaining the private fallback copy only until the
+original 60-second expiry. `POST /screen/frames/caption` uses the same delegated
+authorization and identity fields, consumes that copy once, checks the vision
+budget and returns a real `{description, captionMs}`. It does not count another
+capture. Failed resolution, explicit provider image rejection before output/tools,
+or the image context limit invokes this endpoint for a handle-only turn. Missing
+or expired frames and caption failures produce explicit no-image guidance; they
+never become a fabricated caption. Legacy same-frame captions remain usable.
+Confirmed pre-inference image rejection/local context refusal reconciles the
+original image hold to zero before caption admission. Unknown failures,
+timeouts and cancellation keep conservative holds; caption inference reserves
+and reconciles its own usage. Upload-only capture clears the counter's inference
+hold because no model call occurred.
+The browser's turn payload never
 contains the resolved JPEG. Retries of a visual chat turn use hashed
 session/capture correlation (or the handle when correlation is absent) and
 cannot create another reply.
@@ -1668,8 +1697,9 @@ Admission reuses the shared UTC-day vision ledger and its serialized budget
 lock. On-demand pacing remains three seconds and the daily capture cap remains
 300 (or the configured lower cap). Conservative pending allowances remain
 charged when actual cost cannot be verified; they are budget reservations,
-not a claim of billed image cost. Unknown or over-allowance chat-model pricing
-selects the caption instead. Provider input totals include text as well as
+not a claim of billed image cost. Unknown chat-model pricing is admitted on the
+conservative unverified image hold; known over-allowance pricing selects fallback.
+Provider input totals include text as well as
 image tokens where separate image attribution is unavailable.
 Input/output totals are reported by the chat agent. Image admission is keyed
 idempotently by session and image item, using the existing `input_tokens` metric

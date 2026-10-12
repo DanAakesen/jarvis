@@ -19,7 +19,7 @@ describe('structured log export', () => {
     const logger = createLogger({ logLevel: 'info' }, sink, output).child({
       reqId: '00000000-0000-0000-0000-000000000000',
     });
-    const fields = { path: 'image', reason: 'image_accepted', channel, latencyMs: 42 };
+    const fields = { path: 'image', reason: 'image_accepted', channel, latencyMs: 42, captionMs: 20 };
     logger.info({
       ...fields, frameId: 'private-frame', turnId: 'private-turn', sessionId: '41', messageId: '42',
       image: 'private-image', description: 'private-description', question: 'private-question',
@@ -36,7 +36,7 @@ describe('structured log export', () => {
   });
 
   it.each([
-    'image_attached', 'image_request_accepted', 'image_context_limit',
+    'image_attached', 'image_request_accepted', 'image_context_limit', 'context_failure',
     'image_accepted', 'image_rejected', 'image_timeout', 'image_unavailable',
     'frame_unavailable', 'frame_missing', 'budget_exhausted', 'budget_unavailable', 'legacy_agent',
     'image_input_unverified', 'timeout', 'daily_limit', 'frame_rate_limited', 'capture_failed',
@@ -60,7 +60,7 @@ describe('structured log export', () => {
     const sink = { ...sdk, trackTrace: vi.fn() };
     const logger = createLogger({ logLevel: 'info' }, sink, output);
     for (const latencyMs of [-1, 600_001, Infinity, -Infinity, NaN, '42', null, undefined]) {
-      logger.info({ path: 'private', reason: 'arbitrary_code', channel: 'voice', latencyMs }, 'visual.path');
+      logger.info({ path: 'private', reason: 'arbitrary_code', channel: 'voice', latencyMs, captionMs: latencyMs }, 'visual.path');
       expect(JSON.parse(records.at(-1)!)).toEqual({
         level: 30, time: expect.any(Number), service: 'jarvis-backend', msg: 'visual.path',
       });
@@ -69,10 +69,11 @@ describe('structured log export', () => {
       }));
     }
     for (const latencyMs of [0, 42.5, 600_000]) {
-      logger.info({ latencyMs }, 'visual.path');
+      logger.info({ latencyMs, captionMs: latencyMs }, 'visual.path');
       expect(JSON.parse(records.at(-1)!)).toHaveProperty('latencyMs', latencyMs);
+      expect(JSON.parse(records.at(-1)!)).toHaveProperty('captionMs', latencyMs);
       expect(sink.trackTrace).toHaveBeenLastCalledWith(expect.objectContaining({
-        properties: { service: 'jarvis-backend', latencyMs },
+        properties: { service: 'jarvis-backend', latencyMs, captionMs: latencyMs },
       }));
     }
   });

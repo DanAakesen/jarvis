@@ -13,6 +13,27 @@ function store(ttlMs = 60_000, capacity = 128) {
 }
 
 describe('private frame store', () => {
+  it('resolves one independent image copy and retains exactly one caption consume at the original expiry', async () => {
+    vi.useFakeTimers();
+    const frames = store();
+    const frameId = await frames.put({ ...identity, image: await jpeg(), capturedAt: Date.now(), question: 'Colour?' });
+    expect(frames.resolve(frameId, identity)).toBeUndefined();
+    frames.bind(frameId, identity);
+    expect(frames.resolve(frameId, { ...identity, messageId: '99' })).toBeUndefined();
+    const image = frames.resolve(frameId, identity)!;
+    image.fill(0);
+    expect(frames.resolve(frameId, identity)).toBeUndefined();
+    expect(frames.metadata(frameId, identity)).toEqual({ capturedAt: Date.now(), question: 'Colour?' });
+    const caption = frames.consume(frameId, identity)!;
+    expect(caption[0]).toBe(0xff);
+    caption.fill(0);
+    expect(frames.consume(frameId, identity)).toBeUndefined();
+    const expires = await frames.put({ ...identity, image: await jpeg(), capturedAt: Date.now() - 50_000 });
+    frames.bind(expires, identity);
+    frames.resolve(expires, identity)?.fill(0);
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(frames.consume(expires, identity)).toBeUndefined();
+  });
   it('creates random handles, bounds JPEG dimensions, and consumes only once', async () => {
     const frames = store();
     const frameId = await frames.put({ ...identity, image: await jpeg() });
