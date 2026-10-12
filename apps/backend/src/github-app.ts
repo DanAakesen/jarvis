@@ -3,6 +3,10 @@ import { SignJWT } from 'jose';
 
 export interface GitHubAppTokenIssuer {
   issue(repository: string): Promise<string>;
+  issueWithPermissions?(
+    repository: string,
+    permissions: Readonly<Record<string, 'read' | 'write'>>,
+  ): Promise<string>;
   issueForActions(repository: string): Promise<string>;
   issueForChecks(repository: string): Promise<string>;
   issueForContents(repository: string): Promise<string>;
@@ -45,6 +49,7 @@ const maxResponseBytes = 16 * 1024;
 const maxRepositoryResponseBytes = 1024 * 1024;
 const maxInstallationRepositories = 10_000;
 export const repositoryCacheTtlMs = 5 * 60 * 1000;
+const installationPermissionsCacheTtlMs = 5 * 60 * 1000;
 
 class GitHubAppRequestError extends Error {
   constructor(readonly status: number) {
@@ -298,42 +303,95 @@ export function createGitHubAppTokenIssuer({
         appToken,
         { repositories: [name], permissions },
       );
+      const tokenPermissions = object(object(token)?.permissions);
+      if (tokenPermissions) {
+        for (const [permission, access] of Object.entries(tokenPermissions)) {
+          if (!/^[a-z][a-z_]{0,63}$/u.test(permission) ||
+              (access !== 'read' && access !== 'write' && access !== 'admin')) {
+            throw new Error('GitHub installation token permissions are invalid');
+          }
+        }
+        for (const [permission, requested] of Object.entries(permissions)) {
+          const granted = tokenPermissions[permission];
+          if (granted !== requested && !(requested === 'read' && (granted === 'write' || granted === 'admin'))) {
+            throw new Error('GitHub installation token permissions are invalid');
+          }
+        }
+      }
       return validInstallationToken(token, now);
     }, now, onTokenMint);
   };
 
+  const permissionCache = new Map<string, {
+    expiresAt: number;
+    permissions: Readonly<Record<string, 'read' | 'write' | 'admin'>>;
+  }>();
+  const pendingPermissions = new Map<
+    string,
+    Promise<Readonly<Record<string, 'read' | 'write' | 'admin'>>>
+  >();
   const readInstallationPermissions = async (
     repository: string,
   ): Promise<Readonly<Record<string, 'read' | 'write' | 'admin'>>> => {
     if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/u.test(repository)) {
       throw new Error('GitHub repository is invalid');
     }
+    const cacheKey = repository.toLowerCase();
+    const cached = permissionCache.get(cacheKey);
+    if (cached && cached.expiresAt > now()) return cached.permissions;
+    const pending = pendingPermissions.get(cacheKey);
+    if (pending) return pending;
     const [owner, name] = repository.split('/');
     if (!owner || !name) throw new Error('GitHub repository is invalid');
-    const appToken = await createAppJwt(appId, await getPrivateKey(), now);
-    const installation = object(await requestJson(
-      fetchImpl,
-      `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/installation`,
-      appToken,
-    ));
-    const rawPermissions = object(installation?.permissions);
-    if (!installationId(installation?.id) || !rawPermissions ||
-        Object.keys(rawPermissions).length === 0 || Object.keys(rawPermissions).length > 64) {
-      throw new Error('GitHub installation permissions are unavailable');
-    }
-    const permissions: Record<string, 'read' | 'write' | 'admin'> = {};
-    for (const [permission, access] of Object.entries(rawPermissions)) {
-      if (!/^[a-z][a-z_]{0,63}$/u.test(permission) ||
-          (access !== 'read' && access !== 'write' && access !== 'admin')) {
-        throw new Error('GitHub installation permissions are invalid');
+    const request = (async () => {
+      const appToken = await createAppJwt(appId, await getPrivateKey(), now);
+      const installation = object(await requestJson(
+        fetchImpl,
+        `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/installation`,
+        appToken,
+      ));
+      const rawPermissions = object(installation?.permissions);
+      if (!installationId(installation?.id) || !rawPermissions ||
+          Object.keys(rawPermissions).length === 0 || Object.keys(rawPermissions).length > 64) {
+        throw new Error('GitHub installation permissions are unavailable');
       }
-      permissions[permission] = access;
+      const permissions: Record<string, 'read' | 'write' | 'admin'> = {};
+      for (const [permission, access] of Object.entries(rawPermissions)) {
+        if (!/^[a-z][a-z_]{0,63}$/u.test(permission) ||
+            (access !== 'read' && access !== 'write' && access !== 'admin')) {
+          throw new Error('GitHub installation permissions are invalid');
+        }
+        permissions[permission] = access;
+      }
+      const result = Object.freeze(permissions);
+      permissionCache.set(cacheKey, { expiresAt: now() + installationPermissionsCacheTtlMs, permissions: result });
+      return result;
+    })();
+    pendingPermissions.set(cacheKey, request);
+    try {
+      return await request;
+    } finally {
+      if (pendingPermissions.get(cacheKey) === request) pendingPermissions.delete(cacheKey);
     }
-    return Object.freeze(permissions);
+  };
+  const issueWithPermissions = async (
+    repository: string,
+    permissions: Readonly<Record<string, 'read' | 'write'>>,
+  ) => {
+    const installed = await readInstallationPermissions(repository);
+    for (const [permission, requested] of Object.entries(permissions)) {
+      const granted = installed[permission];
+      if (granted === undefined ||
+          (requested === 'write' && granted !== 'write' && granted !== 'admin')) {
+        throw new Error('GitHub installation permissions are insufficient');
+      }
+    }
+    return issue(repository, { ...permissions });
   };
 
   return {
     issue: (repository) => issue(repository, { contents: 'write', pull_requests: 'write' }),
+    issueWithPermissions,
     issueForActions: (repository) => issue(repository, { actions: 'read' }),
     issueForChecks: (repository) => issue(repository, { checks: 'read' }),
     issueForContents: (repository) => issue(repository, { contents: 'read' }),
