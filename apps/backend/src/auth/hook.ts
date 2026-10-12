@@ -1,6 +1,7 @@
 import type { IncomingMessage, Server, ServerResponse } from 'node:http';
 import type { FastifyBaseLogger, FastifyInstance, FastifyRequest } from 'fastify';
 import { localWebOrigin, type BackendConfig } from '../config.js';
+import { exportDevicePaths, validateExportDevice, verifyExportCredential, type NutritionExportCredentialVerifier } from '../daily/nutrition-export/auth.js';
 import {
   AuthenticationDenied, createTokenVerifier, isAgentPrincipal, isRunnerPrincipal,
   isPcBridgePrincipal, isPhoneEventGridPrincipal, isDeployPrincipal,
@@ -51,13 +52,14 @@ function voiceWebsocketToken(request: FastifyRequest): string | undefined {
   return token && /^[\w-]+\.[\w-]+\.[\w-]+$/u.test(token) ? token : undefined;
 }
 
-export function installAuthentication<Logger extends FastifyBaseLogger>(app: FastifyInstance<Server, IncomingMessage, ServerResponse, Logger>, config: BackendConfig, verify: TokenVerifier = createTokenVerifier(config.auth)) {
+export function installAuthentication<Logger extends FastifyBaseLogger>(app: FastifyInstance<Server, IncomingMessage, ServerResponse, Logger>, config: BackendConfig, verify: TokenVerifier = createTokenVerifier(config.auth), exportDeviceVerifier?: NutritionExportCredentialVerifier) {
   app.decorateRequest('principal', null);
   app.decorateRequest('agentPrincipal', null);
   app.decorateRequest('runnerPrincipal', null);
   app.decorateRequest('pcBridgePrincipal', null);
   app.decorateRequest('phoneEventGridPrincipal', null);
   app.decorateRequest('deployPrincipal', null);
+  app.decorateRequest('nutritionExportPrincipal', null);
   app.addHook('onRequest', async (request, reply) => {
     if (request.routeOptions.url === '/health' && ['GET', 'HEAD'].includes(request.method)) return;
     if (request.routeOptions.config?.githubWebhook === true) return;
@@ -78,6 +80,14 @@ export function installAuthentication<Logger extends FastifyBaseLogger>(app: Fas
     // Logged on denial so a refused request can be traced without logging any credential.
     let reason = 'invalid_token';
     try {
+      if (request.routeOptions.config?.jarvisNutritionExport === true) {
+        reason = 'nutrition_export_capability_denied';
+        if (duplicate || request.method !== 'POST' || !exportDevicePaths.has(request.routeOptions.url ?? '') || !exportDeviceVerifier ||
+            typeof header !== 'string' || !/^Bearer [A-Za-z0-9_-]{43,256}$/u.test(header)) throw new AuthenticationDenied(403);
+        const device = await verifyExportCredential(exportDeviceVerifier,header.slice(7));
+        request.nutritionExportPrincipal = validateExportDevice(device,config.auth.ownerObjectId);
+        return;
+      }
       const token = header === undefined && !duplicate ? voiceWebsocketToken(request) : match?.[1];
       if (duplicate) reason = 'duplicate_authorization';
       else if (!token) reason = header === undefined ? 'missing_token' : 'malformed_authorization';

@@ -15,6 +15,8 @@ const fields = {
 } as const;
 const select = Object.values(fields).map(([column]) => `[${column}]`).join(', ') + ', source, revision, deleted_at, created_at, updated_at';
 const equalKey = (column: string, param: string) => `[${column}]=@${param} AND DATALENGTH([${column}])=DATALENGTH(@${param})`;
+// Metadata only: never queue a correction or erase native-write uncertainty.
+const invalidateExport = "apple_health_status=CASE apple_health_status WHEN N'written' THEN N'out_of_sync' WHEN N'claimed' THEN N'uncertain' WHEN N'pending' THEN N'cancelled' ELSE apple_health_status END";
 function favoriteNames(row: Record<string, unknown>): string[] {
   const aliases: unknown = JSON.parse(row.aliases_json as string);
   if (!Array.isArray(aliases) || aliases.length > 30 || aliases.some((alias) => typeof alias !== 'string')) throw new ToolFailure('Stored favourite aliases are invalid.');
@@ -109,7 +111,7 @@ export class NutritionStore {
       const now = this.now(); instant(now);
       const request = bind(this.request(transaction, signal), input).input('now', sql.NVarChar(64), now);
       const assignments = Object.entries(fields).filter(([key]) => key !== 'id' && key !== 'idempotencyKey').map(([key, [column]]) => `[${column}]=@${key}`);
-      return (await this.query(request, `UPDATE daily.nutrition_meals SET ${assignments.join(',')},revision=revision+1,updated_at=@now
+      return (await this.query(request, `UPDATE daily.nutrition_meals SET ${assignments.join(',')},revision=revision+1,updated_at=@now,${invalidateExport}
         OUTPUT ${select.split(', ').map((c) => `INSERTED.${c}`).join(', ')} WHERE owner_object_id=@owner AND ${equalKey('id', 'id')};`, signal)).recordset[0]!;
     });
   }
@@ -123,7 +125,7 @@ export class NutritionStore {
       if (row.deleted_at !== null || BigInt(row.revision as string) !== expectedRevision) throw new ToolRefusal('Intake changed. Read the latest revision before deleting it.');
       const now = this.now(); instant(now);
       return (await this.query(this.request(transaction, signal).input('key', sql.NVarChar(256), idempotencyKey).input('now', sql.NVarChar(64), now),
-        `UPDATE daily.nutrition_meals SET deleted_at=@now,updated_at=@now,revision=revision+1 OUTPUT ${select.split(', ').map((c) => `INSERTED.${c}`).join(', ')} WHERE owner_object_id=@owner AND ${equalKey('idempotency_key', 'key')};`, signal)).recordset[0]!;
+        `UPDATE daily.nutrition_meals SET deleted_at=@now,updated_at=@now,revision=revision+1,${invalidateExport} OUTPUT ${select.split(', ').map((c) => `INSERTED.${c}`).join(', ')} WHERE owner_object_id=@owner AND ${equalKey('idempotency_key', 'key')};`, signal)).recordset[0]!;
     });
   }
   /** Stable keyset pages over all dates, including tombstones. No seven-day restriction. */
