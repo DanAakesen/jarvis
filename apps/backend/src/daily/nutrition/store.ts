@@ -3,7 +3,7 @@ import type { FastifyRequest } from 'fastify';
 import { setTimeout as delay } from 'node:timers/promises';
 import { resolveDailyOwner } from '../owner.js';
 import { ToolFailure, ToolRefusal } from '../../core/tool-registry.js';
-import { authorizeIntake, canonicalJson, date, instant, meal, plan, text, type IntakeAuthority, type MealInput, type PlanInput } from './model.js';
+import { authorizeIntake, canonicalJson, date, instant, meal, plan, suggest, text, type BudgetContext, type IntakeAuthority, type MealInput, type PlanInput, type Suggestion } from './model.js';
 
 const fields = {
   id: ['id', sql.NVarChar(256)], idempotencyKey: ['idempotency_key', sql.NVarChar(256)],
@@ -157,6 +157,12 @@ export class NutritionStore {
     const rows = (await this.read(request, `SELECT meal_key FROM daily.nutrition_recommendation_feedback WHERE owner_object_id=@owner AND preference=N'dislike'
       AND (${keys.map((_, index) => `(${equalKey('meal_key', `key${index}`)})`).join(' OR ')});`, signal)).recordset;
     return new Set(rows.map((row) => row.meal_key as string));
+  }
+  async suggestions(candidates: readonly Suggestion[], context: BudgetContext, signal: AbortSignal): Promise<Suggestion[]> {
+    // Validate context/candidate bounds before SQL, then always consult persisted owner feedback.
+    suggest(candidates, new Set(), context);
+    candidates = structuredClone(candidates); context = structuredClone(context);
+    return suggest(candidates, await this.disliked(candidates.map((candidate) => candidate.mealKey), signal), context);
   }
 
   /** Save a favourite from an existing intake, never from an unconfirmed suggestion. */

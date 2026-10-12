@@ -66,6 +66,15 @@ describe('nutrition failure/privacy boundaries', () => {
     await expect(store().disliked(Array(1001).fill('meal') as string[], signal())).rejects.toThrow('keys');
     expect(await store().disliked([], signal())).toEqual(new Set());
   });
+  it('always consults persisted owner feedback before returning suggestions', async () => {
+    db.query.mockResolvedValue({ recordset: [{ meal_key: 'disliked' }] });
+    const candidate = (mealKey: string) => ({ ...input, mealKey, name: 'Synthetic', localTimeWindows: [] });
+    const rows = await store().suggestions([candidate('disliked'), candidate('liked')],
+      { now: '2026-10-12T18:00:00+02:00', localTime: '18:00', remainingKcal: 200, remainingProteinGrams: null }, signal());
+    expect(rows.map((row) => row.mealKey)).toEqual(['liked']);
+    expect(db.query).toHaveBeenCalledWith(expect.stringContaining("preference=N'dislike'"));
+    expect(db.inputs.some(([name, , value]) => name === 'owner' && value === owner)).toBe(true);
+  });
   it('cancels in-flight SQL and rolls back without claiming success', async () => {
     const controller = new AbortController();
     db.query.mockImplementation(async () => { controller.abort(); throw new Error('synthetic request cancellation'); });

@@ -5,7 +5,7 @@ import type { FastifyRequest } from 'fastify';
 import { loadDatabaseConfig } from './config.js';
 import { applyMigrations, readMigrations, readDownMigration, revertMigration } from './migrations.js';
 import { NutritionStore } from '../daily/nutrition/store.js';
-import { suggest, type MealInput, type PlanInput } from '../daily/nutrition/model.js';
+import { type MealInput, type PlanInput } from '../daily/nutrition/model.js';
 
 const config = loadDatabaseConfig();
 if (!config || process.env.NODE_ENV !== 'test' || config.server !== '127.0.0.1') throw new Error('Nutrition tests require isolated loopback SQL Server');
@@ -91,8 +91,8 @@ describe('inactive nutrition services on real SQL Server', () => {
     const disliked = await store().disliked(['favorite'], signal());
     expect(disliked).toEqual(new Set(['favorite']));
     expect(await NutritionStore.forRequest(pool, request(other), now).disliked(['favorite'], signal())).toEqual(new Set());
-    expect(suggest([{ ...fixture('candidate'), mealKey: 'favorite', name: 'Synthetic', localTimeWindows: [] }], disliked,
-      { now: now(), localTime: '17:00', remainingKcal: 200, remainingProteinGrams: null })).toEqual([]);
+    expect(await store().suggestions([{ ...fixture('candidate'), mealKey: 'favorite', name: 'Synthetic', localTimeWindows: [] }],
+      { now: now(), localTime: '17:00', remainingKcal: 200, remainingProteinGrams: null }, signal())).toEqual([]);
     await store().feedback('favorite', 'like', signal()); expect(await store().disliked(['favorite'], signal())).toEqual(new Set());
     await expect(store().feedback('favorite ', 'dislike', signal())).rejects.toThrow('conflicts');
   });
