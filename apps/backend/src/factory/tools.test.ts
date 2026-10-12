@@ -229,7 +229,7 @@ describe('Software Factory Jarvis tools', () => {
     expect(test.githubIssueClient.createComment).toHaveBeenCalledWith(project.repo, 8,
       expect.stringContaining('![broken.png](https://raw.githubusercontent.com/'), expect.any(AbortSignal));
     expect(JSON.stringify(test.record.mock.calls)).not.toContain('sig=private');
-    expect((await confirm(test, draft, `confirm ${draft.confirmationCode} publish ${test.attachment.name}`)).json().outcome).toBe('refused');
+    expect((await confirm(test, draft, 'approved')).json().outcome).toBe('refused');
   });
 
   it('refuses same-message publication, missing previews, multiple files and public documents', async () => {
@@ -238,7 +238,7 @@ describe('Software Factory Jarvis tools', () => {
     const staged = await test.app.inject({ method: 'POST', url: '/tools/issue_comment', headers, payload });
     const code = staged.json().result.confirmationCode;
     test.setLatestMessage({ id: '42', sessionId: 'session', role: 'dan', model: null,
-      text: `confirm ${code} publish broken.png`, at: new Date(Date.now() + 1_000) });
+      text: 'yes', at: new Date(Date.now() + 1_000) });
     expect((await test.app.inject({ method: 'POST', url: '/tools/confirm_create_issue', headers, payload: { confirmationCode: code } })).json().outcome).toBe('refused');
     test.workspaceCommands.isConnected.mockReturnValue(false);
     expect((await test.app.inject({ method: 'POST', url: '/tools/issue_comment', headers, payload })).json().outcome).toBe('refused');
@@ -528,7 +528,7 @@ describe('Software Factory Jarvis tools', () => {
     expect(record.mock.calls.map(([call]) => call.outcome)).toEqual(['refused', 'refused', 'refused']);
   });
 
-  it('archives a project only after an exact confirmation in a later Dan message', async () => {
+  it('archives a project only after a plain approval in a later Dan message', async () => {
     const record = vi.fn<(call: ToolCallRecord) => Promise<void>>(async () => {});
     let latestMessage: ConversationMessage = {
       id: '42',
@@ -570,7 +570,7 @@ describe('Software Factory Jarvis tools', () => {
     expect(confirmationCode).toMatch(/^\d{8}$/u);
     expect(projectStore.archive).not.toHaveBeenCalled();
 
-    latestMessage = { ...latestMessage, text: `confirm ${confirmationCode}`, at: new Date(Date.now() + 1_000) };
+    latestMessage = { ...latestMessage, text: 'yes', at: new Date(Date.now() + 1_000) };
     const sameMessage = await app.inject({
       method: 'POST',
       url: '/tools/confirm_project_archive',
@@ -581,7 +581,7 @@ describe('Software Factory Jarvis tools', () => {
     expect(projectStore.archive).not.toHaveBeenCalled();
 
     latestMessage = {
-      ...latestMessage, id: '43', text: `confirm ${confirmationCode} extra`, at: new Date(Date.now() + 2_000),
+      ...latestMessage, id: '43', text: 'yes, and also archive another project', at: new Date(Date.now() + 2_000),
     };
     const refused = await app.inject({
       method: 'POST',
@@ -592,7 +592,7 @@ describe('Software Factory Jarvis tools', () => {
     expect(refused.json()).toMatchObject({ outcome: 'refused' });
     expect(projectStore.archive).not.toHaveBeenCalled();
 
-    latestMessage = { ...latestMessage, id: '44', text: `confirm ${confirmationCode}`, at: new Date(Date.now() + 3_000) };
+    latestMessage = { ...latestMessage, id: '44', text: 'yes', at: new Date(Date.now() + 3_000) };
     const confirmed = await app.inject({
       method: 'POST',
       url: '/tools/confirm_project_archive',

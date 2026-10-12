@@ -43,13 +43,13 @@ afterEach(async () => {
 });
 
 describe('GitHub App capability tools', () => {
-  it.each(['yes', 'approved', 'confirmed', 'go ahead', 'YES.', 'Go Ahead!'])(
+  it.each(['yes', 'approved', 'confirmed', 'go ahead', 'YES.', 'Go Ahead!', 'ok', 'yes please'])(
     'accepts only a simple later approval word: %s', (value) => {
       expect(isSimpleApproval(value)).toBe(true);
     },
   );
 
-  it.each(['ok', 'yes please', 'confirm 12345678', 'go ahead and merge'])(
+  it.each(['confirm 12345678 now please merge it', 'go ahead and merge', 'no'])(
     'rejects generated or ambiguous approval phrases: %s', (value) => {
       expect(isSimpleApproval(value)).toBe(false);
     },

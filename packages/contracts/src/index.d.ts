@@ -1,3 +1,12 @@
+/** Reserved IDs only; native Daily renderers are implemented in P12-16. */
+export const dailyViewIds: Readonly<{
+  status: 'daily-status'; recomp: 'daily-recomp'; review: 'daily-review'; ready: 'daily-ready';
+}>;
+export type DailyViewKind = keyof typeof dailyViewIds;
+export type DailyViewId = typeof dailyViewIds[DailyViewKind];
+export const dailyModuleId: 'daily';
+export const dailyContractVersion: 1;
+
 export const generatedViewVersion: 1;
 export const presenceModes: readonly ['present', 'away', 'on_the_move'];
 export type PresenceMode = typeof presenceModes[number];

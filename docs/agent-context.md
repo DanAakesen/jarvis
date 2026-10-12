@@ -247,6 +247,14 @@ outside npm workspaces; production `apps/web` uses `three@0.180.0` and dev-only
 `@types/three@0.180.0`.
 See [README.md](../README.md) for public web configuration and overrides.
 
+P9-89 presence behavior is shared in `agents/jarvis/presence-instructions.json`.
+Keep it in both Docker images and both the root and hosted-agent `.dockerignore`
+allowlists. Focused
+checks: `npm test --workspace @jarvis/backend -- src/core/settings.test.ts src/core/capability-instructions.test.ts src/voice/realtime.test.ts src/voice/relay.test.ts`;
+from `agents/jarvis`, `.venv/bin/python -m pytest -q tests/test_model_client.py tests/test_voice_runtime.py tests/test_chat_runtime.py tests/test_jarvis_tools.py`.
+Mode preferences may change style, not permissions or exact approval phrases.
+Live chat and both voice languages still need post-deploy acceptance.
+
 Verified in Codex cloud for P0-02:
 
 | Purpose | Command |
@@ -1503,3 +1511,14 @@ at 1440×1000 and 390×844 verified shared minimise/restore, maximise/restore,
 close/reopen, draft continuity across voice, capture/inspection, denial feedback,
 cleanup and reduced motion. Captures/report: `docs/ui/screenshots/p8-37-integration-*`.
 These use scratch authentication/API/socket and fake media, not live providers.
+## DailyDeveloperCloud / P12 execution boundary
+
+Use the published DailyDeveloperCloud environment, explicitly source `/workspace/.jarvis-tools/activate.sh` before repository commands in every fresh shell, and read environment-owned STARTUP.md/setup-report.md. No automatic BASH_ENV activation. Node 22.23.3/npm 10.9.9/Python 3.12.14; Python components use separate retained .venv environments.
+
+[Approved migration](daily-migration.md) and existing milestone #716–#734 govern Daily work. Dan released only #716 for this worker; later tasks require explicit release, dependencies and claim. Follow one-worker/one-issue/one-PR with small pushed codex/ commits from current main; never merge your own PR. Issue dependencies/worker labels are authoritative; board administration/sync stays with existing Actions/coordinator, no broad token. Coordinate shared contracts/docs/composition, avoid ongoing unrelated runtime work.
+
+P12-01 checks: `npm test --workspace @jarvis/contracts`; `npm test --workspace @jarvis/backend -- src/daily/index.test.ts src/modules.test.ts src/auth/auth.test.ts`; affected workspace lint/build. Never disable test isolation or weaken checks. Tests are synthetic; default-off composition leaves current route/tool/navigation registration unchanged. This issue adds no production activation, SQL schema, import or UI page.
+
+Dan approved P12 on 12 October 2026 and explicitly released only P12-01 for this worker. The later [execution authorization](https://github.com/DanAakesen/jarvis/issues/716#issuecomment-6124634183) supersedes the original backlog-only and extra cutover-approval wording: eventual production cutover is pre-authorized only after dependency, parity, reconciliation, backup and rollback gates pass. Original Daily continues ordinary authorized food/health writes and remains running/canonical before cutover. Migration tooling must not alter its application/source code/schema or rewrite its records; final-delta reconciliation accounts for ongoing normal use. Read-only export belongs in the protected migration workflow. Legacy operation may be deprecated only after all in-scope data, features and sync are migrated and verified and rollback is protected; never delete the original repository or data. New secrets/access and unapproved paid resources retain their explicit-confirmation boundaries. This issue performs no cutover or production writes.
+
+No direct Azure access, original Daily checkout/Sites edits, private health/food data/exports or production credentials in coding/public Git. Reuse current login/session/owner and single conversation; no TickTick. Live-provider and physical-iPhone acceptance remain separately verified evidence; main-only release workflows apply.

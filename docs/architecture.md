@@ -685,7 +685,7 @@ flows; live GitHub issue reads/writes await the P10-01 App permission change.
 
 P10-03 adds the sensitive `create_issue` and `confirm_create_issue` tools. The
 first stages a draft and the next creates it only after a later stored Dan
-message exactly confirms its eight-digit code. The Dan-only
+message is a plain approval (yes, approved, confirmed, go ahead; Danish equivalents work; a reply asking for anything else is not approval). The Dan-only
 `POST /factory/issues` route uses the same draft validation and creation service
 for the board. It reads all issue-title pages in the selected active repository,
 allocates the lowest free `P11-NN` code (two digits minimum), then rechecks it
@@ -898,9 +898,8 @@ without Azure access.
 
 The shared Factory tool registry exposes `update_project` and `archive_project`.
 Updates reuse the active-project store and return a bounded summary without
-private merge rules. Archiving stages a one-time eight-digit code for ten minutes;
-`confirm_project_archive` accepts it only when Dan's later message exactly says
-`confirm <code>`. Pending confirmations are process-local and disappear on
+private merge rules. Archiving stages a one-time pending action for ten minutes;
+`confirm_project_archive` accepts it only when Dan's later message is a plain approval (shared `core/approval.ts` classifier; only the latest pending action per scope can be approved). Pending confirmations are process-local and disappear on
 restart, so restarts fail closed rather than archiving without fresh approval.
 
 With backend-only `APPLICATIONINSIGHTS_CONNECTION_STRING` (P0-11 Key Vault
@@ -1011,9 +1010,17 @@ API/feed requests do not return Dan to Present. The owner-authenticated
 `set_presence_mode` tool records manual voice/chat changes without confirmation;
 `set_away_mode` remains a compatibility alias for one release. `GET /agent/settings`
 provides the active mode and timestamp alongside the base
-`personality.customInstructions` and bounded per-mode instructions. Realtime
-voice receives those instructions initially and sends a new `session.update`
-when a mode-change event arrives.
+`personality.customInstructions` and bounded per-mode instructions. P9-89 shares
+first-person built-ins in `agents/jarvis/presence-instructions.json`, packaged in
+both backend and hosted-agent images. Settings reads resolve empty stored mode
+text to those defaults without writes; custom text remains a style preference
+alongside fixed hands-free rules. Chat and hosted Danish voice refresh presence
+each turn, retaining session model/reasoning choices, and rebuild instructions
+after successful mode tools. English realtime sends a new `session.update` on
+mode changes and synchronises successful mode tools before continuing. Every
+relay `response.create`, including custom overrides and Danish responses, carries
+the one-line current-mode statement and built-in behavior. All modes use tools
+to retrieve content rather than require a paste; missing permissions are reported.
 
 The backend does not poll Graph or require `Presence.Read.All`; away mode is
 manual, Jarvis-commanded, or set to Present by authenticated browser activity.
@@ -3258,3 +3265,6 @@ P8-30 scratch Chromium recorded 73 desktop CDP frames across empty, visible-wind
 
 P8-33 scratch Chromium checks cover the adaptive quality thresholds, compact phone/landscape layouts, menu bounds, reduced motion, hidden-tab pause/resume, route teardown/re-entry, resize, page-scale and simulated keyboard-height changes, forced WebGL loss/restore and unavailable WebGL. Dark/light, voice-ready, loss/fallback captures are in `docs/ui/screenshots/p8-33-*`; local voice fixture state remained ready across rendering loss, and HTML chat/voice/window actions stayed mounted. ANGLE SwiftShader at quality tier 2 (backing scale ≈0.70) measured 90 RAF intervals averaging 327ms (p50 333ms, p95 350ms) at 1440×900 and 151ms (p50 150ms, p95 167ms) at 390×844. These are software RAF intervals, not hardware GPU timings, and demonstrate poor cadence rather than acceptance; physical GPU/battery, phone/keyboard, Safari, live voice/provider and normal-rate motion remain unverified.
 The reference lockfile is standalone, outside root workspaces, and contains the prototype's dependencies only. Bundled Three.js/Phosphor notices are retained. Physical/hardware performance, live activity/voice behavior and normal-rate flicker acceptance remain unverified; P8-31 adds no production Three.js dependency.
+## Daily integration boundary (P12-01)
+
+[Migration contract](daily-migration.md) adds `daily/createDailyModules(enabled = false)` to the existing BackendModule pattern. Production composition remains unchanged. Explicit enabled test composition exposes only private `GET /daily/capabilities`, no data/tools/pages; disabled composition contributes nothing. Existing root user/hosted-agent authentication precedes `resolveDailyOwner`, which maps both allowed callers to the server-configured owner and refuses runners/other service identities. Shared contracts reserve four stable native view IDs without changing the renderer/navigation allowlists. Actual services, SQL/device auth, activation wiring and native frontend are downstream P12 work. No new login, dispatcher, voice stack, Azure resource or direct Azure access.

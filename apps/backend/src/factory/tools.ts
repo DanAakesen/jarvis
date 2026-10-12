@@ -1,6 +1,7 @@
 import { randomInt } from 'node:crypto';
 import { issueAttachmentFields, type IssueAttachmentInput } from '@jarvis/contracts';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
+import { approvalInstruction, classifyApprovalReply } from '../core/approval.js';
 import type { JarvisTool } from '../core/tool-registry.js';
 import { ToolFailure, ToolRefusal } from '../core/tool-registry.js';
 import type { ConversationMessage } from '../core/conversation-store.js';
@@ -11,7 +12,6 @@ import { settingsOptions } from '../core/settings.js';
 import { modelsForRole, reasoningForModel } from '../core/model-catalog.js';
 import type { ModelCatalogue } from '@jarvis/contracts';
 import { createGitHubActionsRunClient } from '../github/actions-runs.js';
-import { isSimpleApproval } from '../core/approval.js';
 import { getWorkStatus, steeringRestartsTask, taskRestartReason, workStatusSchema } from './work-status.js';
 import type { WorkStatusInput } from '@jarvis/contracts';
 import {
@@ -198,6 +198,7 @@ function stageProjectArchive(
     pendingProjectArchives.set(server, actions);
   }
   cleanPendingArchives(actions);
+  actions.clear();
   if (actions.size >= maxPendingProjectArchives) throw new Error('Too many pending project archives');
   let confirmationCode: string;
   do {
@@ -216,7 +217,7 @@ function stageProjectArchive(
     name: project.name,
     repo: project.repo,
     confirmationCode,
-    instruction: `Nothing has been archived. To approve, say exactly "confirm ${confirmationCode}" in a new message.`,
+    instruction: `Nothing has been archived. ${approvalInstruction}`,
   };
 }
 
@@ -229,14 +230,16 @@ async function confirmProjectArchive(
   const actions = pendingProjectArchives.get(request.server);
   if (actions) cleanPendingArchives(actions);
   const action = actions?.get(confirmationCode);
+  const reply = classifyApprovalReply(message.text);
   if (!actions || !action || message.role !== 'dan' ||
       !/^[1-9]\d{0,18}$/u.test(message.id) || BigInt(message.id) > maxSqlBigInt ||
       BigInt(message.id) <= BigInt(action.sourceMessageId) ||
       !Number.isFinite(message.at.getTime()) || message.at.getTime() <= action.createdAt ||
-      message.text.trim().toLowerCase() !== `confirm ${confirmationCode}`) {
-    throw new ToolRefusal('No project was archived. Dan must send the exact confirmation phrase in a new message.');
+      reply === undefined) {
+    throw new ToolRefusal('No project was archived. Dan must reply yes, approved, confirmed or go ahead (or no/cancel) in a later message.');
   }
   actions.delete(confirmationCode);
+  if (reply === 'decline') throw new ToolRefusal('Cancelled; the project was not archived.');
   signal.throwIfAborted();
   const store = requireStore(request.server.projectStore, 'Project service');
   if (!await store.archive(action.projectId)) throw new ToolRefusal('The active project was not found; nothing was archived.');
@@ -284,6 +287,7 @@ async function stageIssueCreation(
   for (const [code, action] of actions) {
     if (action.createdAt <= now - issueCreationTtlMs) actions.delete(code);
   }
+  actions.clear();
   if (actions.size >= maxPendingIssueCreations) throw new Error('Too many pending issue creations');
   let confirmationCode: string;
   do {
@@ -311,7 +315,7 @@ async function stageIssueCreation(
     executor,
     confirmationCode,
     ...(publicAttachment ? { warning: `This repository is public. Publishing ${publicAttachment.name} makes the image readable by anyone and commits it to Git history.` } : {}),
-    instruction: `Nothing has been written. Reply later with yes, approved, confirmed or go ahead to approve it.${publicAttachment ? ` ${publicAttachment.name} will be published publicly.` : ''}`,
+    instruction: `Nothing has been written. ${approvalInstruction}${publicAttachment ? ` ${publicAttachment.name} will be published publicly.` : ''}${attachments.length && !publicAttachment ? ' The files stay private; after creation offer to publish one reviewed screenshot.' : ''}`,
   };
 }
 
@@ -350,9 +354,9 @@ async function confirmIssueCreation(
     }
   }
   const action = actions?.get(confirmationCode);
+  const reply = classifyApprovalReply(message.text);
   if (action && /^[1-9]\d{0,18}$/u.test(message.id) &&
-      BigInt(message.id) > BigInt(action.sourceMessageId) &&
-      /^(?:no|cancel)[.!]?$/iu.test(message.text.trim())) {
+      BigInt(message.id) > BigInt(action.sourceMessageId) && reply === 'decline') {
     actions?.delete(confirmationCode);
     throw new ToolRefusal('Cancelled; nothing was written.');
   }
@@ -360,8 +364,8 @@ async function confirmIssueCreation(
       !/^[1-9]\d{0,18}$/u.test(message.id) || BigInt(message.id) > maxSqlBigInt ||
       BigInt(message.id) <= BigInt(action.sourceMessageId) ||
       !Number.isFinite(message.at.getTime()) || message.at.getTime() <= action.createdAt ||
-      !isSimpleApproval(message.text)) {
-    throw new ToolRefusal('I haven’t written anything; Dan must approve later with yes, approved, confirmed or go ahead.');
+      reply !== 'approve') {
+    throw new ToolRefusal('No issue was created. Dan must reply yes, approved, confirmed or go ahead (or no/cancel) in a later message.');
   }
   await requireIssueWritePermission(request, action.repository, action.publicAttachment !== undefined);
   actions.delete(confirmationCode);
@@ -604,7 +608,7 @@ export const factoryTools: readonly JarvisTool[] = [
   },
   {
     name: 'confirm_create_issue',
-    description: 'Confirm a staged issue or attachment publication after Dan later replies with yes, approved, confirmed or go ahead.',
+    description: 'Confirm a staged issue or comment after a later Dan message that is a plain approval (yes, approved, confirmed, go ahead); no or cancel discards it.',
     inputSchema: {
       type: 'object',
       properties: { confirmationCode: { type: 'string', pattern: '^[0-9]{8}$' } },
@@ -691,7 +695,7 @@ export const factoryTools: readonly JarvisTool[] = [
   },
   {
     name: 'archive_project',
-    description: 'Prepare to archive an active Software Factory project. Nothing changes until Dan confirms with the exact phrase returned in a later message.',
+    description: 'Prepare to archive an active Software Factory project. Nothing changes until Dan approves in a later message with a plain yes, approved, confirmed or go ahead.',
     inputSchema: {
       type: 'object',
       properties: { projectId: idSchema },
@@ -707,7 +711,7 @@ export const factoryTools: readonly JarvisTool[] = [
   },
   {
     name: 'confirm_project_archive',
-    description: 'Archive a project only when Dan’s latest message exactly says “confirm” followed by its eight-digit code.',
+    description: 'Archive a project only after the latest Dan message is a plain approval (yes, approved, confirmed, go ahead).',
     inputSchema: {
       type: 'object',
       properties: { confirmationCode: { type: 'string', pattern: '^[0-9]{8}$' } },

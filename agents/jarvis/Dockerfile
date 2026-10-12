@@ -9,7 +9,7 @@ WORKDIR /app
 COPY requirements.txt ./
 RUN pip install --require-hashes -r requirements.txt \
     && useradd --create-home --uid 10001 agent
-COPY *.py limits.json ./
+COPY *.py limits.json presence-instructions.json ./
 
 USER agent
 EXPOSE 8088

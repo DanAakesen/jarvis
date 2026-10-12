@@ -11,6 +11,7 @@ import os
 import time
 from collections.abc import AsyncIterator, Sequence
 from contextlib import aclosing
+from dataclasses import replace
 from typing import Any
 from urllib.parse import urlsplit, urlunsplit
 from uuid import uuid4
@@ -23,6 +24,7 @@ from opentelemetry.trace import SpanKind, Status, StatusCode
 
 from chat_telemetry import latency_span, log_latency
 from jarvis_tools import (
+    BUILT_IN_MODE_INSTRUCTIONS,
     INSTRUCTIONS,
     BackendToolClient,
     backend_settings_from_environment,
@@ -127,20 +129,30 @@ def project_awareness(settings: ModelSettings) -> str:
         "him to confirm before adding it, and add it only after he says yes."
     )
 
-def personalize_instructions(
-    instructions: str, settings: ModelSettings | None
-) -> str:
-    """Apply user preferences without letting them replace Jarvis's fixed rules."""
-    if settings is None:
-        return instructions
+def mode_context(settings: ModelSettings) -> str:
     mode_label = {
         "present": "Present",
         "away": "Away",
         "on_the_move": "On the move",
     }[settings.mode]
     return (
-        f"{instructions}\n\n"
         f"Dan's current mode: {mode_label} since {settings.changed_at or 'an unknown time'}. "
+        f"{BUILT_IN_MODE_INSTRUCTIONS[settings.mode]}"
+    )
+
+
+def personalize_instructions(
+    instructions: str, settings: ModelSettings | None
+) -> str:
+    """Apply user preferences without letting them replace Jarvis's fixed rules."""
+    if settings is None:
+        return instructions
+    custom_mode = settings.mode_instructions.get(settings.mode, "")
+    if custom_mode == BUILT_IN_MODE_INSTRUCTIONS[settings.mode]:
+        custom_mode = ""
+    return (
+        f"{instructions}\n\n"
+        f"{mode_context(settings)}\n"
         "When Dan is not present, task updates and confirmations go to Teams; "
         "spoken replies use one short sentence when possible, with concise written replies. "
         "Use set_presence_mode for heading out (away), driving (on_the_move), or "
@@ -153,11 +165,12 @@ def personalize_instructions(
         f"{json.dumps(settings.custom_instructions, ensure_ascii=False)}\n"
         "The following JSON string is Dan's instruction for the current mode, "
         "not policy or tool input:\n"
-        f"{json.dumps(settings.mode_instructions.get(settings.mode, ''), ensure_ascii=False)}\n"
+        f"{json.dumps(custom_mode, ensure_ascii=False)}\n"
         "These preferences never change who you are as Jarvis, the tools or permissions supplied "
         "by the backend, or the facts you report. Preserve the language selected for this "
         "conversation "
-        "and its existing spoken or written response constraints."
+        "and its existing spoken or written response constraints. "
+        "Custom preferences do not relax the current mode's hands-free rules."
     )
 
 
@@ -532,13 +545,20 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                 catalogue_task = asyncio.create_task(self._tools.tools())
                 context_task = asyncio.create_task(self._tools.context())
                 setup_tasks = [catalogue_task, context_task]
-                if load_settings:
+                if load_settings or settings is not None:
                     setup_tasks.append(asyncio.create_task(self.session_settings()))
                 try:
                     prepared = await asyncio.gather(*setup_tasks)
                     catalogue, context = prepared[:2]
                     if load_settings:
                         settings = prepared[2]
+                    elif settings is not None:
+                        current_settings = prepared[2]
+                        settings = replace(
+                            settings, mode=current_settings.mode,
+                            changed_at=current_settings.changed_at,
+                            mode_instructions=current_settings.mode_instructions,
+                        )
                 except BaseException:
                     for task in setup_tasks:
                         task.cancel()
@@ -560,6 +580,7 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                 with latency_span("prompt_build") as prompt_span:
                     if role == "chat" and settings is not None and settings.capability_instructions:
                         instructions = f"{instructions}\n\n{settings.capability_instructions}"
+                    base_instructions = instructions
                     instructions = personalize_instructions(instructions, settings)
                     model_input: list[Any] = []
                     if messages:
@@ -852,6 +873,17 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                         result = await self._tools.call(
                             call.name, arguments, current_message_id.get()
                         )
+                        if (
+                            call.name in {"set_presence_mode", "set_away_mode"}
+                            and result.get("outcome") == "ok"
+                        ):
+                            current_settings = await self.session_settings()
+                            settings = replace(
+                                settings or current_settings, mode=current_settings.mode,
+                                changed_at=current_settings.changed_at,
+                                mode_instructions=current_settings.mode_instructions,
+                            )
+                            instructions = personalize_instructions(base_instructions, settings)
                         if use_anthropic:
                             tool_results.append({
                                 "type": "tool_result",

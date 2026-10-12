@@ -783,3 +783,6 @@ and durable facts remain authoritative in `DanAakesen/vault`.
 ## Still open
 
 - What usage Codex (`codex-acp`) and Copilot CLI actually report per turn (tokens, premium requests); offline package documentation was inspected in P2-12, but authenticated live runs remain the verification step.
+## Daily owner mapping contract (P12-01; schema planned)
+
+No Daily SQL table or migration is introduced here. P12-03 will map protected source inventory to Jarvis's existing server-configured owner, retaining source record IDs, revision/tombstone semantics, units and local dates. User and hosted-agent requests resolve to that same owner; no client-provided source owner or service-agent ID becomes a data owner. Future device credentials bind to this owner and narrowly scoped operations. [Approved migration](daily-migration.md) requires complete private inventory/backup and an import-or-exclusion decision per record, excludes TickTick from active feeds, and forbids original source-schema/record changes or deletion. P12-01's metadata contains no health/food data or owner ID.
