@@ -49,7 +49,7 @@ const events = new Set([
   'database.ready', 'database.not_configured',
   'telemetry.stdout_only', 'telemetry.export_failed',
   'sandbox_heartbeat.decision', 'task_reconciliation.decision', 'voice.reflex_metrics',
-  'voice.partials_unavailable', 'chat.latency', 'memory.embedding', 'vault.index', 'vault.write',
+  'voice.partials_unavailable', 'chat.latency', 'chat.agent_session', 'memory.embedding', 'vault.index', 'vault.write',
   'pc_act.step',
   'reflex.decision',
   'vision.watch', 'visual.path',
@@ -85,6 +85,8 @@ const reconciliationDecisions = new Set([
 const chatLatencyPhases = new Set([
   'reflex_targets', 'jev', 'agent_first_byte', 'turn_first_token', 'turn_complete',
   'recipe_select', 'recipe_verify', 'recipe_plan', 'recipe_run',
+  'chat_history_verification', 'chat_context', 'tool_catalogue', 'settings',
+  'turn_context', 'prompt_build', 'model_first_delta',
 ]);
 const reflexReasons = new Set([
   'executed', 'unavailable', 'cancelled', 'not_addressed', 'not_action', 'incomplete_command',
@@ -111,6 +113,23 @@ function safeFields(input: Record<string, unknown>): Record<string, unknown> {
     }
     if (typeof input.latencyMs === 'number' && Number.isFinite(input.latencyMs) &&
         input.latencyMs >= 0 && input.latencyMs <= 600_000) fields.latencyMs = input.latencyMs;
+    return fields;
+  }
+  if (input.msg === 'chat.agent_session') {
+    const fields: Record<string, unknown> = {};
+    if (typeof input.sessionIdUsed === 'boolean') fields.sessionIdUsed = input.sessionIdUsed;
+    if (['cold', 'warm', 'resume'].includes(String(input.sessionStartType))) {
+      fields.sessionStartType = input.sessionStartType;
+    }
+    for (const key of ['platformMs', 'provisioningMs', 'containerMs', 'agentMs']) {
+      const value = input[key];
+      if (typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 600_000) {
+        fields[key] = value;
+      }
+    }
+    if (typeof input.fallbackReason === 'string' && /^http_4\d{2}$/u.test(input.fallbackReason)) {
+      fields.fallbackReason = input.fallbackReason;
+    }
     return fields;
   }
   if (input.msg === 'decision.provider_unavailable') {

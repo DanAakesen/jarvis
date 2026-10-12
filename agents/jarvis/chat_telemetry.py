@@ -4,19 +4,32 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import math
 import time
 from collections.abc import Iterator
 from contextlib import contextmanager
+from contextvars import ContextVar
 
 from opentelemetry import trace
 from opentelemetry.trace import Span, Status, StatusCode
 
 logger = logging.getLogger("chat_telemetry")
 _tracer = trace.get_tracer("VoiceHostedAgent.Chat")
+MAX_CHAT_PHASE_DURATION_MS = 600_000
+CHAT_PHASES = frozenset({
+    "chat_history_verification", "chat_context", "tool_catalogue", "settings",
+    "turn_context", "prompt_build", "model_first_delta",
+})
+current_chat_phase_timings: ContextVar[dict[str, float] | None] = ContextVar(
+    "chat_phase_timings", default=None
+)
 
 
 def log_latency(phase: str, started: float, outcome: str = "ok") -> float:
     duration_ms = max(0.0, (time.monotonic() - started) * 1000)
+    phase_timings = current_chat_phase_timings.get()
+    if phase_timings is not None and phase in CHAT_PHASES and math.isfinite(duration_ms):
+        phase_timings.setdefault(phase, min(MAX_CHAT_PHASE_DURATION_MS, duration_ms))
     trace.get_current_span().add_event("chat.latency", {
         "phase": phase, "duration_ms": duration_ms, "outcome": outcome,
     })

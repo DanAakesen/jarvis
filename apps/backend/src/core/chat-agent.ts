@@ -1,9 +1,33 @@
+import { createHash } from 'node:crypto';
 import { normalizeFoundryProjectEndpoint } from '../voice/relay.js';
 import type { VisualContext } from './visual-context.js';
+
+export const CHAT_AGENT_PHASES = [
+  'chat_history_verification',
+  'chat_context',
+  'tool_catalogue',
+  'settings',
+  'turn_context',
+  'prompt_build',
+  'model_first_delta',
+] as const;
+
+export type AgentPhaseTimings = Partial<Record<(typeof CHAT_AGENT_PHASES)[number], number>>;
+
+export interface FoundryAgentSessionTelemetry {
+  readonly sessionIdUsed: boolean;
+  readonly sessionStartType?: 'cold' | 'warm' | 'resume';
+  readonly platformMs?: number;
+  readonly provisioningMs?: number;
+  readonly containerMs?: number;
+  readonly agentMs?: number;
+  readonly fallbackReason?: `http_${number}`;
+}
 
 export interface ConversationAgentInput {
   readonly messageId: string;
   readonly sessionId?: string;
+  readonly agentSessionId?: string;
   readonly turnId?: string;
   readonly text: string;
   readonly language: 'da' | 'en';
@@ -20,6 +44,8 @@ export interface ConversationAgentInput {
   readonly reflexNote?: string;
   readonly steering?: boolean;
   readonly onVisualResult?: (result: ConversationVisualResult) => void;
+  readonly onAgentPhaseTimings?: (timings: AgentPhaseTimings) => void;
+  readonly onAgentSessionTelemetry?: (telemetry: FoundryAgentSessionTelemetry) => void;
 }
 
 export interface ConversationVisualResult {
@@ -36,7 +62,25 @@ export interface ConversationAgent {
 
 const maxStreamBytes = 1024 * 1024;
 const requestTimeoutMs = 120_000;
+const maxDiagnosticDurationMs = 600_000;
 export const FOUNDRY_AGENT_SCOPE = 'https://ai.azure.com/.default';
+const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
+
+export function createFoundryAgentSessionId(ownerObjectId: string, conversationSessionId: string): string {
+  if (!uuidPattern.test(ownerObjectId) || !/^[1-9][0-9]{0,18}$/u.test(conversationSessionId)) {
+    throw new TypeError('Foundry chat session identity is invalid');
+  }
+  const hash = createHash('sha256')
+    .update('jarvis:foundry-chat-session:v1\0')
+    .update(ownerObjectId.toLowerCase())
+    .update('\0')
+    .update(conversationSessionId)
+    .digest();
+  hash[6] = (hash[6]! & 0x0f) | 0x50;
+  hash[8] = (hash[8]! & 0x3f) | 0x80;
+  const id = hash.subarray(0, 16).toString('hex');
+  return `${id.slice(0, 8)}-${id.slice(8, 12)}-${id.slice(12, 16)}-${id.slice(16, 20)}-${id.slice(20)}`;
+}
 
 function parseEvents(buffer: string): { events: { event: string; data: string }[]; pending: string } {
   const frames = buffer.split(/\r?\n\r?\n/u);
@@ -85,14 +129,73 @@ function deltaFromEvent(event: { event: string; data: string }): string | undefi
   return payload.text;
 }
 
-export function createFoundryInvocationsEndpoint(projectEndpoint: string, agentName: string): URL {
+export function createFoundryInvocationsEndpoint(
+  projectEndpoint: string,
+  agentName: string,
+  agentSessionId?: string,
+): URL {
   if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u.test(agentName)) {
     throw new TypeError('Foundry chat agent name is invalid');
+  }
+  if (agentSessionId !== undefined && !uuidPattern.test(agentSessionId)) {
+    throw new TypeError('Foundry chat session ID is invalid');
   }
   const url = new URL(normalizeFoundryProjectEndpoint(projectEndpoint));
   url.pathname += `/agents/${agentName}/endpoint/protocols/invocations`;
   url.searchParams.set('api-version', 'v1');
+  if (agentSessionId !== undefined) url.searchParams.set('agent_session_id', agentSessionId);
   return url;
+}
+
+function foundrySessionTelemetry(
+  headers: Headers,
+  sessionIdUsed: boolean,
+  fallbackReason?: `http_${number}`,
+): FoundryAgentSessionTelemetry {
+  const telemetry: {
+    sessionIdUsed: boolean;
+    sessionStartType?: 'cold' | 'warm' | 'resume';
+    platformMs?: number;
+    provisioningMs?: number;
+    containerMs?: number;
+    agentMs?: number;
+    fallbackReason?: `http_${number}`;
+  } = { sessionIdUsed, ...(fallbackReason ? { fallbackReason } : {}) };
+  const sessionStartType = headers.get('x-ms-debug-latency-session-start-type')?.toLowerCase();
+  if (sessionStartType === 'cold' || sessionStartType === 'warm' || sessionStartType === 'resume') {
+    telemetry.sessionStartType = sessionStartType;
+  }
+  const durationHeaders = {
+    platformMs: 'x-ms-debug-latency-platform',
+    provisioningMs: 'x-ms-debug-latency-provisioning',
+    containerMs: 'x-ms-debug-latency-container',
+    agentMs: 'x-ms-debug-latency-agent',
+  } as const;
+  for (const [field, header] of Object.entries(durationHeaders) as
+    [keyof typeof durationHeaders, (typeof durationHeaders)[keyof typeof durationHeaders]][]) {
+    const value = headers.get(header);
+    if (value === null || !/^(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$/u.test(value)) continue;
+    const durationMs = Number(value);
+    if (Number.isFinite(durationMs) && durationMs <= maxDiagnosticDurationMs) {
+      telemetry[field] = durationMs;
+    }
+  }
+  return telemetry;
+}
+
+function phaseTimingsFromDone(payload: unknown): AgentPhaseTimings | undefined {
+  if (typeof payload !== 'object' || payload === null || !('agentTimings' in payload) ||
+      typeof payload.agentTimings !== 'object' || payload.agentTimings === null) return undefined;
+  const agentTimings = payload.agentTimings as Record<string, unknown>;
+  const timings: AgentPhaseTimings = {};
+  for (const phase of CHAT_AGENT_PHASES) {
+    const durationMs = agentTimings[phase];
+    if (typeof durationMs === 'number' && Number.isFinite(durationMs) &&
+        durationMs >= 0 && durationMs <= maxDiagnosticDurationMs) {
+      timings[phase] = durationMs;
+    }
+  }
+  return Object.keys(timings).length > 0 ? timings : undefined;
 }
 
 export function createFoundryInvocationConversationAgent(
@@ -101,28 +204,47 @@ export function createFoundryInvocationConversationAgent(
   getToken: (scope: string, signal: AbortSignal) => Promise<string>,
   fetcher: typeof fetch = fetch,
 ): ConversationAgent {
-  const url = createFoundryInvocationsEndpoint(projectEndpoint, agentName);
+  const endpoint = createFoundryInvocationsEndpoint(projectEndpoint, agentName);
   return {
     async *stream(input, authorization, signal) {
-      const { onVisualResult, ...payload } = input;
+      const {
+        onVisualResult, onAgentPhaseTimings, onAgentSessionTelemetry, agentSessionId, ...payload
+      } = input;
+      if (agentSessionId !== undefined && !uuidPattern.test(agentSessionId)) {
+        throw new TypeError('Foundry chat session ID is invalid');
+      }
       const requestSignal = AbortSignal.any([signal, AbortSignal.timeout(requestTimeoutMs)]);
       const token = await getToken(FOUNDRY_AGENT_SCOPE, requestSignal);
       if (typeof token !== 'string' || !token.trim() || /[\r\n]/u.test(token)) {
         throw new Error('Foundry authentication unavailable');
       }
-      const response = await fetcher(url, {
+      const request = (url: URL) => fetcher(url, {
         method: 'POST',
         redirect: 'error',
         headers: {
           Authorization: 'Bearer ' + token,
           Accept: 'text/event-stream',
           'Content-Type': 'application/json',
+          'x-ms-debug-latency-enabled': 'true',
         },
         body: JSON.stringify({ ...payload, delegatedAuthorization: authorization }),
         signal: requestSignal,
       });
+      let response = await request(createFoundryInvocationsEndpoint(
+        projectEndpoint, agentName, agentSessionId,
+      ));
+      if (agentSessionId !== undefined && response.status >= 400 && response.status < 500) {
+        const fallbackReason = `http_${response.status}` as const;
+        onAgentSessionTelemetry?.(foundrySessionTelemetry(response.headers, true, fallbackReason));
+        await response.body?.cancel().catch(() => {});
+        response = await request(endpoint);
+        onAgentSessionTelemetry?.(foundrySessionTelemetry(response.headers, false));
+      } else {
+        onAgentSessionTelemetry?.(foundrySessionTelemetry(response.headers, agentSessionId !== undefined));
+      }
       if (!response.ok || !response.body ||
           !response.headers.get('content-type')?.toLowerCase().startsWith('text/event-stream')) {
+        await response.body?.cancel().catch(() => {});
         throw new Error(`Chat agent unavailable (HTTP ${response.status})`);
       }
 
@@ -136,6 +258,8 @@ export function createFoundryInvocationConversationAgent(
         completed = true;
         try {
           const result = JSON.parse(event.data) as Record<string, unknown>;
+          const phaseTimings = phaseTimingsFromDone(result);
+          if (phaseTimings) onAgentPhaseTimings?.(phaseTimings);
           if (result.visualPath === 'image' || result.visualPath === 'caption') {
             onVisualResult?.({ visualPath: result.visualPath,
               ...(typeof result.model === 'string' && /^[A-Za-z0-9][A-Za-z0-9: ._-]{0,127}$/u.test(result.model)
