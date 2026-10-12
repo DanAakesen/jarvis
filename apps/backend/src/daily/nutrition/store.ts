@@ -70,7 +70,7 @@ export class NutritionStore {
         await transaction.rollback().catch(() => undefined);
         if (signal.aborted) throw signal.reason;
         if ((error as { number?: number }).number === 1205 && attempt < 2) { await delay(20 * (attempt + 1), undefined, { signal }); continue; }
-        if (error instanceof ToolRefusal || error instanceof TypeError) throw error;
+        if (error instanceof ToolRefusal) throw error;
         if ([2601, 2627, 51001].includes((error as { number?: number }).number ?? 0)) throw new ToolRefusal('This nutrition key conflicts with an existing exact key.');
         throw new ToolFailure('Nutrition persistence failed. Retry with the same operation key; no successful write is claimed.');
       }

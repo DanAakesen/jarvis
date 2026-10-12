@@ -52,9 +52,9 @@ describe('nutrition failure/privacy boundaries', () => {
     await expect(store().log(input, authority, signal())).rejects.toThrow('Nutrition persistence failed');
     expect(db.begin).toHaveBeenCalledTimes(3); expect(db.rollback).toHaveBeenCalledTimes(3); expect(db.commit).not.toHaveBeenCalled();
   });
-  it('does not retry uncertain commits or expose provider/record/credential diagnostics', async () => {
+  it.each([Error, TypeError])('does not retry uncertain commits or expose %s diagnostics', async (ErrorType) => {
     db.query.mockResolvedValueOnce({ recordset: [] }).mockResolvedValueOnce({ recordset: [{ id: '01' }] });
-    db.commit.mockRejectedValueOnce(new Error('synthetic-secret-and-record-content'));
+    db.commit.mockRejectedValueOnce(new ErrorType('synthetic-secret-and-record-content'));
     const error = await store().log(input, authority, signal()).catch((value: Error) => value);
     expect(String(error)).toContain('Retry with the same operation key'); expect(String(error)).not.toContain('synthetic-secret');
     expect(db.begin).toHaveBeenCalledTimes(1);
