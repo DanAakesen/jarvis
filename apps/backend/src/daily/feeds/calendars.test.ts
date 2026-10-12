@@ -39,6 +39,10 @@ describe('inactive owner-bound Daily calendar reads', () => {
     expect(result).toMatchObject({ status: 'unavailable', freshness: 'unknown', capturedAt: null, issues: [{ kind: expected }], events: [] });
     expect(read).toHaveBeenCalledTimes(1);
   });
+  it('rejects a null calendar collection rather than claiming successful empty coverage', async () => {
+    const read = vi.fn<GoogleApiClient['request']>(async () => ({ items: null }));
+    expect(await new DailyCalendarFeed({ request: read }).refresh(request(),range,signal())).toMatchObject({ status: 'unavailable',issues: [{ kind: 'invalid-response' }] });
+  });
   it('retains prior complete cache as stale on failure, copies outputs and isolates owners', async () => {
     let clock = Date.parse('2026-10-12T10:00:00Z');
     const read = vi.fn<GoogleApiClient['request']>(async (_api, path) => path.startsWith('/users/me') ? { items: [{ id: 'primary' }] } : { items: [event('01')] });

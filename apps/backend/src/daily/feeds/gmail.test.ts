@@ -49,6 +49,10 @@ describe('read-only Gmail retrieval and validated protected semantic capability'
     const read = vi.fn<GoogleApiClient['request']>();
     expect(await new DailyGmailFeed({ request: read }).read(request,now,signal())).toMatchObject({ status: 'error',error: 'semantic-unavailable',threads: [],orders: [] }); expect(read).not.toHaveBeenCalled();
   });
+  it('rejects a null thread collection rather than claiming successful empty coverage', async () => {
+    const read = vi.fn<GoogleApiClient['request']>(async (_api,path) => path.endsWith('/profile') ? { emailAddress: 'self@example.invalid' } : { threads: null });
+    expect(await new DailyGmailFeed({ request: read },model()).read(request,now,signal())).toMatchObject({ status: 'error',error: 'invalid-response',threads: [] });
+  });
   it.each([
     { ...classification,waitingSince: '2026-10-01T00:00:00Z' },{ ...classification,semanticState: 'keyword_guess' },
     { ...classification,action: 'send_email' },{ ...classification,semanticEvidence: '' },{ ...classification,senderIsHuman: 'true' },

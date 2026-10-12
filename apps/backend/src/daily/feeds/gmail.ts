@@ -102,7 +102,7 @@ export class DailyGmailFeed {
         if (page >= 5) { result.error = 'incomplete'; break; }
         const query = new URLSearchParams({ q: 'in:anywhere newer_than:180d -category:promotions -category:social', maxResults: '100' }); if (token) query.set('pageToken', token);
         const response = await this.api.request('gmail', `/users/me/threads?${query}`, { method: 'GET', signal: deadline }); deadline.throwIfAborted();
-        const rows = response.threads ?? []; if (!Array.isArray(rows) || rows.length > 100) throw new TypeError('Invalid thread list');
+        const rows = response.threads === undefined ? [] : response.threads; if (!Array.isArray(rows) || rows.length > 100) throw new TypeError('Invalid thread list');
         for (const row of rows) ids.add(string(object(row).id));
         if (response.nextPageToken === undefined) break;
         token = string(response.nextPageToken, 4096); if (pages.has(token)) throw new TypeError('Repeated mail page'); pages.add(token);
@@ -119,7 +119,7 @@ export class DailyGmailFeed {
           if (typeof row.internalDate !== 'string' || !/^\d{1,16}$/u.test(row.internalDate) || !Number.isSafeInteger(Number(row.internalDate))) throw new TypeError('Invalid mail date');
           const sentAt = new Date(Number(row.internalDate)).toISOString(); const payload = object(row.payload); const from = header(payload, 'from');
           const sender = (from.match(/<([^>]+)>/u)?.[1] ?? from).trim().toLowerCase(); text(sender,320);
-          const labels = row.labelIds ?? []; if (!Array.isArray(labels) || labels.length > 100 || labels.some((label) => typeof label !== 'string' || label.length > 256)) throw new TypeError('Invalid mail labels');
+          const labels = row.labelIds === undefined ? [] : row.labelIds; if (!Array.isArray(labels) || labels.length > 100 || labels.some((label) => typeof label !== 'string' || label.length > 256)) throw new TypeError('Invalid mail labels');
           const message: Message = { messageId, sentAt, sender, direction: sender === account ? 'outgoing' : 'incoming', body: bodyText(payload) };
           return { message, payload, labels: labels.slice(0,30) as string[], name: from.includes('<') ? from.slice(0,from.indexOf('<')).replace(/^"|"$/gu,'').trim() || null : null };
         }).sort((a,b) => Date.parse(a.message.sentAt) - Date.parse(b.message.sentAt));
