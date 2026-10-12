@@ -4,6 +4,14 @@ import { resolveDailyOwner } from '../owner.js';
 import { instant, text } from '../nutrition/model.js';
 
 export interface CalendarRange { from: string; to: string }
+/** Caller input, validated before refresh state, storage or provider work. */
+export function validateCalendarRange(range: unknown): asserts range is CalendarRange {
+  if (!range || typeof range !== 'object' || Array.isArray(range) || Object.keys(range).some((key) => !['from','to'].includes(key))) throw new TypeError('Invalid calendar range');
+  const { from,to } = range as Record<string,unknown>;
+  instant(from); instant(to);
+  const duration = Date.parse(to) - Date.parse(from);
+  if (duration <= 0 || duration > 62 * 86400_000) throw new TypeError('Calendar range exceeds limits');
+}
 export interface CalendarEntry { id: string; title: string; timeZone: string | null }
 export interface CalendarEvent {
   calendarId: string; id: string; title: string;
@@ -56,10 +64,8 @@ export class DailyCalendarFeed {
 
   async refresh(request: FastifyRequest, range: CalendarRange, signal: AbortSignal): Promise<CalendarSnapshot> {
     const owner = resolveDailyOwner(request); signal.throwIfAborted();
-    if (!range || Object.keys(range).some((key) => !['from', 'to'].includes(key))) throw new TypeError('Invalid calendar range');
-    instant(range.from); instant(range.to);
+    validateCalendarRange(range);
     const from = Date.parse(range.from); const to = Date.parse(range.to);
-    if (to <= from || to - from > 62 * 86400_000) throw new TypeError('Calendar range exceeds limits');
     const key = `${owner}:${new Date(from).toISOString()}:${new Date(to).toISOString()}`;
     const checked = this.now(); const checkedAt = new Date(checked).toISOString(); const cached = this.cache.get(key);
     const fallback = (kind: Failure): CalendarSnapshot => cached

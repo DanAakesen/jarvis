@@ -10,6 +10,29 @@ const message = (id: string, at: string, from = 'Synthetic <sender@example.inval
 const classification = { semanticState: 'new_question',semanticEvidence: 'Synthetic factual question.',senderIsHuman: true,excludedCategory: null,sentRequestAt: null,waitingSince: null };
 const model = (complete = vi.fn<MailSemanticModel['complete']>(async () => classification)): MailSemanticModel => ({ strictSchema: true,toolFree: true,complete });
 describe('read-only Gmail retrieval and validated protected semantic capability', () => {
+  it.each([
+    ['alias sent','Alias <alias@example.invalid>',[...Array.from({ length: 30 },(_,i) => `LABEL_${i}`),'SENT'],'outgoing'],
+    ['primary fallback','Self <SELF@example.invalid>',[],'outgoing'],
+    ['inbound','Sender <sender@example.invalid>',[],'incoming'],
+  ] as const)('recognizes %s before DTO label truncation and preserves mixed-thread incoming chronology', async (_name,from,labels,direction) => {
+    const incomingAt = '2026-10-08T10:00:00Z'; const latestAt = '2026-10-09T10:00:00Z';
+    const complete = vi.fn<MailSemanticModel['complete']>(async (input) => {
+      expect(input.data.messages.map((row) => row.direction)).toEqual(['outgoing','incoming',direction]);
+      return { ...classification,semanticState: 'awaiting_reply',sentRequestAt: '2026-10-07T10:00:00.000Z' };
+    });
+    const read = vi.fn<GoogleApiClient['request']>(async (_api,path) => path.endsWith('/profile')
+      ? { emailAddress: 'self@example.invalid',historyId: '100' }
+      : path.includes('format=full') ? { id: '01',messages: [
+        { ...message('latest',latestAt,from),labelIds: [...labels] },
+        message('incoming',incomingAt),message('sent','2026-10-07T10:00:00Z','Self <SELF@example.invalid>'),
+      ] } : { threads: [{ id: '01' }] });
+    const result = await new DailyGmailFeed({ request: read },model(complete)).read(request,now,signal());
+    expect(result.status).toBe('ok');
+    expect(result.threads[0]).toMatchObject({ latestMessageId: 'latest',latestDirection: direction,
+      latestIncomingAt: direction === 'incoming' ? '2026-10-09T10:00:00.000Z' : '2026-10-08T10:00:00.000Z' });
+    expect(result.threads[0]?.labels).toEqual([...labels].slice(0,30));
+    expect(complete).toHaveBeenCalledTimes(1);
+  });
   it('rejects an unavailable mailbox generation rather than mixing unversioned stages', async () => {
     const read = vi.fn<GoogleApiClient['request']>(async () => ({ emailAddress: 'self@example.invalid' }));
     expect(await new DailyGmailFeed({ request: read },model()).read(request,now,signal())).toMatchObject({ status: 'error',error: 'invalid-response',threads: [] });

@@ -1,6 +1,6 @@
 import { createHash,randomUUID } from 'node:crypto';
 import sql from 'mssql';
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { FastifyRequest } from 'fastify';
 import { loadDatabaseConfig } from './config.js';
 import { applyMigrations, readMigrations } from './migrations.js';
@@ -9,7 +9,8 @@ import { canonicalJson } from '../daily/nutrition/model.js';
 import type { Thread, Order } from '../daily/feeds/attention.js';
 import { DailyFeedRefresh } from '../daily/feeds/refresh.js';
 import type { DailyCalendarFeed } from '../daily/feeds/calendars.js';
-import type { DailyGmailFeed } from '../daily/feeds/gmail.js';
+import { DailyGmailFeed } from '../daily/feeds/gmail.js';
+import type { GoogleApiClient } from '../google/api-client.js';
 
 const config = loadDatabaseConfig();
 if (!config || process.env.NODE_ENV !== 'test' || config.server !== '127.0.0.1') throw new Error('Feed tests require isolated loopback SQL Server');
@@ -27,6 +28,47 @@ beforeAll(async () => { await admin.connect(); await admin.request().batch(`CREA
 beforeEach(async () => { await pool.request().batch('DELETE daily.attention_items; DELETE daily.attention_source_snapshots; DELETE daily.attention_runs; DELETE daily.gmail_suppressions; DELETE daily.order_suppressions;'); });
 afterAll(async () => { await pool.close(); if (admin.connected) await admin.request().batch(`IF DB_ID(N'${database}') IS NOT NULL BEGIN ALTER DATABASE [${database}] SET SINGLE_USER WITH ROLLBACK IMMEDIATE; DROP DATABASE [${database}]; END;`); await admin.close(); });
 describe('Daily feed snapshots and suppressions on real isolated SQL Server', () => {
+  it('rejects invalid manual ranges before storage/provider work without creating a failed run', async () => {
+    await store().ingest(run('retained'),signal());
+    const refresh = vi.fn(); const read = vi.fn(); const storeFor = vi.fn(() => store());
+    const runner = new DailyFeedRefresh({ refresh } as unknown as DailyCalendarFeed,{ read } as unknown as DailyGmailFeed,storeFor);
+    await expect(runner.refresh(request(),'invalid',{ from: now,to: now },true,signal())).rejects.toThrow('limits');
+    for (const operation of [refresh,read,storeFor]) expect(operation).not.toHaveBeenCalled();
+    expect((await pool.request().query('SELECT COUNT(*) AS count FROM daily.attention_runs')).recordset[0].count).toBe(1);
+    expect((await store().sources(signal()))[0]).toMatchObject({ status: 'Current',items: [{ id: thread.id }] });
+  });
+  it('retains distinct numberless deliveries and suppresses only the exact owned delivery key', async () => {
+    const left = { ...order,id: 'numberless-left',orderNumber: null,deliveryDetail: 'Door A' };
+    const right = { ...left,id: 'numberless-right',deliveryDetail: 'Door B' };
+    await store().ingest(run('numberless',[item(left),item(right)]),signal());
+    await store(other).ingest(run('numberless',[item(left),item(right)]),signal());
+    expect((await store().attention(signal())).orders.map((row) => row.id)).toEqual([left.id,right.id]);
+    await store().suppress('order',left.id,true,signal());
+    expect((await store().attention(signal())).orders.map((row) => row.id)).toEqual([right.id]);
+    expect((await store(other).attention(signal())).orders).toHaveLength(2);
+    await store().clear('order','synthetic shop:door a',true,signal());
+    expect((await store().attention(signal())).orders).toHaveLength(2);
+  });
+  it('persists SENT-alias direction without falsely reviving incoming-only suppression', async () => {
+    await store().ingest(run('initial'),signal()); await store().suppress('thread',thread.id,true,signal());
+    const message = (id: string,at: string,from: string,labels: string[] = []) => ({ id,internalDate: String(Date.parse(at)),labelIds: labels,
+      payload: { mimeType: 'text/plain',headers: [{ name: 'From',value: from },{ name: 'Subject',value: 'Synthetic question' }],body: { data: Buffer.from('Synthetic request').toString('base64url') } } });
+    const read = vi.fn<GoogleApiClient['request']>(async (_api,path) => path.endsWith('/profile') ? { emailAddress: 'self@example.invalid',historyId: '100' }
+      : path.includes('format=full') ? { id: thread.id,messages: [
+        message('alias-sent','2026-10-10T10:00:00Z','alias@example.invalid',[...Array.from({ length: 30 },(_,i) => `LABEL_${i}`),'SENT']),
+        message(thread.latestMessageId,thread.latestMessageAt,'sender@example.invalid'),message('primary-sent','2026-10-07T10:00:00Z','self@example.invalid'),
+      ] } : { threads: [{ id: thread.id }] });
+    const mail = await new DailyGmailFeed({ request: read },{ strictSchema: true,toolFree: true,complete: async () => ({
+      semanticState: 'awaiting_reply',semanticEvidence: 'Synthetic unanswered request.',senderIsHuman: true,excludedCategory: null,
+      sentRequestAt: '2026-10-07T10:00:00.000Z',waitingSince: null,
+    }) }).read(request(),now,signal());
+    expect(mail.status).toBe('ok'); expect(mail.threads[0]).toMatchObject({ latestDirection: 'outgoing',latestIncomingAt: '2026-10-09T10:00:00.000Z' });
+    const input = run('alias',mail.threads.map(item),'2026-10-12T12:01:00Z');
+    await store(owner,() => input.capturedAt).ingest(input,signal()); await store(other,() => input.capturedAt).ingest(input,signal());
+    expect((await store().attention(signal())).waiting).toEqual([]);
+    expect((await store(other).attention(signal())).waiting[0]?.bucket).toBe('waiting_on_others');
+    expect((await pool.request().query('SELECT revived_at FROM daily.gmail_suppressions')).recordset[0].revived_at).toBeNull();
+  });
   it.each(['items','bytes','nodes'])('persists healthy Gmail and retains last calendar snapshot on calendar %s overflow', async (limit) => {
     const initial = run('initial'); initial.sources[1]!.items = [{ type: 'event',id: 'synthetic:retained',title: 'Retained synthetic',content: {
       type: 'event',id: 'synthetic:retained',calendarId: 'synthetic',allDay: true,startsAt: '2026-10-12T00:00:00Z',endsAt: '2026-10-13T00:00:00Z',

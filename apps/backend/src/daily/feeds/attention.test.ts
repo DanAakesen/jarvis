@@ -85,6 +85,21 @@ describe('verified source attention selectors', () => {
     expect(mergeOrders([order,{ ...order,id: 'new-source-id',orderNumber: ' dk-12/34 ',updatedAt: '2026-10-10T10:00:00Z' }])[0]?.id).toBe('new-source-id');
     expect(mergeOrders([{ ...order,status: ' RECEIVED ' }])).toEqual([]);
   });
+  it.each([
+    [null,null,'Door A','Door B',2], [null,null,' Door #A ','door a',1],
+    [null,null,null,null,2], [null,null,'!!!','???',2],
+    [null,'',null,null,2], ['', ' ',null,null,2],
+    ['123',null,null,null,2], ['123','',null,null,2],
+    [' 123 ','123',null,null,1], ['DK-12/34','DK1234',null,null,2],
+    ['123',null,'Door A','door a',1], [null,'','Door A','door a',1],
+  ])('groups only genuine numbers or nonempty matching delivery details %#', (leftNumber,rightNumber,leftDelivery,rightDelivery,count) => {
+    const left = { ...syntheticOrder,id: 'left',orderNumber: leftNumber as string | null,deliveryDetail: leftDelivery as string | null };
+    const right = { ...syntheticOrder,id: 'right',orderNumber: rightNumber as string | null,deliveryDetail: rightDelivery as string | null };
+    const result = mergeOrders([left,right]);
+    expect(result).toHaveLength(count as number);
+    expect(result.map((row) => row.id)).toEqual(count === 1 ? ['right'] : ['left','right']);
+    expect(mergeOrders([left,{ ...right,company: 'Other merchant' }])).toHaveLength(2);
+  });
   it('revives only a different message with newer incoming data, never mere outgoing IDs', () => {
     const saved = { messageId: syntheticThread.latestMessageId,incomingAt: syntheticThread.latestIncomingAt };
     expect(threadRevives({ ...syntheticThread,latestMessageId: 'outgoing-new' },saved)).toBe(false);

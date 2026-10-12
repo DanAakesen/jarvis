@@ -84,8 +84,8 @@ export function mergeOrders(orders: readonly Order[], suppressed: ReadonlySet<st
     validateOrder(input);
     const order = structuredClone(input); const merchant = orderMerchantKey(order.company);
     const index = merged.findIndex((existing) => Boolean(merchant) && orderMerchantKey(existing.company) === merchant &&
-      (String(existing.orderNumber).trim().toLowerCase() === String(order.orderNumber).trim().toLowerCase() ||
-       Boolean(existing.deliveryDetail && order.deliveryDetail) && normalize(existing.deliveryDetail!) === normalize(order.deliveryDetail!)));
+      (Boolean(existing.orderNumber?.trim() && order.orderNumber?.trim()) && existing.orderNumber!.trim().toLowerCase() === order.orderNumber!.trim().toLowerCase() ||
+       Boolean(normalize(existing.deliveryDetail || '')) && normalize(existing.deliveryDetail || '') === normalize(order.deliveryDetail || '')));
     if (index < 0) merged.push(order);
     else {
       const old = merged[index]!;
