@@ -108,13 +108,15 @@ describe('screen vision endpoint', () => {
     expect(recordImageTokens).toHaveBeenCalledOnce();
   });
 
-  it('fails image admission closed for unknown prices, zero budgets, cancellation and persistence failure', async () => {
+  it('admits unpriced models on the unverified hold and fails closed for zero budgets, cancellation and persistence failure', async () => {
     const reserveImage = vi.fn(async () => 'reserved' as const);
     const service = new ScreenVisionService({ describe: vi.fn() }, {
       reserveImage, reserveFrame: vi.fn(), recordTokens: vi.fn(),
     });
     const input = { sessionId: '41', itemId: 'frame_item', model: 'gpt-6-luna', limitUsd: 1 };
-    await expect(service.reserveImage({ ...input, model: 'unknown-model' })).rejects.toThrow('pricing');
+    expect(await service.reserveImage({ ...input, model: 'unpriced-chat-model' })).toBe(true);
+    expect(reserveImage).toHaveBeenCalledWith(expect.objectContaining({ model: 'unpriced-chat-model', limitDkk: 6.5785 }));
+    reserveImage.mockClear();
     expect(await service.reserveImage({ ...input, limitUsd: 0 })).toBe(false);
     await expect(service.reserveImage({ ...input, signal: AbortSignal.abort() })).rejects.toThrow('cancelled');
     expect(reserveImage).not.toHaveBeenCalled();
