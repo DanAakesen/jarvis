@@ -29,6 +29,24 @@ from jarvis_tools import (
 )
 
 TOKEN = "agent-token-secret"
+
+
+def test_shared_presence_instructions_are_packaged_in_both_images() -> None:
+    agent = Path(__file__).resolve().parents[1]
+    root = agent.parents[1]
+    assert "!presence-instructions.json" in (agent / ".dockerignore").read_text().splitlines()
+    assert "COPY *.py limits.json presence-instructions.json ./" in (
+        agent / "Dockerfile"
+    ).read_text()
+    assert "!agents/jarvis/presence-instructions.json" in (
+        root / ".dockerignore"
+    ).read_text().splitlines()
+    assert (
+        "COPY agents/jarvis/presence-instructions.json "
+        "./agents/jarvis/presence-instructions.json"
+    ) in (root / "apps/backend/Dockerfile").read_text()
+
+
 CREATE_TASK = {
     "name": "create_task",
     "description": "Start a new coding task.",
