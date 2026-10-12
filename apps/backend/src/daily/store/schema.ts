@@ -17,7 +17,13 @@ export const dailyTables = {
       "normalized_counts_json",
       "error_code",
       "error_message"
-    ]
+    ],
+    "keyTypes": {
+      "id": {
+        "type": "text",
+        "maxLength": 256
+      }
+    }
   },
   "health_raw_objects": {
     "keys": [
@@ -35,7 +41,13 @@ export const dailyTables = {
       "storage_status",
       "last_error",
       "deleted_at"
-    ]
+    ],
+    "keyTypes": {
+      "ingestion_id": {
+        "type": "text",
+        "maxLength": 256
+      }
+    }
   },
   "health_daily_metrics": {
     "keys": [
@@ -56,7 +68,16 @@ export const dailyTables = {
       "fields_json",
       "ingestion_id",
       "updated_at"
-    ]
+    ],
+    "keyTypes": {
+      "metric_name": {
+        "type": "text",
+        "maxLength": 256
+      },
+      "metric_date": {
+        "type": "date"
+      }
+    }
   },
   "health_sleep_daily": {
     "keys": [
@@ -77,7 +98,12 @@ export const dailyTables = {
       "segment_count",
       "ingestion_id",
       "updated_at"
-    ]
+    ],
+    "keyTypes": {
+      "sleep_date": {
+        "type": "date"
+      }
+    }
   },
   "health_workouts": {
     "keys": [
@@ -104,7 +130,13 @@ export const dailyTables = {
       "detail_json",
       "ingestion_id",
       "updated_at"
-    ]
+    ],
+    "keyTypes": {
+      "id": {
+        "type": "text",
+        "maxLength": 256
+      }
+    }
   },
   "health_workout_metrics": {
     "keys": [
@@ -123,7 +155,17 @@ export const dailyTables = {
       "fields_json",
       "ingestion_id",
       "updated_at"
-    ]
+    ],
+    "keyTypes": {
+      "workout_id": {
+        "type": "text",
+        "maxLength": 256
+      },
+      "metric_name": {
+        "type": "text",
+        "maxLength": 256
+      }
+    }
   },
   "health_workout_heart_rate_minute": {
     "keys": [
@@ -143,7 +185,21 @@ export const dailyTables = {
       "sample_count",
       "ingestion_id",
       "updated_at"
-    ]
+    ],
+    "keyTypes": {
+      "workout_id": {
+        "type": "text",
+        "maxLength": 256
+      },
+      "sample_minute": {
+        "type": "text",
+        "maxLength": 64
+      },
+      "metric_name": {
+        "type": "text",
+        "maxLength": 256
+      }
+    }
   },
   "health_sync_state": {
     "keys": [
@@ -161,7 +217,12 @@ export const dailyTables = {
       "last_cleanup_at",
       "last_counts_json",
       "updated_at"
-    ]
+    ],
+    "keyTypes": {
+      "id": {
+        "type": "bigint"
+      }
+    }
   },
   "health_sync_feeds": {
     "keys": [
@@ -175,7 +236,13 @@ export const dailyTables = {
       "last_success_at",
       "last_counts_json",
       "updated_at"
-    ]
+    ],
+    "keyTypes": {
+      "feed_kind": {
+        "type": "text",
+        "maxLength": 256
+      }
+    }
   },
   "health_phone_sync_state": {
     "keys": [
@@ -187,7 +254,12 @@ export const dailyTables = {
       "shortcut_name",
       "checked_feeds_json",
       "updated_at"
-    ]
+    ],
+    "keyTypes": {
+      "id": {
+        "type": "bigint"
+      }
+    }
   },
   "nutrition_queue": {
     "keys": [
@@ -216,7 +288,13 @@ export const dailyTables = {
       "last_error",
       "expires_at",
       "updated_at"
-    ]
+    ],
+    "keyTypes": {
+      "id": {
+        "type": "text",
+        "maxLength": 256
+      }
+    }
   },
   "nutrition_meals": {
     "keys": [
@@ -248,7 +326,13 @@ export const dailyTables = {
       "created_at",
       "expires_at",
       "updated_at"
-    ]
+    ],
+    "keyTypes": {
+      "id": {
+        "type": "text",
+        "maxLength": 256
+      }
+    }
   },
   "nutrition_favorites": {
     "keys": [
@@ -272,7 +356,13 @@ export const dailyTables = {
       "source_idempotency_key",
       "created_at",
       "updated_at"
-    ]
+    ],
+    "keyTypes": {
+      "id": {
+        "type": "text",
+        "maxLength": 256
+      }
+    }
   },
   "nutrition_meal_plans": {
     "keys": [
@@ -293,7 +383,13 @@ export const dailyTables = {
       "deleted_at",
       "created_at",
       "updated_at"
-    ]
+    ],
+    "keyTypes": {
+      "id": {
+        "type": "text",
+        "maxLength": 256
+      }
+    }
   },
   "nutrition_recommendation_feedback": {
     "keys": [
@@ -304,7 +400,13 @@ export const dailyTables = {
       "preference",
       "created_at",
       "updated_at"
-    ]
+    ],
+    "keyTypes": {
+      "meal_key": {
+        "type": "text",
+        "maxLength": 256
+      }
+    }
   },
   "coach_profiles": {
     "keys": [],
@@ -329,7 +431,8 @@ export const dailyTables = {
       "revision",
       "created_at",
       "updated_at"
-    ]
+    ],
+    "keyTypes": {}
   },
   "coach_commitments": {
     "keys": [
@@ -349,7 +452,13 @@ export const dailyTables = {
       "idempotency_key",
       "created_at",
       "updated_at"
-    ]
+    ],
+    "keyTypes": {
+      "id": {
+        "type": "text",
+        "maxLength": 256
+      }
+    }
   },
   "readiness_checkins": {
     "keys": [
@@ -362,7 +471,12 @@ export const dailyTables = {
       "captured_at",
       "created_at",
       "updated_at"
-    ]
+    ],
+    "keyTypes": {
+      "checkin_date": {
+        "type": "date"
+      }
+    }
   },
   "recovery_days": {
     "keys": [
@@ -373,7 +487,12 @@ export const dailyTables = {
       "context_text",
       "created_at",
       "updated_at"
-    ]
+    ],
+    "keyTypes": {
+      "recovery_date": {
+        "type": "date"
+      }
+    }
   },
   "attention_runs": {
     "keys": [
@@ -389,7 +508,13 @@ export const dailyTables = {
       "status",
       "source_status_json",
       "completed_at"
-    ]
+    ],
+    "keyTypes": {
+      "id": {
+        "type": "text",
+        "maxLength": 256
+      }
+    }
   },
   "attention_source_snapshots": {
     "keys": [
@@ -406,7 +531,13 @@ export const dailyTables = {
       "checksum",
       "error_code",
       "error_message"
-    ]
+    ],
+    "keyTypes": {
+      "id": {
+        "type": "text",
+        "maxLength": 256
+      }
+    }
   },
   "attention_items": {
     "keys": [
@@ -428,7 +559,21 @@ export const dailyTables = {
       "is_all_day",
       "state",
       "content_json"
-    ]
+    ],
+    "keyTypes": {
+      "snapshot_id": {
+        "type": "text",
+        "maxLength": 256
+      },
+      "item_type": {
+        "type": "text",
+        "maxLength": 256
+      },
+      "stable_id": {
+        "type": "text",
+        "maxLength": 256
+      }
+    }
   },
   "gmail_suppressions": {
     "keys": [
@@ -441,7 +586,13 @@ export const dailyTables = {
       "suppressed_at",
       "revived_at",
       "updated_at"
-    ]
+    ],
+    "keyTypes": {
+      "thread_id": {
+        "type": "text",
+        "maxLength": 256
+      }
+    }
   },
   "order_suppressions": {
     "keys": [
@@ -453,7 +604,13 @@ export const dailyTables = {
       "suppressed_at",
       "revived_at",
       "updated_at"
-    ]
+    ],
+    "keyTypes": {
+      "order_key": {
+        "type": "text",
+        "maxLength": 256
+      }
+    }
   },
   "briefing_runs": {
     "keys": [
@@ -473,7 +630,13 @@ export const dailyTables = {
       "delivered_at",
       "delivery_evidence_json",
       "updated_at"
-    ]
+    ],
+    "keyTypes": {
+      "id": {
+        "type": "text",
+        "maxLength": 256
+      }
+    }
   },
   "attention_rule_config": {
     "keys": [
@@ -484,7 +647,13 @@ export const dailyTables = {
       "value_json",
       "source",
       "updated_at"
-    ]
+    ],
+    "keyTypes": {
+      "key": {
+        "type": "text",
+        "maxLength": 256
+      }
+    }
   },
   "coach_experiments": {
     "keys": [
@@ -509,7 +678,13 @@ export const dailyTables = {
       "idempotency_key",
       "created_at",
       "updated_at"
-    ]
+    ],
+    "keyTypes": {
+      "id": {
+        "type": "text",
+        "maxLength": 256
+      }
+    }
   }
 } as const;
 export type DailyTable = keyof typeof dailyTables;

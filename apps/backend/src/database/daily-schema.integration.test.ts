@@ -103,4 +103,87 @@ describe('Daily SQL owner schema on real SQL Server', () => {
       .rejects.toThrow('Daily rollback requires empty tables');
     expect((await pool.request().query('SELECT COUNT(*) AS count FROM daily.nutrition_meals')).recordset[0].count).toBe(2);
   });
+
+  it('looks up exact numeric-looking text IDs, padded text and date/bigint keys', async () => {
+    await pool.request().input('owner', sql.UniqueIdentifier, owner).batch(`
+      INSERT daily.health_ingestions(owner_object_id,id,automation_id,session_id,checksum,status,content_bytes,received_at)
+        VALUES (@owner,N'01',N'synthetic',N'01',N'synthetic',N'complete',0,N'2026-01-01'),
+               (@owner,N'1',N'synthetic',N'1',N'synthetic',N'complete',0,N'2026-01-01'),
+               (@owner,N'padded ',N'synthetic',N'padded ',N'synthetic',N'complete',0,N'2026-01-01');
+      INSERT daily.health_sync_state(owner_object_id,id) VALUES (@owner,9223372036854775807);`);
+    const store = DailyOwnerStore.forRequest(pool, requestFor(owner));
+    await expect(store.read('health_ingestions', { id: 1 }, signal())).rejects.toThrow('text key');
+    expect(await store.read('health_ingestions', { id: '01' }, signal())).toMatchObject({ id: '01' });
+    expect(await store.read('health_ingestions', { id: '1' }, signal())).toMatchObject({ id: '1' });
+    expect(await store.read('health_ingestions', { id: '1 ' }, signal())).toBeNull();
+    expect(await store.read('health_ingestions', { id: 'padded' }, signal())).toBeNull();
+    expect(await store.read('health_ingestions', { id: 'padded ' }, signal())).toMatchObject({ id: 'padded ' });
+    const maximum = await store.read('health_sync_state', { id: 9223372036854775807n }, signal());
+    expect(maximum).toMatchObject({ id: '9223372036854775807' });
+    expect(await store.read('health_sync_state', { id: '9223372036854775807' }, signal())).toEqual(maximum);
+    const metric = await store.read('health_daily_metrics', { metric_name: 'weight', metric_date: '2026-01-01' }, signal());
+    expect((metric?.metric_date as Date).toISOString().slice(0, 10)).toBe('2026-01-01');
+    await expect(store.read('health_daily_metrics', { metric_name: 'weight', metric_date: '2026-02-30' }, signal())).rejects.toThrow('date key');
+  });
+
+  it('holds Daily writer locks from empty checks through drops during concurrent rollback', async () => {
+    const isolated = `jarvis_daily_race_${randomUUID().replaceAll('-', '')}`;
+    const rollbackPool = new sql.ConnectionPool({ ...configuration, database: isolated });
+    const writerPool = new sql.ConnectionPool({ ...configuration, database: isolated, pool: { min: 1, max: 1 } });
+    await admin.request().batch(`CREATE DATABASE [${isolated}];`);
+    let rollback: Promise<string> | undefined;
+    let writer: Promise<string> | undefined;
+    let rollbackError: unknown;
+    let writerError: unknown;
+    try {
+      await rollbackPool.connect(); await writerPool.connect();
+      const migrations = (await readMigrations()).filter((migration) => migration.name === filename);
+      await applyMigrations(rollbackPool, migrations);
+      const objectId = (await rollbackPool.request().query("SELECT OBJECT_ID(N'daily.health_ingestions') AS id")).recordset[0].id;
+      const writerId = (await writerPool.request().query('SELECT @@SPID AS id')).recordset[0].id;
+      const down = await readDownMigration(filename);
+      // Test-only pause at the boundary after all production emptiness checks.
+      const paused = { ...down, sql: down.sql.replace('DROP TABLE', "WAITFOR DELAY '00:00:05';\nDROP TABLE") };
+      rollback = revertMigration(rollbackPool, migrations, paused).catch((error: unknown) => {
+        rollbackError = error; return 'aborted';
+      });
+      const waitUntil = async (query: string) => {
+        const deadline = Date.now() + 10000;
+        while (Date.now() < deadline) {
+          if ((await admin.request().query(query)).recordset.length) return;
+          await new Promise((resolve) => setTimeout(resolve, 50));
+        }
+        throw new Error('SQL concurrency fixture did not reach the required lock state');
+      };
+      await waitUntil(`SELECT 1 AS locked FROM sys.dm_tran_locks WHERE resource_database_id=DB_ID(N'${isolated}')
+        AND resource_type='OBJECT' AND resource_associated_entity_id=${objectId} AND request_mode='X' AND request_status='GRANT';`);
+      let outcome = 'pending';
+      writer = writerPool.request().input('owner', sql.UniqueIdentifier, owner).query(`
+        INSERT daily.health_ingestions(owner_object_id,id,automation_id,session_id,checksum,status,content_bytes,received_at)
+          VALUES (@owner,N'concurrent',N'synthetic',N'concurrent',N'synthetic',N'complete',0,N'2026-01-01');`)
+        .then(() => { outcome = 'committed'; return outcome; }, (error: unknown) => {
+          writerError = error; outcome = 'rejected'; return outcome;
+        });
+      await waitUntil(`SELECT 1 AS blocked FROM sys.dm_exec_requests WHERE session_id=${writerId} AND blocking_session_id>0;`);
+      expect(outcome).toBe('pending');
+      const rollbackResult = await rollback;
+      const writerResult = await writer;
+      if (rollbackResult === filename) {
+        expect(writerResult).toBe('rejected');
+        // A blocked writer can lose a schema-lock deadlock or resume after DROP.
+        expect([1205, 208]).toContain((writerError as sql.RequestError).number);
+        expect((await rollbackPool.request().query("SELECT OBJECT_ID(N'daily.health_ingestions') AS id")).recordset[0].id).toBeNull();
+      } else {
+        // If SQL selects rollback as the deadlock victim, the writer's commit survives.
+        expect((rollbackError as sql.RequestError).number).toBe(1205);
+        expect(writerResult).toBe('committed');
+        expect((await rollbackPool.request().query("SELECT id FROM daily.health_ingestions WHERE id=N'concurrent'")).recordset)
+          .toEqual([{ id: 'concurrent' }]);
+      }
+    } finally {
+      await Promise.allSettled([rollback, writer]);
+      await rollbackPool.close(); await writerPool.close();
+      await admin.request().batch(`ALTER DATABASE [${isolated}] SET SINGLE_USER WITH ROLLBACK IMMEDIATE; DROP DATABASE [${isolated}];`);
+    }
+  });
 });

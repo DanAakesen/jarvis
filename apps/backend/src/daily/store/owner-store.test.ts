@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import type sql from 'mssql';
+import sql from 'mssql';
 import type { FastifyRequest } from 'fastify';
 import { DailyOwnerStore } from './owner-store.js';
 
@@ -37,5 +37,31 @@ describe('inactive Daily owner persistence boundary', () => {
     const controller = new AbortController(); controller.abort();
     await expect(data.store.read('nutrition_meals', { id: 'x' }, controller.signal)).rejects.toThrow();
     expect(data.request.query).not.toHaveBeenCalled();
+  });
+  it('uses schema key types and rejects numeric text IDs before allocating SQL', async () => {
+    const data = fixture();
+    await expect(data.store.read('nutrition_meals', { id: 1 }, new AbortController().signal)).rejects.toThrow('text key');
+    expect(data.pool.request).not.toHaveBeenCalled();
+    await data.store.read('nutrition_meals', { id: '01' }, new AbortController().signal);
+    expect(data.request.input).toHaveBeenCalledWith('key0', expect.anything(), '01');
+    expect(data.request.query).toHaveBeenCalledWith(expect.stringContaining('DATALENGTH([id]) = DATALENGTH(@key0)'));
+  });
+  it('validates real date-only keys and binds a SQL date, not caller-derived text/numbers', async () => {
+    const data = fixture();
+    for (const date of [1, new Date(), '2026-02-30', '2026-01-01T00:00:00Z', '0000-01-01']) {
+      await expect(data.store.read('health_daily_metrics', { metric_name: 'weight', metric_date: date }, new AbortController().signal)).rejects.toThrow('date key');
+    }
+    expect(data.pool.request).not.toHaveBeenCalled();
+    await data.store.read('health_daily_metrics', { metric_name: 'weight', metric_date: '2026-01-01' }, new AbortController().signal);
+    expect(data.request.input).toHaveBeenCalledWith('key1', sql.Date, new Date('2026-01-01T00:00:00.000Z'));
+  });
+  it('preserves signed 64-bit integer fidelity and rejects unsafe or noncanonical shapes', async () => {
+    const data = fixture();
+    for (const value of [Number.MAX_SAFE_INTEGER + 1, '01', '-0', '1 ', '9223372036854775808', {}, new Date()]) {
+      await expect(data.store.read('health_sync_state', { id: value }, new AbortController().signal)).rejects.toThrow('integer key');
+    }
+    expect(data.pool.request).not.toHaveBeenCalled();
+    await data.store.read('health_sync_state', { id: '9223372036854775807' }, new AbortController().signal);
+    expect(data.request.input).toHaveBeenCalledWith('key0', sql.BigInt, 9223372036854775807n);
   });
 });
