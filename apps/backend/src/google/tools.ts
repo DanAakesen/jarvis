@@ -1278,7 +1278,7 @@ export function createGoogleModule(
     },
     {
       name: 'mail_confirm_action',
-      description: 'Complete a pending Gmail draft, delete, archive, label, or send action only when Dan's latest message is a plain approval (yes, approved, confirmed, go ahead).',
+      description: 'Complete a pending Gmail draft, delete, archive, label, or send action only when the latest Dan message is a plain approval (yes, approved, confirmed, go ahead).',
       inputSchema: confirmationSchema,
       sensitive: true,
       execute: (input, request, signal) => confirmationResult(

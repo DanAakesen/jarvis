@@ -617,7 +617,7 @@ export const factoryTools: readonly JarvisTool[] = [
   },
   {
     name: 'confirm_project_archive',
-    description: 'Archive a project only after Dan's latest message is a plain approval (yes, approved, confirmed, go ahead).',
+    description: 'Archive a project only after the latest Dan message is a plain approval (yes, approved, confirmed, go ahead).',
     inputSchema: {
       type: 'object',
       properties: { confirmationCode: { type: 'string', pattern: '^[0-9]{8}$' } },
