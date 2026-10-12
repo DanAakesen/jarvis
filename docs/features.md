@@ -295,3 +295,5 @@ P12-03 adds only the empty owner-bound persistence schema and inactive exact-key
 | Parity, physical-phone acceptance, protected cutover/rollback and legacy deprecation | Background/Phone | Planned; evidence gates apply | P12-17–P12-19 |
 
 [Approved scope and existing issue URLs](daily-migration.md). No TickTick integration or original Daily repository/data deletion.
+
+P12-10 has inactive source-contract-based resumable Gmail/calendar services, exact waiting/order selectors, owner-local snapshots/suppressions and bounded manual refresh with independent denied/partial/stale/oversized-source states. Semantic extraction uses the existing protected chat model/identity/settings with tool-free JSON transport and strict local validation; absent/failed capability is unavailable. Source and model-interface contracts are supplied; deployed-model/consent/live/private/phone parity remain open. No registered feeds, broadened OAuth or live-provider success is claimed.
