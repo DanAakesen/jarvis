@@ -128,7 +128,7 @@ describe('Daily SQL owner schema on real SQL Server', () => {
 
   it('holds Daily writer locks from empty checks through drops during concurrent rollback', async () => {
     const isolated = `jarvis_daily_race_${randomUUID().replaceAll('-', '')}`;
-    const rollbackPool = new sql.ConnectionPool({ ...configuration, database: isolated });
+    const rollbackPool = new sql.ConnectionPool({ ...configuration, database: isolated, pool: { min: 1, max: 1 } });
     const writerPool = new sql.ConnectionPool({ ...configuration, database: isolated, pool: { min: 1, max: 1 } });
     await admin.request().batch(`CREATE DATABASE [${isolated}];`);
     let rollback: Promise<string> | undefined;
@@ -140,6 +140,7 @@ describe('Daily SQL owner schema on real SQL Server', () => {
       const migrations = (await readMigrations()).filter((migration) => migration.name === filename);
       await applyMigrations(rollbackPool, migrations);
       const objectId = (await rollbackPool.request().query("SELECT OBJECT_ID(N'daily.health_ingestions') AS id")).recordset[0].id;
+      const rollbackId = (await rollbackPool.request().query('SELECT @@SPID AS id')).recordset[0].id;
       const writerId = (await writerPool.request().query('SELECT @@SPID AS id')).recordset[0].id;
       const down = await readDownMigration(filename);
       // Test-only pause at the boundary after all production emptiness checks.
@@ -155,8 +156,11 @@ describe('Daily SQL owner schema on real SQL Server', () => {
         }
         throw new Error('SQL concurrency fixture did not reach the required lock state');
       };
-      await waitUntil(`SELECT 1 AS locked FROM sys.dm_tran_locks WHERE resource_database_id=DB_ID(N'${isolated}')
-        AND resource_type='OBJECT' AND resource_associated_entity_id=${objectId} AND request_mode='X' AND request_status='GRANT';`);
+      await waitUntil(`SELECT 1 AS locked FROM sys.dm_exec_requests AS requests
+        WHERE requests.session_id=${rollbackId} AND requests.wait_type='WAITFOR'
+        AND EXISTS (SELECT 1 FROM sys.dm_tran_locks WHERE request_session_id=${rollbackId}
+          AND resource_database_id=DB_ID(N'${isolated}') AND resource_type='OBJECT'
+          AND resource_associated_entity_id=${objectId} AND request_mode='X' AND request_status='GRANT');`);
       let outcome = 'pending';
       writer = writerPool.request().input('owner', sql.UniqueIdentifier, owner).query(`
         INSERT daily.health_ingestions(owner_object_id,id,automation_id,session_id,checksum,status,content_bytes,received_at)
