@@ -6,6 +6,41 @@ export const syntheticThread: Thread = { type: 'thread', id: '01', threadId: '01
   sentRequestAt: null, waitingSince: null, snippet: null, labels: [] };
 export const syntheticOrder: Order = { id: 'order:synthetic:12345', company: 'Synthetic Shop Ltd', orderNumber: '12345', status: 'shipped', statusLabel: 'Shipped', deliveryDetail: null, updatedAt: '2026-10-09T10:00:00Z' };
 describe('verified source attention selectors', () => {
+  it('gates all seven semantic states across direction, age and waiting timestamp precedence', () => {
+    const now = '2026-10-13T10:00:00Z';
+    const old = '2026-10-08T10:00:00Z'; // Exactly three Danish business days.
+    const recent = '2026-10-12T10:00:00Z'; // One Danish business day.
+    const ages = [
+      { latest: '2026-10-12T10:00:01Z', incomingEligible: false, fallbackEligible: false },
+      { latest: recent, incomingEligible: true, fallbackEligible: false },
+      { latest: old, incomingEligible: true, fallbackEligible: true },
+    ];
+    const timestamps = [
+      { waitingSince: null, sentRequestAt: null, replyEligible: false, deferralEligible: null },
+      { waitingSince: null, sentRequestAt: old, replyEligible: true, deferralEligible: null },
+      { waitingSince: null, sentRequestAt: recent, replyEligible: false, deferralEligible: null },
+      { waitingSince: '2026-10-09T10:00:00Z', sentRequestAt: old, replyEligible: false, deferralEligible: false }, // Two business days.
+      { waitingSince: recent, sentRequestAt: old, replyEligible: false, deferralEligible: false },
+      { waitingSince: old, sentRequestAt: recent, replyEligible: true, deferralEligible: true },
+    ];
+    const states = [
+      ['new_question','incoming'], ['direct_request','incoming'], ['ambiguous','incoming'],
+      ['awaiting_reply','reply'], ['deferral','deferral'], ['resolved','excluded'], ['none','excluded'],
+    ] as const;
+    for (const [semanticState,kind] of states) for (const latestDirection of ['incoming','outgoing'] as const) {
+      for (const age of ages) for (const timestampsCase of timestamps) {
+        const thread: Thread = { ...syntheticThread,semanticState,latestDirection,latestMessageAt: age.latest,
+          latestIncomingAt: age.latest,waitingSince: timestampsCase.waitingSince,sentRequestAt: timestampsCase.sentRequestAt };
+        const expected = kind === 'incoming' && latestDirection === 'incoming' && age.incomingEligible ? 'waiting_for_you'
+          : kind === 'reply' && timestampsCase.replyEligible ? 'waiting_on_others'
+          : kind === 'deferral' && (timestampsCase.deferralEligible ?? age.fallbackEligible) ? 'waiting_on_others' : null;
+        const context = JSON.stringify({ semanticState,latestDirection,age,timestampsCase });
+        expect(classifyGmailThread(thread,now)?.bucket ?? null,context).toBe(expected);
+        expect(classifyGmailThread({ ...thread,senderIsHuman: false },now),context).toBeNull();
+        expect(classifyGmailThread({ ...thread,excludedCategory: 'newsletter' },now),context).toBeNull();
+      }
+    }
+  });
   it('uses exactly 24 real hours for incoming attention, labels ambiguity Review and excludes closed/nonhuman states', () => {
     expect(classifyGmailThread(syntheticThread,'2026-10-10T09:59:59Z')).toBeNull();
     expect(classifyGmailThread(syntheticThread,'2026-10-10T10:00:00Z')).toMatchObject({ bucket: 'waiting_for_you', label: '24h' });

@@ -51,6 +51,7 @@ export function classifyGmailThread(thread: Thread, now: string): Waiting | null
   if (thread.latestDirection === 'incoming' && ['new_question','direct_request','ambiguous'].includes(thread.semanticState)) {
     return hours >= 24 ? { thread, bucket: 'waiting_for_you', label: thread.semanticState === 'ambiguous' ? 'Review' : `${Math.floor(hours)}h` } : null;
   }
+  if (!['awaiting_reply','deferral'].includes(thread.semanticState)) return null;
   const since = thread.semanticState === 'deferral' ? thread.waitingSince || thread.latestMessageAt : thread.waitingSince || thread.sentRequestAt;
   if (!since) return null;
   const days = businessDaysElapsed(since, now);
