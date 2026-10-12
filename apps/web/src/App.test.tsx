@@ -219,6 +219,19 @@ describe('Jarvis routes', () => {
     expect(screen.queryByRole('button', { name: 'Sign in with Microsoft' })).toBeNull();
   });
 
+  it('shows the conversation window before history finishes loading and keeps its frame afterwards', async () => {
+    restoreProfile.mockResolvedValue({ name: 'Test User' });
+    let resolve!: (page: { messages: []; nextCursor: null }) => void;
+    loadConversationHistory.mockReturnValueOnce(new Promise(done => { resolve = done; }));
+    render(<MemoryRouter><App config={config} /></MemoryRouter>);
+    const chat = await screen.findByRole('article', { name: 'Conversation' });
+    expect(within(chat).getByText('Loading messages...')).not.toBeNull();
+    expect(within(chat).getByLabelText('Conversation history').getAttribute('aria-busy')).toBe('true');
+    await act(async () => { resolve({ messages: [], nextCursor: null }); });
+    expect(screen.getByRole('article', { name: 'Conversation' })).toBe(chat);
+    expect(within(chat).getByText('No messages yet.')).not.toBeNull();
+  });
+
   it('uses local time for the personal greeting', () => {
     expect(getSignInGreeting(new Date(2026, 0, 1, 4))).toBe('Good evening, Dan.');
     expect(getSignInGreeting(new Date(2026, 0, 1, 5))).toBe('Good morning, Dan.');
