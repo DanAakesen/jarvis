@@ -81,6 +81,8 @@ describe('inactive nutrition services on real SQL Server', () => {
     await Promise.all([store().favorite(input, signal()), store().favorite(input, signal())]);
     expect(await store().findFavorite('SUPPER', signal())).toMatchObject({ id: 'favorite', source_meal_id: '01', carbohydrates_grams: null });
     expect(await NutritionStore.forRequest(pool, request(other), now).findFavorite('supper', signal())).toBeNull();
+    expect((await store().favorites({ limit: 1 }, signal())).rows).toHaveLength(1);
+    expect((await NutritionStore.forRequest(pool, request(other), now).favorites({ limit: 1 }, signal())).rows).toEqual([]);
     await expect(store().favorite({ ...input, id: 'collision', name: 'Other' }, signal())).rejects.toThrow('already used');
     await expect(store().favorite({ ...input, mealId: '1' }, signal())).rejects.toThrow('unavailable');
   });

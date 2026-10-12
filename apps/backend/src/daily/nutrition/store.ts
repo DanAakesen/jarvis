@@ -170,14 +170,14 @@ export class NutritionStore {
       const source = (await this.query(this.request(transaction, signal).input('id', sql.NVarChar(256), input.mealId),
         `SELECT ${select} FROM daily.nutrition_meals WITH (UPDLOCK,HOLDLOCK) WHERE owner_object_id=@owner AND ${equalKey('id', 'id')} AND deleted_at IS NULL;`, signal)).recordset[0];
       if (!source) throw new ToolRefusal('The source intake is unavailable.');
-      const existing = (await this.query(this.request(transaction, signal).input('id', sql.NVarChar(256), input.id).input('name', sql.NVarChar(256), normalized),
-        `SELECT id,normalized_name,aliases_json FROM daily.nutrition_favorites WITH (UPDLOCK,HOLDLOCK) WHERE owner_object_id=@owner;`, signal)).recordset;
       // One owner-local name/alias namespace; do not silently redirect a favourite.
-      for (const row of existing) {
-        if (row.id === input.id) continue;
-        const names = [row.normalized_name as string, ...JSON.parse(row.aliases_json as string) as string[]];
-        if ([normalized, ...aliases].some((name) => names.includes(name))) throw new ToolRefusal('This favourite name or alias is already used.');
-      }
+      const conflicts = (await this.query(this.request(transaction, signal).input('id', sql.NVarChar(256), input.id)
+        .input('names', sql.NVarChar(sql.MAX), JSON.stringify([normalized, ...aliases])),
+        `SELECT TOP (1) id FROM daily.nutrition_favorites WITH (UPDLOCK,HOLDLOCK) WHERE owner_object_id=@owner
+          AND NOT (${equalKey('id', 'id')}) AND (
+            EXISTS(SELECT 1 FROM OPENJSON(@names) n WHERE n.[value] COLLATE Latin1_General_100_BIN2=normalized_name AND DATALENGTH(n.[value])=DATALENGTH(normalized_name))
+            OR EXISTS(SELECT 1 FROM OPENJSON(aliases_json) a JOIN OPENJSON(@names) n ON a.[value] COLLATE Latin1_General_100_BIN2=n.[value] COLLATE Latin1_General_100_BIN2 AND DATALENGTH(a.[value])=DATALENGTH(n.[value])));`, signal)).recordset;
+      if (conflicts.length) throw new ToolRefusal('This favourite name or alias is already used.');
       const now = this.now(); instant(now);
       const request = this.request(transaction, signal).input('id', sql.NVarChar(256), input.id).input('name', sql.NVarChar(sql.MAX), input.name)
         .input('normalized', sql.NVarChar(256), normalized).input('aliases', sql.NVarChar(sql.MAX), JSON.stringify(aliases)).input('now', sql.NVarChar(64), now);
@@ -201,6 +201,14 @@ export class NutritionStore {
         ((${equalKey('normalized_name', 'name')}) OR EXISTS(SELECT 1 FROM OPENJSON(aliases_json) WHERE [value] COLLATE Latin1_General_100_BIN2=@name AND DATALENGTH([value])=DATALENGTH(@name)));`, signal);
     if (result.recordset.length > 1) throw new ToolRefusal('The favourite alias is ambiguous. Choose its exact name.');
     return result.recordset[0] ?? null;
+  }
+  async favorites(input: { limit: number; afterId?: string }, signal: AbortSignal): Promise<{ rows: Record<string, unknown>[]; nextId: string | null }> {
+    if (!Number.isInteger(input.limit) || input.limit < 1 || input.limit > 100 || Object.keys(input).some((key) => !['limit', 'afterId'].includes(key))) throw new TypeError('Invalid favourite page');
+    if (input.afterId !== undefined) text(input.afterId);
+    const request = this.request(this.pool, signal).input('limit', sql.Int, input.limit + 1).input('after', sql.NVarChar(256), input.afterId ?? null);
+    const rows = (await this.read(request, 'SELECT TOP (@limit) * FROM daily.nutrition_favorites WHERE owner_object_id=@owner AND (@after IS NULL OR id>@after) ORDER BY id;', signal)).recordset;
+    const more = rows.length > input.limit; if (more) rows.pop();
+    return { rows, nextId: more ? rows.at(-1)!.id as string : null };
   }
   /** Plans never call log, nutrition_queue or Apple Health export. */
   async savePlan(input: PlanInput, expectedRevision: bigint, signal: AbortSignal): Promise<Record<string, unknown>> {
