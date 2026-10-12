@@ -51,7 +51,7 @@ const maxInstallationRepositories = 10_000;
 export const repositoryCacheTtlMs = 5 * 60 * 1000;
 const installationPermissionsCacheTtlMs = 5 * 60 * 1000;
 
-class GitHubAppRequestError extends Error {
+export class GitHubAppRequestError extends Error {
   constructor(readonly status: number) {
     super('GitHub App request failed');
   }
@@ -66,6 +66,12 @@ function object(value: unknown): Record<string, unknown> | null {
 function installationId(value: unknown): string | null {
   if (typeof value === 'number' && Number.isSafeInteger(value) && value > 0) return String(value);
   return typeof value === 'string' && /^[1-9][0-9]{0,19}$/u.test(value) ? value : null;
+}
+
+function validRepositoryName(repository: string): boolean {
+  if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/u.test(repository)) return false;
+  const [owner, name] = repository.split('/');
+  return owner !== '.' && owner !== '..' && name !== '.' && name !== '..';
 }
 
 async function requestJson(
@@ -278,7 +284,7 @@ export function createGitHubAppTokenIssuer({
   onTokenMint,
 }: GitHubAppTokenIssuerOptions): GitHubAppTokenIssuer {
   const issue = async (repository: string, permissions: Record<string, 'read' | 'write'>): Promise<string> => {
-    if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/u.test(repository)) {
+    if (!validRepositoryName(repository)) {
       throw new Error('GitHub repository is invalid');
     }
     const [owner, name] = repository.split('/');
@@ -303,8 +309,12 @@ export function createGitHubAppTokenIssuer({
         appToken,
         { repositories: [name], permissions },
       );
-      const tokenPermissions = object(object(token)?.permissions);
-      if (tokenPermissions) {
+      const tokenResponse = object(token);
+      if (tokenResponse && Object.hasOwn(tokenResponse, 'permissions')) {
+        const tokenPermissions = object(tokenResponse.permissions);
+        if (!tokenPermissions || Object.keys(tokenPermissions).length === 0 || Object.keys(tokenPermissions).length > 64) {
+          throw new Error('GitHub installation token permissions are invalid');
+        }
         for (const [permission, access] of Object.entries(tokenPermissions)) {
           if (!/^[a-z][a-z_]{0,63}$/u.test(permission) ||
               (access !== 'read' && access !== 'write' && access !== 'admin')) {
@@ -333,7 +343,7 @@ export function createGitHubAppTokenIssuer({
   const readInstallationPermissions = async (
     repository: string,
   ): Promise<Readonly<Record<string, 'read' | 'write' | 'admin'>>> => {
-    if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/u.test(repository)) {
+    if (!validRepositoryName(repository)) {
       throw new Error('GitHub repository is invalid');
     }
     const cacheKey = repository.toLowerCase();
