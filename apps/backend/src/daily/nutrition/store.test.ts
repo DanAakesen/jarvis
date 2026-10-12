@@ -24,8 +24,8 @@ const request = { server: { ownerObjectId: owner }, principal: { objectId: owner
 const input: MealInput = { id: '01', idempotencyKey: 'synthetic-key', mealName: 'Synthetic food', mealType: null, components: [],
   occurredAt: '2026-01-01T23:30:00+01:00', mealDate: '2026-01-01', expiresAt: '2028-01-01T00:00:00Z',
   energyKcal: 100, proteinGrams: null, carbohydratesGrams: null, fatGrams: null, fiberGrams: null,
-  confidence: 'exact', captureMethod: 'text', provenance: {} };
-const authority = { intent: 'log-intake' as const, explicit: true, estimateAccepted: false };
+  confidence: 'accurate', captureMethod: 'text', provenance: {} };
+const authority = { intent: 'log-intake' as const, explicit: true, estimateAccepted: false, proposalRequired: false };
 const store = () => NutritionStore.forRequest({} as sql.ConnectionPool, request, () => '2026-10-12T15:00:00Z');
 const signal = () => new AbortController().signal;
 beforeEach(() => { vi.clearAllMocks(); db.inputs.length = 0; db.begin.mockResolvedValue(undefined); db.commit.mockResolvedValue(undefined); db.rollback.mockResolvedValue(undefined); db.query.mockReset(); });

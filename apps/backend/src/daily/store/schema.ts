@@ -341,6 +341,7 @@ export const dailyTables = {
     "columns": [
       "id",
       "favorite_name",
+      "nutrient_provenance_json",
       "normalized_name",
       "aliases_json",
       "meal_name",

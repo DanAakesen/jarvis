@@ -1,13 +1,23 @@
 import { describe, expect, it } from 'vitest';
-import { authorizeIntake, canonicalJson, meal, plan, resolveNutrients, suggest, type MealInput, type Suggestion } from './model.js';
+import { authorizeIntake, canonicalJson, meal, plan, prepareMeal, resolveNutrients, suggest, type MealInput, type Suggestion } from './model.js';
 
 export const syntheticMeal: MealInput = {
   id: 'synthetic-01', idempotencyKey: 'synthetic-message-01', mealName: 'Synthetic meal', mealType: null,
   components: [], occurredAt: '2026-01-01T23:30:00+01:00', mealDate: '2026-01-01', expiresAt: '2028-01-01T00:00:00Z',
   energyKcal: 123, proteinGrams: null, carbohydratesGrams: null, fatGrams: null, fiberGrams: null,
-  captureMethod: 'text', confidence: 'exact', provenance: { energyKcal: { source: 'user-exact', unit: 'kcal' } },
+  captureMethod: 'text', confidence: 'accurate', provenance: { energyKcal: { source: 'user-exact', unit: 'kcal' } },
 };
 describe('nutrition evidence and budgets', () => {
+  it('defaults occurrence to trusted request time/Copenhagen date and keeps missing macros null', () => {
+    const input = { id: syntheticMeal.id, idempotencyKey: syntheticMeal.idempotencyKey, mealName: syntheticMeal.mealName, mealType: null,
+      components: [], provenance: {}, energyKcal: syntheticMeal.energyKcal, confidence: syntheticMeal.confidence, captureMethod: syntheticMeal.captureMethod };
+    const result = prepareMeal(input, '2026-10-12T23:30:00Z');
+    expect(result).toMatchObject({ occurredAt: '2026-10-12T23:30:00Z', mealDate: '2026-10-13', proteinGrams: null });
+    expect(prepareMeal({ ...input, occurredAt: syntheticMeal.occurredAt, mealDate: syntheticMeal.mealDate }, '2026-10-12T23:30:00Z')).toMatchObject({ occurredAt: syntheticMeal.occurredAt, mealDate: syntheticMeal.mealDate });
+  });
+  it.each(['accurate','approximate','estimate'] as const)('preserves imported %s/mixed vocabulary', (confidence) => {
+    const input = { ...syntheticMeal, confidence, captureMethod: 'mixed' as const }; meal(input); expect(input.confidence).toBe(confidence);
+  });
   it('canonicalizes only JSON object order and rejects silent value loss/deep payloads', () => {
     expect(canonicalJson({ b: 1, a: [null, { d: 2, c: 3 }] })).toBe(canonicalJson({ a: [null, { c: 3, d: 2 }], b: 1 }));
     for (const value of [{ x: undefined }, [NaN], { x: 1n }, new Date()]) expect(() => canonicalJson(value)).toThrow();
@@ -32,17 +42,18 @@ describe('nutrition evidence and budgets', () => {
   });
   it('preserves exact values and null unknowns without demanding redundant confirmation', () => {
     const copy = structuredClone(syntheticMeal);
-    meal(copy); authorizeIntake(copy, { intent: 'log-intake', explicit: true, estimateAccepted: false });
+    meal(copy); authorizeIntake(copy, { intent: 'log-intake', explicit: true, estimateAccepted: false, proposalRequired: false });
     expect(copy).toEqual(syntheticMeal);
   });
   it.each(['lookup', 'recommendation', 'plan'] as const)('never treats %s as eaten food', (intent) => {
-    expect(() => authorizeIntake(syntheticMeal, { intent, explicit: true, estimateAccepted: true })).toThrow('Suggestions and plans');
+    expect(() => authorizeIntake(syntheticMeal, { intent, explicit: true, estimateAccepted: true, proposalRequired: false })).toThrow('Suggestions and plans');
   });
   it('requires explicit acceptance of ambiguous/photo estimates', () => {
     const estimated = { ...syntheticMeal, captureMethod: 'photo' as const, confidence: 'estimate' as const };
-    expect(() => authorizeIntake(estimated, { intent: 'log-intake', explicit: true, estimateAccepted: false })).toThrow('Confirm');
-    expect(() => authorizeIntake(estimated, { intent: 'log-intake', explicit: true, estimateAccepted: true })).not.toThrow();
-    expect(() => authorizeIntake(syntheticMeal, { intent: 'log-intake', explicit: false, estimateAccepted: true })).toThrow();
+    expect(() => authorizeIntake(estimated, { intent: 'log-intake', explicit: true, estimateAccepted: false, proposalRequired: true })).toThrow('Confirm');
+    expect(() => authorizeIntake(estimated, { intent: 'log-intake', explicit: true, estimateAccepted: true, proposalRequired: true })).not.toThrow();
+    expect(() => authorizeIntake(syntheticMeal, { intent: 'log-intake', explicit: false, estimateAccepted: true, proposalRequired: false })).toThrow();
+    expect(() => authorizeIntake({ ...syntheticMeal, captureMethod: 'photo' }, { intent: 'log-intake', explicit: true, estimateAccepted: false, proposalRequired: true })).toThrow('Confirm');
   });
   it.each([
     { proteinGrams: undefined }, { energyKcal: NaN }, { fatGrams: -1 }, { mealDate: '2026-02-30' },
@@ -59,5 +70,6 @@ describe('nutrition evidence and budgets', () => {
     expect(suggest(candidates, new Set(['disliked']), context).map((x) => x.mealKey)).toEqual(['fit', 'unknown']);
     expect(suggest(candidates, new Set(['disliked']), { ...context, remainingKcal: null, remainingProteinGrams: null }).map((x) => x.mealKey)).toEqual(['over', 'unknown', 'fit']);
     expect(suggest([], new Set(), context)).toEqual([]);
+    expect(suggest(candidates, new Set(), { ...context, remainingKcal: -10 })).toEqual([]);
   });
 });
