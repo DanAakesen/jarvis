@@ -13,7 +13,10 @@ describe('inactive owner-bound Daily calendar reads', () => {
   it('enumerates visible/hidden calendars and event pages with calendar-qualified IDs, GET only', async () => {
     const read = vi.fn<GoogleApiClient['request']>(async (_api, path, options) => {
       expect(options.method).toBe('GET'); expect(options.body).toBeUndefined();
-      if (path.startsWith('/users/me/calendarList')) return path.includes('pageToken=next') ? { items: [{ id: 'other/calendar', summary: 'Other' }] } : { items: [{ id: 'primary', summary: 'Primary' }], nextPageToken: 'next' };
+      if (path.startsWith('/users/me/calendarList')) {
+        expect(new URL(`https://synthetic.invalid${path}`).searchParams.get('maxResults')).toBe('100');
+        return path.includes('pageToken=next') ? { items: [{ id: 'other/calendar', summary: 'Other' }], nextSyncToken: 'synthetic-unused-sync' } : { items: [{ id: 'primary', summary: 'Primary' }], nextPageToken: 'next' };
+      }
       if (path.includes('primary')) return path.includes('pageToken=events') ? { items: [event('02')] } : { items: [event('01')], nextPageToken: 'events' };
       expect(path).toContain('other%2Fcalendar'); return { items: [event('01')] };
     });
