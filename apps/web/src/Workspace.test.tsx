@@ -1,10 +1,13 @@
-import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createRef, useMemo, useRef, useState } from 'react';
 import { PHONE_LAYOUT_MEDIA_QUERY, Workspace, type WorkspaceController, type WorkspaceView } from './Workspace';
 import { useWorkspaceCommands, WorkspaceCommandContext } from './workspace-command-state';
 import { readFileSync } from 'node:fs';
+import type { WorkspacePinsClient } from './workspace-pins';
+import type { GeneratedView, WorkspacePin } from '@jarvis/contracts';
+import type { SessionCommandResult } from './session-commands';
 
 const views: WorkspaceView[] = [
   { id: 'research', title: 'Research summary', content: { status: 'ready', content: <p>Source-linked findings</p> } },
@@ -23,6 +26,19 @@ function phoneViewport() {
     removeEventListener: vi.fn(),
   })));
 }
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason: Error) => void;
+  const promise = new Promise<T>((done, fail) => { resolve = done; reject = fail; });
+  return { promise, resolve, reject };
+}
+
+const savedView: GeneratedView = {
+  version: 1, title: 'Saved report', renderer: 'text',
+  source: { id: 'research', status: 'complete' }, data: { format: 'plain', content: 'Original report' },
+};
+const savedPin: WorkspacePin = { viewId: 'saved-report', view: savedView, pinnedAt: '2026-10-10T08:00:00.000Z' };
 
 function arrangeTrigger(view: HTMLElement, title: string) {
   return within(view).getByRole('button', { name: `Arrange ${title}` });
@@ -60,6 +76,32 @@ function JarvisWorkspaceRequest() {
 }
 
 describe('Workspace', () => {
+  it('keeps a compact camera preview visible beside the foreground phone window, with tab docking and Jarvis commands', () => {
+    phoneViewport();
+    const ref = createRef<WorkspaceController>();
+    const onClose = vi.fn();
+    const shown = vi.fn();
+    const preview: WorkspaceView = {
+      id: 'camera-preview', title: 'Camera preview', presentation: 'camera-preview', onClose,
+      content: { status: 'ready', content: <p>Front camera live</p> },
+    };
+    render(<Workspace ref={ref} views={[views[0]!, preview]} onVisibleViewIdsChange={shown} />);
+    expect(screen.getAllByRole('article')).toHaveLength(2);
+    expect(screen.queryByRole('navigation', { name: 'Switch foreground view' })).toBeNull();
+    expect(shown).toHaveBeenLastCalledWith(['research', 'camera-preview']);
+    expect(ref.current?.isViewVisible?.('camera-preview')).toBe(true);
+    const cameraWindow = screen.getByRole('article', { name: 'Camera preview' });
+    fireEvent.click(within(cameraWindow).getByRole('button', { name: 'Minimise Camera preview' }));
+    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.getByRole('article', { name: 'Research summary' })).not.toBeNull();
+    expect(ref.current?.snapshot?.windows.find((window) => window.viewId === 'camera-preview'))
+      .toMatchObject({ title: 'Camera preview', state: 'minimised' });
+    act(() => { expect(ref.current?.dispatch({ commandId: 'show-preview', operation: 'show', viewId: 'camera-preview' })).toBe(true); });
+    expect(cameraWindow.getAttribute('aria-hidden')).toBeNull();
+    expect(screen.getByRole('article', { name: 'Research summary' })).not.toBeNull();
+    act(() => { expect(ref.current?.dispatch({ commandId: 'close-preview', operation: 'close', viewId: 'camera-preview' })).toBe(true); });
+    expect(onClose).toHaveBeenCalledOnce();
+  });
   it('floats shell windows without the Arrange menu and moves them from the title with arrow keys', () => {
     const view: WorkspaceView = { id: 'notes', title: 'A very long research title', content: { status: 'ready', content: <p>Body</p> } };
     render(<Workspace views={[view]} defaultArrangement="layered" arrangeMenu={false} />);
@@ -172,19 +214,312 @@ describe('Workspace', () => {
     expect(window.style.getPropertyValue('--workspace-width')).toBe('90%');
   });
 
-  it('publishes open window titles and IDs, retaining minimised windows and removing closed ones', () => {
+  it('publishes window lifecycle, placement, pin and front state, retaining minimised windows and removing closed ones', () => {
     const onOpenWindowsChange = vi.fn();
     const controller = createRef<WorkspaceController>();
     render(<Workspace ref={controller} views={views} onOpenWindowsChange={onOpenWindowsChange} />);
     expect(onOpenWindowsChange).toHaveBeenLastCalledWith([
-      { viewId: 'research', title: 'Research summary' }, { viewId: 'sources', title: 'Sources' },
+      { viewId: 'research', title: 'Research summary', state: 'open', placement: 'auto', pinned: false, front: false },
+      { viewId: 'sources', title: 'Sources', state: 'open', placement: 'auto', pinned: false, front: true },
     ]);
     act(() => { controller.current?.dispatch({ commandId: 'minimise', operation: 'minimise', viewId: 'research' }); });
     expect(onOpenWindowsChange).toHaveBeenLastCalledWith([
-      { viewId: 'research', title: 'Research summary' }, { viewId: 'sources', title: 'Sources' },
+      { viewId: 'research', title: 'Research summary', state: 'minimised', placement: 'auto', pinned: false, front: false },
+      { viewId: 'sources', title: 'Sources', state: 'open', placement: 'auto', pinned: false, front: true },
     ]);
     act(() => { controller.current?.dispatch({ commandId: 'close', operation: 'close', viewId: 'research' }); });
-    expect(onOpenWindowsChange).toHaveBeenLastCalledWith([{ viewId: 'sources', title: 'Sources' }]);
+    expect(onOpenWindowsChange).toHaveBeenLastCalledWith([
+      { viewId: 'sources', title: 'Sources', state: 'open', placement: 'auto', pinned: false, front: true },
+    ]);
+  });
+
+  it('restores persistent pins as tabs, keeps them when closed, and removes them only after unpinning', async () => {
+    const user = userEvent.setup();
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const generated = {
+      version: 1 as const,
+      title: 'Pinned report',
+      renderer: 'text' as const,
+      source: { id: 'research' as const, status: 'complete' as const },
+      data: { format: 'plain' as const, content: 'Retained result' },
+    };
+    const pins: WorkspacePinsClient = {
+      load: vi.fn().mockResolvedValue([{ viewId: 'pinned-report', view: generated, pinnedAt: '2026-10-10T08:00:00.000Z' }]),
+      pin: vi.fn(),
+      unpin: vi.fn().mockResolvedValue(undefined),
+    };
+    render(<Workspace views={[]} tabsHost={host} pins={pins} />);
+
+    const restore = await within(host).findByRole('button', { name: 'Restore Pinned report' });
+    expect(restore.querySelector('svg')?.innerHTML).not.toBe(within(host).getByRole('button', { name: 'Unpin Pinned report' }).querySelector('svg')?.innerHTML);
+    expect(restore.parentElement?.querySelectorAll('.workspace-tab-pin')).toHaveLength(1);
+    expect(within(host).getByRole('button', { name: 'Unpin Pinned report' }).getAttribute('aria-pressed')).toBe('true');
+    expect(within(host).queryByRole('button', { name: 'Close Pinned report' })).toBeNull();
+    await user.click(restore);
+    expect(screen.getByText('Retained result')).not.toBeNull();
+    await user.click(screen.getByRole('button', { name: 'Close Pinned report to pinned tab' }));
+    expect(within(host).getByRole('button', { name: 'Restore Pinned report' })).not.toBeNull();
+    await user.click(within(host).getByRole('button', { name: 'Unpin Pinned report' }));
+    await waitFor(() => expect(pins.unpin).toHaveBeenCalledWith('pinned-report', expect.any(AbortSignal)));
+    await waitFor(() => expect(within(host).getByRole('button', { name: 'Close Pinned report' })).not.toBeNull());
+    await user.click(within(host).getByRole('button', { name: 'Close Pinned report' }));
+    expect(within(host).queryByRole('button', { name: 'Restore Pinned report' })).toBeNull();
+    host.remove();
+  });
+
+  it('persists pin commands and reports load and save failures with recovery', async () => {
+    const user = userEvent.setup();
+    const controller = createRef<WorkspaceController>();
+    const generated = {
+      version: 1 as const,
+      title: 'Live report',
+      renderer: 'text' as const,
+      source: { id: 'research' as const, status: 'complete' as const },
+      data: { format: 'plain' as const, content: 'Current result' },
+    };
+    const pins: WorkspacePinsClient = {
+      load: vi.fn()
+        .mockRejectedValueOnce(new Error('Pinned windows could not be loaded. Try again.'))
+        .mockResolvedValue([]),
+      pin: vi.fn().mockRejectedValue(new Error('You already have 20 pinned windows. Unpin one before pinning another.')),
+      unpin: vi.fn(),
+    };
+    render(<Workspace ref={controller} views={[]} pins={pins} />);
+    expect(await screen.findByText('Pinned windows could not be loaded. Try again.')).not.toBeNull();
+    await user.click(screen.getByRole('button', { name: 'Retry pinned windows' }));
+    await waitFor(() => expect(pins.load).toHaveBeenCalledTimes(2));
+    act(() => {
+      controller.current?.dispatch({ commandId: 'create-live', operation: 'create', viewId: 'live-report', view: generated });
+    });
+    await act(async () => {
+      expect(await controller.current?.applyPin?.({ commandId: 'pin-live', operation: 'pin', viewId: 'live-report' }))
+        .toEqual({ applied: false, reason: 'You already have 20 pinned windows. Unpin one before pinning another.' });
+    });
+    expect((await screen.findByRole('alert')).textContent).toContain('You already have 20 pinned windows.');
+    expect(screen.getByRole('button', { name: 'Pin Live report' }).getAttribute('aria-pressed')).toBe('false');
+  });
+
+  it.each(['online', 'visibilitychange'])('recovers failed pin loading on %s without requiring a button click', async event => {
+    const pins: WorkspacePinsClient = {
+      load: vi.fn().mockRejectedValueOnce(new Error('Connection interrupted.')).mockResolvedValue([]),
+      pin: vi.fn(), unpin: vi.fn(),
+    };
+    const visible = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
+    render(<Workspace views={[]} pins={pins} />);
+    await screen.findByText('Connection interrupted.');
+    act(() => { (event === 'online' ? window : document).dispatchEvent(new Event(event)); });
+    expect(pins.load).toHaveBeenCalledOnce();
+    visible.mockReturnValue('visible');
+    act(() => { (event === 'online' ? window : document).dispatchEvent(new Event(event)); });
+    await waitFor(() => expect(pins.load).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.queryByText('Connection interrupted.')).toBeNull());
+    act(() => { (event === 'online' ? window : document).dispatchEvent(new Event(event)); });
+    expect(pins.load).toHaveBeenCalledTimes(2);
+    visible.mockRestore();
+  });
+
+  it('awaits storage before acknowledging pinning, deduplicates requests and prevents closing during a save', async () => {
+    const controller = createRef<WorkspaceController>();
+    const save = deferred<WorkspacePin>();
+    const completed = vi.fn();
+    const pins: WorkspacePinsClient = { load: vi.fn().mockResolvedValue([]), pin: vi.fn(() => save.promise), unpin: vi.fn() };
+    render(<Workspace ref={controller} views={[]} pins={pins} />);
+    act(() => { controller.current!.dispatch({ commandId: 'create-saved', operation: 'create', viewId: savedPin.viewId, view: savedView }); });
+    let result!: Promise<SessionCommandResult>;
+    await act(async () => {
+      result = controller.current!.applyPin!({ commandId: 'pin-saved', operation: 'pin', viewId: savedPin.viewId });
+      void result.then(completed);
+      void controller.current!.applyPin!({ commandId: 'pin-again', operation: 'pin', viewId: savedPin.viewId });
+    });
+    expect(pins.pin).toHaveBeenCalledOnce();
+    expect(completed).not.toHaveBeenCalled();
+    expect(controller.current!.snapshot!.windows[0]!.pinned).toBe(false);
+    expect(screen.getByRole('button', { name: 'Close Saved report' }).hasAttribute('disabled')).toBe(true);
+    act(() => { expect(controller.current!.dispatch({ commandId: 'close-during-save', operation: 'close-all' })).toBe(false); });
+    expect(screen.getByRole('article', { name: 'Saved report' })).not.toBeNull();
+    await act(async () => { save.resolve(savedPin); expect(await result).toEqual({ applied: true }); });
+    expect(completed).toHaveBeenCalledOnce();
+    expect(controller.current!.snapshot!.windows[0]!.pinned).toBe(true);
+    act(() => { expect(controller.current!.dispatch({ commandId: 'close-saved', operation: 'close', viewId: savedPin.viewId })).toBe(true); });
+    expect(controller.current!.snapshot!.windows[0]!.state).toBe('minimised');
+  });
+
+  it('reports an unsuccessful save honestly and retries the pin without optimistic state', async () => {
+    const user = userEvent.setup();
+    const controller = createRef<WorkspaceController>();
+    const pins: WorkspacePinsClient = {
+      load: vi.fn().mockResolvedValue([]),
+      pin: vi.fn().mockRejectedValueOnce(new Error('Pin storage is unavailable.')).mockResolvedValue(savedPin),
+      unpin: vi.fn(),
+    };
+    render(<Workspace ref={controller} views={[]} pins={pins} />);
+    act(() => { controller.current!.dispatch({ commandId: 'create-saved', operation: 'create', viewId: savedPin.viewId, view: savedView }); });
+    await act(async () => {
+      expect(await controller.current!.applyPin!({ commandId: 'pin-saved', operation: 'pin', viewId: savedPin.viewId }))
+        .toEqual({ applied: false, reason: 'Pin storage is unavailable.' });
+    });
+    expect(controller.current!.snapshot!.windows[0]!.pinned).toBe(false);
+    await user.click(screen.getByRole('button', { name: 'Retry pin change' }));
+    await waitFor(() => expect(controller.current!.snapshot!.windows[0]!.pinned).toBe(true));
+    expect(pins.pin).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not minimise an already-open window when a late pin load completes', async () => {
+    const load = deferred<WorkspacePin[]>();
+    const controller = createRef<WorkspaceController>();
+    const pins: WorkspacePinsClient = { load: vi.fn(() => load.promise), pin: vi.fn(), unpin: vi.fn() };
+    render(<Workspace ref={controller} views={[{
+      id: savedPin.viewId, title: savedView.title, content: { status: 'generated', view: savedView },
+    }]} pins={pins} />);
+    await act(async () => { load.resolve([savedPin]); });
+    expect(screen.getByRole('article', { name: 'Saved report' })).not.toBeNull();
+    expect(controller.current!.snapshot!.windows[0]).toMatchObject({ state: 'open', pinned: true });
+  });
+
+  it('can unpin a saved generated view when its ID is now occupied by a page-owned window', async () => {
+    const user = userEvent.setup();
+    const pins: WorkspacePinsClient = { load: vi.fn().mockResolvedValue([savedPin]), pin: vi.fn(), unpin: vi.fn().mockResolvedValue(undefined) };
+    render(<Workspace views={[{
+      id: savedPin.viewId, title: 'Current task', content: { status: 'ready', content: <p>Current source content</p> },
+    }]} pins={pins} />);
+    await user.click(await screen.findByRole('button', { name: 'Unpin Current task' }));
+    await waitFor(() => expect(pins.unpin).toHaveBeenCalledWith(savedPin.viewId, expect.any(AbortSignal)));
+    expect(screen.getByText('Current source content')).not.toBeNull();
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Unpin Current task' })).toBeNull());
+    expect(pins.pin).not.toHaveBeenCalled();
+  });
+
+  it('does not resurrect a pin when a retry load began during an unpin that has since completed', async () => {
+    const user = userEvent.setup();
+    const load = deferred<WorkspacePin[]>();
+    const remove = deferred<void>();
+    const controller = createRef<WorkspaceController>();
+    const pins: WorkspacePinsClient = {
+      load: vi.fn().mockRejectedValueOnce(new Error('Load failed.')).mockImplementationOnce(() => load.promise),
+      pin: vi.fn().mockResolvedValue(savedPin), unpin: vi.fn(() => remove.promise),
+    };
+    render(<Workspace ref={controller} views={[]} pins={pins} />);
+    await screen.findByText('Load failed.');
+    act(() => { controller.current!.dispatch({ commandId: 'create-saved', operation: 'create', viewId: savedPin.viewId, view: savedView }); });
+    await act(async () => { await controller.current!.applyPin!({ commandId: 'pin-saved', operation: 'pin', viewId: savedPin.viewId }); });
+    let result!: Promise<SessionCommandResult>;
+    await act(async () => { result = controller.current!.applyPin!({ commandId: 'unpin-saved', operation: 'unpin', viewId: savedPin.viewId }); });
+    await user.click(screen.getByRole('button', { name: 'Retry pinned windows' }));
+    await act(async () => { remove.resolve(); await result; });
+    await act(async () => { load.resolve([savedPin]); });
+    expect(controller.current!.snapshot!.windows[0]).toMatchObject({ state: 'open', pinned: false });
+  });
+
+  it('ignores a stale load after a confirmed pin and unpin in the current workspace', async () => {
+    const load = deferred<WorkspacePin[]>();
+    const controller = createRef<WorkspaceController>();
+    const pins: WorkspacePinsClient = { load: vi.fn(() => load.promise), pin: vi.fn().mockResolvedValue(savedPin), unpin: vi.fn().mockResolvedValue(undefined) };
+    render(<Workspace ref={controller} views={[]} pins={pins} />);
+    act(() => { controller.current!.dispatch({ commandId: 'create-saved', operation: 'create', viewId: savedPin.viewId, view: savedView }); });
+    await act(async () => { await controller.current!.applyPin!({ commandId: 'pin-saved', operation: 'pin', viewId: savedPin.viewId }); });
+    await act(async () => { await controller.current!.applyPin!({ commandId: 'unpin-saved', operation: 'unpin', viewId: savedPin.viewId }); });
+    await act(async () => { load.resolve([savedPin]); });
+    expect(controller.current!.snapshot!.windows[0]).toMatchObject({ state: 'open', pinned: false });
+    expect(screen.getByRole('article', { name: 'Saved report' })).not.toBeNull();
+  });
+
+  it('coalesces a pinned-window update into the save before its acknowledgement completes', async () => {
+    const first = deferred<WorkspacePin>();
+    const latest = deferred<WorkspacePin>();
+    const controller = createRef<WorkspaceController>();
+    const completed = vi.fn();
+    const revised: GeneratedView = { ...savedView, title: 'Updated report', renderer: 'text', data: { format: 'plain', content: 'Revised result' } };
+    const pins: WorkspacePinsClient = {
+      load: vi.fn().mockResolvedValue([]),
+      pin: vi.fn().mockImplementationOnce(() => first.promise).mockImplementationOnce(() => latest.promise), unpin: vi.fn(),
+    };
+    render(<Workspace ref={controller} views={[]} pins={pins} />);
+    act(() => { controller.current!.dispatch({ commandId: 'create-saved', operation: 'create', viewId: savedPin.viewId, view: savedView }); });
+    let result!: Promise<SessionCommandResult>;
+    await act(async () => {
+      result = controller.current!.applyPin!({ commandId: 'pin-saved', operation: 'pin', viewId: savedPin.viewId });
+      void result.then(completed);
+    });
+    act(() => { controller.current!.dispatch({ commandId: 'revise-saved', operation: 'update', viewId: savedPin.viewId, view: revised }); });
+    await act(async () => { first.resolve(savedPin); });
+    expect(pins.pin).toHaveBeenNthCalledWith(2, savedPin.viewId, revised, expect.any(AbortSignal));
+    expect(completed).not.toHaveBeenCalled();
+    await act(async () => { latest.resolve({ ...savedPin, view: revised }); await result; });
+    expect(completed).toHaveBeenCalledWith({ applied: true });
+    expect(controller.current!.snapshot!.windows[0]).toMatchObject({ title: 'Updated report', pinned: true });
+  });
+
+  it('keeps the window usable and offers recovery when refreshing its saved pin fails', async () => {
+    const user = userEvent.setup();
+    const controller = createRef<WorkspaceController>();
+    const revised: GeneratedView = { ...savedView, renderer: 'text', data: { format: 'plain', content: 'Revised result' } };
+    const pins: WorkspacePinsClient = {
+      load: vi.fn().mockResolvedValue([]),
+      pin: vi.fn().mockResolvedValueOnce(savedPin).mockRejectedValueOnce(new Error('Storage unavailable.')).mockResolvedValue({ ...savedPin, view: revised }),
+      unpin: vi.fn(),
+    };
+    render(<Workspace ref={controller} views={[]} pins={pins} />);
+    act(() => { controller.current!.dispatch({ commandId: 'create-saved', operation: 'create', viewId: savedPin.viewId, view: savedView }); });
+    await act(async () => { await controller.current!.applyPin!({ commandId: 'pin-saved', operation: 'pin', viewId: savedPin.viewId }); });
+    act(() => { controller.current!.dispatch({ commandId: 'revise-saved', operation: 'update', viewId: savedPin.viewId, view: revised }); });
+    expect(await screen.findByText(/saved pin update could not be confirmed/u)).not.toBeNull();
+    expect(screen.getByText('Revised result')).not.toBeNull();
+    expect(controller.current!.snapshot!.windows[0]!.pinned).toBe(true);
+    await user.click(screen.getByRole('button', { name: 'Retry pin change' }));
+    await waitFor(() => expect(pins.pin).toHaveBeenCalledTimes(3));
+    expect(pins.pin).toHaveBeenLastCalledWith(savedPin.viewId, revised, expect.any(AbortSignal));
+  });
+
+  it('cancels pending pin actions when their workspace unmounts and never acknowledges a late success', async () => {
+    const save = deferred<WorkspacePin>();
+    const controller = createRef<WorkspaceController>();
+    const pins: WorkspacePinsClient = { load: vi.fn().mockResolvedValue([]), pin: vi.fn(() => save.promise), unpin: vi.fn() };
+    const rendered = render(<Workspace ref={controller} views={[]} pins={pins} />);
+    act(() => { controller.current!.dispatch({ commandId: 'create-saved', operation: 'create', viewId: savedPin.viewId, view: savedView }); });
+    let result!: Promise<SessionCommandResult>;
+    await act(async () => { result = controller.current!.applyPin!({ commandId: 'pin-saved', operation: 'pin', viewId: savedPin.viewId }); });
+    const signal = vi.mocked(pins.pin).mock.calls[0]![2]!;
+    rendered.unmount();
+    expect(signal.aborted).toBe(true);
+    expect(await result).toMatchObject({ applied: false });
+    save.resolve(savedPin);
+    await Promise.resolve();
+  });
+
+  it('reports partial completion if a window changes during an unsuccessful unpin', async () => {
+    const remove = deferred<void>();
+    const controller = createRef<WorkspaceController>();
+    const revised: GeneratedView = { ...savedView, renderer: 'text', data: { format: 'plain', content: 'Latest result' } };
+    const pins: WorkspacePinsClient = {
+      load: vi.fn().mockResolvedValue([savedPin]), pin: vi.fn(), unpin: vi.fn(() => remove.promise),
+    };
+    render(<Workspace ref={controller} views={[]} pins={pins} />);
+    await screen.findByRole('button', { name: 'Restore Saved report' });
+    act(() => { controller.current!.dispatch({ commandId: 'restore-saved', operation: 'restore', viewId: savedPin.viewId }); });
+    let result!: Promise<SessionCommandResult>;
+    await act(async () => { result = controller.current!.applyPin!({ commandId: 'unpin-saved', operation: 'unpin', viewId: savedPin.viewId }); });
+    act(() => { controller.current!.dispatch({ commandId: 'update-during-unpin', operation: 'update', viewId: savedPin.viewId, view: revised }); });
+    await act(async () => { remove.reject(new Error('Storage unavailable.')); await result; });
+    expect(screen.getByRole('alert').textContent).toContain('saved pin update could not be confirmed');
+    expect(screen.getByText('Latest result')).not.toBeNull();
+    expect(controller.current!.snapshot!.windows[0]!.pinned).toBe(true);
+  });
+
+  it('renders a restored private image with the host validated by the pin client', async () => {
+    const user = userEvent.setup();
+    const image: GeneratedView = { ...savedView, renderer: 'image', data: {
+      images: [{ url: 'https://jarvisimages.blob.core.windows.net/images/result.png?sv=test', alt: 'Saved result image' }],
+    } };
+    const pins: WorkspacePinsClient = {
+      load: vi.fn().mockResolvedValue([{ ...savedPin, view: image, trustedBlobHost: 'jarvisimages.blob.core.windows.net' }]),
+      pin: vi.fn(), unpin: vi.fn(),
+    };
+    render(<Workspace views={[]} pins={pins} />);
+    await user.click(await screen.findByRole('button', { name: 'Restore Saved report' }));
+    expect(screen.getByRole('img', { name: 'Saved result image' }).getAttribute('src'))
+      .toBe('https://jarvisimages.blob.core.windows.net/images/result.png?sv=test');
+    expect(screen.queryByText('This generated view is invalid.')).toBeNull();
   });
 
   it('keeps one phone view foreground, retains content state and supports named and keyboard switching', async () => {
@@ -575,8 +910,9 @@ describe('Workspace', () => {
     expect(workspaceStyles).toContain('.workspace-arrange-menu { position: static; }');
     expect(workspaceStyles).toContain('width: min(300px, 100%); min-width: 0; max-width: 100%;');
     const mobile = workspaceStyles.slice(workspaceStyles.indexOf('@media (max-width: 900px)'));
-    expect(mobile).toContain('.workspace-window-heading h3 { flex-basis: 100%; }');
-    expect(mobile).toContain('grid-template-columns: repeat(4, 44px); justify-content: end; gap: 4px;');
+    expect(mobile).toContain('.workspace-window-heading h3 { flex-basis: auto; }');
+    expect(mobile).toContain('.workspace-window-actions { display: flex; width: auto; flex: 0 0 auto; flex-wrap: nowrap; gap: 4px; }');
+    expect(workspaceStyles).toContain('.sidebar-close, .workspace-window .workspace-icon-control, .workspace-window .workspace-arrange-menu > summary { width: 44px; min-width: 44px; height: 44px; min-height: 44px; }');
     expect(mobile).toContain('.workspace-arrange-menu > summary { width: 44px; padding: 0; }');
   });
 
@@ -726,6 +1062,202 @@ describe('Workspace', () => {
     await user.click(screen.getByRole('button', { name: 'Close Research summary' }));
     expect(within(canvas).queryByRole('article', { name: 'Research summary' })).toBeNull();
     expect(document.activeElement).toBe(screen.getByRole('heading', { name: 'Sources' }));
+  });
+
+  it('applies place, arrange and all-window commands while tidy up releases manual geometry', () => {
+    const controller = createRef<WorkspaceController>();
+    const snapshots = vi.fn();
+    render(<Workspace ref={controller} views={views} defaultArrangement="layered" arrangeMenu={false}
+      onOpenWindowsChange={snapshots} />);
+
+    act(() => {
+      expect(controller.current?.dispatch({
+        commandId: 'place-research', operation: 'place', viewId: 'research', region: 'right',
+      })).toBe(true);
+    });
+    expect(snapshots.mock.calls.at(-1)?.[0]).toContainEqual(expect.objectContaining({
+      viewId: 'research', placement: 'region', region: 'right',
+    }));
+
+    act(() => {
+      expect(controller.current?.dispatch({
+        commandId: 'move-research', operation: 'move', viewId: 'research', x: 0.1, y: 0.1,
+      })).toBe(true);
+    });
+    expect(snapshots.mock.calls.at(-1)?.[0]).toContainEqual(expect.objectContaining({
+      viewId: 'research', placement: 'manual',
+    }));
+
+    act(() => {
+      expect(controller.current?.dispatch({
+        commandId: 'tidy-windows', operation: 'arrange', layout: 'auto',
+      })).toBe(true);
+    });
+    expect(snapshots.mock.calls.at(-1)?.[0]).toContainEqual(expect.objectContaining({
+      viewId: 'research', placement: 'auto',
+    }));
+
+    act(() => {
+      expect(controller.current?.dispatch({ commandId: 'minimise-everything', operation: 'minimise-all' })).toBe(true);
+    });
+    expect(snapshots.mock.calls.at(-1)?.[0]).toEqual(expect.arrayContaining([
+      expect.objectContaining({ viewId: 'research', state: 'minimised' }),
+      expect.objectContaining({ viewId: 'sources', state: 'minimised' }),
+    ]));
+    act(() => {
+      expect(controller.current?.dispatch({ commandId: 'restore-everything', operation: 'restore-all' })).toBe(true);
+    });
+    expect(screen.getAllByRole('article')).toHaveLength(2);
+    act(() => {
+      expect(controller.current?.dispatch({ commandId: 'close-everything', operation: 'close-all' })).toBe(true);
+    });
+    expect(screen.queryByRole('article')).toBeNull();
+  });
+
+  it('maps phone placement and arrangement intents to the named foreground view', () => {
+    phoneViewport();
+    const controller = createRef<WorkspaceController>();
+    render(<Workspace ref={controller} views={views} defaultArrangement="layered" arrangeMenu={false} />);
+
+    act(() => {
+      expect(controller.current?.dispatch({
+        commandId: 'place-sources', operation: 'place', viewId: 'sources', region: 'left',
+      })).toBe(true);
+    });
+    expect(screen.getByRole('article', { name: 'Sources' })).not.toBeNull();
+    act(() => {
+      expect(controller.current?.dispatch({
+        commandId: 'arrange-research-first', operation: 'arrange', layout: 'side-by-side', viewIds: ['research', 'sources'],
+      })).toBe(true);
+    });
+    expect(screen.getByRole('article', { name: 'Research summary' })).not.toBeNull();
+  });
+
+  it('brings a newly-created phone window forward and treats legacy coordinates as named focus requests', () => {
+    phoneViewport();
+    const controller = createRef<WorkspaceController>();
+    render(<Workspace ref={controller} views={views} defaultArrangement="layered" arrangeMenu={false} />);
+    act(() => {
+      expect(controller.current!.dispatch({ commandId: 'new-phone-window', operation: 'create', viewId: savedPin.viewId, view: savedView })).toBe(true);
+    });
+    expect(screen.getByRole('article', { name: 'Saved report' })).not.toBeNull();
+    expect(controller.current!.snapshot!.windows.filter((view) => view.front)).toEqual([
+      expect.objectContaining({ viewId: savedPin.viewId }),
+    ]);
+    act(() => {
+      expect(controller.current!.dispatch({ commandId: 'phone-move', operation: 'move', viewId: 'research', x: 0.95, y: 0.95 })).toBe(true);
+    });
+    expect(screen.getByRole('article', { name: 'Research summary' })).not.toBeNull();
+    expect(controller.current!.snapshot!.windows.find((view) => view.viewId === 'research')!.placement).toBe('auto');
+    act(() => {
+      expect(controller.current!.dispatch({ commandId: 'phone-resize', operation: 'resize', viewId: 'sources', width: 0.8, height: 0.8 })).toBe(true);
+    });
+    expect(screen.getByRole('article', { name: 'Sources' })).not.toBeNull();
+  });
+
+  it('uses explicit cascade IDs front-to-back without changing side-by-side naming', () => {
+    const controller = createRef<WorkspaceController>();
+    render(<Workspace ref={controller} views={views} defaultArrangement="layered" arrangeMenu={false} />);
+    act(() => {
+      expect(controller.current!.dispatch({ commandId: 'named-stack', operation: 'arrange', layout: 'cascade', viewIds: ['research', 'sources'] })).toBe(true);
+    });
+
+    expect(controller.current!.snapshot!.windows.filter((view) => view.front)).toEqual([
+      expect.objectContaining({ viewId: 'research' }),
+    ]);
+    act(() => {
+      expect(controller.current!.dispatch({ commandId: 'named-columns', operation: 'arrange', layout: 'side-by-side', viewIds: ['sources', 'research'] })).toBe(true);
+    });
+    expect(controller.current!.snapshot!.windows).toHaveLength(2);
+  });
+
+  it('brings restored and newly-created windows above an older maximised window', async () => {
+    const user = userEvent.setup();
+    const controller = createRef<WorkspaceController>();
+    render(<Workspace ref={controller} views={views} defaultArrangement="layered" arrangeMenu={false} />);
+    await user.click(screen.getByRole('button', { name: 'Maximise Research summary' }));
+    expect(controller.current!.snapshot!.windows.find((view) => view.front)!.viewId).toBe('research');
+    act(() => { controller.current!.dispatch({ commandId: 'focus-other', operation: 'focus', viewId: 'sources' }); });
+    expect(screen.getByRole('article', { name: 'Research summary' }).className).not.toContain('workspace-window-maximized');
+    expect(controller.current!.snapshot!.windows.find((view) => view.front)!.viewId).toBe('sources');
+    act(() => { controller.current!.dispatch({ commandId: 'hide-research', operation: 'minimise', viewId: 'research' }); });
+    act(() => { controller.current!.dispatch({ commandId: 'restore-research', operation: 'restore', viewId: 'research' }); });
+    expect(controller.current!.snapshot!.windows.find((view) => view.front)!.viewId).toBe('research');
+    await user.click(screen.getByRole('button', { name: 'Maximise Research summary' }));
+    act(() => { controller.current!.dispatch({ commandId: 'create-above-max', operation: 'create', viewId: savedPin.viewId, view: savedView }); });
+    expect(screen.getByRole('article', { name: 'Research summary' }).className).not.toContain('workspace-window-maximized');
+    expect(controller.current!.snapshot!.windows.find((view) => view.front)!.viewId).toBe(savedPin.viewId);
+  });
+
+  it('includes the conversation in all-window lifecycle commands without clearing its content', () => {
+    const controller = createRef<WorkspaceController>();
+    render(<Workspace ref={controller} views={[views[0]!, {
+      id: 'conversation', title: 'Conversation', presentation: 'conversation',
+      content: { status: 'ready', content: <p>Preserved conversation</p> },
+    }]} defaultArrangement="layered" arrangeMenu={false} />);
+    act(() => { expect(controller.current!.dispatch({ commandId: 'all-to-tabs', operation: 'minimise-all' })).toBe(true); });
+    expect(controller.current!.snapshot!.windows.every((view) => view.state === 'minimised')).toBe(true);
+    act(() => { expect(controller.current!.dispatch({ commandId: 'all-back', operation: 'restore-all' })).toBe(true); });
+    expect(controller.current!.snapshot!.windows.every((view) => view.state === 'open')).toBe(true);
+    expect(screen.getByRole('article', { name: 'Conversation' })).not.toBeNull();
+    act(() => { expect(controller.current!.dispatch({ commandId: 'all-closed', operation: 'close-all' })).toBe(true); });
+    expect(controller.current!.snapshot!.windows).toEqual([]);
+    act(() => { expect(controller.current!.dispatch({ commandId: 'conversation-back', operation: 'restore', viewId: 'conversation' })).toBe(true); });
+    expect(screen.getByText('Preserved conversation')).not.toBeNull();
+  });
+
+  it('refuses desktop region or named-layout requests for the separately managed conversation before changing any window', () => {
+    const controller = createRef<WorkspaceController>();
+    render(<Workspace ref={controller} views={[views[0]!, {
+      id: 'conversation', title: 'Conversation', presentation: 'conversation',
+      content: { status: 'ready', content: <p>Preserved conversation</p> },
+    }]} defaultArrangement="layered" arrangeMenu={false} />);
+    const before = controller.current!.snapshot;
+    act(() => {
+      expect(controller.current!.dispatch({ commandId: 'place-chat', operation: 'place', viewId: 'conversation', region: 'left' })).toBe(false);
+      expect(controller.current!.dispatch({ commandId: 'arrange-chat', operation: 'arrange', layout: 'side-by-side', viewIds: ['research', 'conversation'] })).toBe(false);
+    });
+    expect(controller.current!.snapshot).toEqual(before);
+    expect(screen.getAllByRole('article')).toHaveLength(2);
+  });
+
+  it('restores automatic or region placement when a drag is cancelled or loses capture', () => {
+    vi.stubGlobal('ResizeObserver', class implements ResizeObserver {
+      private callback: ResizeObserverCallback;
+      constructor(callback: ResizeObserverCallback) { this.callback = callback; }
+      observe(target: Element) {
+        if (!target.classList.contains('workspace-canvas')) return;
+        this.callback([{ target, contentRect: new DOMRect(0, 0, 1600, 900),
+          borderBoxSize: [], contentBoxSize: [], devicePixelContentBoxSize: [] }], this);
+      }
+      unobserve() {}
+      disconnect() {}
+    });
+    const controller = createRef<WorkspaceController>();
+    render(<Workspace ref={controller} views={views} defaultArrangement="layered" arrangeMenu={false} />);
+    const canvas = screen.getByRole('region', { name: 'Temporary workspace views' });
+    vi.spyOn(canvas, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, 1600, 900));
+    act(() => { controller.current!.dispatch({ commandId: 'region-before-drag', operation: 'place', viewId: 'research', region: 'right' }); });
+    const window = screen.getByRole('article', { name: 'Research summary' });
+    const title = within(window).getByRole('heading');
+    Object.defineProperties(title, {
+      setPointerCapture: { value: vi.fn(), configurable: true },
+      hasPointerCapture: { value: () => true, configurable: true },
+      releasePointerCapture: { value: vi.fn(), configurable: true },
+    });
+    const previous = window.style.getPropertyValue('--workspace-x');
+    fireEvent.pointerDown(title, { pointerId: 1, button: 0, clientX: 500, clientY: 80 });
+    fireEvent.pointerMove(title, { pointerId: 1, clientX: 400, clientY: 110 });
+    expect(controller.current!.snapshot!.windows.find((view) => view.viewId === 'research')!.placement).toBe('manual');
+    fireEvent.pointerCancel(title, { pointerId: 1 });
+    expect(window.style.getPropertyValue('--workspace-x')).toBe(previous);
+    expect(controller.current!.snapshot!.windows.find((view) => view.viewId === 'research')).toMatchObject({ placement: 'region', region: 'right' });
+    act(() => { controller.current!.dispatch({ commandId: 'auto-before-drag', operation: 'arrange', layout: 'auto' }); });
+    fireEvent.pointerDown(title, { pointerId: 2, button: 0, clientX: 500, clientY: 80 });
+    fireEvent.pointerMove(title, { pointerId: 2, clientX: 400, clientY: 110 });
+    fireEvent.lostPointerCapture(title, { pointerId: 2 });
+    expect(controller.current!.snapshot!.windows.find((view) => view.viewId === 'research')!.placement).toBe('auto');
+    expect(window.className).not.toContain('workspace-window-dragging');
   });
 
   it('creates, updates, arranges, moves, resizes, shows, and closes declarative views in memory', () => {

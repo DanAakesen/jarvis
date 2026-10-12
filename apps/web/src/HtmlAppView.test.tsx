@@ -3,13 +3,14 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ConversationIntentContext, type ConversationIntentController } from './conversation-intents';
 import { GeneratedViewRenderer } from './GeneratedViewRenderer';
 import { KnowledgeBackendContext } from './knowledge/knowledge-context';
+import type { SessionCommandResult } from './session-commands';
 
 const artifactId = '12345678-1234-4234-8234-123456789abc';
 const artifact = { id: artifactId.toUpperCase(), kind: 'html', title: 'Man City verdict', html: '<!doctype html><html><head><title>R</title></head><body><h1>Verdict</h1></body></html>',
   sources: [{ title: 'BBC', url: 'https://www.bbc.co.uk/sport' }], createdAt: '2026-10-08T16:40:00.000Z', pinned: false };
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
 
-function renderView(fetchMock: ReturnType<typeof vi.fn>, updatedAt?: string) {
+function renderView(fetchMock: ReturnType<typeof vi.fn>, updatedAt?: string, onPinChange?: (pinned: boolean) => Promise<SessionCommandResult>) {
   vi.stubGlobal('fetch', fetchMock);
   const intents: ConversationIntentController = { pending: [], sendMessage: vi.fn(), focusVoiceStart: vi.fn(), consume: vi.fn() };
   const backend = { backendUrl: 'https://api.example.com', getAccessToken: async () => 'token' };
@@ -17,7 +18,8 @@ function renderView(fetchMock: ReturnType<typeof vi.fn>, updatedAt?: string) {
     <KnowledgeBackendContext.Provider value={backend}>
       <ConversationIntentContext.Provider value={intents}>
         <GeneratedViewRenderer view={{ version: 1, renderer: 'html-app', title: 'Research: Man City verdict',
-          source: { id: 'html_generation', status: 'complete', ...(revision ? { updatedAt: revision } : {}) }, data: { artifactId }, actions: [] }} />
+          source: { id: 'html_generation', status: 'complete', ...(revision ? { updatedAt: revision } : {}) }, data: { artifactId }, actions: [] }}
+          {...(onPinChange ? { onPinChange } : {})} />
       </ConversationIntentContext.Provider>
     </KnowledgeBackendContext.Provider>
   );
@@ -56,6 +58,47 @@ describe('HtmlAppView', () => {
     renderView(vi.fn(async () => json({ error: 'not found' }, 404)));
     expect(await screen.findByText('This report or app is no longer available.')).not.toBeNull();
     expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull();
+  });
+
+  it('routes iframe pins through the window owner and waits for its confirmed result', async () => {
+    let finish!: (result: SessionCommandResult) => void;
+    const onPinChange = vi.fn(() => new Promise<SessionCommandResult>((resolve) => { finish = resolve; }));
+    const fetchMock = vi.fn(async () => json(artifact));
+    renderView(fetchMock, undefined, onPinChange);
+    const frame = await screen.findByTitle('Man City verdict') as HTMLIFrameElement;
+    post(frame.contentWindow, { jarvisBridge: 1, type: 'pin' });
+    expect(onPinChange).toHaveBeenCalledWith(true);
+    expect(screen.getByText('Saving pin change...')).not.toBeNull();
+    expect(screen.queryByText('Pinned.')).toBeNull();
+    await act(async () => { finish({ applied: false, reason: 'The pin store is unavailable.' }); });
+    expect(screen.getByText('The pin store is unavailable.')).not.toBeNull();
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
+  it('ignores untrusted or inactive iframe pin messages and confirms an owner unpin', async () => {
+    const onPinChange = vi.fn().mockResolvedValue({ applied: true });
+    renderView(vi.fn(async () => json(artifact)), undefined, onPinChange);
+    const frame = await screen.findByTitle('Man City verdict') as HTMLIFrameElement;
+    post(window, { jarvisBridge: 1, type: 'pin' });
+    Object.defineProperty(navigator, 'userActivation', { configurable: true, value: { isActive: false, hasBeenActive: true } });
+    post(frame.contentWindow, { jarvisBridge: 1, type: 'pin' });
+    expect(onPinChange).not.toHaveBeenCalled();
+    Object.defineProperty(navigator, 'userActivation', { configurable: true, value: { isActive: true, hasBeenActive: true } });
+    post(frame.contentWindow, { jarvisBridge: 1, type: 'unpin' });
+    expect(await screen.findByText('Unpinned.')).not.toBeNull();
+    expect(onPinChange).toHaveBeenCalledExactlyOnceWith(false);
+  });
+
+  it('preserves artifact pinning for standalone reports without a workspace owner', async () => {
+    const fetchMock = vi.fn(async () => json(artifact));
+    renderView(fetchMock);
+    const frame = await screen.findByTitle('Man City verdict') as HTMLIFrameElement;
+    post(frame.contentWindow, { jarvisBridge: 1, type: 'pin' });
+    expect(await screen.findByText('Pinned.')).not.toBeNull();
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      `https://api.example.com/factory/workspace-artifacts/html/${artifactId}`,
+      expect.objectContaining({ method: 'PATCH', body: JSON.stringify({ pinned: true }) }),
+    );
   });
 
   it('retries after a temporary failure', async () => {

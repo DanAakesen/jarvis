@@ -8,6 +8,23 @@ Verified pure consumer semantics at original HEAD 9e193554c9c8c7c23a788ed3d2b058
 
 The first checkpoint reused server owner/Google client for inactive calendar reads with explicit denied/partial/stale coverage. Current consent documents calendar.events and L125 records calendarList denial. Coordinator verified primary CalendarList:list fields/tokens and maxResults up to 250; calendar.calendarlist.readonly is the least-privilege additional scope. Owner consent stays a separate manual gate; no scope/credential changes or sandbox tokens. Only complete synthetic-tested snapshots enter the owner/range cache. The expanded services above resolve source-rule evidence while full model/live acceptance stays open.
 
+## Workspace handlers and confirmed pins (12 October 2026)
+
+Ship #430 whole after chat-only #751, as directed by Dan through the coordinator.
+Keep the agreed smart-fit/region/manual model, independent stacking order and
+first-named-window-frontmost cascade. Phones focus instead of applying desktop
+geometry. Preserve merged camera preview ownership and chat loading.
+
+Pin/unpin acknowledgements wait for storage; competing requests do not invent
+success. Pending controls are disabled, stale reads cannot resurrect later
+unpins, and updates persist the newest view before their save is acknowledged.
+Close keeps saved pins; only Unpin removes them. Restore safely as tabs.
+Bound transient GET recovery and expose sign-in errors rather than replacing
+them with generic storage failures. The original idle error's transport/auth
+cause is still unproven. Eight scoped suites (237 passes), types, scoped lint,
+build and desktop/phone synthetic workflows pass; live voice/device acceptance
+remains after #621. Earlier local-only/pending-check statements are superseded.
+
 ## Chat loading and release split (12 October 2026)
 
 Dan requested a visible chat window before messages finish loading, rather than

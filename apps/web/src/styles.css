@@ -573,6 +573,9 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
 .workspace-arrangement-options [aria-pressed="true"] { background: var(--state-selected-bg); color: var(--state-selected-fg); box-shadow: none; font-weight: 750; }
 .workspace-shortcuts { flex-basis: 100%; margin: 0; color: var(--text-muted); font-size: var(--type-caption); }
 .workspace-empty { margin: var(--space-2) 0 var(--space-4); font-size: var(--type-small); }
+.workspace-pin-feedback { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2); margin: var(--space-2) 0; color: var(--text-muted); font-size: var(--type-small); pointer-events: auto; }
+.workspace-pin-feedback[role="alert"] { color: var(--error); }
+.workspace-pin-feedback .secondary-button { min-height: 36px; margin: 0; }
 .workspace-canvas { min-width: 0; }
 .workspace-tabs { display: flex; min-width: 0; gap: var(--space-2); margin: 0 0 var(--space-3); overflow-x: auto; padding: 2px 2px var(--space-2); }
 .workspace-tab {
@@ -815,6 +818,8 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
 .sidebar-close:hover, .workspace-window .workspace-icon-control:hover, .workspace-window .workspace-arrange-menu > summary:hover { background: var(--glass-hover); color: var(--text); }
 .sidebar-close:active, .workspace-window .workspace-icon-control:active { background: var(--glass-pressed); transform: scale(.94); }
 .workspace-window .workspace-close-control:hover { background: var(--error-wash); color: var(--text); }
+.workspace-window .workspace-pin-control[aria-pressed="true"] { background: var(--glass-selected); color: var(--glass-glow-warm); box-shadow: var(--glass-selected-glow); }
+.workspace-window .workspace-icon-control:disabled { cursor: wait; opacity: .55; }
 .workspace-resize-edge-corner::after { content: none; }
 @media (pointer: coarse) {
   .sidebar-close, .workspace-window .workspace-icon-control, .workspace-window .workspace-arrange-menu > summary { width: 44px; min-width: 44px; height: 44px; min-height: 44px; }
@@ -1642,9 +1647,8 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
   .workspace-canvas-has-maximized .workspace-window-maximized { position: absolute; inset: 0; width: auto; height: auto; min-height: 0; }
   .workspace-heading { align-items: flex-start; }
   .workspace-window-heading { align-items: flex-start; }
-  .workspace-window-heading h3 { flex-basis: 100%; }
-  .workspace-window-actions { display: grid; width: 100%; grid-template-columns: repeat(4, 44px); justify-content: end; gap: 4px; }
-  .workspace-window-actions:not(:has(.workspace-arrange-menu)) { grid-template-columns: repeat(3, 44px); justify-content: end; }
+  .workspace-window-heading h3 { flex-basis: auto; }
+  .workspace-window-actions { display: flex; width: auto; flex: 0 0 auto; flex-wrap: nowrap; gap: 4px; }
   .workspace-arrange-menu > summary { width: 44px; padding: 0; }
   .workspace-resize-edge-right { display: none; }
   .workspace-resize-edge-corner { cursor: ns-resize; }
@@ -2224,25 +2228,30 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
 
 /* Tab bar under the top bar: minimised windows are thrown up here as glass tabs (window-fly-away.ts) and come back
    with a click. It takes no space when empty; pages keep a constant top gutter for it so nothing moves. */
-.window-tabbar { position: fixed; z-index: 35; top: calc(var(--rail-size) + 4px); right: 18px; left: calc(var(--rail-size) + 22px); display: flex; height: 34px; pointer-events: none; }
+.window-tabbar { position: fixed; z-index: 35; top: calc(var(--rail-size) + 4px); right: 18px; left: calc(var(--rail-size) + 22px); display: flex; height: 40px; pointer-events: none; }
 .window-tabbar .workspace-tabs { display: flex; min-width: 0; gap: 6px; margin: 0; padding: 2px 4px; overflow-x: auto; scrollbar-width: none; pointer-events: auto; }
 .window-tabbar .workspace-tabs::-webkit-scrollbar { display: none; }
 .workspace-tab-item {
-  display: inline-flex; flex: 0 0 auto; align-items: center; height: 30px; border-radius: var(--radius-pill);
+  display: inline-flex; flex: 0 0 auto; align-items: center; gap: 2px; height: 36px; padding: 2px; border-radius: 8px;
   background: var(--stage-glass); backdrop-filter: blur(14px) saturate(1.3);
   box-shadow: inset 0 1px 0 var(--glass-rim-light), inset 0 0 0 1px color-mix(in srgb, var(--glass-rim-light) 26%, transparent), 0 10px 22px -14px rgb(0 0 0 / 70%);
   animation: tab-arrive var(--motion-state) var(--ease-enter);
 }
-.window-tabbar .workspace-tab { display: inline-flex; min-height: 30px; align-items: center; gap: 7px; margin: 0; padding: 0 4px 0 11px; border: 0; border-radius: var(--radius-pill) 0 0 var(--radius-pill); background: transparent; box-shadow: none; color: var(--text); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
-.window-tabbar .workspace-tab svg { width: 15px; height: 15px; color: var(--glass-edge-cool); }
+.window-tabbar .workspace-tab { display: inline-flex; min-height: 32px; align-items: center; gap: 8px; margin: 0; padding: 0 10px; border: 0; border-radius: 6px; background: transparent; box-shadow: none; color: var(--text); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+.window-tabbar .workspace-tab svg { width: 16px; height: 16px; color: currentColor; }
 .window-tabbar .workspace-tab span { max-width: min(26vw, 220px); }
-.workspace-tab-close { display: grid; width: 26px; height: 26px; margin-right: 2px; place-items: center; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--text-muted); cursor: pointer; transition: background-color var(--motion-press) var(--ease-standard), color var(--motion-press) var(--ease-standard); }
-.workspace-tab-close svg { width: 13px; height: 13px; }
+.workspace-tab-close, .workspace-tab-pin { display: grid; flex: 0 0 auto; width: 32px; height: 32px; place-items: center; padding: 0; border: 0; border-radius: 6px; background: var(--glass-hover); color: var(--text); cursor: pointer; transition: background-color var(--motion-press) var(--ease-standard), color var(--motion-press) var(--ease-standard), transform var(--motion-press) var(--ease-standard); }
+.workspace-tab-close svg, .workspace-tab-pin svg { width: 16px; height: 16px; }
+.workspace-tab-pin svg { transform: rotate(-35deg); transition: transform var(--motion-press) var(--ease-standard); }
+.workspace-tab-pin[aria-pressed="true"] svg { transform: none; }
 .workspace-tab-item:has(.workspace-tab:hover) { box-shadow: inset 0 1px 0 var(--glass-rim-light), inset 0 0 0 1px color-mix(in srgb, var(--glass-edge-cool) 55%, transparent), 0 0 16px -4px color-mix(in srgb, var(--glass-edge-cool) 50%, transparent); }
 .window-tabbar .workspace-tab:hover { background: transparent; }
 .workspace-tab-close:hover { background: var(--error-wash); color: var(--text); }
-.workspace-tab-close:active, .window-tabbar .workspace-tab:active { transform: scale(.96); }
-.window-tabbar :is(.workspace-tab, .workspace-tab-close):focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+.workspace-tab-pin:hover { background: var(--glass-pressed); }
+.workspace-tab-pin[aria-pressed="true"] { background: var(--state-selected-bg); color: var(--state-selected-fg); }
+.workspace-tab-pin:disabled, .workspace-tab-close:disabled { cursor: wait; opacity: .55; }
+.workspace-tab-close:active, .workspace-tab-pin:active, .window-tabbar .workspace-tab:active { transform: scale(.96); }
+.window-tabbar :is(.workspace-tab, .workspace-tab-close, .workspace-tab-pin):focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
 @keyframes tab-arrive { from { opacity: 0; scale: .7; } }
 @media (prefers-reduced-motion: reduce) { .workspace-tab-item { animation: none; } }
 :root[data-motion="reduced"] .workspace-tab-item { animation: none; }
@@ -2471,20 +2480,19 @@ a.task-chip:hover { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--glass-e
 }
 /* Tabs in the top bar (Dan, 7 October): open windows sit between the brand and the controls; no breadcrumb.
    Tabs use the shared glass hover of every icon button and window control; the front window uses the selected surface. */
-.app-topbar .window-tabbar { position: static; z-index: auto; display: flex; flex: 1 1 auto; min-width: 0; height: 34px; margin: 0 var(--space-3); align-items: center; pointer-events: auto; }
+.app-topbar .window-tabbar { position: static; z-index: auto; display: flex; flex: 1 1 auto; min-width: 0; height: 40px; margin: 0 var(--space-3); align-items: center; pointer-events: auto; }
 .app-topbar .window-tabbar .workspace-tabs { padding: 2px; }
 .workspace-tab-item, .workspace-tab-item[data-state] {
-  background: transparent; backdrop-filter: none; box-shadow: none;
+  background: var(--glass-hover); backdrop-filter: none; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text-muted) 18%, transparent);
   transition: background-color var(--motion-press) var(--ease-standard), box-shadow var(--motion-press) var(--ease-standard), opacity var(--motion-press) var(--ease-standard);
 }
 .workspace-tab-item:hover, .workspace-tab-item:has(.workspace-tab:hover), .workspace-tab-item:focus-within {
-  background: var(--glass-hover);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--glass-rim-light) 40%, transparent), 0 0 14px color-mix(in srgb, var(--glass-edge-cool) 14%, transparent);
+  background: var(--glass-pressed);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text-muted) 28%, transparent);
 }
 .workspace-tab-item[data-state="front"] { background: var(--state-selected-bg); box-shadow: none; }
 .workspace-tab-item[data-state="front"] .workspace-tab { color: var(--state-selected-fg); font-weight: 750; }
 .workspace-tab-item[data-state="front"] .workspace-tab svg { filter: none; }
-.workspace-tab-close { width: 24px; height: 24px; color: var(--text-muted); }
 .workspace-tab-close:hover { background: var(--error-wash); color: var(--text); }
 .workspace-tab-close:active { background: var(--glass-pressed); transform: scale(.94); }
 /* The window area off the home page now starts just under the top bar. */
@@ -2494,6 +2502,16 @@ a.task-chip:hover { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--glass-e
   .app-topbar .window-tabbar .workspace-tab span { max-width: 22vw; }
   .app-shell.app-shell[data-home="false"]:not(.app-signed-out) .workspace-shell-area { top: calc(var(--rail-size) + 8px); }
 }
+@media (pointer: coarse) {
+  .window-tabbar, .app-topbar .window-tabbar { height: 48px; }
+  .workspace-tab-item { height: 44px; padding: 0; }
+  .window-tabbar .workspace-tab { min-height: 44px; }
+  .workspace-tab-close, .workspace-tab-pin { width: 44px; height: 44px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .workspace-tab-pin svg { transition: none; }
+}
+:root[data-motion="reduced"] .workspace-tab-pin svg { transition: none; }
 /* Floating windows may sit over the docked conversation (Dan, 7 October): no reserved strip, and they stack above it.
    Long titles wrap to two lines before trimming; the full title shows on hover. */
 .workspace-canvas-layered { --reserve-bottom: 0px; }
@@ -2634,14 +2652,14 @@ a.task-chip:hover { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--glass-e
 }
 /* Chrome-style tab strip (Dan, 7 October): every window is a tab, then one tab per background job. Tabs share the
    room and shrink to a minimum before trimming their titles, so the strip never overflows into the controls. */
-.app-topbar .window-tabstrip { position: relative; display: flex; flex: 1 1 auto; min-width: 0; height: 34px; margin: 0 var(--space-3); align-items: center; gap: 6px; }
+.app-topbar .window-tabstrip { position: relative; display: flex; flex: 1 1 auto; min-width: 0; height: 40px; margin: 0 var(--space-3); align-items: center; gap: 6px; }
 .app-topbar .window-tabstrip .window-tabbar { flex: 0 1 auto; min-width: 0; margin: 0; }
-.app-topbar .window-tabbar .workspace-tabs { flex-wrap: nowrap; min-width: 0; overflow: hidden; }
-.window-tabstrip .workspace-tab-item { flex: 0 1 210px; min-width: 76px; max-width: 210px; }
+.app-topbar .window-tabbar .workspace-tabs { flex-wrap: nowrap; min-width: 0; overflow-x: auto; }
+.window-tabstrip .workspace-tab-item { flex: 0 0 auto; min-width: 140px; max-width: 240px; }
 .window-tabstrip .workspace-tab { flex: 1 1 auto; min-width: 0; }
 .window-tabstrip .workspace-tab span { min-width: 0; max-width: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .job-tabs { position: relative; display: flex; flex: 0 1 auto; min-width: 0; gap: 6px; }
-.job-tab .workspace-tab { padding-right: 12px; border-radius: var(--radius-pill); }
+.job-tab .workspace-tab { padding-right: 12px; border-radius: 6px; }
 .job-tab .jobs-ring, .job-tab .jobs-mark { width: 16px; height: 16px; }
 .job-tab[data-tone="running"] { background: color-mix(in srgb, var(--glass-edge-cool) 12%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--glass-edge-cool) 40%, transparent); }
 .job-tab[data-tone="failed"] { background: color-mix(in srgb, var(--warning) 18%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--warning) 55%, transparent); }
@@ -2919,14 +2937,16 @@ a.task-chip:hover { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--glass-e
 .app-shell[data-phone="true"] .app-topbar { gap: 6px; padding-inline: 10px 6px; }
 /* The open windows list is a sheet under the top bar, opened from the count button. */
 .app-shell[data-phone="true"] .window-tabstrip { display: none; }
+.app-shell[data-phone="true"][data-windows-open="true"] .app-topbar { z-index: 1200; }
 .app-shell[data-phone="true"][data-windows-open="true"] .window-tabstrip {
-  position: fixed; z-index: 45; top: calc(env(safe-area-inset-top) + var(--rail-size) + 6px); right: calc(env(safe-area-inset-right) + 8px); left: calc(env(safe-area-inset-left) + 8px); display: flex; max-height: min(60dvh, calc(100dvh - env(safe-area-inset-top) - var(--rail-size) - var(--dock-space))); flex-direction: column;
+  position: fixed; z-index: 45; top: calc(env(safe-area-inset-top) + var(--rail-size) + 6px); right: calc(env(safe-area-inset-right) + 8px); left: calc(env(safe-area-inset-left) + 8px); display: flex; height: auto; max-height: min(60dvh, calc(100dvh - env(safe-area-inset-top) - var(--rail-size) - var(--dock-space))); flex-direction: column;
   gap: 6px; padding: 8px; overflow: auto; border-radius: 20px; background: var(--stage-slab); box-shadow: var(--slab-shadow), inset 0 1px 0 var(--glass-rim-light);
   backdrop-filter: blur(16px) saturate(1.3); animation: mobile-drop 320ms var(--ease-enter) both;
 }
-.app-shell[data-phone="true"][data-windows-open="true"] :is(.window-tabbar, .workspace-tabs) { display: flex; width: 100%; flex-direction: column; gap: 4px; overflow: visible; }
+.app-shell[data-phone="true"][data-windows-open="true"] :is(.window-tabbar, .workspace-tabs) { display: flex; width: 100%; height: auto; flex-direction: column; gap: 4px; overflow: visible; }
 .app-shell[data-phone="true"][data-windows-open="true"] .workspace-tab-item { width: 100%; max-width: none; }
 .app-shell[data-phone="true"][data-windows-open="true"] .workspace-tab { width: 100%; max-width: none; min-height: 44px; justify-content: flex-start; }
+.app-shell[data-phone="true"][data-windows-open="true"] .workspace-tab span { max-width: none; }
 .mobile-windows-button { display: grid; place-items: center; }
 .mobile-windows-count { display: grid; min-width: 24px; height: 22px; padding: 0 6px; place-items: center; border-radius: 7px;
   box-shadow: inset 0 0 0 1.5px currentColor, 3px -3px 0 -1.5px color-mix(in srgb, currentColor 55%, transparent); font-size: 12px; font-weight: 700; }
@@ -3342,11 +3362,11 @@ a.task-chip:hover { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--glass-e
 }
 @keyframes window-rim { to { --window-sweep: 360deg; } }
 :root[data-motion="reduced"] .workspace-window.luminous-glass::before { animation: none; }
-@media (prefers-reduced-motion: reduce) { .workspace-window.luminous-glass::before { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .workspace-window.luminous-glass:not(.workspace-window-conversation)::before { animation: none; } }
 /* Window title (Dan, 8 October): the title's text is centred on the same line as the window buttons (it used to ride
    at the top of its 32 px row), with a little air above; a long title still wraps to two lines. */
 .workspace-window .workspace-window-heading { margin-top: 4px; }
-.workspace-window .workspace-window-heading h3 { padding-block: 6px; line-height: 20px; }
+.workspace-window .workspace-window-heading h3 { margin-block: 6px; padding-block: 0; line-height: 20px; }
 .workspace-window .workspace-window-heading .workspace-window-actions { align-self: flex-start; }
 /* Charts (8 October): generated `chart` views are drawn, not tabulated. Hairline grid, cyan then amber series, lines
    draw in once; the values stay one click away under "Show values". */
@@ -3370,3 +3390,12 @@ a.task-chip:hover { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--glass-e
 @keyframes chart-draw { to { stroke-dashoffset: 0; } }
 :root[data-motion="reduced"] .generated-chart .chart-line { animation: none; stroke-dashoffset: 0; }
 @media (prefers-reduced-motion: reduce) { .generated-chart .chart-line { animation: none; stroke-dashoffset: 0; } }
+/* Window management (P8-42): arranged windows glide to their new place (interruptible; dragging follows the pointer
+   directly). Reduced motion moves them without animation. */
+.app-shell .workspace-canvas-layered .workspace-window:not(.workspace-window-conversation, .workspace-window-dragging, .workspace-window-maximized) {
+  transition: opacity var(--motion-state) var(--ease-standard), transform var(--motion-state) var(--ease-enter),
+    box-shadow var(--motion-press) var(--ease-standard), display var(--motion-state) allow-discrete,
+    left 300ms var(--ease-enter), top 300ms var(--ease-enter), width 300ms var(--ease-enter), height 300ms var(--ease-enter);
+}
+:root[data-motion="reduced"] .app-shell .workspace-canvas-layered .workspace-window:not(.workspace-window-conversation) { transition: none; }
+@media (prefers-reduced-motion: reduce) { .app-shell .workspace-canvas-layered .workspace-window:not(.workspace-window-conversation) { transition: none; } }

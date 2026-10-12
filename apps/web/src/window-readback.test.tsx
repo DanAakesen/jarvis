@@ -78,7 +78,10 @@ describe('window readback', () => {
       } as never } },
     ];
     render(<Workspace views={views} onOpenWindowsChange={onOpenWindowsChange} />);
-    expect(onOpenWindowsChange.mock.lastCall?.[0]).toEqual([{ viewId: 'task-1', title: 'Task one' }, { viewId: 'chart', title: 'Chart' }]);
+    expect(onOpenWindowsChange.mock.lastCall?.[0]).toEqual([
+      { viewId: 'task-1', title: 'Task one', state: 'open', placement: 'auto', pinned: false, front: false },
+      { viewId: 'chart', title: 'Chart', state: 'open', placement: 'auto', pinned: false, front: true },
+    ]);
     act(() => { vi.advanceTimersByTime(500); });
     const windows = onOpenWindowsChange.mock.lastCall?.[0] as { viewId: string; content?: string }[];
     expect(windows[0]!.content).toBe('Build the widget');
@@ -93,9 +96,10 @@ describe('window readback', () => {
     const { container } = render(<Workspace views={views} onOpenWindowsChange={onOpenWindowsChange} />);
     const frame = container.querySelector('iframe')!;
     act(() => { reportFrameReadback(frame, { content: 'Findings: cats', selection: 'cats' }); vi.advanceTimersByTime(500); });
-    expect(onOpenWindowsChange.mock.lastCall?.[0]).toEqual([{ viewId: 'report', title: 'Report', content: 'Findings: cats', selection: 'cats' }]);
+    const reportWindow = { viewId: 'report', title: 'Report', state: 'open', placement: 'auto', pinned: false, front: true };
+    expect(onOpenWindowsChange.mock.lastCall?.[0]).toEqual([{ ...reportWindow, content: 'Findings: cats', selection: 'cats' }]);
     act(() => { reportFrameReadback(frame, null); vi.advanceTimersByTime(500); });
-    expect(onOpenWindowsChange.mock.lastCall?.[0]).toEqual([{ viewId: 'report', title: 'Report' }]);
+    expect(onOpenWindowsChange.mock.lastCall?.[0]).toEqual([reportWindow]);
   });
 
   it('runs the frame bridge: visible text and selection out, form values and hidden parts never', async () => {

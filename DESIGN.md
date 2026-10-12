@@ -1,5 +1,22 @@
 # Design
 
+## Workspace window release (12 October 2026)
+
+#430 follows Dan's 8 October intent design: automatic fit, named regions,
+side-by-side/grid and diagonal cascade. The first named cascade window is in
+front. Arranged windows glide for 300 ms; dragging interrupts from the visible
+rectangle, and reduced motion removes the glide. The existing camera preview
+remains beside the foreground phone content, not in its swipe order.
+
+Tabs are compact rounded rectangles with one pin toggle, accessible pressed
+state, 32 px desktop and 44 px touch controls. Pinned Close returns to a tab;
+unpinned tabs retain Close. Crowded desktop tabs scroll; the phone window list
+opens above the content. Failures and Retry are visible, never colour-only.
+Chromium fixtures cover desktop dark/light and 320px light/touch/reduced-motion
+arrangement, first drag, pin failure/Retry, update, reload and all-window actions.
+Camera and loading-recovery regressions pass too; live voice and real devices
+remain separate acceptance, not inferred from intercepted backend responses.
+
 ## Chat loading correction (12 October 2026)
 
 The glass chat frame appears before its messages. Loading messages, empty

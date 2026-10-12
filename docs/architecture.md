@@ -1,5 +1,23 @@
 # Architecture
 
+## Workspace window release (12 October 2026)
+
+#430 adds the pure `window-layout.ts` engine to the existing `Workspace`.
+Automatic, region and manual placements share normalized geometry; a 480 px
+minimum triggers cascade fallback instead of squeezed side-by-side windows.
+Stacking order is independent of layout order. Window snapshots now include
+state, placement, optional region, pinned status and frontmost status.
+
+App memoizes the authenticated pin client. `Workspace` owns read cancellation,
+revision guards, storage-confirmed writes and pending/recovery UI. GET retries
+at most three times within one 120-second deadline, with 500/1000 ms backoff
+for network TypeError or HTTP 408/502/503/504 only. Token/authentication and
+invalid-data failures are not retried by the client. Writes are not blindly
+retried. Newer pin/unpin/update revisions defeat stale loads; obsolete owners
+cancel requests. Generated HTML's pin bridge uses the same owner and confirmed
+result. Existing backend `/workspace/pins` routes/contracts are unchanged;
+the UI validates restored data and preserves safe private-image host metadata.
+
 ## Chat loading correction (12 October 2026)
 
 `ConversationHistory` marks the shell-hosted view available independently of
