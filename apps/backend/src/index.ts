@@ -124,6 +124,7 @@ import { createWorkspacePinsModule } from './core/workspace-pins.js';
 import { WorkspacePinStore } from './database/workspace-pin-store.js';
 import { createWeatherModule } from './core/weather.js';
 import { createSystemStatusReader } from './system-status.js';
+import { createProductionModules } from './production-modules.js';
 
 try {
   const config = loadConfig();
@@ -677,52 +678,43 @@ try {
     onStatusError: (error) => logger.warn(safeErrorFields(error), 'pc_bridge.status_update_failed'),
   });
   const frameStore = new FrameStore();
-  const modules: BackendModule[] = [
-    coreModule, createConversationModule(frameStore), factoryModule, createSleepModule(containerAppScaler),
-    createRecipeModule(recipeStore),
-    ...(vaultModule ? [vaultModule] : []),
-    ...(webResearchModule ? [webResearchModule] : []),
-    ...(htmlResearchModule ? [htmlResearchModule] : []),
-    ...(googleModule ? [googleModule] : []),
-    createGithubWebhookModule({
-      deliveryStore: webhookDeliveryStore,
-      getSecret: getWebhookSecret,
-      ...(githubAppTokenIssuer ? {
-        readWorkflowRun: createGitHubActionsLogClient(githubAppTokenIssuer).readWorkflowRun,
-      } : {}),
-      isTrackedRepository: (repository) => repository.toLowerCase() === VAULT_REPOSITORY.toLowerCase() ||
-        trackedRepositories.has(repository.toLowerCase()),
-      ...(checksLoop || projectPolicyEvaluator || vaultModule ||
-        (githubIssueClient && projectStore && taskStore) ? {
-        onMapping: async (mapping) => {
-          if (mapping.kind === 'issue_labeled' && githubIssueClient && projectStore && taskStore) {
-            const result = await startIssueTask({
-              projects: projectStore,
-              tasks: taskStore,
-              github: githubIssueClient,
-              repository: mapping.repository,
-              issue: mapping.number,
-            });
-            if (!['created', 'existing', 'project-not-found', 'issue-not-found', 'issue-closed',
-              'not-an-issue', 'prompt-too-large'].includes(result.kind)) {
-              throw new Error('Issue task start failed');
-            }
+  const githubWebhookModule = createGithubWebhookModule({
+    deliveryStore: webhookDeliveryStore,
+    getSecret: getWebhookSecret,
+    ...(githubAppTokenIssuer ? {
+      readWorkflowRun: createGitHubActionsLogClient(githubAppTokenIssuer).readWorkflowRun,
+    } : {}),
+    isTrackedRepository: (repository) => repository.toLowerCase() === VAULT_REPOSITORY.toLowerCase() ||
+      trackedRepositories.has(repository.toLowerCase()),
+    ...(checksLoop || projectPolicyEvaluator || vaultModule ||
+      (githubIssueClient && projectStore && taskStore) ? {
+      onMapping: async (mapping) => {
+        if (mapping.kind === 'issue_labeled' && githubIssueClient && projectStore && taskStore) {
+          const result = await startIssueTask({
+            projects: projectStore,
+            tasks: taskStore,
+            github: githubIssueClient,
+            repository: mapping.repository,
+            issue: mapping.number,
+          });
+          if (!['created', 'existing', 'project-not-found', 'issue-not-found', 'issue-closed',
+            'not-an-issue', 'prompt-too-large'].includes(result.kind)) {
+            throw new Error('Issue task start failed');
           }
-          if (mapping.kind === 'push' && mapping.repository.toLowerCase() === VAULT_REPOSITORY.toLowerCase() &&
-              mapping.ref === `refs/heads/${VAULT_BRANCH}` && vaultModule) {
-            void vaultModule.synchronize(AbortSignal.timeout(10 * 60_000)).catch(() => {
-              logger.warn({
-                msg: 'vault.index', outcome: 'error', added: 0, changed: 0, removed: 0,
-              }, 'vault.index');
-            });
-          }
-          await checksLoop?.handleMapping(mapping);
-          await projectPolicyEvaluator?.handle(mapping);
-        },
-      } : {}),
-    }),
-    pcBridgeModule,
-  ];
+        }
+        if (mapping.kind === 'push' && mapping.repository.toLowerCase() === VAULT_REPOSITORY.toLowerCase() &&
+            mapping.ref === `refs/heads/${VAULT_BRANCH}` && vaultModule) {
+          void vaultModule.synchronize(AbortSignal.timeout(10 * 60_000)).catch(() => {
+            logger.warn({
+              msg: 'vault.index', outcome: 'error', added: 0, changed: 0, removed: 0,
+            }, 'vault.index');
+          });
+        }
+        await checksLoop?.handleMapping(mapping);
+        await projectPolicyEvaluator?.handle(mapping);
+      },
+    } : {}),
+  });
   const phoneCallModule = config.phone && phoneSessionStore && phoneSecretClient && credential &&
     config.teams && config.foundryProjectEndpoint
     ? createPhoneCallModule({
@@ -740,39 +732,42 @@ try {
       connect: createDanishVoiceConnector(config.foundryProjectEndpoint),
     })
     : undefined;
-  if (phoneCallModule) modules.push(phoneCallModule);
-  modules.push(createPhoneStatusModule({
+  const phoneStatusModule = createPhoneStatusModule({
     configured: phoneCallModule !== undefined,
     store: phoneSessionStore ?? null,
-  }));
-  if (browserAgent) modules.push(createBrowserAgentModule(browserAgent));
-  if (workspaceArtifacts && config.foundryEndpoints && config.foundryRunnerAgentName) {
-    modules.push(createImageGenerationModule({
+  });
+  const browserAgentModule = browserAgent ? createBrowserAgentModule(browserAgent) : undefined;
+  const imageGenerationModule = workspaceArtifacts && config.foundryEndpoints && config.foundryRunnerAgentName
+    ? createImageGenerationModule({
       runner: clientFor(config.foundryRunnerAgentName),
       artifacts: workspaceArtifacts,
       model: config.codexImageModel,
       ...(folioStore ? { folio: folioStore } : {}),
-    }));
-  }
-  if (database && workspaceHtmlArtifactStore) {
-    modules.push(createHtmlViewModule(workspaceHtmlArtifactStore, folioStore));
-    modules.push(createWeatherModule(workspaceHtmlArtifactStore));
-  }
-  if (database && folioStore && workspaceHtmlArtifactStore) {
-    modules.push(createFolioModule(folioStore, workspaceHtmlArtifactStore, workspaceArtifacts));
-  }
-  if (workspacePinStore) modules.push(createWorkspacePinsModule(workspacePinStore));
+    })
+    : undefined;
+  const htmlViewModule = database && workspaceHtmlArtifactStore
+    ? createHtmlViewModule(workspaceHtmlArtifactStore, folioStore)
+    : undefined;
+  const weatherModule = database && workspaceHtmlArtifactStore
+    ? createWeatherModule(workspaceHtmlArtifactStore)
+    : undefined;
+  const folioModule = database && folioStore && workspaceHtmlArtifactStore
+    ? createFolioModule(folioStore, workspaceHtmlArtifactStore, workspaceArtifacts)
+    : undefined;
+  const workspacePinsModule = workspacePinStore ? createWorkspacePinsModule(workspacePinStore) : undefined;
   let visionWatch: VisionWatchService | undefined;
   let screenVision: ScreenVisionService | undefined;
+  let screenVisionModule: BackendModule | undefined;
+  let visionWatchModule: BackendModule | undefined;
   if (database && settingsStore && screenVisionModel) {
     const visionUsage = createScreenFrameUsageStore(database.pool);
     screenVision = new ScreenVisionService(screenVisionModel, visionUsage, Date.now, visionUsage);
-    modules.push(createScreenVisionModule(screenVision, frameStore));
+    screenVisionModule = createScreenVisionModule(screenVision, frameStore);
     visionWatch = new VisionWatchService(screenVisionModel, visionUsage, createConversationStore(database.pool));
-    modules.push(createVisionWatchModule(visionWatch));
+    visionWatchModule = createVisionWatchModule(visionWatch);
   }
-  if ((config.voiceLiveEndpoint || config.foundryProjectEndpoint) && credential) {
-    modules.push(createVoiceRelayModule({
+  const voiceRelayModule = (config.voiceLiveEndpoint || config.foundryProjectEndpoint) && credential
+    ? createVoiceRelayModule({
       frameStore,
       ...(screenVision && settingsStore ? {
         reserveImageBudget: async (input) => {
@@ -817,16 +812,41 @@ try {
           ),
         }
         : {}),
-    }));
-  }
-  if (config.teams && teamsNotifications && teamsAudioStore) {
-    modules.push(await createTeamsBotModule({
+    })
+    : undefined;
+  const teamsBotModule = config.teams && teamsNotifications && teamsAudioStore
+    ? await createTeamsBotModule({
       clientId: config.teams.botAppId,
       tenantId: config.teams.tenantId,
       notificationService: teamsNotifications,
       audioStore: teamsAudioStore,
-    }));
-  }
+    })
+    : undefined;
+  const modules: BackendModule[] = createProductionModules({
+    core: coreModule,
+    conversation: createConversationModule(frameStore),
+    factory: factoryModule,
+    sleep: createSleepModule(containerAppScaler),
+    recipes: createRecipeModule(recipeStore),
+    vault: vaultModule,
+    webResearch: webResearchModule,
+    htmlResearch: htmlResearchModule,
+    google: googleModule,
+    githubWebhook: githubWebhookModule,
+    pcBridge: pcBridgeModule,
+    phoneCall: phoneCallModule,
+    phoneStatus: phoneStatusModule,
+    browserAgent: browserAgentModule,
+    imageGeneration: imageGenerationModule,
+    htmlView: htmlViewModule,
+    weather: weatherModule,
+    folio: folioModule,
+    workspacePins: workspacePinsModule,
+    screenVision: screenVisionModule,
+    visionWatch: visionWatchModule,
+    voiceRelay: voiceRelayModule,
+    teamsBot: teamsBotModule,
+  });
   const budgetAlertStore = alertActivityStore;
   const budgetReader = database && credential && config.monthlyBudgetResourceId
     ? createArmBudgetReader({
