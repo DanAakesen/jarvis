@@ -17,6 +17,12 @@ reload, unpin, all-window actions, return/online recovery and camera handles.
 These are synthetic API/stream checks, not live voice or physical-phone proof.
 Keep port 5173 running and preserve all remaining drafts and preservation stashes.
 
+Readback assertions now check all added snapshot fields with exact equality.
+All eight readback tests pass, as do scoped lint and TypeScript. The broader
+Windows run records 794 passes, three local failures (en-DK date expectations
+and Vitest 5.0.2 Blob compatibility), and the unchanged voice-unit exclusion.
+Those three cases passed on the initial CI head; the corrected CI is pending.
+
 ## Chat loading correction (12 October 2026)
 
 Camera #750 merged. The coordinator confirmed PR2 is chat loading only; do not
