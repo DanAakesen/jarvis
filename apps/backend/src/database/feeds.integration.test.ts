@@ -31,7 +31,7 @@ describe('Daily feed snapshots and suppressions on real isolated SQL Server', ()
       type: 'event',id: 'synthetic:retained',calendarId: 'synthetic',allDay: true,startsAt: '2026-10-12T00:00:00Z',endsAt: '2026-10-13T00:00:00Z',
     } }];
     await store().ingest(initial,signal());
-    const capturedAt = '2026-10-12T12:01:00Z';
+    const capturedAt = '2026-10-12T12:01:00.000Z';
     const events = Array.from({ length: limit === 'items' ? 1001 : 100 },(_,i) => ({ calendarId: 'synthetic',id: String(i),title: limit === 'bytes' ? '界'.repeat(2000) : 'Synthetic',start: { date: '2026-10-12' },end: { date: '2026-10-13' } }));
     const refresh = new DailyFeedRefresh({ refresh: async () => ({ status: 'complete',freshness: 'fresh',issues: [],events }) } as unknown as DailyCalendarFeed,
       { read: async () => ({ status: 'ok',capturedAt,threads: [thread],orders: [],error: null }) } as unknown as DailyGmailFeed,
