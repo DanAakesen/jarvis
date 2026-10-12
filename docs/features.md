@@ -276,3 +276,15 @@ These accepted changes are implemented offline together in P8-40 [#417](https://
 | Direct voice sharing | Native-permission screen/camera start, requested inspection and stop; sharing alone sends no frame | More in voice controls | Local implementation; live physical capture/backend pending |  | P8-43 (#435) |
 | Transient notifications | Dismissible bottom-right toast; no menu overlay or composer text leakage | Outside chat/voice layout | Local implementation; browser verification recorded with the PR |  | P8-43 (#435) |
 | Projected status and living dormancy | White text without badge/dot; gentle dormant cyan pulse and stirring amber core, stronger awake movement; preserve wake and real state/audio responses | Under orb and existing Jarvis stage | Local implementation; hardware motion acceptance pending |  | P8-43 (#435) |
+## Daily migration (P12)
+
+| Feature | Surface | Status | Tasks |
+| --- | --- | --- | --- |
+| Default-off Daily integration metadata, shared server owner and reserved view IDs | Backend contract | Built offline; pending review | P12-01 (#716) |
+| Private export/inventory, SQL mapping, durable health ingestion/processing and reconciliation | Background | Planned; gated | P12-02–P12-06 |
+| Nutrition/Frida/plans and coaching/recovery/recomp | Both | Planned; gated | P12-07–P12-09 |
+| Existing Google feeds, scoped widget/Shortcut, football and brief history | Both/Phone | Planned; recurring notifications off | P12-10–P12-14 |
+| Mobile-first Daily/Workouts/Nutrition and four native assistant views | Both | Planned; no renderer/navigation registered yet | P12-15–P12-16 |
+| Parity, physical-phone acceptance, protected cutover/rollback and legacy deprecation | Background/Phone | Planned; evidence gates apply | P12-17–P12-19 |
+
+[Approved scope and existing issue URLs](daily-migration.md). No TickTick integration or original Daily repository/data deletion.

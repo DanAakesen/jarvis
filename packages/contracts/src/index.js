@@ -1,3 +1,5 @@
+export { dailyViewIds, dailyModuleId, dailyContractVersion } from './daily.js';
+
 export const generatedViewVersion = 1;
 export const systemSmokeCheckIds = Object.freeze([
   'google', 'github_app', 'vault', 'foundry.embeddings', 'research', 'pc_bridge',
