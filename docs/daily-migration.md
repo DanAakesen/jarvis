@@ -100,7 +100,7 @@ Register Daily through BackendModule, with shared services for UI and tools, own
 
 ### [P12-10: Google feed, all calendars & attention](https://github.com/DanAakesen/jarvis/issues/725)
 
-Released after closed/deployed #718 and merged #722. [Inactive feed services](../apps/backend/src/daily/feeds/README.md) now use coordinator-verified pure consumer/public producer contracts for bounded Gmail/calendar reads, exact attention/order selectors, mapped owner-local snapshots/suppressions and manual refresh. Missing generic protected strict-schema model capability reports unavailable; no guessed classifier or new resource/key. Consent, protected model/live parity/private/phone gates remain open; no OAuth change or activation. Draft #746 is not final #725 acceptance or merge readiness.
+Released after closed/deployed #718 and merged #722. [Inactive feed services](../apps/backend/src/daily/feeds/README.md) use coordinator-verified pure consumer/public producer contracts for resumable bounded Gmail/calendar reads, exact selectors, mapped owner-local snapshots/suppressions and manual refresh. The existing protected chat identity/settings/catalogue/usage boundary supplies tool-free JSON extraction with strict local schema and source-timestamp checks; failures remain unavailable, never guessed. Per-source size checks preserve healthy-source success. Consent, deployed-model/live parity/private/phone gates remain open; no new resource/key, OAuth change or activation. Draft #746 is not final #725 acceptance or merge readiness.
 
 **REUSE EXISTING JARVIS — permanent** · Personal integrations & phone surfaces
 
