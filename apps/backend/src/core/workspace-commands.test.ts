@@ -49,7 +49,9 @@ describe('workspace command delivery', () => {
     expect(schema).toMatchObject({
       required: ['commandId', 'operation'], additionalProperties: false,
       properties: {
-        operation: { enum: expect.arrayContaining(['session']) },
+        operation: { enum: expect.arrayContaining([
+          'session', 'place', 'arrange', 'minimise-all', 'restore-all', 'close-all', 'pin', 'unpin',
+        ]) },
         action: { enum: expect.arrayContaining(['language', 'voice', 'camera']) },
         value: { type: 'string', enum: ['da', 'en', 'end', 'front', 'rear', 'off'] },
         target: { enum: ['active', 'desktop', 'phone', 'all'] },
@@ -59,6 +61,18 @@ describe('workspace command delivery', () => {
     expect(workspaceCommandTool.description).toContain('backend never requests browser permissions');
     expect(workspaceCommandTool.description).toContain('tell Dan to grant permission in the browser');
     expect(workspaceCommandTool.description).toContain('Target defaults to active');
+  });
+
+  it('describes snapshot-backed window intents, ordering, phone behavior, and confirmed pins', () => {
+    expect(workspaceCommandTool.description).toContain('act by intent rather than coordinates');
+    expect(workspaceCommandTool.description).toContain('snapshot titles and front');
+    expect(workspaceCommandTool.description).toContain('"X right, Y left" uses viewIds [Y, X]');
+    expect(workspaceCommandTool.description).toContain('viewIds are front-to-back, first frontmost—put the desired top window first');
+    expect(workspaceCommandTool.description).toContain('arrange with auto ("tidy up")');
+    expect(workspaceCommandTool.description).toContain('Minimise, restore or close everything with minimise-all, restore-all or close-all');
+    expect(workspaceCommandTool.description).toContain('Pin or unpin on request');
+    expect(workspaceCommandTool.description).toContain('only when the result confirms storage succeeded');
+    expect(workspaceCommandTool.description).toContain('On phones, geometry requests focus the named window');
   });
 
   it.each([
@@ -284,6 +298,7 @@ describe('workspace command delivery', () => {
   it.each([
     { commandId: 'place-intent', operation: 'place', viewId: 'report', region: 'left' },
     { commandId: 'arrange-intent', operation: 'arrange', layout: 'grid', viewIds: ['report', 'chart'] },
+    { commandId: 'cascade-intent', operation: 'arrange', layout: 'cascade', viewIds: ['front', 'behind'] },
     { commandId: 'minimise-all-intent', operation: 'minimise-all' },
     { commandId: 'restore-all-intent', operation: 'restore-all' },
     { commandId: 'close-all-intent', operation: 'close-all' },

@@ -814,6 +814,7 @@ test('defines and validates bounded workspace commands for the approved operatio
     { ...base, operation: 'layout', arrangement: 'layered' },
     { ...base, operation: 'place', viewId: 'research', region: 'centre' },
     { ...base, operation: 'arrange', layout: 'side-by-side', viewIds: ['research', 'chart'] },
+    { ...base, operation: 'arrange', layout: 'cascade', viewIds: ['front', 'behind'] },
     { ...base, operation: 'arrange', layout: 'auto' },
     ...['minimise-all', 'restore-all', 'close-all'].map((operation) => ({ ...base, operation })),
     { ...base, operation: 'pin', viewId: 'research' },

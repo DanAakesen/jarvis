@@ -18,6 +18,18 @@ describe('shared navigation capability instructions', () => {
     expect(instructions).toContain('name the missing tool permission');
   });
 
+  it('maps window requests to snapshot-backed intents and reports pin outcomes honestly', () => {
+    const instructions = capabilityInstructions({ automaticCapture: false });
+    expect(instructions).toContain('Windows: intent, not coordinates');
+    expect(instructions).toContain('titles/front to viewIds');
+    expect(instructions).toContain('"X right, Y left": arrange side-by-side [Y, X]');
+    expect(instructions).toContain('"Stack"/"cascade": arrange cascade; first viewId is frontmost');
+    expect(instructions).toContain('"Tidy up": arrange auto');
+    expect(instructions).toContain('Minimise/restore/close everything: minimise-all/restore-all/close-all');
+    expect(instructions).toContain('Pin/unpin on request; relay result');
+    expect(instructions).toContain('Phones accept all; geometry focuses named windows');
+  });
+
   it('distinguishes fresh, earlier, and unavailable visual evidence without volunteering timestamps', () => {
     const instructions = capabilityInstructions({ automaticCapture: false });
     expect(instructions).toContain('no more than 60 seconds old, correlated with this turn\'s question');
@@ -34,8 +46,9 @@ describe('shared navigation capability instructions', () => {
     const instructions = capabilityInstructions({ automaticCapture });
     expect(instructions).toContain('target "active" (latest snapshot tab)');
     expect(instructions).toContain('"all" only for every tab');
-    expect(instructions).toContain('operation "session": language da/en, voice end, or camera front/rear/off');
-    expect(instructions).toContain('not saved defaults; wait for application, relay refusals');
+    expect(instructions).toContain('Use operation "session" (not saved defaults) for language da/en, voice end, or camera front/rear/off');
+    expect(instructions).toContain('wait for application, relay refusals, and tell Dan to grant browser permission if missing');
+    expect(instructions).toContain('Camera preview is "camera-preview"');
     expect(instructions).toContain('tell Dan to grant browser permission if missing');
     expect(instructions).toContain('operation "conversation" and action "show"');
     expect(instructions).toContain('hide the transcript, use action "hide"');
@@ -54,10 +67,10 @@ describe('shared navigation capability instructions', () => {
     expect(instructions).not.toContain('"knowledge-graph"');
     expect(instructions).toContain('never claim navigation succeeded on send');
     expect(instructions).toContain('Only report it applied after the tool succeeds');
-    expect(instructions).toContain('"This" or "that" refers to the focused workspace window');
+    expect(instructions).toContain('"This"/"that" means the focused window');
     expect(instructions).toContain('"Go back" means navigate to view.previous');
     expect(instructions).toContain('If view.previous is unavailable, ask Dan');
-    expect(instructions).toContain('If no snapshot or focus is available, say so');
+    expect(instructions).toContain('Without snapshot/focus, ask rather than guess');
     expect(instructions).toContain('The Folio is a pane');
     expect(instructions).toContain('The UI still refuses Status until its page exists');
     expect(instructions).not.toContain('refuses Folio and Status');
