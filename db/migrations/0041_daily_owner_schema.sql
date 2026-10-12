@@ -17,8 +17,8 @@ CREATE TABLE daily.[health_ingestions] (
   [error_code] nvarchar(256) NULL,
   [error_message] nvarchar(max) NULL,
   CONSTRAINT PK_daily_health_ingestions PRIMARY KEY NONCLUSTERED ([owner_object_id], [id]),
-  CONSTRAINT CK_daily_health_ingestions_request_metadata_json CHECK ([request_metadata_json] IS NULL OR ISJSON([request_metadata_json]) = 1),
-  CONSTRAINT CK_daily_health_ingestions_normalized_counts_json CHECK ([normalized_counts_json] IS NULL OR ISJSON([normalized_counts_json]) = 1)
+  CONSTRAINT CK_daily_health_ingestions_request_metadata_json CHECK ([request_metadata_json] IS NULL OR ISJSON([request_metadata_json], VALUE) = 1),
+  CONSTRAINT CK_daily_health_ingestions_normalized_counts_json CHECK ([normalized_counts_json] IS NULL OR ISJSON([normalized_counts_json], VALUE) = 1)
 );
 CREATE UNIQUE INDEX UQ_daily_health_ingestions_0 ON daily.[health_ingestions] ([owner_object_id], [automation_id], [session_id]);
 
@@ -55,7 +55,7 @@ CREATE TABLE daily.[health_daily_metrics] (
   [ingestion_id] nvarchar(256) COLLATE Latin1_General_100_BIN2 NOT NULL,
   [updated_at] nvarchar(64) COLLATE Latin1_General_100_BIN2 NOT NULL,
   CONSTRAINT PK_daily_health_daily_metrics PRIMARY KEY NONCLUSTERED ([owner_object_id], [metric_name], [metric_date]),
-  CONSTRAINT CK_daily_health_daily_metrics_fields_json CHECK ([fields_json] IS NULL OR ISJSON([fields_json]) = 1)
+  CONSTRAINT CK_daily_health_daily_metrics_fields_json CHECK ([fields_json] IS NULL OR ISJSON([fields_json], VALUE) = 1)
 );
 
 CREATE TABLE daily.[health_sleep_daily] (
@@ -75,7 +75,7 @@ CREATE TABLE daily.[health_sleep_daily] (
   [ingestion_id] nvarchar(256) COLLATE Latin1_General_100_BIN2 NOT NULL,
   [updated_at] nvarchar(64) COLLATE Latin1_General_100_BIN2 NOT NULL,
   CONSTRAINT PK_daily_health_sleep_daily PRIMARY KEY NONCLUSTERED ([owner_object_id], [sleep_date]),
-  CONSTRAINT CK_daily_health_sleep_daily_source_json CHECK ([source_json] IS NULL OR ISJSON([source_json]) = 1)
+  CONSTRAINT CK_daily_health_sleep_daily_source_json CHECK ([source_json] IS NULL OR ISJSON([source_json], VALUE) = 1)
 );
 
 CREATE TABLE daily.[health_workouts] (
@@ -101,7 +101,7 @@ CREATE TABLE daily.[health_workouts] (
   [ingestion_id] nvarchar(256) COLLATE Latin1_General_100_BIN2 NOT NULL,
   [updated_at] nvarchar(64) COLLATE Latin1_General_100_BIN2 NOT NULL,
   CONSTRAINT PK_daily_health_workouts PRIMARY KEY NONCLUSTERED ([owner_object_id], [id]),
-  CONSTRAINT CK_daily_health_workouts_detail_json CHECK ([detail_json] IS NULL OR ISJSON([detail_json]) = 1)
+  CONSTRAINT CK_daily_health_workouts_detail_json CHECK ([detail_json] IS NULL OR ISJSON([detail_json], VALUE) = 1)
 );
 
 CREATE TABLE daily.[health_workout_metrics] (
@@ -118,7 +118,7 @@ CREATE TABLE daily.[health_workout_metrics] (
   [ingestion_id] nvarchar(256) COLLATE Latin1_General_100_BIN2 NOT NULL,
   [updated_at] nvarchar(64) COLLATE Latin1_General_100_BIN2 NOT NULL,
   CONSTRAINT PK_daily_health_workout_metrics PRIMARY KEY NONCLUSTERED ([owner_object_id], [workout_id], [metric_name]),
-  CONSTRAINT CK_daily_health_workout_metrics_fields_json CHECK ([fields_json] IS NULL OR ISJSON([fields_json]) = 1)
+  CONSTRAINT CK_daily_health_workout_metrics_fields_json CHECK ([fields_json] IS NULL OR ISJSON([fields_json], VALUE) = 1)
 );
 
 CREATE TABLE daily.[health_workout_heart_rate_minute] (
@@ -135,7 +135,7 @@ CREATE TABLE daily.[health_workout_heart_rate_minute] (
   [ingestion_id] nvarchar(256) COLLATE Latin1_General_100_BIN2 NOT NULL,
   [updated_at] nvarchar(64) COLLATE Latin1_General_100_BIN2 NOT NULL,
   CONSTRAINT PK_daily_health_workout_heart_rate_minute PRIMARY KEY NONCLUSTERED ([owner_object_id], [workout_id], [sample_minute], [metric_name]),
-  CONSTRAINT CK_daily_health_workout_heart_rate_minute_source_json CHECK ([source_json] IS NULL OR ISJSON([source_json]) = 1)
+  CONSTRAINT CK_daily_health_workout_heart_rate_minute_source_json CHECK ([source_json] IS NULL OR ISJSON([source_json], VALUE) = 1)
 );
 
 CREATE TABLE daily.[health_sync_state] (
@@ -152,7 +152,7 @@ CREATE TABLE daily.[health_sync_state] (
   [last_counts_json] nvarchar(max) NOT NULL CONSTRAINT DF_daily_health_sync_state_last_counts_json DEFAULT N'{}',
   [updated_at] nvarchar(64) COLLATE Latin1_General_100_BIN2 NULL,
   CONSTRAINT PK_daily_health_sync_state PRIMARY KEY NONCLUSTERED ([owner_object_id], [id]),
-  CONSTRAINT CK_daily_health_sync_state_last_counts_json CHECK ([last_counts_json] IS NULL OR ISJSON([last_counts_json]) = 1)
+  CONSTRAINT CK_daily_health_sync_state_last_counts_json CHECK ([last_counts_json] IS NULL OR ISJSON([last_counts_json], VALUE) = 1)
 );
 
 CREATE TABLE daily.[health_sync_feeds] (
@@ -165,7 +165,7 @@ CREATE TABLE daily.[health_sync_feeds] (
   [last_counts_json] nvarchar(max) NOT NULL CONSTRAINT DF_daily_health_sync_feeds_last_counts_json DEFAULT N'{}',
   [updated_at] nvarchar(64) COLLATE Latin1_General_100_BIN2 NOT NULL,
   CONSTRAINT PK_daily_health_sync_feeds PRIMARY KEY NONCLUSTERED ([owner_object_id], [feed_kind]),
-  CONSTRAINT CK_daily_health_sync_feeds_last_counts_json CHECK ([last_counts_json] IS NULL OR ISJSON([last_counts_json]) = 1)
+  CONSTRAINT CK_daily_health_sync_feeds_last_counts_json CHECK ([last_counts_json] IS NULL OR ISJSON([last_counts_json], VALUE) = 1)
 );
 
 CREATE TABLE daily.[health_phone_sync_state] (
@@ -176,7 +176,7 @@ CREATE TABLE daily.[health_phone_sync_state] (
   [checked_feeds_json] nvarchar(max) NOT NULL CONSTRAINT DF_daily_health_phone_sync_state_checked_feeds_json DEFAULT N'[]',
   [updated_at] nvarchar(64) COLLATE Latin1_General_100_BIN2 NOT NULL,
   CONSTRAINT PK_daily_health_phone_sync_state PRIMARY KEY NONCLUSTERED ([owner_object_id], [id]),
-  CONSTRAINT CK_daily_health_phone_sync_state_checked_feeds_json CHECK ([checked_feeds_json] IS NULL OR ISJSON([checked_feeds_json]) = 1)
+  CONSTRAINT CK_daily_health_phone_sync_state_checked_feeds_json CHECK ([checked_feeds_json] IS NULL OR ISJSON([checked_feeds_json], VALUE) = 1)
 );
 
 CREATE TABLE daily.[nutrition_queue] (
@@ -204,7 +204,7 @@ CREATE TABLE daily.[nutrition_queue] (
   [expires_at] nvarchar(64) COLLATE Latin1_General_100_BIN2 NOT NULL,
   [updated_at] nvarchar(64) COLLATE Latin1_General_100_BIN2 NOT NULL,
   CONSTRAINT PK_daily_nutrition_queue PRIMARY KEY NONCLUSTERED ([owner_object_id], [id]),
-  CONSTRAINT CK_daily_nutrition_queue_components_json CHECK ([components_json] IS NULL OR ISJSON([components_json]) = 1)
+  CONSTRAINT CK_daily_nutrition_queue_components_json CHECK ([components_json] IS NULL OR ISJSON([components_json], VALUE) = 1)
 );
 CREATE UNIQUE INDEX UQ_daily_nutrition_queue_0 ON daily.[nutrition_queue] ([owner_object_id], [idempotency_key]);
 
@@ -236,8 +236,8 @@ CREATE TABLE daily.[nutrition_meals] (
   [expires_at] nvarchar(64) COLLATE Latin1_General_100_BIN2 NOT NULL,
   [updated_at] nvarchar(64) COLLATE Latin1_General_100_BIN2 NOT NULL,
   CONSTRAINT PK_daily_nutrition_meals PRIMARY KEY NONCLUSTERED ([owner_object_id], [id]),
-  CONSTRAINT CK_daily_nutrition_meals_components_json CHECK ([components_json] IS NULL OR ISJSON([components_json]) = 1),
-  CONSTRAINT CK_daily_nutrition_meals_nutrient_provenance_json CHECK ([nutrient_provenance_json] IS NULL OR ISJSON([nutrient_provenance_json]) = 1),
+  CONSTRAINT CK_daily_nutrition_meals_components_json CHECK ([components_json] IS NULL OR ISJSON([components_json], VALUE) = 1),
+  CONSTRAINT CK_daily_nutrition_meals_nutrient_provenance_json CHECK ([nutrient_provenance_json] IS NULL OR ISJSON([nutrient_provenance_json], VALUE) = 1),
   CONSTRAINT CK_daily_nutrition_meals_revision CHECK (revision >= 1)
 );
 CREATE UNIQUE INDEX UQ_daily_nutrition_meals_0 ON daily.[nutrition_meals] ([owner_object_id], [idempotency_key]);
@@ -262,8 +262,8 @@ CREATE TABLE daily.[nutrition_favorites] (
   [created_at] nvarchar(64) COLLATE Latin1_General_100_BIN2 NOT NULL,
   [updated_at] nvarchar(64) COLLATE Latin1_General_100_BIN2 NOT NULL,
   CONSTRAINT PK_daily_nutrition_favorites PRIMARY KEY NONCLUSTERED ([owner_object_id], [id]),
-  CONSTRAINT CK_daily_nutrition_favorites_aliases_json CHECK ([aliases_json] IS NULL OR ISJSON([aliases_json]) = 1),
-  CONSTRAINT CK_daily_nutrition_favorites_components_json CHECK ([components_json] IS NULL OR ISJSON([components_json]) = 1)
+  CONSTRAINT CK_daily_nutrition_favorites_aliases_json CHECK ([aliases_json] IS NULL OR ISJSON([aliases_json], VALUE) = 1),
+  CONSTRAINT CK_daily_nutrition_favorites_components_json CHECK ([components_json] IS NULL OR ISJSON([components_json], VALUE) = 1)
 );
 CREATE UNIQUE INDEX UQ_daily_nutrition_favorites_0 ON daily.[nutrition_favorites] ([owner_object_id], [normalized_name]);
 
@@ -284,7 +284,7 @@ CREATE TABLE daily.[nutrition_meal_plans] (
   [created_at] nvarchar(64) COLLATE Latin1_General_100_BIN2 NOT NULL,
   [updated_at] nvarchar(64) COLLATE Latin1_General_100_BIN2 NOT NULL,
   CONSTRAINT PK_daily_nutrition_meal_plans PRIMARY KEY NONCLUSTERED ([owner_object_id], [id]),
-  CONSTRAINT CK_daily_nutrition_meal_plans_items_json CHECK ([items_json] IS NULL OR ISJSON([items_json]) = 1),
+  CONSTRAINT CK_daily_nutrition_meal_plans_items_json CHECK ([items_json] IS NULL OR ISJSON([items_json], VALUE) = 1),
   CONSTRAINT CK_daily_nutrition_meal_plans_revision CHECK (revision >= 1)
 );
 CREATE UNIQUE INDEX UQ_daily_nutrition_meal_plans_0 ON daily.[nutrition_meal_plans] ([owner_object_id], [normalized_name]);
@@ -321,10 +321,10 @@ CREATE TABLE daily.[coach_profiles] (
   [created_at] nvarchar(64) COLLATE Latin1_General_100_BIN2 NOT NULL,
   [updated_at] nvarchar(64) COLLATE Latin1_General_100_BIN2 NOT NULL,
   CONSTRAINT PK_daily_coach_profiles PRIMARY KEY NONCLUSTERED ([owner_object_id]),
-  CONSTRAINT CK_daily_coach_profiles_meal_schedule_json CHECK ([meal_schedule_json] IS NULL OR ISJSON([meal_schedule_json]) = 1),
-  CONSTRAINT CK_daily_coach_profiles_food_preferences_json CHECK ([food_preferences_json] IS NULL OR ISJSON([food_preferences_json]) = 1),
-  CONSTRAINT CK_daily_coach_profiles_restrictions_json CHECK ([restrictions_json] IS NULL OR ISJSON([restrictions_json]) = 1),
-  CONSTRAINT CK_daily_coach_profiles_football_preferences_json CHECK ([football_preferences_json] IS NULL OR ISJSON([football_preferences_json]) = 1),
+  CONSTRAINT CK_daily_coach_profiles_meal_schedule_json CHECK ([meal_schedule_json] IS NULL OR ISJSON([meal_schedule_json], VALUE) = 1),
+  CONSTRAINT CK_daily_coach_profiles_food_preferences_json CHECK ([food_preferences_json] IS NULL OR ISJSON([food_preferences_json], VALUE) = 1),
+  CONSTRAINT CK_daily_coach_profiles_restrictions_json CHECK ([restrictions_json] IS NULL OR ISJSON([restrictions_json], VALUE) = 1),
+  CONSTRAINT CK_daily_coach_profiles_football_preferences_json CHECK ([football_preferences_json] IS NULL OR ISJSON([football_preferences_json], VALUE) = 1),
   CONSTRAINT CK_daily_coach_profiles_revision CHECK (revision >= 1)
 );
 
@@ -379,7 +379,7 @@ CREATE TABLE daily.[attention_runs] (
   [source_status_json] nvarchar(max) NOT NULL CONSTRAINT DF_daily_attention_runs_source_status_json DEFAULT N'{}',
   [completed_at] nvarchar(64) COLLATE Latin1_General_100_BIN2 NULL,
   CONSTRAINT PK_daily_attention_runs PRIMARY KEY NONCLUSTERED ([owner_object_id], [id]),
-  CONSTRAINT CK_daily_attention_runs_source_status_json CHECK ([source_status_json] IS NULL OR ISJSON([source_status_json]) = 1)
+  CONSTRAINT CK_daily_attention_runs_source_status_json CHECK ([source_status_json] IS NULL OR ISJSON([source_status_json], VALUE) = 1)
 );
 CREATE UNIQUE INDEX UQ_daily_attention_runs_0 ON daily.[attention_runs] ([owner_object_id], [idempotency_key]);
 
@@ -416,7 +416,7 @@ CREATE TABLE daily.[attention_items] (
   [state] nvarchar(256) NULL,
   [content_json] nvarchar(max) NOT NULL,
   CONSTRAINT PK_daily_attention_items PRIMARY KEY NONCLUSTERED ([owner_object_id], [snapshot_id], [item_type], [stable_id]),
-  CONSTRAINT CK_daily_attention_items_content_json CHECK ([content_json] IS NULL OR ISJSON([content_json]) = 1),
+  CONSTRAINT CK_daily_attention_items_content_json CHECK ([content_json] IS NULL OR ISJSON([content_json], VALUE) = 1),
   CONSTRAINT CK_daily_attention_items_source CHECK (LOWER(source) NOT LIKE N'%ticktick%')
 );
 
@@ -457,9 +457,9 @@ CREATE TABLE daily.[briefing_runs] (
   [delivery_evidence_json] nvarchar(max) NULL,
   [updated_at] nvarchar(64) COLLATE Latin1_General_100_BIN2 NOT NULL,
   CONSTRAINT PK_daily_briefing_runs PRIMARY KEY NONCLUSTERED ([owner_object_id], [id]),
-  CONSTRAINT CK_daily_briefing_runs_body_json CHECK ([body_json] IS NULL OR ISJSON([body_json]) = 1),
-  CONSTRAINT CK_daily_briefing_runs_source_snapshots_json CHECK ([source_snapshots_json] IS NULL OR ISJSON([source_snapshots_json]) = 1),
-  CONSTRAINT CK_daily_briefing_runs_delivery_evidence_json CHECK ([delivery_evidence_json] IS NULL OR ISJSON([delivery_evidence_json]) = 1)
+  CONSTRAINT CK_daily_briefing_runs_body_json CHECK ([body_json] IS NULL OR ISJSON([body_json], VALUE) = 1),
+  CONSTRAINT CK_daily_briefing_runs_source_snapshots_json CHECK ([source_snapshots_json] IS NULL OR ISJSON([source_snapshots_json], VALUE) = 1),
+  CONSTRAINT CK_daily_briefing_runs_delivery_evidence_json CHECK ([delivery_evidence_json] IS NULL OR ISJSON([delivery_evidence_json], VALUE) = 1)
 );
 
 CREATE TABLE daily.[attention_rule_config] (
@@ -469,7 +469,7 @@ CREATE TABLE daily.[attention_rule_config] (
   [source] nvarchar(256) NOT NULL,
   [updated_at] nvarchar(64) COLLATE Latin1_General_100_BIN2 NOT NULL,
   CONSTRAINT PK_daily_attention_rule_config PRIMARY KEY NONCLUSTERED ([owner_object_id], [key]),
-  CONSTRAINT CK_daily_attention_rule_config_value_json CHECK ([value_json] IS NULL OR ISJSON([value_json]) = 1),
+  CONSTRAINT CK_daily_attention_rule_config_value_json CHECK ([value_json] IS NULL OR ISJSON([value_json], VALUE) = 1),
   CONSTRAINT CK_daily_attention_rule_config_source CHECK (LOWER(source) NOT LIKE N'%ticktick%')
 );
 
@@ -494,7 +494,7 @@ CREATE TABLE daily.[coach_experiments] (
   [created_at] nvarchar(64) COLLATE Latin1_General_100_BIN2 NOT NULL,
   [updated_at] nvarchar(64) COLLATE Latin1_General_100_BIN2 NOT NULL,
   CONSTRAINT PK_daily_coach_experiments PRIMARY KEY NONCLUSTERED ([owner_object_id], [id]),
-  CONSTRAINT CK_daily_coach_experiments_locked_variables_json CHECK ([locked_variables_json] IS NULL OR ISJSON([locked_variables_json]) = 1)
+  CONSTRAINT CK_daily_coach_experiments_locked_variables_json CHECK ([locked_variables_json] IS NULL OR ISJSON([locked_variables_json], VALUE) = 1)
 );
 CREATE UNIQUE INDEX UQ_daily_coach_experiments_0 ON daily.[coach_experiments] ([owner_object_id], [idempotency_key]);
 

@@ -91,6 +91,11 @@ describe('Daily SQL owner schema on real SQL Server', () => {
     await expect(pool.request().input('owner', sql.UniqueIdentifier, owner).batch(`
       INSERT daily.attention_rule_config(owner_object_id,[key],value_json,source,updated_at)
         VALUES (@owner,N'invalid-json',N'not json',N'synthetic',N'2026-01-01');`)).rejects.toThrow();
+    await pool.request().input('owner', sql.UniqueIdentifier, owner).batch(`
+      INSERT daily.attention_rule_config(owner_object_id,[key],value_json,source,updated_at)
+        VALUES (@owner,N'scalar-json',N'true',N'synthetic',N'2026-01-01');`);
+    expect(await DailyOwnerStore.forRequest(pool, requestFor(owner)).read('attention_rule_config', { key: 'scalar-json' }, signal()))
+      .toMatchObject({ value_json: 'true' });
   });
 
   it('refuses destructive down migration while any Daily record exists', async () => {
