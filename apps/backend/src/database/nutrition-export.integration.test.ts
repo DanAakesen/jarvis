@@ -139,6 +139,7 @@ describe('inactive nutrition export on isolated SQL Server',() => {
     const revoked = deviceRequest(); revoked.nutritionExportPrincipal!.revoked = true;
     expect(() => NutritionExportStore.forDevice(pool,revoked,now)).toThrow();
     expect(() => NutritionExportStore.forDevice(pool,{ ...deviceRequest(),principal: request().principal } as FastifyRequest,now)).toThrow();
+    expect(() => NutritionExportStore.forOwner(pool,{ ...deviceRequest(),principal: request().principal } as FastifyRequest,now)).toThrow();
   });
   it('rolls back an oversized claim response before issuing any native-write instructions',async () => {
     for (let i = 0; i < 10; i++) await nutrition().log({ ...meal(`large-${i}`),components: ['界'.repeat(10000)] },intakeAuthority,signal());

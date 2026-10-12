@@ -1,7 +1,14 @@
 import { describe,expect,it } from 'vitest';
 import { authorizePeriod,claimInput,completion,exportItem,period } from './model.js';
+import { resolveDailyOwner } from '../owner.js';
+import type { FastifyRequest } from 'fastify';
 const range = { from: '2026-10-12T00:00:00Z',to: '2026-10-13T00:00:00Z' };
 describe('bounded explicit nutrition export contracts',() => {
+  it('denies export/mixed principals at ordinary Daily owner boundaries',() => {
+    const owner = '11111111-1111-4111-8111-111111111111';
+    for (const principal of [undefined,{ objectId: owner }]) expect(() => resolveDailyOwner({ server: { ownerObjectId: owner },principal,
+      nutritionExportPrincipal: { kind: 'nutrition-export-device' } } as unknown as FastifyRequest)).toThrow();
+  });
   it('requires trusted confirmation of precisely the supplied period',() => {
     expect(authorizePeriod(range,{ intent: 'queue-nutrition-export',explicit: true,confirmedPeriod: range })).toEqual({ from: '2026-10-12T00:00:00.000Z',to: '2026-10-13T00:00:00.000Z' });
     for (const authority of [{ intent: 'queue-nutrition-export' as const,explicit: false,confirmedPeriod: range },

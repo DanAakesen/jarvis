@@ -5,7 +5,7 @@ import { AuthenticationDenied } from '../auth/verify.js';
 export function resolveDailyOwner(request: FastifyRequest): string {
   const owner = request.server.ownerObjectId;
   const user = request.principal;
-  if (!owner || request.runnerPrincipal || request.pcBridgePrincipal ||
+  if (!owner || request.nutritionExportPrincipal || request.runnerPrincipal || request.pcBridgePrincipal ||
       request.phoneEventGridPrincipal || request.deployPrincipal ||
       (user && request.agentPrincipal)) throw new AuthenticationDenied(403);
   if (request.agentPrincipal?.kind === 'jarvis-agent') return owner;

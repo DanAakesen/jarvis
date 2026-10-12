@@ -158,17 +158,18 @@ export class NutritionExportStore {
     if (this.device || authority?.intent !== 'reconcile-nutrition-export' || authority.explicit !== true || authority.checkedInHealth !== true ||
         !['all-samples-present','all-samples-absent','partial-or-unknown'].includes(authority.evidence)) throw new ExportConflict();
     text(id);
+    const checkedEvidence = authority.evidence;
     return this.transaction(signal,async (tx,now) => {
       await this.expire(tx,now,signal);
       const row = (await this.query(this.request(tx).input('id',sql.NVarChar(256),id),
         `SELECT q.*,m.revision AS current_revision,m.deleted_at FROM daily.nutrition_queue q WITH(UPDLOCK,HOLDLOCK)
           JOIN daily.nutrition_meals m WITH(UPDLOCK,HOLDLOCK) ON m.owner_object_id=q.owner_object_id AND m.id=q.id AND DATALENGTH(m.id)=DATALENGTH(q.id)
           WHERE q.owner_object_id=@owner AND ${exact('q.id')};`,signal)).recordset[0];
-      const evidence = canonicalJson({ evidence: authority.evidence });
+      const evidence = canonicalJson({ evidence: checkedEvidence });
       if (row?.reconciliation_json === evidence) return { state: row.status as string };
       if (!row || !['uncertain','out_of_sync','failed'].includes(row.status as string) ||
           row.reconciliation_json && row.reconciliation_json !== canonicalJson({ evidence: 'partial-or-unknown' })) throw new ExportConflict();
-      const state = authority.evidence === 'all-samples-absent' ? 'reconciled_absent' : authority.evidence === 'partial-or-unknown' ? 'uncertain'
+      const state = checkedEvidence === 'all-samples-absent' ? 'reconciled_absent' : checkedEvidence === 'partial-or-unknown' ? 'uncertain'
         : row.deleted_at !== null || String(row.source_revision) !== String(row.current_revision) ? 'out_of_sync' : 'written';
       await this.query(this.request(tx).input('id',sql.NVarChar(256),id).input('evidence',sql.NVarChar(2000),evidence).input('state',sql.NVarChar(256),state).input('now',sql.NVarChar(64),now),
         `UPDATE daily.nutrition_queue SET status=@state,reconciliation_json=@evidence,updated_at=@now WHERE owner_object_id=@owner AND ${exact('id')};
