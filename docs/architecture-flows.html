@@ -892,7 +892,7 @@ const FLOWS = [
   },
   {
     name: "Daily migration contract",
-    summary: "P12-01 proves only default-off composition and the existing authenticated owner boundary. Daily data, device credentials, native views and production cutover remain downstream evidence-gated work; original Daily remains unchanged and canonical until migration completes.",
+    summary: "P12-01 proves only default-off composition and the existing authenticated owner boundary. Daily data, device credentials, native views and production cutover remain downstream evidence-gated work; original Daily remains canonical before cutover with ordinary authorized writes; migration tooling cannot modify source code/schema or rewrite records.",
     nodes: [
       { id: "daily-caller", lane: "user", col: 1, s: "context", t: "Existing user or hosted Jarvis", d: "Reuse the one login/session/conversation; no client owner.", href: "daily-migration.md" },
       { id: "daily-gate", lane: "backend", col: 2, s: "proven", t: "Default-off composition", d: "createDailyModules() contributes no routes or tools. Production composition stays unchanged.", ev: "P12-01 synthetic composition regressions pass; no production activation.", href: "daily-migration.md" },
