@@ -280,7 +280,7 @@ These accepted changes are implemented offline together in P8-40 [#417](https://
 | Projected status and living dormancy | White text without badge/dot; gentle dormant cyan pulse and stirring amber core, stronger awake movement; preserve wake and real state/audio responses | Under orb and existing Jarvis stage | Local implementation; hardware motion acceptance pending |  | P8-43 (#435) |
 ## Daily migration (P12)
 
-P12-07 has an inactive synthetic nutrition persistence/planning checkpoint, with owner-bound logging/history/corrections/tombstones, favourites/aliases and feedback/budget suggestions. Verified source/Frida lookup semantics and real provider/phone acceptance remain open. No production tool/API registration, intake activation or Apple Health queue integration is included. Exact-head SQL/container/CI evidence is recorded in PR #743.
+P12-07 has inactive nutrition services/typed handlers, source-compatible idempotency-key history/corrections, confirmed favourites/aliases, server-resolved plans and persisted-dislike budget suggestions. The public Frida adapter pins source release 10 / 5.5 with attribution and honest partial totals. Bootstrap format clarification, exact-head CI/review and real provider/phone acceptance remain open. No runtime registration, intake activation or Apple Health queue integration. Exact-head SQL/container/CI evidence belongs to PR #743.
 
 P12-03 adds only the empty owner-bound persistence schema and inactive exact-key read contract; target schema/ownership tests require real SQL validation. Health/food/coaching services, imports and pages remain planned and disabled. [Source mapping and later reconciliation gates](daily-schema-mapping.md); parked #717 backup acceptance is unchanged.
 

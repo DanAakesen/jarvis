@@ -157,6 +157,8 @@ export function suggest(candidates: readonly Suggestion[], disliked: ReadonlySet
   instant(context.now);
   const clock = /^([01]\d|2[0-3]):([0-5]\d)$/u;
   if (!clock.test(context.localTime) || candidates.length > 1000) throw new TypeError('Invalid suggestion context');
+  const authoritativeClock = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Copenhagen', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date(context.now));
+  if (context.localTime !== authoritativeClock) throw new TypeError('Suggestion clock disagrees with authoritative time');
   for (const value of [context.remainingKcal, context.remainingProteinGrams]) if (value !== null && (typeof value !== 'number' || !Number.isFinite(value))) throw new TypeError('Invalid remaining budget');
   return candidates.filter((candidate) => {
     text(candidate.mealKey); nutrients(candidate);

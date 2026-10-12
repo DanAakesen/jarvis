@@ -71,5 +71,6 @@ describe('nutrition evidence and budgets', () => {
     expect(suggest(candidates, new Set(['disliked']), { ...context, remainingKcal: null, remainingProteinGrams: null }).map((x) => x.mealKey)).toEqual(['over', 'unknown', 'fit']);
     expect(suggest([], new Set(), context)).toEqual([]);
     expect(suggest(candidates, new Set(), { ...context, remainingKcal: -10 })).toEqual([]);
+    expect(() => suggest(candidates, new Set(), { ...context, localTime: '07:00' })).toThrow('authoritative time');
   });
 });

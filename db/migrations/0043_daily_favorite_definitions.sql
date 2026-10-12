@@ -3,4 +3,5 @@ ALTER TABLE daily.nutrition_favorites ALTER COLUMN source_meal_id nvarchar(256) 
 ALTER TABLE daily.nutrition_favorites ALTER COLUMN source_idempotency_key nvarchar(256) COLLATE Latin1_General_100_BIN2 NULL;
 ALTER TABLE daily.nutrition_favorites ADD nutrient_provenance_json nvarchar(max) NOT NULL
   CONSTRAINT DF_daily_favorites_provenance DEFAULT N'{}';
-ALTER TABLE daily.nutrition_favorites ADD CONSTRAINT CK_daily_favorites_provenance CHECK (ISJSON(nutrient_provenance_json, VALUE)=1);
+-- Compile the constraint after the additive column exists (same pattern as 0040).
+EXEC(N'ALTER TABLE daily.nutrition_favorites ADD CONSTRAINT CK_daily_favorites_provenance CHECK (ISJSON(nutrient_provenance_json, VALUE)=1);');
