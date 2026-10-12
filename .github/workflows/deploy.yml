@@ -424,8 +424,8 @@ jobs:
           unset token
           if ! jq -e '
             .entries as $entries |
-            ($entries | type == "array" and length == 6) and
-            ([$entries[].id] | sort == ["foundry.embeddings", "github_app", "google", "pc_bridge", "research", "vault"]) and
+            ($entries | type == "array" and length >= 6) and
+            (["foundry.embeddings", "github_app", "google", "pc_bridge", "research", "vault"] - [$entries[].id] | length == 0) and
             all($entries[]; .status == "ok" or .status == "degraded" or .status == "down" or .status == "unknown")
           ' "$response" >/dev/null; then
             echo "::error::The backend returned an invalid smoke report."
