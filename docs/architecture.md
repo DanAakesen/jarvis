@@ -1102,7 +1102,8 @@ The authenticated SSE endpoint, heartbeat and replay are P1-06. Factory also own
 projects and task APIs. The catalogue rejects duplicate
 module/tool identities, snapshots frozen schemas and exposes read-only descriptors
 with ownership and handlers. Authenticated `GET /tools` exposes every descriptor's
-name, description and input schema. The core registers a schema-validated
+name, description and input schema. The registry refuses a catalogue of more than 128 tools,,000-character descriptions or 1 MiB (limits in `agents/jarvis/limits.json`, which the agent reads: it
+rejects the whole catalogue, and so every chat turn, past them), so the backend fails its health gate of deploying; related tools are merged into one tool with an operation parameter. The core registers a schema-validated
 `POST /tools/{name}` for every tool at composition time, passes the request and
 cancellation signal to its handler, then writes the arguments, result and outcome
 to `tool_calls` using the process-owned SQL pool. A tool may provide a bounded safe
