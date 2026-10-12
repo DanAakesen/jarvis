@@ -40,6 +40,8 @@ Re-inventory the current Sites D1 schema (31 tables at review) and retained R2 o
 
 ### [P12-03: Daily SQL schema & owner mapping](https://github.com/DanAakesen/jarvis/issues/718)
 
+Sequentially released after closed #716; parked #717 is not a dependency. [Explicit source-table/field mapping and reconciliation limits](daily-schema-mapping.md) distinguish supplied schema definitions from live schema/export evidence. P12-03 adds only empty owner-bound SQL tables and an inactive authenticated-owner read boundary; no import, downstream service, device auth, UI or Daily activation.
+
 **NEW DAILY CAPABILITY — permanent** · Integration contract & protected inventory
 
 Owner-bound health / food / coaching / Google-feed tables; stable IDs, revisions, soft deletes and idempotency. Allocate migration numbers against current main.

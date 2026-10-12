@@ -279,6 +279,8 @@ These accepted changes are implemented offline together in P8-40 [#417](https://
 | Projected status and living dormancy | White text without badge/dot; gentle dormant cyan pulse and stirring amber core, stronger awake movement; preserve wake and real state/audio responses | Under orb and existing Jarvis stage | Local implementation; hardware motion acceptance pending |  | P8-43 (#435) |
 ## Daily migration (P12)
 
+P12-03 adds only the empty owner-bound persistence schema and inactive exact-key read contract; target schema/ownership tests require real SQL validation. Health/food/coaching services, imports and pages remain planned and disabled. [Source mapping and later reconciliation gates](daily-schema-mapping.md); parked #717 backup acceptance is unchanged.
+
 | Feature | Surface | Status | Tasks |
 | --- | --- | --- | --- |
 | Default-off Daily integration metadata, shared server owner and reserved view IDs | Backend contract | Built offline; pending review | P12-01 (#716) |

@@ -1513,6 +1513,8 @@ cleanup and reduced motion. Captures/report: `docs/ui/screenshots/p8-37-integrat
 These use scratch authentication/API/socket and fake media, not live providers.
 ## DailyDeveloperCloud / P12 execution boundary
 
+P12-02 (#717) is parked/deferred with draft #741; no resumption without explicit coordinator release. P12-03 (#718) depends only on closed #716 and owns `daily/store`, migration `0041_daily_owner_schema.sql` and synthetic SQL tests. Run `npm test --workspace @jarvis/backend -- src/daily/index.test.ts src/daily/store/owner-store.test.ts src/modules.test.ts src/auth/auth.test.ts`, backend lint/build, and real `npm run test:database --workspace @jarvis/backend` using only the documented loopback SQL fixture or exact-head GitHub Database CI. A local SQL image pull was forbidden; CI must prove the actual DDL and behavior. No private data, live import or source mutation.
+
 Use the published DailyDeveloperCloud environment, explicitly source `/workspace/.jarvis-tools/activate.sh` before repository commands in every fresh shell, and read environment-owned STARTUP.md/setup-report.md. No automatic BASH_ENV activation. Node 22.23.3/npm 10.9.9/Python 3.12.14; Python components use separate retained .venv environments.
 
 [Approved migration](daily-migration.md) and existing milestone #716–#734 govern Daily work. Dan released only #716 for this worker; later tasks require explicit release, dependencies and claim. Follow one-worker/one-issue/one-PR with small pushed codex/ commits from current main; never merge your own PR. Issue dependencies/worker labels are authoritative; board administration/sync stays with existing Actions/coordinator, no broad token. Coordinate shared contracts/docs/composition, avoid ongoing unrelated runtime work.
