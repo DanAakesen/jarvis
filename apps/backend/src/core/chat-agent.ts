@@ -70,11 +70,9 @@ export function createFoundryAgentSessionId(ownerObjectId: string, conversationS
   if (!uuidPattern.test(ownerObjectId) || !/^[1-9][0-9]{0,18}$/u.test(conversationSessionId)) {
     throw new TypeError('Foundry chat session identity is invalid');
   }
-  const hash = createHash('sha256')
-    .update('jarvis:foundry-chat-session:v1\0')
-    .update(ownerObjectId.toLowerCase())
-    .update('\0')
-    .update(conversationSessionId)
+  const hash = createHash('sha1')
+    .update(Buffer.from('6ba7b8119dad11d180b400c04fd430c8', 'hex'))
+    .update(`jarvis:foundry-chat-session:v1\0${ownerObjectId.toLowerCase()}\0${conversationSessionId}`)
     .digest();
   hash[6] = (hash[6]! & 0x0f) | 0x50;
   hash[8] = (hash[8]! & 0x3f) | 0x80;
