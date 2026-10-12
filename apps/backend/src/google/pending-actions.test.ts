@@ -70,12 +70,21 @@ describe('pending Google actions', () => {
     expect(f.execute).not.toHaveBeenCalled();
   });
 
-  it('preserves Gmail exact-code confirmation and pending mail when staging calendar', async () => {
+  it('approves Gmail with a plain reply and keeps pending mail when staging calendar', async () => {
     const f = fixture('mail');
     f.actions.stage({ scope: 'calendar', sourceMessageId: '10', summary: 'Calendar.', execute: vi.fn() });
-    await expect(f.confirm('yes')).rejects.toMatchObject({ name: 'ToolRefusal' });
-    await expect(f.confirm('cancel')).rejects.toMatchObject({ name: 'ToolRefusal' });
-    await expect(f.confirm(`confirm ${f.pending.confirmationCode}`)).resolves.toMatchObject({ status: 'completed' });
+    await expect(f.confirm('yes, and also delete my inbox')).rejects.toMatchObject({ name: 'ToolRefusal' });
+    await expect(f.confirm('approved')).resolves.toMatchObject({ status: 'completed' });
     expect(f.execute).toHaveBeenCalledOnce();
+  });
+
+  it('discards Gmail on a plain decline and only the latest mail action can be approved', async () => {
+    const f = fixture('mail');
+    await expect(f.confirm('nej')).resolves.toMatchObject({ status: 'cancelled' });
+    expect(f.execute).not.toHaveBeenCalled();
+    const older = fixture('mail');
+    const newer = older.actions.stage({ scope: 'mail', sourceMessageId: '10', summary: 'Newer mail.', execute: vi.fn() });
+    await expect(older.confirm('confirmed')).rejects.toMatchObject({ name: 'ToolRefusal' });
+    await expect(older.confirm('confirmed', undefined, newer.confirmationCode)).resolves.toBeUndefined();
   });
 });

@@ -4,6 +4,7 @@ Phase 1 delivers the Software Factory. Requirements and page specifications are 
 
 ## Current focus
 
+- **Approvals (Dan-directed, 12 Oct):** Every tool confirmation (Google calendar/mail, issue creation, project archive, public screenshot) now completes on a plain approval such as yes, approved or confirmed (Danish too); no spoken codes. Shared classifier `core/approval.ts`; latest pending action per scope only. Vault delete and PC-action confirmations are unchanged.
 - **P9-87 (#714):** Dan-directed live-feel visual answers are implemented offline. Freshness is computed from build-time age and current-question correlation; earlier and unavailable evidence is labelled honestly in chat and EN/DA voice. 181 backend and 151 agent tests, backend lint/build, Python Ruff and the capability budget pass. Next: coordinator verifies live chat/camera and both voice languages after deployment.
 - **P9-81 (#701):** Backend/agent question-aware vision and retained grounding implemented with focused route, history and voice regressions. Vision tests (57, including 18 watch regressions), backend/agent checks, build, lint and secret scan pass offline. Final automated review hit the session time limit; read-only review found no blocking defects. SQL integration execution and live camera acceptance remain unverified. Next: CI/review and the separate UI question/fresh-frame task.
 

@@ -685,7 +685,7 @@ flows; live GitHub issue reads/writes await the P10-01 App permission change.
 
 P10-03 adds the sensitive `create_issue` and `confirm_create_issue` tools. The
 first stages a draft and the next creates it only after a later stored Dan
-message exactly confirms its eight-digit code. The Dan-only
+message is a plain approval (yes, approved, confirmed, go ahead; Danish equivalents work; a reply asking for anything else is not approval). The Dan-only
 `POST /factory/issues` route uses the same draft validation and creation service
 for the board. It reads all issue-title pages in the selected active repository,
 allocates the lowest free `P11-NN` code (two digits minimum), then rechecks it
@@ -898,9 +898,8 @@ without Azure access.
 
 The shared Factory tool registry exposes `update_project` and `archive_project`.
 Updates reuse the active-project store and return a bounded summary without
-private merge rules. Archiving stages a one-time eight-digit code for ten minutes;
-`confirm_project_archive` accepts it only when Dan's later message exactly says
-`confirm <code>`. Pending confirmations are process-local and disappear on
+private merge rules. Archiving stages a one-time pending action for ten minutes;
+`confirm_project_archive` accepts it only when Dan's later message is a plain approval (shared `core/approval.ts` classifier; only the latest pending action per scope can be approved). Pending confirmations are process-local and disappear on
 restart, so restarts fail closed rather than archiving without fresh approval.
 
 With backend-only `APPLICATIONINSIGHTS_CONNECTION_STRING` (P0-11 Key Vault

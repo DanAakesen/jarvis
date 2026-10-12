@@ -56,7 +56,7 @@ function confirmHeaders(id: string) {
 }
 
 function confirmMessage(setLatest: (message: ConversationMessage) => void, code: string) {
-  setLatest(conversationMessage('43', `confirm ${code}`, new Date(Date.now() + 10_000)));
+  setLatest(conversationMessage('43', 'approved', new Date(Date.now() + 10_000)));
 }
 
 function decodedMimeBody(raw: string): string {
