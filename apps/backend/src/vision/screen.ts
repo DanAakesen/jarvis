@@ -28,6 +28,18 @@ export interface ScreenFrameVisionResult extends ScreenVisionResult {
   readonly frameId?: string;
 }
 
+export interface ScreenCaptionInput {
+  readonly sessionId: string;
+  readonly image: Buffer;
+  readonly model: string;
+  readonly reasoningEffort?: string;
+  readonly signal: AbortSignal;
+  readonly question?: string;
+  readonly turnId?: string;
+  readonly capturedAt?: Date;
+  readonly limitUsd?: number;
+}
+
 export interface ScreenVisionModel {
   describe(input: {
     readonly image: Buffer;
@@ -50,7 +62,7 @@ export interface ScreenFrameUsageStore {
   reserveImage?(input: { readonly sessionId: string; readonly eventId: string;
     readonly limitDkk: number; readonly at: Date; readonly model?: string }): Promise<'reserved' | 'limit' | 'inactive'>;
   recordImageTokens?(input: { readonly sessionId: string; readonly eventId: string; readonly model: string;
-    readonly inputTokens: number; readonly outputTokens: number; readonly role?: 'chat' | 'voice';
+    readonly inputTokens: number; readonly outputTokens: number; readonly role?: 'chat' | 'voice' | 'vision';
     readonly imageOnly?: boolean }): Promise<void>;
   reserveFrame(input: {
     readonly sessionId: string;
@@ -110,6 +122,72 @@ export class ScreenVisionService {
 
   requestReceivedAt(): Date {
     return new Date(this.now());
+  }
+
+  async upload(input: { readonly sessionId: string; readonly dailyCap: number; readonly model: string;
+    readonly signal: AbortSignal }): Promise<void> {
+    if (!Number.isInteger(input.dailyCap) || input.dailyCap < 1 || input.dailyCap > 300) {
+      throw new ScreenVisionError(503, 'Screen inspection settings are unavailable.');
+    }
+    if (input.signal.aborted) throw new ScreenVisionError(503, 'Screen upload was cancelled.');
+    const eventId = randomUUID();
+    const at = this.requestReceivedAt();
+    const reservation = await this.usage.reserveFrame({
+      sessionId: input.sessionId, eventId, dailyCap: input.dailyCap, at,
+    });
+    if (reservation === 'inactive') throw new ScreenVisionError(404, 'Active conversation session not found.');
+    if (reservation === 'limit') throw new ScreenVisionError(429, 'The daily screen-inspection limit has been reached.', 'daily_limit');
+    if (reservation === 'budget-exhausted') throw new ScreenVisionError(429, 'The daily vision budget has been exhausted.', 'budget_exhausted');
+    if (reservation === 'rate-limited') {
+      throw new ScreenVisionError(429, 'Please wait before inspecting another screen frame.', 'frame_rate_limited', 3_000);
+    }
+    // The existing frame counter also inserts a cost hold. No inference happened, so release it.
+    await this.usage.recordTokens({ sessionId: input.sessionId, eventId, inputTokens: 0, outputTokens: 0,
+      costDkk: 0, costUsd: 0, costStatus: 'estimated', model: input.model, at });
+  }
+
+  async caption(input: ScreenCaptionInput): Promise<ScreenFrameVisionResult & { readonly captionMs: number }> {
+    const question = normalizeScreenQuestion(input.question);
+    const turnId = normalizeScreenTurnId(input.turnId);
+    const capturedAt = input.capturedAt ?? this.requestReceivedAt();
+    const eventId = imageUsageEventId(input.sessionId, randomUUID());
+    if (!validSessionId(input.sessionId) || !this.usage.reserveImage || !this.usage.recordImageTokens ||
+        input.limitUsd === undefined || !Number.isFinite(input.limitUsd) ||
+        input.limitUsd < 0 || input.limitUsd > 100 || !foundryTokenCosts(input.model, 32_768, 500) ||
+        !Number.isFinite(capturedAt.getTime()) || input.signal.aborted) {
+      throw new ScreenVisionError(503, 'Screen inspection budget or pricing is unavailable.');
+    }
+    if (input.limitUsd === 0) {
+      throw new ScreenVisionError(429, 'The daily vision budget has been exhausted.', 'budget_exhausted');
+    }
+    const startedAt = performance.now();
+    try {
+      const reservation = await this.usage.reserveImage({ sessionId: input.sessionId, eventId,
+        model: input.model, limitDkk: input.limitUsd * DKK_PER_USD, at: this.requestReceivedAt() });
+      if (reservation === 'inactive') throw new ScreenVisionError(404, 'Active conversation session not found.');
+      if (reservation === 'limit') throw new ScreenVisionError(429,
+        'The daily vision budget has been exhausted.', 'budget_exhausted');
+      if (input.signal.aborted) throw new Error('Cancelled');
+      const result = await this.model.describe({ image: input.image, model: input.model, signal: input.signal,
+        ...(input.reasoningEffort === undefined ? {} : { reasoningEffort: input.reasoningEffort }),
+        ...(question === undefined ? {} : { question }) });
+      if (typeof result.description !== 'string' || !result.description.trim() ||
+          Array.from(result.description).length > MAX_SCREEN_DESCRIPTION_CHARACTERS ||
+          !Number.isSafeInteger(result.inputTokens) || result.inputTokens < 0 || result.inputTokens > 10_000_000 ||
+          !Number.isSafeInteger(result.outputTokens) || result.outputTokens < 0 || result.outputTokens > 10_000_000) {
+        throw new Error('Invalid screen description response');
+      }
+      await this.usage.recordImageTokens({ sessionId: input.sessionId, eventId, model: input.model,
+        inputTokens: result.inputTokens, outputTokens: result.outputTokens, role: 'vision' });
+      if (input.signal.aborted) throw new Error('Cancelled');
+      return { description: result.description.trim(), inputTokens: result.inputTokens,
+        outputTokens: result.outputTokens, capturedAt: capturedAt.toISOString(), question: question ?? null,
+        ...(turnId === undefined ? {} : { turnId }),
+        captionMs: Math.min(600_000, Math.max(0, performance.now() - startedAt)) };
+    } catch (error) {
+      if (error instanceof ScreenVisionError) throw error;
+      throw new ScreenVisionError(503, 'I could not inspect the shared screen.');
+    }
   }
 
   async describe(input: {
@@ -309,7 +387,7 @@ export function createScreenVisionModule(service: ScreenVisionService, frameStor
           }
           const session = await app.conversationStore?.getSession(sessionId);
           if (!session || session.endedAt) return reply.code(404).send({ error: 'Frame unavailable' });
-          const image = frameStore?.consume(frameId, { ownerObjectId: principal.objectId,
+          const image = frameStore?.resolve(frameId, { ownerObjectId: principal.objectId,
             sessionId, messageId, ...(turnId === undefined ? {} : { turnId }) });
           if (!image) return reply.code(404).send({ error: 'Frame unavailable' });
           try {
@@ -330,9 +408,62 @@ export function createScreenVisionModule(service: ScreenVisionService, frameStor
               ...(turnId === undefined ? {} : { turnId }) });
           } finally { image.fill(0); }
         });
+      app.post<{ Body: { frameId: string; sessionId: string; messageId: string; turnId?: string } }>(
+            '/screen/frames/caption', {
+              bodyLimit: 1_024,
+              schema: { body: { type: 'object', properties: {
+                frameId: { type: 'string', pattern: '^[A-Za-z0-9_-]{1,128}$', maxLength: 128 },
+                sessionId: { type: 'string', pattern: '^[1-9][0-9]{0,18}$' },
+                messageId: { type: 'string', pattern: '^[1-9][0-9]{0,18}$' },
+                turnId: { type: 'string', pattern: '^[A-Za-z0-9_-]{1,128}$', maxLength: 128 },
+              }, required: ['frameId', 'sessionId', 'messageId'], additionalProperties: false } },
+            }, async (request, reply) => {
+              reply.header('Cache-Control', 'no-store');
+              const principal = request.principal;
+              if (!principal || principal.objectId.toLowerCase() !== app.ownerObjectId.toLowerCase()) {
+                return reply.code(403).send({ error: 'Unauthorized' });
+              }
+              const { frameId, sessionId, messageId, turnId } = request.body;
+              if (!validSessionId(sessionId) || !validSessionId(messageId) ||
+                  await app.conversationStore?.getMessageSessionId?.(messageId) !== sessionId) {
+                return reply.code(404).send({ error: 'Frame unavailable' });
+              }
+              const session = await app.conversationStore?.getSession(sessionId);
+              if (!session || session.endedAt) return reply.code(404).send({ error: 'Frame unavailable' });
+              const identity = { ownerObjectId: principal.objectId, sessionId, messageId,
+                ...(turnId === undefined ? {} : { turnId }) };
+              const metadata = frameStore?.metadata(frameId, identity);
+              const image = frameStore?.consume(frameId, identity);
+              if (!image) return reply.code(404).send({ error: 'Frame unavailable' });
+              const controller = new AbortController();
+              const abortOnRequest = () => controller.abort();
+              const abortOnClose = () => { if (!reply.raw.writableEnded) controller.abort(); };
+              request.raw.once('aborted', abortOnRequest);
+              reply.raw.once('close', abortOnClose);
+              try {
+                if (!app.settingsStore) throw new ScreenVisionError(503, 'Screen inspection is unavailable.');
+                const settings = await readSettings(app.settingsStore, await app.modelCatalogue.read());
+                const result = await service.caption({ sessionId, image, signal: controller.signal,
+                  model: settings.roles.vision.model, reasoningEffort: settings.roles.vision.reasoningEffort,
+                  limitUsd: settings.global.visionDailyBudgetUsd,
+                  ...(metadata?.capturedAt === undefined ? {} : { capturedAt: new Date(metadata.capturedAt) }),
+                  ...(metadata?.question === undefined ? {} : { question: metadata.question }),
+                  ...(turnId === undefined ? {} : { turnId }) });
+                return reply.send({ description: result.description, capturedAt: result.capturedAt,
+                  question: result.question, captionMs: result.captionMs });
+              } catch (error) {
+                if (error instanceof ScreenVisionError) return reply.code(error.statusCode).send({
+                  error: error.message, ...(error.code === undefined ? {} : { code: error.code }) });
+                return reply.code(503).send({ error: 'Screen inspection is unavailable.' });
+              } finally {
+                image.fill(0);
+                request.raw.removeListener('aborted', abortOnRequest);
+                reply.raw.removeListener('close', abortOnClose);
+              }
+            });
       const frameRequests = new WeakMap<object, { capturedAt: Date; question?: string; turnId?: string }>();
       app.post<{
-        Body: { sessionId: string; frame: string; question?: string; turnId?: string };
+        Body: { sessionId: string; frame: string; question?: string; turnId?: string; mode?: 'handle' };
       }>('/screen/frames', {
         bodyLimit: SCREEN_QUESTION_FRAME_BODY_LIMIT,
         onRequest: async (request) => {
@@ -368,6 +499,7 @@ export function createScreenVisionModule(service: ScreenVisionService, frameStor
               frame: { type: 'string', minLength: 4, maxLength: MAX_SCREEN_FRAME_BASE64_BYTES },
               question: { type: 'string', maxLength: MAX_SCREEN_QUESTION_CHARACTERS },
               turnId: { type: 'string', pattern: '^[A-Za-z0-9_-]{1,128}$', maxLength: 128 },
+              mode: { type: 'string', enum: ['handle'] },
             },
             required: ['sessionId', 'frame'],
             additionalProperties: false,
@@ -384,7 +516,7 @@ export function createScreenVisionModule(service: ScreenVisionService, frameStor
                 turnId: { type: 'string', pattern: '^[A-Za-z0-9_-]{1,128}$', maxLength: 128 },
                 frameId: { type: 'string', pattern: '^[A-Za-z0-9_-]{32}$', maxLength: 32 },
               },
-              required: ['description', 'inputTokens', 'outputTokens', 'capturedAt', 'question'],
+              required: ['capturedAt', 'question'],
               additionalProperties: false,
             },
             400: { type: 'object', properties: { error: { type: 'string' } }, required: ['error'], additionalProperties: false },
@@ -438,6 +570,19 @@ export function createScreenVisionModule(service: ScreenVisionService, frameStor
         reply.raw.once('close', abortOnClose);
         try {
           const settings = await readSettings(app.settingsStore, await app.modelCatalogue.read());
+          if (request.body.mode === 'handle') {
+            if (!frameStore) throw new ScreenVisionError(503, 'Private frame storage is unavailable.');
+            await service.upload({ sessionId, model: settings.roles.vision.model,
+              dailyCap: settings.global.screenShareDailyFrameCap, signal: controller.signal });
+            if (controller.signal.aborted) throw new ScreenVisionError(503, 'Screen upload was cancelled.');
+            const capturedAt = frameRequest?.capturedAt ?? service.requestReceivedAt();
+            const frameId = await frameStore.put({ image, ownerObjectId: request.principal.objectId,
+              sessionId, capturedAt: capturedAt.getTime(),
+              ...(frameRequest?.question === undefined ? {} : { question: frameRequest.question }),
+              ...(frameRequest?.turnId === undefined ? {} : { turnId: frameRequest.turnId }) });
+            return reply.send({ frameId, capturedAt: capturedAt.toISOString(), question: frameRequest?.question ?? null,
+              ...(frameRequest?.turnId === undefined ? {} : { turnId: frameRequest.turnId }) });
+          }
           const result = await service.describe({
             sessionId,
             image,
@@ -453,6 +598,7 @@ export function createScreenVisionModule(service: ScreenVisionService, frameStor
             try {
               frameId = await frameStore.put({ image, ownerObjectId: request.principal.objectId, sessionId,
                 capturedAt: Date.parse(result.capturedAt),
+                ...(frameRequest?.question === undefined ? {} : { question: frameRequest.question }),
                 ...(frameRequest?.turnId === undefined ? {} : { turnId: frameRequest.turnId }) });
             } catch { /* Keep the working caption path when image preprocessing fails. */ }
           }

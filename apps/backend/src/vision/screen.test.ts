@@ -73,6 +73,92 @@ function createFixture(options: {
 }
 
 describe('screen vision endpoint', () => {
+  it.each(['upload', 'caption'])('rejects undocumented mode %s without inference', async (mode) => {
+    const { app, image, model, reservations } = createFixture();
+    const response = await app.inject({ method: 'POST', url: '/screen/frames', headers: authorization,
+      payload: { sessionId: '41', frame: image, mode } });
+    expect(response.statusCode).toBe(400);
+    expect(model.describe).not.toHaveBeenCalled();
+    expect(reservations).toEqual([]);
+  });
+
+  it('uploads without inference, resolves once, then captions once with original question/time and separate token budget', async () => {
+    const frames = new FrameStore();
+    const image = await sharp({ create: { width: 20, height: 20, channels: 3, background: 'red' } }).jpeg().toBuffer();
+    const describe = vi.fn(async () => ({ description: 'A real red square.', inputTokens: 12, outputTokens: 5 }));
+    const reserveFrame = vi.fn(async () => 'reserved' as const);
+    const reserveImage = vi.fn(async () => 'reserved' as const);
+    const recordTokens = vi.fn(async () => {});
+    const recordImageTokens = vi.fn(async () => {});
+    const conversations = { getSession: async () => ({ endedAt: null }),
+      getMessageSessionId: async (messageId: string) => messageId === '42' ? '41' : '99' } as unknown as ConversationStore;
+    const app = buildApp(config, undefined, { auth: async () => ({
+      objectId: config.auth.ownerObjectId, tenantId: config.auth.tenantId, displayName: 'Dan',
+    }), settingsStore: { read: async () => ({}), write: async () => {} }, conversationStore: conversations,
+      modules: [createScreenVisionModule(new ScreenVisionService({ describe },
+        { reserveFrame, reserveImage, recordTokens, recordImageTokens }), frames)] });
+    apps.push(app);
+    const uploaded = await app.inject({ method: 'POST', url: '/screen/frames', headers: authorization,
+      payload: { sessionId: '41', frame: image.toString('base64'), mode: 'handle', turnId: 'capture', question: ' Colour? ' } });
+    expect(uploaded.statusCode).toBe(200);
+    expect(uploaded.json()).not.toHaveProperty('description');
+    expect(uploaded.json()).not.toHaveProperty('inputTokens');
+    expect(describe).not.toHaveBeenCalled();
+    expect(reserveFrame).toHaveBeenCalledOnce();
+    expect(reserveFrame.mock.calls[0]![0]).not.toHaveProperty('limitDkk');
+    expect(recordTokens).toHaveBeenCalledWith(expect.objectContaining({ inputTokens: 0, outputTokens: 0, costDkk: 0 }));
+    expect(reserveImage).not.toHaveBeenCalled();
+    const frameId = uploaded.json().frameId as string;
+    frames.bind(frameId, { ownerObjectId: config.auth.ownerObjectId, sessionId: '41', messageId: '42', turnId: 'capture' });
+    const payload = { frameId, sessionId: '41', messageId: '42', turnId: 'capture' };
+    expect((await app.inject({ method: 'POST', url: '/screen/frames/caption', headers: authorization,
+      payload: { ...payload, messageId: '99' } })).statusCode).toBe(404);
+    expect((await app.inject({ method: 'POST', url: '/screen/frames/resolve', headers: authorization, payload })).statusCode).toBe(200);
+    expect((await app.inject({ method: 'POST', url: '/screen/frames/resolve', headers: authorization, payload })).statusCode).toBe(404);
+    const caption = await app.inject({ method: 'POST', url: '/screen/frames/caption', headers: authorization, payload });
+    expect(caption.statusCode).toBe(200);
+    expect(caption.headers['cache-control']).toBe('no-store');
+    expect(caption.json()).toEqual({ description: 'A real red square.', capturedAt: uploaded.json().capturedAt,
+      question: 'Colour?', captionMs: expect.any(Number) });
+    expect(describe).toHaveBeenCalledOnce();
+    expect(describe).toHaveBeenCalledWith(expect.objectContaining({ question: 'Colour?' }));
+    expect(recordImageTokens).toHaveBeenCalledWith(expect.objectContaining({
+      inputTokens: 12, outputTokens: 5, role: 'vision',
+    }));
+    expect(reserveFrame).toHaveBeenCalledOnce();
+    expect(reserveImage).toHaveBeenCalledTimes(2);
+    expect((await app.inject({ method: 'POST', url: '/screen/frames/caption', headers: authorization, payload })).statusCode).toBe(404);
+    image.fill(0);
+  });
+
+  it.each(['limit', 'inactive', 'failure', 'empty', 'cancelled'] as const)(
+    'never fabricates a fallback caption for %s and never reserves another frame', async (outcome) => {
+      const reserveFrame = vi.fn();
+      const recordImageTokens = vi.fn(async () => {});
+      const describe = vi.fn(async () => {
+        if (outcome === 'failure') throw new Error('provider secret');
+        return { description: outcome === 'empty' ? ' ' : 'Real image.', inputTokens: 1, outputTokens: 1 };
+      });
+      const service = new ScreenVisionService({ describe }, { reserveFrame, recordTokens: vi.fn(),
+        reserveImage: async () => outcome === 'limit' || outcome === 'inactive' ? outcome : 'reserved', recordImageTokens });
+      await expect(service.caption({ sessionId: '41', image: Buffer.alloc(1), model: 'gpt-6-luna',
+        signal: outcome === 'cancelled' ? AbortSignal.abort() : new AbortController().signal,
+        limitUsd: 1 })).rejects.toThrow();
+      expect(reserveFrame).not.toHaveBeenCalled();
+      expect(recordImageTokens).not.toHaveBeenCalled();
+      if (['limit', 'inactive', 'cancelled'].includes(outcome)) expect(describe).not.toHaveBeenCalled();
+    });
+
+  it.each(['rate-limited', 'limit', 'inactive'] as const)('preserves upload pacing/cap denial %s without inference', async (outcome) => {
+    const { app, image, model } = createFixture({ reserve: async () => outcome });
+    // Upload mode needs configured private storage; the service admission itself keeps the legacy outcomes.
+    const service = new ScreenVisionService(model, { reserveFrame: async () => outcome, recordTokens: vi.fn() });
+    await expect(service.upload({ sessionId: '41', dailyCap: 300, model: 'gpt-6-luna',
+      signal: new AbortController().signal })).rejects.toThrow();
+    expect(model.describe).not.toHaveBeenCalled();
+    expect((await app.inject({ method: 'POST', url: '/screen/frames', headers: authorization,
+      payload: { sessionId: '41', frame: image, mode: 'handle' } })).statusCode).toBe(503);
+  });
   it('returns a distinct budget denial with turn correlation before inference', async () => {
     const { app, image, model } = createFixture({ reserve: async () => 'budget-exhausted' });
     const response = await app.inject({ method: 'POST', url: '/screen/frames', headers: authorization,

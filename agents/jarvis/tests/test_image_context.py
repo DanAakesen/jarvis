@@ -28,6 +28,7 @@ from state import ConversationHistory, ModelImage, ModelMessage
 from visual_context import (
     MAX_JPEG_BYTES,
     current_image_reservation,
+    current_visual_fallback,
     current_visual_result,
     resolved_visual_image,
     visual_context,
@@ -43,6 +44,275 @@ VISUAL = {
 PRIVATE = {
     "frameId": "frame_1", "imageBase64": JPEG, "mimeType": "image/jpeg", "detail": "low",
 }
+HANDLE_VISUAL = {key: value for key, value in VISUAL.items() if key != "description"}
+
+
+def test_handle_only_context_requires_valid_frame_and_legacy_description():
+    assert visual_context(HANDLE_VISUAL) == HANDLE_VISUAL
+    assert visual_context({key: value for key, value in HANDLE_VISUAL.items()
+                           if key != "frameId"}) is None
+    assert visual_context({**HANDLE_VISUAL, "description": None}) is None
+    assert visual_context({**HANDLE_VISUAL, "description": ""}) is None
+
+
+def test_handle_only_chat_attaches_image_without_caption_call(monkeypatch):
+    async def resolve(*args):
+        return ModelImage(JPEG)
+
+    async def caption(*args):
+        pytest.fail("The image happy path must not run the caption model")
+
+    monkeypatch.setattr(chat_runtime, "resolve_frame_image", resolve)
+    monkeypatch.setattr(chat_runtime, "resolve_frame_caption", caption)
+    app, model = app_with(lambda *_args: _empty_context())
+    with TestClient(app) as browser:
+        response = browser.post("/invocations", json={
+            "messageId": "42", "sessionId": "41", "text": "What is this?", "language": "en",
+            "delegatedAuthorization": AUTHORIZATION, "visualContext": HANDLE_VISUAL,
+        })
+    assert response.status_code == 200
+    assert model.messages[-1] == ModelMessage("user", "What is this?", (ModelImage(JPEG),))
+    assert "No caption was produced" in model.messages[0].content
+    assert JPEG not in response.text
+    assert current_visual_fallback.get() is None
+
+
+def test_handle_only_turn_captions_after_provider_rejection_in_same_invocation(monkeypatch):
+    from voice_runtime import create_app
+
+    model, provider = client([
+        SimpleNamespace(type="response.output_text.delta", delta="A blue cup."), completed(),
+    ], backend=FakeBackend())
+    model_requests = []
+    backend_requests = []
+    original_create = provider.responses.create
+    original_client = httpx.AsyncClient
+
+    async def create(**kwargs):
+        model_requests.append(kwargs)
+        if len(model_requests) == 1:
+            raise ProviderRejection()
+        return await original_create(**kwargs)
+
+    def backend(request):
+        backend_requests.append(request)
+        if request.url.path == "/screen/frames/resolve":
+            assert not model_requests
+            return httpx.Response(200, content=base64.b64decode(JPEG),
+                                  headers={"content-type": "image/jpeg"})
+        if request.url.path == "/screen/frames/caption":
+            assert len(model_requests) == 1
+            return httpx.Response(200, json={"description": "A real blue cup.", "captionMs": 47})
+        if request.url.path.endswith("/steering"):
+            return httpx.Response(200, json={"messages": []})
+        if request.url.path.endswith("/phase"):
+            return httpx.Response(204)
+        return httpx.Response(200, json={})
+
+    provider.responses.create = create
+    monkeypatch.setattr(chat_runtime, "backend_settings_from_environment", lambda: (
+        "https://backend.test", "scope",
+    ))
+    monkeypatch.setattr(chat_runtime.httpx, "AsyncClient", lambda **kwargs: original_client(
+        **kwargs, transport=httpx.MockTransport(backend),
+    ))
+    app = create_app(model, configure_observability=None,
+                     chat_context_loader=lambda *_args: _empty_context())
+    with TestClient(app) as browser:
+        response = browser.post("/invocations", json={
+            "messageId": "42", "sessionId": "41", "text": "What is this?", "language": "en",
+            "delegatedAuthorization": AUTHORIZATION, "visualContext": HANDLE_VISUAL,
+        })
+    assert len(model_requests) == 2
+    assert JPEG in json.dumps(model_requests[0])
+    assert JPEG not in json.dumps(model_requests[1])
+    assert "A real blue cup." in json.dumps(model_requests[1])
+    assert model_requests[1]["input"][-1]["content"] == "What is this?"
+    captions = [request for request in backend_requests
+                if request.url.path == "/screen/frames/caption"]
+    assert len(captions) == 1
+    assert json.loads(captions[0].content) == {
+        "frameId": "frame_1", "sessionId": "41", "messageId": "42", "turnId": "legacy-turn",
+    }
+    assert response.text.count("event: done") == 1
+    assert response.text.count("event: visual") == 1
+    assert '"text": "A blue cup."' in response.text
+    done = json.loads(response.text.split("event: done\ndata: ", 1)[1].split("\n", 1)[0])
+    assert all(value >= 0 for value in done.pop("agentTimings").values())
+    assert done == {"visualPath": "caption", "visualReason": "image_rejected",
+                    "description": "A real blue cup.", "captionMs": 47}
+    assert JPEG not in response.text
+
+
+async def _empty_context():
+    from jarvis_tools import current_chat_session_id
+
+    current_chat_session_id.set("41")
+    return []
+
+
+@pytest.mark.parametrize("reason", [
+    "frame_unavailable", "budget_exhausted", "budget_unavailable",
+])
+@pytest.mark.parametrize("caption_available", [True, False])
+def test_handle_only_resolver_failure_uses_real_caption_or_explicit_absence(
+    monkeypatch, reason, caption_available,
+):
+    calls = []
+
+    async def resolve(*args):
+        current_visual_result.get()["visualReason"] = reason
+        return None
+
+    async def caption(*args):
+        calls.append(args)
+        return {"description": "A real blue cup.", "captionMs": 123} if caption_available else None
+
+    monkeypatch.setattr(chat_runtime, "resolve_frame_image", resolve)
+    monkeypatch.setattr(chat_runtime, "resolve_frame_caption", caption)
+    app, model = app_with(lambda *_args: _empty_context())
+    with TestClient(app) as browser:
+        response = browser.post("/invocations", json={
+            "messageId": "42", "sessionId": "41", "text": "What is this?", "language": "en",
+            "delegatedAuthorization": AUTHORIZATION, "visualContext": HANDLE_VISUAL,
+        })
+    assert len(calls) == 1
+    assert calls[0][1:4] == (HANDLE_VISUAL, "41", "42")
+    assert not model.messages[-1].images
+    evidence = "\n".join(message.content for message in model.messages)
+    assert ("A real blue cup." in evidence) == caption_available
+    if not caption_available:
+        assert "No image or real caption was available" in evidence
+    done = json.loads(response.text.split("event: done\ndata: ", 1)[1].split("\n", 1)[0])
+    assert done["visualPath"] == "caption"
+    assert done["visualReason"] == reason
+    assert "captionMs" in done
+    assert ("description" in done) == caption_available
+    assert JPEG not in response.text
+
+
+@pytest.mark.parametrize("reason", ["image_rejected", "image_context_limit"])
+@pytest.mark.asyncio
+async def test_handle_only_model_failure_requests_caption_before_single_text_retry(reason):
+    backend = FakeBackend()
+    model, transport = client([completed()], backend=backend)
+    requests = []
+    calls = []
+    original = transport.responses.create
+
+    async def create(**kwargs):
+        requests.append(kwargs)
+        if len(requests) == 1 and reason == "image_rejected":
+            raise ProviderRejection()
+        return await original(**kwargs)
+
+    async def fallback(actual_reason):
+        release = [json.loads(request.content) for request in backend.requests
+                   if request.url.path == "/usage/foundry"]
+        assert len(release) == 1
+        assert release[0]["inputTokens"] == release[0]["outputTokens"] == 0
+        assert release[0]["imageReservation"] == {"sessionId": "41", "itemId": "frame_1"}
+        assert release[0]["model"] == "deployment"
+        assert current_image_reservation.get() is None
+        calls.append(actual_reason)
+        return "Real fallback caption: a blue cup."
+
+    transport.responses.create = create
+    token = current_visual_fallback.set(fallback)
+    reservation_token = current_image_reservation.set({"sessionId": "41", "itemId": "frame_1"})
+    try:
+        text = "x" * 400_001 if reason == "image_context_limit" else "What is this?"
+        assert [delta async for delta in model.complete_chat(
+            [ModelMessage("user", text, (ModelImage(JPEG),))], "en",
+        )] == []
+    finally:
+        current_visual_fallback.reset(token)
+        current_image_reservation.reset(reservation_token)
+        await model.close()
+    assert calls == [reason]
+    assert len(requests) == (2 if reason == "image_rejected" else 1)
+    assert "Real fallback caption: a blue cup." in json.dumps(requests[-1])
+    assert JPEG not in json.dumps(requests[-1])
+    assert requests[-1]["input"][-1]["content"] == text
+
+
+@pytest.mark.asyncio
+async def test_unknown_provider_failure_keeps_image_hold_without_caption_retry():
+    backend = FakeBackend()
+    model, transport = client([], backend=backend)
+    error = ProviderRejection()
+    error.status_code = 500
+
+    async def create(**kwargs):
+        raise error
+
+    async def fallback(reason):
+        pytest.fail("Unknown provider failures must not release holds or run caption retry")
+
+    reservation = {"sessionId": "41", "itemId": "frame_1"}
+    transport.responses.create = create
+    token = current_visual_fallback.set(fallback)
+    reservation_token = current_image_reservation.set(reservation)
+    try:
+        with pytest.raises(ProviderRejection):
+            _ = [delta async for delta in model.complete_chat(
+                [ModelMessage("user", "What is this?", (ModelImage(JPEG),))], "en",
+            )]
+        assert current_image_reservation.get() == reservation
+    finally:
+        current_visual_fallback.reset(token)
+        current_image_reservation.reset(reservation_token)
+        await model.close()
+    assert not any(request.url.path == "/usage/foundry" for request in backend.requests)
+
+
+@pytest.mark.parametrize("response", [
+    {"description": "", "captionMs": 1},
+    {"description": "x" * 5_001, "captionMs": 1},
+    {"description": "A cup.", "captionMs": -1},
+    {"description": "A cup.", "captionMs": True},
+    {"description": "A cup.", "captionMs": float("nan")},
+    {"description": "A cup."},
+])
+@pytest.mark.asyncio
+async def test_caption_resolver_rejects_invalid_backend_result(monkeypatch, response):
+    original = httpx.AsyncClient
+    monkeypatch.setattr(chat_runtime, "backend_settings_from_environment", lambda: (
+        "https://backend.test", "scope",
+    ))
+    monkeypatch.setattr(chat_runtime.httpx, "AsyncClient", lambda **kwargs: original(
+        **kwargs, transport=httpx.MockTransport(
+            lambda request: httpx.Response(200, content=json.dumps(response),
+                                          headers={"content-type": "application/json"})
+        ),
+    ))
+    assert await chat_runtime.resolve_frame_caption(
+        "a.b.c", HANDLE_VISUAL, "41", "42", 10,
+    ) is None
+
+
+@pytest.mark.asyncio
+async def test_caption_resolver_sends_only_correlated_handle(monkeypatch):
+    requests = []
+    original = httpx.AsyncClient
+
+    def handle(request):
+        requests.append(request)
+        return httpx.Response(200, json={"description": "A real cup.", "captionMs": 12})
+
+    monkeypatch.setattr(chat_runtime, "backend_settings_from_environment", lambda: (
+        "https://backend.test", "scope",
+    ))
+    monkeypatch.setattr(chat_runtime.httpx, "AsyncClient", lambda **kwargs: original(
+        **kwargs, transport=httpx.MockTransport(handle),
+    ))
+    assert await chat_runtime.resolve_frame_caption(
+        "a.b.c", HANDLE_VISUAL, "41", "42", 10,
+    ) == {"description": "A real cup.", "captionMs": 12}
+    assert requests[0].url.path == "/screen/frames/caption"
+    assert json.loads(requests[0].content) == {
+        "frameId": "frame_1", "sessionId": "41", "messageId": "42", "turnId": "legacy-turn",
+    }
 
 
 @pytest.mark.parametrize("detail", ["low", "auto"])
@@ -130,7 +400,7 @@ async def test_oversized_image_prompt_falls_back_before_image_request():
     token = current_visual_result.set(result)
     try:
         assert [text async for text in model.complete_chat(
-            [ModelMessage("user", "x" * 28_001, (ModelImage(JPEG),))], "en"
+            [ModelMessage("user", "x" * 400_001, (ModelImage(JPEG),))], "en"
         )] == []
     finally:
         current_visual_result.reset(token)

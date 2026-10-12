@@ -113,6 +113,8 @@ function safeFields(input: Record<string, unknown>): Record<string, unknown> {
     }
     if (typeof input.latencyMs === 'number' && Number.isFinite(input.latencyMs) &&
         input.latencyMs >= 0 && input.latencyMs <= 600_000) fields.latencyMs = input.latencyMs;
+    if (typeof input.captionMs === 'number' && Number.isFinite(input.captionMs) &&
+        input.captionMs >= 0 && input.captionMs <= 600_000) fields.captionMs = input.captionMs;
     return fields;
   }
   if (input.msg === 'chat.agent_session') {

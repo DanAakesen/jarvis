@@ -781,6 +781,16 @@ try {
           return await screenVision!.reserveImage({ ...input, limitUsd: settings.global.visionDailyBudgetUsd });
         },
         recordImageUsage: (input) => screenVision!.recordImageUsage(input),
+        captionFrame: async (input) => {
+          if (input.signal.aborted) throw new Error('Camera caption was cancelled');
+          const settings = await readSettings(settingsStore, await modelCatalogue.read());
+          return screenVision!.caption({
+            ...input,
+            model: settings.roles.vision.model,
+            reasoningEffort: settings.roles.vision.reasoningEffort,
+            limitUsd: settings.global.visionDailyBudgetUsd,
+          });
+        },
       } : {}),
       ...(visionWatch ? { visionWatch } : {}),
       getToken: async (scope, signal) => {

@@ -54,6 +54,8 @@ export interface ConversationVisualResult {
   readonly model?: string;
   readonly inputTokens?: number;
   readonly outputTokens?: number;
+  readonly description?: string;
+  readonly captionMs?: number;
 }
 
 export interface ConversationAgent {
@@ -266,6 +268,10 @@ export function createFoundryInvocationConversationAgent(
                 (result.inputTokens as number) <= 10_000_000 ? { inputTokens: result.inputTokens as number } : {}),
               ...(Number.isSafeInteger(result.outputTokens) && (result.outputTokens as number) >= 0 &&
                 (result.outputTokens as number) <= 10_000_000 ? { outputTokens: result.outputTokens as number } : {}),
+              ...(typeof result.description === 'string' && result.description.trim() &&
+                Array.from(result.description).length <= 5_000 ? { description: result.description.trim() } : {}),
+              ...(typeof result.captionMs === 'number' && Number.isFinite(result.captionMs) &&
+                result.captionMs >= 0 && result.captionMs <= maxDiagnosticDurationMs ? { captionMs: result.captionMs } : {}),
               ...(typeof result.visualReason === 'string' && /^[a-z0-9_]{1,64}$/u.test(result.visualReason)
                 ? { visualReason: result.visualReason } : {}) });
           }

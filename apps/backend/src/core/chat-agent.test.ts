@@ -33,6 +33,35 @@ function streamedResponse(chunks: string[], headers: HeadersInit = { 'content-ty
 }
 
 describe('Foundry Invocations chat agent', () => {
+  it('accepts a description-free handle and keeps deferred caption evidence internal and bounded', async () => {
+    const onVisualResult = vi.fn();
+    const visualContext = { source: 'camera' as const, capturedAt: '2026-10-11T19:30:00Z', frameId: 'a'.repeat(32) };
+    const fetcher = vi.fn<typeof fetch>(async () => streamedResponse([
+      'event: delta\ndata: {"text":"A red mug."}\n\n',
+      'event: done\ndata: {"visualPath":"caption","visualReason":"image_rejected","description":" A real red mug. ","captionMs":25}\n\n',
+    ]));
+    const { agent } = createAgent(fetcher);
+    for await (const chunk of agent.stream({ ...input, sessionId: '41', visualContext, onVisualResult },
+      delegatedAuthorization, new AbortController().signal)) { expect(chunk).toBe('A red mug.'); }
+    expect(onVisualResult).toHaveBeenCalledWith({ visualPath: 'caption', visualReason: 'image_rejected',
+      description: 'A real red mug.', captionMs: 25 });
+    expect(JSON.parse(fetcher.mock.calls[0]![1]!.body as string).visualContext).toEqual(visualContext);
+  });
+
+  it.each([
+    { description: ' ', captionMs: -1 },
+    { description: 'x'.repeat(5_001), captionMs: 600_001 },
+    { description: 12, captionMs: '25' },
+  ])('drops invalid deferred caption metadata %#', async (metadata) => {
+    const onVisualResult = vi.fn();
+    const { agent } = createAgent(vi.fn(async () => streamedResponse([
+      `event: done\ndata: ${JSON.stringify({ visualPath: 'caption', ...metadata })}\n\n`,
+    ])));
+    for await (const chunk of agent.stream({ ...input, onVisualResult },
+      delegatedAuthorization, new AbortController().signal)) { expect(chunk).toBeUndefined(); }
+    expect(onVisualResult).toHaveBeenCalledWith({ visualPath: 'caption' });
+  });
+
   it('forwards only a private handle and reports bounded final visual metadata', async () => {
     const onVisualResult = vi.fn();
     const visualContext = { source: 'screen' as const, capturedAt: '2026-10-11T19:30:00Z',
