@@ -4,6 +4,8 @@ Phase 1 delivers the Software Factory. Requirements and page specifications are 
 
 ## Current focus
 
+- **P12-10 (#725):** Released/claimed by DailyDeveloperCloud on `codex/p12-10-google-feeds`. Inactive read-only calendar pagination/cache checkpoint; no registration or OAuth changes. Waiting/delivery/suppression parity is blocked pending nonsensitive source contracts. Existing consent lacks documented calendar-list scope; denied enumeration remains explicit. Draft checkpoint is not completion; live/provider/phone and private migration gates remain open.
+
 - **P12-07 (#722):** Inactive nutrition services/typed handlers and source-pinned Frida lookup are implemented offline in draft #743 on `codex/p12-07-nutrition-services`. Supplied source/public format contracts drive exact-key logging/history/corrections, legacy vocabulary, favourite definition/name reuse, server-resolved 3–50-slot plans and Frida release 10 / 5.5 with attribution/unknowns/subtotals. Local lint/build and 97 focused tests pass; prior repaired head passed full CI and all 109 SQL tests. Next: final format-tightening head full CI and independent coordinator review before readiness/release. Cloud provider CONNECT is denied with HTTP 403; live/import/phone gates remain open. No registration/activation; parked #717/#741 remains untouched.
 
 - **Tool catalogue limit (12 Oct):** #737 pushed the backend tool catalogue past the agent's 128-tool limit and broke every chat turn; reverted in #744. The registry now enforces 128 tools, 4,000-character descriptions and 1 MiB, mirrored in `agents/jarvis/limits.json` with parity tests; P9-88 (#735) is redone as consolidated tools with an operation parameter.

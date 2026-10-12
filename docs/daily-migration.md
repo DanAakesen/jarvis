@@ -100,6 +100,8 @@ Register Daily through BackendModule, with shared services for UI and tools, own
 
 ### [P12-10: Google feed, all calendars & attention](https://github.com/DanAakesen/jarvis/issues/725)
 
+Released to DailyDeveloperCloud after closed/deployed #718 and merged #722. The [inactive calendar checkpoint](../apps/backend/src/daily/feeds/README.md) reads through existing Google auth/client and reports denied/partial/stale coverage explicitly; no OAuth change or activation. Waiting/delivery/suppression source rules and full parity remain unverified pending nonsensitive coordinator contracts. Schema fields are not evidence of classifiers or feed completeness. Preparatory synthetic code is not final #725 acceptance or merge readiness.
+
 **REUSE EXISTING JARVIS — permanent** · Personal integrations & phone surfaces
 
 Reuse existing Google auth and read APIs; extend all visible calendars, Gmail attention, waiting states, deliveries and suppressions. Coordinate shared Google code with ongoing approval work.

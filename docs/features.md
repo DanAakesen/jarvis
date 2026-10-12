@@ -293,3 +293,5 @@ P12-03 adds only the empty owner-bound persistence schema and inactive exact-key
 | Parity, physical-phone acceptance, protected cutover/rollback and legacy deprecation | Background/Phone | Planned; evidence gates apply | P12-17–P12-19 |
 
 [Approved scope and existing issue URLs](daily-migration.md). No TickTick integration or original Daily repository/data deletion.
+
+P12-10 has an inactive synthetic-tested calendar enumeration/cache checkpoint with explicit denied/partial/stale coverage. Full Google attention, waiting/delivery/suppression parity remains blocked pending nonsensitive source rules and verified existing scopes; no runtime registration, OAuth expansion or live-provider acceptance is claimed.

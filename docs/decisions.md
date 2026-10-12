@@ -1,5 +1,9 @@
 # Decisions
 
+## P12-10 calendar checkpoint (12 October 2026)
+
+Reuse existing server owner and Google client for inactive GET-only calendar enumeration/event reads, with explicit denied/partial/stale coverage and bounded manual refresh. Current consent documents calendar.events, while L125 records calendarList denial; no OAuth scope/credential changes are authorized here. Only complete synthetic-tested snapshots enter the owner/range in-memory cache. Waiting/delivery/suppression business rules require nonsensitive source contracts rather than inference from mapped tables. This checkpoint adds no SQL, classifiers, catalogue registration or activation; full source/live acceptance remains open.
+
 Confirmed choices, their rationale, evidence, and status. Requirements live in [PRODUCT.md](../PRODUCT.md); the resulting system in [architecture.md](architecture.md). Keep decision (#) and learning (L#) numbers stable; add new ones at the end.
 
 ## Decision areas
