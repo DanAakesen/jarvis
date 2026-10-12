@@ -15,6 +15,7 @@ from jarvis_tools import (
     CAPABILITY_INSTRUCTIONS_MAX_CODE_POINTS,
     CATALOGUE_TTL_SECONDS,
     INSTRUCTIONS,
+    MAX_DESCRIPTION_CHARACTERS,
     MAX_RESPONSE_BYTES,
     MAX_TOOLS,
     REPOSITORY_INSTRUCTIONS,
@@ -774,3 +775,10 @@ async def test_identity_client_requests_the_api_scope() -> None:
     assert await client._token() == TOKEN
     assert scopes == ["api://id/.default"]
     await client.close()
+
+def test_tool_catalogue_limits_come_from_the_shared_limits_file() -> None:
+    limits = json.loads((Path(__file__).parents[1] / "limits.json").read_text(encoding="utf-8"))
+
+    assert MAX_TOOLS == limits["maxTools"] == 128
+    assert MAX_DESCRIPTION_CHARACTERS == limits["maxToolDescriptionCharacters"]
+    assert limits["maxCatalogueBytes"] <= MAX_RESPONSE_BYTES
