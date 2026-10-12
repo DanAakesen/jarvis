@@ -781,7 +781,12 @@ async function writeHandler(
       let labelSet = set;
       if (!labelSet) {
         const existing = object(await githubJson(`${base}/issues/${number}`, token, signal));
-        labelSet = labels(existing?.labels);
+        const existingLabels = existing?.labels;
+        if (!Array.isArray(existingLabels) || existingLabels.length > 30 ||
+            existingLabels.some((label) => typeof object(label)?.name !== 'string')) {
+          throw new ToolRefusal('I can’t safely add or remove labels because I can’t preserve the complete existing label set.');
+        }
+        labelSet = labels(existingLabels);
         labelSet = [...new Set([...labelSet.filter((label) => !remove.includes(label)), ...add])];
       }
       if (labelSet.length > 30) throw new ToolRefusal('I can set up to 30 issue labels at once.');
@@ -852,6 +857,11 @@ async function writeHandler(
     const checks = object(checksValue);
     const status = object(statusValue);
     const runs = Array.isArray(checks?.check_runs) ? checks.check_runs : [];
+    if (!checks || !Array.isArray(checks.check_runs) ||
+        !Number.isSafeInteger(checks.total_count) || (checks.total_count as number) < 0 ||
+        checks!.total_count !== runs.length || runs.length > maxPerPage) {
+      throw new ToolRefusal('I can’t merge because I can’t verify every check run within the safe result limit.');
+    }
     const failing = status?.state === 'failure' || status?.state === 'error' ||
       runs.some((run) => ['failure', 'cancelled', 'timed_out', 'action_required', 'stale'].includes(String(object(run)?.conclusion)));
     if (failing) {
@@ -977,7 +987,7 @@ const existingToolPermissions: Readonly<Record<string, readonly Permission[]>> =
   pr_get: [
     { name: 'contents', access: 'read' }, { name: 'issues', access: 'read' },
     { name: 'pull_requests', access: 'read' }, { name: 'checks', access: 'read' },
-    { name: 'statuses', access: 'read' },
+    { name: 'statuses', access: 'read' }, { name: 'actions', access: 'read' },
   ],
   pr_diff: [
     { name: 'contents', access: 'read' }, { name: 'issues', access: 'read' },
@@ -996,7 +1006,13 @@ const existingToolPermissions: Readonly<Record<string, readonly Permission[]>> =
   ],
   ci_log: [{ name: 'actions', access: 'read' }],
   get_deployment_status: [{ name: 'actions', access: 'read' }],
-  start_issue: [{ name: 'issues', access: 'read' }],
+  start_issue: [{ name: 'issues', access: 'read' }, { name: 'contents', access: 'read' }],
+  get_work_status: [
+    { name: 'contents', access: 'read' }, { name: 'issues', access: 'read' },
+    { name: 'pull_requests', access: 'read' }, { name: 'checks', access: 'read' },
+    { name: 'statuses', access: 'read' }, { name: 'actions', access: 'read' },
+  ],
+  create_task: [{ name: 'issues', access: 'write' }],
   create_issue: [{ name: 'issues', access: 'write' }],
   issue_comment: [{ name: 'issues', access: 'write' }],
   confirm_create_issue: [{ name: 'issues', access: 'write' }],

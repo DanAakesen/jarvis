@@ -78,7 +78,10 @@ describe('GitHub App capability tools', () => {
     expect(response.json().result).toMatchObject({
       repository: 'DanAakesen/jarvis',
       permissions: { issues: 'read', pull_requests: 'write', contents: 'read', actions: 'read', checks: 'read' },
-      operations: { issue_get: true, issue_update: false, pr_create: true, file_write: false },
+      operations: {
+        issue_get: true, issue_update: false, pr_create: true, file_write: false,
+        pr_get: false, start_issue: true, get_work_status: false,
+      },
     });
   });
 
@@ -136,6 +139,39 @@ describe('GitHub App capability tools', () => {
     });
     expect(githubAppTokenIssuer.issueWithPermissions).not.toHaveBeenCalled();
     expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it('preserves existing labels when adding or removing and refuses an oversized set', async () => {
+    const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(Response.json({
+      labels: Array.from({ length: 31 }, (_, index) => ({ name: `label-${index}` })),
+    }));
+    const { app } = fixture(fetchImpl, { issues: 'write' });
+    const response = await callTool(app, 'issue_update', {
+      number: 700, labelsAdd: ['new-label'],
+    });
+
+    expect(response.json()).toMatchObject({
+      outcome: 'refused',
+      result: { refused: expect.stringContaining('complete existing label set') },
+    });
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it('includes the full existing label set when applying additions', async () => {
+    const fetchImpl = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(Response.json({
+        labels: [{ name: 'first' }, { name: 'second' }, { name: 'third' }],
+      }))
+      .mockResolvedValueOnce(Response.json({ number: 700 }));
+    const { app } = fixture(fetchImpl, { issues: 'write' });
+    const response = await callTool(app, 'issue_update', {
+      number: 700, labelsAdd: ['fourth'],
+    });
+
+    expect(response.json().outcome).toBe('ok');
+    expect(JSON.parse(String(fetchImpl.mock.calls[1]?.[1]?.body))).toEqual({
+      labels: ['first', 'second', 'third', 'fourth'],
+    });
   });
 
   it('does not close an issue without a later simple approval from a verified Dan message', async () => {
@@ -281,5 +317,34 @@ describe('GitHub App capability tools', () => {
       outcome: 'refused', result: { refused: expect.stringContaining('Statuses: read') },
     });
     expect(githubAppTokenIssuer.issueWithPermissions).not.toHaveBeenCalled();
+  });
+
+  it('refuses a PR merge when the check-run response is truncated', async () => {
+    const fetchImpl = vi.fn<typeof fetch>(async (request) => {
+      const url = new URL(String(request));
+      if (url.pathname.endsWith('/pulls/700')) {
+        return Response.json({ head: { sha: 'a'.repeat(40) } });
+      }
+      if (url.pathname.endsWith('/check-runs')) {
+        return Response.json({
+          total_count: 31,
+          check_runs: Array.from({ length: 30 }, (_, id) => ({ id, conclusion: 'success' })),
+        });
+      }
+      return Response.json({ state: 'success' });
+    });
+    const { app } = fixture(fetchImpl, {
+      pull_requests: 'write', checks: 'read', statuses: 'read',
+    });
+    const response = await callTool(app, 'pr_merge', {
+      number: 700, expectedHeadSha: 'a'.repeat(40),
+    });
+
+    expect(response.json()).toMatchObject({
+      outcome: 'refused', result: { refused: expect.stringContaining('verify every check run') },
+    });
+    expect(fetchImpl).toHaveBeenCalledTimes(3);
+    expect(fetchImpl.mock.calls.some(([url, init]) =>
+      String(url).endsWith('/pulls/700/merge') && init?.method === 'PUT')).toBe(false);
   });
 });
