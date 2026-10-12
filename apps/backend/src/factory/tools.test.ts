@@ -134,10 +134,7 @@ function fixture() {
     projectStore,
     taskStore,
     githubIssueClient,
-    githubAppTokenIssuer: {
-      issueForRepositoryRead: vi.fn(async () => 'read-token'),
-      readInstallationPermissions: vi.fn(async () => ({ issues: 'write' as const, contents: 'write' as const })),
-    } as unknown as NonNullable<import('../app.js').BuildAppOptions['githubAppTokenIssuer']>,
+    githubAppTokenIssuer: { issueForRepositoryRead: vi.fn(async () => 'read-token') } as unknown as NonNullable<import('../app.js').BuildAppOptions['githubAppTokenIssuer']>,
     factoryBoardReader: { read: vi.fn(), searchIssues: vi.fn(async () => ({ numbers: [], incomplete: false })) },
     conversationStore,
     conversationAttachments: conversationAttachments as unknown as ConversationAttachmentStore,
@@ -189,18 +186,14 @@ describe('Software Factory Jarvis tools', () => {
     expect(test.record.mock.calls.every(([call]) => JSON.stringify(call).includes('retry failed') === false)).toBe(true);
   });
 
-  it.each([false, true])('posts directly or safely stages comments with attachments=%s', async (withAttachment) => {
+  it.each([false, true])('stages and confirms comments with attachments=%s', async (withAttachment) => {
     const test = fixture();
     const staged = await test.app.inject({
       method: 'POST', url: '/tools/issue_comment', headers,
       payload: { issueNumber: 8, text: 'Retry is still broken.', ...(withAttachment ? { attachmentIds: [test.attachment.id] } : {}) },
     });
-    if (withAttachment) {
-      expect(test.githubIssueClient.createComment).not.toHaveBeenCalled();
-      expect((await confirm(test, staged.json().result)).json()).toMatchObject({ outcome: 'ok', result: { status: 'commented', number: 8 } });
-    } else {
-      expect(staged.json()).toMatchObject({ outcome: 'ok', result: { status: 'commented', number: 8 } });
-    }
+    expect(test.githubIssueClient.createComment).not.toHaveBeenCalled();
+    expect((await confirm(test, staged.json().result)).json()).toMatchObject({ outcome: 'ok', result: { status: 'commented', number: 8 } });
     expect(test.githubIssueClient.createComment).toHaveBeenCalledWith(project.repo, 8,
       withAttachment ? expect.stringContaining('Error: retry failed') : 'Retry is still broken.', expect.any(AbortSignal));
     expect(test.githubIssueClient.publishIssueImage).not.toHaveBeenCalled();
@@ -218,7 +211,7 @@ describe('Software Factory Jarvis tools', () => {
     expect(test.workspaceCommands.execute).toHaveBeenCalledWith(expect.any(String),
       expect.objectContaining({ view: expect.objectContaining({ renderer: 'image' }) }), expect.any(AbortSignal));
     expect(test.githubIssueClient.publishIssueImage).not.toHaveBeenCalled();
-    expect((await confirm(test, draft, 'not yet')).json().outcome).toBe('refused');
+    expect((await confirm(test, draft, 'yes, but publish a different file')).json().outcome).toBe('refused');
     expect(test.githubIssueClient.publishIssueImage).not.toHaveBeenCalled();
     const result = await confirm(test, draft, 'approved');
     expect(result.json().outcome).toBe('ok');
@@ -256,7 +249,7 @@ describe('Software Factory Jarvis tools', () => {
       payload: { issueNumber: 8, text: 'Screenshot', attachmentIds: [test.attachment.id], publish: 'public' } });
     const draft = staged.json().result;
     expect((await confirm(test, draft, 'no')).json().outcome).toBe('refused');
-    expect((await confirm(test, draft, 'go ahead')).json().outcome).toBe('refused');
+    expect((await confirm(test, draft, 'yes')).json().outcome).toBe('refused');
     expect(test.githubIssueClient.publishIssueImage).not.toHaveBeenCalled();
     expect(test.githubIssueClient.createComment).not.toHaveBeenCalled();
   });
@@ -311,11 +304,6 @@ describe('Software Factory Jarvis tools', () => {
       'create_task', 'set_task_model', 'retry_task', 'steer_task', 'pause_task', 'resume_task', 'cancel_task',
       'list_capabilities', 'repo_overview', 'repo_list', 'repo_read', 'repo_search', 'repo_issues',
       'pr_get', 'pr_diff', 'pr_reviews', 'checks_list', 'ci_log',
-      'github_capabilities', 'issue_get', 'issue_comments', 'issue_search', 'pr_search',
-      'pr_list', 'pr_comments', 'workflow_runs', 'repo_branches', 'repo_commits',
-      'repo_compare', 'labels_list', 'milestones_list', 'issue_update', 'pr_create',
-      'pr_update', 'pr_comment', 'pr_review', 'pr_merge', 'pr_ready', 'branch_create',
-      'workflow_dispatch', 'workflow_rerun', 'file_write', 'label_create',
       'create_project', 'manage_repository',
     ];
     const repositoryNames = [
@@ -329,7 +317,7 @@ describe('Software Factory Jarvis tools', () => {
     }
     expect(capabilities).toContain('repo_overview first');
     expect(capabilities).toContain('repo_search or repo_read');
-    expect(capabilities).toContain('create a GitHub issue');
+    expect(capabilities).toContain('draft a GitHub issue');
     expect(capabilities).toContain('confirm_create_issue');
     expect(capabilities).toContain('set_jarvis_model');
 
@@ -343,9 +331,9 @@ describe('Software Factory Jarvis tools', () => {
       inputSchema.type === 'object')).toBe(true);
   });
 
-  it('creates a code-change issue directly when Dan asks', async () => {
-    const { app, githubIssueClient } = fixture();
-    const created = await app.inject({
+  it('creates a code-change issue only after a plain approval in a later Dan message', async () => {
+    const { app, githubIssueClient, setLatestMessage } = fixture();
+    const draft = await app.inject({
       method: 'POST',
       url: '/tools/create_issue',
       headers,
@@ -354,7 +342,52 @@ describe('Software Factory Jarvis tools', () => {
         body: 'Problem: retries fail.\nAcceptance: retry succeeds.',
       },
     });
-    expect(created.json()).toMatchObject({
+    expect(draft.json()).toMatchObject({
+      outcome: 'ok',
+      result: {
+        status: 'awaiting_confirmation',
+        taskCode: 'P11-01',
+        title: 'P11-01: Fix retries',
+        body: 'Problem: retries fail.\nAcceptance: retry succeeds.',
+        executor: 'jarvis',
+      },
+    });
+    const confirmationCode = draft.json().result.confirmationCode as string;
+    expect(confirmationCode).toMatch(/^\d{8}$/u);
+    expect(githubIssueClient.createIssue).not.toHaveBeenCalled();
+
+    setLatestMessage({
+      id: '42',
+      sessionId: 'session',
+      role: 'dan',
+      text: 'yes',
+      model: null,
+      at: new Date(Date.now() + 1_000),
+    });
+    const sameMessage = await app.inject({
+      method: 'POST',
+      url: '/tools/confirm_create_issue',
+      headers,
+      payload: { confirmationCode },
+    });
+    expect(sameMessage.json()).toMatchObject({ outcome: 'refused' });
+    expect(githubIssueClient.createIssue).not.toHaveBeenCalled();
+
+    setLatestMessage({
+      id: '43',
+      sessionId: 'session',
+      role: 'dan',
+      text: 'yes',
+      model: null,
+      at: new Date(Date.now() + 2_000),
+    });
+    const confirmed = await app.inject({
+      method: 'POST',
+      url: '/tools/confirm_create_issue',
+      headers: { ...headers, 'x-jarvis-message-id': '43' },
+      payload: { confirmationCode },
+    });
+    expect(confirmed.json()).toMatchObject({
       outcome: 'ok',
       result: {
         number: 9,
