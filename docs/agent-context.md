@@ -1513,6 +1513,8 @@ cleanup and reduced motion. Captures/report: `docs/ui/screenshots/p8-37-integrat
 These use scratch authentication/API/socket and fake media, not live providers.
 ## DailyDeveloperCloud / P12 execution boundary
 
+P12-02 is sequentially released after P12-01 merged. Its source-independent safety tests run with `node --test tools/daily-migration/export/safety.test.mjs` and are included in existing Backend CI. See the [missing nonsensitive provider/output evidence](../tools/daily-migration/export/README.md). This synthetic preparation is not a live adapter or protected backup. Keep #717 in progress and its PR draft with `Refs #717` until source contract and protected live completeness gates are verified by the coordinator. No provider endpoints or encryption/output formats may be guessed.
+
 Use the published DailyDeveloperCloud environment, explicitly source `/workspace/.jarvis-tools/activate.sh` before repository commands in every fresh shell, and read environment-owned STARTUP.md/setup-report.md. No automatic BASH_ENV activation. Node 22.23.3/npm 10.9.9/Python 3.12.14; Python components use separate retained .venv environments.
 
 [Approved migration](daily-migration.md) and existing milestone #716–#734 govern Daily work. Dan released only #716 for this worker; later tasks require explicit release, dependencies and claim. Follow one-worker/one-issue/one-PR with small pushed codex/ commits from current main; never merge your own PR. Issue dependencies/worker labels are authoritative; board administration/sync stays with existing Actions/coordinator, no broad token. Coordinate shared contracts/docs/composition, avoid ongoing unrelated runtime work.
