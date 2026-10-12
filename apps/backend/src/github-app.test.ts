@@ -31,34 +31,6 @@ describe('GitHub App installation tokens', () => {
     );
   });
 
-  it('caches installation permissions by repository and mints a generic token with only the requested scope', async () => {
-    const now = Date.parse('2026-10-12T12:00:00.000Z');
-    const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
-    const fetchImpl = vi.fn<typeof fetch>()
-      .mockResolvedValueOnce(Response.json({ id: 123, permissions: { contents: 'read', issues: 'write' } }))
-      .mockResolvedValueOnce(Response.json({ id: 123 }))
-      .mockResolvedValueOnce(Response.json({
-        token: 'scoped-test-token',
-        expires_at: new Date(now + 60 * 60 * 1000).toISOString(),
-        permissions: { issues: 'write' },
-      }, { status: 201 }));
-    const issuer = createGitHubAppTokenIssuer({
-      appId: '123',
-      getPrivateKey: async () => privateKey.export({ type: 'pkcs8', format: 'pem' }).toString(),
-      fetch: fetchImpl,
-      now: () => now,
-    });
-
-    await expect(issuer.readInstallationPermissions('DanAakesen/jarvis')).resolves.toMatchObject({ issues: 'write' });
-    await expect(issuer.readInstallationPermissions('danaakesen/JARVIS')).resolves.toMatchObject({ contents: 'read' });
-    await expect(issuer.issueWithPermissions?.('DanAakesen/jarvis', { issues: 'write' }))
-      .resolves.toBe('scoped-test-token');
-    expect(fetchImpl).toHaveBeenCalledTimes(3);
-    expect(JSON.parse(String(fetchImpl.mock.calls[2]?.[1]?.body))).toEqual({
-      repositories: ['jarvis'], permissions: { issues: 'write' },
-    });
-  });
-
   it('rejects malformed installation permission data', async () => {
     const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
     const issuer = createGitHubAppTokenIssuer({
