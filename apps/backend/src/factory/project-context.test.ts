@@ -10,6 +10,11 @@ describe('project awareness', () => {
     expect(JARVIS_REPOSITORY).toBe('DanAakesen/jarvis');
     expect(text).toContain('already added as project "jarvis" (project ID 2)');
     expect(text).toContain('When Dan says "your code"');
+    expect(text).toContain('my own code');
+    expect(text).toContain('Its code, PRs, issues');
+    expect(text).toContain('the Software Factory is how I build and');
+    expect(text).toContain('I found a bug in my code');
+    expect(text).toContain('Jeg fandt en fejl i min kode');
     expect(text).toContain('- jarvis-test-target (DanAakesen/jarvis-test-target, project ID 1)');
     expect(text).toContain('ask him to confirm before adding it');
     expect(text).toContain('do not add it again');

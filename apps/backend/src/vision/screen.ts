@@ -195,7 +195,7 @@ export class ScreenVisionService {
         ...(turnId === undefined ? {} : { turnId }),
       };
     } catch {
-      throw new ScreenVisionError(503, 'Jarvis could not inspect the shared screen.');
+      throw new ScreenVisionError(503, 'I could not inspect the shared screen.');
     }
   }
 

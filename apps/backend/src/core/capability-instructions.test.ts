@@ -4,13 +4,24 @@ import { workspaceNavigationPages, workspaceSettingsSections } from '@jarvis/con
 import { capabilityInstructions, CAPABILITY_INSTRUCTIONS_MAX_CODE_POINTS } from './capability-instructions.js';
 
 describe('shared navigation capability instructions', () => {
+  it('establishes first-person identity and ownership of Jarvis implementation', () => {
+    const instructions = capabilityInstructions({ automaticCapture: false });
+    expect(instructions).toContain('I am Jarvis');
+    expect(instructions).toContain('"I", "me" and "my"');
+    expect(instructions).toContain('"jeg", "mig" and "min/mit"');
+    expect(instructions).toContain('the Software Factory is how I build and change myself');
+    expect(instructions).toContain('I found a bug in my code');
+    expect(instructions).toContain('Jeg fandt en fejl i min kode');
+    expect(instructions).toContain('Only say an action succeeded when its tool result reports success');
+  });
+
   it('treats prior images as timestamped evidence and asks to look again without fresh details', () => {
     const instructions = capabilityInstructions({ automaticCapture: false });
     expect(instructions).toContain('real camera or screen images at the stated capture time');
     expect(instructions).toContain('the image I looked at N minutes ago');
     expect(instructions).toContain('only when the current time is known; otherwise cite its capture time');
     expect(instructions).toContain('Never invent elapsed time');
-    expect(instructions).toContain('without a fresh frame ask Dan to let Jarvis look again');
+    expect(instructions).toContain('without a fresh frame ask Dan to let me look again');
     expect(instructions).toContain('Never invent visual details');
   });
   it.each([true, false])('includes canonical destinations and aliases with automatic capture %s', (automaticCapture) => {
@@ -78,5 +89,21 @@ describe('shared capability instruction budget', () => {
   it.each([true, false])('uses only BMP characters so TypeScript and Python count the same with automatic capture %s', (automaticCapture) => {
     const text = capabilityInstructions({ automaticCapture });
     expect(codePoints(text)).toBe(text.length);
+  });
+
+  it('does not use third-person Jarvis wording in user-facing failures', () => {
+    const sources = [
+      '../core/conversation.ts',
+      '../pc-bridge/pc-act.ts',
+      '../vision/screen.ts',
+      '../vision/watch.ts',
+      '../factory/dispatcher.ts',
+      '../factory/new-project.ts',
+      '../github/checks-loop.ts',
+      '../../../../agents/jarvis/jarvis_tools.py',
+    ];
+    for (const source of sources) {
+      expect(readFileSync(new URL(source, import.meta.url), 'utf8')).not.toMatch(/\bJarvis (?:will|could not)\b/iu);
+    }
   });
 });

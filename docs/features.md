@@ -22,12 +22,13 @@ The complete list of what Jarvis does or will do, for UI design and planning. Ea
 | **Phone** | Away from the browser: Teams app or phone |
 | **Background** | Runs without Dan; shows only its effects |
 
-Status as of 8 October 2026.
+Status as of 12 October 2026.
 `Verified live` records the date of coordinator-confirmed production acceptance; blank means no live confirmation is recorded.
 
 ## Jarvis: conversation and voice
 
 | Feature | What Dan can do | Surface | Where | Status | Verified live | Tasks |
+| First-person identity and own-code awareness | Talk with Jarvis as a first-person assistant; when discussing `DanAakesen/jarvis`, Jarvis recognizes its code, PRs, issues, deployments and Factory tasks as his own implementation | Voice/chat | Chat, hosted voice agent and realtime voice prompts | Built offline; production wording acceptance pending |  | P9-86 |
 | Read workspace windows | Ask Jarvis to read a chart, timeline, list/table or HTML report by window title/focus; bounded untrusted text prefers page content and falls back to owner-scoped generated views | Voice/chat | Workspace | Built backend/contracts offline; page content reporting depends on #640; live acceptance unverified | | P9-52 |
 | --- | --- | --- | --- | --- | --- | --- |
 | Sign-in | Sign in with his Microsoft account; everyone else is refused | Screen | All pages | Live |  | P0-08, P0-09 |

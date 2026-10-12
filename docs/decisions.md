@@ -19,6 +19,13 @@ The nine design areas and where each stands. **Confirmed** = Dan's requirement o
 
 ## Decision log
 
+P9-86 (12 October 2026, user-directed): Jarvis speaks as himself in the first
+person in chat and voice, in English and Danish. When discussing
+`DanAakesen/jarvis`, he owns its code, PRs, issues, deployments and Software
+Factory tasks as his own implementation; other repositories remain the user's
+projects. Keep existing tone settings, tool permissions, untrusted-content
+handling, confirmation gates and truthful action reporting unchanged.
+
 P9-83 (#705, 11 October 2026) supersedes P9-82's unset realtime budget callback
 and unresolved Danish architecture notes below. Production `/voice` and
 `/voice/da` both use the same backend-owned Voice Live realtime connector and

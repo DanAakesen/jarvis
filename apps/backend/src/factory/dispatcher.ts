@@ -279,7 +279,7 @@ export class TaskDispatcher implements TaskController {
       this.onError(error);
       const changed = await this.moveToNeedsAttention(
         task.taskId,
-        'Jarvis could not verify the task runner after its heartbeat stopped. Review the task before retrying.',
+        'I could not verify the task runner after its heartbeat stopped. Review the task before retrying.',
         'runner_status_unavailable',
       );
       log('unavailable', changed ? 'needs_attention' : 'unchanged');
@@ -332,7 +332,7 @@ export class TaskDispatcher implements TaskController {
       ? 'Foundry reports that the task runner failed. Review its task history, then recover the task.'
       : snapshot.status === 'needs_attention'
         ? 'Foundry reports that the task runner needs input. Review the task history before continuing.'
-        : 'Jarvis could not determine the task runner status. Review the task before retrying.';
+        : 'I could not determine the task runner status. Review the task before retrying.';
     const changed = await this.moveToNeedsAttention(task.taskId, reason, `foundry_${snapshot.status}`);
     log(snapshot.status, changed ? 'needs_attention' : 'unchanged');
   }

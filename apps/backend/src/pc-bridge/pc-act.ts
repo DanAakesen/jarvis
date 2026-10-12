@@ -639,7 +639,7 @@ export async function runPcAct(
   }
   if (!authorizedDan(request)) throw new ToolRefusal('A verified Dan session is required for PC actions.');
   if (sensitiveGoal(input.goal)) {
-    throw new ToolRefusal('Jarvis will not handle passwords, payment-card numbers, one-time codes, or sensitive identity numbers.');
+    throw new ToolRefusal("I won't handle passwords, payment-card numbers, one-time codes, or sensitive identity numbers.");
   }
 
   const runStartedAt = performance.now();
