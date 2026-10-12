@@ -19,6 +19,10 @@ The nine design areas and where each stands. **Confirmed** = Dan's requirement o
 
 ## Decision log
 
+12 October 2026, standing Daily migration direction: Dan authorizes completion of approved migration work through coordinator dependency/gate releases without generic re-confirmation. #717 remains protected-export blocked; no independent downstream dispatch or own-PR merge. All migrated React/rich UI must fully reuse current Jarvis layout/styling, DESIGN.md, canonical styles.css tokens, shared components, themes/density/motion and phone/workspace patterns. Legacy Daily capabilities/data survive through recomposition, not a separate navy/plum/card theme. Generated views receive safe existing-bridge theme context without expanded permissions. Browser/mobile visual acceptance is mandatory in #730/#731/#732/#726; #718 starts no frontend work.
+
+P12-03 (#718, 12 October 2026): additive empty tables use separate SQL schema `daily`, configured server owner prefixes legacy keys/uniqueness, and only the supplied explicit relationships become owner-composite foreign keys. Existing auth resolves the user/hosted agent; runners cannot construct the inactive store. Nullable unknown values, original/sanitized raw checksums, source timestamps/local dates, revisions/tombstones and recovery measurements remain distinct. Legacy OAuth/widget/claim credentials have no active target. Mixed attention data requires explicit source/JSON exclusion before import. [Mapping and compatibility limits](daily-schema-mapping.md) are source-code evidence, not protected live column/export parity. #717 is parked; #718 does not bypass it or accept backup/import. No personal seed, source mutation or Daily activation.
+
 P9-89 (#736, 12 October 2026, user-directed): make presence behavior salient
 on every chat and EN/DA voice turn, not merely when asked. Share short,
 first-person built-ins in `agents/jarvis/presence-instructions.json`: On the move
