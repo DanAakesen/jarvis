@@ -9,11 +9,11 @@ export const fridaReference = Object.freeze({ provider: 'DTU Frida', version: '5
 const origin = 'https://fcdb.fooddata.dk/api';
 const parameters = { energyKcal: [356, 'kcal'], proteinGrams: [218, 'g'], carbohydratesGrams: [172, 'g'], fatGrams: [141, 'g'], fiberGrams: [168, 'g'] } as const;
 type Parameter = keyof typeof parameters;
-interface Food { releaseId: number; id: number; nameDanish: string; nameEnglish: string | null; danishSynonyms: string | string[] | null; englishSynonyms: string | string[] | null }
+interface Food { releaseId: number; id: number; nameDanish: string; nameEnglish: string | null; danishSynonyms: string[]; englishSynonyms: string[] }
 export interface LookupComponent { name: string; grams: number | null; preparationMethod: string | null }
 export interface FridaMatch {
   foodId: number; name: string; grams: number; values: Partial<Record<keyof Nutrients, number | null>>;
-  provenance: Partial<Record<Parameter, { parameterId: number; unit: string; sourceIds: readonly (string | number)[]; sourceFoodIds: readonly (string | number)[] }>>;
+  provenance: Partial<Record<Parameter, { parameterId: number; unit: string; sourceIds: readonly number[] | null; sourceFoodIds: readonly number[] | null }>>;
   retrievedAt: string;
 }
 export interface FridaLookup {
@@ -27,7 +27,7 @@ function normalize(value: string): string {
     .normalize('NFKD').replace(/\p{M}/gu, '').replace(/[^a-z0-9]+/gu, ' ').trim();
 }
 function names(food: Food): string[] {
-  const synonyms = [food.danishSynonyms, food.englishSynonyms].flatMap((value) => Array.isArray(value) ? value : value ? [value] : []);
+  const synonyms = [...food.danishSynonyms, ...food.englishSynonyms];
   return [food.nameDanish, food.nameEnglish ?? '', ...synonyms].filter(Boolean).map(normalize);
 }
 function object(value: unknown): Record<string, unknown> {
@@ -37,9 +37,7 @@ function object(value: unknown): Record<string, unknown> {
 function id(value: unknown): asserts value is number {
   if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 1) throw new TypeError('Invalid public food identifier');
 }
-function nullableNames(value: unknown): asserts value is string | string[] | null {
-  if (value === null) return;
-  if (typeof value === 'string') { if (value.length > 8000) throw new TypeError('Invalid public food synonyms'); return; }
+function synonyms(value: unknown): asserts value is string[] {
   if (!Array.isArray(value) || value.length > 100 || value.some((item) => typeof item !== 'string' || item.length > 2000)) throw new TypeError('Invalid public food synonyms');
 }
 /** Verified release pin and DTO mapping; never accepts a caller URL or credentials. */
@@ -73,13 +71,20 @@ export class FridaLookupAdapter {
   private async get(path: string, signal: AbortSignal): Promise<unknown> {
     if (!this.session || this.session.until <= this.now()) {
       const response = await this.response('/antiforgery', signal);
-      // Fail closed on an unknown bootstrap shape; no guessed JSON token fields.
+      // Verified public bootstrap is empty, with response header and XSRF-TOKEN cookie.
       const token = response.headers.get('X-XSRF-TOKEN');
       const cookies = response.headers.getSetCookie();
-      await response.body?.cancel();
+      const reader = response.body?.getReader();
+      try {
+        if (reader) {
+          for (let chunks = 0; ; chunks++) { signal.throwIfAborted(); const part = await reader.read(); if (part.done) break;
+            if (part.value.byteLength || chunks >= 2) throw new TypeError('Unexpected public food bootstrap body'); }
+        }
+      } finally { if (reader) { await reader.cancel().catch(() => undefined); reader.releaseLock(); } }
       if (!token || token.length > 4096 || /[\r\n]/u.test(token) || !cookies.length || cookies.length > 6) throw new TypeError('Public food session contract mismatch');
       const cookie = cookies.map((value) => value.split(';', 1)[0]!).join('; ');
-      if (cookie.length > 16000 || /[\r\n]/u.test(cookie) || !cookies.every((value) => /^[^\s;=]+=[^;]*;/u.test(value))) throw new TypeError('Invalid public food session cookie');
+      if (cookie.length > 16000 || /[\r\n]/u.test(cookie) || !cookies.some((value) => value.startsWith('XSRF-TOKEN=')) ||
+          !cookies.every((value) => /^[^\s;=]+=[^;]*(?:;|$)/u.test(value))) throw new TypeError('Invalid public food session cookie');
       this.session = { token, cookie, until: this.now() + 10 * 60_000 };
     }
     return this.json(await this.response(path, signal, { 'X-XSRF-TOKEN': this.session.token, Cookie: this.session.cookie }), signal);
@@ -92,8 +97,8 @@ export class FridaLookupAdapter {
     const ids = new Set<number>();
     const rows = value.map((item) => {
       const row = object(item); id(row.id); if (row.releaseId !== 10 || ids.has(row.id)) throw new TypeError('Pinned food release or ID mismatch'); ids.add(row.id);
-      text(row.nameDanish, 2000); nullableNames(row.nameEnglish); if (Array.isArray(row.nameEnglish)) throw new TypeError('Invalid food name');
-      nullableNames(row.danishSynonyms); nullableNames(row.englishSynonyms);
+      text(row.nameDanish, 2000); if (row.nameEnglish !== null && (typeof row.nameEnglish !== 'string' || row.nameEnglish.length > 2000)) throw new TypeError('Invalid food name');
+      synonyms(row.danishSynonyms); synonyms(row.englishSynonyms);
       for (const key of ['descriptionDanish', 'descriptionEnglish']) if (row[key] !== null && (typeof row[key] !== 'string' || (row[key] as string).length > 16000)) throw new TypeError('Invalid food description');
       return row as unknown as Food;
     });
@@ -110,9 +115,10 @@ export class FridaLookupAdapter {
     for (const item of entries) {
       const row = object(item); id(row.id); if (seen.has(row.id)) throw new TypeError('Duplicate food parameter'); seen.add(row.id);
       const key = (Object.keys(parameters) as Parameter[]).find((key) => parameters[key][0] === row.id); if (!key) continue;
-      if (row.unitName !== parameters[key][1] || row.value !== null && (typeof row.value !== 'number' || !Number.isFinite(row.value) || row.value < 0)) throw new TypeError('Invalid nutrient value or unit');
-      const sources = (value: unknown) => { if (!Array.isArray(value) || value.length > 1000 || value.some((value) => !(typeof value === 'number' && Number.isSafeInteger(value) || typeof value === 'string' && value.length <= 256))) throw new TypeError('Invalid nutrient provenance'); return value as (string | number)[]; };
-      result.values[key] = row.value as number | null;
+      if (row.unitName !== parameters[key][1] || row.value !== null && row.value !== undefined && (typeof row.value !== 'number' || !Number.isFinite(row.value) || row.value < 0)) throw new TypeError('Invalid nutrient value or unit');
+      const sources = (value: unknown) => { if (value === null || value === undefined) return null;
+        if (!Array.isArray(value) || value.length > 1000 || value.some((value) => typeof value !== 'number' || !Number.isSafeInteger(value) || value < 1)) throw new TypeError('Invalid nutrient provenance'); return value as number[]; };
+      result.values[key] = row.value === undefined || row.value === null ? null : row.value as number;
       result.provenance[key] = { parameterId: row.id, unit: row.unitName as string, sourceIds: sources(row.sourceIds), sourceFoodIds: sources(row.sourceFoodIds) };
     }
     if (this.cache.size >= 200) this.cache.delete(this.cache.keys().next().value!);
@@ -144,6 +150,8 @@ export class FridaLookupAdapter {
           for (const key of Object.keys(parameters) as Parameter[]) {
             const value = data.values[key]; values[key] = value === undefined || value === null ? null : value * component.grams / 100;
             if (values[key] === null) unknowns.push(`nutrient_missing:${key}`);
+            const provenance = data.provenance[key];
+            if (!provenance || provenance.sourceIds === null || provenance.sourceFoodIds === null) unknowns.push(`provenance_unavailable:${key}`);
           }
           match = { foodId: chosen.food.id, name: chosen.food.nameDanish, grams: component.grams, values, provenance: structuredClone(data.provenance), retrievedAt: data.retrievedAt };
           if (component.preparationMethod && !names(chosen.food).some((name) => name.includes(normalize(component.preparationMethod!)))) unknowns.push('preparation_unverified');

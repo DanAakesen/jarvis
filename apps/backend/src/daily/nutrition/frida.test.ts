@@ -3,7 +3,7 @@ import { FridaLookupAdapter, fridaReference } from './frida.js';
 
 const foods = () => Array.from({ length: 1381 }, (_, index) => ({ releaseId: 10, id: index + 1,
   nameDanish: index === 0 ? 'Æble' : `Synthetic reference ${index}`, nameEnglish: index === 0 ? 'Apple' : null,
-  descriptionDanish: null, descriptionEnglish: null, danishSynonyms: null, englishSynonyms: null }));
+  descriptionDanish: null, descriptionEnglish: null, danishSynonyms: [] as string[], englishSynonyms: [] as string[] }));
 const parameter = (id: number, value: number | null, unitName: string) => ({ id, value, unitName, nameDanish: 'Synthetic', nameEnglish: 'Synthetic', sourceIds: [101], sourceFoodIds: [1] });
 const values = () => [{ foodParameters: [parameter(356, 100, 'kcal'), parameter(218, 2, 'g'), parameter(172, 10, 'g'), parameter(168, null, 'g'), parameter(141, 1, 'g')] }];
 const json = (value: unknown) => new Response(JSON.stringify(value), { headers: { 'content-type': 'application/json' } });
@@ -11,8 +11,8 @@ function fixture(overrides: { catalogue?: unknown; parameters?: unknown; token?:
   let clock = Date.parse('2026-10-12T15:42:01Z');
   const fetcher = vi.fn(async (url: string | URL | Request, options?: RequestInit) => {
     const path = String(url);
-    if (path.endsWith('/antiforgery')) return new Response('', { headers: { ...(overrides.token === false ? {} : { 'X-XSRF-TOKEN': 'synthetic-public-session' }), 'set-cookie': 'publicFrida=synthetic; Secure; HttpOnly' } });
-    expect(options?.headers).toEqual({ 'X-XSRF-TOKEN': 'synthetic-public-session', Cookie: 'publicFrida=synthetic' });
+    if (path.endsWith('/antiforgery')) return new Response('', { headers: { ...(overrides.token === false ? {} : { 'X-XSRF-TOKEN': 'synthetic-public-session' }), 'set-cookie': 'XSRF-TOKEN=synthetic; Secure; HttpOnly' } });
+    expect(options?.headers).toEqual({ 'X-XSRF-TOKEN': 'synthetic-public-session', Cookie: 'XSRF-TOKEN=synthetic' });
     if (path.endsWith('/food/10')) return json(overrides.catalogue ?? foods());
     if (/\/foodParameter\/10\/\d+\/consumer$/u.test(path)) return json(overrides.parameters ?? values());
     throw new Error('Unexpected public endpoint');
@@ -51,10 +51,26 @@ describe('pinned verified Frida adapter using synthetic public DTOs only', () =>
     const result = await fixture({ catalogue, parameters: params }).adapter.lookup([{ name: 'Synthetic ripe apple edible', grams: 100, preparationMethod: null }], signal());
     expect(result.status).toBe('complete'); expect(result.components[0]?.match?.foodId).toBe(1); expect(result.totals.fiberGrams).toBe(1);
   });
+  it('preserves unavailable provenance and missing values without fabricating IDs or zeros', async () => {
+    const row = { ...parameter(356, 100, 'kcal'), sourceIds: null, sourceFoodIds: undefined, value: undefined };
+    const result = await fixture({ parameters: [{ foodParameters: [row] }] }).adapter.lookup(input, signal());
+    expect(result.status).toBe('partial'); expect(result.totals.energyKcal).toBeNull(); expect(result.matchedSubtotals.energyKcal).toBeNull();
+    expect(result.components[0]?.match?.provenance.energyKcal).toMatchObject({ sourceIds: null, sourceFoodIds: null });
+    expect(result.unknowns).toContain('0:provenance_unavailable:energyKcal');
+  });
+  it('searches verified synonym arrays and rejects nonempty bootstrap bodies', async () => {
+    const catalogue = foods(); catalogue[0]!.englishSynonyms = ['Synthetic synonym'];
+    expect((await fixture({ catalogue }).adapter.lookup([{ ...input[0]!, name: 'Synthetic synonym' }], signal())).components[0]?.match?.foodId).toBe(1);
+    const fetcher = vi.fn(async () => new Response('unexpected bootstrap body', { headers: { 'X-XSRF-TOKEN': 'synthetic', 'set-cookie': 'XSRF-TOKEN=synthetic; Secure' } })) as unknown as typeof fetch;
+    await expect(new FridaLookupAdapter(fetcher).lookup(input, signal())).rejects.toThrow('invalid');
+  });
   it.each([
     { catalogue: foods().slice(0, 100) }, { catalogue: foods().map((row) => ({ ...row, releaseId: 11 })) },
     { catalogue: foods().map((row) => ({ ...row, id: 1 })) }, { parameters: [{ foodParameters: [parameter(356, 1, 'kJ')] }] },
     { parameters: [{ foodParameters: [parameter(356, 1, 'kcal'), parameter(356, 2, 'kcal')] }] }, { token: false },
+    { catalogue: foods().map((row) => ({ ...row, danishSynonyms: 'not-an-array' })) },
+    { parameters: [{ foodParameters: [{ ...parameter(356, 1, 'kcal'), value: '1' }] }] },
+    { parameters: [{ foodParameters: [{ ...parameter(356, 1, 'kcal'), sourceIds: { id: 1 } }] }] },
   ])('fails closed on invalid/truncated/provider session contracts %#', async (override) => {
     await expect(fixture(override).adapter.lookup(input, signal())).rejects.toThrow('No complete nutrient estimate');
   });
@@ -67,7 +83,7 @@ describe('pinned verified Frida adapter using synthetic public DTOs only', () =>
     const cancelled = new AbortController(); cancelled.abort(); await expect(new FridaLookupAdapter(fetcher).lookup(input, cancelled.signal)).rejects.toThrow();
     expect(fetcher).toHaveBeenCalledTimes(1);
     const body = new ReadableStream<Uint8Array>({ start(controller) { controller.enqueue(new Uint8Array(8 * 1024 * 1024 + 1)); controller.close(); } });
-    const huge = vi.fn(async (url: string) => url.endsWith('/antiforgery') ? new Response('', { headers: { 'X-XSRF-TOKEN': 'synthetic', 'set-cookie': 'public=synthetic; Secure' } }) : new Response(body, { headers: { 'content-type': 'application/json' } })) as unknown as typeof fetch;
+    const huge = vi.fn(async (url: string) => url.endsWith('/antiforgery') ? new Response('', { headers: { 'X-XSRF-TOKEN': 'synthetic', 'set-cookie': 'XSRF-TOKEN=synthetic; Secure' } }) : new Response(body, { headers: { 'content-type': 'application/json' } })) as unknown as typeof fetch;
     await expect(new FridaLookupAdapter(huge).lookup(input, signal())).rejects.toThrow('invalid');
   });
 });
