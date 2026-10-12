@@ -36,3 +36,7 @@ export function classifyApprovalReply(text: string | undefined): ApprovalReply |
 
 export const approvalInstruction =
   'Reply yes, approved, confirmed or go ahead to approve; no or cancel to decline, in a new message within ten minutes.';
+
+export function isSimpleApproval(value: string): boolean {
+  return classifyApprovalReply(value) === 'approve';
+}
