@@ -64,6 +64,30 @@ describe('inactive owner-bound Daily calendar reads', () => {
     expect(await feed.refresh(request(), { ...range, from: '2026-10-12T01:00:00Z' }, signal())).toMatchObject({ status: 'unavailable', issues: [{ kind: 'refresh-limited' }] });
     expect(read).toHaveBeenCalledTimes(1);
   });
+  it('marks continuation bounds partial and never caches truncated coverage as complete', async () => {
+    let pages = 0;
+    const read = vi.fn<GoogleApiClient['request']>(async (_api, path) => path.startsWith('/users/me')
+      ? { items: [{ id: `calendar-${++pages}` }], nextPageToken: `page-${pages}` }
+      : { items: [] });
+    const result = await new DailyCalendarFeed({ request: read }).refresh(request(), range, signal());
+    expect(pages).toBe(10); expect(result.status).toBe('partial');
+    expect(result.issues).toContainEqual({ kind: 'coverage-limit' });
+    expect(result.calendars).toHaveLength(10);
+  });
+  it('keeps the previous complete cache when a later refresh has partial calendar access', async () => {
+    let clock = Date.parse('2026-10-12T10:00:00Z'); let mode = 'complete';
+    const read = vi.fn<GoogleApiClient['request']>(async (_api, path) => {
+      if (mode === 'denied') throw new GoogleApiError('forbidden');
+      if (path.startsWith('/users/me')) return { items: [{ id: 'primary' }, { id: 'other' }] };
+      if (mode === 'partial' && path.includes('/other/')) throw new GoogleApiError('forbidden');
+      return { items: [event('01')] };
+    });
+    const feed = new DailyCalendarFeed({ request: read }, () => clock);
+    const first = await feed.refresh(request(), range, signal()); clock += 60_000; mode = 'partial';
+    expect(await feed.refresh(request(), range, signal())).toMatchObject({ status: 'partial', issues: [{ kind: 'scope-denied', calendarId: 'other' }] });
+    clock += 60_000; mode = 'denied';
+    expect(await feed.refresh(request(), range, signal())).toMatchObject({ status: 'complete', freshness: 'stale', capturedAt: first.capturedAt, events: first.events });
+  });
   it('bounds concurrent duplicate refresh and honors cancellation without claiming success', async () => {
     let release!: () => void; const wait = new Promise<void>((resolve) => { release = resolve; });
     // Even a provider returning after cancellation must not populate a successful cache.
