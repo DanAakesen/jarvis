@@ -71,6 +71,7 @@ export class DailyCalendarFeed {
         if (page >= 10) { result.issues.push({ kind: 'coverage-limit' }); break; }
         const query = new URLSearchParams({ maxResults: '100', showHidden: 'true' }); if (pageToken) query.set('pageToken', pageToken);
         const response = await this.api.request('calendar', `/users/me/calendarList?${query}`, { method: 'GET', signal: deadline });
+        deadline.throwIfAborted();
         const items = response.items ?? []; if (!Array.isArray(items) || items.length > 100) throw new Error('Invalid calendar list');
         for (const item of items) {
           const row = record(item); const id = bounded(row.id);
@@ -88,6 +89,7 @@ export class DailyCalendarFeed {
             if (page >= 10 || result.events.length >= 2000) { result.issues.push({ kind: 'coverage-limit', calendarId: calendar.id }); break; }
             const query = new URLSearchParams({ timeMin: range.from, timeMax: range.to, singleEvents: 'true', orderBy: 'startTime', maxResults: '250' }); if (token) query.set('pageToken', token);
             const response = await this.api.request('calendar', `/calendars/${encodeURIComponent(calendar.id)}/events?${query}`, { method: 'GET', signal: deadline });
+            deadline.throwIfAborted();
             const items = response.items ?? []; if (!Array.isArray(items) || items.length > 250) throw new Error('Invalid events');
             for (const item of items) {
               const row = record(item); const id = bounded(row.id);
@@ -103,6 +105,7 @@ export class DailyCalendarFeed {
         if (deadline.aborted) break;
       }
       if (result.issues.length) result.status = 'partial';
+      signal.throwIfAborted();
       if (result.status === 'complete') {
         if (!this.cache.has(key) && this.cache.size >= 4) this.cache.delete(this.cache.keys().next().value!);
         this.cache.set(key, { snapshot: structuredClone(result), refreshedAt: checked });

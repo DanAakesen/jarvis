@@ -63,7 +63,8 @@ describe('inactive owner-bound Daily calendar reads', () => {
   });
   it('bounds concurrent duplicate refresh and honors cancellation without claiming success', async () => {
     let release!: () => void; const wait = new Promise<void>((resolve) => { release = resolve; });
-    const read = vi.fn<GoogleApiClient['request']>(async (_api, _path, options) => { await wait; options.signal.throwIfAborted(); return { items: [] }; });
+    // Even a provider returning after cancellation must not populate a successful cache.
+    const read = vi.fn<GoogleApiClient['request']>(async () => { await wait; return { items: [] }; });
     const feed = new DailyCalendarFeed({ request: read }); const controller = new AbortController();
     const first = feed.refresh(request(), range, controller.signal);
     expect(await feed.refresh(request(), range, signal())).toMatchObject({ status: 'unavailable', issues: [{ kind: 'busy' }] });
