@@ -49,12 +49,18 @@ describe('SQL conversation store', () => {
     expect(JSON.parse(row.recordset[0]!.metadata)).toEqual({ visualContext: replacement });
     const migrations = await readMigrations();
     const down = await readDownMigration('0040_message_visual_context.sql');
+    // Keep the latest-only rollback contract: unwind newer empty additive schemas
+    // before testing this historical column migration, then restore the full tree.
+    const newer = migrations.filter((migration) => migration.name > down.name);
+    for (const migration of [...newer].reverse()) {
+      await expect(revertMigration(pool, migrations, await readDownMigration(migration.name))).resolves.toBe(migration.name);
+    }
     await expect(revertMigration(pool, migrations, down)).resolves.toBe(down.name);
     const afterDown = await pool.request().input('id', sql.BigInt, BigInt(dan.id))
       .query<{ text: string; metadata_column: number | null }>(`SELECT text,
         COL_LENGTH(N'dbo.messages', N'metadata') AS metadata_column FROM dbo.messages WHERE id = @id`);
     expect(afterDown.recordset[0]).toEqual({ text: 'Final transcript', metadata_column: null });
-    await expect(applyMigrations(pool, migrations)).resolves.toEqual([down.name]);
+    await expect(applyMigrations(pool, migrations)).resolves.toEqual([down.name, ...newer.map((migration) => migration.name)]);
     await pool.request().input('sessionId', sql.BigInt, BigInt(session.id))
       .query(`DELETE FROM dbo.messages WHERE jarvis_session_id = @sessionId;
         DELETE FROM dbo.jarvis_sessions WHERE id = @sessionId;`);

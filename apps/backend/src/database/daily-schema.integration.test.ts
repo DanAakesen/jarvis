@@ -79,8 +79,23 @@ describe('Daily SQL owner schema on real SQL Server', () => {
     expect((await pool.request().query("SELECT name FROM sys.columns WHERE object_id=OBJECT_ID(N'daily.nutrition_queue') AND name IN (N'claim_token',N'owner_email')")).recordset).toEqual([]);
   });
 
+  it('enforces owner-composite relationships and preserves case-distinct source IDs', async () => {
+    await pool.request().input('owner', sql.UniqueIdentifier, owner).batch(`
+      INSERT daily.attention_runs(owner_object_id,id,idempotency_key,mode,captured_at,received_at,checksum,status)
+        VALUES (@owner,N'Run',N'Run',N'synthetic',N'2026-01-01',N'2026-01-01',N'synthetic',N'complete'),
+               (@owner,N'run',N'run',N'synthetic',N'2026-01-01',N'2026-01-01',N'synthetic',N'complete');`);
+    await expect(pool.request().input('other', sql.UniqueIdentifier, other).batch(`
+      INSERT daily.attention_source_snapshots(owner_object_id,id,run_id,source,status,captured_at,received_at)
+        VALUES (@other,N'synthetic-child',N'Run',N'gmail',N'complete',N'2026-01-01',N'2026-01-01');`)).rejects.toThrow();
+    expect((await pool.request().query('SELECT COUNT(*) AS count FROM daily.attention_runs')).recordset[0].count).toBe(2);
+    await expect(pool.request().input('owner', sql.UniqueIdentifier, owner).batch(`
+      INSERT daily.attention_rule_config(owner_object_id,[key],value_json,source,updated_at)
+        VALUES (@owner,N'invalid-json',N'not json',N'synthetic',N'2026-01-01');`)).rejects.toThrow();
+  });
+
   it('refuses destructive down migration while any Daily record exists', async () => {
-    await expect(revertMigration(pool, await readDownMigration(filename))).rejects.toThrow();
+    await expect(revertMigration(pool, (await readMigrations()).filter((migration) => migration.name === filename), await readDownMigration(filename)))
+      .rejects.toThrow('Daily rollback requires empty tables');
     expect((await pool.request().query('SELECT COUNT(*) AS count FROM daily.nutrition_meals')).recordset[0].count).toBe(2);
   });
 });
