@@ -203,10 +203,12 @@ export class ScreenVisionService {
     readonly sessionId: string; readonly itemId: string; readonly model: string;
     readonly limitUsd: number; readonly signal?: AbortSignal;
   }): Promise<boolean> {
+    // A model without a published price (for example a new chat model) is admitted on the same conservative
+    // unverified hold; a known price above the hold is still refused. Only a known cost replaces the hold later.
     const costs = foundryTokenCosts(input.model, 32_768, 4_096);
     if (!this.usage.reserveImage || !validSessionId(input.sessionId) || !validImageItemId(input.itemId) ||
         !Number.isFinite(input.limitUsd) || input.limitUsd < 0 || input.limitUsd > 100 ||
-        (!isRealtimeImageModel(input.model) && (!costs || costs.inputDkk + costs.outputDkk > 0.1))) {
+        (!isRealtimeImageModel(input.model) && costs && costs.inputDkk + costs.outputDkk > 0.1)) {
       throw new Error('Image budget or pricing is unavailable');
     }
     if (input.signal?.aborted) throw new Error('Image budget admission was cancelled');
