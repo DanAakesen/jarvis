@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { workspaceNavigationPages, workspaceSettingsSections } from '@jarvis/contracts';
 import { capabilityInstructions, CAPABILITY_INSTRUCTIONS_MAX_CODE_POINTS } from './capability-instructions.js';
+import { builtInModeInstructions } from './presence-instructions.js';
 
 describe('shared navigation capability instructions', () => {
   it('establishes first-person identity and ownership of Jarvis implementation', () => {
@@ -13,6 +14,8 @@ describe('shared navigation capability instructions', () => {
     expect(instructions).toContain('I found a bug in my code');
     expect(instructions).toContain('Jeg fandt en fejl i min kode');
     expect(instructions).toContain('Only say an action succeeded when its tool result reports success');
+    expect(instructions).toContain('never ask Dan to paste or copy content a tool can get');
+    expect(instructions).toContain('name the missing tool permission');
   });
 
   it('distinguishes fresh, earlier, and unavailable visual evidence without volunteering timestamps', () => {
@@ -87,6 +90,14 @@ describe('shared capability instruction budget', () => {
   it.each([true, false])('stays within the headroom budget with automatic capture %s', (automaticCapture) => {
     expect(codePoints(capabilityInstructions({ automaticCapture })))
       .toBeLessThanOrEqual(limits.capabilityInstructionsBudgetCodePoints);
+  });
+
+  it.each([true, false])('keeps built-in mode behavior within the shared headroom budget with automatic capture %s', (automaticCapture) => {
+    for (const instructions of Object.values(builtInModeInstructions)) {
+      expect(codePoints(capabilityInstructions({ automaticCapture }) + instructions))
+        .toBeLessThanOrEqual(limits.capabilityInstructionsBudgetCodePoints);
+      expect(instructions.length).toBeLessThanOrEqual(2_000);
+    }
   });
 
   it.each([true, false])('uses only BMP characters so TypeScript and Python count the same with automatic capture %s', (automaticCapture) => {

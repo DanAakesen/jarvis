@@ -32,6 +32,7 @@ COPY --from=build /app/packages/contracts/src ./packages/contracts/src
 RUN node --input-type=module -e "await import('@jarvis/contracts')"
 COPY --from=build /app/apps/backend/dist ./apps/backend/dist
 COPY db/migrations ./db/migrations
+COPY agents/jarvis/presence-instructions.json ./agents/jarvis/presence-instructions.json
 COPY docs/features.md ./apps/backend/feature-index.md
 USER node
 EXPOSE 3000

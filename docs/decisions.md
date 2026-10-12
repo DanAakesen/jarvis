@@ -19,6 +19,21 @@ The nine design areas and where each stands. **Confirmed** = Dan's requirement o
 
 ## Decision log
 
+P9-89 (#736, 12 October 2026, user-directed): make presence behavior salient
+on every chat and EN/DA voice turn, not merely when asked. Share short,
+first-person built-ins in `agents/jarvis/presence-instructions.json`: On the move
+is voice-first and hands-free, Away queues screen-dependent work, and Present
+allows richer answers and summaries on return. Fetch needed content with tools
+or identify missing permissions; never insist on manual sharing. Keep custom
+style text alongside fixed mode rules; empty stored values resolve to built-ins
+without rewriting saved settings. Refresh presence during hosted turns and after
+successful mode tools while retaining session model/reasoning choices. Realtime
+updates and response overrides carry the current mode. Single-word confirmations
+never bypass exact sensitive-action approval phrases. Offline regressions,
+backend lint/build, Python Ruff and the unchanged instruction budget pass.
+Live model/voice acceptance remains pending; no web, schema or migration change
+(L120/L121).
+
 P9-87 (#714, 12 October 2026, user-directed): classify visual observations in
 prompt builders using the build-time clock and turn/question correlation.
 Fresh observations answer directly without volunteered capture times; reused or

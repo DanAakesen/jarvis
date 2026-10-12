@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { workspaceContext } from '../core/workspace-context.js';
+import { modeContext } from '../core/presence-instructions.js';
 import { projectContext, type ProjectContextEntry } from '../factory/project-context.js';
 import websocket from '@fastify/websocket';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
@@ -1444,7 +1445,7 @@ function registerVoiceRoute(
         ...next,
         response: {
           ...response,
-          instructions: `${instructions}\n${workspaceContext(
+          instructions: `${instructions}\n${modeContext(presence)}\n${workspaceContext(
             app.workspaceCommands.snapshot(app.ownerObjectId), app.workspaceCommands.deviceContext(app.ownerObjectId),
           )}`,
         },
@@ -1558,7 +1559,7 @@ function registerVoiceRoute(
     unsubscribeAwayMode = app.nowEventHub.subscribe((event) => {
       if (event.type !== 'mode_changed') return;
       awayMode = event.away;
-      if (!english || !app.awayModeStore) return;
+      if (!app.awayModeStore) return;
       void (async () => {
         presence = await app.awayModeStore!.read();
         if (app.settingsStore) {
@@ -1566,7 +1567,7 @@ function registerVoiceRoute(
           personality = settings.personality;
           memorySettings = settings.memory;
         }
-        sendUpstream(createRealtimeSessionUpdate(
+        if (english) sendUpstream(createRealtimeSessionUpdate(
           app.jarvisTools, personality, presence, language, projects, transcriptionModel, voiceTuning, memorySettings,
         ));
       })().catch(() => request.log.warn('voice.presence_mode_update_failed'));
@@ -1690,6 +1691,13 @@ function registerVoiceRoute(
               outcome = response.outcome;
             }
           } catch { /* The fallback is an error outcome. */ }
+          if (outcome === 'ok' && (call.name === 'set_presence_mode' || call.name === 'set_away_mode') && app.awayModeStore) {
+            presence = await app.awayModeStore.read();
+            awayMode = presence.mode !== 'present';
+            sendUpstream(createRealtimeSessionUpdate(
+              app.jarvisTools, personality, presence, language, projects, transcriptionModel, voiceTuning, memorySettings,
+            ));
+          }
           if (toolTiming) {
             toolTiming.finishedMs = elapsedSinceSpeechStopped(toolTurnTiming) ?? toolTiming.startedMs;
             toolTiming.outcome = outcome;

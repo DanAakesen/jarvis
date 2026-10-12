@@ -247,6 +247,14 @@ outside npm workspaces; production `apps/web` uses `three@0.180.0` and dev-only
 `@types/three@0.180.0`.
 See [README.md](../README.md) for public web configuration and overrides.
 
+P9-89 presence behavior is shared in `agents/jarvis/presence-instructions.json`.
+Keep it in both Docker images and both the root and hosted-agent `.dockerignore`
+allowlists. Focused
+checks: `npm test --workspace @jarvis/backend -- src/core/settings.test.ts src/core/capability-instructions.test.ts src/voice/realtime.test.ts src/voice/relay.test.ts`;
+from `agents/jarvis`, `.venv/bin/python -m pytest -q tests/test_model_client.py tests/test_voice_runtime.py tests/test_chat_runtime.py tests/test_jarvis_tools.py`.
+Mode preferences may change style, not permissions or exact approval phrases.
+Live chat and both voice languages still need post-deploy acceptance.
+
 Verified in Codex cloud for P0-02:
 
 | Purpose | Command |

@@ -1010,9 +1010,17 @@ API/feed requests do not return Dan to Present. The owner-authenticated
 `set_presence_mode` tool records manual voice/chat changes without confirmation;
 `set_away_mode` remains a compatibility alias for one release. `GET /agent/settings`
 provides the active mode and timestamp alongside the base
-`personality.customInstructions` and bounded per-mode instructions. Realtime
-voice receives those instructions initially and sends a new `session.update`
-when a mode-change event arrives.
+`personality.customInstructions` and bounded per-mode instructions. P9-89 shares
+first-person built-ins in `agents/jarvis/presence-instructions.json`, packaged in
+both backend and hosted-agent images. Settings reads resolve empty stored mode
+text to those defaults without writes; custom text remains a style preference
+alongside fixed hands-free rules. Chat and hosted Danish voice refresh presence
+each turn, retaining session model/reasoning choices, and rebuild instructions
+after successful mode tools. English realtime sends a new `session.update` on
+mode changes and synchronises successful mode tools before continuing. Every
+relay `response.create`, including custom overrides and Danish responses, carries
+the one-line current-mode statement and built-in behavior. All modes use tools
+to retrieve content rather than require a paste; missing permissions are reported.
 
 The backend does not poll Graph or require `Presence.Read.All`; away mode is
 manual, Jarvis-commanded, or set to Present by authenticated browser activity.

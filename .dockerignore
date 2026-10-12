@@ -8,6 +8,9 @@
 !db/migrations/**
 !docs/
 !docs/features.md
+!agents/
+!agents/jarvis/
+!agents/jarvis/presence-instructions.json
 !apps/
 !apps/backend/
 !apps/backend/package.json
