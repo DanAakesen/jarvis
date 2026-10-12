@@ -89,6 +89,8 @@ describe('inactive nutrition services on real SQL Server', () => {
     await store().favorite({ ...input, id: 'not-a-duplicate', name: 'SYNTHETIC DINNER' }, accepted, signal());
     expect((await store().favorites({ limit: 100 }, signal())).rows).toHaveLength(1);
     expect(await store().findFavorite('supper', signal())).toMatchObject({ id: 'favorite' });
+    await expect(store().favorite({ ...input, id: 'deleted-source', name: 'Deleted source', aliases: [], sourceIdempotencyKey: 'synthetic-1' }, accepted, signal())).rejects.toThrow('unavailable');
+    expect(await store().findFavorite('Deleted source', signal())).toBeNull();
   });
   it('persists retry-safe likes/dislikes and never returns a disliked suggestion', async () => {
     await Promise.all([store().feedback('favorite', 'dislike', signal()), store().feedback('favorite', 'dislike', signal())]);
@@ -99,6 +101,16 @@ describe('inactive nutrition services on real SQL Server', () => {
       { now: now(), localTime: '17:00', remainingKcal: 200, remainingProteinGrams: null }, signal())).toEqual([]);
     await store().feedback('favorite', 'like', signal()); expect(await store().disliked(['favorite'], signal())).toEqual(new Set());
     await expect(store().feedback('favorite ', 'dislike', signal())).rejects.toThrow('conflicts');
+    await store().feedback('favorite', 'dislike', signal());
+    const otherStore = NutritionStore.forRequest(pool, request(other), now);
+    await otherStore.feedback('favorite', 'dislike', signal());
+    await expect(store().feedback('favorite ', null, signal())).rejects.toThrow('conflicts');
+    expect(await store().disliked(['favorite'], signal())).toEqual(new Set(['favorite']));
+    await Promise.all([store().feedback('favorite', null, signal()), store().feedback('favorite', null, signal())]);
+    expect(await store().disliked(['favorite'], signal())).toEqual(new Set());
+    expect(await otherStore.disliked(['favorite'], signal())).toEqual(new Set(['favorite']));
+    expect((await store().suggestions([{ ...fixture('candidate'), mealKey: 'favorite', name: 'Synthetic', localTimeWindows: [] }],
+      { now: now(), localTime: '17:00', remainingKcal: 200, remainingProteinGrams: null }, signal())).map((row) => row.mealKey)).toEqual(['favorite']);
   });
   it('saves retry-safe revisioned plans with unknown macros without logging or enqueueing intake', async () => {
     const planInput: PlanRequest = { id: 'plan', name: 'Synthetic Plan', description: null,
@@ -143,5 +155,56 @@ describe('inactive nutrition services on real SQL Server', () => {
         VALUES(@owner,N'synthetic',N'Synthetic',N'synthetic',100,NULL,NULL,NULL,NULL,N'2026-01-01',N'2026-01-01');`);
       await expect(revertMigration(rollbackPool, migrations, await readDownMigration('0042_daily_plan_unknown_nutrients.sql'))).rejects.toThrow('cannot replace unknown');
     } finally { await rollbackPool.close(); await admin.request().batch(`IF DB_ID(N'${isolated}') IS NOT NULL BEGIN ALTER DATABASE [${isolated}] SET SINGLE_USER WITH ROLLBACK IMMEDIATE; DROP DATABASE [${isolated}]; END;`); }
+  });
+  it('reuses legacy accented favourite/plan names and raw aliases, isolating owners and rejecting ambiguity', async () => {
+    const accepted = { explicit: true, estimateAccepted: false };
+    const cleanDefinition: FoodDefinition = { mealName: 'Synthetic capped definition', mealType: null, components: [], confidence: 'accurate', provenance: {},
+      energyKcal: 10000, proteinGrams: 1000, carbohydratesGrams: null, fatGrams: null, fiberGrams: null };
+    const favorite = { id: 'legacy-favorite-01', name: 'Crème-BRÛLÉE!', aliases: ['MÝ Raw.Alias'], definition: cleanDefinition };
+    await store().favorite(favorite, accepted, signal());
+    // Synthetic import shape: original normalization plus untouched display aliases.
+    await pool.request().input('owner', sql.UniqueIdentifier, owner).query(`UPDATE daily.nutrition_favorites SET normalized_name=N'creme brulee',aliases_json=N'["MÝ Raw.Alias"]' WHERE owner_object_id=@owner AND id=N'legacy-favorite-01';`);
+    expect(await store().findFavorite('my RAW alias', signal())).toMatchObject({ id: favorite.id, aliases_json: '["MÝ Raw.Alias"]' });
+    const otherStore = NutritionStore.forRequest(pool, request(other), now);
+    expect(await otherStore.findFavorite('my raw alias', signal())).toBeNull();
+    await Promise.all([store().favorite({ ...favorite, id: 'duplicate-a', name: 'CREME / brulee' }, accepted, signal()),
+      store().favorite({ ...favorite, id: 'duplicate-b', name: 'Crème Brûlée' }, accepted, signal())]);
+    expect((await store().favorites({ limit: 100 }, signal())).rows.filter((row) => row.normalized_name === 'creme brulee').map((row) => row.id)).toEqual([favorite.id]);
+    expect(await store().findFavorite('MÝ Raw.Alias', signal())).toMatchObject({ id: favorite.id, aliases_json: '["MÝ Raw.Alias"]' });
+    await expect(store().favorite({ ...favorite, id: 'collision', name: 'Different', aliases: ['MY RAW-ALIAS'] }, accepted, signal())).rejects.toThrow('already used');
+    await otherStore.favorite({ ...favorite, id: 'other-favorite' }, accepted, signal());
+    expect(await otherStore.findFavorite('my raw alias', signal())).toMatchObject({ id: 'other-favorite' });
+    const plan: PlanRequest = { id: 'legacy-plan-01', name: 'Crème / DAY!', description: null,
+      entries: [{ slot: 'breakfast', favoriteId: favorite.id }, { slot: 'lunch', favoriteId: favorite.id }, { slot: 'dinner', favoriteId: favorite.id }] };
+    const created = await store().savePlan(plan, 0n, signal());
+    expect(created).toMatchObject({ id: plan.id, energy_kcal: 30000, protein_grams: 3000, carbohydrates_grams: null });
+    await pool.request().input('owner', sql.UniqueIdentifier, owner).query(`UPDATE daily.nutrition_meal_plans SET normalized_name=N'creme day' WHERE owner_object_id=@owner AND id=N'legacy-plan-01';`);
+    expect(await store().savePlan({ ...plan, id: 'duplicate-plan', name: 'CREME-DAY' }, 1n, signal())).toMatchObject({ id: plan.id, revision: '2' });
+    expect((await store().plans({ limit: 100 }, signal())).rows.filter((row) => row.normalized_name === 'creme day').map((row) => row.id)).toEqual([plan.id]);
+    await store().favorite({ ...favorite, id: 'ambiguous-favorite', name: 'Unique name', aliases: [] }, accepted, signal());
+    await pool.request().input('owner', sql.UniqueIdentifier, owner).query(`UPDATE daily.nutrition_favorites SET aliases_json=N'["My Raw Alias"]' WHERE owner_object_id=@owner AND id=N'ambiguous-favorite';`);
+    await expect(store().findFavorite('MÝ Raw.Alias', signal())).rejects.toThrow('ambiguous');
+    await expect(store().favorite(favorite, accepted, signal())).rejects.toThrow('already used');
+    await pool.request().input('owner', sql.UniqueIdentifier, owner).query(`UPDATE daily.nutrition_favorites SET favorite_name=N'Creme Brulee' WHERE owner_object_id=@owner AND id=N'ambiguous-favorite';`);
+    await expect(store().favorite(favorite, accepted, signal())).rejects.toThrow('ambiguous');
+  });
+  it('rejects deleted source intake but retains an independent favourite snapshot', async () => {
+    const intake = fixture('snapshot-source'); await store().log(intake, authority, signal());
+    const input = { id: 'retained-snapshot', name: 'Retained snapshot', aliases: [], sourceIdempotencyKey: intake.idempotencyKey };
+    await store().favorite(input, { explicit: true, estimateAccepted: false }, signal());
+    await store().remove(intake.idempotencyKey, 1n, signal());
+    await expect(store().favorite({ ...input, id: 'new-snapshot', name: 'New snapshot' }, { explicit: true, estimateAccepted: false }, signal())).rejects.toThrow('unavailable');
+    expect(await store().findFavorite(input.name, signal())).toMatchObject({ id: input.id, source_meal_id: intake.id, energy_kcal: intake.energyKcal });
+  });
+  it('enforces new-write domains, caps, trusted time and Copenhagen dates without rejecting old/null intake', async () => {
+    const input = fixture('write-guards');
+    for (const patch of [{ energyKcal: -1 }, { energyKcal: 10001 }, { proteinGrams: 1001 }, { mealType: 'supper' },
+      { occurredAt: '2026-10-12T15:05:01Z', mealDate: '2026-10-12' }, { mealDate: '2026-01-02' }]) {
+      await expect(store().log({ ...input, ...patch }, authority, signal())).rejects.toThrow();
+      await expect(store().correct({ ...input, ...patch }, 1n, signal())).rejects.toThrow();
+    }
+    expect(await store().intake(input.idempotencyKey, signal())).toBeNull();
+    expect(await store().log(input, authority, signal())).toMatchObject({ protein_grams: null, occurred_at: input.occurredAt });
+    expect(await store().correct({ ...input, mealType: 'other' }, 1n, signal())).toMatchObject({ revision: '2', protein_grams: null });
   });
 });

@@ -78,7 +78,7 @@ Released after closed/deployed #718. Draft #743 implements inactive nutrition se
 
 **NEW DAILY CAPABILITY — permanent** · Backend & migration rehearsal
 
-Lookup, log / edit / delete, full history, favourites / aliases, plans and persisted like / dislike behaviour.
+Lookup, log / edit / delete, full history, favourites / aliases, plans and persisted like / dislike / clear behaviour. Draft #743 restores legacy name normalization and raw display-alias compatibility, rejects deleted source intake for new favourites, validates new-write meal domains/caps/trusted time/Copenhagen dates, and verifies Frida group/row identity and finite arithmetic. Synthetic SQL covers stable-ID reuse, ambiguity, owner isolation and clearing; exact-head CI and independent acceptance remain required.
 
 Text/voice/photo lookup and current Frida data; exact-once confirmed food logging; full history and edits beyond 7 days; soft deletion, aliases, favourites, plans and persistent likes/dislikes. Suggest proactively using time of day and remaining budget; disliked meals must not return. Keep intake, protein and other macros from actual records; never silently invent missing quantities.
 

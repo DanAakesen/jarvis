@@ -3,7 +3,7 @@ import type { FastifyRequest } from 'fastify';
 import { setTimeout as delay } from 'node:timers/promises';
 import { resolveDailyOwner } from '../owner.js';
 import { ToolFailure, ToolRefusal } from '../../core/tool-registry.js';
-import { authorizeIntake, canonicalJson, date, foodDefinition, instant, meal, nutrients, plan, suggest, text, type BudgetContext, type FavoriteAuthority, type FavoriteInput, type IntakeAuthority, type MealInput, type PlanInput, type PlanRequest, type Suggestion } from './model.js';
+import { authorizeIntake, canonicalJson, date, instant, normalizeSearchText, nutrients, plan, suggest, text, writeDefinition, writeMeal, type BudgetContext, type FavoriteAuthority, type FavoriteInput, type IntakeAuthority, type MealInput, type PlanInput, type PlanRequest, type Suggestion } from './model.js';
 
 const fields = {
   id: ['id', sql.NVarChar(256)], idempotencyKey: ['idempotency_key', sql.NVarChar(256)],
@@ -15,6 +15,11 @@ const fields = {
 } as const;
 const select = Object.values(fields).map(([column]) => `[${column}]`).join(', ') + ', source, revision, deleted_at, created_at, updated_at';
 const equalKey = (column: string, param: string) => `[${column}]=@${param} AND DATALENGTH([${column}])=DATALENGTH(@${param})`;
+function favoriteNames(row: Record<string, unknown>): string[] {
+  const aliases: unknown = JSON.parse(row.aliases_json as string);
+  if (!Array.isArray(aliases) || aliases.length > 30 || aliases.some((alias) => typeof alias !== 'string')) throw new ToolFailure('Stored favourite aliases are invalid.');
+  return [row.normalized_name as string, row.favorite_name as string, ...aliases as string[]].map(normalizeSearchText);
+}
 function bind(request: sql.Request, input: MealInput): sql.Request {
   for (const key of Object.keys(fields) as (keyof typeof fields)[]) {
     const [, type] = fields[key];
@@ -77,7 +82,7 @@ export class NutritionStore {
     }
   }
   async log(input: MealInput, authority: IntakeAuthority, signal: AbortSignal): Promise<Record<string, unknown>> {
-    meal(input); input = structuredClone(input); authorizeIntake(input, authority);
+    writeMeal(input, this.now()); input = structuredClone(input); authorizeIntake(input, authority);
     return this.transaction(signal, async (transaction) => {
       const lookup = this.request(transaction, signal).input('key', sql.NVarChar(256), input.idempotencyKey);
       const existing = (await this.query(lookup, `SELECT ${select} FROM daily.nutrition_meals WITH (UPDLOCK,HOLDLOCK)
@@ -94,7 +99,7 @@ export class NutritionStore {
     });
   }
   async correct(input: MealInput, expectedRevision: bigint, signal: AbortSignal): Promise<Record<string, unknown>> {
-    meal(input); input = structuredClone(input); if (typeof expectedRevision !== 'bigint' || expectedRevision < 1n || expectedRevision >= 9223372036854775807n) throw new TypeError('Invalid meal revision');
+    writeMeal(input, this.now()); input = structuredClone(input); if (typeof expectedRevision !== 'bigint' || expectedRevision < 1n || expectedRevision >= 9223372036854775807n) throw new TypeError('Invalid meal revision');
     return this.transaction(signal, async (transaction) => {
       const lookup = this.request(transaction, signal).input('key', sql.NVarChar(256), input.idempotencyKey);
       const row = (await this.query(lookup, `SELECT ${select} FROM daily.nutrition_meals WITH (UPDLOCK,HOLDLOCK) WHERE owner_object_id=@owner AND ${equalKey('idempotency_key', 'key')};`, signal)).recordset[0];
@@ -142,13 +147,14 @@ export class NutritionStore {
     const last = rows.at(-1);
     return { rows, next: more && last ? { createdAt: last.created_at as string, id: last.id as string } : null };
   }
-  async feedback(mealKey: string, preference: 'like' | 'dislike', signal: AbortSignal): Promise<void> {
-    text(mealKey); if (preference !== 'like' && preference !== 'dislike') throw new TypeError('Invalid meal preference');
+  async feedback(mealKey: string, preference: 'like' | 'dislike' | null, signal: AbortSignal): Promise<void> {
+    text(mealKey); if (preference !== null && preference !== 'like' && preference !== 'dislike') throw new TypeError('Invalid meal preference');
     await this.transaction(signal, async (transaction) => {
       const now = this.now(); instant(now);
       const request = this.request(transaction, signal).input('key', sql.NVarChar(256), mealKey).input('preference', sql.NVarChar(256), preference).input('now', sql.NVarChar(64), now);
       await this.query(request, `IF EXISTS(SELECT 1 FROM daily.nutrition_recommendation_feedback WITH (UPDLOCK,HOLDLOCK) WHERE owner_object_id=@owner AND meal_key=@key AND DATALENGTH(meal_key)<>DATALENGTH(@key)) THROW 51001,'Nutrition key conflict',1;
-        IF EXISTS(SELECT 1 FROM daily.nutrition_recommendation_feedback WITH (UPDLOCK,HOLDLOCK) WHERE owner_object_id=@owner AND meal_key=@key)
+        IF @preference IS NULL DELETE daily.nutrition_recommendation_feedback WHERE owner_object_id=@owner AND ${equalKey('meal_key', 'key')};
+        ELSE IF EXISTS(SELECT 1 FROM daily.nutrition_recommendation_feedback WITH (UPDLOCK,HOLDLOCK) WHERE owner_object_id=@owner AND meal_key=@key)
         UPDATE daily.nutrition_recommendation_feedback SET preference=@preference,updated_at=@now WHERE owner_object_id=@owner AND ${equalKey('meal_key', 'key')};
         ELSE INSERT daily.nutrition_recommendation_feedback(owner_object_id,meal_key,preference,created_at,updated_at) VALUES(@owner,@key,@preference,@now,@now);`, signal);
     });
@@ -180,26 +186,24 @@ export class NutritionStore {
     if (input.definition) {
       const definition = input.definition;
       if (Object.keys(definition).some((key) => !['mealName','mealType','components','confidence','provenance','energyKcal','proteinGrams','carbohydratesGrams','fatGrams','fiberGrams'].includes(key))) throw new TypeError('Invalid favourite definition');
-      foodDefinition(definition);
+      writeDefinition(definition);
       if (definition.confidence !== 'accurate' && authority.estimateAccepted !== true) throw new ToolRefusal('Accept the displayed estimated favourite definition first.');
     }
     input = structuredClone(input);
-    const normalized = input.name.normalize('NFKC').toLocaleLowerCase('en-US').trim(); text(normalized);
-    const aliases = [...new Set(input.aliases.map((alias) => { text(alias); const result = alias.normalize('NFKC').toLocaleLowerCase('en-US').trim(); text(result); return result; }))];
+    const normalized = normalizeSearchText(input.name);
+    const aliases = [...new Set(input.aliases.map((alias) => { normalizeSearchText(alias); return alias; }))];
     await this.transaction(signal, async (transaction) => {
       const source = input.sourceIdempotencyKey === undefined ? null : (await this.query(this.request(transaction, signal).input('key', sql.NVarChar(256), input.sourceIdempotencyKey),
-        `SELECT ${select} FROM daily.nutrition_meals WITH (UPDLOCK,HOLDLOCK) WHERE owner_object_id=@owner AND ${equalKey('idempotency_key', 'key')};`, signal)).recordset[0];
+        `SELECT ${select} FROM daily.nutrition_meals WITH (UPDLOCK,HOLDLOCK) WHERE owner_object_id=@owner AND deleted_at IS NULL AND ${equalKey('idempotency_key', 'key')};`, signal)).recordset[0];
       if (input.sourceIdempotencyKey !== undefined && !source) throw new ToolRefusal('The source intake is unavailable.');
-      const existing = (await this.query(this.request(transaction, signal).input('name', sql.NVarChar(256), normalized),
-        `SELECT id FROM daily.nutrition_favorites WITH (UPDLOCK,HOLDLOCK) WHERE owner_object_id=@owner AND ${equalKey('normalized_name', 'name')};`, signal)).recordset[0];
+      const namespace = await this.favoriteNamespace(transaction, signal);
+      const matches = namespace.filter((row) => favoriteNames(row).slice(0, 2).includes(normalized));
+      if (matches.length > 1) throw new ToolRefusal('The favourite name is ambiguous.');
+      const existing = matches[0];
       const favoriteId = existing?.id as string | undefined ?? input.id;
       // One owner-local name/alias namespace; do not silently redirect a favourite.
-      const conflicts = (await this.query(this.request(transaction, signal).input('id', sql.NVarChar(256), favoriteId)
-        .input('names', sql.NVarChar(sql.MAX), JSON.stringify([normalized, ...aliases])),
-        `SELECT TOP (1) id FROM daily.nutrition_favorites WITH (UPDLOCK,HOLDLOCK) WHERE owner_object_id=@owner
-          AND NOT (${equalKey('id', 'id')}) AND (
-            EXISTS(SELECT 1 FROM OPENJSON(@names) n WHERE n.[value] COLLATE Latin1_General_100_BIN2=normalized_name AND DATALENGTH(n.[value])=DATALENGTH(normalized_name))
-            OR EXISTS(SELECT 1 FROM OPENJSON(aliases_json) a JOIN OPENJSON(@names) n ON a.[value] COLLATE Latin1_General_100_BIN2=n.[value] COLLATE Latin1_General_100_BIN2 AND DATALENGTH(a.[value])=DATALENGTH(n.[value])));`, signal)).recordset;
+      const proposedNames = new Set([normalized, ...aliases.map(normalizeSearchText)]);
+      const conflicts = namespace.filter((row) => row.id !== favoriteId && favoriteNames(row).some((name) => proposedNames.has(name)));
       if (conflicts.length) throw new ToolRefusal('This favourite name or alias is already used.');
       const now = this.now(); instant(now);
       const request = this.request(transaction, signal).input('id', sql.NVarChar(256), favoriteId).input('name', sql.NVarChar(sql.MAX), input.name)
@@ -222,12 +226,19 @@ export class NutritionStore {
     });
   }
   async findFavorite(name: string, signal: AbortSignal): Promise<Record<string, unknown> | null> {
-    text(name); const normalized = name.normalize('NFKC').toLocaleLowerCase('en-US').trim(); text(normalized);
-    const result = await this.read(this.request(this.pool, signal).input('name', sql.NVarChar(256), normalized),
-      `SELECT TOP (2) * FROM daily.nutrition_favorites WHERE owner_object_id=@owner AND
-        ((${equalKey('normalized_name', 'name')}) OR EXISTS(SELECT 1 FROM OPENJSON(aliases_json) WHERE [value] COLLATE Latin1_General_100_BIN2=@name AND DATALENGTH([value])=DATALENGTH(@name)));`, signal);
-    if (result.recordset.length > 1) throw new ToolRefusal('The favourite alias is ambiguous. Choose its exact name.');
-    return result.recordset[0] ?? null;
+    const normalized = normalizeSearchText(name);
+    const matches = (await this.favoriteNamespace(this.pool, signal)).filter((row) => favoriteNames(row).includes(normalized));
+    if (matches.length > 1) throw new ToolRefusal('The favourite alias is ambiguous.');
+    return matches[0] ?? null;
+  }
+  private async favoriteNamespace(parent: sql.Transaction | sql.ConnectionPool, signal: AbortSignal): Promise<Record<string, unknown>[]> {
+    // Lock the owner namespace through updates: JS normalization matches the source exactly,
+    // including raw imported aliases, without a lossy SQL collation or importer rewrite.
+    const request = this.request(parent, signal);
+    const query = `SELECT TOP (1001) * FROM daily.nutrition_favorites ${parent instanceof sql.Transaction ? 'WITH (UPDLOCK,HOLDLOCK)' : ''} WHERE owner_object_id=@owner ORDER BY id;`;
+    const rows = (await (parent instanceof sql.Transaction ? this.query(request, query, signal) : this.read(request, query, signal))).recordset;
+    if (rows.length > 1000) throw new ToolRefusal('Favourite namespace exceeds safe lookup limits.');
+    return rows;
   }
   /** Exact owner-owned favourites/aliases outrank historical meal-name matches. */
   async lookupSaved(name: string, signal: AbortSignal): Promise<{ source: 'favorite' | 'history'; row: Record<string, unknown> } | null> {
@@ -253,10 +264,11 @@ export class NutritionStore {
     for (const entry of input.entries) { if (Object.keys(entry).some((key) => !['slot','favoriteId'].includes(key)) || !['breakfast','lunch','dinner','snack'].includes(entry.slot)) throw new TypeError('Invalid plan slot'); text(entry.favoriteId); }
     for (const slot of ['breakfast','lunch','dinner']) if (input.entries.filter((entry) => entry.slot === slot).length !== 1) throw new TypeError('Plan requires one breakfast, lunch and dinner');
     input = structuredClone(input); if (typeof expectedRevision !== 'bigint' || expectedRevision < 0n || expectedRevision >= 9223372036854775807n) throw new TypeError('Invalid plan revision');
-    const normalized = input.name.normalize('NFKC').toLocaleLowerCase('en-US').trim(); text(normalized);
+    const normalized = normalizeSearchText(input.name);
     return this.transaction(signal, async (transaction) => {
-      const lookup = this.request(transaction, signal).input('id', sql.NVarChar(256), input.id).input('name', sql.NVarChar(256), normalized);
-      const existing = (await this.query(lookup, `SELECT * FROM daily.nutrition_meal_plans WITH (UPDLOCK,HOLDLOCK) WHERE owner_object_id=@owner AND ((${equalKey('id', 'id')}) OR (${equalKey('normalized_name', 'name')}));`, signal)).recordset;
+      const rows = (await this.query(this.request(transaction, signal), `SELECT TOP (1001) * FROM daily.nutrition_meal_plans WITH (UPDLOCK,HOLDLOCK) WHERE owner_object_id=@owner ORDER BY id;`, signal)).recordset;
+      if (rows.length > 1000) throw new ToolRefusal('Plan namespace exceeds safe lookup limits.');
+      const existing = rows.filter((row) => row.id === input.id || normalizeSearchText(row.normalized_name as string) === normalized || normalizeSearchText(row.plan_name as string) === normalized);
       if (existing.length > 1) throw new ToolRefusal('Plan name conflicts with another existing plan.');
       const row = existing[0];
       const items: PlanInput['items'][number][] = [];

@@ -30,6 +30,20 @@ const store = () => NutritionStore.forRequest({} as sql.ConnectionPool, request,
 const signal = () => new AbortController().signal;
 beforeEach(() => { vi.clearAllMocks(); db.inputs.length = 0; db.begin.mockResolvedValue(undefined); db.commit.mockResolvedValue(undefined); db.rollback.mockResolvedValue(undefined); db.query.mockReset(); });
 describe('nutrition failure/privacy boundaries', () => {
+  it.each([{ mealType: 'supper' }, { energyKcal: 10001 }, { proteinGrams: 1001 }, { mealDate: '2026-01-02' },
+    { occurredAt: '2026-10-12T15:05:01Z', mealDate: '2026-10-12' }])('rejects log and correction writes before SQL %j', async (patch) => {
+    await expect(store().log({ ...input, ...patch }, authority, signal())).rejects.toThrow();
+    await expect(store().correct({ ...input, ...patch }, 1n, signal())).rejects.toThrow();
+    expect(db.begin).not.toHaveBeenCalled(); expect(db.query).not.toHaveBeenCalled();
+  });
+  it('rejects invalid confirmed favourite definitions before SQL', async () => {
+    await expect(store().favorite({ id: 'fav', name: 'Fav', aliases: [], definition: { ...input, energyKcal: 10001 } }, { explicit: true, estimateAccepted: true }, signal())).rejects.toThrow();
+    expect(db.begin).not.toHaveBeenCalled();
+  });
+  it('fails closed on incomplete favourite namespaces', async () => {
+    db.query.mockResolvedValue({ recordset: Array(1001).fill({}) });
+    await expect(store().findFavorite('name', signal())).rejects.toThrow('safe lookup limits');
+  });
   it('denies callers selecting another owner or a coding runner before SQL', () => {
     expect(() => NutritionStore.forRequest({} as sql.ConnectionPool, { ...request, principal: { objectId: 'other' } } as unknown as FastifyRequest)).toThrow();
     expect(() => NutritionStore.forRequest({} as sql.ConnectionPool, { ...request, runnerPrincipal: { kind: 'jarvis-runner' } } as unknown as FastifyRequest)).toThrow();

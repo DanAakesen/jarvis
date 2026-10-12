@@ -4,8 +4,9 @@ import { FridaLookupAdapter, fridaReference } from './frida.js';
 const foods = () => Array.from({ length: 1381 }, (_, index) => ({ releaseId: 10, id: index + 1,
   nameDanish: index === 0 ? 'Æble' : `Synthetic reference ${index}`, nameEnglish: index === 0 ? 'Apple' : null,
   descriptionDanish: null, descriptionEnglish: null, danishSynonyms: [] as string[], englishSynonyms: [] as string[] }));
-const parameter = (id: number, value: number | null, unitName: string) => ({ id, value, unitName, nameDanish: 'Synthetic', nameEnglish: 'Synthetic', sourceIds: [101], sourceFoodIds: [1] });
-const values = () => [{ foodParameters: [parameter(356, 100, 'kcal'), parameter(218, 2, 'g'), parameter(172, 10, 'g'), parameter(168, null, 'g'), parameter(141, 1, 'g')] }];
+const parameter = (id: number, value: number | null, unitName: string) => ({ id, foodId: 1, releaseId: 10, value, unitName, nameDanish: 'Synthetic', nameEnglish: 'Synthetic', sourceIds: [101], sourceFoodIds: [1] });
+const group = (foodParameters: unknown[]) => ({ foodId: 1, releaseId: 10, foodParameters });
+const values = () => [group([parameter(356, 100, 'kcal'), parameter(218, 2, 'g'), parameter(172, 10, 'g'), parameter(168, null, 'g'), parameter(141, 1, 'g')])];
 const json = (value: unknown) => new Response(JSON.stringify(value), { headers: { 'content-type': 'application/json' } });
 function fixture(overrides: { catalogue?: unknown; parameters?: unknown; token?: boolean } = {}) {
   let clock = Date.parse('2026-10-12T15:42:01Z');
@@ -47,13 +48,13 @@ describe('pinned verified Frida adapter using synthetic public DTOs only', () =>
   });
   it('recognizes a strong separated match without inventing nutrient quantities', async () => {
     const catalogue = foods(); catalogue[0]!.nameDanish = 'Synthetic ripe apple edible fruit'; catalogue[0]!.nameEnglish = null;
-    const params = values(); params[0]!.foodParameters[3]!.value = 1;
+    const params = [group([parameter(356, 100, 'kcal'), parameter(218, 2, 'g'), parameter(172, 10, 'g'), parameter(168, 1, 'g'), parameter(141, 1, 'g')])];
     const result = await fixture({ catalogue, parameters: params }).adapter.lookup([{ name: 'Synthetic ripe apple edible', grams: 100, preparationMethod: null }], signal());
     expect(result.status).toBe('complete'); expect(result.components[0]?.match?.foodId).toBe(1); expect(result.totals.fiberGrams).toBe(1);
   });
   it('preserves unavailable provenance and missing values without fabricating IDs or zeros', async () => {
     const row = { ...parameter(356, 100, 'kcal'), sourceIds: null, sourceFoodIds: undefined, value: undefined };
-    const result = await fixture({ parameters: [{ foodParameters: [row] }] }).adapter.lookup(input, signal());
+    const result = await fixture({ parameters: [group([row])] }).adapter.lookup(input, signal());
     expect(result.status).toBe('partial'); expect(result.totals.energyKcal).toBeNull(); expect(result.matchedSubtotals.energyKcal).toBeNull();
     expect(result.components[0]?.match?.provenance.energyKcal).toMatchObject({ sourceIds: null, sourceFoodIds: null });
     expect(result.unknowns).toContain('0:provenance_unavailable:energyKcal');
@@ -65,12 +66,33 @@ describe('pinned verified Frida adapter using synthetic public DTOs only', () =>
     await expect(new FridaLookupAdapter(fetcher).lookup(input, signal())).rejects.toThrow('invalid');
   });
   it.each([
+    { parameters: [{ ...group([parameter(356, 100, 'kcal')]), foodId: 2 }] },
+    { parameters: [{ ...group([parameter(356, 100, 'kcal')]), releaseId: 11 }] },
+    { parameters: [group([{ ...parameter(356, 100, 'kcal'), foodId: 2 }])] },
+    { parameters: [group([{ ...parameter(356, 100, 'kcal'), releaseId: 11 }])] },
+  ])('rejects mismatched group/parameter identity before caching %#', async (override) => {
+    const data = fixture(override);
+    await expect(data.adapter.lookup(input, signal())).rejects.toThrow('No complete nutrient estimate');
+    await expect(data.adapter.lookup(input, signal())).rejects.toThrow('No complete nutrient estimate');
+    expect(data.fetcher).toHaveBeenCalledTimes(5);
+  });
+  it('keeps donor food provenance independent of requested identity', async () => {
+    const result = await fixture({ parameters: [group([{ ...parameter(356, 100, 'kcal'), sourceFoodIds: [999] }])] }).adapter.lookup(input, signal());
+    expect(result.components[0]?.match?.provenance.energyKcal?.sourceFoodIds).toEqual([999]);
+  });
+  it('rejects scaling and accumulation overflow rather than claiming complete totals', async () => {
+    const parameters = [group([parameter(356, Number.MAX_VALUE, 'kcal')])];
+    await expect(fixture({ parameters }).adapter.lookup([{ ...input[0]!, grams: 5000 }], signal())).rejects.toThrow('No complete nutrient estimate');
+    await expect(fixture({ parameters }).adapter.lookup([{ ...input[0]!, grams: 100 }, { ...input[0]!, grams: 100 }], signal())).rejects.toThrow('No complete nutrient estimate');
+    expect((await fixture({ parameters }).adapter.lookup([{ ...input[0]!, grams: 1 }], signal())).matchedSubtotals.energyKcal).toBe(Number.MAX_VALUE * 0.01);
+  });
+  it.each([
     { catalogue: foods().slice(0, 100) }, { catalogue: foods().map((row) => ({ ...row, releaseId: 11 })) },
-    { catalogue: foods().map((row) => ({ ...row, id: 1 })) }, { parameters: [{ foodParameters: [parameter(356, 1, 'kJ')] }] },
-    { parameters: [{ foodParameters: [parameter(356, 1, 'kcal'), parameter(356, 2, 'kcal')] }] }, { token: false },
+    { catalogue: foods().map((row) => ({ ...row, id: 1 })) }, { parameters: [group([parameter(356, 1, 'kJ')])] },
+    { parameters: [group([parameter(356, 1, 'kcal'), parameter(356, 2, 'kcal')])] }, { token: false },
     { catalogue: foods().map((row) => ({ ...row, danishSynonyms: 'not-an-array' })) },
-    { parameters: [{ foodParameters: [{ ...parameter(356, 1, 'kcal'), value: '1' }] }] },
-    { parameters: [{ foodParameters: [{ ...parameter(356, 1, 'kcal'), sourceIds: { id: 1 } }] }] },
+    { parameters: [group([{ ...parameter(356, 1, 'kcal'), value: '1' }])] },
+    { parameters: [group([{ ...parameter(356, 1, 'kcal'), sourceIds: { id: 1 } }])] },
   ])('fails closed on invalid/truncated/provider session contracts %#', async (override) => {
     await expect(fixture(override).adapter.lookup(input, signal())).rejects.toThrow('No complete nutrient estimate');
   });

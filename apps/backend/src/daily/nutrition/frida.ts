@@ -108,13 +108,16 @@ export class FridaLookupAdapter {
     const cached = this.cache.get(foodId); if (cached && cached.until > this.now()) return cached;
     const groups = await this.get(`/foodParameter/10/${foodId}/consumer`, signal);
     if (!Array.isArray(groups) || groups.length > 100) throw new TypeError('Invalid food parameter groups');
-    const entries = groups.flatMap((group) => { const items = object(group).foodParameters; if (!Array.isArray(items) || items.length > 1000) throw new TypeError('Invalid food parameters'); return items; });
+    const entries = groups.flatMap((group) => { const row = object(group);
+      if (row.foodId !== foodId || row.releaseId !== 10) throw new TypeError('Food parameter group identity mismatch');
+      const items = row.foodParameters; if (!Array.isArray(items) || items.length > 1000) throw new TypeError('Invalid food parameters'); return items; });
     if (entries.length > 5000) throw new TypeError('Food parameters exceed limits');
     const result: { values: FridaMatch['values']; provenance: FridaMatch['provenance']; retrievedAt: string; until: number } = { values: {}, provenance: {}, retrievedAt: new Date(this.now()).toISOString(), until: this.now() + 10 * 60_000 };
     const seen = new Set<number>();
     for (const item of entries) {
       const row = object(item); id(row.id); if (seen.has(row.id)) throw new TypeError('Duplicate food parameter'); seen.add(row.id);
       const key = (Object.keys(parameters) as Parameter[]).find((key) => parameters[key][0] === row.id); if (!key) continue;
+      if (row.foodId !== foodId || row.releaseId !== 10) throw new TypeError('Food parameter identity mismatch');
       if (row.unitName !== parameters[key][1] || row.value !== null && row.value !== undefined && (typeof row.value !== 'number' || !Number.isFinite(row.value) || row.value < 0)) throw new TypeError('Invalid nutrient value or unit');
       const sources = (value: unknown) => { if (value === null || value === undefined) return null;
         if (!Array.isArray(value) || value.length > 1000 || value.some((value) => typeof value !== 'number' || !Number.isSafeInteger(value) || value < 1)) throw new TypeError('Invalid nutrient provenance'); return value as number[]; };
@@ -148,7 +151,8 @@ export class FridaLookupAdapter {
         if (chosen && component.grams !== null) {
           const data = await this.foodValues(chosen.food.id, deadline); const values: FridaMatch['values'] = {};
           for (const key of Object.keys(parameters) as Parameter[]) {
-            const value = data.values[key]; values[key] = value === undefined || value === null ? null : value * component.grams / 100;
+            const value = data.values[key]; values[key] = value === undefined || value === null ? null : value * (component.grams / 100);
+            if (values[key] !== null && !Number.isFinite(values[key])) throw new TypeError('Scaled food quantity exceeds finite limits');
             if (values[key] === null) unknowns.push(`nutrient_missing:${key}`);
             const provenance = data.provenance[key];
             if (!provenance || provenance.sourceIds === null || provenance.sourceFoodIds === null) unknowns.push(`provenance_unavailable:${key}`);
@@ -162,6 +166,7 @@ export class FridaLookupAdapter {
       for (const key of Object.keys(parameters) as Parameter[]) {
         const known = components.flatMap((component) => { const value = component.match?.values[key]; return typeof value === 'number' ? [value] : []; });
         matchedSubtotals[key] = known.length ? known.reduce((a, b) => a + b, 0) : null;
+        if (matchedSubtotals[key] !== null && !Number.isFinite(matchedSubtotals[key])) throw new TypeError('Food total exceeds finite limits');
         totals[key] = known.length === components.length ? matchedSubtotals[key] : null;
       }
       const unknowns = components.flatMap((component, index) => component.unknowns.map((unknown) => `${index}:${unknown}`));

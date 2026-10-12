@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { authorizeIntake, canonicalJson, meal, plan, prepareMeal, resolveNutrients, suggest, type MealInput, type Suggestion } from './model.js';
+import { authorizeIntake, canonicalJson, meal, normalizeSearchText, plan, prepareMeal, resolveNutrients, suggest, writeDefinition, writeMeal, type MealInput, type Suggestion } from './model.js';
 
 export const syntheticMeal: MealInput = {
   id: 'synthetic-01', idempotencyKey: 'synthetic-message-01', mealName: 'Synthetic meal', mealType: null,
@@ -8,6 +8,26 @@ export const syntheticMeal: MealInput = {
   captureMethod: 'text', confidence: 'accurate', provenance: { energyKcal: { source: 'user-exact', unit: 'kcal' } },
 };
 describe('nutrition evidence and budgets', () => {
+  it('matches legacy accent/punctuation search normalization without altering display text', () => {
+    expect(normalizeSearchText('  Crème-BRÛLÉE / Dinner! ')).toBe('creme brulee dinner');
+    expect(normalizeSearchText('MÝ Raw.Alias')).toBe('my raw alias');
+  });
+  it.each([
+    { mealType: 'supper' }, { energyKcal: -1 }, { energyKcal: 10001 }, { proteinGrams: 1001 },
+    { carbohydratesGrams: 1001 }, { fatGrams: 1001 }, { fiberGrams: 1001 },
+    { occurredAt: '2026-10-12T15:05:00.001Z', mealDate: '2026-10-12' }, { mealDate: '2026-01-02' },
+  ])('rejects invalid new writes %j', (patch) => {
+    expect(() => writeMeal({ ...syntheticMeal, ...patch }, '2026-10-12T15:00:00Z')).toThrow();
+  });
+  it('accepts historical/null writes and inclusive caps/time grace while keeping plan totals uncapped', () => {
+    expect(() => writeMeal(syntheticMeal, '2026-10-12T15:00:00Z')).not.toThrow();
+    expect(() => writeMeal({ ...syntheticMeal, occurredAt: '2026-10-12T15:05:00Z', mealDate: '2026-10-12', mealType: 'other', energyKcal: 10000, proteinGrams: 1000 }, '2026-10-12T15:00:00Z')).not.toThrow();
+    expect(() => writeDefinition({ ...syntheticMeal, mealType: 'snack' })).not.toThrow();
+    const large = { ...syntheticMeal, energyKcal: 10000 };
+    expect(() => plan({ id: 'plan', name: 'Large plan', description: null, items: [1,2,3].map((id) => ({ mealKey: String(id), name: 'Meal', nutrients: large })), energyKcal: 30000, proteinGrams: null, carbohydratesGrams: null, fatGrams: null, fiberGrams: null })).not.toThrow();
+    // Read-side/import shapes do not apply new-write caps or meal-type policy.
+    expect(() => meal({ ...syntheticMeal, energyKcal: 10001, mealType: 'legacy-type' })).not.toThrow();
+  });
   it('defaults occurrence to trusted request time/Copenhagen date and keeps missing macros null', () => {
     const input = { id: syntheticMeal.id, idempotencyKey: syntheticMeal.idempotencyKey, mealName: syntheticMeal.mealName, mealType: null,
       components: [], provenance: {}, energyKcal: syntheticMeal.energyKcal, confidence: syntheticMeal.confidence, captureMethod: syntheticMeal.captureMethod };

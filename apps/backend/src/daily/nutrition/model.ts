@@ -66,6 +66,25 @@ export function foodDefinition(input: FoodDefinition): void {
       !input.provenance || Array.isArray(input.provenance) || typeof input.provenance !== 'object' || canonicalJson(input.components).length > 32000 || canonicalJson(input.provenance).length > 16000) throw new TypeError('Invalid food definition');
   nutrients(input);
 }
+/** Source-compatible search keys; display names/aliases and stable IDs stay untouched. */
+export function normalizeSearchText(value: string): string {
+  text(value);
+  const normalized = value.normalize('NFKD').replace(/\p{M}/gu, '').toLowerCase().replace(/[^a-z0-9]+/gu, ' ').trim();
+  text(normalized); return normalized;
+}
+/** New writes only: imported history is readable without retroactive validation. */
+export function writeDefinition(input: FoodDefinition): void {
+  foodDefinition(input);
+  if (input.mealType !== null && !['breakfast', 'lunch', 'dinner', 'snack', 'other'].includes(input.mealType)) throw new TypeError('Invalid meal type');
+  for (const key of ['energyKcal', 'proteinGrams', 'carbohydratesGrams', 'fatGrams', 'fiberGrams'] as const) {
+    if (input[key] !== null && input[key]! > (key === 'energyKcal' ? 10000 : 1000)) throw new TypeError('Meal nutrient exceeds limits');
+  }
+}
+export function writeMeal(input: MealInput, requestTime: string): void {
+  meal(input); writeDefinition(input); instant(requestTime);
+  if (Date.parse(input.occurredAt) > Date.parse(requestTime) + 5 * 60_000) throw new TypeError('Meal occurrence exceeds trusted time');
+  if (input.mealDate !== copenhagenDate(input.occurredAt)) throw new TypeError('Meal date disagrees with Copenhagen occurrence');
+}
 export interface FavoriteInput {
   id: string; name: string; aliases: readonly string[];
   sourceIdempotencyKey?: string; definition?: FoodDefinition;
@@ -89,7 +108,7 @@ export function prepareMeal(input: Omit<MealInput, 'occurredAt' | 'mealDate' | '
     fatGrams: input.fatGrams ?? null, fiberGrams: input.fiberGrams ?? null, occurredAt, mealDate: input.mealDate ?? copenhagenDate(occurredAt),
     // Existing non-null source column is retained as metadata. Meals have no expiry cleanup.
     expiresAt: '9999-12-31T23:59:59Z' };
-  meal(result); return result;
+  writeMeal(result, requestTime); return result;
 }
 /** Supplied by the existing trusted evidence/confirmation boundary, not tool arguments. */
 export interface IntakeAuthority {
