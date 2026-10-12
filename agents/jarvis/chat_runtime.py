@@ -21,7 +21,7 @@ from azure.ai.agentserver.invocations.voice import VoiceAgentServerHost
 from starlette.requests import Request
 from starlette.responses import JSONResponse, StreamingResponse
 
-from chat_telemetry import latency_span, log_latency
+from chat_telemetry import current_chat_phase_timings, latency_span, log_latency
 from jarvis_tools import (
     BACKEND_HTTP_TIMEOUT_SECONDS,
     BackendUnavailable,
@@ -453,6 +453,8 @@ def register_chat_invocation(
             )
         ):
             return JSONResponse({"error": "Invalid request"}, status_code=400)
+        phase_timings: dict[str, float] = {}
+        phase_timings_token = current_chat_phase_timings.set(phase_timings)
         try:
             current_chat_session_id.set(None)
             history = await context_loader(match.group(1), message_id, text, language)
@@ -462,6 +464,8 @@ def register_chat_invocation(
             raise
         except Exception:
             return JSONResponse({"error": "Chat authorization is unavailable"}, status_code=503)
+        finally:
+            current_chat_phase_timings.reset(phase_timings_token)
         if history is None or (session_id is not None and session_id != chat_session_id):
             return JSONResponse(
                 {"error": "Unauthorized or unverified conversation message"},
@@ -471,6 +475,7 @@ def register_chat_invocation(
         current_backend_http_timeout_seconds.set(int(BACKEND_HTTP_TIMEOUT_SECONDS))
 
         async def events():
+            timing_token = current_chat_phase_timings.set(phase_timings)
             message_token = current_message_id.set(message_id)
             conversation_token = current_conversation.set(f"chat-{message_id}")
             turn_token = current_turn.set(message_id)
@@ -642,6 +647,8 @@ def register_chat_invocation(
                      if key in visual_result}
                     if visual_result is not None else {}
                 )
+                if phase_timings:
+                    done["agentTimings"] = phase_timings
                 yield f"event: done\ndata: {json.dumps(done)}\n\n"
             except asyncio.CancelledError:
                 raise
@@ -666,6 +673,7 @@ def register_chat_invocation(
                 current_chat_session_id.reset(chat_session_token)
                 current_visual_result.reset(visual_token)
                 current_image_reservation.reset(image_reservation_token)
+                current_chat_phase_timings.reset(timing_token)
 
         return StreamingResponse(
             events(),

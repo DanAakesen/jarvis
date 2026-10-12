@@ -415,7 +415,10 @@ describe('structured log export', () => {
     logger.info({
       outcome: 'ok', durationMs: 45.6, query: 'memory-secret',
     }, 'memory.embedding');
-    for (const phase of ['turn_first_token', 'turn_complete']) {
+    for (const phase of [
+      'turn_first_token', 'turn_complete', 'chat_history_verification', 'chat_context',
+      'tool_catalogue', 'settings', 'turn_context', 'prompt_build', 'model_first_delta',
+    ]) {
       logger.info({ phase, durationMs: 234.5, text: 'prompt-secret' }, 'chat.latency');
     }
 
@@ -425,12 +428,39 @@ describe('structured log export', () => {
     expect(JSON.parse(records[1]!)).toMatchObject({
       outcome: 'ok', durationMs: 45.6, msg: 'memory.embedding',
     });
-    expect(records.slice(2).map((record) => JSON.parse(record))).toEqual([
-      expect.objectContaining({ phase: 'turn_first_token', durationMs: 234.5 }),
-      expect.objectContaining({ phase: 'turn_complete', durationMs: 234.5 }),
+    expect(records.slice(2).map((record) => JSON.parse(record).phase)).toEqual([
+      'turn_first_token', 'turn_complete', 'chat_history_verification', 'chat_context',
+      'tool_catalogue', 'settings', 'turn_context', 'prompt_build', 'model_first_delta',
     ]);
+    expect(records.slice(2).map((record) => JSON.parse(record).durationMs))
+      .toEqual(Array(9).fill(234.5));
     expect(records.join('')).not.toContain('secret');
     expect(JSON.stringify(sdk.trackTrace.mock.calls)).not.toContain('secret');
+  });
+  it('exports only allowlisted hosted-agent session diagnostics', () => {
+    const records: string[] = [];
+    const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });
+    const logger = createLogger({ logLevel: 'info' }, sdk, output);
+    logger.info({
+      sessionIdUsed: true, sessionStartType: 'cold', platformMs: 12.5,
+      provisioningMs: 20, containerMs: 300, agentMs: 42.5, fallbackReason: 'http_400',
+      owner: 'owner-secret', agentSessionId: 'session-secret', text: 'prompt-secret',
+    }, 'chat.agent_session');
+    logger.info({
+      sessionIdUsed: 'true', sessionStartType: 'unknown', platformMs: 600_001,
+      provisioningMs: -1, containerMs: Infinity, agentMs: '3',
+      fallbackReason: 'private-reason', owner: 'owner-secret',
+    }, 'chat.agent_session');
+
+    expect(JSON.parse(records[0]!)).toMatchObject({
+      msg: 'chat.agent_session', sessionIdUsed: true, sessionStartType: 'cold',
+      platformMs: 12.5, provisioningMs: 20, containerMs: 300, agentMs: 42.5,
+      fallbackReason: 'http_400',
+    });
+    expect(JSON.parse(records[1]!)).toEqual({
+      level: 30, time: expect.any(Number), service: 'jarvis-backend', msg: 'chat.agent_session',
+    });
+    expect(records.join('') + JSON.stringify(sdk.trackTrace.mock.calls)).not.toContain('secret');
   });
   it('exports recipe timing through P5-14 without recipe content', () => {
     const records: string[] = [];

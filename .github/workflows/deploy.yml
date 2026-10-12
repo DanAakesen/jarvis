@@ -228,7 +228,7 @@ jobs:
                 AZURE_AI_MODEL_DEPLOYMENT_NAME: "gpt-5.6-luna",
                 JARVIS_BACKEND_URL: $backend
               },
-              session_configuration: {idle_timeout_seconds: 120}
+              session_configuration: {idle_timeout_seconds: 3600}
             }
           }')
           versions="$FOUNDRY_ADMIN/agents/jarvis/versions"

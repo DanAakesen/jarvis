@@ -12,6 +12,12 @@ import type {
 import { InvalidConversationAttachmentsError } from './conversation-store.js';
 import { ToolRefusal, type JarvisTool } from './tool-registry.js';
 import {
+  CHAT_AGENT_PHASES,
+  createFoundryAgentSessionId,
+  type AgentPhaseTimings,
+  type ConversationVisualResult,
+} from './chat-agent.js';
+import {
   AttachmentInputError,
   MAX_ATTACHMENT_REQUEST_BYTES,
   extractAttachment,
@@ -603,6 +609,7 @@ return {
       const authorization = request.headers.authorization;
       if (!authorization) return reply.code(401).send({ error: 'Unauthorized' });
       if (activeTurns.has(sessionId)) return reply.code(409).send({ error: 'A chat turn is already active' });
+      const agentSessionId = createFoundryAgentSessionId(request.principal!.objectId, sessionId);
       const visualTurnKey = visualContext?.turnId ?? visualContext?.frameId;
       const sourceItemId = visualTurnKey === undefined ? undefined
         : `screen:chat:${createHash('sha256').update(`${sessionId}:${visualTurnKey}`).digest('hex')}`;
@@ -653,7 +660,8 @@ return {
       activeTurn.rootMessageId = userMessage.id;
       activeTurn.consumedThrough = userMessage.id;
       let agentVisualContext = visualContext;
-      let visualResult: import('./chat-agent.js').ConversationVisualResult | undefined;
+      let visualResult: ConversationVisualResult | undefined;
+      let agentPhaseTimings: AgentPhaseTimings | undefined;
       if (visualContext?.frameId) {
         const authorized = request.principal &&
           request.principal.objectId.toLowerCase() === app.ownerObjectId.toLowerCase() &&
@@ -718,13 +726,26 @@ return {
             try {
               agentIterator = agent.stream({
                 messageId: turnMessageId,
+                agentSessionId,
                 text: turnText,
                 language: turnLanguage,
                 turnId: activeTurn.rootMessageId,
+                onAgentPhaseTimings: (timings) => {
+                  agentPhaseTimings = timings;
+                  for (const phase of CHAT_AGENT_PHASES) {
+                    const durationMs = timings[phase];
+                    if (durationMs !== undefined) {
+                      request.log.info({ msg: 'chat.latency', phase, durationMs }, 'chat.latency');
+                    }
+                  }
+                },
+                onAgentSessionTelemetry: (telemetry) => {
+                  request.log.info({ ...telemetry }, 'chat.agent_session');
+                },
                 ...(isSteering ? { steering: true } : {}),
                 ...(!isSteering && agentVisualContext !== undefined
                   ? { visualContext: agentVisualContext, sessionId,
-                    onVisualResult: (result: import('./chat-agent.js').ConversationVisualResult) => { visualResult = result; } }
+                    onVisualResult: (result: ConversationVisualResult) => { visualResult = result; } }
                   : {}),
                 ...(!isSteering && attachmentContext.length > 0
                   ? { attachments: attachmentContext }
@@ -819,6 +840,7 @@ return {
               }, 'visual.path');
             }
             yield streamEvent('done', { ...assistantMessage,
+              ...(agentPhaseTimings ? { agentTimings: agentPhaseTimings } : {}),
               ...(visualContext ? {
                 visualPath: visualResult?.visualPath ?? 'caption',
                 ...(visualResult?.visualReason ? { visualReason: visualResult.visualReason } :
