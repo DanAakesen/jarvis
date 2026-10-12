@@ -1,4 +1,7 @@
 {
   "capabilityInstructionsMaxCodePoints": 20000,
-  "capabilityInstructionsBudgetCodePoints": 15000
+  "capabilityInstructionsBudgetCodePoints": 15000,
+  "maxTools": 128,
+  "maxToolDescriptionCharacters": 4000,
+  "maxCatalogueBytes": 1048576
 }
