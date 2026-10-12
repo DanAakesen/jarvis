@@ -858,7 +858,7 @@ return {
             );
             publishActivity('failed');
             yield streamEvent('error', {
-              error: 'Jarvis could not finish the reply. A task action may still have completed; check its status before trying again.',
+              error: 'I could not finish the reply. A task action may still have completed; check its status before trying again.',
             });
           }
         } finally {

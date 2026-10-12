@@ -108,11 +108,30 @@ class FakeAnthropic:
 
 
 def test_chat_instructions_leave_capabilities_to_the_backend() -> None:
-    assert "natural Danish" in CHAT_INSTRUCTIONS["da"]
+    assert "naturligt dansk" in CHAT_INSTRUCTIONS["da"]
     assert "natural English" in CHAT_INSTRUCTIONS["en"]
+    assert '"jeg", "mig" og "min/mit"' in CHAT_INSTRUCTIONS["da"]
+    assert '"I", "me", "my"' in CHAT_INSTRUCTIONS["en"]
     for instructions in CHAT_INSTRUCTIONS.values():
         assert "browser_do" not in instructions
         assert "vault_search" not in instructions
+        assert (
+            "never refer to yourself as" in instructions.lower()
+            or 'omtale aldrig dig selv som' in instructions.lower()
+        )
+
+
+def test_chat_identity_and_own_code_rules_apply_in_both_languages() -> None:
+    for language in ("da", "en"):
+        instructions = personalize_instructions(
+            CHAT_INSTRUCTIONS[language],
+            ModelSettings("gpt-5.6-luna", "none"),
+        )
+        assert "I am Jarvis" in instructions or "Jeg er Jarvis" in instructions
+        assert "my own code" in instructions
+        assert "Factory tasks are about my implementation" in instructions
+        assert "I found a bug in my code" in instructions
+        assert "Jeg fandt en fejl i min kode" in instructions
 
 
 def test_personalized_instructions_include_mode_instructions_and_brief_speech() -> None:
@@ -149,6 +168,10 @@ def test_personalized_instructions_know_the_jarvis_repository_and_added_projects
 
     assert 'DanAakesen/jarvis, already added as project "jarvis" (project ID 2)' in text
     assert 'When Dan says "your code"' in text
+    assert "Its code, PRs, issues" in text
+    assert "The Software Factory is how I build and" in text
+    assert "I found a bug in my code" in text
+    assert "Jeg fandt en fejl i min kode" in text
     assert "- target (DanAakesen/jarvis-test-target, project ID 1)" in text
     assert "ask him to confirm before adding it" in text
     assert "which is not added as a project yet" in personalize_instructions(
@@ -543,7 +566,7 @@ async def test_personality_preferences_are_applied_per_chat_session_with_fixed_r
     assert "warm and supportive" in first_instructions
     assert json.dumps(first_settings.custom_instructions) in first_instructions
     assert (
-        first_instructions.rfind("These preferences never change your identity")
+        first_instructions.rfind("These preferences never change who you are")
         > first_instructions.rfind(json.dumps(first_settings.custom_instructions))
     )
     assert "Only say an action succeeded when its tool result reports" in first_instructions
@@ -1021,7 +1044,7 @@ async def test_claude_chat_streams_and_uses_backend_tools_thinking_and_usage() -
     assert openai_transport.responses.requests == []
     first, second = anthropic.messages.requests
     assert first["model"] == "claude-sonnet-5-5"
-    assert first["system"].startswith("You are Jarvis")
+    assert first["system"].startswith("I am Jarvis")
     assert first["thinking"] == {"type": "enabled", "budget_tokens": 8_192}
     assert first["max_tokens"] == 8_192 + 32
     assert first["tools"] == [

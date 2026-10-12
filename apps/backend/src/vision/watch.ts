@@ -234,7 +234,7 @@ export class VisionWatchService {
       return { summary: observation.summary, speak, budget: { usedUsd: usedDkk / DKK_PER_USD, limitUsd: input.limitUsd } };
     } catch (error) {
       if (error instanceof ScreenVisionError) throw error;
-      throw new ScreenVisionError(503, 'Jarvis could not watch the shared image.');
+      throw new ScreenVisionError(503, 'I could not watch the shared image.');
     } finally {
       this.busy.delete(key);
     }

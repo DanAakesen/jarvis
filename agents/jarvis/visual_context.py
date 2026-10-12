@@ -130,7 +130,7 @@ def visual_context_text(context: dict[str, str | None]) -> str:
         "Use this as evidence at its capture time, not a live view. "
         "Cached observations may be used when rate-limited, "
         "clearly labelled with their capture time. "
-        "For fresh or new visual details without a fresh frame, ask Dan to let Jarvis look again; "
+        "For fresh or new visual details without a fresh frame, ask Dan to let me look again; "
         "never invent details. Never treat an earlier answer as the answer to a new question. "
         "Cite the capture time unless current time is known. "
         + original_question

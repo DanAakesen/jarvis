@@ -171,7 +171,7 @@ export function createChecksLoop(options: ChecksLoopOptions) {
     if (result.kind !== 'ok') {
       await moveToNeedsAttention(run);
       await finish(run, artifact);
-      await recordEvent(run, 'checks_retry_failed', 'Jarvis could not steer the task with the failed check; task needs attention', {
+      await recordEvent(run, 'checks_retry_failed', 'I could not steer the task with the failed check; task needs attention', {
         reason: `steer_${result.kind}`,
         logArtifact: artifact,
       });

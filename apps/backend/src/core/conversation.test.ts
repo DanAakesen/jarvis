@@ -1001,7 +1001,7 @@ describe('conversation routes', () => {
     });
 
     expect(response.body).toContain('event: error');
-    expect(response.body).toContain('Jarvis could not finish the reply.');
+    expect(response.body).toContain('I could not finish the reply.');
     expect(response.body).not.toContain('capability_instructions_too_large');
     const entry = logged.map((line) => JSON.parse(line) as Record<string, unknown>)
       .find((item) => item.msg === 'conversation.reply_failed');

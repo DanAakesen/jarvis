@@ -110,7 +110,7 @@ export const createProjectTool: JarvisTool = {
       project = await projectStore.create(projectInput);
     } catch {
       throw new ToolRefusal(
-        `The repository ${repo} was created, but Jarvis could not register it. No scaffolding task was started.`,
+        `The repository ${repo} was created, but I could not register it. No scaffolding task was started.`,
       );
     }
 
@@ -131,12 +131,12 @@ export const createProjectTool: JarvisTool = {
       });
     } catch {
       throw new ToolRefusal(
-        `The repository ${repo} was created and registered, but Jarvis could not start its scaffolding task.`,
+        `The repository ${repo} was created and registered, but I could not start its scaffolding task.`,
       );
     }
     if (!task) {
       throw new ToolRefusal(
-        `The repository ${repo} was created and registered, but Jarvis could not start its scaffolding task.`,
+        `The repository ${repo} was created and registered, but I could not start its scaffolding task.`,
       );
     }
     return {

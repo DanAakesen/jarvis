@@ -2999,6 +2999,15 @@ existing memory-capture setting. Realtime voice uses it directly; the agent-only
 `GET /agent/settings` route returns the same block for chat, which adds it to its
 language-specific prompt after loading that settings snapshot. Both surfaces
 continue to use the backend tool registry and confirmation results.
+P9-86 makes each prompt speak as Jarvis in the first person and identify
+`DanAakesen/jarvis` as his own implementation. Sources are the hosted agent's
+Danish/English `CHAT_INSTRUCTIONS` and `project_awareness` in
+`agents/jarvis/model_client.py`, hosted Danish `INSTRUCTIONS` and
+`REPOSITORY_INSTRUCTIONS` in `agents/jarvis/jarvis_tools.py`, the realtime
+English/Danish instructions and backend `projectAwarenessInstructions`, the
+hosted and backend visual-context builders, plus this shared capability block.
+First-person wording does not alter tool permissions, untrusted-content
+boundaries, confirmation gates, or truthful outcome reporting.
 That block is bounded by one shared contract, `agents/jarvis/limits.json`: the
 agent refuses settings above `capabilityInstructionsMaxCodePoints` (20,000) and
 the backend tests require the block to stay within
