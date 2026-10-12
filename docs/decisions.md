@@ -19,6 +19,232 @@ The nine design areas and where each stands. **Confirmed** = Dan's requirement o
 
 ## Decision log
 
+12 October 2026, standing Daily migration direction: Dan authorizes completion of approved migration work through coordinator dependency/gate releases without generic re-confirmation. #717 remains protected-export blocked; no independent downstream dispatch or own-PR merge. All migrated React/rich UI must fully reuse current Jarvis layout/styling, DESIGN.md, canonical styles.css tokens, shared components, themes/density/motion and phone/workspace patterns. Legacy Daily capabilities/data survive through recomposition, not a separate navy/plum/card theme. Generated views receive safe existing-bridge theme context without expanded permissions. Browser/mobile visual acceptance is mandatory in #730/#731/#732/#726; #718 starts no frontend work.
+
+P12-03 (#718, 12 October 2026): additive empty tables use separate SQL schema `daily`, configured server owner prefixes legacy keys/uniqueness, and only the supplied explicit relationships become owner-composite foreign keys. Existing auth resolves the user/hosted agent; runners cannot construct the inactive store. Nullable unknown values, original/sanitized raw checksums, source timestamps/local dates, revisions/tombstones and recovery measurements remain distinct. Legacy OAuth/widget/claim credentials have no active target. Mixed attention data requires explicit source/JSON exclusion before import. [Mapping and compatibility limits](daily-schema-mapping.md) are source-code evidence, not protected live column/export parity. #717 is parked; #718 does not bypass it or accept backup/import. No personal seed, source mutation or Daily activation.
+
+P9-89 (#736, 12 October 2026, user-directed): make presence behavior salient
+on every chat and EN/DA voice turn, not merely when asked. Share short,
+first-person built-ins in `agents/jarvis/presence-instructions.json`: On the move
+is voice-first and hands-free, Away queues screen-dependent work, and Present
+allows richer answers and summaries on return. Fetch needed content with tools
+or identify missing permissions; never insist on manual sharing. Keep custom
+style text alongside fixed mode rules; empty stored values resolve to built-ins
+without rewriting saved settings. Refresh presence during hosted turns and after
+successful mode tools while retaining session model/reasoning choices. Realtime
+updates and response overrides carry the current mode. Single-word confirmations
+never bypass exact sensitive-action approval phrases. Offline regressions,
+backend lint/build, Python Ruff and the unchanged instruction budget pass.
+Live model/voice acceptance remains pending; no web, schema or migration change
+(L120/L121).
+
+P9-87 (#714, 12 October 2026, user-directed): classify visual observations in
+prompt builders using the build-time clock and turn/question correlation.
+Fresh observations answer directly without volunteered capture times; reused or
+older observations are labelled as earlier with an ordinary-language age, and
+missing frames/descriptions are reported plainly with an offer to look again.
+When asked, provenance and `visualPath` determine truthful answers about capture
+time and image-versus-description delivery; never claim continuous video.
+Preserve stored provenance, logs and untrusted-data quoting; do not rewrite
+generated text or change the UI. Keep shared capability guidance within
+`agents/jarvis/limits.json`. No migration or schema change (L120/L121).
+
+P9-88 (#735, 12 October 2026, user-directed): expose the GitHub App's live,
+installation-specific permissions and let Jarvis use the corresponding backend
+tools across repositories where the App is installed. Read permission grants
+from GitHub and cache them briefly; do not treat the manifest or a saved list
+as current authorization. Ordinary writes run when Dan asks; closing issues,
+merging pull requests, public-repository publication and default-branch file
+writes require a later simple approval word, never a generated phrase. Secret
+scan outgoing text, bound provider responses and label returned content
+untrusted. No web, schema, migration or dependency change. The implementation
+and focused tests are offline evidence; coordinator live permission/issue-read
+acceptance remains pending.
+
+P9-88 redo (12 October 2026, user-directed): the first design (#737) registered about
+25 GitHub tools, pushed the catalogue past the hosted agent's 128-tool limit and
+broke every chat turn (reverted in #744). GitHub capability is now three tools:
+`github_capabilities`, `github_read` and `github_write`, each of the latter with an
+`operation` enum, a plain root object schema and per-operation validation in the
+handler. A test fails when `githubAppTools` has more than three tools; no limit in
+`agents/jarvis/limits.json` was raised.
+
+P9-85 (#710, 12 October 2026, Dan-directed): remove the sequential caption call
+from camera turns. `POST /screen/frames` accepts additive `mode: "handle"` and
+returns `frameId`, receipt-time `capturedAt`, `question` (echo or null) and optional
+`turnId`, without a description. Chat `visualContext` and camera-on
+`jarvis.screen.context` accept a handle without a description; legacy clients
+keep caption-first behavior. Do not change the selected chat model, low reasoning
+effort, hosted-session affinity or the unverified image-budget hold.
+
+Keep a single-use image resolution plus one same-message caption fallback within
+the original 60-second private frame lifetime. Only real image delivery failure
+may invoke the vision model; missing/expired frames or failed captions require
+explicit no-image guidance, never a made-up caption. Preserve owner/session/turn
+binding, frame pacing/caps, budget accounting, the voice one-response hold and
+content-free `visual.path` events, adding `captionMs` for fallback work. Image-only
+history records are not cached visual evidence. Release image holds only for
+confirmed pre-inference refusal; retain them for unknown failures, timeout or
+cancellation. Upload-only capture has zero inference cost; fallback captions
+reserve/account their own usage without another frame count. No migration is needed: 0040
+already stores bounded JSON metadata; 0041 remains free (L120). Schema alternatives
+are validated in code with plain root objects (L121); shared capability
+instructions and their limits are unchanged. Offline checks do not establish live
+provider acceptance or latency; the UI switch and deployed verification belong
+to the coordinator/separate web session.
+
+P9-86 (12 October 2026, user-directed): Jarvis speaks as himself in the first
+person in chat and voice, in English and Danish. When discussing
+`DanAakesen/jarvis`, he owns its code, PRs, issues, deployments and Software
+Factory tasks as his own implementation; other repositories remain the user's
+projects. Keep existing tone settings, tool permissions, untrusted-content
+handling, confirmation gates and truthful action reporting unchanged.
+
+P9-83 (#705, 11 October 2026) supersedes P9-82's unset realtime budget callback
+and unresolved Danish architecture notes below. Production `/voice` and
+`/voice/da` both use the same backend-owned Voice Live realtime connector and
+configured voice deployment (`gpt-realtime-2.1` by default), not a Danish
+transcribe → chat → TTS pipeline. Preserve the L103 session shape and #702's
+item-correlated, single `response.create` hold. The provisioned hosted Danish
+bridge is only a fallback when that connector is absent; it remains honestly
+caption-only.
+
+The relay sends an original `input_image` only after private-handle binding and
+budget admission. A matching item acknowledgement selects `image_accepted`;
+correlated rejection or the 1.5-second acknowledgement deadline selects
+`image_rejected` or `image_timeout`, deletes the image item and supplies caption
+observations. Late results cannot create another reply. Capture budget denial
+and image admission denial surface as turn-correlated `budget_exhausted` with
+typed unavailable feedback; unknown admission is `budget_unavailable`.
+Buffers are zeroed after sending, and image history remains text-only.
+
+Reuse the shared UTC-day vision ledger and its conservative pending allowance;
+capture counts once toward the 300-frame cap. Chat reserves at authorized
+frame resolution and reconciles the first image request's provider totals
+without double billing. Voice records provider-reported image token quantities,
+never prices audio/text totals as image tokens. No realtime image tariff is
+hardcoded: the provider image-token quantity is actual, while both realtime
+models retain their conservative unverified allowance charged to the daily
+budget until the coordinator verifies Azure pricing. A web-search list-price
+claim was not adopted because direct source retrieval was unavailable and it
+did not establish the deployed Azure tariff. Missing provider
+usage after inference also keeps that hold; missing usage is not evidence of
+zero cost. Known no-inference rejections/cancellations release the reservation.
+
+`visual.path` is allowlisted to path, bounded reason, channel and latency only.
+It strips content and all identifiers, including request logger bindings.
+The coordinator must inspect `chat`, `voice-en` and `voice-da` events after
+deploy and confirm acceptance with a non-private fixture. Offline request,
+acknowledgement, fallback and accounting tests are implementation evidence,
+**not a live capability probe**. Cloud agents have not accessed Azure or
+verified selected-model image support, provider billing, microphone timing or
+deployed SQL behavior. No new migration, tool schema or capability instruction
+is required; L120/L121 and `agents/jarvis/limits.json` remain unchanged.
+Final offline evidence: 114 relay tests, 119 logging/conversation tests, 143
+accounting tests and 246 Python tests passed, alongside backend build and scoped
+ESLint/Ruff checks. A compiled private-frame smoke verified owner binding,
+single-use consumption and zeroing. Secret scanning found no secrets. The final
+automated validation request could not run because its time limit had been
+reached; this is not a successful automated review or full final CodeQL result.
+
+P9-82 (11 October 2026): camera-on consent includes sending the actual frame to
+the answering model, not just a vision caption. Keep #702's question-aware
+caption as the fallback. Frames belong in bounded process memory only, with a
+60-second, owner/session/turn-bound, single-use handle; no image history,
+SQL/Blob storage, logs or telemetry. No migration is needed.
+
+Capability evidence at implementation start: the configured default chat
+deployment is `gpt-5.6-luna`; its existing adapter uses Foundry Responses.
+L112 records a successful live JPEG probe against the separate `gpt-6-luna`
+vision deployment, not the selected chat model. This does **not** verify image
+acceptance by the chat deployment. Earlier decisions claiming realtime cannot
+accept images are not evidence for `gpt-realtime-2.1` on the deployed Voice Live
+API. Both deployed acceptance probes remain unverified: cloud agents must not
+access Azure (`docs/agent-context.md`, Development workflow). Offline provider
+request tests must be distinguished from a live probe. The coordinator must
+probe a small non-private fixture with the selected deployment/API and record
+acceptance or rejection before claiming deployed direct-image support.
+
+The Danish production relay currently shares English's realtime path (L103);
+the hosted Danish agent is a fallback only. Do not silently replace that
+architecture with the issue's assumed transcribe/chat/TTS pipeline. Cover the
+hosted chat adapter in both languages and report the realtime limitation.
+Realtime direct-image injection has an offline-tested acknowledgement/error
+handshake behind explicit budget admission; the production callback remains
+unset. The deployed EN/DA result is therefore still the caption path, reported
+as `visualPath: "caption"`, not evidence that image input is unsupported.
+P9-82 remains in progress until the coordinator verifies both selected-model
+acceptance and the intended Danish answering architecture. No instruction or
+tool-schema change is needed; existing capability limits remain unchanged.
+Image admission uses the existing allowed `input_tokens` metric with a tagged
+zero-quantity conservative cost reservation, included in the shared vision
+budget. Actual model usage is recorded by the existing chat reporter and the
+agent reports first-image-request totals. Separate image token attribution and
+reservation reconciliation remain incomplete; do not describe zero reserved
+quantity as actual usage or duplicate billed chat tokens. No new SQL metric or
+migration was introduced.
+Final offline validation: 262 targeted backend tests, 173 Python tests,
+backend build, targeted ESLint/Ruff and bounded resolver/privacy smoke checks
+passed. Secret scanning found no secrets. The read-only fallback review found
+no remaining blockers after handle-validation and steering-image replay fixes.
+Automated review was unavailable because its configured model was missing;
+CodeQL completed Python with zero alerts but timed out before all languages
+finished. These checks do not replace the unresolved deployed acceptance,
+realtime budget admission or image-token reconciliation checks.
+
+P9-81 follow-up (11 October 2026, Dan's decision on #701): camera on is consent
+to look on every chat and voice turn; camera off sends nothing. This supersedes
+the earlier explicit-request-only camera contract, not screen sharing or watch
+mode. Keep the existing three-second session rate limit and daily frame cap;
+return typed pacing errors rather than silently dropping images or closing a
+voice call. Retain the answered question alongside bounded visual provenance,
+and label cached observations by their original question and server receipt
+time. Never reuse an old answer as the answer to a new question.
+Camera-enabled voice waits for the matching transcription item’s result,
+unavailable reason or a roughly twelve-second deadline, then creates exactly
+one normal reply; reflex-completed actions are not delayed. Existing realtime
+English and Danish configurations already disable automatic response creation;
+keep that baseline while adding the correlated wait. UI capture remains owned
+by the separate session; this PR changes backend/agent contracts only.
+Question bounds count Unicode code points before trimming and reject anything
+above 500 with HTTP 400. Echo normalized question and caller correlation;
+capture time is recorded at the server request hook, before parsing/settings/model
+work, not after inference.
+
+P9-81 (11 October 2026): on-demand vision accepts an optional bounded question
+as untrusted data, with trusted model instructions asking for precise counts,
+text and colours. Generic inspection and continuous watching keep their existing
+prompts and limits. The capture time is the backend frame-acceptance time, not
+an asserted device timestamp. Retain only the bounded visual description,
+source, answered question and capture time in conversation turn metadata under
+the turn's retention; never persist image bytes or log questions. Restored context labels
+the observation as a real image while keeping its contents untrusted.
+New/detail questions without a fresh image ask for another look; an earlier
+real observation must not be called ungrounded. Legacy clients remain supported.
+Migration 0040 has a paired down batch (L120); schemas remain plain root
+objects (L121), and shared guidance stays within `agents/jarvis/limits.json`.
+Focused vision/backend/agent tests, build, lint and secret scanning passed
+offline; a read-only review found no blocking defects. Final automated
+validation reached the session time limit. Isolated SQL integration execution
+and UI/live acceptance remain unverified. Direct hosted-voice bridge translation
+of realtime conversation items also remains unverified; DA/EN realtime paths
+and hosted text-history grounding have offline regression coverage.
+
+P9-80 (11 October 2026): Dan directed full backend access to the private
+`DanAakesen/vault` repository. Owner Notes routes, vault tools, indexing, search
+and graph cover safe Markdown paths at the root and at any depth; folder and
+routing-rule gates no longer restrict access. The additive `/notes/tree` is
+derived from the complete Git tree and cached with the vault index; Git's
+implicit-directory model means writing the first note creates its parent path.
+Writes, edits and deletes reject any dot-prefixed segment (including `.git` and
+the skipped `.github`, `.obsidian`, `.codex` and `.vscode` trees);
+note content stays untrusted data, never instructions. Owner auth, safe-path
+validation, 256 KiB writes, secret checks, stored-Dan-message checks for agent
+writes, SHA conflict protection and confirmed deletion remain. Contracts add
+directory metadata and tree shape; logs expose only the four legacy folder
+names or `other`, never paths or content. No migration or web change. Implemented
+and tested offline; live vault access remains unverified.
+
 P9-78 (11 October 2026): use the generated view's existing `source.updatedAt`
 to invalidate a mounted HTML artifact load when its ID stays the same. Keep
 the artifact React key and existing window system, rather than remounting the
@@ -428,6 +654,7 @@ Windows/Chrome/Jev speedup remains live acceptance.
 
 | Date | Decision | Rationale and evidence | Status |
 | --- | --- | --- | --- |
+| 2026-10-12 | P9-84 reuses Foundry hosted chat sessions with a deterministic UUIDv5 derived from authenticated owner + Jarvis conversation session, query-only affinity, and one content-free no-affinity retry for HTTP 4xx. Set the deploy-time idle timeout to 3600 seconds; continue loading verified backend history on every invocation. Preserve Dan's selected chat model and reasoning effort. | The issue's 5–10 s first-delta model interval and ~15,000-character prompt do not reveal a time split between prompt processing and reasoning; provider timings report only the aggregate. Fixed-name, bounded `chat.agent_session` and `chat.latency` events provide the next production evidence. No capability instruction or tool schema is changed; a future prompt experiment may remove only proven duplicate prose, preserving capabilities and L120/L121. | Implemented and tested offline; Foundry cold/warm behavior and latency improvement require coordinator verification after deploy |
 | 2026-10-11 | P9-64 (#641) handles the shared `workspace_command` operation `session` in the web UI: `language` (da/en), `voice` (end) and `camera` (front/rear/off). The shared contract gains only the additive `session` operation, `action` values and `value` field, matching the reviewed #667 specification, so this UI ships before that backend PR. Commands never prompt: the camera starts only when `navigator.permissions` already reports `granted` (otherwise refused with a reason), and facing reuses the one camera capture (`selectFacing`, which backs the existing front/back switch). The acknowledgement waits for the actual action (stream restart, voice stopped within 5 s); failures carry a bounded refusal reason. | Language and voice owners register narrow handlers in `session-commands.ts`; the camera comes from the existing shell capture state. No new controls, windows or second capture system. Unit, panel and capture tests cover each action, unknown values and each permission state. | Implemented offline; desktop/phone browser and live backend acceptance pending #667 |
 | 2026-10-10 | P9-73 uses one additive phone dock gap above the safe area, enables edge-to-edge viewports and adds a minimal standalone manifest reusing the app icon. | `max(gap, inset)` leaves no gap above a nonzero inset. Chromium/WebKit fixtures measured 16px with zero inset and 50px with 34px inset; desktop geometry is unchanged. Root ownership lets body-portalled toasts share the phone token. | Implemented and browser-checked with fixtures; physical iPhone and installed Home Screen acceptance remain unverified |
 | 2026-10-10 | P9-49 adds owner-only REST access to list, read, create and edit Markdown notes in the private GitHub vault. Creates refuse existing paths; edits compare the loaded Contents SHA and return 409 with the latest note when stale instead of retrying or overwriting. | Reuse the vault's routing, path, 256 KiB and secret-safety checks, but do not require a stored chat message for the owner's direct edit. Commit to `master`, log only outcome/folder, and synchronize the derived index after writes. No migration or web change; the Notes UI is separate. | Implemented and tested offline; live GitHub access and Notes UI acceptance remain pending |
@@ -436,6 +663,9 @@ Windows/Chrome/Jev speedup remains live acceptance.
 | 2026-10-10 | Windows open on their own only in voice; typed chat answers inline and opens a window only when Dan asks. Dan's rule, applied to every tool through one parameter on `startWorkPresentation` (`chat` presents nothing, `voice` presents as before), not per-tool exceptions. | The Calendar window showed escaped JSON (`&quot;`) beside a chat answer that already read well: the backend HTML-escaped plain text that the renderer escapes again. Chat already has the tool chip and the written answer; voice has no visible answer. Plain text is no longer escaped and calendar results render as an agenda. An explicit "show me" still uses the view tools; the capability instructions say so. | Implemented; verified by backend tests, live check pending |
 | 2026-10-10 | `gpt-6-astra` and `gpt-6.1-sol` are deployed in Foundry (Global Standard, capacity 50, also in `infra/main.bicep`) so they appear in the Chat and Research pickers, and the Codex list is replaced by Codex's own current catalogue (`gpt-6.1-sol`, `gpt-6-astra`, `gpt-6-sol`, `gpt-6-luna`, `gpt-5.6-sol/terra/luna`, plus `default`). Defaults and Dan's saved choices are unchanged; he picks per role. | Dan: luna for every role is not good; wants Astra and GPT-6.1 for research and voice, and the Codex models were old. Chat and Research options come from live Foundry deployments, so deploying is the change; the Codex list was hard-coded (`gpt-5.5`, `gpt-5.4`, `gpt-5.3-codex`). English speech-to-speech stays on `gpt-realtime-2.1`, the newest realtime model; the Danish voice answers through the Chat model. Codex reasoning efforts stay at the shared enum (up to `xhigh`); Codex also offers `max` and `ultra`, not exposed yet. | Deployed and Succeeded; live chat with each model not verified from here |
 | 2026-10-10 | Decisions are scored by a selectable provider: Jev (default) or Microsoft-Decision-1, chosen by the `decisions.provider` setting for reflex, browser, recipe and PC decisions together. Dan can switch in Settings or by asking Jarvis; nothing switches provider automatically. | Dan wants to test Microsoft's new decision model against Jev himself. The two accept the same request (`model`, `state`, typed questions), so one target resolver replaces the fixed Jev key. Microsoft's speed and accuracy figures are vendor-run and disputed, our measured Jev time is about 274 ms (voice) and 398 ms (chat) p50, and the confidence thresholds are tuned for Jev, so the setting defaults to Jev and the providers are compared on our own `reflex.decision` logs (now with `provider`). Deployment `decision-1` (name cannot contain "microsoft"; quota 60 requests a minute) is in Bicep; Foundry host for the route is tried in two forms until one answers. | Implemented; live check on both providers pending |
+| 2026-10-12 | Image budget admission no longer requires a published price for the chat model. | Dan's live camera turns on 12 October all fell back to the caption path (`budget_unavailable`): `reserveImage` refused any model missing from the pricing table and `gpt-6.1-sol` is not in it, so the direct-image path could never run. An unpriced model is now admitted on the same conservative unverified 0.1 DKK hold; a known price above the hold is still refused and only a known cost replaces the hold. | Implemented; live image acceptance still unverified |
+| 2026-10-12 | User-directed: every tool confirmation (Google calendar/mail, issue creation, project archive, public screenshot) completes on a plain approval such as yes, approved, confirmed, go ahead (Danish equivalents too). No exact phrases or codes are spoken or typed. Safeguards stay: only Dan, only a later message, whole-message match (a reply that asks for anything else is not approval), 10-minute expiry, and only the latest pending action per scope can be approved. | Dan was on the move and Jarvis demanded 'confirm 74483420' by voice; this was a generic backend problem, not a Google one (closes the intent of #601, also relevant to #725). | Active |
+| 2026-10-12 | The backend tool catalogue is capped at 128 tools, 4,000 characters per description and 1 MiB, enforced when the registry is built and mirrored in agents/jarvis/limits.json. Related tools are merged into one tool with an operation parameter rather than added one by one. | #737 added about 25 GitHub tools and pushed the catalogue past the agent's 128-tool limit, so the agent rejected the whole catalogue and every chat turn failed (reverted in #744). | Active |
 | 2026-10-08 | P9-33 exposes explicit vault-note deletion through the shared sensitive tool registry. Reuse the GitHub App Contents-write client and require a present-mode Now confirmation naming the exact path; recheck the note SHA after approval, then remove its index rows and invalidate the graph cache. | Existing Contents API SHA protection, `TeamsNotificationService.runConfirmed`, and `VaultIndexStore.deleteFiles` cover the provider, approval and cleanup boundaries. No migration or web change is needed; focused fake-GitHub tests cover approval gating, concurrent edits, commit metadata, index removal and graph invalidation. | Implemented offline; live GitHub App access remains unverified |
 | 2026-10-08 | P9-31 adds `get_usage` through the existing agent-only tool registry and usage store. Reuse the shared usage period/entry contracts, support the current UTC day, and group spend by role/source and model without hiding estimated or unverified costs. Redact the financial result from durable generic tool-call audit records; add no migration or web changes. | `UsageStore.list` already bounds and groups persisted usage, including active sandbox estimates and cost coverage. Backend tests cover today’s UTC interval, per-area/model aggregation, cost status, tool registration and sensitive audit redaction. | Implemented offline; live provider billing remains unverified |
 | 2026-10-07 | P9-22 exposes owner-authenticated `/phone/status` and a 20-call history through the existing shared contracts and `phone_sessions` table. Keep phone calling dormant unless Dan provisions Teams/ACS and a Teams Phone number; status configuration is not a provider health check. Do not return caller or call IDs, and do not add a migration or web changes. | P6-22 keeps Teams unprovisioned in production; P7-01 records that no phone number was purchased. Backend tests cover owner auth, unavailable history, sanitized failure, bounded history and status mapping. No Azure CLI/live Azure access was available, so current number, ACS resource and callback delivery remain unverified. | Implemented offline; production setup and live callbacks unverified |
@@ -668,8 +898,10 @@ Windows/Chrome/Jev speedup remains live acceptance.
 keep reflex safety/auditing and its 800 ms parallel classification budget unchanged.
 Overlap chat settings with catalogue/live-context reads, retain the existing
 60-second container catalogue cache, and leave memory retrieval/embedding on demand.
-Do not cache live settings/task data or repeat #344's caller-chosen session routing,
-which #356 reverted after Foundry rejected chat invocations.
+Do not cache live settings/task data or repeat #344's earlier opaque session-routing
+attempt, which #356 reverted after Foundry rejected chat invocations. P9-84
+supersedes that historical routing decision using the documented Invocations query
+parameter and a validated owner-scoped UUIDv5.
 
 | Evidence | First text / total duration | Source and limitation |
 | --- | --- | --- |
@@ -884,6 +1116,7 @@ Mistakes made so far and the rule that prevents each one.
 | **L128** | Wake word: a 10-second gap before the chime | Dan heard the chime about 10 s after saying "Wake up Jarvis". A timing probe with Speech SDK 1.52.0, his `.table` model and real-time push audio showed the keyword detected at once, but `KeywordRecognizer.Dispose()` blocked for 10.01 s because the bridge never stopped the recognition session after a detection. Calling `StopRecognitionAsync()` before disposing cut that to 0.13 s. Always stop a Speech SDK recognizer before disposing it, and time detection and teardown separately when diagnosing latency. |
 | **L129** | The chat agent rejected every reply because the shared instructions grew past 10,000 characters | On 10 October, "hi" in the chat returned "Jarvis could not finish the reply". The backend log only said `conversation.reply_failed` / "Chat agent failed"; the hosted agent swallows the exception (`except Exception: yield "event: error"`), so the cause was invisible in Log Analytics. It was `capabilityInstructions` (the shared tool guidance sent with `GET /agent/settings`): 11,362 characters after the P9-5x tool additions, while `agents/jarvis/jarvis_tools.py` rejected anything over 10,000 as "invalid Jarvis settings" and the agent failed ~9 ms after reading settings. Every capability line added raises the risk and no test connected the two limits. The agent limit is now 20,000 and the budget lives in one shared file, `agents/jarvis/limits.json` (hard limit 20,000, headroom budget 15,000 code points): the agent reads it, and `capability-instructions.test.ts` checks the backend constant, the budget and BMP-only text against it. A failed chat turn now emits `event: error` with a short diagnostic `code` (for example `capability_instructions_too_large`), which the backend logs in the `failure` field of `conversation.reply_failed` as `Chat agent failed (<code>)`, with no message text. Some redundant wording was also trimmed. When a chat turn fails, filter Log Analytics for `conversation.reply_failed` and read `failure`. Two services enforced the same budget in different languages without a shared test, and a generic catch hid the cause. |
 | **L130** | File and screenshot contents are untrusted prompt data | P9-66 sends extracted document text or a bounded image description to the hosted agent so Jarvis can answer file questions. | Treat all file-derived content as data, label it untrusted, keep it out of logs and tool-call audits, and expose further reads only through owner-scoped sensitive tools. |
+| **L131** | A tool catalogue over 128 tools silently takes chat down | #737 (GitHub App tools) passed CI and deployed, then every chat turn failed with 'I could not finish the reply' (Chat agent failed (catalogue_unavailable)): the hosted agent rejects the whole /tools catalogue above 128 tools, which is also the model API limit. Nothing tested the production catalogue size. Fix: the registry now refuses more than the limit (and over-long descriptions or an over-large catalogue) when the backend starts, so the deploy fails its health gate and the previous revision keeps serving; the limits live in agents/jarvis/limits.json, with a backend and an agent test that they cannot drift. Add tools only by merging related ones into one tool with an operation parameter. | Check the tool count before adding tools and watch for `conversation.reply_failed` right after a deploy |
 | **L124** | Folio ids came back upper case from SQL | After #564 deployed, `GET /folio` returned 503 for Dan: migration 0035 built `item_id` as `kind:` + `CONVERT(nvarchar(36), id)`, which SQL Server renders in upper case, while the store only accepts lower-case GUIDs, so every stored item failed validation. Same root cause as #536's job ids. Migration 0036 lower-cases existing ids and the store normalises ids on every read and write. Lesson: never build or compare GUID text from SQL Server without `LOWER()`; tests against the real database must assert the id shape round-trips. |
 | **L125** | The Google smoke probe used an endpoint Jarvis has no scope for | Every deploy after P9-39 (#562) failed its smoke gate with Google "down", while Dan's calendar tools worked. The probe read `/users/me/calendarList`, which needs `calendar.readonly`; Jarvis holds only `calendar.events` (infra/setup-google.ps1), so it always got 403. The probe now reads one primary-calendar event, the same endpoint and scope the calendar tools use. Lesson: a health probe must exercise the feature's own endpoint and scopes, and a new gate should be checked against a known-good system before it blocks deploys. |
 
@@ -1268,3 +1501,16 @@ regression; live acceptance is pending.
   CI/deployment, post-deploy review and physical-phone keyboard acceptance remain.
   Fixture checks use synthetic sign-in, notes and intercepted writes, not
   live vault edits.
+## 2026-10-12: P12-01 Daily integration and migration authority
+
+### P12-07 nutrition checkpoint (released after P12-03)
+
+Dan released #722 after #718 merged/deployed. Supplied read-only source action contracts preserve accurate/approximate/estimate, voice/photo/text/mixed, explicit exact-label intent, accepted photo/portion proposals, permanent intake with exact-key revisions/tombstones, favourite definition/name reuse and owned-favourite 3–50-slot plans with server-summed snapshots. Trusted Jarvis metadata replaces no auth/dispatcher and never accepts model userConfirmed. Unknown macros remain null; plans/recommendations are not food. Guarded migrations 0042/0043 support unknown plan totals and confirmed standalone favourites/provenance without fake source/intake IDs. Frida deliberately stays at source release 10 / 5.5, DOI DTU.29500682, dataset version 8 published 19 January 2026, with DTU attribution and qualified CC BY 4.0 dataset terms. Public API shape/pin evidence is coordinator-provided; cloud CONNECT returns HTTP 403 and exact bootstrap format clarification is pending. No session borrowing, provider/live success claim or source mutation. Status: draft #743; exact-head CI/review and live gates remain distinct.
+
+SQL validation caught new-column constraint compilation in migration 0043: a static constraint in the same batch could not bind the just-added provenance column, so startup rolled back and unrelated tables were absent. Use the existing 0040 deferred `EXEC` pattern for that constraint; preserve actual SQL startup/reapply tests and never treat cascading missing-table errors as permission to weaken checks. Exact repaired-SHA results belong in PR #743.
+
+Provider-format clarification (16:17:51 UTC) resolves the earlier bootstrap/scalar questions: an empty body, response X-XSRF-TOKEN header and XSRF-TOKEN cookie; synonyms are arrays; mapped values are numbers; observed source IDs are numeric arrays. This sample does not prove global non-null provenance. Missing/null provenance stays unavailable, and unrecognized string/object structures are refused. No coordinator session values are copied. The repaired pre-format-tightening head passed full CI and all 109 SQL tests; final head still requires fresh checks/independent review before readiness.
+
+Dan approved P12 on 12 October 2026 and explicitly released only P12-01 for this worker. The later [execution authorization](https://github.com/DanAakesen/jarvis/issues/716#issuecomment-6124634183) supersedes the original backlog-only and extra cutover-approval wording: eventual production cutover is pre-authorized only after dependency, parity, reconciliation, backup and rollback gates pass. Original Daily continues ordinary authorized food/health writes and remains running/canonical before cutover. Migration tooling must not alter its application/source code/schema or rewrite its records; final-delta reconciliation accounts for ongoing normal use. Read-only export belongs in the protected migration workflow. Legacy operation may be deprecated only after all in-scope data, features and sync are migrated and verified and rollback is protected; never delete the original repository or data. New secrets/access and unapproved paid resources retain their explicit-confirmation boundaries. This issue performs no cutover or production writes.
+
+**Implemented contract, pending review/live acceptance:** default-off trusted module flag; metadata-only enabled endpoint; same server owner for existing user and hosted-agent auth; runner denial; reserved stable native view IDs. Production composition, shell, voice, login and dispatcher stay unchanged. **Planned:** owner-bound Daily data/device services, native mobile-first pages/views and protected migration/parity workflows in existing #717–#734. [Full scope and evidence gates](daily-migration.md). Synthetic checks are distinct from live providers, SQL, cutover and physical-phone acceptance. TickTick excluded; notifications default off; private health/food data and credentials excluded from public Git/coding sandboxes.

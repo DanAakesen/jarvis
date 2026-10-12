@@ -4,6 +4,14 @@ Version 1, updated 10 October 2026 for P6-22, P7-01, P7-02, P7-03, P7-08, P7-13,
 
 ## Migration infrastructure
 
+P9-81 adds nullable `dbo.messages.metadata` in migration
+`0040_message_visual_context.sql`, with a paired down batch. Its visual record
+contains `source` (`camera` or `screen`), ISO `capturedAt`, bounded answered
+`question`, optional turn correlation and a description bounded to 5,000
+characters. It is owned by the conversation turn and follows
+message retention/deletion; no image bytes are stored and questions are never logged. History
+returns this additive metadata for grounded agent follow-ups.
+
 Issue #7 adds `dbo.schema_migrations`, an internal deployment ledger separate
 from the nine domain groups: `name nvarchar(255)` primary key, `checksum char(64)`
 (SHA-256 of committed file bytes), and `applied_at datetime2(7)` defaulting to
@@ -241,6 +249,7 @@ erDiagram
         bigint jarvis_session_id FK
         string role "dan | jarvis"
         string text
+        json metadata "nullable; bounded visual provenance"
         string model "for example gpt-5.6-luna"
         int input_tokens
         int output_tokens
@@ -774,3 +783,12 @@ and durable facts remain authoritative in `DanAakesen/vault`.
 ## Still open
 
 - What usage Codex (`codex-acp`) and Copilot CLI actually report per turn (tokens, premium requests); offline package documentation was inspected in P2-12, but authenticated live runs remain the verification step.
+## Daily owner mapping and additive schema (P12-01/P12-03)
+
+P12-07 also adds `0043_daily_favorite_definitions.sql`: source references become nullable for explicitly confirmed standalone definitions (no fabricated source meal/key), and target-only `nutrient_provenance_json` retains definition/copied-intake provenance. Existing favourites start with an honest empty provenance object; no source values are rewritten or inferred. The down script holds writer locks and refuses null references/nonempty provenance. Favourite/plan normalized-name reuse preserves existing stable IDs. Plans resolve each owned favourite slot server-side, snapshot values/components/provenance and sum known values while preserving null totals.
+
+P12-07 reuses `daily.nutrition_meals`, `nutrition_favorites`, `nutrition_meal_plans` and `nutrition_recommendation_feedback`. Intake operation keys remain unique per server owner; corrections preserve IDs/idempotency keys and increment bigint revisions, and deletions retain nutrients/provenance as tombstones. Source `occurred_at` offsets and `meal_date` are preserved separately. Plans are snapshots, not food-log/queue entries. Additive `0042_daily_plan_unknown_nutrients.sql` makes only the four plan macro columns nullable without rewriting records, so unknown quantities cannot become fabricated zeros; its down script takes a table writer lock across null checks and ALTER in the existing migration transaction and refuses incompatible rollback. Live import/source reconciliation remains unverified.
+
+P12-03 introduces empty `daily` schema tables in `0041_daily_owner_schema.sql` with a guarded down migration; [explicit source-table/field mapping](daily-schema-mapping.md) lists the supplied-definition inclusions, mixed attention exclusions, legacy credential exclusions and target type/key limits. Source `owner_email` and formerly global tables map to the existing server `owner_object_id`. No profile/recovery seed, import, raw-object existence assertion or working legacy credential is introduced. Original/sanitized checksum, deletion/retention, revisions/tombstones, nullable unknowns and recovery measurements remain distinct. Protected live schema/backup reconciliation is still required.
+
+P12-01 introduced only metadata/owner contracts; P12-03 now provides empty owner-bound target tables while protected source reconciliation/import remains future work. Source IDs, revision/tombstone semantics, units and local dates remain explicit. User and hosted-agent requests resolve to the same server owner; no client-provided source owner or service-agent ID becomes a data owner. Future device credentials bind to this owner and narrowly scoped operations. [Approved migration](daily-migration.md) requires complete private inventory/backup and an import-or-exclusion decision per record, excludes TickTick from active feeds, and forbids migration tooling changing source schema/records or deleting originals. P12-01's metadata contains no health/food data or owner ID.

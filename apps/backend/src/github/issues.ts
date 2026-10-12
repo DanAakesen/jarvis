@@ -156,6 +156,12 @@ export function createGitHubIssueClient(
   tokenIssuer: GitHubAppTokenIssuer,
   fetchImpl: typeof fetch = fetch,
 ): GitHubIssueClient {
+  const issueToken = (repository: string, access: 'read' | 'write') =>
+    tokenIssuer.issueWithPermissions
+      ? tokenIssuer.issueWithPermissions(repository, { issues: access })
+      : access === 'read'
+        ? tokenIssuer.issueForRepositoryRead(repository)
+        : tokenIssuer.issueForIssuesWrite(repository);
   return {
     async publishIssueImage(repository, issue, bytes, extension, signal) {
       const path = repositoryPath(repository);
@@ -205,7 +211,7 @@ export function createGitHubIssueClient(
     async readIssue(repository, issue) {
       const path = repositoryPath(repository);
       if (!Number.isSafeInteger(issue) || issue < 1 || issue > 2_147_483_647) throw new Error('Invalid issue number');
-      const token = await tokenIssuer.issueForRepositoryRead(repository);
+      const token = await issueToken(repository, 'read');
       try {
         return parsedIssue(
           await request(fetchImpl, token, `/repos/${path}/issues/${issue}`),
@@ -220,7 +226,7 @@ export function createGitHubIssueClient(
     async readComments(repository, issue) {
       const path = repositoryPath(repository);
       if (!Number.isSafeInteger(issue) || issue < 1 || issue > 2_147_483_647) throw new Error('Invalid issue number');
-      const token = await tokenIssuer.issueForRepositoryRead(repository);
+      const token = await issueToken(repository, 'read');
       const comments: GitHubIssueComment[] = [];
       for (let page = 1; page <= maxIssueCommentPages; page += 1) {
         const response = await request(
@@ -258,7 +264,7 @@ export function createGitHubIssueClient(
     },
     async listIssueTitles(repository) {
       const path = repositoryPath(repository);
-      const token = await tokenIssuer.issueForRepositoryRead(repository);
+      const token = await issueToken(repository, 'read');
       const titles: string[] = [];
       for (let page = 1; page <= maxIssueTitlePages; page += 1) {
         const response = await request(
@@ -278,7 +284,7 @@ export function createGitHubIssueClient(
     async findIssueByTitleSuffix(repository, suffix) {
       if (!suffix.trim() || suffix.length > 100) throw new Error('Invalid issue title suffix');
       const path = repositoryPath(repository);
-      const token = await tokenIssuer.issueForRepositoryRead(repository);
+      const token = await issueToken(repository, 'read');
       let match: GitHubIssueReference | null = null;
       for (let page = 1; page <= maxIssueTitlePages; page += 1) {
         const response = await request(
@@ -312,7 +318,7 @@ export function createGitHubIssueClient(
           options?.assignees?.some((assignee) => !/^[A-Za-z0-9-]{1,39}$/u.test(assignee))) {
         throw new Error('Invalid issue content');
       }
-      const token = await tokenIssuer.issueForIssuesWrite(repository);
+      const token = await issueToken(repository, 'write');
       const created = await request(fetchImpl, token, `/repos/${path}/issues`, 'POST', {
         title,
         body,
@@ -333,21 +339,21 @@ export function createGitHubIssueClient(
           labels.some((label) => !label.trim() || label.length > 50)) {
         throw new Error('Invalid issue labels');
       }
-      const token = await tokenIssuer.issueForIssuesWrite(repository);
+      const token = await issueToken(repository, 'write');
       await request(fetchImpl, token, `/repos/${path}/issues/${issue}/labels`, 'POST', { labels });
     },
     async createComment(repository, issue, body, signal) {
       const path = repositoryPath(repository);
       if (!Number.isSafeInteger(issue) || issue < 1 || issue > 2_147_483_647 ||
         !body.trim() || body.length > 4_000) throw new Error('Invalid issue comment');
-      const token = await tokenIssuer.issueForIssuesWrite(repository);
+      const token = await issueToken(repository, 'write');
       await request(fetchImpl, token, `/repos/${path}/issues/${issue}/comments`, 'POST', { body }, signal);
     },
     async removeLabel(repository, issue, label) {
       const path = repositoryPath(repository);
       if (!Number.isSafeInteger(issue) || issue < 1 || issue > 2_147_483_647 ||
         !label.trim() || label.length > 50) throw new Error('Invalid issue label');
-      const token = await tokenIssuer.issueForIssuesWrite(repository);
+      const token = await issueToken(repository, 'write');
       try {
         await request(fetchImpl, token,
           `/repos/${path}/issues/${issue}/labels/${encodeURIComponent(label)}`, 'DELETE');

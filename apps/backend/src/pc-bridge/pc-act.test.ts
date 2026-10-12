@@ -1046,7 +1046,7 @@ describe('pc_act bounded Windows control loop', () => {
       new AbortController().signal,
       pcBridge,
       { planner },
-    )).rejects.toThrow(/will not handle passwords, payment-card numbers, one-time codes, or sensitive identity numbers/u);
+    )).rejects.toThrow(/I won't handle passwords, payment-card numbers, one-time codes, or sensitive identity numbers/u);
     expect(pcBridge.observe).not.toHaveBeenCalled();
 
     await expect(runPcAct(

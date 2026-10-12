@@ -3,6 +3,8 @@ import { foundryTokenCosts, DKK_PER_USD } from '../core/usage-pricing.js';
 import type { FoundryModelUsage } from '../core/usage.js';
 import { databaseReadRequest } from './wake-retry.js';
 import type { DailyToolCount, UsageEntry, UsageStore } from '../core/usage.js';
+import { imageUsageEventId } from '../vision/screen.js';
+import { createScreenFrameUsageStore } from './screen-usage-store.js';
 
 interface UsageRow extends Omit<UsageEntry, 'at'> {
   at: Date | string;
@@ -178,7 +180,16 @@ export function createUsageStore(pool: sql.ConnectionPool): UsageStore {
         toolCalls: meteredTools.recordset.map(({ tool, count }) => ({ tool, count, costStatus: 'unverified' as const })),
       };
     },
-    async recordFoundryUsage({ role, model, inputTokens, outputTokens, eventId }: FoundryModelUsage) {
+    async recordFoundryUsage({ role, model, inputTokens, outputTokens, eventId, imageReservation }: FoundryModelUsage) {
+      if (imageReservation) {
+        if (role !== 'chat') throw new Error('Invalid image usage role');
+        await createScreenFrameUsageStore(pool).recordImageTokens!({
+          sessionId: imageReservation.sessionId,
+          eventId: imageUsageEventId(imageReservation.sessionId, imageReservation.itemId),
+          model, inputTokens, outputTokens, role,
+        });
+        return;
+      }
       const costs = foundryTokenCosts(model, inputTokens, outputTokens);
       const status = costs ? 'estimated' : 'unverified';
       const transaction = new sql.Transaction(pool);

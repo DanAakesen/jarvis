@@ -1,4 +1,5 @@
 *
 !*.py
 !limits.json
+!presence-instructions.json
 !requirements.txt

@@ -45,3 +45,16 @@ def test_stage_timings_are_content_free(monkeypatch, caplog, error) -> None:
         f"chat.latency phase=prompt_build durationMs=125.00 outcome={outcome}",
     ]
     assert "private-content" not in caplog.text
+
+
+def test_completion_timings_are_allowlisted_and_bounded(monkeypatch) -> None:
+    timings = {}
+    token = chat_telemetry.current_chat_phase_timings.set(timings)
+    monkeypatch.setattr(chat_telemetry.time, "monotonic", lambda: 700.0)
+    try:
+        chat_telemetry.log_latency("chat_context", 0.0)
+        chat_telemetry.log_latency("private_phase", 0.0)
+    finally:
+        chat_telemetry.current_chat_phase_timings.reset(token)
+
+    assert timings == {"chat_context": 600_000}

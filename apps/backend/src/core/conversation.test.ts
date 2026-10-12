@@ -7,10 +7,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { buildApp, type BuildAppOptions } from '../app.js';
 import { loadConfig } from '../config.js';
 import { createLogger } from '../logging.js';
-import { ChatAgentError } from './chat-agent.js';
+import { ChatAgentError, createFoundryAgentSessionId } from './chat-agent.js';
 import type { ConversationStore } from './conversation-store.js';
 import type { ReflexClassifier } from './reflex.js';
 import type { ToolCallStore } from './tool-calls.js';
+import { createConversationModule } from './conversation.js';
+import { FrameStore } from '../vision/frame-store.js';
 
 const config = loadConfig({});
 const apps: ReturnType<typeof buildApp>[] = [];
@@ -83,6 +85,324 @@ afterEach(async () => { await Promise.all(apps.splice(0).map((app) => app.close(
 const headers = { authorization: ['Bearer', 'a.b.c'].join(' ') };
 
 describe('conversation routes', () => {
+  it.each([
+    { outcome: 'image', path: 'image', reason: 'image_accepted' },
+    { outcome: 'rejected', path: 'caption', reason: 'image_rejected' },
+    { outcome: 'caption', path: 'caption', reason: 'image_unavailable' },
+    { outcome: 'legacy', path: 'caption', reason: 'legacy_agent' },
+    { outcome: 'unavailable', path: 'caption', reason: 'frame_unavailable' },
+    { outcome: 'screen', path: 'caption', reason: 'legacy_agent' },
+    { outcome: 'none', path: undefined, reason: undefined },
+    { outcome: 'failed', path: undefined, reason: undefined },
+  ])('logs the final $outcome chat visual result once before done, without content', async ({ outcome, path, reason }) => {
+    const records: string[] = [];
+    const ordering: string[] = [];
+    const sink = { trackTrace: vi.fn(), flush: vi.fn(async () => {}), shutdown: vi.fn(async () => {}) };
+    const output = new Writable({ write(chunk: Buffer, _encoding, done) {
+      const record = JSON.parse(chunk.toString()) as { msg: string };
+      if (record.msg === 'visual.path') ordering.push('visual.path');
+      records.push(chunk.toString());
+      done();
+    } });
+    const agent = { stream: vi.fn(async function* (input: import('./chat-agent.js').ConversationAgentInput) {
+      if (outcome === 'image' || outcome === 'rejected') {
+        input.onVisualResult?.({ visualPath: 'caption', visualReason: 'image_unavailable' });
+        input.onVisualResult?.(outcome === 'image' ? { visualPath: 'image' } :
+          { visualPath: 'caption', visualReason: 'image_rejected' });
+      }
+      if (outcome === 'caption') input.onVisualResult?.({ visualPath: 'caption' });
+      if (outcome === 'failed') throw new Error('Agent failed');
+      yield 'private-answer';
+    }) };
+    const app = buildApp(config, createLogger(config, sink, output), {
+      auth, conversationStore: storeFixture(), conversationAgent: agent,
+    });
+    apps.push(app);
+    app.addHook('onRequest', async (_request, reply) => {
+      const write = reply.raw.write.bind(reply.raw);
+      vi.spyOn(reply.raw, 'write').mockImplementation((...args) => {
+        if (String(args[0]).includes('event: done')) ordering.push('done');
+        return write(...args);
+      });
+    });
+    const response = await app.inject({
+      method: 'POST', url: '/conversation/sessions/41/turns', headers,
+      payload: {
+        text: 'private-prompt',
+        ...(outcome === 'none' ? {} : outcome === 'screen' ? { screenContext: 'private-description' } : {
+          visualContext: {
+            source: 'camera', capturedAt: '2026-10-11T19:30:00Z', description: 'private-description',
+            question: 'private-question', ...(outcome === 'unavailable' ? { frameId: 'private-frame' } : {}),
+          },
+        }),
+      },
+    });
+    expect(response.statusCode).toBe(200);
+    const visualRecords = records.map((record) => JSON.parse(record) as Record<string, unknown>)
+      .filter((record) => record.msg === 'visual.path');
+    const traces = sink.trackTrace.mock.calls.map(([trace]) => trace)
+      .filter((trace) => trace.message === 'visual.path');
+    if (path === undefined) {
+      expect(visualRecords).toEqual([]);
+      expect(traces).toEqual([]);
+      expect(ordering).toEqual(outcome === 'failed' ? [] : ['done']);
+    } else {
+      expect(visualRecords).toEqual([{
+        level: 30, time: expect.any(Number), service: 'jarvis-backend',
+        msg: 'visual.path', path, reason, channel: 'chat', latencyMs: expect.any(Number),
+      }]);
+      expect(traces).toEqual([expect.objectContaining({
+        message: 'visual.path',
+        properties: { service: 'jarvis-backend', path, reason, channel: 'chat', latencyMs: expect.any(Number) },
+      })]);
+      expect(ordering).toEqual(['visual.path', 'done']);
+      expect(JSON.stringify(visualRecords) + JSON.stringify(traces)).not.toContain('private');
+      if (outcome === 'caption') {
+        const done = response.body.split('event: done\ndata: ')[1]!.split('\n')[0]!;
+        expect(JSON.parse(done)).toHaveProperty('visualPath', 'caption');
+        expect(JSON.parse(done)).not.toHaveProperty('visualReason');
+      }
+    }
+  });
+
+  it('passes owner-scoped session affinity and logs only allowlisted agent timings', async () => {
+    const records: string[] = [];
+    const output = new Writable({ write(chunk: Buffer, _encoding, done) {
+      records.push(chunk.toString());
+      done();
+    } });
+    const seenSessionIds: Array<string | undefined> = [];
+    const agent = { stream: vi.fn(async function* (input: import('./chat-agent.js').ConversationAgentInput) {
+      seenSessionIds.push(input.agentSessionId);
+      input.onAgentPhaseTimings?.({ chat_context: 12.5 });
+      input.onAgentSessionTelemetry?.({
+        sessionIdUsed: true, sessionStartType: 'warm', platformMs: 18, agentMs: 4,
+      });
+      yield 'answer';
+    }) };
+    const app = buildApp(config, createLogger(config, undefined, output), {
+      auth, conversationStore: storeFixture(), conversationAgent: agent,
+    });
+    apps.push(app);
+
+    const response = await app.inject({
+      method: 'POST', url: '/conversation/sessions/41/turns', headers,
+      payload: { text: 'private-prompt' },
+    });
+    const expectedSessionId = createFoundryAgentSessionId(config.auth.ownerObjectId, '41');
+    expect(response.statusCode).toBe(200);
+    expect(seenSessionIds).toEqual([expectedSessionId]);
+    const done = JSON.parse(response.body.split('event: done\ndata: ')[1]!.split('\n')[0]!) as
+      Record<string, unknown>;
+    expect(done.agentTimings).toEqual({ chat_context: 12.5 });
+    const events = records.map((record) => JSON.parse(record) as Record<string, unknown>);
+    expect(events).toContainEqual(expect.objectContaining({
+      msg: 'chat.agent_session', sessionIdUsed: true, sessionStartType: 'warm',
+      platformMs: 18, agentMs: 4,
+    }));
+    expect(events).toContainEqual(expect.objectContaining({
+      msg: 'chat.latency', phase: 'chat_context', durationMs: 12.5,
+    }));
+    expect(JSON.stringify(events)).not.toContain('private-prompt');
+    expect(JSON.stringify(events)).not.toContain(expectedSessionId);
+  });
+
+  it('binds an image to the authorized immutable Dan message and persists no frame handle', async () => {
+    const frames = new FrameStore();
+    const frameId = await frames.put({ ownerObjectId: config.auth.ownerObjectId,
+      sessionId: '41', turnId: 'capture', image: await sharp({
+        create: { width: 20, height: 20, channels: 3, background: 'red' },
+      }).jpeg().toBuffer() });
+    const setVisualContext = vi.fn(async () => true);
+    const store = storeFixture({ setVisualContext });
+    const visualContext = { source: 'screen' as const, capturedAt: '2026-10-11T19:30:00Z',
+      description: 'A red square.', frameId, turnId: 'capture' };
+    const agent = { stream: vi.fn(async function* (input: import('./chat-agent.js').ConversationAgentInput) {
+      expect(frames.consume(frameId, { ownerObjectId: config.auth.ownerObjectId,
+        sessionId: '41', messageId: input.messageId, turnId: 'capture' })).toBeInstanceOf(Buffer);
+      input.onVisualResult?.({ visualPath: 'image' });
+      yield 'A red square.';
+    }) };
+    try {
+      const app = createApp(store, { modules: [createConversationModule(frames)], conversationAgent: agent });
+      const response = await app.inject({ method: 'POST', url: '/conversation/sessions/41/turns',
+        headers, payload: { text: 'What is this?', visualContext } });
+      expect(response.statusCode).toBe(200);
+      expect(response.body).toContain('"visualPath":"image"');
+      const saved = store.addMessage.mock.calls[0]![0]!.visualContext!;
+      expect(saved).not.toHaveProperty('frameId');
+      expect(setVisualContext).toHaveBeenCalledWith(expect.objectContaining({
+        visualContext: expect.objectContaining({ visualPath: 'image' }),
+      }));
+    } finally { frames.close(); }
+  });
+
+  it('persists real deferred-caption evidence for a description-free handle without retaining the handle', async () => {
+    const frames = new FrameStore();
+    const frameId = await frames.put({ ownerObjectId: config.auth.ownerObjectId,
+      sessionId: '41', turnId: 'capture', image: await sharp({
+        create: { width: 20, height: 20, channels: 3, background: 'red' },
+      }).jpeg().toBuffer() });
+    const setVisualContext = vi.fn(async () => true);
+    const store = storeFixture({ setVisualContext });
+    const visualContext = { source: 'screen' as const, capturedAt: '2026-10-11T19:30:00Z', frameId, turnId: 'capture' };
+    const agent = { stream: vi.fn(async function* (input: import('./chat-agent.js').ConversationAgentInput) {
+      expect(input.visualContext).toEqual(visualContext);
+      input.onVisualResult?.({ visualPath: 'caption', visualReason: 'image_rejected',
+        description: 'A real red square.', captionMs: 25 });
+      yield 'A red square.';
+    }) };
+    try {
+      const app = createApp(store, { modules: [createConversationModule(frames)], conversationAgent: agent });
+      const response = await app.inject({ method: 'POST', url: '/conversation/sessions/41/turns',
+        headers, payload: { text: 'What is this?', visualContext } });
+      expect(response.statusCode).toBe(200);
+      const saved = store.addMessage.mock.calls[0]![0]!.visualContext!;
+      expect(saved).not.toHaveProperty('description');
+      expect(saved).not.toHaveProperty('frameId');
+      expect(setVisualContext).toHaveBeenCalledWith({ sessionId: '41', messageId: '42',
+        visualContext: { source: 'screen', capturedAt: visualContext.capturedAt, turnId: 'capture',
+          description: 'A real red square.', visualPath: 'caption', visualReason: 'image_rejected' } });
+    } finally { frames.close(); }
+  });
+
+  it.each(['image', 'failure', 'another-message'] as const)(
+    'discards the owned retained frame after %s but never discards a frame bound to another message', async (outcome) => {
+      const frames = new FrameStore();
+      const identity = { ownerObjectId: config.auth.ownerObjectId, sessionId: '41', turnId: 'capture', messageId: '42' };
+      const frameId = await frames.put({ ...identity, image: await sharp({
+        create: { width: 20, height: 20, channels: 3, background: 'red' },
+      }).jpeg().toBuffer() });
+      if (outcome === 'another-message') frames.bind(frameId, { ...identity, messageId: '99' });
+      const store = storeFixture();
+      const visualContext = { source: 'camera' as const, capturedAt: '2026-10-11T19:30:00Z', frameId, turnId: 'capture' };
+      const agent = { stream: vi.fn(async function* (input: import('./chat-agent.js').ConversationAgentInput) {
+        if (outcome !== 'another-message') {
+          const image = frames.resolve(frameId, identity);
+          expect(image).toBeInstanceOf(Buffer);
+          image!.fill(0);
+          expect(frames.metadata(frameId, identity)).toBeDefined();
+          if (outcome === 'failure') throw new Error('Provider unavailable');
+          input.onVisualResult?.({ visualPath: 'image' });
+        }
+        yield 'Image response.';
+      }) };
+      try {
+        const app = createApp(store, { modules: [createConversationModule(frames)], conversationAgent: agent });
+        const response = await app.inject({ method: 'POST', url: '/conversation/sessions/41/turns',
+          headers, payload: { text: 'What is this?', visualContext } });
+        expect(response.statusCode).toBe(200);
+        if (outcome === 'failure') expect(response.body).toContain('event: error');
+        else expect(response.body).toContain('Image response.');
+        if (outcome === 'another-message') expect(frames.metadata(frameId, { ...identity, messageId: '99' })).toBeDefined();
+        else expect(frames.consume(frameId, identity)).toBeUndefined();
+      } finally { frames.close(); }
+    });
+
+  it.each(['a'.repeat(31), 'shortmissing', 'a'.repeat(128)])('continues with caption for unavailable frame %s and rejects caller path metadata', async (frameId) => {
+    const store = storeFixture();
+    const agent = { stream: vi.fn(async function* () { yield 'Caption answer.'; }) };
+    const app = createApp(store, { conversationAgent: agent });
+    const visualContext = { source: 'screen' as const, capturedAt: '2026-10-11T19:30:00Z',
+      description: 'A chart.', frameId };
+    expect((await app.inject({ method: 'POST', url: '/conversation/sessions/41/turns', headers,
+      payload: { text: 'What?', visualContext } })).statusCode).toBe(200);
+    expect(agent.stream.mock.calls[0]![0]!.visualContext).not.toHaveProperty('frameId');
+    expect((await app.inject({ method: 'POST', url: '/conversation/sessions/41/turns', headers,
+      payload: { text: 'What?', visualContext: { ...visualContext, visualPath: 'image' } } })).statusCode).toBe(400);
+  });
+
+  it.each(['missing', 'expired', 'foreign'] as const)(
+    'keeps a description-free %s handle for authenticated resolver failure rather than invalid agent input', async (outcome) => {
+      let now = Date.now();
+      const frames = new FrameStore(60_000, 128, () => now);
+      let frameId = 'missing_frame';
+      if (outcome !== 'missing') {
+        frameId = await frames.put({ ownerObjectId: outcome === 'foreign' ? 'foreign-owner' : config.auth.ownerObjectId,
+          sessionId: '41', turnId: 'capture', image: await sharp({
+            create: { width: 20, height: 20, channels: 3, background: 'red' },
+          }).jpeg().toBuffer() });
+        if (outcome === 'expired') now += 60_000;
+      }
+      const setVisualContext = vi.fn(async () => true);
+      const store = storeFixture({ setVisualContext });
+      const visualContext = { source: 'camera' as const, capturedAt: '2026-10-11T19:30:00Z', frameId, turnId: 'capture' };
+      const agent = { stream: vi.fn(async function* (input: import('./chat-agent.js').ConversationAgentInput) {
+        expect(input.visualContext).toEqual(visualContext);
+        expect(frames.resolve(frameId, { ownerObjectId: config.auth.ownerObjectId,
+          sessionId: '41', messageId: input.messageId, turnId: 'capture' })).toBeUndefined();
+        input.onVisualResult?.({ visualPath: 'caption', visualReason: 'frame_unavailable' });
+        yield 'No image or caption is available. Please let me look again.';
+      }) };
+      try {
+        const app = createApp(store, { modules: [createConversationModule(frames)], conversationAgent: agent });
+        const response = await app.inject({ method: 'POST', url: '/conversation/sessions/41/turns',
+          headers, payload: { text: 'What is this?', visualContext } });
+        expect(response.statusCode).toBe(200);
+        expect(response.body).toContain('No image or caption is available');
+        expect(store.addMessage.mock.calls[0]![0]!.visualContext).not.toHaveProperty('frameId');
+        expect(setVisualContext).toHaveBeenCalledWith({ sessionId: '41', messageId: '42',
+          visualContext: { source: 'camera', capturedAt: visualContext.capturedAt, turnId: 'capture',
+            visualPath: 'caption', visualReason: 'frame_unavailable' } });
+      } finally { frames.close(); }
+    });
+
+  it('never replies twice to a completed visual turn replay', async () => {
+    let sourceItemId: string | undefined;
+    const store = storeFixture({
+      getDanMessageIdBySourceItemId: vi.fn(async (id) => sourceItemId === id ? '42' : null),
+      addMessage: vi.fn(async (input) => {
+        if (input.sourceItemId) sourceItemId = input.sourceItemId;
+        return message;
+      }),
+    });
+    const agent = { stream: vi.fn(async function* () { yield 'One answer.'; }) };
+    const app = createApp(store, { conversationAgent: agent });
+    const payload = { text: 'What?', visualContext: { source: 'screen',
+      capturedAt: '2026-10-11T19:30:00Z', description: 'A chart.', frameId: 'a'.repeat(32) } };
+    expect((await app.inject({ method: 'POST', url: '/conversation/sessions/41/turns', headers, payload })).statusCode).toBe(200);
+    expect((await app.inject({ method: 'POST', url: '/conversation/sessions/41/turns', headers, payload })).statusCode).toBe(409);
+    expect(agent.stream).toHaveBeenCalledOnce();
+  });
+  it('persists camera provenance, forwards it unchanged, and exposes additive history metadata', async () => {
+    const visualContext = {
+      source: 'camera' as const, capturedAt: '2026-10-11T19:30:00Z', description: 'A red mug.',
+      question: 'What colour?', turnId: 'item_A-1',
+    };
+    const store = storeFixture({ getHistory: vi.fn(async () => ({
+      ...history, messages: [{ ...history.messages[0]!, metadata: { visualContext } }],
+    })) });
+    const agent = { stream: vi.fn(async function* () { yield 'A red mug.'; }) };
+    const app = createApp(store, { conversationAgent: agent });
+    const response = await app.inject({
+      method: 'POST', url: '/conversation/sessions/41/turns', headers,
+      payload: { text: 'What is this?', visualContext },
+    });
+    expect(response.statusCode).toBe(200);
+    expect(store.addMessage).toHaveBeenCalledWith(expect.objectContaining({ role: 'dan', visualContext }));
+    expect(agent.stream).toHaveBeenCalledWith(expect.objectContaining({ visualContext }), headers.authorization, expect.any(AbortSignal));
+    const page = await app.inject({ url: '/conversation/history', headers });
+    expect(page.json().messages[0].metadata).toEqual({ visualContext });
+    for (const invalid of [
+      { visualContext, screenContext: 'legacy' },
+      { visualContext: { ...visualContext, capturedAt: 'yesterday' } },
+      { visualContext: { ...visualContext, description: 'x'.repeat(5_001) } },
+      { visualContext: { ...visualContext, question: 123 } },
+      { visualContext: { ...visualContext, question: false } },
+      { visualContext: { ...visualContext, question: ['coercion'] } },
+      { visualContext: { ...visualContext, question: 'x'.repeat(501) } },
+      { visualContext: { ...visualContext, question: '😀'.repeat(501) } },
+      { visualContext: { ...visualContext, turnId: 123 } },
+      { visualContext: { ...visualContext, turnId: null } },
+      { visualContext: { ...visualContext, turnId: 'x'.repeat(129) } },
+      { visualContext: { ...visualContext, turnId: 'item.123' } },
+    ]) {
+      expect((await app.inject({
+        method: 'POST', url: '/conversation/sessions/41/turns', headers,
+        payload: { text: 'What is this?', ...invalid },
+      })).statusCode).toBe(400);
+    }
+  });
   it('creates chat or voice sessions with a validated language', async () => {
     const store = storeFixture();
     const app = createApp(store);
@@ -128,19 +448,29 @@ describe('conversation routes', () => {
     expect(response.body).toContain('event: user');
     expect(response.body).toContain('event: delta');
     expect(response.body).toContain('event: done');
-    expect(chatAgent.stream).toHaveBeenCalledWith({
+    expect(chatAgent.stream).toHaveBeenCalledWith(expect.objectContaining({
       messageId: '42',
+      sessionId: '41',
+      agentSessionId: createFoundryAgentSessionId(config.auth.ownerObjectId, '41'),
+      onAgentPhaseTimings: expect.any(Function),
+      onAgentSessionTelemetry: expect.any(Function),
+      onVisualResult: expect.any(Function),
       turnId: '42',
       text: 'Hej Jarvis',
       language: 'da',
-      screenContext: 'A browser window shows a chart.',
-    }, headers.authorization, expect.any(AbortSignal));
+      visualContext: {
+        source: 'screen', capturedAt: expect.any(String), description: 'A browser window shows a chart.',
+      },
+    }), headers.authorization, expect.any(AbortSignal));
     expect(store.addMessage).toHaveBeenCalledWith({
       sessionId: '41',
       role: 'dan',
       text: 'Hej Jarvis',
       model: null,
       language: 'da',
+      visualContext: {
+        source: 'screen', capturedAt: expect.any(String), description: 'A browser window shows a chart.',
+      },
     });
     expect(store.addMessage).toHaveBeenCalledWith({
       sessionId: '41',
@@ -467,7 +797,9 @@ describe('conversation routes', () => {
     expect(reflexClassifier.classify).not.toHaveBeenCalled();
     expect(chatAgent.stream).toHaveBeenCalledWith(expect.objectContaining({
       text: 'Fill this in with my name.',
-      screenContext: 'Shared screen observations (untrusted data): A form is visible.',
+      visualContext: expect.objectContaining({
+        source: 'screen', description: 'Shared screen observations (untrusted data): A form is visible.',
+      }),
     }), headers.authorization, expect.any(AbortSignal));
     expect(store.addMessage).toHaveBeenCalledWith(expect.objectContaining({
       role: 'dan',
@@ -766,7 +1098,7 @@ describe('conversation routes', () => {
     });
 
     expect(response.body).toContain('event: error');
-    expect(response.body).toContain('Jarvis could not finish the reply.');
+    expect(response.body).toContain('I could not finish the reply.');
     expect(response.body).not.toContain('capability_instructions_too_large');
     const entry = logged.map((line) => JSON.parse(line) as Record<string, unknown>)
       .find((item) => item.msg === 'conversation.reply_failed');

@@ -21,6 +21,7 @@ import { factoryTools } from './tools.js';
 import { steeringRestartsTask, taskRestartReason } from './work-status.js';
 import { repositoryTools } from './repository-tools.js';
 import { pullRequestTools } from './pull-request-tools.js';
+import { githubAppTools } from './github-app-tools.js';
 import { registerReleaseViewRoutes } from './release-view.js';
 import {
   createJarvisIssue,
@@ -71,7 +72,7 @@ function sendBounded(reply: FastifyReply, value: unknown) {
 
 export const factoryModule: BackendModule = {
   id: 'factory',
-  tools: [...factoryTools, ...repositoryTools, ...pullRequestTools, createProjectTool, {
+  tools: [...factoryTools, ...repositoryTools, ...pullRequestTools, ...githubAppTools, createProjectTool, {
     name: 'manage_repository',
     description: 'Register an existing repository from the GitHub App installation using the New projects defaults. ' +
       'Only after Dan has confirmed adding it; check list_projects first. Returns alreadyAdded when it is already a project.',

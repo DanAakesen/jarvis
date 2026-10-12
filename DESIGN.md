@@ -867,3 +867,6 @@ publication confirmation adds the image and a warm warning surface stating
 that the repository is public. Text, not colour alone, conveys every state; no
 new animation is introduced.
 
+## Daily migration visual requirement (12 October 2026)
+
+Confirmed by Dan for #730/#731/#732/#726: all migrated React/rich UI fully follows the current Jarvis layout and styling. Current DESIGN.md direction, `apps/web/src/styles.css` tokens, shared components, theme/density/motion settings and native phone/workspace patterns are the source of truth. Preserve capabilities and data semantics while restyling/recomposing legacy Daily content; do not carry its navy/plum/card skin, create a second theme or replace the shared shell, voice or window manager. Generated/ad-hoc views receive only safe trusted Jarvis theme context through the existing bridge, without widened permissions. UI issues require full mobile-first real-browser visual acceptance. P12-03 remains backend/schema-only; this records the standing direction, not completed visual work.

@@ -244,4 +244,25 @@ describe('usage report API', () => {
     expect(recordFoundryUsage).toHaveBeenCalledOnce();
     expect(recordFoundryUsage).toHaveBeenCalledWith(payload);
   });
+
+  it('accepts a private image reservation only for chat reports with bounded session/item identity', async () => {
+    const recordFoundryUsage = vi.fn(async () => {});
+    const store: UsageStore = { list: async () => ({ entries: [], totalEntries: '0' }), recordFoundryUsage };
+    const agentAuth: TokenVerifier = async () => ({ kind: 'jarvis-agent',
+      objectId: config.auth.ownerObjectId, tenantId: config.auth.tenantId });
+    const app = fixture(store, agentAuth);
+    const payload = { role: 'chat', model: 'gpt-6-luna', inputTokens: 100, outputTokens: 20,
+      eventId: 'a2a01070-225e-4d8b-b882-f925cf177603',
+      imageReservation: { sessionId: '42', itemId: 'frame_item' } };
+    expect((await app.inject({ method: 'POST', url: '/usage/foundry', headers, payload })).statusCode).toBe(204);
+    expect(recordFoundryUsage).toHaveBeenCalledWith(payload);
+    for (const invalid of [
+      { ...payload, role: 'voice' },
+      { ...payload, imageReservation: { sessionId: '9223372036854775808', itemId: 'frame_item' } },
+      { ...payload, imageReservation: { sessionId: '42', itemId: '../frame' } },
+    ]) {
+      expect((await app.inject({ method: 'POST', url: '/usage/foundry', headers, payload: invalid })).statusCode).toBe(400);
+    }
+    expect(recordFoundryUsage).toHaveBeenCalledOnce();
+  });
 });

@@ -16,6 +16,7 @@ import pytest
 
 import model_client
 from jarvis_tools import (
+    INSTRUCTIONS,
     BackendToolClient,
     BackendUnavailable,
     current_chat_phase_setter,
@@ -108,11 +109,30 @@ class FakeAnthropic:
 
 
 def test_chat_instructions_leave_capabilities_to_the_backend() -> None:
-    assert "natural Danish" in CHAT_INSTRUCTIONS["da"]
+    assert "naturligt dansk" in CHAT_INSTRUCTIONS["da"]
     assert "natural English" in CHAT_INSTRUCTIONS["en"]
+    assert '"jeg", "mig" og "min/mit"' in CHAT_INSTRUCTIONS["da"]
+    assert '"I", "me", "my"' in CHAT_INSTRUCTIONS["en"]
     for instructions in CHAT_INSTRUCTIONS.values():
         assert "browser_do" not in instructions
         assert "vault_search" not in instructions
+        assert (
+            "never refer to yourself as" in instructions.lower()
+            or 'omtale aldrig dig selv som' in instructions.lower()
+        )
+
+
+def test_chat_identity_and_own_code_rules_apply_in_both_languages() -> None:
+    for language in ("da", "en"):
+        instructions = personalize_instructions(
+            CHAT_INSTRUCTIONS[language],
+            ModelSettings("gpt-5.6-luna", "none"),
+        )
+        assert "I am Jarvis" in instructions or "Jeg er Jarvis" in instructions
+        assert "my own code" in instructions
+        assert "Factory tasks are about my implementation" in instructions
+        assert "I found a bug in my code" in instructions
+        assert "Jeg fandt en fejl i min kode" in instructions
 
 
 def test_personalized_instructions_include_mode_instructions_and_brief_speech() -> None:
@@ -135,6 +155,83 @@ def test_personalized_instructions_include_mode_instructions_and_brief_speech() 
     assert "Dan's current mode: Present since an unknown time." in present
 
 
+@pytest.mark.parametrize("mode", ["present", "away", "on_the_move"])
+@pytest.mark.parametrize("base", [CHAT_INSTRUCTIONS["en"], CHAT_INSTRUCTIONS["da"], INSTRUCTIONS])
+def test_builtin_presence_behavior_is_salient_with_empty_or_custom_preferences(mode, base) -> None:
+    from jarvis_tools import BUILT_IN_MODE_INSTRUCTIONS
+
+    for custom in ("", "Use a warmer tone."):
+        instructions = personalize_instructions(
+            base, ModelSettings("deployment", "none", mode=mode, mode_instructions={mode: custom})
+        )
+        statement = next(
+            line for line in instructions.splitlines() if line.startswith("Dan's current mode:")
+        )
+        assert BUILT_IN_MODE_INSTRUCTIONS[mode] in statement
+        assert json.dumps(custom) in instructions
+        if mode == "on_the_move":
+            assert "one very short sentence" in statement
+            assert "never ask him to paste, type, copy, open or read anything" in statement
+            assert "or look at a screen" in statement
+            assert "single-word confirmations" in statement
+            assert "say 'read it'" in statement
+
+
+@pytest.mark.asyncio
+async def test_mode_change_refreshes_tool_loop_and_next_voice_turn() -> None:
+    class PresenceBackend(FakeBackend):
+        mode = "present"
+
+        def handle(self, request: httpx.Request) -> httpx.Response:
+            if request.url.path == "/agent/settings":
+                self.requests.append(request)
+                return httpx.Response(200, json={
+                    "model": "deployment", "reasoningEffort": "none", "mode": self.mode,
+                    "capabilityInstructions": "Shared backend capability block.",
+                })
+            if request.url.path == "/tools/set_presence_mode":
+                self.mode = json.loads(request.content)["mode"]
+                self.requests.append(request)
+                return httpx.Response(200, json={
+                    "tool": "set_presence_mode", "outcome": "ok", "result": {"mode": self.mode},
+                })
+            return super().handle(request)
+
+    call = FakeItem(
+        type="function_call", call_id="mode_1", name="set_presence_mode",
+        arguments='{"mode":"on_the_move"}',
+    )
+    backend = PresenceBackend(catalogue=[{
+        "name": "set_presence_mode", "description": "Change presence mode.",
+        "inputSchema": {
+            "type": "object", "properties": {"mode": {"type": "string"}}, "required": ["mode"],
+        },
+    }])
+    model, transport = client([], rounds=[
+        [completed(call)], [completed()], [completed()],
+    ], backend=backend)
+    pinned = ModelSettings("deployment", "none", mode="present")
+    token = current_message_id.set("42")
+    try:
+        assert [chunk async for chunk in model.complete(
+            [ModelMessage("user", "I am driving")], settings=pinned,
+        )] == []
+        assert [chunk async for chunk in model.complete(
+            [ModelMessage("user", "What is waiting?")], settings=pinned,
+        )] == []
+    finally:
+        current_message_id.reset(token)
+        await model.close()
+    first, switched, next_turn = transport.responses.requests
+    assert "Dan's current mode: Present" in first["instructions"]
+    for request in (switched, next_turn):
+        assert "Dan's current mode: On the move" in request["instructions"]
+        assert "Dan's current mode: Present" not in request["instructions"]
+        assert (
+            "never ask him to paste, type, copy, open or read anything" in request["instructions"]
+        )
+
+
 def test_personalized_instructions_know_the_jarvis_repository_and_added_projects() -> None:
     text = personalize_instructions(
         "base",
@@ -149,6 +246,10 @@ def test_personalized_instructions_know_the_jarvis_repository_and_added_projects
 
     assert 'DanAakesen/jarvis, already added as project "jarvis" (project ID 2)' in text
     assert 'When Dan says "your code"' in text
+    assert "Its code, PRs, issues" in text
+    assert "The Software Factory is how I build and" in text
+    assert "I found a bug in my code" in text
+    assert "Jeg fandt en fejl i min kode" in text
     assert "- target (DanAakesen/jarvis-test-target, project ID 1)" in text
     assert "ask him to confirm before adding it" in text
     assert "which is not added as a project yet" in personalize_instructions(
@@ -543,7 +644,7 @@ async def test_personality_preferences_are_applied_per_chat_session_with_fixed_r
     assert "warm and supportive" in first_instructions
     assert json.dumps(first_settings.custom_instructions) in first_instructions
     assert (
-        first_instructions.rfind("These preferences never change your identity")
+        first_instructions.rfind("These preferences never change who you are")
         > first_instructions.rfind(json.dumps(first_settings.custom_instructions))
     )
     assert "Only say an action succeeded when its tool result reports" in first_instructions
@@ -1021,7 +1122,7 @@ async def test_claude_chat_streams_and_uses_backend_tools_thinking_and_usage() -
     assert openai_transport.responses.requests == []
     first, second = anthropic.messages.requests
     assert first["model"] == "claude-sonnet-5-5"
-    assert first["system"].startswith("You are Jarvis")
+    assert first["system"].startswith("I am Jarvis")
     assert first["thinking"] == {"type": "enabled", "budget_tokens": 8_192}
     assert first["max_tokens"] == 8_192 + 32
     assert first["tools"] == [

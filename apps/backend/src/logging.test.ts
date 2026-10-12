@@ -12,6 +12,72 @@ vi.mock('applicationinsights', () => ({
 }));
 
 describe('structured log export', () => {
+  it.each(['chat', 'voice-en', 'voice-da'])('exports visual path metadata for %s without identifiers or content', (channel) => {
+    const records: string[] = [];
+    const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });
+    const sink = { ...sdk, trackTrace: vi.fn() };
+    const logger = createLogger({ logLevel: 'info' }, sink, output).child({
+      reqId: '00000000-0000-0000-0000-000000000000',
+    });
+    const fields = { path: 'image', reason: 'image_accepted', channel, latencyMs: 42, captionMs: 20 };
+    logger.info({
+      ...fields, frameId: 'private-frame', turnId: 'private-turn', sessionId: '41', messageId: '42',
+      image: 'private-image', description: 'private-description', question: 'private-question',
+      text: 'private-text', url: 'https://example.com/private', method: 'POST', route: '/private',
+      responseTime: 42, statusCode: 200, port: 3000, error: new Error('private-error'),
+    }, 'visual.path');
+    expect(JSON.parse(records[0]!)).toEqual({
+      level: 30, time: expect.any(Number), service: 'jarvis-backend', msg: 'visual.path', ...fields,
+    });
+    expect(sink.trackTrace).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
+      message: 'visual.path', properties: { service: 'jarvis-backend', ...fields },
+    }));
+    expect(records.join('') + JSON.stringify(sink.trackTrace.mock.calls)).not.toContain('private');
+  });
+
+  it.each([
+    'image_attached', 'image_request_accepted', 'image_context_limit',
+    'image_accepted', 'image_rejected', 'image_timeout', 'image_unavailable',
+    'frame_unavailable', 'frame_missing', 'budget_exhausted', 'budget_unavailable', 'legacy_agent',
+    'image_input_unverified', 'timeout', 'daily_limit', 'frame_rate_limited', 'capture_failed',
+    'camera_off', 'permission_denied', 'not_supported', 'session_ended', 'vision_failed',
+  ])('exports only the explicit visual reason %s', (reason) => {
+    const records: string[] = [];
+    const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });
+    const sink = { ...sdk, trackTrace: vi.fn() };
+    createLogger({ logLevel: 'info' }, sink, output).info({ path: 'caption', reason }, 'visual.path');
+    expect(JSON.parse(records[0]!)).toEqual({
+      level: 30, time: expect.any(Number), service: 'jarvis-backend', msg: 'visual.path', path: 'caption', reason,
+    });
+    expect(sink.trackTrace).toHaveBeenCalledWith(expect.objectContaining({
+      message: 'visual.path', properties: { service: 'jarvis-backend', path: 'caption', reason },
+    }));
+  });
+
+  it('rejects arbitrary visual metadata and invalid timings at both export boundaries', () => {
+    const records: string[] = [];
+    const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });
+    const sink = { ...sdk, trackTrace: vi.fn() };
+    const logger = createLogger({ logLevel: 'info' }, sink, output);
+    for (const latencyMs of [-1, 600_001, Infinity, -Infinity, NaN, '42', null, undefined]) {
+      logger.info({ path: 'private', reason: 'arbitrary_code', channel: 'voice', latencyMs, captionMs: latencyMs }, 'visual.path');
+      expect(JSON.parse(records.at(-1)!)).toEqual({
+        level: 30, time: expect.any(Number), service: 'jarvis-backend', msg: 'visual.path',
+      });
+      expect(sink.trackTrace).toHaveBeenLastCalledWith(expect.objectContaining({
+        message: 'visual.path', properties: { service: 'jarvis-backend' },
+      }));
+    }
+    for (const latencyMs of [0, 42.5, 600_000]) {
+      logger.info({ latencyMs, captionMs: latencyMs }, 'visual.path');
+      expect(JSON.parse(records.at(-1)!)).toHaveProperty('latencyMs', latencyMs);
+      expect(JSON.parse(records.at(-1)!)).toHaveProperty('captionMs', latencyMs);
+      expect(sink.trackTrace).toHaveBeenLastCalledWith(expect.objectContaining({
+        properties: { service: 'jarvis-backend', latencyMs, captionMs: latencyMs },
+      }));
+    }
+  });
+
   it('exports tool argument diagnostics without argument content or unsafe metadata', () => {
     const records: string[] = [];
     const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });
@@ -239,17 +305,17 @@ describe('structured log export', () => {
     const sink = { ...sdk, trackTrace: vi.fn() };
     const logger = createLogger({ logLevel: 'info' }, sink, output);
     logger.info({
-      outcome: 'ok', added: 3, changed: 1, removed: 2, folders: ['Work', 'People', 'Work'],
+      outcome: 'ok', added: 3, changed: 1, removed: 2, folders: ['Work', 'Customers', 'Work'],
       path: 'Work/private-note.md', content: 'note-secret',
     }, 'vault.index');
     logger.info({
-      outcome: 'ok', folder: 'People', path: 'People/private-note.md', content: 'note-secret',
+      outcome: 'ok', folder: 'Customers', path: 'Customers/private-note.md', content: 'note-secret',
     }, 'vault.write');
 
     expect(JSON.parse(records[0]!)).toMatchObject({
-      outcome: 'ok', added: 3, changed: 1, removed: 2, folders: ['Work', 'People'], msg: 'vault.index',
+      outcome: 'ok', added: 3, changed: 1, removed: 2, folders: ['Work', 'other'], msg: 'vault.index',
     });
-    expect(JSON.parse(records[1]!)).toMatchObject({ outcome: 'ok', folder: 'People', msg: 'vault.write' });
+    expect(JSON.parse(records[1]!)).toMatchObject({ outcome: 'ok', folder: 'other', msg: 'vault.write' });
     expect(records.join('')).not.toContain('private-note');
     expect(records.join('')).not.toContain('note-secret');
     expect(JSON.stringify(sink.trackTrace.mock.calls)).not.toContain('note-secret');
@@ -350,7 +416,10 @@ describe('structured log export', () => {
     logger.info({
       outcome: 'ok', durationMs: 45.6, query: 'memory-secret',
     }, 'memory.embedding');
-    for (const phase of ['turn_first_token', 'turn_complete']) {
+    for (const phase of [
+      'turn_first_token', 'turn_complete', 'chat_history_verification', 'chat_context',
+      'tool_catalogue', 'settings', 'turn_context', 'prompt_build', 'model_first_delta',
+    ]) {
       logger.info({ phase, durationMs: 234.5, text: 'prompt-secret' }, 'chat.latency');
     }
 
@@ -360,12 +429,39 @@ describe('structured log export', () => {
     expect(JSON.parse(records[1]!)).toMatchObject({
       outcome: 'ok', durationMs: 45.6, msg: 'memory.embedding',
     });
-    expect(records.slice(2).map((record) => JSON.parse(record))).toEqual([
-      expect.objectContaining({ phase: 'turn_first_token', durationMs: 234.5 }),
-      expect.objectContaining({ phase: 'turn_complete', durationMs: 234.5 }),
+    expect(records.slice(2).map((record) => JSON.parse(record).phase)).toEqual([
+      'turn_first_token', 'turn_complete', 'chat_history_verification', 'chat_context',
+      'tool_catalogue', 'settings', 'turn_context', 'prompt_build', 'model_first_delta',
     ]);
+    expect(records.slice(2).map((record) => JSON.parse(record).durationMs))
+      .toEqual(Array(9).fill(234.5));
     expect(records.join('')).not.toContain('secret');
     expect(JSON.stringify(sdk.trackTrace.mock.calls)).not.toContain('secret');
+  });
+  it('exports only allowlisted hosted-agent session diagnostics', () => {
+    const records: string[] = [];
+    const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });
+    const logger = createLogger({ logLevel: 'info' }, sdk, output);
+    logger.info({
+      sessionIdUsed: true, sessionStartType: 'cold', platformMs: 12.5,
+      provisioningMs: 20, containerMs: 300, agentMs: 42.5, fallbackReason: 'http_400',
+      owner: 'owner-secret', agentSessionId: 'session-secret', text: 'prompt-secret',
+    }, 'chat.agent_session');
+    logger.info({
+      sessionIdUsed: 'true', sessionStartType: 'unknown', platformMs: 600_001,
+      provisioningMs: -1, containerMs: Infinity, agentMs: '3',
+      fallbackReason: 'private-reason', owner: 'owner-secret',
+    }, 'chat.agent_session');
+
+    expect(JSON.parse(records[0]!)).toMatchObject({
+      msg: 'chat.agent_session', sessionIdUsed: true, sessionStartType: 'cold',
+      platformMs: 12.5, provisioningMs: 20, containerMs: 300, agentMs: 42.5,
+      fallbackReason: 'http_400',
+    });
+    expect(JSON.parse(records[1]!)).toEqual({
+      level: 30, time: expect.any(Number), service: 'jarvis-backend', msg: 'chat.agent_session',
+    });
+    expect(records.join('') + JSON.stringify(sdk.trackTrace.mock.calls)).not.toContain('secret');
   });
   it('exports recipe timing through P5-14 without recipe content', () => {
     const records: string[] = [];

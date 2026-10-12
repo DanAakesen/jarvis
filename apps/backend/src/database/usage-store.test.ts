@@ -5,6 +5,27 @@ import { createUsageStore } from './usage-store.js';
 describe('SQL usage store', () => {
   afterEach(() => vi.restoreAllMocks());
 
+  it('reconciles correlated image usage instead of billing the same provider response a second time', async () => {
+    const query = vi.fn(async () => ({ rowsAffected: [2] }));
+    const input = vi.fn().mockReturnThis();
+    const request = { input, query };
+    const transaction = { begin: vi.fn(async () => {}), request: vi.fn(() => request),
+      commit: vi.fn(async () => {}), rollback: vi.fn(async () => {}) };
+    vi.spyOn(sql, 'Transaction').mockImplementation(function () {
+      return transaction as unknown as sql.Transaction;
+    });
+    await createUsageStore({} as sql.ConnectionPool).recordFoundryUsage!({
+      role: 'chat', model: 'gpt-6-luna', inputTokens: 100, outputTokens: 20,
+      eventId: 'a2a01070-225e-4d8b-b882-f925cf177603',
+      imageReservation: { sessionId: '42', itemId: 'frame_item' },
+    });
+    expect(query).toHaveBeenCalledOnce();
+    expect(query.mock.calls[0]?.[0]).toContain('SET quantity = @inputTokens');
+    expect(query.mock.calls[0]?.[0]).not.toContain('FROM (VALUES');
+    expect(input).toHaveBeenCalledWith('eventId', expect.anything(), expect.stringMatching(/^screen:image:[a-f0-9]{64}$/u));
+    expect(input).toHaveBeenCalledWith('sessionId', sql.BigInt, 42n);
+  });
+
   it('returns grouped usage with exact period bounds and includes live sandbox estimates', async () => {
     const row = {
       taskId: '42',

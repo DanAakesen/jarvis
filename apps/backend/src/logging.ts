@@ -49,10 +49,10 @@ const events = new Set([
   'database.ready', 'database.not_configured',
   'telemetry.stdout_only', 'telemetry.export_failed',
   'sandbox_heartbeat.decision', 'task_reconciliation.decision', 'voice.reflex_metrics',
-  'voice.partials_unavailable', 'chat.latency', 'memory.embedding', 'vault.index', 'vault.write',
+  'voice.partials_unavailable', 'chat.latency', 'chat.agent_session', 'memory.embedding', 'vault.index', 'vault.write',
   'pc_act.step',
   'reflex.decision',
-  'vision.watch',
+  'vision.watch', 'visual.path',
   'conversation.reply_failed', 'voice.connection_failed', 'voice.upstream_closed', 'voice.upstream_error',
   'voice.upstream_event_error', 'voice.turn_timing', 'pc_bridge.command_timing', 'pc_bridge.wake_word',
   'credentials.codex_renewal', 'dispatcher.start_failed',
@@ -85,6 +85,8 @@ const reconciliationDecisions = new Set([
 const chatLatencyPhases = new Set([
   'reflex_targets', 'jev', 'agent_first_byte', 'turn_first_token', 'turn_complete',
   'recipe_select', 'recipe_verify', 'recipe_plan', 'recipe_run',
+  'chat_history_verification', 'chat_context', 'tool_catalogue', 'settings',
+  'turn_context', 'prompt_build', 'model_first_delta',
 ]);
 const reflexReasons = new Set([
   'executed', 'unavailable', 'cancelled', 'not_addressed', 'not_action', 'incomplete_command',
@@ -93,8 +95,45 @@ const reflexReasons = new Set([
   'already_executed', 'shared_context_required', 'billing', 'auth', 'rate_limited', 'timeout',
   'invalid_answer', 'network_error',
 ]);
+const visualPathReasons = new Set([
+  'image_attached', 'image_request_accepted', 'image_context_limit',
+  'image_accepted', 'image_rejected', 'image_timeout', 'image_unavailable',
+  'frame_unavailable', 'frame_missing', 'budget_exhausted', 'budget_unavailable', 'legacy_agent',
+  'image_input_unverified', 'timeout', 'daily_limit', 'frame_rate_limited', 'capture_failed',
+  'camera_off', 'permission_denied', 'not_supported', 'session_ended', 'vision_failed',
+]);
 
 function safeFields(input: Record<string, unknown>): Record<string, unknown> {
+  if (input.msg === 'visual.path') {
+    const fields: Record<string, unknown> = {};
+    if (input.path === 'image' || input.path === 'caption') fields.path = input.path;
+    if (typeof input.reason === 'string' && visualPathReasons.has(input.reason)) fields.reason = input.reason;
+    if (input.channel === 'chat' || input.channel === 'voice-en' || input.channel === 'voice-da') {
+      fields.channel = input.channel;
+    }
+    if (typeof input.latencyMs === 'number' && Number.isFinite(input.latencyMs) &&
+        input.latencyMs >= 0 && input.latencyMs <= 600_000) fields.latencyMs = input.latencyMs;
+    if (typeof input.captionMs === 'number' && Number.isFinite(input.captionMs) &&
+        input.captionMs >= 0 && input.captionMs <= 600_000) fields.captionMs = input.captionMs;
+    return fields;
+  }
+  if (input.msg === 'chat.agent_session') {
+    const fields: Record<string, unknown> = {};
+    if (typeof input.sessionIdUsed === 'boolean') fields.sessionIdUsed = input.sessionIdUsed;
+    if (['cold', 'warm', 'resume'].includes(String(input.sessionStartType))) {
+      fields.sessionStartType = input.sessionStartType;
+    }
+    for (const key of ['platformMs', 'provisioningMs', 'containerMs', 'agentMs']) {
+      const value = input[key];
+      if (typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 600_000) {
+        fields[key] = value;
+      }
+    }
+    if (typeof input.fallbackReason === 'string' && /^http_4\d{2}$/u.test(input.fallbackReason)) {
+      fields.fallbackReason = input.fallbackReason;
+    }
+    return fields;
+  }
   if (input.msg === 'decision.provider_unavailable') {
     return ['jev', 'microsoft'].includes(String(input.provider)) ? { provider: input.provider } : {};
   }
@@ -196,13 +235,15 @@ function safeFields(input: Record<string, unknown>): Record<string, unknown> {
       if (Number.isSafeInteger(value) && Number(value) >= 0 && Number(value) <= 10_000) fields[key] = value;
     }
     if (Array.isArray(input.folders)) {
-      fields.folders = [...new Set(input.folders.filter((folder) =>
-        ['People', 'Work', 'Personal', 'General'].includes(String(folder))))].slice(0, 4);
+      fields.folders = [...new Set(input.folders.map((folder) =>
+        ['People', 'Work', 'Personal', 'General'].includes(String(folder))
+          ? String(folder) : 'other'))].slice(0, 5);
     }
   }
   if (input.msg === 'vault.write') {
     if (['ok', 'error', 'refused'].includes(String(input.outcome))) fields.outcome = input.outcome;
-    if (['People', 'Work', 'Personal', 'General'].includes(String(input.folder))) fields.folder = input.folder;
+    fields.folder = ['People', 'Work', 'Personal', 'General'].includes(String(input.folder))
+      ? input.folder : 'other';
   }
   if (input.msg === 'vision.watch') {
     if (input.source === 'screen' || input.source === 'camera') fields.source = input.source;

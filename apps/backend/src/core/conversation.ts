@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { Readable } from 'node:stream';
 import type { FastifyRequest } from 'fastify';
 import type { ConversationSearchPage } from '@jarvis/contracts';
@@ -11,6 +11,12 @@ import type {
 } from './conversation-store.js';
 import { InvalidConversationAttachmentsError } from './conversation-store.js';
 import { ToolRefusal, type JarvisTool } from './tool-registry.js';
+import {
+  CHAT_AGENT_PHASES,
+  createFoundryAgentSessionId,
+  type AgentPhaseTimings,
+  type ConversationVisualResult,
+} from './chat-agent.js';
 import {
   AttachmentInputError,
   MAX_ATTACHMENT_REQUEST_BYTES,
@@ -30,6 +36,9 @@ import {
 } from './reflex.js';
 import { isJevFailure } from './jev.js';
 import type { DecisionProviderId } from './decision-provider.js';
+import { normalizeVisualContext, visualContextSchema, persistedVisualContextSchema,
+  persistedVisualContext, type VisualContext } from './visual-context.js';
+import type { FrameStore } from '../vision/frame-store.js';
 
 const maxSqlBigInt = 9_223_372_036_854_775_807n;
 const chatReflexBudgetMs = 800;
@@ -233,6 +242,12 @@ const historySchema = {
           model: { type: ['string', 'null'] },
           interrupted: { type: 'boolean' },
           voiceMinutes: { type: ['number', 'null'], minimum: 0 },
+          metadata: {
+            type: 'object',
+            properties: { visualContext: persistedVisualContextSchema },
+            required: ['visualContext'],
+            additionalProperties: false,
+          },
           at: { type: 'string', format: 'date-time' },
           toolCalls: {
             type: 'array',
@@ -361,7 +376,8 @@ async function runChatReflex(
   }
 }
 
-export const conversationModule: BackendModule = {
+export function createConversationModule(frameStore?: FrameStore): BackendModule {
+return {
   id: 'conversation',
   tools: [conversationSearchTool, attachmentListTool, attachmentReadTool],
   registerRoutes: async (app) => {
@@ -504,9 +520,17 @@ export const conversationModule: BackendModule = {
         text: string;
         attachmentIds?: string[];
         screenContext?: string;
+        visualContext?: VisualContext;
         sharedScreenContext?: { screenDescription: string; sharedWindowTitle?: string };
       };
     }>('/conversation/sessions/:sessionId/turns', {
+      preValidation: async (request, reply) => {
+        const body: unknown = request.body;
+        if (typeof body !== 'object' || body === null || !Object.hasOwn(body, 'visualContext')) return;
+        if (!normalizeVisualContext((body as Record<string, unknown>).visualContext)) {
+          return reply.code(400).send({ error: 'Invalid visual context' });
+        }
+      },
       schema: {
         params: { type: 'object', properties: { sessionId: idSchema }, required: ['sessionId'], additionalProperties: false },
         body: {
@@ -521,6 +545,7 @@ export const conversationModule: BackendModule = {
               items: { type: 'string', pattern: '^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$' },
             },
             screenContext: { type: 'string', minLength: 1, maxLength: 5_000 },
+            visualContext: visualContextSchema,
             sharedScreenContext: {
               type: 'object',
               properties: {
@@ -549,6 +574,19 @@ export const conversationModule: BackendModule = {
       if (request.body.screenContext !== undefined && !request.body.screenContext.trim()) {
         return reply.code(400).send({ error: 'Screen context cannot be empty' });
       }
+      if (request.body.visualContext !== undefined && request.body.screenContext !== undefined) {
+        return reply.code(400).send({ error: 'Send visualContext or legacy screenContext, not both' });
+      }
+      const visualContext = request.body.visualContext !== undefined
+        ? normalizeVisualContext(request.body.visualContext)
+        : request.body.screenContext !== undefined
+          ? normalizeVisualContext({
+            source: 'screen', capturedAt: new Date().toISOString(), description: request.body.screenContext,
+          })
+          : undefined;
+      if (request.body.visualContext !== undefined && !visualContext) {
+        return reply.code(400).send({ error: 'Invalid visual context' });
+      }
       const attachmentIds = request.body.attachmentIds ?? [];
       if (attachmentIds.length > 0 && !app.conversationAttachments) {
         return reply.code(503).send({ error: 'Conversation attachments are unavailable.' });
@@ -571,6 +609,10 @@ export const conversationModule: BackendModule = {
       const authorization = request.headers.authorization;
       if (!authorization) return reply.code(401).send({ error: 'Unauthorized' });
       if (activeTurns.has(sessionId)) return reply.code(409).send({ error: 'A chat turn is already active' });
+      const agentSessionId = createFoundryAgentSessionId(request.principal!.objectId, sessionId);
+      const visualTurnKey = visualContext?.turnId ?? visualContext?.frameId;
+      const sourceItemId = visualTurnKey === undefined ? undefined
+        : `screen:chat:${createHash('sha256').update(`${sessionId}:${visualTurnKey}`).digest('hex')}`;
       const activeTurn: ActiveChatTurn = {
         sessionId,
         rootMessageId: '',
@@ -586,12 +628,18 @@ export const conversationModule: BackendModule = {
 
       let userMessage;
       try {
+        if (sourceItemId && await store.getDanMessageIdBySourceItemId(sourceItemId)) {
+          activeTurns.delete(sessionId);
+          return reply.code(409).send({ error: 'This visual turn has already been received' });
+        }
         userMessage = await store.addMessage({
           sessionId,
           role: 'dan',
           text,
           model: null,
           language: session.language,
+          ...(sourceItemId === undefined ? {} : { sourceItemId }),
+          ...(visualContext ? { visualContext: persistedVisualContext(visualContext) } : {}),
           ...(attachmentIds.length > 0 ? {
             attachmentIds,
             attachmentOwnerObjectId: request.principal!.objectId,
@@ -611,6 +659,23 @@ export const conversationModule: BackendModule = {
       }
       activeTurn.rootMessageId = userMessage.id;
       activeTurn.consumedThrough = userMessage.id;
+      let agentVisualContext = visualContext;
+      let visualResult: ConversationVisualResult | undefined;
+      let agentPhaseTimings: AgentPhaseTimings | undefined;
+      let boundVisualFrame = false;
+      if (visualContext?.frameId) {
+        const authorized = request.principal &&
+          request.principal.objectId.toLowerCase() === app.ownerObjectId.toLowerCase() &&
+          frameStore?.bind(visualContext.frameId, {
+            ownerObjectId: request.principal.objectId, sessionId, messageId: userMessage.id,
+            ...(visualContext.turnId === undefined ? {} : { turnId: visualContext.turnId }),
+          });
+        boundVisualFrame = Boolean(authorized);
+        if (!authorized) {
+          agentVisualContext = visualContext.description ? persistedVisualContext(visualContext) : visualContext;
+          visualResult = { visualPath: 'caption', visualReason: 'frame_unavailable' };
+        }
+      }
 
       const controller = new AbortController();
       const activityId = randomUUID();
@@ -663,12 +728,26 @@ export const conversationModule: BackendModule = {
             try {
               agentIterator = agent.stream({
                 messageId: turnMessageId,
+                agentSessionId,
                 text: turnText,
                 language: turnLanguage,
                 turnId: activeTurn.rootMessageId,
+                onAgentPhaseTimings: (timings) => {
+                  agentPhaseTimings = timings;
+                  for (const phase of CHAT_AGENT_PHASES) {
+                    const durationMs = timings[phase];
+                    if (durationMs !== undefined) {
+                      request.log.info({ msg: 'chat.latency', phase, durationMs }, 'chat.latency');
+                    }
+                  }
+                },
+                onAgentSessionTelemetry: (telemetry) => {
+                  request.log.info({ ...telemetry }, 'chat.agent_session');
+                },
                 ...(isSteering ? { steering: true } : {}),
-                ...(!isSteering && request.body.screenContext !== undefined
-                  ? { screenContext: request.body.screenContext }
+                ...(!isSteering && agentVisualContext !== undefined
+                  ? { visualContext: agentVisualContext, sessionId,
+                    onVisualResult: (result: ConversationVisualResult) => { visualResult = result; } }
                   : {}),
                 ...(!isSteering && attachmentContext.length > 0
                   ? { attachments: attachmentContext }
@@ -733,6 +812,17 @@ export const conversationModule: BackendModule = {
               throw new Error('Chat turn was interrupted without a steering message');
             }
             if (!partial.trim()) throw new Error('Chat response was empty');
+            if (!isSteering && visualContext) {
+              const metadata = { ...persistedVisualContext(visualContext),
+                ...(visualResult?.visualPath === 'caption' && visualResult.description
+                  ? { description: visualResult.description } : {}),
+                visualPath: visualResult?.visualPath ?? 'caption' as const,
+                ...(visualResult?.visualReason ? { visualReason: visualResult.visualReason } :
+                  visualResult ? {} : { visualReason: 'legacy_agent' }) };
+              if (store.setVisualContext) await store.setVisualContext({
+                sessionId, messageId: userMessage.id, visualContext: metadata,
+              });
+            }
             const assistantMessage = await store.addMessage({
               sessionId,
               role: 'jarvis',
@@ -743,7 +833,24 @@ export const conversationModule: BackendModule = {
             if (!assistantMessage) throw new Error('Chat session ended');
             publishActivity('ended');
             logChatLatency(request, 'turn_complete', turnStartedAt);
-            yield streamEvent('done', assistantMessage);
+            if (visualContext) {
+              request.log.info({
+                path: visualResult?.visualPath ?? 'caption',
+                reason: visualResult?.visualReason ??
+                  (visualResult?.visualPath === 'image' ? 'image_accepted' :
+                    visualResult ? 'image_unavailable' : 'legacy_agent'),
+                channel: 'chat',
+                latencyMs: Math.max(0, performance.now() - turnStartedAt),
+                ...(visualResult?.captionMs === undefined ? {} : { captionMs: visualResult.captionMs }),
+              }, 'visual.path');
+            }
+            yield streamEvent('done', { ...assistantMessage,
+              ...(agentPhaseTimings ? { agentTimings: agentPhaseTimings } : {}),
+              ...(visualContext ? {
+                visualPath: visualResult?.visualPath ?? 'caption',
+                ...(visualResult?.visualReason ? { visualReason: visualResult.visualReason } :
+                  visualResult ? {} : { visualReason: 'legacy_agent' }),
+              } : {}) });
             break;
           }
         } catch (error) {
@@ -756,10 +863,14 @@ export const conversationModule: BackendModule = {
             );
             publishActivity('failed');
             yield streamEvent('error', {
-              error: 'Jarvis could not finish the reply. A task action may still have completed; check its status before trying again.',
+              error: 'I could not finish the reply. A task action may still have completed; check its status before trying again.',
             });
           }
         } finally {
+          if (boundVisualFrame && visualContext?.frameId && request.principal) {
+            frameStore?.discard(visualContext.frameId, { ownerObjectId: request.principal.objectId, sessionId,
+              ...(visualContext.turnId === undefined ? {} : { turnId: visualContext.turnId }) });
+          }
           activeTurn.roundController = null;
           if (activeTurns.get(sessionId) === activeTurn) activeTurns.delete(sessionId);
           if (!activityFinished) publishActivity(controller.signal.aborted ? 'interrupted' : 'ended');
@@ -1036,3 +1147,6 @@ export const conversationModule: BackendModule = {
     });
   },
 };
+}
+
+export const conversationModule = createConversationModule();

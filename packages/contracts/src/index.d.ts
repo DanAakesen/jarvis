@@ -1,3 +1,12 @@
+/** Reserved IDs only; native Daily renderers are implemented in P12-16. */
+export const dailyViewIds: Readonly<{
+  status: 'daily-status'; recomp: 'daily-recomp'; review: 'daily-review'; ready: 'daily-ready';
+}>;
+export type DailyViewKind = keyof typeof dailyViewIds;
+export type DailyViewId = typeof dailyViewIds[DailyViewKind];
+export const dailyModuleId: 'daily';
+export const dailyContractVersion: 1;
+
 export const generatedViewVersion: 1;
 export const presenceModes: readonly ['present', 'away', 'on_the_move'];
 export type PresenceMode = typeof presenceModes[number];
@@ -212,6 +221,28 @@ export interface GeneratedViewListData {
 export interface GeneratedKnowledgeGraphData {
   query: string;
   highlight: string[];
+}
+
+export interface VaultNoteListItem {
+  path: string;
+  title: string;
+  /** First path segment, or an empty string for a root note. */
+  folder: string;
+  /** Full parent directory path, or an empty string for a root note. */
+  directory: string;
+  updatedAt: string;
+}
+
+export interface VaultKnowledgeGraphNode extends VaultNoteListItem {
+  id: string;
+  degree: number;
+}
+
+export interface VaultDirectoryTree {
+  directories: string[];
+  rootNoteCount: number;
+  truncated: boolean;
+  updatedAt: string;
 }
 
 export interface GeneratedCodeData {

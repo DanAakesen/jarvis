@@ -29,7 +29,8 @@ import { createTaskEventArchive, createTaskEventArchiveJob } from './database/ta
 import { createEventHub } from './core/event-hub.js';
 import type { TaskEventHub, TaskEventMessage } from './factory/task-store.js';
 import { coreModule } from './core/index.js';
-import { conversationModule } from './core/conversation.js';
+import { createConversationModule } from './core/conversation.js';
+import { FrameStore } from './vision/frame-store.js';
 import { createJevReflexClassifier } from './core/reflex.js';
 import {
   createCachedDecisionProviderReader,
@@ -675,8 +676,9 @@ try {
     } : {}),
     onStatusError: (error) => logger.warn(safeErrorFields(error), 'pc_bridge.status_update_failed'),
   });
+  const frameStore = new FrameStore();
   const modules: BackendModule[] = [
-    coreModule, conversationModule, factoryModule, createSleepModule(containerAppScaler),
+    coreModule, createConversationModule(frameStore), factoryModule, createSleepModule(containerAppScaler),
     createRecipeModule(recipeStore),
     ...(vaultModule ? [vaultModule] : []),
     ...(webResearchModule ? [webResearchModule] : []),
@@ -761,14 +763,35 @@ try {
   }
   if (workspacePinStore) modules.push(createWorkspacePinsModule(workspacePinStore));
   let visionWatch: VisionWatchService | undefined;
+  let screenVision: ScreenVisionService | undefined;
   if (database && settingsStore && screenVisionModel) {
     const visionUsage = createScreenFrameUsageStore(database.pool);
-    modules.push(createScreenVisionModule(new ScreenVisionService(screenVisionModel, visionUsage)));
+    screenVision = new ScreenVisionService(screenVisionModel, visionUsage, Date.now, visionUsage);
+    modules.push(createScreenVisionModule(screenVision, frameStore));
     visionWatch = new VisionWatchService(screenVisionModel, visionUsage, createConversationStore(database.pool));
     modules.push(createVisionWatchModule(visionWatch));
   }
   if ((config.voiceLiveEndpoint || config.foundryProjectEndpoint) && credential) {
     modules.push(createVoiceRelayModule({
+      frameStore,
+      ...(screenVision && settingsStore ? {
+        reserveImageBudget: async (input) => {
+          if (input.signal.aborted) throw new Error('Image budget admission was cancelled');
+          const settings = await readSettings(settingsStore, await modelCatalogue.read());
+          return await screenVision!.reserveImage({ ...input, limitUsd: settings.global.visionDailyBudgetUsd });
+        },
+        recordImageUsage: (input) => screenVision!.recordImageUsage(input),
+        captionFrame: async (input) => {
+          if (input.signal.aborted) throw new Error('Camera caption was cancelled');
+          const settings = await readSettings(settingsStore, await modelCatalogue.read());
+          return screenVision!.caption({
+            ...input,
+            model: settings.roles.vision.model,
+            reasoningEffort: settings.roles.vision.reasoningEffort,
+            limitUsd: settings.global.visionDailyBudgetUsd,
+          });
+        },
+      } : {}),
       ...(visionWatch ? { visionWatch } : {}),
       getToken: async (scope, signal) => {
         const token = await credential.getToken(scope, { abortSignal: signal });
@@ -1018,7 +1041,10 @@ try {
       settingsStore: settingsStore,
       ...(conversationStore ? { conversationStore } : {}),
       ...(taskStatusNotificationStore ? { taskStatusNotificationStore } : {}),
-      ...(visionWatch ? { onConversationSessionEnded: (sessionId: string) => visionWatch?.forgetSession(sessionId) } : {}),
+      onConversationSessionEnded: (sessionId: string) => {
+        visionWatch?.forgetSession(sessionId);
+        frameStore.forgetSession(sessionId);
+      },
       taskStore,
       ...(githubAppTokenIssuer ? { githubAppTokenIssuer } : {}),
       ...(githubIssueClient ? { githubIssueClient, issueProgressBoardUrl: config.staticWebAppOrigin } : {}),

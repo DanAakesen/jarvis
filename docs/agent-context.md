@@ -247,6 +247,14 @@ outside npm workspaces; production `apps/web` uses `three@0.180.0` and dev-only
 `@types/three@0.180.0`.
 See [README.md](../README.md) for public web configuration and overrides.
 
+P9-89 presence behavior is shared in `agents/jarvis/presence-instructions.json`.
+Keep it in both Docker images and both the root and hosted-agent `.dockerignore`
+allowlists. Focused
+checks: `npm test --workspace @jarvis/backend -- src/core/settings.test.ts src/core/capability-instructions.test.ts src/voice/realtime.test.ts src/voice/relay.test.ts`;
+from `agents/jarvis`, `.venv/bin/python -m pytest -q tests/test_model_client.py tests/test_voice_runtime.py tests/test_chat_runtime.py tests/test_jarvis_tools.py`.
+Mode preferences may change style, not permissions or exact approval phrases.
+Live chat and both voice languages still need post-deploy acceptance.
+
 Verified in Codex cloud for P0-02:
 
 | Purpose | Command |
@@ -283,6 +291,7 @@ Verified in Codex cloud for P0-02:
 | Focused P7-20 streaming voice reflex checks | `npm test --workspace @jarvis/backend -- --run src/voice/relay.test.ts src/core/reflex.test.ts src/database/conversation-store.test.ts src/voice/realtime.test.ts src/logging.test.ts`; `npm run lint --workspace @jarvis/backend`; `npm run build --workspace @jarvis/backend`; `agents/jarvis/.venv/bin/python -m pytest -q agents/jarvis/tests/test_voice_provisioning.py` |
 | Focused P7-24 live partial-recognition checks | `npm test --workspace @jarvis/backend -- --run src/voice/relay.test.ts src/voice/realtime.test.ts src/voice/speech-recognizer.test.ts src/logging.test.ts`; `npm test --workspace @jarvis/web -- --run src/voice-client.test.tsx`; `npm run lint --workspace @jarvis/backend`; `npm run build --workspace @jarvis/backend` |
 | P7-13 isolated SQL migration/store contracts | `npm run test:database --workspace @jarvis/backend` |
+| Focused P9-81 visual grounding checks | `npm test --workspace @jarvis/backend -- src/vision/screen.test.ts src/vision/foundry-model.test.ts src/vision/watch.test.ts src/core/conversation.test.ts src/core/capability-instructions.test.ts src/database/conversation-store.test.ts src/database/migrations.test.ts src/voice/relay.test.ts`; `agents/jarvis/.venv/bin/python -m pytest -q agents/jarvis/tests/test_chat_runtime.py` |
 | Focused P3-05 failed-check tests | `npm test --workspace @jarvis/backend -- src/database/checks-loop-blob.test.ts src/database/checks-loop-store.test.ts src/github/checks-loop.test.ts src/github/actions-logs.test.ts src/github/webhook.test.ts src/core/settings.test.ts src/github-app.test.ts` |
 | Focused P6-01 usage page and navigation tests | `npm test --workspace @jarvis/web -- --run src/usage/UsagePage.test.tsx src/App.test.tsx` |
 | Run web app | `npm run dev` in the repository root; open `http://localhost:5173` |
@@ -1358,6 +1367,17 @@ also need the stored message ID from P4-03, supplied by the caller in P4-06.
 
 ### Screen sharing and camera (P7-05/P7-08)
 
+P9-83 verification: run `npm test --workspace @jarvis/backend -- src/voice/relay.test.ts`
+for real local WebSocket image acknowledgement/fallback/correlation regressions.
+These use fake upstream providers, not Azure. After deploy the coordinator must
+inspect `visual.path` for `channel` values `chat`, `voice-en` and `voice-da` and
+confirm `path: image` using a non-private fixture. EN and production DA both use
+the realtime connector; the hosted DA fallback remains caption-only. Verify
+the configured deployment's modality-specific tariff and reported image tokens
+before treating reservations as billed image cost. Cloud agents must not run
+Azure capability probes. No new migration or shared instruction-budget change
+is introduced.
+
 The backend uses the existing `FOUNDRY_PROJECT_ENDPOINT` and managed identity;
 Bicep already grants that identity `Foundry User`, so these features add no Azure
 resource, credential, or provisioning script. Migration `0015_screen_frame_usage`
@@ -1491,3 +1511,20 @@ at 1440×1000 and 390×844 verified shared minimise/restore, maximise/restore,
 close/reopen, draft continuity across voice, capture/inspection, denial feedback,
 cleanup and reduced motion. Captures/report: `docs/ui/screenshots/p8-37-integration-*`.
 These use scratch authentication/API/socket and fake media, not live providers.
+## DailyDeveloperCloud / P12 execution boundary
+
+P12-07 (#722) is released after closed/merged/deployed #718, on `codex/p12-07-nutrition-services` / draft #743. It owns nutrition services/typed handlers, synthetic SQL tests and narrow migrations 0042/0043; no registration. Coordinator supplied read-only source HEAD `9e193554c9c8c7c23a788ed3d2b0582580b76c0f`, release-10/Frida-5.5 public DOI/DTO evidence and empty bootstrap/header/cookie/array/numeric shape verification at 16:17:51 UTC. Null/missing provenance remains unavailable. Cloud CONNECT returns HTTP 403; never bypass/borrow sessions. Focused checks: `npm test --workspace @jarvis/backend -- src/daily/nutrition/model.test.ts src/daily/nutrition/store.test.ts src/daily/nutrition/frida.test.ts src/daily/nutrition/handlers.test.ts src/daily/index.test.ts src/daily/store/owner-store.test.ts src/database/migrations.test.ts src/modules.test.ts src/auth/auth.test.ts`, lint/build and exact-head Database/full CI (auth needs loopback permission). Latest coordinator gate keeps draft until final checks/independent review; no own merge. No private Daily tools; #717/#741 remains parked and #719 unreleased. No downstream dispatch.
+
+Standing authorization: continue approved migration through coordinator dependency/gate releases without another generic approval; never independently dispatch blocked tasks or merge your own PR. For future Daily React/rich UI, read product-ui and current DESIGN.md; use current Jarvis canonical styles.css tokens/components/themes/density/motion and phone/workspace patterns, preserve data/capabilities through restyling, and provide actual mobile-first browser acceptance. No separate Daily skin/theme or replacement shell/voice/window manager; generated view theme context uses the existing trusted bridge without widening permissions. This does not expand #718 beyond backend/schema.
+
+P12-02 (#717) is parked/deferred with draft #741; no resumption without explicit coordinator release. P12-03 (#718) depends only on closed #716 and owns `daily/store`, migration `0041_daily_owner_schema.sql` and synthetic SQL tests. Run `npm test --workspace @jarvis/backend -- src/daily/index.test.ts src/daily/store/owner-store.test.ts src/modules.test.ts src/auth/auth.test.ts`, backend lint/build, and real `npm run test:database --workspace @jarvis/backend` using only the documented loopback SQL fixture or exact-head GitHub Database CI. A local SQL image pull was forbidden; CI must prove the actual DDL and behavior. No private data, live import or source mutation.
+
+Use the published DailyDeveloperCloud environment, explicitly source `/workspace/.jarvis-tools/activate.sh` before repository commands in every fresh shell, and read environment-owned STARTUP.md/setup-report.md. No automatic BASH_ENV activation. Node 22.23.3/npm 10.9.9/Python 3.12.14; Python components use separate retained .venv environments.
+
+[Approved migration](daily-migration.md) and existing milestone #716–#734 govern Daily work. Dan released only #716 for this worker; later tasks require explicit release, dependencies and claim. Follow one-worker/one-issue/one-PR with small pushed codex/ commits from current main; never merge your own PR. Issue dependencies/worker labels are authoritative; board administration/sync stays with existing Actions/coordinator, no broad token. Coordinate shared contracts/docs/composition, avoid ongoing unrelated runtime work.
+
+P12-01 checks: `npm test --workspace @jarvis/contracts`; `npm test --workspace @jarvis/backend -- src/daily/index.test.ts src/modules.test.ts src/auth/auth.test.ts`; affected workspace lint/build. Never disable test isolation or weaken checks. Tests are synthetic; default-off composition leaves current route/tool/navigation registration unchanged. This issue adds no production activation, SQL schema, import or UI page.
+
+Dan approved P12 on 12 October 2026 and explicitly released only P12-01 for this worker. The later [execution authorization](https://github.com/DanAakesen/jarvis/issues/716#issuecomment-6124634183) supersedes the original backlog-only and extra cutover-approval wording: eventual production cutover is pre-authorized only after dependency, parity, reconciliation, backup and rollback gates pass. Original Daily continues ordinary authorized food/health writes and remains running/canonical before cutover. Migration tooling must not alter its application/source code/schema or rewrite its records; final-delta reconciliation accounts for ongoing normal use. Read-only export belongs in the protected migration workflow. Legacy operation may be deprecated only after all in-scope data, features and sync are migrated and verified and rollback is protected; never delete the original repository or data. New secrets/access and unapproved paid resources retain their explicit-confirmation boundaries. This issue performs no cutover or production writes.
+
+No direct Azure access, original Daily checkout/Sites edits, private health/food data/exports or production credentials in coding/public Git. Reuse current login/session/owner and single conversation; no TickTick. Live-provider and physical-iPhone acceptance remain separately verified evidence; main-only release workflows apply.

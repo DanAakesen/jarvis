@@ -17,6 +17,7 @@ import type {
   ConversationAttachmentReference,
 } from '../core/conversation-store.js';
 import { InvalidConversationAttachmentsError } from '../core/conversation-store.js';
+import { normalizeVisualContext, persistedVisualContext } from '../core/visual-context.js';
 
 const conversationSearchSetupPath = fileURLToPath(
   new URL('../../../../db/migrations/setup/0032_conversation_search.sql', import.meta.url),
@@ -57,6 +58,7 @@ interface MessageRow {
   text: string;
   model: string | null;
   at: Date;
+  metadata?: string | null;
 }
 
 interface HistoryRow extends MessageRow {
@@ -86,6 +88,10 @@ function sessionFromRow(row: SessionRow): ConversationSession {
 }
 
 function messageFromRow(row: MessageRow): ConversationMessage {
+  let visualContext;
+  try {
+    visualContext = row.metadata ? normalizeVisualContext(JSON.parse(row.metadata).visualContext, true) : undefined;
+  } catch { /* Ignore malformed legacy metadata. */ }
   return {
     id: row.id,
     sessionId: row.session_id,
@@ -93,6 +99,7 @@ function messageFromRow(row: MessageRow): ConversationMessage {
     text: row.text,
     model: row.model,
     at: row.at,
+    ...(visualContext ? { metadata: { visualContext } } : {}),
   };
 }
 
@@ -126,14 +133,19 @@ async function addMessageWithAttachments(
       .input('interrupted', sql.Bit, input.interrupted ?? false)
       .input('sourceItemId', sql.NVarChar(128), input.sourceItemId ?? null)
       .input('allowEndedSession', sql.Bit, input.allowEndedSession ?? false)
+      .input('metadata', sql.NVarChar(sql.MAX), messageMetadata(input))
       .query<MessageRow>(`INSERT INTO dbo.messages
-          (jarvis_session_id, role, text, model, language, interrupted, source_item_id)
+          (jarvis_session_id, role, text, model, language, interrupted, source_item_id, metadata)
         OUTPUT CONVERT(varchar(20), INSERTED.id) AS id,
           CONVERT(varchar(20), INSERTED.jarvis_session_id) AS session_id,
-          INSERTED.role, INSERTED.text, INSERTED.model, INSERTED.at
-        SELECT id, @role, @text, @model, @language, @interrupted, @sourceItemId
+          INSERTED.role, INSERTED.text, INSERTED.model, INSERTED.at, INSERTED.metadata
+        SELECT id, @role, @text, @model, @language, @interrupted, @sourceItemId, @metadata
         FROM dbo.jarvis_sessions
-        WHERE id = @sessionId AND (ended_at IS NULL OR @allowEndedSession = 1);`);
+        WHERE id = @sessionId AND (ended_at IS NULL OR @allowEndedSession = 1)
+          AND (@sourceItemId IS NULL OR @sourceItemId NOT LIKE N'screen:chat:%' OR NOT EXISTS (
+            SELECT 1 FROM dbo.messages WITH (UPDLOCK, HOLDLOCK)
+            WHERE source_item_id = @sourceItemId AND role = N'dan'
+          ));`);
     const row = messageResult.recordset[0];
     if (!row) {
       await transaction.commit();
@@ -157,6 +169,13 @@ async function addMessageWithAttachments(
     try { await transaction.rollback(); } catch { /* Preserve the original attachment error. */ }
     throw error;
   }
+}
+
+function messageMetadata(input: Parameters<ConversationStore['addMessage']>[0]): string | null {
+  if (input.visualContext === undefined) return null;
+  const visualContext = normalizeVisualContext(input.visualContext, true);
+  if (input.role !== 'dan' || !visualContext) throw new TypeError('Invalid visual context');
+  return JSON.stringify({ visualContext: persistedVisualContext(visualContext) });
 }
 
 export function createConversationStore(pool: sql.ConnectionPool): ConversationStore {
@@ -246,16 +265,32 @@ export function createConversationStore(pool: sql.ConnectionPool): ConversationS
         .input('interrupted', sql.Bit, input.interrupted ?? false)
         .input('sourceItemId', sql.NVarChar(128), input.sourceItemId ?? null)
         .input('allowEndedSession', sql.Bit, input.allowEndedSession ?? false)
+        .input('metadata', sql.NVarChar(sql.MAX), messageMetadata(input))
         .query<MessageRow>(`INSERT INTO dbo.messages
-            (jarvis_session_id, role, text, model, language, interrupted, source_item_id)
+            (jarvis_session_id, role, text, model, language, interrupted, source_item_id, metadata)
           OUTPUT CONVERT(varchar(20), INSERTED.id) AS id,
             CONVERT(varchar(20), INSERTED.jarvis_session_id) AS session_id,
-            INSERTED.role, INSERTED.text, INSERTED.model, INSERTED.at
-          SELECT id, @role, @text, @model, @language, @interrupted, @sourceItemId
+            INSERTED.role, INSERTED.text, INSERTED.model, INSERTED.at, INSERTED.metadata
+          SELECT id, @role, @text, @model, @language, @interrupted, @sourceItemId, @metadata
           FROM dbo.jarvis_sessions
-          WHERE id = @sessionId AND (ended_at IS NULL OR @allowEndedSession = 1);`);
+          WHERE id = @sessionId AND (ended_at IS NULL OR @allowEndedSession = 1)
+            AND (@sourceItemId IS NULL OR @sourceItemId NOT LIKE N'screen:chat:%' OR NOT EXISTS (
+              SELECT 1 FROM dbo.messages WITH (UPDLOCK, HOLDLOCK)
+              WHERE source_item_id = @sourceItemId AND role = N'dan'
+            ));`);
       const row = result.recordset[0];
       return row ? messageFromRow(row) : null;
+    },
+
+    async setVisualContext({ sessionId, messageId, visualContext }) {
+      const metadata = messageMetadata({ sessionId, role: 'dan', text: '', model: null, visualContext });
+      const result = await pool.request()
+        .input('sessionId', sql.BigInt, BigInt(sessionId))
+        .input('messageId', sql.BigInt, BigInt(messageId))
+        .input('metadata', sql.NVarChar(sql.MAX), metadata)
+        .query(`UPDATE dbo.messages SET metadata = @metadata
+          WHERE id = @messageId AND jarvis_session_id = @sessionId AND role = N'dan';`);
+      return result.rowsAffected[0] === 1;
     },
 
     async updateMessage(messageId, text) {
@@ -266,7 +301,7 @@ export function createConversationStore(pool: sql.ConnectionPool): ConversationS
           SET text = @text
           OUTPUT CONVERT(varchar(20), INSERTED.id) AS id,
             CONVERT(varchar(20), INSERTED.jarvis_session_id) AS session_id,
-            INSERTED.role, INSERTED.text, INSERTED.model, INSERTED.at
+            INSERTED.role, INSERTED.text, INSERTED.model, INSERTED.at, INSERTED.metadata
           WHERE id = @messageId AND role = N'dan';`);
       const row = result.recordset[0];
       return row ? messageFromRow(row) : null;
@@ -312,12 +347,13 @@ export function createConversationStore(pool: sql.ConnectionPool): ConversationS
             model nvarchar(100) NULL,
             interrupted bit NOT NULL,
             voice_minutes decimal(19,6) NULL,
+            metadata nvarchar(max) NULL,
             at datetime2(7) NOT NULL
           );
-          INSERT INTO @history (id, session_id, channel, language, role, text, model, interrupted, voice_minutes, at)
+          INSERT INTO @history (id, session_id, channel, language, role, text, model, interrupted, voice_minutes, metadata, at)
           SELECT TOP (@take) m.id, m.jarvis_session_id, s.channel, COALESCE(m.language, s.language) AS language,
             m.role, m.text, m.model, m.interrupted,
-            voice_usage.voice_minutes, m.at
+            voice_usage.voice_minutes, m.metadata, m.at
           FROM dbo.messages AS m
           INNER JOIN dbo.jarvis_sessions AS s ON s.id = m.jarvis_session_id
           OUTER APPLY (
@@ -330,7 +366,7 @@ export function createConversationStore(pool: sql.ConnectionPool): ConversationS
 
           SELECT CONVERT(varchar(20), id) AS id,
             CONVERT(varchar(20), session_id) AS session_id, channel, language, role, text, model,
-            interrupted, voice_minutes, at
+            interrupted, voice_minutes, metadata, at
           FROM @history
           ORDER BY id;
 
