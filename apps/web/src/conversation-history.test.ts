@@ -37,6 +37,21 @@ function createClient(overrides: Record<string, unknown> = {}) {
 afterEach(() => { vi.unstubAllGlobals(); });
 
 describe('loadConversationHistory', () => {
+  it.each(['image', 'caption'] as const)('projects persisted %s evidence without retaining frame handles or descriptions', async visualPath => {
+    const metadata = { visualContext: {
+      source: 'camera', capturedAt: history.messages[0]!.at, question: 'A question', description: 'Private visual description',
+      visualPath, visualReason: 'frame_unavailable', frameId: 'must-not-enter-history', frame: 'private-image',
+    } };
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({
+      ...history, messages: [{ ...history.messages[0], metadata }],
+    }))));
+    const result = await loadConversationHistory(createClient() as never, config);
+    expect(result.messages[0]?.visualResult).toEqual({ visualPath, visualReason: 'frame_unavailable' });
+    expect(result.messages[0]).not.toHaveProperty('metadata');
+    expect(JSON.stringify(result)).not.toContain('must-not-enter-history');
+    expect(JSON.stringify(result)).not.toContain('Private visual description');
+  });
+
   it('requests the bounded page with a bearer token and cursor', async () => {
     const client = createClient();
     let request: { input: RequestInfo | URL; init?: RequestInit } | undefined;
@@ -56,7 +71,100 @@ describe('loadConversationHistory', () => {
     expect(client.acquireTokenSilent).toHaveBeenCalledWith({ scopes: [config.apiScope], account });
   });
 
+  it('rejects malformed persisted visual evidence rather than claiming image access', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({
+      ...history, messages: [{ ...history.messages[0], metadata: { visualContext: { visualPath: 'video' } } }],
+    }))));
+    await expect(loadConversationHistory(createClient() as never, config)).rejects.toThrow('invalid visual input status');
+  });
+
   describe('chat turn API', () => {
+      it.each(['image', 'caption', undefined] as const)('reads %s delivery from done, not from an uploaded handle', async visualPath => {
+        const base = { id: '51', sessionId: '41', role: 'dan', text: 'Count.', model: null, at: '2026-10-11T20:06:00Z' };
+        vi.stubGlobal('fetch', vi.fn(async () => new Response(
+          `event: user\ndata: ${JSON.stringify(base)}\n\n` +
+          `event: done\ndata: ${JSON.stringify({ ...base, id: '52', role: 'jarvis',
+            ...(visualPath ? { visualPath, visualReason: 'image_input_unverified' } : {}),
+            frameId: 'private-handle', frame: 'private-image' })}\n\n`,
+          { headers: { 'Content-Type': 'text/event-stream' } },
+        )));
+        const result = await sendChatTurn(createClient() as never, config, { id: '41', language: 'en' }, 'Count.', vi.fn(), vi.fn());
+        expect(result.visualResult).toEqual(visualPath ? { visualPath, visualReason: 'image_input_unverified' } : undefined);
+        expect(result).not.toHaveProperty('frameId');
+        expect(result).not.toHaveProperty('frame');
+      });
+
+      it('makes malformed done evidence visible instead of reporting image success', async () => {
+        const base = { id: '51', sessionId: '41', role: 'dan', text: 'Count.', model: null, at: '2026-10-11T20:06:00Z' };
+        vi.stubGlobal('fetch', vi.fn(async () => new Response(
+          `event: user\ndata: ${JSON.stringify(base)}\n\n` +
+          `event: done\ndata: ${JSON.stringify({ ...base, id: '52', role: 'jarvis', visualPath: 'imaginary' })}\n\n`,
+          { headers: { 'Content-Type': 'text/event-stream' } },
+        )));
+        await expect(sendChatTurn(createClient() as never, config, { id: '41', language: 'en' }, 'Count.', vi.fn(), vi.fn()))
+          .rejects.toThrow('invalid visual input status');
+      });
+
+      it.each([undefined, 'opaque_frame-123'])('prepares one visualContext with optional frameId %s, without legacy context or frame bytes', async (frameId) => {
+        const client = createClient();
+        const session = { id: '41', language: 'en' as const };
+        const visualContext = {
+          source: 'camera' as const, capturedAt: '2026-10-11T20:06:00.000Z',
+          description: 'Three fingers.', question: 'How many fingers am I holding up?',
+          ...(frameId === undefined ? {} : { frameId }),
+        };
+        const extra = { ...visualContext, frame: 'must-not-be-forwarded' };
+        const fetch = vi.fn<typeof globalThis.fetch>(async () => new Response(
+          `event: user\ndata: ${JSON.stringify({
+            id: '51', sessionId: '41', role: 'dan', text: visualContext.question, model: null,
+            at: '2026-10-11T20:06:00.000Z',
+          })}\n\n` +
+          `event: done\ndata: ${JSON.stringify({
+            id: '52', sessionId: '41', role: 'jarvis', text: 'Three.', model: null,
+            at: '2026-10-11T20:06:00.000Z',
+          })}\n\n`,
+          { headers: { 'Content-Type': 'text/event-stream' } },
+        ));
+        vi.stubGlobal('fetch', fetch);
+        await sendChatTurn(
+          client as never, config, session, visualContext.question, vi.fn(), vi.fn(),
+          undefined, undefined, undefined, undefined, undefined, undefined, extra,
+        );
+        expect(fetch).toHaveBeenCalledOnce();
+        expect(JSON.parse(String(fetch.mock.calls[0]?.[1]?.body))).toEqual({
+          text: visualContext.question, visualContext,
+        });
+      });
+
+      it.each([
+        { capturedAt: 'invalid' },
+        { frameId: 'bad/id' },
+        { question: 'x'.repeat(501) },
+        { description: ' ' },
+      ])('refuses invalid visualContext before sending a turn: %j', async (overrides) => {
+        const client = createClient();
+        const fetch = vi.fn();
+        vi.stubGlobal('fetch', fetch);
+        await expect(sendChatTurn(
+          client as never, config, { id: '41', language: 'en' }, 'Count fingers.', vi.fn(), vi.fn(),
+          undefined, undefined, undefined, undefined, undefined, undefined,
+          { source: 'camera', capturedAt: '2026-10-11T20:06:00.000Z', description: 'Three.', ...overrides },
+        )).rejects.toThrow();
+        expect(fetch).not.toHaveBeenCalled();
+        expect(client.acquireTokenSilent).not.toHaveBeenCalled();
+      });
+
+      it('rejects simultaneous legacy and structured visual context before sending', async () => {
+        const fetch = vi.fn();
+        vi.stubGlobal('fetch', fetch);
+        await expect(sendChatTurn(
+          createClient() as never, config, { id: '41', language: 'en' }, 'Count fingers.', vi.fn(), vi.fn(),
+          undefined, 'Legacy scene.', undefined, undefined, undefined, undefined,
+          { source: 'camera', capturedAt: '2026-10-11T20:06:00.000Z', description: 'Three.' },
+        )).rejects.toThrow('Send visual context or legacy screen context, not both.');
+        expect(fetch).not.toHaveBeenCalled();
+      });
+
       it('creates a session and reads streamed user and assistant messages', async () => {
         const client = createClient();
         const userMessage = {
@@ -111,6 +219,48 @@ describe('loadConversationHistory', () => {
         expect(reply).toEqual(assistantMessage);
         expect(fetch).toHaveBeenCalledTimes(2);
         expect(String(fetch.mock.calls[1]?.[0])).toContain('/conversation/sessions/41/turns');
+      });
+
+      it.each(['\n', '\r\n'])('delivers a fragmented first delta while the stream is still open with %j delimiters', async newline => {
+        const userMessage = {
+          id: '51', sessionId: '41', role: 'dan', text: 'Hello', model: null,
+          at: '2026-10-12T06:17:18.000Z',
+        };
+        const assistantMessage = { ...userMessage, id: '52', role: 'jarvis', text: 'Hej, D\u00e6n.' };
+        const encoder = new TextEncoder();
+        let controller!: ReadableStreamDefaultController<Uint8Array>;
+        const stream = new ReadableStream<Uint8Array>({
+          start(value) { controller = value; },
+        });
+        vi.stubGlobal('fetch', vi.fn(async () => new Response(stream, {
+          headers: { 'Content-Type': 'text/event-stream' },
+        })));
+        let receivedDelta!: () => void;
+        const firstDelta = new Promise<void>(resolve => { receivedDelta = resolve; });
+        const onUser = vi.fn();
+        const onDelta = vi.fn(() => receivedDelta());
+        let completed = false;
+        const turn = sendChatTurn(
+          createClient() as never, config, { id: '41', language: 'en' },
+          'Hello', onUser, onDelta,
+        ).then(reply => { completed = true; return reply; });
+        const frame = (event: string, payload: unknown) =>
+          `event: ${event}${newline}data: ${JSON.stringify(payload)}${newline}${newline}`;
+        controller.enqueue(encoder.encode(frame('user', userMessage)));
+        const bytes = encoder.encode(frame('delta', { text: assistantMessage.text }));
+        const splitAt = bytes.indexOf(0xc3) + 1;
+        controller.enqueue(bytes.slice(0, splitAt));
+        controller.enqueue(bytes.slice(splitAt));
+        try {
+          await firstDelta;
+          expect(onUser).toHaveBeenCalledWith(userMessage);
+          expect(onDelta).toHaveBeenCalledExactlyOnceWith(assistantMessage.text);
+          expect(completed).toBe(false);
+          controller.enqueue(encoder.encode(frame('done', assistantMessage)));
+        } finally {
+          controller.close();
+        }
+        await expect(turn).resolves.toEqual(assistantMessage);
       });
 
       it('shows the backend refusal and does not retry a failed turn', async () => {

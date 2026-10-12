@@ -1,7 +1,8 @@
 import type { PublicClientApplication } from '@azure/msal-browser';
 import type { PublicConfig } from '../config/public-config';
-import { backendFetch } from './backend-request';
+import { backendFetch, awaitWithSignal as waitForChatSetup } from './backend-request';
 import type { ChatAttachment } from './chat-attachments';
+import { parseVisualResult, parseVisualTurnContext, type VisualResult, type VisualTurnContext } from './visual-context';
 
 export interface ConversationHistoryToolCall {
   id: string;
@@ -24,6 +25,7 @@ export interface ConversationHistoryMessage {
   at: string;
   toolCalls: ConversationHistoryToolCall[];
   attachments?: ChatAttachment[];
+  visualResult?: VisualResult;
 }
 
 export interface ConversationHistoryPage {
@@ -43,6 +45,7 @@ export interface ChatMessage {
   text: string;
   model: string | null;
   at: string;
+  visualResult?: VisualResult;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -79,19 +82,7 @@ export interface SteeringMessage extends ChatMessage {
   language: 'da' | 'en';
 }
 
-export async function waitForChatSetup<T>(operation: () => Promise<T>, signal: AbortSignal): Promise<T> {
-  signal.throwIfAborted();
-  let abort!: () => void;
-  const cancelled = new Promise<never>((_resolve, reject) => {
-    abort = () => reject(signal.reason);
-    signal.addEventListener('abort', abort, { once: true });
-  });
-  try {
-    return await Promise.race([operation(), cancelled]);
-  } finally {
-    signal.removeEventListener('abort', abort);
-  }
-}
+export { awaitWithSignal as waitForChatSetup } from './backend-request';
 
 export async function accessToken(client: PublicClientApplication, config: PublicConfig): Promise<string> {
   const account = client.getActiveAccount() ?? client.getAllAccounts()[0];
@@ -188,6 +179,15 @@ function isChatMessage(value: unknown, role: ChatMessage['role'], sessionId: str
     typeof value.at === 'string' && !Number.isNaN(Date.parse(value.at));
 }
 
+function chatMessageResult(message: ChatMessage): ChatMessage {
+  const visualResult = parseVisualResult(message);
+  return {
+    id: message.id, sessionId: message.sessionId, role: message.role,
+    text: message.text, model: message.model, at: message.at,
+    ...(visualResult ? { visualResult } : {}),
+  };
+}
+
 export async function sendChatTurn(
   client: PublicClientApplication,
   config: PublicConfig,
@@ -201,7 +201,12 @@ export async function sendChatTurn(
   signal?: AbortSignal,
   onInterrupted?: (message: ChatMessage) => void,
   attachmentIds?: readonly string[],
+  visualContext?: VisualTurnContext,
 ): Promise<ChatMessage> {
+  if (visualContext !== undefined && screenContext !== undefined) {
+    throw new Error('Send visual context or legacy screen context, not both.');
+  }
+  const visual = visualContext === undefined ? undefined : parseVisualTurnContext(visualContext);
   const response = await chatResponse(
     client,
     config,
@@ -210,6 +215,7 @@ export async function sendChatTurn(
       text,
       ...(attachmentIds?.length ? { attachmentIds } : {}),
       ...(screenContext === undefined ? {} : { screenContext }),
+      ...(visual === undefined ? {} : { visualContext: visual }),
       ...(sharedScreenContext === undefined ? {} : { sharedScreenContext }),
     },
     'text/event-stream',
@@ -239,8 +245,8 @@ export async function sendChatTurn(
     }
     if (event.event === 'user') {
       if (!isChatMessage(payload, 'dan', session.id)) throw new Error('Jarvis returned an invalid chat stream.');
-      userMessage = payload;
-      onUserMessage(payload);
+      userMessage = chatMessageResult(payload);
+      onUserMessage(userMessage);
     } else if (event.event === 'delta') {
       if (!isRecord(payload) || typeof payload.text !== 'string' || payload.text.length === 0) {
         throw new Error('Jarvis returned an invalid chat stream.');
@@ -248,10 +254,10 @@ export async function sendChatTurn(
       onDelta(payload.text);
     } else if (event.event === 'interrupted') {
       if (!isChatMessage(payload, 'jarvis', session.id)) throw new Error('Jarvis returned an invalid chat stream.');
-      onInterrupted?.(payload);
+      onInterrupted?.(chatMessageResult(payload));
     } else if (event.event === 'done') {
       if (!isChatMessage(payload, 'jarvis', session.id)) throw new Error('Jarvis returned an invalid chat stream.');
-      assistantMessage = payload;
+      assistantMessage = chatMessageResult(payload);
     }
   };
 
@@ -341,7 +347,21 @@ export async function loadConversationHistory(
     throw new Error('Jarvis returned an invalid conversation history response.');
   }
   if (!isHistoryPage(body)) throw new Error('Jarvis returned an invalid conversation history response.');
-  return body;
+  return {
+    nextCursor: body.nextCursor,
+    messages: body.messages.map(message => {
+      const metadata = 'metadata' in message ? message.metadata : undefined;
+      const visualResult = isRecord(metadata) ? parseVisualResult(metadata.visualContext) : undefined;
+      return {
+        id: message.id, sessionId: message.sessionId, channel: message.channel, language: message.language,
+        role: message.role, text: message.text, model: message.model, at: message.at, toolCalls: message.toolCalls,
+        ...(message.interrupted === undefined ? {} : { interrupted: message.interrupted }),
+        ...(message.voiceMinutes === undefined ? {} : { voiceMinutes: message.voiceMinutes }),
+        ...(message.attachments === undefined ? {} : { attachments: message.attachments }),
+        ...(visualResult ? { visualResult } : {}),
+      };
+    }),
+  };
 }
 
 export async function loadImageArtifactUrl(

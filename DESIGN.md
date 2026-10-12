@@ -1,5 +1,24 @@
 # Design
 
+## Camera UI release (12 October 2026)
+
+Dan approved #695 shipping at 21:20; this supersedes earlier parked-camera
+statements below. Keep the agreed compact upper-right glass preview, contained
+local video, Front/Back and Live labels, existing window chrome, dock-to-tab
+motion and mobile-touch-only Switch. On phones the preview stays beside the
+foreground window; controls remain 44 px and the composer keeps its geometry.
+Close/Turn off stops capture. Ten-minute user-idle expiry restores explanation
+and Retry, hiding the inactive picture. Live means local playback, never a
+claim that the model receives continuous video.
+
+The upload-only contract changes no layout or animation. Image/caption evidence
+uses existing body copy and current-item voice notices. Synthetic Chromium
+1440x1000 dark/ordinary-motion and 320x700 light/touch/reduced-motion checks cover
+preview, switching, composer clearance, docking, chat and both voice languages,
+Close and idle recovery. These do not establish physical-phone or voice-model
+acceptance. Other local window/Notes changes are not part of this release.
+
+
 The shared shell and voice-workspace structure were agreed with Dan on 4 October 2026. On 5 October Dan accepted the centred live 3D Jarvis stage; P8-28's production stage and P8-31's shared glass styling are merged, and P8-29's activity/playback wiring is implemented offline in draft PR #377. This direction supersedes the earlier aurora/voice-only-orb presentation on the Jarvis page. See [the complete UI discussion and wireframes](ui.md). Dan designs each page by giving an image generator the page's data points and actions from [PRODUCT.md](PRODUCT.md#page-requirements), then picks a direction. Record the chosen direction, references, and findings here. Requirements stay in PRODUCT.md; token values go in code.
 
 ## Design goals

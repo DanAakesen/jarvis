@@ -6,6 +6,19 @@ Verified pure consumer semantics at original HEAD 9e193554c9c8c7c23a788ed3d2b058
 
 The first checkpoint reused server owner/Google client for inactive calendar reads with explicit denied/partial/stale coverage. Current consent documents calendar.events and L125 records calendarList denial. Coordinator verified primary CalendarList:list fields/tokens and maxResults up to 250; calendar.calendarlist.readonly is the least-privilege additional scope. Owner consent stays a separate manual gate; no scope/credential changes or sandbox tokens. Only complete synthetic-tested snapshots enter the owner/range cache. The expanded services above resolve source-rule evidence while full model/live acceptance stays open.
 
+## Camera UI release (12 October 2026)
+
+Dan authorised shipping #695 at 21:20, relayed by the coordinator, after accepting
+the camera conversation and live chat image input. This supersedes earlier
+release/activation holds below. Enable deployed #713 upload-only camera handles;
+do not require or invent a caption, and never cache/replay a frame-only result.
+Legacy caption-first inspection remains compatible. Camera preview, direction,
+composer clearance and ten-minute user-idle shutdown ship without #430, Notes,
+report appearance or movable-chat drafts. Local scoped types/lint/build and
+synthetic desktop/phone chat/EN/DA workflows pass; live voice and physical-phone
+acceptance remain unverified. The coordinator merges this scoped PR on green CI.
+
+
 Confirmed choices, their rationale, evidence, and status. Requirements live in [PRODUCT.md](../PRODUCT.md); the resulting system in [architecture.md](architecture.md). Keep decision (#) and learning (L#) numbers stable; add new ones at the end.
 
 ## Decision areas
