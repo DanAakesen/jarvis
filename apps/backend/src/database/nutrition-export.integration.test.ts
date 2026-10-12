@@ -100,6 +100,13 @@ describe('inactive nutrition export on isolated SQL Server',() => {
     expect(await queue('again')).toEqual({ queued: 0,skipped: 1 });
     expect((await deviceStore().claim({ operationKey: 'later' },signal())).items).toEqual([]);
   });
+  it('retains a maximally escaped bounded failure receipt for safe identical ACK replay',async () => {
+    await log(); await queue(); const claimed = await deviceStore().claim({ operationKey: 'a' },signal());
+    const ack = { id: '01',claimToken: claimed.claimToken,status: 'failed' as const,writer: 'x'.repeat(100),error: '\u0000'.repeat(500) };
+    expect(await deviceStore().complete(ack,signal())).toMatchObject({ state: 'uncertain',replay: false });
+    expect(await deviceStore().complete(ack,signal())).toMatchObject({ state: 'uncertain',replay: true });
+    expect(JSON.parse((await rows())[0].receipt_json).error).toBe(ack.error);
+  });
   it.each(['correct','delete'])('rejects a %s snapshot changed before claim without rewriting measurements',async action => {
     await log(); await queue();
     if (action === 'correct') await nutrition().correct({ ...meal(),energyKcal: 222 },1n,signal());

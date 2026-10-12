@@ -145,7 +145,7 @@ export class NutritionExportStore {
       }
       const stale = row.deleted_at !== null || String(row.source_revision) !== String(row.current_revision);
       const state = receipt.status === 'failed' ? 'uncertain' : stale ? 'out_of_sync' : 'written';
-      await this.query(this.request(tx).input('id',sql.NVarChar(256),receipt.id).input('receipt',sql.NVarChar(2000),receipt.receipt).input('state',sql.NVarChar(256),state)
+      await this.query(this.request(tx).input('id',sql.NVarChar(256),receipt.id).input('receipt',sql.NVarChar(4000),receipt.receipt).input('state',sql.NVarChar(256),state)
         .input('writer',sql.NVarChar(256),receipt.writer).input('error',sql.NVarChar(sql.MAX),receipt.error).input('now',sql.NVarChar(64),now),
         `UPDATE daily.nutrition_queue SET receipt_json=@receipt,status=@state,completed_at=@now,writer=@writer,last_error=@error,updated_at=@now WHERE owner_object_id=@owner AND ${exact('id')};
           UPDATE daily.nutrition_meals SET apple_health_status=@state,apple_health_completed_at=@now,apple_health_writer=@writer,apple_health_error=@error WHERE owner_object_id=@owner AND ${exact('id')};`,signal);

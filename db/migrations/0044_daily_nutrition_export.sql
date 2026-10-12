@@ -1,7 +1,7 @@
 -- New export metadata only. Legacy queue credentials are never activated/imported.
 ALTER TABLE daily.nutrition_queue ADD source_revision bigint NULL,
   claim_token uniqueidentifier NULL, claim_device_id nvarchar(256) COLLATE Latin1_General_100_BIN2 NULL,
-  receipt_json nvarchar(2000) NULL, reconciliation_json nvarchar(2000) NULL;
+  receipt_json nvarchar(4000) NULL, reconciliation_json nvarchar(2000) NULL;
 CREATE TABLE daily.nutrition_export_requests (
   owner_object_id uniqueidentifier NOT NULL,
   id nvarchar(256) COLLATE Latin1_General_100_BIN2 NOT NULL,

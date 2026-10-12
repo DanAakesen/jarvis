@@ -1555,6 +1555,10 @@ regression; live acceptance is pending.
   CI/deployment, post-deploy review and physical-phone keyboard acceptance remain.
   Fixture checks use synthetic sign-in, notes and intercepted writes, not
   live vault edits.
+## 2026-10-13: P12-12 inactive optional nutrition export
+
+Coordinator released only #727 after closed/deployed #722 using [pure source contract evidence](https://github.com/DanAakesen/jarvis/issues/727#issuecomment-6134567097). Ordinary ChatGPT logging is independent; canonical SQL meals alone feed exact owner-confirmed period snapshots. Scoped revocable export-device verification is a root-auth extension for only two inactive routes, not login/upload auth or a production credential grant. No verifier/issuance is installed. Claim-response replay returns no instructions; identical receipt ACK replay is harmless, conflicting ACKs refuse. Five-minute expiry, partial native writes and changed revisions/tombstones preserve uncertainty/out_of_sync. Recovery records checked-in-Health evidence but never automatically requeues, even when absence is reported; replacement native-write policy and actual phone behavior remain unverified. This conservative slice does not assert SQL guarantees exactly-once Health effects. 0044 adds only export evidence metadata with guarded rollback, and scoped canonical-writer changes affect status metadata only. Draft #758/Refs #727 requires exact-head SQL/full CI, independent review and explicit readiness release; device provisioning/activation/live/private/iPhone gates remain open. No original source/data/credential/access/resource changes or own merge.
+
 ## 2026-10-12: P12-01 Daily integration and migration authority
 
 ### P12-07 nutrition checkpoint (released after P12-03)
