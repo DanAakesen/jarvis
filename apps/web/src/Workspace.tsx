@@ -22,7 +22,7 @@ export interface WorkspaceView {
   title: string;
   content: WorkspaceViewContent;
   /** `conversation` hosts the shell's conversation history: glass material and a visually hidden title. */
-  presentation?: 'conversation';
+  presentation?: 'conversation' | 'camera-preview';
   initialGeometry?: Partial<WorkspaceGeometry>;
   /** Starts as a tab in the tab bar (for example a window pinned before a reload). */
   initiallyMinimised?: boolean;
@@ -202,7 +202,8 @@ export const Workspace = forwardRef<WorkspaceController, {
   const openViews = useMemo(() => orderedViews.filter((view) => !closedViewIds.has(view.id)), [closedViewIds, orderedViews]);
   const minimizedViews = useMemo(() => openViews.filter((view) => minimizedViewIds.has(view.id)), [minimizedViewIds, openViews]);
   const visibleViews = useMemo(() => openViews.filter((view) => !minimizedViewIds.has(view.id)), [minimizedViewIds, openViews]);
-  const foreground = visibleViews.find((view) => view.id === foregroundViewId) ?? visibleViews[0];
+  const primaryViews = useMemo(() => visibleViews.filter((view) => view.presentation !== 'camera-preview'), [visibleViews]);
+  const foreground = primaryViews.find((view) => view.id === foregroundViewId) ?? primaryViews[0] ?? visibleViews[0];
 
   // What each window shows (P9-63), read after the content settles and sent with the snapshot.
   const reported = useMemo(() => openViews.slice(0, 32), [openViews]);
@@ -217,17 +218,21 @@ export const Workspace = forwardRef<WorkspaceController, {
     }
     return result;
   }, Boolean(onOpenWindowsChange), reported.map(({ id }) => id).join('\n'));
+  const snapshotWindows = useMemo<WorkspaceSnapshot['windows']>(() => reported.map(({ id, title, presentation }) => ({
+    viewId: id, title, ...readback?.[id],
+    ...(presentation === 'camera-preview' ? { state: minimizedViewIds.has(id) ? 'minimised' as const : 'open' as const } : {}),
+  })), [minimizedViewIds, readback, reported]);
   useEffect(() => {
-    onOpenWindowsChange?.(reported.map(({ id, title }) => ({ viewId: id, title, ...readback?.[id] })));
-  }, [onOpenWindowsChange, readback, reported]);
-  const frontId = (phone ? foreground?.id : visibleViews.at(-1)?.id) ?? null;
+    onOpenWindowsChange?.(snapshotWindows);
+  }, [onOpenWindowsChange, snapshotWindows]);
+  const frontId = (phone ? foreground?.id : primaryViews.at(-1)?.id) ?? null;
   useEffect(() => { onFrontViewChange?.(frontId); }, [frontId, onFrontViewChange]);
 
   useLayoutEffect(() => {
     onVisibleViewsChange?.(visibleViews.length > 0);
   }, [onVisibleViewsChange, visibleViews.length]);
 
-  const shownViewIds = (phone ? (foreground ? [foreground.id] : []) : visibleViews.map((view) => view.id)).join('\n');
+  const shownViewIds = (phone ? visibleViews.filter((view) => view.id === foreground?.id || view.presentation === 'camera-preview') : visibleViews).map((view) => view.id).join('\n');
   useLayoutEffect(() => {
     onVisibleViewIdsChange?.(shownViewIds ? shownViewIds.split('\n') : []);
   }, [onVisibleViewIdsChange, shownViewIds]);
@@ -393,8 +398,8 @@ export const Workspace = forwardRef<WorkspaceController, {
   }, [foreground?.id, isViewOpen, minimizedViewIds, orderedViews, phone, reorder, restoreView, workspaceViews]);
 
   function switchView(offset: number) {
-    const index = visibleViews.findIndex((view) => view.id === foreground?.id);
-    const next = visibleViews[index + offset];
+    const index = primaryViews.findIndex((view) => view.id === foreground?.id);
+    const next = primaryViews[index + offset];
     if (next) focusView(next.id);
   }
 
@@ -541,8 +546,9 @@ export const Workspace = forwardRef<WorkspaceController, {
     dispatch: dispatchCommand,
     minimiseAll,
     hasVisibleViews: () => visibleViews.length > 0,
-    isViewVisible: (viewId: string) => visibleViews.some((view) => view.id === viewId) && (!phone || foreground?.id === viewId),
-  }), [dispatchCommand, foreground?.id, minimiseAll, phone, visibleViews]);
+    isViewVisible: (viewId: string) => visibleViews.some((view) => view.id === viewId && (!phone || foreground?.id === viewId || view.presentation === 'camera-preview')),
+    snapshot: { windows: snapshotWindows, contextPanelOpen: false },
+  }), [dispatchCommand, foreground?.id, minimiseAll, phone, snapshotWindows, visibleViews]);
 
   function raiseView(event: { target: EventTarget }, id: string) {
     if (arrangement !== 'layered' || narrow) return;
@@ -778,18 +784,18 @@ export const Workspace = forwardRef<WorkspaceController, {
       ) : openViews.length === minimizedViews.length ? (
         <p className="workspace-empty">All views are minimised.</p>
       ) : null}
-      {phone && visibleViews.length > 1 && (
+      {phone && primaryViews.length > 1 && (
         <nav className="workspace-view-switcher" aria-label="Switch foreground view">
-          {visibleViews.map((view, index) => (
+          {primaryViews.map((view, index) => (
             <button className="workspace-tab" key={view.id} type="button"
               aria-label={`Show ${view.title}`} aria-current={foreground?.id === view.id ? 'true' : undefined}
               onClick={() => focusView(view.id)}
               onKeyDown={(event) => {
-                const nextIndex = event.key === 'Home' ? 0 : event.key === 'End' ? visibleViews.length - 1
-                  : event.key === 'ArrowLeft' ? Math.max(0, index - 1) : event.key === 'ArrowRight' ? Math.min(visibleViews.length - 1, index + 1) : null;
+                const nextIndex = event.key === 'Home' ? 0 : event.key === 'End' ? primaryViews.length - 1
+                  : event.key === 'ArrowLeft' ? Math.max(0, index - 1) : event.key === 'ArrowRight' ? Math.min(primaryViews.length - 1, index + 1) : null;
                 if (nextIndex === null) return;
                 event.preventDefault();
-                focusView(visibleViews[nextIndex]!.id);
+                focusView(primaryViews[nextIndex]!.id);
               }}>
               {view.title}
             </button>
@@ -840,7 +846,7 @@ export const Workspace = forwardRef<WorkspaceController, {
           const titleId = `${workspaceId}-view-${index}`;
           const currentGeometry = geometryFor(view.id, index);
           const minimized = minimizedViewIds.has(view.id);
-          const background = phone && foreground?.id !== view.id;
+          const background = phone && foreground?.id !== view.id && view.presentation !== 'camera-preview';
           const maximized = activeMaximizedViewId === view.id;
           const style = {
             '--workspace-x': percent(currentGeometry.x),
@@ -861,7 +867,7 @@ export const Workspace = forwardRef<WorkspaceController, {
 
           return (
             <article
-              className={`workspace-window luminous-glass${view.presentation === 'conversation' ? ' workspace-window-conversation' : ''}${minimized ? ' workspace-window-minimized' : ''}${maximized ? ' workspace-window-maximized' : ''}${activeGestureId === view.id ? ' workspace-window-dragging' : ''}${jarvisUpdatingIds.has(view.id) ? ' workspace-window-jarvis-updating' : ''}`}
+              className={`workspace-window luminous-glass${view.presentation === 'conversation' ? ' workspace-window-conversation' : ''}${view.presentation === 'camera-preview' ? ' workspace-window-camera-preview' : ''}${minimized ? ' workspace-window-minimized' : ''}${maximized ? ' workspace-window-maximized' : ''}${activeGestureId === view.id ? ' workspace-window-dragging' : ''}${jarvisUpdatingIds.has(view.id) ? ' workspace-window-jarvis-updating' : ''}`}
               key={view.id}
               data-view-id={view.id}
               style={style}

@@ -1,5 +1,24 @@
 # Product
 
+## Camera UI release (12 October 2026)
+
+Dan accepted the camera conversation and authorised shipping #695 at 21:20,
+relayed by the coordinator. This supersedes earlier camera-release holds below.
+The coordinator reports live chat `visual.path=image` on every tested turn;
+live voice image acceptance and physical-phone checks remain separate.
+
+Camera preview is a separate workspace window with local video, actual
+Front/Back status and mobile-touch-only switching. It docks without stopping
+capture; Close/Turn off, session end and ten minutes without a user turn stop
+the tracks. Idle recovery stays visible. Camera controls never share or cover
+the composer. Camera-on chat and correlated EN/DA realtime turns upload a fresh
+frame using deployed #713 `mode: 'handle'`, then forward its single-use handle
+without requiring a caption. Legacy screen inspection stays caption-first.
+No frame-only result is cached or replayed; rate/daily limits without a real
+cached caption report unavailable. Backend image/caption evidence remains honest.
+Window pins/layout, floating-chat resizing and Notes drafts ship separately.
+
+
 Jarvis is Dan's personal AI platform: one app, controlled by chat and voice, that grows area by area. Phase 1 is the **Software Factory**: Dan asks Jarvis for a change, a coding agent (Codex or GitHub Copilot) does the work in a cloud sandbox, and GitHub Actions builds, tests, and releases it.
 
 Keep implementation phases and progress in [PLAN.md](PLAN.md), feature summaries in [docs/features.md](docs/features.md), visual choices in [DESIGN.md](DESIGN.md), system structure in [docs/architecture.md](docs/architecture.md), the data model in [docs/data-model.md](docs/data-model.md), commands and operating constraints in [docs/agent-context.md](docs/agent-context.md), and dated decisions and learnings in [docs/decisions.md](docs/decisions.md).

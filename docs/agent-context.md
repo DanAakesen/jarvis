@@ -1,5 +1,24 @@
 # Agent context
 
+## Camera UI release (12 October 2026)
+
+Dan approved shipping #695 at 21:20 via the coordinator; earlier release holds
+and five-minute camera shutdown instructions below are superseded. Ship camera
+alone from `ui/shell-iteration`, preserving Notes, floating-chat and #430 drafts.
+The coordinator merges on green CI. Keep the port-5173 hot-reload server running.
+
+The isolated camera candidate passes TypeScript, scoped zero-warning ESLint
+and production build. After main reconciliation all twelve scoped suites pass
+362 tests, with the unchanged OS-locale-specific
+`Voice · 2.5 voice minutes` expectation excluded (Windows renders `2,5`).
+Synthetic Chromium checks pass at 1440x1000 dark/ordinary motion and
+320x700 light/touch/reduced motion: preview, direction/switch, unchanged composer,
+docking, fresh handle-only chat/EN/DA payloads, Close and ten-minute idle shutdown.
+API/WebSocket responses and camera streams are fixtures, not live voice evidence.
+Dan and the coordinator report live chat image acceptance; physical phones and
+live voice remain to check after deployment. No backend or dependency changes.
+
+
 Project-specific working context for agents. The generated `AGENTS.md` is not edited; additions belong here.
 
 ## Scope

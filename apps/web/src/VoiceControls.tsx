@@ -1,6 +1,6 @@
 import type { PublicClientApplication } from '@azure/msal-browser';
 import type { JarvisActivityEvent } from '@jarvis/contracts';
-import { useCallback, useContext, useEffect, useRef, useState } from 'react';
+import { useCallback, useContext, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { PublicConfig } from '../config/public-config';
 import { useJarvisActivity } from './activity-context';
 import { ConversationMoreMenu, type MoreMenuAction } from './ConversationMoreMenu';
@@ -12,10 +12,13 @@ import { languageName } from './voice-language';
 import { useSessionCommandRegistry } from './session-commands';
 import { voicePresentation } from './voice-presentation';
 import { VoiceStageContext } from './voice-stage-context';
-import type { CameraController, ScreenShareController } from './screen-sharing';
+import { VisionInspectionError, type CameraController, type ScreenShareController } from './screen-sharing';
 import { formatWatchBudget, useVisionWatch } from './vision-watch';
 import { phoneDeviceQuery } from './presence-store';
 import { onVoiceWake, reportWakeOutcome } from './wake-store';import './VoiceControls.css';
+import { awaitWithSignal } from './backend-request';
+import { CameraObservationToast } from './CameraPreview';
+import { visualResultText } from './visual-context';
 
 const initialMessage = 'Start voice with the input orb. Your browser asks for microphone access when voice starts; Jarvis only hears you after the voice session is connected.';
 const cameraGuidance = 'Camera is off. Turn it on in More.';
@@ -74,6 +77,23 @@ export function VoiceControls({
   const { voiceActivity } = useJarvisActivity();
   const stage = useContext(VoiceStageContext);
   const client = useRef<BrowserVoiceClient | null>(null);
+  const visionRequest = useRef(0);
+  const visionItems = useRef(new Set<string>());
+  const visualResultItem = useRef<string | null>(null);
+  const visionController = useRef<AbortController | null>(null);
+  const captures = useRef({ camera, screenShare });
+  useLayoutEffect(() => {
+    const previous = captures.current.camera;
+    captures.current = { camera, screenShare };
+    if (camera?.conversation) client.current?.setCameraState(camera.sharing);
+    if (previous?.sharing !== camera?.sharing ||
+        previous?.sharing && previous.previewStream !== camera?.previewStream) {
+      visionRequest.current += 1;
+      visualResultItem.current = null;
+      visionController.current?.abort();
+    }
+  }, [camera, screenShare]);
+  useEffect(() => () => { visionController.current?.abort(); }, []);
   const screenSessionIdRef = useRef<string | null>(null);
   const [clientStatus, setClientStatus] = useState<VoiceStatus>('stopped');
   const [clientMessage, setClientMessage] = useState(initialMessage);
@@ -198,15 +218,52 @@ export function VoiceControls({
       language: selectedLanguage,
       ...(onSessionEnded ? { onSessionEnded } : {}),
       onSessionReady: (sessionId) => {
+        if (client.current !== voice) return;
+        visionRequest.current += 1;
+        visionItems.current.clear();
+        visualResultItem.current = null;
+        visionController.current?.abort();
         screenSessionIdRef.current = sessionId;
         setScreenSessionId(sessionId);
       },
-      onVisionRequest: (source) => { void inspectAndSendVision(source); },
+      onVisionRequest: (source, transcript, itemId) => {
+        if (client.current === voice) void inspectAndSendVision(source, transcript, itemId);
+      },
+      onVisionLimit: (limit) => {
+        if (client.current !== voice || visualResultItem.current !== limit.itemId) return;
+        notify(limit.code === 'daily_limit'
+          ? 'Daily camera limit reached in voice. Jarvis has no fresh frame for this turn.'
+          : limit.code === 'budget_exhausted'
+            ? 'Camera image budget reached in voice. No image was supplied for this turn.'
+            : limit.code === 'budget_unavailable'
+              ? 'Camera image budget could not be checked. No image was supplied for this turn.'
+              : 'Voice camera is rate-limited. Jarvis has no fresh frame for this turn.');
+      },
+      onVisualResult: (result) => {
+        if (client.current !== voice || !captures.current.camera?.sharing ||
+            !result.itemId || visualResultItem.current !== result.itemId) return;
+        visualResultItem.current = null;
+        notify(visualResultText(result));
+      },
+      onVisualResultError: (itemId) => {
+        if (client.current !== voice || !captures.current.camera?.sharing ||
+            visualResultItem.current === null || itemId && visualResultItem.current !== itemId) return;
+        notify('Jarvis could not confirm the visual input for this turn.', true);
+      },
+      onUserTurn: () => {
+        if (client.current === voice) captures.current.camera?.recordActivity?.();
+      },
       onMicrophoneState: (state) => {
         if (client.current === voice) setMicrophone(state);
       },
       onStatus: (nextStatus, nextMessage) => {
         if (client.current !== voice) return;
+        if (nextStatus === 'reconnecting') {
+          visionRequest.current += 1;
+          visualResultItem.current = null;
+          visionController.current?.abort();
+        }
+        if (nextStatus === 'listening') captures.current.camera?.recordActivity?.();
         setClientStatus(nextStatus);
         setClientMessage(nextMessage);
         if (nextStatus === 'stopped' || nextStatus === 'error') {
@@ -214,14 +271,18 @@ export function VoiceControls({
           if (nextStatus === 'error' && wakeSession.current) reportWakeOutcome(wakeSession.current, 'error', nextMessage);
           wakeSession.current = null;
           client.current = null;
+          visionItems.current.clear();
+          visualResultItem.current = null;
+          visionRequest.current += 1;
+          visionController.current?.abort();
           for (const done of stopWaiters.current) done();
           stopWaiters.current.clear();
           stage.setSignals(null);
           setSessionLanguage(null);
           screenSessionIdRef.current = null;
           setScreenSessionId(null);
-          screenShare?.stop();
-          camera?.stop();
+          captures.current.screenShare?.stop();
+          captures.current.camera?.stop();
           setMuted(false);
           setMicrophone('off');
           onActiveChange?.(false);
@@ -229,6 +290,7 @@ export function VoiceControls({
       },
     });
     client.current = voice;
+    if (captures.current.camera?.conversation) voice.setCameraState(captures.current.camera.sharing);
     stage.setSignals({
       playbackLevel: () => voice.playbackLevel(),
       inputLevel: () => voice.inputLevel(),
@@ -238,31 +300,76 @@ export function VoiceControls({
     voice.start();
   };
 
-  const inspectAndSendVision = async (source: 'camera' | 'screen') => {
-    const capture = source === 'camera' ? camera : screenShare;
+  const inspectAndSendVision = async (source: 'camera' | 'screen', question?: string, itemId?: string) => {
+    if (source === 'screen' && captures.current.camera?.conversation && captures.current.camera.sharing) {
+      notify('Turn off the camera to inspect the shared screen in voice.');
+      return;
+    }
+    if (source === 'camera' && captures.current.camera?.conversation && itemId) {
+      if (visionItems.current.has(itemId)) return;
+      visionItems.current.add(itemId);
+      if (visionItems.current.size > 64) {
+        const oldest = visionItems.current.values().next().value;
+        if (oldest !== undefined) visionItems.current.delete(oldest);
+      }
+    }
+    const request = ++visionRequest.current;
+    visualResultItem.current = null;
+    visionController.current?.abort();
+    // Session callbacks outlive renders, including turning a camera on after voice starts.
+    const capture = source === 'camera' ? captures.current.camera : captures.current.screenShare;
     const sessionId = screenSessionIdRef.current;
     const voice = client.current;
-    if (!sessionId || !voice) return;
+    const conversation = source === 'camera' && Boolean(capture?.conversation);
+    if (!sessionId || !voice) { notify('Voice is not ready to inspect a frame. Wait for the connection and try again.', true); return; }
     if (!capture?.sharing) {
       notify(source === 'camera' ? cameraGuidance : screenGuidance);
-      if (source === 'screen') {
-        try { voice.sendScreenContextUnavailable(); } catch { /* The voice session may be closing. */ }
+      try { voice.sendScreenContextUnavailable(); } catch (reason) {
+        notify(reason instanceof Error ? reason.message : 'Visual feedback could not reach the voice session.', true);
       }
       return;
     }
+    if (conversation && (!itemId || !question)) {
+      notify('The voice turn has no camera correlation ID or question. No frame was sent.', true);
+      return;
+    }
+    if (conversation && itemId) visualResultItem.current = itemId;
+    const controller = new AbortController();
+    visionController.current = controller;
+    const timeout = conversation ? setTimeout(() => controller.abort(), 10_000) : undefined;
     try {
-      const context = await capture.inspect(sessionId, 'caller');
-      if (client.current !== voice || screenSessionIdRef.current !== sessionId) return;
+      if (conversation) {
+        if (!capture.inspectTurn) throw new Error('Camera conversation inspection is unavailable.');
+        const inspectTurn = capture.inspectTurn;
+        const context = await awaitWithSignal(() => inspectTurn(sessionId, question ?? '', controller.signal, itemId), controller.signal);
+        if (client.current !== voice || screenSessionIdRef.current !== sessionId || visionRequest.current !== request) return;
+        voice.sendScreenContext(context.description, undefined, itemId, context);
+        return;
+      }
+      const context = await awaitWithSignal(() => capture.inspect(sessionId, 'caller', controller.signal), controller.signal);
+      if (client.current !== voice || screenSessionIdRef.current !== sessionId || visionRequest.current !== request) return;
       voice.sendScreenContext(
         context.description,
         source === 'screen' ? context.sharedWindowTitle : undefined,
       );
     } catch (reason) {
-      if (client.current !== voice || screenSessionIdRef.current !== sessionId) return;
-      notify(reason instanceof Error ? reason.message : 'Jarvis could not inspect the visual frame.', true);
-      if (source === 'screen') {
-        try { voice.sendScreenContextUnavailable(); } catch { /* The voice session may be closing. */ }
+      if (client.current !== voice || screenSessionIdRef.current !== sessionId || visionRequest.current !== request) return;
+      notify(controller.signal.aborted ? 'Camera inspection timed out. Jarvis has no fresh frame for this turn.'
+        : reason instanceof Error ? reason.message : 'Jarvis could not inspect the visual frame.', true);
+      try {
+        if (conversation && itemId) {
+          voice.sendScreenContextUnavailable({
+            itemId,
+            reason: reason instanceof VisionInspectionError && reason.code ? reason.code
+              : controller.signal.aborted ? 'timeout' : 'vision_failed',
+          });
+        } else voice.sendScreenContextUnavailable();
+      } catch (cause) {
+        notify(cause instanceof Error ? cause.message : 'Visual feedback could not reach the voice session.', true);
       }
+    } finally {
+      if (timeout !== undefined) clearTimeout(timeout);
+      if (visionController.current === controller) visionController.current = null;
     }
   };
 
@@ -345,13 +452,15 @@ export function VoiceControls({
     client.current?.setMuted(nextMuted);
   };
 
+  const cameraOwnsVoiceContext = Boolean(camera?.conversation && camera.sharing);
   const screenActions: MoreMenuAction[] = screenShare?.sharing ? [{
     id: 'screen',
     label: screenShare.inspecting ? 'Looking at screen…' : 'Look at screen',
     icon: <MenuGlyph name="screen" />,
     onSelect: () => { void inspectAndSendVision('screen'); },
-    disabled: !screenSessionId || pending || screenShare.inspecting,
-    ...(!screenSessionId || pending ? { description: sessionPendingGuidance } : {}),
+    disabled: cameraOwnsVoiceContext || !screenSessionId || pending || screenShare.inspecting,
+    ...(cameraOwnsVoiceContext ? { description: 'Turn off the camera to inspect the shared screen in voice.' }
+      : !screenSessionId || pending ? { description: sessionPendingGuidance } : {}),
   }, {
     id: 'screen-watch',
     label: screenWatch.watching ? `Stop watching the screen${formatWatchBudget(screenWatch.budget) ? ` · ${formatWatchBudget(screenWatch.budget)}` : ''}` : 'Watch the screen',
@@ -373,14 +482,14 @@ export function VoiceControls({
     disabled: !screenShare || screenShare.starting,
     ...(!screenShare ? { description: 'Screen sharing is unavailable.' } : {}),
   }];
-  const cameraActions: MoreMenuAction[] = camera?.sharing ? [{
+  const cameraActions: MoreMenuAction[] = camera?.sharing ? [...(!camera.conversation ? [{
     id: 'camera',
     label: camera.inspecting ? 'Looking at camera…' : 'Look at camera',
     icon: <MenuGlyph name="camera" />,
     onSelect: () => { void inspectAndSendVision('camera'); },
     disabled: !screenSessionId || pending || camera.inspecting,
     ...(!screenSessionId || pending ? { description: sessionPendingGuidance } : {}),
-  }, {
+  }] : []), {
     id: 'camera-watch',
     label: cameraWatch.watching ? `Stop watching the camera${formatWatchBudget(cameraWatch.budget) ? ` · ${formatWatchBudget(cameraWatch.budget)}` : ''}` : 'Watch the camera',
     icon: <MenuGlyph name="camera" />,
@@ -452,6 +561,8 @@ export function VoiceControls({
         </div>
       )}
       {notification && <ConversationToast voiceActive={active} notification={notification} onDismiss={dismissNotification} />}
+      {active && camera?.observationNotice &&
+        <CameraObservationToast key={camera.observationNotice} message={camera.observationNotice} voiceActive />}
     </div>
   );
 }

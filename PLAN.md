@@ -1,5 +1,20 @@
 # Project plan
 
+## Camera UI release (12 October 2026)
+
+#695/P9-79 is approved for shipping by Dan at 21:20, via the coordinator.
+This supersedes earlier parked-camera and held-opt-in status below.
+The scoped candidate includes preview/Front-Back, composer clearance, docking
+and idle lifecycle, plus deployed #713 upload-only camera conversation.
+Types, scoped lint and build pass; 362 scoped tests pass after main reconciliation,
+retaining one unchanged OS-locale baseline exclusion. Desktop dark/normal
+motion and 320px light/touch/reduced-motion workflows pass with synthetic streams
+and intercepted chat/EN/DA transport. Coordinator-reported live chat image input
+is accepted by Dan; voice/physical-phone acceptance is separate.
+Next: camera-only PR, coordinator merge on green CI, then loading recovery and
+#430 as separate releases. Preserve Notes, report styling and floating-chat drafts.
+
+
 Phase 1 delivers the Software Factory. Requirements and page specifications are in [PRODUCT.md](PRODUCT.md); the system and stack in [docs/architecture.md](docs/architecture.md); the data model in [docs/data-model.md](docs/data-model.md); decisions and learnings in [docs/decisions.md](docs/decisions.md).
 
 ## Current focus

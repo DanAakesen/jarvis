@@ -1,5 +1,18 @@
 # Decisions
 
+## Camera UI release (12 October 2026)
+
+Dan authorised shipping #695 at 21:20, relayed by the coordinator, after accepting
+the camera conversation and live chat image input. This supersedes earlier
+release/activation holds below. Enable deployed #713 upload-only camera handles;
+do not require or invent a caption, and never cache/replay a frame-only result.
+Legacy caption-first inspection remains compatible. Camera preview, direction,
+composer clearance and ten-minute user-idle shutdown ship without #430, Notes,
+report appearance or movable-chat drafts. Local scoped types/lint/build and
+synthetic desktop/phone chat/EN/DA workflows pass; live voice and physical-phone
+acceptance remain unverified. The coordinator merges this scoped PR on green CI.
+
+
 Confirmed choices, their rationale, evidence, and status. Requirements live in [PRODUCT.md](../PRODUCT.md); the resulting system in [architecture.md](architecture.md). Keep decision (#) and learning (L#) numbers stable; add new ones at the end.
 
 ## Decision areas

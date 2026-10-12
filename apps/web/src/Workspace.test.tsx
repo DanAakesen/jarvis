@@ -813,3 +813,33 @@ describe('Workspace', () => {
     expect(screen.queryByRole('article', { name: 'Updated research' })).toBeNull();
   });
 });
+
+
+describe('camera preview ownership', () => {
+it('keeps a compact camera preview visible beside the foreground phone window, with tab docking and Jarvis commands', () => {
+    phoneViewport();
+    const ref = createRef<WorkspaceController>();
+    const onClose = vi.fn();
+    const shown = vi.fn();
+    const preview: WorkspaceView = {
+      id: 'camera-preview', title: 'Camera preview', presentation: 'camera-preview', onClose,
+      content: { status: 'ready', content: <p>Front camera live</p> },
+    };
+    render(<Workspace ref={ref} views={[views[0]!, preview]} onVisibleViewIdsChange={shown} />);
+    expect(screen.getAllByRole('article')).toHaveLength(2);
+    expect(screen.queryByRole('navigation', { name: 'Switch foreground view' })).toBeNull();
+    expect(shown).toHaveBeenLastCalledWith(['research', 'camera-preview']);
+    expect(ref.current?.isViewVisible?.('camera-preview')).toBe(true);
+    const cameraWindow = screen.getByRole('article', { name: 'Camera preview' });
+    fireEvent.click(within(cameraWindow).getByRole('button', { name: 'Minimise Camera preview' }));
+    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.getByRole('article', { name: 'Research summary' })).not.toBeNull();
+    expect(ref.current?.snapshot?.windows.find((window) => window.viewId === 'camera-preview'))
+      .toMatchObject({ title: 'Camera preview', state: 'minimised' });
+    act(() => { expect(ref.current?.dispatch({ commandId: 'show-preview', operation: 'show', viewId: 'camera-preview' })).toBe(true); });
+    expect(cameraWindow.getAttribute('aria-hidden')).toBeNull();
+    expect(screen.getByRole('article', { name: 'Research summary' })).not.toBeNull();
+    act(() => { expect(ref.current?.dispatch({ commandId: 'close-preview', operation: 'close', viewId: 'camera-preview' })).toBe(true); });
+    expect(onClose).toHaveBeenCalledOnce();
+  });
+});

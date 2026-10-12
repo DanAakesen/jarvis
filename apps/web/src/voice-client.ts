@@ -1,3 +1,6 @@
+import { isCameraRequest, isScreenRequest } from './vision-request';
+import { parseVisualResult, parseVisualTurnContext, type VisualResult, type VisualTurnContext } from './visual-context';
+
 export type VoiceLanguage = 'da' | 'en';
 export type VoiceStatus = 'stopped' | 'connecting' | 'ready' | 'stopping' | 'listening' | 'thinking' | 'speaking' | 'reconnecting' | 'error';
 
@@ -39,7 +42,11 @@ export interface VoiceClientOptions {
   onMicrophoneState?: (state: MicrophoneState) => void;
   onSessionEnded?: () => void;
   onSessionReady?: (sessionId: string) => void;
-  onVisionRequest?: (source: 'camera' | 'screen', transcript: string) => void;
+  onUserTurn?: (transcript: string, itemId?: string) => void;
+  onVisionRequest?: (source: 'camera' | 'screen', transcript: string, itemId?: string) => void;
+  onVisionLimit?: (limit: { itemId: string; code: 'frame_rate_limited' | 'daily_limit' | 'budget_exhausted' | 'budget_unavailable'; retryAfterMs?: number }) => void;
+  onVisualResult?: (result: VisualResult & { itemId?: string }) => void;
+  onVisualResultError?: (itemId?: string) => void;
   createSocket?: (url: string, protocols: string[]) => VoiceSocket;
   createAudio?: () => VoiceAudio;
   delay?: (milliseconds: number, signal: AbortSignal) => Promise<void>;
@@ -55,6 +62,12 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+function isTranscriptionItemId(value: unknown): value is string {
+  return typeof value === 'string' && /^[A-Za-z0-9_-]{1,128}$/u.test(value);
+}
+
+export type VisionUnavailableReason = 'frame_rate_limited' | 'daily_limit' | 'budget_exhausted' | 'capture_failed' | 'vision_failed' | 'timeout';
+
 function decodeEvent(data: unknown): Record<string, unknown> | null {
   if (typeof data !== 'string') return null;
   try {
@@ -66,12 +79,8 @@ function decodeEvent(data: unknown): Record<string, unknown> | null {
 }
 
 function requestedVisionSource(transcript: string): 'camera' | 'screen' | undefined {
-  if (/\b(?:what am i holding|what(?:'s| is) in my hand|look at (?:my|the) camera|what can you see|hvad holder jeg|hvad er det jeg holder|kig på (?:mit )?kamera(?:et)?|hvad kan du se)\b/iu.test(transcript)) {
-    return 'camera';
-  }
-  if (/\b(?:look at (?:my|the) screen|what(?:'s| is) on (?:my|the) screen|kig på (?:min )?skærm(?:en)?|hvad (?:er der|kan du se) på (?:min )?skærm(?:en)?)\b/iu.test(transcript)) {
-    return 'screen';
-  }
+  if (isScreenRequest(transcript)) return 'screen';
+  if (isCameraRequest(transcript)) return 'camera';
   if (/\b(?:do|act|use|fill|complete|submit|book|buy|purchase|send|delete|choose|select|find|search|compare|open|click|type|enter|apply)\b.{0,80}\b(?:here|this|that|it|these|those)\b|\b(?:here|this|that|it|these|those)\b.{0,80}\b(?:do|act|use|fill|complete|submit|book|buy|purchase|send|delete|choose|select|find|search|compare|open|click|type|enter|apply)\b/iu.test(transcript)) {
     return 'screen';
   }
@@ -457,6 +466,7 @@ export class BrowserVoiceClient {
   private stopOpenSocket: VoiceSocket | undefined;
   private stopOpenHandler: (() => void) | undefined;
   private screenSessionReady = false;
+  private cameraState: boolean | undefined;
 
   constructor(private readonly options: VoiceClientOptions) {
     this.language = options.language ?? 'da';
@@ -559,27 +569,53 @@ export class BrowserVoiceClient {
     await this.requestMicrophone(signal);
   }
 
-  sendScreenContext(description: string, sharedWindowTitle?: string): void {
-    if (!this.running || !this.screenSessionReady || description.trim().length === 0 ||
-        description.length > 5_000 || (sharedWindowTitle !== undefined &&
+  setCameraState(on: boolean): void {
+    if (this.cameraState === on) return;
+    this.cameraState = on;
+    this.sendCameraState();
+  }
+
+  private sendCameraState(): void {
+    if (this.cameraState === undefined || !this.running || !this.screenSessionReady ||
+        this.socket?.readyState !== WebSocket.OPEN) return;
+    this.socket.send(JSON.stringify({ type: 'jarvis.camera.state', on: this.cameraState }));
+  }
+
+  sendScreenContext(description: string | undefined, sharedWindowTitle?: string, itemId?: string,
+    visual?: Omit<VisualTurnContext, 'description'>): void {
+    if (!this.running || !this.screenSessionReady ||
+        description !== undefined && (!description.trim() || description.length > 5_000) ||
+        description === undefined && !visual?.frameId || (sharedWindowTitle !== undefined &&
           (!sharedWindowTitle.trim() || sharedWindowTitle.length > 300 ||
             Array.from(sharedWindowTitle).some((character) =>
               character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127))) ||
+        (itemId !== undefined && !isTranscriptionItemId(itemId)) ||
+        (visual !== undefined && itemId === undefined) ||
         this.socket?.readyState !== WebSocket.OPEN) {
       throw new Error('The active voice session is not ready for screen context.');
     }
+    const context = visual === undefined ? undefined : parseVisualTurnContext({
+      ...visual, ...(description === undefined ? {} : { description }),
+    });
     this.socket.send(JSON.stringify({
       type: 'jarvis.screen.context',
-      description,
+      ...(description === undefined ? {} : { description }),
       ...(sharedWindowTitle ? { sharedWindowTitle } : {}),
+      ...(itemId === undefined ? {} : { itemId }),
+      ...(context === undefined ? {} : context),
     }));
   }
 
-  sendScreenContextUnavailable(): void {
-    if (!this.running || !this.screenSessionReady || this.socket?.readyState !== WebSocket.OPEN) {
+  sendScreenContextUnavailable(turn?: { itemId: string; reason: VisionUnavailableReason }): void {
+    if (!this.running || !this.screenSessionReady || this.socket?.readyState !== WebSocket.OPEN ||
+        (turn !== undefined && (!isTranscriptionItemId(turn.itemId) ||
+          !['frame_rate_limited', 'daily_limit', 'budget_exhausted', 'capture_failed', 'vision_failed', 'timeout'].includes(turn.reason)))) {
       throw new Error('The active voice session is not ready for screen context.');
     }
-    this.socket.send(JSON.stringify({ type: 'jarvis.screen.context.unavailable' }));
+    this.socket.send(JSON.stringify({
+      type: 'jarvis.screen.context.unavailable',
+      ...(turn === undefined ? {} : { itemId: turn.itemId, reason: turn.reason }),
+    }));
   }
 
   private setMicrophone(state: MicrophoneState): void {
@@ -758,14 +794,50 @@ export class BrowserVoiceClient {
     if (event.type === 'jarvis.session.ready') {
       if (typeof event.sessionId === 'string' && /^[1-9]\d{0,18}$/u.test(event.sessionId)) {
         this.screenSessionReady = true;
+        this.sendCameraState();
         this.options.onSessionReady?.(event.sessionId);
       }
     } else if (event.type === 'jarvis.session.ended') {
       this.finishStop(true);
+    } else if (event.type === 'jarvis.visual_context') {
+      const itemId = isTranscriptionItemId(event.itemId) ? event.itemId : undefined;
+      if (event.itemId !== undefined && itemId === undefined) {
+        this.options.onVisualResultError?.();
+        return;
+      }
+      let result: VisualResult | undefined;
+      try { result = parseVisualResult(event); } catch {
+        this.options.onVisualResultError?.(itemId);
+        return;
+      }
+      if (result) this.options.onVisualResult?.({
+        ...result, ...(itemId === undefined ? {} : { itemId }),
+      });
+      else this.options.onVisualResultError?.(itemId);
+    } else if (event.type === 'jarvis.screen.context.unavailable' && this.cameraState === true &&
+        isTranscriptionItemId(event.itemId) &&
+        (event.reason === 'frame_rate_limited' || event.reason === 'daily_limit' ||
+          event.reason === 'budget_exhausted' || event.reason === 'budget_unavailable')) {
+      const retryAfterMs = event.retryAfterMs;
+      if (retryAfterMs !== undefined && (typeof retryAfterMs !== 'number' ||
+          !Number.isSafeInteger(retryAfterMs) || retryAfterMs < 0 || retryAfterMs > 86_400_000)) return;
+      this.options.onVisionLimit?.({
+        itemId: event.itemId, code: event.reason,
+        ...(typeof retryAfterMs === 'number' ? { retryAfterMs } : {}),
+      });
     } else if (event.type === 'conversation.item.input_audio_transcription.completed' &&
         typeof event.transcript === 'string') {
-      const source = requestedVisionSource(event.transcript);
-      if (source) this.options.onVisionRequest?.(source, event.transcript);
+      if (!event.transcript.trim()) return;
+      const itemId = isTranscriptionItemId(event.item_id) ? event.item_id : undefined;
+      if (itemId === undefined) this.options.onUserTurn?.(event.transcript);
+      else this.options.onUserTurn?.(event.transcript, itemId);
+      const requestedSource = requestedVisionSource(event.transcript);
+      const source = this.cameraState === true ? 'camera'
+        : this.cameraState === false && requestedSource === 'camera' ? undefined : requestedSource;
+      if (source) {
+        if (itemId === undefined) this.options.onVisionRequest?.(source, event.transcript);
+        else this.options.onVisionRequest?.(source, event.transcript, itemId);
+      }
     } else if (event.type === 'input_audio_buffer.speech_started' || event.type === 'speech_started') {
       this.audio.stopPlayback();
       this.playbackAllowed = false;
