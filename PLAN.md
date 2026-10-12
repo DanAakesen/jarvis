@@ -4,6 +4,7 @@ Phase 1 delivers the Software Factory. Requirements and page specifications are 
 
 ## Current focus
 
+- **Tool catalogue limit (12 Oct):** #737 pushed the backend tool catalogue past the agent's 128-tool limit and broke every chat turn; reverted in #744. The registry now enforces 128 tools, 4,000-character descriptions and 1 MiB, mirrored in `agents/jarvis/limits.json` with parity tests; P9-88 (#735) is redone as consolidated tools with an operation parameter.
 - **P12-03 (#718):** Implemented offline in PR #742: empty owner-bound Daily SQL schema, inactive exact-key read boundary, explicit source mapping and legacy/mixed-source exclusions. 84 focused tests and backend lint/build pass; actual SQL Server integration and container smoke pass in GitHub CI. Next: final exact-head full CI and independent coordinator review. #717 is parked/deferred at unchanged draft #741 pending protected export evidence and is not a dependency of #718; backup/import/live-source reconciliation remains open.
 
 - **P12-01 (#716):** Implemented offline in PR #740: default-off module metadata, server-resolved owner and reserved native view IDs; 43 contracts and 109 targeted backend tests, contracts/backend/web lint and builds pass. Next: independent review and required CI; downstream #717–#734 remain deferred until explicitly released and claimed. See [approved migration and evidence gates](docs/daily-migration.md); original Daily remains canonical during migration and continues ordinary authorized writes; migration tooling cannot modify source code/schema or rewrite records.
