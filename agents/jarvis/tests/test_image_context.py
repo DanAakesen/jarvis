@@ -221,7 +221,7 @@ async def test_handle_only_model_failure_requests_caption_before_single_text_ret
     token = current_visual_fallback.set(fallback)
     reservation_token = current_image_reservation.set({"sessionId": "41", "itemId": "frame_1"})
     try:
-        text = "x" * 28_001 if reason == "image_context_limit" else "What is this?"
+        text = "x" * 400_001 if reason == "image_context_limit" else "What is this?"
         assert [delta async for delta in model.complete_chat(
             [ModelMessage("user", text, (ModelImage(JPEG),))], "en",
         )] == []
@@ -400,7 +400,7 @@ async def test_oversized_image_prompt_falls_back_before_image_request():
     token = current_visual_result.set(result)
     try:
         assert [text async for text in model.complete_chat(
-            [ModelMessage("user", "x" * 28_001, (ModelImage(JPEG),))], "en"
+            [ModelMessage("user", "x" * 400_001, (ModelImage(JPEG),))], "en"
         )] == []
     finally:
         current_visual_result.reset(token)

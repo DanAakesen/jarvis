@@ -83,6 +83,10 @@ PERSONALITY_RESPONSE_STYLES = {
     "detailed": "include relevant explanation and context, avoiding repetition",
 }
 
+# Text part of an image request (instructions, history, tool schemas). The old 28 KB ceiling
+# dropped the image on every real turn: the shared instructions alone are about 15 KB.
+IMAGE_REQUEST_MAX_TEXT_BYTES = 400_000
+
 _tracer = trace.get_tracer("VoiceHostedAgent.Model")
 logger = logging.getLogger("model_client")
 
@@ -617,7 +621,7 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                             {"instructions": instructions, "input": text_input, "tools": tools},
                             ensure_ascii=False,
                         ).encode("utf-8"))
-                        if prompt_bytes > 28_000:
+                        if prompt_bytes > IMAGE_REQUEST_MAX_TEXT_BYTES:
                             raise ImageInputRejected("image_context_limit", model=model_name)
                     started = time.monotonic()
                     first_text_ms: int | None = None
