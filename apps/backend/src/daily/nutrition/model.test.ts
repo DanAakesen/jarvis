@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { authorizeIntake, meal, suggest, type MealInput, type Suggestion } from './model.js';
+import { authorizeIntake, canonicalJson, meal, plan, resolveNutrients, suggest, type MealInput, type Suggestion } from './model.js';
 
 export const syntheticMeal: MealInput = {
   id: 'synthetic-01', idempotencyKey: 'synthetic-message-01', mealName: 'Synthetic meal', mealType: null,
@@ -8,6 +8,28 @@ export const syntheticMeal: MealInput = {
   captureMethod: 'text', confidence: 'exact', provenance: { energyKcal: { source: 'user-exact', unit: 'kcal' } },
 };
 describe('nutrition evidence and budgets', () => {
+  it('canonicalizes only JSON object order and rejects silent value loss/deep payloads', () => {
+    expect(canonicalJson({ b: 1, a: [null, { d: 2, c: 3 }] })).toBe(canonicalJson({ a: [null, { c: 3, d: 2 }], b: 1 }));
+    for (const value of [{ x: undefined }, [NaN], { x: 1n }, new Date()]) expect(() => canonicalJson(value)).toThrow();
+    let deep: unknown = null; for (let i = 0; i < 18; i++) deep = [deep];
+    expect(() => canonicalJson(deep)).toThrow('limits');
+  });
+  it('gives exact user quantities priority and never fills absent macros with zero', () => {
+    const result = resolveNutrients({ energyKcal: 321, proteinGrams: null }, { ...syntheticMeal, energyKcal: 999, proteinGrams: 80, fatGrams: 10 });
+    expect(result.values).toEqual({ energyKcal: 321, proteinGrams: null, carbohydratesGrams: null, fatGrams: 10, fiberGrams: null });
+    expect(result.provenance.energyKcal).toEqual({ source: 'user-exact', unit: 'kcal' });
+    expect(result.provenance.carbohydratesGrams?.source).toBe('unknown');
+    expect(resolveNutrients({ energyKcal: 321 }, null).values.proteinGrams).toBeNull();
+    expect(() => resolveNutrients({}, null)).toThrow('calorie quantity');
+    expect(() => resolveNutrients({ energyKcal: 321, proteinGrams: undefined }, null)).toThrow();
+  });
+  it('keeps unknown plan totals unknown and rejects fabricated totals', () => {
+    const input = { id: 'plan', name: 'Plan', description: null, items: [{ mealKey: 'meal', name: 'Meal', nutrients: syntheticMeal }],
+      energyKcal: 123, proteinGrams: null, carbohydratesGrams: null, fatGrams: null, fiberGrams: null };
+    expect(() => plan(input)).not.toThrow();
+    expect(() => plan({ ...input, proteinGrams: 0 })).toThrow('totals');
+    expect(() => plan({ ...input, energyKcal: 1 })).toThrow('totals');
+  });
   it('preserves exact values and null unknowns without demanding redundant confirmation', () => {
     const copy = structuredClone(syntheticMeal);
     meal(copy); authorizeIntake(copy, { intent: 'log-intake', explicit: true, estimateAccepted: false });
@@ -24,7 +46,7 @@ describe('nutrition evidence and budgets', () => {
   });
   it.each([
     { proteinGrams: undefined }, { energyKcal: NaN }, { fatGrams: -1 }, { mealDate: '2026-02-30' },
-    { occurredAt: '2026-01-01' }, { owner: 'other' }, { ownerEmail: 'not-an-owner' }, { components: Array(101).fill({}) },
+    { occurredAt: '2026-01-01' }, { occurredAt: '2026-01-01T24:00:00Z' }, { id: '\ud800' }, { owner: 'other' }, { ownerEmail: 'not-an-owner' }, { components: Array(101).fill({}) },
   ])('rejects unsafe shapes %j', (patch) => {
     expect(() => meal({ ...syntheticMeal, ...patch } as MealInput)).toThrow();
   });

@@ -74,6 +74,8 @@ Every exported record has an import or explicit exclusion decision. Import in-sc
 
 ### [P12-07: Nutrition tools, Frida & meal planning](https://github.com/DanAakesen/jarvis/issues/722)
 
+Released after closed/deployed #718. Draft PR #743 contains inactive owner-bound synthetic services, separate plan snapshots and guarded nullable-plan-macro migration 0042. [Boundary and validation](../apps/backend/src/daily/nutrition/README.md) distinguishes implemented service primitives from pending verified source-action/current Frida lookup contracts. No runtime registration, provider success, real data/import, Apple Health queue or production activation is claimed. P12-09 supplies trusted existing tool/evidence/confirmation integration. Exact-head CI, provider contract completion and independent review remain prerequisites; protected backup/import/live/phone gates remain separate.
+
 **NEW DAILY CAPABILITY — permanent** · Backend & migration rehearsal
 
 Lookup, log / edit / delete, full history, favourites / aliases, plans and persisted like / dislike behaviour.

@@ -3,7 +3,7 @@ import type { FastifyRequest } from 'fastify';
 import { setTimeout as delay } from 'node:timers/promises';
 import { resolveDailyOwner } from '../owner.js';
 import { ToolFailure, ToolRefusal } from '../../core/tool-registry.js';
-import { authorizeIntake, date, instant, meal, plan, text, type IntakeAuthority, type MealInput, type PlanInput } from './model.js';
+import { authorizeIntake, canonicalJson, date, instant, meal, plan, text, type IntakeAuthority, type MealInput, type PlanInput } from './model.js';
 
 const fields = {
   id: ['id', sql.NVarChar(256)], idempotencyKey: ['idempotency_key', sql.NVarChar(256)],
@@ -13,12 +13,12 @@ const fields = {
   fatGrams: ['fat_grams', sql.Float], fiberGrams: ['fiber_grams', sql.Float], confidence: ['confidence', sql.NVarChar(256)],
   captureMethod: ['capture_method', sql.NVarChar(256)], components: ['components_json', sql.NVarChar(sql.MAX)], provenance: ['nutrient_provenance_json', sql.NVarChar(sql.MAX)],
 } as const;
-const select = Object.values(fields).map(([column]) => `[${column}]`).join(', ') + ', revision, deleted_at, created_at, updated_at';
+const select = Object.values(fields).map(([column]) => `[${column}]`).join(', ') + ', source, revision, deleted_at, created_at, updated_at';
 const equalKey = (column: string, param: string) => `[${column}]=@${param} AND DATALENGTH([${column}])=DATALENGTH(@${param})`;
 function bind(request: sql.Request, input: MealInput): sql.Request {
   for (const key of Object.keys(fields) as (keyof typeof fields)[]) {
     const [, type] = fields[key];
-    const value = key === 'components' || key === 'provenance' ? JSON.stringify(input[key]) : key === 'mealDate' ? new Date(`${input.mealDate}T00:00:00Z`) : input[key];
+    const value = key === 'components' || key === 'provenance' ? canonicalJson(input[key]) : key === 'mealDate' ? new Date(`${input.mealDate}T00:00:00Z`) : input[key];
     request.input(key, type, value);
   }
   return request;
@@ -27,7 +27,7 @@ function same(row: Record<string, unknown>, input: MealInput): boolean {
   return Object.entries(fields).every(([key, [column]]) => {
     const value = input[key as keyof MealInput];
     if (key === 'mealDate') return row[column] instanceof Date && (row[column] as Date).toISOString().slice(0, 10) === value;
-    if (key === 'components' || key === 'provenance') return row[column] === JSON.stringify(value);
+    if (key === 'components' || key === 'provenance') return canonicalJson(JSON.parse(row[column] as string)) === canonicalJson(value);
     return row[column] === value;
   });
 }
@@ -49,6 +49,13 @@ export class NutritionStore {
     try { signal.throwIfAborted(); return await request.query<Record<string, unknown>>(query); }
     finally { signal.removeEventListener('abort', cancel); }
   }
+  private async read(request: sql.Request, query: string, signal: AbortSignal) {
+    try { return await this.query(request, query, signal); }
+    catch {
+      if (signal.aborted) throw signal.reason;
+      throw new ToolFailure('Nutrition read failed. No record content or provider diagnostics are exposed.');
+    }
+  }
   private async transaction<T>(signal: AbortSignal, action: (transaction: sql.Transaction) => Promise<T>): Promise<T> {
     for (let attempt = 0; ; attempt++) {
       signal.throwIfAborted();
@@ -64,12 +71,13 @@ export class NutritionStore {
         if (signal.aborted) throw signal.reason;
         if ((error as { number?: number }).number === 1205 && attempt < 2) { await delay(20 * (attempt + 1), undefined, { signal }); continue; }
         if (error instanceof ToolRefusal || error instanceof TypeError) throw error;
+        if ([2601, 2627, 51001].includes((error as { number?: number }).number ?? 0)) throw new ToolRefusal('This nutrition key conflicts with an existing exact key.');
         throw new ToolFailure('Nutrition persistence failed. Retry with the same operation key; no successful write is claimed.');
       }
     }
   }
   async log(input: MealInput, authority: IntakeAuthority, signal: AbortSignal): Promise<Record<string, unknown>> {
-    meal(input); authorizeIntake(input, authority);
+    meal(input); input = structuredClone(input); authorizeIntake(input, authority);
     return this.transaction(signal, async (transaction) => {
       const lookup = this.request(transaction, signal).input('key', sql.NVarChar(256), input.idempotencyKey);
       const existing = (await this.query(lookup, `SELECT ${select} FROM daily.nutrition_meals WITH (UPDLOCK,HOLDLOCK)
@@ -86,7 +94,7 @@ export class NutritionStore {
     });
   }
   async correct(input: MealInput, expectedRevision: bigint, signal: AbortSignal): Promise<Record<string, unknown>> {
-    meal(input); if (typeof expectedRevision !== 'bigint' || expectedRevision < 1n || expectedRevision >= 9223372036854775807n) throw new TypeError('Invalid meal revision');
+    meal(input); input = structuredClone(input); if (typeof expectedRevision !== 'bigint' || expectedRevision < 1n || expectedRevision >= 9223372036854775807n) throw new TypeError('Invalid meal revision');
     return this.transaction(signal, async (transaction) => {
       const lookup = this.request(transaction, signal).input('id', sql.NVarChar(256), input.id);
       const row = (await this.query(lookup, `SELECT ${select} FROM daily.nutrition_meals WITH (UPDLOCK,HOLDLOCK) WHERE owner_object_id=@owner AND ${equalKey('id', 'id')};`, signal)).recordset[0];
@@ -122,7 +130,7 @@ export class NutritionStore {
     const request = this.request(this.pool, signal).input('limit', sql.Int, input.limit + 1)
       .input('from', sql.Date, input.from ? new Date(`${input.from}T00:00:00Z`) : null).input('to', sql.Date, input.to ? new Date(`${input.to}T00:00:00Z`) : null)
       .input('afterTime', sql.NVarChar(64), input.after?.createdAt ?? null).input('afterId', sql.NVarChar(256), input.after?.id ?? null);
-    const rows = (await this.query(request, `SELECT TOP (@limit) ${select} FROM daily.nutrition_meals WHERE owner_object_id=@owner
+    const rows = (await this.read(request, `SELECT TOP (@limit) ${select} FROM daily.nutrition_meals WHERE owner_object_id=@owner
       AND (@from IS NULL OR meal_date>=@from) AND (@to IS NULL OR meal_date<=@to)
       AND (@afterTime IS NULL OR created_at>@afterTime OR (created_at=@afterTime AND id>@afterId)) ORDER BY created_at,id;`, signal)).recordset;
     const more = rows.length > input.limit; if (more) rows.pop();
@@ -140,8 +148,14 @@ export class NutritionStore {
         ELSE INSERT daily.nutrition_recommendation_feedback(owner_object_id,meal_key,preference,created_at,updated_at) VALUES(@owner,@key,@preference,@now,@now);`, signal);
     });
   }
-  async disliked(signal: AbortSignal): Promise<Set<string>> {
-    const rows = (await this.query(this.request(this.pool, signal), `SELECT meal_key FROM daily.nutrition_recommendation_feedback WHERE owner_object_id=@owner AND preference=N'dislike';`, signal)).recordset;
+  async disliked(keys: readonly string[], signal: AbortSignal): Promise<Set<string>> {
+    if (!Array.isArray(keys) || keys.length > 1000) throw new TypeError('Invalid suggestion keys');
+    keys.forEach((key) => text(key)); signal.throwIfAborted();
+    if (!keys.length) return new Set();
+    const request = this.request(this.pool, signal);
+    keys.forEach((key, index) => request.input(`key${index}`, sql.NVarChar(256), key));
+    const rows = (await this.read(request, `SELECT meal_key FROM daily.nutrition_recommendation_feedback WHERE owner_object_id=@owner AND preference=N'dislike'
+      AND (${keys.map((_, index) => `(${equalKey('meal_key', `key${index}`)})`).join(' OR ')});`, signal)).recordset;
     return new Set(rows.map((row) => row.meal_key as string));
   }
 
@@ -149,6 +163,7 @@ export class NutritionStore {
   async favorite(input: { id: string; mealId: string; name: string; aliases: readonly string[] }, signal: AbortSignal): Promise<void> {
     text(input.id); text(input.mealId); text(input.name);
     if (Object.keys(input).some((key) => !['id', 'mealId', 'name', 'aliases'].includes(key)) || !Array.isArray(input.aliases) || input.aliases.length > 30) throw new TypeError('Invalid favourite');
+    input = structuredClone(input);
     const normalized = input.name.normalize('NFKC').toLocaleLowerCase('en-US').trim(); text(normalized);
     const aliases = [...new Set(input.aliases.map((alias) => { text(alias); const result = alias.normalize('NFKC').toLocaleLowerCase('en-US').trim(); text(result); return result; }))];
     await this.transaction(signal, async (transaction) => {
@@ -181,7 +196,7 @@ export class NutritionStore {
   }
   async findFavorite(name: string, signal: AbortSignal): Promise<Record<string, unknown> | null> {
     text(name); const normalized = name.normalize('NFKC').toLocaleLowerCase('en-US').trim(); text(normalized);
-    const result = await this.query(this.request(this.pool, signal).input('name', sql.NVarChar(256), normalized),
+    const result = await this.read(this.request(this.pool, signal).input('name', sql.NVarChar(256), normalized),
       `SELECT TOP (2) * FROM daily.nutrition_favorites WHERE owner_object_id=@owner AND
         ((${equalKey('normalized_name', 'name')}) OR EXISTS(SELECT 1 FROM OPENJSON(aliases_json) WHERE [value] COLLATE Latin1_General_100_BIN2=@name AND DATALENGTH([value])=DATALENGTH(@name)));`, signal);
     if (result.recordset.length > 1) throw new ToolRefusal('The favourite alias is ambiguous. Choose its exact name.');
@@ -189,12 +204,12 @@ export class NutritionStore {
   }
   /** Plans never call log, nutrition_queue or Apple Health export. */
   async savePlan(input: PlanInput, expectedRevision: bigint, signal: AbortSignal): Promise<Record<string, unknown>> {
-    plan(input); if (typeof expectedRevision !== 'bigint' || expectedRevision < 0n || expectedRevision >= 9223372036854775807n) throw new TypeError('Invalid plan revision');
+    plan(input); input = structuredClone(input); if (typeof expectedRevision !== 'bigint' || expectedRevision < 0n || expectedRevision >= 9223372036854775807n) throw new TypeError('Invalid plan revision');
     const normalized = input.name.normalize('NFKC').toLocaleLowerCase('en-US').trim(); text(normalized);
     return this.transaction(signal, async (transaction) => {
       const lookup = this.request(transaction, signal).input('id', sql.NVarChar(256), input.id);
       const row = (await this.query(lookup, 'SELECT * FROM daily.nutrition_meal_plans WITH (UPDLOCK,HOLDLOCK) WHERE owner_object_id=@owner AND id=@id;', signal)).recordset[0];
-      const columns = { plan_name: input.name, normalized_name: normalized, description: input.description, items_json: JSON.stringify(input.items),
+      const columns = { plan_name: input.name, normalized_name: normalized, description: input.description, items_json: canonicalJson(input.items),
         energy_kcal: input.energyKcal, protein_grams: input.proteinGrams, carbohydrates_grams: input.carbohydratesGrams, fat_grams: input.fatGrams, fiber_grams: input.fiberGrams };
       if (row) {
         if (row.id !== input.id || row.deleted_at !== null) throw new ToolRefusal('Plan unavailable or key conflict.');
@@ -207,6 +222,27 @@ export class NutritionStore {
       const query = row ? `UPDATE daily.nutrition_meal_plans SET ${Object.keys(columns).map((c) => `[${c}]=@${c}`).join(',')},revision=revision+1,updated_at=@now OUTPUT INSERTED.* WHERE owner_object_id=@owner AND ${equalKey('id', 'id')};`
         : `INSERT daily.nutrition_meal_plans(owner_object_id,id,${Object.keys(columns).join(',')},created_at,updated_at) OUTPUT INSERTED.* VALUES(@owner,@id,${Object.keys(columns).map((c) => `@${c}`).join(',')},@now,@now);`;
       return (await this.query(request, query, signal)).recordset[0]!;
+    });
+  }
+  async plans(input: { limit: number; afterId?: string }, signal: AbortSignal): Promise<{ rows: Record<string, unknown>[]; nextId: string | null }> {
+    if (!Number.isInteger(input.limit) || input.limit < 1 || input.limit > 100 || Object.keys(input).some((key) => !['limit', 'afterId'].includes(key))) throw new TypeError('Invalid plan page');
+    if (input.afterId !== undefined) text(input.afterId);
+    const request = this.request(this.pool, signal).input('limit', sql.Int, input.limit + 1).input('after', sql.NVarChar(256), input.afterId ?? null);
+    const rows = (await this.read(request, 'SELECT TOP (@limit) * FROM daily.nutrition_meal_plans WHERE owner_object_id=@owner AND (@after IS NULL OR id>@after) ORDER BY id;', signal)).recordset;
+    const more = rows.length > input.limit; if (more) rows.pop();
+    return { rows, nextId: more ? rows.at(-1)!.id as string : null };
+  }
+  async removePlan(id: string, expectedRevision: bigint, signal: AbortSignal): Promise<Record<string, unknown>> {
+    text(id); if (typeof expectedRevision !== 'bigint' || expectedRevision < 1n || expectedRevision >= 9223372036854775807n) throw new TypeError('Invalid plan revision');
+    return this.transaction(signal, async (transaction) => {
+      const row = (await this.query(this.request(transaction, signal).input('id', sql.NVarChar(256), id),
+        `SELECT * FROM daily.nutrition_meal_plans WITH (UPDLOCK,HOLDLOCK) WHERE owner_object_id=@owner AND ${equalKey('id', 'id')};`, signal)).recordset[0];
+      if (!row) throw new ToolRefusal('Plan not found.');
+      if (row.deleted_at !== null && BigInt(row.revision as string) === expectedRevision + 1n) return row;
+      if (row.deleted_at !== null || BigInt(row.revision as string) !== expectedRevision) throw new ToolRefusal('Plan changed. Read the latest revision first.');
+      const now = this.now(); instant(now);
+      return (await this.query(this.request(transaction, signal).input('id', sql.NVarChar(256), id).input('now', sql.NVarChar(64), now),
+        `UPDATE daily.nutrition_meal_plans SET deleted_at=@now,updated_at=@now,revision=revision+1 OUTPUT INSERTED.* WHERE owner_object_id=@owner AND ${equalKey('id', 'id')};`, signal)).recordset[0]!;
     });
   }
 }

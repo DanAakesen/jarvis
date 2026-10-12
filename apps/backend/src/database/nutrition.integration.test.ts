@@ -86,13 +86,13 @@ describe('inactive nutrition services on real SQL Server', () => {
   });
   it('persists retry-safe likes/dislikes and never returns a disliked suggestion', async () => {
     await Promise.all([store().feedback('favorite', 'dislike', signal()), store().feedback('favorite', 'dislike', signal())]);
-    const disliked = await store().disliked(signal());
+    const disliked = await store().disliked(['favorite'], signal());
     expect(disliked).toEqual(new Set(['favorite']));
-    expect(await NutritionStore.forRequest(pool, request(other), now).disliked(signal())).toEqual(new Set());
+    expect(await NutritionStore.forRequest(pool, request(other), now).disliked(['favorite'], signal())).toEqual(new Set());
     expect(suggest([{ ...fixture('candidate'), mealKey: 'favorite', name: 'Synthetic', localTimeWindows: [] }], disliked,
       { now: now(), localTime: '17:00', remainingKcal: 200, remainingProteinGrams: null })).toEqual([]);
-    await store().feedback('favorite', 'like', signal()); expect(await store().disliked(signal())).toEqual(new Set());
-    await expect(store().feedback('favorite ', 'dislike', signal())).rejects.toThrow('persistence failed');
+    await store().feedback('favorite', 'like', signal()); expect(await store().disliked(['favorite'], signal())).toEqual(new Set());
+    await expect(store().feedback('favorite ', 'dislike', signal())).rejects.toThrow('conflicts');
   });
   it('saves retry-safe revisioned plans with unknown macros without logging or enqueueing intake', async () => {
     const input: PlanInput = { ...fixture('plan'), name: 'Synthetic Plan', description: null, items: [{ mealKey: 'favorite', name: 'Synthetic', nutrients: fixture('plan') }] };
@@ -106,8 +106,13 @@ describe('inactive nutrition services on real SQL Server', () => {
     expect((await store().savePlan(changed, 1n, signal())).revision).toBe('2');
     expect((await store().savePlan(changed, 1n, signal())).revision).toBe('2');
     await expect(store().savePlan({ ...changed, description: 'Stale' }, 1n, signal())).rejects.toThrow('changed');
+    expect((await store().plans({ limit: 1 }, signal())).rows).toHaveLength(1);
+    expect((await NutritionStore.forRequest(pool, request(other), now).plans({ limit: 1 }, signal())).rows).toEqual([]);
+    const removed = await store().removePlan('plan', 2n, signal());
+    expect(removed).toMatchObject({ revision: '3', deleted_at: now(), protein_grams: null });
+    expect(await store().removePlan('plan', 2n, signal())).toEqual(removed);
     expect((await pool.request().query('SELECT COUNT(*) AS count FROM daily.nutrition_meals')).recordset[0].count).toBe(before);
     expect((await pool.request().query('SELECT COUNT(*) AS count FROM daily.nutrition_queue')).recordset[0].count).toBe(0);
-    await expect(revertMigration(pool, await readMigrations(), await readDownMigration('0042_daily_plan_unknown_nutrients.sql'))).rejects.toThrow('cannot replace unknown');
+    await expect(revertMigration(pool, (await readMigrations()).filter(({ name }) => /^004[12]_daily/u.test(name)), await readDownMigration('0042_daily_plan_unknown_nutrients.sql'))).rejects.toThrow('cannot replace unknown');
   });
 });
