@@ -49,6 +49,26 @@ Preserve stored provenance, logs and untrusted-data quoting; do not rewrite
 generated text or change the UI. Keep shared capability guidance within
 `agents/jarvis/limits.json`. No migration or schema change (L120/L121).
 
+P9-88 (#735, 12 October 2026, user-directed): expose the GitHub App's live,
+installation-specific permissions and let Jarvis use the corresponding backend
+tools across repositories where the App is installed. Read permission grants
+from GitHub and cache them briefly; do not treat the manifest or a saved list
+as current authorization. Ordinary writes run when Dan asks; closing issues,
+merging pull requests, public-repository publication and default-branch file
+writes require a later simple approval word, never a generated phrase. Secret
+scan outgoing text, bound provider responses and label returned content
+untrusted. No web, schema, migration or dependency change. The implementation
+and focused tests are offline evidence; coordinator live permission/issue-read
+acceptance remains pending.
+
+P9-88 redo (12 October 2026, user-directed): the first design (#737) registered about
+25 GitHub tools, pushed the catalogue past the hosted agent's 128-tool limit and
+broke every chat turn (reverted in #744). GitHub capability is now three tools:
+`github_capabilities`, `github_read` and `github_write`, each of the latter with an
+`operation` enum, a plain root object schema and per-operation validation in the
+handler. A test fails when `githubAppTools` has more than three tools; no limit in
+`agents/jarvis/limits.json` was raised.
+
 P9-85 (#710, 12 October 2026, Dan-directed): remove the sequential caption call
 from camera turns. `POST /screen/frames` accepts additive `mode: "handle"` and
 returns `frameId`, receipt-time `capturedAt`, `question` (echo or null) and optional
