@@ -31,7 +31,7 @@ async function readIssueAttachment(server: FastifyInstance, id: string): Promise
 export async function issueAttachments(server: FastifyInstance, input: IssueAttachmentInput): Promise<IssueAttachment[]> {
   const ids = input.attachmentIds ?? [];
   if (input.publish === 'public' && ids.length !== 1) {
-    throw new ToolRefusal('Publish exactly one image per confirmation, naming that file.');
+    throw new ToolRefusal('Publish exactly one image at a time.');
   }
   if (!ids.length) return [];
   const store = server.conversationAttachments;
