@@ -203,14 +203,14 @@ async def load_verified_history(
                 or message.get("role") != "dan"
                 or not isinstance(message.get("id"), str)
                 or not MESSAGE_ID.fullmatch(message["id"])
-                or int(message["id"]) > int(message_id)
+                or int(message["id"]) >= int(message_id)
             ):
                 continue
             metadata = message.get("metadata")
             record = (
                 visual_context({
                     key: value for key, value in metadata["visualContext"].items()
-                    if key not in {"visualPath", "visualReason"}
+                    if key != "visualReason"
                 })
                 if isinstance(metadata, dict)
                 and isinstance(metadata.get("visualContext"), dict)
@@ -220,7 +220,9 @@ async def load_verified_history(
                 latest_visual is None or int(message["id"]) > latest_visual[0]
             ):
                 latest_visual = (int(message["id"]), record)
-        visual_text = visual_context_text(latest_visual[1]) if latest_visual else ""
+        visual_text = visual_context_text(
+            latest_visual[1], current_turn=False, language=language, question=text,
+        ) if latest_visual else ""
         if len(visual_text) > MAX_CONTEXT_CHARACTERS:
             visual_text = ""
         previous = [
@@ -563,14 +565,16 @@ def register_chat_invocation(
                         if caption is not None:
                             visual_result.update(caption)
                             fallback_text = visual_context_text({
-                                **visual, "description": caption["description"],
-                            })
+                                **visual,
+                                "description": caption["description"],
+                                "visualPath": "caption",
+                            }, current_turn=not steering, language=language, question=text.strip())
                         else:
                             fallback_text = (
-                                "No image or real caption was available for Dan's requested "
-                                f"{visual['source']} frame captured at {visual['capturedAt']}. "
-                                "Say that I could not see this frame. Do not invent a caption "
-                                "or use an earlier frame as evidence for this turn."
+                                "No usable image or real visual description is available for "
+                                "this turn. Say plainly that I could not see it and offer to look "
+                                "again. Never invent visual details or use an earlier answer as "
+                                "current evidence."
                             )
                         return fallback_text
 
@@ -667,14 +671,27 @@ def register_chat_invocation(
                         "description": screen_context.strip(),
                     } if screen_context is not None else None
                 )
+                if current_visual is not None:
+                    current_visual = {
+                        **current_visual,
+                        "visualPath": "image" if current_image is not None else "caption",
+                    }
                 if current_visual is not None and not any(
-                    message.content == visual_context_text(current_visual) for message in history
+                    message.content == visual_context_text(
+                        current_visual,
+                        current_turn=not steering,
+                        language=language,
+                        question=current_text,
+                    ) for message in history
                 ):
                     messages = (
                         *messages,
                         ModelMessage(
                             "user",
-                            visual_context_text(current_visual),
+                            visual_context_text(
+                                current_visual, current_turn=not steering, language=language,
+                                question=current_text,
+                            ),
                         ),
                     )
                 if attachments:

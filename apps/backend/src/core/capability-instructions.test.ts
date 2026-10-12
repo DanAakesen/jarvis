@@ -15,13 +15,16 @@ describe('shared navigation capability instructions', () => {
     expect(instructions).toContain('Only say an action succeeded when its tool result reports success');
   });
 
-  it('treats prior images as timestamped evidence and asks to look again without fresh details', () => {
+  it('distinguishes fresh, earlier, and unavailable visual evidence without volunteering timestamps', () => {
     const instructions = capabilityInstructions({ automaticCapture: false });
-    expect(instructions).toContain('real camera or screen images at the stated capture time');
-    expect(instructions).toContain('the image I looked at N minutes ago');
-    expect(instructions).toContain('only when the current time is known; otherwise cite its capture time');
-    expect(instructions).toContain('Never invent elapsed time');
-    expect(instructions).toContain('without a fresh frame ask Dan to let me look again');
+    expect(instructions).toContain('no more than 60 seconds old, correlated with this turn\'s question');
+    expect(instructions).toContain('Answer naturally and directly as if seeing it now');
+    expect(instructions).toContain('Do not volunteer capture times, UTC timestamps');
+    expect(instructions).toContain('source, capturedAt and visualPath');
+    expect(instructions).toContain('visualPath=image');
+    expect(instructions).toContain('human age (English: "about 2 minutes ago"; Danish: "for cirka 2 minutter siden")');
+    expect(instructions).toContain('offer to look again');
+    expect(instructions).toContain('If no usable frame or real description is available');
     expect(instructions).toContain('Never invent visual details');
   });
   it.each([true, false])('includes canonical destinations and aliases with automatic capture %s', (automaticCapture) => {
