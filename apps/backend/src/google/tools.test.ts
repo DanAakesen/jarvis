@@ -55,8 +55,8 @@ function confirmHeaders(id: string) {
   return { ...headers, 'x-jarvis-message-id': id };
 }
 
-function confirmMessage(setLatest: (message: ConversationMessage) => void, code: string) {
-  setLatest(conversationMessage('43', `confirm ${code}`, new Date(Date.now() + 10_000)));
+function confirmMessage(setLatest: (message: ConversationMessage) => void) {
+  setLatest(conversationMessage('43', 'approved', new Date(Date.now() + 10_000)));
 }
 
 function decodedMimeBody(raw: string): string {
@@ -596,7 +596,7 @@ describe('Google Calendar and Gmail tools', () => {
     });
     expect(JSON.stringify(records)).not.toContain(body);
 
-    confirmMessage(setLatest, code);
+    confirmMessage(setLatest);
     const confirmed = await app.inject({
       method: 'POST',
       url: '/tools/mail_confirm_action',
@@ -742,7 +742,7 @@ describe('Google Calendar and Gmail tools', () => {
     });
     expect(JSON.stringify(records)).not.toContain('Updated draft text');
 
-    confirmMessage(setLatest, code);
+    confirmMessage(setLatest);
     const confirmed = await app.inject({
       method: 'POST',
       url: '/tools/mail_confirm_action',
@@ -816,7 +816,7 @@ describe('Google Calendar and Gmail tools', () => {
       result: { redacted: true },
     });
 
-    confirmMessage(setLatest, code);
+    confirmMessage(setLatest);
     const confirmed = await app.inject({
       method: 'POST',
       url: '/tools/mail_confirm_action',
@@ -842,7 +842,7 @@ describe('Google Calendar and Gmail tools', () => {
     const code = staged.json().result.confirmationCode as string;
 
     expect(request).not.toHaveBeenCalled();
-    confirmMessage(setLatest, code);
+    confirmMessage(setLatest);
     const confirmed = await app.inject({
       method: 'POST',
       url: '/tools/mail_confirm_action',
@@ -875,7 +875,7 @@ describe('Google Calendar and Gmail tools', () => {
 
     expect(staged.json()).toMatchObject({ outcome: 'ok', result: { status: 'awaiting_confirmation' } });
     expect(request).toHaveBeenCalledOnce();
-    confirmMessage(setLatest, code);
+    confirmMessage(setLatest);
     const confirmed = await app.inject({
       method: 'POST',
       url: '/tools/mail_confirm_action',
@@ -915,7 +915,7 @@ describe('Google Calendar and Gmail tools', () => {
     expect(request).toHaveBeenCalledOnce();
     expect(request.mock.calls[0]?.[1]).toContain('/users/me/messages/message-1');
 
-    confirmMessage(setLatest, code);
+    confirmMessage(setLatest);
     const confirmed = await app.inject({
       method: 'POST',
       url: '/tools/mail_confirm_action',
