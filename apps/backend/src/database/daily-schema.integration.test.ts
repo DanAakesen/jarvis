@@ -54,7 +54,7 @@ describe('Daily SQL owner schema on real SQL Server', () => {
         VALUES (@owner,'2026-01-01',N'synthetic recovery',N'2026-01-01',N'2026-01-01');`);
     const store = DailyOwnerStore.forRequest(pool, requestFor(owner));
     const row = await store.read('health_daily_metrics', { metric_name: 'weight', metric_date: '2026-01-01' }, signal());
-    expect(row).toMatchObject({ value: null, min_value: null, avg_value: null, max_value: null, unit: 'kg', sample_count: 0 });
+    expect(row).toMatchObject({ value: null, min_value: null, avg_value: null, max_value: null, unit: 'kg', sample_count: '0' });
     expect(await DailyOwnerStore.forRequest(pool, requestFor(other)).read('health_daily_metrics', { metric_name: 'weight', metric_date: '2026-01-01' }, signal())).toBeNull();
     expect(await DailyOwnerStore.forRequest(pool, requestFor(owner, 'agent')).read('health_daily_metrics', { metric_name: 'weight', metric_date: '2026-01-01' }, signal())).toEqual(row);
     expect(() => DailyOwnerStore.forRequest(pool, requestFor(owner, 'runner'))).toThrow();
@@ -68,7 +68,7 @@ describe('Daily SQL owner schema on real SQL Server', () => {
     await insert('meal', owner);
     await expect(insert('different', owner)).rejects.toThrow();
     await insert('meal', other);
-    expect(await DailyOwnerStore.forRequest(pool, requestFor(owner)).read('nutrition_meals', { id: 'meal' }, signal())).toMatchObject({ revision: 3, deleted_at: '2026-01-02', protein_grams: null, fiber_grams: null });
+    expect(await DailyOwnerStore.forRequest(pool, requestFor(owner)).read('nutrition_meals', { id: 'meal' }, signal())).toMatchObject({ revision: '3', deleted_at: '2026-01-02', protein_grams: null, fiber_grams: null });
   });
 
   it('keeps original/sanitized raw checksums distinct and excludes legacy credentials/TickTick sources', async () => {

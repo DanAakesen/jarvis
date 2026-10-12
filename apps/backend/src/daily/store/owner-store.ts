@@ -23,7 +23,7 @@ export class DailyOwnerStore {
       const value = key[column];
       if (typeof value === 'number') {
         if (!Number.isSafeInteger(value)) throw new TypeError('Invalid Daily key');
-        request.input(`key${index}`, sql.Int, value);
+        request.input(`key${index}`, sql.BigInt, value);
       } else {
         if (typeof value !== 'string' || value.length === 0 || value.length > 256) throw new TypeError('Invalid Daily key');
         request.input(`key${index}`, sql.NVarChar(256), value);
