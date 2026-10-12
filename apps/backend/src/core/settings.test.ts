@@ -8,6 +8,7 @@ import {
 import type { CredentialStatusStore } from '../credentials/credential-status.js';
 import type { AwayModeStore } from './away-mode.js';
 import { capabilityInstructions } from './capability-instructions.js';
+import { checkAgentContract } from './agent-contract.js';
 
 const config = { ...loadConfig({}), logLevel: 'silent' as const };
 const authorization = { authorization: `${['Bear', 'er'].join('')} ${['a', 'b', 'c'].join('.')}` };
@@ -358,6 +359,7 @@ describe('settings API', () => {
       research: { timeoutSeconds: 305 },
       timeouts: defaultSettings.timeouts,
     });
+    await expect(checkAgentContract([], async () => settings.json())).resolves.toEqual({ status: 'ok' });
   });
 
   it('exposes and saves Codex and Copilot model-specific reasoning choices', async () => {

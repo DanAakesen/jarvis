@@ -135,12 +135,13 @@ describe('get_status_summary', () => {
     const vault = vi.fn(async () => ({ status: 'ok' as const }));
     const embeddings = vi.fn(async () => ({ status: 'ok' as const }));
     const research = vi.fn(async () => ({ status: 'ok' as const }));
+    const agentContract = vi.fn(async () => ({ status: 'ok' as const }));
     const reader = createSystemStatusReader({ google }, undefined);
     const app = buildApp(config, undefined, {
       modules: [coreModule],
       auth: async () => ({ objectId: config.auth.ownerObjectId, tenantId: config.auth.tenantId }),
       systemStatusReader: reader,
-      systemSmokeProbes: { vault, 'foundry.embeddings': embeddings, research },
+      systemSmokeProbes: { vault, 'foundry.embeddings': embeddings, research, agent_contract: agentContract },
     });
     apps.push(app);
     await reader.read();
@@ -150,18 +151,20 @@ describe('get_status_summary', () => {
 
     expect(smoke.statusCode).toBe(200);
     expect(smoke.headers['cache-control']).toBe('no-store');
-    expect(smoke.json().entries).toHaveLength(6);
+    expect(smoke.json().entries).toHaveLength(7);
     expect(smoke.json().entries).toEqual(expect.arrayContaining([
       expect.objectContaining({ id: 'google', status: 'ok' }),
       expect.objectContaining({ id: 'vault', status: 'ok' }),
       expect.objectContaining({ id: 'foundry.embeddings', status: 'ok' }),
       expect.objectContaining({ id: 'research', status: 'ok' }),
+      expect.objectContaining({ id: 'agent_contract', status: 'ok' }),
     ]));
     expect(status.json().smoke).toEqual(smoke.json());
     expect(google).toHaveBeenCalledTimes(2);
     expect(vault).toHaveBeenCalledOnce();
     expect(embeddings).toHaveBeenCalledOnce();
     expect(research).toHaveBeenCalledOnce();
+    expect(agentContract).toHaveBeenCalledOnce();
     expect(JSON.stringify(smoke.json())).not.toMatch(/token|secret|private|configured/iu);
   });
 
@@ -180,6 +183,7 @@ describe('get_status_summary', () => {
       auth: async () => ({ objectId: config.auth.ownerObjectId, tenantId: config.auth.tenantId }),
       systemSmokeProbes: {
         research: async () => { throw new Error('provider response contains private data'); },
+        agent_contract: async () => ({ status: 'down', reason: 'A tool schema is not an object.' }),
       },
     });
     apps.push(app);
@@ -191,6 +195,9 @@ describe('get_status_summary', () => {
       expect.objectContaining({ id: 'research', status: 'down' }),
     ]));
     expect(response.body).not.toContain('provider response contains private data');
+    expect(response.json().entries).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'agent_contract', status: 'down', reason: 'A tool schema is not an object.' }),
+    ]));
     expect((await app.inject({ url: '/status', headers })).json().smoke).toEqual(response.json());
   });
 

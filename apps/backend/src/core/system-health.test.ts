@@ -56,7 +56,7 @@ describe('structured system health', () => {
     vi.useFakeTimers(); vi.setSystemTime(now);
     const f = fixture();
     const result = await health(f.app);
-    expect(result.components).toHaveLength(26);
+    expect(result.components).toHaveLength(27);
     expect(result.components.every((item) => item.status === 'ok' && item.recovery.length === 0)).toBe(true);
     expect(result.components.map(({ id }) => id)).toEqual([...ids, ...systemSmokeCheckIds.map((id) => `smoke.${id}`),
       ...f.credentials.map(({ name }) => `credential.${name}`), 'background_jobs', 'deployment', 'work',

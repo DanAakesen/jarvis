@@ -223,7 +223,7 @@ test('clipboard contracts bound UTF-8 text and keep read/write result shapes exa
   assert.equal(isClipboardWriteResult({ written: false }), false);
 });
 
-test('system smoke contract requires the six ordered allowlisted checks and sanitized values', () => {
+test('system smoke contract requires the seven ordered allowlisted checks and sanitized values', () => {
   const report = {
     checkedAt: '2026-10-08T02:00:00.000Z',
     entries: systemSmokeCheckIds.map((id) => ({
@@ -237,6 +237,19 @@ test('system smoke contract requires the six ordered allowlisted checks and sani
   }), false);
   assert.equal(isSystemSmokeStatus({
     ...report, entries: [{ ...report.entries[0], detail: 'secret' }, ...report.entries.slice(1)],
+  }), false);
+  const failedAgentContract = {
+    ...report,
+    entries: [...report.entries.slice(0, -1), {
+      ...report.entries.at(-1), status: 'down', reason: 'Agent settings have an invalid shape.',
+    }],
+  };
+  assert.equal(isSystemSmokeStatus(failedAgentContract), true);
+  assert.equal(isSystemSmokeStatus({
+    ...failedAgentContract,
+    entries: [...failedAgentContract.entries.slice(0, -1), {
+      ...failedAgentContract.entries.at(-1), reason: 'x'.repeat(121),
+    }],
   }), false);
 });
 

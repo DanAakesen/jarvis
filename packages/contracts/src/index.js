@@ -2,7 +2,7 @@ export { dailyViewIds, dailyModuleId, dailyContractVersion } from './daily.js';
 
 export const generatedViewVersion = 1;
 export const systemSmokeCheckIds = Object.freeze([
-  'google', 'github_app', 'vault', 'foundry.embeddings', 'research', 'pc_bridge',
+  'google', 'github_app', 'vault', 'foundry.embeddings', 'research', 'pc_bridge', 'agent_contract',
 ]);
 export const modelRoles = Object.freeze([
   'chat', 'vision', 'research', 'voice', 'transcription', 'embedding', 'codex', 'copilot',
@@ -564,6 +564,13 @@ function boundedString(value, max, min = 0) {
   return typeof value === 'string' && value.length >= min && value.length <= max;
 }
 
+function hasControlCharacters(value) {
+  return Array.from(value).some((character) => {
+    const code = character.codePointAt(0);
+    return code < 32 || code === 127;
+  });
+}
+
 export function isSystemSmokeStatus(value) {
   if (!isObject(value) || Object.keys(value).some((key) => !['checkedAt', 'entries'].includes(key)) ||
       !Array.isArray(value.entries) || value.entries.length !== systemSmokeCheckIds.length) return false;
@@ -574,10 +581,12 @@ export function isSystemSmokeStatus(value) {
   if (!validTime(value.checkedAt)) return false;
   return value.entries.every((entry, index) =>
     isObject(entry) &&
-    Object.keys(entry).every((key) => ['id', 'status', 'checkedAt'].includes(key)) &&
-    Object.keys(entry).length === 3 &&
+    Object.keys(entry).every((key) => ['id', 'status', 'checkedAt', 'reason'].includes(key)) &&
+    Object.keys(entry).length === (entry.reason === undefined ? 3 : 4) &&
     entry.id === systemSmokeCheckIds[index] &&
     ['ok', 'degraded', 'down', 'unknown'].includes(entry.status) &&
+    (entry.reason === undefined ||
+      (entry.status === 'down' && boundedString(entry.reason, 120, 1) && !hasControlCharacters(entry.reason))) &&
     validTime(entry.checkedAt));
 }
 

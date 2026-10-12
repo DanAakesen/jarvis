@@ -757,13 +757,14 @@ export interface PhoneStatus {
 }
 
 export const systemSmokeCheckIds: readonly [
-  'google', 'github_app', 'vault', 'foundry.embeddings', 'research', 'pc_bridge',
+  'google', 'github_app', 'vault', 'foundry.embeddings', 'research', 'pc_bridge', 'agent_contract',
 ];
 export type SystemSmokeCheckId = typeof systemSmokeCheckIds[number];
 export interface SystemSmokeEntry {
   id: SystemSmokeCheckId;
   status: SystemStatusValue;
   checkedAt: string;
+  reason?: string;
 }
 export interface SystemSmokeStatus {
   checkedAt: string;
