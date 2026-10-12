@@ -177,3 +177,11 @@ Verify data manifests, one-user access/denial, retries/exact-once meals, four vi
 
 Use normal main-only release workflows; cloud coding agents have no direct Azure access. Real health/food records, exports, credentials and private fixtures never enter public Git or coding environments. Recurring Daily notifications remain off; new schedules require a separate user decision.
 
+## P12-01 verification evidence (12 October 2026)
+
+- Unmodified `npm test --workspace @jarvis/contracts`: 43 passed, zero failed/skipped with the pinned Node 22.23.3/npm 10.9.9. No isolation changes.
+- `npm test --workspace @jarvis/backend -- src/daily/index.test.ts src/modules.test.ts src/auth/auth.test.ts src/core/workspace-pins.test.ts src/core/read-window.test.ts`: 109 passed across five files, zero failed/skipped. Synthetic identities prove the same server owner for delegated user/hosted agent, non-owner/runner refusal, owner-query rejection and unchanged disabled health/tool registration.
+- Contracts/backend/web lint and builds pass; web retains its existing large-chunk advisory. PLAN parser recognizes all 19 unique P12 tasks with existing issue URLs/dependencies. Architecture-flow script syntax and diff whitespace checks pass.
+- Initial shell socket restriction prevented the existing auth fixture's local JWKS server; rerun with socket access passed. The initial Daily query regression caught Fastify stripping extra fields; rejection now precedes validation. Tests were not weakened.
+- Production composition remains untouched. No Daily SQL/device auth/data tool/page, import, live sign-in/provider/device test, production write, deployment or cutover was performed. Synthetic checks do not satisfy downstream physical-phone/parity/backup/rollback gates.
+
