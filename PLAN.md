@@ -1,5 +1,21 @@
 # Project plan
 
+## Workspace window release (12 October 2026)
+
+Camera #750 is deployed and chat-loading #751 is merged. The isolated #430 UI
+candidate now includes the layout engine, command handlers, richer window
+snapshot, confirmed pin/unpin controls and saved-pin recovery after idle/return.
+TypeScript, zero-warning scoped lint, build and eight scoped suites pass:
+237 tests, with one unchanged Windows decimal-format baseline excluded locally.
+Desktop dark/light and 320px light/touch/reduced-motion workflows cover
+arrangement, dragging, pin failure/Retry, update, reload, unpin and all-window
+lifecycle; pin-load recovery and the merged camera/handle flow also pass.
+
+Next: separate #430 PR, coordinator merge on green, then backend instruction
+task #621 and live voice acceptance. PR description must give exact operation
+names and first-named-window-frontmost cascade order. Keep Notes, report styling
+and floating-chat drafts unstaged; do not call physical-device checks complete.
+
 ## Overnight UI release sequence (12 October 2026)
 
 Camera #750 is merged; production deployment is in progress. The next isolated

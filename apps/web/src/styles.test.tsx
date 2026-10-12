@@ -172,6 +172,18 @@ describe('shared glass tokens', () => {
     expect(tokenValue(source, ':root', '--font-heading')).toBe('var(--font-body)');
   });
 
+  it('gives window tabs compact corners, distinct pin states and touch-sized actions', () => {
+    const source = readFileSync('src/styles.css', 'utf8');
+    expect(source).not.toMatch(/\.workspace-window-actions[^{]*\{[^}]*grid-template-columns/);
+    expect(source).toContain('.workspace-window-actions { display: flex; width: auto; flex: 0 0 auto; flex-wrap: nowrap; gap: 4px; }');
+    expect(ruleDeclaration(source, /\.workspace-tab-item\s*\{([^}]*)\}/, 'border-radius')).toBe('8px');
+    expect(ruleDeclaration(source, /\.workspace-tab-close, \.workspace-tab-pin\s*\{([^}]*)\}/, 'width')).toBe('32px');
+    expect(source).toContain('.workspace-tab-pin[aria-pressed="true"] svg { transform: none; }');
+    expect(source).toContain('.workspace-tab-close, .workspace-tab-pin { width: 44px; height: 44px; }');
+    expect(source).toContain(':root[data-motion="reduced"] .workspace-tab-pin svg { transition: none; }');
+    expect(source).toContain('.app-shell[data-phone="true"][data-windows-open="true"] .app-topbar { z-index: 1200; }');
+  });
+
   it('gives the empty conversation readable glass placement clear of the orb', () => {
     const styles = readFileSync('src/ConversationHistory.css', 'utf8');
     const greeting = ruleDeclaration(styles, /\.conversation-greeting\s*\{([^}]*)\}/, 'background');

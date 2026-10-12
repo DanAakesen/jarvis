@@ -5,6 +5,7 @@ import { KnowledgeGraphWindow } from './knowledge/KnowledgeGraphView';
 import { ChartView } from './ChartView';
 import { CodeView } from './CodeView';
 import { HtmlAppView } from './HtmlAppView';
+import type { SessionCommandResult } from './session-commands';
 
 function ViewAction({ view, title }: { view: GeneratedView; title: string }) {
   const action = view.actions?.find((candidate) => candidate.type === 'open-route' || candidate.type === 'open-link');
@@ -27,10 +28,12 @@ function timelineDate(at: string) {
 export function GeneratedViewRenderer({  view,
   className,
   trustedBlobHost,
+  onPinChange,
 }: {
   view: GeneratedView;
   className?: string;
   trustedBlobHost?: string;
+  onPinChange?: (pinned: boolean) => Promise<SessionCommandResult>;
 }) {
   if (!isGeneratedView(view, trustedBlobHost ? { trustedBlobHost } : undefined)) {
     return <p role="alert">This generated view is invalid.</p>;
@@ -38,7 +41,8 @@ export function GeneratedViewRenderer({  view,
 
   switch (view.renderer) {
     case 'html-app':
-      return <HtmlAppView key={view.data.artifactId} artifactId={view.data.artifactId} title={view.title} updatedAt={view.source.updatedAt} />;
+      return <HtmlAppView key={view.data.artifactId} artifactId={view.data.artifactId} title={view.title} updatedAt={view.source.updatedAt}
+        {...(onPinChange ? { onPinChange } : {})} />;
     case 'code':
       return <CodeView data={view.data} title={view.title} />;
     case 'knowledge-graph':

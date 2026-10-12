@@ -1,5 +1,21 @@
 # Product
 
+## Workspace window release (12 October 2026)
+
+#430 implements the agreed window intents: smart-fit automatic layout,
+`place`, `arrange`, `minimise-all`, `restore-all`, `close-all`, `pin` and `unpin`.
+New windows come forward. A named cascade puts the first `viewId` frontmost;
+manual placement remains untouched until tidy-up. Phone geometry requests
+focus the named view instead of forcing desktop coordinates.
+
+Generated windows can be pinned from the title or tab. Owner-scoped pins
+return as tabs after reload; Close keeps a pin, while Unpin removes it.
+Updates refresh the saved view. Acknowledgement waits for storage, and failed
+or timed-out saves retain visible recovery. Pin reads retry transient failures
+within a bounded deadline and recover on a visible return/online event;
+sign-in failures retain sign-in guidance. Camera and chat lifecycle remain
+unchanged. Notes, report appearance and movable-chat drafts stay separate.
+
 ## Chat loading correction (12 October 2026)
 
 Show the conversation window as soon as the signed-in shell is ready; do not

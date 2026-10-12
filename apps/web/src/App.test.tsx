@@ -5,6 +5,7 @@ import { useState, type ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from './App';
 import { getSignInGreeting } from './sign-in-greeting';
+import type { GeneratedView, WorkspaceCommand } from '@jarvis/contracts';
 
 const {
   createAuthClient,
@@ -456,14 +457,20 @@ describe('App shell', () => {
     },
   ];
 
-  function streamWorkspaceCommands() {
-    fetchMock.mockImplementation(async (input) => {
-      if (new URL(String(input)).pathname === '/now/events') {
+  function streamWorkspaceCommands(pinResponse?: Promise<Response>) {
+    fetchMock.mockImplementation(async (input, init) => {
+      const path = new URL(String(input)).pathname;
+      if (path === '/now/events') {
         return new Response(new ReadableStream<Uint8Array>({
           start(controller) { activityStream = controller; },
           cancel() { activityStream = null; },
         }), { status: 200, headers: { 'Content-Type': 'text/event-stream' } });
       }
+      if (path === '/workspace/pins') return new Response(JSON.stringify({ pins: [] }), {
+        headers: { 'Content-Type': 'application/json' },
+      });
+      if (path.startsWith('/workspace/pins/') && init?.method === 'PUT' && pinResponse) return pinResponse;
+      if (path.startsWith('/workspace/pins/') && init?.method === 'DELETE') return new Response(null, { status: 204 });
       return new Response(JSON.stringify({ state: 'awake' }), {
         status: 200, headers: { 'Content-Type': 'application/json' },
       });
@@ -475,6 +482,10 @@ describe('App shell', () => {
       String(url).endsWith(`/now/workspace/commands/${commandId}/ack`)
     ));
     return {
+      ack,
+      publishCommand: (command: WorkspaceCommand) => act(() => {
+        publish('workspace-command', { command, expiresAt: Date.now() + 5_000 });
+      }),
       ready: () => act(() => { publish('workspace-ready', { sessionId: '12345678-1234-4234-8234-123456789abc' }); }),
       command: async (commandId: string, operation: string, viewId = 'conversation') => {
         act(() => {
@@ -483,10 +494,47 @@ describe('App shell', () => {
           });
         });
         await waitFor(() => expect(ack(commandId)).toBeTruthy());
-        return JSON.parse(String(ack(commandId)![1]!.body)) as { applied: boolean; reason?: string };
+        return JSON.parse(String(ack(commandId)![1]!.body)) as { applied: boolean };
       },
     };
   }
+
+  it.each([200, 503])('acknowledges a broker pin only after storage replies with status %s', async (status) => {
+    let finish!: (response: Response) => void;
+    const response = new Promise<Response>((resolve) => { finish = resolve; });
+    const stream = streamWorkspaceCommands(response);
+    await renderSignedIn();
+    await waitFor(() => expect(activityStream).not.toBeNull());
+    stream.ready();
+    const view: GeneratedView = {
+      version: 1, title: 'Stored broker report', renderer: 'text',
+      source: { id: 'research', status: 'complete' }, data: { format: 'plain', content: 'Broker fixture result' },
+    };
+    stream.publishCommand({ commandId: 'create-broker-pin', operation: 'create', viewId: 'broker-report', view });
+    await waitFor(() => expect(stream.ack('create-broker-pin')).toBeTruthy());
+    stream.publishCommand({ commandId: 'save-broker-pin', operation: 'pin', viewId: 'broker-report' });
+    await waitFor(() => expect(fetchMock.mock.calls.some(([url, init]) =>
+      String(url).endsWith('/workspace/pins/broker-report') && init?.method === 'PUT')).toBe(true));
+    expect(stream.ack('save-broker-pin')).toBeUndefined();
+    await act(async () => {
+      finish(new Response(JSON.stringify(status === 200
+        ? { pin: { viewId: 'broker-report', view, pinnedAt: '2026-10-12T19:00:00.000Z' } }
+        : { error: 'storage_unavailable' }), { status, headers: { 'Content-Type': 'application/json' } }));
+    });
+    await waitFor(() => expect(stream.ack('save-broker-pin')).toBeTruthy());
+    const acknowledgement: unknown = JSON.parse(String(stream.ack('save-broker-pin')![1]!.body));
+    expect(acknowledgement).toMatchObject({ applied: status === 200 });
+    if (status === 200) {
+      const controls = screen.getAllByRole('button', { name: 'Unpin Stored broker report' });
+      expect(controls).toHaveLength(2);
+      expect(controls.every((control) => control.getAttribute('aria-pressed') === 'true')).toBe(true);
+    } else {
+      const controls = screen.getAllByRole('button', { name: 'Pin Stored broker report' });
+      expect(controls).toHaveLength(2);
+      expect(controls.every((control) => control.getAttribute('aria-pressed') === 'false')).toBe(true);
+      expect(screen.getByText('This window could not be pinned. Try again.')).not.toBeNull();
+    }
+  });
 
   it('hosts conversation history in a shared workspace window with tabs, maximise and close', async () => {
     const user = userEvent.setup();
@@ -551,7 +599,11 @@ describe('App shell', () => {
     await waitFor(() => expect(fetchMock.mock.calls.some(([url, init]) => (
       String(url).endsWith('/now/workspace/state') &&
       (JSON.parse(String(init?.body)) as { windows: unknown[] }).windows.some((window) => (
-        JSON.stringify(window) === JSON.stringify({ viewId: 'conversation', title: 'Conversation' })
+        typeof window === 'object' && window !== null &&
+        (window as { viewId?: string }).viewId === 'conversation' &&
+        (window as { title?: string }).title === 'Conversation' &&
+        (window as { state?: string }).state === 'open' &&
+        (window as { pinned?: boolean }).pinned === false
       ))
     ))).toBe(true));
 
@@ -1138,6 +1190,7 @@ describe('App shell', () => {
       expect(result).toMatchObject({ reason: expect.stringContaining('Camera access') });
     }
   });
+
   it('opens and closes the contextual shell panel without replacing page content', async () => {
     const user = userEvent.setup();
     await renderSignedIn();
