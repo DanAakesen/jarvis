@@ -49,6 +49,7 @@ import { hasRunningJob, useJobs } from './jobs-store';
 import { KnowledgeBackendContext } from './knowledge/knowledge-context';
 import { PresenceChip, PresenceSettings } from './Presence';
 import { MemorySettings } from './MemorySettings';
+import { createWorkspacePinsClient } from './workspace-pins';
 
 /** Interim research progress: 
 unning from P9-46 (#613) on; older backends sent partial for it. */
@@ -273,9 +274,12 @@ function ShellLayout({ signedIn, config, session, camera, screenShare }: {
     hasVisibleViews: () => workspaceController.current?.hasVisibleViews() ?? false,
     isViewVisible: (viewId: string) => workspaceController.current?.isViewVisible?.(viewId) ?? false,
     applySession: (command: Parameters<typeof applySessionCommand>[0]) => applySessionCommand(command, sessionCommands, cameraRef.current),
+    applyPin: (command: Extract<WorkspaceCommand, { operation: 'pin' | 'unpin' }>) =>
+      workspaceController.current?.applyPin?.(command) ?? Promise.resolve({ applied: false, reason: 'Window pinning is unavailable.' }),
   }), [contextPanel, frame, navigateTo, sessionCommands, signedIn, snapshotWindows, view]);
   const applyWorkspaceCommand = useCallback((command: WorkspaceCommand, trustedBlobHost?: string): boolean | Promise<SessionCommandResult> => {
     if (command.operation === 'session') return workspaceCommands.applySession(command);
+    if (command.operation === 'pin' || command.operation === 'unpin') return workspaceCommands.applyPin(command);
     if ((command.operation === 'show' || command.operation === 'restore' || command.operation === 'focus') &&
         command.viewId === cameraPreviewViewId && !cameraRef.current.sharing && !cameraRef.current.starting) {
       return openCameraPreview(cameraRef.current);
@@ -349,6 +353,9 @@ function ShellLayout({ signedIn, config, session, camera, screenShare }: {
   }, [focusTaskWindow]);
   const [tabsHost, setTabsHost] = useState<HTMLDivElement | null>(null);
   const knowledgeBackend = useMemo(() => ({ backendUrl: config.backendUrl, getAccessToken }), [config.backendUrl, getAccessToken]);
+  const workspacePins = useMemo(() => signedIn && config.backendUrl
+    ? createWorkspacePinsClient(config.backendUrl, getAccessToken)
+    : undefined, [config.backendUrl, getAccessToken, signedIn]);
   // A finished background job brings its result window forward, or parks it as a tab while Dan is away.
   // While a research job shows as a tab, its progress window's own tab would be a duplicate.
   const { jobs: backgroundJobs } = useJobs(config.backendUrl, getAccessToken);
@@ -689,7 +696,7 @@ function ShellLayout({ signedIn, config, session, camera, screenShare }: {
               <div className="workspace-shell-area">
                 <Workspace ref={workspaceController} views={workspaceViews} onVisibleViewsChange={setVoiceHasWindows} onOpenWindowsChange={onOpenWindowsChange} onFrontViewChange={setFrontViewId}
                   onVisibleViewIdsChange={onVisibleViewIdsChange} tabsHost={tabsHost} defaultArrangement="layered" arrangeMenu={false}
-                  hideTab={hideResearchProgressTab} />
+                  hideTab={hideResearchProgressTab} {...(workspacePins ? { pins: workspacePins } : {})} />
               </div>
             )}
             {/* Settings shows the Now feed itself; everywhere else one hidden instance keeps runtime activity flowing. */}
@@ -755,6 +762,7 @@ function SettingsActivity({ client, config, getAccessToken }: {
   const workspace = useWorkspaceCommands();
   const applyWorkspaceCommand = useCallback((command: WorkspaceCommand, trustedBlobHost?: string): boolean | Promise<SessionCommandResult> => {
     if (command.operation === 'session') return workspace.applySession?.(command) ?? Promise.resolve<SessionCommandResult>({ applied: false, reason: 'Session commands are unavailable.' });
+    if (command.operation === 'pin' || command.operation === 'unpin') return workspace.applyPin?.(command) ?? Promise.resolve<SessionCommandResult>({ applied: false, reason: 'Window pinning is unavailable.' });
     let applied = false;
     flushSync(() => { applied = workspace.dispatch(command, trustedBlobHost); });
     return applied;

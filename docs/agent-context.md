@@ -1,5 +1,28 @@
 # Agent context
 
+## Workspace window release (12 October 2026)
+
+Dan and the coordinator authorised #430 whole after #751 merged, including
+pin-load idle/HMR recovery. The scoped candidate retains merged camera/chat
+and excludes Notes, report surfaces and floating-chat geometry/density.
+The coordinator merges on green and then starts #621. State the exact operation
+names and first-`viewId`-frontmost cascade ordering in the PR description.
+
+The exact candidate passes TypeScript, zero-warning scoped ESLint, Vite build
+and 237 tests across App, Workspace, pins/loading, layouts, HTML pin bridge,
+history and shared styles. One unchanged Windows locale assertion was excluded
+locally, not altered in source. Chromium fixtures pass on desktop dark/light
+and 320px light/touch/reduced motion, including pin failures, Retry, save/update,
+reload, unpin, all-window actions, return/online recovery and camera handles.
+These are synthetic API/stream checks, not live voice or physical-phone proof.
+Keep port 5173 running and preserve all remaining drafts and preservation stashes.
+
+Readback assertions now check all added snapshot fields with exact equality.
+All eight readback tests pass, as do scoped lint and TypeScript. The broader
+Windows run records 794 passes, three local failures (en-DK date expectations
+and Vitest 5.0.2 Blob compatibility), and the unchanged voice-unit exclusion.
+Those three cases passed on the initial CI head; the corrected CI is pending.
+
 ## Chat loading correction (12 October 2026)
 
 Camera #750 merged. The coordinator confirmed PR2 is chat loading only; do not

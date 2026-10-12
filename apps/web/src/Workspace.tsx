@@ -4,9 +4,12 @@ import { createPortal } from 'react-dom';
 import { isWorkspaceCommand, type GeneratedView, type WorkspaceCommand, type WorkspaceSnapshot } from '@jarvis/contracts';
 import { GeneratedViewRenderer } from './GeneratedViewRenderer';
 import { flyWindowAway, flyWindowToTab } from './window-fly-away';
+import { layoutOrder, layoutWindows, type WindowLayout, type WindowPlacement } from './window-layout';
 import { Loader } from './Loader';
 import { readElement, useReadback, type WindowReadback } from './window-readback';
 import type { SessionCommand, SessionCommandResult } from './session-commands';
+import type { WorkspacePinsClient } from './workspace-pins';
+import { awaitWithSignal } from './backend-request';
 export type { WorkspaceCommand } from '@jarvis/contracts';
 
 export type WorkspaceViewContent =
@@ -38,6 +41,8 @@ export interface WorkspaceController {
   isViewVisible?: (viewId: string) => boolean;
   /** Applies a current-session command (language, voice, camera) and resolves once the UI action has finished. */
   applySession?: (command: SessionCommand) => Promise<SessionCommandResult>;
+  /** Confirms a pin change only after the owner's store accepts it. */
+  applyPin?: (command: Extract<WorkspaceCommand, { operation: 'pin' | 'unpin' }>) => Promise<SessionCommandResult>;
   snapshot?: WorkspaceSnapshot;
 }
 
@@ -52,13 +57,16 @@ type Gesture = {
   x: number;
   y: number;
   geometry: Geometry;
+  previousGeometry: Geometry | undefined;
+  previousPlacement: WindowPlacement | undefined;
   edge: 'right' | 'bottom' | undefined;
+
 };
 
 const clamp = (value: number, min: number, max: number) => Math.round(Math.min(max, Math.max(min, value)) * 1000) / 1000;
 const percent = (value: number) => `${Number((value * 100).toFixed(2))}%`;
 
-function WindowIcon({ name }: { name: 'minimise' | 'maximise' | 'restore' | 'close' | 'view' | 'more' }) {
+function WindowIcon({ name }: { name: 'minimise' | 'maximise' | 'restore' | 'close' | 'view' | 'more' | 'pin' }) {
   const common = { 'aria-hidden': true as const, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
   switch (name) {
     case 'minimise':
@@ -73,6 +81,8 @@ function WindowIcon({ name }: { name: 'minimise' | 'maximise' | 'restore' | 'clo
       return <svg {...common}><rect x="4" y="5" width="16" height="14" rx="2" /><path d="M4 9h16" /></svg>;
     case 'more':
       return <svg {...common}><circle cx="5" cy="12" r="1" /><circle cx="12" cy="12" r="1" /><circle cx="19" cy="12" r="1" /></svg>;
+    case 'pin':
+      return <svg {...common}><path d="m14.5 3.5 6 6-3 1.5-3.5 3.5.5 4-1.5 1.5-3.5-3.5L5 21l-.5-.5L9 16l-3.5-3.5L7 11l4 .5 3.5-3.5z" /></svg>;
   }
 }
 
@@ -103,7 +113,9 @@ export const Workspace = forwardRef<WorkspaceController, {
   arrangeMenu?: boolean;
   /** Leaves a window out of the tab bar (for example a progress window already shown as a job tab). */
   hideTab?: (view: WorkspaceView) => boolean;
-}>(function Workspace({ views, onVisibleViewsChange, onOpenWindowsChange, onVisibleViewIdsChange, onFrontViewChange, tabsHost, defaultArrangement = 'tiled', arrangeMenu = true, hideTab }, ref) {
+  /** Authenticated persistence for generated windows. Omit it when persistent pins are unavailable. */
+  pins?: WorkspacePinsClient;
+}>(function Workspace({ views, onVisibleViewsChange, onOpenWindowsChange, onVisibleViewIdsChange, onFrontViewChange, tabsHost, defaultArrangement = 'tiled', arrangeMenu = true, hideTab, pins }, ref) {
   const workspaceId = useId();
   const [agentViews, setAgentViews] = useState<WorkspaceView[]>([]);
   const closedAgentViews = useRef(new Map<string, { view: WorkspaceView; geometry: Geometry | undefined }>());
@@ -128,6 +140,28 @@ export const Workspace = forwardRef<WorkspaceController, {
   const [pendingActions, setPendingActions] = useState<ReadonlySet<string>>(new Set());
   const [jarvisUpdatingIds, setJarvisUpdatingIds] = useState<ReadonlySet<string>>(new Set());
   const [activeGestureId, setActiveGestureId] = useState<string | null>(null);
+  // Window management by intent (P8-42): the shell arranges its windows itself (smart fit), and Jarvis or Dan can
+  // place a window in a region, pick a layout or drag a window to leave it alone (manual).
+  const [placements, setPlacements] = useState<Record<string, WindowPlacement>>({});
+  const [layoutKind, setLayoutKind] = useState<WindowLayout>('auto');
+  const [layoutPreference, setLayoutPreference] = useState<string[]>([]);
+  const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 });
+  const [pinnedViewIds, setPinnedViewIds] = useState<ReadonlySet<string>>(new Set());
+  const [pendingPinState, setPendingPinState] = useState<{ owner: WorkspacePinsClient | undefined; ids: ReadonlySet<string> }>({ owner: pins, ids: new Set() });
+  const pendingPinIds = pendingPinState.owner === pins ? pendingPinState.ids : new Set<string>();
+  const pinOwner = useRef(pins);
+  const pinRevisions = useRef(new Map<string, number>());
+  const persistedPinViews = useRef(new Map<string, GeneratedView>());
+  const pinRequests = useRef(new Map<string, {
+    request: { owner: WorkspacePinsClient; controller: AbortController; signal: AbortSignal; pinned: boolean; view: GeneratedView };
+    result: Promise<SessionCommandResult>;
+  }>());
+  const [pinLoadAttempt, setPinLoadAttempt] = useState(0);
+  const [pinLoadError, setPinLoadError] = useState('');
+  const [pinFeedback, setPinFeedback] = useState<{
+    tone: 'status' | 'alert'; message: string;
+    retry?: { id: string; pinned: boolean; refresh: boolean };
+  } | null>(null);
   const [narrowScreen, setNarrow] = useState(() => (
     typeof window.matchMedia === 'function' && window.matchMedia('(max-width: 900px)').matches
   ));
@@ -183,6 +217,78 @@ export const Workspace = forwardRef<WorkspaceController, {
     ));
   }, [order, workspaceViews]);
   const viewIds = useMemo(() => new Set(workspaceViews.map(({ id }) => id)), [workspaceViews]);
+  const currentViews = useRef(workspaceViews);
+  useLayoutEffect(() => { currentViews.current = workspaceViews; }, [workspaceViews]);
+  useEffect(() => {
+    pinOwner.current = pins;
+    const requests = pinRequests.current;
+    return () => {
+      pinOwner.current = undefined;
+      for (const { request } of requests.values()) {
+        if (request.owner === pins) request.controller.abort();
+      }
+    };
+  }, [pins]);
+  useEffect(() => {
+    if (!pins) return;
+    const controller = new AbortController();
+    const revisions = new Map(pinRevisions.current);
+    void pins.load(controller.signal).then((storedPins) => {
+      if (controller.signal.aborted) return;
+      setPinLoadError('');
+      const confirmed = storedPins.filter((pin) =>
+        pinRevisions.current.get(pin.viewId) === revisions.get(pin.viewId));
+      const confirmedIds = new Set(confirmed.map((pin) => pin.viewId));
+      for (const id of persistedPinViews.current.keys()) {
+        if (!confirmedIds.has(id) && pinRevisions.current.get(id) === revisions.get(id)) persistedPinViews.current.delete(id);
+      }
+      for (const pin of confirmed) persistedPinViews.current.set(pin.viewId, pin.view);
+      const existing = new Set(currentViews.current.map((view) => view.id));
+      const restored = confirmed.filter((pin) => !existing.has(pin.viewId));
+      setAgentViews((current) => {
+        const present = new Set(current.map((view) => view.id));
+        const added = restored
+          .filter((pin) => !present.has(pin.viewId))
+          .map((pin): WorkspaceView => ({
+            id: pin.viewId,
+            title: pin.view.title,
+            initiallyMinimised: true,
+            content: {
+              status: 'generated',
+              view: pin.view,
+              ...((pin.trustedBlobHost ?? pins.trustedBlobHost) ? { trustedBlobHost: pin.trustedBlobHost ?? pins.trustedBlobHost } : {}),
+            },
+          }));
+        return added.length ? [...current, ...added] : current;
+      });
+      const ids = confirmed.map((pin) => pin.viewId);
+      setPinnedViewIds((current) => new Set([
+        ...[...current].filter((id) => confirmedIds.has(id) || pinRevisions.current.get(id) !== revisions.get(id)),
+        ...ids,
+      ]));
+      setMinimizedViewIds((current) => new Set([...current, ...restored.map((pin) => pin.viewId)]));
+    }).catch((error: unknown) => {
+      if (!controller.signal.aborted) {
+        setPinLoadError(error instanceof Error ? error.message : 'Pinned windows could not be loaded. Try again.');
+      }
+    });
+    return () => controller.abort();
+  }, [pinLoadAttempt, pins]);
+  useEffect(() => {
+    if (!pinLoadError) return;
+    const retry = () => {
+      if (document.visibilityState !== 'hidden') {
+        setPinLoadError('');
+        setPinLoadAttempt((attempt) => attempt + 1);
+      }
+    };
+    window.addEventListener('online', retry);
+    document.addEventListener('visibilitychange', retry);
+    return () => {
+      window.removeEventListener('online', retry);
+      document.removeEventListener('visibilitychange', retry);
+    };
+  }, [pinLoadError]);
   // Views that arrive already pinned start as tabs; each id is only considered once while it stays present.
   const seenViewIds = useRef(new Set<string>());
   useLayoutEffect(() => {
@@ -218,21 +324,54 @@ export const Workspace = forwardRef<WorkspaceController, {
     }
     return result;
   }, Boolean(onOpenWindowsChange), reported.map(({ id }) => id).join('\n'));
-  const snapshotWindows = useMemo<WorkspaceSnapshot['windows']>(() => reported.map(({ id, title, presentation }) => ({
-    viewId: id, title, ...readback?.[id],
-    ...(presentation === 'camera-preview' ? { state: minimizedViewIds.has(id) ? 'minimised' as const : 'open' as const } : {}),
-  })), [minimizedViewIds, readback, reported]);
+  useEffect(() => {
+    const element = canvas.current;
+    if (!element || typeof ResizeObserver !== 'function') return;
+    const observer = new ResizeObserver(([entry]) => {
+      const box = entry?.contentRect;
+      if (!box) return;
+      setCanvasSize((current) => Math.abs(current.width - box.width) < .1 && Math.abs(current.height - box.height) < .1
+        ? current : { width: box.width, height: box.height });
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+  // Only the shell's floating desktop windows are managed; the classic workspace and phones keep their own rules.
+  // Layout follows the order windows opened (not stacking order), so raising a window never reshuffles the screen.
+  const managed = !arrangeMenu && arrangement === 'layered' && !phone;
+  const layoutIds = useMemo(() => workspaceViews
+    .filter((view) => view.presentation !== 'conversation' && (view.presentation !== 'camera-preview' || placements[view.id]?.mode === 'region') && !closedViewIds.has(view.id) && !minimizedViewIds.has(view.id) &&
+      view.id !== activeMaximizedViewId)
+    .map((view) => view.id), [activeMaximizedViewId, closedViewIds, minimizedViewIds, placements, workspaceViews]);
+  const autoRects = useMemo(() => managed && canvasSize.width > 0
+    ? layoutWindows({ ids: layoutOrder(layoutIds, layoutPreference), placements, layout: layoutKind, size: canvasSize })
+    : {}, [canvasSize, layoutIds, layoutKind, layoutPreference, managed, placements]);
+
+  const frontId = (phone ? foreground?.id : activeMaximizedViewId ?? visibleViews.at(-1)?.id) ?? null;
+  const snapshotWindows = useMemo<WorkspaceSnapshot['windows']>(() => openViews.slice(0, 32).map(({ id, title }) => {
+    const placement = placements[id] ?? { mode: 'auto' as const };
+    return {
+      viewId: id,
+      title,
+      ...readback?.[id],
+      state: minimizedViewIds.has(id) ? 'minimised' : 'open',
+      placement: placement.mode,
+      ...(placement.mode === 'region' ? { region: placement.region } : {}),
+      pinned: pinnedViewIds.has(id),
+      front: id === frontId,
+    };
+  }), [frontId, minimizedViewIds, openViews, pinnedViewIds, placements, readback]);
   useEffect(() => {
     onOpenWindowsChange?.(snapshotWindows);
   }, [onOpenWindowsChange, snapshotWindows]);
-  const frontId = (phone ? foreground?.id : primaryViews.at(-1)?.id) ?? null;
   useEffect(() => { onFrontViewChange?.(frontId); }, [frontId, onFrontViewChange]);
 
   useLayoutEffect(() => {
     onVisibleViewsChange?.(visibleViews.length > 0);
   }, [onVisibleViewsChange, visibleViews.length]);
 
-  const shownViewIds = (phone ? visibleViews.filter((view) => view.id === foreground?.id || view.presentation === 'camera-preview') : visibleViews).map((view) => view.id).join('\n');
+  const shownViewIds = (phone ? visibleViews.filter((view) => view.id === foreground?.id || view.presentation === 'camera-preview')
+    : visibleViews).map((view) => view.id).join('\n');
   useLayoutEffect(() => {
     onVisibleViewIdsChange?.(shownViewIds ? shownViewIds.split('\n') : []);
   }, [onVisibleViewIdsChange, shownViewIds]);
@@ -256,7 +395,9 @@ export const Workspace = forwardRef<WorkspaceController, {
   }), [workspaceViews]);
 
   function geometryFor(id: string, index: number): Geometry {
-    return geometry[id] ?? initialGeometry(id, index);
+    const arranged = activeGestureId === id ? undefined : autoRects[id];
+    const stored = geometry[id] ?? initialGeometry(id, index);
+    return arranged ? { ...stored, ...arranged } : stored;
   }
 
   const reorder = useCallback((id: string, offset: number, label: string): boolean => {
@@ -310,6 +451,15 @@ export const Workspace = forwardRef<WorkspaceController, {
       return next;
     });
     setForegroundViewId(id);
+    setMaximizedViewId((current) => current === id ? current : null);
+    setOrder((current) => {
+      const existing = new Set(workspaceViews.map((view) => view.id));
+      if (retained) existing.add(id);
+      const ids = [...current.filter((candidate) => existing.has(candidate)),
+        ...workspaceViews.filter((view) => !current.includes(view.id)).map((view) => view.id)];
+      if (retained && !ids.includes(id)) ids.push(id);
+      return ids.at(-1) === id ? current : [...ids.filter((candidate) => candidate !== id), id];
+    });
     // On phones the restored view becomes foreground; move focus with it only from inside the workspace.
     const focusInWorkspace = !document.activeElement || document.activeElement === document.body ||
       workspaceSection.current?.contains(document.activeElement);
@@ -327,6 +477,13 @@ export const Workspace = forwardRef<WorkspaceController, {
   }, [foreground?.id, phone, workspaceViews]);
 
   const closeView = useCallback((id: string, reversible = false): boolean => {
+    const pinRequest = pinRequests.current.get(id);
+    if (pinRequest && !pinRequest.request.signal.aborted) return false;
+    if (pinnedViewIds.has(id)) {
+      const minimised = minimiseView(id);
+      if (minimised) setAnnouncement(`${workspaceViews.find((view) => view.id === id)?.title} kept as a pinned tab.`);
+      return minimised;
+    }
     const generated = agentViews.some((view) => view.id === id);
     if (!workspaceViews.some((view) => view.id === id)) return false;
     if (closedViewIds.has(id)) return true;
@@ -384,18 +541,16 @@ export const Workspace = forwardRef<WorkspaceController, {
     setMaximizedViewId((current) => current === id ? null : current);
     setAnnouncement(`${workspaceViews.find((view) => view.id === id)?.title} closed.`);
     return true;
-  }, [agentViews, closedViewIds, geometry, minimizedViewIds, openViews, workspaceViews]);
+  }, [agentViews, closedViewIds, geometry, minimiseView, minimizedViewIds, openViews, pinnedViewIds, workspaceViews]);
 
   const focusView = useCallback((id: string): boolean => {
     if (!isViewOpen(id)) return false;
     restoreView(id);
-    const index = orderedViews.findIndex((view) => view.id === id);
-    if (!phone && index >= 0 && index !== orderedViews.length - 1) reorder(id, orderedViews.length - index - 1, 'brought forward');
-    if (minimizedViewIds.has(id) || (phone && foreground?.id !== id)) pendingFocus.current = { target: 'window', viewId: id };
+    if (minimizedViewIds.has(id) || (phone && foreground?.id !== id) || (activeMaximizedViewId && activeMaximizedViewId !== id)) pendingFocus.current = { target: 'window', viewId: id };
     else windowHeadings.current.get(id)?.focus();
     if (phone) setAnnouncement(`${workspaceViews.find((view) => view.id === id)?.title} foreground.`);
     return true;
-  }, [foreground?.id, isViewOpen, minimizedViewIds, orderedViews, phone, reorder, restoreView, workspaceViews]);
+  }, [activeMaximizedViewId, foreground?.id, isViewOpen, minimizedViewIds, phone, restoreView, workspaceViews]);
 
   function switchView(offset: number) {
     const index = primaryViews.findIndex((view) => view.id === foreground?.id);
@@ -424,8 +579,96 @@ export const Workspace = forwardRef<WorkspaceController, {
     if (Math.abs(dx) >= 48 && Math.abs(dx) > Math.abs(dy) * 1.5) switchView(dx < 0 ? 1 : -1);
   }
 
+  const minimiseAll = useCallback(() => {
+    const ids = visibleViews.map(({ id }) => id);
+    if (ids.length === 0) return;
+    const focusedId = ids.find((id) => windowElements.current.get(id)?.contains(document.activeElement));
+    if (focusedId) pendingFocus.current = { target: 'tab', viewId: focusedId };
+    setMaximizedViewId(null);
+    setMinimizedViewIds((current) => new Set([...current, ...ids]));
+    setAnnouncement(`${ids.length} ${ids.length === 1 ? 'window' : 'windows'} minimised.`);
+  }, [visibleViews]);
+
+  const requestPinChange = useCallback((id: string, nextPinned: boolean, updatedView?: GeneratedView): Promise<SessionCommandResult> => {
+    const refuse = (reason: string) => Promise.resolve<SessionCommandResult>({ applied: false, reason });
+    if (!pins || pinOwner.current !== pins) return refuse('Window pinning is unavailable.');
+    if (!isViewOpen(id)) return refuse('This window is no longer open.');
+    const pending = pinRequests.current.get(id);
+    if (pending && !pending.request.signal.aborted) {
+      if (pending.request.pinned !== nextPinned) {
+        if (updatedView) pending.request.view = updatedView;
+        return refuse('A pin change is already in progress. Try again when it finishes.');
+      }
+      if (updatedView) pending.request.view = updatedView;
+      return pending.result;
+    }
+    if (!updatedView && pinnedViewIds.has(id) === nextPinned) return Promise.resolve({ applied: true });
+    const view = workspaceViews.find((candidate) => candidate.id === id);
+    if (!view) return refuse('This window is no longer available.');
+    const generated = updatedView ?? (view.content.status === 'generated' ? view.content.view : persistedPinViews.current.get(id));
+    if (!generated || (nextPinned && view.content.status !== 'generated')) return refuse('Only generated windows can be pinned.');
+    const controller = new AbortController();
+    const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(120_000)]);
+    const request = { owner: pins, controller, signal, pinned: nextPinned, view: generated };
+    pinRevisions.current.set(id, (pinRevisions.current.get(id) ?? 0) + 1);
+    setPendingPinState((current) => ({
+      owner: pins, ids: new Set(current.owner === pins ? current.ids : []).add(id),
+    }));
+    setPinFeedback(null);
+    const result = Promise.resolve().then(async (): Promise<SessionCommandResult> => {
+      try {
+        if (nextPinned) {
+          // Updates arriving during a save share its acknowledgement and finish with the latest view.
+          let saved: GeneratedView;
+          do {
+            saved = request.view;
+            await awaitWithSignal(() => pins.pin(id, saved, signal), signal);
+          } while (saved !== request.view);
+        } else {
+          await awaitWithSignal(() => pins.unpin(id, signal), signal);
+        }
+        signal.throwIfAborted();
+        if (pinOwner.current !== pins) return { applied: false, reason: 'This workspace is no longer active.' };
+        if (nextPinned) persistedPinViews.current.set(id, request.view);
+        else persistedPinViews.current.delete(id);
+        setPinnedViewIds((current) => {
+          const updated = new Set(current);
+          if (nextPinned) updated.add(id);
+          else updated.delete(id);
+          return updated;
+        });
+        const message = `${nextPinned ? request.view.title : view.title} ${nextPinned ? 'pinned' : 'unpinned'}.`;
+        setAnnouncement(message);
+        setPinFeedback({ tone: 'status', message });
+        return { applied: true };
+      } catch (error: unknown) {
+        if (controller.signal.aborted || pinOwner.current !== pins) {
+          return { applied: false, reason: 'This workspace is no longer active; the pin change could not be confirmed.' };
+        }
+        const detail = signal.aborted ? 'The pin change timed out. Try again.'
+          : error instanceof Error ? error.message : `This window could not be ${nextPinned ? 'pinned' : 'unpinned'}. Try again.`;
+        const message = (updatedView || request.view !== generated) && pinnedViewIds.has(id)
+          ? `The window was updated, but its saved pin update could not be confirmed. ${detail}` : detail;
+        setPinFeedback({ tone: 'alert', message, retry: { id, pinned: nextPinned, refresh: Boolean(updatedView) } });
+        return { applied: false, reason: message };
+      } finally {
+        if (pinRequests.current.get(id)?.request === request) {
+          pinRevisions.current.set(id, (pinRevisions.current.get(id) ?? 0) + 1);
+          pinRequests.current.delete(id);
+          if (pinOwner.current === pins) setPendingPinState((current) => {
+            if (current.owner !== pins) return current;
+            const ids = new Set(current.ids);
+            ids.delete(id);
+            return { owner: pins, ids };
+          });
+        }
+      }
+    });
+    pinRequests.current.set(id, { request, result });
+    return result;
+  }, [isViewOpen, pinnedViewIds, pins, workspaceViews]);
+
   const dispatchCommand = useCallback((command: WorkspaceCommand, trustedBlobHost?: string): boolean => {
-    if (!isWorkspaceCommand(command, trustedBlobHost ? { trustedBlobHost } : undefined)) return false;
     const viewIndex = 'viewId' in command
       ? orderedViews.findIndex((view) => view.id === command.viewId)
       : -1;
@@ -443,6 +686,82 @@ export const Workspace = forwardRef<WorkspaceController, {
         });
       }, 1_200));
     };
+    const titleOf = (id: string) => workspaceViews.find((view) => view.id === id)?.title ?? 'Window';
+    const bringForward = (id: string) => {
+      const index = orderedViews.findIndex((view) => view.id === id);
+      if (index >= 0 && index !== orderedViews.length - 1) reorder(id, orderedViews.length - index - 1, 'brought forward');
+    };
+    // Window intents (P8-42): Jarvis names what he wants; the layout engine works out the geometry.
+    function applyIntent(intent: Extract<WorkspaceCommand, { operation: 'place' | 'arrange' | 'minimise-all' | 'restore-all' | 'close-all' }>): boolean {
+      switch (intent.operation) {
+        case 'place': {
+          if (!isViewOpen(intent.viewId)) return false;
+          if (!managed) return focusView(intent.viewId);
+          if (workspaceViews.find((view) => view.id === intent.viewId)?.presentation === 'conversation') return false;
+          if (minimizedViewIds.has(intent.viewId)) restoreView(intent.viewId);
+          setMaximizedViewId((current) => current === intent.viewId ? null : current);
+          setPlacements((current) => {
+            // One window per region: whoever held it goes back to the automatic layout.
+            const next: Record<string, WindowPlacement> = {};
+            for (const [id, placement] of Object.entries(current)) {
+              next[id] = placement.mode === 'region' && placement.region === intent.region ? { mode: 'auto' } : placement;
+            }
+            next[intent.viewId] = { mode: 'region', region: intent.region };
+            return next;
+          });
+          bringForward(intent.viewId);
+          setAnnouncement(`${titleOf(intent.viewId)} moved to the ${intent.region === 'full' ? 'whole screen' : intent.region}.`);
+          return true;
+        }
+        case 'arrange': {
+          const targets = intent.viewIds;
+          if (targets && !targets.every((id) => isViewOpen(id))) return false;
+          if (!managed) return targets?.[0] ? focusView(targets[0]) : true;
+          if (targets?.some((id) => workspaceViews.find((view) => view.id === id)?.presentation === 'conversation')) return false;
+          if (targets) {
+            // The named windows share the screen; the others step aside as tabs, one tap away.
+            for (const view of visibleViews) {
+              if (view.presentation !== 'conversation' && !targets.includes(view.id)) minimiseView(view.id);
+            }
+            for (const id of targets) if (minimizedViewIds.has(id)) restoreView(id);
+          }
+          setMaximizedViewId(null);
+          setLayoutKind(intent.layout);
+          setLayoutPreference(targets && intent.layout === 'cascade' ? [...targets].reverse() : targets ?? []);
+          if (targets && intent.layout === 'cascade') {
+            setOrder([...orderedViews.filter((view) => !targets.includes(view.id)).map((view) => view.id), ...[...targets].reverse()]);
+          }
+          setPlacements((current) => targets
+            ? Object.fromEntries(Object.entries(current).filter(([id]) => !targets.includes(id)))
+            : {});
+          setAnnouncement(intent.layout === 'auto' ? 'Windows tidied.' : `Windows arranged ${intent.layout === 'cascade' ? 'in a stack' : intent.layout.replaceAll('-', ' ')}.`);
+          return true;
+        }
+        case 'minimise-all':
+          minimiseAll();
+          return true;
+        case 'restore-all': {
+          const ids = minimizedViews.map((view) => view.id);
+          for (const id of ids) restoreView(id);
+          setAnnouncement(`${ids.length} ${ids.length === 1 ? 'window' : 'windows'} restored.`);
+          return true;
+        }
+        case 'close-all': {
+          const ids = openViews.map((view) => view.id);
+          if (ids.some((id) => {
+            const pending = pinRequests.current.get(id);
+            return pending && !pending.request.signal.aborted;
+          })) {
+            setAnnouncement('Wait for the pending pin changes before closing all windows.');
+            return false;
+          }
+          for (const id of ids) closeView(id, true);
+          setAnnouncement(`${ids.length} ${ids.length === 1 ? 'window' : 'windows'} closed.`);
+          return true;
+        }
+      }
+    }
+    if (!isWorkspaceCommand(command, trustedBlobHost ? { trustedBlobHost } : undefined)) return false;
     switch (command.operation) {
       case 'create':
         if (workspaceViews.some((view) => view.id === command.viewId)) return false;
@@ -457,6 +776,8 @@ export const Workspace = forwardRef<WorkspaceController, {
           },
         }]);
         setGeometry((current) => ({ ...current, [command.viewId]: defaultGeometry(workspaceViews.length) }));
+        setForegroundViewId(command.viewId);
+        setMaximizedViewId(null);
         setAnnouncement(`${command.view.title} created.`);
         shimmerUpdatedView(command.viewId);
         return true;
@@ -475,6 +796,9 @@ export const Workspace = forwardRef<WorkspaceController, {
           : view));
         setAnnouncement(`${command.view.title} updated.`);
         shimmerUpdatedView(command.viewId);
+        if (pinnedViewIds.has(command.viewId) || pinRequests.current.get(command.viewId)?.request.pinned) {
+          void requestPinChange(command.viewId, true, command.view);
+        }
         return true;
       case 'show':
         return focusView(command.viewId);
@@ -488,18 +812,23 @@ export const Workspace = forwardRef<WorkspaceController, {
         return focusView(command.viewId);
       case 'move': {
         if (!isViewOpen(command.viewId) || viewIndex < 0) return false;
-        const current = geometry[command.viewId] ?? initialGeometry(command.viewId, viewIndex);
+        if (phone) return focusView(command.viewId);
+        if (workspaceViews.find((view) => view.id === command.viewId)?.presentation === 'conversation') return false;
+        const current = { ...(geometry[command.viewId] ?? initialGeometry(command.viewId, viewIndex)), ...autoRects[command.viewId] };
         if (command.x + current.width > 1 || command.y + current.height > 1) return false;
         setGeometry((value) => ({
           ...value,
-          [command.viewId]: { ...(value[command.viewId] ?? current), x: command.x, y: command.y },
+          [command.viewId]: { ...current, x: command.x, y: command.y },
         }));
+        setPlacements((value) => ({ ...value, [command.viewId]: { mode: 'manual' } }));
         setAnnouncement(`${workspaceViews.find((view) => view.id === command.viewId)?.title} moved.`);
         return true;
       }
       case 'resize': {
         if (!isViewOpen(command.viewId) || viewIndex < 0) return false;
-        const current = geometry[command.viewId] ?? initialGeometry(command.viewId, viewIndex);
+        if (phone) return focusView(command.viewId);
+        if (workspaceViews.find((view) => view.id === command.viewId)?.presentation === 'conversation') return false;
+        const current = { ...(geometry[command.viewId] ?? initialGeometry(command.viewId, viewIndex)), ...autoRects[command.viewId] };
         const x = command.x ?? current.x;
         const y = command.y ?? current.y;
         if (x + command.width > 1 || y + command.height > 1) return false;
@@ -510,18 +839,30 @@ export const Workspace = forwardRef<WorkspaceController, {
             columns: command.width > 0.72 ? 2 : 1, rows: command.height > 0.72 ? 2 : 1,
           },
         }));
+        setPlacements((value) => ({ ...value, [command.viewId]: { mode: 'manual' } }));
         setAnnouncement(`${workspaceViews.find((view) => view.id === command.viewId)?.title} resized.`);
         return true;
       }
       case 'layout':
-        // The shell always floats its windows; a layout request is acknowledged without tiling them.
-        if (!arrangeMenu) {
-          setAnnouncement('Windows float freely in this workspace.');
-          return true;
-        }
+        // The shell arranges by intent: tiled means the automatic layout, layered means a stack (cascade).
+        if (!arrangeMenu) return applyIntent({
+          commandId: command.commandId,
+          operation: 'arrange',
+          layout: command.arrangement === 'tiled' ? 'auto' : 'cascade',
+        });
         setArrangement(command.arrangement);
         setAnnouncement(`Workspace arranged in ${command.arrangement} layout.`);
         return true;
+      case 'place':
+      case 'arrange':
+      case 'minimise-all':
+      case 'restore-all':
+      case 'close-all':
+        return applyIntent(command);
+      case 'pin':
+      case 'unpin':
+        // Persistent actions use applyPin so callers cannot acknowledge a request before storage confirms it.
+        return false;
       case 'context-panel':
         return false;
       default:
@@ -529,26 +870,22 @@ export const Workspace = forwardRef<WorkspaceController, {
         // here, so a new contract operation never breaks the build or silently counts as applied.
         return false;
     }
-  }, [agentViews, arrangeMenu, closeView, closedViewIds, focusView, geometry, initialGeometry, isViewOpen, jarvisUpdateTimers, minimiseView,
-    orderedViews, restoreView, workspaceViews]);
+  }, [agentViews, arrangeMenu, autoRects, closeView, closedViewIds, focusView, geometry, initialGeometry, isViewOpen, jarvisUpdateTimers, managed, minimiseAll,
+    minimiseView, minimizedViewIds, minimizedViews, openViews, orderedViews, phone, pinnedViewIds, reorder, requestPinChange, restoreView, visibleViews, workspaceViews]);
 
-  const minimiseAll = useCallback(() => {
-    const ids = visibleViews.map(({ id }) => id);
-    if (ids.length === 0) return;
-    const focusedId = ids.find((id) => windowElements.current.get(id)?.contains(document.activeElement));
-    if (focusedId) pendingFocus.current = { target: 'tab', viewId: focusedId };
-    setMaximizedViewId(null);
-    setMinimizedViewIds((current) => new Set([...current, ...ids]));
-    setAnnouncement(`${ids.length} ${ids.length === 1 ? 'window' : 'windows'} minimised.`);
-  }, [visibleViews]);
 
   useImperativeHandle(ref, () => ({
     dispatch: dispatchCommand,
+    applyPin: (command) => isWorkspaceCommand(command)
+      && (command.operation === 'pin' || command.operation === 'unpin')
+      ? requestPinChange(command.viewId, command.operation === 'pin')
+      : Promise.resolve({ applied: false, reason: 'This pin command is invalid.' }),
     minimiseAll,
     hasVisibleViews: () => visibleViews.length > 0,
-    isViewVisible: (viewId: string) => visibleViews.some((view) => view.id === viewId && (!phone || foreground?.id === viewId || view.presentation === 'camera-preview')),
+    isViewVisible: (viewId: string) => visibleViews.some((view) => view.id === viewId &&
+      (!phone || foreground?.id === viewId || view.presentation === 'camera-preview')),
     snapshot: { windows: snapshotWindows, contextPanelOpen: false },
-  }), [dispatchCommand, foreground?.id, minimiseAll, phone, snapshotWindows, visibleViews]);
+  }), [dispatchCommand, foreground?.id, minimiseAll, phone, requestPinChange, snapshotWindows, visibleViews]);
 
   function raiseView(event: { target: EventTarget }, id: string) {
     if (arrangement !== 'layered' || narrow) return;
@@ -560,6 +897,13 @@ export const Workspace = forwardRef<WorkspaceController, {
   }
 
   function updateGeometry(id: string, update: (current: Geometry) => Geometry, index: number) {
+    // Dragging or resizing an arranged window makes it manual: it starts from where it is and is then left alone.
+    if (autoRects[id]) {
+      const from = geometryFor(id, index);
+      setPlacements((current) => ({ ...current, [id]: { mode: 'manual' } }));
+      setGeometry((current) => ({ ...current, [id]: update(from) }));
+      return;
+    }
     setGeometry((current) => ({ ...current, [id]: update(current[id] ?? initialGeometry(id, index)) }));
   }
 
@@ -596,7 +940,7 @@ export const Workspace = forwardRef<WorkspaceController, {
     setAnnouncement(`${workspaceViews.find((view) => view.id === id)?.title} size changed.`);
   }
 
-  function beginGesture(event: PointerEvent<HTMLElement>, id: string, kind: Gesture['kind'], index: number, edge?: Gesture['edge']) {
+  function beginGesture(event: PointerEvent<HTMLElement>, id: string, kind: 'move' | 'resize', index: number, edge?: 'right' | 'bottom') {
     if (phone) return;
     if (event.button !== 0 && event.pointerType !== 'touch') return;
     if (activeMaximizedViewId === id) return;
@@ -605,12 +949,21 @@ export const Workspace = forwardRef<WorkspaceController, {
     event.preventDefault();
     event.currentTarget.setPointerCapture(event.pointerId);
     setActiveGestureId(id);
+    const stored = geometryFor(id, index);
+    const visible = windowElements.current.get(id)?.getBoundingClientRect();
+    const start = arrangement === 'layered' && !narrow && bounds.width && bounds.height && visible?.width && visible.height
+      ? { ...stored, x: (visible.left - bounds.left) / bounds.width, y: (visible.top - bounds.top) / bounds.height,
+        width: visible.width / bounds.width, height: visible.height / bounds.height }
+      : stored;
+    setGeometry((current) => ({ ...current, [id]: start }));
     gestures.current.set(event.pointerId, {
       id,
       kind,
       x: event.clientX,
       y: event.clientY,
-      geometry: geometryFor(id, index),
+      geometry: start,
+      previousGeometry: geometry[id],
+      previousPlacement: placements[id],
       edge,
     });
   }
@@ -619,6 +972,8 @@ export const Workspace = forwardRef<WorkspaceController, {
     const gesture = gestures.current.get(event.pointerId);
     const bounds = canvas.current?.getBoundingClientRect();
     if (!gesture || !bounds?.width || !bounds.height) return;
+    // A click with a slight wobble is not a drag: only a real move (4 px) takes a window out of the automatic layout.
+    if (autoRects[gesture.id] && Math.hypot(event.clientX - gesture.x, event.clientY - gesture.y) < 4) return;
     const dx = gesture.edge === 'bottom' ? 0 : (event.clientX - gesture.x) / bounds.width;
     const dy = gesture.edge === 'right' ? 0 : (event.clientY - gesture.y) / bounds.height;
     updateGeometry(gesture.id, (current) => {
@@ -631,18 +986,20 @@ export const Workspace = forwardRef<WorkspaceController, {
         };
       }
       if (gesture.kind === 'move') {
-        const x = clamp(gesture.geometry.x + dx, 0, 1 - current.width);
-        const y = clamp(gesture.geometry.y + dy, 0, 1 - current.height);
-        return { ...current, x, y };
+        const x = clamp(gesture.geometry.x + dx, 0, 1 - gesture.geometry.width);
+        const y = clamp(gesture.geometry.y + dy, 0, 1 - gesture.geometry.height);
+        return { ...current, x, y, width: gesture.geometry.width, height: gesture.geometry.height };
       }
-      const width = clamp(gesture.geometry.width + dx, 0.32, 0.92);
-      const height = clamp(gesture.geometry.height + dy, 0.34, 0.92);
+      const availableWidth = 1 - gesture.geometry.x;
+      const availableHeight = 1 - gesture.geometry.y;
+      const width = clamp(gesture.geometry.width + dx, Math.min(0.32, availableWidth), availableWidth);
+      const height = clamp(gesture.geometry.height + dy, Math.min(0.34, availableHeight), availableHeight);
       return {
         ...current,
         width,
         height,
-        x: clamp(current.x, 0, 1 - width),
-        y: clamp(current.y, 0, 1 - height),
+        x: clamp(gesture.geometry.x, 0, 1 - width),
+        y: clamp(gesture.geometry.y, 0, 1 - height),
       };
     }, orderedViews.findIndex((view) => view.id === gesture.id));
   }
@@ -655,8 +1012,19 @@ export const Workspace = forwardRef<WorkspaceController, {
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
-    if (event.type === 'pointercancel') {
-      updateGeometry(gesture.id, () => gesture.geometry, 0);
+    if (event.type === 'pointercancel' || event.type === 'lostpointercapture') {
+      setGeometry((current) => {
+        const next = { ...current };
+        if (gesture.previousGeometry) next[gesture.id] = gesture.previousGeometry;
+        else delete next[gesture.id];
+        return next;
+      });
+      setPlacements((current) => {
+        const next = { ...current };
+        if (gesture.previousPlacement) next[gesture.id] = gesture.previousPlacement;
+        else delete next[gesture.id];
+        return next;
+      });
       setAnnouncement('Arrangement cancelled.');
       return;
     }
@@ -749,7 +1117,7 @@ export const Workspace = forwardRef<WorkspaceController, {
   // In the shell the tab bar lists every open window, the conversation included;
   // without a shell host it lists only minimised views.
   const tabViews = (tabsHost ? openViews : minimizedViews).filter((view) => !hideTab?.(view));
-  const frontViewId = phone ? foreground?.id : [...orderedViews].reverse().find((view) => visibleViews.includes(view))?.id;
+  const frontViewId = frontId;
 
   return (
     <section ref={workspaceSection} className="workspace" data-phone={phone} aria-labelledby={`${workspaceId}-heading`}>
@@ -784,6 +1152,24 @@ export const Workspace = forwardRef<WorkspaceController, {
       ) : openViews.length === minimizedViews.length ? (
         <p className="workspace-empty">All views are minimised.</p>
       ) : null}
+      {pinLoadError && (
+        <div className="workspace-pin-feedback" role="alert">
+          <span>{pinLoadError}</span>
+          <button className="secondary-button" type="button" onClick={() => {
+            setPinLoadError('');
+            setPinLoadAttempt((attempt) => attempt + 1);
+          }}>Retry pinned windows</button>
+        </div>
+      )}
+      {pinFeedback && <div className="workspace-pin-feedback" role={pinFeedback.tone}>
+        <span>{pinFeedback.message}</span>
+        {pinFeedback.retry && <button className="secondary-button" type="button" onClick={() => {
+          const retry = pinFeedback.retry;
+          if (!retry) return;
+          const content = workspaceViews.find((view) => view.id === retry.id)?.content;
+          void requestPinChange(retry.id, retry.pinned, retry.refresh && content?.status === 'generated' ? content.view : undefined);
+        }}>Retry pin change</button>}
+      </div>}
       {phone && primaryViews.length > 1 && (
         <nav className="workspace-view-switcher" aria-label="Switch foreground view">
           {primaryViews.map((view, index) => (
@@ -804,31 +1190,47 @@ export const Workspace = forwardRef<WorkspaceController, {
       )}
       {tabViews.length > 0 && maybePortal(
         <nav className="workspace-tabs" aria-label={tabsHost ? 'Open windows' : 'Minimised views'}>
-          {tabViews.map((view) => (
-            <span className="workspace-tab-item" key={view.id} data-view-id={view.id}
-              data-state={minimizedViewIds.has(view.id) ? 'minimised' : view.id === frontViewId ? 'front' : 'open'}>
-              <button
-                className="workspace-tab"
-                data-view-id={view.id}
-                ref={(element) => {
-                  if (element) tabElements.current.set(view.id, element);
-                  else tabElements.current.delete(view.id);
-                }}
-                type="button"
-                aria-label={minimizedViewIds.has(view.id) ? `Restore ${view.title}` : `Show ${view.title}`}
-                aria-current={view.id === frontViewId ? 'true' : undefined}
-                title={view.title}
-                onClick={() => { if (minimizedViewIds.has(view.id)) restoreView(view.id); else focusView(view.id); }}
-              >
-                <WindowIcon name="view" />
-                <span>{view.title}</span>
-              </button>
-              <button className="workspace-tab-close" type="button" aria-label={`Close ${view.title}`} title={`Close ${view.title}`}
-                onClick={() => closeView(view.id)}>
-                <WindowIcon name="close" />
-              </button>
-            </span>
-          ))}
+          {tabViews.map((view) => {
+            const pinned = pinnedViewIds.has(view.id);
+            const canPin = Boolean(pins && (view.content.status === 'generated' || pinned));
+            const pinPending = pendingPinIds.has(view.id);
+            return (
+              <span className="workspace-tab-item" key={view.id} data-view-id={view.id} data-pinned={pinned || undefined}
+                data-state={minimizedViewIds.has(view.id) ? 'minimised' : view.id === frontViewId ? 'front' : 'open'}>
+                <button
+                  className="workspace-tab"
+                  data-view-id={view.id}
+                  ref={(element) => {
+                    if (element) tabElements.current.set(view.id, element);
+                    else tabElements.current.delete(view.id);
+                  }}
+                  type="button"
+                  aria-label={minimizedViewIds.has(view.id) ? `Restore ${view.title}` : `Show ${view.title}`}
+                  aria-current={view.id === frontViewId ? 'true' : undefined}
+                  title={view.title}
+                  onClick={() => { if (minimizedViewIds.has(view.id)) restoreView(view.id); else focusView(view.id); }}
+                >
+                  <WindowIcon name="view" />
+                  <span>{view.title}</span>
+                </button>
+                {canPin && (
+                  <button className="workspace-tab-pin" type="button" aria-pressed={pinned} disabled={pinPending}
+                    aria-label={`${pinned ? 'Unpin' : 'Pin'} ${view.title}`} title={pinned ? 'Unpin' : 'Pin'}
+                    onClick={() => requestPinChange(view.id, !pinned)}>
+                    <WindowIcon name="pin" />
+                  </button>
+                )}
+                {!pinned && (
+                  <button className="workspace-tab-close" type="button" aria-label={`Close ${view.title}`}
+                    title={pinPending ? 'Wait for the pin change to finish' : `Close ${view.title}`}
+                    disabled={pinPending}
+                    onClick={() => closeView(view.id)}>
+                    <WindowIcon name="close" />
+                  </button>
+                )}
+              </span>
+            );
+          })}
         </nav>,
       )}
       <div
@@ -860,7 +1262,10 @@ export const Workspace = forwardRef<WorkspaceController, {
             '--workspace-height-n': currentGeometry.height,
           } as CSSProperties;
           const actionPending = pendingActions.has(view.id);
-          // The conversation is docked onto the composer: no free move/resize; the composer handle shows and hides it.
+          const pinned = pinnedViewIds.has(view.id);
+          const pinPending = pendingPinIds.has(view.id);
+          const canPin = Boolean(pins && (view.content.status === 'generated' || pinned));
+          // The conversation stays docked onto the composer and has no free move/resize controls.
           const docked = view.presentation === 'conversation';
           const retry = view.content.status === 'error' ? view.content.retry : undefined;
           const resume = view.content.status === 'interrupted' ? view.content.resume : undefined;
@@ -905,6 +1310,7 @@ export const Workspace = forwardRef<WorkspaceController, {
                     onPointerMove: updateGesture,
                     onPointerUp: endGesture,
                     onPointerCancel: endGesture,
+                    onLostPointerCapture: endGesture,
                   })}
                 >
                   {docked ? <span className="visually-hidden">{view.title}</span> : view.title}
@@ -933,6 +1339,7 @@ export const Workspace = forwardRef<WorkspaceController, {
                         onPointerMove={updateGesture}
                         onPointerUp={endGesture}
                         onPointerCancel={endGesture}
+                        onLostPointerCapture={endGesture}
                         onKeyDown={(event) => moveHandleKeyDown(event, view.id, index)}
                       >
                         Move
@@ -966,19 +1373,27 @@ export const Workspace = forwardRef<WorkspaceController, {
                         onPointerMove={updateGesture}
                         onPointerUp={endGesture}
                         onPointerCancel={endGesture}
+                        onLostPointerCapture={endGesture}
                         onKeyDown={(event) => resizeHandleKeyDown(event, view.id, index)}
                       >
                         Resize
                       </button>
                     </div>
                   </details>}
+                  {canPin && <button className="workspace-icon-control workspace-pin-control" type="button" aria-pressed={pinned} disabled={pinPending}
+                    aria-label={`${pinPending ? (pinned ? 'Unpinning' : 'Pinning') : pinned ? 'Unpin' : 'Pin'} ${view.title}`}
+                    title={pinned ? 'Unpin' : 'Pin'} onClick={() => requestPinChange(view.id, !pinned)}>
+                    <WindowIcon name="pin" />
+                  </button>}
                   {!phone && <button className="workspace-icon-control" type="button" aria-label={`${maximized ? 'Restore size of' : 'Maximise'} ${view.title}`} onClick={() => setMaximizedViewId(maximized ? null : view.id)}>
                     <WindowIcon name={maximized ? 'restore' : 'maximise'} />
                   </button>}
                   <button className="workspace-icon-control" type="button" aria-label={`Minimise ${view.title}`} onClick={() => minimiseView(view.id)}>
                     <WindowIcon name="minimise" />
                   </button>
-                  <button className="workspace-icon-control workspace-close-control" type="button" aria-label={`Close ${view.title}`} onClick={() => closeView(view.id)}>
+                  <button className="workspace-icon-control workspace-close-control" type="button"
+                    disabled={pinPending} title={pinPending ? 'Wait for the pin change to finish' : undefined}
+                    aria-label={pinned ? `Close ${view.title} to pinned tab` : `Close ${view.title}`} onClick={() => closeView(view.id)}>
                     <WindowIcon name="close" />
                   </button>
                 </div>
@@ -1011,6 +1426,7 @@ export const Workspace = forwardRef<WorkspaceController, {
                 {view.content.status === 'generated' && (
                   <GeneratedViewRenderer
                     view={view.content.view}
+                    onPinChange={(pinned) => requestPinChange(view.id, pinned)}
                     {...(view.content.trustedBlobHost ? { trustedBlobHost: view.content.trustedBlobHost } : {})}
                   />
                 )}
@@ -1025,6 +1441,7 @@ export const Workspace = forwardRef<WorkspaceController, {
                   onPointerMove={updateGesture}
                   onPointerUp={endGesture}
                   onPointerCancel={endGesture}
+                  onLostPointerCapture={endGesture}
                 />
                 <div
                   className="workspace-resize-edge workspace-resize-edge-bottom"
@@ -1033,6 +1450,7 @@ export const Workspace = forwardRef<WorkspaceController, {
                   onPointerMove={updateGesture}
                   onPointerUp={endGesture}
                   onPointerCancel={endGesture}
+                  onLostPointerCapture={endGesture}
                 />
                 <div
                   className="workspace-resize-edge workspace-resize-edge-corner"
@@ -1041,6 +1459,7 @@ export const Workspace = forwardRef<WorkspaceController, {
                   onPointerMove={updateGesture}
                   onPointerUp={endGesture}
                   onPointerCancel={endGesture}
+                  onLostPointerCapture={endGesture}
                 />
               </>}
             </article>

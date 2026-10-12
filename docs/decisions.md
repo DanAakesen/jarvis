@@ -1,5 +1,22 @@
 # Decisions
 
+## Workspace handlers and confirmed pins (12 October 2026)
+
+Ship #430 whole after chat-only #751, as directed by Dan through the coordinator.
+Keep the agreed smart-fit/region/manual model, independent stacking order and
+first-named-window-frontmost cascade. Phones focus instead of applying desktop
+geometry. Preserve merged camera preview ownership and chat loading.
+
+Pin/unpin acknowledgements wait for storage; competing requests do not invent
+success. Pending controls are disabled, stale reads cannot resurrect later
+unpins, and updates persist the newest view before their save is acknowledged.
+Close keeps saved pins; only Unpin removes them. Restore safely as tabs.
+Bound transient GET recovery and expose sign-in errors rather than replacing
+them with generic storage failures. The original idle error's transport/auth
+cause is still unproven. Eight scoped suites (237 passes), types, scoped lint,
+build and desktop/phone synthetic workflows pass; live voice/device acceptance
+remains after #621. Earlier local-only/pending-check statements are superseded.
+
 ## Chat loading and release split (12 October 2026)
 
 Dan requested a visible chat window before messages finish loading, rather than

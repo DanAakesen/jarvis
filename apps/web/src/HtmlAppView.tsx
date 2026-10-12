@@ -5,6 +5,7 @@ import { useConversationIntents } from './conversation-intents';
 import { useKnowledgeBackend } from './knowledge/knowledge-context';
 import { Loader } from './Loader';
 import { reportFrameReadback } from './window-readback';
+import type { SessionCommandResult } from './session-commands';
 import { htmlAppDocument, minAppHeight, readHtmlAppMessage, readHtmlArtifact } from './html-app-document';
 
 type Load = { key: string } & ({ status: 'loading' } | { status: 'error'; message: string; retry: boolean } | { status: 'ready'; artifact: HtmlArtifact; document: string });
@@ -21,7 +22,10 @@ function hostTheme() {
 }
 
 /** A model-written HTML app or research report in a sandboxed frame (P8-41, #429). */
-export function HtmlAppView({ artifactId, title, updatedAt }: { artifactId: string; title: string; updatedAt?: string | undefined }) {
+export function HtmlAppView({ artifactId, title, updatedAt, onPinChange }: {
+  artifactId: string; title: string; updatedAt?: string | undefined;
+  onPinChange?: (pinned: boolean) => Promise<SessionCommandResult>;
+}) {
   const backend = useKnowledgeBackend();
   const intents = useConversationIntents();
   const frame = useRef<HTMLIFrameElement>(null);
@@ -106,6 +110,14 @@ export function HtmlAppView({ artifactId, title, updatedAt }: { artifactId: stri
         case 'pin':
         case 'unpin':
           if (!clicked) return;
+          if (onPinChange) {
+            setNotice('Saving pin change...');
+            void onPinChange(message.type === 'pin')
+              .then((result) => setNotice(result.applied ? (message.type === 'pin' ? 'Pinned.' : 'Unpinned.')
+                : result.reason ?? 'Jarvis could not change the pin.'))
+              .catch(() => setNotice('Jarvis could not change the pin.'));
+            return;
+          }
           void call({ method: 'PATCH', body: { pinned: message.type === 'pin' } })
             .then((response) => setNotice(response.ok ? (message.type === 'pin' ? 'Pinned.' : 'Unpinned.') : 'Jarvis could not change the pin.'))
             .catch(() => setNotice('Jarvis could not change the pin.'));
@@ -113,7 +125,7 @@ export function HtmlAppView({ artifactId, title, updatedAt }: { artifactId: stri
     };
     window.addEventListener('message', onMessage);
     return () => window.removeEventListener('message', onMessage);
-  }, [call, intents]);
+  }, [call, intents, onPinChange]);
 
   if (!backend?.backendUrl) return <p className="html-app-state" role="status">This window opens in the Jarvis workspace.</p>;
   if (load.key !== loadKey || load.status === 'loading') return <Loader variant="lines" label={`Opening ${title}…`} />;
