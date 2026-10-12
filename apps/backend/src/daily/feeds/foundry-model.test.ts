@@ -63,4 +63,11 @@ describe('existing-identity tool-free Foundry mail boundary', () => {
     for (let i = 0; i < 50; i++) await semantic(f.model,'attention',data,signal());
     await expect(semantic(f.model,'attention',data,signal())).rejects.toThrow('capability unavailable'); expect(f.fetcher).toHaveBeenCalledTimes(50);
   });
+  it('cancels a pending canonical selection without acquiring a token or making a model request', async () => {
+    const f = fixture(); f.settings.read = () => new Promise(() => undefined);
+    const controller = new AbortController();
+    const identity = f.model.cacheIdentity!(controller.signal); controller.abort(new Error('Synthetic selection cancellation'));
+    await expect(identity).rejects.toThrow('Synthetic selection cancellation');
+    expect(f.getToken).not.toHaveBeenCalled(); expect(f.fetcher).not.toHaveBeenCalled();
+  });
 });

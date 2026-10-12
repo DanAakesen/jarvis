@@ -66,7 +66,11 @@ export function createFoundryMailSemanticModel(
   };
   return {
     strictSchema: true,toolFree: true,
-    async cacheIdentity() { try { return JSON.stringify(await cancellable(selection(),AbortSignal.timeout(30000))); } catch { throw new MailSemanticUnavailable(); } },
+    async cacheIdentity(signal) {
+      const deadline = signal ? AbortSignal.any([signal,AbortSignal.timeout(30000)]) : AbortSignal.timeout(30000);
+      try { return JSON.stringify(await cancellable(selection(),deadline)); }
+      catch { signal?.throwIfAborted(); throw new MailSemanticUnavailable(); }
+    },
     async complete(input,signal) {
       signal.throwIfAborted();
       if (running || input.tools.length || input.maxOutputTokens !== 1024 || !['attention','order'].includes(input.purpose)) throw new MailSemanticUnavailable();

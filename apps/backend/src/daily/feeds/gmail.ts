@@ -10,7 +10,7 @@ export interface ClassificationInput { threadId: string; subject: string; messag
 /** Server-owned protected-model capability; never a tool argument or provider key. */
 export interface MailSemanticModel {
   readonly strictSchema: true; readonly toolFree: true;
-  cacheIdentity?(): Promise<string>;
+  cacheIdentity?(signal?: AbortSignal): Promise<string>;
   complete(input: { purpose: 'attention' | 'order'; instructions: string; data: ClassificationInput; schema: Record<string, unknown>; tools: readonly never[]; maxOutputTokens: 1024 }, signal: AbortSignal): Promise<unknown>;
 }
 export class MailSemanticUnavailable extends Error { constructor() { super('Protected mail semantic capability unavailable'); } }
@@ -107,7 +107,7 @@ export class DailyGmailFeed {
       const account = string(profile.emailAddress, 320).trim().toLowerCase();
       const history = string(profile.historyId);
       if (!/^\d{1,32}$/u.test(history)) throw new TypeError('Invalid mailbox history generation');
-      const identity = await this.model.cacheIdentity?.() ?? 'fixed-injected-model';
+      const identity = await this.model.cacheIdentity?.(deadline) ?? 'fixed-injected-model';
       deadline.throwIfAborted();
       const version = JSON.stringify([account, history, identity, now.slice(0,10)]);
       let scan = this.scans.get(owner);
@@ -143,8 +143,8 @@ export class DailyGmailFeed {
         const key = createHash('sha256').update(JSON.stringify([purpose,input])).digest('hex');
         const cached = scan.cache.get(key); if (cached) return structuredClone(cached);
         if (++classifications > 50) throw new MailCoverageLimit('Classification continuation required');
-        const value = await semantic(this.model,purpose,input,deadline);
         if (scan.cache.size >= 2000) throw new MailCoverageLimit('Classification cache exceeds bounds');
+        const value = await semantic(this.model,purpose,input,deadline);
         scan.cache.set(key,structuredClone(value)); return value;
       };
       // Sequential work bounds provider/model concurrency to one, unlike the legacy producer.
@@ -197,9 +197,10 @@ export class DailyGmailFeed {
           this.scans.delete(owner); throw new MailCoverageLimit('Mailbox changed during scan');
         }
       }
-      if ((await this.model.cacheIdentity?.() ?? 'fixed-injected-model') !== identity) {
+      if ((await this.model.cacheIdentity?.(deadline) ?? 'fixed-injected-model') !== identity) {
         this.scans.delete(owner); throw new MailCoverageLimit('Model selection changed during scan');
       }
+      deadline.throwIfAborted();
       // Re-enumerate the rolling window next time, while reusing only this
       // unchanged mailbox/model generation's full rows and semantic results.
       scan.ids = new Set(); scan.pages = new Set(); delete scan.token; scan.listed = false;
