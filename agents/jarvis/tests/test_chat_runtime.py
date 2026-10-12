@@ -121,6 +121,39 @@ def test_chat_streams_text_and_sets_tool_source_message() -> None:
     assert model.closed
 
 
+def test_reused_agent_reloads_history_and_returns_phase_timings() -> None:
+    loaded: list[int] = []
+
+    async def context(_token: str, _message_id: str, _text: str, _language: str):
+        loaded.append(len(loaded) + 1)
+        chat_telemetry.log_latency(
+            "chat_history_verification", chat_telemetry.time.monotonic() - 0.001
+        )
+        chat_telemetry.log_latency("chat_context", chat_telemetry.time.monotonic() - 0.001)
+        return [ModelMessage("user", f"backend history {loaded[-1]}")]
+
+    app, model = app_with(context)
+    with TestClient(app) as client:
+        responses = [
+            client.post(
+                "/invocations",
+                json={
+                    "messageId": "42", "text": "Hello", "language": "en",
+                    "delegatedAuthorization": AUTHORIZATION,
+                },
+            )
+            for _ in range(2)
+        ]
+
+    assert all(response.status_code == 200 for response in responses)
+    assert loaded == [1, 2]
+    assert model.messages[0].content == "backend history 2"
+    for response in responses:
+        done = json.loads(response.text.split("event: done\ndata: ", 1)[1].split("\n", 1)[0])
+        assert done["agentTimings"]["chat_history_verification"] <= 600_000
+        assert done["agentTimings"]["chat_context"] <= 600_000
+
+
 def test_steered_invocation_uses_saved_language_and_authorized_round_boundary(monkeypatch) -> None:
     history = {
         "messages": [

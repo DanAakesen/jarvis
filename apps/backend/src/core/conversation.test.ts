@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { buildApp, type BuildAppOptions } from '../app.js';
 import { loadConfig } from '../config.js';
 import { createLogger } from '../logging.js';
-import { ChatAgentError } from './chat-agent.js';
+import { ChatAgentError, createFoundryAgentSessionId } from './chat-agent.js';
 import type { ConversationStore } from './conversation-store.js';
 import type { ReflexClassifier } from './reflex.js';
 import type { ToolCallStore } from './tool-calls.js';
@@ -165,6 +165,48 @@ describe('conversation routes', () => {
     }
   });
 
+  it('passes owner-scoped session affinity and logs only allowlisted agent timings', async () => {
+    const records: string[] = [];
+    const output = new Writable({ write(chunk: Buffer, _encoding, done) {
+      records.push(chunk.toString());
+      done();
+    } });
+    const seenSessionIds: Array<string | undefined> = [];
+    const agent = { stream: vi.fn(async function* (input: import('./chat-agent.js').ConversationAgentInput) {
+      seenSessionIds.push(input.agentSessionId);
+      input.onAgentPhaseTimings?.({ chat_context: 12.5 });
+      input.onAgentSessionTelemetry?.({
+        sessionIdUsed: true, sessionStartType: 'warm', platformMs: 18, agentMs: 4,
+      });
+      yield 'answer';
+    }) };
+    const app = buildApp(config, createLogger(config, undefined, output), {
+      auth, conversationStore: storeFixture(), conversationAgent: agent,
+    });
+    apps.push(app);
+
+    const response = await app.inject({
+      method: 'POST', url: '/conversation/sessions/41/turns', headers,
+      payload: { text: 'private-prompt' },
+    });
+    const expectedSessionId = createFoundryAgentSessionId(config.auth.ownerObjectId, '41');
+    expect(response.statusCode).toBe(200);
+    expect(seenSessionIds).toEqual([expectedSessionId]);
+    const done = JSON.parse(response.body.split('event: done\ndata: ')[1]!.split('\n')[0]!) as
+      Record<string, unknown>;
+    expect(done.agentTimings).toEqual({ chat_context: 12.5 });
+    const events = records.map((record) => JSON.parse(record) as Record<string, unknown>);
+    expect(events).toContainEqual(expect.objectContaining({
+      msg: 'chat.agent_session', sessionIdUsed: true, sessionStartType: 'warm',
+      platformMs: 18, agentMs: 4,
+    }));
+    expect(events).toContainEqual(expect.objectContaining({
+      msg: 'chat.latency', phase: 'chat_context', durationMs: 12.5,
+    }));
+    expect(JSON.stringify(events)).not.toContain('private-prompt');
+    expect(JSON.stringify(events)).not.toContain(expectedSessionId);
+  });
+
   it('binds an image to the authorized immutable Dan message and persists no frame handle', async () => {
     const frames = new FrameStore();
     const frameId = await frames.put({ ownerObjectId: config.auth.ownerObjectId,
@@ -309,9 +351,12 @@ describe('conversation routes', () => {
     expect(response.body).toContain('event: user');
     expect(response.body).toContain('event: delta');
     expect(response.body).toContain('event: done');
-    expect(chatAgent.stream).toHaveBeenCalledWith({
+    expect(chatAgent.stream).toHaveBeenCalledWith(expect.objectContaining({
       messageId: '42',
       sessionId: '41',
+      agentSessionId: createFoundryAgentSessionId(config.auth.ownerObjectId, '41'),
+      onAgentPhaseTimings: expect.any(Function),
+      onAgentSessionTelemetry: expect.any(Function),
       onVisualResult: expect.any(Function),
       turnId: '42',
       text: 'Hej Jarvis',
@@ -319,7 +364,7 @@ describe('conversation routes', () => {
       visualContext: {
         source: 'screen', capturedAt: expect.any(String), description: 'A browser window shows a chart.',
       },
-    }, headers.authorization, expect.any(AbortSignal));
+    }), headers.authorization, expect.any(AbortSignal));
     expect(store.addMessage).toHaveBeenCalledWith({
       sessionId: '41',
       role: 'dan',

@@ -2121,14 +2121,37 @@ These are not deployed timings. The live acceptance target remains at most
 2.5 seconds to the first token and 4 seconds for a short greeting.
 
 The deployed backend configuration has `minReplicas: 1` / `maxReplicas: 1`;
-this is not a Foundry hosted-agent replica setting. The Jarvis version definition
-in `.github/workflows/deploy.yml` sets a 120-second session idle timeout and
-routes all traffic to the active version. It does not establish an always-warm
-hosted container. The reported ~4.5 s gap before `invoke_agent` remains a gateway/
-container-routing hypothesis, not a confirmed cold-start diagnosis. Chat sends
-no caller-chosen `agent_session_id`: #344's reuse approach was reverted in #356
-after Foundry rejected it. Verify any future routing/replica change against the
-provider contract and live evidence before adopting it.
+this is not a Foundry hosted-agent replica setting. `.github/workflows/deploy.yml`
+sets the hosted Jarvis version's `session_configuration.idle_timeout_seconds` to
+3600 (the 60-minute maximum in [Manage hosted agent sessions](https://learn.microsoft.com/azure/foundry/agents/how-to/manage-hosted-sessions))
+and routes all traffic to the active version. This allows longer session reuse;
+it does not establish an always-warm hosted container.
+
+Every chat invocation derives a UUIDv5 `agent_session_id` from the authenticated
+owner object ID and numeric Jarvis conversation-session ID, then sends it only in
+the Invocations query string. User text and the raw owner/session IDs are never
+part of that key or telemetry. A platform 4xx rejection is logged by status only
+and retried once without session affinity. Each invocation still validates `/me`
+and reloads its source message and conversation history from the backend; chat
+turns do not depend on prior sandbox memory. The opt-in
+`x-ms-debug-latency-enabled: true` response headers are reduced to the
+`chat.agent_session` allowlist (session start type plus bounded platform,
+provisioning, container and agent milliseconds). Agent phase durations
+(`chat_history_verification`, `chat_context`, `tool_catalogue`, `settings`,
+`turn_context`, `prompt_build`, `model_first_delta`) are returned in the agent
+completion event and logged by the backend as allowlisted `chat.latency` events.
+
+The reported 5–10 s model-to-first-delta interval is not currently attributable
+between prompt processing and reasoning: the provider exposes one elapsed
+first-delta duration, not separate prompt-ingestion and reasoning durations.
+The reported ~15,000 prompt characters are a size observation, not evidence for
+how many seconds prompt size costs. Keep the selected model, reasoning effort,
+capabilities and tool schemas unchanged. The smallest safe prompt experiment is
+to remove only proven duplicate prose from the shared capability instructions,
+without removing a capability or safety rule; preserve L120's migration rule
+and L121's plain root-object tool schemas if an instruction/schema change is
+later approved. The reported pre-callback gap remains a platform cold-start
+hypothesis until `chat.agent_session` is observed after deployment.
 
 The conversation store shares the process-owned SQL pool and uses the existing
 group-one schema; no migration or new service is required. Tool calls continue to
