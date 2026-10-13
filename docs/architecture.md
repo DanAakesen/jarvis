@@ -2080,8 +2080,10 @@ unknown deployment rates and subscription-backed research/image-generation costs
 remain explicitly unverified. `/usage` returns daily UTC and monthly UTC cost
 totals plus research, web-research and image-generation tool-call counts. All-time
 daily totals are bounded to the latest 90 days; monthly totals cover the selected
-period. Provider-reported chat/voice tokens, SQL collection and live billing have
-not been verified against a deployed service or invoice.
+period. Migration `0045_smoke_usage_role.sql` extends the usage-role constraint
+for post-deploy chat-canary token records; its down batch refuses rollback while
+such rows remain. Provider-reported chat/voice tokens, SQL collection and live
+billing have not been verified against a deployed service or invoice.
 
 P9-31 adds the agent-only `get_usage` tool to the shared registry. It uses the
 existing usage store and shared period/entry contracts to return USD and DKK
