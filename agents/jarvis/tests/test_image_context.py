@@ -23,6 +23,7 @@ from test_model_client import (
 )
 
 import chat_runtime
+import chat_telemetry
 from jarvis_tools import current_chat_turn_id, current_message_id, current_steering_fetcher
 from model_client import image_input_rejected
 from state import ConversationHistory, ModelImage, ModelMessage
@@ -201,20 +202,28 @@ def test_handle_only_resolver_failure_uses_real_caption_or_explicit_absence(
 
 @pytest.mark.parametrize("reason", ["image_rejected", "image_context_limit"])
 @pytest.mark.asyncio
-async def test_handle_only_model_failure_requests_caption_before_single_text_retry(reason):
+async def test_handle_only_model_failure_requests_caption_before_single_text_retry(
+    monkeypatch, reason,
+):
+    clock = [100.0]
+    monkeypatch.setattr(chat_telemetry.time, "monotonic", lambda: clock[0])
     backend = FakeBackend()
-    model, transport = client([completed()], backend=backend)
+    model, transport = client([
+        SimpleNamespace(type="response.output_text.delta", delta="A blue cup."), completed(),
+    ], backend=backend)
     requests = []
     calls = []
     original = transport.responses.create
 
     async def create(**kwargs):
         requests.append(kwargs)
+        clock[0] += 5 if len(requests) == 1 else 4
         if len(requests) == 1 and reason == "image_rejected":
             raise ProviderRejection()
         return await original(**kwargs)
 
     async def fallback(actual_reason):
+        clock[0] += 6
         release = [json.loads(request.content) for request in backend.requests
                    if request.url.path == "/usage/foundry"]
         assert len(release) == 1
@@ -228,12 +237,18 @@ async def test_handle_only_model_failure_requests_caption_before_single_text_ret
     transport.responses.create = create
     token = current_visual_fallback.set(fallback)
     reservation_token = current_image_reservation.set({"sessionId": "41", "itemId": "frame_1"})
+    timings = {}
+    timing_token = chat_telemetry.current_chat_phase_timings.set(timings)
+    started_token = chat_telemetry.current_chat_started_at.set(98.0)
     try:
         text = "x" * 400_001 if reason == "image_context_limit" else "What is this?"
         assert [delta async for delta in model.complete_chat(
             [ModelMessage("user", text, (ModelImage(JPEG),))], "en",
-        )] == []
+        )] == ["A blue cup."]
+        assert chat_telemetry.current_model_started_at.get() is None
     finally:
+        chat_telemetry.current_chat_started_at.reset(started_token)
+        chat_telemetry.current_chat_phase_timings.reset(timing_token)
         current_visual_fallback.reset(token)
         current_image_reservation.reset(reservation_token)
         await model.close()
@@ -242,6 +257,8 @@ async def test_handle_only_model_failure_requests_caption_before_single_text_ret
     assert "Real fallback caption: a blue cup." in json.dumps(requests[-1])
     assert JPEG not in json.dumps(requests[-1])
     assert requests[-1]["input"][-1]["content"] == text
+    assert timings["model_to_first_delta"] == (15_000 if reason == "image_rejected" else 5_000)
+    assert timings["agent_pre_model"] == (2_000 if reason == "image_rejected" else 8_000)
 
 
 @pytest.mark.asyncio

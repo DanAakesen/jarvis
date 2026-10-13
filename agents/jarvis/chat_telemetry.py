@@ -25,6 +25,7 @@ current_chat_phase_timings: ContextVar[dict[str, float] | None] = ContextVar(
     "chat_phase_timings", default=None
 )
 current_chat_started_at: ContextVar[float | None] = ContextVar("chat_started_at", default=None)
+current_model_started_at: ContextVar[float | None] = ContextVar("model_started_at", default=None)
 
 
 def log_latency(phase: str, started: float, outcome: str = "ok") -> float:

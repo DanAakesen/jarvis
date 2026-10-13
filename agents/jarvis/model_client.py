@@ -22,7 +22,12 @@ from openai import AsyncOpenAI
 from opentelemetry import trace
 from opentelemetry.trace import SpanKind, Status, StatusCode
 
-from chat_telemetry import current_chat_started_at, latency_span, log_latency
+from chat_telemetry import (
+    current_chat_started_at,
+    current_model_started_at,
+    latency_span,
+    log_latency,
+)
 from jarvis_tools import (
     BUILT_IN_MODE_INSTRUCTIONS,
     INSTRUCTIONS,
@@ -436,6 +441,7 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
         role = "chat" if has_image else "voice"
         if has_image and settings is None:
             settings = await self.session_settings()
+        model_timing_token = current_model_started_at.set(None)
         try:
             async with aclosing(
                 self._complete(messages, self._system_prompt, settings, role=role)
@@ -456,6 +462,8 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
             ) as response:
                 async for delta in response:
                     yield delta
+        finally:
+            current_model_started_at.reset(model_timing_token)
 
     async def complete_chat(
         self,
@@ -476,6 +484,7 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                 + reflex_note
                 + " Relay the result honestly and acknowledge briefly. Do not repeat the action."
             )
+        model_timing_token = current_model_started_at.set(None)
         try:
             async with aclosing(self._complete(
                 messages, instructions, settings, load_settings=settings is None,
@@ -494,6 +503,8 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
             )) as response:
                 async for delta in response:
                     yield delta
+        finally:
+            current_model_started_at.reset(model_timing_token)
 
     async def _caption_messages(
         self, messages: Sequence[ModelMessage], rejection: ImageInputRejected, role: str,
@@ -625,7 +636,7 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                         current_message_id.set(message_id)
                     return bool(steering_messages)
 
-                first_model_started = None
+                first_model_started = current_model_started_at.get()
                 for round_number in range(1, MAX_TOOL_ROUNDS + 1):
                     with latency_span("model_coordination"):
                         await append_steering()
@@ -657,6 +668,7 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                     started = time.monotonic()
                     if first_model_started is None:
                         first_model_started = started
+                        current_model_started_at.set(started)
                         chat_started = current_chat_started_at.get()
                         if chat_started is not None:
                             log_latency("agent_pre_model", chat_started)

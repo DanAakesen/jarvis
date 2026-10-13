@@ -2416,7 +2416,8 @@ logged by the backend as allowlisted `chat.latency` events. P9-99 adds:
   provider authentication. This overlaps, rather than adds to, model first delta.
 - `model_first_delta`: the first text-emitting model round's request-to-text time.
 - `model_to_first_delta`: first model request through first text, including any
-  preceding tool-only model rounds, tool execution, usage writes and coordination.
+  preceding tool-only model rounds, tool execution, usage writes, coordination
+  and image-to-caption fallback. Its timestamp survives a rejected image request.
 - `agent_first_delta`: agent request entry through first outgoing text.
 - `agent_auth`: backend authentication to Foundry, measured by the backend.
 - `session_start`: backend invocation-to-first-text minus `agent_first_delta`.
