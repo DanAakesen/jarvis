@@ -1,10 +1,10 @@
 import Fastify,{ type FastifyRequest } from 'fastify';
 import { randomUUID } from 'node:crypto';
-import { authorizeHealth,healthUploadLimit,opaqueId,sha256,HealthConflict,HealthDenied,HealthUnavailable,
+import { authorizeHealth,healthUploadLimit,metadataLimit,opaqueId,sha256,HealthConflict,HealthDenied,HealthUnavailable,
   type HealthCapability,type HealthCredentialVerifier,type HealthKind } from './contracts.js';
 import type { AzureHealthBuffer,UploadIdentity } from './azure-buffer.js';
 
-declare module 'fastify' { interface FastifyRequest { healthUploadCapability: HealthCapability | null; healthUploadIdentity: UploadIdentity | null; healthUploadRelease: (() => void) | null } }
+declare module 'fastify' { interface FastifyRequest { healthUploadCapability: HealthCapability | null; healthUploadIdentity: UploadIdentity | null; healthUploadRelease: (() => void) | null; healthHeartbeatName: string | null } }
 const routes = { '/api/health/ingest': 'upload','/api/health/heartbeat': 'heartbeat' } as const;
 function header(request: FastifyRequest,name: string): string | undefined {
   if (request.raw.rawHeaders.filter((value,i) => i % 2 === 0 && value.toLowerCase() === name).length > 1) throw new TypeError('Duplicate header');
@@ -26,11 +26,17 @@ export function buildHealthUploadServer(options: { enabled?: boolean; buffer?: A
   if (options.enabled !== true) return app;
   app.decorateRequest('healthUploadCapability',null); app.decorateRequest('healthUploadIdentity',null);
   app.decorateRequest('healthUploadRelease',null); let active = 0;
+  app.decorateRequest('healthHeartbeatName',null);
   app.addHook('onResponse',async request => request.healthUploadRelease?.());
   app.removeContentTypeParser('application/json');
   app.addContentTypeParser('application/json',{ parseAs: 'buffer',bodyLimit: healthUploadLimit },(_request,body,done) => {
+    if (_request.routeOptions.url === '/api/health/heartbeat') { done(null,body); return; }
     try { JSON.parse(new TextDecoder('utf-8',{ fatal: true }).decode(body as Buffer)); done(null,body); }
     catch { done(new TypeError('Invalid JSON')); }
+  });
+  app.addContentTypeParser('*',{ parseAs: 'buffer',bodyLimit: healthUploadLimit },(request,body,done) => {
+    if (request.routeOptions.url === '/api/health/heartbeat') done(null,body);
+    else done(Object.assign(new Error('JSON required'),{ statusCode: 415 }));
   });
   app.addHook('onRequest',async request => {
     const kind: HealthKind | undefined = routes[request.routeOptions.url as keyof typeof routes];
@@ -52,13 +58,18 @@ export function buildHealthUploadServer(options: { enabled?: boolean; buffer?: A
     if (automation !== undefined) opaqueId(automation); if (session !== undefined) opaqueId(session);
     if (kind === 'upload' && (!automation || !session)) throw new TypeError('Missing upload identity');
     request.healthUploadIdentity = { automationId: automation ?? 'heartbeat',sessionId: session ?? randomUUID() };
-    for (const name of ['checksum','x-payload-checksum']) { const checksum = header(request,name); if (checksum !== undefined && !/^[a-f\d]{64}$/iu.test(checksum)) throw new TypeError('Invalid checksum'); }
+    if (kind === 'heartbeat') {
+      const name = header(request,'shortcut-name') ?? 'Daily Overview heartbeat';
+      opaqueId(name,256); request.healthHeartbeatName = name;
+    } else for (const name of ['checksum','x-payload-checksum']) { const checksum = header(request,name); if (checksum !== undefined && !/^[a-f\d]{64}$/iu.test(checksum)) throw new TypeError('Invalid checksum'); }
   });
-  for (const [url,kind] of Object.entries(routes)) app.post(url,async (request,reply) => {
+  for (const [url,kind] of Object.entries(routes)) app.post(url,{ bodyLimit: kind === 'heartbeat' ? metadataLimit : healthUploadLimit },async (request,reply) => {
     reply.header('Cache-Control','no-store');
-    const body = request.body; if (!Buffer.isBuffer(body) || body.length === 0) throw new TypeError('Invalid JSON body');
+    // Source heartbeat reads headers, not a body. Retain only bounded private provenance.
+    const body = kind === 'heartbeat' ? Buffer.from(JSON.stringify({ shortcutName: request.healthHeartbeatName,checkedFeeds: ['metrics','workouts'] })) : request.body;
+    if (!Buffer.isBuffer(body) || body.length === 0) throw new TypeError('Invalid JSON body');
     const checksum = sha256(body);
-    for (const name of ['checksum','x-payload-checksum']) { const expected = header(request,name); if (expected && expected.toLowerCase() !== checksum) throw new HealthConflict(); }
+    if (kind === 'upload') for (const name of ['checksum','x-payload-checksum']) { const expected = header(request,name); if (expected && expected.toLowerCase() !== checksum) throw new HealthConflict(); }
     if (!options.buffer || !request.healthUploadCapability || !request.healthUploadIdentity) throw new HealthDenied();
     const controller = new AbortController(); const aborted = () => controller.abort(); request.raw.once('aborted',aborted);
     const closed = () => { if (!reply.raw.writableFinished) controller.abort(); }; reply.raw.once('close',closed);

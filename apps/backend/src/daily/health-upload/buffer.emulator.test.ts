@@ -2,6 +2,7 @@ import { fork,spawn,execFile,type ChildProcess } from 'node:child_process';
 import { once } from 'node:events';
 import { mkdtemp,rm } from 'node:fs/promises';
 import { createServer } from 'node:net';
+import { request as httpRequest } from 'node:http';
 import { tmpdir } from 'node:os';
 import { dirname,join } from 'node:path';
 import { createRequire } from 'node:module';
@@ -157,6 +158,41 @@ describe('actual HTTP -> private Blob -> pointer Queue on synthetic Azurite',() 
     expect(heartbeat.status).toBe(202); expect((await heartbeat.json()).processing).toBe('not-confirmed');
     expect((await manifests())[0]?.value).toMatchObject({ ownerObjectId: owner,kind: 'heartbeat' });
     await raw.setAccessPolicy('blob'); const failure = await post(address); expect(failure.status).toBe(503);
+    expect(await manifests()).toHaveLength(1);
+  });
+  it('durably accepts source-compatible bodyless heartbeat with or without content type',async () => {
+    const address = await start();
+    for (const extra of [{},{ 'content-type': 'application/json','shortcut-name': 'Synthetic shortcut marker' }] as Record<string,string>[]) {
+      const response = await fetch(address + '/api/health/heartbeat',{ method: 'POST',headers: { authorization: `Bearer ${token}`,...extra } });
+      expect(response.status).toBe(202); expect(await response.json()).toMatchObject({ status: 'accepted',processing: 'not-confirmed' });
+    }
+    const stored = await manifests(); expect(stored).toHaveLength(2);
+    const records = await Promise.all(stored.map(async row => JSON.parse((await raw.getBlobClient(row.value.rawKey as string).downloadToBuffer()).toString())));
+    expect(records).toEqual(expect.arrayContaining([
+      { shortcutName: 'Daily Overview heartbeat',checkedFeeds: ['metrics','workouts'] },
+      { shortcutName: 'Synthetic shortcut marker',checkedFeeds: ['metrics','workouts'] },
+    ]));
+    for (const item of (await queue.peekMessages({ numberOfMessages: 32 })).peekedMessageItems) {
+      expect(item.messageText).not.toContain('shortcut'); expect(item.messageText).not.toContain('metrics'); expect(item.messageText).not.toContain(token);
+    }
+  });
+  it('bounds heartbeat provenance, rejects duplicate headers and leaves empty upload rejection strict',async () => {
+    const address = await start();
+    const send = (name: string) => fetch(address + '/api/health/heartbeat',{ method: 'POST',headers: { authorization: `Bearer ${token}`,'shortcut-name': name } });
+    expect((await send('x'.repeat(256))).status).toBe(202);
+    expect((await send('x'.repeat(257))).status).toBe(400);
+    expect((await send('')).status).toBe(400);
+    const duplicate = await new Promise<number>((resolve,reject) => {
+      const request = httpRequest(address + '/api/health/heartbeat',{ method: 'POST',headers: ['authorization',`Bearer ${token}`,'shortcut-name','first','shortcut-name','second'] },response => {
+        response.resume(); response.once('end',() => resolve(response.statusCode!));
+      }); request.once('error',reject); request.end();
+    });
+    expect(duplicate).toBe(400);
+    for (const extra of [{},{ 'content-type': 'application/json' }] as Record<string,string>[]) {
+      expect((await fetch(address + '/api/health/ingest',{ method: 'POST',headers: { authorization: `Bearer ${token}`,'automation-id': 'synthetic','session-id': 'empty',...extra } })).status).toBe(400);
+    }
+    expect((await fetch(address + '/api/health/heartbeat',{ method: 'POST',headers: { authorization: `Bearer ${token}`,'content-type': 'application/json' },
+      body: 'x'.repeat(32 * 1024 + 1) })).status).toBe(413);
     expect(await manifests()).toHaveLength(1);
   });
   it('paginates bounded recovery and makes continuation/failed coverage explicit',async () => {

@@ -52,6 +52,8 @@ Preserve source IDs, revisions, deleted tombstones, ingestion provenance, readin
 
 **Inactive implementation checkpoint:** unregistered `daily/health-upload` supplies owner/scoped/revocable private capability checks, immutable raw bytes + conditional durable manifests and non-expiring pointer-only Queue. HTTP 202 means accepted, never processed; pending delivery survives Queue/SQL/agent outage and bounded recovery can replay pointers at least once. Actual synthetic HTTP/SDK/Azurite and killed-gateway checks do not prove Azure or phone acceptance. [Protocol/checks/gates](../apps/backend/src/daily/health-upload/README.md). No resources, credentials, permissions or activation are installed; #720 processing and protected/live/device acceptance remain open.
 
+Verified source heartbeat accepts authenticated bodyless POST without Content-Type. The target stores bounded private `shortcut-name` provenance (default `Daily Overview heartbeat`) and checked feeds `metrics`/`workouts`, without claiming measurements were received or processed. Upload JSON validation remains separate and strict.
+
 **NEW DAILY CAPABILITY — permanent** · Backend & migration rehearsal
 
 Dedicated upload / heartbeat service, private Blob + queue, managed identities, Key Vault and processing telemetry.
