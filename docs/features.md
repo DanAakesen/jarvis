@@ -295,8 +295,9 @@ P12-03 adds only the empty owner-bound persistence schema and inactive exact-key
 | Feature | Surface | Status | Tasks |
 | --- | --- | --- | --- |
 | Default-off Daily integration metadata, shared server owner and reserved view IDs | Backend contract | Built offline; pending review | P12-01 (#716) |
-| Private export/inventory, SQL mapping, health processing and reconciliation | Background | Protected export/processing/reconciliation gated; empty SQL mapping implemented | P12-02, P12-03, P12-05, P12-06 |
-| Existing-backend health upload/heartbeat with hashed device permissions and SQL raw inbox | Device HTTP/background | Inactive implementation; exact-head CI/review and private/live/phone acceptance pending; no new resources | P12-04 (#719) |
+| Private export/inventory, SQL mapping and reconciliation | Background | Protected export/reconciliation gated; empty SQL mapping implemented | P12-02, P12-03, P12-06 |
+| Existing-backend health upload/heartbeat with hashed device permissions and SQL raw inbox | Device HTTP/background | Inactive #805 reviewed/CI-tested/deployed; private/live/phone acceptance still gated; no new resources | P12-04 (#719) |
+| SQL health processing, bounded retry/quarantine, owner history/detail and distinct processed/heartbeat freshness | Unregistered backend library | Inactive synthetic implementation; exact-head CI/review and protected/live/device parity pending; no scheduler or activation | P12-05 (#720) |
 | Nutrition/Frida/plans and coaching/recovery/recomp | Both | Planned; gated | P12-07–P12-09 |
 | Existing Google feeds, scoped widget/Shortcut, football and brief history | Both/Phone | Planned; recurring notifications off | P12-10–P12-14 |
 | Mobile-first Daily/Workouts/Nutrition and four native assistant views | Both | Planned; no renderer/navigation registered yet | P12-15–P12-16 |

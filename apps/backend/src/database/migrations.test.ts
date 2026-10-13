@@ -13,6 +13,14 @@ async function directory() {
 afterEach(async () => { await Promise.all(directories.splice(0).map((path) => rm(path, { recursive: true }))); });
 
 describe('committed SQL manifest', () => {
+  it('bounds inactive health attempts and protects processing evidence on rollback', async () => {
+    const migration = (await readMigrations()).find(({ name }) => name === '0047_daily_health_processing.sql');
+    expect(migration?.sql).toContain('processing_attempts BETWEEN 0 AND 3');
+    expect(migration?.sql).toContain("EXEC(N'ALTER TABLE daily.health_upload_inbox");
+    const down = await readDownMigration('0047_daily_health_processing.sql');
+    expect(down.sql).toContain('TABLOCKX,HOLDLOCK');
+    expect(down.sql).toContain('no processing evidence');
+  });
   it('adds reversible bounded message metadata with same-batch references compiled dynamically', async () => {
     const migration = (await readMigrations()).find(({ name }) => name === '0040_message_visual_context.sql');
     expect(migration?.sql).toContain('ALTER TABLE dbo.messages ADD metadata nvarchar(max) NULL');
@@ -84,6 +92,7 @@ describe('committed SQL manifest', () => {
       '0044_daily_nutrition_export.sql',
       '0045_smoke_usage_role.sql',
       '0046_daily_health_upload_inbox.sql',
+      '0047_daily_health_processing.sql',
     ]);
     for (const migration of migrations) await expect(readDownMigration(migration.name)).resolves.toMatchObject({ name: migration.name });
   });

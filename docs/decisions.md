@@ -1,5 +1,11 @@
 # Decisions
 
+## P12-05 inactive SQL health processing (13 October 2026)
+
+The [local coordinator release for #720](https://github.com/DanAakesen/jarvis/issues/720#issuecomment-6154043444) follows #805's independently reviewed, CI-tested and deployed inactive SQL acceptance. Reuse that inbox/pool/owner lock. A committed claim generation bounds retries; normalization occurs outside the transaction, then domain rows, ingestion lineage, applicable feed freshness and processed receipt commit together. Heartbeat is a separate signal. Retain raw evidence and quarantine rather than deleting poison inputs or retrying forever. No timer, dispatcher, production registration or credential change.
+
+Pure original Site code at `9e193554c9c8c7c23a788ed3d2b0582580b76c0f` establishes shapes, not private-data parity. Preserve distinct workout IDs/detail/minute HR, exclude nutrition feedback and spatial derived details, and correct missing-number-to-zero and array-order assumptions with explicit unknowns and timestamp ordering. Copenhagen days and supported physical-unit conversions are explicit; ambiguous units, malformed timestamps and oversized identities quarantine without truncation. Accept-time ordering prevents stale retries from overwriting newer arrivals but does not prove source-event ordering. [Bounds, reads and live gates](../apps/backend/src/daily/health/README.md).
+
 ## P9-99 chat latency attribution and session affinity (13 October 2026)
 
 Issue #794 reports 45 production turns with median first token 14.4 s and nine
