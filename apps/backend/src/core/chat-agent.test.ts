@@ -7,7 +7,7 @@ import {
   FOUNDRY_AGENT_SCOPE,
 } from './chat-agent.js';
 
-afterEach(() => { vi.unstubAllGlobals(); });
+afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 const projectEndpoint = 'https://resource.services.ai.azure.com/api/projects/jarvis';
 const delegatedAuthorization = ['Bear', 'er'].join('') + ' delegated-token';
 const input = { messageId: '42', text: 'Hello', language: 'en' as const };
@@ -102,15 +102,26 @@ describe('Foundry Invocations chat agent', () => {
     );
   });
 
-  it('derives a stable UUID session ID scoped to the owner and conversation', () => {
+  it('reuses a random 32-hex session ID scoped to the owner and conversation', () => {
     const owner = '12bcfab7-49ba-4cf7-8be7-780a13911f93';
     const session = createFoundryAgentSessionId(owner, '41');
-    expect(session).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u);
+    expect(session).toMatch(/^[0-9a-f]{32}$/u);
     expect(createFoundryAgentSessionId(owner.toUpperCase(), '41')).toBe(session);
     expect(createFoundryAgentSessionId(owner, '42')).not.toBe(session);
     expect(createFoundryAgentSessionId('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', '41')).not.toBe(session);
     expect(() => createFoundryAgentSessionId('not-an-owner-id', '41')).toThrow('identity is invalid');
     expect(() => createFoundryAgentSessionId(owner, '../message-text')).toThrow('identity is invalid');
+  });
+
+  it('bounds session affinity to the 256 most recently used conversations', () => {
+    const owner = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+    const evicted = createFoundryAgentSessionId(owner, '1000');
+    const retained = createFoundryAgentSessionId(owner, '1001');
+    for (let id = 1002; id < 1256; id++) createFoundryAgentSessionId(owner, String(id));
+    expect(createFoundryAgentSessionId(owner, '1001')).toBe(retained);
+    createFoundryAgentSessionId(owner, '1256');
+    expect(createFoundryAgentSessionId(owner, '1001')).toBe(retained);
+    expect(createFoundryAgentSessionId(owner, '1000')).not.toBe(evicted);
   });
 
   it('uses session affinity, requests debug timings, and accepts only bounded agent phases', async () => {
@@ -142,20 +153,22 @@ describe('Foundry Invocations chat agent', () => {
     expect(body).not.toHaveProperty('agentSessionId');
     expect(body).not.toHaveProperty('onAgentPhaseTimings');
     expect(body).not.toHaveProperty('onAgentSessionTelemetry');
-    expect(onAgentPhaseTimings).toHaveBeenCalledWith({ chat_history_verification: 25.5 });
+    expect(onAgentPhaseTimings).toHaveBeenCalledWith({
+      chat_history_verification: 25.5, agent_auth: expect.any(Number),
+    });
     expect(onAgentSessionTelemetry).toHaveBeenCalledWith({
       sessionIdUsed: true, sessionStartType: 'warm', platformMs: 120, agentMs: 12.5,
     });
     expect(JSON.stringify(onAgentSessionTelemetry.mock.calls)).not.toContain('other');
   });
 
-  it('retries one rejected session-affine invocation once without affinity', async () => {
+  it.each([400, 401, 403, 404, 408, 429, 500])('never replays HTTP %s which may follow execution', async (status) => {
     const agentSessionId = createFoundryAgentSessionId(
       '12bcfab7-49ba-4cf7-8be7-780a13911f93', '41',
     );
     const onAgentSessionTelemetry = vi.fn();
     const fetcher = vi.fn<typeof fetch>()
-      .mockResolvedValueOnce(new Response('private provider details', { status: 400 }))
+      .mockResolvedValueOnce(new Response('private provider details', { status }))
       .mockResolvedValueOnce(streamedResponse([
         'event: delta\ndata: {"text":"Hello"}\n\n',
         'event: done\ndata: {}\n\n',
@@ -165,24 +178,50 @@ describe('Foundry Invocations chat agent', () => {
         'x-ms-debug-latency-container': '450',
       }));
     const { agent } = createAgent(fetcher);
-    const chunks: string[] = [];
-    for await (const chunk of agent.stream({
-      ...input, agentSessionId, onAgentSessionTelemetry,
-    }, delegatedAuthorization, new AbortController().signal)) chunks.push(chunk);
-
-    expect(chunks).toEqual(['Hello']);
-    expect(fetcher).toHaveBeenCalledTimes(2);
+    await expect(async () => {
+      for await (const chunk of agent.stream({
+        ...input, agentSessionId, onAgentSessionTelemetry,
+      }, delegatedAuthorization, new AbortController().signal)) { void chunk; }
+    }).rejects.toThrow(`Chat agent unavailable (HTTP ${status})`);
+    expect(fetcher).toHaveBeenCalledTimes(1);
     expect((fetcher.mock.calls[0]![0] as URL).searchParams.has('agent_session_id')).toBe(true);
-    expect((fetcher.mock.calls[1]![0] as URL).searchParams.has('agent_session_id')).toBe(false);
     expect(fetcher.mock.calls.every(([, options]) =>
       (options?.headers as Record<string, string>)['x-ms-debug-latency-enabled'] === 'true')).toBe(true);
     expect(onAgentSessionTelemetry.mock.calls).toEqual([
-      [{ sessionIdUsed: true, fallbackReason: 'http_400' }],
-      [{ sessionIdUsed: false, sessionStartType: 'cold', containerMs: 450 }],
+      [{ sessionIdUsed: true }],
     ]);
     expect(JSON.stringify(onAgentSessionTelemetry.mock.calls)).not.toContain('private provider details');
   });
 
+  it('separates token authentication, hosted dispatch/transport and agent elapsed time', async () => {
+    vi.spyOn(performance, 'now')
+      .mockReturnValueOnce(1000).mockReturnValueOnce(1050)
+      .mockReturnValueOnce(1050).mockReturnValueOnce(15450);
+    const onAgentPhaseTimings = vi.fn();
+    const { agent } = createAgent(vi.fn(async () => streamedResponse([
+      'event: delta\ndata: {"text":"Hello"}\n\n',
+      'event: done\ndata: {"agentTimings":{"agent_first_delta":4400,"agent_pre_model":400,"model_to_first_delta":4000,"agent_auth":999,"session_start":999}}\n\n',
+    ])));
+    for await (const chunk of agent.stream({ ...input, onAgentPhaseTimings },
+      delegatedAuthorization, new AbortController().signal)) { void chunk; }
+    expect(onAgentPhaseTimings).toHaveBeenCalledWith({
+      agent_first_delta: 4400, agent_pre_model: 400, model_to_first_delta: 4000,
+      agent_auth: 50, session_start: 10000,
+    });
+  });
+
+  it('does not manufacture a negative session-start residual or accept one from the agent', async () => {
+    const onAgentPhaseTimings = vi.fn();
+    const { agent } = createAgent(vi.fn(async () => streamedResponse([
+      'event: delta\ndata: {"text":"Hello"}\n\n',
+      'event: done\ndata: {"agentTimings":{"agent_first_delta":600000,"session_start":999}}\n\n',
+    ])));
+    for await (const chunk of agent.stream({ ...input, onAgentPhaseTimings },
+      delegatedAuthorization, new AbortController().signal)) { void chunk; }
+    expect(onAgentPhaseTimings).toHaveBeenCalledWith({
+      agent_first_delta: 600000, agent_auth: expect.any(Number),
+    });
+  });
   it('does not retry an invocation that had no session ID', async () => {
     const fetcher = vi.fn<typeof fetch>(async () => new Response('private provider details', { status: 400 }));
     const { agent } = createAgent(fetcher);
