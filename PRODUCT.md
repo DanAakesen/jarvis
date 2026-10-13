@@ -1,5 +1,30 @@
 # Product
 
+## Remaining UI release (13 October 2026)
+
+Dan authorised "Deploy everything. so i can test live." This releases the
+remaining chat, Notes and report refinements together and supersedes the
+earlier instructions to hold or split these drafts. Camera #750, immediate
+chat loading #751 and window management #752 are already deployed.
+
+Chat moves from its header Move control and resizes from its plain borders
+and corners, without decorative handles or interception of the native
+scrollbar. The composer follows it without losing its draft. Device-local
+position and size survive refresh; fitting a smaller viewport does not replace
+the saved preference. Minimise retains the composer position.
+
+Notes remains graph-first. Create new opens a focused, writable blank draft
+immediately; its destination picker includes the vault root, arbitrary safe
+folders and attachment-only directories from `/notes/tree`. Per-folder plus
+controls add a local destination; only explicit Save writes to the vault.
+Freshness, unavailable/incomplete inventory and save conflicts remain visible.
+
+Generated reports share one opaque surface with their workspace frame.
+Appearance changes update the existing iframe rather than resetting its state.
+Backend APIs, permissions, camera ownership and pin persistence are unchanged.
+CI and deployment remain the release gates; Dan's live/device acceptance is
+not inferred from local fixture checks.
+
 ## Workspace window release (12 October 2026)
 
 #430 implements the agreed window intents: smart-fit automatic layout,
@@ -91,7 +116,7 @@ Only phase 1 is in scope now, extended by P7 (Jarvis everywhere: web and voice c
 | **Local Codex prompts** | For quick local work, Jarvis opens the Codex desktop app and enters the exact non-sensitive prompt through the existing PC UI Automation flow. Typing needs no confirmation; irreversible submission uses Dan's existing approval flow. Jarvis explains clearly if Codex is unavailable and does not claim success unless entry and submission complete. Tracked repository work uses Factory `create_task` instead. |
 | **Calendar and mail** | Jarvis reads today's Google Calendar agenda, finds free slots, searches and summarises Gmail, lists and replaces simple drafts, archives messages, manages labels, and prepares calendar changes, reply drafts, or messages to send. Calendar writes wait for Dan's later standalone yes/approve/go ahead/do it reply to the latest staged action within ten minutes; no/cancel discards it. Gmail writes retain exact-phrase confirmation in a later message. Reply drafts are saved to Gmail for Dan to send himself. Mail content is untrusted data, never instructions. |
 | **Long-term knowledge** | Dan's private GitHub vault is the source of truth. Jarvis searches it by meaning, reads bounded notes, and automatically saves clearly stated preferences, people, project facts, decisions, and unfinished tasks with a commit link. The backend indexes safe Markdown at the root and in every non-skipped directory, and exposes a bounded note graph of links and semantic neighbours; `show_knowledge` opens the validated graph view with search matches highlighted, with UI rendering handled separately. |
-| **Notes (P9-77)** | The existing graph is the default Notes page, retaining search and section filters. The backend provides a real indexed directory tree and safe Markdown access across the vault root and all directories. Writes, edits and deletes exclude every dot-prefixed path segment; note content is untrusted data. Clicking a note opens its familiar popup with Markdown editing, safe preview and explicit Save. Create new in the corner chooses a section and title before opening a draft. Dirty drafts guard closing, changing notes and navigation; stale writes offer reload/comparison without automatic overwrite. `knowledge` remains a navigation alias. |
+| **Notes (P9-77)** | The existing graph is the default Notes page, retaining search and folder filters. Clicking a note opens its familiar popup with Markdown editing, safe preview and explicit Save. The centred search contains a quiet plus-only Create new action that opens a blank, immediately writable draft; title and an Obsidian-style expandable destination tree live alongside the editor. Vault inventory freshness appears in the popup header, including when the phone destination picker is folded. Dan requires read/write access across all normal vault folders and root-level notes, not a four-section whitelist; he explicitly approved excluding hidden dot-folders, without a repeated notice in the picker. The picker uses `/notes/tree` and adds its implicit root locally, not a graph or paged-index fallback. Backend #698/#699 is deployed and inventories directories from every Git-tree file, including folders containing only non-Markdown files; Dan approved the remaining picker for shipping on 13 October. Incomplete, not-ready or unavailable data stays visible without blocking writing. New folder adds a draft destination under the selected folder; saving its first note creates it in the vault. Dirty drafts guard closing, changing notes and navigation; an untouched blank draft closes freely. Stale writes offer reload/comparison without automatic overwrite. `knowledge` remains a navigation alias. |
 | **Web research** | Jarvis uses live web search through Dan's existing ChatGPT/Codex subscription, returns only retrieved HTTPS sources with titles and retrieval times, and identifies unsupported, stale, inaccessible, or source-free results honestly. Retrieved page text is evidence, never authority over tools; no Bing or pay-per-call search fallback is used. |
 | **Interactive research reports (P7-37)** | A quick or deep research request opens an acknowledged progress window immediately, updates observed query/source progress, then replaces it with a cited, self-contained HTML report artifact. Jarvis speaks a brief findings summary on success; failures remain visible and are announced. The report runs only in the sandboxed `html-app` iframe renderer, with the validated host bridge and Dan-authorized artifact access. |
 | **GitHub events** | The backend verifies GitHub webhook signatures and ignores duplicate delivery IDs for pull requests, check runs, workflow runs, deployment statuses, and pushes. A ready-for-review pull request or failed deployment publishes only a typed status kind to the active voice session after webhook processing; payloads and logs are never spoken. |
@@ -238,18 +263,106 @@ Danish voice uses the authenticated backend `/voice/da` WebSocket to a provision
 
 Screen sharing uses the browser's explicit screen/window picker. Sharing status and Stop sharing remain visible; Jarvis captures a frame only when Dan asks by button or voice phrase. The authenticated backend validates the active session, JPEG type and size, a three-second minimum interval, and the configurable daily cap before using the existing Foundry project and backend managed identity.
 
-Camera access starts only after Dan turns it on from the shared top bar or voice More menu and grants browser permission. Camera on is consent for Jarvis to see a fresh frame on every chat and voice turn, without phrase matching; camera off sends nothing. A visible on/off state and stop control stay available. Capture uses the same authenticated screen-vision upload, three-second rate limit, daily cap, usage records and Foundry model path. Camera access stops when voice or the signed-in app session ends, when its owner unmounts, or after five minutes. Frames remain in memory only and never enter transcripts, logs, or task events.
+Camera access starts after Dan turns it on in More and grants browser permission. It opens a separate **Camera preview** workspace window, not a camera row in the composer or voice bar. The window shows the local muted live video, actual Front/Back label, Live status and Turn off; Switch appears only on mobile touch input, not a narrow desktop window. Direction is marked unavailable when the browser cannot report it. The compact phone preview stays visible beside the foreground window. Minimise docks it as a tab while capture remains on; restoring does not request another stream. Close or Turn off stops capture and removes the preview. Jarvis receives its stable name, ID and state in workspace snapshots and can show, restore, focus, minimise or close it. Reopening an off camera by command requires already-granted permission and never opens a permission prompt.
 
-The answering model receives the actual camera image in chat and both English
-and Danish realtime voice when budget admission and provider acceptance succeed.
-Image rejection or acknowledgement timeout uses the caption with a truthful
-image/caption result; voice still creates one response per turn. Image input
-shares `visionDailyBudgetUsd` and the 300-frame capture cap. Budget denial is
-turn-correlated `budget_exhausted`, with typed unavailable feedback, not a
-silent fallback. Content-free `visual.path` events let the coordinator verify
-deployed delivery without exposing images, text or identifiers.
+Dan's 11 October decision superseded explicit-request camera capture: while the camera is on, every chat and voice user turn captures a fresh bounded frame with that turn's question, even while docked. Camera off sends no frames; enabling or switching alone does not upload. There is no Look now button and conversation capture does not require watch mode. Respect the shared three-second interval and daily cap; when a limit prevents freshness, label any reused observation with its capture time/age and original question, show the limit visibly and never treat an old observation as a new answer. This is the implemented local path, not an accepted final camera experience.
 
-P9-81 makes visual inspection question-aware: an optional, trimmed question of at most 500 characters asks the vision model for precise counts, text or colours; longer questions are rejected, never truncated. The result echoes its question and turn correlation and includes the server receipt time. Bounded description, source, question and capture time stay with the conversation turn under its existing retention; image bytes never do. Typed rate-limit and daily-cap errors remain visible. Jarvis may use cached observations with their original question and capture time, never present an old answer as an answer to a new question, and ask to look again when fresh details are needed. Camera-enabled voice holds the normal model reply for a correlated image or an explicit unavailable/timeout outcome, producing one reply rather than racing two answers; completed reflex actions do not wait. The separate UI task supplies per-turn frames and questions; continuous watching is unchanged.
+On 12 October Dan rejected the slow snapshot-per-turn experience and requires
+a natural conversation about what is on camera, alongside faster general chat.
+Camera UI changes are deferred until that experience is proved. His two live
+camera chat turns reported caption-only input with `budget_unavailable`; the
+finger answer was incorrect according to Dan. Browser request-to-completion
+timings were approximately 20 and 23.5 seconds, including sequential frame
+inspection. This is failed live acceptance, not proof of direct image input.
+The replacement visual conversation flow and cadence remain under investigation;
+continuous background uploads are not enabled or approved by this requirement.
+
+Dan's 12 October wording requirement: fresh camera answers should sound like
+conversation, not a capture report. Omit unsolicited capture timestamps and
+"captured image, not a live view" boilerplate; answer the observation directly.
+Keep provenance internally. Stale/reused observations still need an ordinary
+age warning, and unavailable input must be explicit. Answer timing/input-path
+questions honestly when asked; do not claim continuous video access.
+
+The coordinator identified the failed budget check: the image resolver refused
+`gpt-6.1-sol` because the model had no pricing-table entry. #707 merged on
+12 October to admit unpriced models with the existing conservative, unverified
+0.1 DKK reservation. The coordinator confirms #707 deployed on 12 October;
+real image acceptance still needs proof.
+This admission fix does not remove the existing caption request before chat.
+General chat first-token times were 12.2-17.6 seconds in coordinator logs;
+#708 investigates hosted-session reuse and exposes timing breakdowns without
+changing Dan's selected model or reasoning effort.
+Separately, the coordinator reports changing the live chat reasoning effort
+from medium to low on 12 October; it is reversible in Settings. This is not a
+change to the product default or proof of lower latency.
+
+Dan also requires the chat and voice answering models to receive the actual
+camera image, not only a vision caption. Deployed #704 returns an opaque,
+owner/session/turn-bound `frameId` for an in-memory frame with at most sixty
+seconds' lifetime and single-use consumption. The queued chat
+turn must capture immediately before sending; voice supplies the reference
+with that transcription item's visual result before its held reply is
+released. Image delivery versus caption fallback must be distinguishable
+through `visualPath: 'image' | 'caption'`; an expired or reused reference must
+never be presented as current image access. Local callers forward fresh
+optional references using the final deployed contract. Chat/Danish-text image
+input is implemented, but live answering-model image acceptance is unverified.
+#713's deployed upload-only `mode: 'handle'` additionally removes the separate
+caption call before the answering turn; failed image delivery captions that
+same stored frame, and failed fallback reports unavailable. Omitted mode
+preserves the current caption-first caller. The UI opt-in remains held until
+Dan accepts the camera UI release; deployment alone neither authorises
+activation nor proves actual image delivery.
+Deployed #706 (P9-83, closing #705) adds budget-admitted original images to
+English and Danish realtime voice before the single item-correlated reply.
+Acknowledged delivery or caption fallback is reported per turn; hosted Danish
+fallback remains caption-only. Actual `gpt-6.1-sol` and `gpt-realtime-2.1`
+image acceptance remains unverified: Dan's 12 October live chat turns reported
+caption fallback because the image budget could not be checked. Voice image
+acceptance has not been exercised. Content-free `visual.path { path, reason, channel, latencyMs }`
+diagnostics support subsequent live verification. #703 remains open until
+that evidence exists. No UI release is authorised.
+
+The local UI consumes #704's deployed input evidence without inferring image
+delivery from a frame reference or the preview's Live label. A backend-reported
+image/caption result appears on the matching chat user message, including
+history reload, and as a current-item voice notice. Legacy turns without
+evidence stay unlabelled; malformed evidence reports that input could not be
+confirmed. Stale, duplicate, uncorrelated and pre-switch/reconnect voice results
+must not claim current image access. Caption fallback is explicit, with known
+limit/reference/model reasons in ordinary text. Neither synthetic image-status
+fixtures nor successful caption conversations fulfil actual-image acceptance.
+Unverified model image support must not be described as disabled image input;
+legacy-agent input being disabled is a separate reason.
+If evidence metadata makes a history refresh fail, Retry must reload that
+latest page, retaining already displayed messages. An older-page failure
+instead retries its original cursor; having messages does not decide the
+retry destination.
+
+The local camera cache is scoped to its current stream and conversation;
+stop/switch clears observations, but does not forget known rate/daily limits.
+Only typed limit refusals may reuse a prior caption, never its single-use image
+reference. Without a previous observation, report unavailable rather than
+inventing one. Other failures remain explicit. Limits are visible in Camera
+preview and a toast even when it is docked. Voice results require the provider's
+transcription item ID; obsolete/repeated items and results after the ten-second
+inspection deadline must not create another reply. Backend hold/late-result
+behaviour is deployed but has offline-only voice-ordering acceptance.
+
+Caption reuse is limited to `frame_rate_limited` and `daily_limit`.
+A capture-time `budget_exhausted` refusal remains an explicit typed failure;
+it must not replay a caption or image handle as a successful capture.
+Voice budget-denial and unavailable-budget notices apply only to the current
+camera item, without echoing a relay event or creating another reply.
+
+Camera-on voice owns the per-turn visual slot. Look at screen is disabled with
+an explanation until the camera is off; it must not cancel the camera turn or
+send an uncorrelated unavailable event that closes the relay. Activating the
+camera cancels any in-flight legacy screen inspection. Independent watch
+mode and Stop sharing screen remain available.
+
+Camera access stops when voice or the signed-in app session ends, when its owner unmounts, or after ten minutes without a user turn. Chat submission, speech start and completed voice turns reset that idle timer, not preview rendering or docking. Idle shutdown brings the preview's explanation and recovery into view; it must not interrupt an active conversation at a fixed elapsed time. Raw frames remain in memory only and never enter transcripts, logs or task events. Capture/connection failures and local-preview playback failures are visible with recovery, and a failed inspection never silently becomes a successful camera answer. This idle lifecycle is implemented locally; deployment and full every-turn acceptance remain pending.
 
 P7-38 adds continuous watching alongside that existing on-demand path. Dan controls screen and camera sharing independently; the client sends changed JPEGs to `POST /vision/watch` only while that source is on, at most every 2.5 seconds per source. Jarvis remains silent except for a visible screen error/problem, a match for an active `watch_for` instruction, or a direct answer to Dan's latest question. `stop_watching_for` clears instructions for one or both sources without changing sharing. Frames are never stored, and there is no automatic sensitive-content pause. Summaries and instructions stay in memory for the session; only useful comments enter chat/voice. The shared `global.vision_daily_budget_usd` defaults to USD 1 (0 disables watching); exhaustion refuses further watch frames and comments until the next UTC day. P9-21 adds the web side: once a source is shared, the More menu offers Watch/Stop watching for that source. Watching is a feature-owned loop (`apps/web/src/vision-watch.ts`) that never starts capture itself, skips unchanged frames, shows the shared daily budget used, and ends when the share ends, the conversation session changes, Dan stops it, the budget is spent or the backend refuses it.
 
@@ -305,6 +418,14 @@ signed-in workspace session, and are acknowledged only after the client applies
 or refuses them. Generated views and window state stay in memory; closing or
 changing a view does not change conversation or source data. A local-fixture
 footer belongs only to screenshot fixtures and is absent from the production UI.
+
+Generated HTML reports and their host share one solid appearance-aware background,
+without a second outer frame. Internal report sections and controls remain intact,
+and theme changes preserve report state. Window controls stay on one row beside
+long titles. Open-window tabs use a consistent window icon, one pin toggle where
+pinning is available, and Close for unpinned windows. Crowded tabs remain
+scrollable; phone window-list actions remain reachable above content windows.
+Persistent-pin semantics are still part of the unfinished P8-42 implementation.
 
 #### Software Factory — task view
 
@@ -477,7 +598,14 @@ P9-77 adds `/notes` as the canonical page; old `/knowledge` addresses redirect.
 The source editor preserves front matter and whitespace. Preview uses the safe
 Markdown renderer with no raw HTML, unsafe links or external image requests.
 The graph stays mounted behind the editable popup and may lag a vault write.
-Create new chooses People, Work, Personal or General before writing.
+The centred search's plus action starts writing immediately; title and destination
+can be chosen before Save from the full normal-folder vault tree, including root.
+The popup header carries the inventory's last-sync time.
+New folders start from the plus on their parent row, including Vault root:
+desktop hover or keyboard focus reveals it; touch keeps it visible. The child
+name field opens inside that folder with typing focus. Enter or the check adds
+and selects it locally; Escape or the cross cancels. The separate New folder
+button and new-draft instruction/path row are removed.
 Phones retain the graph with a scrollable note overlay. Saves keep the draft on failure, prevent duplicate submissions
 and use the loaded Contents SHA; 409 offers reload or comparison with explicit
 adoption of the latest revision before a separate Save. Uncertain writes are not
@@ -575,6 +703,26 @@ The same consolidated P8-37 (#398) uses an avatar-free chat message window: remo
 P9-45 lets Dan ask Jarvis to show or hide the conversation transcript through the existing `workspace_command` broker. This reversible view change needs no confirmation; Jarvis reports it only after the UI applies and acknowledges it. On phones, the transcript is hidden by default. The backend contract and prompt are implemented; the UI handler, phone default, and live acceptance remain the UI session's work.
 
 In desktop typing mode, maximising the visible conversation also widens its composer to the same horizontal edges, including when chat floats over another page. Restoring, minimising or closing the transcript restores the normal composer width. Phone and voice layouts, drafts and other windows are unchanged.
+
+Dan's revised 12 October requirement (local, unreleased) supersedes the initial
+fixed-width height grip: resize by dragging the clean glass border from any
+edge or corner, with no decorative corner brackets or separate top grip.
+Resize hit regions must leave the native scrollbar usable; scrolling must not
+move or resize the window or change its saved placement.
+A Move icon beside Maximise moves the conversation and composer together.
+Save position and size on this browser, fit them within the available viewport,
+and preserve drafts and voice-client identity. Keyboard alternatives and
+cancelled-drag restoration remain. Minimise hides messages but leaves the
+composer where Dan placed it (Dan's explicit selection); maximise/restore
+retains the saved placement. Keep compact message type and the readable composer.
+On initial load, mount the chat window before requesting its messages. Show
+message placeholders and a loading label inside the window, never in the room.
+Keep the same window for loaded, empty and error/Retry states; retain existing
+messages during refresh. Phones retain their explicit show/hide behaviour.
+Temporary pinned-window read failures receive bounded recovery, including after
+returning online or to the page. Authentication failures must identify sign-in,
+not masquerade as storage failures; persistent errors retain Retry.
+No backend change or release is authorised.
 
 ### Voice feedback and orb refinement (6 October 2026)
 

@@ -25,6 +25,7 @@ import { useSignIn, type SignInSession } from './useSignIn';
 import { backendFetch } from './backend-request';
 import { Workspace, PHONE_LAYOUT_MEDIA_QUERY, type WorkspaceController, type WorkspaceView } from './Workspace';
 import { ConversationWindowContext, conversationViewId } from './conversation-window-state';
+import type { ConversationPosition } from './conversation-layout';
 import { WorkspaceCommandContext, useWorkspaceCommands } from './workspace-command-state';
 import { SessionCommandRegistryContext, applySessionCommand, openCameraPreview, createSessionCommandRegistry, type SessionCommandResult } from './session-commands';
 import { BackendSleepControl } from './BackendSleepControl';
@@ -376,10 +377,14 @@ function ShellLayout({ signedIn, config, session, camera, screenShare }: {
   const [conversationAvailable, setConversationAvailable] = useState(false);
   const [conversationHost, setConversationHost] = useState<HTMLDivElement | null>(null);
   const [conversationOpen, setConversationOpen] = useState(false);
+  const [conversationPosition, setConversationPosition] = useState<ConversationPosition | null>(null);
+  const [conversationComposerHeight, setConversationComposerHeight] = useState(52);
   const onVisibleViewIdsChange = useCallback((ids: readonly string[]) => {
     setConversationOpen(ids.includes(conversationViewId));
   }, []);
   const conversationWindow = useMemo(() => ({
+    position: voiceActive ? null : conversationPosition,
+    setComposerHeight: setConversationComposerHeight,
     element: conversationHost,
     setAvailable: setConversationAvailable,
     open: conversationOpen,
@@ -388,7 +393,7 @@ function ShellLayout({ signedIn, config, session, camera, screenShare }: {
       operation: open ? 'restore' : 'minimise',
       viewId: conversationViewId,
     }) ?? false,
-  }), [conversationHost, conversationOpen]);
+  }), [conversationHost, conversationOpen, conversationPosition, voiceActive]);
   useEffect(() => { conversationWindowRef.current = conversationWindow; }, [conversationWindow]);
   // Phones (Dan, 8 October): moving to another page tucks the chat away so the new page is not covered.
   const lastPath = useRef(pathname);
@@ -552,7 +557,8 @@ function ShellLayout({ signedIn, config, session, camera, screenShare }: {
     <TaskWindowsContext.Provider value={signedIn ? taskWindowsApi : null}>
     <div className={`app app-shell${signedIn ? '' : ' app-signed-out'}`} data-navigation-open={signedIn && (navigationShown || folioOpen)} data-folio-open={signedIn && folioOpen}
       data-context-open={signedIn && contextPanel.isOpen} data-voice-active={voiceActive}
-      data-voice-has-windows={voiceHasWindows} data-conversation-open={signedIn && conversationOpen} style={panelWidths}
+      data-voice-has-windows={voiceHasWindows} data-conversation-open={signedIn && conversationOpen}
+      style={{ ...panelWidths, '--conversation-composer-height': `${conversationComposerHeight}px` } as CSSProperties}
       data-home={home} data-chat={chatPlace} data-phone={signedIn && phone} data-windows-open={signedIn && phone && windowsSheetOpen && windowCount > 0}>
       <a className="skip-link" href="#content">Skip to content</a>
       {signedIn && (
@@ -696,6 +702,8 @@ function ShellLayout({ signedIn, config, session, camera, screenShare }: {
               <div className="workspace-shell-area">
                 <Workspace ref={workspaceController} views={workspaceViews} onVisibleViewsChange={setVoiceHasWindows} onOpenWindowsChange={onOpenWindowsChange} onFrontViewChange={setFrontViewId}
                   onVisibleViewIdsChange={onVisibleViewIdsChange} tabsHost={tabsHost} defaultArrangement="layered" arrangeMenu={false}
+                  onConversationPositionChange={setConversationPosition}
+                  conversationComposerHeight={conversationComposerHeight}
                   hideTab={hideResearchProgressTab} {...(workspacePins ? { pins: workspacePins } : {})} />
               </div>
             )}

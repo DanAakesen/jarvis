@@ -166,10 +166,50 @@ describe('shared glass tokens', () => {
     expect(source).toContain(':root { --chat-width: 740px;');
   });
 
+  it('keeps chat type compact without shrinking the composer or touch resize borders', () => {
+    const source = readFileSync('src/ConversationHistory.css', 'utf8');
+    expect(source).toContain('font-size: var(--type-small); line-height: 1.45;');
+    expect(source).toContain('.conversation-message :where(p, li, blockquote) { font-size: inherit; line-height: inherit; }');
+    expect(source).toContain('font-size: var(--type-body); line-height: 24px;');
+    expect(source).toContain('.conversation-resize-corner { width: 44px; height: 44px; }');
+    expect(source).toContain('.conversation-resize-border-top { top: -10px; height: 24px;');
+    expect(source).not.toContain('.conversation-corner svg');
+    expect(source).toContain('var(--conversation-height, min(var(--chat-height), 44vh))');
+  });
+
+  it('keeps chat side resizing outside the transcript and excludes the inner corner quadrants', () => {
+    const source = readFileSync('src/ConversationHistory.css', 'utf8');
+    for (const side of ['left', 'right']) {
+      const rules = [...source.matchAll(new RegExp(`\\.conversation-resize-border-${side}\\s*\\{([^}]*)\\}`, 'g'))];
+      expect(rules).toHaveLength(2);
+      for (const [, declarations] of rules) {
+        const offset = Number(declarations!.match(new RegExp(`${side}: (-?\\d+)px;`))?.[1]);
+        const width = Number(declarations!.match(/width: (\d+)px;/)?.[1]);
+        expect(width).toBeGreaterThan(0);
+        expect(offset + width).toBe(0);
+      }
+    }
+    expect(source).toContain('clip-path: polygon(0 0, 100% 0, 100% 50%, 50% 50%, 50% 100%, 0 100%)');
+    expect(source).toContain('clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 100%, 50% 50%, 0 50%)');
+    expect(source).toContain('clip-path: polygon(0 0, 50% 0, 50% 50%, 100% 50%, 100% 100%, 0 100%)');
+    expect(source).toContain('clip-path: polygon(50% 0, 100% 0, 100% 100%, 0 100%, 0 50%, 50% 50%)');
+  });
+
   it('uses the accepted sans typography for shared headings', () => {
     const source = readFileSync('src/styles.css', 'utf8');
 
     expect(tokenValue(source, ':root', '--font-heading')).toBe('var(--font-body)');
+  });
+
+  it('shares one opaque report surface and keeps window controls in one row', () => {
+    const source = readFileSync('src/styles.css', 'utf8');
+    expect(tokenValue(source, ':root', '--report-surface')).toBe('#f0f5f7');
+    expect(tokenValue(source, ':root\\[data-theme="dark"\\]', '--report-surface')).toBe('#091018');
+    expect(ruleDeclaration(source, /\.workspace-window\.luminous-glass:has\(\.html-app\)\s*\{([^}]*)\}/, 'background')).toBe('var(--report-surface)');
+    expect(ruleDeclaration(source, /\.html-app-frame\s*\{([^}]*)\}/, 'background')).toBe('var(--report-surface)');
+    expect(ruleDeclaration(source, /\.html-app-frame\s*\{([^}]*)\}/, 'border-radius')).toBe('0');
+    expect(source).not.toMatch(/\.workspace-window-actions[^{]*\{[^}]*grid-template-columns/);
+    expect(source).toContain('.workspace-window-actions { display: flex; width: auto; flex: 0 0 auto; flex-wrap: nowrap; gap: 4px; }');
   });
 
   it('gives window tabs compact corners, distinct pin states and touch-sized actions', () => {

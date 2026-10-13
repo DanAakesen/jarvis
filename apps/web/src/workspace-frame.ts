@@ -3,7 +3,7 @@ import { PHONE_LAYOUT_MEDIA_QUERY } from './Workspace';
 
 // The theme tokens a generated report or app needs to look native in Jarvis's glass windows.
 const tokenNames = [
-  '--text', '--text-muted', '--surface', '--surface-muted', '--rule', '--focus',
+  '--text', '--text-muted', '--surface', '--surface-muted', '--report-surface', '--rule', '--focus',
   '--stage-background', '--stage-slab', '--stage-glass', '--board-slab', '--glass-hover', '--glass-selected',
   '--glass-rim-light', '--glass-edge-cool', '--glass-glow-warm', '--primary-action',
   '--success', '--warning', '--error', '--radius-window', '--radius-panel', '--radius-control', '--radius-pill',

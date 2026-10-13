@@ -1,11 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createNotesClient, maxNoteBytes, newNotePath, NoteConflict, NoteSaveUnverified, readNote, readNotePage, safeNotePath } from './notes-data';
+import { createNotesClient, maxNoteBytes, newNotePath, NoteConflict, NoteSaveUnverified, readNote, readNotePage, readNoteTree, safeNoteFolder, safeNotePath } from './notes-data';
 
 const oldSha = 'a'.repeat(40);
 const newSha = 'b'.repeat(40);
 const commit = 'c'.repeat(40);
 const note = { path: 'Work/fixture.md', content: '---\ntags: [fixture]\n---\n# Fixture\n\nRaw text.\n', sha: oldSha, url: 'https://github.com/example/vault/blob/master/Work/fixture.md' };
-const summary = { path: note.path, title: 'Fixture', folder: 'Work', updatedAt: '2026-10-11T00:00:00Z' };
+const summary = { path: note.path, title: 'Fixture', folder: 'Work', directory: 'Work', updatedAt: '2026-10-11T00:00:00Z' };
+const tree = { directories: ['Assets', 'Customers', 'Customers/Novaro', 'Meetings', '_agent-log'], rootNoteCount: 3, truncated: false, updatedAt: '2026-10-11T17:00:00Z' };
 const json = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status, headers: { 'Content-Type': 'application/json' } });
 const client = () => createNotesClient('https://api.example.com/', async () => 'fixture-token');
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
@@ -15,17 +16,29 @@ describe('Notes contract', () => {
     expect(readNote(note)).toEqual(note);
     expect(readNotePage({ notes: [summary], limit: 50, offset: 0, hasMore: false }).notes).toEqual([summary]);
   });
-  it.each(['../Work/a.md', 'Work/.hidden.md', 'Work/../a.md', 'Work//a.md', 'Work/a\\b.md', 'Work/a.md?x', 'Other/a.md', 'Work/a%20.md', 'Work/a\0.md', `Work/${'a'.repeat(180)}.md`, 'Work/cafe\u0301.md'])('rejects unsafe or noncanonical paths: %s', path => {
+  it.each(['../Work/a.md', './a.md', 'Work/../a.md', 'Work//a.md', 'Work/a\\b.md', 'Work/a.md?x', '/a.md', 'Work/a%20.md', 'Work/a\0.md', `Work/${'a'.repeat(180)}.md`, 'Work/cafe\u0301.md', 'Work/\ud800.md', '.github/review.md', 'Work/.obsidian/review.md', 'Work/.hidden.md'])('rejects unsafe or noncanonical paths: %s', path => {
     expect(safeNotePath(path)).toBe(false);
   });
-  it('accepts nested routed Unicode Markdown and creates safe title slugs', () => {
+  it('accepts full-vault, root and nested Unicode Markdown and creates safe title slugs', () => {
     expect(safeNotePath('Work/project/Notes.md')).toBe(true);
     expect(safeNotePath('People/René.md')).toBe(true);
     expect(newNotePath('General', ' Café / test? #100% ')).toBe('General/cafe-test-100.md');
     expect(newNotePath('Work', '...')).toBe('');
+    expect(safeNotePath('Customers/Novaro/review.md')).toBe(true);
+    expect(safeNotePath('_agent-log/latest.md')).toBe(true);
+    expect(safeNotePath('.archive/review.md')).toBe(false);
+    expect(safeNotePath('AGENTS.md')).toBe(true);
+    expect(newNotePath('Customers/Novaro', 'Review')).toBe('Customers/Novaro/review.md');
+    expect(newNotePath('', 'Review')).toBe('review.md');
+    expect(newNotePath('../Customers', 'Review')).toBe('');
+    expect(safeNoteFolder('')).toBe(true);
+    expect(safeNoteFolder('Meetings/2026')).toBe(true);
+    expect(safeNoteFolder('Work/..')).toBe(false);
+    expect(safeNoteFolder(`Assets/${'a'.repeat(173)}`)).toBe(true);
+    expect(safeNotePath(`Assets/${'a'.repeat(173)}/a.md`)).toBe(false);
   });
   it.each([
-    { ...note, sha: commit.slice(1) }, { ...note, path: 'Work/.hidden.md' },
+    { ...note, sha: commit.slice(1) }, { ...note, path: 'Work/../hidden.md' },
     { ...note, url: 'javascript:alert(1)' }, { ...note, url: 'https://github.com.evil.example/a' },
     { ...note, content: '\ud800' }, { ...note, content: 'a'.repeat(maxNoteBytes + 1) },
   ])('rejects malformed notes', value => expect(() => readNote(value)).toThrow('invalid note'));
@@ -33,6 +46,58 @@ describe('Notes contract', () => {
     for (const notes of [[summary, summary], [{ ...summary, folder: 'General' }], [{ ...summary, updatedAt: 'not a date' }], Array(101).fill(summary)]) {
       expect(() => readNotePage({ notes, limit: 50, offset: 0, hasMore: false })).toThrow('invalid notes list');
     }
+  });
+  it('reads summaries for any top-level folder and root-level notes', () => {
+    const notes = [{ ...summary, path: 'Customers/Novaro/review.md', folder: 'Customers', directory: 'Customers/Novaro' },
+      { ...summary, path: 'AGENTS.md', folder: '', directory: '' }];
+    expect(readNotePage({ notes, limit: 50, offset: 0, hasMore: false }).notes).toEqual(notes);
+  });
+  it('derives a full parent directory for older responses and rejects contradictory new metadata', () => {
+    expect(readNotePage({ notes: [{ ...summary, directory: undefined }], limit: 50, offset: 0, hasMore: false }).notes[0]?.directory).toBe('Work');
+    expect(() => readNotePage({ notes: [{ ...summary, directory: 'General' }], limit: 50, offset: 0, hasMore: false })).toThrow('invalid notes list');
+  });
+  it('validates actual vault trees and retains explicit partial/freshness metadata', () => {
+    expect(readNoteTree(tree)).toEqual(tree);
+    expect(readNoteTree({ ...tree, directories: [], rootNoteCount: 0, truncated: true })).toMatchObject({ directories: [], rootNoteCount: 0, truncated: true });
+    expect(readNoteTree({ ...tree, directories: [], rootNoteCount: 3 })).toMatchObject({ directories: [], rootNoteCount: 3 });
+  });
+  it('accepts exactly 10,000 unique directories and rejects the next entry', () => {
+    const directories = Array.from({ length: 10_000 }, (_, index) => `Folder-${String(index).padStart(5, '0')}`);
+    expect(readNoteTree({ ...tree, directories, rootNoteCount: 10_000, truncated: true }).directories).toEqual(directories);
+    expect(() => readNoteTree({ ...tree, directories: [...directories, 'Folder-10000'] })).toThrow('invalid vault folder tree');
+  });
+  it.each([
+    { ...tree, directories: ['Customers', 'Customers'] },
+    { ...tree, directories: ['../Customers'] },
+    { ...tree, directories: ['.obsidian'] },
+    { ...tree, directories: ['Work/a\\b'] },
+    { ...tree, directories: ['Work/cafe\u0301'] },
+    { ...tree, directories: Array(10_001).fill('Work') },
+    { ...tree, directories: [''] },
+    { ...tree, directories: undefined },
+    { ...tree, directories: ['Customers', ''] },
+    { ...tree, rootNoteCount: -1 },
+    { ...tree, rootNoteCount: 1.5 },
+    { ...tree, rootNoteCount: 10_001 },
+    { ...tree, truncated: 'false' },
+    { ...tree, updatedAt: undefined },
+    { ...tree, updatedAt: null },
+    { ...tree, updatedAt: 'not a date' },
+    { ...tree, updatedAt: '2026-10-11' },
+  ])('rejects malformed vault tree responses', value => expect(() => readNoteTree(value)).toThrow('invalid vault folder tree'));
+  it('loads the authenticated git-tree endpoint and exposes deployment/permission errors without a list fallback', async () => {
+    const fetch = vi.fn<typeof globalThis.fetch>(async () => json(tree));
+    vi.stubGlobal('fetch', fetch);
+    expect(await client().tree(new AbortController().signal)).toEqual(tree);
+    expect(String(fetch.mock.calls[0]![0])).toBe('https://api.example.com/notes/tree');
+    expect(fetch.mock.calls[0]![1]).toMatchObject({ cache: 'no-store', headers: { Authorization: 'Bearer fixture-token' } });
+    fetch.mockImplementationOnce(async () => json({ error: 'Not found' }, 404));
+    await expect(client().tree(new AbortController().signal)).rejects.toThrow('awaiting deployment');
+    fetch.mockImplementationOnce(async () => json({ error: 'Forbidden' }, 403));
+    await expect(client().tree(new AbortController().signal)).rejects.toThrow('only to the owner');
+    fetch.mockImplementationOnce(async () => json({ error: 'Index not ready' }, 503));
+    await expect(client().tree(new AbortController().signal)).rejects.toThrow('Wait for the vault index');
+    expect(fetch).toHaveBeenCalledTimes(4);
   });
   it('sends authenticated bounded filter/page requests', async () => {
     const fetch = vi.fn<typeof globalThis.fetch>(async () => json({ notes: [], limit: 50, offset: 50, hasMore: false }));

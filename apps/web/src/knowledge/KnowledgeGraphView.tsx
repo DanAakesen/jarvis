@@ -2,7 +2,7 @@ import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useSta
 import { MarkdownContent } from '../MarkdownContent';
 import {
   connectedNotes, KnowledgeUnavailable, knowledgeFolders, loadKnowledgeGraph, loadKnowledgeNote, matchTitles,
-  searchKnowledge, type KnowledgeFolder, type KnowledgeGraph, type KnowledgeNode, type KnowledgeNote,
+  searchKnowledge, type KnowledgeGraph, type KnowledgeNode, type KnowledgeNote,
 } from './knowledge-data';
 import type { KnowledgeScene } from './knowledge-scene';
 import { useKnowledgeBackend } from './knowledge-context';
@@ -48,7 +48,7 @@ export function KnowledgeNoteReader({ children }: { children: ReactNode }) {
  * matches and flies to them; a star opens its note. Used by the Knowledge page and by the window Jarvis opens.
  */
 export function KnowledgeGraphView({ backendUrl, getAccessToken, initialQuery = '', initialHighlight, compact = false,
-  onOpenNote, selectedPath, refreshKey = 0, children }: {
+  onOpenNote, selectedPath, refreshKey = 0, searchAction, children }: {
   backendUrl: string | null;
   getAccessToken: () => Promise<string>;
   initialQuery?: string;
@@ -57,6 +57,7 @@ export function KnowledgeGraphView({ backendUrl, getAccessToken, initialQuery = 
   onOpenNote?: (node: KnowledgeNode, graph: KnowledgeGraph) => void;
   selectedPath?: string;
   refreshKey?: number;
+  searchAction?: ReactNode;
   children?: ReactNode;
 }) {
   const ids = useId();
@@ -78,7 +79,7 @@ export function KnowledgeGraphView({ backendUrl, getAccessToken, initialQuery = 
   const [searching, setSearching] = useState(false);
   const [localSelectedId, setSelectedId] = useState<string | null>(null);
   // Browsing: one folder can be isolated from the legend; its notes list beside the search.
-  const [folder, setFolder] = useState<KnowledgeFolder | null>(null);
+  const [folder, setFolder] = useState<string | null>(null);
   const [note, setNote] = useState<{ id: string; value: KnowledgeNote | null; error: string } | null>(null);
   const [hover, setHover] = useState<{ id: string; x: number; y: number } | null>(null);
   const [labels, setLabels] = useState<{ id: string; x: number; y: number }[]>([]);
@@ -137,7 +138,7 @@ export function KnowledgeGraphView({ backendUrl, getAccessToken, initialQuery = 
 
   useEffect(() => { scene.current?.highlight(hits); }, [hits, graph]);
   useEffect(() => { scene.current?.select(selectedId); }, [selectedId]);
-  useEffect(() => { scene.current?.showFolders(folder ? [folder] : null); }, [folder, graph]);
+  useEffect(() => { scene.current?.showFolders(folder !== null ? [folder] : null); }, [folder, graph]);
 
   // Search: titles match instantly; the knowledge search refines the result when it answers.
   useEffect(() => {
@@ -177,7 +178,18 @@ export function KnowledgeGraphView({ backendUrl, getAccessToken, initialQuery = 
 
   const selected = selectedId ? nodesById.get(selectedId) : undefined;
   const neighbours = useMemo(() => connectedNotes(graph, selectedId), [graph, selectedId]);
-  const counts = useMemo(() => new Map(knowledgeFolders.map((folder) => [folder, graph?.nodes.filter((node) => node.folder === folder).length ?? 0])), [graph]);
+  const counts = useMemo(() => {
+    const result = new Map<string, number>();
+    for (const node of graph?.nodes ?? []) result.set(node.folder, (result.get(node.folder) ?? 0) + 1);
+    return result;
+  }, [graph]);
+  const folders = [...counts.keys()].sort((left, right) => {
+    const rank = (name: string) => {
+      const index = knowledgeFolders.findIndex(folder => folder === name);
+      return index === -1 ? knowledgeFolders.length : index;
+    };
+    return rank(left) - rank(right) || left.localeCompare(right);
+  });
   const currentNote = note && note.id === selectedId ? note : null;
 
   return (
@@ -197,6 +209,20 @@ export function KnowledgeGraphView({ backendUrl, getAccessToken, initialQuery = 
       )}
       {sceneFailed && graph && <p className="knowledge-status" role="status">The 3D view is unavailable. Search remains available.</p>}
 
+      {(graph || searchAction) && <div className="knowledge-search luminous-glass">
+        <label className="visually-hidden" htmlFor={`${ids}-query`}>Search your knowledge</label>
+        <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><circle cx="11" cy="11" r="6.5" /><path d="m16 16 4.5 4.5" /></svg>
+        <input id={`${ids}-query`} type="search" placeholder="Search your knowledge…" value={query} maxLength={200} autoComplete="off"
+          disabled={!graph} onChange={(event) => setQuery(event.target.value)}
+          onKeyDown={(event) => { if (event.key === 'Escape' && query) { event.preventDefault(); setQuery(''); } }} />
+        {graph && <span className="knowledge-count" role="status" aria-live="polite">
+          {query.trim() ? `${hits.length} ${hits.length === 1 ? 'match' : 'matches'}${searching ? '…' : ''}` : `${graph.nodes.length} notes`}
+        </span>}
+        {(query || selectedId || folder !== null) && (
+          <button className="knowledge-reset" type="button" onClick={() => { setQuery(''); setSelectedId(null); setFolder(null); scene.current?.resetView(); }}>Reset view</button>
+        )}
+        {searchAction}
+      </div>}
       {graph && (
         <>
           {labels.map((label) => {
@@ -211,21 +237,8 @@ export function KnowledgeGraphView({ backendUrl, getAccessToken, initialQuery = 
               {nodesById.get(hover.id)!.title}
             </span>
           )}
-          <div className="knowledge-search luminous-glass">
-            <label className="visually-hidden" htmlFor={`${ids}-query`}>Search your knowledge</label>
-            <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><circle cx="11" cy="11" r="6.5" /><path d="m16 16 4.5 4.5" /></svg>
-            <input id={`${ids}-query`} type="search" placeholder="Search your knowledge…" value={query} maxLength={200} autoComplete="off"
-              onChange={(event) => setQuery(event.target.value)}
-              onKeyDown={(event) => { if (event.key === 'Escape' && query) { event.preventDefault(); setQuery(''); } }} />
-            <span className="knowledge-count" role="status" aria-live="polite">
-              {query.trim() ? `${hits.length} ${hits.length === 1 ? 'match' : 'matches'}${searching ? '…' : ''}` : `${graph.nodes.length} notes`}
-            </span>
-            {(query || selectedId || folder) && (
-              <button className="knowledge-reset" type="button" onClick={() => { setQuery(''); setSelectedId(null); setFolder(null); scene.current?.resetView(); }}>Reset view</button>
-            )}
-          </div>
           {(query.trim() ? hits.length > 0 : folder !== null) && (
-            <ol className="knowledge-results luminous-glass" aria-label={query.trim() ? 'Matching notes' : `${folder} notes`}>
+            <ol className="knowledge-results luminous-glass" aria-label={query.trim() ? 'Matching notes' : `${folder || 'Vault root'} notes`}>
               {(query.trim()
                 ? hits.slice(0, compact ? 6 : 12).flatMap((id) => nodesById.get(id) ?? [])
                 : graph.nodes.filter((node) => node.folder === folder).sort((left, right) => left.title.localeCompare(right.title)).slice(0, 60)
@@ -239,11 +252,11 @@ export function KnowledgeGraphView({ backendUrl, getAccessToken, initialQuery = 
             </ol>
           )}
           <ul className="knowledge-legend" aria-label="Folders">
-            {knowledgeFolders.map((name) => (
+            {folders.map((name) => (
               <li key={name} data-folder={name}>
                 <button type="button" aria-pressed={folder === name} title={folder === name ? 'Show every folder' : `Show only ${name}`}
                   onClick={() => setFolder((current) => current === name ? null : name)}>
-                  <span className="knowledge-dot" aria-hidden="true" />{name}<span className="knowledge-legend-count">{counts.get(name)}</span>
+                  <span className="knowledge-dot" aria-hidden="true" />{name || 'Vault root'}<span className="knowledge-legend-count">{counts.get(name)}</span>
                 </button>
               </li>
             ))}
