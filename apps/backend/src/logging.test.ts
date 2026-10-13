@@ -12,6 +12,42 @@ vi.mock('applicationinsights', () => ({
 }));
 
 describe('structured log export', () => {
+  it.each(['factory.board_read_failed', 'factory.board_project_lookup_failed'])(
+    'exports only allowlisted board diagnostics for %s to stdout and telemetry', (event) => {
+      const records: string[] = [];
+      const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });
+      const sink = { ...sdk, trackTrace: vi.fn() };
+      const logger = createLogger({ logLevel: 'info' }, sink, output).child({
+        token: 'private-token', issueBody: 'private-body', err: new Error('private-error'),
+      });
+      const reasons = ['request_failed', 'timeout', 'cancelled', 'transport_failed', 'invalid_response',
+        'response_too_large', 'result_limit', 'incomplete_response', 'invalid_token_lifetime',
+        'invalid_token_permissions', 'unexpected'];
+      for (const stage of ['project', 'token', 'source', 'task', 'release', 'response']) {
+        for (const reason of reasons) {
+          const fields = { stage, reason, status: 403, stale: false };
+          logger.warn({ ...fields, body: 'private-response', message: 'private-message', repo: 'private-repo' }, event);
+          expect(JSON.parse(records.at(-1)!)).toEqual({
+            level: 40, time: expect.any(Number), service: 'jarvis-backend', msg: event, ...fields,
+          });
+          expect(sink.trackTrace).toHaveBeenLastCalledWith(expect.objectContaining({
+            message: event, properties: { service: 'jarvis-backend', ...fields },
+          }));
+        }
+      }
+      for (const status of [99, 600, 403.5, '403', null, Infinity, NaN]) {
+        logger.warn({ stage: 'private-stage', reason: 'private-reason', status, stale: 'private-stale' }, event);
+        expect(JSON.parse(records.at(-1)!)).toEqual({
+          level: 40, time: expect.any(Number), service: 'jarvis-backend', msg: event,
+        });
+        expect(sink.trackTrace).toHaveBeenLastCalledWith(expect.objectContaining({
+          properties: { service: 'jarvis-backend' },
+        }));
+      }
+      expect(records.join('') + JSON.stringify(sink.trackTrace.mock.calls)).not.toContain('private');
+    },
+  );
+
   it('names the WebSocket plugin warning without exporting framework error details', () => {
     const records: string[] = [];
     const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });

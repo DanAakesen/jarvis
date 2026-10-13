@@ -57,6 +57,15 @@ export class GitHubAppRequestError extends Error {
   }
 }
 
+export class GitHubAppResponseError extends Error {
+  constructor(
+    readonly reason: 'invalid_response' | 'response_too_large' | 'invalid_token_lifetime' | 'invalid_token_permissions',
+    message: string,
+  ) {
+    super(message);
+  }
+}
+
 function object(value: unknown): Record<string, unknown> | null {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
     ? value as Record<string, unknown>
@@ -96,10 +105,10 @@ async function requestJson(
   if (!response.ok) throw new GitHubAppRequestError(response.status);
   const contentLength = response.headers.get('content-length');
   if (contentLength !== null && Number(contentLength) > responseLimit) {
-    throw new Error('GitHub App response is too large');
+    throw new GitHubAppResponseError('response_too_large', 'GitHub App response is too large');
   }
   const reader = response.body?.getReader();
-  if (!reader) throw new Error('GitHub App response is invalid');
+  if (!reader) throw new GitHubAppResponseError('invalid_response', 'GitHub App response is invalid');
   const chunks: Uint8Array[] = [];
   let size = 0;
   try {
@@ -109,7 +118,7 @@ async function requestJson(
       size += value.byteLength;
       if (size > responseLimit) {
         await reader.cancel().catch(() => undefined);
-        throw new Error('GitHub App response is too large');
+        throw new GitHubAppResponseError('response_too_large', 'GitHub App response is too large');
       }
       chunks.push(value);
     }
@@ -120,7 +129,7 @@ async function requestJson(
   try {
     return JSON.parse(text) as unknown;
   } catch {
-    throw new Error('GitHub App response is invalid');
+    throw new GitHubAppResponseError('invalid_response', 'GitHub App response is invalid');
   }
 }
 
@@ -142,9 +151,11 @@ function validInstallationToken(value: unknown, now: () => number): string {
     Array.from(token.token).some((character) => {
       const code = character.charCodeAt(0);
       return code < 32 || code === 127;
-    }) || !Number.isFinite(expiresAt) ||
-    lifetime < 50 * 60 * 1000 || lifetime > 65 * 60 * 1000) {
-    throw new Error('GitHub installation token response is invalid');
+    })) {
+    throw new GitHubAppResponseError('invalid_response', 'GitHub installation token response is invalid');
+  }
+  if (!Number.isFinite(expiresAt) || lifetime < 50 * 60 * 1000 || lifetime > 65 * 60 * 1000) {
+    throw new GitHubAppResponseError('invalid_token_lifetime', 'GitHub installation token response is invalid');
   }
   return token.token;
 }
@@ -300,7 +311,7 @@ export function createGitHubAppTokenIssuer({
       ));
       const id = installationId(installation?.id);
       if (!id) {
-        throw new Error('GitHub installation response is invalid');
+        throw new GitHubAppResponseError('invalid_response', 'GitHub installation response is invalid');
       }
 
       const token = await requestJson(
@@ -313,18 +324,18 @@ export function createGitHubAppTokenIssuer({
       if (tokenResponse && Object.hasOwn(tokenResponse, 'permissions')) {
         const tokenPermissions = object(tokenResponse.permissions);
         if (!tokenPermissions || Object.keys(tokenPermissions).length === 0 || Object.keys(tokenPermissions).length > 64) {
-          throw new Error('GitHub installation token permissions are invalid');
+          throw new GitHubAppResponseError('invalid_token_permissions', 'GitHub installation token permissions are invalid');
         }
         for (const [permission, access] of Object.entries(tokenPermissions)) {
           if (!/^[a-z][a-z_]{0,63}$/u.test(permission) ||
               (access !== 'read' && access !== 'write' && access !== 'admin')) {
-            throw new Error('GitHub installation token permissions are invalid');
+            throw new GitHubAppResponseError('invalid_token_permissions', 'GitHub installation token permissions are invalid');
           }
         }
         for (const [permission, requested] of Object.entries(permissions)) {
           const granted = tokenPermissions[permission];
           if (granted !== requested && !(requested === 'read' && (granted === 'write' || granted === 'admin'))) {
-            throw new Error('GitHub installation token permissions are invalid');
+            throw new GitHubAppResponseError('invalid_token_permissions', 'GitHub installation token permissions are invalid');
           }
         }
       }
