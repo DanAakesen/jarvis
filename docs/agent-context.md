@@ -1,5 +1,7 @@
 # Agent context
 
+Current DailyDeveloperCloud release is #719 / P12-04 on `codex/p12-04-health-upload-buffer`: code-only inactive dedicated upload/heartbeat, private Blob acceptance outbox and pointer Queue; no production registration/provisioning/permissions or #720 processing. Source `/workspace/.jarvis-tools/activate.sh` in each cloud shell. Focused actual HTTP/SDK/emulator checks: `npm test --workspace @jarvis/backend -- src/daily/health-upload/buffer.emulator.test.ts`; Azurite is isolated synthetic dev-only and uses no API-version/loose bypass. Run backend lint/build, affected auth/module regressions and full exact-head CI/container/SQL. Keep PR draft until explicit coordinator readiness release, use Refs #719, preserve workflow-owned PLAN statuses. [Boundary/gates](../apps/backend/src/daily/health-upload/README.md). #727 is merged inactive with device/recovery acceptance open; #725/#717 are parked. No original-source/private-data access, Azure calls, paid resources, role/secret grants or own-PR merge.
+
 ## Workspace window release (12 October 2026)
 
 Dan and the coordinator authorised #430 whole after #751 merged, including

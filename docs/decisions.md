@@ -1,5 +1,9 @@
 # Decisions
 
+## P12-04 inactive durable upload boundary (13 October 2026)
+
+The [coordinator release](https://github.com/DanAakesen/jarvis/issues/719#issuecomment-6135270257) authorizes only dedicated upload/heartbeat, revocable owner/device capability and private Blob/pointer Queue code. A conditional Blob manifest is the acceptance outbox so Queue/SQL/agent outage cannot discard acknowledged uploads. Queue pointers do not expire and may repeat; no exactly-once processing claim follows from HTTP 202. Raw bytes retain source format/units/timezone, including empty workouts. A separate unregistered factory preserves existing human authentication and default-off composition. Synthetic SDK/Azurite and killed-process tests are distinct from Azure/iPhone verification. Provisioning, identities/roles/secrets, activation, private source migration and #720 processing remain gated; original Daily stays canonical and untouched by migration tooling.
+
 ## P12-10 reviewed inactive implementation (12 October 2026)
 
 Correction review hold: the ready-triggered canonical node-budget finding supersedes release readiness for the affected serialization boundary. Convert all source serialization guard failures into sanitized independent errors; compose the fixed two-source run from individually guarded canonical trees instead of imposing nutrition's smaller single-tree aggregate budget. Preserve prior canonical bytes/checksums and leave shared nutrition guards unchanged. Require focused, real isolated SQL and full exact-head CI plus independent correction review; no activation or live acceptance follows from the earlier intermediate code review.
