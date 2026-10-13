@@ -111,7 +111,18 @@ describe('Entra bearer authentication at the server boundary', () => {
     const forbidden = await app.inject({ url: '/protected', headers: { authorization } });
 
     expect(accepted.statusCode).toBe(200);
-    expect(accepted.json().entries).toHaveLength(8);
+    expect(accepted.json().entries).toHaveLength(15);
+    expect(accepted.json().entries.map(({ id }: { id: string }) => id)).toEqual(
+      expect.arrayContaining([
+        'chat_identity',
+        'chat_capabilities',
+        'chat_github_read',
+        'chat_jobs',
+        'chat_navigation',
+        'chat_no_timestamp',
+        'chat_plain_approval',
+      ]),
+    );
     expect(forbidden.statusCode).toBe(403);
   });
   it.each([

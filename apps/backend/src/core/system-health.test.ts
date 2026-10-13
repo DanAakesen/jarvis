@@ -56,7 +56,7 @@ describe('structured system health', () => {
     vi.useFakeTimers(); vi.setSystemTime(now);
     const f = fixture();
     const result = await health(f.app);
-    expect(result.components).toHaveLength(28);
+    expect(result.components).toHaveLength(ids.length + systemSmokeCheckIds.length + f.credentials.length + 5);
     expect(result.components.every((item) => item.status === 'ok' && item.recovery.length === 0)).toBe(true);
     expect(result.components.map(({ id }) => id)).toEqual([...ids, ...systemSmokeCheckIds.map((id) => `smoke.${id}`),
       ...f.credentials.map(({ name }) => `credential.${name}`), 'background_jobs', 'deployment', 'work',
@@ -185,6 +185,9 @@ describe('structured system health', () => {
     expect(f.app.systemHealthDiagnostics.counts().invalid).toBe(1);
     expect((await f.app.inject({ method: 'POST', url: '/tools/get_system_health', payload: {} })).statusCode).toBe(401);
     expect(f.app.jarvisTools.get('get_system_health')!.inputSchema).toEqual({
-      type: 'object', properties: {}, additionalProperties: false });
+      type: 'object',
+      properties: { operation: { type: 'string', enum: ['list_capabilities', 'confirmation_test'] } },
+      additionalProperties: false,
+    });
   });
 });

@@ -317,13 +317,15 @@ export function createGitHubFactoryBoardReader(fetchImpl: typeof fetch = fetch):
             token,
             signal,
           );
-          const blockedBy = dependencies.map((dependency) => {
+          // The summary's blocked_by counts OPEN blockers only, while the list also returns closed ones.
+          const blockedBy = dependencies.flatMap((dependency) => {
             const blockedIssue = record(dependency);
             if (!blockedIssue || !Number.isSafeInteger(blockedIssue.number) ||
-                (blockedIssue.number as number) < 1) {
+                (blockedIssue.number as number) < 1 ||
+                (blockedIssue.state !== 'open' && blockedIssue.state !== 'closed')) {
               throw new Error('GitHub board response is invalid');
             }
-            return blockedIssue.number as number;
+            return blockedIssue.state === 'open' ? [blockedIssue.number as number] : [];
           });
           if (blockedBy.length !== issue.blockedByCount) throw new Error('GitHub board response is incomplete');
           return { ...issue, blockedBy };

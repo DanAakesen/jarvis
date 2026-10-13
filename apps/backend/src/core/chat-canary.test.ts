@@ -1,79 +1,147 @@
 import { describe, expect, it, vi } from 'vitest';
-import { ChatAgentError, type ConversationAgent } from './chat-agent.js';
-import { createChatCanaryProbe } from './chat-canary.js';
+import type { ConversationAgent, ConversationAgentInput, ConversationAgentToolCall } from './chat-agent.js';
+import { createChatAcceptanceProbes } from './chat-canary.js';
 
-function agent(stream: ConversationAgent['stream']): ConversationAgent {
-  return { stream };
+const prompts = [
+  'who are you and what can you do?',
+  'what can you do?',
+  'what is in issue 700?',
+  'what jobs are running?',
+  'open the settings page',
+  'What does the image show, and when was it captured?',
+  'Please run the no-op test action. Ask me before running it.',
+];
+
+function passingAgent(
+  override: (input: ConversationAgentInput) => { text: string; calls?: ConversationAgentToolCall[] } | undefined = () => undefined,
+): ConversationAgent {
+  const implementation: ConversationAgent['stream'] = async function* (input) {
+    const changed = override(input);
+    const defaultCalls: ConversationAgentToolCall[] = input.text === 'what can you do?' ? [{
+      name: 'get_system_health', operation: 'list_capabilities', outcome: 'ok',
+      capabilities: ['Notes: vault_read, vault_search', 'Calendar: calendar_today_agenda', 'GitHub tools: github_read'],
+    }] : input.text === 'what is in issue 700?' ? [{
+      name: 'github_read', operation: 'issue_get', number: 700, outcome: 'ok', title: 'Camera preview behavior',
+    }] : input.text === 'what jobs are running?' ? [{
+      name: 'list_jobs', outcome: 'ok',
+    }] : input.text === 'open the settings page' ? [{
+      name: 'workspace_command', operation: 'navigate', page: 'settings', outcome: 'refused',
+      refusal: 'No tab connected for the deployment smoke check.',
+    }] : input.text === prompts[6] ? [{
+      name: 'get_system_health', operation: 'confirmation_test', outcome: 'refused',
+    }] : input.text === 'yes' ? [{
+      name: 'get_system_health', operation: 'confirmation_test', outcome: 'ok', executed: true,
+    }] : [];
+    const calls = changed ? changed.calls ?? [] : defaultCalls;
+    input.onAgentToolCalls?.(calls);
+    yield changed?.text ?? (input.text === 'who are you and what can you do?'
+      ? 'I am Jarvis, and I can help with your tools.'
+      : input.text === 'what can you do?'
+        ? 'I can help with notes, calendar, and GitHub tools.'
+        : input.text === 'what is in issue 700?'
+          ? 'Issue 700 is Camera preview behavior.'
+          : input.text === 'what jobs are running?'
+            ? 'There are no running jobs.'
+            : input.text === 'open the settings page'
+              ? 'I cannot open Settings because no tab is connected.'
+              : input.text === prompts[6]
+                ? 'I need your confirmation before running the no-op action.'
+                : input.text === 'yes'
+                  ? 'The no-op action is complete.'
+                  : 'I cannot see an image, so I cannot say when it was captured.');
+  };
+  return { stream: vi.fn(implementation) };
 }
 
-function failingAgent(error: Error): ConversationAgent {
-  return agent(() => ({
-    [Symbol.asyncIterator]: () => ({
-      next: async () => { throw error; },
-    }),
-  }));
+function probes(agent: ConversationAgent, now?: () => number) {
+  return createChatAcceptanceProbes(agent, now);
 }
 
-describe('chat canary probe', () => {
-  it('accepts a non-empty reply from the system smoke path', async () => {
-    const stream = vi.fn(async function* () { yield 'ok'; });
-    const probe = createChatCanaryProbe(agent(stream));
+describe('post-deploy chat acceptance suite', () => {
+  it('reports each scripted prompt as an independent passing check', async () => {
+    const agent = passingAgent();
+    const suite = probes(agent);
+    const entries = await Promise.all(Object.entries(suite).map(async ([id, probe]) => [id, await probe!()] as const));
 
-    await expect(probe()).resolves.toMatchObject({ status: 'ok' });
-    expect(stream).toHaveBeenCalledWith({
-      messageId: '1',
-      text: 'Reply with the single word ok.',
-      language: 'en',
-      smoke: true,
-    }, '', expect.any(AbortSignal));
-  });
-
-  it('reports catalogue failures, empty replies, and other agent errors safely', async () => {
-    const catalogueUnavailable = createChatCanaryProbe(
-      failingAgent(new ChatAgentError('catalogue_unavailable')),
-    );
-    const empty = createChatCanaryProbe(agent(async function* () { yield '  \n'; }));
-    const agentError = createChatCanaryProbe(
-      failingAgent(new Error('provider response contains private data')),
-    );
-
-    await expect(catalogueUnavailable()).resolves.toMatchObject({
-      status: 'down', reason: 'catalogue_unavailable',
+    expect(Object.fromEntries(entries)).toEqual({
+      chat_identity: { status: 'ok' },
+      chat_capabilities: { status: 'ok' },
+      chat_github_read: { status: 'ok' },
+      chat_jobs: { status: 'ok' },
+      chat_navigation: { status: 'ok' },
+      chat_no_timestamp: { status: 'ok' },
+      chat_plain_approval: { status: 'ok' },
+      chat_canary: { status: 'ok' },
     });
-    await expect(empty()).resolves.toMatchObject({ status: 'down', reason: 'empty_reply' });
-    await expect(agentError()).resolves.toMatchObject({ status: 'down', reason: 'agent_error' });
-    expect(JSON.stringify(await agentError())).not.toContain('private data');
+    expect(agent.stream).toHaveBeenCalledTimes(8);
+    const inputs = vi.mocked(agent.stream).mock.calls.map(([input]) => input);
+    expect(inputs.map(({ text }) => text)).toEqual(expect.arrayContaining(prompts));
+    expect(inputs.find(({ text }) => text === 'yes')).toMatchObject({
+      smoke: true,
+      smokeApproval: true,
+      smokeHistory: [
+        { role: 'user', text: prompts[6] },
+        { role: 'assistant', text: 'I need your confirmation before running the no-op action.' },
+      ],
+    });
+    expect(inputs.every(({ smoke }) => smoke === true)).toBe(true);
   });
 
-  it('times out a stalled hosted-agent turn', async () => {
+  it('fails the matching deterministic check when a required tool call is missing', async () => {
+    const suite = probes(passingAgent((input) => input.text === 'what is in issue 700?'
+      ? { text: 'Issue 700 is Camera preview behavior.' }
+      : undefined));
+
+    await expect(suite.chat_github_read!()).resolves.toMatchObject({
+      status: 'down', reason: 'github_issue_unavailable',
+    });
+    await expect(suite.chat_canary!()).resolves.toMatchObject({
+      status: 'down', reason: 'acceptance_check_failed',
+    });
+  });
+
+  it('reports wording-only identity and missing-image timestamp failures as warnings', async () => {
+    const suite = probes(passingAgent((input) => input.text === prompts[0]
+      ? { text: 'I am a generic assistant named Jarvis.' }
+      : input.text === prompts[5]
+        ? { text: 'The image was captured at 12:34.' }
+        : undefined));
+
+    await expect(suite.chat_identity!()).resolves.toMatchObject({ status: 'degraded' });
+    await expect(suite.chat_no_timestamp!()).resolves.toMatchObject({ status: 'degraded' });
+    await expect(suite.chat_canary!()).resolves.toMatchObject({ status: 'ok' });
+  });
+
+  it('coalesces concurrent report entries and caches one suite for 60 seconds', async () => {
+    let now = 0;
+    const agent = passingAgent();
+    const suite = probes(agent, () => now);
+
+    await Promise.all(Object.values(suite).map((probe) => probe!()));
+    await suite.chat_jobs!();
+    expect(agent.stream).toHaveBeenCalledTimes(8);
+
+    now = 60_000;
+    await suite.chat_jobs!();
+    expect(agent.stream).toHaveBeenCalledTimes(16);
+  });
+
+  it('bounds a stalled prompt and returns a safe failure', async () => {
     vi.useFakeTimers();
     try {
-      const stalled = agent(() => ({
-        [Symbol.asyncIterator]: () => ({
-          next: () => new Promise<IteratorResult<string>>(() => {}),
-          return: async () => ({ done: true, value: undefined }),
+      const stalled: ConversationAgent = {
+        stream: () => ({
+          [Symbol.asyncIterator]: () => ({
+            next: () => new Promise<IteratorResult<string>>(() => {}),
+            return: async () => ({ done: true, value: undefined }),
+          }),
         }),
-      }));
-      const probe = createChatCanaryProbe(stalled);
-      const result = probe();
-      await vi.advanceTimersByTimeAsync(45_000);
+      };
+      const result = probes(stalled).chat_jobs!();
+      await vi.advanceTimersByTimeAsync(25_000);
       await expect(result).resolves.toMatchObject({ status: 'down', reason: 'timeout' });
     } finally {
       vi.useRealTimers();
     }
-  });
-
-  it('caches and coalesces calls for 60 seconds', async () => {
-    let now = 0;
-    const stream = vi.fn(async function* () { yield 'ok'; });
-    const probe = createChatCanaryProbe(agent(stream), () => now);
-
-    await Promise.all([probe(), probe()]);
-    await probe();
-    expect(stream).toHaveBeenCalledOnce();
-
-    now = 60_000;
-    await probe();
-    expect(stream).toHaveBeenCalledTimes(2);
   });
 });

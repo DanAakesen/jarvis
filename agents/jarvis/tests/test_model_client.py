@@ -332,6 +332,11 @@ PC_OPEN = {
         "required": ["url"],
     },
 }
+LIST_JOBS = {
+    "name": "list_jobs",
+    "description": "List running jobs.",
+    "inputSchema": {"type": "object", "properties": {}, "additionalProperties": False},
+}
 
 
 class FakeBackend:
@@ -419,25 +424,137 @@ async def test_chat_uses_capability_instructions_from_agent_settings() -> None:
 
 
 @pytest.mark.asyncio
-async def test_smoke_chat_validates_catalogue_without_context_or_tool_execution() -> None:
+async def test_smoke_chat_executes_only_read_only_tools_without_context_or_history() -> None:
+    tool_call = FakeItem(
+        type="function_call", call_id="smoke_tool", name="list_jobs", arguments="{}",
+    )
+    backend = FakeBackend(catalogue=[LIST_JOBS])
+    model, transport = client([], rounds=[[completed(tool_call)], [completed()]], backend=backend)
+
+    _ = [chunk async for chunk in model.complete_chat(
+        [ModelMessage("user", "what jobs are running?")], "en", smoke=True,
+    )]
+
+    request = transport.responses.request
+    assert request is not None
+    assert [tool["name"] for tool in request["tools"]] == ["list_jobs"]
+    assert "Reference context from Jarvis" not in json.dumps(request["input"])
+    assert request["max_output_tokens"] == 32
+    tool_request = next(
+        request for request in backend.requests if request.url.path == "/tools/list_jobs"
+    )
+    assert tool_request.headers["x-jarvis-smoke"] == "true"
+    assert "x-jarvis-message-id" not in tool_request.headers
+    assert not any(request.url.path == "/factory/context" for request in backend.requests)
+    assert json.loads(backend.requests[-1].content)["role"] == "smoke"
+
+
+@pytest.mark.asyncio
+async def test_smoke_chat_refuses_tools_outside_the_read_only_allowlist() -> None:
     tool_call = FakeItem(
         type="function_call", call_id="smoke_tool", name="create_task", arguments="{}",
     )
     backend = FakeBackend()
-    model, transport = client([completed(tool_call)], backend=backend)
+    model, transport = client([], rounds=[[completed(tool_call)], [completed()]], backend=backend)
 
-    with pytest.raises(RuntimeError, match="smoke turn requested a tool"):
-        _ = [chunk async for chunk in model.complete_chat(
-            [ModelMessage("user", "Reply with the single word ok.")], "en", smoke=True,
-        )]
+    _ = [chunk async for chunk in model.complete_chat(
+        [ModelMessage("user", "what jobs are running?")], "en", smoke=True,
+    )]
 
     assert transport.responses.request is not None
-    assert "tools" not in transport.responses.request
-    assert "Reference context from Jarvis" not in json.dumps(transport.responses.request["input"])
-    assert [request.url.path for request in backend.requests] == [
-        "/tools", "/agent/settings", "/usage/foundry",
+    assert transport.responses.request.get("tools", []) == []
+    assert all(request.url.path != "/tools/create_task" for request in backend.requests)
+
+
+@pytest.mark.asyncio
+async def test_smoke_catalogue_is_narrowed_and_test_operations_are_hidden_from_chat() -> None:
+    catalogue = [
+        {
+            "name": "get_system_health",
+            "description": "System health.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "operation": {
+                        "type": "string",
+                        "enum": ["list_capabilities", "confirmation_test"],
+                    }
+                },
+                "additionalProperties": False,
+            },
+        },
+        {
+            "name": "github_read",
+            "description": "Read GitHub.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "operation": {"type": "string", "enum": ["issue_get", "issue_comments"]},
+                    "number": {"type": "integer"},
+                },
+                "required": ["operation", "number"],
+                "additionalProperties": False,
+            },
+        },
+        LIST_JOBS,
+        {
+            "name": "workspace_command",
+            "description": "Navigate or control the workspace.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "commandId": {"type": "string"},
+                    "operation": {"type": "string"},
+                    "page": {"type": "string"},
+                },
+                "required": ["commandId", "operation"],
+                "additionalProperties": False,
+            },
+        },
     ]
-    assert json.loads(backend.requests[-1].content)["role"] == "smoke"
+    backend = FakeBackend(catalogue=catalogue)
+    model, transport = client([], rounds=[[completed()], [completed()]], backend=backend)
+
+    _ = [chunk async for chunk in model.complete_chat(
+        [ModelMessage("user", "what can you do?")], "en", smoke=True,
+    )]
+    _ = [chunk async for chunk in model.complete_chat(
+        [ModelMessage("user", "How is the system?")], "en",
+    )]
+
+    smoke_tools = transport.responses.requests[0]["tools"]
+    assert [tool["name"] for tool in smoke_tools] == [
+        "get_system_health", "github_read", "list_jobs", "workspace_command",
+    ]
+    assert smoke_tools[1]["parameters"]["properties"]["operation"] == {
+        "type": "string", "const": "issue_get",
+    }
+    assert smoke_tools[1]["parameters"]["properties"]["number"] == {
+        "type": "integer", "const": 700,
+    }
+    assert smoke_tools[3]["parameters"]["properties"]["page"]["const"] == "settings"
+    chat_health = next(
+        tool for tool in transport.responses.requests[1]["tools"]
+        if tool["name"] == "get_system_health"
+    )
+    assert chat_health["parameters"]["properties"] == {}
+
+
+@pytest.mark.asyncio
+async def test_smoke_invocation_executes_at_most_one_tool_call() -> None:
+    calls = [
+        FakeItem(type="function_call", call_id=f"smoke_{index}", name="list_jobs", arguments="{}")
+        for index in range(2)
+    ]
+    backend = FakeBackend(catalogue=[LIST_JOBS])
+    model, _ = client([], rounds=[[completed(*calls)]], backend=backend)
+
+    with pytest.raises(RuntimeError, match="Smoke tool-call limit exceeded"):
+        _ = [chunk async for chunk in model.complete_chat(
+            [ModelMessage("user", "what jobs are running?")], "en", smoke=True,
+        )]
+
+    assert not any(request.url.path == "/tools/list_jobs" for request in backend.requests)
 
 
 def test_builds_responses_base_url_from_project_endpoint() -> None:
