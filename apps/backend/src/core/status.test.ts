@@ -6,8 +6,7 @@ import type { NowFeedSnapshot, NowFeedStore } from './now.js';
 import { coreModule } from './index.js';
 import { summarizeNowFeed } from './status.js';
 import { createSystemStatusReader } from '../system-status.js';
-import { createChatCanaryProbe } from './chat-canary.js';
-import type { ConversationStore } from '../database/conversation-store.js';
+import { systemSmokeCheckIds } from '@jarvis/contracts';
 
 const config = { ...loadConfig({}), logLevel: 'silent' as const };
 const headers = {
@@ -138,24 +137,14 @@ describe('get_status_summary', () => {
     const embeddings = vi.fn(async () => ({ status: 'ok' as const }));
     const research = vi.fn(async () => ({ status: 'ok' as const }));
     const agentContract = vi.fn(async () => ({ status: 'ok' as const }));
-    const conversationStore = {
-      createSession: vi.fn(async () => null),
-      addMessage: vi.fn(async () => null),
-    } as unknown as ConversationStore;
-    const recordToolCall = vi.fn(async () => {});
-    const canaryAgent = {
-      stream: vi.fn(async function* () { yield 'ok'; }),
-    };
     const reader = createSystemStatusReader({ google }, undefined);
     const app = buildApp(config, undefined, {
       modules: [coreModule],
       auth: async () => ({ objectId: config.auth.ownerObjectId, tenantId: config.auth.tenantId }),
       systemStatusReader: reader,
-      conversationStore,
-      toolCallStore: { record: recordToolCall },
       systemSmokeProbes: {
         vault, 'foundry.embeddings': embeddings, research, agent_contract: agentContract,
-        chat_canary: createChatCanaryProbe(canaryAgent),
+        chat_canary: async () => ({ status: 'ok' as const }),
       },
     });
     apps.push(app);
@@ -166,7 +155,8 @@ describe('get_status_summary', () => {
 
     expect(smoke.statusCode).toBe(200);
     expect(smoke.headers['cache-control']).toBe('no-store');
-    expect(smoke.json().entries).toHaveLength(8);
+    expect(smoke.json().entries).toHaveLength(systemSmokeCheckIds.length);
+    expect(smoke.json().entries.map(({ id }: { id: string }) => id)).toEqual(systemSmokeCheckIds);
     expect(smoke.json().entries).toEqual(expect.arrayContaining([
       expect.objectContaining({ id: 'google', status: 'ok' }),
       expect.objectContaining({ id: 'vault', status: 'ok' }),
@@ -181,10 +171,6 @@ describe('get_status_summary', () => {
     expect(embeddings).toHaveBeenCalledOnce();
     expect(research).toHaveBeenCalledOnce();
     expect(agentContract).toHaveBeenCalledOnce();
-    expect(canaryAgent.stream).toHaveBeenCalledOnce();
-    expect(conversationStore.createSession).not.toHaveBeenCalled();
-    expect(conversationStore.addMessage).not.toHaveBeenCalled();
-    expect(recordToolCall).not.toHaveBeenCalled();
     expect(JSON.stringify(smoke.json())).not.toMatch(/token|secret|private|configured/iu);
   });
 
@@ -195,6 +181,66 @@ describe('get_status_summary', () => {
 
     expect(unauthenticated.statusCode).toBe(401);
     expect(unauthenticated.json()).toEqual({ error: 'Unauthorized' });
+  });
+
+  it('limits smoke tool calls to safe checks and gates the no-op action on approval', async () => {
+    const record = vi.fn(async () => {});
+    const catalogueTools = ['vault_read', 'calendar_today_agenda', 'github_read'].map((name) => ({
+      name,
+      description: `Read-only ${name}.`,
+      inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+      execute: async () => ({}),
+    }));
+    const app = buildApp(config, undefined, {
+      modules: [coreModule, { id: 'smoke-catalogue', tools: catalogueTools }],
+      auth: async () => ({ kind: 'jarvis-agent', objectId: 'agent', tenantId: config.auth.tenantId }),
+      toolCallStore: { record },
+    });
+    apps.push(app);
+    const smokeHeaders = {
+      authorization: headers.authorization,
+      'x-jarvis-smoke': 'true',
+    };
+
+    const catalogue = await app.inject({ url: '/tools', headers: smokeHeaders });
+    const notApproved = await app.inject({
+      method: 'POST', url: '/tools/get_system_health', headers: smokeHeaders,
+      payload: { operation: 'confirmation_test' },
+    });
+    const capabilities = await app.inject({
+      method: 'POST', url: '/tools/get_system_health', headers: smokeHeaders,
+      payload: { operation: 'list_capabilities' },
+    });
+    const approved = await app.inject({
+      method: 'POST', url: '/tools/get_system_health',
+      headers: { ...smokeHeaders, 'x-jarvis-smoke-approval': 'true' },
+      payload: { operation: 'confirmation_test' },
+    });
+    const navigation = await app.inject({
+      method: 'POST', url: '/tools/workspace_command', headers: smokeHeaders,
+      payload: { commandId: 'smoke-settings', operation: 'navigate', page: 'settings' },
+    });
+
+    expect(catalogue.statusCode).toBe(200);
+    expect(catalogue.json().map(({ name }: { name: string }) => name)).toEqual([
+      'get_system_health', 'workspace_command', 'list_jobs',
+    ]);
+    expect(notApproved.json()).toMatchObject({
+      outcome: 'refused', result: { refused: expect.stringContaining('Confirmation required') },
+    });
+    expect(capabilities.json()).toMatchObject({
+      outcome: 'ok',
+      result: { capabilities: [
+        'Notes: vault_read', 'Calendar: calendar_today_agenda', 'GitHub tools: github_read',
+      ] },
+    });
+    expect(approved.json()).toMatchObject({
+      outcome: 'ok', result: { executed: true },
+    });
+    expect(navigation.json()).toMatchObject({
+      outcome: 'refused', result: { refused: expect.stringContaining('No tab connected') },
+    });
+    expect(record).not.toHaveBeenCalled();
   });
 
   it('records a failed research dry run without returning provider error text', async () => {

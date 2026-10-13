@@ -32,6 +32,8 @@ export interface ConversationAgentInput {
   readonly text: string;
   readonly language: 'da' | 'en';
   readonly smoke?: boolean;
+  readonly smokeHistory?: readonly { readonly role: 'user' | 'assistant'; readonly text: string }[];
+  readonly smokeApproval?: boolean;
   readonly screenContext?: string;
   readonly visualContext?: VisualContext;
   readonly attachments?: readonly {
@@ -47,6 +49,19 @@ export interface ConversationAgentInput {
   readonly onVisualResult?: (result: ConversationVisualResult) => void;
   readonly onAgentPhaseTimings?: (timings: AgentPhaseTimings) => void;
   readonly onAgentSessionTelemetry?: (telemetry: FoundryAgentSessionTelemetry) => void;
+  readonly onAgentToolCalls?: (calls: readonly ConversationAgentToolCall[]) => void;
+}
+
+export interface ConversationAgentToolCall {
+  readonly name: string;
+  readonly operation?: string;
+  readonly number?: number;
+  readonly page?: string;
+  readonly outcome: 'ok' | 'refused' | 'error';
+  readonly title?: string;
+  readonly capabilities?: readonly string[];
+  readonly refusal?: string;
+  readonly executed?: boolean;
 }
 
 export interface ConversationVisualResult {
@@ -209,7 +224,8 @@ export function createFoundryInvocationConversationAgent(
   return {
     async *stream(input, authorization, signal) {
       const {
-        onVisualResult, onAgentPhaseTimings, onAgentSessionTelemetry, agentSessionId, smoke, ...payload
+        onVisualResult, onAgentPhaseTimings, onAgentSessionTelemetry, onAgentToolCalls,
+        agentSessionId, smoke, ...payload
       } = input;
       if (agentSessionId !== undefined && !uuidPattern.test(agentSessionId)) {
         throw new TypeError('Foundry chat session ID is invalid');
@@ -264,6 +280,27 @@ export function createFoundryInvocationConversationAgent(
           const result = JSON.parse(event.data) as Record<string, unknown>;
           const phaseTimings = phaseTimingsFromDone(result);
           if (phaseTimings) onAgentPhaseTimings?.(phaseTimings);
+          if (Array.isArray(result.smokeToolCalls)) {
+            const calls = result.smokeToolCalls.flatMap((item): ConversationAgentToolCall[] => {
+              if (typeof item !== 'object' || item === null || !('name' in item) ||
+                  typeof item.name !== 'string' || !('outcome' in item) ||
+                  (item.outcome !== 'ok' && item.outcome !== 'refused' && item.outcome !== 'error')) return [];
+              return [{
+                name: item.name,
+                ...(typeof item.operation === 'string' ? { operation: item.operation } : {}),
+                ...(typeof item.number === 'number' ? { number: item.number } : {}),
+                ...(typeof item.page === 'string' ? { page: item.page } : {}),
+                outcome: item.outcome,
+                ...(typeof item.title === 'string' ? { title: item.title } : {}),
+                ...(Array.isArray(item.capabilities) &&
+                  item.capabilities.every((value: unknown) => typeof value === 'string')
+                  ? { capabilities: item.capabilities } : {}),
+                ...(typeof item.refusal === 'string' ? { refusal: item.refusal } : {}),
+                ...(typeof item.executed === 'boolean' ? { executed: item.executed } : {}),
+              }];
+            });
+            onAgentToolCalls?.(calls);
+          }
           if (result.visualPath === 'image' || result.visualPath === 'caption') {
             onVisualResult?.({ visualPath: result.visualPath,
               ...(typeof result.model === 'string' && /^[A-Za-z0-9][A-Za-z0-9: ._-]{0,127}$/u.test(result.model)

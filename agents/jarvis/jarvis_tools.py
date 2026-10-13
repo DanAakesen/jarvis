@@ -27,6 +27,16 @@ from chat_telemetry import latency_span
 from state import ModelSettings
 
 logger = logging.getLogger("jarvis_tools")
+SMOKE_TOOL_NAMES = frozenset({"get_system_health", "github_read", "list_jobs", "workspace_command"})
+current_smoke_invocation: contextvars.ContextVar[bool] = contextvars.ContextVar(
+    "current_smoke_invocation", default=False
+)
+current_smoke_approval: contextvars.ContextVar[bool] = contextvars.ContextVar(
+    "current_smoke_approval", default=False
+)
+current_smoke_tool_calls: contextvars.ContextVar[list[dict[str, Any]] | None] = (
+    contextvars.ContextVar("current_smoke_tool_calls", default=None)
+)
 
 # Single source of truth for the shared-instruction budget; the backend tests read the same file.
 LIMITS = json.loads((Path(__file__).parent / "limits.json").read_text(encoding="utf-8"))
@@ -663,6 +673,9 @@ class BackendToolClient:
     async def _call(
         self, name: str, arguments_json: str | None, message_id: str | None
     ) -> dict[str, Any]:
+        smoke = current_smoke_invocation.get()
+        if smoke and name not in SMOKE_TOOL_NAMES:
+            return _error(name, "This tool is unavailable to the read-only smoke role.")
         if self._catalogue is None:
             return _error(name, "The backend tool catalogue is unavailable; nothing was done.")
         if not any(tool.name == name for tool in self._catalogue):
@@ -683,7 +696,7 @@ class BackendToolClient:
             )
         voice_item_id = current_turn.get() if message_id is None else ""
         if message_id is None and not (
-            name in _READ_ONLY_VAULT_TOOLS or
+            (smoke and name in SMOKE_TOOL_NAMES) or name in _READ_ONLY_VAULT_TOOLS or
             isinstance(voice_item_id, str) and _VOICE_ITEM_ID.fullmatch(voice_item_id)
         ):
             return _error(
@@ -699,6 +712,10 @@ class BackendToolClient:
             logger.warning("Could not get the agent identity token", exc_info=True)
             return _error(name, "I could not authenticate to the backend; nothing was done.")
         headers = {"Authorization": _bearer(token)}
+        if smoke:
+            headers["X-Jarvis-Smoke"] = "true"
+            if current_smoke_approval.get():
+                headers["X-Jarvis-Smoke-Approval"] = "true"
         if message_id is not None:
             headers["X-Jarvis-Message-ID"] = message_id
         elif isinstance(voice_item_id, str) and _VOICE_ITEM_ID.fullmatch(voice_item_id):
@@ -756,6 +773,40 @@ class BackendToolClient:
             result = None
         if not isinstance(result, dict) or not isinstance(result.get("outcome"), str):
             return _error(name, "The backend answer was not understood; check before retrying.")
+        trace = current_smoke_tool_calls.get()
+        if smoke and trace is not None and len(trace) < 32:
+            call: dict[str, Any] = {
+                "name": name,
+                "outcome": result["outcome"]
+                if result["outcome"] in {"ok", "refused", "error"}
+                else "error",
+            }
+            operation = arguments.get("operation")
+            if isinstance(operation, str):
+                call["operation"] = operation
+            if name == "github_read":
+                data = result.get("result")
+                if isinstance(arguments.get("number"), int):
+                    call["number"] = arguments["number"]
+                if isinstance(data, dict) and isinstance(data.get("title"), str):
+                    call["title"] = data["title"][:500]
+            elif name == "get_system_health" and operation == "list_capabilities":
+                data = result.get("result")
+                if isinstance(data, dict) and isinstance(data.get("capabilities"), list):
+                    call["capabilities"] = [
+                        item[:200] for item in data["capabilities"]
+                        if isinstance(item, str)
+                    ][:128]
+            elif name == "get_system_health" and operation == "confirmation_test":
+                data = result.get("result")
+                call["executed"] = isinstance(data, dict) and data.get("executed") is True
+            elif name == "workspace_command":
+                if arguments.get("operation") == "navigate" and arguments.get("page") == "settings":
+                    call["page"] = "settings"
+                data = result.get("result")
+                if isinstance(data, dict) and isinstance(data.get("refused"), str):
+                    call["refusal"] = data["refused"][:200]
+            trace.append(call)
         return result
 
     def diagnostics(self) -> str:

@@ -141,7 +141,7 @@ def test_system_smoke_invocation_skips_user_history_and_persistence() -> None:
             "/invocations",
             json={
                 "messageId": "1",
-                "text": "Reply with the single word ok.",
+                "text": "what can you do?",
                 "language": "en",
                 "smoke": True,
             },
@@ -162,7 +162,43 @@ def test_system_smoke_invocation_skips_user_history_and_persistence() -> None:
     assert history_reads == 0
     assert model.smoke
     assert model.chat_calls == 1
-    assert model.messages == (ModelMessage("user", "Reply with the single word ok."),)
+    assert model.messages == (ModelMessage("user", "what can you do?"),)
+
+
+def test_smoke_plain_yes_accepts_only_the_fixed_confirmation_transcript() -> None:
+    app, model = app_with(lambda *_args: None)
+    prompt = "Please run the no-op test action. Ask me before running it."
+    history = [
+        {"role": "user", "text": prompt},
+        {"role": "assistant", "text": "I need your confirmation before running it."},
+    ]
+    with TestClient(app) as client:
+        approved = client.post("/invocations", json={
+            "messageId": "1",
+            "text": "yes",
+            "language": "en",
+            "smoke": True,
+            "smokeHistory": history,
+            "smokeApproval": True,
+        })
+        not_plain = client.post("/invocations", json={
+            "messageId": "1",
+            "text": "yes please",
+            "language": "en",
+            "smoke": True,
+            "smokeHistory": history,
+            "smokeApproval": True,
+        })
+
+    assert approved.status_code == 200
+    assert not_plain.status_code == 400
+    assert model.smoke
+    assert model.message_id is None
+    assert model.messages == (
+        ModelMessage("user", prompt),
+        ModelMessage("assistant", "I need your confirmation before running it."),
+        ModelMessage("user", "yes"),
+    )
 
 
 def test_reused_agent_reloads_history_and_returns_phase_timings() -> None:

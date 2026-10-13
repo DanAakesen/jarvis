@@ -26,11 +26,13 @@ from chat_telemetry import latency_span, log_latency
 from jarvis_tools import (
     BUILT_IN_MODE_INSTRUCTIONS,
     INSTRUCTIONS,
+    SMOKE_TOOL_NAMES,
     BackendToolClient,
     backend_settings_from_environment,
     current_chat_phase_setter,
     current_chat_turn_id,
     current_message_id,
+    current_smoke_invocation,
     current_steering_fetcher,
     model_tools,
 )
@@ -476,24 +478,28 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                 + reflex_note
                 + " Relay the result honestly and acknowledge briefly. Do not repeat the action."
             )
+        smoke_token = current_smoke_invocation.set(smoke)
         try:
-            async with aclosing(self._complete(
-                messages, instructions, settings, load_settings=settings is None,
-                role="smoke" if smoke else "chat",
-            )) as response:
-                async for delta in response:
-                    yield delta
-        except ImageInputRejected as exc:
-            visual_result = current_visual_result.get()
-            if visual_result is not None:
-                visual_result["visualReason"] = exc.reason
-            caption_messages = await self._caption_messages(messages, exc, "chat")
-            async with aclosing(self._complete(
-                caption_messages, instructions, settings,
-                load_settings=settings is None, role="chat",
-            )) as response:
-                async for delta in response:
-                    yield delta
+            try:
+                async with aclosing(self._complete(
+                    messages, instructions, settings, load_settings=settings is None,
+                    role="smoke" if smoke else "chat",
+                )) as response:
+                    async for delta in response:
+                        yield delta
+            except ImageInputRejected as exc:
+                visual_result = current_visual_result.get()
+                if visual_result is not None:
+                    visual_result["visualReason"] = exc.reason
+                caption_messages = await self._caption_messages(messages, exc, "chat")
+                async with aclosing(self._complete(
+                    caption_messages, instructions, settings,
+                    load_settings=settings is None, role="chat",
+                )) as response:
+                    async for delta in response:
+                        yield delta
+        finally:
+            current_smoke_invocation.reset(smoke_token)
 
     async def _caption_messages(
         self, messages: Sequence[ModelMessage], rejection: ImageInputRejected, role: str,
@@ -579,14 +585,16 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                 if use_anthropic and self._anthropic_client is None:
                     raise RuntimeError("Foundry Claude client is unavailable")
                 reasoning_effort = (
+                    "none" if role == "smoke" else
                     settings.reasoning_effort if settings is not None else self._reasoning_effort
+                )
+                max_output_tokens = (
+                    min(self._max_output_tokens, 256)
+                    if role == "smoke" else self._max_output_tokens
                 )
                 span.set_attribute("gen_ai.request.model", model_name)
                 with latency_span("prompt_build") as prompt_span:
-                    if (
-                        role in {"chat", "smoke"} and settings is not None
-                        and settings.capability_instructions
-                    ):
+                    if role == "chat" and settings is not None and settings.capability_instructions:
                         instructions = f"{instructions}\n\n{settings.capability_instructions}"
                     base_instructions = instructions
                     instructions = personalize_instructions(instructions, settings)
@@ -602,7 +610,12 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                             }
                         )
                     model_input.extend(model_message_input(message) for message in messages)
-                    tools = [] if role == "smoke" else model_tools(catalogue)
+                    tools = model_tools(
+                        tuple(
+                            tool for tool in catalogue
+                            if role != "smoke" or tool.name in SMOKE_TOOL_NAMES
+                        )
+                    )
                     prompt_span.set_attribute("message.count", len(model_input))
                     prompt_span.set_attribute("tool.count", len(tools))
                 steering_fetcher = current_steering_fetcher.get()
@@ -625,7 +638,9 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                         current_message_id.set(message_id)
                     return bool(steering_messages)
 
-                for round_number in range(1, MAX_TOOL_ROUNDS + 1):
+                max_rounds = 2 if role == "smoke" else MAX_TOOL_ROUNDS
+                smoke_tool_call_count = 0
+                for round_number in range(1, max_rounds + 1):
                     await append_steering()
                     if phase_setter is not None and turn_id is not None:
                         await phase_setter("model")
@@ -659,7 +674,7 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                         "model": model_name,
                         "instructions": instructions,
                         "input": model_input,
-                        "max_output_tokens": self._max_output_tokens,
+                        "max_output_tokens": max_output_tokens,
                         "store": False,
                         "stream": True,
                     }
@@ -675,7 +690,7 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                                 "system": instructions,
                                 "messages": anthropic_messages(model_input),
                                 **anthropic_thinking_parameters(
-                                    reasoning_effort, self._max_output_tokens
+                                    reasoning_effort, max_output_tokens
                                 ),
                             }
                             if tools:
@@ -842,7 +857,9 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                         len(calls),
                     )
                     if role == "smoke" and calls:
-                        raise RuntimeError("The smoke turn requested a tool")
+                        smoke_tool_call_count += len(calls)
+                        if smoke_tool_call_count > 1:
+                            raise RuntimeError("Smoke tool-call limit exceeded")
                     model_input = [
                         {
                             **item,

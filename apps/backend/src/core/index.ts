@@ -25,6 +25,23 @@ import { toolArgumentRefusal, unexpectedToolArgument } from './tool-arguments.js
 import { startWorkPresentation } from './work-presentation.js';
 
 const readOnlyToolsWithoutMessage = new Set(['memory_search', 'vault_search', 'vault_read']);
+const smokeTools = new Set(['get_system_health', 'github_read', 'list_jobs', 'workspace_command']);
+
+function smokeToolAllowed(toolName: string, input: unknown): boolean {
+  if (!smokeTools.has(toolName)) return false;
+  if (toolName === 'github_read') {
+    return isObject(input) && input.operation === 'issue_get' && input.number === 700 &&
+      Object.keys(input).every((key) => ['operation', 'number'].includes(key));
+  }
+  if (toolName === 'workspace_command') {
+    return isObject(input) && input.operation === 'navigate' && input.page === 'settings';
+  }
+  if (toolName === 'get_system_health') {
+    return isObject(input) && ['list_capabilities', 'confirmation_test'].includes(String(input.operation)) &&
+      Object.keys(input).every((key) => key === 'operation');
+  }
+  return toolName === 'list_jobs';
+}
 
 // Keep deletable memory content out of the durable generic tool-call audit.
 function auditToolArguments(toolName: string, value: unknown): unknown {
@@ -122,9 +139,13 @@ export const coreModule: BackendModule = {
       if (!request.principal) return reply.code(401).send({ error: 'Unauthorized' });
       return { name: request.principal.displayName };
     });
-    app.get('/tools', { config: { jarvisAgent: true } }, async () => app.jarvisTools.list().map(({ name, description, inputSchema }) => ({
-      name, description, inputSchema,
-    })));
+    app.get('/tools', { config: { jarvisAgent: true } }, async (request, reply) => {
+      const smoke = request.headers['x-jarvis-smoke'] === 'true';
+      if (smoke && !request.agentPrincipal) return reply.code(403).send({ error: 'Smoke tools are unavailable' });
+      return app.jarvisTools.list()
+        .filter(({ name }) => !smoke || smokeTools.has(name))
+        .map(({ name, description, inputSchema }) => ({ name, description, inputSchema }));
+    });
     for (const tool of app.jarvisTools.list()) {
       app.post(`/tools/${tool.name}`, {
         config: { jarvisAgent: true },
@@ -148,6 +169,10 @@ export const coreModule: BackendModule = {
           });
         },
       }, async (request, reply) => {
+        const smoke = request.headers['x-jarvis-smoke'] === 'true';
+        if (smoke && (!request.agentPrincipal || !smokeToolAllowed(tool.name, request.body))) {
+          return reply.code(403).send({ error: 'Tool is unavailable to the read-only smoke role' });
+        }
         const messageHeader = request.headers['x-jarvis-message-id'];
         const voiceItemHeader = request.headers['x-jarvis-voice-item-id'];
         const phoneSessionHeader = request.headers['x-jarvis-phone-session-id'];
@@ -166,7 +191,7 @@ export const coreModule: BackendModule = {
         const validMessageId = messageId !== undefined &&
           /^[1-9]\d{0,18}$/u.test(messageId) && BigInt(messageId) <= 9_223_372_036_854_775_807n;
         const unrecordedRead = messageId === undefined && request.agentPrincipal !== null &&
-          readOnlyToolsWithoutMessage.has(tool.name);
+          (readOnlyToolsWithoutMessage.has(tool.name) || smoke);
         if (!validMessageId && !unrecordedRead) {
           return reply.code(400).send({ error: 'Invalid message ID' });
         }
@@ -206,7 +231,7 @@ export const coreModule: BackendModule = {
         };
         request.raw.once('aborted', abortOnRequest);
         reply.raw.once('close', abortOnClose);
-        const presentation = startWorkPresentation(tool.name, request.body, request, activityId,
+        const presentation = smoke ? undefined : startWorkPresentation(tool.name, request.body, request, activityId,
           messageId ?? (typeof voiceItemHeader === 'string' ? voiceItemHeader : activityId), controller.signal,
           voiceItemHeader !== undefined || phoneSessionId !== undefined ? 'voice' : 'chat');
         let outcome: ToolCallOutcome = 'ok';
@@ -246,7 +271,7 @@ export const coreModule: BackendModule = {
           }
         } finally {
           if (outcome === 'error') app.systemHealthDiagnostics.record('failed');
-          presentation.finish(result, outcome === 'ok');
+          presentation?.finish(result, outcome === 'ok');
           request.raw.removeListener('aborted', abortOnRequest);
           reply.raw.removeListener('close', abortOnClose);
         }

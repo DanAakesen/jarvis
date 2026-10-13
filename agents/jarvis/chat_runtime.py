@@ -31,6 +31,9 @@ from jarvis_tools import (
     current_chat_turn_id,
     current_conversation,
     current_message_id,
+    current_smoke_approval,
+    current_smoke_invocation,
+    current_smoke_tool_calls,
     current_steering_fetcher,
     current_turn,
 )
@@ -69,6 +72,15 @@ MAX_ATTACHMENT_CONTEXT_CHARACTERS = 2_000
 MAX_OUTPUT_BYTES = 512 * 1024
 MESSAGE_ID = re.compile(r"^[1-9][0-9]{0,18}$")
 MAX_SQL_BIGINT = 9_223_372_036_854_775_807
+SMOKE_PROMPTS = frozenset({
+    "who are you and what can you do?",
+    "what can you do?",
+    "what is in issue 700?",
+    "what jobs are running?",
+    "open the settings page",
+    "What does the image show, and when was it captured?",
+    "Please run the no-op test action. Ask me before running it.",
+})
 current_backend_http_timeout_seconds: contextvars.ContextVar[int] = contextvars.ContextVar(
     "backend_http_timeout_seconds", default=int(BACKEND_HTTP_TIMEOUT_SECONDS)
 )
@@ -390,6 +402,8 @@ def register_chat_invocation(
             body[:] = b"\0" * len(body)
 
         smoke = isinstance(payload, dict) and payload.get("smoke") is True
+        smoke_history = payload.get("smokeHistory") if isinstance(payload, dict) else None
+        smoke_approval = payload.get("smokeApproval", False) if isinstance(payload, dict) else False
         delegated_authorization = (
             payload.get("delegatedAuthorization")
             if isinstance(payload, dict) and not smoke else None
@@ -415,6 +429,10 @@ def register_chat_invocation(
             {"messageId", "text", "language", "smoke"}
             if smoke else {"messageId", "text", "language", "delegatedAuthorization"}
         )
+        if smoke and "smokeHistory" in payload:
+            expected_keys.add("smokeHistory")
+        if smoke and "smokeApproval" in payload:
+            expected_keys.add("smokeApproval")
         if isinstance(payload, dict) and "turnId" in payload:
             expected_keys.add("turnId")
         if isinstance(payload, dict) and "sessionId" in payload:
@@ -429,6 +447,29 @@ def register_chat_invocation(
             expected_keys.add("attachments")
         if isinstance(payload, dict) and "reflexNote" in payload:
             expected_keys.add("reflexNote")
+        approval_history_valid = (
+            isinstance(smoke_history, list)
+            and len(smoke_history) == 2
+            and smoke_history[0] == {
+                "role": "user",
+                "text": "Please run the no-op test action. Ask me before running it.",
+            }
+            and isinstance(smoke_history[1], dict)
+            and set(smoke_history[1]) == {"role", "text"}
+            and smoke_history[1].get("role") == "assistant"
+            and isinstance(smoke_history[1].get("text"), str)
+            and 1 <= len(smoke_history[1]["text"]) <= 2_000
+        )
+        valid_smoke_prompt = (
+            isinstance(text, str)
+            and text in SMOKE_PROMPTS
+            and "smokeHistory" not in payload
+            and "smokeApproval" not in payload
+        ) or (
+            text == "yes"
+            and smoke_approval is True
+            and approval_history_valid
+        )
         if (
             not isinstance(message_id, str)
             or not MESSAGE_ID.fullmatch(message_id)
@@ -452,8 +493,9 @@ def register_chat_invocation(
             or (
                 smoke and (
                     message_id != "1"
-                    or text != "Reply with the single word ok."
                     or language != "en"
+                    or not isinstance(smoke_approval, bool)
+                    or not valid_smoke_prompt
                 )
             )
             or set(payload) != expected_keys
@@ -534,13 +576,17 @@ def register_chat_invocation(
 
         async def events():
             timing_token = current_chat_phase_timings.set(phase_timings)
-            message_token = current_message_id.set(message_id)
+            message_token = current_message_id.set(None if smoke else message_id)
             conversation_token = current_conversation.set(
                 "smoke" if smoke else f"chat-{message_id}"
             )
-            turn_token = current_turn.set(message_id)
+            turn_token = current_turn.set(None if smoke else message_id)
             chat_turn_token = current_chat_turn_id.set(turn_id)
             chat_session_token = current_chat_session_id.set(chat_session_id)
+            smoke_calls: list[dict[str, Any]] = []
+            smoke_token = current_smoke_invocation.set(smoke)
+            smoke_approval_token = current_smoke_approval.set(smoke and smoke_approval is True)
+            smoke_calls_token = current_smoke_tool_calls.set(smoke_calls if smoke else None)
             visual_result = (
                 {"visualPath": "caption"}
                 if visual is not None else None
@@ -680,6 +726,10 @@ def register_chat_invocation(
                         + current_text
                     )
                 messages = tuple(history)
+                if smoke and isinstance(smoke_history, list):
+                    messages = tuple(
+                        ModelMessage(item["role"], item["text"]) for item in smoke_history
+                    )
                 current_visual = visual or (
                     {
                         "source": "screen",
@@ -768,6 +818,8 @@ def register_chat_invocation(
                 )
                 if phase_timings:
                     done["agentTimings"] = phase_timings
+                if smoke:
+                    done["smokeToolCalls"] = smoke_calls
                 yield f"event: done\ndata: {json.dumps(done)}\n\n"
             except asyncio.CancelledError:
                 raise
@@ -794,6 +846,9 @@ def register_chat_invocation(
                 current_image_reservation.reset(image_reservation_token)
                 current_visual_fallback.reset(visual_fallback_token)
                 current_chat_phase_timings.reset(timing_token)
+                current_smoke_tool_calls.reset(smoke_calls_token)
+                current_smoke_approval.reset(smoke_approval_token)
+                current_smoke_invocation.reset(smoke_token)
 
         return StreamingResponse(
             events(),

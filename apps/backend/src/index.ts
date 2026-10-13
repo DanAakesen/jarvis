@@ -56,7 +56,7 @@ import { createArmModelCatalogueReader, fallbackModelCatalogue } from './core/mo
 import { createArmModelDeploymentClient, createModelDeploymentWorkflow } from './core/model-deployments.js';
 import { createSleepModule } from './operations/sleep.js';
 import { createFoundryInvocationConversationAgent } from './core/chat-agent.js';
-import { createChatCanaryProbe } from './core/chat-canary.js';
+import { createChatAcceptanceProbes } from './core/chat-canary.js';
 import { FoundryClient } from './foundry/client.js';
 import { createJevPcActPlanner } from './pc-bridge/pc-act.js';
 import { createJevRecipePlanner } from './core/task-recipes.js';
@@ -950,7 +950,7 @@ try {
       if (!app) return { status: 'down' as const, reason: 'Agent contract could not be checked.' };
       return checkAgentContract(app.jarvisTools.list(), () => buildAgentSettingsPayload(app));
     },
-    chat_canary: createChatCanaryProbe(conversationAgent),
+    ...createChatAcceptanceProbes(conversationAgent),
   };
   const deployedCommit = process.env.JARVIS_DEPLOYED_COMMIT;
   const systemStatusReader = createSystemStatusReader({
