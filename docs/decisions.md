@@ -6,6 +6,23 @@ The [local coordinator release for #720](https://github.com/DanAakesen/jarvis/is
 
 Pure original Site code at `9e193554c9c8c7c23a788ed3d2b0582580b76c0f` establishes shapes, not private-data parity. Preserve distinct workout IDs/detail/minute HR, exclude nutrition feedback and spatial derived details, and correct missing-number-to-zero and array-order assumptions with explicit unknowns and timestamp ordering. Copenhagen days and supported physical-unit conversions are explicit; ambiguous units, malformed timestamps and oversized identities quarantine without truncation. Accept-time ordering prevents stale retries from overwriting newer arrivals but does not prove source-event ordering. [Bounds, reads and live gates](../apps/backend/src/daily/health/README.md).
 
+## #811 backend board failure attribution (13 October 2026)
+
+Preserve board authentication, canonical columns, `.sssZ` timestamps and
+existing budgets. Correct the reproduced loss of diagnostic cause in both
+cache rejection paths and silent stale-refresh failure; export only bounded,
+allowlisted stage/reason/status/stale fields through the existing logging
+boundary. Validate a complete shared board before caching it. Token lifetime
+and permission validation stay unchanged; their failures become distinguishable.
+
+The existing deployment principal is restricted to `/status/smoke`, so do not
+grant it board access for a new acceptance check. #811's complete production
+board and #790/#792/#793 rendered-placement gates require an authorized
+post-deploy readback, coordinated with #810. The short production failures and
+successful CLI reader are not evidence of a particular App/SQL/source defect.
+Production cause and recovery remain unverified; see the operations runbook.
+This backend-only addition leaves #810's UI decisions and documents unchanged.
+
 ## P9-99 chat latency attribution and session affinity (13 October 2026)
 
 Issue #794 reports 45 production turns with median first token 14.4 s and nine

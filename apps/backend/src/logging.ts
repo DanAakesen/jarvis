@@ -133,8 +133,23 @@ const visualPathReasons = new Set([
   'image_input_unverified', 'timeout', 'daily_limit', 'frame_rate_limited', 'capture_failed',
   'camera_off', 'permission_denied', 'not_supported', 'session_ended', 'vision_failed',
 ]);
+const boardReadStages = new Set(['project', 'token', 'source', 'task', 'release', 'response']);
+const boardReadReasons = new Set([
+  'request_failed', 'timeout', 'cancelled', 'transport_failed', 'invalid_response',
+  'response_too_large', 'result_limit', 'incomplete_response', 'invalid_token_lifetime',
+  'invalid_token_permissions', 'unexpected',
+]);
 
 function safeFields(input: Record<string, unknown>): Record<string, unknown> {
+  if (input.msg === 'factory.board_read_failed' || input.msg === 'factory.board_project_lookup_failed') {
+    const fields: Record<string, unknown> = {};
+    if (typeof input.stage === 'string' && boardReadStages.has(input.stage)) fields.stage = input.stage;
+    if (typeof input.reason === 'string' && boardReadReasons.has(input.reason)) fields.reason = input.reason;
+    if (typeof input.status === 'number' && Number.isInteger(input.status) &&
+        input.status >= 100 && input.status <= 599) fields.status = input.status;
+    if (typeof input.stale === 'boolean') fields.stale = input.stale;
+    return fields;
+  }
   if (input.msg === 'visual.path') {
     const fields: Record<string, unknown> = {};
     if (input.path === 'image' || input.path === 'caption') fields.path = input.path;
