@@ -15,6 +15,10 @@ desktop WebGL graph continuity. An unchanged local locale assertion remains
 excluded without source changes. CI and the merge's deployment are still
 release gates; fixtures are not real-device, live voice or vault-write proof.
 
+## Daily reuses Jarvis's single Google grant (13 October 2026)
+
+Dan confirmed that Daily uses the same Google access as Jarvis, because it is the same site and one grant. There is no second login. Listing all calendars needs one extra read-only scope on that grant, `calendar.calendarlist.readonly` (L125: `calendar.events` cannot list calendars). `infra/setup-google.ps1` and the setup docs now request it. Nothing changes live until Dan reruns the script once and clicks Allow in the browser, which also replaces the Key Vault refresh token. #725 stays open for that consent and the remaining acceptance gates.
+
 ## P12-02 backup route chosen: paged double read (13 October 2026)
 
 Dan chose to stop waiting for a provider export route and approved a paged-read backup of the Daily D1 data (25-row pages, every table read to exhaustion twice, per-table counts and checksums compared between passes). He lifted, for P12-02 only, the earlier rule that real records must not pass through a Codex sandbox. The backup is labelled a paged-read backup, not a provider-signed snapshot, and R2 coverage is reported as far as the tools allow. Unchanged limits: the repository is public, so no row content, personal data or credentials enter Git, PRs, issues or CI logs; the data goes only to private encrypted storage owned by Dan; original Daily stays running and its source and schema are untouched. The OpenAI support request stays available as a parallel fallback. The #717 release comment holds the acceptance standard.
