@@ -4,6 +4,8 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ContextPanel, ContextPanelProvider } from '../ContextPanel';
 import { FactoryArea } from './FactoryArea';
+import { factoryBoardColumnIds, type BoardCard, type FactoryBoard, type FactoryBoardColumnId } from '@jarvis/contracts';
+import { publishFactoryBoardStatus, publishFactoryBoardUpdate, resetFactoryBoardForTests } from '../factory-board-store';
 
 const streamHarness = vi.hoisted(() => ({
   callbacks: new Map<string, (event: { id: string; taskId: string; type: string; summary: string | null; at: string }) => void>(),
@@ -59,6 +61,34 @@ let boardTask: Omit<typeof task, 'state'> & {
 const getAccessToken = vi.fn(async () => 'test-access-token');
 const fetchMock = vi.fn<typeof fetch>();
 
+function makeCard(value = boardTask): BoardCard {
+  return {
+    issue: {
+      number: Number(value.id), url: `https://github.com/DanAakesen/jarvis/issues/${value.id}`,
+      title: value.title, taskCode: 'P10-07', labels: ['P10', 'Codex'], worker: 'Codex',
+      state: 'open', updatedAt: '2026-10-13T12:00:00.000Z', closedAt: null, blockedBy: [],
+    },
+    pr: null,
+    task: {
+      id: value.id, state: value.state, agent: value.agent, activity: value.activity,
+      attemptCount: value.attemptCount, branch: value.branch, startedAt: value.startedAt,
+      latestSessionEndReason: value.latestSessionEndReason ?? null,
+    },
+  };
+}
+
+function boardFixture(values = [boardTask], column: FactoryBoardColumnId = 'in_progress', projectId = '7'): FactoryBoard {
+  return {
+    project: { id: projectId, repo: projectId === '7' ? 'DanAakesen/jarvis' : 'DanAakesen/other' },
+    fetchedAt: '2026-10-13T13:00:00.000Z', stale: false,
+    columns: factoryBoardColumnIds.map((id) => ({ id, cards: id === column ? values.map(makeCard) : [] })),
+  };
+}
+
+function invalidate(version = 1, projectId = '7') {
+  act(() => publishFactoryBoardUpdate('https://api.example.com', { projectId, version }));
+}
+
 function response(body: unknown, status = 200) {
   return new Response(status === 204 ? null : JSON.stringify(body), {
     status,
@@ -75,6 +105,7 @@ function renderFactory(path = '/factory/kanban') {
             <FactoryArea backendUrl="https://api.example.com" getAccessToken={getAccessToken} />
           } />
         </Routes>
+        <button id="context-panel-toggle" type="button">Context panel</button>
         <ContextPanel closeIcon={<span aria-hidden="true">×</span>} />
       </MemoryRouter>
     </ContextPanelProvider>,
@@ -82,6 +113,9 @@ function renderFactory(path = '/factory/kanban') {
 }
 
 beforeEach(() => {
+  localStorage.clear();
+  resetFactoryBoardForTests();
+  publishFactoryBoardStatus('https://api.example.com', 'connected');
   getAccessToken.mockClear();
   streamHarness.callbacks.clear();
   boardTask = { ...task };
@@ -91,7 +125,7 @@ beforeEach(() => {
     const method = init?.method ?? 'GET';
     if (url.endsWith('/factory/projects') && method === 'GET') return response([project]);
     if (url.endsWith('/factory/projects/7/releases') && method === 'GET') return response(projectRelease);
-    if (url.includes('/factory/tasks?') && method === 'GET') return response({ tasks: [boardTask], limit: 100, offset: 0 });
+    if (url.includes('/factory/board?') && method === 'GET') return response(boardFixture());
     if (url.includes('/factory/tasks/42?') && method === 'GET') {
       return response({
         ...task, source: 'board', originMessageId: null, modelOverride: null, reasoningOverride: null,
@@ -106,30 +140,33 @@ beforeEach(() => {
   vi.stubGlobal('fetch', fetchMock);
 });
 
-afterEach(() => { vi.unstubAllGlobals(); });
+afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
 
 describe('Factory task board', () => {
-  it('shows the Kanban board with state columns, compact cards, instant filters and the shared details pane', async () => {
+  it('shows canonical GitHub Project columns, issue links, local filters and the shared details pane', async () => {
     const user = userEvent.setup();
     renderFactory('/factory/kanban');
 
     expect(await screen.findByRole('heading', { level: 1, name: 'Kanban' })).not.toBeNull();
-    const board = await screen.findByRole('region', { name: 'Tasks by state' });
-    for (const name of ['Ready', 'Running', 'Paused', 'Needs attention', 'Done', 'Cancelled']) {
+    const board = await screen.findByRole('region', { name: 'Issues by GitHub Project column' });
+    const names = ['Backlog', 'Needs Dan', 'Ready', 'In progress', 'In review', 'Done'];
+    expect(within(board).getAllByRole('heading', { level: 2 }).map((heading) => heading.textContent)).toEqual(names);
+    for (const name of names) {
       expect(within(board).getByRole('heading', { level: 2, name })).not.toBeNull();
     }
-    const running = within(board).getByRole('heading', { level: 2, name: 'Running' }).closest('section')!;
+    const running = within(board).getByRole('heading', { level: 2, name: 'In progress' }).closest('section')!;
     const card = within(running).getByRole('article', { name: 'Fix the bug' });
-    expect(within(card).getByRole('list', { name: 'Project and agent' }).textContent).toContain('Jarvis');
+    expect(within(card).getByRole('list', { name: 'Worker and task state' }).textContent).toContain('Running');
+    expect(within(card).getByRole('link', { name: '#42' }).getAttribute('href')).toBe('https://github.com/DanAakesen/jarvis/issues/42');
     expect(within(card).getByText('Updating tests')).not.toBeNull();
     expect(within(card).getByText(/2 attempts/)).not.toBeNull();
     expect(within(card).getByText('copilot/fix-the-bug')).not.toBeNull();
 
     await user.selectOptions(screen.getByRole('combobox', { name: 'Agent' }), 'codex');
-    await waitFor(() => expect(fetchMock.mock.calls.some(([url]) => String(url).includes('agent=codex'))).toBe(true));
+    expect(screen.getByRole('article', { name: 'Fix the bug' })).toBe(card);
 
-    await user.type(screen.getByRole('searchbox', { name: 'Search tasks' }), 'bug');
-    await waitFor(() => expect(fetchMock.mock.calls.some(([url]) => String(url).includes('search=bug'))).toBe(true));
+    await user.type(screen.getByRole('searchbox', { name: 'Search issues' }), 'bug');
+    await waitFor(() => expect(screen.getByRole('article', { name: 'Fix the bug' })).toBe(card));
 
     const title = await screen.findByRole('button', { name: 'Fix the bug' });
     await user.click(title);
@@ -137,12 +174,11 @@ describe('Factory task board', () => {
     expect(await screen.findByRole('complementary', { name: 'Fix the bug' })).not.toBeNull();
   });
 
-  it('shows task cards by state with activity, timing, attempt, and unavailable data points', async () => {
+  it('shows supplied task activity, start time, attempts, controls and workspace links', async () => {
     renderFactory();
 
-    const running = await screen.findByRole('region', { name: 'Running' });
+    const running = await screen.findByRole('region', { name: 'In progress' });
     const card = within(running).getByRole('article', { name: 'Fix the bug' });
-    expect(within(card).getByText('Jarvis')).not.toBeNull();
     expect(within(card).getByText('Codex')).not.toBeNull();
     expect(within(card).getByText('Updating tests')).not.toBeNull();
     expect(within(card).getByText(/2 attempts/)).not.toBeNull();
@@ -151,34 +187,33 @@ describe('Factory task board', () => {
     expect(within(card).getByRole('button', { name: 'View details' })).not.toBeNull();
     expect(within(card).getByRole('link', { name: 'Open Fix the bug in a window' }).getAttribute('href')).toBe('/factory/tasks/42');
     expect(within(card).getByRole('button', { name: 'Fix the bug' }).getAttribute('aria-pressed')).toBe('false');
-    expect(await screen.findByText('Live updates connected.')).not.toBeNull();
-    expect(streamHarness.callbacks.has('42')).toBe(true);
+    expect(within(card).getByText(/Started/)).not.toBeNull();
+    expect(await screen.findByText('Live board updates connected.')).not.toBeNull();
+    expect(streamHarness.callbacks.size).toBe(0);
   });
 
-  it('applies project, agent, state, period, and search filters to the Tasks API', async () => {
+  it('uses only the required project query and applies agent, task-state, update-period and search filters locally', async () => {
     const user = userEvent.setup();
     renderFactory();
     await screen.findByRole('article', { name: 'Fix the bug' });
 
     await user.selectOptions(screen.getByRole('combobox', { name: 'Project' }), '7');
     await user.selectOptions(screen.getByRole('combobox', { name: 'Agent' }), 'codex');
-    await user.selectOptions(screen.getByRole('combobox', { name: 'State' }), 'Running');
-    await user.selectOptions(screen.getByRole('combobox', { name: 'Period' }), '7');
-    await user.type(screen.getByRole('searchbox', { name: 'Search tasks' }), 'tests');
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Task state' }), 'Running');
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Updated' }), '7');
+    await user.type(screen.getByRole('searchbox', { name: 'Search issues' }), '#42');
 
     await waitFor(() => {
-      const listRequest = fetchMock.mock.calls.find(([url]) => {
-        const parsed = new URL(String(url));
-        return parsed.pathname === '/factory/tasks' && parsed.searchParams.get('projectId') === '7' &&
-          parsed.searchParams.get('search') === 'tests';
-      });
+      const listRequest = fetchMock.mock.calls.find(([url]) => String(url).includes('/factory/board?'));
       expect(listRequest).toBeDefined();
       const url = new URL(String(listRequest?.[0]));
-      expect(url.searchParams.get('agent')).toBe('codex');
-      expect(url.searchParams.get('state')).toBe('Running');
-      expect(url.searchParams.get('search')).toBe('tests');
-      expect(url.searchParams.get('createdAfter')).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+      expect(url.search).toBe('?project=7');
+      expect(screen.getByRole('article', { name: 'Fix the bug' })).not.toBeNull();
     });
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Agent' }), 'copilot');
+    await waitFor(() => expect(screen.queryByRole('article', { name: 'Fix the bug' })).toBeNull());
+    expect(fetchMock.mock.calls.filter(([url]) => String(url).includes('/factory/board?'))).toHaveLength(1);
+    expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/factory/tasks?'))).toBe(false);
   });
 
   it('creates a task with selected project, agent, and optional overrides', async () => {
@@ -195,7 +230,7 @@ describe('Factory task board', () => {
     await user.type(within(dialog).getByRole('textbox', { name: 'Reasoning override (optional)' }), 'high');
     await user.click(within(dialog).getByRole('button', { name: 'Create task' }));
 
-    expect(await screen.findByText('Task created and added to Ready.')).not.toBeNull();
+    expect(await screen.findByText('Task created. Linked issues appear in their GitHub Project column.')).not.toBeNull();
     const createCall = fetchMock.mock.calls.find(([, init]) => init?.method === 'POST');
     expect(createCall?.[0]).toBe('https://api.example.com/factory/tasks');
     expect(createCall?.[1]?.headers).toMatchObject({ Authorization: ['Bearer', 'test-access-token'].join(' ') });
@@ -209,16 +244,12 @@ describe('Factory task board', () => {
     });
   });
 
-  it('shows the latest activity from a task SSE event', async () => {
+  it('refreshes canonical placement and activity after a board invalidation', async () => {
     boardTask = { ...task, activity: null };
     renderFactory();
     const card = await screen.findByRole('article', { name: 'Fix the bug' });
-    await waitFor(() => expect(streamHarness.callbacks.has('42')).toBe(true));
-    const onEvent = streamHarness.callbacks.get('42');
-    expect(onEvent).toBeDefined();
-
-    onEvent?.({ id: '19', taskId: '42', type: 'progress', summary: 'Tests passed', at: '2026-10-04T00:30:00.000Z' });
-
+    boardTask = { ...task, activity: 'Tests passed' };
+    invalidate();
     await waitFor(() => {
       expect(within(card).getByText('Tests passed')).not.toBeNull();
     });
@@ -227,32 +258,26 @@ describe('Factory task board', () => {
   it('keeps the board, scroll and selected task mounted while a live refresh is pending', async () => {
       const user = userEvent.setup();
       renderFactory();
-      const board = await screen.findByRole('region', { name: 'Tasks by state' });
+      const board = await screen.findByRole('region', { name: 'Issues by GitHub Project column' });
       const title = screen.getByRole('button', { name: 'Fix the bug' });
-      await waitFor(() => expect(streamHarness.callbacks.has('42')).toBe(true));
-      const onBoardEvent = streamHarness.callbacks.get('42')!;
       await user.click(title);
       board.scrollLeft = 180;
       board.scrollTop = 90;
-      await waitFor(() => expect(streamHarness.callbacks.has('42')).toBe(true));
       let finishRefresh!: (value: Response) => void;
       const originalFetch = fetchMock.getMockImplementation()!;
-      fetchMock.mockImplementation((input, init) => String(input).includes('/factory/tasks?')
+      fetchMock.mockImplementation((input, init) => String(input).includes('/factory/board?')
         ? new Promise<Response>((resolve) => { finishRefresh = resolve; })
         : originalFetch(input, init));
-      act(() => onBoardEvent({
-        id: '20', taskId: '42', type: 'progress', summary: 'Recovering',
-        at: '2026-10-09T07:55:00.000Z',
-      }));
+      invalidate();
       await waitFor(() => expect(finishRefresh).toBeDefined());
-      expect(screen.queryByText('Loading tasks…')).toBeNull();
-      expect(screen.getByRole('region', { name: 'Tasks by state' })).toBe(board);
+      expect(screen.queryByText('Loading GitHub board…')).toBeNull();
+      expect(screen.getByRole('region', { name: 'Issues by GitHub Project column' })).toBe(board);
       expect(title.getAttribute('aria-pressed')).toBe('true');
       expect(board.scrollLeft).toBe(180);
       expect(board.scrollTop).toBe(90);
-      await act(async () => finishRefresh(response({ tasks: [{ ...task, activity: 'Recovered' }] })));
+      await act(async () => finishRefresh(response(boardFixture([{ ...task, activity: 'Recovered' }]))));
       expect(await screen.findByText('Recovered')).not.toBeNull();
-      expect(screen.getByRole('region', { name: 'Tasks by state' })).toBe(board);
+      expect(screen.getByRole('region', { name: 'Issues by GitHub Project column' })).toBe(board);
       expect(screen.getByRole('button', { name: 'Fix the bug' })).toBe(title);
       expect(board.scrollLeft).toBe(180);
       expect(board.scrollTop).toBe(90);
@@ -261,17 +286,14 @@ describe('Factory task board', () => {
 
   it('keeps an empty board mounted after a live refresh without an orb', async () => {
       renderFactory();
-      const board = await screen.findByRole('region', { name: 'Tasks by state' });
-      await waitFor(() => expect(streamHarness.callbacks.has('42')).toBe(true));
+      const board = await screen.findByRole('region', { name: 'Issues by GitHub Project column' });
       const originalFetch = fetchMock.getMockImplementation()!;
-      fetchMock.mockImplementation((input, init) => String(input).includes('/factory/tasks?')
-        ? Promise.resolve(response({ tasks: [] }))
+      fetchMock.mockImplementation((input, init) => String(input).includes('/factory/board?')
+        ? Promise.resolve(response(boardFixture([])))
         : originalFetch(input, init));
-      act(() => streamHarness.callbacks.get('42')?.({
-        id: '21', taskId: '42', type: 'progress', summary: null, at: '2026-10-09T07:56:00.000Z',
-      }));
+      invalidate();
       await waitFor(() => expect(screen.queryByRole('article', { name: 'Fix the bug' })).toBeNull());
-      expect(screen.getByRole('region', { name: 'Tasks by state' })).toBe(board);
+      expect(screen.getByRole('region', { name: 'Issues by GitHub Project column' })).toBe(board);
       expect(document.querySelector('.loader-core')).toBeNull();
   });
 
@@ -279,7 +301,7 @@ describe('Factory task board', () => {
     const user = userEvent.setup();
     boardTask = { ...task, state: 'NeedsAttention', latestSessionEndReason: 'crashed' };
     renderFactory();
-    const board = await screen.findByRole('region', { name: 'Tasks by state' });
+    const board = await screen.findByRole('region', { name: 'Issues by GitHub Project column' });
     const card = await screen.findByRole('article', { name: 'Fix the bug' });
     board.scrollLeft = 160;
     board.scrollTop = 70;
@@ -289,21 +311,21 @@ describe('Factory task board', () => {
       if (String(input).endsWith('/factory/tasks/42/controls')) {
         return Promise.resolve(response({ id: '42', state: 'Running' }));
       }
-      return String(input).includes('/factory/tasks?')
+      return String(input).includes('/factory/board?')
         ? new Promise<Response>((resolve) => { finishRefresh = resolve; })
         : originalFetch(input, init);
     });
     await user.click(within(card).getByRole('button', { name: 'Recover' }));
     await waitFor(() => expect(finishRefresh).toBeDefined());
-    expect(screen.getByRole('region', { name: 'Tasks by state' })).toBe(board);
+    expect(screen.getByRole('region', { name: 'Issues by GitHub Project column' })).toBe(board);
     expect(screen.getByRole('article', { name: 'Fix the bug' })).toBe(card);
     expect(board.scrollLeft).toBe(160);
     expect(board.scrollTop).toBe(70);
-    expect(screen.queryByText('Loading tasks…')).toBeNull();
+    expect(screen.queryByText('Loading GitHub board…')).toBeNull();
     expect(document.querySelector('.loader-core')).toBeNull();
-    await act(async () => finishRefresh(response({ tasks: [{ ...task, activity: 'Recovered' }] })));
+    await act(async () => finishRefresh(response(boardFixture([{ ...task, activity: 'Recovered' }]))));
     expect(await screen.findByText('Recovered')).not.toBeNull();
-    expect(screen.getByRole('region', { name: 'Tasks by state' })).toBe(board);
+    expect(screen.getByRole('region', { name: 'Issues by GitHub Project column' })).toBe(board);
     expect(board.scrollLeft).toBe(160);
     expect(board.scrollTop).toBe(70);
     const control = fetchMock.mock.calls.find(([url]) => String(url).endsWith('/controls'));
@@ -312,32 +334,30 @@ describe('Factory task board', () => {
 
   it('shows a live refresh failure beside the retained board without replacing its cards', async () => {
     renderFactory();
-    const board = await screen.findByRole('region', { name: 'Tasks by state' });
+    const board = await screen.findByRole('region', { name: 'Issues by GitHub Project column' });
     const card = screen.getByRole('article', { name: 'Fix the bug' });
-    await waitFor(() => expect(streamHarness.callbacks.has('42')).toBe(true));
     const originalFetch = fetchMock.getMockImplementation()!;
-    fetchMock.mockImplementation((input, init) => String(input).includes('/factory/tasks?')
+    fetchMock.mockImplementation((input, init) => String(input).includes('/factory/board?')
       ? Promise.resolve(response({ error: 'unavailable' }, 503))
       : originalFetch(input, init));
-    act(() => streamHarness.callbacks.get('42')?.({
-      id: '22', taskId: '42', type: 'progress', summary: null, at: '2026-10-09T07:57:00.000Z',
-    }));
-    expect(await screen.findByText('Showing the last loaded tasks because refresh failed.')).not.toBeNull();
-    expect(screen.getByRole('region', { name: 'Tasks by state' })).toBe(board);
+    invalidate();
+    expect(await screen.findByText('Showing the last loaded board because refresh failed.')).not.toBeNull();
+    expect(screen.getByRole('region', { name: 'Issues by GitHub Project column' })).toBe(board);
     expect(screen.getByRole('article', { name: 'Fix the bug' })).toBe(card);
-    expect(screen.queryByText('Loading tasks…')).toBeNull();
+    expect(screen.queryByText('Loading GitHub board…')).toBeNull();
     expect(document.querySelector('.loader-core')).toBeNull();
   });
 
-  it('shows a recoverable error when the task list cannot be loaded', async () => {
+  it('shows a recoverable error when the GitHub board cannot be loaded', async () => {
     fetchMock.mockImplementation(async (input) => {
       if (String(input).endsWith('/factory/projects')) return response([project]);
+      if (String(input).endsWith('/factory/projects/7/releases')) return response(projectRelease);
       return response({ error: 'unavailable' }, 503);
     });
     renderFactory();
 
-    expect((await screen.findByRole('alert')).textContent).toContain('Task data could not be loaded. Try again.');
-    expect(screen.getByRole('button', { name: 'Retry tasks' })).not.toBeNull();
+    expect((await screen.findByRole('alert')).textContent).toContain('Board data could not be loaded. Try again.');
+    expect(screen.getByRole('button', { name: 'Retry board' })).not.toBeNull();
   });
 
   it('opens task details in the shared panel and returns focus to the selected card', async () => {
@@ -366,7 +386,7 @@ describe('Factory task board', () => {
       const url = String(input);
       const method = init?.method ?? 'GET';
       if (url.endsWith('/factory/projects')) return Promise.resolve(response([project]));
-      if (url.includes('/factory/tasks?')) return Promise.resolve(response({ tasks: [task, second], limit: 100, offset: 0 }));
+      if (url.includes('/factory/board?')) return Promise.resolve(response(boardFixture([task, second])));
       if (url.includes('/factory/tasks/42?')) {
         return new Promise<Response>((resolve) => {
           finishFirst = () => resolve(response({
@@ -395,5 +415,187 @@ describe('Factory task board', () => {
       expect(screen.getByRole('heading', { name: 'Second task', level: 2 })).not.toBeNull();
       expect(screen.queryByText('Find and fix it')).toBeNull();
     });
+  });
+
+  it.each(['Paused', 'NeedsAttention', 'Cancelled'] as const)('keeps %s as an overlay fact, not a column', async (state) => {
+    boardTask = { ...task, state };
+    renderFactory();
+    const progress = await screen.findByRole('region', { name: 'In progress' });
+    const card = within(progress).getByRole('article', { name: 'Fix the bug' });
+    expect(within(card).getByRole('list', { name: 'Worker and task state' }).textContent)
+      .toContain(state === 'NeedsAttention' ? 'Needs attention' : state);
+    expect(screen.queryByRole('heading', { level: 2, name: state === 'NeedsAttention' ? 'Needs attention' : state })).toBeNull();
+  });
+
+  it('shows an issue and PR without fabricating a Factory task or controls', async () => {
+    const value = boardFixture();
+    const issue = makeCard();
+    value.columns = value.columns.map((column) => column.id === 'in_progress' ? { ...column, cards: [issue] } : column);
+    issue.task = null;
+    issue.issue.worker = 'Dan';
+    issue.issue.blockedBy = [790];
+    issue.pr = { number: 99, url: 'https://github.com/DanAakesen/jarvis/pull/99', draft: true, checks: 'failing' };
+    const original = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation((input, init) => String(input).includes('/factory/board?')
+      ? Promise.resolve(response(value)) : original(input, init));
+    renderFactory();
+    const card = await screen.findByRole('article', { name: 'Fix the bug' });
+    expect(within(card).getByRole('link', { name: 'Fix the bug' }).getAttribute('href'))
+      .toBe('https://github.com/DanAakesen/jarvis/issues/42');
+    expect(within(card).getByRole('link', { name: 'PR #99' }).getAttribute('href'))
+      .toBe('https://github.com/DanAakesen/jarvis/pull/99');
+    expect(within(card).getByText('Draft · Checks: failing')).not.toBeNull();
+    expect(within(card).getByText('No Factory task linked.')).not.toBeNull();
+    expect(within(card).getByText('Blocked by #790')).not.toBeNull();
+    expect(within(card).queryAllByRole('button')).toHaveLength(0);
+    expect(within(card).queryByText(/attempt/)).toBeNull();
+  });
+
+  it('moves an issue on refresh while retaining its selected task and returning focus safely', async () => {
+    const user = userEvent.setup();
+    renderFactory();
+    const title = await screen.findByRole('button', { name: 'Fix the bug' });
+    await user.click(title);
+    await screen.findByText('Find and fix it');
+    const original = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation((input, init) => String(input).includes('/factory/board?')
+      ? Promise.resolve(response(boardFixture([boardTask], 'in_review'))) : original(input, init));
+    invalidate();
+    await waitFor(() => {
+      expect(within(screen.getByRole('region', { name: 'In review' })).getByRole('article', { name: 'Fix the bug' })).not.toBeNull();
+    });
+    expect(title.isConnected).toBe(false);
+    expect(screen.getByRole('button', { name: 'Fix the bug' }).getAttribute('aria-pressed')).toBe('true');
+    expect(screen.getByText('Find and fix it')).not.toBeNull();
+    await user.click(screen.getByRole('button', { name: 'Close context panel' }));
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Fix the bug' }));
+  });
+
+  it('refreshes after reconnection and accepts lower versions after a backend restart', async () => {
+    renderFactory();
+    await screen.findByRole('article', { name: 'Fix the bug' });
+    invalidate(100);
+    await waitFor(() => expect(fetchMock.mock.calls.filter(([url]) => String(url).includes('/factory/board?'))).toHaveLength(2));
+    act(() => publishFactoryBoardStatus('https://api.example.com', 'reconnecting'));
+    expect(screen.getByText(/Reconnecting to live board updates/)).not.toBeNull();
+    act(() => publishFactoryBoardStatus('https://api.example.com', 'connected'));
+    await waitFor(() => expect(fetchMock.mock.calls.filter(([url]) => String(url).includes('/factory/board?'))).toHaveLength(3));
+    invalidate(1);
+    await waitFor(() => expect(fetchMock.mock.calls.filter(([url]) => String(url).includes('/factory/board?'))).toHaveLength(4));
+  });
+
+  it('ignores unrelated board invalidations and debounces relevant bursts', async () => {
+    renderFactory();
+    await screen.findByRole('article', { name: 'Fix the bug' });
+    vi.useFakeTimers();
+    invalidate(1, '9');
+    await act(async () => { await vi.advanceTimersByTimeAsync(500); });
+    expect(fetchMock.mock.calls.filter(([url]) => String(url).includes('/factory/board?'))).toHaveLength(1);
+    invalidate(2);
+    invalidate(3);
+    invalidate(3);
+    await act(async () => { await vi.advanceTimersByTimeAsync(150); });
+    expect(fetchMock.mock.calls.filter(([url]) => String(url).includes('/factory/board?'))).toHaveLength(2);
+  });
+
+  it('marks cached data and permits manual refresh when live updates are unavailable', async () => {
+    const user = userEvent.setup();
+    const original = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation((input, init) => String(input).includes('/factory/board?')
+      ? Promise.resolve(response({ ...boardFixture(), stale: true })) : original(input, init));
+    publishFactoryBoardStatus('https://api.example.com', 'unavailable');
+    renderFactory();
+    await screen.findByText('GitHub is unavailable. Showing a cached board; placement may be out of date.');
+    expect(screen.getByText(/Live board updates are unavailable/)).not.toBeNull();
+    expect(screen.getByText('DanAakesen/jarvis')).not.toBeNull();
+    await user.click(screen.getByRole('button', { name: 'Refresh board' }));
+    await waitFor(() => expect(fetchMock.mock.calls.filter(([url]) => String(url).includes('/factory/board?'))).toHaveLength(2));
+  });
+
+  it.each(['wrong project', 'wrong columns', 'unsafe issue link'] as const)('rejects %s rather than showing false data', async (kind) => {
+    const value = boardFixture();
+    if (kind === 'wrong project') value.project.id = '9';
+    if (kind === 'wrong columns') value.columns.reverse();
+    if (kind === 'unsafe issue link') value.columns.forEach((column) => {
+      column.cards.forEach((card) => { card.issue.url = 'javascript:alert(1)'; });
+    });
+    const original = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation((input, init) => String(input).includes('/factory/board?')
+      ? Promise.resolve(response(value)) : original(input, init));
+    renderFactory();
+    expect(await screen.findByText('Jarvis returned invalid board data for this project. Try again.')).not.toBeNull();
+    expect(screen.queryByRole('article')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Retry board' })).not.toBeNull();
+  });
+
+  it('does not request an unscoped board when there are no active projects', async () => {
+    fetchMock.mockResolvedValue(response([]));
+    renderFactory();
+    await screen.findByText('No active projects are available for a GitHub board. Create a project to begin.');
+    expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/factory/board'))).toBe(false);
+    expect(screen.getByRole('button', { name: 'Create task' }).hasAttribute('disabled')).toBe(true);
+  });
+
+  it('isolates project changes and ignores a late response for the previous selection', async () => {
+    const user = userEvent.setup();
+    let finishOld!: (value: Response) => void;
+    const original = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation((input, init) => {
+      const url = String(input);
+      if (url.endsWith('/factory/projects')) return Promise.resolve(response([
+        project, { ...project, id: '9', name: 'Other', repo: 'DanAakesen/other' },
+      ]));
+      if (url.endsWith('/factory/board?project=7')) return new Promise<Response>((resolve) => { finishOld = resolve; });
+      if (url.endsWith('/factory/board?project=9')) return Promise.resolve(response(boardFixture([{ ...task, title: 'Other issue' }], 'ready', '9')));
+      if (url.endsWith('/factory/projects/9/releases')) return Promise.resolve(response({
+        ...projectRelease, project: { ...projectRelease.project, id: '9', name: 'Other', repo: 'DanAakesen/other' },
+      }));
+      return original(input, init);
+    });
+    renderFactory();
+    await waitFor(() => expect(finishOld).toBeDefined());
+    const oldRequest = fetchMock.mock.calls.find(([url]) => String(url).endsWith('/factory/board?project=7'));
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Project' }), '9');
+    expect(oldRequest?.[1]?.signal?.aborted).toBe(true);
+    await screen.findByRole('article', { name: 'Other issue' });
+    await act(async () => finishOld(response(boardFixture())));
+    expect(screen.queryByRole('article', { name: 'Fix the bug' })).toBeNull();
+    expect(screen.getByRole('article', { name: 'Other issue' })).not.toBeNull();
+    expect(screen.getByText('DanAakesen/other')).not.toBeNull();
+  });
+
+  it('caps each column explicitly and filters the full snapshot before applying that cap', async () => {
+    const user = userEvent.setup();
+    const values = Array.from({ length: 101 }, (_, index) => ({
+      ...task, id: String(index + 100), title: `Issue ${index + 100}`,
+    }));
+    const original = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation((input, init) => String(input).includes('/factory/board?')
+      ? Promise.resolve(response(boardFixture(values))) : original(input, init));
+    renderFactory();
+    await screen.findByText('Showing 100 of 101 matching issues. Refine the filters to find another issue.');
+    expect(screen.getAllByRole('article')).toHaveLength(100);
+    expect(screen.queryByRole('article', { name: 'Issue 200' })).toBeNull();
+    await user.type(screen.getByRole('searchbox', { name: 'Search issues' }), '#200');
+    await screen.findByRole('article', { name: 'Issue 200' });
+    expect(screen.getAllByRole('article')).toHaveLength(1);
+    expect(screen.queryByText(/Showing 100 of/)).toBeNull();
+  });
+
+  it('collapses canonical columns and filters with keyboard-operable controls', async () => {
+    const user = userEvent.setup();
+    renderFactory('/factory/tasks');
+    const title = await screen.findByRole('button', { name: 'Fix the bug' });
+    const toggle = screen.getByRole('button', { name: 'In progress' });
+    toggle.focus();
+    await user.keyboard('{Enter}');
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    expect(screen.queryByRole('article', { name: 'Fix the bug' })).toBeNull();
+    expect(localStorage.getItem('jarvis.kanban.collapsedColumns')).toContain('In progress');
+    await user.keyboard('{Enter}');
+    expect(screen.getByRole('button', { name: 'Fix the bug' })).toBe(title);
+    await user.click(screen.getByRole('button', { name: 'Search and filters' }));
+    expect(screen.getByRole('button', { name: 'Search and filters' }).getAttribute('aria-expanded')).toBe('false');
+    expect(document.getElementById('kanban-filter-body')?.hasAttribute('inert')).toBe(true);
   });
 });

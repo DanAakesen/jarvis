@@ -3,7 +3,9 @@ import type { ActivityItem, NowFeed, ConfirmationActionKind } from './activity';
 import { backendFetch } from './backend-request';
 import {
   isJarvisActivityEvent,
+  isFactoryBoardUpdate,
   isWorkspaceCommand,
+  type FactoryBoardUpdate,
   type JarvisActivityEvent,
   type WorkspaceCommand,
   type WorkspaceSnapshot,
@@ -33,6 +35,7 @@ export interface NowFeedStreamOptions {
   onVoiceWake?: (at: string) => void;
   /** Receives raw job event payloads for the jobs chip. */
   onJob?: (job: unknown) => void;
+  onBoard?: (update: FactoryBoardUpdate) => void;
   signal: AbortSignal;
 }
 
@@ -285,6 +288,15 @@ async function readNowEvents(body: ReadableStream<Uint8Array>, signal: AbortSign
           }
         }
         options.onUpdate();
+      } else if (event === 'board') {
+        let value: unknown;
+        try {
+          value = JSON.parse(data.join('\n'));
+        } catch {
+          throw new Error('Factory board update event is invalid.');
+        }
+        if (!isFactoryBoardUpdate(value)) throw new Error('Factory board update event is invalid.');
+        options.onBoard?.(value);
       } else if (event === 'job') {
         // Background job updates (P8-43); the jobs store validates them with isBackgroundJob.
         let value: unknown;

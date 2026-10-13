@@ -134,6 +134,31 @@ describe('Now feed client', () => {
     }));
   });
 
+  it('decodes canonical board invalidations without opening a second event stream', async () => {
+    fetchMock.mockResolvedValueOnce(eventStream('event: board\ndata: {"projectId":"7","version":12}\n\n'));
+    const controller = new AbortController();
+    const onBoard = vi.fn(() => controller.abort());
+    await streamNowFeed({
+      backendUrl: 'https://api.example.com', getAccessToken, onBoard,
+      onUpdate: () => {}, onStatus: () => {}, signal: controller.signal,
+    });
+    expect(onBoard).toHaveBeenCalledWith({ projectId: '7', version: 12 });
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
+  it.each(['{', '{"projectId":"7","version":-1}', '{"projectId":"bad","version":1}'])(
+    'surfaces an invalid board event instead of forwarding it: %s', async (data) => {
+      fetchMock.mockResolvedValueOnce(eventStream(`event: board\ndata: ${data}\n\n`));
+      const controller = new AbortController();
+      const onBoard = vi.fn();
+      await expect(streamNowFeed({
+        backendUrl: 'https://api.example.com', getAccessToken, onBoard,
+        onUpdate: () => {}, onStatus: () => {}, signal: controller.signal,
+      })).rejects.toThrow('Factory board update event is invalid.');
+      expect(onBoard).not.toHaveBeenCalled();
+    },
+  );
+
   it('refreshes the feed when away-mode status changes', async () => {
     fetchMock.mockResolvedValueOnce(eventStream('event: mode\ndata: {}\n\n'));
     const controller = new AbortController();

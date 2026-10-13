@@ -1,6 +1,7 @@
 import { publishPresenceMode } from './presence-store';
 import { publishJob } from './jobs-store';
 import { publishVoiceWake } from './wake-store';
+import { publishFactoryBoardStatus, publishFactoryBoardUpdate } from './factory-board-store';
 import { useContext, useEffect, useRef, useState } from 'react';
 import type { PublicClientApplication } from '@azure/msal-browser';
 import { useJarvisActivity } from './activity-context';
@@ -86,12 +87,15 @@ export function NowFeedPanel({
     void refresh();
 
     if (config.backendUrl) {
+      publishFactoryBoardStatus(config.backendUrl, 'connecting');
       void streamNowFeed({
         backendUrl: config.backendUrl,
         getAccessToken,
         onUpdate: () => { void refresh(); },
         onStatus: (status) => {
+          if (!active) return;
           setStreamStatus(status);
+          if (config.backendUrl) publishFactoryBoardStatus(config.backendUrl, status);
           if (status === 'reconnecting') {
             clearRuntimeActivities();
             setWorkspaceSession(null);
@@ -100,6 +104,9 @@ export function NowFeedPanel({
         onActivity: applyRuntimeActivity,
         onPresenceMode: publishPresenceMode,
         onJob: publishJob,
+        onBoard: (update) => {
+          if (active && config.backendUrl) publishFactoryBoardUpdate(config.backendUrl, update);
+        },
         onVoiceWake: publishVoiceWake,
         onWorkspaceReady: (sessionId, blobHost) => {
           workspaceSessionId = sessionId;
@@ -157,13 +164,17 @@ export function NowFeedPanel({
         },
         signal: controller.signal,
       }).catch(() => {
-        if (active) setStreamStatus('unavailable');
+        if (active) {
+          setStreamStatus('unavailable');
+          if (config.backendUrl) publishFactoryBoardStatus(config.backendUrl, 'unavailable');
+        }
       });
     }
 
     return () => {
       active = false;
       controller.abort();
+      if (config.backendUrl) publishFactoryBoardStatus(config.backendUrl, 'unavailable');
       refreshRef.current = null;
     };
   }, [applyRuntimeActivity, clearRuntimeActivities, client, config, getAccessToken, retry]);

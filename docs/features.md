@@ -82,7 +82,7 @@ Status as of 13 October 2026.
 
 | Feature | What Dan can do | Surface | Where | Status | Verified live | Tasks |
 | --- | --- | --- | --- | --- | --- | --- |
-| Task board | See tasks in columns by state with live updates; filter and search | Screen | Task view | Built |  | P1-08 |
+| GitHub issue board | See the six GitHub Project columns and linked issue/PR facts, with real Factory task overlays and valid controls; project/local filters, bounded display, snapshot freshness and live board refresh | Screen | `/factory/kanban` | Local tests and desktop/320px browser fixtures pass; authenticated live placement pending |  | P1-08, P10-07 |
 | GitHub issue board API | Load GitHub-backed issue cards into the six Project Jarvis columns, with linked PR checks, Factory task overlays, and board SSE updates | Backend API | `GET /factory/board?project=<id>`; `/now/events` | GitHub App issue reads verified live; linked PR checks, task overlays and live board updates remain unverified | 2026-10-08 | P10-04 |
 | Factory release bar and task lens | Approved task-board composition with selected-project release/commit context and a closable right task-details pane; reuse existing controls and source data | Screen | Factory task view; contextual right panel | Built offline; live integrations unverified |  | P8-34 |
 | Create task | Create a GitHub issue and linked task (project, agent, text, optional model/reasoning) | Both | Task view; by voice once P4-10 lands | Backend implemented offline; UI issue flow pending |  | P1-04, P1-08, P4-10, P10-02 |

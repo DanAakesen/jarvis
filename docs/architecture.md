@@ -811,6 +811,24 @@ and monotonically increasing in-process version. No migration or GitHub
 Project write is needed; live GitHub reads require the App's issue read
 permission.
 
+P10-07's `TasksPage` consumes that contract directly with `isFactoryBoard`,
+verifies the requested project ID, and cancels stale project reads. It selects
+the first active project returned by `/factory/projects`; there is no unscoped
+or All-projects board request. Agent, actual task state, issue-update period
+(relative to the snapshot time), and text filtering happen locally before
+each column's 100-card display cap. Task creation still uses the existing
+POST route; task details/windows and controls reuse their existing boundaries.
+`now-feed.ts` validates typed `board` frames, and the central `NowFeedPanel`
+publishes them and connection state to `factory-board-store.ts`. The board
+debounces matching invalidations and refreshes after connection recovery,
+without opening per-card task streams or duplicating GitHub placement logic.
+Task details retain their own task stream. Equal invalidations are deduplicated,
+but a lower version after restart is accepted. Cached/failed-refresh snapshots
+retain the board DOM and show their source timestamp and stale feedback.
+The context panel accepts an optional focus resolver as well as its existing
+element target; the board resolves the moved issue's current title control or
+its Create project control when the issue is hidden, preserving keyboard return.
+
 Migration `0037_task_github_issues` adds nullable `tasks.issue_number` and a
 filtered unique index that permits one active task per project and issue while
 retaining old unlinked rows. `POST /factory/issues/:number/start` is available

@@ -1428,9 +1428,9 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
 .kanban-column-heading h2 { margin: 0; font-size: 15px; font-weight: 650; line-height: 1.3; }
 .kanban-count { min-width: 24px; padding: 1px 8px; border-radius: var(--radius-pill); background: var(--glass-hover); color: var(--text-muted); font-size: 12px; font-weight: 650; text-align: center; }
 .kanban-dot { --tone: var(--text-muted); width: 10px; height: 10px; flex: 0 0 auto; border-radius: 50%; background: var(--tone); box-shadow: 0 0 10px color-mix(in srgb, var(--tone) 60%, transparent); }
-.kanban-dot-running { --tone: var(--glass-edge-cool); }
-.kanban-dot-paused { --tone: var(--warning); }
-.kanban-dot-needs-attention { --tone: var(--glass-glow-warm); }
+.kanban-dot-running, .kanban-dot-in-progress { --tone: var(--glass-edge-cool); }
+.kanban-dot-paused, .kanban-dot-in-review { --tone: var(--warning); }
+.kanban-dot-needs-attention, .kanban-dot-needs-dan { --tone: var(--glass-glow-warm); }
 .kanban-dot-done { --tone: var(--success); }
 .kanban-dot-cancelled { --tone: var(--disabled-text); box-shadow: none; }
 .kanban-column .task-column-empty { margin: var(--space-2); color: var(--text-muted); font-size: var(--type-caption); }
@@ -1448,7 +1448,7 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
 .kanban-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 var(--space-2); padding: 0; list-style: none; }
 .kanban-chips li { max-width: 100%; padding: 2px 8px; overflow: hidden; border-radius: 6px; background: var(--glass-hover); color: var(--text-muted); font-size: 12px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
 .kanban-activity { max-width: none; margin: 0 0 var(--space-2); color: var(--text); font-size: var(--type-small); overflow-wrap: anywhere; }
-.kanban-meta { display: flex; min-width: 0; max-width: none; align-items: center; gap: 6px; margin: 0 0 4px; color: var(--text-muted); font-size: 13px; }
+.kanban-meta { display: flex; min-width: 0; max-width: none; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0 0 4px; color: var(--text-muted); font-size: 13px; overflow-wrap: anywhere; }
 .kanban-meta svg { width: 15px; height: 15px; flex: 0 0 auto; }
 .kanban-meta code { min-width: 0; overflow: hidden; font-family: var(--font-mono); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .kanban-card .task-controls { margin-top: var(--space-3); }
@@ -2029,15 +2029,15 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
 .kanban-pulse li[data-tone="running"] { --tone: var(--glass-edge-cool); }
 .kanban-pulse li[data-tone="needs-attention"] { --tone: var(--glass-glow-warm); }
 .kanban-pulse li[data-tone="done"] { --tone: var(--success); }
-.kanban-pulse li[data-tone="running"] > span, .kanban-dot-running { animation: kanban-live 2.4s ease-in-out infinite; }
+.kanban-pulse li[data-tone="running"] > span, .kanban-dot-running, .kanban-dot-in-progress { animation: kanban-live 2.4s ease-in-out infinite; }
 @keyframes kanban-live {
   0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--glass-edge-cool) 70%, transparent), 0 0 10px var(--glass-edge-cool); }
   50% { box-shadow: 0 0 0 6px transparent, 0 0 16px var(--glass-edge-cool); }
 }
 .kanban-column { --tone: var(--text-muted); }
-.kanban-column:has(.kanban-dot-running) { --tone: var(--glass-edge-cool); }
-.kanban-column:has(.kanban-dot-paused) { --tone: var(--warning); }
-.kanban-column:has(.kanban-dot-needs-attention) { --tone: var(--glass-glow-warm); }
+.kanban-column:has(.kanban-dot-running, .kanban-dot-in-progress) { --tone: var(--glass-edge-cool); }
+.kanban-column:has(.kanban-dot-paused, .kanban-dot-in-review) { --tone: var(--warning); }
+.kanban-column:has(.kanban-dot-needs-attention, .kanban-dot-needs-dan) { --tone: var(--glass-glow-warm); }
 .kanban-column:has(.kanban-dot-done) { --tone: var(--success); }
 .kanban-column:has(.kanban-dot-cancelled) { --tone: var(--disabled-text); }
 .kanban-column {
@@ -2203,10 +2203,10 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
   .release-trail-commits li:nth-last-child(n + 4) { display: none; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .kanban-pulse li > span, .kanban-dot-running, .release-trail-commits li[data-latest] .release-trail-dot, .kanban-card[data-state="Running"]::after { animation: none; }
+  .kanban-pulse li > span, .kanban-dot-running, .kanban-dot-in-progress, .release-trail-commits li[data-latest] .release-trail-dot, .kanban-card[data-state="Running"]::after { animation: none; }
   .kanban-card:hover { transform: none; }
 }
-:root[data-motion="reduced"] :is(.kanban-pulse li > span, .kanban-dot-running, .release-trail-commits li[data-latest] .release-trail-dot, .kanban-card[data-state="Running"]::after) { animation: none; }
+:root[data-motion="reduced"] :is(.kanban-pulse li > span, .kanban-dot-running, .kanban-dot-in-progress, .release-trail-commits li[data-latest] .release-trail-dot, .kanban-card[data-state="Running"]::after) { animation: none; }
 
 /* Desktop shell: the side panels float over the page like drawers. The main area keeps one constant
    gutter, so opening, closing or resizing a panel never moves content; content passes behind the glass. */
