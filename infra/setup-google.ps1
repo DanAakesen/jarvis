@@ -163,7 +163,8 @@ try {
         'https://www.googleapis.com/auth/gmail.compose',
         'https://www.googleapis.com/auth/gmail.send',
         'https://www.googleapis.com/auth/gmail.modify',
-        'https://www.googleapis.com/auth/calendar.events'
+        'https://www.googleapis.com/auth/calendar.events',
+        'https://www.googleapis.com/auth/calendar.calendarlist.readonly'
     ) -join ' '
     $null = Add-Type -AssemblyName System.Web
     $authorize = New-Object -TypeName System.UriBuilder -ArgumentList 'https://accounts.google.com/o/oauth2/v2/auth'
