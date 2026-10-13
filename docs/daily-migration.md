@@ -54,6 +54,8 @@ Preserve source IDs, revisions, deleted tombstones, ingestion provenance, readin
 
 Verified source heartbeat accepts authenticated bodyless POST without Content-Type. The target stores bounded private `shortcut-name` provenance (default `Daily Overview heartbeat`) and checked feeds `metrics`/`workouts`, without claiming measurements were received or processed. Upload JSON validation remains separate and strict.
 
+The code-only continuation prepares a separate default-off runnable host, explicit named managed identity, bounded leased recovery with a durable cursor and private counters. Maintained client/instance request-rate guards run before credential/storage work, complementing source/body/concurrency/cancellation limits. Per-instance budgets are not a deployment-wide/edge claim. [Unreferenced proposal/runbook](daily-health-ingestion/README.md) stays outside watched `infra/`; neither resources/grants nor activation are executed. Reliable idle recovery requires approved minimum-instance or external invocation; no schedule or #720 processor is added. Protected source/device/private/provider/resource acceptance remains open.
+
 **NEW DAILY CAPABILITY — permanent** · Backend & migration rehearsal
 
 Dedicated upload / heartbeat service, private Blob + queue, managed identities, Key Vault and processing telemetry.

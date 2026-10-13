@@ -10,10 +10,12 @@ import { promisify } from 'node:util';
 import { randomBytes,randomUUID } from 'node:crypto';
 import { BlobServiceClient,type ContainerClient } from '@azure/storage-blob';
 import { QueueServiceClient,type QueueClient } from '@azure/storage-queue';
-import { afterAll,beforeAll,beforeEach,describe,expect,it } from 'vitest';
+import { afterAll,beforeAll,beforeEach,describe,expect,it,vi } from 'vitest';
 import { AzureHealthBuffer,createBlobHealthVerifier,type HealthBufferFaults } from './azure-buffer.js';
 import { buildHealthUploadServer } from './server.js';
 import { healthUploadLimit,sha256,type HealthCapability } from './contracts.js';
+import { readHealthHostConfig } from './host-config.js';
+import { startHealthUploadHost,type HealthReceiptDiagnostics } from './host.js';
 
 const require = createRequire(import.meta.url); const exec = promisify(execFile);
 const owner = '11111111-1111-4111-8111-111111111111';
@@ -23,6 +25,7 @@ const body = Buffer.from('{ "synthetic_private_marker":true,"data":{"metrics":[]
 let emulator: ChildProcess; let directory: string; let connection: string;
 let blobs: BlobServiceClient; let queues: QueueServiceClient; let raw: ContainerClient; let auth: ContainerClient; let queue: QueueClient;
 const apps: ReturnType<typeof buildHealthUploadServer>[] = []; const children: ChildProcess[] = [];
+const hosts: Awaited<ReturnType<typeof startHealthUploadHost>>[] = [];
 async function port(): Promise<number> { const server = createServer(); await new Promise<void>(resolve => server.listen(0,'127.0.0.1',resolve)); const result = (server.address() as { port: number }).port; await new Promise<void>(resolve => server.close(() => resolve())); return result; }
 async function start(faults: HealthBufferFaults = {},bufferQueue = queue) {
   const app = buildHealthUploadServer({ enabled: true,buffer: new AzureHealthBuffer(raw,bufferQueue,owner,undefined,faults),verifier: createBlobHealthVerifier(auth) });
@@ -38,6 +41,13 @@ async function manifests() {
   return result;
 }
 async function credential(value: unknown = capability) { await auth.getBlockBlobClient(`health-devices/${sha256(token)}.json`).uploadData(Buffer.from(JSON.stringify(value))); }
+async function hostConfig(recovery = true) {
+  return readHealthHostConfig({ DAILY_HEALTH_UPLOAD_ENABLED: 'true',DAILY_HEALTH_RECOVERY_ENABLED: String(recovery),DAILY_HEALTH_HOST: '127.0.0.1',
+    DAILY_HEALTH_PORT: String(await port()),DAILY_HEALTH_RECOVERY_INTERVAL_MS: '1000',DAILY_HEALTH_RECOVERY_PAGE_SIZE: '1',
+    DAILY_HEALTH_OWNER_OBJECT_ID: owner,DAILY_HEALTH_MANAGED_IDENTITY_CLIENT_ID: '22222222-2222-4222-8222-222222222222',
+    DAILY_HEALTH_BLOB_URL: 'https://syntheticaccount.blob.core.windows.net/',DAILY_HEALTH_QUEUE_URL: 'https://syntheticaccount.queue.core.windows.net/',
+    DAILY_HEALTH_RAW_CONTAINER: raw.containerName,DAILY_HEALTH_DEVICE_CONTAINER: auth.containerName,DAILY_HEALTH_QUEUE_NAME: queue.name });
+}
 beforeAll(async () => {
   directory = await mkdtemp(join(tmpdir(),'jarvis-health-emulator-'));
   const ports = new Set<number>(); while (ports.size < 3) ports.add(await port()); const [blobPort,queuePort,tablePort] = [...ports];
@@ -62,6 +72,7 @@ beforeEach(async () => {
   await raw.create(); await auth.create(); await queue.create(); await credential();
 });
 afterAll(async () => {
+  await Promise.all(hosts.map(host => host.stop()));
   for (const child of children) if (child.exitCode === null && child.signalCode === null) { child.kill('SIGKILL'); await once(child,'exit'); }
   await Promise.all(apps.map(app => app.close()));
   if (emulator?.exitCode === null) { emulator.kill('SIGTERM'); await once(emulator,'exit'); }
@@ -212,5 +223,155 @@ describe('actual HTTP -> private Blob -> pointer Queue on synthetic Azurite',() 
       expect(await new AzureHealthBuffer(raw,queue,owner).recover({ limit: 10 },AbortSignal.timeout(10000))).toMatchObject({ inspected: 1,queued: 0,failed: 1 });
       expect((await queue.peekMessages()).peekedMessageItems).toHaveLength(0);
     }
+  });
+  it('advances a durable recovery cursor across fresh owners instead of rescanning the first page forever',async () => {
+    await queue.delete(); const address = await start();
+    for (let i = 0; i < 3; i++) expect((await post(address,body,{ 'session-id': `owned-${i}` })).status).toBe(202);
+    await queue.create();
+    for (let i = 0; i < 3; i++) {
+      const result = await new AzureHealthBuffer(raw,queue,owner).recoverOwnedPage({ limit: 1 },AbortSignal.timeout(10000));
+      expect(result).toMatchObject({ ownership: 'owned',inspected: 1,queued: 1,failed: 0,hasMore: i < 2 });
+    }
+    expect((await queue.peekMessages({ numberOfMessages: 32 })).peekedMessageItems).toHaveLength(3);
+    expect(await new AzureHealthBuffer(raw,queue,owner).recoverOwnedPage({ limit: 1 },AbortSignal.timeout(10000))).toMatchObject({ queued: 0,inspected: 1 });
+  });
+  it('respects a competing Blob lease and releases ownership on failed validation',async () => {
+    const buffer = new AzureHealthBuffer(raw,queue,owner);
+    await buffer.recoverOwnedPage({ limit: 1 },AbortSignal.timeout(10000));
+    const control = raw.getBlockBlobClient(`control/recovery-${sha256(owner)}.json`); const lease = control.getBlobLeaseClient();
+    await lease.acquireLease(60);
+    expect(await buffer.recoverOwnedPage({ limit: 1 },AbortSignal.timeout(10000))).toEqual({ ownership: 'busy',inspected: 0,queued: 0,failed: 0,hasMore: null });
+    await lease.releaseLease();
+    await control.uploadData(Buffer.from(JSON.stringify({ version: 1,ownerObjectId: 'untrusted-owner',cursor: null })));
+    await expect(buffer.recoverOwnedPage({ limit: 1 },AbortSignal.timeout(10000))).rejects.toThrow();
+    const next = control.getBlobLeaseClient(); await next.acquireLease(60); await next.releaseLease();
+    expect((await queue.peekMessages()).peekedMessageItems).toHaveLength(0);
+  });
+  it('runs the dedicated host with bounded automatic recovery while a live instance exists and shuts down cleanly',async () => {
+    await queue.delete(); const address = await start();
+    for (let i = 0; i < 3; i++) expect((await post(address,body,{ 'session-id': `host-${i}` })).status).toBe(202);
+    await queue.create();
+    let finish: () => void = () => {}; const recovered = new Promise<void>(resolve => { finish = resolve; });
+    const host = await startHealthUploadHost(await hostConfig(),{ buffer: new AzureHealthBuffer(raw,queue,owner),verifier: createBlobHealthVerifier(auth) },status => {
+      if (status.queued >= 3) finish();
+    }); hosts.push(host);
+    await Promise.race([recovered,new Promise((_,reject) => { const timer = setTimeout(() => reject(new Error('Synthetic host recovery deadline')),10000); timer.unref(); })]);
+    expect((await post(host.address,body,{ 'session-id': 'host-retry' })).status).toBe(202);
+    const status = host.status(); expect(status).toMatchObject({ lifecycle: 'running',processing: 'not-configured',acceptedUploads: 1,queuedReceipts: 1,recovery: { queued: 3 } });
+    for (const secret of [token,owner,raw.containerName,'synthetic_private_marker','sensitive_automation_marker']) expect(JSON.stringify(status)).not.toContain(secret);
+    expect(await host.stop()).toBe('drained'); expect(await host.stop()).toBe('drained'); expect(host.status().lifecycle).toBe('stopped');
+    await expect(post(host.address)).rejects.toThrow();
+  },15000);
+  it('cancels an in-flight HTTP write during host shutdown without losing durable bytes or inventing an ACK',async () => {
+    let entered: () => void = () => {}; let release: () => void = () => {};
+    const enteredRaw = new Promise<void>(resolve => { entered = resolve; }); const blocked = new Promise<void>(resolve => { release = resolve; });
+    const buffer = new AzureHealthBuffer(raw,queue,owner,undefined,{ afterRaw: async () => { entered(); await blocked; } });
+    const host = await startHealthUploadHost(await hostConfig(false),{ buffer,verifier: createBlobHealthVerifier(auth) }); hosts.push(host);
+    const request = post(host.address); await enteredRaw; const stopping = host.stop(); release();
+    expect((await request).status).toBe(503); expect(await stopping).toBe('drained'); expect(await manifests()).toEqual([]);
+    expect((await post(await start())).status).toBe(202); expect(await manifests()).toHaveLength(1);
+    expect((await raw.getBlobClient((await manifests())[0]!.value.rawKey as string).downloadToBuffer()).equals(body)).toBe(true);
+  });
+  it('emits bounded cumulative runtime receipts, flushes on shutdown and cancels its timer',async () => {
+    const snapshots: HealthReceiptDiagnostics[] = [];
+    const config = { ...await hostConfig(false),diagnosticsIntervalMs: 1000 };
+    const host = await startHealthUploadHost(config,{ buffer: new AzureHealthBuffer(raw,queue,owner),verifier: createBlobHealthVerifier(auth) },undefined,
+      snapshot => snapshots.push(snapshot)); hosts.push(host);
+    await queue.delete();
+    expect((await post(host.address)).status).toBe(202);
+    expect((await post(host.address)).status).toBe(202);
+    await queue.create(); expect((await post(host.address)).status).toBe(202);
+    expect((await post(host.address,body,{ authorization: 'Bearer invalid' })).status).toBe(403);
+    expect((await post(host.address,Buffer.alloc(0),{},'/api/health/heartbeat')).status).toBe(202);
+    await vi.waitFor(() => expect(snapshots.some(row => row.reason === 'interval' && row.acceptedHeartbeats === 1)).toBe(true),{ timeout: 5000 });
+    await host.stop(); await host.stop();
+    expect(snapshots.at(-1)).toEqual({ event: 'health_receipt_events',semantics: 'cumulative-receipt-events',reason: 'shutdown',
+      lifecycle: 'stopped',acceptance: 'configured',processing: 'not-configured',acceptedUploads: 3,acceptedHeartbeats: 1,
+      pendingReceipts: 2,queuedReceipts: 2,duplicateReceipts: 2,rejected: 1 });
+    const serialized = JSON.stringify(snapshots);
+    for (const secret of [token,owner,'synthetic-phone','sensitive_automation_marker','session-one','synthetic_private_marker',sha256(body)]) expect(serialized).not.toContain(secret);
+    const length = snapshots.length; await new Promise(resolve => setTimeout(resolve,1100)); expect(snapshots).toHaveLength(length);
+    expect(await manifests()).toHaveLength(2);
+  },15000);
+  it('isolates throwing runtime observers from HTTP acceptance and shutdown',async () => {
+    const sink = vi.fn((snapshot: HealthReceiptDiagnostics) => { throw new Error(`synthetic_private_observer_error:${snapshot.reason}`); });
+    const host = await startHealthUploadHost({ ...await hostConfig(false),diagnosticsIntervalMs: 1000 },
+      { buffer: new AzureHealthBuffer(raw,queue,owner),verifier: createBlobHealthVerifier(auth) },undefined,sink); hosts.push(host);
+    expect((await post(host.address)).status).toBe(202);
+    await vi.waitFor(() => expect(sink).toHaveBeenCalled(),{ timeout: 5000 });
+    expect((await post(host.address)).status).toBe(202);
+    expect(await host.stop()).toBe('drained');
+    expect(sink.mock.calls.at(-1)?.[0]).toMatchObject({ reason: 'shutdown',acceptedUploads: 2,duplicateReceipts: 1 });
+    const stored = await manifests(); expect(stored).toHaveLength(1);
+    expect((await raw.getBlobClient(stored[0]!.value.rawKey as string).downloadToBuffer()).equals(body)).toBe(true);
+  },10000);
+  it('executes the packaged inactive entry point without credentials and handles real SIGTERM',async () => {
+    const listenPort = await port();
+    const child = spawn(process.execPath,[join(import.meta.dirname,'../../../dist/daily/health-upload/main.js')],{
+      env: { ...process.env,DAILY_HEALTH_UPLOAD_ENABLED: 'false',DAILY_HEALTH_RECOVERY_ENABLED: 'false',DAILY_HEALTH_HOST: '127.0.0.1',DAILY_HEALTH_PORT: String(listenPort),
+        DAILY_HEALTH_BLOB_URL: 'synthetic-private-config-marker' },stdio: ['ignore','pipe','pipe'] }); children.push(child);
+    let logs = ''; child.stdout!.on('data',chunk => { logs += String(chunk); });
+    const [output] = await once(child.stdout!,'data',{ signal: AbortSignal.timeout(10000) }); expect(String(output)).toContain('health_host_started');
+    expect(String(output)).not.toContain('synthetic-private-config-marker');
+    expect(await (await fetch(`http://127.0.0.1:${listenPort}/health`)).json()).toEqual({ acceptance: 'inactive',processing: 'not-configured' });
+    expect((await post(`http://127.0.0.1:${listenPort}`)).status).toBe(404);
+    const exited = once(child,'exit'); child.kill('SIGTERM'); expect((await exited)[0]).toBe(0);
+    expect(logs.split('\n').filter(Boolean).map(line => JSON.parse(line))).toContainEqual(expect.objectContaining({
+      event: 'health_receipt_events',semantics: 'cumulative-receipt-events',reason: 'shutdown',lifecycle: 'stopped',acceptance: 'inactive',processing: 'not-configured' }));
+    expect(logs).not.toContain('synthetic-private-config-marker');
+  },15000);
+  it('retains acknowledged uploads after a recovery owner is SIGKILLed between queue send and checkpoint',async () => {
+    await queue.delete(); expect((await post(await start())).status).toBe(202); await queue.create();
+    const child = fork(join(import.meta.dirname,'recovery-crash-fixture.mjs'),[],{ env: { ...process.env,SYNTHETIC_CONNECTION: connection,
+      SYNTHETIC_RAW: raw.containerName,SYNTHETIC_QUEUE: queue.name,SYNTHETIC_OWNER: owner },stdio: ['ignore','ignore','ignore','ipc'] }); children.push(child);
+    expect((await once(child,'message',{ signal: AbortSignal.timeout(10000) }))[0]).toEqual({ stage: 'queued' });
+    const exit = once(child,'exit'); child.kill('SIGKILL'); await exit;
+    const fresh = new AzureHealthBuffer(raw,queue,owner);
+    expect(await fresh.recoverOwnedPage({ limit: 1 },AbortSignal.timeout(10000))).toMatchObject({ ownership: 'busy',hasMore: null });
+    // Emulate lease expiry after confirmed process death; never break a live production lease.
+    await raw.getBlobClient(`control/recovery-${sha256(owner)}.json`).getBlobLeaseClient().breakLease(0);
+    expect(await fresh.recoverOwnedPage({ limit: 1 },AbortSignal.timeout(10000))).toMatchObject({ ownership: 'owned',queued: 1,failed: 0 });
+    const messages = (await queue.peekMessages({ numberOfMessages: 32 })).peekedMessageItems;
+    expect(messages).toHaveLength(2); expect(messages[0]?.messageText).toBe(messages[1]?.messageText);
+    expect((await raw.getBlobClient((await manifests())[0]!.value.rawKey as string).downloadToBuffer()).equals(body)).toBe(true);
+  },15000);
+  it('fails the packaged entry before listening on malformed enablement without echoing config',async () => {
+    await expect(exec(process.execPath,[join(import.meta.dirname,'../../../dist/daily/health-upload/main.js')],{
+      env: { ...process.env,DAILY_HEALTH_UPLOAD_ENABLED: 'synthetic-private-config-marker' },timeout: 10000,
+    })).rejects.toMatchObject({ code: 1,stdout: '',stderr: 'health_host_configuration_or_startup_failed\n' });
+  },15000);
+  it('rate-limits sequential requests before verifier/storage, ignores spoofed proxy headers and recovers next window',async () => {
+    const buffer = new AzureHealthBuffer(raw,queue,owner); const write = vi.spyOn(buffer,'accept');
+    const verifier = vi.fn(createBlobHealthVerifier(auth));
+    const app = buildHealthUploadServer({ enabled: true,buffer,verifier,ratePolicy: { perClient: 2,perInstance: 10,windowMs: 1000 } }); apps.push(app);
+    const address = await app.listen({ host: '127.0.0.1',port: 0 });
+    for (let i = 0; i < 2; i++) expect((await post(address,body,{ 'x-forwarded-for': `203.0.113.${i + 1}` })).status).toBe(202);
+    const rejected = await post(address,body,{ authorization: `Bearer ${randomBytes(32).toString('base64url')}`,'x-forwarded-for': '203.0.113.99' });
+    expect(rejected.status).toBe(429); expect(Number(rejected.headers.get('retry-after'))).toBeGreaterThanOrEqual(1);
+    expect(await rejected.json()).toEqual({ error: 'Health request rate limited' });
+    expect(verifier).toHaveBeenCalledTimes(2); expect(write).toHaveBeenCalledTimes(2); expect(await manifests()).toHaveLength(1);
+    await new Promise(resolve => setTimeout(resolve,1050));
+    expect((await post(address)).status).toBe(202); expect(verifier).toHaveBeenCalledTimes(3); expect(write).toHaveBeenCalledTimes(3);
+    expect(await manifests()).toHaveLength(1);
+  });
+  it('bounds total instance work across trusted clients and keeps source-compatible heartbeat in the same budget',async () => {
+    const buffer = new AzureHealthBuffer(raw,queue,owner); const write = vi.spyOn(buffer,'accept'); const verifier = vi.fn(createBlobHealthVerifier(auth));
+    const app = buildHealthUploadServer({ enabled: true,buffer,verifier,trustedProxyCidrs: ['127.0.0.1/32'],
+      ratePolicy: { perClient: 2,perInstance: 2,windowMs: 1000 } }); apps.push(app);
+    const address = await app.listen({ host: '127.0.0.1',port: 0 });
+    for (const ip of ['203.0.113.1','203.0.113.2']) expect((await fetch(address + '/api/health/heartbeat',{ method: 'POST',headers: { authorization: `Bearer ${token}`,'x-forwarded-for': ip } })).status).toBe(202);
+    const rejected = await post(address,body,{ 'x-forwarded-for': '203.0.113.3' });
+    expect(rejected.status).toBe(429); expect(rejected.headers.get('retry-after')).toBe('1');
+    expect(verifier).toHaveBeenCalledTimes(2); expect(write).toHaveBeenCalledTimes(2); expect(await manifests()).toHaveLength(2);
+    expect(await rejected.text()).not.toContain(token);
+  });
+  it('uses the nearest untrusted client hop and groups IPv6 /64 instead of trusting arbitrary header identity',async () => {
+    const verifier = vi.fn(createBlobHealthVerifier(auth));
+    const app = buildHealthUploadServer({ enabled: true,buffer: new AzureHealthBuffer(raw,queue,owner),verifier,trustedProxyCidrs: ['127.0.0.1/32'],
+      ratePolicy: { perClient: 2,perInstance: 10,windowMs: 1000 } }); apps.push(app);
+    const address = await app.listen({ host: '127.0.0.1',port: 0 });
+    for (let i = 0; i < 2; i++) expect((await post(address,body,{ 'x-forwarded-for': `198.51.100.${i + 1}, 2001:db8:abcd:1::${i + 1}` })).status).toBe(202);
+    expect((await post(address,body,{ 'x-forwarded-for': '198.51.100.99, 2001:db8:abcd:1::ffff' })).status).toBe(429);
+    expect(verifier).toHaveBeenCalledTimes(2);
   });
 });
