@@ -245,7 +245,7 @@ Presence has three modes: Present (`present`, cyan), Away (`away`, amber), and O
 | Appearance | Light, dark, or system mode; approved theme tokens | Light |
 | Personality | Tone, response style, base custom instructions, and per-mode instructions (each up to 2,000 characters) | British butler, concise, no custom instructions |
 | Voice | Speech to text | MAI Transcribe |
-| Voice | Voice per language | English: Ryan HD (British butler persona, addresses Dan as "sir"); Danish: Harper (MAI-Voice-2) |
+| Voice | Voice per language | English: Ryan HD (British butler persona, addresses Dan as "sir"); Danish: Jeppe (`da-DK-JeppeNeural`, native male; live since P5-08) |
 | Voice | Default language | Danish |
 | Voice | Minimise all windows when starting voice | Off |
 | Global | Screen inspections per day | 300 (configurable from 1 to 300) |
