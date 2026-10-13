@@ -164,7 +164,7 @@ export async function getSystemHealth(app: FastifyInstance, signal: AbortSignal,
 
 export const getSystemHealthTool: JarvisTool = {
   name: 'get_system_health',
-  description: 'Diagnose cached system and smoke checks, credential expiry, recent failed jobs, recorded deployment, work evidence and tool failure counts. During deployment smoke, the list_capabilities and confirmation_test operations are read-only or no-op checks.',
+  description: 'Diagnose cached system and smoke checks, credential expiry, recent failed jobs, recorded deployment, work evidence and tool failure counts. Returns bounded safe reasons and available recovery tools only; never runs probes or repairs.',
   inputSchema: {
     type: 'object',
     properties: { operation: { type: 'string', enum: ['list_capabilities', 'confirmation_test'] } },

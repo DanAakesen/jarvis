@@ -27,7 +27,8 @@ from chat_telemetry import latency_span
 from state import ModelSettings
 
 logger = logging.getLogger("jarvis_tools")
-SMOKE_TOOL_NAMES = frozenset({"get_system_health", "github_read", "list_jobs", "workspace_command"})
+SMOKE_TOOL_ORDER = ("get_system_health", "github_read", "list_jobs", "workspace_command")
+SMOKE_TOOL_NAMES = frozenset(SMOKE_TOOL_ORDER)
 current_smoke_invocation: contextvars.ContextVar[bool] = contextvars.ContextVar(
     "current_smoke_invocation", default=False
 )

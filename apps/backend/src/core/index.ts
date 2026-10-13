@@ -248,6 +248,13 @@ export const coreModule: BackendModule = {
               signal: controller.signal,
               execute: () => tool.execute(request.body, request, controller.signal),
             });
+          if (smoke && tool.name === 'github_read') {
+            const issue = isObject(result) ? result : {};
+            result = {
+              ...(typeof issue.number === 'number' ? { number: issue.number } : {}),
+              ...(typeof issue.title === 'string' ? { title: issue.title.slice(0, 500) } : {}),
+            };
+          }
           if (isObject(result) && result.type === 'generated-view') {
             const validateView = request.compileValidationSchema(generatedViewSchema, 'body');
             if (!validateView(result.view) || !isGeneratedView(result.view, {

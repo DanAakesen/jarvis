@@ -192,7 +192,10 @@ describe('get_status_summary', () => {
       execute: async () => ({}),
     }));
     const app = buildApp(config, undefined, {
-      modules: [coreModule, { id: 'smoke-catalogue', tools: catalogueTools }],
+      modules: [
+        coreModule,
+        { id: 'smoke-catalogue', registerRoutes: async () => {}, tools: catalogueTools },
+      ],
       auth: async () => ({ kind: 'jarvis-agent', objectId: 'agent', tenantId: config.auth.tenantId }),
       toolCallStore: { record },
     });
@@ -223,7 +226,7 @@ describe('get_status_summary', () => {
 
     expect(catalogue.statusCode).toBe(200);
     expect(catalogue.json().map(({ name }: { name: string }) => name)).toEqual([
-      'get_system_health', 'workspace_command', 'list_jobs',
+      'get_system_health', 'workspace_command', 'list_jobs', 'github_read',
     ]);
     expect(notApproved.json()).toMatchObject({
       outcome: 'refused', result: { refused: expect.stringContaining('Confirmation required') },
