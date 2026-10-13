@@ -50,6 +50,8 @@ Preserve source IDs, revisions, deleted tombstones, ingestion provenance, readin
 
 ### [P12-04: Azure ingestion, device auth & durable buffer](https://github.com/DanAakesen/jarvis/issues/719)
 
+**Inactive implementation checkpoint:** unregistered `daily/health-upload` supplies owner/scoped/revocable private capability checks, immutable raw bytes + conditional durable manifests and non-expiring pointer-only Queue. HTTP 202 means accepted, never processed; pending delivery survives Queue/SQL/agent outage and bounded recovery can replay pointers at least once. Actual synthetic HTTP/SDK/Azurite and killed-gateway checks do not prove Azure or phone acceptance. [Protocol/checks/gates](../apps/backend/src/daily/health-upload/README.md). No resources, credentials, permissions or activation are installed; #720 processing and protected/live/device acceptance remain open.
+
 **NEW DAILY CAPABILITY — permanent** · Backend & migration rehearsal
 
 Dedicated upload / heartbeat service, private Blob + queue, managed identities, Key Vault and processing telemetry.
