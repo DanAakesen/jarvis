@@ -45,7 +45,7 @@ export function validateManifest(value: unknown): HealthManifest {
   if (!row || typeof row !== 'object' || Array.isArray(row) || Object.keys(row).some(key => !['version','acceptanceId','ownerObjectId','deviceId','kind','automationId','sessionId','checksum','rawKey','bytes','acceptedAt','delivery'].includes(key)) ||
       row.version !== 1 || !['upload','heartbeat'].includes(row.kind) || !['pending','queued'].includes(row.delivery) ||
       !/^[a-f\d]{64}$/u.test(row.checksum) || !/^raw\/[a-f\d]{64}\.json$/u.test(row.rawKey) || !Number.isInteger(row.bytes) || row.bytes < 1 || row.bytes > healthUploadLimit ||
-      !Number.isFinite(Date.parse(row.acceptedAt))) throw new HealthUnavailable();
+      typeof row.acceptedAt !== 'string' || !Number.isFinite(Date.parse(row.acceptedAt))) throw new HealthUnavailable();
   ownerId(row.ownerObjectId); ownerId(row.acceptanceId); opaqueId(row.deviceId,256); opaqueId(row.automationId); opaqueId(row.sessionId);
   return row;
 }

@@ -167,4 +167,14 @@ describe('actual HTTP -> private Blob -> pointer Queue on synthetic Azurite',() 
     const last = await buffer.recover({ limit: 2,cursor: first.next! },AbortSignal.timeout(10000)); expect(last).toMatchObject({ inspected: 1,queued: 1,failed: 0,next: null });
     expect((await queue.peekMessages({ numberOfMessages: 32 })).peekedMessageItems).toHaveLength(3);
   });
+  it('fails closed on corrupted manifest types and mismatched pointer identity',async () => {
+    await queue.delete(); const address = await start(); expect((await post(address)).status).toBe(202);
+    const [stored] = await manifests(); await queue.create();
+    for (const value of [{ ...stored!.value,acceptedAt: 2026 },{ ...stored!.value,sessionId: 'different-session' },
+      { ...stored!.value,rawKey: `raw/${'0'.repeat(64)}.json` }]) {
+      await raw.getBlockBlobClient(stored!.name).uploadData(Buffer.from(JSON.stringify(value)));
+      expect(await new AzureHealthBuffer(raw,queue,owner).recover({ limit: 10 },AbortSignal.timeout(10000))).toMatchObject({ inspected: 1,queued: 0,failed: 1 });
+      expect((await queue.peekMessages()).peekedMessageItems).toHaveLength(0);
+    }
+  });
 });

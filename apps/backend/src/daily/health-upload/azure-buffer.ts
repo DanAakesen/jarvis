@@ -99,12 +99,13 @@ export class AzureHealthBuffer {
   private async deliver(key: string,manifest: HealthManifest,signal: AbortSignal) {
     const blob = this.container.getBlockBlobClient(key);
     const before = await blob.getProperties({ abortSignal: signal });
+    if (!before.etag) throw new HealthUnavailable();
     // Non-expiring pointer: SQL/agent outage must not silently expire accepted work.
     await this.queue.sendMessage(JSON.stringify({ version: 1,manifest: key }),{ abortSignal: signal,messageTimeToLive: -1 });
     await this.faults.afterQueue?.(); signal.throwIfAborted();
     try {
       await blob.uploadData(Buffer.from(JSON.stringify({ ...manifest,delivery: 'queued' })),{
-        abortSignal: signal,conditions: { ifMatch: before.etag! },blobHTTPHeaders: { blobContentType: 'application/json' } });
+        abortSignal: signal,conditions: { ifMatch: before.etag },blobHTTPHeaders: { blobContentType: 'application/json' } });
     } catch (error) {
       if (status(error) !== 412) throw error;
       const current = validateManifest(await jsonBlob(this.container,key,signal));
@@ -124,7 +125,9 @@ export class AzureHealthBuffer {
         signal.throwIfAborted(); if (++inspected > options.limit) throw new HealthUnavailable();
         try {
           const manifest = validateManifest(await jsonBlob(this.container,blob.name,signal));
-          if (manifest.ownerObjectId !== this.owner || !/^accepted\/[a-f\d]{64}\.json$/u.test(blob.name)) throw new HealthUnavailable();
+          const sessionHash = sha256(JSON.stringify([this.owner,manifest.kind,manifest.automationId,manifest.sessionId]));
+          if (manifest.ownerObjectId !== this.owner || blob.name !== `accepted/${sessionHash}.json` ||
+              manifest.rawKey !== `raw/${sha256(JSON.stringify([sessionHash,manifest.checksum]))}.json`) throw new HealthUnavailable();
           if (manifest.delivery === 'pending' || options.replayQueued === true) { await this.deliver(blob.name,manifest,signal); queued++; }
         } catch { if (signal.aborted) throw signal.reason; failed++; }
       }
