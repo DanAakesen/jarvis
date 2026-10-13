@@ -1,9 +1,11 @@
 import type {
   BoardCard, FactoryBoard, FactoryBoardColumn, FactoryBoardColumnId, FactoryBoardTask,
 } from '@jarvis/contracts';
+import { isFactoryBoard } from '@jarvis/contracts';
 import type { FastifyInstance } from 'fastify';
 import type { GitHubAppTokenIssuer } from '../github-app.js';
 import type { TaskRecord } from './task-store.js';
+import { boardReadError, FactoryBoardReadError, readBoardStage } from './board-errors.js';
 
 const githubApi = 'https://api.github.com';
 const repositoryPattern = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/u;
@@ -94,12 +96,12 @@ function issueFromGitHub(value: unknown): FactoryBoardIssue | null {
       (body !== null && typeof body !== 'string') ||
       (dependency?.blocked_by !== undefined &&
         (!Number.isSafeInteger(dependency.blocked_by) || (dependency.blocked_by as number) < 0))) {
-    throw new Error('GitHub board response is invalid');
+    throw new FactoryBoardReadError('source', 'invalid_response');
   }
   const url = githubUrl(issue.html_url);
   const labelNames = labels.map((label) => {
     const name = record(label)?.name;
-    if (typeof name !== 'string' || name.length > 100) throw new Error('GitHub board response is invalid');
+    if (typeof name !== 'string' || name.length > 100) throw new FactoryBoardReadError('source', 'invalid_response');
     return name;
   });
   return {
@@ -111,7 +113,7 @@ function issueFromGitHub(value: unknown): FactoryBoardIssue | null {
     worker: workerLabels.find((worker) => labelNames.includes(worker)) ?? null,
     state: issue.state,
     updatedAt: new Date(updatedAt).toISOString(),
-    closedAt: closedAt as string | null,
+    closedAt: closedAt === null ? null : new Date(closedAt as string).toISOString(),
     blockedBy: [],
     blockedByCount: (dependency?.blocked_by as number | undefined) ?? 0,
     body: body as string | null,
@@ -119,15 +121,15 @@ function issueFromGitHub(value: unknown): FactoryBoardIssue | null {
 }
 
 function githubUrl(value: unknown): string {
-  if (typeof value !== 'string') throw new Error('GitHub board response is invalid');
+  if (typeof value !== 'string') throw new FactoryBoardReadError('source', 'invalid_response');
   let url: URL;
   try {
     url = new URL(value);
   } catch {
-    throw new Error('GitHub board response is invalid');
+    throw new FactoryBoardReadError('source', 'invalid_response');
   }
   if (url.protocol !== 'https:' || url.hostname !== 'github.com' || url.username || url.password || url.port) {
-    throw new Error('GitHub board response is invalid');
+    throw new FactoryBoardReadError('source', 'invalid_response');
   }
   return url.toString();
 }
@@ -137,7 +139,7 @@ function pullRequestFromGitHub(value: unknown): FactoryBoardPullRequestSource {
   if (!pullRequest || !Number.isSafeInteger(pullRequest.number) || (pullRequest.number as number) < 1 ||
       typeof pullRequest.body !== 'string' && pullRequest.body !== null ||
       typeof pullRequest.draft !== 'boolean' || typeof pullRequest.html_url !== 'string') {
-    throw new Error('GitHub board response is invalid');
+    throw new FactoryBoardReadError('source', 'invalid_response');
   }
   return {
     number: pullRequest.number as number,
@@ -148,11 +150,11 @@ function pullRequestFromGitHub(value: unknown): FactoryBoardPullRequestSource {
 }
 
 async function readResponse(response: Response): Promise<unknown> {
-  if (!response.ok) throw new Error('GitHub board request failed');
+  if (!response.ok) throw new FactoryBoardReadError('source', 'request_failed', response.status);
   const length = response.headers.get('content-length');
-  if (length !== null && Number(length) > maxResponseBytes) throw new Error('GitHub board response is too large');
+  if (length !== null && Number(length) > maxResponseBytes) throw new FactoryBoardReadError('source', 'response_too_large');
   const reader = response.body?.getReader();
-  if (!reader) throw new Error('GitHub board response is invalid');
+  if (!reader) throw new FactoryBoardReadError('source', 'invalid_response');
   const chunks: Uint8Array[] = [];
   let size = 0;
   try {
@@ -162,7 +164,7 @@ async function readResponse(response: Response): Promise<unknown> {
       size += value.byteLength;
       if (size > maxResponseBytes) {
         await reader.cancel().catch(() => undefined);
-        throw new Error('GitHub board response is too large');
+        throw new FactoryBoardReadError('source', 'response_too_large');
       }
       chunks.push(value);
     }
@@ -172,7 +174,7 @@ async function readResponse(response: Response): Promise<unknown> {
   try {
     return JSON.parse(Buffer.concat(chunks.map((chunk) => Buffer.from(chunk))).toString('utf8')) as unknown;
   } catch {
-    throw new Error('GitHub board response is invalid');
+    throw new FactoryBoardReadError('source', 'invalid_response');
   }
 }
 
@@ -193,13 +195,16 @@ async function readPages(
       },
       signal,
       redirect: 'error',
+    }).catch((error: unknown) => {
+      const diagnostic = boardReadError('source', error);
+      throw diagnostic.reason === 'unexpected' ? new FactoryBoardReadError('source', 'transport_failed') : diagnostic;
     });
     const result = await readResponse(response);
-    if (!Array.isArray(result) || result.length > pageSize) throw new Error('GitHub board response is invalid');
+    if (!Array.isArray(result) || result.length > pageSize) throw new FactoryBoardReadError('source', 'invalid_response');
     items.push(...result);
     if (!response.headers.get('link')?.match(/<[^>]+>;\s*rel="next"/u)) return items;
   }
-  throw new Error('GitHub board result limit exceeded');
+  throw new FactoryBoardReadError('source', 'result_limit');
 }
 
 export function createGitHubFactoryBoardReader(fetchImpl: typeof fetch = fetch): FactoryBoardReader {
@@ -323,11 +328,11 @@ export function createGitHubFactoryBoardReader(fetchImpl: typeof fetch = fetch):
             if (!blockedIssue || !Number.isSafeInteger(blockedIssue.number) ||
                 (blockedIssue.number as number) < 1 ||
                 (blockedIssue.state !== 'open' && blockedIssue.state !== 'closed')) {
-              throw new Error('GitHub board response is invalid');
+              throw new FactoryBoardReadError('source', 'invalid_response');
             }
             return blockedIssue.state === 'open' ? [blockedIssue.number as number] : [];
           });
-          if (blockedBy.length !== issue.blockedByCount) throw new Error('GitHub board response is incomplete');
+          if (blockedBy.length !== issue.blockedByCount) throw new FactoryBoardReadError('source', 'incomplete_response');
           return { ...issue, blockedBy };
         })));
       }
@@ -343,7 +348,9 @@ export class FactoryBoardCache {
 
   constructor(private readonly now: () => number = Date.now, private readonly ttlMs = 60_000) {}
 
-  async get(projectId: string, load: () => Promise<FactoryBoard>): Promise<{ board: FactoryBoard; stale: boolean }> {
+  async get(projectId: string, load: () => Promise<FactoryBoard>): Promise<{
+    board: FactoryBoard; stale: boolean; failure?: unknown;
+  }> {
     const key = projectId;
     const cached = this.entries.get(key);
     if (cached && cached.expiresAt > this.now()) {
@@ -353,9 +360,9 @@ export class FactoryBoardCache {
     }
     const pending = this.pending.get(key);
     if (pending?.generation === this.generation) {
-      return pending.promise.then((board) => ({ board, stale: false }), () => {
-        if (cached) return { board: cached.board, stale: true };
-        throw new Error('Factory board is unavailable');
+      return pending.promise.then((board) => ({ board, stale: false }), (error: unknown) => {
+        if (cached) return { board: cached.board, stale: true, failure: error };
+        throw error;
       });
     }
 
@@ -372,9 +379,9 @@ export class FactoryBoardCache {
     this.pending.set(key, { generation, promise });
     try {
       return { board: await promise, stale: false };
-    } catch {
-      if (cached) return { board: cached.board, stale: true };
-      throw new Error('Factory board is unavailable');
+    } catch (error) {
+      if (cached) return { board: cached.board, stale: true, failure: error };
+      throw error;
     }
   }
 
@@ -521,23 +528,24 @@ export function registerFactoryBoardRoute(app: FastifyInstance): void {
     let project;
     try {
       project = (await projects.list()).find((candidate) => candidate.id === request.query.project && candidate.active);
-    } catch {
-      request.log.warn('factory.board_project_lookup_failed');
+    } catch (error) {
+      const { stage, reason, status } = boardReadError('project', error);
+      request.log.warn({ stage, reason, status }, 'factory.board_project_lookup_failed');
       return reply.code(503).send({ error: 'Factory board service unavailable' });
     }
     if (!project) return reply.code(404).send({ error: 'Project not found' });
 
     try {
-      const { board, stale } = await app.factoryBoardCache.get(project.id, async () => {
+      const { board, stale, failure } = await app.factoryBoardCache.get(project.id, async () => {
         const now = Date.now();
         const closedSince = new Date(now - closedIssueWindowMs).toISOString();
-        const token = await tokenIssuer.issueForRepositoryRead(project.repo);
+        const token = await readBoardStage('token', () => tokenIssuer.issueForRepositoryRead(project.repo));
         const [source, taskRecords, releaseRecords] = await Promise.all([
-          app.factoryBoardReader.read(project.repo, token, closedSince),
-          tasks.list({ projectId: project!.id, limit: 1000, offset: 0 }),
-          releases.read(project!.id),
+          readBoardStage('source', () => app.factoryBoardReader.read(project.repo, token, closedSince)),
+          readBoardStage('task', () => tasks.list({ projectId: project!.id, limit: 1000, offset: 0 })),
+          readBoardStage('release', () => releases.read(project!.id)),
         ]);
-        return createFactoryBoard(
+        const board = createFactoryBoard(
           project!.id,
           project!.repo,
           source,
@@ -545,15 +553,23 @@ export function registerFactoryBoardRoute(app: FastifyInstance): void {
           releaseRecords.pullRequests,
           now,
         );
+        if (!isFactoryBoard(board)) throw new FactoryBoardReadError('response', 'invalid_response');
+        return board;
       });
+      if (stale) {
+        const { stage, reason, status } = boardReadError('response', failure);
+        request.log.warn({ stage, reason, status, stale: true }, 'factory.board_read_failed');
+      }
       const response = { ...board, stale };
       const serialized = JSON.stringify(response);
       if (Buffer.byteLength(serialized) > 1024 * 1024) {
+        request.log.warn({ stage: 'response', reason: 'response_too_large', status: 413 }, 'factory.board_read_failed');
         return reply.code(413).send({ error: 'Factory board response too large' });
       }
       return reply.header('Cache-Control', 'no-store').send(response);
-    } catch {
-      request.log.warn('factory.board_read_failed');
+    } catch (error) {
+      const { stage, reason, status } = boardReadError('response', error);
+      request.log.warn({ stage, reason, status, stale: false }, 'factory.board_read_failed');
       return reply.code(502).send({ error: 'Factory board unavailable' });
     }
   });

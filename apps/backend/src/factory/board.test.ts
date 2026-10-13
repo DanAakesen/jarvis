@@ -1,9 +1,10 @@
 import { readFileSync } from 'node:fs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { isFactoryBoard } from '@jarvis/contracts';
+import { isFactoryBoard, type FactoryBoard } from '@jarvis/contracts';
 import { buildApp } from '../app.js';
 import { loadConfig } from '../config.js';
-import type { GitHubAppTokenIssuer } from '../github-app.js';
+import type { TokenVerifier } from '../auth/verify.js';
+import { GitHubAppRequestError, GitHubAppResponseError, type GitHubAppTokenIssuer } from '../github-app.js';
 import type { BackendModule } from '../modules.js';
 import { factoryModule } from './index.js';
 import type { Project, ProjectStore } from './projects.js';
@@ -17,6 +18,7 @@ import {
 } from './board.js';
 import type { TaskEventMessage, TaskRecord, TaskStore } from './task-store.js';
 import type { ReleaseViewStore } from './release-view.js';
+import { FactoryBoardReadError } from './board-errors.js';
 
 const config = { ...loadConfig({}), logLevel: 'silent' as const };
 const headers = {
@@ -56,7 +58,7 @@ const cases = JSON.parse(readFileSync(
 const apps: ReturnType<typeof buildApp>[] = [];
 afterEach(async () => { await Promise.all(apps.splice(0).map((app) => app.close())); });
 
-function fixture(reader: ReturnType<typeof vi.fn>, options: { modules?: readonly BackendModule[] } = {}) {
+function fixture(reader: ReturnType<typeof vi.fn>, options: { modules?: readonly BackendModule[]; auth?: TokenVerifier } = {}) {
   const projectStore = { list: vi.fn(async () => [project]) } as unknown as ProjectStore;
   const taskStore = {
     list: vi.fn(async () => [task]),
@@ -74,7 +76,7 @@ function fixture(reader: ReturnType<typeof vi.fn>, options: { modules?: readonly
     issueForRepositoryRead: vi.fn(async () => 'test-installation-token'),
   } as unknown as GitHubAppTokenIssuer;
   const app = buildApp(config, undefined, {
-    auth: async () => ({ objectId: config.auth.ownerObjectId, tenantId: config.auth.tenantId }),
+    auth: options.auth ?? (async () => ({ objectId: config.auth.ownerObjectId, tenantId: config.auth.tenantId })),
     modules: options.modules ?? [factoryModule],
     projectStore,
     taskStore,
@@ -87,6 +89,17 @@ function fixture(reader: ReturnType<typeof vi.fn>, options: { modules?: readonly
 }
 
 describe('Factory board', () => {
+  it('keeps the board private and refuses the existing deployment smoke identity', async () => {
+    const reader = vi.fn(async () => source);
+    const { app, tokenIssuer } = fixture(reader, {
+      auth: async () => ({ kind: 'jarvis-deploy', objectId: config.auth.ownerObjectId, tenantId: config.auth.tenantId }),
+    });
+    expect((await app.inject({ url: '/factory/board?project=42' })).statusCode).toBe(401);
+    expect((await app.inject({ url: '/factory/board?project=42', headers })).statusCode).toBe(403);
+    expect(tokenIssuer.issueForRepositoryRead).not.toHaveBeenCalled();
+    expect(reader).not.toHaveBeenCalled();
+  });
+
   it('uses the same status fixtures as project_board.py', () => {
     for (const testCase of cases) {
       expect(
@@ -174,6 +187,112 @@ describe('Factory board', () => {
     expect((await app.inject({ url: '/factory/board?project=42', headers })).statusCode).toBe(200);
     expect(reader).toHaveBeenCalledTimes(2);
     unsubscribe();
+  });
+
+  it.each([
+    ['token', new GitHubAppRequestError(401), 'request_failed', 401],
+    ['token', new GitHubAppRequestError(403), 'request_failed', 403],
+    ['token', new GitHubAppResponseError('invalid_token_lifetime', 'sensitive-expiry'), 'invalid_token_lifetime', undefined],
+    ['token', new GitHubAppResponseError('invalid_token_permissions', 'sensitive-permissions'), 'invalid_token_permissions', undefined],
+    ['source', new FactoryBoardReadError('source', 'request_failed', 429), 'request_failed', 429],
+    ['source', new FactoryBoardReadError('source', 'result_limit'), 'result_limit', undefined],
+    ['source', new DOMException('sensitive-timeout', 'TimeoutError'), 'timeout', undefined],
+    ['task', new Error('sensitive-sql'), 'unexpected', undefined],
+    ['release', new Error('sensitive-release'), 'unexpected', undefined],
+  ] as const)('reports only safe fields for %s / %s failures', async (stage, error, reason, status) => {
+    const reader = vi.fn(async () => source);
+    const { app, tokenIssuer, taskStore, releaseViewStore } = fixture(reader);
+    const warn = vi.fn();
+    app.addHook('onRequest', async (request) => { request.log.warn = warn; });
+    if (stage === 'token') vi.mocked(tokenIssuer.issueForRepositoryRead).mockRejectedValueOnce(error);
+    if (stage === 'source') reader.mockRejectedValueOnce(error);
+    if (stage === 'task') vi.mocked(taskStore.list).mockRejectedValueOnce(error);
+    if (stage === 'release') vi.mocked(releaseViewStore.read).mockRejectedValueOnce(error);
+    const response = await app.inject({ url: '/factory/board?project=42', headers });
+    expect(response.statusCode).toBe(502);
+    expect(response.json()).toEqual({ error: 'Factory board unavailable' });
+    expect(warn).toHaveBeenCalledExactlyOnceWith(
+      { stage, reason, status, stale: false }, 'factory.board_read_failed',
+    );
+    expect(JSON.stringify(warn.mock.calls)).not.toContain('sensitive');
+    if (stage === 'token') expect(reader).not.toHaveBeenCalled();
+  });
+
+  it('rejects an invalid completed board before caching it and accepts a subsequent valid read', async () => {
+    const reader = vi.fn(async () => source);
+    const { app, taskStore } = fixture(reader);
+    const warn = vi.fn();
+    app.addHook('onRequest', async (request) => { request.log.warn = warn; });
+    vi.mocked(taskStore.list).mockResolvedValueOnce([{ ...task, startedAt: 'invalid' }]);
+    const failed = await app.inject({ url: '/factory/board?project=42', headers });
+    expect(failed.statusCode).toBe(502);
+    expect(warn).toHaveBeenCalledWith({
+      stage: 'response', reason: 'invalid_response', status: undefined, stale: false,
+    }, 'factory.board_read_failed');
+    const response = await app.inject({ url: '/factory/board?project=42', headers });
+    expect(response.statusCode).toBe(200);
+    expect(isFactoryBoard(response.json())).toBe(true);
+    expect(reader).toHaveBeenCalledTimes(2);
+  });
+
+  it('logs stale refresh diagnostics without exposing them in the response', async () => {
+    const error = new FactoryBoardReadError('source', 'request_failed', 503);
+    const reader = vi.fn(async () => source);
+    const { app } = fixture(reader);
+    const warn = vi.fn();
+    app.addHook('onRequest', async (request) => { request.log.warn = warn; });
+    let now = Date.now();
+    app.factoryBoardCache = new FactoryBoardCache(() => now, 10);
+    await app.inject({ url: '/factory/board?project=42', headers });
+    now += 11;
+    reader.mockRejectedValueOnce(error);
+    const response = await app.inject({ url: '/factory/board?project=42', headers });
+    expect(response.statusCode).toBe(200);
+    expect(response.json().stale).toBe(true);
+    expect(isFactoryBoard(response.json())).toBe(true);
+    expect(response.body).not.toContain('failure');
+    expect(warn).toHaveBeenCalledExactlyOnceWith({
+      stage: 'source', reason: 'request_failed', status: 503, stale: true,
+    }, 'factory.board_read_failed');
+  });
+
+  it('retains the response byte limit with a safe response-stage diagnostic', async () => {
+    const reader = vi.fn(async () => ({
+      issues: Array.from({ length: 150 }, (_, index) => ({
+        ...sourceIssue, number: index + 1, labels: Array.from({ length: 100 }, (_, label) => `${label}-${'x'.repeat(95)}`),
+      })),
+      pullRequests: [],
+    }));
+    const { app } = fixture(reader);
+    const warn = vi.fn();
+    app.addHook('onRequest', async (request) => { request.log.warn = warn; });
+    const response = await app.inject({ url: '/factory/board?project=42', headers });
+    expect(response.statusCode).toBe(413);
+    expect(warn).toHaveBeenCalledExactlyOnceWith({
+      stage: 'response', reason: 'response_too_large', status: 413,
+    }, 'factory.board_read_failed');
+  });
+
+  it.each([401, 403, 429, 500, 503])('preserves source HTTP %s without reading the external error body', async (status) => {
+    const reader = createGitHubFactoryBoardReader(async () => new Response('private-external-response', { status }));
+    await expect(reader.read(project.repo, 'reader-token', timestamp)).rejects.toMatchObject({
+      stage: 'source', reason: 'request_failed', status,
+    });
+  });
+
+  it.each([
+    ['size', 'response_too_large'],
+    ['json', 'invalid_response'],
+    ['pagination', 'result_limit'],
+  ] as const)('reports the bounded source %s failure', async (failure, reason) => {
+    const reader = createGitHubFactoryBoardReader(async () => {
+      if (failure === 'size') return new Response('private-response', { headers: { 'content-length': String(1024 * 1024 + 1) } });
+      if (failure === 'json') return new Response('private-invalid-json');
+      return new Response('[]', { headers: { link: '<https://api.github.com/next>; rel="next"' } });
+    });
+    await expect(reader.read(project.repo, 'reader-token', timestamp)).rejects.toMatchObject({
+      stage: 'source', reason,
+    });
   });
 
   it('rejects missing projects and limits GitHub reads to the configured repository', async () => {
@@ -293,15 +412,61 @@ describe('Factory board', () => {
     await expect(serve([{ number: 3, state: 'open' }]).read(project.repo, 't', timestamp)).rejects.toThrow();
   });
 
+  it('normalises GitHub closed_at (no milliseconds) so the board passes the shared contract', async () => {
+    const closedAt = new Date(Date.now() - 1_000).toISOString().replace(/\.\d{3}Z$/u, 'Z');
+    const reader = createGitHubFactoryBoardReader(async (input) => {
+      const url = String(input);
+      if (url.includes('/pulls?')) return new Response('[]');
+      const issue = (state: 'open' | 'closed') => ({
+        number: state === 'closed' ? 2 : 1, title: `Issue ${state}`, body: null, state,
+        html_url: `https://github.com/DanAakesen/jarvis/issues/${state === 'closed' ? 2 : 1}`,
+        updated_at: closedAt, closed_at: state === 'closed' ? closedAt : null, labels: [],
+        issue_dependencies_summary: { blocked_by: 0 },
+      });
+      return new Response(JSON.stringify([issue(url.includes('state=closed') ? 'closed' : 'open')]));
+    });
+
+    const source = await reader.read(project.repo, 'reader-token', new Date(Date.now() - 14 * 86_400_000).toISOString());
+    const closed = source.issues.find(({ number }) => number === 2)!;
+    expect(closed.closedAt).toBe(new Date(closedAt).toISOString());
+    expect(closed.closedAt).toMatch(/\.\d{3}Z$/u);
+    expect(isFactoryBoard(createFactoryBoard(project.id, project.repo, source, [], [], Date.now()))).toBe(true);
+  });
+
   it('marks an expired cached board stale when GitHub refresh fails', async () => {
     let now = 1_000;
     const cache = new FactoryBoardCache(() => now, 10);
     const snapshot = createFactoryBoard(project.id, project.repo, source, [task], [], now);
     await expect(cache.get(project.id, async () => snapshot)).resolves.toEqual({ board: snapshot, stale: false });
     now += 11;
-    await expect(cache.get(project.id, async () => { throw new Error('GitHub unavailable'); })).resolves.toEqual({
+    const failure = new FactoryBoardReadError('source', 'request_failed', 503);
+    await expect(cache.get(project.id, async () => { throw failure; })).resolves.toEqual({
       board: snapshot,
       stale: true,
+      failure,
     });
+  });
+
+  it.each([false, true])('preserves the cause for joined cache failures (cached: %s)', async (cached) => {
+    let now = 1_000;
+    const cache = new FactoryBoardCache(() => now, 10);
+    const board = createFactoryBoard(project.id, project.repo, source, [], [], now);
+    if (cached) await cache.get(project.id, async () => board);
+    now += 11;
+    let reject!: (error: unknown) => void;
+    const load = vi.fn(() => new Promise<FactoryBoard>((_resolve, fail) => { reject = fail; }));
+    const first = cache.get(project.id, load);
+    const second = cache.get(project.id, load);
+    const failure = new FactoryBoardReadError('token', 'invalid_token_lifetime');
+    const results = Promise.allSettled([first, second]);
+    reject(failure);
+    expect(await results).toEqual(cached ? [
+      { status: 'fulfilled', value: { board, stale: true, failure } },
+      { status: 'fulfilled', value: { board, stale: true, failure } },
+    ] : [
+      { status: 'rejected', reason: failure }, { status: 'rejected', reason: failure },
+    ]);
+    expect(load).toHaveBeenCalledOnce();
+    await expect(cache.get(project.id, async () => board)).resolves.toEqual({ board, stale: false });
   });
 });

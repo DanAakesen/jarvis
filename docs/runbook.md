@@ -21,6 +21,51 @@ from the `jarvis-infra` deployment outputs instead of guessing them.
 4. Confirm the relevant Deploy or Runner deploy jobs and smoke checks succeeded.
    A successful build alone is not production acceptance.
 
+## Factory board 502 diagnosis and acceptance
+
+For #811, a successful Deploy or `/health` response is not board acceptance.
+The existing deployment principal is authorized only for `GET /status/smoke`,
+not `/factory/board`. Do not broaden its permissions, bypass authentication,
+extract an App key/token, or ask for new user credentials to run a board probe.
+The authenticated UI and an authorized operator own the post-deploy readback.
+
+1. Record the exact PR head's CI result, merge, Deploy run, serving revision and
+   UTC request time. Perform one authorized `GET /factory/board?project=2`
+   with a 60-second client deadline and a 1-MiB response cap; do not poll/retry
+   indefinitely. Require HTTP 200, `stale: false`, project ID `2`, repository
+   `DanAakesen/jarvis` and the **complete** shared `isFactoryBoard` contract,
+   including six ordered columns and `.sssZ` timestamps. Validate privately;
+   do not publish the board body, request headers or credentials.
+2. On failure, the operator reads `factory.board_read_failed` (or
+   `factory.board_project_lookup_failed`) at that time. Only `stage`, `reason`,
+   bounded HTTP `status` and boolean `stale` are exported. Stages distinguish
+   project lookup, token issuance, GitHub source, SQL task overlays, release
+   reads and response construction/validation/size. Stale-cache refresh failures
+   retain their diagnostics even though the client receives a stale 200.
+3. `token` with `invalid_token_lifetime` or `invalid_token_permissions` means
+   local validation rejected the mint response; existing lifetime/permission
+   validation is unchanged. `request_failed` with 401/403 at `token` versus
+   `source` distinguishes issuance from downstream rejection. Status 429 or
+   5xx identifies an upstream refusal, not a reader deadline. Source
+   `result_limit`, `response_too_large`, `incomplete_response` and
+   `invalid_response` identify the relevant bounded/validation failures.
+   `timeout`/`cancelled` do not justify increasing budgets. `unexpected` means
+   the cause is not classified; never copy raw exception messages to logs.
+4. Fix only the stage supported by that readback and a regression. The reported
+   CLI success uses a different GitHub identity and does not establish that
+   App issuance or App-scoped reads work. The short production failure timings
+   alone do not prove token expiry, permissions, rate limits or SQL failure.
+5. After a fresh complete board passes, read Project 2 again and verify the
+   signed-in web renders #790 **Done**, #792 **Ready**, #793 **Done** against
+   that readback. Coordinate with #810's UI owner; preserve the original Note
+   and checkout. Fixture tests and deployment smoke cannot close this gate.
+
+Confirmed offline correction: both cache rejection paths previously replaced
+the original error, and stale fallback hid refresh failure. Typed boundary
+diagnostics now survive those paths and the stdout/telemetry allowlist.
+The actual recurring production failing stage remains unconfirmed until the
+authorized post-deploy readback; no runtime-cause correction is claimed yet.
+
 ## Roll back a deployment
 
 ### Backend Container Apps revision

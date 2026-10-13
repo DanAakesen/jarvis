@@ -745,10 +745,12 @@ navigation follow-up is in #810, held for review fixes to old-session command
 queues and current issue-focus workspace selectors. Scoped regressions pass
 125 tests; types/lint/build and the unchanged online pin-recovery regression
 pass locally. Exact-head CI/release and live navigation remain.
-The earlier authenticated 200 read placed #790/#792/#793 as Done/Ready/Done,
-matching GitHub Project 2, but failed date validation. After #809 deployed,
-the single Retry returned 502 and no board rendered. The coordinator owns
-backend/provider recovery; rendered placement remains unverified. Next UI work
+After earlier date-validation and post-#809 502 failures, diagnostic #812's
+Deploy 38475702418 passed. One authenticated read at 22:18:24Z returns a
+fresh, valid complete board; all six columns and visible #790/#792/#793 cards
+render as Done/Ready/Done, matching fresh Project 2. The rendered-board gate
+passes; navigation #810 still awaits release. This does not diagnose a root
+cause or establish sustained backend recovery. Next UI work
 after the navigation follow-up: #799, #798, #797, then #792.
 
 ### P11 — Jarvis-raised fixes

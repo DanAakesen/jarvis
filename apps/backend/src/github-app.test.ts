@@ -4,10 +4,37 @@ import { jwtVerify } from 'jose';
 import {
   createGitHubAppRepositoryCatalog,
   createGitHubAppTokenIssuer,
+  GitHubAppResponseError,
   repositoryCacheTtlMs,
 } from './github-app.js';
 
 describe('GitHub App installation tokens', () => {
+  it.each([
+    ['lifetime', 'invalid_token_lifetime'],
+    ['permissions', 'invalid_token_permissions'],
+    ['token', 'invalid_response'],
+  ] as const)('distinguishes invalid token %s without including response content', async (failure, reason) => {
+    const now = Date.parse('2026-10-13T21:00:00.000Z');
+    const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
+    const issuer = createGitHubAppTokenIssuer({
+      appId: '123', now: () => now,
+      getPrivateKey: async () => privateKey.export({ type: 'pkcs8', format: 'pem' }).toString(),
+      fetch: vi.fn<typeof fetch>()
+        .mockResolvedValueOnce(Response.json({ id: 123 }))
+        .mockResolvedValueOnce(Response.json({
+          token: failure === 'token' ? 'private\ninvalid-token' : 'private-installation-token',
+          expires_at: new Date(now + (failure === 'lifetime' ? 49 : 60) * 60_000).toISOString(),
+          permissions: failure === 'permissions' ? { contents: 'read' } : {
+            contents: 'read', issues: 'read', pull_requests: 'read', checks: 'read', statuses: 'read',
+          },
+        })),
+    });
+    const error: unknown = await issuer.issueForRepositoryRead('DanAakesen/jarvis').catch((error: unknown) => error);
+    expect(error).toBeInstanceOf(GitHubAppResponseError);
+    expect(error).toMatchObject({ reason });
+    expect(JSON.stringify(error)).not.toContain('private');
+  });
+
   it('reads validated installation permission levels without creating or exposing an installation token', async () => {
     const now = Date.parse('2026-10-07T12:00:00.000Z');
     const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });

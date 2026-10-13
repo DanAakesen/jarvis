@@ -32,8 +32,14 @@ Retry returned HTTP 502 again; no cards rendered at 21:30Z. Fresh Project
 placement still reads Done/Ready/Done. At 21:41Z, one authorised read set
 returned `/status` 200 with `github_app` status `ok`, Factory tasks 200 and
 project 2 releases 200. No repeated board retries, credential extraction or
-Note changes. The coordinator owns backend/provider investigation; do not
-weaken validation or edit backend code. Rendered placement remains unverified.
+Note changes. After diagnostic Deploy 38475702418 on `d35f332b`, the one
+authorised project-2 board read returned 200 at 22:18:24Z, with `stale: false`
+and canonical closed dates. The entire response passed web validation and all
+six columns rendered without an alert. Actual visible DOM cards place #790
+and #793 in Done and #792 in Ready, matching fresh Project 2 readback.
+This verifies that rendered-board gate, not a root cause or sustained recovery.
+The coordinator owns backend/provider investigation; do not weaken validation
+or edit backend code.
 
 The user-directed post-merge issue-number navigation follow-up is implemented
 locally with page-owned lookup, exact search/unfold/reveal, truthful bounded
