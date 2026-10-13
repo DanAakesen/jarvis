@@ -20,6 +20,15 @@ CI/release and authenticated Status/voice acceptance remain pending.
 Keep this PR separate from latency QA, presence/Routines/phone Save work,
 unrelated pin changes and the coordinator's #811 backend investigation.
 
+The coordinator authorised one coupled release-gate exception in #815:
+the PR-title normalizer and linked-issue ID extraction must preserve full
+two-or-more-digit task numbers, including P9-101. The old bot renamed it
+P9-10 and stopped the guarded merge. Five existing-style unittest methods
+cover full IDs/idempotence, boundaries, linked extraction and legacy
+two-digit/WIP/bracket/fix-main/docs formats; all 48 workflow-script tests and
+Bash syntax pass locally. No other workflow, backend or dependency changes.
+The corrected head must pass fresh exact-head gates before merge.
+
 ## GitHub-aligned Factory board (13 October 2026)
 
 P10-07/#793 is owned by Dan and the UI session after merged/deployed #791 and

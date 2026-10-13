@@ -729,6 +729,13 @@ Declined in the audit (do not file): verbosity and max-output-token settings, no
 | P9-97 | [#790](https://github.com/DanAakesen/jarvis/issues/790) | Show the live Danish voice, Jeppe, as fixed/read-only in Settings; coordinator owns backend compatibility and UI session owns web | Settings and API accept retired Harper storage; truthful default/option, no Danish-voice UI patch; focused tests, types/lint and desktop/phone inspection | — | Complete |
 | P9-101 | [#799](https://github.com/DanAakesen/jarvis/issues/799) | Read-only Status page, rail/phone navigation and existing voice/chat target | Eleven reported checks, failure reasons, visible PC connection/pause state, timestamps/stale markers, retained smoke with no invented release association; Refresh never runs canaries. Local types/lint/build, 103 scoped tests and desktop/320px synthetic browser checks pass; exact-head CI/release/live acceptance pending | P9-20 | In progress |
 | P9-104 | [#796](https://github.com/DanAakesen/jarvis/issues/796) | Reconcile `docs/features.md` with completed tasks and verified production state | Correct targeted statuses with evidence; count Live/Built not verified/Offline only/Planned; record #787/#791 release, P9-82 chat-image logs with voice check outstanding, P10-04 backend/P10-07 web ownership, and Daily reuse of existing SQL without new infrastructure | — | Complete |
+
+#815's guarded merge caught the title bot truncating P9-101 to P9-10.
+The coordinator authorised the coupled normalizer/linked-ID correction and
+existing-style regressions in the same PR. All 48 script tests and Bash
+syntax pass locally; the new head needs fresh exact-head CI before merge.
+Status release/authenticated acceptance remains pending.
+
 ### P10 — GitHub backlog as source of truth
 Goal: GitHub issues are the single backlog. The Software Factory (worker label `Jarvis`, default agent `codex`) and Copilot (`Copilot`) are executors that pick issues up; the Factory board shows the same columns as the GitHub Project. Decided by Dan on 8 October 2026.
 | ID | Issue | Task | Acceptance criteria | Depends on | Status |
