@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { flushSync } from 'react-dom';
 import { Link, Navigate, NavLink, Outlet, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import type { HtmlArtifactFrame, JarvisActivityEvent, WorkspaceCommand, WorkspaceSnapshot, WorkspaceView as LookingAtView, WorkspaceViewLocation } from '@jarvis/contracts';
@@ -26,7 +26,7 @@ import { backendFetch } from './backend-request';
 import { Workspace, PHONE_LAYOUT_MEDIA_QUERY, type WorkspaceController, type WorkspaceView } from './Workspace';
 import { ConversationWindowContext, conversationViewId } from './conversation-window-state';
 import type { ConversationPosition } from './conversation-layout';
-import { WorkspaceCommandContext, useWorkspaceCommands } from './workspace-command-state';
+import { WorkspaceCommandContext } from './workspace-command-state';
 import { SessionCommandRegistryContext, applySessionCommand, openCameraPreview, createSessionCommandRegistry, type SessionCommandResult } from './session-commands';
 import { BackendSleepControl } from './BackendSleepControl';
 import { VoiceWorkspaceContext } from './voice-workspace-state';
@@ -37,7 +37,7 @@ import { useGlassLight } from './glass-light';
 import { TaskDetailPage } from './factory/TaskDetailPage';
 import { InputOrbCore } from './InputOrbCore';
 import { TaskWindowsContext, readTaskWindows, saveTaskWindows, taskWindowViewId, type TaskWindowEntry } from './task-windows';
-import { NavigationGuardContext, pageForPath, readConversationCommand, readNavigateCommand, resolveNavigation, revealWhenReady, useVisibleSettingsSection, type NavigateRequest } from './page-navigation';
+import { FactoryIssueNavigationContext, NavigationGuardContext, pageForPath, readConversationCommand, readNavigateCommand, resolveNavigation, revealWhenReady, useVisibleSettingsSection, waitForFactoryIssue, type FactoryIssueNavigator, type NavigateRequest } from './page-navigation';
 import { FolioPane } from './Folio';
 import { CollapsibleSection } from './CollapsibleSection';
 import { MobileCaption, MobileMenu } from './MobileShell';
@@ -51,6 +51,8 @@ import { KnowledgeBackendContext } from './knowledge/knowledge-context';
 import { PresenceChip, PresenceSettings } from './Presence';
 import { MemorySettings } from './MemorySettings';
 import { createWorkspacePinsClient } from './workspace-pins';
+
+const SettingsActivityHostContext = createContext<((host: HTMLDivElement | null) => void) | null>(null);
 
 /** Interim research progress: 
 unning from P9-46 (#613) on; older backends sent partial for it. */
@@ -199,9 +201,12 @@ function ShellLayout({ signedIn, config, session, camera, screenShare }: {
   const conversationWindowRef = useRef<{ open: boolean; setOpen: (open: boolean) => boolean } | null>(null);
   const cancelReveal = useRef<() => void>(() => {});
   const navigationGuard = useRef(false);
+  const factoryIssueNavigator = useRef<FactoryIssueNavigator | null>(null);
+  const issueNavigationAbort = useRef<AbortController | null>(null);
   const navigateTo = useCallback((request: NavigateRequest) => {
     const target = resolveNavigation(request);
     if (!target.ok) return false;
+    if (target.issueNumber !== undefined) return false;
     if (target.pane === 'folio') { setFolioOpen(true); return true; }
     if (pathnameRef.current !== target.path && navigationGuard.current) return false;
     closePagePanels();
@@ -215,6 +220,10 @@ function ShellLayout({ signedIn, config, session, camera, screenShare }: {
     return true;
   }, [closePagePanels, navigate]);
   useEffect(() => () => cancelReveal.current(), []);
+  useEffect(() => {
+    if (pathname !== '/factory/kanban') issueNavigationAbort.current?.abort();
+  }, [pathname]);
+  useEffect(() => () => issueNavigationAbort.current?.abort(), []);
   // What Dan is looking at (P9-43), sent with the snapshot so Jarvis can say "this page" or "that task" correctly.
   const [frontViewId, setFrontViewId] = useState<string | null>(null);
   const viewPage = pageForPath(pathname);
@@ -278,7 +287,37 @@ function ShellLayout({ signedIn, config, session, camera, screenShare }: {
     applyPin: (command: Extract<WorkspaceCommand, { operation: 'pin' | 'unpin' }>) =>
       workspaceController.current?.applyPin?.(command) ?? Promise.resolve({ applied: false, reason: 'Window pinning is unavailable.' }),
   }), [contextPanel, frame, navigateTo, sessionCommands, signedIn, snapshotWindows, view]);
-  const applyWorkspaceCommand = useCallback((command: WorkspaceCommand, trustedBlobHost?: string): boolean | Promise<SessionCommandResult> => {
+  const applyWorkspaceCommand = useCallback((command: WorkspaceCommand, trustedBlobHost?: string, expiresAt?: number, cancelSignal?: AbortSignal): boolean | Promise<SessionCommandResult> => {
+    if (command.operation === 'navigate' && command.page === 'factory' && command.issueNumber !== undefined) {
+      const { issueNumber, taskId } = command;
+      const target = resolveNavigation(command);
+      if (!target.ok) return Promise.resolve({ applied: false, reason: target.reason });
+      if (cancelSignal?.aborted || (expiresAt !== undefined && expiresAt <= Date.now() + 250)) {
+        return Promise.resolve({ applied: false, reason: 'The issue navigation command expired or was cancelled.' });
+      }
+      let navigated = false;
+      flushSync(() => { navigated = navigateTo({ page: 'factory' }); });
+      if (!navigated) return Promise.resolve({ applied: false, reason: 'Save or discard the current draft before opening this issue.' });
+      issueNavigationAbort.current?.abort();
+      const controller = new AbortController();
+      issueNavigationAbort.current = controller;
+      const signal = cancelSignal ? AbortSignal.any([controller.signal, cancelSignal]) : controller.signal;
+      return waitForFactoryIssue(() => factoryIssueNavigator.current?.(issueNumber, taskId) ?? null,
+        signal, expiresAt).then((result) => {
+        if (result.status === 'refused') return { applied: false, reason: result.reason };
+        if (signal.aborted) return { applied: false, reason: 'Issue navigation was cancelled.' };
+        const title = document.getElementById(result.anchorId)?.querySelector<HTMLElement>('.task-card-title');
+        if (!title) return { applied: false, reason: 'The requested issue could not be revealed on this board.' };
+        const linkedTaskId = result.taskId;
+        if (linkedTaskId) flushSync(() => openTaskRef.current(linkedTaskId));
+        const reduced = document.documentElement.dataset.motion === 'reduced' ||
+          (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false);
+        if (!linkedTaskId) title.focus({ preventScroll: true });
+        cancelReveal.current();
+        cancelReveal.current = revealWhenReady(() => document.getElementById(result.anchorId), reduced);
+        return { applied: true };
+      });
+    }
     if (command.operation === 'session') return workspaceCommands.applySession(command);
     if (command.operation === 'pin' || command.operation === 'unpin') return workspaceCommands.applyPin(command);
     if ((command.operation === 'show' || command.operation === 'restore' || command.operation === 'focus') &&
@@ -288,7 +327,7 @@ function ShellLayout({ signedIn, config, session, camera, screenShare }: {
     let applied = false;
     flushSync(() => { applied = workspaceCommands.dispatch(command, trustedBlobHost); });
     return applied;
-  }, [workspaceCommands]);
+  }, [navigateTo, workspaceCommands]);
   const onVoiceActiveChange = useCallback((active: boolean) => {
     if (active && readVoiceWorkspacePreference().voice.minimizeWindowsOnVoiceStart) {
       workspaceController.current?.minimiseAll();
@@ -485,6 +524,7 @@ function ShellLayout({ signedIn, config, session, camera, screenShare }: {
   const [presenceError, setPresenceError] = useState('');
   const activeArea = areas.find(({ path }) => pathname.startsWith(`/${path}`));
   const settingsActive = pathname.startsWith('/settings');
+  const [settingsActivityHost, setSettingsActivityHost] = useState<HTMLElement | null>(null);
   const areaLabel = settingsActive ? 'Settings' : activeArea?.label ?? 'Jarvis';
   const navigationItems = activeArea?.navigation ?? [{ label: 'Conversation', path: '/' }];
   // The navigation panel only exists for an area with more than one page; otherwise there is nothing to choose.
@@ -684,7 +724,11 @@ function ShellLayout({ signedIn, config, session, camera, screenShare }: {
           <VoiceWorkspaceContext.Provider value={{ onVoiceActiveChange }}>
             <ConversationWindowContext.Provider value={conversationWindow}>
               <NavigationGuardContext.Provider value={navigationGuard}>
-                <Outlet />
+                <FactoryIssueNavigationContext.Provider value={factoryIssueNavigator}>
+                  <SettingsActivityHostContext.Provider value={setSettingsActivityHost}>
+                    <Outlet />
+                  </SettingsActivityHostContext.Provider>
+                </FactoryIssueNavigationContext.Provider>
               </NavigationGuardContext.Provider>
               {/* The chat stays mounted on every page, so a conversation or voice session survives navigation. */}
               {signedIn && session.profile && (
@@ -707,14 +751,15 @@ function ShellLayout({ signedIn, config, session, camera, screenShare }: {
                   hideTab={hideResearchProgressTab} {...(workspacePins ? { pins: workspacePins } : {})} />
               </div>
             )}
-            {/* Settings shows the Now feed itself; everywhere else one hidden instance keeps runtime activity flowing. */}
-            {signedIn && !settingsActive && (
+            {/* Keep the broker session alive across routes; only its visible panel moves into Settings. */}
+            {signedIn && (
               <div hidden>
                 <NowFeedPanel
                   client={session.client}
                   config={config}
                   getAccessToken={getAccessToken}
                   applyWorkspaceCommand={applyWorkspaceCommand}
+                  portalHost={settingsActivityHost}
                 />
               </div>
             )}
@@ -757,27 +802,19 @@ function SettingsRoute({ config, session }: { config: PublicConfig; session: Sig
       presence={<PresenceSettings backendUrl={config.backendUrl} getAccessToken={session.getAccessToken} />}
       projects={<ProjectsPage backendUrl={config.backendUrl} getAccessToken={session.getAccessToken} />}
       memory={<MemorySettings backendUrl={config.backendUrl} getAccessToken={session.getAccessToken} />}
-      activity={<SettingsActivity client={session.client} config={config} getAccessToken={session.getAccessToken} />} />
+      activity={<SettingsActivity client={session.client} config={config} />} />
   );
 }
 
-/** The Now feed and backend sleep live on Settings; this is the only Now feed mounted while Settings is open. */
-function SettingsActivity({ client, config, getAccessToken }: {
+/** The persistent shell feed renders into this slot; backend sleep remains Settings-owned. */
+function SettingsActivity({ client, config }: {
   client: SignInSession['client'];
   config: PublicConfig;
-  getAccessToken: () => Promise<string>;
 }) {
-  const workspace = useWorkspaceCommands();
-  const applyWorkspaceCommand = useCallback((command: WorkspaceCommand, trustedBlobHost?: string): boolean | Promise<SessionCommandResult> => {
-    if (command.operation === 'session') return workspace.applySession?.(command) ?? Promise.resolve<SessionCommandResult>({ applied: false, reason: 'Session commands are unavailable.' });
-    if (command.operation === 'pin' || command.operation === 'unpin') return workspace.applyPin?.(command) ?? Promise.resolve<SessionCommandResult>({ applied: false, reason: 'Window pinning is unavailable.' });
-    let applied = false;
-    flushSync(() => { applied = workspace.dispatch(command, trustedBlobHost); });
-    return applied;
-  }, [workspace]);
+  const registerHost = useContext(SettingsActivityHostContext);
   return (
     <>
-      <NowFeedPanel client={client} config={config} getAccessToken={getAccessToken} applyWorkspaceCommand={applyWorkspaceCommand} />
+      <div id="settings-activity" ref={registerHost} />
       <CollapsibleSection storageKey="settings.backend" className="panel" headingId="backend-heading" title="Backend">
         <BackendSleepControl client={client} config={config} />
       </CollapsibleSection>

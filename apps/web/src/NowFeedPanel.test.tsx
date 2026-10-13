@@ -217,7 +217,7 @@ describe('live Now panel', () => {
       undefined,
       undefined,
     ));
-    expect(applyWorkspaceCommand).toHaveBeenCalledWith(command, undefined);
+    expect(applyWorkspaceCommand).toHaveBeenCalledWith(command, undefined, expect.any(Number), expect.any(AbortSignal));
     view.unmount();
   });
 

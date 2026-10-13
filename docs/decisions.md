@@ -1,5 +1,21 @@
 # Decisions
 
+## Factory issue-number navigation uses the page snapshot (13 October 2026)
+
+The user added issue-number navigation acceptance after #793's board release
+merged as #806. Resolve the requested issue against the selected project's
+existing validated board, clear local filters, unfold the column and reveal
+the real card before acknowledgement. Do not copy GitHub placement rules,
+fetch a second board in the shell, invent a task, or treat route-only navigation
+as success. Keep task-ID anchors and the Notes draft guard.
+
+Bound waiting to six seconds and the broker-provided expiry, with cancellation
+and explicit refusal reasons. Keep the Now stream mounted in the shell and
+portal its visible panel into Settings: the backend declines a pending command
+when its workspace disconnects, so remounting the stream during navigation
+would invalidate a truthful asynchronous acknowledgement. No backend,
+contract, dependency or workflow change is needed for this navigation path.
+
 ## P9-99 chat latency attribution and session affinity (13 October 2026)
 
 Issue #794 reports 45 production turns with median first token 14.4 s and nine

@@ -1,6 +1,8 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { isWorkspaceSnapshot } from '@jarvis/contracts';
-import { pageForPath, readConversationCommand, readNavigateCommand, resolveNavigation } from './page-navigation';
+import { pageForPath, readConversationCommand, readNavigateCommand, resolveNavigation, revealWhenReady, waitForFactoryIssue, type FactoryIssueTarget } from './page-navigation';
+
+afterEach(() => vi.useRealTimers());
 
 describe('page navigation', () => {
   it('reads only navigate commands', () => {
@@ -18,6 +20,67 @@ describe('page navigation', () => {
     expect(resolveNavigation({ page: 'settings', section: 'routines' }))
       .toEqual({ ok: true, path: '/settings', anchorId: 'task-recipes-heading' });
     expect(resolveNavigation({ page: 'factory', taskId: '42' })).toEqual({ ok: true, path: '/factory/kanban', taskId: '42' });
+  });
+
+  it('retains positive whole issue numbers and refuses malformed or non-Factory issue targets', () => {
+    expect(readNavigateCommand({ operation: 'navigate', page: 'factory', issueNumber: 793 }))
+      .toEqual({ page: 'factory', issueNumber: 793 });
+    expect(resolveNavigation({ page: 'factory', issueNumber: 793 }))
+      .toEqual({ ok: true, path: '/factory/kanban', issueNumber: 793 });
+    for (const issueNumber of [0, -1, 1.5, '793', null, Infinity, Number.MAX_SAFE_INTEGER + 1]) {
+      expect(readNavigateCommand({ operation: 'navigate', page: 'factory', issueNumber })).toBeNull();
+    }
+    expect(resolveNavigation({ page: 'settings', issueNumber: 793 }).ok).toBe(false);
+    expect(resolveNavigation({ page: 'factory', issueNumber: 793, taskId: 'bad' }).ok).toBe(false);
+  });
+
+  it('waits for page-owned issue data rather than treating a route change as success', async () => {
+    vi.useFakeTimers();
+    let target: FactoryIssueTarget = { status: 'loading' };
+    const result = waitForFactoryIssue(() => target, new AbortController().signal);
+    await vi.advanceTimersByTimeAsync(120);
+    target = { status: 'ready', anchorId: 'issue-title-793' };
+    await vi.advanceTimersByTimeAsync(120);
+    expect(await result).toEqual(target);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('expands a task card column before the existing task-id reveal scrolls and highlights it', async () => {
+    vi.useFakeTimers();
+    const column = document.createElement('section');
+    column.className = 'kanban-column';
+    column.innerHTML = '<button class="kanban-column-toggle" aria-expanded="false">Done</button><article class="kanban-card"><h3>Task</h3></article>';
+    const toggle = column.querySelector('button')!;
+    toggle.addEventListener('click', () => toggle.setAttribute('aria-expanded', 'true'));
+    const card = column.querySelector('article')!;
+    card.scrollIntoView = vi.fn();
+    const cancel = revealWhenReady(() => column.querySelector('h3'), true);
+    await vi.advanceTimersByTimeAsync(60);
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+    expect(card.scrollIntoView).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(120);
+    expect(card.scrollIntoView).toHaveBeenCalledWith({ behavior: 'auto', block: 'center' });
+    expect(card.hasAttribute('data-navigated')).toBe(true);
+    cancel();
+    expect(card.hasAttribute('data-navigated')).toBe(false);
+  });
+
+  it('settles a board failure, command cancellation and the acknowledgement deadline without late lookups', async () => {
+    vi.useFakeTimers();
+    const missing: FactoryIssueTarget = { status: 'refused', reason: 'Issue not found.' };
+    expect(await waitForFactoryIssue(() => missing, new AbortController().signal)).toEqual(missing);
+    const controller = new AbortController();
+    const find = vi.fn(() => null);
+    const cancelled = waitForFactoryIssue(find, controller.signal);
+    controller.abort();
+    expect(await cancelled).toMatchObject({ status: 'refused', reason: 'Issue navigation was cancelled.' });
+    const expired = waitForFactoryIssue(find, new AbortController().signal, Date.now() + 1000);
+    await vi.advanceTimersByTimeAsync(750);
+    expect(await expired).toMatchObject({ status: 'refused', reason: expect.stringContaining('still loading') });
+    const calls = find.mock.calls.length;
+    await vi.advanceTimersByTimeAsync(10000);
+    expect(find).toHaveBeenCalledTimes(calls);
+    expect(vi.getTimerCount()).toBe(0);
   });
 
   it('refuses unknown, unbuilt or malformed targets with a reason', () => {

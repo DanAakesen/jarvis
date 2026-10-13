@@ -829,6 +829,23 @@ The context panel accepts an optional focus resolver as well as its existing
 element target; the board resolves the moved issue's current title control or
 its Create project control when the issue is hidden, preserving keyboard return.
 
+Issue-number navigation uses a page-owned resolver registered through
+`FactoryIssueNavigationContext`, not a second board fetch or app-level cache.
+The resolver searches the complete validated selected-project snapshot,
+resets local filters to an exact issue-number search and expands the matching
+column before application is acknowledged. Only an actual overlay opens a
+task window. `App` bounds waiting to six seconds and the command expiry,
+propagates cancellation and checks that the issue title was rendered. Task-ID
+title anchors remain compatible with the existing reveal helper.
+
+`NowFeedPanel` is now shell-owned on every signed-in route. Settings registers
+a DOM host through a callback ref; only `ActivityPanel` is portalled there.
+Moving between Settings and Factory therefore does not disconnect the broker
+while an asynchronous navigation is awaiting its board. The same stream and
+snapshot publisher persist; reconnect, command cancellation and unmount abort
+the active command's signal. Session and pin operations retain their existing
+handlers and persistence boundaries.
+
 Migration `0037_task_github_issues` adds nullable `tasks.issue_number` and a
 filtered unique index that permits one active task per project and issue while
 retaining old unlinked rows. `POST /factory/issues/:number/start` is available

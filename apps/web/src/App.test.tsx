@@ -5,7 +5,7 @@ import { useState, type ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from './App';
 import { getSignInGreeting } from './sign-in-greeting';
-import type { GeneratedView, WorkspaceCommand } from '@jarvis/contracts';
+import { factoryBoardColumnIds, type FactoryBoard, type GeneratedView, type WorkspaceCommand } from '@jarvis/contracts';
 
 const {
   createAuthClient,
@@ -366,7 +366,7 @@ describe('App shell', () => {
 
     await user.click(screen.getByRole('link', { name: 'Settings' }));
     await screen.findByRole('heading', { name: 'Settings' });
-    await waitFor(() => expect(eventRequests()).toHaveLength(2));
+    expect(eventRequests()).toHaveLength(1);
   });
 
   it('keeps one 3D stage behind every route without remounting it', async () => {
@@ -900,7 +900,10 @@ describe('App shell', () => {
     )).toBe(true));
   });
 
-  it('refuses Jarvis page navigation while a Notes draft is unsaved instead of acknowledging a blocked move', async () => {
+  it.each([
+    { page: 'usage' as const },
+    { page: 'factory' as const, issueNumber: 793 },
+  ])('refuses Jarvis page navigation while a Notes draft is unsaved (%j)', async (target) => {
     streamWorkspaceCommands();
     await renderSignedIn('/notes');
     await waitFor(() => expect(activityStream).not.toBeNull());
@@ -913,7 +916,7 @@ describe('App shell', () => {
       activityStream!.enqueue(new TextEncoder().encode(
         `event: workspace-ready\ndata: ${JSON.stringify({ sessionId: '12345678-1234-4234-8234-123456789abc' })}\n\n` +
         `event: workspace-command\ndata: ${JSON.stringify({
-          command: { commandId: 'notes-unsaved', operation: 'navigate', page: 'usage' }, expiresAt: Date.now() + 5_000,
+          command: { commandId: 'notes-unsaved', operation: 'navigate', ...target }, expiresAt: Date.now() + 5_000,
         })}\n\n`,
       ));
     });
@@ -922,6 +925,84 @@ describe('App shell', () => {
     expect(JSON.parse(String(ack[1]?.body))).toMatchObject({ applied: false });
     expect((screen.getByRole('textbox', { name: 'Markdown' }) as HTMLTextAreaElement).value).toBe('# Fixture draft\n\n');
     expect(screen.getByRole('link', { name: 'Notes' }).getAttribute('aria-current')).toBe('page');
+  });
+
+  function issueBoard() : FactoryBoard {
+    return {
+      project: { id: '7', repo: 'DanAakesen/jarvis' }, fetchedAt: new Date().toISOString(), stale: false,
+      columns: factoryBoardColumnIds.map((id) => ({
+        id, cards: id === 'done' ? [{
+          issue: { number: 793, url: 'https://github.com/DanAakesen/jarvis/issues/793', title: 'Canonical board',
+            taskCode: 'P10-07', labels: ['Dan'], worker: 'Dan', state: 'closed',
+            updatedAt: new Date().toISOString(), closedAt: new Date().toISOString(), blockedBy: [] },
+          pr: null, task: null,
+        }] : [],
+      })),
+    };
+  }
+
+  function serveIssueBoard(boardResponse: () => Promise<Response>) {
+    const original = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation(async (input, init) => {
+      const path = new URL(String(input)).pathname;
+      if (path === '/factory/projects') return new Response(JSON.stringify([{ id: '7', name: 'Jarvis', default_agent: 'copilot' }]));
+      if (path === '/factory/board') return boardResponse();
+      return original(input, init);
+    });
+  }
+
+  it('keeps the broker connected from Settings and acknowledges an issue only after revealing its real card', async () => {
+    const workspace = streamWorkspaceCommands();
+    let finish!: (response: Response) => void;
+    serveIssueBoard(() => new Promise<Response>((resolve) => { finish = resolve; }));
+    localStorage.setItem('jarvis.kanban.collapsedColumns', JSON.stringify(['Done']));
+    await renderSignedIn('/settings');
+    await waitFor(() => expect(activityStream).not.toBeNull());
+    const stream = activityStream;
+    workspace.ready();
+    workspace.publishCommand({ commandId: 'open-issue', operation: 'navigate', page: 'factory', issueNumber: 793 });
+    await screen.findByRole('heading', { level: 1, name: 'Kanban' });
+    await waitFor(() => expect(finish).toBeDefined());
+    expect(workspace.ack('open-issue')).toBeUndefined();
+    expect(activityStream).toBe(stream);
+    await act(async () => { finish(new Response(JSON.stringify(issueBoard()))); });
+    await waitFor(() => expect(workspace.ack('open-issue')).toBeTruthy());
+    expect(JSON.parse(String(workspace.ack('open-issue')?.[1]?.body))).toMatchObject({ applied: true });
+    expect(screen.getByRole('link', { name: 'Canonical board' })).toBe(document.activeElement);
+    expect(screen.getByRole('button', { name: 'Done' }).getAttribute('aria-expanded')).toBe('true');
+    expect(document.querySelector('.workspace-window-task')).toBeNull();
+    expect(fetchMock.mock.calls.filter(([url]) => new URL(String(url)).pathname === '/now/events')).toHaveLength(1);
+  });
+
+  it.each([502, 200])('refuses an issue instead of acknowledging a route-only result (board HTTP %s)', async (status) => {
+    const workspace = streamWorkspaceCommands();
+    serveIssueBoard(async () => new Response(JSON.stringify(status === 200 ? issueBoard() : {}), { status }));
+    await renderSignedIn();
+    await waitFor(() => expect(activityStream).not.toBeNull());
+    workspace.ready();
+    workspace.publishCommand({ commandId: 'missing-issue', operation: 'navigate', page: 'factory', issueNumber: 999 });
+    await waitFor(() => expect(workspace.ack('missing-issue')).toBeTruthy());
+    expect(JSON.parse(String(workspace.ack('missing-issue')?.[1]?.body)))
+      .toMatchObject({ applied: false, outcome: 'refused', reason: expect.stringContaining(status === 502 ? 'HTTP 502' : 'not in') });
+    expect(document.querySelector('[data-navigated]')).toBeNull();
+  });
+
+  it('cancels an in-flight issue command without navigating to a card when its board arrives later', async () => {
+    const workspace = streamWorkspaceCommands();
+    let finish!: (response: Response) => void;
+    serveIssueBoard(() => new Promise<Response>((resolve) => { finish = resolve; }));
+    await renderSignedIn();
+    await waitFor(() => expect(activityStream).not.toBeNull());
+    workspace.ready();
+    workspace.publishCommand({ commandId: 'cancel-issue', operation: 'navigate', page: 'factory', issueNumber: 793 });
+    await waitFor(() => expect(finish).toBeDefined());
+    act(() => activityStream!.enqueue(new TextEncoder().encode('event: workspace-cancel\ndata: {"commandId":"cancel-issue"}\n\n')));
+    await waitFor(() => expect(workspace.ack('cancel-issue')).toBeTruthy());
+    expect(JSON.parse(String(workspace.ack('cancel-issue')?.[1]?.body))).toMatchObject({ applied: false, reason: expect.stringContaining('cancelled') });
+    await act(async () => { finish(new Response(JSON.stringify(issueBoard()))); });
+    await screen.findByRole('article', { name: 'Canonical board' });
+    expect(document.querySelector('[data-navigated]')).toBeNull();
+    expect(screen.getByRole('searchbox', { name: 'Search issues' })).toHaveProperty('value', '');
   });
 
   it('marks only the current desktop area as the page', async () => {
