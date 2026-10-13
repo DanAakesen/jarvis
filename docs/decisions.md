@@ -1,5 +1,9 @@
 # Decisions
 
+## P12-02 backup route chosen: paged double read (13 October 2026)
+
+Dan chose to stop waiting for a provider export route and approved a paged-read backup of the Daily D1 data (25-row pages, every table read to exhaustion twice, per-table counts and checksums compared between passes). He lifted, for P12-02 only, the earlier rule that real records must not pass through a Codex sandbox. The backup is labelled a paged-read backup, not a provider-signed snapshot, and R2 coverage is reported as far as the tools allow. Unchanged limits: the repository is public, so no row content, personal data or credentials enter Git, PRs, issues or CI logs; the data goes only to private encrypted storage owned by Dan; original Daily stays running and its source and schema are untouched. The OpenAI support request stays available as a parallel fallback. The #717 release comment holds the acceptance standard.
+
 ## P12-04 offline proposal Queue sender mapping (13 October 2026)
 
 The coordinator's narrow #719 release corrects the unreferenced proposal's Queue sender DataAction to Microsoft's documented `Microsoft.Storage/storageAccounts/queueServices/queues/messages/add/action` ([official sender role](https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles/storage#storage-queue-data-message-sender)). Keep empty management actions and the existing queue-only assignment scope; add no consumption, update/delete, Blob delete or capability write. An offline source contract locks exact permission/scope sets and default-off/unreferenced/max-one behavior, alongside separate Bicep build/lint. Neither compiler nor Shared-Key emulator proves Azure RBAC; live identity propagation, resource/cost approval, operator access/secret custody, activation and device/private migration acceptance remain unverified. No role is granted or deployment wiring changed.
