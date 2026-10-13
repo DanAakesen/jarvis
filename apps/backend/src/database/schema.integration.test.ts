@@ -1886,6 +1886,10 @@ describe('committed domain schema (groups 1-8)', () => {
       await expect(revertMigration(
         pool, committed, await readDownMigration('0045_smoke_usage_role.sql'),
       )).rejects.toThrow('Smoke usage rows must be retained');
+      const retainedUsage = await pool.request()
+        .input('eventId', sql.NVarChar(300), eventId)
+        .query<{ role: string }>('SELECT DISTINCT role FROM dbo.usage WHERE source_event_id = @eventId;');
+      expect(retainedUsage.recordset).toEqual([{ role: 'smoke' }]);
     } finally {
       await pool.request()
         .input('eventId', sql.NVarChar(300), eventId)
