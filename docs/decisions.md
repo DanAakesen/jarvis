@@ -1,5 +1,8 @@
 # Decisions
 
+## P12-04 offline proposal Queue sender mapping (13 October 2026)
+
+The coordinator's narrow #719 release corrects the unreferenced proposal's Queue sender DataAction to Microsoft's documented `Microsoft.Storage/storageAccounts/queueServices/queues/messages/add/action` ([official sender role](https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles/storage#storage-queue-data-message-sender)). Keep empty management actions and the existing queue-only assignment scope; add no consumption, update/delete, Blob delete or capability write. An offline source contract locks exact permission/scope sets and default-off/unreferenced/max-one behavior, alongside separate Bicep build/lint. Neither compiler nor Shared-Key emulator proves Azure RBAC; live identity propagation, resource/cost approval, operator access/secret custody, activation and device/private migration acceptance remain unverified. No role is granted or deployment wiring changed.
 ## P9-96 backend connection draining (13 October 2026)
 
 Drain long-lived connections in Fastify `preClose`, after stopping the HTTP
