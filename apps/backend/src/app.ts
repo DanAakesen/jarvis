@@ -57,6 +57,7 @@ import {
 export interface BuildAppOptions {
   readonly databaseStatus?: () => boolean;
   readonly auth?: TokenVerifier;
+  readonly nutritionExportAuth?: import('./daily/nutrition-export/auth.js').NutritionExportCredentialVerifier;
   readonly modules?: readonly BackendModule[];
   readonly projectStore?: ProjectStore;
   readonly releaseViewStore?: ReleaseViewStore;
@@ -173,7 +174,7 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
     }
   });
   // Authenticate before CORS can finish OPTIONS requests in its onRequest hook.
-  installAuthentication(app, config, options.auth);
+  installAuthentication(app, config, options.auth, options.nutritionExportAuth);
   app.decorate('ownerObjectId', config.auth.ownerObjectId);
   app.decorate('awayModeStore', options.awayModeStore ?? null);
   app.register(cors, {
