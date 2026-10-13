@@ -1473,6 +1473,7 @@ usage and billed cost remain unverified.
 
 ## Release procedure
 
+- Pin external workflow actions to a full commit SHA. Resolve `refs/tags/<release>` through GitHub's Git refs API; if it returns a tag object, dereference that object through the Git tags API until the target is a commit. Use the commit SHA in `uses:` and keep the release tag as a trailing comment. Dependabot updates GitHub Actions pins weekly.
 - Every change reaches `main` through a PR merged by Dan or an explicitly authorized agent (see [Merge](#merge)). A merge runs the Deploy workflow, which deploys only the changed parts among infrastructure, backend, web, and the Jarvis agent; the backend applies migrations at startup. Redeploy everything with **Actions → Deploy → Run workflow** on `main` (`gh workflow run deploy.yml --ref main`).
 - After the first successful deploy only (P0-16): run `./infra/bootstrap.ps1 -WebRedirectUris 'https://<Static Web App host>/redirect.html'` so sign-in works there (the redirect URI is MSAL's redirect bridge page, L63) (existing URIs are kept), set `backendUrl` in `apps/web/config.json` to the backend URL so `npm run dev` signs in, and set the Actions variable `JARVIS_INFRA_DEPLOYMENT_NAME` to `jarvis-infra` (`gh variable set JARVIS_INFRA_DEPLOYMENT_NAME --body jarvis-infra`). The Deploy run summary lists both URLs.
 - No manual infrastructure portal changes.

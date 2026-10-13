@@ -557,6 +557,7 @@ Declined in the audit (do not file): verbosity and max-output-token settings, no
 | P9-38 | [#532](https://github.com/DanAakesen/jarvis/issues/532) | Clean up features.md, add a verified-live column | Backend | — | Complete |
 | P9-39 | [#533](https://github.com/DanAakesen/jarvis/issues/533) | After every Deploy, run and record read-only Google, GitHub, vault, embeddings, research dry-run, and PC-bridge checks through authenticated `GET /status/smoke` | Backend + deploy workflow | P9-20 | Complete |
 | P9-43 | [#587](https://github.com/DanAakesen/jarvis/issues/587) | Jarvis knows what Dan is looking at: optional workspace view contract, bounded per-turn voice/chat context, focused references and previous-page fallback; backend/contracts validated offline, UI snapshot population and live acceptance pending | Backend + UI session | P9-40 | Complete |
+| P9-94 | [#765](https://github.com/DanAakesen/jarvis/issues/765) | Pin all workflow actions to verified full commit SHAs, enable weekly GitHub Actions Dependabot updates, and document the pinning procedure | Workflows/docs | — | Complete |
 ### P10 — GitHub backlog as source of truth
 Goal: GitHub issues are the single backlog. The Software Factory (worker label `Jarvis`, default agent `codex`) and Copilot (`Copilot`) are executors that pick issues up; the Factory board shows the same columns as the GitHub Project. Decided by Dan on 8 October 2026.
 | ID | Issue | Task | Acceptance criteria | Depends on | Status |
