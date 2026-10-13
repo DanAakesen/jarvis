@@ -32,6 +32,8 @@ Before downstream engineering, record this approved P12 backlog and its existing
 
 ### [P12-02: Protected export & inventory](https://github.com/DanAakesen/jarvis/issues/717)
 
+Sequentially released after P12-01 merged. [Synthetic safety preparation and missing provider/output evidence](../tools/daily-migration/export/README.md) are separate from live protected export execution. Schema must be inventoried dynamically; 31 tables is historical. No verified source adapter or encrypted backup is claimed yet. Live backup/count/checksum/object-coverage acceptance stays open; use a draft `Refs #717` PR until the protected coordinator-run gates pass. Normal source writes continue and require a verified consistency/final-delta strategy.
+
 **TEMPORARY — migration-only; remove after acceptance/retention gates** · Integration contract & protected inventory
 
 Complete original backup of the 31-table inventory and retained raw objects; manifest separates in-scope migration from excluded source snapshots.

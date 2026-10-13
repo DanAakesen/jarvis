@@ -21,6 +21,8 @@ jobs:
       - name: Pin npm
         run: npm install --global npm@10.9.9
       - run: npm ci
+      - name: Synthetic protected-export safety checks
+        run: node --test tools/daily-migration/export/safety.test.mjs
       - run: npm run lint --workspace @jarvis/backend
       - run: npm test --workspace @jarvis/backend
       - run: npm run build --workspace @jarvis/backend
