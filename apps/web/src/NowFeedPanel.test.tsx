@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { NowFeed } from './activity';
 import { NowFeedPanel } from './NowFeedPanel';
 import { WorkspaceCommandContext } from './workspace-command-state';
+import { useFactoryBoardLiveState, resetFactoryBoardForTests } from './factory-board-store';
 
 const {
   loadNowFeed,
@@ -53,6 +54,7 @@ const client = {} as never;
 const getAccessToken = vi.fn(async () => 'test-access-token');
 
 afterEach(() => {
+  resetFactoryBoardForTests();
   vi.clearAllMocks();
   streamCallbacks.onUpdate = null;
   streamCallbacks.onWorkspaceReady = null;
@@ -60,6 +62,38 @@ afterEach(() => {
 });
 
 describe('live Now panel', () => {
+  it('bridges board events, connection status and cleanup through the existing Now stream', async () => {
+    loadNowFeed.mockResolvedValue(feed);
+    let callbacks: import('./now-feed').NowFeedStreamOptions | undefined;
+    streamNowFeed.mockImplementation(async (options: import('./now-feed').NowFeedStreamOptions) => {
+      callbacks = options;
+      await new Promise<void>((resolve) => options.signal.addEventListener('abort', () => resolve(), { once: true }));
+    });
+    function Observer() {
+      const state = useFactoryBoardLiveState();
+      return <output data-testid="board-status">{JSON.stringify(state)}</output>;
+    }
+    const view = render(<MemoryRouter>
+      <NowFeedPanel client={client} config={config} getAccessToken={getAccessToken} applyWorkspaceCommand={() => false} />
+      <Observer />
+    </MemoryRouter>);
+    await waitFor(() => expect(callbacks).toBeDefined());
+    expect(screen.getByTestId('board-status').textContent).toContain('"status":"connecting"');
+    act(() => callbacks?.onStatus('connected'));
+    act(() => callbacks?.onBoard?.({ projectId: '7', version: 8 }));
+    expect(screen.getByTestId('board-status').textContent).toContain('"version":8');
+    act(() => callbacks?.onStatus('reconnecting'));
+    expect(screen.getByTestId('board-status').textContent).toContain('"status":"reconnecting"');
+    expect(screen.getByTestId('board-status').textContent).toContain('"update":null');
+    expect(streamNowFeed).toHaveBeenCalledOnce();
+    view.unmount();
+    const observer = render(<Observer />);
+    expect(screen.getByTestId('board-status').textContent).toContain('"status":"unavailable"');
+    act(() => callbacks?.onBoard?.({ projectId: '7', version: 9 }));
+    expect(screen.getByTestId('board-status').textContent).toContain('"update":null');
+    observer.unmount();
+  });
+
   it('publishes window snapshots on readiness and changes without restarting the command stream', async () => {
     loadNowFeed.mockResolvedValue(feed);
     publishWorkspaceSnapshot.mockResolvedValue(undefined);

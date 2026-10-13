@@ -1,8 +1,12 @@
 import { useEffect, useRef, useState, type CSSProperties, type FormEvent } from 'react';
+import {
+  isFactoryBoard,
+  type BoardCard, type FactoryBoard, type FactoryBoardColumnId, type FactoryBoardTask,
+} from '@jarvis/contracts';
 import { TaskWindowLink } from '../TaskWindowLink';
 import { Modal } from '../Modal';
-import { backendFetch } from '../backend-request';
-import { streamTaskEvents } from '../task-events';
+import { awaitWithSignal, backendFetch } from '../backend-request';
+import { useFactoryBoardLiveState } from '../factory-board-store';
 import { useContextPanel } from '../context-panel-state';
 import { TaskDetailPage } from './TaskDetailPage';
 import { TaskReleaseBar } from './TaskReleaseBar';
@@ -16,7 +20,7 @@ interface Project {
   default_agent: 'codex' | 'copilot';
 }
 
-type TaskState = 'Ready' | 'Running' | 'PauseRequested' | 'Paused' | 'NeedsAttention' | 'Done' | 'Cancelled';
+type TaskState = FactoryBoardTask['state'];
 type Agent = 'codex' | 'copilot';
 
 interface Task {
@@ -35,14 +39,6 @@ interface Task {
   finishedAt: string | null;
 }
 
-interface TaskEvent {
-  id: string;
-  taskId: string;
-  type: string;
-  summary: string | null;
-  at: string;
-}
-
 interface TaskFilters {
   projectId: string;
   agent: string;
@@ -52,18 +48,18 @@ interface TaskFilters {
 }
 
 type PageState = 'loading' | 'ready' | 'error';
-type StreamStatus = 'connecting' | 'connected' | 'reconnecting' | 'error';
 type Props = { backendUrl: string | null; getAccessToken: () => Promise<string> };
 
 const taskStates: TaskState[] = ['Ready', 'Running', 'PauseRequested', 'Paused', 'NeedsAttention', 'Done', 'Cancelled'];
-const columns: { label: string; states: TaskState[] }[] = [
-  { label: 'Ready', states: ['Ready'] },
-  { label: 'Running', states: ['Running'] },
-  { label: 'Paused', states: ['PauseRequested', 'Paused'] },
-  { label: 'Needs attention', states: ['NeedsAttention'] },
-  { label: 'Done', states: ['Done'] },
-  { label: 'Cancelled', states: ['Cancelled'] },
-];
+const columnLabels: Record<FactoryBoardColumnId, string> = {
+  backlog: 'Backlog',
+  needs_dan: 'Needs Dan',
+  ready: 'Ready',
+  in_progress: 'In progress',
+  in_review: 'In review',
+  done: 'Done',
+};
+const maxCardsPerColumn = 100;
 const emptyFilters: TaskFilters = { projectId: '', agent: '', state: '', period: '', search: '' };
 const taskIdPattern = /^[1-9]\d{0,18}$/;
 const maxSqlBigInt = 9_223_372_036_854_775_807n;
@@ -98,26 +94,18 @@ function isTask(value: unknown): value is Task {
     (value.finishedAt === null || isDate(value.finishedAt));
 }
 
-function isTaskList(value: unknown): value is { tasks: Task[] } {
-  return isObject(value) && Array.isArray(value.tasks) && value.tasks.every(isTask);
-}
-
-function isTaskEvent(value: unknown): value is TaskEvent {
-  return isObject(value) && typeof value.id === 'string' && typeof value.taskId === 'string' &&
-    typeof value.type === 'string' && (typeof value.summary === 'string' || value.summary === null) &&
-    isDate(value.at);
-}
-
 async function request(
   backendUrl: string,
   getAccessToken: () => Promise<string>,
   path: string,
   method: 'GET' | 'POST' = 'GET',
   body?: unknown,
+  signal?: AbortSignal,
 ): Promise<unknown> {
+  const resource = path.startsWith('/factory/board') ? 'board' : 'task';
   let token: string;
   try {
-    token = await getAccessToken();
+    token = signal ? await awaitWithSignal(getAccessToken, signal) : await getAccessToken();
   } catch (cause) {
     throw new Error('Your Microsoft sign-in needs attention. Sign in again.', { cause });
   }
@@ -131,19 +119,20 @@ async function request(
         ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
       },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      ...(signal ? { signal } : {}),
     });
   } catch (cause) {
-    throw new Error('Jarvis could not reach the task service. Try again.', { cause });
+    throw new Error(`Jarvis could not reach the ${resource} service. Try again.`, { cause });
   }
   if (!response.ok) {
     if (response.status === 401) throw new Error('Your Microsoft sign-in needs attention. Sign in again.');
-    if (response.status === 503) throw new Error('Task data could not be loaded. Try again.');
-    throw new Error(`Jarvis could not ${method === 'GET' ? 'load' : 'create'} task data (HTTP ${response.status}).`);
+    if (response.status === 503) throw new Error(`${resource === 'board' ? 'Board' : 'Task'} data could not be loaded. Try again.`);
+    throw new Error(`Jarvis could not ${method === 'GET' ? 'load' : 'create'} ${resource} data (HTTP ${response.status}).`);
   }
   try {
     return await response.json();
   } catch (cause) {
-    throw new Error('Jarvis returned invalid task data. Try again.', { cause });
+    throw new Error(`Jarvis returned invalid ${resource} data. Try again.`, { cause });
   }
 }
 
@@ -153,17 +142,16 @@ async function loadProjects(backendUrl: string, getAccessToken: () => Promise<st
   return value;
 }
 
-function taskQuery(filters: TaskFilters): string {
-  const query = new URLSearchParams({ limit: '100', offset: '0' });
-  if (filters.projectId) query.set('projectId', filters.projectId);
-  if (filters.agent) query.set('agent', filters.agent);
-  if (filters.state) query.set('state', filters.state);
-  if (filters.search.trim()) query.set('search', filters.search.trim());
-  if (filters.period) {
-    const days = Number(filters.period);
-    if ([7, 30, 90].includes(days)) query.set('createdAfter', new Date(Date.now() - days * 86_400_000).toISOString());
-  }
-  return query.toString();
+function matchesFilters(card: BoardCard, filters: TaskFilters, updatedAfter: number | null): boolean {
+  const agent = card.task?.agent ?? card.issue.worker?.toLowerCase();
+  if (filters.agent && agent !== filters.agent) return false;
+  if (filters.state && card.task?.state !== filters.state) return false;
+  if (updatedAfter !== null && Date.parse(card.issue.updatedAt) < updatedAfter) return false;
+  const search = filters.search.trim().toLowerCase();
+  return !search || [
+    card.issue.title, `#${card.issue.number}`, card.issue.taskCode ?? '',
+    ...card.issue.labels, card.task?.branch ?? '',
+  ].join(' ').toLowerCase().includes(search);
 }
 
 function taskError(error: unknown): string {
@@ -177,20 +165,6 @@ function agentLabel(agent: Agent): string {
 function stateLabel(state: TaskState): string {
   return state === 'PauseRequested' ? 'Pause requested' :
     state === 'NeedsAttention' ? 'Needs attention' : state;
-}
-
-function formatDuration(task: Task, now: number): string {
-  if (!task.startedAt) return 'Not started';
-  const end = task.finishedAt ? Date.parse(task.finishedAt) : now;
-  const totalMinutes = Math.max(0, Math.floor((end - Date.parse(task.startedAt)) / 60_000));
-  const days = Math.floor(totalMinutes / 1440);
-  const hours = Math.floor((totalMinutes % 1440) / 60);
-  const minutes = totalMinutes % 60;
-  return days ? `${days}d ${hours}h` : hours ? `${hours}h ${minutes}m` : `${minutes}m`;
-}
-
-function projectName(projects: Project[], projectId: string): string {
-  return projects.find((project) => project.id === projectId)?.name ?? `Unavailable project (${projectId})`;
 }
 
 const collapsedColumnsKey = 'jarvis.kanban.collapsedColumns';
@@ -232,7 +206,7 @@ function columnTone(label: string): string {
 }
 
 /** What the card says when the runtime has not reported an activity line; derived only from the task state. */
-function stateSummary(task: Task): string {
+function stateSummary(task: FactoryBoardTask): string {
   switch (task.state) {
     case 'Ready': return task.startedAt ? 'Waiting to continue' : 'Not started';
     case 'Running': return 'Working';
@@ -251,10 +225,11 @@ export function TasksPage({ backendUrl, getAccessToken }: Props) {
   const [projectError, setProjectError] = useState(backendUrl ? '' : 'Projects unavailable.');
   const [projectRetry, setProjectRetry] = useState(0);
   const [settledProjectKey, setSettledProjectKey] = useState('');
-  const [tasks, setTasks] = useState<Task[]>([]);
+  const [snapshot, setSnapshot] = useState<{ key: string; board: FactoryBoard } | null>(null);
   const [taskState, setTaskState] = useState<PageState>(backendUrl ? 'loading' : 'error');
-  const [error, setError] = useState(backendUrl ? '' : 'Tasks unavailable.');
+  const [error, setError] = useState(backendUrl ? '' : 'Board unavailable.');
   const [settledTaskKey, setSettledTaskKey] = useState('');
+  const [settledReloadKey, setSettledReloadKey] = useState(-1);
   const [filters, setFilters] = useState(emptyFilters);
   const [appliedFilters, setAppliedFilters] = useState(emptyFilters);
   // Space on the board (Dan, 8 October): columns and the search/filter section collapse, remembered on this device.
@@ -268,16 +243,14 @@ export function TasksPage({ backendUrl, getAccessToken }: Props) {
     return next;
   });
   const [reloadKey, setReloadKey] = useState(0);
-  const [streamKey, setStreamKey] = useState(0);
-  const [liveStatuses, setLiveStatuses] = useState<Record<string, StreamStatus>>({});
-  const [lastActivity, setLastActivity] = useState<Record<string, string>>({});
+  const liveState = useFactoryBoardLiveState();
+  const previousLiveState = useRef(liveState);
   const [notice, setNotice] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState('');
   const [createProjectId, setCreateProjectId] = useState('');
   const [createAgent, setCreateAgent] = useState<Agent>('copilot');
-  const [now, setNow] = useState(0);
   const [selectedTaskId, setSelectedTaskId] = useState('');
   const selectedTaskIdRef = useRef('');
   const contextPanel = useContextPanel();
@@ -285,19 +258,20 @@ export function TasksPage({ backendUrl, getAccessToken }: Props) {
   const createButtonRef = useRef<HTMLButtonElement>(null);
   const createProjectButtonRef = useRef<HTMLButtonElement>(null);
   const [projectDialogOpen, setProjectDialogOpen] = useState(false);
-  const lastEventIds = useRef(new Map<string, string>());
   const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const taskIds = tasks.filter((task) => task.state !== 'Done' && task.state !== 'Cancelled').map((task) => task.id).join(',');
-  const filterKey = JSON.stringify(appliedFilters);
   const projectRequestKey = `${backendUrl ?? ''}:${projectRetry}`;
   // Live refreshes change reloadKey, not the dataset identity: keep the board mounted while fetching.
-  const taskRequestKey = `${backendUrl ?? ''}:${filterKey}`;
+  const taskRequestKey = `${backendUrl ?? ''}:${filters.projectId}`;
+  const board = snapshot?.key === taskRequestKey ? snapshot.board : null;
   const visibleProjectState: PageState = !backendUrl ? 'error' :
     settledProjectKey === projectRequestKey ? projectState : 'loading';
   const visibleProjectError = backendUrl ? projectError : 'Projects unavailable.';
   const visibleTaskState: PageState = !backendUrl ? 'error' :
-    settledTaskKey === taskRequestKey ? taskState : 'loading';
-  const visibleTaskError = backendUrl ? error : 'Tasks unavailable.';
+    !filters.projectId ? (visibleProjectState === 'loading' ? 'loading' : 'ready') :
+      settledTaskKey === taskRequestKey ? taskState : 'loading';
+  const visibleTaskError = backendUrl ? error : 'Board unavailable.';
+  const refreshing = !!backendUrl && !!filters.projectId &&
+    (settledTaskKey !== taskRequestKey || settledReloadKey !== reloadKey);
 
   useEffect(() => () => {
     if (selectedTaskIdRef.current) closeContextPanel();
@@ -312,6 +286,12 @@ export function TasksPage({ backendUrl, getAccessToken }: Props) {
       setProjectState('ready');
       setProjectError('');
       setSettledProjectKey(projectRequestKey);
+      const chooseProject = (current: TaskFilters) => ({
+        ...current,
+        projectId: loaded.some((project) => project.id === current.projectId) ? current.projectId : loaded[0]?.id ?? '',
+      });
+      setFilters(chooseProject);
+      setAppliedFilters(chooseProject);
     }).catch((reason: unknown) => {
       if (!active) return;
       setProjectState('error');
@@ -323,67 +303,46 @@ export function TasksPage({ backendUrl, getAccessToken }: Props) {
 
   useEffect(() => {
     let active = true;
-    if (!backendUrl) return () => { active = false; };
-    void request(backendUrl, getAccessToken, `/factory/tasks?${taskQuery(appliedFilters)}`).then((value) => {
+    const controller = new AbortController();
+    if (!backendUrl || !filters.projectId) return () => { active = false; controller.abort(); };
+    const query = new URLSearchParams({ project: filters.projectId });
+    void request(backendUrl, getAccessToken, `/factory/board?${query}`, 'GET', undefined, controller.signal).then((value) => {
       if (!active) return;
-      if (!isTaskList(value)) throw new Error('Jarvis returned invalid task data. Try again.');
-      setTasks(value.tasks);
+      if (!isFactoryBoard(value) || value.project.id !== filters.projectId) {
+        throw new Error('Jarvis returned invalid board data for this project. Try again.');
+      }
+      setSnapshot({ key: taskRequestKey, board: value });
       setTaskState('ready');
       setError('');
       setSettledTaskKey(taskRequestKey);
+      setSettledReloadKey(reloadKey);
     }).catch((reason: unknown) => {
       if (!active) return;
       setTaskState('error');
       setError(taskError(reason));
       setSettledTaskKey(taskRequestKey);
+      setSettledReloadKey(reloadKey);
     });
-    return () => { active = false; };
-  }, [backendUrl, getAccessToken, appliedFilters, reloadKey, taskRequestKey]);
+    return () => { active = false; controller.abort(); };
+  }, [backendUrl, getAccessToken, filters.projectId, reloadKey, taskRequestKey]);
 
   useEffect(() => {
-    if (!tasks.some((task) => task.startedAt && !task.finishedAt)) return undefined;
-    const initialTimer = setTimeout(() => setNow(Date.now()), 0);
-    const timer = setInterval(() => setNow(Date.now()), 60_000);
-    return () => {
-      clearTimeout(initialTimer);
-      clearInterval(timer);
-    };
-  }, [tasks]);
-
-  useEffect(() => {
-    if (!backendUrl || !taskIds) return undefined;
-    const controllers = new Map<string, AbortController>();
-    const ids = taskIds.split(',');
-    for (const taskId of ids) {
-      const controller = new AbortController();
-      const lastEventId = lastEventIds.current.get(taskId);
-      controllers.set(taskId, controller);
-      void streamTaskEvents<TaskEvent>({
-        backendUrl,
-        taskId,
-        ...(lastEventId ? { lastEventId } : {}),
-        getAccessToken,
-        signal: controller.signal,
-        onStatus: (status) => setLiveStatuses((current) => ({ ...current, [taskId]: status })),
-        onEvent: (event) => {
-          if (!isTaskEvent(event) || event.taskId !== taskId) return;
-          lastEventIds.current.set(taskId, event.id);
-          if (event.summary) setLastActivity((current) => ({ ...current, [taskId]: event.summary as string }));
-          if (refreshTimer.current) clearTimeout(refreshTimer.current);
-          refreshTimer.current = setTimeout(() => setReloadKey((value) => value + 1), 150);
-        },
-      }).catch(() => {
-        if (!controller.signal.aborted) setLiveStatuses((current) => ({ ...current, [taskId]: 'error' }));
-      });
-    }
-    return () => {
-      for (const controller of controllers.values()) controller.abort();
-    };
-  }, [backendUrl, getAccessToken, taskIds, streamKey]);
+    const previous = previousLiveState.current;
+    previousLiveState.current = liveState;
+    if (!backendUrl || liveState.backendUrl !== backendUrl || !filters.projectId) return;
+    const update = liveState.update;
+    const boardChanged = update !== previous.update && update?.projectId === filters.projectId;
+    const reconnected = liveState.status === 'connected' &&
+      (previous.status !== 'connected' || previous.backendUrl !== backendUrl);
+    if (!boardChanged && !reconnected) return;
+    if (refreshTimer.current) clearTimeout(refreshTimer.current);
+    refreshTimer.current = setTimeout(() => setReloadKey((value) => value + 1), 150);
+  }, [backendUrl, filters.projectId, liveState]);
 
   useEffect(() => () => {
     if (refreshTimer.current) clearTimeout(refreshTimer.current);
-  }, []);
+    refreshTimer.current = null;
+  }, [taskRequestKey]);
 
   const applyFilters = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -393,28 +352,27 @@ export function TasksPage({ backendUrl, getAccessToken }: Props) {
   // Kanban applies filters as they change; search waits for a short pause in typing.
   function applyNow(next: TaskFilters) {
     setFilters(next);
-    setTasks([]);
-    setLiveStatuses({});
-    setLastActivity({});
+    if (next.projectId !== filters.projectId && selectedTaskIdRef.current) {
+      closeContextPanel();
+      selectedTaskIdRef.current = '';
+      setSelectedTaskId('');
+    }
     setAppliedFilters({ ...next });
-    setReloadKey((value) => value + 1);
   }
   const pendingSearch = filters.search !== appliedFilters.search ? filters.search : null;
   useEffect(() => {
     if (pendingSearch === null) return undefined;
     const timer = setTimeout(() => {
-      setTasks([]);
       setAppliedFilters((current) => ({ ...current, search: pendingSearch }));
-      setReloadKey((value) => value + 1);
     }, 350);
     return () => clearTimeout(timer);
   }, [pendingSearch]);
 
-  const selectTask = (task: Task, trigger: HTMLElement) => {
+  const selectTask = (task: FactoryBoardTask, title: string, issueNumber: number, trigger: HTMLElement) => {
     selectedTaskIdRef.current = task.id;
     setSelectedTaskId(task.id);
     contextPanel.show({
-      title: task.title,
+      title,
       status: 'custom',
       content: <TaskDetailPage
         key={task.id}
@@ -423,7 +381,11 @@ export function TasksPage({ backendUrl, getAccessToken }: Props) {
         taskId={task.id}
         compact
       />,
-    }, trigger);
+    }, () => {
+      if (trigger.isConnected && !trigger.closest('[hidden],[inert]')) return trigger;
+      const replacement = document.getElementById(`issue-title-${issueNumber}`)?.querySelector<HTMLElement>('.task-card-title');
+      return replacement && !replacement.closest('[hidden],[inert]') ? replacement : createProjectButtonRef.current;
+    });
   };
 
   const closeDialog = () => {
@@ -464,7 +426,7 @@ export function TasksPage({ backendUrl, getAccessToken }: Props) {
     try {
       const value = await request(backendUrl, getAccessToken, '/factory/tasks', 'POST', body);
       if (!isTask(value)) throw new Error('Jarvis returned invalid task data. Try again.');
-      setNotice('Task created and added to Ready.');
+      setNotice('Task created. Linked issues appear in their GitHub Project column.');
       setDialogOpen(false);
       setReloadKey((current) => current + 1);
       window.setTimeout(() => createButtonRef.current?.focus(), 0);
@@ -474,11 +436,6 @@ export function TasksPage({ backendUrl, getAccessToken }: Props) {
       setCreating(false);
     }
   };
-
-  const streamValues = taskIds.split(',').filter(Boolean).map((id) => liveStatuses[id] ?? 'connecting');
-  const streamErrorCount = streamValues.filter((status) => status === 'error').length;
-  const allConnected = streamValues.length > 0 && streamValues.every((status) => status === 'connected');
-  const anyReconnecting = streamValues.some((status) => status === 'reconnecting');
 
   const createDialog = dialogOpen && (
     <Modal title="Create task" titleId="create-task-heading" onClose={closeDialog} busy={creating} className="task-dialog">
@@ -534,7 +491,7 @@ export function TasksPage({ backendUrl, getAccessToken }: Props) {
     </Modal>
   );
   const openCreateDialog = () => {
-    const selected = projects.find((project) => project.id === createProjectId) ?? projects[0];
+    const selected = projects.find((project) => project.id === filters.projectId) ?? projects[0];
     if (selected) {
       setCreateProjectId(selected.id);
       setCreateAgent(selected.default_agent);
@@ -542,31 +499,39 @@ export function TasksPage({ backendUrl, getAccessToken }: Props) {
     setDialogOpen(true);
     setCreateError('');
   };
-  const activeFilterCount = [filters.search.trim(), filters.projectId, filters.agent, filters.state, filters.period].filter(Boolean).length;
+  const activeFilterCount = [filters.search.trim(), filters.agent, filters.state, filters.period].filter(Boolean).length;
   const createUnavailable = !backendUrl || visibleProjectState !== 'ready' || projects.length === 0;
   const createHelp = visibleProjectState === 'loading' ? 'Loading projects before task creation is available.' :
     visibleProjectState === 'error' ? 'Retry project loading before creating a task.' :
       projects.length === 0 ? 'No active projects are available. Project registration is managed by Jarvis.' :
         'Create a task on an active project. Model and reasoning overrides apply to this task only.';
-  const liveStatusText = streamErrorCount > 0
-    ? <><span>Live updates need attention for {streamErrorCount} task{streamErrorCount === 1 ? '' : 's'}.</span> <button type="button" className="task-inline-button" onClick={() => setStreamKey((value) => value + 1)}>Reconnect</button></>
-    : allConnected ? 'Live updates connected.' :
-      anyReconnecting ? 'Reconnecting to live task updates…' :
-        streamValues.length > 0 ? 'Connecting to live task updates…' : 'Live updates connect while tasks are active.';
+  const liveStatus = liveState.backendUrl === backendUrl ? liveState.status : 'unavailable';
+  const liveStatusText = liveStatus === 'connected' ? 'Live board updates connected.' :
+    liveStatus === 'reconnecting' ? 'Reconnecting to live board updates. The board may be out of date.' :
+      liveStatus === 'connecting' ? 'Connecting to live board updates…' :
+        'Live board updates are unavailable. Refresh the board to check for changes.';
+  const updatedAfter = board && appliedFilters.period ? Date.parse(board.fetchedAt) - Number(appliedFilters.period) * 86_400_000 : null;
+  const columns = board?.columns.map((column) => ({
+    ...column,
+    label: columnLabels[column.id],
+    cards: column.cards.filter((card) => matchesFilters(card, appliedFilters, updatedAfter)),
+  })) ?? [];
 
   {
     return (
       <section className="tasks-page kanban-page" aria-labelledby="tasks-heading">
         <header className="kanban-header">
           <h1 id="tasks-heading">Kanban</h1>
-          {visibleTaskState === 'ready' && (
+          {board && (
             <ul className="kanban-pulse" aria-label="Board summary">
-              <li data-tone="running"><span aria-hidden="true" />{tasks.filter((task) => task.state === 'Running').length} running</li>
-              <li data-tone="needs-attention"><span aria-hidden="true" />{tasks.filter((task) => task.state === 'NeedsAttention').length} need you</li>
-              <li data-tone="done"><span aria-hidden="true" />{tasks.filter((task) => task.state === 'Done').length} done</li>
+              <li data-tone="running"><span aria-hidden="true" />{columns.find((column) => column.id === 'in_progress')?.cards.length ?? 0} in progress</li>
+              <li data-tone="needs-attention"><span aria-hidden="true" />{columns.find((column) => column.id === 'needs_dan')?.cards.length ?? 0} needs Dan</li>
+              <li data-tone="done"><span aria-hidden="true" />{columns.find((column) => column.id === 'done')?.cards.length ?? 0} done</li>
             </ul>
           )}
           <div className="kanban-header-actions">
+          <button className="secondary-button" type="button" disabled={!backendUrl || !filters.projectId || refreshing}
+            onClick={() => setReloadKey((value) => value + 1)}>{refreshing ? 'Refreshing board…' : 'Refresh board'}</button>
           <button className="secondary-button kanban-create kanban-create-project" type="button" ref={createProjectButtonRef}
             onClick={() => setProjectDialogOpen(true)} disabled={!backendUrl}>
             <KanbanIcon name="plus" />
@@ -597,17 +562,18 @@ export function TasksPage({ backendUrl, getAccessToken }: Props) {
           <span className="kanban-chevron" aria-hidden="true"><KanbanIcon name="chevron" /></span>
         </button>
         <div id="kanban-filter-body" className="kanban-filter-body" inert={!filtersOpen}>
-        <form className="kanban-filters" role="search" aria-label="Filter tasks" onSubmit={applyFilters}>
+        <form className="kanban-filters" role="search" aria-label="Filter issues" onSubmit={applyFilters}>
           <label className="kanban-search">
             <KanbanIcon name="search" />
-            <span className="visually-hidden">Search tasks</span>
-            <input id="filter-search" type="search" placeholder="Search tasks…" value={filters.search} maxLength={100}
+            <span className="visually-hidden">Search issues</span>
+            <input id="filter-search" type="search" placeholder="Search issues…" value={filters.search} maxLength={100}
               onChange={(event) => setFilters({ ...filters, search: event.target.value })} />
           </label>
           <label className="kanban-select">
             <span className="visually-hidden">Project</span>
-            <select id="filter-project" value={filters.projectId} onChange={(event) => applyNow({ ...filters, projectId: event.target.value })}>
-              <option value="">Project: All</option>
+            <select id="filter-project" value={filters.projectId} disabled={visibleProjectState !== 'ready' || projects.length === 0}
+              onChange={(event) => applyNow({ ...filters, projectId: event.target.value })}>
+              {!filters.projectId && <option value="">Select a project</option>}
               {projects.map((project) => <option key={project.id} value={project.id}>Project: {project.name}</option>)}
             </select>
           </label>
@@ -620,16 +586,16 @@ export function TasksPage({ backendUrl, getAccessToken }: Props) {
             </select>
           </label>
           <label className="kanban-select">
-            <span className="visually-hidden">State</span>
+            <span className="visually-hidden">Task state</span>
             <select id="filter-state" value={filters.state} onChange={(event) => applyNow({ ...filters, state: event.target.value })}>
-              <option value="">State: All</option>
+              <option value="">Task state: All</option>
               {taskStates.map((state) => <option key={state} value={state}>State: {stateLabel(state)}</option>)}
             </select>
           </label>
           <label className="kanban-select">
-            <span className="visually-hidden">Period</span>
+            <span className="visually-hidden">Updated</span>
             <select id="filter-period" value={filters.period} onChange={(event) => applyNow({ ...filters, period: event.target.value })}>
-              <option value="">Any time</option>
+              <option value="">Updated: Any time</option>
               <option value="7">Last 7 days</option>
               <option value="30">Last 30 days</option>
               <option value="90">Last 90 days</option>
@@ -639,25 +605,34 @@ export function TasksPage({ backendUrl, getAccessToken }: Props) {
         </div>
         </section>
 
-        <TaskReleaseBar backendUrl={backendUrl} getAccessToken={getAccessToken} projectId={appliedFilters.projectId} variant="trail" />
+        <TaskReleaseBar backendUrl={backendUrl} getAccessToken={getAccessToken} projectId={filters.projectId} variant="trail" />
 
-        {visibleTaskState === 'loading' && <Loader variant="cards" label="Loading tasks…" />}
+        {visibleTaskState === 'loading' && <Loader variant="cards" label="Loading GitHub board…" />}
+        {visibleProjectState === 'ready' && projects.length === 0 &&
+          <p className="tasks-feedback">No active projects are available for a GitHub board. Create a project to begin.</p>}
         {visibleTaskState === 'error' && (
           <div className="tasks-feedback" role="alert">
             <p>{visibleTaskError}</p>
-            <button className="secondary-button" type="button" onClick={() => setReloadKey((value) => value + 1)}>Retry tasks</button>
+            <button className="secondary-button" type="button" disabled={refreshing}
+              onClick={() => setReloadKey((value) => value + 1)}>Retry board</button>
           </div>
         )}
-        {(visibleTaskState === 'ready' || tasks.length > 0) && (
+        {board && (
           <>
+            <p className="tasks-help">
+              <a href={`https://github.com/${board.project.repo}`} target="_blank" rel="noopener noreferrer">{board.project.repo}</a>
+              {' · '}Fetched <time dateTime={board.fetchedAt}>{new Date(board.fetchedAt).toLocaleString()}</time>.
+              {' '}Open issues and issues closed in the last 14 days.
+            </p>
             <div className="task-live-status kanban-live-status" role="status" aria-live="polite">{liveStatusText}</div>
-            {visibleTaskState === 'error' && tasks.length > 0 &&
-              <p className="tasks-feedback" role="status">Showing the last loaded tasks because refresh failed.</p>}
-            {tasks.length === 100 && <p className="task-limit-note">Showing the 100 most recent matching tasks.</p>}
-            <div className="task-board kanban-board" role="region" aria-label="Tasks by state"
+            {visibleTaskState === 'error' &&
+              <p className="tasks-feedback" role="status">Showing the last loaded board because refresh failed.</p>}
+            {board.stale &&
+              <p className="tasks-feedback" role="status">GitHub is unavailable. Showing a cached board; placement may be out of date.</p>}
+            <div className="task-board kanban-board" role="region" aria-label="Issues by GitHub Project column"
               style={{ '--kanban-columns': columns.map((column) => collapsedColumns.has(column.label) ? '52px' : 'minmax(240px, 1fr)').join(' ') } as CSSProperties}>
               {columns.map((column) => {
-                const items = tasks.filter((task) => column.states.includes(task.state));
+                const items = column.cards;
                 const headingId = `column-${columnTone(column.label)}`;
                 return (
                   <section className="task-column kanban-column" key={column.label} aria-labelledby={headingId}
@@ -671,59 +646,79 @@ export function TasksPage({ backendUrl, getAccessToken }: Props) {
                           <span className="kanban-chevron" aria-hidden="true"><KanbanIcon name="chevron" /></span>
                         </button>
                       </h2>
-                      <span className="kanban-count" aria-label={`${items.length} tasks`}>{items.length}</span>
+                      <span className="kanban-count" aria-label={`${items.length} issues`}>{items.length}</span>
                     </header>
                     <div id={`${headingId}-cards`} className="kanban-column-body" hidden={collapsedColumns.has(column.label)}>
                     {items.length === 0
-                      ? <p className="task-column-empty">No matching tasks.</p>
+                      ? <p className="task-column-empty">No matching issues.</p>
                       : <ul className="task-card-list">
-                        {items.map((task, index) => (
-                          <li key={task.id} style={{ '--i': index } as CSSProperties}>
-                            <article className="task-card kanban-card" data-state={task.state}
-                              data-selected={selectedTaskId === task.id || undefined} aria-labelledby={`task-title-${task.id}`}>
-                              <h3 id={`task-title-${task.id}`}>
-                                <button className="task-card-title" type="button" aria-pressed={selectedTaskId === task.id}
-                                  aria-controls="context-panel" onClick={(event) => selectTask(task, event.currentTarget)}>
-                                  {task.title}
-                                </button>
+                        {items.slice(0, maxCardsPerColumn).map((card, index) => (
+                          <li key={card.issue.number} style={{ '--i': index } as CSSProperties}>
+                            <article className="task-card kanban-card" data-state={card.task?.state}
+                              data-selected={!!card.task && selectedTaskId === card.task.id || undefined} aria-labelledby={`issue-title-${card.issue.number}`}>
+                              <h3 id={`issue-title-${card.issue.number}`}>
+                                {card.task ? <button className="task-card-title" type="button" aria-pressed={selectedTaskId === card.task.id}
+                                  aria-controls="context-panel" onClick={(event) => {
+                                    if (card.task) selectTask(card.task, card.issue.title, card.issue.number, event.currentTarget);
+                                  }}>{card.issue.title}</button> :
+                                  <a className="task-card-title" href={card.issue.url} target="_blank" rel="noopener noreferrer">{card.issue.title}</a>}
                               </h3>
-                              <ul className="kanban-chips" aria-label="Project and agent">
-                                <li>{projectName(projects, task.projectId)}</li>
-                                <li>{agentLabel(task.agent)}</li>
-                              </ul>
-                              <p className="kanban-activity">{task.activity || lastActivity[task.id] || stateSummary(task)}</p>
                               <p className="kanban-meta">
-                                <KanbanIcon name="clock" />
-                                <span>{formatDuration(task, now)} · {task.attemptCount} attempt{task.attemptCount === 1 ? '' : 's'}</span>
+                                <a href={card.issue.url} target="_blank" rel="noopener noreferrer">#{card.issue.number}</a>
+                                {card.issue.taskCode && <span>{card.issue.taskCode}</span>}
                               </p>
-                              <p className="kanban-meta">
-                                <KanbanIcon name="branch" />
-                                {task.branch ? <code>{task.branch}</code> : <span className="kanban-muted">Branch not reported</span>}
-                              </p>
+                              {(card.task || card.issue.worker) && <ul className="kanban-chips" aria-label="Worker and task state">
+                                {card.task ? <>
+                                  <li>{agentLabel(card.task.agent)}</li>
+                                  <li>{stateLabel(card.task.state)}</li>
+                                </> : card.issue.worker && <li>{card.issue.worker}</li>}
+                              </ul>}
+                              <p className="kanban-activity">{card.task ? card.task.activity || stateSummary(card.task) : 'No Factory task linked.'}</p>
+                              {card.issue.blockedBy.length > 0 &&
+                                <p className="kanban-meta">Blocked by {card.issue.blockedBy.map((number) => `#${number}`).join(', ')}</p>}
+                              {card.pr && <p className="kanban-meta">
+                                <a href={card.pr.url} target="_blank" rel="noopener noreferrer">PR #{card.pr.number}</a>
+                                <span>{card.pr.draft ? 'Draft · ' : ''}Checks: {card.pr.checks}</span>
+                              </p>}
+                              {card.task && <>
+                                <p className="kanban-meta">
+                                  <KanbanIcon name="clock" />
+                                  <span>{card.task.attemptCount} attempt{card.task.attemptCount === 1 ? '' : 's'}
+                                    {' · '}{card.task.startedAt ? <>Started <time dateTime={card.task.startedAt}>{new Date(card.task.startedAt).toLocaleString()}</time></> : 'Start not reported'}</span>
+                                </p>
+                                <p className="kanban-meta">
+                                  <KanbanIcon name="branch" />
+                                  {card.task.branch ? <code>{card.task.branch}</code> : <span className="kanban-muted">Branch not reported</span>}
+                                </p>
                               <TaskControls
                                 backendUrl={backendUrl}
                                 getAccessToken={getAccessToken}
-                                taskId={task.id}
-                                state={task.state}
-                                latestSessionEndReason={task.latestSessionEndReason}
+                                taskId={card.task.id}
+                                state={card.task.state}
+                                latestSessionEndReason={card.task.latestSessionEndReason}
                                 onComplete={() => setReloadKey((value) => value + 1)}
                               />
                               <div className="kanban-card-actions">
                                 <button className="kanban-card-action" type="button" aria-controls="context-panel"
-                                  onClick={(event) => selectTask(task, event.currentTarget)}>
+                                  onClick={(event) => {
+                                    if (card.task) selectTask(card.task, card.issue.title, card.issue.number, event.currentTarget);
+                                  }}>
                                   View details
                                 </button>
-                                <TaskWindowLink className="kanban-card-action kanban-card-open" taskId={task.id} title={task.title}
-                                  aria-label={`Open ${task.title} in a window`}>
+                                <TaskWindowLink className="kanban-card-action kanban-card-open" taskId={card.task.id} title={card.issue.title}
+                                  aria-label={`Open ${card.issue.title} in a window`}>
                                   <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
                                     <rect x="3.5" y="5" width="17" height="14" rx="2.5" /><path d="M3.5 9h17M7 7h.01M9.5 7h.01" />
                                   </svg>
                                 </TaskWindowLink>
                               </div>
+                              </>}
                             </article>
                           </li>
                         ))}
                       </ul>}
+                    {items.length > maxCardsPerColumn &&
+                      <p className="task-limit-note">Showing {maxCardsPerColumn} of {items.length} matching issues. Refine the filters to find another issue.</p>}
                     </div>
                   </section>
                 );

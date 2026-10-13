@@ -1,5 +1,32 @@
 # Agent context
 
+## GitHub-aligned Factory board (13 October 2026)
+
+P10-07/#793 is owned by Dan and the UI session after merged/deployed #791 and
+before #792. The web board now reads the project-required canonical board API,
+not the task list. GitHub column placement stays backend-owned; no backend,
+contract, dependency or workflow files are changed. The central Now stream
+delivers validated board invalidations and reconnect refreshes. Task-free
+issues remain usable, and real overlays retain their valid controls/details.
+
+Local checks pass: 160 tests across TasksPage, now-feed, NowFeedPanel, the board
+store, ContextPanel, App, styles and TaskControls; TypeScript and scoped ESLint
+with zero warnings. Chromium fixtures exercise desktop dark/ordinary motion
+and 320x700 light/touch/reduced motion, using a real bounded local SSE fixture
+with the production decoder and central publisher. Checks cover canonical
+columns, links, local filters/collapse, issue movement, retained board/scroll,
+keyboard focus after movement, Recover, failed refresh and cached-data retry.
+The card focus resolver fixes the observed narrow-screen return failure after
+reparenting. The 3D room is disabled for these isolated board checks; fixtures
+intercept all API writes, so this is not live GitHub or physical-phone proof.
+
+GitHub Project 2 readback shows #790 Done, #792 Ready and #793 In progress.
+Authenticated live board placement remains to verify. Actual Chrome is signed
+in; a duplicate validation tab preserves Dan's original open Note. Keep port
+5173 running, `.ui-session-handoff.md` untracked, `.impeccable` excluded and
+the preservation stashes intact. Ship from `ui/shell-iteration`; report the
+PR immediately and let the coordinator merge on exact-head green CI.
+
 ## Remaining UI release (13 October 2026)
 
 Dan explicitly authorised "Deploy everything. so i can test live." Ship all

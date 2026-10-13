@@ -10,11 +10,13 @@ export type ContextPanelContent =
   | { title: string; status: 'custom'; content: ReactNode }
   | { title: string; status: 'view'; view: GeneratedView; trustedBlobHost?: string };
 
+export type ContextPanelReturnFocus = HTMLElement | (() => HTMLElement | null) | null;
+
 export interface ContextPanelController {
   content: ContextPanelContent;
   isOpen: boolean;
   close: () => void;
-  show: (content: ContextPanelContent, returnFocus?: HTMLElement | null) => void;
+  show: (content: ContextPanelContent, returnFocus?: ContextPanelReturnFocus) => void;
   toggle: () => void;
 }
 

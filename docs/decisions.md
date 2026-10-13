@@ -1834,6 +1834,25 @@ board update. The response contract is backend-owned; the UI session separately
 consumes it. Offline fake-provider tests do not establish live GitHub App
 permissions.
 
+## P10-07 (13 October 2026) — Wire the canonical board into Kanban
+
+Implements Dan's 8 October column decision through #793. Reuse the approved
+Task Lens layout and the backend `FactoryBoard` validator; do not rename task
+columns or duplicate GitHub placement rules. Select the first returned active
+project because the board endpoint requires an actual project. Other filters
+are local, with issue-update periods relative to the snapshot and filtering
+before the explicit 100-card cap per column. Task states remain overlay facts;
+task-free issues have no invented controls or duration. Share validated board
+invalidations through the existing Now stream, refresh on reconnect, accept
+version resets after deployment, and preserve board DOM/selection during quiet
+refreshes. Loading another project hides the previous snapshot and cancels its
+request. Live and cached failures remain visible. No backend or Project writes.
+An observed 320px keyboard-return failure after moving a selected card is
+handled by the shared panel's optional focus resolver: find the issue's current
+title control or a usable board header action, while preserving existing element
+targets. Local types, zero-warning lint, 160 tests and desktop/320px Chromium
+fixtures pass. Authenticated live board placement and release remain to verify.
+
 ## 8 October 2026 — Voice-first phone shell
 
 **Confirmed by Dan:** on phones Jarvis is primarily hands-free voice. The rail and side panels give way to a slim top bar, a bottom menu sheet and the chat bar as the dock; the transcript is hidden until swiped up or requested from Jarvis (P9-45, #596); Jarvis-opened windows are full-width sheets; presence switches to On the move on phones (P9-44, #595, a manual choice wins for two hours). Screen sharing is not offered on phones because no mobile browser supports it; the camera gets a front/back switch. UI plus the two backend issues named.
