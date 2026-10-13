@@ -674,16 +674,25 @@ repository-scoped GitHub App token issuer before creating a task.
 caches the secret after its first successful Key Vault lookup. Missing Key Vault
 configuration or secret fails webhook requests with 503, not an unsigned fallback.
 The server generates request IDs and records only approved event names, methods,
-route templates, statuses and timings. A final output allowlist covers child
-logger bindings as well as log arguments, dropping request/provider secrets.
-Background failure events retain their emitted names for presence, sandbox
-heartbeat, budget checks, task-event archival, project-policy confirmations,
-dispatcher operations, checks-loop recovery, PC bridge status, Google expiry
-alerts and telemetry shutdown. These events export only a fixed error-kind
-vocabulary and integer HTTP status codes (100–599), never error messages,
-bodies, tokens or URLs. Error callbacks preserve caught errors until the logging
-boundary; Graph authentication/transport/HTTP failures and budget HTTP failures
-carry safe metadata without provider responses.
+route templates, statuses and timings. A source-scan test requires every literal
+message passed to backend `info`, `warn` and `error` calls to be registered; the
+output allowlist still collapses unknown events to `backend.event`. Failed
+requests include the static route template and safe error kind, never path
+parameter values, query strings, headers or bodies. A final output allowlist
+covers child logger bindings as well as log arguments, dropping request/provider
+secrets. Startup credential-status diagnostics retain the events
+`credentials.github_app_status_failed` (GitHub App status persistence) and
+`credentials.copilot_check_failed` (the initial Copilot status probe); their
+callbacks do not expose the underlying database/provider errors. Background
+failure events export only a fixed error-kind vocabulary and integer HTTP
+status codes (100–599), never error messages, bodies, tokens or URLs. Error
+callbacks preserve caught errors until the logging boundary; Graph
+authentication/transport/HTTP failures and budget HTTP failures carry safe
+metadata without provider responses. Telemetry flush/disposal is bounded by the
+five-second shutdown deadline and failures are warning-level
+`telemetry.close_failed` records with a safe kind; a server-close failure remains
+an error-level `server.shutdown_failed` and still sets a failing process exit
+code.
 
 The factory module exposes authenticated `POST /factory/tasks`, filtered and
 paginated `GET /factory/tasks`, and `GET /factory/tasks/:id` with paginated event

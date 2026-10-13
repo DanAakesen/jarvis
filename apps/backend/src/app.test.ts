@@ -77,11 +77,15 @@ describe('Fastify backend', () => {
   });
   it('exports structured request logs without inbound secrets or provider error text', async () => {
     const { app, records, sink } = fixture();
-    app.get('/failure', async () => { throw new Error('provider-secret https://example.com?token=error-secret'); });
+    app.post('/failure/:name', async () => { throw new Error('provider-secret https://example.com?token=error-secret'); });
     const headers = { authorization: 'Bearer a.b.c', cookie: 'session=cookie-secret', 'x-request-id': 'request-id-secret' };
     const health = await app.inject({ url: '/health?token=query-secret', headers });
     const missing = await app.inject({ url: '/path-secret?token=missing-secret', headers });
-    const failure = await app.inject({ url: '/failure?token=error-query-secret', headers });
+    const failure = await app.inject({
+      method: 'POST', url: '/failure/path-secret?token=error-query-secret',
+      headers: { ...headers, 'x-private-header': 'header-secret' },
+      payload: { private: 'body-secret' },
+    });
     expect(health.statusCode).toBe(200);
     expect(missing.json()).toEqual({ error: 'Not found' });
     expect(failure.statusCode).toBe(500);
@@ -93,7 +97,12 @@ describe('Fastify backend', () => {
     const completed = records.map((record) => JSON.parse(record)).filter((record) => record.msg === 'request.completed');
     expect(completed).toHaveLength(3);
     expect(completed[0]).toMatchObject({ service: 'jarvis-backend', method: 'GET', route: '/health', statusCode: 200, responseTime: expect.any(Number), reqId: expect.stringMatching(/^[\da-f-]{36}$/) });
-    expect(sink.trackTrace).toHaveBeenCalledWith(expect.objectContaining({ message: 'request.failed', severity: 'Error', properties: expect.objectContaining({ statusCode: 500 }) }));
+    expect(sink.trackTrace).toHaveBeenCalledWith(expect.objectContaining({
+      message: 'request.failed', severity: 'Error',
+      properties: expect.objectContaining({ statusCode: 500, route: '/failure/:name', kind: 'internal' }),
+    }));
+    expect(records.map((record) => JSON.parse(record)).find((record) => record.msg === 'request.failed'))
+      .toMatchObject({ route: '/failure/:name', kind: 'internal', statusCode: 500 });
   });
   it('does not echo parser errors or request bodies', async () => {
     const { app, records } = fixture();
