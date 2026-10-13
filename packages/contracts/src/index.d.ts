@@ -758,7 +758,8 @@ export interface PhoneStatus {
 
 export const systemSmokeCheckIds: readonly [
   'google', 'github_app', 'vault', 'foundry.embeddings', 'research', 'pc_bridge', 'agent_contract',
-  'chat_canary',
+  'chat_canary', 'chat_identity', 'chat_capabilities', 'chat_github_read', 'chat_jobs',
+  'chat_navigation', 'chat_no_timestamp', 'chat_plain_approval',
 ];
 export type SystemSmokeCheckId = typeof systemSmokeCheckIds[number];
 export interface SystemSmokeEntry {

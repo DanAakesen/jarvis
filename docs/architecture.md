@@ -1355,24 +1355,39 @@ tree-metadata, embedding, and PC-bridge checks, adds a bounded research dry run,
 checks the agent contract, and makes a real chat turn through the existing hosted
 agent client. The contract check validates the live tool registry against the
 hosted agent's catalogue limits and builds the same `/agent/settings` payload
-used by the route, then verifies the shape accepted by the agent. The `chat_canary`
-turn uses the backend's agent identity, validates the live tool catalogue, and
-disables user-history reads, context reads, tool execution, and conversation
-persistence. It asks for one short reply, waits up to 45 seconds, and caches the
-last result for 60 seconds. Its failure reason is restricted to
-`catalogue_unavailable`, `timeout`, `empty_reply`, or `agent_error`; no reply text,
-tool metadata, settings, or provider error text is included. Canary model usage is
-recorded under the distinct `smoke` role. The endpoint never reads note contents.
-Its response contains each check ID, status, timestamp, and a bounded reason only
-for failed checks. The latest report is kept in
+used by the route, then verifies the shape accepted by the agent. The cached
+`chat_canary` suite uses the backend's agent identity and runs seven fixed
+acceptance prompts under the existing `smoke` usage role. It has one 55-second
+suite deadline, a 25-second per-prompt deadline and a 60-second result cache.
+Smoke requests omit user history and running-task context, do not persist
+conversation messages or tool-call audits, and limit each model invocation to
+two rounds, one tool call and 256 output tokens. The agent receives only
+`get_system_health`, `github_read` for issue 700, `list_jobs` and
+`workspace_command` for Settings navigation; the backend enforces the same
+allowlist. `list_capabilities` and the confirmation test are operations on the
+existing health tool, so the 128-tool catalogue does not grow. Smoke job results
+are counts only, GitHub results are reduced to the issue number/title, and
+workspace navigation always returns the fixed no-tab refusal without contacting
+a connected browser. The confirmation test is an in-memory no-op: the backend
+refuses it until the next smoke invocation contains the exact plain `yes` and
+the fixed preceding transcript.
+
+Each scripted check has its own smoke-report entry. Deterministic tool and
+response checks report `down`; the identity and missing-image timestamp wording
+checks report `degraded`, which the Deploy gate excludes from failure decisions.
+The suite summary fails only for deterministic checks. The report contains IDs,
+statuses, timestamps and fixed failure reasons only; it never includes reply
+text, tool arguments/results, settings or provider error text. The endpoint
+never reads note contents. The latest report is kept in
 the backend's in-memory status snapshot and is returned as `smoke` by `GET /status`
 for the status page; it is lost when the backend restarts. The embedding vector is
 discarded, and the temporary research invocation is cleaned up without writing
 research output or other user data. Dan may call the endpoint with his normal
 token; the configured deployment service principal may call only this exact GET
 route using an Azure Resource Manager token. The Deploy workflow records the
-six required check statuses plus any additional entries in its run summary and
-fails on degraded/down checks except for an offline PC bridge.
+required check statuses plus every chat acceptance entry in its run summary and
+fails on degraded/down checks except for an offline PC bridge and the two
+wording-only chat checks.
 
 ### Local PC bridge (P7-06)
 

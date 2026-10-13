@@ -285,6 +285,12 @@ export const listJobsTool: JarvisTool = {
   execute: async (_input, request) => {
     const now = Date.now();
     const jobs = await request.server.backgroundJobs.list();
+    if (request.headers?.['x-jarvis-smoke'] === 'true') {
+      return {
+        runningCount: jobs.filter((job) => job.status === 'running').length,
+        finishedCount: jobs.filter((job) => job.status !== 'running').length,
+      };
+    }
     return {
       running: jobs.filter((job) => job.status === 'running').map((job) => describeJob(job, now)),
       finished: jobs.filter((job) => job.status !== 'running').map((job) => describeJob(job, now)),

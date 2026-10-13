@@ -165,13 +165,42 @@ export async function getSystemHealth(app: FastifyInstance, signal: AbortSignal,
 export const getSystemHealthTool: JarvisTool = {
   name: 'get_system_health',
   description: 'Diagnose cached system and smoke checks, credential expiry, recent failed jobs, recorded deployment, work evidence and tool failure counts. Returns bounded safe reasons and available recovery tools only; never runs probes or repairs.',
-  inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+  inputSchema: {
+    type: 'object',
+    properties: { operation: { type: 'string', enum: ['list_capabilities', 'confirmation_test'] } },
+    additionalProperties: false,
+  },
   reflexSafe: true,
   execute: async (input, request, signal) => {
-    if (!input || typeof input !== 'object' || Array.isArray(input) || Object.keys(input).length) {
+    if (!input || typeof input !== 'object' || Array.isArray(input) ||
+        Object.keys(input).some((key) => key !== 'operation')) {
       throw new ToolRefusal('System health request is invalid.');
     }
     if (!request.principal && !request.agentPrincipal) throw new ToolRefusal('System health requires an authenticated Jarvis identity.');
+    const operation = (input as { operation?: unknown }).operation;
+    if (operation === 'list_capabilities') {
+      if (request.headers['x-jarvis-smoke'] !== 'true' || !request.agentPrincipal) {
+        throw new ToolRefusal('Capability listing is available only to the deployment smoke check.');
+      }
+      const tools = request.server.jarvisTools.list().map(({ name }) => name);
+      return {
+        capabilities: [
+          `Notes: ${tools.filter((name) => name.startsWith('vault_')).join(', ')}`,
+          `Calendar: ${tools.filter((name) => name.startsWith('calendar_')).join(', ')}`,
+          `GitHub tools: ${tools.filter((name) => name.startsWith('github_')).join(', ')}`,
+        ],
+      };
+    }
+    if (operation === 'confirmation_test') {
+      if (request.headers['x-jarvis-smoke'] !== 'true' || !request.agentPrincipal) {
+        throw new ToolRefusal('The no-op confirmation check is available only to the deployment smoke check.');
+      }
+      if (request.headers['x-jarvis-smoke-approval'] !== 'true') {
+        throw new ToolRefusal('Confirmation required; the no-op action was not executed.');
+      }
+      return { executed: true, confirmation: 'No-op smoke action completed.' };
+    }
+    if (operation !== undefined) throw new ToolRefusal('System health operation is invalid.');
     return getSystemHealth(request.server, signal);
   },
 };

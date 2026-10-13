@@ -223,7 +223,7 @@ test('clipboard contracts bound UTF-8 text and keep read/write result shapes exa
   assert.equal(isClipboardWriteResult({ written: false }), false);
 });
 
-test('system smoke contract requires the eight ordered allowlisted checks and sanitized values', () => {
+test('system smoke contract requires the ordered allowlisted checks and sanitized values', () => {
   const report = {
     checkedAt: '2026-10-08T02:00:00.000Z',
     entries: systemSmokeCheckIds.map((id) => ({
