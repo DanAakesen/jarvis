@@ -266,4 +266,31 @@ describe('usage report API', () => {
     }
     expect(recordFoundryUsage).toHaveBeenCalledOnce();
   });
+
+  it('accepts the smoke role from the post-deploy chat canary and rejects a smoke image reservation', async () => {
+    const recordFoundryUsage = vi.fn(async () => {});
+    const store: UsageStore = { list: async () => ({ entries: [], totalEntries: '0' }), recordFoundryUsage };
+    const agentAuth: TokenVerifier = async () => ({ kind: 'jarvis-agent',
+      objectId: config.auth.ownerObjectId, tenantId: config.auth.tenantId });
+    const app = fixture(store, agentAuth);
+    const smoke = { role: 'smoke', model: 'gpt-6-luna', inputTokens: 12, outputTokens: 3,
+      eventId: 'a2a01070-225e-4d8b-b882-f925cf177603' };
+    expect((await app.inject({ method: 'POST', url: '/usage/foundry', headers, payload: smoke })).statusCode).toBe(204);
+    expect(recordFoundryUsage).toHaveBeenCalledWith(smoke);
+    const withImage = { ...smoke, imageReservation: { sessionId: '42', itemId: 'frame_item' } };
+    expect((await app.inject({ method: 'POST', url: '/usage/foundry', headers, payload: withImage })).statusCode).toBe(400);
+    expect(recordFoundryUsage).toHaveBeenCalledOnce();
+  });
+
+  it.each(['chat', 'smoke', 'voice', 'vision', 'research', 'embeddings'])(
+    'accepts every usage role the schema lists, so the schema and the validator cannot drift: %s', async (role) => {
+      const recordFoundryUsage = vi.fn(async () => {});
+      const store: UsageStore = { list: async () => ({ entries: [], totalEntries: '0' }), recordFoundryUsage };
+      const agentAuth: TokenVerifier = async () => ({ kind: 'jarvis-agent',
+        objectId: config.auth.ownerObjectId, tenantId: config.auth.tenantId });
+      const app = fixture(store, agentAuth);
+      const payload = { role, model: 'gpt-6-luna', inputTokens: 1, outputTokens: 1,
+        eventId: 'a2a01070-225e-4d8b-b882-f925cf177603' };
+      expect((await app.inject({ method: 'POST', url: '/usage/foundry', headers, payload })).statusCode).toBe(204);
+    });
 });
