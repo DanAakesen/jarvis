@@ -293,6 +293,27 @@ describe('Factory board', () => {
     await expect(serve([{ number: 3, state: 'open' }]).read(project.repo, 't', timestamp)).rejects.toThrow();
   });
 
+  it('normalises GitHub closed_at (no milliseconds) so the board passes the shared contract', async () => {
+    const closedAt = new Date(Date.now() - 1_000).toISOString().replace(/\.\d{3}Z$/u, 'Z');
+    const reader = createGitHubFactoryBoardReader(async (input) => {
+      const url = String(input);
+      if (url.includes('/pulls?')) return new Response('[]');
+      const issue = (state: 'open' | 'closed') => ({
+        number: state === 'closed' ? 2 : 1, title: `Issue ${state}`, body: null, state,
+        html_url: `https://github.com/DanAakesen/jarvis/issues/${state === 'closed' ? 2 : 1}`,
+        updated_at: closedAt, closed_at: state === 'closed' ? closedAt : null, labels: [],
+        issue_dependencies_summary: { blocked_by: 0 },
+      });
+      return new Response(JSON.stringify([issue(url.includes('state=closed') ? 'closed' : 'open')]));
+    });
+
+    const source = await reader.read(project.repo, 'reader-token', new Date(Date.now() - 14 * 86_400_000).toISOString());
+    const closed = source.issues.find(({ number }) => number === 2)!;
+    expect(closed.closedAt).toBe(new Date(closedAt).toISOString());
+    expect(closed.closedAt).toMatch(/\.\d{3}Z$/u);
+    expect(isFactoryBoard(createFactoryBoard(project.id, project.repo, source, [], [], Date.now()))).toBe(true);
+  });
+
   it('marks an expired cached board stale when GitHub refresh fails', async () => {
     let now = 1_000;
     const cache = new FactoryBoardCache(() => now, 10);
