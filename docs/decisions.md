@@ -1,5 +1,23 @@
 # Decisions
 
+## Status reads recorded evidence without running canaries (14 October 2026)
+
+P9-101/#799 uses the existing owner-only `/status` contract and shell
+navigation. Show reported status, reasons, check times and safe details,
+including visible PC connection/pause state; do not invent overall health.
+Foundry configuration is not a live model test, the commit belongs to the
+backend image, and last_error is historical.
+
+Manual Refresh never calls `/status/smoke`: that endpoint invokes real models.
+Validate the full eleven-entry snapshot and optional shared smoke contract,
+bound reading to 30 seconds, cancel on backend replacement/unmount, retain
+explicitly previous data on failed refresh and offer Retry. Mark evidence
+older than five minutes stale without background probe requests.
+The smoke contract has no deployment ID/SHA association; use Recorded smoke
+check with its timestamp, not a claim that the latest release passed.
+No backend, contract, dependency or workflow change. Local synthetic browser
+checks are not authenticated production or physical-phone acceptance.
+
 ## Factory issue-number navigation uses the page snapshot (13 October 2026)
 
 The user added issue-number navigation acceptance after #793's board release
@@ -21,6 +39,16 @@ reconnect. Publish the contract's existing Factory issue selector from actual
 visible card focus, clearing it on other focus, card removal/collapse or route
 changes. This avoids a sticky app-level selection and conflicting stale
 foreground-window selectors.
+
+Released as #810 at `b4915164`, Deploy 38479582927. Authenticated production
+chat navigation received an applied HTTP 204 ack and HTTP 204 state selecting
+#792, with its real title focused in Ready and no stale window selector.
+Settings-to-Factory retained one session/stream. Collapse and route changes
+cleared the current issue selector with accepted state updates. Pure
+focus-away-only clearing remains fixture-only: the background production
+canvas changes activeElement without emitting native focus events.
+The coordinator independently corroborated the broker/state and board reads.
+Positive board placement/recovery evidence does not diagnose the earlier 502.
 
 ## #811 backend board failure attribution (13 October 2026)
 

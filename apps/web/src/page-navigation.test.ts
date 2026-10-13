@@ -18,6 +18,7 @@ describe('page navigation', () => {
     expect(resolveNavigation({ page: 'factory' })).toEqual({ ok: true, path: '/factory/kanban' });
     expect(resolveNavigation({ page: 'knowledge' })).toEqual({ ok: true, path: '/notes' });
     expect(resolveNavigation({ page: 'notes' })).toEqual({ ok: true, path: '/notes' });
+    expect(resolveNavigation({ page: 'status' })).toEqual({ ok: true, path: '/status' });
     expect(resolveNavigation({ page: 'settings', section: 'routines' }))
       .toEqual({ ok: true, path: '/settings', anchorId: 'task-recipes-heading' });
     expect(resolveNavigation({ page: 'factory', taskId: '42' })).toEqual({ ok: true, path: '/factory/kanban', taskId: '42' });
@@ -84,9 +85,9 @@ describe('page navigation', () => {
     expect(vi.getTimerCount()).toBe(0);
   });
 
-  it('refuses unknown, unbuilt or malformed targets with a reason', () => {
+  it('refuses unknown or malformed targets with a reason', () => {
     expect(resolveNavigation({ page: 'folio' })).toEqual({ ok: true, pane: 'folio' });
-    for (const request of [{ page: 'folio', section: 'x' }, { page: 'status' }, { page: 'nowhere' }, { page: 'settings', section: 'nope' },
+    for (const request of [{ page: 'folio', section: 'x' }, { page: 'status', taskId: '42' }, { page: 'status', section: 'voice' }, { page: 'nowhere' }, { page: 'settings', section: 'nope' },
       { page: 'usage', section: 'voice' }, { page: 'factory', taskId: 'abc' }, { page: 'home', taskId: '42' }]) {
       const result = resolveNavigation(request);
       expect(result.ok).toBe(false);
@@ -95,8 +96,8 @@ describe('page navigation', () => {
   });
 
   it('names the page Dan is looking at and builds a valid snapshot view', () => {
-    expect(['/', '/factory/kanban', '/factory/tasks/42', '/settings', '/usage', '/notes', '/knowledge', '/nowhere'].map(pageForPath))
-      .toEqual(['home', 'factory', 'factory', 'settings', 'usage', 'notes', 'knowledge', 'home']);
+    expect(['/', '/factory/kanban', '/factory/tasks/42', '/settings', '/usage', '/status', '/notes', '/knowledge', '/nowhere'].map(pageForPath))
+      .toEqual(['home', 'factory', 'factory', 'settings', 'usage', 'status', 'notes', 'knowledge', 'home']);
     expect(isWorkspaceSnapshot({
       windows: [], contextPanelOpen: false, view: { page: 'factory', issueNumber: 793 },
     })).toBe(true);

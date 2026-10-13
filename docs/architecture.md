@@ -1344,6 +1344,19 @@ Dan-only `GET /status` returns the shared `SystemStatus` contract with one
 sets a private 30-second HTTP cache. `get_status_summary` reads the same snapshot
 and combines health counts with the existing Now-feed counts.
 
+The P9-101 web consumer lives at `/status`, reachable from the shell rail,
+phone menu and existing acknowledged workspace navigation. It validates all
+eleven unique subsystem entries and the optional shared smoke report before
+rendering. Authenticated reads bypass the browser cache but still honour
+the backend's 60-second snapshot cache. A 30-second deadline and lifecycle
+abort bound loading; a failed refresh explicitly retains previous evidence.
+Local ageing marks individual/snapshot/smoke timestamps stale after five
+minutes without additional API requests. Refresh never calls `/status/smoke`.
+The retained smoke report has no deployment ID or commit association; the
+web page cannot present it as certification of a particular release.
+Status also participates in page metadata and bounded/redacted window
+readback. No new backend routes, storage or permission changes.
+
 P9-62 adds always-registered `get_system_health`, returning the shared
 `SystemHealth` contract: 26 fixed-order components with status, safe detail,
 nullable evidence timestamp and available recovery tool descriptions.

@@ -61,7 +61,7 @@ const researchInProgress = (status: string) => status === 'running' || status ==
 const sidebarLimits = { min: 160, max: 420 };
 const contextLimits = { min: 220, max: 560 };
 
-type ShellIconName = 'home' | 'factory' | 'knowledge' | 'usage' | 'navigation' | 'screen' | 'camera' | 'context' | 'settings' | 'close' | 'folio';
+type ShellIconName = 'home' | 'factory' | 'knowledge' | 'usage' | 'status' | 'navigation' | 'screen' | 'camera' | 'context' | 'settings' | 'close' | 'folio';
 
 function activityLabel(event: JarvisActivityEvent | null): string {
   if (!event) return 'Jarvis is working';
@@ -94,6 +94,8 @@ function ShellIcon({ name }: { name: ShellIconName }) {
       return <svg {...common}><circle cx="6" cy="7" r="2.2" /><circle cx="17.5" cy="5.5" r="1.8" /><circle cx="12.5" cy="13" r="2.4" /><circle cx="5.5" cy="18" r="1.7" /><circle cx="18.5" cy="18.5" r="2" /><path d="m8 8.3 2.6 3M15.9 6.6l-2.4 4.3M10.4 14.4l-3.4 2.6M14.6 14.4l2.5 2.6M7.9 6.7l7.8-1" /></svg>;
     case 'usage':
       return <svg {...common}><path d="M4 20V11m5 9V5m5 15v-7m5 7V8" /><path d="M2 21h20" /></svg>;
+    case 'status':
+      return <svg {...common}><path d="M2 12h4l3-8 5 16 3-8h5" /></svg>;
     case 'navigation':
       return <svg {...common}><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M9 4v16m-3-11h1m-1 4h1" /></svg>;
     case 'screen':
@@ -623,7 +625,7 @@ function ShellLayout({ signedIn, config, session, camera, screenShare }: {
           </NavLink>
           {areas.map((area) => (
             <NavLink key={area.id} className="rail-link" to={`/${area.path}`} aria-label={area.label} onClick={() => { setFolioOpen(false); setNavigationOpen(area.navigation.length > 1); }}>
-              <ShellIcon name={area.id === 'factory' ? 'factory' : area.id === 'notes' ? 'knowledge' : 'usage'} /><span className="visually-hidden">{area.label}</span>
+              <ShellIcon name={area.id === 'factory' ? 'factory' : area.id === 'notes' ? 'knowledge' : area.id === 'status' ? 'status' : 'usage'} /><span className="visually-hidden">{area.label}</span>
             </NavLink>
           ))}
           <button className={`rail-link rail-folio${folioOpen ? ' active' : ''}`} type="button" aria-label="Folio" aria-pressed={folioOpen}

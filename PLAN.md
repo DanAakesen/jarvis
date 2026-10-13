@@ -727,6 +727,7 @@ Declined in the audit (do not file): verbosity and max-output-token settings, no
 | P9-95 | [#779](https://github.com/DanAakesen/jarvis/issues/779) | Keep backend logs diagnosable without weakening the event/field allowlist: register literal logger events and scan source, add route-template/error-kind to failed requests with privacy coverage, and downgrade bounded telemetry close failures while retaining server-shutdown failure exit behavior | Backend/docs | — | Complete |
 | P9-96 | [#783](https://github.com/DanAakesen/jarvis/issues/783) | Drain backend task/Now/chat streams and voice/phone WebSockets on deploy before resource cleanup; clean exit 0 versus real failure/timeout exit 1; name framework upgrade warnings and release failed upgrade sockets | Live two-revision SIGTERM/upgrade reproduction and focused lifecycle/privacy tests; existing client reconnect behavior checked read-only. Production shutdown/takeover logs require coordinator verification. | — | Complete |
 | P9-97 | [#790](https://github.com/DanAakesen/jarvis/issues/790) | Show the live Danish voice, Jeppe, as fixed/read-only in Settings; coordinator owns backend compatibility and UI session owns web | Settings and API accept retired Harper storage; truthful default/option, no Danish-voice UI patch; focused tests, types/lint and desktop/phone inspection | — | Complete |
+| P9-101 | [#799](https://github.com/DanAakesen/jarvis/issues/799) | Read-only Status page, rail/phone navigation and existing voice/chat target | Eleven reported checks, failure reasons, visible PC connection/pause state, timestamps/stale markers, retained smoke with no invented release association; Refresh never runs canaries. Local types/lint/build, 103 scoped tests and desktop/320px synthetic browser checks pass; exact-head CI/release/live acceptance pending | P9-20 | In progress |
 | P9-104 | [#796](https://github.com/DanAakesen/jarvis/issues/796) | Reconcile `docs/features.md` with completed tasks and verified production state | Correct targeted statuses with evidence; count Live/Built not verified/Offline only/Planned; record #787/#791 release, P9-82 chat-image logs with voice check outstanding, P10-04 backend/P10-07 web ownership, and Daily reuse of existing SQL without new infrastructure | — | Complete |
 ### P10 — GitHub backlog as source of truth
 Goal: GitHub issues are the single backlog. The Software Factory (worker label `Jarvis`, default agent `codex`) and Copilot (`Copilot`) are executors that pick issues up; the Factory board shows the same columns as the GitHub Project. Decided by Dan on 8 October 2026.
@@ -741,17 +742,23 @@ Goal: GitHub issues are the single backlog. The Software Factory (worker label `
 | P10-07 | [#793](https://github.com/DanAakesen/jarvis/issues/793) | UI session consumes the canonical GitHub Factory board, replacing the legacy task-state columns | Six ordered Project columns, issue/PR links and real task overlays, local filters, bounded display, Now-stream invalidations/reconnect, stale/error recovery, focused checks and desktop/320px inspection; spot-check live Project placement | P10-04 | Complete |
 
 P10-07's board shipped in #806. The subsequently requested issue-number
-navigation follow-up is in #810, held for review fixes to old-session command
-queues and current issue-focus workspace selectors. Scoped regressions pass
+navigation follow-up shipped in #810 at `b4915164`; Deploy 38479582927 passed.
+It binds old-session command queues and reports current issue-focus workspace
+selectors. Scoped regressions pass
 125 tests; types/lint/build and the unchanged online pin-recovery regression
-pass locally. Exact-head CI/release and live navigation remain.
+pass locally. Exact-head CI/CodeQL passed for `177e73e3`.
+Authenticated released chat navigation to #792 at 22:49:33Z produced an
+applied HTTP 204 acknowledgement and HTTP 204 Factory state with issueNumber
+792, preserving one stream from Settings. Collapse and route clearing also
+returned 204; pure focus-away-only clearing remains fixture-only.
 After earlier date-validation and post-#809 502 failures, diagnostic #812's
 Deploy 38475702418 passed. One authenticated read at 22:18:24Z returns a
 fresh, valid complete board; all six columns and visible #790/#792/#793 cards
 render as Done/Ready/Done, matching fresh Project 2. The rendered-board gate
-passes; navigation #810 still awaits release. This does not diagnose a root
+passes. This does not diagnose a root
 cause or establish sustained backend recovery. Next UI work
-after the navigation follow-up: #799, #798, #797, then #792.
+after the navigation follow-up: #799 is implemented locally with release/live
+acceptance pending; #798, #797, then #792 remain separate.
 
 ### P11 — Jarvis-raised fixes
 A rolling intake phase. When Dan asks Jarvis to change its own code or a project's code, Jarvis drafts the issue, confirms it with Dan and creates it as `P11-NN` (P10-03). Rows are added here as the issues are created.
