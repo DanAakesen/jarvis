@@ -165,6 +165,37 @@ Remove the temporary rule as soon as the work is complete and confirm it is no
 longer listed. Never allow a broad range or use a SQL password. Do not alter the
 Bicep-managed `AllowAzureServices` rule for operator access.
 
+## Restore the database to a temporary copy (drill)
+
+Verified end to end on 13 October 2026 (P6-04, #65). The production database `jarvis` on server
+`sql-jarvis-rmw7kae3bza6a` (resource group `rg-jarvis`) is serverless General Purpose Gen5 (0.5 to 1 vCore,
+auto-pause after 60 minutes, about 254 MB used) with locally redundant backup storage. Azure keeps
+point-in-time restore data; the earliest restore point on 13 October was 6 October 02:38 UTC (about seven days).
+
+1. Pick a restore time in UTC inside the window, formatted `yyyy-MM-ddTHH:mm:ssZ`. Build it with the invariant
+   culture; on a Danish-locale Windows machine `ToString('yyyy-MM-ddTHH:mm:ssZ')` renders the colons as dots and the
+   request fails (the Azure CLI then fails with a deserialization error and creates nothing).
+2. Restore into a new database on the same server with the ARM API. `az sql db restore` hung without submitting a
+   request from the operator machine, so the REST call below is the verified path:
+   `az rest --method put --uri https://management.azure.com/subscriptions/<sub>/resourceGroups/rg-jarvis/providers/Microsoft.Sql/servers/sql-jarvis-rmw7kae3bza6a/databases/jarvis-restore-drill?api-version=2023-08-01-preview --body @restore.json`
+   with `restore.json` = `{"location":"swedencentral","sku":{"name":"GP_S_Gen5","tier":"GeneralPurpose","family":"Gen5","capacity":1},"properties":{"createMode":"PointInTimeRestore","sourceDatabaseId":"<resource id of jarvis>","restorePointInTime":"<time>","minCapacity":0.5,"autoPauseDelay":60,"requestedBackupStorageRedundancy":"Local"}}`.
+   The response is `CreateRestoreRequest`.
+3. Poll `az sql db show -g rg-jarvis -s sql-jarvis-rmw7kae3bza6a -n jarvis-restore-drill --query status` until
+   `Online`. Observed: 104 seconds for this database.
+4. Verify with the temporary firewall rule below (rule name `coordinator-temp`, delete it afterwards): connect to both
+   databases with an Entra token and compare per-table row counts. Result on 13 October with a restore point 30
+   minutes old: 67 of 67 tables present, 64 identical, and only the three busiest tables (`dbo.webhook_deliveries`,
+   `dbo.workflow_runs`, `dbo.pull_requests`) differed, by the rows written after the restore point.
+5. Delete the copy immediately: `az sql db delete -g rg-jarvis -s sql-jarvis-rmw7kae3bza6a -n jarvis-restore-drill --yes`,
+   then delete the firewall rule and confirm only `jarvis` and `master` remain. A serverless copy that exists for
+   a few minutes costs pennies; leaving it running does not.
+
+To recover production data (not drilled): restore to a temporary copy as above, copy the needed rows back with a
+reviewed script, then delete the copy. Do not rename databases or replace `jarvis` without a recorded decision.
+
+Limits of this drill: it proves the point-in-time backup is restorable and complete for row counts. It does not
+prove the application starts against the copy, restores of older points than 30 minutes, long-term retention (none
+is configured), or geo-restore (backup storage is local, so a regional loss is not covered).
 ## Not verified by this runbook
 
 These procedures document the repository's current configuration; they do not
