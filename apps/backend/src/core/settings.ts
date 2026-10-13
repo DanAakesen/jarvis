@@ -1,3 +1,4 @@
+import type { FastifyInstance } from 'fastify';
 import { defaultAwayModeState, presenceModes } from './away-mode.js';
 import { JARVIS_REPOSITORY, projectContext } from '../factory/project-context.js';
 import { capabilityInstructions, CAPABILITY_INSTRUCTIONS_MAX_CODE_POINTS } from './capability-instructions.js';
@@ -973,6 +974,30 @@ export function settingsOptionsForCatalogue(catalogue: ModelCatalogue) {
   };
 }
 
+export async function buildAgentSettingsPayload(
+  app: Pick<FastifyInstance, 'settingsStore' | 'modelCatalogue' | 'awayModeStore' | 'projectStore'>,
+) {
+  if (!app.settingsStore) throw new Error('Settings unavailable');
+  const catalogue = await app.modelCatalogue.read();
+  const settings = await readSettings(app.settingsStore, catalogue);
+  const presence = await app.awayModeStore?.read() ?? defaultAwayModeState;
+  return {
+    model: settings.jarvis.model,
+    reasoningEffort: settings.jarvis.reasoning,
+    roles: settings.roles,
+    memory: settings.memory,
+    research: { timeoutSeconds: settings.research.timeoutSeconds },
+    capabilityInstructions: capabilityInstructions(settings.memory),
+    timeouts: settings.timeouts,
+    personality: settings.personality,
+    awayMode: presence.mode !== 'present',
+    mode: presence.mode,
+    changedAt: presence.changedAt,
+    jarvisRepository: JARVIS_REPOSITORY,
+    projects: await projectContext(app),
+  };
+}
+
 export async function registerSettingsRoutes(app: import('fastify').FastifyInstance) {
   app.post<{ Params: { name: string } }>('/settings/credentials/:name/renew', async (request, reply) => {
     if (request.principal?.objectId !== app.ownerObjectId) {
@@ -1123,24 +1148,7 @@ export async function registerSettingsRoutes(app: import('fastify').FastifyInsta
   }, async (request, reply) => {
     if (!request.agentPrincipal) return reply.code(403).send({ error: 'Forbidden' });
     if (!app.settingsStore) return reply.code(503).send({ error: 'Settings unavailable' });
-    const catalogue = await app.modelCatalogue.read();
-    const settings = await readSettings(app.settingsStore, catalogue);
-    const presence = await app.awayModeStore?.read() ?? defaultAwayModeState;
-    return {
-      model: settings.jarvis.model,
-      reasoningEffort: settings.jarvis.reasoning,
-      roles: settings.roles,
-      memory: settings.memory,
-      research: { timeoutSeconds: settings.research.timeoutSeconds },
-      capabilityInstructions: capabilityInstructions(settings.memory),
-      timeouts: settings.timeouts,
-      personality: settings.personality,
-      awayMode: presence.mode !== 'present',
-      mode: presence.mode,
-      changedAt: presence.changedAt,
-      jarvisRepository: JARVIS_REPOSITORY,
-      projects: await projectContext(app),
-    };
+    return buildAgentSettingsPayload(app);
   });
 
   app.patch('/settings', {

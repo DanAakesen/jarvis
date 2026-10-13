@@ -88,7 +88,8 @@ import { createAlertActivityStore } from './database/alert-store.js';
 import { createMemoryStore, createVaultIndexStore } from './database/memory-store.js';
 import { createFoundryMemoryEmbedder, MEMORY_EMBEDDING_DIMENSIONS } from './core/memory-embeddings.js';
 import type { MemoryEmbedder } from './core/memory-embeddings.js';
-import { readSettings } from './core/settings.js';
+import { checkAgentContract } from './core/agent-contract.js';
+import { buildAgentSettingsPayload, readSettings } from './core/settings.js';
 import { createGitHubVaultClient, VAULT_BRANCH, VAULT_REPOSITORY } from './vault/github-client.js';
 import { createVaultModule } from './vault/index.js';
 import { createArmBudgetReader, startBudgetAlertMonitor } from './operations/budget-alert.js';
@@ -895,6 +896,7 @@ try {
       return { status: 'degraded' as const, details: { configured: true, deploymentAvailable: false } };
     }
   };
+  const runtime = { app: undefined as ReturnType<typeof buildApp> | undefined };
   const systemSmokeProbes = {
     vault: async () => {
       if (!vaultClient) return { status: 'down' as const, details: { configured: false } };
@@ -941,6 +943,11 @@ try {
       } catch {
         return { status: 'down' as const, details: { configured: true } };
       }
+    },
+    agent_contract: async () => {
+      const app = runtime.app;
+      if (!app) return { status: 'down' as const, reason: 'Agent contract could not be checked.' };
+      return checkAgentContract(app.jarvisTools.list(), () => buildAgentSettingsPayload(app));
     },
   };
   const deployedCommit = process.env.JARVIS_DEPLOYED_COMMIT;
@@ -1130,6 +1137,7 @@ try {
     ...(teamsNotifications ? { teamsNotifications } : {}),
     ...(phoneSessionStore ? { phoneSessionStore } : {}),
   });
+  runtime.app = app;
   if (checksLoop || projectPolicyEvaluator) {
     app.addHook('onClose', async () => {
       await checksLoop?.stop();

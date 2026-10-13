@@ -1240,9 +1240,15 @@ returned. Probe failures are reduced to fixed status details. No status table or
 migration is added.
 
 `GET /status/smoke` forces fresh read-only Google, GitHub App, vault repository
-tree-metadata, embedding, and PC-bridge checks and adds a bounded research dry
-run. It never reads note contents. Its response contains only each check ID,
-status, and timestamp. The latest report is kept in
+tree-metadata, embedding, and PC-bridge checks, adds a bounded research dry run,
+and checks the agent contract. The contract check validates the live tool registry
+against the hosted agent's catalogue limits and builds the same `/agent/settings`
+payload used by the route, then verifies the shape accepted by the agent. It does
+not call the hosted agent endpoint. Contract failures report a fixed short reason;
+tool names, descriptions, schemas, settings, and provider error text are never
+included. The endpoint never reads note contents. Its response contains each
+check ID, status, timestamp, and a bounded reason only for a failed contract
+check. The latest report is kept in
 the backend's in-memory status snapshot and is returned as `smoke` by `GET /status`
 for the status page; it is lost when the backend restarts. The embedding vector is
 discarded, and the temporary research invocation is cleaned up without writing

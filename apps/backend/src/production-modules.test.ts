@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
+import { modelRoles } from '@jarvis/contracts';
 import { FrameStore } from './vision/frame-store.js';
 import { createConversationModule } from './core/conversation.js';
 import { coreModule } from './core/index.js';
@@ -26,6 +27,7 @@ import { createVoiceRelayModule } from './voice/relay.js';
 import { createAskDanToConfirmTool } from './teams/service.js';
 import { createProductionModules } from './production-modules.js';
 import { createToolRegistry } from './core/tool-registry.js';
+import { checkAgentContract } from './core/agent-contract.js';
 
 const limits = JSON.parse(readFileSync(
   new URL('../../../agents/jarvis/limits.json', import.meta.url), 'utf8',
@@ -105,6 +107,32 @@ describe('production tool catalogue', () => {
       'browser-agent', 'image-generation', 'html-view', 'weather', 'folio', 'workspace-pins',
       'screen-vision', 'vision-watch', 'voice', 'teams',
     ]);
+  });
+
+  it('passes the smoke contract with the real all-features composed registry', async () => {
+    const registry = buildCatalogue(modulesWithEveryFeature());
+    const roles = Object.fromEntries(modelRoles.map((role) => [role, {
+      model: 'gpt-6-luna',
+      reasoningEffort: 'none',
+    }]));
+    const result = await checkAgentContract(registry.list(), async () => ({
+      model: 'gpt-6-luna',
+      reasoningEffort: 'none',
+      roles,
+      mode: 'present',
+      awayMode: false,
+      changedAt: null,
+      personality: {
+        tone: 'british_butler',
+        responseStyle: 'concise',
+        customInstructions: '',
+        modeInstructions: { present: '', away: '', on_the_move: '' },
+      },
+      timeouts: { toolTimeoutSeconds: 30, longToolTimeoutSeconds: 320, backendHttpTimeoutSeconds: 10 },
+      research: { timeoutSeconds: 305 },
+      capabilityInstructions: 'Safe shared instructions.',
+    }));
+    expect(result).toEqual({ status: 'ok' });
   });
 
   it('reports each module tool count when the catalogue exceeds the agent limit', () => {
