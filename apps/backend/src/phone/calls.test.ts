@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { PhoneSessionStore } from '../database/phone-session-store.js';
 import { buildApp } from '../app.js';
 import { loadConfig } from '../config.js';
+import { shutdown } from '../shutdown.js';
 import { createVoiceRelayModule } from '../voice/relay.js';
 import { createPhoneCallModule } from './calls.js';
 import { parsePhoneAllowlist } from './caller.js';
@@ -103,6 +104,62 @@ async function appFor({
 }
 
 describe('ACS phone call handling', () => {
+  it.each(['answer', 'activate'])('hangs up a call when shutdown overlaps %s', async (phase) => {
+    let release!: () => void;
+    let entered!: () => void;
+    const pending = new Promise<void>((resolve) => { release = resolve; });
+    const started = new Promise<void>((resolve) => { entered = resolve; });
+    const answeredHangUp = vi.fn(async () => {});
+    const answerCall = vi.fn(async () => {
+      if (phase === 'answer') { entered(); await pending; }
+      return {
+        callConnectionProperties: { callConnectionId: 'connection-1' },
+        callConnection: { hangUp: answeredHangUp },
+      };
+    });
+    const { app, client, store } = await appFor({ answerCall });
+    if (phase === 'activate') {
+      vi.mocked(store.activate).mockImplementationOnce(async () => {
+        entered();
+        await pending;
+        return true;
+      });
+    }
+    const request = app.inject({
+      method: 'POST', url: '/phone/events',
+      headers: { authorization: ['Bearer', 'event-grid.token.signature'].join(' ') },
+      payload: [event()],
+    });
+    await started;
+    const close = shutdown(app, undefined, 1_000);
+    await vi.waitFor(() => expect(store.finish).toHaveBeenCalledExactlyOnceWith('42', 'failed'));
+    release();
+    await request;
+    await close;
+    if (phase === 'answer') {
+      expect(answeredHangUp).toHaveBeenCalledExactlyOnceWith(true);
+      expect(store.activate).not.toHaveBeenCalled();
+    } else {
+      expect(client.getCallConnection).toHaveBeenCalledExactlyOnceWith('connection-1');
+    }
+    expect(store.finish).toHaveBeenCalledOnce();
+  });
+
+  it('hangs up and finalizes calls before onClose resource disposal', async () => {
+    const { app, client, store } = await appFor();
+    app.addHook('onClose', async () => {
+      expect(client.getCallConnection).toHaveBeenCalledExactlyOnceWith('connection-1');
+      expect(store.finish).toHaveBeenCalledExactlyOnceWith('42', 'failed');
+    });
+    const response = await app.inject({
+      method: 'POST', url: '/phone/events',
+      headers: { authorization: ['Bearer', 'event-grid.token.signature'].join(' ') },
+      payload: [event()],
+    });
+    expect(response.statusCode).toBe(202);
+    await shutdown(app, undefined, 1_000);
+  });
+
   it('completes Event Grid validation without answering a call', async () => {
     const { app, answerCall, store } = await appFor();
     const response = await app.inject({

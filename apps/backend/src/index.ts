@@ -1194,7 +1194,10 @@ try {
   if (!telemetry) logger.info('telemetry.stdout_only');
 
   let stopping = false;
-  app.addHook('preClose', async () => { await taskEventArchiveJob?.stop(); });
+  app.addHook('preClose', async () => {
+    try { await taskEventArchiveJob?.stop(); }
+    catch (error) { app.shutdownErrors.push(error); }
+  });
   const stop = async () => {
     if (stopping) return;
     stopping = true;

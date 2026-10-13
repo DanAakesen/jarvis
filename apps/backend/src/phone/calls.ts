@@ -35,6 +35,7 @@ interface PhoneCall {
   readonly expiresAt: number;
   readonly timer: NodeJS.Timeout;
   callConnectionId?: string;
+  ending?: boolean;
 }
 
 interface Ticket {
@@ -117,6 +118,7 @@ export function createPhoneCallModule(options: PhoneCallModuleOptions): PhoneCal
   const callbackTickets = new Map<string, Ticket>();
   const mediaTickets = new Map<string, Ticket>();
   const mediaSockets = new Map<string, websocket>();
+  const finishingCalls = new Map<string, Promise<void>>();
 
   function issueTicket(): string {
     return randomBytes(32).toString('base64url');
@@ -136,13 +138,30 @@ export function createPhoneCallModule(options: PhoneCallModuleOptions): PhoneCal
     return ticket.sessionId;
   }
 
-  async function finishCall(
+  function finishCall(
+    sessionId: string,
+    status: 'ended' | 'failed',
+    hangUp: boolean,
+  ): Promise<void> {
+    const existing = finishingCalls.get(sessionId);
+    if (existing) return existing;
+    const pending = finishCallOnce(sessionId, status, hangUp);
+    finishingCalls.set(sessionId, pending);
+    void pending.then(
+      () => { finishingCalls.delete(sessionId); },
+      () => { finishingCalls.delete(sessionId); },
+    );
+    return pending;
+  }
+
+  async function finishCallOnce(
     sessionId: string,
     status: 'ended' | 'failed',
     hangUp: boolean,
   ): Promise<void> {
     const call = activeCalls.get(sessionId);
     if (!call) return;
+    call.ending = true;
     if (hangUp && call.callConnectionId) {
       try { await options.client.getCallConnection(call.callConnectionId).hangUp(true); }
       catch { /* The call may already have ended. */ }
@@ -184,6 +203,11 @@ export function createPhoneCallModule(options: PhoneCallModuleOptions): PhoneCal
       callerId: caller.id,
     });
     if (!session) return;
+    if (request.server.isStopping) {
+      await options.store.finish(session.sessionId, 'failed');
+      await rejectCall(event.context, KnownCallRejectReason.Busy);
+      return;
+    }
 
     const mediaTicket = issueTicket();
     const callbackTicket = issueTicket();
@@ -220,13 +244,20 @@ export function createPhoneCallModule(options: PhoneCallModuleOptions): PhoneCal
         { mediaStreamingOptions },
       );
       const connectionId = answered.callConnectionProperties.callConnectionId;
-      if (!string(connectionId, 256) ||
-          !await options.store.activate(session.sessionId, connectionId)) {
+      if (!string(connectionId, 256) || call.ending) {
         try { await answered.callConnection.hangUp(true); } catch { /* The call may have ended. */ }
         await finishCall(session.sessionId, 'failed', false);
         return;
       }
       call.callConnectionId = connectionId;
+      if (!await options.store.activate(session.sessionId, connectionId)) {
+        if (!call.ending) {
+          try { await answered.callConnection.hangUp(true); } catch { /* The call may have ended. */ }
+        }
+        await finishCall(session.sessionId, 'failed', false);
+        return;
+      }
+      if (call.ending) return;
       request.log.info({
         phoneSessionId: session.sessionId,
         caller: 'redacted',
@@ -276,6 +307,15 @@ export function createPhoneCallModule(options: PhoneCallModuleOptions): PhoneCal
     id: 'phone',
     tools: [],
     registerRoutes: async (app) => {
+      app.shutdownConnections.add(async () => {
+        const results = await Promise.allSettled([...activeCalls.keys()].map(async (sessionId) => {
+          mediaSockets.get(sessionId)?.close(1012, 'Service restarting; reconnect');
+          await finishCall(sessionId, 'failed', true);
+        }));
+        for (const result of results) {
+          if (result.status === 'rejected') app.shutdownErrors.push(result.reason);
+        }
+      });
       app.post('/phone/events', { config: { jarvisPhoneEvents: true } }, async (request, reply) => {
         if (!request.phoneEventGridPrincipal) return reply.code(403).send({ error: 'Forbidden' });
         const events = Array.isArray(request.body) ? request.body : [request.body];

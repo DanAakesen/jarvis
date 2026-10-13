@@ -151,6 +151,7 @@ declare module 'fastify' {
     systemHealthDiagnostics: SystemHealthDiagnostics;
     systemSmokeReader: SystemSmokeReader;
     shutdownConnections: Set<() => void | Promise<void>>;
+    shutdownErrors: unknown[];
     isStopping: boolean;
   }
 }
@@ -167,16 +168,24 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
   });
   const origins = new Set([localWebOrigin, config.staticWebAppOrigin].filter((origin) => origin !== undefined));
   app.decorate('shutdownConnections', new Set<() => void | Promise<void>>());
+  app.decorate('shutdownErrors', []);
   app.decorate('isStopping', false);
   app.addHook('preClose', async () => {
     app.isStopping = true;
     // Stop accepting connections before draining streams; onClose runs only after HTTP drains.
     if (app.server.listening) app.server.close();
-    await Promise.all([...app.shutdownConnections].map((close) => close()));
+    const results = await Promise.allSettled([...app.shutdownConnections].map(async (close) => close()));
+    for (const result of results) {
+      if (result.status === 'rejected') app.shutdownErrors.push(result.reason);
+    }
     app.shutdownConnections.clear();
     app.eventHub.close();
     app.nowEventHub.close();
     app.jarvisActivityHub.close();
+  });
+  // Fastify discards preClose errors; propagate drain failures after resource cleanup instead.
+  app.addHook('onClose', async () => {
+    if (app.shutdownErrors.length) throw app.shutdownErrors[0];
   });
 
   app.addHook('onRequest', async (request, reply) => {

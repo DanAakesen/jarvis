@@ -203,6 +203,22 @@ describe('graceful shutdown', () => {
     }));
     expect(records.map((record) => JSON.parse(record).msg)).not.toContain('server.stopped');
   });
+  it('drains every connection and disposes resources before reporting a drain failure', async () => {
+    const { app, records } = fixture();
+    const otherConnection = vi.fn();
+    const resourcesClosed = vi.fn();
+    app.shutdownConnections.add(async () => { throw new Error('persistence failed'); });
+    app.shutdownConnections.add(otherConnection);
+    app.addHook('onClose', async () => { resourcesClosed(); });
+    await app.ready();
+    await expect(shutdown(app)).rejects.toThrow('persistence failed');
+    expect(otherConnection).toHaveBeenCalledOnce();
+    expect(resourcesClosed).toHaveBeenCalledOnce();
+    expect(records.map((record) => JSON.parse(record))).toContainEqual(expect.objectContaining({
+      msg: 'server.shutdown_failed', level: 50, kind: 'internal',
+    }));
+    expect(records.map((record) => JSON.parse(record).msg)).not.toContain('server.stopped');
+  });
   it('rejects a server shutdown timeout instead of reporting a clean stop', async () => {
     vi.useFakeTimers();
     const { app, records } = fixture();

@@ -1265,6 +1265,7 @@ function registerVoiceRoute(
     const shutdownSession = async () => {
       endRequested = true;
       close(1012, 'Service restarting; reconnect');
+      closeSocket(browser, 1012, 'Service restarting; reconnect');
       await finalizeSession();
     };
     app.shutdownConnections.add(shutdownSession);
@@ -2359,7 +2360,7 @@ export function createVoiceRelayModule(options: VoiceRelayOptions): BackendModul
           }
           await new Promise<void>((resolve, reject) => {
             app.websocketServer.close((error) => error ? reject(error) : resolve());
-          });
+          }).catch((error: unknown) => { app.shutdownErrors.push(error); });
         },
         options: {
           maxPayload: MAX_MESSAGE_BYTES,

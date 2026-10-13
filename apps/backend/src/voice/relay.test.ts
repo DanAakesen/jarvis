@@ -261,6 +261,23 @@ function sendTimedPartialTranscript(socket: WebSocket, itemId: string) {
 }
 
 describe('backend-relayed Voice Live WebSocket', () => {
+  it('reports failed voice persistence after draining both transports', async () => {
+    const records: string[] = [];
+    const { app, browser, upstream, conversationStore } = await connectedPartialVoice(
+      partialSpeechHarness(), { classify: vi.fn(async () => null) }, records,
+    );
+    conversationStore.endSession.mockRejectedValueOnce(new Error('Persistence failed'));
+    const browserClosed = once(browser, 'close');
+    const upstreamClosed = once(upstream, 'close');
+    await expect(shutdown(app, undefined, 1_000)).rejects.toThrow('Persistence failed');
+    expect((await browserClosed)[0]).toBe(1012);
+    expect((await upstreamClosed)[0]).toBe(1012);
+    expect(records.map((record) => JSON.parse(record))).toContainEqual(expect.objectContaining({
+      msg: 'server.shutdown_failed', level: 50, kind: 'internal',
+    }));
+    expect(records.map((record) => JSON.parse(record).msg)).not.toContain('server.stopped');
+  });
+
   it.each(['/voice', '/voice/da'])('ends %s and its upstream without warnings on shutdown', async (path) => {
     const records: string[] = [];
     const { app, browser, upstream, conversationStore } = await connectedPartialVoice(

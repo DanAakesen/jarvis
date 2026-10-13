@@ -693,8 +693,11 @@ five-second shutdown deadline and failures are warning-level
 `telemetry.close_failed` records with a safe kind. SIGTERM/SIGINT first stops
 accepting connections in `preClose`, ends task/Now/chat SSE with
 `retry: 1000` and a final `reconnect` event, cancels chat work, and closes voice
-and phone WebSockets with code 1012 (service restart). Voice sessions persist
-their final state before shutdown completes; event hubs release their listeners.
+and phone WebSockets with code 1012 (service restart). Voice sessions persist their final state and ACS phone calls hang up/finalize
+during the early drain, before shutdown completes; event hubs release their
+listeners. Every connection drain settles even if another fails. Recorded drain
+errors propagate after resource disposal, because Fastify's HTTP close callback
+does not propagate `preClose` hook errors.
 Streams that finish opening during shutdown are ended immediately. Ordinary
 in-flight HTTP requests still finish before `onClose` disposes services and SQL.
 A clean stop logs info-level `server.stopping`/`server.stopped` and exits 0;
