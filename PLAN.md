@@ -12,13 +12,14 @@ Types, zero-warning scoped lint/build and 22 Settings tests pass locally.
 The unchanged Windows date-format assertion remains a full-CI gate.
 Desktop dark and 320px light/reduced-motion fixtures verify the read-only
 field, legacy loading, changed-only saves, folding, reload and no overflow.
-The phone save was keyboard-verified; its pointer target met the existing
-composer overlay. The unrelated 3D renderer was disabled in these checks.
+The phone save was keyboard-verified; its pointer target was intercepted
+by the composer. The unrelated 3D renderer was disabled in these checks.
 The coordinator's exact backend commit passes full CI; this UI checkout
 does not have backend dependencies installed.
 
-Next: open the combined PR. Exact-head CI, coordinator merge and deployment
-remain release gates.
+The combined release is in [#791](https://github.com/DanAakesen/jarvis/pull/791).
+Next: coordinator merge on green exact-head CI, then deployment and live
+Settings verification.
 
 ## Remaining UI release (13 October 2026)
 
