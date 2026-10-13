@@ -22,8 +22,9 @@ function fixture(overrides: HealthUploadOptions = {}) {
   const buffer: HealthBuffer = { owner: config.auth.ownerObjectId,accept };
   const verifier = overrides.verifier ?? vi.fn(async () => capability);
   const auth = vi.fn(async () => ({ objectId: config.auth.ownerObjectId,tenantId: config.auth.tenantId,displayName: 'Synthetic owner' }));
-  const app = buildApp(config,createLogger(config,undefined,output),{ auth,modules: [],healthUpload: { enabled: true,buffer,verifier,...overrides } });
+  const app = buildApp(config,createLogger(config,undefined,output),{ auth,healthUpload: { enabled: true,buffer,verifier,...overrides } });
   app.get('/synthetic-owner-route',async request => ({ owner: request.principal?.objectId }));
+  app.post('/synthetic-owner-json',async request => ({ body: request.body }));
   app.post('/synthetic-opt-in',{ config: { jarvisHealthUpload: true } },async () => ({ shouldNotBypassAuth: true }));
   apps.push(app);
   return { app,accept,verifier,auth,logs };
@@ -104,6 +105,32 @@ describe('inactive SQL health composition in the existing backend',() => {
     expect((await post(app,{ payload: `"${'x'.repeat(healthUploadLimit)}"` })).statusCode).toBe(413);
     expect((await post(app,{ payload: Buffer.from([0xff,0xfe]) })).statusCode).toBe(400);
     expect(accept).not.toHaveBeenCalled();
+    const ownerHeaders = { authorization: 'Bearer a.b.c','content-type': 'application/json' };
+    expect((await app.inject({ method: 'POST',url: '/synthetic-owner-json',headers: ownerHeaders,payload: '{"synthetic":true}' })).json()).toEqual({ body: { synthetic: true } });
+    expect((await app.inject({ method: 'POST',url: '/synthetic-owner-json',headers: ownerHeaders,payload: `"${'x'.repeat(1024 * 1024)}"` })).statusCode).toBe(413);
+  });
+  it('bounds active SQL acceptance requests and releases slots after completion',async () => {
+    const commits: Array<(value: HealthReceipt) => void> = [];
+    const accept = vi.fn<HealthBuffer['accept']>(() => new Promise(resolve => { commits.push(resolve); }));
+    const { app } = fixture({ buffer: { owner: capability.ownerObjectId,accept } });
+    const pending = Array.from({ length: 8 },() => post(app).then(response => response));
+    await vi.waitFor(() => expect(accept).toHaveBeenCalledTimes(8));
+    expect((await post(app)).statusCode).toBe(429);
+    commits.forEach(commit => commit(receipt));
+    expect((await Promise.all(pending)).every(response => response.statusCode === 202)).toBe(true);
+    accept.mockResolvedValue(receipt);
+    expect((await post(app)).statusCode).toBe(202);
+  });
+  it('propagates shutdown to an active acceptance and returns no successful receipt',async () => {
+    const controller = new AbortController();
+    const accept = vi.fn<HealthBuffer['accept']>((_kind,_capability,_identity,_body,signal) => new Promise((_resolve,reject) => {
+      signal.addEventListener('abort',() => reject(new HealthUnavailable()),{ once: true });
+    }));
+    const { app } = fixture({ shutdownSignal: controller.signal,buffer: { owner: capability.ownerObjectId,accept } });
+    const pending = post(app).then(response => response);
+    await vi.waitFor(() => expect(accept).toHaveBeenCalledOnce());
+    controller.abort();
+    expect((await pending).statusCode).toBe(503);
   });
   it('fails closed on missing configuration, shutdown and owner mismatch',async () => {
     for (const options of [{ buffer: undefined },{ verifier: undefined },{ shutdownSignal: AbortSignal.abort() }]) {

@@ -9,7 +9,7 @@ import { loadConfig } from '../config.js';
 import { SqlHealthBuffer } from '../daily/health-upload/sql-buffer.js';
 import { SqlHealthCapabilities } from '../daily/health-upload/sql-capabilities.js';
 import { createSqlHealthUpload } from '../daily/health-upload/sql-composition.js';
-import { healthSqlTransaction } from '../daily/health-upload/sql-transaction.js';
+import { healthSqlQuery,healthSqlTransaction } from '../daily/health-upload/sql-transaction.js';
 import { HealthConflict,HealthDenied,HealthUnavailable,sha256,type HealthCapability } from '../daily/health-upload/contracts.js';
 import { HealthCapabilityLifecycleError,type PreparedHealthCapability } from '../daily/health-upload/capability-operation.js';
 
@@ -137,6 +137,17 @@ describe('inactive health acceptance on real isolated SQL Server',() => {
     await expect(accept(device,body,{ ...identity,sessionId: 'another' },inbox)).rejects.toBeInstanceOf(HealthUnavailable);
     expect((await rows())[0].raw_bytes).toEqual(body); expect(await rows()).toHaveLength(1);
   });
+  it('bounds tiny-payload metadata rows and still permits an exact retry at the row ceiling',async () => {
+    const device = await provision(); await accept(device);
+    await pool.request().input('owner',sql.UniqueIdentifier,owner).input('reference',sql.Char(64),device.operation.reference)
+      .input('checksum',sql.Char(64),sha256('0')).batch(`
+        WITH numbers AS (SELECT TOP (9999) ROW_NUMBER() OVER(ORDER BY a.object_id,b.object_id) AS n FROM sys.all_objects a CROSS JOIN sys.all_objects b)
+        INSERT daily.health_upload_inbox(owner_object_id,session_hash,acceptance_id,capability_reference,device_id,kind,automation_id,session_id,checksum,byte_count,raw_bytes,accepted_at)
+        SELECT @owner,LOWER(CONVERT(varchar(64),HASHBYTES('SHA2_256',CONCAT('synthetic-row-',n)),2)),NEWID(),@reference,N'synthetic-phone','upload',N'synthetic-bulk',CONCAT(N'row-',n),@checksum,1,0x30,SYSUTCDATETIME() FROM numbers;`);
+    expect((await pool.request().query('SELECT COUNT(*) AS count FROM daily.health_upload_inbox')).recordset[0].count).toBe(10000);
+    expect(await accept(device)).toMatchObject({ duplicate: true });
+    await expect(accept(device,body,{ ...identity,sessionId: 'over-row-limit' })).rejects.toBeInstanceOf(HealthUnavailable);
+  });
   it('rolls back partial work on failure/cancellation and never emits an accepted receipt for it',async () => {
     const device = await provision();
     for (const cancel of [false,true]) {
@@ -150,6 +161,17 @@ describe('inactive health acceptance on real isolated SQL Server',() => {
     }
     await expect(buffer().accept('upload',device.capability,identity,body,AbortSignal.abort(),device.operation.reference)).rejects.toBeInstanceOf(HealthUnavailable);
     expect(await rows()).toEqual([]);
+  });
+  it('cancels an active SQL request and rolls its transaction back',async () => {
+    const device = await provision(); const controller = new AbortController();
+    await expect(healthSqlTransaction(pool,owner,controller.signal,async (tx,bounded) => {
+      const timer = setTimeout(() => controller.abort(),100);
+      try {
+        await healthSqlQuery(tx.request().input('owner',sql.UniqueIdentifier,owner).input('id',sql.Char(64),device.operation.reference),
+          "UPDATE daily.health_upload_capabilities SET revoked=1 WHERE owner_object_id=@owner AND token_hash=@id; WAITFOR DELAY '00:00:10';",bounded);
+      } finally { clearTimeout(timer); }
+    })).rejects.toBeInstanceOf(HealthUnavailable);
+    expect(await device.operation.useSecret(token => device.store.verify(token,signal()))).not.toBeNull();
   });
   it('exercises the actual backend: SQL commit -> 202, conflict -> 409, SQL unavailable -> 503',async () => {
     const device = await provision(); const instance = app();
@@ -168,11 +190,11 @@ describe('inactive health acceptance on real isolated SQL Server',() => {
   it('refuses rollback with inbox or capability evidence and reverses only empty tables',async () => {
     const device = await provision(); await accept(device);
     const down = await readDownMigration(filename);
-    await expect(revertMigration(pool,down)).rejects.toThrow('empty inbox');
+    await expect(revertMigration(pool,await migrations(),down)).rejects.toThrow('empty inbox');
     await pool.request().batch('DELETE daily.health_upload_inbox;');
-    await expect(revertMigration(pool,down)).rejects.toThrow('empty capability');
+    await expect(revertMigration(pool,await migrations(),down)).rejects.toThrow('empty capability');
     await pool.request().batch('DELETE daily.health_upload_capabilities;');
-    await revertMigration(pool,down);
+    await revertMigration(pool,await migrations(),down);
     expect((await pool.request().query("SELECT name FROM sys.tables WHERE name IN('health_upload_inbox','health_upload_capabilities')")).recordset).toEqual([]);
     await applyMigrations(pool,await migrations());
     expect(await rows()).toEqual([]);

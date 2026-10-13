@@ -1879,6 +1879,10 @@ describe('committed domain schema (groups 1-8)', () => {
     });
 
     try {
+      // Later additive migrations must be reversed first; do not weaken 0045's evidence guard.
+      for (const migration of committed.filter(migration => migration.name > '0045_smoke_usage_role.sql').reverse()) {
+        await revertMigration(pool, committed, await readDownMigration(migration.name));
+      }
       const usage = await pool.request()
         .input('eventId', sql.NVarChar(300), eventId)
         .query<{ role: string }>('SELECT DISTINCT role FROM dbo.usage WHERE source_event_id = @eventId;');
@@ -1894,6 +1898,7 @@ describe('committed domain schema (groups 1-8)', () => {
       await pool.request()
         .input('eventId', sql.NVarChar(300), eventId)
         .query('DELETE FROM dbo.usage WHERE source_event_id = @eventId;');
+      await applyMigrations(pool, committed);
     }
   });
 

@@ -17,7 +17,7 @@ export function sqlHealthCapability(row: Record<string,unknown>): HealthCapabili
   };
 }
 export async function readSqlHealthCapability(context: sql.ConnectionPool | sql.Transaction,owner: string,id: string,signal: AbortSignal) {
-  const result = await healthSqlQuery(new sql.Request(context).input('owner',sql.UniqueIdentifier,owner).input('reference',sql.Char(64),reference(id)),
+  const result = await healthSqlQuery(context.request().input('owner',sql.UniqueIdentifier,owner).input('reference',sql.Char(64),reference(id)),
     'SELECT owner_object_id,device_id,can_ingest,can_heartbeat,expires_at,revoked,replacement_reference FROM daily.health_upload_capabilities WHERE owner_object_id=@owner AND token_hash=@reference;',signal);
   return result.recordset[0];
 }
