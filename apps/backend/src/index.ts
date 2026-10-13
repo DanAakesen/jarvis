@@ -56,6 +56,7 @@ import { createArmModelCatalogueReader, fallbackModelCatalogue } from './core/mo
 import { createArmModelDeploymentClient, createModelDeploymentWorkflow } from './core/model-deployments.js';
 import { createSleepModule } from './operations/sleep.js';
 import { createFoundryInvocationConversationAgent } from './core/chat-agent.js';
+import { createChatCanaryProbe } from './core/chat-canary.js';
 import { FoundryClient } from './foundry/client.js';
 import { createJevPcActPlanner } from './pc-bridge/pc-act.js';
 import { createJevRecipePlanner } from './core/task-recipes.js';
@@ -88,7 +89,8 @@ import { createAlertActivityStore } from './database/alert-store.js';
 import { createMemoryStore, createVaultIndexStore } from './database/memory-store.js';
 import { createFoundryMemoryEmbedder, MEMORY_EMBEDDING_DIMENSIONS } from './core/memory-embeddings.js';
 import type { MemoryEmbedder } from './core/memory-embeddings.js';
-import { readSettings } from './core/settings.js';
+import { checkAgentContract } from './core/agent-contract.js';
+import { buildAgentSettingsPayload, readSettings } from './core/settings.js';
 import { createGitHubVaultClient, VAULT_BRANCH, VAULT_REPOSITORY } from './vault/github-client.js';
 import { createVaultModule } from './vault/index.js';
 import { createArmBudgetReader, startBudgetAlertMonitor } from './operations/budget-alert.js';
@@ -895,6 +897,7 @@ try {
       return { status: 'degraded' as const, details: { configured: true, deploymentAvailable: false } };
     }
   };
+  const runtime = { app: undefined as ReturnType<typeof buildApp> | undefined };
   const systemSmokeProbes = {
     vault: async () => {
       if (!vaultClient) return { status: 'down' as const, details: { configured: false } };
@@ -942,6 +945,12 @@ try {
         return { status: 'down' as const, details: { configured: true } };
       }
     },
+    agent_contract: async () => {
+      const app = runtime.app;
+      if (!app) return { status: 'down' as const, reason: 'Agent contract could not be checked.' };
+      return checkAgentContract(app.jarvisTools.list(), () => buildAgentSettingsPayload(app));
+    },
+    chat_canary: createChatCanaryProbe(conversationAgent),
   };
   const deployedCommit = process.env.JARVIS_DEPLOYED_COMMIT;
   const systemStatusReader = createSystemStatusReader({
@@ -1130,6 +1139,7 @@ try {
     ...(teamsNotifications ? { teamsNotifications } : {}),
     ...(phoneSessionStore ? { phoneSessionStore } : {}),
   });
+  runtime.app = app;
   if (checksLoop || projectPolicyEvaluator) {
     app.addHook('onClose', async () => {
       await checksLoop?.stop();
@@ -1184,14 +1194,17 @@ try {
   if (!telemetry) logger.info('telemetry.stdout_only');
 
   let stopping = false;
+  app.addHook('preClose', async () => {
+    try { await taskEventArchiveJob?.stop(); }
+    catch (error) { app.shutdownErrors.push(error); }
+  });
   const stop = async () => {
     if (stopping) return;
     stopping = true;
     try {
-      await taskEventArchiveJob?.stop();
       await shutdown(app, telemetry);
     }
-    catch (error) { logger.error(safeErrorFields(error), 'telemetry.close_failed'); process.exitCode = 1; }
+    catch { process.exitCode = 1; }
     // Enforce the shutdown deadline even if an SDK/network handle remains open.
     process.exit(process.exitCode ?? 0);
   };

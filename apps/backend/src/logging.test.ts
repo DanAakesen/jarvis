@@ -12,6 +12,26 @@ vi.mock('applicationinsights', () => ({
 }));
 
 describe('structured log export', () => {
+  it('names the WebSocket plugin warning without exporting framework error details', () => {
+    const records: string[] = [];
+    const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });
+    const sink = { ...sdk, trackTrace: vi.fn() };
+    const logger = createLogger({ logLevel: 'info' }, sink, output);
+    logger.warn({
+      err: Object.assign(new Error('private-url private-credential'), { code: 'ERR_HTTP_SOCKET_ASSIGNED' }),
+      url: 'private-url',
+    }, 'websocket upgrade failed');
+    expect(JSON.parse(records[0]!)).toEqual({
+      level: 40, time: expect.any(Number), service: 'jarvis-backend',
+      msg: 'connection.upgrade_failed', kind: 'protocol',
+    });
+    expect(sink.trackTrace).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
+      message: 'connection.upgrade_failed', severity: 'Warning',
+      properties: { service: 'jarvis-backend', kind: 'protocol' },
+    }));
+    expect(records.join('') + JSON.stringify(sink.trackTrace.mock.calls)).not.toContain('private');
+  });
+
   it.each(['chat', 'voice-en', 'voice-da'])('exports visual path metadata for %s without identifiers or content', (channel) => {
     const records: string[] = [];
     const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });

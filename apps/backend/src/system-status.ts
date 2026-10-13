@@ -8,7 +8,7 @@ import type {
 } from '@jarvis/contracts';
 import { systemSmokeCheckIds } from '@jarvis/contracts';
 
-export type SystemStatusResult = Pick<SystemStatusEntry, 'status' | 'details'>;
+export type SystemStatusResult = Pick<SystemStatusEntry, 'status' | 'details'> & { reason?: string };
 
 export type SystemStatusProbe = () => Promise<SystemStatusResult>;
 
@@ -62,14 +62,15 @@ export const systemStatusResponseSchema = {
         checkedAt: { type: 'string', format: 'date-time' },
         entries: {
           type: 'array',
-          minItems: 6,
-          maxItems: 6,
+          minItems: systemSmokeCheckIds.length,
+          maxItems: systemSmokeCheckIds.length,
           items: {
             type: 'object',
             properties: {
               id: { type: 'string', enum: systemSmokeCheckIds },
               status: { type: 'string', enum: ['ok', 'degraded', 'down', 'unknown'] },
               checkedAt: { type: 'string', format: 'date-time' },
+              reason: { type: 'string', minLength: 1, maxLength: 120 },
             },
             required: ['id', 'status', 'checkedAt'],
             additionalProperties: false,
@@ -109,14 +110,15 @@ properties: {
   checkedAt: { type: 'string', format: 'date-time' },
   entries: {
     type: 'array',
-    minItems: 6,
-    maxItems: 6,
+    minItems: systemSmokeCheckIds.length,
+    maxItems: systemSmokeCheckIds.length,
     items: {
       type: 'object',
       properties: {
         id: { type: 'string', enum: systemSmokeCheckIds },
         status: { type: 'string', enum: ['ok', 'degraded', 'down', 'unknown'] },
         checkedAt: { type: 'string', format: 'date-time' },
+        reason: { type: 'string', minLength: 1, maxLength: 120 },
       },
       required: ['id', 'status', 'checkedAt'],
       additionalProperties: false,
@@ -264,6 +266,7 @@ export function createSystemSmokeReader(
             id,
             status: isStatus(active.status) ? active.status : 'unknown',
             checkedAt: researchCheckedAt,
+            ...(active.status === 'down' && active.reason ? { reason: active.reason } : {}),
           };
         }
         return {

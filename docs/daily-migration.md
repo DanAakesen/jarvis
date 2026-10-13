@@ -50,6 +50,14 @@ Preserve source IDs, revisions, deleted tombstones, ingestion provenance, readin
 
 ### [P12-04: Azure ingestion, device auth & durable buffer](https://github.com/DanAakesen/jarvis/issues/719)
 
+**Inactive implementation checkpoint:** unregistered `daily/health-upload` supplies owner/scoped/revocable private capability checks, immutable raw bytes + conditional durable manifests and non-expiring pointer-only Queue. HTTP 202 means accepted, never processed; pending delivery survives Queue/SQL/agent outage and bounded recovery can replay pointers at least once. Actual synthetic HTTP/SDK/Azurite and killed-gateway checks do not prove Azure or phone acceptance. [Protocol/checks/gates](../apps/backend/src/daily/health-upload/README.md). No resources, credentials, permissions or activation are installed; #720 processing and protected/live/device acceptance remain open.
+
+Verified source heartbeat accepts authenticated bodyless POST without Content-Type. The target stores bounded private `shortcut-name` provenance (default `Daily Overview heartbeat`) and checked feeds `metrics`/`workouts`, without claiming measurements were received or processed. Upload JSON validation remains separate and strict.
+
+Protected capability lifecycle preparation is now a separate unregistered injected-client library: random opaque bearers, exact v1 records, conditional issue/revoke, and one reserved replacement with revoke-before-issue ordering. Synthetic HTTP/Azurite checks cover concurrency, denial and ambiguous retry; no production capability, operator access or secret handoff is created. Retain the same protected operation across retries; revocation cannot reactivate its record. Live operator/device/resource/activation and secret storage/delivery remain gates, with no atomic rotation or exactly-once handoff claim.
+
+The code-only continuation prepares a separate default-off runnable host, explicit named managed identity, bounded leased recovery with a durable cursor and private counters. Maintained client/instance request-rate guards run before credential/storage work, complementing source/body/concurrency/cancellation limits. Per-instance budgets are not a deployment-wide/edge claim. [Unreferenced proposal/runbook](daily-health-ingestion/README.md) stays outside watched `infra/`; neither resources/grants nor activation are executed. Reliable idle recovery requires approved minimum-instance or external invocation; no schedule or #720 processor is added. Protected source/device/private/provider/resource acceptance remains open.
+
 **NEW DAILY CAPABILITY — permanent** · Backend & migration rehearsal
 
 Dedicated upload / heartbeat service, private Blob + queue, managed identities, Key Vault and processing telemetry.
@@ -100,6 +108,10 @@ Register Daily through BackendModule, with shared services for UI and tools, own
 
 ### [P12-10: Google feed, all calendars & attention](https://github.com/DanAakesen/jarvis/issues/725)
 
+After inactive #746 merged, scoped continuation draft #754 corrects caller calendar-range preflight, numberless delivery grouping and SENT-alias direction. No live acceptance or activation is implied. Exact-head synthetic/isolated SQL/full CI and independent review are required; only explicit coordinator release may mark this follow-up ready. Issue/native gates remain open.
+
+Released after closed/deployed #718 and merged #722. [Inactive feed services](../apps/backend/src/daily/feeds/README.md) use coordinator-verified pure consumer/public producer contracts for resumable bounded Gmail/calendar reads, exact selectors, mapped owner-local snapshots/suppressions and manual refresh. The existing protected chat identity/settings/catalogue/usage boundary supplies tool-free JSON extraction with strict local schema and source-timestamp checks; failures remain unavailable, never guessed. Per-source size checks preserve healthy-source success. Consent, deployed-model/live parity/private/phone gates remain open; no new resource/key, OAuth change or activation. Coordinator accepted 895b7c3/full CI 38310725882 for a reviewed inactive intermediate release through #746; final documentation/exact-head CI precede readiness. Refs #725 remains, with the issue open and native dependencies intact. Full acceptance still requires manual CalendarList owner consent, deployed identity/model and Google/provider parity, protected backup/import/reconciliation and physical-device evidence.
+
 **REUSE EXISTING JARVIS — permanent** · Personal integrations & phone surfaces
 
 Reuse existing Google auth and read APIs; extend all visible calendars, Gmail attention, waiting states, deliveries and suppressions. Coordinate shared Google code with ongoing approval work.
@@ -115,6 +127,8 @@ Minimal Azure widget surface, narrow device credential and links into Jarvis Dai
 Keep a small read-only phone glance with owner-bound credentials and Jarvis links. Verify actual iPhone refresh and navigation. Credentials must not log food, call arbitrary tools or expose unrelated private records.
 
 ### [P12-12: Apple Health nutrition export Shortcut](https://github.com/DanAakesen/jarvis/issues/727)
+
+Released inactive slice on `codex/p12-12-nutrition-export` / draft #758 after closed/deployed #722. Coordinator [verified pure source contract](https://github.com/DanAakesen/jarvis/issues/727#issuecomment-6134567097) supplies claim/complete DTOs and optional native-write guidance; no original records were read. Target replaces unsafe requeue/ACK behavior with scoped owner-bound device capability, exact-period trusted confirmation, revision/expiry uncertainty, no-instruction claim replay and identical receipt replay. Canonical SQL meals/ordinary logging remain independent; no native re-ingestion or automatic export. [Inactive boundary](../apps/backend/src/daily/nutrition-export/README.md) and [unverified phone guide](nutrition-export-shortcut.md) keep provisioning/activation/live/private/iPhone gates visible. Keep Refs #727, issue/native gates open and PR draft until explicit coordinator readiness release.
 
 **NEW DAILY CAPABILITY — permanent** · Personal integrations & phone surfaces
 

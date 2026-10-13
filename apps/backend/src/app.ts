@@ -6,7 +6,7 @@ import type { Logger } from 'pino';
 import type { SystemSmokeCheckId } from '@jarvis/contracts';
 import type { BackgroundJobEvent, JarvisActivityEvent, JarvisVoiceWakeEvent } from '@jarvis/contracts';
 import { localWebOrigin, type BackendConfig } from './config.js';
-import { createLogger } from './logging.js';
+import { createLogger, safeErrorFields } from './logging.js';
 import { installAuthentication } from './auth/hook.js';
 import type { TokenVerifier } from './auth/verify.js';
 import { coreModule } from './core/index.js';
@@ -57,6 +57,7 @@ import {
 export interface BuildAppOptions {
   readonly databaseStatus?: () => boolean;
   readonly auth?: TokenVerifier;
+  readonly nutritionExportAuth?: import('./daily/nutrition-export/auth.js').NutritionExportCredentialVerifier;
   readonly modules?: readonly BackendModule[];
   readonly projectStore?: ProjectStore;
   readonly releaseViewStore?: ReleaseViewStore;
@@ -149,6 +150,9 @@ declare module 'fastify' {
     systemStatusReader: SystemStatusReader;
     systemHealthDiagnostics: SystemHealthDiagnostics;
     systemSmokeReader: SystemSmokeReader;
+    shutdownConnections: Set<() => void | Promise<void>>;
+    shutdownErrors: unknown[];
+    isStopping: boolean;
   }
 }
 
@@ -163,6 +167,26 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
     forceCloseConnections: 'idle',
   });
   const origins = new Set([localWebOrigin, config.staticWebAppOrigin].filter((origin) => origin !== undefined));
+  app.decorate('shutdownConnections', new Set<() => void | Promise<void>>());
+  app.decorate('shutdownErrors', []);
+  app.decorate('isStopping', false);
+  app.addHook('preClose', async () => {
+    app.isStopping = true;
+    // Stop accepting connections before draining streams; onClose runs only after HTTP drains.
+    if (app.server.listening) app.server.close();
+    const results = await Promise.allSettled([...app.shutdownConnections].map(async (close) => close()));
+    for (const result of results) {
+      if (result.status === 'rejected') app.shutdownErrors.push(result.reason);
+    }
+    app.shutdownConnections.clear();
+    app.eventHub.close();
+    app.nowEventHub.close();
+    app.jarvisActivityHub.close();
+  });
+  // Fastify discards preClose errors; propagate drain failures after resource cleanup instead.
+  app.addHook('onClose', async () => {
+    if (app.shutdownErrors.length) throw app.shutdownErrors[0];
+  });
 
   app.addHook('onRequest', async (request, reply) => {
     request.log.info({ method: request.method }, 'request.started');
@@ -173,7 +197,7 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
     }
   });
   // Authenticate before CORS can finish OPTIONS requests in its onRequest hook.
-  installAuthentication(app, config, options.auth);
+  installAuthentication(app, config, options.auth, options.nutritionExportAuth);
   app.decorate('ownerObjectId', config.auth.ownerObjectId);
   app.decorate('awayModeStore', options.awayModeStore ?? null);
   app.register(cors, {
@@ -206,7 +230,11 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
     const candidate = (error as { statusCode?: number }).statusCode;
     const statusCode = candidate && Number.isInteger(candidate) && candidate >= 400 && candidate < 500 ? candidate : 500;
     systemStatusReader.recordError(request.routeOptions.url, statusCode);
-    request.log.error({ statusCode }, 'request.failed');
+    request.log.error({
+      ...safeErrorFields(error),
+      statusCode,
+      ...(request.routeOptions.url === undefined ? {} : { route: request.routeOptions.url }),
+    }, 'request.failed');
     reply.code(statusCode).send({ error: statusCode < 500 ? 'Invalid request' : 'Internal server error' });
   });
   app.setNotFoundHandler((_request, reply) => reply.code(404).send({ error: 'Not found' }));

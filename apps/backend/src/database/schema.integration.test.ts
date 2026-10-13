@@ -17,6 +17,7 @@ import { createConversationStore } from './conversation-store.js';
 import { createMemoryStore, createVaultIndexStore } from './memory-store.js';
 import { createTaskStatusNotificationStore } from './task-status-notification-store.js';
 import { createBackgroundJobStore } from './background-job-store.js';
+import { createUsageStore } from './usage-store.js';
 import { WorkspaceHtmlArtifactNotFound, WorkspaceHtmlArtifactStore, workspaceHtmlSizeLimit } from './workspace-html-artifact-store.js';
 import { FolioStore } from './folio-store.js';
 import {
@@ -1864,6 +1865,36 @@ describe('committed domain schema (groups 1-8)', () => {
     expect(call).toBeDefined();
     // Remove the row so the revert-all test below can run 0018's guarded down script.
     await pool.request().query(`DELETE dbo.tool_calls WHERE id = ${String(call)}`);
+  });
+
+  it('records smoke usage and preserves it when migration 0045 is reverted', async () => {
+    const eventId = randomUUID();
+    const committed = await readMigrations();
+    await createUsageStore(pool).recordFoundryUsage!({
+      role: 'smoke',
+      model: 'gpt-6-luna',
+      inputTokens: 1,
+      outputTokens: 1,
+      eventId,
+    });
+
+    try {
+      const usage = await pool.request()
+        .input('eventId', sql.NVarChar(300), eventId)
+        .query<{ role: string }>('SELECT DISTINCT role FROM dbo.usage WHERE source_event_id = @eventId;');
+      expect(usage.recordset).toEqual([{ role: 'smoke' }]);
+      await expect(revertMigration(
+        pool, committed, await readDownMigration('0045_smoke_usage_role.sql'),
+      )).rejects.toThrow('Smoke usage rows must be retained');
+      const retainedUsage = await pool.request()
+        .input('eventId', sql.NVarChar(300), eventId)
+        .query<{ role: string }>('SELECT DISTINCT role FROM dbo.usage WHERE source_event_id = @eventId;');
+      expect(retainedUsage.recordset).toEqual([{ role: 'smoke' }]);
+    } finally {
+      await pool.request()
+        .input('eventId', sql.NVarChar(300), eventId)
+        .query('DELETE FROM dbo.usage WHERE source_event_id = @eventId;');
+    }
   });
 
   it('preserves steering metadata when reverting migration 0020', async () => {

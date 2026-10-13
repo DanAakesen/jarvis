@@ -2,6 +2,17 @@ import { describe, expect, it, vi } from 'vitest';
 import { createEventHub } from './event-hub.js';
 
 describe('event hub', () => {
+  it('closes existing subscriptions and refuses new listeners', () => {
+    const hub = createEventHub<{ id: string }>();
+    const listener = vi.fn();
+    hub.subscribe(listener);
+    hub.close();
+    hub.subscribe(listener);
+    hub.publish({ id: '1' });
+    hub.close();
+    expect(listener).not.toHaveBeenCalled();
+  });
+
   it('publishes synchronously to connected listeners and supports unsubscribe', () => {
     const hub = createEventHub<{ id: string }>();
     const first = vi.fn();

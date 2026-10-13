@@ -674,16 +674,51 @@ repository-scoped GitHub App token issuer before creating a task.
 caches the secret after its first successful Key Vault lookup. Missing Key Vault
 configuration or secret fails webhook requests with 503, not an unsigned fallback.
 The server generates request IDs and records only approved event names, methods,
-route templates, statuses and timings. A final output allowlist covers child
-logger bindings as well as log arguments, dropping request/provider secrets.
-Background failure events retain their emitted names for presence, sandbox
-heartbeat, budget checks, task-event archival, project-policy confirmations,
-dispatcher operations, checks-loop recovery, PC bridge status, Google expiry
-alerts and telemetry shutdown. These events export only a fixed error-kind
-vocabulary and integer HTTP status codes (100–599), never error messages,
-bodies, tokens or URLs. Error callbacks preserve caught errors until the logging
-boundary; Graph authentication/transport/HTTP failures and budget HTTP failures
-carry safe metadata without provider responses.
+route templates, statuses and timings. A source-scan test requires every literal
+message passed to backend `info`, `warn` and `error` calls to be registered; the
+output allowlist still collapses unknown events to `backend.event`. Failed
+requests include the static route template and safe error kind, never path
+parameter values, query strings, headers or bodies. A final output allowlist
+covers child logger bindings as well as log arguments, dropping request/provider
+secrets. Startup credential-status diagnostics retain the events
+`credentials.github_app_status_failed` (GitHub App status persistence) and
+`credentials.copilot_check_failed` (the initial Copilot status probe); their
+callbacks do not expose the underlying database/provider errors. Background
+failure events export only a fixed error-kind vocabulary and integer HTTP
+status codes (100–599), never error messages, bodies, tokens or URLs. Error
+callbacks preserve caught errors until the logging boundary; Graph
+authentication/transport/HTTP failures and budget HTTP failures carry safe
+metadata without provider responses. Telemetry flush/disposal is bounded by the
+five-second shutdown deadline and failures are warning-level
+`telemetry.close_failed` records with a safe kind. SIGTERM/SIGINT first stops
+accepting connections in `preClose`, ends task/Now/chat SSE with
+`retry: 1000` and a final `reconnect` event, cancels chat work, and closes voice
+and phone WebSockets with code 1012 (service restart). Voice sessions persist their final state and ACS phone calls hang up/finalize
+during the early drain, before shutdown completes; event hubs release their
+listeners. Every connection drain settles even if another fails. Recorded drain
+errors propagate after resource disposal, because Fastify's HTTP close callback
+does not propagate `preClose` hook errors.
+Streams that finish opening during shutdown are ended immediately. Ordinary
+in-flight HTTP requests still finish before `onClose` disposes services and SQL.
+A clean stop logs info-level `server.stopping`/`server.stopped` and exits 0;
+server-close failure or deadline expiry logs error-level `server.shutdown_failed`
+(`kind: timeout` for expiry) and exits 1, without a later false `server.stopped`.
+The task/Now web clients already reconnect on EOF (task replay retains
+`Last-Event-ID`), and voice reconnects on transport closure with backoff; no web
+change or special event handling is required. UI-session note: a chat turn is
+cancelled, not automatically replayed (which could duplicate tool side effects),
+and ACS phone media has no browser-style reconnect loop; phone calls follow
+their existing teardown path.
+
+The WebSocket plugin's framework-supplied `websocket upgrade failed` warning
+is normalized to registered `connection.upgrade_failed` at the logging boundary.
+A pipelined health request followed by a voice upgrade locally reproduces
+`ERR_HTTP_SOCKET_ASSIGNED`; it remains warning-level with safe `kind: protocol`,
+without exporting the error message, stack, URL or credentials. Failed/pending
+upgrade sockets are tracked separately from established WebSocket clients and
+released on peer disconnect or shutdown. This confirms a producer of the
+previous unnamed level-40 `backend.event`, not attribution of the production
+takeover warning; the coordinator verifies the named event after deploy.
 
 The factory module exposes authenticated `POST /factory/tasks`, filtered and
 paginated `GET /factory/tasks`, and `GET /factory/tasks/:id` with paginated event
@@ -1240,17 +1275,28 @@ returned. Probe failures are reduced to fixed status details. No status table or
 migration is added.
 
 `GET /status/smoke` forces fresh read-only Google, GitHub App, vault repository
-tree-metadata, embedding, and PC-bridge checks and adds a bounded research dry
-run. It never reads note contents. Its response contains only each check ID,
-status, and timestamp. The latest report is kept in
+tree-metadata, embedding, and PC-bridge checks, adds a bounded research dry run,
+checks the agent contract, and makes a real chat turn through the existing hosted
+agent client. The contract check validates the live tool registry against the
+hosted agent's catalogue limits and builds the same `/agent/settings` payload
+used by the route, then verifies the shape accepted by the agent. The `chat_canary`
+turn uses the backend's agent identity, validates the live tool catalogue, and
+disables user-history reads, context reads, tool execution, and conversation
+persistence. It asks for one short reply, waits up to 45 seconds, and caches the
+last result for 60 seconds. Its failure reason is restricted to
+`catalogue_unavailable`, `timeout`, `empty_reply`, or `agent_error`; no reply text,
+tool metadata, settings, or provider error text is included. Canary model usage is
+recorded under the distinct `smoke` role. The endpoint never reads note contents.
+Its response contains each check ID, status, timestamp, and a bounded reason only
+for failed checks. The latest report is kept in
 the backend's in-memory status snapshot and is returned as `smoke` by `GET /status`
 for the status page; it is lost when the backend restarts. The embedding vector is
 discarded, and the temporary research invocation is cleaned up without writing
 research output or other user data. Dan may call the endpoint with his normal
 token; the configured deployment service principal may call only this exact GET
 route using an Azure Resource Manager token. The Deploy workflow records the
-allowlisted statuses in its run summary and fails on degraded/down checks except
-for an offline PC bridge.
+six required check statuses plus any additional entries in its run summary and
+fails on degraded/down checks except for an offline PC bridge.
 
 ### Local PC bridge (P7-06)
 
@@ -2069,8 +2115,10 @@ unknown deployment rates and subscription-backed research/image-generation costs
 remain explicitly unverified. `/usage` returns daily UTC and monthly UTC cost
 totals plus research, web-research and image-generation tool-call counts. All-time
 daily totals are bounded to the latest 90 days; monthly totals cover the selected
-period. Provider-reported chat/voice tokens, SQL collection and live billing have
-not been verified against a deployed service or invoice.
+period. Migration `0045_smoke_usage_role.sql` extends the usage-role constraint
+for post-deploy chat-canary token records; its down batch refuses rollback while
+such rows remain. Provider-reported chat/voice tokens, SQL collection and live
+billing have not been verified against a deployed service or invoice.
 
 P9-31 adds the agent-only `get_usage` tool to the shared registry. It uses the
 existing usage store and shared period/entry contracts to return USD and DKK
@@ -3316,6 +3364,18 @@ P8-30 scratch Chromium recorded 73 desktop CDP frames across empty, visible-wind
 P8-33 scratch Chromium checks cover the adaptive quality thresholds, compact phone/landscape layouts, menu bounds, reduced motion, hidden-tab pause/resume, route teardown/re-entry, resize, page-scale and simulated keyboard-height changes, forced WebGL loss/restore and unavailable WebGL. Dark/light, voice-ready, loss/fallback captures are in `docs/ui/screenshots/p8-33-*`; local voice fixture state remained ready across rendering loss, and HTML chat/voice/window actions stayed mounted. ANGLE SwiftShader at quality tier 2 (backing scale ≈0.70) measured 90 RAF intervals averaging 327ms (p50 333ms, p95 350ms) at 1440×900 and 151ms (p50 150ms, p95 167ms) at 390×844. These are software RAF intervals, not hardware GPU timings, and demonstrate poor cadence rather than acceptance; physical GPU/battery, phone/keyboard, Safari, live voice/provider and normal-rate motion remain unverified.
 The reference lockfile is standalone, outside root workspaces, and contains the prototype's dependencies only. Bundled Three.js/Phosphor notices are retained. Physical/hardware performance, live activity/voice behavior and normal-rate flicker acceptance remain unverified; P8-31 adds no production Three.js dependency.
 ## Daily integration boundary (P12-01)
+
+P12-04's inactive `daily/health-upload` isolates HTTP acceptance from SQL/agents and ordinary human authentication. Private Blob capability lookup binds requests to configured owner/scope/expiry/revocation. Immutable raw bytes plus conditional manifests form a durable outbox; non-expiring Queue messages contain only opaque pointers. Conditional delivery, bounded recovery and sanitized receipts distinguish accepted from processed. Azure clients accept future injected managed identity but production `index.ts`/templates never compose or provision them. [Protocol/emulator checks](../apps/backend/src/daily/health-upload/README.md); processing remains #720.
+
+Unregistered `capability-lifecycle.ts` prepares opaque random device bearers and conditionally creates the existing v1 capability records through a separate injected private-container write client. Terminal revocation uses ETag conditions; rotation reserves one replacement in a private journal, revokes the old record first, then creates the replacement. Cancellation/response loss may leave a reservation, revoked old record or active replacement: retries retain the same protected prepared operation, never mint another bearer automatically. There is an intentional availability gap, not an atomic exchange or exactly-once secret handoff. Upload host identity remains capability-read-only; no operator credential, endpoint, CLI or delivery/storage channel is configured. [Protected operator gates](daily-health-ingestion/README.md#protected-device-capability-preparation).
+
+The dedicated `daily/health-upload/main.js` entry point validates nonsecret settings and constructs only the explicit user-assigned ManagedIdentityCredential when enabled. Inactive startup binds liveness without storage credentials or upload routes. Optional serial recovery owns bounded batches through a private Blob lease/control cursor, with cancellation/backoff and sanitized saturating receipt/delivery counters. SIGTERM/SIGINT stop work within a configured bound; crash remnants remain recoverable. No SQL/domain consumer or schedule is added. [Self-contained unreferenced proposal/runbook](daily-health-ingestion/README.md) reuses the existing ACA environment/registry and proposes dedicated identity/private storage/scoped roles/optional host outside watched `infra/`; cost/grants/idle reliability/activation remain gated.
+
+Both dedicated POST routes use `@fastify/rate-limit` before credential/storage work, with a bounded client LRU and independent instance budget, normalized IPs and default no forwarded trust. Only explicit narrow proxy CIDRs change hop resolution. Source heartbeat/upload/body/concurrency/cancellation semantics remain intact; stable 429/Retry-After carries no private data. Multi-replica/shared or edge limiting is not implemented or approved, and existing Jarvis main auth/routes remain unchanged.
+
+P12-12 adds inactive `daily/nutrition-export` owner/device services and an explicitly callable route factory, never production composition. A root-auth optional verifier contract is scoped to the two POST claim/complete routes; absent/revoked/expired/wrong-owner capability denies access and ordinary routes retain existing JWT handling. No verifier/provisioning is installed by `index.ts`. Additive 0044 supplies request/claim/receipt/reconciliation evidence over existing temporary queue snapshots, not another meal store. Canonical nutrition writers invalidate only export status metadata; export transactions recheck all source revisions/tombstones. Owner-local app locks, conditional selection, bounded requests/outputs/deadlock retry/cancellation and no-instruction claim replay protect SQL state. Native Health effects remain outside SQL transactions; [protocol/gates](../apps/backend/src/daily/nutrition-export/README.md).
+
+P12-10's inactive `daily/feeds` services inject the existing Google client and resolve server owner per request. Gmail scans stage bounded work against connected account/history/model generations; cancellation/change/incomplete coverage cannot publish success. The Foundry semantic factory reuses configured endpoint validation, existing managed-identity callback, canonical chat settings/catalogue and usage accounting; json_object transport has strict local output/source-date validation, no tools or runner relay. Independent source item/UTF-8 preflight prevents an oversized calendar from blocking healthy Gmail. Exact selectors/keys and mapped 0041 transactions use per-owner app locks, parameterized SQL and retained-success freshness. Manual execution reports running/completed/limited and independent errors. No new schema/credentials/model/resource/composition/tools; calendar consent and deployed-model/live parity remain open. [Boundary and limitations](../apps/backend/src/daily/feeds/README.md).
 
 P12-07's inactive `daily/nutrition` services/typed handlers use existing server-owner resolution and mapped SQL tables. Transactions/range locks protect operation-key idempotency and revisions, retry only deadlock 1205 (three attempts), and sanitize errors. Reads/feedback are bounded. P12-09 supplies trusted existing text/voice/attachment/frame evidence and intent/proposal metadata; clients/models cannot supply authority. Plans snapshot owned favourites/server-sum totals separately from intake/queues. The public Frida adapter pins release 10 / 5.5 and coordinator-verified empty bootstrap/header/cookie, synonym arrays and numeric nutrient DTOs; missing/null provenance is unavailable. Attribution, per-100-g units, bounded validation/cache/deadline and incomplete-total separation remain explicit. Cloud CONNECT is denied with HTTP 403. No production composition import, new auth/media model/dispatcher/infrastructure. [Boundary and checks](../apps/backend/src/daily/nutrition/README.md).
 

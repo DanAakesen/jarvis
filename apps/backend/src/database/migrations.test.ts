@@ -81,8 +81,17 @@ describe('committed SQL manifest', () => {
       '0041_daily_owner_schema.sql',
       '0042_daily_plan_unknown_nutrients.sql',
       '0043_daily_favorite_definitions.sql',
+      '0044_daily_nutrition_export.sql',
+      '0045_smoke_usage_role.sql',
     ]);
     for (const migration of migrations) await expect(readDownMigration(migration.name)).resolves.toMatchObject({ name: migration.name });
+  });
+  it('allows smoke usage and refuses rollback while its usage rows exist', async () => {
+    const migration = (await readMigrations()).find(({ name }) => name === '0045_smoke_usage_role.sql');
+    expect(migration?.sql).toContain("N'smoke'");
+    const down = await readDownMigration('0045_smoke_usage_role.sql');
+    expect(down.sql).toContain("WHERE role = N'smoke'");
+    expect(down.sql).toContain('THROW 51000');
   });
   it('adds a nullable task issue link with an active-issue uniqueness constraint', async () => {
     const migration = (await readMigrations()).find(({ name }) => name === '0037_task_github_issues.sql');

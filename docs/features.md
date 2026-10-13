@@ -143,7 +143,7 @@ Status as of 12 October 2026.
 | Usage and cost tool | Ask Jarvis for spend by area and model for today or another supported period, with estimated and unverified amounts identified | Voice/chat | `get_usage` | Backend implemented offline; live provider billing unverified |  | P9-31 |
 | Event archive | Old task events move to Blob and load on demand; idle checks skip SQL until a sandbox is active | Background | Task detail | Built offline |  | P6-03, P5-13 |
 | Alerts | Failed deploys, sandbox crashes, credential expiry, budget 80 % | Now + email | Main page; email-only Azure Monitor action group | Built (offline; live Azure delivery unverified) |  | P6-02 |
-| Backup drill | Database restore documented | Background | — | Planned |  | P6-04 |
+| Backup drill | Point-in-time restore to a temporary database verified and documented in the runbook | Background | — | Verified 13 Oct 2026 |  | P6-04 |
 | Runbook | Deploy, rollback, key rotation, task recovery, sleep, and temporary SQL access | — | [Operations runbook](runbook.md) | In progress |  | P6-06 |
 
 ## Jarvis everywhere (P7)
@@ -295,3 +295,5 @@ P12-03 adds only the empty owner-bound persistence schema and inactive exact-key
 | Parity, physical-phone acceptance, protected cutover/rollback and legacy deprecation | Background/Phone | Planned; evidence gates apply | P12-17–P12-19 |
 
 [Approved scope and existing issue URLs](daily-migration.md). No TickTick integration or original Daily repository/data deletion.
+
+P12-10 has inactive source-contract-based resumable Gmail/calendar services, exact waiting/order selectors, owner-local snapshots/suppressions and bounded manual refresh with independent denied/partial/stale/oversized-source states. Semantic extraction uses the existing protected chat model/identity/settings with tool-free JSON transport and strict local validation; absent/failed capability is unavailable. Source and model-interface contracts are supplied; deployed-model/consent/live/private/phone parity remain open. No registered feeds, broadened OAuth or live-provider success is claimed.

@@ -223,7 +223,7 @@ test('clipboard contracts bound UTF-8 text and keep read/write result shapes exa
   assert.equal(isClipboardWriteResult({ written: false }), false);
 });
 
-test('system smoke contract requires the six ordered allowlisted checks and sanitized values', () => {
+test('system smoke contract requires the eight ordered allowlisted checks and sanitized values', () => {
   const report = {
     checkedAt: '2026-10-08T02:00:00.000Z',
     entries: systemSmokeCheckIds.map((id) => ({
@@ -237,6 +237,20 @@ test('system smoke contract requires the six ordered allowlisted checks and sani
   }), false);
   assert.equal(isSystemSmokeStatus({
     ...report, entries: [{ ...report.entries[0], detail: 'secret' }, ...report.entries.slice(1)],
+  }), false);
+  const agentContractIndex = systemSmokeCheckIds.indexOf('agent_contract');
+  const failedAgentContract = {
+    ...report,
+    entries: report.entries.map((entry, index) => index === agentContractIndex
+      ? { ...entry, status: 'down', reason: 'Agent settings have an invalid shape.' }
+      : entry),
+  };
+  assert.equal(isSystemSmokeStatus(failedAgentContract), true);
+  assert.equal(isSystemSmokeStatus({
+    ...failedAgentContract,
+    entries: failedAgentContract.entries.map((entry, index) => index === agentContractIndex
+      ? { ...entry, reason: 'x'.repeat(121) }
+      : entry),
   }), false);
 });
 
@@ -814,6 +828,7 @@ test('defines and validates bounded workspace commands for the approved operatio
     { ...base, operation: 'layout', arrangement: 'layered' },
     { ...base, operation: 'place', viewId: 'research', region: 'centre' },
     { ...base, operation: 'arrange', layout: 'side-by-side', viewIds: ['research', 'chart'] },
+    { ...base, operation: 'arrange', layout: 'cascade', viewIds: ['front', 'behind'] },
     { ...base, operation: 'arrange', layout: 'auto' },
     ...['minimise-all', 'restore-all', 'close-all'].map((operation) => ({ ...base, operation })),
     { ...base, operation: 'pin', viewId: 'research' },

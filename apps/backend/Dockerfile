@@ -31,6 +31,7 @@ COPY --from=build /app/packages/contracts/package.json ./packages/contracts/pack
 COPY --from=build /app/packages/contracts/src ./packages/contracts/src
 RUN node --input-type=module -e "await import('@jarvis/contracts')"
 COPY --from=build /app/apps/backend/dist ./apps/backend/dist
+RUN node --input-type=module -e "await import('./apps/backend/dist/daily/health-upload/azure-buffer.js'); await import('./apps/backend/dist/daily/health-upload/host.js'); const {buildHealthUploadServer}=await import('./apps/backend/dist/daily/health-upload/server.js'); const app=buildHealthUploadServer(); if ((await app.inject({method:'POST',url:'/api/health/ingest',payload:{}})).statusCode!==404) process.exit(1); await app.close();"
 COPY db/migrations ./db/migrations
 COPY agents/jarvis/presence-instructions.json ./agents/jarvis/presence-instructions.json
 COPY docs/features.md ./apps/backend/feature-index.md

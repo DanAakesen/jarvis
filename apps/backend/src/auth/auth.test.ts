@@ -111,7 +111,7 @@ describe('Entra bearer authentication at the server boundary', () => {
     const forbidden = await app.inject({ url: '/protected', headers: { authorization } });
 
     expect(accepted.statusCode).toBe(200);
-    expect(accepted.json().entries).toHaveLength(6);
+    expect(accepted.json().entries).toHaveLength(8);
     expect(forbidden.statusCode).toBe(403);
   });
   it.each([

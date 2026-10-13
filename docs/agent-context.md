@@ -1,5 +1,7 @@
 # Agent context
 
+Current DailyDeveloperCloud release continues #719 / P12-04 after merged/deployed inactive #778 on `codex/p12-04-queue-sender-contract`: correct only the unreferenced proposal's documented Queue sender `/messages/add/action`, with exact offline least-privilege/scope/default-off regression and source-backed docs. Source `/workspace/.jarvis-tools/activate.sh` in each cloud shell. Run `npm test --workspace @jarvis/backend -- src/daily/health-upload/proposal.test.ts`, backend lint/build, offline Bicep build/lint for `docs/daily-health-ingestion/proposal.bicep`, and full exact-head CI/container/SQL. The source contract/compiler are not live RBAC verification. No runtime/dependency/workflow, watched infra/planner, production issuance/access/resource/secret/composition change or #720 processing. Keep draft, Refs #719, preserve other workers/shared docs and workflow-owned Status columns, including unrelated #780/#781. [Operator/resource/device/private gates](daily-health-ingestion/README.md) remain open; no own merge/readiness or next scope.
+
 ## Workspace window release (12 October 2026)
 
 Dan and the coordinator authorised #430 whole after #751 merged, including
@@ -1255,6 +1257,9 @@ Aggregate CI (P0-10), `.github/workflows/ci.yml`:
 - Add a new component workflow as `on: workflow_call`, call it from `ci.yml`, and add it to `CI result`'s `needs`, so it runs once per PR and the gate covers it.
 - Required checks on `main` are not enforced: branch protection on a private repository needs GitHub Pro. When available, Dan requires `CI result`; until then Dan or the authorized merging agent must read the `CI` run result itself.
 
+CodeQL code scanning (P9-93), `.github/workflows/codeql.yml`:
+Advanced CodeQL code scanning analyzes `javascript-typescript`, `python`, and `actions` using the `security-extended` query suite on pushes and PRs to `main` (path-filtered against markdown and docs) and a weekly schedule. CodeQL is non-blocking and operates independently of the `CI result` aggregate gate. Security findings, CWE classifications, and severity levels appear in GitHub under **Security → Code scanning alerts** (`GET /repos/DanAakesen/jarvis/code-scanning/alerts`); triage verdicts should distinguish real security flaws from false positives or test-only code before opening follow-up remediation issues.
+
 Plan status, `.github/workflows/plan-status.yml`:
 
 | Item | Detail |
@@ -1282,9 +1287,10 @@ Azure Resource Manager access token from the existing OIDC deployment identity
 and calls `GET /status/smoke`. The backend accepts that audience only for the
 bootstrapped deploy service principal and that exact route; Dan can also call it
 with his normal API token. The workflow masks the token, stores the JSON only in
-the runner temp directory, and prints only the six allowlisted check IDs and
-statuses. Google, GitHub App, vault, embeddings, and research failures block
-acceptance; an offline PC bridge is reported but does not block deployment.
+the runner temp directory, requires the six original check IDs while accepting
+additional entries, and prints IDs and statuses only. Google, GitHub App, vault,
+embeddings, research, agent-contract, and chat-canary failures block acceptance;
+an offline PC bridge is reported but does not block deployment.
 
 ### Backend modules
 
@@ -1467,6 +1473,7 @@ usage and billed cost remain unverified.
 
 ## Release procedure
 
+- Pin external workflow actions to a full commit SHA. Resolve `refs/tags/<release>` through GitHub's Git refs API; if it returns a tag object, dereference that object through the Git tags API until the target is a commit. Use the commit SHA in `uses:` and keep the release tag as a trailing comment. Dependabot updates GitHub Actions pins weekly.
 - Every change reaches `main` through a PR merged by Dan or an explicitly authorized agent (see [Merge](#merge)). A merge runs the Deploy workflow, which deploys only the changed parts among infrastructure, backend, web, and the Jarvis agent; the backend applies migrations at startup. Redeploy everything with **Actions → Deploy → Run workflow** on `main` (`gh workflow run deploy.yml --ref main`).
 - After the first successful deploy only (P0-16): run `./infra/bootstrap.ps1 -WebRedirectUris 'https://<Static Web App host>/redirect.html'` so sign-in works there (the redirect URI is MSAL's redirect bridge page, L63) (existing URIs are kept), set `backendUrl` in `apps/web/config.json` to the backend URL so `npm run dev` signs in, and set the Actions variable `JARVIS_INFRA_DEPLOYMENT_NAME` to `jarvis-infra` (`gh variable set JARVIS_INFRA_DEPLOYMENT_NAME --body jarvis-infra`). The Deploy run summary lists both URLs.
 - No manual infrastructure portal changes.
@@ -1568,6 +1575,12 @@ close/reopen, draft continuity across voice, capture/inspection, denial feedback
 cleanup and reduced motion. Captures/report: `docs/ui/screenshots/p8-37-integration-*`.
 These use scratch authentication/API/socket and fake media, not live providers.
 ## DailyDeveloperCloud / P12 execution boundary
+
+Current release is ONLY #727/P12-12 inactive export on `codex/p12-12-nutrition-export` / draft #758; #725 is parked open after merged #754, not active implementation. Use coordinator source comment 6134567097, canonical SQL meals and scoped root device-verifier contract; no production registration/verifier/issuance, credentials/access/resources or phone changes. Run focused export/nutrition/auth/module/migration tests, backend lint/build and exact-head normal full CI/isolated SQL/container smoke. 0044 was allocated against current main; don't allocate another migration without rechecking. No automatic uncertain/failed/out_of_sync requeue, no native exactly-once claim, no private records/source edits/own merge/next scope. Keep #758 draft until explicit coordinator readiness release after independent review. This current release supersedes the historical #725 checkpoint instructions below; post one compact PR handoff and final answer, then idle.
+
+Current #725 continuation: #746 merged at `93553e9`; only the three feed-boundary corrections are released on `codex/p12-10-feed-boundary-corrections` / draft #754. Validate calendar ranges before any refresh/storage/provider/model work; preserve nonempty-number versus delivery-detail order grouping and full validated SENT-label direction before DTO truncation. Synthetic and isolated SQL regressions/full exact-head CI are required. Keep #754 draft until explicit coordinator readiness release after independent review, Refs #725/open issue/native dependencies, default-off and all consent/model/provider/private/device gates. No #727 dispatch or own merge. The following #746 checkpoint record is historical and does not override this continuation gate.
+
+P12-10 (#725) remains sole released scope on `codex/p12-10-google-feeds` / #746. Verified pure source contracts drive resumable bounded Gmail/calendar retrieval, exact selectors/keys, owner-local snapshots/suppressions and independent manual refresh. Coordinator supplied the existing protected Foundry chat-completions boundary: inactive factory reuses configured endpoint, managed-identity callback, canonical chat settings/catalogue and usage accounting; JSON-object transport has strict local schema/source-date checks, no tools/runner relay/new model role. Missing/failed capability reports unavailable. Scan-generation/cancellation and per-source UTF-8/item bounds cannot promote partial results or lose healthy-source success. Existing calendar.events consent does not establish calendarList access (L125); no broader OAuth/resource/secret authorization. Run `npm test --workspace @jarvis/backend -- src/daily/feeds src/google src/core/tool-registry.test.ts src/modules.test.ts src/auth/auth.test.ts`, backend lint/build and exact-head SQL/full CI/container smoke. Real `feeds.integration.test.ts` uses only isolated loopback SQL CI; local SQL image remains forbidden. Coordinator accepted 895b7c3/full CI 38310725882 as a reviewed inactive intermediate implementation. Mark #746 ready after final documentation/exact-head full CI, retain Refs #725 and keep the issue/native dependencies open. CalendarList owner consent, deployed identity/model and Google/provider parity, protected backup/import/reconciliation and physical-device gates remain unverified; no activation or permission change. #717/#741 stays parked, original Daily canonical. Post one final completion/blocker comment and final answer; no own merge/unsupported messaging.
 
 P12-07 (#722) is released after closed/merged/deployed #718, on `codex/p12-07-nutrition-services` / draft #743. It owns nutrition services/typed handlers, synthetic SQL tests and narrow migrations 0042/0043; no registration. Coordinator supplied read-only source HEAD `9e193554c9c8c7c23a788ed3d2b0582580b76c0f`, release-10/Frida-5.5 public DOI/DTO evidence and empty bootstrap/header/cookie/array/numeric shape verification at 16:17:51 UTC. Null/missing provenance remains unavailable. Cloud CONNECT returns HTTP 403; never bypass/borrow sessions. Focused checks: `npm test --workspace @jarvis/backend -- src/daily/nutrition/model.test.ts src/daily/nutrition/store.test.ts src/daily/nutrition/frida.test.ts src/daily/nutrition/handlers.test.ts src/daily/index.test.ts src/daily/store/owner-store.test.ts src/database/migrations.test.ts src/modules.test.ts src/auth/auth.test.ts`, lint/build and exact-head Database/full CI (auth needs loopback permission). Latest coordinator gate keeps draft until final checks/independent review; no own merge. No private Daily tools; #717/#741 remains parked and #719 unreleased. No downstream dispatch.
 

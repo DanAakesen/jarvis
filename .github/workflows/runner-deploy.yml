@@ -34,11 +34,11 @@ jobs:
       GITHUB_APP_ID: ${{ vars.JARVIS_GITHUB_APP_ID }}
       JARVIS_GITHUB_APP_TOKEN_ENABLED: ${{ vars.JARVIS_GITHUB_APP_TOKEN_ENABLED || 'false' }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version-file: .python-version
-      - uses: azure/login@v2
+      - uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
         with:
           client-id: ${{ vars.AZURE_CLIENT_ID }}
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
@@ -56,7 +56,7 @@ jobs:
         run: python runner/scripts/deploy.py --subscription "$SUBSCRIPTION_ID" --outputs /tmp/runner-infra.json --registry "$REGISTRY" --tag "$IMAGE_TAG" --state /tmp/runner-deployment.json
       - name: Save deployment evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: runner-deployment-${{ github.sha }}
           path: /tmp/runner-deployment.json

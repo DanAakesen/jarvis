@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - run: docker build --tag jarvis-runner:local runner
       - run: docker build --file runner/Dockerfile.dotnet --tag jarvis-runner-dotnet:local runner
       - name: Check packaged runtimes and non-root user

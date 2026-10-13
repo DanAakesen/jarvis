@@ -43,7 +43,7 @@ export interface ProjectContextEntry {
 }
 
 /** Active Software Factory projects for Jarvis's context, bounded; empty when the store is unavailable. */
-export async function projectContext(app: FastifyInstance): Promise<ProjectContextEntry[]> {
+export async function projectContext(app: Pick<FastifyInstance, 'projectStore'>): Promise<ProjectContextEntry[]> {
   if (!app.projectStore) return [];
   try {
     return (await app.projectStore.list()).slice(0, maxProjects)
