@@ -200,7 +200,7 @@ flowchart LR
 | 4 | Sandbox | The Foundry sessions that run a task, each turn, files kept in Blob | `sandbox_sessions`, `sandbox_turns`, `artifacts` |
 | 5 | GitHub and release | Pull requests, checks, the release view (commits fetched from GitHub on demand) | `pull_requests`, `workflow_runs`, `releases`, `deployments` |
 | 6 | Operations | Safe webhook handling, credential expiry warnings | `webhook_deliveries`, `credential_status` |
-| 7 | Usage and cost | Transparency per task/project and current UTC-day web-research calls; the latter reuses group-one `tool_calls` | `usage` |
+| 7 | Usage and cost | Transparency per task/project, Foundry chat-canary tokens and current UTC-day web-research calls; the latter reuses group-one `tool_calls` | `usage` |
 | 8 | Phone, notifications and confirmations | Phone-call sessions plus expiring browser approvals; `teams_conversations` remains dormant optional-integration storage, not used in production | `phone_sessions`, `teams_conversations`, `teams_confirmations` |
 | 9 | Legacy SQL memory | Historical source-linked memory rows, retained for compatibility but superseded as the durable knowledge source | `memories`, `memory_history`, `memory_deletions` |
 | 10 | Workspace artifacts | Owner-scoped image metadata and explicitly pinned workspace views; image bytes are private Blob objects | `workspace_artifacts`, `workspace_pins` |

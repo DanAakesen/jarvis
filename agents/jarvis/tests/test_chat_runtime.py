@@ -45,6 +45,8 @@ class FakeModel:
         self.settings: ModelSettings | None = None
         self.captured_settings: ModelSettings | None = None
         self.reflex_note: str | None = None
+        self.smoke = False
+        self.chat_calls = 0
         self.closed = False
 
     async def session_settings(self) -> ModelSettings:
@@ -62,11 +64,14 @@ class FakeModel:
         *,
         settings: ModelSettings | None = None,
         reflex_note: str | None = None,
+        smoke: bool = False,
     ) -> AsyncIterator[str]:
         self.messages = tuple(messages)
         self.language = language
         self.captured_settings = settings or await self.session_settings()
         self.reflex_note = reflex_note
+        self.smoke = smoke
+        self.chat_calls += 1
         self.message_id = current_message_id.get()
         yield "Hej"
         yield " med dig."
@@ -120,6 +125,44 @@ def test_chat_streams_text_and_sets_tool_source_message() -> None:
     assert model.message_id == "42"
     assert model.captured_settings == model.settings
     assert model.closed
+
+
+def test_system_smoke_invocation_skips_user_history_and_persistence() -> None:
+    history_reads = 0
+
+    async def context(*_args):
+        nonlocal history_reads
+        history_reads += 1
+        raise AssertionError("smoke must not read user history")
+
+    app, model = app_with(context)
+    with TestClient(app) as client:
+        response = client.post(
+            "/invocations",
+            json={
+                "messageId": "1",
+                "text": "Reply with the single word ok.",
+                "language": "en",
+                "smoke": True,
+            },
+        )
+        invalid = client.post(
+            "/invocations",
+            json={
+                "messageId": "1",
+                "text": "Answer an arbitrary prompt.",
+                "language": "en",
+                "smoke": True,
+            },
+        )
+
+    assert response.status_code == 200
+    assert invalid.status_code == 400
+    assert 'data: {"text": "Hej"}' in response.text
+    assert history_reads == 0
+    assert model.smoke
+    assert model.chat_calls == 1
+    assert model.messages == (ModelMessage("user", "Reply with the single word ok."),)
 
 
 def test_reused_agent_reloads_history_and_returns_phase_timings() -> None:
