@@ -66,6 +66,24 @@ diagnostics now survive those paths and the stdout/telemetry allowlist.
 The actual recurring production failing stage remains unconfirmed until the
 authorized post-deploy readback; no runtime-cause correction is claimed yet.
 
+## Factory board source latency (#813)
+
+The 2026-10-13 baseline is 90 observed `/factory/board` requests on revision
+`--0000307` between 22:14 and 23:08 UTC. All returned HTTP 200; median latency
+was 10.065 s, p95 12.915 s, and maximum 19.211 s. The cohort includes cache
+hits; it is not a cold-only benchmark and does not identify a slow stage.
+
+After the authorized deployment, compare normal production request telemetry
+for the serving revision with this baseline. Record the time window, request
+count, status distribution, median, p95, maximum, and stale status where
+available. Separate cache hits only when existing telemetry can identify them;
+do not infer cold/warm status from latency or issue extra load to manufacture a
+comparison. Keep payloads, credentials, and private records out of the report.
+Use the authorized readback above to confirm a fresh, complete shared board and
+canonical placement. Report any missing telemetry or cache classification as a
+limitation. This comparison measures latency only and does not establish the
+cause of #811's historical 502s.
+
 ## Roll back a deployment
 
 ### Backend Container Apps revision

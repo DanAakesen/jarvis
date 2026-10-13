@@ -1,5 +1,25 @@
 # Decisions
 
+## #813 bound Factory board source reads (13 October 2026)
+
+Use one eight-request limiter for every GitHub source request in a board snapshot,
+including the three primary lists, their pagination pages, and dependency lists.
+Fetch pages concurrently only after page 1 establishes the provider's bounded
+range; retain response order and reconcile every page's pagination metadata.
+Treat Link URLs as untrusted: validate their origin, repository endpoint, query,
+page size, and page relationships, then construct requests locally from the
+already-selected repository path and page number. A failed page/dependency read
+cancels siblings, including queued requests.
+
+This removes avoidable serial request waves without changing source coverage,
+filtering, canonical output, authentication, cache policy, or response/deadline
+bounds. Deterministic synthetic tests cover 15 source requests in four parallel
+waves rather than 15 serial waves and compare the complete result. Production
+latency and cache-hit attribution remain post-deploy operator checks; the
+2026-10-13 baseline of 90 successful requests (median 10.065 s, p95 12.915 s,
+maximum 19.211 s) included cache hits and is not a cold-only cohort. This is not
+a diagnosis of #811's separate historical 502s.
+
 ## Factory issue-number navigation uses the page snapshot (13 October 2026)
 
 The user added issue-number navigation acceptance after #793's board release

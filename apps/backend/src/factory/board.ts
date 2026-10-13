@@ -12,6 +12,7 @@ const repositoryPattern = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/u;
 const maxResponseBytes = 1024 * 1024;
 const maxPages = 10;
 const pageSize = 100;
+const maxConcurrentRequests = 8;
 const boardColumns: readonly { id: FactoryBoardColumnId; label: string }[] = [
   { id: 'backlog', label: 'Backlog' },
   { id: 'needs_dan', label: 'Needs Dan' },
@@ -178,33 +179,192 @@ async function readResponse(response: Response): Promise<unknown> {
   }
 }
 
+interface RequestLimiter {
+  read(url: string, signal: AbortSignal): Promise<{ response: Response; result: unknown }>;
+}
+
+function createRequestLimiter(fetchImpl: typeof fetch, token: string): RequestLimiter {
+  let active = 0;
+  const waiting: {
+    signal: AbortSignal;
+    resolve: () => void;
+    reject: (error: unknown) => void;
+    onAbort: () => void;
+  }[] = [];
+
+  function acquire(signal: AbortSignal): Promise<() => void> {
+    if (signal.aborted) return Promise.reject(signal.reason);
+    return new Promise((resolve, reject) => {
+      const grant = () => {
+        signal.removeEventListener('abort', onAbort);
+        active += 1;
+        resolve(() => {
+          active -= 1;
+          while (waiting.length > 0) {
+            const next = waiting.shift()!;
+            next.signal.removeEventListener('abort', next.onAbort);
+            if (next.signal.aborted) {
+              next.reject(next.signal.reason);
+              continue;
+            }
+            next.resolve();
+            break;
+          }
+        });
+      };
+      const onAbort = () => {
+        const index = waiting.findIndex((entry) => entry.onAbort === onAbort);
+        if (index >= 0) waiting.splice(index, 1);
+        reject(signal.reason);
+      };
+      if (active < maxConcurrentRequests) {
+        grant();
+      } else {
+        waiting.push({ signal, resolve: grant, reject, onAbort });
+        signal.addEventListener('abort', onAbort, { once: true });
+      }
+    });
+  }
+
+  return {
+    async read(url, signal) {
+      let release: (() => void) | undefined;
+      try {
+        release = await acquire(signal);
+        const response = await fetchImpl(url, {
+          headers: {
+            Accept: 'application/vnd.github+json',
+            Authorization: `${['Bear', 'er'].join('')} ${token}`,
+            'X-GitHub-Api-Version': '2022-11-28',
+          },
+          signal,
+          redirect: 'error',
+        });
+        return { response, result: await readResponse(response) };
+      } catch (error) {
+        if (error instanceof FactoryBoardReadError) throw error;
+        const diagnostic = boardReadError('source', error);
+        throw diagnostic.reason === 'unexpected'
+          ? new FactoryBoardReadError('source', 'transport_failed')
+          : diagnostic;
+      } finally {
+        release?.();
+      }
+    },
+  };
+}
+
+function paginationPage(response: Response, path: string, page: number): number {
+  const header = response.headers.get('link');
+  if (!header) return page;
+
+  const baseUrl = new URL(`${githubApi}${path}`);
+  const expectedQuery = [...baseUrl.searchParams.entries()].sort(([leftKey, leftValue], [rightKey, rightValue]) =>
+    leftKey.localeCompare(rightKey) || leftValue.localeCompare(rightValue));
+  const relations = new Map<string, number>();
+  for (const entry of header.split(/,\s*(?=<)/u)) {
+    const match = /^<([^<>]+)>\s*;\s*rel="([^"]+)"(?:\s*;[^,]+)*$/u.exec(entry);
+    if (!match) throw new FactoryBoardReadError('source', 'invalid_response');
+    let url: URL;
+    try {
+      url = new URL(match[1]!);
+    } catch {
+      throw new FactoryBoardReadError('source', 'invalid_response');
+    }
+    const relation = match[2]!;
+    const linkPage = url.searchParams.get('page');
+    const linkPageNumber = linkPage === null ? NaN : Number(linkPage);
+    const actualQuery = [...url.searchParams.entries()]
+      .filter(([key]) => key !== 'page' && key !== 'per_page')
+      .sort(([leftKey, leftValue], [rightKey, rightValue]) =>
+        leftKey.localeCompare(rightKey) || leftValue.localeCompare(rightValue));
+    if (url.origin !== githubApi || url.pathname !== baseUrl.pathname || url.username || url.password ||
+        url.hash || url.port || url.searchParams.getAll('page').length !== 1 ||
+        url.searchParams.getAll('per_page').length !== 1 || url.searchParams.get('per_page') !== String(pageSize) ||
+        !Number.isSafeInteger(linkPageNumber) || linkPageNumber < 1 ||
+        JSON.stringify(actualQuery) !== JSON.stringify(expectedQuery) ||
+        !['first', 'prev', 'next', 'last'].includes(relation) || relations.has(relation)) {
+      throw new FactoryBoardReadError('source', 'invalid_response');
+    }
+    relations.set(relation, linkPageNumber);
+  }
+
+  const lastPage = relations.get('last') ?? page;
+  const nextPage = relations.get('next');
+  if ((nextPage !== undefined) !== (page < lastPage) ||
+      (nextPage !== undefined && nextPage !== page + 1) ||
+      lastPage < page ||
+      (relations.has('last') && !relations.has('next') && lastPage !== page) ||
+      (relations.has('first') && relations.get('first') !== 1) ||
+      (relations.has('prev') && (page < 2 || relations.get('prev') !== page - 1)) ||
+      (page === 1 && relations.has('prev'))) {
+    throw new FactoryBoardReadError('source', 'invalid_response');
+  }
+  return lastPage;
+}
+
 async function readPages(
-  fetchImpl: typeof fetch,
+  limiter: RequestLimiter,
   path: string,
-  token: string,
   signal: AbortSignal,
 ): Promise<unknown[]> {
-  const items: unknown[] = [];
-  for (let page = 1; page <= maxPages; page += 1) {
+  async function readPage(page: number, pageSignal = signal): Promise<{ items: unknown[]; lastPage: number }> {
     const url = `${githubApi}${path}${path.includes('?') ? '&' : '?'}per_page=${pageSize}&page=${page}`;
-    const response = await fetchImpl(url, {
-      headers: {
-        Accept: 'application/vnd.github+json',
-        Authorization: `${['Bear', 'er'].join('')} ${token}`,
-        'X-GitHub-Api-Version': '2022-11-28',
-      },
-      signal,
-      redirect: 'error',
-    }).catch((error: unknown) => {
-      const diagnostic = boardReadError('source', error);
-      throw diagnostic.reason === 'unexpected' ? new FactoryBoardReadError('source', 'transport_failed') : diagnostic;
-    });
-    const result = await readResponse(response);
+    const { response, result } = await limiter.read(url, pageSignal);
     if (!Array.isArray(result) || result.length > pageSize) throw new FactoryBoardReadError('source', 'invalid_response');
-    items.push(...result);
-    if (!response.headers.get('link')?.match(/<[^>]+>;\s*rel="next"/u)) return items;
+    const lastPage = paginationPage(response, path, page);
+    if (lastPage > page && result.length !== pageSize || lastPage > maxPages) {
+      throw new FactoryBoardReadError('source', lastPage > maxPages ? 'result_limit' : 'incomplete_response');
+    }
+    if (lastPage > 1 && page === lastPage && result.length === 0) {
+      throw new FactoryBoardReadError('source', 'incomplete_response');
+    }
+    return { items: result, lastPage };
   }
-  throw new FactoryBoardReadError('source', 'result_limit');
+
+  const first = await readPage(1);
+  const pages = await readTogether(
+    Array.from({ length: first.lastPage - 1 }, (_, index) => async (pageSignal) => {
+      const result = await readPage(index + 2, pageSignal);
+      if (result.lastPage !== first.lastPage) {
+        throw new FactoryBoardReadError('source', 'incomplete_response');
+      }
+      return result;
+    }),
+    signal,
+  );
+  const items = [first, ...pages].flatMap(({ items: pageItems }) => pageItems);
+  const identities = new Set<string>();
+  for (const item of items) {
+    const value = record(item);
+    const identity = Number.isSafeInteger(value?.number) && (value!.number as number) > 0
+      ? `number:${value!.number}`
+      : typeof value?.id === 'string' || Number.isSafeInteger(value?.id) ? `id:${value?.id}` : undefined;
+    if (identity && identities.has(identity)) throw new FactoryBoardReadError('source', 'incomplete_response');
+    if (identity) identities.add(identity);
+  }
+  return items;
+}
+
+async function readTogether<T extends readonly unknown[]>(
+  reads: { [K in keyof T]: (signal: AbortSignal) => Promise<T[K]> },
+  signal: AbortSignal,
+): Promise<T> {
+  const controller = new AbortController();
+  const combinedSignal = AbortSignal.any([signal, controller.signal]);
+  let failed = false;
+  let firstError: unknown;
+  const pending = reads.map((read) => Promise.resolve().then(() => read(combinedSignal)).catch((error: unknown) => {
+    if (!failed) {
+      failed = true;
+      firstError = error;
+      controller.abort(error);
+    }
+    throw error;
+  }));
+  const results = await Promise.allSettled(pending);
+  if (failed) throw firstError;
+  return results.map((result) => (result as PromiseFulfilledResult<T[number]>).value) as unknown as T;
 }
 
 export function createGitHubFactoryBoardReader(fetchImpl: typeof fetch = fetch): FactoryBoardReader {
@@ -244,8 +404,11 @@ export function createGitHubFactoryBoardReader(fetchImpl: typeof fetch = fetch):
         incomplete: data.incomplete_results === true || (data.total_count as number) > 10 };
     },
     async issuePullRequests(repository, token, issue) {
-      const events = await readPages(fetchImpl, `${root(repository)}/issues/${issue}/timeline`, token,
-        AbortSignal.timeout(25_000));
+      const events = await readPages(
+        createRequestLimiter(fetchImpl, token),
+        `${root(repository)}/issues/${issue}/timeline`,
+        AbortSignal.timeout(25_000),
+      );
       return [...new Set(events.flatMap((value) => {
         const event = record(value);
         const source = record(record(event?.source)?.issue);
@@ -300,42 +463,41 @@ export function createGitHubFactoryBoardReader(fetchImpl: typeof fetch = fetch):
       const [owner, name] = repository.split('/');
       const root = `/repos/${encodeURIComponent(owner!)}/${encodeURIComponent(name!)}`;
       const signal = AbortSignal.timeout(25_000);
-      const [openIssues, recentlyUpdatedClosedIssues, openPulls] = await Promise.all([
-        readPages(fetchImpl, `${root}/issues?state=open`, token, signal),
-        readPages(fetchImpl, `${root}/issues?state=closed&since=${encodeURIComponent(closedSince)}`, token, signal),
-        readPages(fetchImpl, `${root}/pulls?state=open`, token, signal),
-      ]);
+      const limiter = createRequestLimiter(fetchImpl, token);
+      const [openIssues, recentlyUpdatedClosedIssues, openPulls] = await readTogether([
+        (readSignal) => readPages(limiter, `${root}/issues?state=open`, readSignal),
+        (readSignal) => readPages(limiter, `${root}/issues?state=closed&since=${encodeURIComponent(closedSince)}`, readSignal),
+        (readSignal) => readPages(limiter, `${root}/pulls?state=open`, readSignal),
+      ] as const, signal);
       const cutoff = Date.parse(closedSince);
       const candidates = [...openIssues, ...recentlyUpdatedClosedIssues]
         .map(issueFromGitHub)
         .filter((issue): issue is FactoryBoardIssue => issue !== null)
         .filter((issue) => issue.state === 'open' ||
           (issue.closedAt !== null && Date.parse(issue.closedAt) >= cutoff));
-      const issues: FactoryBoardIssue[] = [];
-      for (let offset = 0; offset < candidates.length; offset += 8) {
-        const batch = candidates.slice(offset, offset + 8);
-        issues.push(...await Promise.all(batch.map(async (issue) => {
-          if (issue.blockedByCount === 0) return issue;
-          const dependencies = await readPages(
-            fetchImpl,
-            `${root}/issues/${issue.number}/dependencies/blocked_by`,
-            token,
-            signal,
-          );
-          // The summary's blocked_by counts OPEN blockers only, while the list also returns closed ones.
-          const blockedBy = dependencies.flatMap((dependency) => {
-            const blockedIssue = record(dependency);
-            if (!blockedIssue || !Number.isSafeInteger(blockedIssue.number) ||
-                (blockedIssue.number as number) < 1 ||
-                (blockedIssue.state !== 'open' && blockedIssue.state !== 'closed')) {
-              throw new FactoryBoardReadError('source', 'invalid_response');
-            }
-            return blockedIssue.state === 'open' ? [blockedIssue.number as number] : [];
-          });
-          if (blockedBy.length !== issue.blockedByCount) throw new FactoryBoardReadError('source', 'incomplete_response');
-          return { ...issue, blockedBy };
-        })));
+      if (new Set(candidates.map(({ number }) => number)).size !== candidates.length) {
+        throw new FactoryBoardReadError('source', 'incomplete_response');
       }
+      const issues = await readTogether(candidates.map((issue) => async (readSignal) => {
+        if (issue.blockedByCount === 0) return issue;
+        const dependencies = await readPages(
+          limiter,
+          `${root}/issues/${issue.number}/dependencies/blocked_by`,
+          readSignal,
+        );
+        // The summary's blocked_by counts OPEN blockers only, while the list also returns closed ones.
+        const blockedBy = dependencies.flatMap((dependency) => {
+          const blockedIssue = record(dependency);
+          if (!blockedIssue || !Number.isSafeInteger(blockedIssue.number) ||
+              (blockedIssue.number as number) < 1 ||
+              (blockedIssue.state !== 'open' && blockedIssue.state !== 'closed')) {
+            throw new FactoryBoardReadError('source', 'invalid_response');
+          }
+          return blockedIssue.state === 'open' ? [blockedIssue.number as number] : [];
+        });
+        if (blockedBy.length !== issue.blockedByCount) throw new FactoryBoardReadError('source', 'incomplete_response');
+        return { ...issue, blockedBy };
+      }), signal);
       return { issues, pullRequests: openPulls.map(pullRequestFromGitHub) };
     },
   };

@@ -84,8 +84,11 @@ describe('historical work status GitHub reads', () => {
     });
   });
   it('refuses incomplete historical pagination instead of silently omitting merged PRs', async () => {
-    const fetcher = vi.fn(async () => Response.json([], { headers: { link: '<https://api.github.com/next>; rel="next"' } })) as unknown as typeof fetch;
+    const fetcher = vi.fn(async () => Response.json([], { headers: { link: [
+      '<https://api.github.com/repos/DanAakesen/jarvis/issues/8/timeline?per_page=100&page=2>; rel="next"',
+      '<https://api.github.com/repos/DanAakesen/jarvis/issues/8/timeline?per_page=100&page=11>; rel="last"',
+    ].join(', ') } })) as unknown as typeof fetch;
     await expect(createGitHubFactoryBoardReader(fetcher).issuePullRequests!(repo, 'token', 8)).rejects.toThrow('limit');
-    expect(vi.mocked(fetcher).mock.calls).toHaveLength(10);
+    expect(vi.mocked(fetcher).mock.calls).toHaveLength(1);
   });
 });
