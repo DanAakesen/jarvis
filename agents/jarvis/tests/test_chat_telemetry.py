@@ -47,14 +47,16 @@ def test_stage_timings_are_content_free(monkeypatch, caplog, error) -> None:
     assert "private-content" not in caplog.text
 
 
-def test_completion_timings_are_allowlisted_and_bounded(monkeypatch) -> None:
+@pytest.mark.parametrize("phase", sorted(chat_telemetry.CHAT_PHASES))
+def test_completion_timings_are_allowlisted_and_bounded(monkeypatch, phase) -> None:
     timings = {}
     token = chat_telemetry.current_chat_phase_timings.set(timings)
     monkeypatch.setattr(chat_telemetry.time, "monotonic", lambda: 700.0)
     try:
-        chat_telemetry.log_latency("chat_context", 0.0)
+        chat_telemetry.log_latency(phase, 0.0)
+        chat_telemetry.log_latency(phase, 699.0)
         chat_telemetry.log_latency("private_phase", 0.0)
     finally:
         chat_telemetry.current_chat_phase_timings.reset(token)
 
-    assert timings == {"chat_context": 600_000}
+    assert timings == {phase: 600_000}

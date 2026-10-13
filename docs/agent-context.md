@@ -1641,6 +1641,14 @@ pending P9-87/#714, not part of #713's delivered behavior.
 not the rejected `chat-<id>` format, and requires cold/warm debug-header proof.
 Its recovery is restricted to explicit pre-execution routing rejection;
 generic invocation failures must not replay a potentially executed turn.
+P9-99 implements the random 32-hex affinity in a process-local 256-entry
+owner/conversation LRU and removes generic 4xx replay. No verified provider
+pre-execution routing code is available for safe automatic recovery. New
+completion timings distinguish agent preparation, all model/tool work before
+first text and the backend's hosted-dispatch/transport residual; definitions
+are in [architecture](architecture.md#conversation-storage-and-history).
+Deploy and at least ten production turns remain coordinator acceptance, not an
+offline test result.
 
 Camera conversation callers (11 October, local): `App.tsx` passes
 `cameraConversationDeployed = true` into `useCamera` after #702's backend,
