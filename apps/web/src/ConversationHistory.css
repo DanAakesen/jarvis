@@ -46,9 +46,9 @@
 .app-shell[data-voice-active="false"] .workspace-canvas-tiled { grid-auto-rows: minmax(0, 1fr); }
 .app-shell[data-voice-active="false"] .workspace-canvas-layered,
 .app-shell[data-voice-active="false"] .workspace-canvas-has-maximized { height: auto; min-height: 0; }
-.app-shell[data-voice-active="false"] .workspace-canvas-tiled .workspace-window-conversation:not(.workspace-window-maximized) { order: 9999; align-self: end; justify-self: center; width: min(var(--chat-width), 100%); max-height: min(var(--chat-height), 44vh); }
+.app-shell[data-voice-active="false"] .workspace-canvas-tiled .workspace-window-conversation:not(.workspace-window-maximized) { order: 9999; align-self: end; justify-self: center; width: min(var(--chat-width), 100%); height: min(var(--conversation-height, min(var(--chat-height), 44vh)), 100%); max-height: 100%; }
 /* Docked to the composer in every arrangement: other windows stack above it. */
-.app-shell[data-voice-active="false"] .workspace-canvas-layered .workspace-window-conversation:not(.workspace-window-maximized) { top: auto; bottom: 0; left: max(0px, calc(50% - var(--chat-width) / 2)); width: min(var(--chat-width), 100%); height: min(var(--chat-height), 44vh); }
+.app-shell[data-voice-active="false"] .workspace-canvas-layered .workspace-window-conversation:not(.workspace-window-maximized) { top: auto; bottom: 0; left: max(0px, calc(50% - var(--chat-width) / 2)); width: min(var(--chat-width), 100%); height: min(var(--conversation-height, min(var(--chat-height), 44vh)), 100%); }
 .conversation-transcript { position: relative; flex: 1; min-height: 0; overflow-y: auto; padding: 0 max(4px, calc((100% - 760px) / 2)) var(--space-6); scrollbar-gutter: stable; }
 .conversation-transcript:has(.conversation-greeting) { display: flex; flex-direction: column; padding: clamp(16px, 12vh, 100px) 12px var(--space-6); }
 .conversation-greeting {
@@ -71,6 +71,8 @@
 .conversation-loading > p, .conversation-empty { color: var(--text-muted); font-size: var(--type-small); }
 .conversation-history-error > p { color: var(--error); }
 .conversation-input { position: relative; display: grid; grid-template-columns: 40px minmax(0, 1fr); align-items: center; gap: 22px; flex: 0 0 auto; width: 100%; max-width: var(--chat-width); margin: 0 auto; padding: 5px 6px 5px 7px; border: 1px solid var(--rule); border-radius: 26px; background: var(--surface-translucent); backdrop-filter: blur(var(--surface-blur)); box-shadow: var(--dialog-shadow); }
+.conversation-input-slot { display: contents; }
+.conversation-input-slot[data-positioned] { display: block; flex: 0 0 auto; height: var(--conversation-composer-height, 52px); }
 /* The desktop composer and maximised transcript share their page gutters. Restore keeps the normal dock width. */
 .app-shell[data-phone="false"][data-voice-active="false"][data-conversation-open="true"]:has(.workspace-window-conversation.workspace-window-maximized:not(.workspace-window-minimized, [hidden])) .jarvis-page { --chat-width: 100%; }
 .conversation-input:has(textarea:focus-visible) { box-shadow: var(--dialog-shadow), 0 0 0 3px var(--focus); }
@@ -256,7 +258,7 @@
 @media (max-width: 700px), (max-height: 500px) and (pointer: coarse) {
   .app-shell[data-voice-active="false"] .shell-main { display: flex; flex-direction: column; }
   .app-shell[data-voice-active="false"] .shell-main:is([data-home="true"] > *) .workspace-shell-area { padding: var(--space-3) var(--space-3) 0; }
-  .app-shell[data-voice-active="false"] .workspace[data-phone="true"] .workspace-window-conversation:not(.workspace-window-maximized) { flex: 0 1 auto; align-self: flex-end; max-height: min(46dvh, 420px); }
+  .app-shell[data-voice-active="false"] .workspace[data-phone="true"] .workspace-window-conversation:not(.workspace-window-maximized) { flex: 0 1 auto; align-self: flex-end; height: var(--conversation-height, auto); max-height: min(var(--conversation-height, min(46dvh, 420px)), 100%); }
   .workspace[data-phone="true"] .workspace-conversation-content { touch-action: pan-y pinch-zoom; }
   .workspace[data-phone="true"] .workspace-window-conversation .workspace-icon-control { width: 44px; min-width: 44px; height: 44px; min-height: 44px; }
   .app-shell[data-voice-active="true"] { --phone-dock-height: var(--voice-bar-height, 60px); }
@@ -339,7 +341,9 @@
 
 /* Bubbles v2 (Dan, 7 October): smaller and quieter. Softer tinted glass with a thin rim, a tighter corner on the
    speaker's side, smaller type, and tighter spacing between consecutive messages from the same speaker. */
-.conversation-message { max-width: min(80%, 58ch); margin: 10px 0; padding: 9px 14px 8px; border-radius: 18px; font-size: 15px; line-height: 1.5; }
+.conversation-message { max-width: min(80%, 58ch); margin: 8px 0; padding: 8px 12px; border-radius: 18px; font-size: var(--type-small); line-height: 1.45; }
+.conversation-message :where(p, li, blockquote) { font-size: inherit; line-height: inherit; }
+.conversation-message .markdown-content :is(h1, h2, h3, h4, h5, h6) { font-size: 1.15em; line-height: 1.35; }
 .conversation-message[data-speaker="dan"] {
   border: 1px solid color-mix(in srgb, var(--glass-glow-warm) 45%, transparent);
   border-bottom-right-radius: 6px;
@@ -347,7 +351,7 @@
   box-shadow: 0 6px 18px -12px color-mix(in srgb, var(--glass-glow-warm) 70%, transparent), inset 0 1px 0 color-mix(in srgb, var(--glass-rim-light) 70%, transparent);
 }
 .conversation-message[data-speaker="jarvis"] {
-  padding-left: 14px;
+  padding-left: 12px;
   border: 1px solid color-mix(in srgb, var(--glass-edge-cool) 22%, transparent);
   border-bottom-left-radius: 6px;
   background-image: linear-gradient(160deg, color-mix(in srgb, var(--glass-edge-cool) 10%, transparent), transparent 70%);
@@ -426,7 +430,7 @@
 /* More air between Dan's and Jarvis's bubbles; consecutive bubbles from one speaker stay close. */
 .conversation-message[data-speaker="dan"] + .conversation-message[data-speaker="jarvis"],
 .conversation-message[data-speaker="jarvis"] + .conversation-message[data-speaker="dan"],
-.conversation-messages + .conversation-message, .conversation-message + .live-turn { margin-top: 22px; }
+.conversation-messages + .conversation-message, .conversation-message + .live-turn { margin-top: 14px; }
 
 /* Live turn: the assembling J while Jarvis thinks, then one line per tool on a thin lit trail, then the answer. */
 .live-turn { min-width: 200px; }
@@ -594,3 +598,63 @@
 .composer-prompt { align-self: center; min-width: 0; padding: 0 2px; overflow: hidden; color: var(--text-muted); font-size: var(--type-body); line-height: 24px;
   text-overflow: ellipsis; white-space: nowrap; pointer-events: none; transition: opacity var(--motion-state) var(--ease-standard); }
 .conversation-history .composer:focus-within .composer-prompt { opacity: .55; }
+
+/* A manually placed chat keeps its layout area even while only the composer is visible. */
+.app-shell[data-voice-active="false"]:has(.workspace[data-conversation-positioned]) .workspace-shell-area {
+  display: block; order: -1; flex: 1; min-height: 0; overflow: visible;
+}
+.app-shell[data-voice-active="false"]:has(.workspace[data-conversation-positioned]) .jarvis-page {
+  flex: 0 0 auto; height: auto; padding-top: 0;
+}
+.app-shell[data-voice-active="false"]:has(.workspace[data-conversation-positioned]) .conversation-history > .conversation-transcript {
+  flex: 0 0 auto; padding: 0;
+}
+.app-shell[data-voice-active="false"] .workspace-canvas .workspace-window-conversation[data-conversation-positioned]:not(.workspace-window-maximized) {
+  position: absolute; top: var(--conversation-y); bottom: auto; left: var(--conversation-x);
+  width: var(--conversation-width); height: var(--conversation-height); min-height: 0; max-height: none; flex: none;
+}
+.workspace-window.workspace-window-conversation.workspace-window-dragging {
+  scale: 1; translate: none; transition: none;
+}
+.workspace-window.workspace-window-conversation[data-conversation-positioned]:not(.workspace-window-minimized) {
+  scale: 1; transition: opacity var(--motion-state) var(--ease-standard), box-shadow var(--motion-press) var(--ease-standard);
+}
+.workspace-window-conversation .workspace-move-handle { cursor: grab; touch-action: none; }
+.workspace-window-conversation .workspace-move-handle:active { cursor: grabbing; }
+.conversation-resize-border {
+  position: absolute; z-index: 3; display: block; min-height: 0; padding: 0; border: 0; border-radius: 0;
+  background: transparent; box-shadow: none; touch-action: none;
+}
+.conversation-resize-border-top { top: -4px; right: 24px; left: 24px; height: 12px; cursor: ns-resize; }
+.conversation-resize-border-bottom { bottom: 0; right: 24px; left: 24px; height: 12px; cursor: ns-resize; }
+.conversation-resize-border-left { top: 24px; bottom: 24px; left: -8px; width: 8px; cursor: ew-resize; }
+.conversation-resize-border-right { top: 24px; bottom: 24px; right: -8px; width: 8px; cursor: ew-resize; }
+/* Corner cutouts leave the transcript and its native scrollbar interactive. */
+.conversation-resize-corner { width: 24px; height: 24px; }
+.conversation-resize-border-top-left { top: -12px; left: -12px; cursor: nwse-resize; clip-path: polygon(0 0, 100% 0, 100% 50%, 50% 50%, 50% 100%, 0 100%); }
+.conversation-resize-border-top-right { top: -12px; right: -12px; cursor: nesw-resize; clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 100%, 50% 50%, 0 50%); }
+.conversation-resize-border-bottom-left { bottom: -12px; left: -12px; cursor: nesw-resize; clip-path: polygon(0 0, 50% 0, 50% 50%, 100% 50%, 100% 100%, 0 100%); }
+.conversation-resize-border-bottom-right { bottom: -12px; right: -12px; cursor: nwse-resize; clip-path: polygon(50% 0, 100% 0, 100% 100%, 0 100%, 0 50%, 50% 50%); }
+.conversation-resize-border:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+.conversation-resize-border:is(:hover, :active) { background: transparent; box-shadow: none; }
+.workspace-window-conversation .workspace-window-actions { position: relative; z-index: 4; }
+.app-shell[data-voice-active="true"] :is(.conversation-resize-border, .workspace-window-conversation .workspace-move-handle) { display: none; }
+.conversation-layout-error {
+  position: fixed; z-index: 1200; right: 16px; bottom: 16px; max-width: min(36ch, calc(100vw - 32px)); margin: 0;
+  padding: var(--space-3); border: 1px solid var(--rule); border-radius: var(--radius-panel);
+  background: var(--surface-translucent); color: var(--error); font-size: var(--type-small);
+}
+@media (pointer: coarse) {
+  .conversation-resize-border-top { top: -10px; height: 24px; right: 44px; left: 44px; }
+  .conversation-resize-border-bottom { height: 24px; right: 44px; left: 44px; }
+  .conversation-resize-border-left { left: -24px; width: 24px; top: 44px; bottom: 44px; }
+  .conversation-resize-border-right { right: -24px; width: 24px; top: 44px; bottom: 44px; }
+  .conversation-resize-corner { width: 44px; height: 44px; }
+  .conversation-resize-border-top-left { top: -22px; left: -22px; }
+  .conversation-resize-border-top-right { top: -22px; right: -22px; }
+  .conversation-resize-border-bottom-left { bottom: -22px; left: -22px; }
+  .conversation-resize-border-bottom-right { bottom: -22px; right: -22px; }
+}
+.app-shell[data-voice-active="false"][data-home="false"]:has(.workspace[data-conversation-positioned]):not(.app-signed-out) .workspace-shell-area {
+  bottom: calc(var(--conversation-composer-height, 52px) + 16px);
+}

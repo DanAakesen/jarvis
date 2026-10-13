@@ -9,9 +9,20 @@ describe('html app document', () => {
     expect(doc.startsWith('<!DOCTYPE html><meta http-equiv="Content-Security-Policy"')).toBe(true);
     expect(doc.indexOf(htmlAppCsp)).toBeLessThan(doc.indexOf('steal()'));
     expect(doc).toContain("connect-src 'none'");
-    expect(doc).toContain('--jarvis-text: #fff;');
+    expect(doc).toContain('--jarvis-text: #fff !important;');
     expect(doc).not.toContain('} body {');
-    expect(doc).toContain('--jarvis-evil: red  body  display: none;');
+    expect(doc).toContain('--jarvis-evil: red  body  display: none !important;');
+  });
+
+  it('joins authored document backgrounds to the host without flattening content sections', () => {
+    const html = '<!doctype html><html><body style="background:#000"><main><section style="border:1px solid red">Findings</section></main></body></html>';
+    const doc = htmlAppDocument(html, { scheme: 'light', tokens: { '--background': '#f0f5f7', '--text': '#17202a' } });
+    expect(doc).toContain('--jarvis-background: #f0f5f7 !important;');
+    expect(doc).toContain('html, body { background: var(--jarvis-background) !important;');
+    expect(doc).toContain('[data-jarvis-document-root] { background: transparent !important; border: 0 !important;');
+    expect(doc).toContain('<section style="border:1px solid red">Findings</section>');
+    expect(doc).toContain("event.source !== parent");
+    expect(doc).toContain("theme.jarvisHostTheme !== 1");
   });
 
   it('accepts only bounded bridge messages', () => {

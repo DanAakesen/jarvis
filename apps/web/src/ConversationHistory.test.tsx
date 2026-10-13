@@ -391,6 +391,41 @@ describe('ConversationHistory', () => {
     expect(loadConversationHistory).toHaveBeenLastCalledWith(client, config, '40');
   });
 
+  it.each([null, '40'])('retries failed visual metadata refresh rather than older history with cursor %s', async nextCursor => {
+    const content = (historyRefresh: number) => (
+      <JarvisActivityProvider>
+        <MemoryRouter>
+          <ConversationHistory client={client} config={config} historyRefresh={historyRefresh} />
+        </MemoryRouter>
+      </JarvisActivityProvider>
+    );
+    loadConversationHistory.mockReset().mockResolvedValueOnce({ messages: [message], nextCursor })
+      .mockRejectedValueOnce(new Error('Jarvis returned an invalid visual input status.'))
+      .mockResolvedValueOnce({ messages: [message], nextCursor });
+    const view = render(content(0));
+    await screen.findByText(message.text);
+    view.rerender(content(1));
+    await screen.findByRole('alert');
+    expect(screen.getByText(message.text)).not.toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    await waitFor(() => expect(loadConversationHistory).toHaveBeenCalledTimes(3));
+    expect(loadConversationHistory).toHaveBeenLastCalledWith(client, config);
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('retries an older-page visual metadata failure using its original cursor', async () => {
+    loadConversationHistory.mockReset().mockResolvedValueOnce({ messages: [message], nextCursor: '40' })
+      .mockRejectedValueOnce(new Error('Jarvis returned an invalid visual input status.'))
+      .mockResolvedValueOnce({ messages: [{ ...message, id: '40', text: 'Earlier turn.' }], nextCursor: null });
+    renderConversation();
+    await screen.findByText(message.text);
+    fireEvent.click(screen.getByRole('button', { name: 'Load older history' }));
+    await screen.findByRole('alert');
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    await screen.findByText('Earlier turn.');
+    expect(loadConversationHistory).toHaveBeenLastCalledWith(client, config, '40');
+  });
+
   it('reloads persisted history after a voice session ends', async () => {
     loadConversationHistory.mockResolvedValue({ messages: [message], nextCursor: null });
     const view = renderConversation();

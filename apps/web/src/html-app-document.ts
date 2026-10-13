@@ -12,6 +12,11 @@ export const maxReadbackSelectionLength = 4_096;
 export const minAppHeight = 160;
 export const maxAppHeight = 20_000;
 
+export interface HtmlAppTheme {
+  scheme: 'dark' | 'light';
+  tokens: Record<string, string>;
+}
+
 export type HtmlAppMessage =
   | { type: 'open_url'; url: string }
   | { type: 'ask'; text: string }
@@ -29,6 +34,23 @@ const bridgeScript = `(function () {
     pin: function () { post({ type: 'pin' }); },
     unpin: function () { post({ type: 'unpin' }); },
     resize: function (height) { post({ type: 'resize', height: Number(height) }); }
+  });
+  addEventListener('message', function (event) {
+    var theme = event.data;
+    if (event.source !== parent || !theme || theme.jarvisHostTheme !== 1 ||
+        (theme.scheme !== 'dark' && theme.scheme !== 'light') || !theme.tokens || typeof theme.tokens !== 'object') return;
+    document.documentElement.style.setProperty('color-scheme', theme.scheme, 'important');
+    Object.keys(theme.tokens).forEach(function (name) {
+      var value = theme.tokens[name];
+      if (!/^--[a-z0-9-]{1,40}$/.test(name) || typeof value !== 'string' || !value.trim()) return;
+      document.documentElement.style.setProperty('--jarvis-' + name.slice(2), value.replace(/[<>{};]/g, '').slice(0, 300), 'important');
+    });
+  });
+  addEventListener('DOMContentLoaded', function () {
+    var roots = Array.from(document.body.children).filter(function (node) {
+      return !/^(SCRIPT|STYLE|LINK|META|TEMPLATE)$/.test(node.tagName);
+    });
+    if (roots.length === 1 && /^(MAIN|DIV|ARTICLE)$/.test(roots[0].tagName)) roots[0].setAttribute('data-jarvis-document-root', '');
   });
   document.addEventListener('click', function (event) {
     var link = event.target && event.target.closest ? event.target.closest('a[href]') : null;
@@ -90,14 +112,18 @@ function escapeStyleValue(value: string) {
 }
 
 /** Builds the frame document: CSP first, then theme variables and the bridge, then the app's own head. */
-export function htmlAppDocument(html: string, theme: { scheme: 'dark' | 'light'; tokens: Record<string, string> }) {
+export function htmlAppDocument(html: string, theme: HtmlAppTheme) {
   const variables = Object.entries(theme.tokens)
     .filter(([name, value]) => /^--[a-z0-9-]{1,40}$/u.test(name) && value.trim())
-    .map(([name, value]) => `--jarvis-${name.slice(2)}: ${escapeStyleValue(value.trim())};`)
+    .map(([name, value]) => `--jarvis-${name.slice(2)}: ${escapeStyleValue(value.trim())} !important;`)
     .join(' ');
   const injected = `<meta http-equiv="Content-Security-Policy" content="${htmlAppCsp}">`
     + `<meta name="referrer" content="no-referrer">`
-    + `<style>:root { color-scheme: ${theme.scheme}; ${variables} }</style>`
+    + `<style>:root { color-scheme: ${theme.scheme} !important; ${variables} }
+html, body { background: var(--jarvis-background) !important; color: var(--jarvis-text) !important; border: 0 !important; border-radius: 0 !important; box-shadow: none !important; }
+body { margin: 0 !important; font-family: var(--jarvis-font, system-ui, sans-serif); }
+[data-jarvis-document-root] { background: transparent !important; border: 0 !important; border-radius: 0 !important; box-shadow: none !important; }
+</style>`
     + `<script>${bridgeScript}</script>`;
   // A meta CSP only governs what follows it, so it goes before anything the app wrote (after the doctype, which keeps
   // standards mode); the parser files these elements into the head it creates.

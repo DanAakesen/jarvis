@@ -1,4 +1,4 @@
-import { act, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ConversationIntentContext, type ConversationIntentController } from './conversation-intents';
 import { GeneratedViewRenderer } from './GeneratedViewRenderer';
@@ -31,7 +31,14 @@ function post(source: MessageEventSource | null, data: unknown) {
   act(() => { window.dispatchEvent(new MessageEvent('message', { data, origin: 'null', source })); });
 }
 
-afterEach(() => { vi.unstubAllGlobals(); Reflect.deleteProperty(navigator, 'userActivation'); });
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+  Reflect.deleteProperty(navigator, 'userActivation');
+  document.documentElement.style.removeProperty('--report-surface');
+  document.documentElement.style.removeProperty('color-scheme');
+  delete document.documentElement.dataset.theme;
+});
 
 describe('HtmlAppView', () => {
   it('loads the artifact into a scripts-only sandbox with the CSP and handles validated bridge messages', async () => {
@@ -162,5 +169,29 @@ describe('HtmlAppView', () => {
     const frame = await screen.findByTitle('Man City verdict') as HTMLIFrameElement;
     expect(frame.srcdoc).toContain('Updated after retry');
     expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+  it('synchronises the solid surface after load and theme changes without reloading report state', async () => {
+    document.documentElement.dataset.theme = 'dark';
+    document.documentElement.style.setProperty('--report-surface', '#091018');
+    document.documentElement.style.colorScheme = 'dark';
+    const fetchMock = vi.fn(async () => json(artifact));
+    renderView(fetchMock);
+    const frame = await screen.findByTitle('Man City verdict') as HTMLIFrameElement;
+    const originalDocument = frame.srcdoc;
+    const postMessage = vi.spyOn(frame.contentWindow!, 'postMessage');
+
+    fireEvent.load(frame);
+    expect(postMessage).toHaveBeenLastCalledWith(expect.objectContaining({
+      jarvisHostTheme: 1, scheme: 'dark', tokens: expect.objectContaining({ '--background': '#091018' }),
+    }), '*');
+    act(() => {
+      document.documentElement.style.setProperty('--report-surface', '#f0f5f7');
+      document.documentElement.dataset.theme = 'light';
+    });
+    await waitFor(() => expect(postMessage).toHaveBeenLastCalledWith(expect.objectContaining({
+      jarvisHostTheme: 1, scheme: 'light', tokens: expect.objectContaining({ '--background': '#f0f5f7' }),
+    }), '*'));
+    expect(frame.srcdoc).toBe(originalDocument);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });

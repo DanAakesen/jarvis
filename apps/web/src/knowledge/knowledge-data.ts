@@ -1,8 +1,8 @@
 import { backendFetch } from '../backend-request';
 
 /** Knowledge graph of Dan's vault (P7-43, contract in #481). */
-export type KnowledgeFolder = 'People' | 'Work' | 'Personal' | 'General';
-export interface KnowledgeNode { id: string; path: string; title: string; folder: KnowledgeFolder; updatedAt: string | null; degree: number }
+export type KnowledgeFolder = string;
+export interface KnowledgeNode { id: string; path: string; title: string; folder: KnowledgeFolder; directory: string; updatedAt: string | null; degree: number }
 export interface KnowledgeEdge { source: string; target: string; type: 'link' | 'similar'; /** Similarity strength, 0–1. */ score?: number }
 export interface KnowledgeGraph { nodes: KnowledgeNode[]; edges: KnowledgeEdge[]; sample?: boolean }
 export interface KnowledgeNote { id: string; title: string; folder: string; content: string; updatedAt: string | null; githubUrl: string | null }
@@ -47,11 +47,14 @@ export function readKnowledgeGraph(value: unknown): KnowledgeGraph {
     const node = record(entry);
     const id = typeof node?.id === 'string' || typeof node?.id === 'number' ? String(node.id) : '';
     if (!node || !id || id.length > 300 || ids.has(id)) continue;
-    const folder = knowledgeFolders.includes(node.folder as KnowledgeFolder) ? node.folder as KnowledgeFolder : 'General';
+    const path = text(node.path, 400);
+    const folder = typeof node.folder === 'string' && node.folder.length <= 180 ? node.folder
+      : path.includes('/') ? path.split('/')[0]! : '';
     ids.add(id);
     nodes.push({
       id, folder,
-      path: text(node.path, 400),
+      path,
+      directory: path.includes('/') ? path.slice(0, path.lastIndexOf('/')) : '',
       title: text(node.title, 200) || text(node.path, 200) || id,
       updatedAt: typeof node.updatedAt === 'string' && !Number.isNaN(Date.parse(node.updatedAt)) ? node.updatedAt : null,
       degree: typeof node.degree === 'number' && Number.isFinite(node.degree) ? Math.max(0, Math.min(1000, Math.round(node.degree))) : 0,
@@ -142,10 +145,10 @@ export function sampleKnowledgeGraph(count = 420): KnowledgeGraph {
   const nodes: KnowledgeNode[] = Array.from({ length: count }, (_, index) => {
     const folder = knowledgeFolders[Math.floor(random() * 4)]!;
     const title = `${words[Math.floor(random() * words.length)]} ${words[Math.floor(random() * words.length)]} ${index}`;
-    return { id: `sample-${index}`, path: `${folder}/${title}.md`, title, folder, updatedAt: null, degree: 0 };
+    return { id: `sample-${index}`, path: `${folder}/${title}.md`, title, folder, directory: folder, updatedAt: null, degree: 0 };
   });
   const edges: KnowledgeEdge[] = [];
-  const byFolder = new Map(knowledgeFolders.map((folder) => [folder, nodes.filter((node) => node.folder === folder)]));
+  const byFolder = new Map<string, KnowledgeNode[]>(knowledgeFolders.map((folder) => [folder, nodes.filter((node) => node.folder === folder)]));
   for (const node of nodes) {
     const links = 1 + Math.floor(random() * 3);
     for (let link = 0; link < links; link += 1) {

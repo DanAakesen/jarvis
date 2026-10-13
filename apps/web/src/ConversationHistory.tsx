@@ -243,6 +243,17 @@ export function ConversationHistory({
   const windowed = conversationWindow !== null || messages.length > 0 || sending || queue.length > 0 || failedTurns.length > 0 || activeMessage !== null || Boolean(turnError);
   const hosted = windowed && conversationWindow !== null;
   const setConversationAvailable = conversationWindow?.setAvailable;
+  const setComposerHeight = conversationWindow?.setComposerHeight;
+  useLayoutEffect(() => {
+    const bar = inputBar.current;
+    if (!bar || voiceActive || !setComposerHeight) return;
+    const measure = () => setComposerHeight(bar.offsetHeight);
+    measure();
+    if (typeof ResizeObserver !== 'function') return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(bar);
+    return () => observer.disconnect();
+  }, [setComposerHeight, voiceActive]);
   useLayoutEffect(() => { setConversationAvailable?.(windowed); }, [setConversationAvailable, windowed]);
   useLayoutEffect(() => () => { setConversationAvailable?.(false); }, [setConversationAvailable]);
   const updateVoiceActive = useCallback((active: boolean) => {
@@ -902,7 +913,12 @@ export function ConversationHistory({
         conversationWindow.element,
       )}
 
-      <div ref={inputBar} className={`conversation-input${voiceActive ? '' : ' luminous-glass'}`} data-voice-active={voiceActive}>
+      <div className="conversation-input-slot" data-positioned={Boolean(conversationWindow?.position) || undefined}>
+      <div ref={inputBar} className={`conversation-input${voiceActive ? '' : ' luminous-glass'}`} data-voice-active={voiceActive}
+        style={conversationWindow?.position ? {
+          position: 'fixed', left: conversationWindow.position.left, top: conversationWindow.position.top,
+          width: conversationWindow.position.width, maxWidth: 'none', margin: 0,
+        } : undefined}>
       {hosted && conversationWindow && !voiceActive && <ConversationHandle host={conversationWindow} />}
       <div className="conversation-actions">
       <VoiceControls
@@ -984,6 +1000,7 @@ export function ConversationHistory({
         {(screenShare?.inspecting || camera?.inspecting) &&
           <p className="composer-status" role="status">{camera?.inspecting ? 'Looking at camera…' : 'Looking at screen…'}</p>}
       </form>
+      </div>
       </div>
       {historyError && messages.length > 0 && (
         <ConversationToast notification={{ id: historyErrorId, message: historyError, error: true }}

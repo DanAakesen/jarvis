@@ -12,19 +12,29 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
 afterEach(() => { vi.unstubAllGlobals(); });
 
 describe('knowledge graph data', () => {
-  it('validates the graph, defaults unknown folders and drops dangling or self edges', () => {
+  it('preserves full-vault folders and drops dangling or self edges', () => {
     const graph = readKnowledgeGraph({
       nodes: [
         { id: 'a', path: 'People/Anna.md', title: 'Anna', folder: 'People', updatedAt: '2026-10-07T10:00:00.000Z', degree: 2 },
-        { id: 'b', path: 'Work/Roadmap.md', title: 'Roadmap', folder: 'Archive', updatedAt: null, degree: 1 },
+        { id: 'b', path: 'Archive/Roadmap.md', title: 'Roadmap', folder: 'Archive', updatedAt: null, degree: 1 },
       ],
       edges: [{ source: 'a', target: 'b', type: 'link' }, { source: 'a', target: 'a', type: 'link' }, { source: 'a', target: 'zzz', type: 'similar' }],
     });
-    expect(graph.nodes.map((node) => node.folder)).toEqual(['People', 'General']);
+    expect(graph.nodes.map((node) => node.folder)).toEqual(['People', 'Archive']);
     expect(graph.edges).toEqual([{ source: 'a', target: 'b', type: 'link' }]);
     expect(matchTitles(graph, 'ann')).toEqual(['a']);
     expect(() => readKnowledgeGraph({ nodes: 'nope' })).toThrow();
     expect(vaultMemoryId('People/Anna.md')).toBe('vault_UGVvcGxlL0FubmEubWQ');
+  });
+  it('lays out root and arbitrary folders without assuming four regions', () => {
+    const graph = readKnowledgeGraph({ nodes: [
+      { id: 'root', path: 'AGENTS.md', folder: '' }, { id: 'customer', path: 'Customers/Review.md', folder: 'Customers' },
+      { id: 'prototype', path: 'constructor/Review.md', folder: 'constructor' },
+    ], edges: [] });
+    const layout = createKnowledgeLayout(graph);
+    layout.settle();
+    expect(layout.positions.every(Number.isFinite)).toBe(true);
+    expect(graph.nodes.map(node => node.folder)).toEqual(['', 'Customers', 'constructor']);
   });
 
   it('lays out a deterministic cloud that settles with finite positions', () => {
@@ -39,6 +49,18 @@ describe('knowledge graph data', () => {
 });
 
 describe('knowledge graph view', () => {
+  it('filters actual folders including vault root instead of relabelling them General', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => json({ nodes: [
+      { id: 'root', path: 'AGENTS.md', title: 'Root fixture', folder: '' },
+      { id: 'customer', path: 'Customers/Review.md', title: 'Customer fixture', folder: 'Customers' },
+    ], edges: [] })));
+    render(<KnowledgeGraphView backendUrl="https://api.example.com" getAccessToken={getAccessToken} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Vault root1' }));
+    expect(within(screen.getByRole('list', { name: 'Vault root notes' })).getByRole('button', { name: 'Root fixture' })).not.toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Customers1' }));
+    expect(within(screen.getByRole('list', { name: 'Customers notes' })).getByRole('button', { name: 'Customer fixture' })).not.toBeNull();
+    expect(screen.queryByRole('button', { name: 'General0' })).toBeNull();
+  });
   it.each([
     ['front matter first', '---\ntags: [fixture]\ncreated: 2026-10-10\n---\n'],
     ['leading comments and whitespace', ' \n<!-- Fixture sync template -->\n<!-- Another comment -->\n---\ntags: [fixture]\n---\n'],

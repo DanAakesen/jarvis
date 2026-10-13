@@ -1,5 +1,20 @@
 # Decisions
 
+## Remaining UI release approval (13 October 2026)
+
+Dan's "Deploy everything. so i can test live." authorises the remaining
+chat/composer, Notes/graph and report refinements in one release. Earlier
+local-only holds and the camera/loading/window split no longer gate these
+drafts; those three releases are already deployed. Preserve the agreed plain
+border resizing, following composer, graph-first immediate note draft and
+one-surface report design. No backend support or dependency change is needed.
+
+The current candidate passes types, zero-warning scoped lint/build, 368
+affected tests and desktop/phone Chromium fixture workflows, including
+desktop WebGL graph continuity. An unchanged local locale assertion remains
+excluded without source changes. CI and the merge's deployment are still
+release gates; fixtures are not real-device, live voice or vault-write proof.
+
 ## P12-02 backup route chosen: paged double read (13 October 2026)
 
 Dan chose to stop waiting for a provider export route and approved a paged-read backup of the Daily D1 data (25-row pages, every table read to exhaustion twice, per-table counts and checksums compared between passes). He lifted, for P12-02 only, the earlier rule that real records must not pass through a Codex sandbox. The backup is labelled a paged-read backup, not a provider-signed snapshot, and R2 coverage is reported as far as the tools allow. Unchanged limits: the repository is public, so no row content, personal data or credentials enter Git, PRs, issues or CI logs; the data goes only to private encrypted storage owned by Dan; original Daily stays running and its source and schema are untouched. The OpenAI support request stays available as a parallel fallback. The #717 release comment holds the acceptance standard.
@@ -354,6 +369,376 @@ writes, SHA conflict protection and confirmed deletion remain. Contracts add
 directory metadata and tree shape; logs expose only the four legacy folder
 names or `other`, never paths or content. No migration or web change. Implemented
 and tested offline; live vault access remains unverified.
+
+Clean border resize and movable chat (12 October 2026, Dan; local, unreleased):
+the later request supersedes the fixed-width, mounted-session height-only
+refinement below. Dan explicitly rejected visible corner brackets: use invisible
+edge/corner resize regions on the existing glass border, directional cursors
+and keyboard focus, with no separate top resize grip. Keep Move beside Maximise.
+Dan selected leaving the composer at its placed position when messages minimise.
+Persist validated device-local position/size with reference canvas dimensions,
+preserving preferred pixels across composer wrapping and clamping smaller
+viewports without overwriting the saved preference. Keep the composer and
+voice client in their existing React tree; the shell shares their pixel anchor
+and measures the footer footprint. Seed first pointer interaction from the
+visible opening rectangle before freezing its scale to avoid the reported jump.
+Keep workspace move/resize commands and manual-placement snapshots consistent
+with that same saved geometry.
+Dan's scrollbar correction places side hit regions outside the transcript and
+cuts the inward quadrant out of corner regions. The native scrollbar has its
+own uninterrupted lane; scrolling cannot change saved window geometry.
+Suppress the unhosted initial-history skeleton in the empty room while retaining
+accessible status, standalone loading and error/Retry. Compact message type
+remains. Local automated/browser evidence is recorded in agent-context;
+physical-device acceptance, camera activation, commits and release remain separate.
+
+Upload-only deployment and activation boundary (12 October 2026, coordinator
+at 11:01 local): #713 (P9-85, closing #710) is merged/deployed with backend,
+agent and smoke green, including the 400,000-byte text-part ceiling. Capture
+`mode: 'handle'` returns a private handle/provenance with no description or
+vision call; omitted mode preserves caption-first compatibility. Chat and
+EN/DA realtime accept handle-only context, with same-frame backend caption
+fallback and explicit no-image guidance if it fails. Correlation, single
+response, sixty-second lifetime and owner/session/turn binding remain.
+Final shapes are recorded in `docs/architecture.md`. The local opt-in stays
+off until Dan accepts the camera UI release; this deployment is not permission
+to flip it or proof of model image acceptance. Live-feel wording is now
+identified as separate P9-87/#714, superseding its earlier #713 scope placement.
+
+Live camera/latency follow-through (12 October 2026, coordinator at 10:54
+local): Log Analytics for Dan's 07:52-07:53 UTC turns reports cold then warm
+`chat.agent_session` records with `sessionIdUsed: true`. First text delta
+(`agent_first_byte`) falls from 12.2 s cold to 5.2 s and 4.5 s warm, compared
+with the earlier 12-18 s range. Session reuse now has reported live evidence;
+this is not a local end-to-end timing or proof of the 2.5 s target.
+Both camera turns still report `visual.path: caption` with
+`reason: image_context_limit`, because request text exceeded a 28,000-byte
+ceiling. The coordinator raised the ceiling to 400,000 bytes on #713; CI was
+running at this update, so neither deployment nor answering-model image
+acceptance is established. #713 also owns upload-only input. The current UI
+still posts the caption-compatible request and validates a real description;
+wait for final deployed shapes before enabling handle-only capture.
+
+Chat height and density (12 October 2026, Dan; initial local refinement,
+superseded above): make the typing transcript
+taller by dragging its top grip, not by moving the dock or composer. Extend
+the existing workspace gesture handling with per-view session height,
+viewport clamps, cancellation and a keyboard alternative; keep free movement
+and width resizing unavailable. The grip stays clear of window actions and
+has a larger phone touch target. The chosen height survives minimise/reopen
+and maximise/restore, but is not persisted across refresh. Correct scoped
+message paragraphs from the inherited 18px lead style to the existing 14px
+small-type role, tighten padding/speaker gaps, and keep the composer at 16px.
+Desktop and touch Chromium fixtures verify the behavior and increased visible
+message capacity; physical phone acceptance remains unverified. No backend,
+camera-polish, commit or release change is authorised by this request.
+
+Natural camera replies (12 October 2026, Dan; implementation pending): Dan
+asks "Stop it from saying when the image was captured, i need this to feel live".
+For fresh observations, answer conversationally without unsolicited capture
+timestamps or snapshot-versus-live boilerplate. Preserve internal provenance,
+ordinary age warnings for stale/reused observations, explicit unavailable
+feedback and truthful answers to direct timing/input-path questions. Do not
+claim continuous video access. The coordinator owns chat/EN/DA voice grounding
+instructions; no UI message stripping, timestamp-field removal or cadence
+change. Backend deployment/live wording verification remains pending.
+The coordinator reports the change is scoped into #713, including code-owned
+freshness (this turn's own observation within sixty seconds), ordinary age for
+earlier/reused observations and fresh/earlier/unavailable chat/EN/DA coverage.
+That earlier scope report was not deployment or local verification evidence.
+The latest 11:01 local update confirms #713's input deployment but identifies
+fresh-answer wording separately as P9-87/#714, still pending. No UI message
+stripping or timestamp-field removal is needed.
+
+Runtime status update (12 October 2026, coordinator report): #707 is deployed.
+The coordinator changed live `roles.chat.reasoning_effort` from medium to low
+to target model first-token latency; it is reversible in Settings. This
+session made no settings/default/model change. At 06:53 UTC, the observed
+browser Resource Timing buffer contains no new completed turns after the
+budget-fix merge, so neither a latency improvement nor actual image input
+is measured. #708 session reuse and #710 upload-only input remain pending.
+
+Camera experience and chat latency (12 October 2026, Dan; open investigation):
+Dan rejects the slow snapshot-per-turn camera experience and prioritises
+natural visual conversation and faster general chat. Camera-window polish is
+deferred until that experience is proved. Two live chat camera turns reported
+caption-only input with `budget_unavailable`; Dan reports the finger count was
+wrong. Existing signed-in browser Resource Timing measures ordinary chat
+request-to-stream-completion at 18.416 s and 12.437 s, and camera inspection
+plus chat at 19.694 s and 23.494 s. The latter include 1.773 s and 4.747 s of
+inspection before chat. These are not time-to-first-token measurements:
+cross-origin request/response timing details are unavailable. The UI starts
+chat within 2-4 ms of inspection settling and consumes text deltas immediately;
+history refresh is after completion. The coordinator owns deployed budget and
+agent-latency diagnosis. This supersedes the earlier no-live-traffic acceptance
+status, not image/audio acceptance: actual image input remains unproved.
+No replacement cadence, continuous upload or release is approved.
+
+Backend diagnosis follow-through (12 October 2026, coordinator): Log Analytics
+reports first tokens at 17.6/12.2/16.6/16.1 s, with backend work under 0.5 s
+and a 6.5-7.2 s no-callback gap before hosted-agent work. #708 investigates
+query-parameter session reuse and debug-latency evidence; the gap alone is
+not proof of provisioning, and #344/#356's failed reuse must not be repeated
+without distinguishing the provider contract. The image resolver rejected
+`gpt-6.1-sol` because it was absent from the pricing table. #707 merged at
+06:41:02 UTC to admit unpriced models with an existing conservative,
+unverified 0.1 DKK hold; deployment and real image acceptance remain unproved.
+This is an admission correction, not removal of the serial caption stage:
+the browser still awaits `/screen/frames` and its real description before
+chat. A caption-free direct-input contract is separate proposed work.
+No changes to the selected model, reasoning effort, camera cadence or UI.
+
+Backend next-step scope (12 October 2026, coordinator; proposed, not deployed):
+#708 now distinguishes #344's rejected `chat-<id>` sessions from the random
+32-hex format already accepted by the voice path. Its chat plan is a
+conversation-owned in-memory ID map with cold/warm debug-header evidence,
+longer supported idle lifetime and recovery only for an explicit
+pre-execution routing rejection, never a generic invocation failure.
+#710 (P9-85), blocked by #708 for file overlap, proposes upload-only
+`/screen/frames` `mode: 'handle'` and handle-only chat/voice context.
+Only failed direct-image delivery would run a caption model inside the
+answering turn; failed caption fallback must report unavailable.
+Final field names and compatibility are pending that PR. The local UI keeps
+its current deployed contract; camera cadence remains unresolved.
+
+Deployed realtime image alignment (12 October 2026): #706 merged at
+22:39:33 UTC on 11 October (55ee8e4b), closing #705. The coordinator confirms
+backend, agent and smoke green and no relevant upstream/settings failures.
+Final contract matches the prepared implementation: original budget-admitted
+images precede one item-correlated EN/DA realtime response; acknowledged
+delivery or caption fallback uses the existing visual-result event.
+`budget_unavailable` is relay-to-client only, not a browser-send reason.
+Hosted DA fallback remains caption-only. Image-budget accounting and
+content-free `visual.path` diagnostics are deployed. No live camera traffic
+has exercised this deployment, so actual model acceptance is unverified and
+#703 stays open. The 320-test combined local suite passes with two known
+unrelated baselines excluded; synthetic image-reported desktop/phone checks
+exercise chat and both voice languages without claiming model acceptance.
+This supersedes the earlier open/deployment and voice-caption-only statuses
+below. The UI stays local until Dan reviews; no release or live upload approved.
+
+Camera budget feedback (12 October 2026, local; deployment status superseded
+by realtime alignment above): UI capture parsing and voice
+receipt were dropping `budget_exhausted`, either forwarding generic
+`vision_failed` or ignoring the relay notice. Preserve the typed capture
+failure and current-item relay feedback; only rate/frame-cap refusals can
+reuse a caption, never a budget denial. Do not echo server notices or infer
+image delivery. #706's proposed `budget_unavailable` gets distinct receive-only
+feedback; the browser does not send this new reason before deployment.
+Nine failing regressions reproduced the gaps; all 128 tests in the four
+affected files pass after correction, as do types/scoped lint/build.
+Synthetic desktop/phone checks exercise both voice languages and history
+recovery. #706 is open, and deployment/live acceptance remain unconfirmed.
+No backend edits or UI release.
+
+Camera evidence wording (12 October 2026, local): #704 implements image input
+but live model support remains unverified. The previous shared copy conflated
+`image_input_unverified` with disabled legacy-agent input. Use "Model image
+support has not been verified" for the former and retain "Direct image input
+is not enabled" for `legacy_agent`. Both still report caption-only input for
+that turn. A regression reproduced the inaccurate wording before correction;
+chat history and current-item voice use the same helper. No backend protocol,
+image capability, layout or release policy changes.
+The 114-test helper/chat/voice subset passes with the known locale baseline
+excluded, alongside types/scoped lint/build. Synthetic desktop/phone checks
+verify corrected wording and recovery in chat and both voice languages.
+
+Deployed image contract alignment (11 October 2026; voice-caption-only status
+superseded by realtime alignment above): #704 merged at 21:46:10
+UTC (e5c83dbc); the coordinator confirms backend, agent and smoke green with
+no voice upstream-event or agent-settings failures. Its implementation
+matches the prepared draft. Keep the local consumers and forward fresh
+optional handles with the correlated voice item; do not infer image input
+from a handle or Live playback. Synthetic desktop/phone fixtures now use
+32-character server-shaped handles and verify caption-only feedback and
+recovery. Chat/Danish-text image input is implemented but live model acceptance
+is unverified; EN/DA voice remain caption-only. #703 stays open; #705 (P9-83)
+owns remaining voice images, image-budget accounting and content-free
+`visual.path` diagnostics. This supersedes the draft/pending deployment state
+below, not the outstanding actual-image/audio acceptance or Dan's review
+requirement. No UI commit or release is authorised.
+
+Voice visual-source interlock (11 October 2026, local): the deployed camera-on
+relay requires item-correlated context/unavailable events. The old Look at
+screen action could supersede a camera request or send an uncorrelated failure,
+closing the socket with 1008. Disable that action while camera conversation is
+on, with an accessible explanation; keep shared screen capture and independent
+watch controls intact. Camera activation and stream/state changes cancel
+in-flight legacy inspection, and its abort signal reaches capture. Three
+regressions cover camera-turn preservation and late screen success/failure.
+The 108-test voice/client/App subset passes, with the known stale Notes test
+excluded; synthetic desktop/phone checks exercise the disabled row in both
+voice languages. Direct image and live-audio acceptance remain pending.
+
+Visual evidence recovery (11 October 2026, local): tracking the failed history
+request's latest/older source is necessary for the existing Retry control.
+Two regressions reproduced no request without a cursor and the wrong older
+request with a cursor; both now pass, along with an older-cursor recovery
+regression. The history/transport subset passes 79 tests (known locale test
+excluded), types/build/scoped lint pass, and synthetic desktop/phone checks
+exercise malformed evidence retry, restored history metadata and
+stale/duplicate/uncorrelated voice events. The design-hook gradient-text
+finding remains the previously accepted typed-phrase light sweep, documented
+in DESIGN.md, not new evidence styling or a heading. No suppression or
+unrelated visual change was added.
+
+Camera input evidence (11 October 2026, local preparation; draft status
+superseded by deployed alignment above): use only backend-reported
+`visualPath`/`visualReason` to distinguish actual image input from caption-only
+fallback. Do not infer it from the preview's Live label or an uploaded reference.
+Prepare the current draft #704 done/history/voice shapes; do not call the server
+resolver from the browser. Show ordinary chat body text on the matching user
+message and the existing voice toast only for the current item. Invalid
+evidence is a visible failure, not success; missing legacy evidence adds no
+label. Discard raw visual metadata from UI history. Camera replacement,
+on/off, session replacement and reconnect invalidate pending evidence; retain
+the separate bounded transcription deduplication set. Synthetic desktop/phone
+checks found and fixed phone preview limit-copy clipping with an open transcript.
+The 307-test targeted suite, scoped lint, types and build pass; actual model
+image capability and both voice image paths remain unfinished in draft #704.
+No UI release is authorised.
+
+Local camera activation (11 October 2026): #702's backend, Jarvis agent and
+smoke checks succeeded in Deploy run 38172562500 for de3eb935. Enable
+`cameraConversationDeployed` locally for question-aware caption conversations;
+the direct-image task #703/#704 is additive and does not need to block that
+deployed stage. The UI sends fresh optional references only if supplied by
+the backend, never a cached handle. Physical-camera/live relay acceptance,
+actual answering-model image delivery and Dan's UI release approval remain
+outstanding. No commit or UI deployment is authorised.
+
+Coordinator confirmation (11 October 2026; image dependency status superseded
+by deployed alignment above): #702's final deployed contract
+supports the locally enabled caption stage. Migration 0040 applied, deployment
+checks found no voice upstream-event or agent-settings errors, and both voice
+paths have item-correlated twelve-second holds with settled-item late results
+ignored. The Danish hosted path disables automatic response creation while
+camera-on. Relay ordering and legacy hosted-voice gateway translation are
+offline-tested only; live audio acceptance is still outstanding. Keep the UI
+local until Dan reviews. Direct image/frame references remain pending #703/#704.
+
+Merged camera contract alignment (11 October 2026, before deployment; activation
+above supersedes this gate state): #702 merged at 20:31:21 UTC; deployment and
+live ordering were then unconfirmed. Read-only
+review of its actual validators found three differences from the proposal:
+generic capture returns `question: null`, question bounds count Unicode code
+points, and correlated unavailable accepts `vision_failed`/`timeout` rather
+than `inspection_failed`. Accept the generic null as absent, keep exact
+500-code-point/no-truncation behaviour and use the actual relay names; the
+proposed failure name would close the socket with 1008. Item/turn identifiers
+use the merged ASCII pattern. Voice supplies optional frame `turnId` and
+requires a matching echo. Show valid relay-originated limit events only for
+the current turn, without echoing them back. The App gate was false pending deployment; actual image-path acceptance remains
+outstanding and no release is authorised.
+
+Camera caller implementation (11 October 2026, before deployment; gate state
+superseded by local activation above): implement Dan's
+every-turn requirement against the coordinator's proposed contract without
+activating unsupported production payloads. App's `cameraConversationDeployed`
+gate was false pending deployed contracts and both voice response holds. Camera-on chat queues rather than steering and inspects
+when its turn runs. Voice synchronises camera state and reconnect, captures
+the item's question, aborts superseded work and emits unavailable by ten
+seconds. Repeated transcription IDs are suppressed in a bounded session set.
+Only typed limits reuse a same-stream/session caption labelled with age and
+original question; single-use frame references never enter that cache. Known
+pacing survives stop/switch, while cached content is cleared. Limit notices
+use preview body text and the existing toast stack, including while docked.
+This reuses the existing window/composer geometry and independent watch mode.
+Local synthetic tests and desktop/phone Chromium checks support UI behaviour,
+not live relay ordering, actual model image delivery or release approval.
+
+Direct camera image (11 October 2026, user-directed via coordinator;
+proposal/deployment status superseded by deployed alignment above): Dan
+requires actual image input to the chat and voice answering models, not only
+a caption. The coordinator is sequencing an additive opaque frame reference
+after #702: at most sixty seconds in memory, single-use owner/session-bound
+consumption and `visualPath: image | caption` metadata. Prepare preservation
+of optional `frameId` in the UI capture result without claiming image delivery.
+The coordinator later proposed 1–128 characters from `[A-Za-z0-9_-]`,
+one chat `visualContext { source, capturedAt, description, question, frameId? }`
+and the same fields beside voice `itemId`. Local send adapters now prepare
+that shape using shared bounds and strip unknown fields, including frame
+bytes; gated callers now use it, while normal app behaviour remains unchanged
+until deployment.
+Chat captures when the queued turn executes; voice
+forwards the reference before releasing the same item's held reply. Final
+deployed fields and backend implementation are pending; no deployment is
+authorised here.
+
+Camera conversation (11 October 2026, user-directed via coordinator): Dan wants
+a conversation about the camera in both chat and voice. Camera on therefore
+requires a fresh bounded frame with the question on every user turn; explicit
+phrase matching and watch-mode dependence are superseded. Camera off sends
+nothing. Respect rate/daily limits with visible, age-labelled reused context,
+never treating an old observation as a fresh answer. Exact deployed question,
+provenance and voice response-ordering contracts await #701/#702.
+
+Dan selected ten minutes without a user turn for idle shutdown instead of
+the hard five-minute cutoff. Locally, chat submission and speech/final voice
+turns reset the capture owner's timer; dock/render activity does not. Expiry
+stops tracks and restores the preview with an explanation and retry. Hide the
+inactive empty picture so recovery fits phones. Explicit stop/unmount cancels
+the timer. This does not authorise UI shipping.
+
+Camera follow-up evidence (11 October 2026): the coordinator reports exactly one
+successful live `POST /screen/frames` at 19:23:33 UTC (200, 2.9 s), grounding
+Dan's scene description. The later finger-count question triggers no capture
+in the current UI, even without its typo. Missing current image context does
+not invalidate the prior observation. The coordinator identified transient
+turn-only vision context and a generic question-free vision prompt, and is
+preparing question-aware requests, capture time and retained visual provenance.
+These contract additions are pending, not implemented here; keep the UI capture
+path unchanged until exact deployed fields arrive.
+
+Camera contract preparation (11 October, local): prepare optional question
+forwarding and response parsing against the coordinator's proposed shape,
+without changing live caller routing before deployment. Reject questions over
+500 characters instead of truncating them. Legacy responses carry no invented
+capture time; a question-specific result needs valid server time and a matching
+echoed question. Preserve only recognised typed 429 limits for future cached
+fallback; ordinary/unknown failures remain explicit. These proposed fields
+are not a claim that #702 or every-turn vision is deployed.
+
+Voice camera protocol preparation (11 October, local): the coordinator found
+that existing visual context creates a separate voice reply and rapid context
+events can close the socket. Prepare explicit camera-state signalling with
+reconnect replay and transcription-item correlation for context/unavailable,
+without enabling these events against the old production relay. An opted-in
+camera-on adapter requests context for every non-empty transcript, not a
+phrase match. The backend must hold one normal reply, release it for the same
+item's context/unavailable or its deadline, and ignore stale/late results.
+Normal app callers remain gated pending the confirmed deployment; local
+opted-in callers now implement that orchestration.
+
+Camera preview (11 October 2026, local): Dan supplied desktop/phone references
+for a separate preview instead of modifying the composer. Reuse one local
+capture and the existing workspace window/tab/command lifecycle, named
+`Camera preview` with ID `camera-preview`. Dan confirmed Close turns camera
+off; minimise/dock keeps capture on. Phones keep a compact preview alongside
+the foreground view; desktop starts upper-right and supports normal move/resize.
+Switch is mobile-only; the live preview never uploads by itself. Reopening by
+Jarvis uses already-granted permission and the default camera, rather than
+requiring desktop facing metadata. Permission refusal, cancellation and
+playback failures remain explicit. Local scoped tests (96), typecheck/build
+and synthetic desktop/phone/landscape browser workflows pass, including a
+fresh frame while docked. Lint retains the pre-existing pin-loading effect
+error. The coordinator confirms #700 deployed the matching backend capability
+instructions, including permission-checked reopening without a schema/tool
+change; backend smoke checks are green and logs clean. Physical-camera/live-model
+acceptance and Dan's UI release approval remain outstanding; the UI is local.
+
+P9-79 (11 October 2026, local): Dan requested camera status outside the phone
+typing area, actual Front/Back indication and switching, then explicitly rejected
+Look now buttons in favour of simple wording and icons. Reuse one compact status
+row in chat and voice with switch/off icons initially; the Camera preview
+decision above supersedes that placement. Inspection remains wording-driven.
+The client trace found voice callbacks retaining the camera's old sharing state,
+chat recognising fewer phrases than voice, and visual requests being steered
+without a frame during an active reply. Fix those paths, verify actual facing,
+and bound frame readiness/token acquisition using the existing cancellation
+pattern. Synthetic Chromium traffic proves the local upload/context path, not
+the root cause of every reported live turn or physical-camera/model acceptance.
+No backend route, provider, dependency or persisted camera permission is added.
 
 P9-78 (11 October 2026): use the generated view's existing `source.updatedAt`
 to invalidate a mounted HTML artifact load when its ID stays the same. Keep
@@ -1562,6 +1947,21 @@ regression; live acceptance is pending.
   stubbed auth and API. Live backend, Blob and provider acceptance remain pending.
 - **Status:** implemented offline.
 
+## 2026-10-08: Window management by intent (P8-42, #430)
+
+- **Decision (Dan):** The page arranges windows automatically (smart fit by window count, cascade from five); Jarvis acts only when asked. Jarvis names intents and the page computes geometry: `place {viewId, region}`, `arrange {layout: auto | side-by-side | grid | cascade, viewIds?}`, `minimise-all`, `restore-all`, `close-all` and `pin`/`unpin`. "Stack" means a diagonal cascade. Windows placed by Dan or by coordinates stay put until "tidy up". Pins persist server-side across reloads and devices; pinned windows return as tabs, and closing a pinned window sends it to the tab bar.
+- **Rationale:** intents are quick for voice, can't be wrong about the real screen size, and degrade sensibly on phones. Coordinates stay as a backwards-compatible fallback.
+- **Split:** the UI session builds the layout engine, command handlers, pin UI and richer snapshot (window `state`, `region`, `pinned`, `front`). The coordinator adds the contract, pin storage and routes, and Jarvis's tool and instructions.
+- **Status:** design agreed; implementation in progress.
+
+## 2026-10-10: Integrated reports and compact window tabs
+
+- **Decision (Dan):** use one solid background shared by report and host, rather than nested frames. Use compact rounded-rectangle tabs with clear buttons.
+- **Treatment:** the canonical report surface follows light/dark appearance. Strip only document-level framing and a sole main/div/article wrapper, retaining useful nested sections. Synchronise presentation tokens without reloading interactive reports; retain the existing sandbox and CSP.
+- **Controls:** keep window controls in one non-wrapping row. Tabs use a consistent window icon and one pin toggle; its orientation and accessible pressed state identify pin status. Preserve Close-to-tab behaviour for pinned windows, and show Close on unpinned tabs. Desktop controls are 32 px, touch controls 44 px; crowded tabs scroll and the phone list opens above windows.
+- **Evidence:** local report fixtures at desktop, 860 px tablet and 390 px touch-phone widths; matching solid surfaces, single-row controls and preserved report-section selection after theme messages. The shared browser confirms one functional pin and the separate window icon. Typecheck, 64 focused tests and build pass.
+- **Limitations:** additional real Settings-control browser acceptance and ESLint stalled; their helper processes were stopped. No production release or physical-device acceptance. Persistent-pin lifecycle work under #430 remains unfinished and unshipped.
+
 ## 2026-10-10: Notes source editor (P9-77, #683)
 
 - **Decision (Dan):** the local UI session builds Notes after #626 merges.
@@ -1632,3 +2032,151 @@ Provider-format clarification (16:17:51 UTC) resolves the earlier bootstrap/scal
 Dan approved P12 on 12 October 2026 and explicitly released only P12-01 for this worker. The later [execution authorization](https://github.com/DanAakesen/jarvis/issues/716#issuecomment-6124634183) supersedes the original backlog-only and extra cutover-approval wording: eventual production cutover is pre-authorized only after dependency, parity, reconciliation, backup and rollback gates pass. Original Daily continues ordinary authorized food/health writes and remains running/canonical before cutover. Migration tooling must not alter its application/source code/schema or rewrite its records; final-delta reconciliation accounts for ongoing normal use. Read-only export belongs in the protected migration workflow. Legacy operation may be deprecated only after all in-scope data, features and sync are migrated and verified and rollback is protected; never delete the original repository or data. New secrets/access and unapproved paid resources retain their explicit-confirmation boundaries. This issue performs no cutover or production writes.
 
 **Implemented contract, pending review/live acceptance:** default-off trusted module flag; metadata-only enabled endpoint; same server owner for existing user and hosted-agent auth; runner denial; reserved stable native view IDs. Production composition, shell, voice, login and dispatcher stay unchanged. **Planned:** owner-bound Daily data/device services, native mobile-first pages/views and protected migration/parity workflows in existing #717–#734. [Full scope and evidence gates](daily-migration.md). Synthetic checks are distinct from live providers, SQL, cutover and physical-phone acceptance. TickTick excluded; notifications default off; private health/food data and credentials excluded from public Git/coding sandboxes.
+
+- **Creation revision (Dan, 11 October):** remove Start writing and the filled
+  Create new treatment. Open the blank editor immediately, with title and an
+  Obsidian-style expandable folder picker. Dan chose existing folders plus new
+  nested folders; those are local destinations until their first note Save.
+  An untouched blank draft does not trigger discard confirmation. Typed title
+  or source does; location/title changes must not modify Markdown.
+- **Vault scope (Dan, 11 October):** “Jarvis should be able to read and write all
+  folder, no limitations at all! full vault acess that is the whole point”.
+  This supersedes the four routing-folder permission restriction for Notes and
+  Jarvis vault access, including root notes and arbitrary nested directories.
+  Preserve owner authentication, safe paths, existing secret handling and SHA
+  concurrency; access scope is not permission to traverse outside the vault or
+  overwrite a newer revision. Backend/contracts work and an actual full-vault
+  folder inventory are requested from the coordinator. The local UI revision
+  is not committed/deployed; full-vault live acceptance remains blocked on it.
+- **Local revision evidence:** typecheck, scoped ESLint, production build and
+  74 Notes/graph tests pass. Chromium fixtures cover dark 1440x1000 desktop
+  with preserved graph canvas, light 320x700 phone and dark reduced-motion
+  844x390 touch landscape. Immediate writing focus, title focus retention,
+  nested destination creation, exact intercepted POST content, SHA/conflict
+  recovery and dock clearance pass. Corrected an initial harness URL mistake
+  and duplicate accessibility names. No real notes were written; full-vault
+  backend access, complete folder inventory and physical keyboard acceptance
+  remain unverified. The coordinator session is stopped; requests are queued.
+- **Backend contract and scope exception (Dan, 11 October):** the coordinator
+  started #697 (P9-80), backend/contracts only, and agreed an owner-only
+  `/notes/tree` prototype contract sourced from the real Git tree. The picker
+  consumed it directly, validated bounded paths/metadata, exposed truncation
+  and freshness, and keeps drafting available on an unavailable endpoint.
+  No graph or paged-index fallback is used. Dan explicitly selected
+  “Exclude hidden dot-folders; allow all normal note folders”, superseding
+  the unrestricted hidden-folder interpretation. Root Markdown and arbitrary
+  normal nested folders remain required. Backend merge/deployment and live
+  acceptance are pending; the earlier stopped-coordinator observation is
+  historical, not the current assignment status.
+- **Tree integration evidence:** typecheck, scoped ESLint, build and 93
+  Notes/graph tests pass. Updated `/notes/tree` Chromium fixtures pass at
+  1440x1000 dark desktop (graph canvas retained) and 320x700 light reduced-motion
+  touch phone, including explicit truncation, new nested folders and
+  intercepted saves. The shared signed-in canvas confirms the unavailable
+  endpoint is displayed with Retry rather than a false complete tree.
+  This evidence covers the earlier `/notes/tree` prototype, superseded by the
+  final contract below.
+- **Superseded folder proposal (coordinator, 11 October):** #697 was described as owner-only
+  `GET /notes/folders`, with `{ folders, rootNoteCount, truncated, updatedAt }`.
+  All depths and non-Markdown-only folders are included; root `""` is always
+  first, ancestors are included, hidden/skipped folders are excluded, the
+  timestamp is a non-null string, and the backend bounds the inventory at
+  roughly 2,000 entries. The UI used this proposal, rejected missing root or
+  malformed metadata, and distinguishes absent deployment (404) from an index
+  not ready (503). Neither failure substitutes invented or graph-derived folders.
+  Folder paths and final note paths have independent length validation, so a
+  long existing directory does not falsely invalidate the whole inventory.
+  Typecheck, scoped Notes lint, build and 98 Notes/graph tests pass. Final-contract
+  Chromium fixtures pass at 1440x1000 dark desktop (graph canvas retained) and
+  320x700 light reduced-motion touch phone (WebGL disabled), including root and
+  non-Markdown-only destinations, immediate writing focus, nested new folders,
+  exact intercepted saves, conflicts and dock clearance. The signed-in shared
+  canvas still shows an unavailable live endpoint with Retry. Actual full-vault
+  responses, physical-phone keyboard acceptance and deployment remain pending.
+- **Implemented contract correction (#698, 11 October):** the coordinator
+  superseded `/notes/folders` with `GET /notes/tree` and
+  `{ directories, rootNoteCount, truncated, updatedAt }`. Root is implicit,
+  the directory bound is 10,000, and `updatedAt` is an ISO last-sync timestamp.
+  The picker now consumes this shape and offers Vault root even with zero
+  directories/root notes. Note/graph items require `folder` and `directory`;
+  older deployed responses remain readable through derived parent metadata.
+  Typecheck, scoped Notes lint, build and 103 Notes/graph tests pass, including
+  the exact directory bound, implicit-root handling and date-time validation.
+  Updated Chromium desktop/phone fixtures pass with intercepted saves.
+  The signed-in local canvas now loads the live tree and expands nested folders,
+  without real vault writes; physical-phone keyboard acceptance remains pending.
+  At inspected head `4d2d3279`, synchronization calls
+  `indexedDirectoryTree(markdown.map(({ path }) => path))`, omitting
+  non-Markdown-only folders. This contradicts the agreed full-directory scope
+  and was raised with the backend coordinator; the requirement is not withdrawn.
+- **Inventory gap resolved (#699, 11 October):** the follow-up is merged at
+  `ffd29ec1` and the coordinator reports deployment/smoke green. Inspection
+  confirms directory collection now uses every Git-tree file while counting
+  only eligible root Markdown notes. Hidden/skipped directory segments remain
+  excluded; `/notes/tree` names and bounds are unchanged. Reopening an untouched
+  draft in the signed-in local canvas loads the refreshed live inventory with
+  last-sync time 19:42:47. No code adaptation or live note write was needed.
+  The backend blocker is resolved; Dan's local UI review and shipping approval
+  remain pending.
+
+## 2026-10-11: Centred Notes creation and camera request correction (local)
+
+- **Dan's UI direction:** keep search centred and place a quiet plus-only
+  Create new action inside it. Move vault inventory freshness into the note
+  popup header's top row next to the close icon, not below the title, and remove
+  the repeated hidden-folder exclusion notice. Narrow-phone metadata wraps
+  within that row while keeping close reachable.
+  The destination disclosure also uses one line, not stacked "Save in" and
+  folder labels; long paths retain their full accessible name and tooltip.
+  Dan then replaced the separate New folder button with a per-parent plus
+  (including Vault root), revealed on desktop hover/focus and always visible
+  on touch. Clicking it expands the parent and focuses a child naming row there;
+  Enter/check adds and selects locally, Escape/cross cancels and restores focus.
+  The new-draft instruction/path row is removed; existing note paths remain.
+  Final picker checks pass typecheck, scoped lint/build and 92 Notes tests.
+  Desktop/phone Chromium fixtures verify hover/focus/touch visibility, focused
+  child naming, cancellation, nested selection and exact intercepted saves.
+  Repeated clicks preserve the pending name; collapsing its ancestor cancels
+  naming and returns focus to a visible control. No real vault write occurred.
+  Hidden dot-folders remain refused, as previously approved.
+- **Writing:** a new draft still focuses Markdown immediately. Scroll its source
+  into view without motion so header metadata cannot leave the phone writing
+  area clipped below the fold.
+- **Camera evidence:** the screenshot's "can you see anything?" was absent from
+  the shared chat/voice recogniser, bypassing frame capture. Recognise broader
+  explicit English/Danish visual questions while keeping screen-specific wording
+  on the screen path and unrelated turns free of camera uploads.
+- **Switching:** Dan requested the switch icon only on mobile. Use coarse primary
+  input without hover, not viewport width; desktop keeps status and camera-off.
+  Real errors remain visible. No backend contract, camera permission or automatic
+  every-turn capture change is introduced.
+- **Evidence:** typecheck, scoped lint/build and 229 of 230 relevant tests pass;
+  the unchanged en-DK decimal expectation is the only failure. Reduced-motion
+  Chromium fixtures cover Notes at 1440/900 px desktop and 320 px touch phone,
+  plus camera chat/both voice transports at 1440 px desktop, 320 px phone and
+  844x390 touch landscape. Fresh JPEGs and transient context delivery pass;
+  failed capture remains visible and does not send text-only chat.
+  These fixtures disable WebGL and intercept writes. Initial normal-motion
+  workflow attempts timed out; the signed-in canvas confirms live graph/search,
+  header freshness and immediate draft focus, without vault writes. Sampling the
+  existing popup entrance in the signed-in canvas confirms normal-motion
+  progression with the empty Markdown source still focused.
+  Physical-phone/live-model acceptance remains unverified.
+- **Scope:** local UI only; no new commit, push or deployment authorised.
+
+## 2026-10-12: Shell history frame and pin recovery
+
+- **Decision (Dan):** show the chat window before its messages load, with loading
+  feedback inside the window rather than appearing in the room or popping the
+  window in after the request. Preserve the frame for empty and error/Retry
+  states and keep loaded messages visible during refresh.
+- **Recovery:** retry only temporary pin GET failures, at most twice within the
+  existing deadline. A failed load can retry when the page becomes visible or
+  connectivity returns. Do not retry pin writes, permission refusals or invalid
+  saved data. Token failures retain explicit Microsoft sign-in guidance.
+- **Evidence:** Dan's signed-in local browser showed the reported error; its
+  manual retry returned HTTP 200 and removed the error. The earlier failure's
+  transport cause is not proven. The client previously erased token failures
+  behind the generic pin-load message. Regression and rendered checks pending.
+- **Scope:** local correction; phone explicit show/hide and voice lifecycle
+  remain unchanged. No backend change or broader draft release.

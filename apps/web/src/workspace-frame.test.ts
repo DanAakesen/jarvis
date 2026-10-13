@@ -12,13 +12,14 @@ describe('workspace frame', () => {
   it('describes the window generated content opens in with the contract shape', () => {
     document.documentElement.dataset.theme = 'light';
     document.documentElement.style.setProperty('--text', '#111111');
+    document.documentElement.style.setProperty('--report-surface', '#f0f5f7');
     document.documentElement.style.setProperty('--font-body', 'Segoe UI, sans-serif');
     document.body.innerHTML = '<div class="workspace-canvas" data-arrangement="layered"></div>';
 
     const frame = readWorkspaceFrame();
 
     expect(frame && isHtmlArtifactFrame(frame)).toBe(true);
-    expect(frame).toMatchObject({ theme: 'light', layout: 'layered', pinned: false, designTokens: { '--text': '#111111' } });
+    expect(frame).toMatchObject({ theme: 'light', layout: 'layered', pinned: false, designTokens: { '--text': '#111111', '--report-surface': '#f0f5f7' } });
     expect(frame?.fonts.body).toBe('Segoe UI, sans-serif');
     expect(frame?.widthPx).toBeGreaterThan(0);
   });

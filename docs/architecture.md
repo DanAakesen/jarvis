@@ -1,5 +1,29 @@
 # Architecture
 
+## Remaining UI release (13 October 2026)
+
+`Workspace` owns conversation gestures and device-local normalized geometry
+in `conversation-layout.ts`. Optional reference canvas dimensions preserve
+preferred pixels when the composer wraps or the viewport changes. Fitting
+does not write storage; only completed pointer/keyboard/command changes do.
+Cancelled gestures restore the previous layout, and storage failures surface
+as alerts. Shell state carries the composer anchor and measured height;
+`ConversationHistory` keeps its existing mounted input owner.
+
+`NoteFolderPicker` uses the existing authenticated `/notes/tree` endpoint,
+with cancellation, bounded response validation and explicit retry/incomplete
+states. It owns transient destination folders; explicit note Save remains the
+only vault write. Notes derives directory metadata from validated paths and
+retains exact content/revision safeguards. The graph accepts arbitrary/root
+folder names, with neutral layout/colour fallbacks for unfamiliar folders.
+
+`HtmlAppView` observes host appearance and sends validated theme messages to
+the existing scripts-only sandbox. The injected bridge accepts its parent
+only and bounds token names/values; it updates variables without iframe
+reload. Host and document share `--report-surface`, removing duplicate outer
+chrome while retaining inner content structure. Existing CSP, backend routes,
+authentication, pin APIs and camera lifetimes are unchanged.
+
 ## Workspace window release (12 October 2026)
 
 #430 adds the pure `window-layout.ts` engine to the existing `Workspace`.
@@ -88,8 +112,14 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   generated graph windows retain their original reader. The Notes popup is
   body-portalled, like existing modals, so page transforms and short-phone
   document scrolling cannot move its close control or cover the dock.
-  Create new chooses
-  a section/title and opens a draft without writing until Save. Bootstrap uses React Router's data
+  A Notes-only search action slot holds the centred search's plus button; generated
+  read-only graphs do not receive it. Create new opens a blank draft immediately,
+  without writing to the vault until Save. Its cancellable folder-loader callback
+  reports the successful inventory timestamp to the popup header; the picker still
+  owns its tree, loading and recovery state. Per-folder plus actions create one
+  transient naming row beneath the clicked parent, not a separate dialog or API
+  write. Adding selects the local destination; cancellation restores the row's
+  trigger focus. Bootstrap uses React Router's data
   router so `useBlocker` can guard links and browser history. A shell-owned
   navigation-guard ref refuses Jarvis route changes immediately while a draft
   is dirty or saving, rather than acknowledging a blocked move. `beforeunload`
@@ -373,6 +403,28 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   window therefore uses the shared tabs, geometry, focus, snapshot and Jarvis
   commands. Voice entry minimises it, voice exit restores it, and sending or
   Conversation navigation restores it after Close.
+  Dan's revised 12 October local typing refinement adds conversation-specific
+  move/resize gestures to that same map. `Workspace` owns preferred geometry,
+  saved under `jarvis.conversation-layout.v1` as a validated rectangle plus its
+  reference canvas size. The reference converts normalised coordinates back
+  to stable preferred pixels, so wrapping composer text does not displace the
+  opposite corner. Older rectangle-only records remain readable. Rendered
+  fitting clamps to current available space without overwriting the preference;
+  storage failures are explicit. Pointer-down seeds the visible rectangle
+  before cancelling the opening scale transition; cancellation/lost capture
+  restores the prior geometry and reference size, and competing pointers are
+  rejected. Borders/corners and the header Move button have keyboard alternatives.
+  Existing workspace move/resize commands use this same saved geometry, and
+  snapshots report a placed conversation as manual rather than automatic.
+  The shell receives a pixel composer anchor through `ConversationWindowContext`;
+  the composer stays in its original React tree with a measured flow placeholder.
+  Its height participates in the anchor update, including wrapping and attachments.
+  No DOM reparenting, voice-client remount, API field or backend caller is added.
+  Minimise retains the composer anchor, including without other visible windows;
+  refresh restores it, and maximise temporarily uses the full canvas.
+  Initial pending history keeps an accessible status instead of drawing an
+  unhosted message skeleton before any transcript window exists. Standalone
+  loading and the existing error/Retry paths are unchanged.
 - Background jobs (P9-14, 7 October): slow work that ends in a workspace window
   (research today; images and HTML apps next) registers with
   `BackgroundJobRegistry` (`apps/backend/src/core/jobs.ts`). Migration 0029 stores
@@ -643,6 +695,7 @@ Jarvis is one backend with a shared core and one module per area, a static web a
 - **One window layer.** `Workspace` is mounted by the shell on every page. Off the home page it is a fixed overlay above the page (pointer events only on windows). Minimised windows are portalled as tabs into `.window-tabbar` under the top bar; `window-fly-away.ts` animates inert copies for close and minimise.
 - **Task windows.** `task-windows.ts` keeps open task windows (`task-<id>` views rendering `TaskDetailPage`) and saves `{ taskId, title }` entries (at most 12) in `localStorage` under `jarvis.windows.tasks`, so they return as tabs after a reload. `TaskWindowLink` opens a window on plain clicks and keeps `/factory/tasks/:id` for new tabs; that route opens the window and redirects to Kanban. No server state is added (#430's server-side pinning remains open).
 - **Chat dock.** `JarvisPage` (conversation, composer and voice) stays mounted in the shell for every signed-in page. `.app-shell[data-home]` and `[data-chat="home|out|rail"]` drive its placement; `chat-flight.ts` animates the bar into and out of the rail orb. Starting voice off the home page navigates home.
+- **History loading (local, 12 October).** The shell conversation view is available before its history request finishes. Its existing portal hosts loading placeholders, messages, empty text and initial error/Retry without replacing the window. Phone minimisation and voice lifecycle remain shell-owned. Workspace-pin GET requests use bounded transient retries; failed loads retry on online/visible events, without replaying pin writes or overriding owner cancellation. Token-acquisition failures retain explicit sign-in guidance.
 - **Presence (#468).** `presence-store.ts` shares one state for the top-bar chip and Settings: `GET /presence` on first use and every minute while visible, `PUT /presence { mode }` to switch, and `mode_changed` (or `mode`) events from `/now/events` applied live through `now-feed.ts`. Contract: Presence modes (P6-23), live since 6 October. 404/405/501 still read as "not available yet". Instructions per mode are read from and patched to `personality.modeInstructions` through `/settings`.
 - **Memory (#469).** `MemorySettings` uses `GET /memory/status`, `GET /memory?query&folder&limit`, `GET /memory/{id}`, `PATCH /memory/{id} { text }` and `DELETE /memory/{id}` as documented under GitHub vault memory (P7-40). It shows commit links for vault edits and distinguishes 204 (forgotten), 202 (approval pending in Jarvis), 409 (away) and 503 (web approval unavailable).
 ## Runtime overview
@@ -1965,6 +2018,37 @@ discard confirmation, or explicit adoption of the latest SHA followed by a
 separate Save. Failed note switches/reloads keep the previous draft until a
 new read succeeds. No draft storage, package, permission or migration is added.
 
+Dan's subsequent 11 October UI revision opens a blank new draft immediately;
+title and destination changes never rewrite its source. A local expandable
+folder picker supports root and nested destinations and adds draft subfolders,
+which persist with the first note Save through the existing create route.
+The frontend no longer whitelists four routing folders; path canonicalization,
+traversal/URL/control-character checks, byte limits and SHA conflict handling
+remain. Graph folder labels and filters preserve arbitrary folders rather than
+silently relabelling them General; existing four colour/layout roles stay intact
+and other folders use a neutral treatment. The picker now reads the agreed
+owner-only `GET /notes/tree` response implemented in #698: `directories`,
+`rootNoteCount`, `truncated` and an ISO date-time string `updatedAt` (last
+successful vault sync). Root is implicit and always offered by the picker,
+including when `directories` is empty or `rootNoteCount` is zero.
+The response is bounded at 10,000 directory entries and reports truncation.
+The client bounds and validates this response,
+propagates cancellation and displays partial/freshness/error state without an
+index/graph fallback; 404 explains pending deployment and 503 explains the
+not-ready index with Retry. Older note/graph responses remain readable; `directory`
+is derived from each note path and additive metadata cannot contradict it.
+Dan explicitly approved excluding hidden dot-folders, reflected in frontend
+path validation. #698 requires `folder` and `directory` on note/graph items;
+the frontend still derives missing parent metadata for older deployed responses.
+Deployed follow-up #699 builds the inventory from every file path in the Git
+tree, including attachment-only folders; hidden/skipped directory segments
+are excluded and `rootNoteCount` remains Markdown-only. The response shape
+is unchanged, so the local picker needs no further code adaptation.
+The signed-in local UI successfully reads the deployed `/notes/tree` response
+and expands nested directories; no live note writes were used for verification.
+After #699, reopening a blank draft loads the refreshed live inventory and
+last-sync time. Full-vault write acceptance remains unverified.
+
 P7-42 adds a Dan-only Settings API; there are no `apps/web` changes. `GET
 /memory` returns durable SQL memories followed by indexed vault notes, with
 `query`, `folder` (`People`, `Work`, `Personal`, `General`), `limit` (1–50) and
@@ -2252,6 +2336,47 @@ incremental delivery, while a real local Hypercorn/mock-model check observed a
 0.005 s first delta and 0.757 s completion with a deliberate 0.75 s model pause.
 These are not deployed timings. The live acceptance target remains at most
 2.5 seconds to the first token and 4 seconds for a short greeting.
+
+On 12 October, existing Resource Timing in Dan's signed-in local browser
+measured ordinary chat request-to-stream-completion at 18.416 s and 12.437 s.
+The two camera turns took 19.694 s and 23.494 s from inspection request to chat
+completion: frame inspection took 1.773 s and 4.747 s, followed within 2-4 ms
+by chat requests taking 17.918 s and 18.745 s. History refresh ran afterward
+and took 82-104 ms. Cross-origin `requestStart`/`responseStart` are unavailable,
+so these measurements do not establish first-token latency. Browser SSE
+consumption delivers each complete delta frame without waiting for stream EOF.
+Two controlled open-stream regressions verify this for fragmented UTF-8 with
+LF/CRLF framing; the transport/component suite passes 81 tests with one known
+locale baseline excluded. These checks rule out completion-buffering in the
+browser adapter; they do not measure production first-token latency.
+Subsequent coordinator Log Analytics findings measure
+`agent_first_byte`/`turn_first_token` at 17.6/12.2/16.6/16.1 s for those four
+turns. Backend work is under 0.5 s; the coordinator reports a 6.5-7.2 s gap
+before the hosted agent's first backend callback and 5-10 s of model latency
+with `gpt-6.1-sol`, medium reasoning and about 15,000 instruction characters.
+The gap is consistent with sandbox provisioning, not conclusive platform
+evidence. #708 investigates stable owner/conversation-scoped invocation query
+sessions and allowlisted debug-latency headers, with optional done-event
+phase timings. It must distinguish the query route from the prior rejected
+reuse attempt below. No model/effort change or measured improvement is
+established by those baseline measurements. At the coordinator's subsequent
+12 October 08:52 local update, live chat reasoning effort was changed from
+medium to low. This setting is reversible; its independent latency effect is
+not isolated from the subsequent hosted-session change.
+
+At the coordinator's 12 October 10:54 local update, Log Analytics for Dan's
+07:52-07:53 UTC turns records `chat.agent_session` cold then warm with
+`sessionIdUsed: true`. Reported `agent_first_byte` improves from 12.2 s cold
+to 5.2 s and 4.5 s warm. This is live backend first-text-delta evidence, not
+a new browser request-to-completion measurement, and remains above the
+2.5-second target. Both camera turns still use `visual.path: caption`,
+reason `image_context_limit`: their instructions/history/tool-schema text
+exceeds the answering-model client's 28,000-byte text-part ceiling. The
+coordinator reports raising that ceiling to 400,000 bytes on #713, with CI
+running at the 10:54 update. The 11:01 local coordinator update confirms #713
+merged/deployed with backend, agent and smoke green. That deployment is not
+answering-model image acceptance; the upload-only contract and UI activation
+boundary are described in the camera section below.
 
 The deployed backend configuration has `minReplicas: 1` / `maxReplicas: 1`;
 this is not a Foundry hosted-agent replica setting. `.github/workflows/deploy.yml`
@@ -2843,6 +2968,14 @@ window with origin `null`, validated by `readHtmlAppMessage`: `resize` (clamped
 `open_url` (`window.open`, falling back to `POST .../html/open-url`), and `pin`/`unpin`,
 which act only with transient user activation.
 
+The host and frame share the canonical `--report-surface` token. Injected
+document styles remove html/body and sole top-level wrapper framing, preserving
+nested content sections. `HtmlAppView` observes root appearance changes and
+sends only theme/font/colour tokens on load and subsequent changes. The frame
+accepts these updates only from its parent; `srcdoc` remains stable so interactive
+report state is retained. The scripts-only sandbox, CSP and artifact API remain
+unchanged.
+
 ### Folio (P9-25)
 
 P9-53 adds sensitive agent-only `read_html_view` and `update_html_view` tools.
@@ -3099,6 +3232,246 @@ Proven 2 October 2026 in a separate prototype ([voice report](reference/voice-pr
 | Speed | Warm the agent with a silent no-model message (`/diag`) before the microphone opens; preload running tasks | 2.7–3.9 s to first audio; ≈5 s cold (L17, L21) |
 | Interruption | The client stops playback on Voice Live's `speech_started` | Detected in 0.6 s |
 | Reconnect | Reconnect automatically when the voice bridge ends | L21 |
+
+The visual-inspection table above describes the earlier explicit-request
+implementation. Dan's 11 October camera conversation decision supersedes
+camera phrase gating and the hard five-minute limit: camera-on capture must
+cover every user turn, with question-aware vision and age-labelled reused
+context on limits. #702's deployed transport supplies camera state and turn
+correlation; local callers use it so ordinary responses wait for inspection
+in either voice language. Live-audio ordering remains unverified.
+
+The local capture controller accepts an optional fourth `inspect` argument
+for the merged #702 question contract, bounded at 500 Unicode code points without
+truncation. Legacy callers may omit it; camera conversation supplies it on
+every captured turn.
+Legacy description-only responses remain accepted without inventing a capture
+time. #702's generic `question: null` is treated as no question, not malformed
+provenance. Question-bearing requests require a valid server UTC `capturedAt` and
+matching echoed `question` before their response can be treated as an answer.
+Voice capture supplies optional `turnId` in the fifth argument and requires
+the response to echo the same 1–128-character ASCII identifier before forwarding.
+`VisionInspectionError` preserves HTTP status and recognises only typed 429
+`frame_rate_limited`/`daily_limit` errors, with validated optional retry delay.
+Unknown/legacy errors remain visible, not success-shaped fallback. Local
+`inspectTurn` and chat/voice callers now wire those fields through
+`cameraConversationDeployed = true` in the local App. #702's backend, agent
+and smoke deployment succeeded in run 38172562500; this enables the local
+question-aware caption stage. No UI release is authorised. #704's deployed
+image references are additive; forwarding one is not proof that an answering
+model received an image.
+
+The camera capture owner keeps one bounded, current-stream/session caption
+with its original question and server capture time. New same-session turns
+respect a conservative three-second gap after inspection settles, plus any
+longer typed retry delay; a known daily cap remains blocked until UTC midnight.
+Pacing survives stop/switch, but observation content does not. A typed limit
+can reuse only that labelled earlier caption, with age/original question and
+no `frameId`; other errors are not substituted with cached success. No prior
+observation means unavailable. Camera preview and a shared toast expose the
+limit without forcing a docked window open.
+Reuse applies only to `frame_rate_limited`/`daily_limit`. Capture response
+parsing also preserves typed 429 `budget_exhausted` as an explicit failure,
+never cached success. Voice forwards that reason with the current item to
+release its hold, using the reason already allowed by #702. Inbound
+budget-denial notices and #706's deployed `budget_unavailable` notice retain
+current-item ownership and do not trigger any outbound echo; input-result
+copy distinguishes exhaustion from an unavailable budget check. The browser
+never sends `budget_unavailable`: it is relay-to-client only.
+The camera-on path owns the single visual-context slot; explicit shared-screen
+inspection retains its existing route when the camera is off.
+In voice, camera-on disables the legacy Look at screen action with recovery
+copy and guards callbacks before they can supersede camera inspection. Camera
+state/stream transitions invalidate and abort in-flight visual work. Legacy
+screen/camera inspection also receives the owner's abort signal, so late
+success or failure cannot send uncorrelated context after camera activation;
+the merged camera-on relay would reject an uncorrelated unavailable event.
+Independent watch mode remains separate.
+
+The voice adapter and current local UI callers use the deployed protocol:
+explicit `setCameraState` opts into
+`jarvis.camera.state { on }`, retains the setting until session readiness and
+resends it on reconnect. While opted in/on, every non-empty final transcript
+requests camera context; callbacks preserve the provider transcription item
+ID rather than inventing one. Screen-context results can include `itemId`;
+unavailable events can carry that ID with `frame_rate_limited`, `daily_limit`,
+`budget_exhausted`, `capture_failed`, `vision_failed` or `timeout`. These are the merged relay's
+accepted names; the earlier proposal `inspection_failed` would be rejected.
+Unconfigured clients send no new
+camera-state event and retain legacy behaviour. Opted-in/off transcripts do
+not invoke the legacy camera phrase route. Local VoiceControls synchronises
+camera state, captures each correlated transcript's question, aborts obsolete
+inspection on turn/camera/reconnect/stop changes and emits unavailable within
+ten seconds. A bounded in-memory set suppresses repeated transcription IDs;
+late results cannot reach the relay. Both backend voice paths must
+hold exactly one response for the matching item and ignore late results after
+answering. The relay's camera hold is twelve seconds; Danish hosted voice
+sets `turn_detection.create_response` false while camera-on and restores it
+afterward. #702 merged at 20:31:21 UTC on 11 October and deployed with
+backend/agent/smoke green. The coordinator confirms migration 0040 applied,
+no `voice.upstream_event_error` and no `/agent/settings` failures in the
+deployment checks. Relay ordering and legacy hosted-voice gateway translation
+remain verified only by offline tests, not live audio. Relay-originated typed limit
+events are validated and shown for the current item rather than ignored or
+echoed back to create another response.
+
+Dan's direct-image decision uses deployed #704's additive backend path:
+`/screen/frames` returns an opaque `frameId` for a transient, single-use image
+held in memory for at most sixty seconds from receipt. The server issues
+32-character unpadded base64url handles and bounds the JPEG to 768 pixels at
+quality 70. Consumption is owner/session/turn-bound. The local result parser
+preserves that optional string exactly, without decoding, storing or logging
+it. The final public bound is 1–128 characters from
+`[A-Za-z0-9_-]`, checked in shared `visual-context.ts` helpers. Those helpers
+also validate source, UTC capture time and bounded description/question,
+returning only recognised fields. The chat send adapter accepts a single
+optional `visualContext` object and refuses simultaneous legacy screen
+context. The voice send adapter prepares those same fields beside `itemId`
+and refuses new visual metadata without a correlation ID. Local gated UI
+callers use these arguments and preserve fresh optional image handles.
+The browser never calls the resolver: the agent resolves through
+`POST /screen/frames/resolve { frameId, sessionId, messageId, turnId? }`.
+History excludes handles and bytes. No actual model image delivery is
+established by local caller fixtures.
+Capture at queued-turn
+execution avoids consuming its lifetime while waiting; voice must deliver it
+with the matched transcription item's result before the relay releases the
+single held response. Backend metadata distinguishes image delivery
+from caption fallback using `visualPath`. Expiry, duplicate handling and both
+models' actual image support require backend and live acceptance; a caption
+result must not claim direct image delivery.
+
+#704 merged at 21:46:10 UTC on 11 October (e5c83dbc) and the coordinator
+confirms backend, agent and smoke deployment succeeded. Its final contract
+matches the prepared draft implementation. It reports chat input evidence through top-level
+`done.visualPath: 'image' | 'caption'` and optional `visualReason`, retained
+on the user message in `metadata.visualContext`. Voice reports
+`jarvis.visual_context { itemId?, visualPath, visualReason? }`. Local
+`visual-context.ts` projects only path and a bounded lowercase ASCII reason,
+not frame references, bytes or descriptions. Chat transport maps done evidence
+to its user message; history extracts the same result without retaining raw
+metadata. Missing evidence adds no claim; malformed present evidence surfaces
+an error. Voice validates and projects the event, then its current-item owner
+shows a notice only once. Camera state/stream changes, session replacement and
+reconnect invalidate that evidence owner without clearing the bounded
+transcription deduplication set prematurely.
+The shared reason copy distinguishes unverified model image support
+(`image_input_unverified`) from disabled legacy-agent input (`legacy_agent`);
+neither caption-only reason claims that this turn supplied an image.
+History-error state also records whether the failed request was latest or
+older. Retry targets that source rather than inferring it from the presence
+of messages, which previously made refresh errors retry the wrong cursor or
+silently return when there was no older page.
+
+These are final-contract consumers, not live-image verification.
+Chat/Danish-text image input is implemented, but live `gpt-6.1-sol` image
+acceptance remains unverified and may fall back to caption. #706 merged at
+22:39:33 UTC on 11 October (55ee8e4b); the coordinator confirms backend,
+agent and smoke deployment green, with no relevant upstream/settings errors.
+EN/DA realtime voice now attaches a budget-admitted original image before its
+single item-correlated response and reports acknowledged delivery or explicit
+caption fallback through the existing visual-result event. Danish realtime
+is not a browser transcribe/chat/TTS flow; the earlier voice table describes
+the hosted path, which remains caption-only as a fallback.
+Image-budget accounting and the content-free log event
+`visual.path { path, reason, channel: chat | voice-en | voice-da, latencyMs }`
+are deployed. Dan's 12 October live chat turns reported caption-only input with
+`budget_unavailable` and an incorrect finger count according to Dan. The budget
+failure was diagnosed by the coordinator: `/screen/frames/resolve` returned
+503 because `reserveImage` rejected models absent from the pricing table,
+including `gpt-6.1-sol`. #707 merged at 06:41:02 UTC to admit an unpriced model
+on the existing conservative, unverified 0.1 DKK hold. The coordinator confirms
+#707 deployed at the 12 October 08:52 local update; first real image delivery
+still needs confirmation. The hold is not verified
+model pricing; roughly 65 image turns per day at the USD 1 budget is the
+coordinator's estimate, not a measured consumption guarantee.
+Those prior caption-only turns do not establish image
+input. Live `gpt-realtime-2.1` image acceptance is also still unverified. #703 remains
+open for live image evidence; successful deployment or synthetic UI events
+do not establish it.
+The UI never resolves a frame handle itself or sends client-asserted input
+evidence. Actual model image access and live voice ordering still require
+acceptance; Dan must review before any UI release.
+
+Dan now rejects the slow snapshot-per-turn experience. A direct, responsive
+visual conversation flow is under investigation; no replacement upload
+cadence or protocol is implemented or agreed. Camera UI polish is parked
+until the experience is proved. The existing per-turn capture and honest
+image/caption evidence remain unchanged during diagnosis.
+
+Dan's 12 October reply-style requirement is separate from provenance:
+fresh camera answers omit unsolicited capture timestamps and
+snapshot-versus-live boilerplate. Backend grounding/persona instructions own
+the change for chat and both voice languages; the UI must not strip generated
+text or remove `capturedAt`. Stale/reused observations retain an ordinary age
+warning, unavailable input remains explicit, and direct timing/path questions
+still receive truthful answers. The latest coordinator update places this
+wording in P9-87/#714; it is not established by #713's input deployment.
+
+The current browser still waits for the full `/screen/frames` response before
+chat; it validates a non-empty description, capture time, question echo and
+optional image handle. #707 only changes resolver budget admission, so it
+cannot remove the separate vision-model caption round trip. Skipping that
+round trip needs a new direct-input contract; the UI must not fake a
+description or send undocumented fields to bypass the existing contract.
+
+#713 (P9-85, closing #710) is confirmed merged/deployed by the coordinator at
+11:01 local on 12 October. Its final additive contract is:
+
+- Capture accepts `{ sessionId, frame, question?, turnId?, mode?: 'handle' }`.
+  Omitted mode retains caption-first behavior. Handle mode stores the frame
+  privately and returns `{ frameId, capturedAt, question: echo | null, turnId? }`
+  without a vision call or description.
+- Chat accepts `visualContext { source, capturedAt, frameId, turnId?, question? }`;
+  description is optional with a handle and required otherwise. `done` retains
+  `visualPath: 'image' | 'caption'` and `visualReason`.
+- EN/DA realtime accept `jarvis.screen.context
+  { itemId, frameId, question, capturedAt, source }` without description.
+  Existing item correlation, single-response hold and `jarvis.visual_context
+  { itemId, visualPath, visualReason }` remain. Hosted Danish stays caption-only.
+- Failed image delivery captions the same stored frame within the turn.
+  Missing frames or failed fallback produce explicit no-image guidance, not a
+  substituted observation. `visual.path` adds `captionMs` on fallback. Handles
+  remain sixty-second, single-use and owner/session/turn-bound.
+
+The local browser still sends omitted mode and requires a description. Its
+handle-only opt-in must wait for Dan's camera UI release acceptance; no caller
+or activation flag is changed here. Deployment does not prove model image
+acceptance or settle the disputed camera cadence. Handle-only history metadata
+also needs confirmation before the stricter local history decoder is changed.
+
+The camera idle lifecycle is already local: `recordActivity` resets a
+ten-minute timer on accepted chat submission and current-client speech/final
+voice turns. Start arms it; switch restarts it; dock/render/watch-frame work
+does not keep it alive. Stop/unmount cancels it and stops tracks. Idle expiry
+restores even a docked preview with visible explanation and recovery; its
+inactive picture is hidden to avoid clipping phone controls.
+
+P9-79's legacy `vision-request.ts` recogniser includes explicit questions such as
+"can you see anything?" and "kan du se noget?". Every-turn camera capture now
+bypasses phrase recognition while on; camera off retains the explicit screen
+workflow. `CameraStatus` observes coarse primary input without hover
+to render the mobile switch in Camera preview. Resizing a desktop does not offer
+a rear camera. Capture policy, transport and authorization stay unchanged.
+
+The shell registers local view `camera-preview`, titled `Camera preview`, while
+camera capture is starting, active or has an actionable error. `useCamera`
+exposes its existing stream only to the local muted, inline video element;
+no second capture or serialized video is introduced. Playback failure has a
+local retry; stream replacement/teardown detaches video without owning tracks.
+The workspace owns geometry, tabs, minimise/restore, focus and snapshot state;
+the capture owner stops tracks on Close/Turn off. The preview is exempt from
+automatic desktop tiling and is a compact overlay alongside the foreground
+phone view. Explicit desktop region placement still works. Minimise retains
+capture and on-request inspection. Generic show/restore/focus on the stable ID
+can reopen an off camera only after the existing permission check reports
+granted; the default camera need not report a facing direction. Refusal and
+cancelled startup are acknowledged without false success. Snapshot readback is
+text only (status and lifecycle explanation); preview video is excluded.
+The coordinator confirms #700 deployed the shared capability instructions for
+this stable ID and lifecycle, including permission-checked reopening by show
+or session camera front/rear. No schema or tool change was needed. The UI
+remains local pending Dan's acceptance and release approval.
 
 P5-03 pins the English model and Ryan HD in the backend. P5-04 implements browser PCM capture/playback, stops playback when speech starts, reconnects after a relay drop, and exposes language selection for the next session. P5-02 provides Danish voice provisioning; P5-05 owns the language toggle and voice settings. P5-06 persists completed transcripts and voice minutes without a migration; voice minutes measure connected relay duration, not speaking time.
 

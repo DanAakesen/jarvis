@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import type { KnowledgeFolder, KnowledgeGraph } from './knowledge-data';
+import type { KnowledgeGraph } from './knowledge-data';
 import { createKnowledgeLayout } from './knowledge-layout';
 
 export interface KnowledgeSceneCallbacks {
@@ -12,15 +12,16 @@ export interface KnowledgeSceneCallbacks {
 
 const frameInterval = 1000 / 30;
 
-function folderColours(element: HTMLElement): Record<KnowledgeFolder, THREE.Color> {
+function folderColours(element: HTMLElement): Map<string, THREE.Color> {
   const styles = getComputedStyle(element);
   const read = (name: string, fallback: string) => new THREE.Color(styles.getPropertyValue(name).trim() || fallback);
-  return {
-    People: read('--graph-people', '#4aa8ff'),
-    Work: read('--graph-work', '#ffb45c'),
-    Personal: read('--graph-personal', '#3ddc97'),
-    General: read('--graph-general', '#b69cff'),
-  };
+  return new Map([
+    ['People', read('--graph-people', '#4aa8ff')],
+    ['Work', read('--graph-work', '#ffb45c')],
+    ['Personal', read('--graph-personal', '#3ddc97')],
+    ['General', read('--graph-general', '#b69cff')],
+    ['', read('--text-muted', '#a4b5bb')],
+  ]);
 }
 
 // Idle life on a flat map (Dan, 8 October): each note floats a few pixels on its own slow orbit; links follow.
@@ -105,7 +106,7 @@ export function createKnowledgeScene(host: HTMLElement, graph: KnowledgeGraph, c
   const sizes = new Float32Array(count);
   const lit = new Float32Array(count);
   graph.nodes.forEach((node, index) => {
-    const colour = colours[node.folder];
+    const colour = colours.get(node.folder) ?? colours.get('')!;
     colourArray.set([colour.r, colour.g, colour.b], index * 3);
     sizes[index] = 1.9 + Math.min(3, Math.sqrt(node.degree) * 0.7);
   });
@@ -146,7 +147,7 @@ export function createKnowledgeScene(host: HTMLElement, graph: KnowledgeGraph, c
     // Links are firm; similarity lines brighten with their score (median about 0.32).
     const strength = similar ? 0.06 + 0.42 * score : 0.5;
     for (const [end, node] of [[0, source], [1, target]] as const) {
-      const colour = colours[graph.nodes[node]!.folder];
+      const colour = colours.get(graph.nodes[node]!.folder) ?? colours.get('')!;
       baseLineColours.set([colour.r * strength, colour.g * strength, colour.b * strength], edge * 6 + end * 3);
     }
   });

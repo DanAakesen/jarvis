@@ -68,8 +68,8 @@ vi.mock('./voice-client', () => ({
     playbackLevel = () => 0;
     inputLevel = () => 0;
     setMuted = vi.fn();
-    sendScreenContext = vi.fn();
     setCameraState = vi.fn();
+    sendScreenContext = vi.fn();
     sendScreenContextUnavailable = vi.fn();
   },
 }));
@@ -436,6 +436,7 @@ describe('App shell', () => {
     expect(shell?.getAttribute('data-voice-active')).toBe('false');
     await user.click(screen.getByRole('button', { name: 'Start voice' }));
 
+    expect(voiceSessions[0]?.setCameraState).toHaveBeenCalledWith(false);
     expect(shell?.getAttribute('data-voice-active')).toBe('true');
     expect(shell?.getAttribute('data-voice-has-windows')).toBe('false');
     expect(screen.queryByRole('textbox', { name: 'Message Jarvis' })).toBeNull();
@@ -752,6 +753,10 @@ describe('App shell', () => {
     const shell = historyWindow.closest('.app-shell')!;
     expect(within(historyWindow).queryByRole('button', { name: 'Arrange Conversation' })).toBeNull();
     expect(historyWindow.querySelector('.workspace-resize-edge')).toBeNull();
+    expect(historyWindow.querySelectorAll('.conversation-resize-corner')).toHaveLength(4);
+    expect(historyWindow.querySelectorAll('.conversation-resize-border')).toHaveLength(8);
+    expect(within(historyWindow).getByRole('button', { name: 'Move Conversation' })).not.toBeNull();
+    expect(within(historyWindow).getByRole('button', { name: 'Resize Conversation height' })).not.toBeNull();
     expect(shell.getAttribute('data-conversation-open')).toBe('true');
 
     await user.click(screen.getByRole('button', { name: 'Hide conversation' }));
@@ -781,6 +786,21 @@ describe('App shell', () => {
     await user.click(screen.getByRole('button', { name: 'End voice' }));
     expect(historyWindow.hasAttribute('inert')).toBe(false);
     expect(screen.queryByRole('button', { name: 'Restore Conversation' })).toBeNull();
+  });
+
+  it('keeps camera and screen sharing out of the top bar and in the chat More menu', async () => {
+    const user = userEvent.setup();
+    Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: { getDisplayMedia: vi.fn(), getUserMedia: vi.fn() } });
+    try {
+      await renderSignedIn();
+      const topbar = document.querySelector('.topbar-actions') as HTMLElement;
+      expect(within(topbar).queryByRole('button', { name: /share screen|camera/i })).toBeNull();
+      await user.click(screen.getByRole('button', { name: 'More options' }));
+      expect(screen.getByRole('menuitem', { name: 'Share screen' })).not.toBeNull();
+      expect(screen.getByRole('menuitem', { name: 'Turn camera on' })).not.toBeNull();
+    } finally {
+      Reflect.deleteProperty(navigator, 'mediaDevices');
+    }
   });
   it('offers no screen sharing where the browser cannot share the screen (phones)', async () => {
     const user = userEvent.setup();
@@ -885,8 +905,10 @@ describe('App shell', () => {
     await renderSignedIn('/notes');
     await waitFor(() => expect(activityStream).not.toBeNull());
     fireEvent.click(screen.getByRole('button', { name: 'Create new' }));
+    const draft = screen.getByRole('textbox', { name: 'Markdown' });
+    expect(document.activeElement).toBe(draft);
     fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Fixture draft' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Start writing' }));
+    fireEvent.change(draft, { target: { value: '# Fixture draft\n\n' } });
     act(() => {
       activityStream!.enqueue(new TextEncoder().encode(
         `event: workspace-ready\ndata: ${JSON.stringify({ sessionId: '12345678-1234-4234-8234-123456789abc' })}\n\n` +
@@ -1077,21 +1099,6 @@ describe('App shell', () => {
     expect(shell.getAttribute('data-folio-open')).toBe('false');
     await user.click(screen.getByRole('button', { name: 'Next page' }));
     expect(shell.getAttribute('data-folio-open')).toBe('false');
-  });
-
-  it('keeps camera and screen sharing out of the top bar and in the chat More menu', async () => {
-    const user = userEvent.setup();
-    Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: { getDisplayMedia: vi.fn(), getUserMedia: vi.fn() } });
-    try {
-      await renderSignedIn();
-      const topbar = document.querySelector('.topbar-actions') as HTMLElement;
-      expect(within(topbar).queryByRole('button', { name: /share screen|camera/i })).toBeNull();
-      await user.click(screen.getByRole('button', { name: 'More options' }));
-      expect(screen.getByRole('menuitem', { name: 'Share screen' })).not.toBeNull();
-      expect(screen.getByRole('menuitem', { name: 'Turn camera on' })).not.toBeNull();
-    } finally {
-      Reflect.deleteProperty(navigator, 'mediaDevices');
-    }
   });
 
   it('opens a local camera preview, docks it without stopping capture, and lets Jarvis restore and close it', async () => {

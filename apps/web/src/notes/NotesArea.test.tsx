@@ -34,6 +34,10 @@ beforeEach(() => {
       nodes: [{ id: 'fixture', path, title: 'Fixture', folder: 'Work', degree: 1 },
         { id: 'other', ...second, degree: 1 }], edges: [{ source: 'fixture', target: 'other', type: 'link' }],
     });
+    if (url.pathname === '/notes/tree') return json({
+      directories: ['Customers', 'Customers/Novaro', 'General', 'Work'],
+      rootNoteCount: 1, truncated: false, updatedAt: '2026-10-11T17:00:00Z',
+    });
     if (init?.method === 'POST' || init?.method === 'PUT') {
       const body = JSON.parse(String(init.body)) as { path: string; content: string };
       savedContent = body.content; blobSha = newSha; lastRead = body.path;
@@ -118,22 +122,89 @@ describe('Notes workflow', () => {
     expect(JSON.parse(String(saveCalls()[1]![1]?.body)).sha).toBe(newSha);
     expect(screen.getByRole('link', { name: 'View saved commit on GitHub' }).getAttribute('href')).toContain(commit);
   });
-  it('creates a safe path with a folder picker, preserving whitespace and using POST', async () => {
+  it('opens an immediately writable draft and saves in a nested new folder without changing source', async () => {
     mount();
     fireEvent.click(await screen.findByRole('button', { name: 'Create new' }));
     const dialog = screen.getByRole('dialog', { name: 'New note' });
+    const input = within(dialog).getByRole('textbox', { name: 'Markdown' });
+    expect(document.activeElement).toBe(input);
+    expect(screen.queryByRole('button', { name: 'Start writing' })).toBeNull();
+    expect((input as HTMLTextAreaElement).value).toBe('');
+    fireEvent.change(input, { target: { value: '# My exact source\n\n  Whitespace.\n' } });
     fireEvent.change(within(dialog).getByLabelText('Title'), { target: { value: 'Café / review?' } });
-    fireEvent.change(within(dialog).getByLabelText('Section'), { target: { value: 'Personal' } });
-    expect(within(dialog).getByText('Personal/cafe-review.md')).not.toBeNull();
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Start writing' }));
-    const input = await screen.findByRole('textbox', { name: 'Markdown' });
-    expect((input as HTMLTextAreaElement).value).toBe('# Café / review?\n\n');
+    fireEvent.click(await within(dialog).findByRole('button', { name: 'Save in Work' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'New folder in Work' }));
+    fireEvent.change(within(dialog).getByRole('textbox', { name: 'New folder in Work' }), { target: { value: 'Research' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Add folder' }));
+    expect(within(dialog).getByRole('button', { name: 'Choose note location: Work/Research' })).not.toBeNull();
+    expect(dialog.querySelector('.knowledge-note-meta')).toBeNull();
+    expect(saveCalls()).toHaveLength(0);
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
     await screen.findByText('Saved to your vault.');
     const [, request] = saveCalls()[0]!;
     expect(request?.method).toBe('POST');
-    expect(JSON.parse(String(request?.body))).toEqual({ path: 'Personal/cafe-review.md', content: '# Café / review?\n\n' });
-    expect(lastRead).toBe('Personal/cafe-review.md');
+    expect(JSON.parse(String(request?.body))).toEqual({ path: 'Work/Research/cafe-review.md', content: '# My exact source\n\n  Whitespace.\n' });
+    expect(lastRead).toBe('Work/Research/cafe-review.md');
+  });
+  it('keeps icon-only creation inside search and puts vault freshness only in the popup header', async () => {
+    mount();
+    const create = await screen.findByRole('button', { name: 'Create new' });
+    expect(create.closest('.knowledge-search')).not.toBeNull();
+    expect(create.textContent).toBe('');
+    fireEvent.click(create);
+    const dialog = screen.getByRole('dialog', { name: 'New note' });
+    await within(dialog).findByText(/Vault folders. Updated/);
+    const time = dialog.querySelector('header time');
+    expect(time?.getAttribute('datetime')).toBe('2026-10-11T17:00:00Z');
+    expect(time?.parentElement?.parentElement?.tagName).toBe('HEADER');
+    expect(time?.parentElement?.nextElementSibling?.getAttribute('aria-label')).toBe('Close New note');
+    expect(dialog.querySelector('.notes-location time')).toBeNull();
+    expect(screen.queryByText('Hidden dot-folders are excluded.')).toBeNull();
+    expect(screen.queryByText('Write now. Add a title before saving.')).toBeNull();
+    expect(document.activeElement).toBe(within(dialog).getByRole('textbox', { name: 'Markdown' }));
+  });
+  it('closes an untouched new draft without a discard prompt and guards title-only edits', async () => {
+    const { guard } = mount();
+    fireEvent.click(await screen.findByRole('button', { name: 'Create new' }));
+    expect(guard.current).toBe(false);
+    fireEvent.click(screen.getByRole('button', { name: 'Close New note' }));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Create new' }));
+    fireEvent.change(screen.getByLabelText('Title'), { target: { value: 'Unsaved title' } });
+    expect(guard.current).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: 'Close New note' }));
+    expect(screen.getByRole('dialog', { name: 'Unsaved changes' })).not.toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Keep editing' }));
+    expect((screen.getByLabelText('Title') as HTMLInputElement).value).toBe('Unsaved title');
+    expect(saveCalls()).toHaveLength(0);
+  });
+  it('keeps writing focus and refuses saving until the new draft has a valid title', async () => {
+    mount();
+    fireEvent.click(await screen.findByRole('button', { name: 'Create new' }));
+    const input = screen.getByRole('textbox', { name: 'Markdown' });
+    fireEvent.change(input, { target: { value: 'Write first' } });
+    expect((screen.getByRole('button', { name: 'Save' }) as HTMLButtonElement).disabled).toBe(true);
+    const titleInput = screen.getByLabelText('Title');
+    titleInput.focus();
+    fireEvent.change(titleInput, { target: { value: 'Root note' } });
+    expect(document.activeElement).toBe(titleInput);
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await screen.findByText('Saved to your vault.');
+    expect(JSON.parse(String(saveCalls()[0]![1]?.body))).toEqual({ path: 'root-note.md', content: 'Write first' });
+  });
+  it('loads actual vault folders once, not paged notes, and keeps writing during a folder-tree outage', async () => {
+    const defaultFetch = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation((input, init) => new URL(String(input)).pathname === '/notes/tree'
+      ? Promise.resolve(json({ error: 'Not found' }, 404)) : defaultFetch(input, init));
+    mount();
+    fireEvent.click(await screen.findByRole('button', { name: 'Create new' }));
+    await screen.findByText(/folder tree is not available yet/);
+    const input = screen.getByRole('textbox', { name: 'Markdown' });
+    fireEvent.change(input, { target: { value: 'Keep writing while the tree is unavailable.' } });
+    expect((input as HTMLTextAreaElement).value).toBe('Keep writing while the tree is unavailable.');
+    expect(fetchMock.mock.calls.filter(([url]) => new URL(String(url)).pathname === '/notes/tree')).toHaveLength(1);
+    expect(fetchMock.mock.calls.some(([url]) => new URL(String(url)).pathname === '/notes')).toBe(false);
+    expect(saveCalls()).toHaveLength(0);
   });
   it('keeps drafts on conflicts, compares versions and saves only with an explicitly adopted latest revision', async () => {
     mount();
@@ -275,7 +346,8 @@ describe('Notes workflow', () => {
     await screen.findByText(/could not load your knowledge/);
     expect(screen.queryByRole('button', { name: 'Fixture' })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Create new' }));
-    expect(screen.getByLabelText('Section')).not.toBeNull();
+    expect(screen.getByLabelText('Title')).not.toBeNull();
+    expect(screen.getByRole('textbox', { name: 'Markdown' })).not.toBeNull();
     expect(saveCalls()).toHaveLength(0);
   });
   it('retains graph search and section filtering without replacing them with a separate browser', async () => {

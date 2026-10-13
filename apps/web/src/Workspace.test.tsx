@@ -6,6 +6,7 @@ import { PHONE_LAYOUT_MEDIA_QUERY, Workspace, type WorkspaceController, type Wor
 import { useWorkspaceCommands, WorkspaceCommandContext } from './workspace-command-state';
 import { readFileSync } from 'node:fs';
 import type { WorkspacePinsClient } from './workspace-pins';
+import { conversationLayoutKey } from './conversation-layout';
 import type { GeneratedView, WorkspacePin } from '@jarvis/contracts';
 import type { SessionCommandResult } from './session-commands';
 
@@ -17,6 +18,7 @@ const views: WorkspaceView[] = [
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
+  localStorage.removeItem(conversationLayoutKey);
 });
 
 function phoneViewport() {
@@ -887,6 +889,109 @@ describe('Workspace', () => {
     expect(screen.getByText('Arrangement cancelled.')).not.toBeNull();
   });
 
+  it.each([false, true])('resizes conversation height without first-drag jumps, including phone=%s and cancellation', phone => {
+    if (phone) phoneViewport();
+    render(<Workspace views={[{
+      id: 'conversation', title: 'Conversation', presentation: 'conversation',
+      content: { status: 'ready', content: <p>Conversation history</p> },
+    }]} defaultArrangement="layered" arrangeMenu={false} />);
+    const canvas = screen.getByRole('region', { name: 'Temporary workspace views' });
+    const conversation = screen.getByRole('article', { name: 'Conversation' });
+    vi.spyOn(canvas, 'getBoundingClientRect').mockReturnValue({
+      x: 0, y: 0, top: 0, left: 0, right: 1000, bottom: 600, width: 1000, height: 600, toJSON: () => ({}),
+    });
+    vi.spyOn(conversation, 'getBoundingClientRect').mockImplementation(() => {
+      const placed = conversation.hasAttribute('data-conversation-positioned');
+      const x = placed ? parseFloat(conversation.style.getPropertyValue('--workspace-x')) * 10 : 130;
+      const y = placed ? parseFloat(conversation.style.getPropertyValue('--workspace-y')) * 6 : 280;
+      const width = placed ? parseFloat(conversation.style.getPropertyValue('--workspace-width')) * 10 : 740;
+      const height = placed ? parseFloat(conversation.style.getPropertyValue('--workspace-height')) * 6 : 320;
+      return { x, y, top: y, left: x, right: x + width, bottom: y + height, width, height, toJSON: () => ({}) };
+    });
+    const height = () => parseFloat(conversation.style.getPropertyValue('--workspace-height')) * 6;
+    const handle = within(conversation).getByRole('button', { name: 'Resize Conversation height' });
+    Object.defineProperties(handle, {
+      setPointerCapture: { value: vi.fn(), configurable: true },
+      hasPointerCapture: { value: () => true, configurable: true },
+      releasePointerCapture: { value: vi.fn(), configurable: true },
+    });
+    const start = { pointerId: 1, button: phone ? -1 : 0, pointerType: phone ? 'touch' : 'mouse', clientX: 400, clientY: 280 };
+    fireEvent.pointerDown(handle, start);
+    expect(height()).toBeCloseTo(320, 0);
+    fireEvent.pointerMove(handle, { ...start, clientY: 279 });
+    expect(height()).toBeCloseTo(321, 0);
+    fireEvent.pointerMove(handle, { ...start, clientX: 500, clientY: 80 });
+    expect(height()).toBeCloseTo(520, 0);
+    expect(conversation.style.getPropertyValue('--workspace-width')).toBe('74%');
+    fireEvent.pointerCancel(handle, { pointerId: 1 });
+    expect(conversation.hasAttribute('data-conversation-positioned')).toBe(false);
+    expect(localStorage.getItem(conversationLayoutKey)).toBeNull();
+    expect(conversation.classList.contains('workspace-window-dragging')).toBe(false);
+
+    fireEvent.pointerDown(handle, start);
+    fireEvent.pointerMove(handle, { ...start, clientY: -1000 });
+    expect(height()).toBeCloseTo(600, 0);
+    fireEvent.pointerUp(handle, { ...start, clientY: -1000 });
+    fireEvent.pointerDown(handle, start);
+    fireEvent.pointerMove(handle, { ...start, clientY: 1000 });
+    expect(height()).toBeCloseTo(160, 0);
+    fireEvent.pointerUp(handle, { ...start, clientY: 1000 });
+
+    fireEvent.pointerDown(handle, start);
+    fireEvent.pointerMove(handle, { ...start, clientY: 200 });
+    const beforeSecondPointer = height();
+    fireEvent.pointerDown(handle, { ...start, pointerId: 2 });
+    fireEvent.pointerMove(handle, { ...start, pointerId: 2, clientY: -1000 });
+    expect(height()).toBe(beforeSecondPointer);
+    fireEvent.lostPointerCapture(handle, { pointerId: 1 });
+    expect(height()).toBeCloseTo(160, 0);
+    expect(conversation.classList.contains('workspace-window-dragging')).toBe(false);
+  });
+
+  it('resizes conversation with keys and saves it through maximise, minimise and remount', () => {
+    const fixture: WorkspaceView[] = [{
+      id: 'conversation', title: 'Conversation', presentation: 'conversation',
+      content: { status: 'ready', content: <p>Conversation history</p> },
+    }];
+    const rendered = render(<Workspace views={fixture} defaultArrangement="layered" arrangeMenu={false} />);
+    const canvas = screen.getByRole('region', { name: 'Temporary workspace views' });
+    const conversation = screen.getByRole('article', { name: 'Conversation' });
+    vi.spyOn(canvas, 'getBoundingClientRect').mockReturnValue({
+      x: 0, y: 0, top: 0, left: 0, right: 1000, bottom: 600, width: 1000, height: 600, toJSON: () => ({}),
+    });
+    vi.spyOn(conversation, 'getBoundingClientRect').mockReturnValue({
+      x: 130, y: 280, top: 280, left: 130, right: 870, bottom: 600, width: 740, height: 320, toJSON: () => ({}),
+    });
+    const handle = within(conversation).getByRole('button', { name: 'Resize Conversation height' });
+    const height = () => parseFloat(conversation.style.getPropertyValue('--workspace-height')) * 6;
+    handle.focus();
+    fireEvent.keyDown(handle, { key: 'ArrowUp' });
+    expect(height()).toBeCloseTo(352, 0);
+    fireEvent.keyDown(handle, { key: 'ArrowUp', shiftKey: true });
+    expect(height()).toBeCloseTo(416, 0);
+    fireEvent.keyDown(handle, { key: 'ArrowDown' });
+    expect(height()).toBeCloseTo(384, 0);
+    fireEvent.keyDown(handle, { key: 'Home' });
+    expect(height()).toBeCloseTo(160, 0);
+    fireEvent.keyDown(handle, { key: 'End' });
+    expect(height()).toBeCloseTo(600, 0);
+    expect(document.activeElement).toBe(handle);
+
+    fireEvent.click(within(conversation).getByRole('button', { name: 'Maximise Conversation' }));
+    expect(within(conversation).queryByRole('button', { name: 'Resize Conversation height' })).toBeNull();
+    fireEvent.click(within(conversation).getByRole('button', { name: 'Restore size of Conversation' }));
+    expect(height()).toBeCloseTo(600, 0);
+    fireEvent.click(within(conversation).getByRole('button', { name: 'Minimise Conversation' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Restore Conversation' }));
+    expect(height()).toBeCloseTo(600, 0);
+    const saved = conversation.style.getPropertyValue('--workspace-width');
+    rendered.unmount();
+    render(<Workspace views={fixture} defaultArrangement="layered" arrangeMenu={false} />);
+    const restored = screen.getByRole('article', { name: 'Conversation' });
+    expect(restored.style.getPropertyValue('--workspace-width')).toBe(saved);
+    expect(restored.style.getPropertyValue('--workspace-height')).toBe('100%');
+  });
+
   it('keeps content available without motion callbacks and disables movement without hiding reduced-motion states', () => {
     render(<Workspace views={views} />);
     expect(screen.getByRole('heading', { name: 'Research summary' })).not.toBeNull();
@@ -902,6 +1007,102 @@ describe('Workspace', () => {
     expect(reducedMotion).toContain('.workspace-tab { animation: none; transition: none; }');
     const reducedWindow = reducedMotion.match(/\.workspace-window \{([^}]+)\}/)?.[1];
     expect(reducedWindow).not.toMatch(/opacity:\s*0|display:\s*none|visibility:\s*hidden/);
+  });
+
+  it('shares saved chat geometry with workspace move/resize commands and reports manual placement', () => {
+    const controller = createRef<WorkspaceController>();
+    render(<Workspace ref={controller} views={[{
+      id: 'conversation', title: 'Conversation', presentation: 'conversation',
+      content: { status: 'ready', content: <p>History</p> },
+    }]} defaultArrangement="layered" arrangeMenu={false} />);
+    const canvas = screen.getByRole('region', { name: 'Temporary workspace views' });
+    const conversation = screen.getByRole('article', { name: 'Conversation' });
+    vi.spyOn(canvas, 'getBoundingClientRect').mockReturnValue({
+      x: 0, y: 0, top: 0, left: 0, right: 1000, bottom: 600, width: 1000, height: 600, toJSON: () => ({}),
+    });
+    vi.spyOn(conversation, 'getBoundingClientRect').mockImplementation(() => {
+      const placed = conversation.hasAttribute('data-conversation-positioned');
+      const x = placed ? parseFloat(conversation.style.getPropertyValue('--workspace-x')) * 10 : 130;
+      const y = placed ? parseFloat(conversation.style.getPropertyValue('--workspace-y')) * 6 : 280;
+      const width = placed ? parseFloat(conversation.style.getPropertyValue('--workspace-width')) * 10 : 740;
+      const height = placed ? parseFloat(conversation.style.getPropertyValue('--workspace-height')) * 6 : 320;
+      return { x, y, top: y, left: x, right: x + width, bottom: y + height, width, height, toJSON: () => ({}) };
+    });
+    act(() => {
+      expect(controller.current?.dispatch({
+        commandId: 'move-chat', operation: 'move', viewId: 'conversation', x: .2, y: .1,
+      })).toBe(true);
+    });
+    expect(conversation.style.getPropertyValue('--workspace-x')).toBe('20%');
+    expect(conversation.style.getPropertyValue('--workspace-y')).toBe('10%');
+    expect(controller.current?.snapshot?.windows[0]?.placement).toBe('manual');
+    act(() => {
+      expect(controller.current?.dispatch({
+        commandId: 'resize-chat', operation: 'resize', viewId: 'conversation', width: .6, height: .7,
+      })).toBe(true);
+    });
+    expect(conversation.style.getPropertyValue('--workspace-width')).toBe('60%');
+    expect(conversation.style.getPropertyValue('--workspace-height')).toBe('70%');
+    expect(JSON.parse(localStorage.getItem(conversationLayoutKey)!)).toMatchObject({ x: .2, y: .1, width: .6, height: .7 });
+    const saved = localStorage.getItem(conversationLayoutKey);
+    act(() => {
+      expect(controller.current?.dispatch({
+        commandId: 'outside-chat', operation: 'move', viewId: 'conversation', x: .9, y: .1,
+      })).toBe(false);
+    });
+    expect(localStorage.getItem(conversationLayoutKey)).toBe(saved);
+    act(() => {
+      expect(controller.current?.dispatch({
+        commandId: 'minimise-chat', operation: 'minimise', viewId: 'conversation',
+      })).toBe(true);
+    });
+    vi.mocked(conversation.getBoundingClientRect).mockReturnValue({
+      x: 0, y: 0, top: 0, left: 0, right: 0, bottom: 0, width: 0, height: 0, toJSON: () => ({}),
+    });
+    act(() => {
+      expect(controller.current?.dispatch({
+        commandId: 'move-minimised-chat', operation: 'move', viewId: 'conversation', x: .15, y: .2,
+      })).toBe(true);
+    });
+    expect(JSON.parse(localStorage.getItem(conversationLayoutKey)!)).toMatchObject({ x: .15, y: .2, width: .6, height: .7 });
+  });
+
+  it.each([false, true])('moves chat using its header, publishes the composer anchor and saves the result, phone=%s', phone => {
+    if (phone) phoneViewport();
+    const anchor = vi.fn();
+    const windowUpdates = vi.fn();
+    render(<Workspace views={[{
+      id: 'conversation', title: 'Conversation', presentation: 'conversation',
+      content: { status: 'ready', content: <p>History</p> },
+    }, ...views]} onConversationPositionChange={anchor} onOpenWindowsChange={windowUpdates} defaultArrangement="layered" arrangeMenu={false} />);
+    const canvas = screen.getByRole('region', { name: 'Temporary workspace views' });
+    const conversation = screen.getByRole('article', { name: 'Conversation', hidden: phone });
+    vi.spyOn(canvas, 'getBoundingClientRect').mockReturnValue({
+      x: 20, y: 80, left: 20, top: 80, right: 1020, bottom: 680, width: 1000, height: 600, toJSON: () => ({}),
+    });
+    vi.spyOn(conversation, 'getBoundingClientRect').mockReturnValue({
+      x: 150, y: 360, left: 150, top: 360, right: 890, bottom: 680, width: 740, height: 320, toJSON: () => ({}),
+    });
+    const move = within(conversation).getByRole('button', { name: 'Move Conversation', hidden: phone });
+    Object.defineProperties(move, {
+      setPointerCapture: { value: vi.fn() }, hasPointerCapture: { value: () => true }, releasePointerCapture: { value: vi.fn() },
+    });
+    const start = { pointerId: 1, button: phone ? -1 : 0, pointerType: phone ? 'touch' : 'mouse', clientX: 200, clientY: 360 };
+    fireEvent.pointerDown(move, start);
+    expect(conversation.style.getPropertyValue('--workspace-x')).toBe('13%');
+    const updatesAfterPickup = windowUpdates.mock.calls.length;
+    fireEvent.pointerMove(move, { ...start, clientX: 250, clientY: 260 });
+    fireEvent.pointerUp(move, { ...start, clientX: 250, clientY: 260 });
+    expect(windowUpdates).toHaveBeenCalledTimes(updatesAfterPickup);
+    expect(conversation.style.getPropertyValue('--workspace-x')).toBe('18%');
+    expect(parseFloat(conversation.style.getPropertyValue('--workspace-y'))).toBeCloseTo(30, 0);
+    expect(anchor).toHaveBeenLastCalledWith(expect.objectContaining({ left: 200, top: 578, width: 740 }));
+    expect(JSON.parse(localStorage.getItem(conversationLayoutKey)!)).toMatchObject({ x: .18, width: .74 });
+    expect(conversation.querySelectorAll('.conversation-resize-corner')).toHaveLength(4);
+    expect(conversation.querySelectorAll('.conversation-resize-border')).toHaveLength(8);
+    expect(conversation.querySelector('.conversation-resize-border svg')).toBeNull();
+    fireEvent.click(within(conversation).getByRole('button', { name: 'Minimise Conversation', hidden: phone }));
+    expect(anchor).toHaveBeenLastCalledWith(expect.objectContaining({ left: 200, top: 578, width: 740 }));
   });
 
   it('bounds Arrange to its window and keeps mobile lifecycle actions in one row with 44px targets', () => {

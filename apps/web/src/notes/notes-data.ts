@@ -1,11 +1,11 @@
 import { backendFetch } from '../backend-request';
-import { knowledgeFolders, type KnowledgeFolder } from '../knowledge/knowledge-data';
 
 export const maxNoteBytes = 256 * 1024;
-export interface NoteSummary { path: string; title: string; folder: KnowledgeFolder; updatedAt: string }
+export interface NoteSummary { path: string; title: string; folder: string; directory: string; updatedAt: string }
 export interface Note { path: string; content: string; sha: string; url: string }
 export interface NotePage { notes: NoteSummary[]; limit: number; offset: number; hasMore: boolean }
 export interface NoteWrite { path: string; commit: string; url: string }
+export interface NoteTree { directories: string[]; rootNoteCount: number; truncated: boolean; updatedAt: string }
 export class NoteConflict extends Error {
   constructor(public readonly currentSha: string | null, public readonly content: string | null) {
     super('This note changed elsewhere. Your draft has not been overwritten.');
@@ -32,18 +32,25 @@ const githubUrl = (value: unknown): value is string => {
   } catch { return false; }
 };
 
-export function safeNotePath(value: unknown): value is string {
+function safeVaultPath(value: unknown): value is string {
   if (typeof value !== 'string' || value.length > 180 || value !== value.normalize('NFC') ||
-      /[\\?#%]|\p{Cc}/u.test(value)) return false;
+      /[\\?#%]|\p{Cc}|\p{Cs}/u.test(value)) return false;
   const segments = value.split('/');
-  return knowledgeFolders.includes(segments[0] as KnowledgeFolder) && segments.length >= 2 &&
-    /\.md$/iu.test(segments.at(-1)!) && segments.every(segment => !!segment && !segment.startsWith('.'));
+  return segments.every(segment => !!segment && !segment.startsWith('.'));
 }
 
-export function newNotePath(folder: KnowledgeFolder, title: string): string {
+export function safeNotePath(value: unknown): value is string {
+  return safeVaultPath(value) && /\.md$/iu.test(value);
+}
+
+export function safeNoteFolder(value: unknown): value is string {
+  return value === '' || safeVaultPath(value);
+}
+
+export function newNotePath(folder: string, title: string): string {
   const slug = title.normalize('NFKD').replace(/\p{M}/gu, '').toLowerCase()
     .replace(/[^a-z0-9]+/gu, '-').replace(/^-+|-+$/gu, '');
-  return slug ? `${folder}/${slug}.md` : '';
+  return slug && safeNoteFolder(folder) ? `${folder ? `${folder}/` : ''}${slug}.md` : '';
 }
 
 export function readNote(value: unknown): Note {
@@ -64,16 +71,36 @@ export function readNotePage(value: unknown): NotePage {
   const paths = new Set<string>();
   const notes = page.notes.map((entry): NoteSummary => {
     const note = object(entry);
+    const directory = typeof note?.path === 'string' && note.path.includes('/') ? note.path.slice(0, note.path.lastIndexOf('/')) : '';
     if (!note || !safeNotePath(note.path) || paths.has(note.path) ||
         typeof note.title !== 'string' || !note.title.trim() || note.title.length > 200 ||
-        !knowledgeFolders.includes(note.folder as KnowledgeFolder) || note.folder !== note.path.split('/')[0] ||
+        typeof note.folder !== 'string' || note.folder !== (note.path.includes('/') ? note.path.split('/')[0] : '') ||
+        (note.directory !== undefined && note.directory !== directory) ||
         typeof note.updatedAt !== 'string' || Number.isNaN(Date.parse(note.updatedAt))) {
       throw new Error('Jarvis returned an invalid notes list.');
     }
     paths.add(note.path);
-    return { path: note.path, title: note.title, folder: note.folder as KnowledgeFolder, updatedAt: note.updatedAt };
+    return { path: note.path, title: note.title, folder: note.folder, directory, updatedAt: note.updatedAt };
   });
   return { notes, limit: Number(page.limit), offset: Number(page.offset), hasMore: page.hasMore };
+}
+
+export function readNoteTree(value: unknown): NoteTree {
+  const tree = object(value);
+  if (!tree || !Array.isArray(tree.directories) || tree.directories.length > 10_000 ||
+      !Number.isSafeInteger(tree.rootNoteCount) || Number(tree.rootNoteCount) < 0 || Number(tree.rootNoteCount) > 10_000 ||
+      typeof tree.truncated !== 'boolean' || typeof tree.updatedAt !== 'string' ||
+      !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/u.test(tree.updatedAt) ||
+      Number.isNaN(Date.parse(tree.updatedAt))) {
+    throw new Error('Jarvis returned an invalid vault folder tree. Try again.');
+  }
+  const seen = new Set<string>();
+  const directories = tree.directories.map((path): string => {
+    if (!safeVaultPath(path) || seen.has(path)) throw new Error('Jarvis returned an invalid vault folder tree. Try again.');
+    seen.add(path);
+    return path;
+  });
+  return { directories, rootNoteCount: Number(tree.rootNoteCount), truncated: tree.truncated, updatedAt: tree.updatedAt };
 }
 
 export function createNotesClient(backendUrl: string, getAccessToken: () => Promise<string>) {
@@ -113,8 +140,20 @@ export function createNotesClient(backendUrl: string, getAccessToken: () => Prom
     return response.json() as Promise<unknown>;
   }
   return {
+    async tree(signal: AbortSignal) {
+      try { return readNoteTree(await request('/notes/tree', { signal })); }
+      catch (cause) {
+        if (cause instanceof NoteRequestError && cause.status === 404) {
+          throw new Error('The vault folder tree is not available yet. Full-vault backend support is awaiting deployment.', { cause });
+        }
+        if (cause instanceof NoteRequestError && cause.status === 503) {
+          throw new Error('Vault folders are not ready yet. Wait for the vault index, then retry. Your draft is kept.', { cause });
+        }
+        throw cause;
+      }
+    },
     async list(query: string, folder: string, offset: number, signal: AbortSignal) {
-      if (query.length > 500 || (folder && !knowledgeFolders.includes(folder as KnowledgeFolder)) ||
+      if (query.length > 500 || !safeNoteFolder(folder) ||
           !Number.isInteger(offset) || offset < 0 || offset > 10_000) throw new Error('Use a valid notes search, folder and page.');
       const params = new URLSearchParams({ limit: '50', offset: String(offset) });
       if (query.trim()) params.set('query', query.trim());
@@ -124,7 +163,7 @@ export function createNotesClient(backendUrl: string, getAccessToken: () => Prom
       return page;
     },
     async read(path: string, signal?: AbortSignal) {
-      if (!safeNotePath(path)) throw new Error('Use a safe Markdown path in an allowed folder.');
+      if (!safeNotePath(path)) throw new Error('Use a safe Markdown path in the vault.');
       const note = readNote(await request(`/notes/note?${new URLSearchParams({ path })}`, signal ? { signal } : {}));
       if (note.path !== path) throw new Error('Jarvis returned a different note. Your draft is unchanged.');
       return note;

@@ -6,18 +6,20 @@ import { useKnowledgeBackend } from './knowledge/knowledge-context';
 import { Loader } from './Loader';
 import { reportFrameReadback } from './window-readback';
 import type { SessionCommandResult } from './session-commands';
-import { htmlAppDocument, minAppHeight, readHtmlAppMessage, readHtmlArtifact } from './html-app-document';
+import { htmlAppDocument, minAppHeight, readHtmlAppMessage, readHtmlArtifact, type HtmlAppTheme } from './html-app-document';
 
 type Load = { key: string } & ({ status: 'loading' } | { status: 'error'; message: string; retry: boolean } | { status: 'ready'; artifact: HtmlArtifact; document: string });
 
-const themeTokens = { text: '--text', muted: '--text-muted', accent: '--glass-edge-cool', 'accent-warm': '--glass-glow-warm', error: '--error' } as const;
+const themeTokens = { text: '--text', muted: '--text-muted', accent: '--glass-edge-cool', 'accent-warm': '--glass-glow-warm', error: '--error', background: '--report-surface' } as const;
 
-function hostTheme() {
+function hostTheme(): HtmlAppTheme {
   const root = getComputedStyle(document.documentElement);
   const tokens: Record<string, string> = {};
   for (const [name, source] of Object.entries(themeTokens)) tokens[`--${name}`] = root.getPropertyValue(source);
   tokens['--font'] = getComputedStyle(document.body).fontFamily;
-  const scheme: 'dark' | 'light' = root.colorScheme.includes('light') && !root.colorScheme.includes('dark') ? 'light' : 'dark';
+  const resolved = document.documentElement.dataset.theme;
+  const scheme = resolved === 'light' || resolved === 'dark' ? resolved :
+    root.colorScheme.includes('light') && !root.colorScheme.includes('dark') ? 'light' : 'dark';
   return { scheme, tokens };
 }
 
@@ -35,6 +37,15 @@ export function HtmlAppView({ artifactId, title, updatedAt, onPinChange }: {
   const [load, setLoad] = useState<Load>({ key: loadKey, status: 'loading' });
   const [height, setHeight] = useState(minAppHeight * 3);
   const [notice, setNotice] = useState('');
+  const syncTheme = useCallback(() => {
+    frame.current?.contentWindow?.postMessage({ jarvisHostTheme: 1, ...hostTheme() }, '*');
+  }, []);
+
+  useEffect(() => {
+    const observer = new MutationObserver(syncTheme);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme', 'style'] });
+    return () => observer.disconnect();
+  }, [syncTheme]);
 
   const call = useCallback(async (init?: { method: 'PATCH'; body: unknown } | { method: 'POST'; path: string; body: unknown }, signal?: AbortSignal) => {
     if (!backend?.backendUrl) throw new Error('unavailable');
@@ -140,7 +151,7 @@ export function HtmlAppView({ artifactId, title, updatedAt, onPinChange }: {
   return (
     <div className="html-app">
       <iframe ref={frame} className="html-app-frame" title={load.artifact.title || title} sandbox="allow-scripts"
-        referrerPolicy="no-referrer" srcDoc={load.document} style={{ height }} />
+        referrerPolicy="no-referrer" srcDoc={load.document} style={{ height }} onLoad={syncTheme} />
       {notice && <p className="html-app-notice" role="status">{notice}</p>}
     </div>
   );

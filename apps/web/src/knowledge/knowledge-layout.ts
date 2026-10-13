@@ -1,13 +1,13 @@
-import type { KnowledgeFolder, KnowledgeGraph } from './knowledge-data';
+import type { KnowledgeGraph } from './knowledge-data';
 
 /**
  * A 3D force layout for the knowledge cloud. Each folder gets its own region, linked notes pull together and nearby
  * notes push apart (neighbours only, via a spatial grid, so a step stays roughly linear for 2,000 notes). The caller
  * runs one step per frame, so the cloud visibly settles, and stops once it is still.
  */
-const folderCentres: Record<KnowledgeFolder, [number, number, number]> = {
-  People: [1, 1, 1], Work: [-1, -1, 1], Personal: [-1, 1, -1], General: [1, -1, -1],
-};
+const folderCentres = new Map<string, [number, number, number]>([
+  ['People', [1, 1, 1]], ['Work', [-1, -1, 1]], ['Personal', [-1, 1, -1]], ['General', [1, -1, -1]],
+]);
 
 export interface KnowledgeLayout {
   /** xyz per node, in graph.nodes order. */
@@ -34,7 +34,7 @@ export function createKnowledgeLayout(graph: KnowledgeGraph, seed = 11): Knowled
   const random = () => { state = (state * 16807) % 2147483647; return state / 2147483647; };
   // The cloud's size grows with the cube root of the number of notes, so density stays similar.
   const spread = 26 * Math.cbrt(Math.max(count, 8) / 400);
-  const centres = graph.nodes.map((node) => folderCentres[node.folder].map((value) => value * spread * 0.55));
+  const centres = graph.nodes.map((node) => (folderCentres.get(node.folder) ?? [0, 0, 0]).map((value) => value * spread * 0.55));
   for (let node = 0; node < count; node += 1) {
     const centre = centres[node]!;
     const radius = spread * 0.45 * Math.cbrt(random());
@@ -94,7 +94,7 @@ export function createKnowledgeLayout(graph: KnowledgeGraph, seed = 11): Knowled
       const centre = centres[node]!;
       for (let axis = 0; axis < 3; axis += 1) {
         const at = node * 3 + axis;
-        // A gentle pull back to the folder's region keeps the four clusters readable.
+        // A gentle pull back keeps the established clusters readable.
         if (axis === 2) continue;
         const home = (centre[axis]! - positions[at]!) * 0.004;
         velocities[at] = (velocities[at]! + forces[at]! + home) * 0.82;
