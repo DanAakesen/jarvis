@@ -16,6 +16,7 @@ import { buildHealthUploadServer } from './server.js';
 import { healthUploadLimit,sha256,type HealthCapability } from './contracts.js';
 import { readHealthHostConfig } from './host-config.js';
 import { startHealthUploadHost,type HealthReceiptDiagnostics } from './host.js';
+import { HealthCapabilityLifecycle,type PreparedHealthCapability } from './capability-lifecycle.js';
 
 const require = createRequire(import.meta.url); const exec = promisify(execFile);
 const owner = '11111111-1111-4111-8111-111111111111';
@@ -26,6 +27,10 @@ let emulator: ChildProcess; let directory: string; let connection: string;
 let blobs: BlobServiceClient; let queues: QueueServiceClient; let raw: ContainerClient; let auth: ContainerClient; let queue: QueueClient;
 const apps: ReturnType<typeof buildHealthUploadServer>[] = []; const children: ChildProcess[] = [];
 const hosts: Awaited<ReturnType<typeof startHealthUploadHost>>[] = [];
+const deviceDefinition = { deviceId: 'synthetic-lifecycle-device',permissions: ['health-ingest','health-heartbeat'] as HealthCapability['permissions'],expiresAt: '2099-01-01T00:00:00.000Z' };
+async function withDevice(address: string,operation: PreparedHealthCapability,route = '/api/health/ingest') {
+  return operation.useSecret(secret => post(address,body,{ authorization: `Bearer ${secret}` },route));
+}
 async function port(): Promise<number> { const server = createServer(); await new Promise<void>(resolve => server.listen(0,'127.0.0.1',resolve)); const result = (server.address() as { port: number }).port; await new Promise<void>(resolve => server.close(() => resolve())); return result; }
 async function start(faults: HealthBufferFaults = {},bufferQueue = queue) {
   const app = buildHealthUploadServer({ enabled: true,buffer: new AzureHealthBuffer(raw,bufferQueue,owner,undefined,faults),verifier: createBlobHealthVerifier(auth) });
@@ -79,6 +84,145 @@ afterAll(async () => {
   if (directory) await rm(directory,{ recursive: true,force: true });
 },30000);
 describe('actual HTTP -> private Blob -> pointer Queue on synthetic Azurite',() => {
+  it('conditionally issues random opaque capabilities with exact retries, isolated devices and redacted handles',async () => {
+    const lifecycle = new HealthCapabilityLifecycle(auth,owner); const operation = lifecycle.prepare(deviceDefinition);
+    const other = lifecycle.prepare({ ...deviceDefinition,deviceId: 'second-synthetic-device' });
+    expect(operation.reference === other.reference).toBe(false);
+    await operation.useSecret(async secret => { expect(/^[A-Za-z0-9_-]{43}$/u.test(secret)).toBe(true); expect(JSON.stringify(operation).includes(secret)).toBe(false); });
+    expect(JSON.stringify(operation)).toBe('{"type":"prepared-health-capability","secret":"redacted"}');
+    const issued = await Promise.all(Array.from({ length: 5 },() => lifecycle.issue(operation,AbortSignal.timeout(10000))));
+    expect(issued).toEqual(Array.from({ length: 5 },() => ({ state: 'issued' })));
+    const address = await start(); expect((await withDevice(address,operation)).status).toBe(202);
+    await lifecycle.issue(other,AbortSignal.timeout(10000)); expect((await withDevice(address,other)).status).toBe(202);
+    expect(await lifecycle.revoke(operation.reference,AbortSignal.timeout(10000))).toEqual({ state: 'revoked' });
+    expect((await withDevice(address,operation)).status).toBe(403); expect((await withDevice(address,other)).status).toBe(202);
+    expect(await lifecycle.issue(operation,AbortSignal.timeout(10000))).toEqual({ state: 'revoked' });
+    expect(await lifecycle.revoke(operation.reference,AbortSignal.timeout(10000))).toEqual({ state: 'revoked' });
+  },20000);
+  it('imports the compiled lifecycle artifact and exercises it against the actual HTTP verifier',async () => {
+    const { HealthCapabilityLifecycle: CompiledLifecycle } = await import(join(import.meta.dirname,'../../../dist/daily/health-upload/capability-lifecycle.js'));
+    const lifecycle = new CompiledLifecycle(auth,owner); const operation = lifecycle.prepare(deviceDefinition);
+    expect(await lifecycle.issue(operation,AbortSignal.timeout(10000))).toEqual({ state: 'issued' });
+    expect((await withDevice(await start(),operation)).status).toBe(202);
+  });
+  it('rejects invalid lifecycle definitions and refuses unrelated, malformed and public capability storage',async () => {
+    const lifecycle = new HealthCapabilityLifecycle(auth,owner);
+    for (const input of [{ ...deviceDefinition,permissions: [] },{ ...deviceDefinition,permissions: ['nutrition-export'] },
+      { ...deviceDefinition,permissions: ['health-ingest','health-ingest'] },{ ...deviceDefinition,deviceId: ' padded ' },
+      { ...deviceDefinition,expiresAt: '2020-01-01T00:00:00.000Z' },{ ...deviceDefinition,expiresAt: '2099-02-30T00:00:00.000Z' },
+      { ...deviceDefinition,ownerObjectId: owner }]) expect(() => lifecycle.prepare(input as typeof deviceDefinition)).toThrow('invalid-input');
+    const operation = lifecycle.prepare(deviceDefinition); const blob = auth.getBlockBlobClient(`health-devices/${operation.reference}.json`);
+    const foreign = { ...capability,ownerObjectId: '22222222-2222-4222-8222-222222222222',expiresAt: deviceDefinition.expiresAt };
+    await blob.uploadData(Buffer.from(JSON.stringify(foreign)));
+    await expect(lifecycle.issue(operation,AbortSignal.timeout(10000))).rejects.toMatchObject({ code: 'conflict' });
+    await expect(lifecycle.revoke(operation.reference,AbortSignal.timeout(10000))).rejects.toMatchObject({ code: 'conflict' });
+    expect(JSON.parse((await blob.downloadToBuffer()).toString())).toEqual(foreign);
+    await blob.uploadData(Buffer.from('{"malformed":true}'));
+    await expect(lifecycle.revoke(operation.reference,AbortSignal.timeout(10000))).rejects.toMatchObject({ code: 'conflict' });
+    expect((await blob.downloadToBuffer()).toString()).toBe('{"malformed":true}');
+    await auth.setAccessPolicy('blob');
+    await expect(lifecycle.issue(lifecycle.prepare(deviceDefinition),AbortSignal.timeout(10000))).rejects.toMatchObject({ code: 'unavailable' });
+    await auth.setAccessPolicy();
+  });
+  it('verifies scoped and expired issued devices through real HTTP without changing human auth',async () => {
+    const lifecycle = new HealthCapabilityLifecycle(auth,owner);
+    const heartbeat = lifecycle.prepare({ ...deviceDefinition,permissions: ['health-heartbeat'] });
+    await lifecycle.issue(heartbeat,AbortSignal.timeout(10000)); const address = await start();
+    expect((await withDevice(address,heartbeat)).status).toBe(403);
+    expect((await withDevice(address,heartbeat,'/api/health/heartbeat')).status).toBe(202);
+    // Synthetic controlled clock creates a genuinely expired v1 record; no live credential.
+    const historical = new HealthCapabilityLifecycle(auth,owner,() => Date.parse('2019-01-01T00:00:00Z'));
+    const expired = historical.prepare({ ...deviceDefinition,expiresAt: '2020-01-01T00:00:00.000Z' });
+    await historical.issue(expired,AbortSignal.timeout(10000)); expect((await withDevice(address,expired)).status).toBe(403);
+    const foreignOwner = new HealthCapabilityLifecycle(auth,'22222222-2222-4222-8222-222222222222');
+    const foreign = foreignOwner.prepare(deviceDefinition); await foreignOwner.issue(foreign,AbortSignal.timeout(10000));
+    expect((await withDevice(address,foreign)).status).toBe(403);
+  });
+  it('reserves one rotation replacement, revokes first and handles concurrent identical/different rotations',async () => {
+    const lifecycle = new HealthCapabilityLifecycle(auth,owner); const original = lifecycle.prepare(deviceDefinition);
+    await lifecycle.issue(original,AbortSignal.timeout(10000)); const replacement = lifecycle.prepare(deviceDefinition);
+    const competing = lifecycle.prepare(deviceDefinition);
+    const outcomes = await Promise.allSettled([replacement,replacement,competing].map(next => lifecycle.rotate(original.reference,next,AbortSignal.timeout(10000))));
+    const reserved = JSON.parse((await auth.getBlobClient(`health-device-rotations/${original.reference}.json`).downloadToBuffer()).toString());
+    const winner = reserved.replacementReference === replacement.reference ? replacement : competing;
+    const loser = winner === replacement ? competing : replacement;
+    expect(outcomes.some(row => row.status === 'fulfilled' && row.value.state === 'rotated')).toBe(true);
+    const address = await start(); expect((await withDevice(address,original)).status).toBe(403);
+    expect((await withDevice(address,winner)).status).toBe(202); expect((await withDevice(address,loser)).status).toBe(403);
+    expect(await lifecycle.rotate(original.reference,winner,AbortSignal.timeout(10000))).toEqual({ state: 'rotated' });
+    await lifecycle.revoke(winner.reference,AbortSignal.timeout(10000));
+    expect(await lifecycle.rotate(original.reference,winner,AbortSignal.timeout(10000))).toEqual({ state: 'replacement-revoked' });
+    expect((await withDevice(address,winner)).status).toBe(403);
+  },20000);
+  it('preserves existing v1 expiry spelling and scope on rotation and denies scope expansion',async () => {
+    const lifecycle = new HealthCapabilityLifecycle(auth,owner);
+    const next = lifecycle.prepare({ ...deviceDefinition,deviceId: capability.deviceId,permissions: ['health-heartbeat'] });
+    expect(await lifecycle.rotate(sha256(token),next,AbortSignal.timeout(10000))).toEqual({ state: 'rotated' });
+    const previous = JSON.parse((await auth.getBlobClient(`health-devices/${sha256(token)}.json`).downloadToBuffer()).toString());
+    expect(previous).toEqual({ ...capability,revoked: true });
+    const expanded = lifecycle.prepare({ ...deviceDefinition,deviceId: capability.deviceId });
+    await expect(lifecycle.rotate(next.reference,expanded,AbortSignal.timeout(10000))).rejects.toMatchObject({ code: 'conflict' });
+    const address = await start(); expect((await withDevice(address,next,'/api/health/heartbeat')).status).toBe(202);
+  });
+  it('preserves safe rotation gap and resumes exact operation after replacement write failure',async () => {
+    const lifecycle = new HealthCapabilityLifecycle(auth,owner); const original = lifecycle.prepare(deviceDefinition);
+    await lifecycle.issue(original,AbortSignal.timeout(10000)); const replacement = lifecycle.prepare(deviceDefinition);
+    const get = auth.getBlockBlobClient.bind(auth);
+    const spy = vi.spyOn(auth,'getBlockBlobClient').mockImplementation(name => {
+      const client = get(name);
+      if (name === `health-devices/${replacement.reference}.json`) vi.spyOn(client,'uploadData').mockRejectedValue(new Error('synthetic-private-provider-message'));
+      return client;
+    });
+    await expect(lifecycle.rotate(original.reference,replacement,AbortSignal.timeout(10000))).rejects.toMatchObject({ code: 'unavailable',outcome: 'unknown',message: 'Health capability operation unavailable' });
+    spy.mockRestore(); const address = await start();
+    expect((await withDevice(address,original)).status).toBe(403); expect((await withDevice(address,replacement)).status).toBe(403);
+    expect(await lifecycle.rotate(original.reference,replacement,AbortSignal.timeout(10000))).toEqual({ state: 'rotated' });
+    expect((await withDevice(address,replacement)).status).toBe(202);
+  });
+  it('recovers committed create/revoke response loss, cancellation and expired prepared-operation failures',async () => {
+    let clock = Date.now(); const lifecycle = new HealthCapabilityLifecycle(auth,owner,() => clock); const operation = lifecycle.prepare(deviceDefinition);
+    const get = auth.getBlockBlobClient.bind(auth); let lost = false;
+    const spy = vi.spyOn(auth,'getBlockBlobClient').mockImplementation(name => {
+      const client = get(name); const upload = client.uploadData.bind(client);
+      vi.spyOn(client,'uploadData').mockImplementation(async (...args) => {
+        const response = await upload(...args); if (!lost) { lost = true; throw new Error('synthetic-private-response-loss'); } return response;
+      }); return client;
+    });
+    await expect(lifecycle.issue(operation,AbortSignal.timeout(10000))).rejects.toMatchObject({ code: 'unavailable',outcome: 'unknown' });
+    expect(await lifecycle.issue(operation,AbortSignal.timeout(10000))).toEqual({ state: 'issued' });
+    lost = false; await expect(lifecycle.revoke(operation.reference,AbortSignal.timeout(10000))).rejects.toMatchObject({ code: 'unavailable' });
+    expect(await lifecycle.revoke(operation.reference,AbortSignal.timeout(10000))).toEqual({ state: 'revoked' }); spy.mockRestore();
+    const canceled = new AbortController(); canceled.abort(new Error('synthetic-private-cancel'));
+    const untouched = lifecycle.prepare(deviceDefinition);
+    await expect(lifecycle.issue(untouched,canceled.signal)).rejects.toMatchObject({ code: 'canceled',message: 'Health capability operation canceled' });
+    expect(await auth.getBlobClient(`health-devices/${untouched.reference}.json`).exists()).toBe(false);
+    clock = Date.parse('2100-01-01T00:00:00Z');
+    await expect(lifecycle.issue(untouched,AbortSignal.timeout(10000))).rejects.toMatchObject({ code: 'invalid-input' });
+    await expect(operation.useSecret(async secret => { throw new Error(secret); })).rejects.toMatchObject({ message: 'Health capability operation unavailable' });
+  });
+  it('resumes reserved rotation after a deadline/response gap without issuing a second replacement',async () => {
+    const lifecycle = new HealthCapabilityLifecycle(auth,owner); const original = lifecycle.prepare(deviceDefinition);
+    await lifecycle.issue(original,AbortSignal.timeout(10000)); const next = lifecycle.prepare(deviceDefinition);
+    const controller = new AbortController(); const get = auth.getBlockBlobClient.bind(auth);
+    const spy = vi.spyOn(auth,'getBlockBlobClient').mockImplementation(name => {
+      const client = get(name); const upload = client.uploadData.bind(client);
+      if (name.startsWith('health-device-rotations/')) vi.spyOn(client,'uploadData').mockImplementation(async (...args) => {
+        await upload(...args); controller.abort(new DOMException('synthetic-private-timeout','TimeoutError')); throw controller.signal.reason;
+      }); return client;
+    });
+    await expect(lifecycle.rotate(original.reference,next,controller.signal)).rejects.toMatchObject({ code: 'canceled',outcome: 'unknown' });
+    spy.mockRestore(); const address = await start();
+    expect((await withDevice(address,original)).status).toBe(202); expect((await withDevice(address,next)).status).toBe(403);
+    const different = lifecycle.prepare(deviceDefinition);
+    await expect(lifecycle.rotate(original.reference,different,AbortSignal.timeout(10000))).rejects.toMatchObject({ code: 'conflict' });
+    expect(await lifecycle.rotate(original.reference,next,AbortSignal.timeout(10000))).toEqual({ state: 'rotated' });
+    expect((await withDevice(address,original)).status).toBe(403); expect((await withDevice(address,next)).status).toBe(202);
+    // Malformed operation evidence is never replaced to make a retry look successful.
+    const journal = auth.getBlockBlobClient(`health-device-rotations/${original.reference}.json`);
+    await journal.uploadData(Buffer.from('{"invalid":true}'));
+    await expect(lifecycle.rotate(original.reference,next,AbortSignal.timeout(10000))).rejects.toMatchObject({ code: 'conflict' });
+    expect((await journal.downloadToBuffer()).toString()).toBe('{"invalid":true}');
+  });
   it('persists byte-exact empty-workout data and de-duplicates concurrent same-session/checksum retries',async () => {
     const address = await start();
     const results = await Promise.all(Array.from({ length: 6 },async () => { const response = await post(address,body,{ checksum: sha256(body),'x-payload-checksum': sha256(body) }); expect(response.status).toBe(202); return response.json(); }));
