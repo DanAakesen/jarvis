@@ -79,7 +79,8 @@ describe('inactive processor on real isolated SQL Server, synthetic records only
     await expect(accept(device, payload(200), 'same')).rejects.toBeInstanceOf(HealthConflict);
     expect((await inbox())[0]).toMatchObject({ raw_bytes: bytes, checksum: sha256(bytes), processing_status: 'processed', processing_attempts: 1 });
     expect(await rows('health_ingestions')).toHaveLength(1);
-    expect((await rows('health_ingestions'))[0]).toMatchObject({ id: receipt.acceptanceId, status: 'succeeded', content_bytes: bytes.length });
+    // mssql preserves bigint as decimal text; do not narrow the storage contract to a JS number.
+    expect((await rows('health_ingestions'))[0]).toMatchObject({ id: receipt.acceptanceId, status: 'succeeded', content_bytes: String(bytes.length) });
     expect(await rows('health_workouts')).toHaveLength(2); expect(await rows('health_workout_heart_rate_minute')).toHaveLength(2);
     expect((await rows('health_sleep_daily'))[0]).toMatchObject({ total_sleep_hours: 7, deep_hours: 2 });
     expect((await rows('health_daily_metrics')).find(row => row.metric_name === 'step_count')).toMatchObject({ value: 100, ingestion_id: receipt.acceptanceId });
