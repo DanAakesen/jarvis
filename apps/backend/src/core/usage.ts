@@ -64,6 +64,12 @@ const roleCoverage: UsageRoleCoverage[] = [
     note: 'Foundry-reported model tokens; list-price costs are estimates, not provider invoices.',
   },
   {
+    role: 'smoke',
+    usageStatus: 'measured',
+    costStatus: 'estimated',
+    note: 'Foundry-reported post-deploy chat canary tokens; list-price costs are estimates, not provider invoices.',
+  },
+  {
     role: 'voice',
     usageStatus: 'measured',
     costStatus: 'estimated',
@@ -198,7 +204,7 @@ export async function registerUsageRoutes(app: FastifyInstance) {
       body: {
         type: 'object',
         properties: {
-          role: { type: 'string', enum: ['chat', 'voice', 'vision', 'research', 'embeddings'] },
+          role: { type: 'string', enum: ['chat', 'smoke', 'voice', 'vision', 'research', 'embeddings'] },
           model: { type: 'string', minLength: 1, maxLength: 128, pattern: '^[A-Za-z0-9][A-Za-z0-9._-]*$' },
           inputTokens: { type: 'integer', minimum: 0, maximum: 10_000_000 },
           outputTokens: { type: 'integer', minimum: 0, maximum: 10_000_000 },

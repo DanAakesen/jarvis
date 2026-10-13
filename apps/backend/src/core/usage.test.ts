@@ -68,6 +68,7 @@ describe('usage report API', () => {
       toolCalls: [],
       roleCoverage: expect.arrayContaining([
         { role: 'chat', usageStatus: 'measured', costStatus: 'estimated', note: expect.any(String) },
+        { role: 'smoke', usageStatus: 'measured', costStatus: 'estimated', note: expect.any(String) },
         { role: 'research', usageStatus: 'unverified', costStatus: 'unverified', note: expect.any(String) },
         { role: 'embeddings', usageStatus: 'measured', costStatus: 'unverified', note: expect.any(String) },
       ]),

@@ -3,6 +3,7 @@ export { dailyViewIds, dailyModuleId, dailyContractVersion } from './daily.js';
 export const generatedViewVersion = 1;
 export const systemSmokeCheckIds = Object.freeze([
   'google', 'github_app', 'vault', 'foundry.embeddings', 'research', 'pc_bridge', 'agent_contract',
+  'chat_canary',
 ]);
 export const modelRoles = Object.freeze([
   'chat', 'vision', 'research', 'voice', 'transcription', 'embedding', 'codex', 'copilot',

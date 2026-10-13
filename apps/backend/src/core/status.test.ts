@@ -6,6 +6,8 @@ import type { NowFeedSnapshot, NowFeedStore } from './now.js';
 import { coreModule } from './index.js';
 import { summarizeNowFeed } from './status.js';
 import { createSystemStatusReader } from '../system-status.js';
+import { createChatCanaryProbe } from './chat-canary.js';
+import type { ConversationStore } from '../database/conversation-store.js';
 
 const config = { ...loadConfig({}), logLevel: 'silent' as const };
 const headers = {
@@ -136,12 +138,25 @@ describe('get_status_summary', () => {
     const embeddings = vi.fn(async () => ({ status: 'ok' as const }));
     const research = vi.fn(async () => ({ status: 'ok' as const }));
     const agentContract = vi.fn(async () => ({ status: 'ok' as const }));
+    const conversationStore = {
+      createSession: vi.fn(async () => null),
+      addMessage: vi.fn(async () => null),
+    } as unknown as ConversationStore;
+    const recordToolCall = vi.fn(async () => {});
+    const canaryAgent = {
+      stream: vi.fn(async function* () { yield 'ok'; }),
+    };
     const reader = createSystemStatusReader({ google }, undefined);
     const app = buildApp(config, undefined, {
       modules: [coreModule],
       auth: async () => ({ objectId: config.auth.ownerObjectId, tenantId: config.auth.tenantId }),
       systemStatusReader: reader,
-      systemSmokeProbes: { vault, 'foundry.embeddings': embeddings, research, agent_contract: agentContract },
+      conversationStore,
+      toolCallStore: { record: recordToolCall },
+      systemSmokeProbes: {
+        vault, 'foundry.embeddings': embeddings, research, agent_contract: agentContract,
+        chat_canary: createChatCanaryProbe(canaryAgent),
+      },
     });
     apps.push(app);
     await reader.read();
@@ -151,13 +166,14 @@ describe('get_status_summary', () => {
 
     expect(smoke.statusCode).toBe(200);
     expect(smoke.headers['cache-control']).toBe('no-store');
-    expect(smoke.json().entries).toHaveLength(7);
+    expect(smoke.json().entries).toHaveLength(8);
     expect(smoke.json().entries).toEqual(expect.arrayContaining([
       expect.objectContaining({ id: 'google', status: 'ok' }),
       expect.objectContaining({ id: 'vault', status: 'ok' }),
       expect.objectContaining({ id: 'foundry.embeddings', status: 'ok' }),
       expect.objectContaining({ id: 'research', status: 'ok' }),
       expect.objectContaining({ id: 'agent_contract', status: 'ok' }),
+      expect.objectContaining({ id: 'chat_canary', status: 'ok' }),
     ]));
     expect(status.json().smoke).toEqual(smoke.json());
     expect(google).toHaveBeenCalledTimes(2);
@@ -165,6 +181,10 @@ describe('get_status_summary', () => {
     expect(embeddings).toHaveBeenCalledOnce();
     expect(research).toHaveBeenCalledOnce();
     expect(agentContract).toHaveBeenCalledOnce();
+    expect(canaryAgent.stream).toHaveBeenCalledOnce();
+    expect(conversationStore.createSession).not.toHaveBeenCalled();
+    expect(conversationStore.addMessage).not.toHaveBeenCalled();
+    expect(recordToolCall).not.toHaveBeenCalled();
     expect(JSON.stringify(smoke.json())).not.toMatch(/token|secret|private|configured/iu);
   });
 
@@ -184,6 +204,7 @@ describe('get_status_summary', () => {
       systemSmokeProbes: {
         research: async () => { throw new Error('provider response contains private data'); },
         agent_contract: async () => ({ status: 'down', reason: 'A tool schema is not an object.' }),
+        chat_canary: async () => ({ status: 'down', reason: 'agent_error' }),
       },
     });
     apps.push(app);
@@ -197,6 +218,9 @@ describe('get_status_summary', () => {
     expect(response.body).not.toContain('provider response contains private data');
     expect(response.json().entries).toEqual(expect.arrayContaining([
       expect.objectContaining({ id: 'agent_contract', status: 'down', reason: 'A tool schema is not an object.' }),
+    ]));
+    expect(response.json().entries).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'chat_canary', status: 'down', reason: expect.any(String) }),
     ]));
     expect((await app.inject({ url: '/status', headers })).json().smoke).toEqual(response.json());
   });

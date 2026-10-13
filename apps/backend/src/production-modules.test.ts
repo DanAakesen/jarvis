@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { modelRoles } from '@jarvis/contracts';
+import { modelRoles, systemSmokeCheckIds } from '@jarvis/contracts';
 import { FrameStore } from './vision/frame-store.js';
 import { createConversationModule } from './core/conversation.js';
 import { coreModule } from './core/index.js';
@@ -110,6 +110,7 @@ describe('production tool catalogue', () => {
   });
 
   it('passes the smoke contract with the real all-features composed registry', async () => {
+    expect(systemSmokeCheckIds).toContain('chat_canary');
     const registry = buildCatalogue(modulesWithEveryFeature());
     const roles = Object.fromEntries(modelRoles.map((role) => [role, {
       model: 'gpt-6-luna',

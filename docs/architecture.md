@@ -1241,22 +1241,27 @@ migration is added.
 
 `GET /status/smoke` forces fresh read-only Google, GitHub App, vault repository
 tree-metadata, embedding, and PC-bridge checks, adds a bounded research dry run,
-and checks the agent contract. The contract check validates the live tool registry
-against the hosted agent's catalogue limits and builds the same `/agent/settings`
-payload used by the route, then verifies the shape accepted by the agent. It does
-not call the hosted agent endpoint. Contract failures report a fixed short reason;
-tool names, descriptions, schemas, settings, and provider error text are never
-included. The endpoint never reads note contents. Its response contains each
-check ID, status, timestamp, and a bounded reason only for a failed contract
-check. The latest report is kept in
+checks the agent contract, and makes a real chat turn through the existing hosted
+agent client. The contract check validates the live tool registry against the
+hosted agent's catalogue limits and builds the same `/agent/settings` payload
+used by the route, then verifies the shape accepted by the agent. The `chat_canary`
+turn uses the backend's agent identity, validates the live tool catalogue, and
+disables user-history reads, context reads, tool execution, and conversation
+persistence. It asks for one short reply, waits up to 45 seconds, and caches the
+last result for 60 seconds. Its failure reason is restricted to
+`catalogue_unavailable`, `timeout`, `empty_reply`, or `agent_error`; no reply text,
+tool metadata, settings, or provider error text is included. Canary model usage is
+recorded under the distinct `smoke` role. The endpoint never reads note contents.
+Its response contains each check ID, status, timestamp, and a bounded reason only
+for failed checks. The latest report is kept in
 the backend's in-memory status snapshot and is returned as `smoke` by `GET /status`
 for the status page; it is lost when the backend restarts. The embedding vector is
 discarded, and the temporary research invocation is cleaned up without writing
 research output or other user data. Dan may call the endpoint with his normal
 token; the configured deployment service principal may call only this exact GET
 route using an Azure Resource Manager token. The Deploy workflow records the
-allowlisted statuses in its run summary and fails on degraded/down checks except
-for an offline PC bridge.
+six required check statuses plus any additional entries in its run summary and
+fails on degraded/down checks except for an offline PC bridge.
 
 ### Local PC bridge (P7-06)
 
@@ -2075,8 +2080,10 @@ unknown deployment rates and subscription-backed research/image-generation costs
 remain explicitly unverified. `/usage` returns daily UTC and monthly UTC cost
 totals plus research, web-research and image-generation tool-call counts. All-time
 daily totals are bounded to the latest 90 days; monthly totals cover the selected
-period. Provider-reported chat/voice tokens, SQL collection and live billing have
-not been verified against a deployed service or invoice.
+period. Migration `0045_smoke_usage_role.sql` extends the usage-role constraint
+for post-deploy chat-canary token records; its down batch refuses rollback while
+such rows remain. Provider-reported chat/voice tokens, SQL collection and live
+billing have not been verified against a deployed service or invoice.
 
 P9-31 adds the agent-only `get_usage` tool to the shared registry. It uses the
 existing usage store and shared period/entry contracts to return USD and DKK
