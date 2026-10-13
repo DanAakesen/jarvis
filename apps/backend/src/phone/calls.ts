@@ -354,7 +354,7 @@ export function createPhoneCallModule(options: PhoneCallModuleOptions): PhoneCal
           connect: options.connect,
         });
         socket.once('close', (code) => {
-          if (activeCalls.has(sessionId) && code !== 1000) {
+          if (!app.isStopping && activeCalls.has(sessionId) && code !== 1000) {
             void finishCall(sessionId, 'failed', true)
               .catch(() => request.log.warn('phone.call_media_cleanup_failed'));
           }

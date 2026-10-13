@@ -1,5 +1,20 @@
 # Decisions
 
+## P9-96 backend connection draining (13 October 2026)
+
+Drain long-lived connections in Fastify `preClose`, after stopping the HTTP
+listener and before `onClose` cleanup. Local SIGTERM reproduction with an open
+Now SSE and WebSocket confirmed that the SSE kept HTTP shutdown waiting:
+the previous implementation timed out at 5,005 ms, never reached `onClose`,
+and exited 1. With explicit SSE EOF/reconnect and WebSocket 1012 close frames,
+the same run reached cleanup and exited 0 in 6 ms. Preserve ordinary in-flight
+requests and the existing telemetry-warning/server-failure distinction.
+Do not replay cancelled chat turns automatically: they may have performed
+side effects. Existing task/Now/voice clients reconnect without changes;
+ACS phone media follows existing call teardown, not browser reconnection.
+Injected real close failure and timeout still exit 1 with named error events.
+Production log acceptance remains the coordinator's post-deploy check.
+
 ## P12-04 protected capability lifecycle preparation (13 October 2026)
 
 [Release 6138056083](https://github.com/DanAakesen/jarvis/issues/719#issuecomment-6138056083) authorizes an inactive injected-client library and synthetic/Azurite evidence after merged #772, not production credential issuance. Use 256-bit standard cryptographic randomness and the existing v1 owner/device/scope/expiry/revocation contract. Retain the same prepared secret operation across conditional-create retries; refuse unrelated or malformed records. ETag revocation never writes an active record. A conditional private rotation reservation selects one replacement; revoke the old credential before issuing that replacement, preferring a truthful availability gap over overlapping automatic credentials. SDK/response/cancellation ambiguity requires exact-operation retry and protected reconciliation, not a distributed atomicity claim. Prepared handles redact JSON/inspection; no bearer or body enters diagnostics. Separate operator write access, durable secret storage/delivery and recovery after handle loss remain explicit approvals; upload identity/read-only verifier, human auth, resources/composition and source stay unchanged.

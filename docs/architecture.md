@@ -690,9 +690,22 @@ callbacks preserve caught errors until the logging boundary; Graph
 authentication/transport/HTTP failures and budget HTTP failures carry safe
 metadata without provider responses. Telemetry flush/disposal is bounded by the
 five-second shutdown deadline and failures are warning-level
-`telemetry.close_failed` records with a safe kind; a server-close failure remains
-an error-level `server.shutdown_failed` and still sets a failing process exit
-code.
+`telemetry.close_failed` records with a safe kind. SIGTERM/SIGINT first stops
+accepting connections in `preClose`, ends task/Now/chat SSE with
+`retry: 1000` and a final `reconnect` event, cancels chat work, and closes voice
+and phone WebSockets with code 1012 (service restart). Voice sessions persist
+their final state before shutdown completes; event hubs release their listeners.
+Streams that finish opening during shutdown are ended immediately. Ordinary
+in-flight HTTP requests still finish before `onClose` disposes services and SQL.
+A clean stop logs info-level `server.stopping`/`server.stopped` and exits 0;
+server-close failure or deadline expiry logs error-level `server.shutdown_failed`
+(`kind: timeout` for expiry) and exits 1, without a later false `server.stopped`.
+The task/Now web clients already reconnect on EOF (task replay retains
+`Last-Event-ID`), and voice reconnects on transport closure with backoff; no web
+change or special event handling is required. UI-session note: a chat turn is
+cancelled, not automatically replayed (which could duplicate tool side effects),
+and ACS phone media has no browser-style reconnect loop; phone calls follow
+their existing teardown path.
 
 The factory module exposes authenticated `POST /factory/tasks`, filtered and
 paginated `GET /factory/tasks`, and `GET /factory/tasks/:id` with paginated event

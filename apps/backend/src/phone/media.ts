@@ -229,11 +229,13 @@ export function bridgePhoneMedia({
         if (event.type === 'session.rejected' || event.type === 'error') end(1011, 'Voice session failed');
       });
       upstream.once('error', () => {
+        if (closed) return;
         request.log.warn('phone.voice_connection_failed');
         end(1011, 'Voice connection failed');
       });
       upstream.once('close', () => end(1011, 'Voice connection closed'));
     } catch {
+      if (closed) return;
       request.log.warn('phone.voice_connection_failed');
       end(1011, 'Voice connection failed');
     }

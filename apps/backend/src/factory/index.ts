@@ -4,7 +4,7 @@ import { ToolRefusal } from '../core/tool-registry.js';
 import { readSettings } from '../core/settings.js';
 import { workspaceContext } from '../core/workspace-context.js';
 import { sseHeaders } from '../core/now.js';
-import { writeSseEvent } from '../core/sse.js';
+import { registerSseShutdown, writeSseEvent } from '../core/sse.js';
 import {
   GitHubRepositoryUnavailableError,
   ProjectConflictError,
@@ -491,6 +491,7 @@ export const factoryModule: BackendModule = {
         'X-Accel-Buffering': 'no',
       });
       response.flushHeaders();
+      registerSseShutdown(app, response, cleanup);
 
       const replay = async () => {
         let cursor = afterEventId;

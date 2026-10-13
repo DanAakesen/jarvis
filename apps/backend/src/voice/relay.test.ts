@@ -12,6 +12,7 @@ import { AuthenticationDenied } from '../auth/verify.js';
 import { buildApp, type BuildAppOptions } from '../app.js';
 import { loadConfig } from '../config.js';
 import { createLogger } from '../logging.js';
+import { shutdown } from '../shutdown.js';
 import { coreModule } from '../core/index.js';
 import type { ConversationStore } from '../core/conversation-store.js';
 import type { SettingsStore } from '../core/settings.js';
@@ -260,6 +261,20 @@ function sendTimedPartialTranscript(socket: WebSocket, itemId: string) {
 }
 
 describe('backend-relayed Voice Live WebSocket', () => {
+  it.each(['/voice', '/voice/da'])('ends %s and its upstream without warnings on shutdown', async (path) => {
+    const records: string[] = [];
+    const { app, browser, upstream, conversationStore } = await connectedPartialVoice(
+      partialSpeechHarness(), { classify: vi.fn(async () => null) }, records, undefined, path,
+    );
+    const browserClosed = once(browser, 'close');
+    const upstreamClosed = once(upstream, 'close');
+    await shutdown(app, undefined, 1_000);
+    expect((await browserClosed)[0]).toBe(1012);
+    expect((await upstreamClosed)[0]).toBe(1012);
+    expect(conversationStore.endSession).toHaveBeenCalledExactlyOnceWith('41');
+    expect(records.map((record) => JSON.parse(record)).filter((record) => record.level >= 40)).toEqual([]);
+  });
+
   it.each(['/voice', '/voice/da'])('refreshes workspace reference context before each response on %s, including disconnects', async (path) => {
     const { app, browser, upstream, received } = await connectedPartialVoice(
       partialSpeechHarness(), { classify: vi.fn(async () => null) }, undefined, undefined, path,

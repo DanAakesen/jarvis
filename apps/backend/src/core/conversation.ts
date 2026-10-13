@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { Readable } from 'node:stream';
+import { registerSseShutdown } from './sse.js';
 import type { FastifyRequest } from 'fastify';
 import type { ConversationSearchPage } from '@jarvis/contracts';
 import type { BackendModule } from '../modules.js';
@@ -878,6 +879,12 @@ return {
           reply.raw.removeListener('close', abortOnClose);
         }
       })());
+      const unregisterShutdown = registerSseShutdown(app, reply.raw, () => {
+        controller.abort();
+        stream.unpipe(reply.raw);
+        stream.destroy();
+      });
+      stream.once('close', unregisterShutdown);
       return reply.send(stream);
     });
 

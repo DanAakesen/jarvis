@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { buildApp, type BuildAppOptions } from '../app.js';
 import { loadConfig } from '../config.js';
 import { createLogger } from '../logging.js';
+import { shutdown } from '../shutdown.js';
 import { ChatAgentError, createFoundryAgentSessionId } from './chat-agent.js';
 import type { ConversationStore } from './conversation-store.js';
 import type { ReflexClassifier } from './reflex.js';
@@ -885,7 +886,7 @@ describe('conversation routes', () => {
       expect(JSON.stringify(decision)).not.toContain(transcript);
     });
 
-    it('cancels both the agent and reflex when the chat client disconnects', async () => {
+    it.each(['disconnect', 'shutdown'])('cancels both the agent and reflex on chat %s', async (reason) => {
       const store = storeFixture();
       let agentSignal!: AbortSignal;
       let resolveAgentAbort!: () => void;
@@ -928,9 +929,20 @@ describe('conversation routes', () => {
         received += decoder.decode(chunk.value);
       }
 
-      controller.abort();
-      serverResponse.destroy();
-      await reader.cancel().catch(() => {});
+      if (reason === 'shutdown') {
+        await shutdown(app, undefined, 1_000);
+        while (true) {
+          const chunk = await reader.read();
+          if (chunk.done) break;
+          received += decoder.decode(chunk.value);
+        }
+        expect(received).toContain('event: reconnect\ndata: {}\n\n');
+        expect(app.shutdownConnections.size).toBe(0);
+      } else {
+        controller.abort();
+        serverResponse.destroy();
+        await reader.cancel().catch(() => {});
+      }
       await Promise.all([agentAborted, reflexAborted]);
 
       expect(port).toBeGreaterThan(0);

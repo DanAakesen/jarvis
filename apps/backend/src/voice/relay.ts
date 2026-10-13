@@ -338,6 +338,10 @@ function registerVoiceRoute(
   captionFrame?: VoiceRelayOptions['captionFrame'],
 ): void {
   app.get(path, { websocket: true }, (browser, request) => {
+    if (app.isStopping) {
+      browser.close(1012, 'Service restarting; reconnect');
+      return;
+    }
     if (request.principal === null) {
       browser.close(1008, 'Unauthorized');
       return;
@@ -1240,7 +1244,7 @@ function registerVoiceRoute(
       finishTurnTiming();
       finishActiveToolActivities();
       if (!activityFinished) {
-        publishActivity(code === 1000 || activityState === 'reconnecting' ? 'ended' : 'failed');
+        publishActivity(code === 1000 || code === 1012 || activityState === 'reconnecting' ? 'ended' : 'failed');
       }
       stopPartialRecognition();
       controller.abort();
@@ -1255,6 +1259,14 @@ function registerVoiceRoute(
         },
       );
     };
+
+    const shutdownSession = async () => {
+      endRequested = true;
+      close(1012, 'Service restarting; reconnect');
+      await finalizeSession();
+    };
+    app.shutdownConnections.add(shutdownSession);
+    browser.once('close', () => { app.shutdownConnections.delete(shutdownSession); });
 
     const sendUpstream = (message: unknown, sent?: () => void) => {
       if (upstream?.readyState !== WebSocket.OPEN) return;
@@ -1977,10 +1989,11 @@ function registerVoiceRoute(
       queued.push({ data, binary });
     });
     browser.once('close', (code) => {
+      endRequested = true;
       finishTurnTiming();
       finishActiveToolActivities();
       if (!activityFinished) {
-        publishActivity(code === 1000 || activityState === 'reconnecting' ? 'ended' : 'failed');
+        publishActivity(code === 1000 || code === 1012 || activityState === 'reconnecting' ? 'ended' : 'failed');
       }
       stopPartialRecognition();
       controller.abort();
@@ -2297,6 +2310,7 @@ function registerVoiceRoute(
           }
         });
         upstream.once('error', (error) => {
+          if (controller.signal.aborted) return;
           const status = /Unexpected server response: (\d{3})/u.exec(error.message)?.[1];
           request.log.warn({
             failure: error.message.replace(/[^A-Za-z0-9 .:,'()_-]/gu, ' ').slice(0, 120),
@@ -2307,6 +2321,7 @@ function registerVoiceRoute(
           close(1011, 'Voice connection failed');
         });
       } catch (error) {
+        if (controller.signal.aborted) return;
         request.log.warn({
           failure: error instanceof Error ? error.message.replace(/[^A-Za-z0-9 .:,'()_-]/gu, ' ').slice(0, 120) : 'unknown',
           language,
@@ -2324,6 +2339,14 @@ export function createVoiceRelayModule(options: VoiceRelayOptions): BackendModul
     tools: [],
     registerRoutes: async (app) => {
       await app.register(websocket, {
+        preClose: async () => {
+          for (const socket of app.websocketServer.clients) {
+            socket.close(1012, 'Service restarting; reconnect');
+          }
+          await new Promise<void>((resolve, reject) => {
+            app.websocketServer.close((error) => error ? reject(error) : resolve());
+          });
+        },
         options: {
           maxPayload: MAX_MESSAGE_BYTES,
           perMessageDeflate: false,

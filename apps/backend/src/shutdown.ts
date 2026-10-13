@@ -10,6 +10,7 @@ export async function shutdown(app: ReturnType<typeof buildApp>, telemetry?: Tel
         (async () => {
           app.log.info('server.stopping');
           await app.close();
+          if (state.timedOut) return;
           app.log.info('server.stopped');
           if (telemetry) {
             state.phase = 'telemetry';
@@ -29,7 +30,10 @@ export async function shutdown(app: ReturnType<typeof buildApp>, telemetry?: Tel
         }),
       ]);
     } catch (error) {
-      if (state.phase !== 'telemetry') throw error;
+      if (state.phase !== 'telemetry') {
+        app.log.error(state.timedOut ? { kind: 'timeout' } : safeErrorFields(error), 'server.shutdown_failed');
+        throw error;
+      }
       app.log.warn(state.timedOut ? { kind: 'timeout' } : safeErrorFields(error), 'telemetry.close_failed');
     }
   } finally {
