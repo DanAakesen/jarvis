@@ -98,6 +98,56 @@ describe('inactive processor on real isolated SQL Server, synthetic records only
     expect(feeds.find(row => row.feed_kind === 'workouts')?.accepted_evidence_at).toBe(new Date(clock).toISOString());
     expect(feeds.find(row => row.feed_kind === 'metrics')?.accepted_evidence_at).toBe(new Date(base).toISOString());
   });
+  it('reads canonical BPM summaries and minute series back from SQL without inventing missing units or values', async () => {
+    const device = await provision();
+    const declared = { ...workout('declared'), avgHeartRate: { qty: 110, units: 'count/min' }, maxHeartRate: { qty: 120, units: 'beats/min' },
+      heartRateData: [{ date: '2026-10-13T08:00:10Z', qty: 100, units: 'count/min' }, { date: '2026-10-13T08:00:50Z', qty: 120, units: 'BPM' }] };
+    const bytes = raw({ data: { workouts: [declared,
+      { ...workout('nested'), heartRate: { unit: 'beats/min', avg: { qty: 115 }, Max: 155 } },
+      { ...workout('implicit'), avgHeartRate: { qty: 105 }, maxHeartRate: { qty: 145 } },
+      { ...workout('zero'), avgHeartRate: { qty: 0 }, maxHeartRate: { qty: 0 } },
+      { ...workout('unknown'), heartRateData: [{ date: '2026-10-13T08:00:10Z', qty: 95 }] },
+    ], metrics: [{ name: 'resting_heart_rate', units: 'count/min', data: [{ date: '2026-10-13', qty: 60 }] },
+      { name: 'heart_rate_variability_sdnn', units: 'ms', data: [{ date: '2026-10-13', qty: 45 }] }] } });
+    await accept(device, bytes); expect(await processor().processNext(signal())).toMatchObject({ state: 'processed' });
+    const history = (await readModel().history('workouts', { startDate: '2026-10-13', endDate: '2026-10-13' }, signal())).items;
+    for (const [id, avg_heart_rate, max_heart_rate] of [['declared', 110, 120], ['nested', 115, 155], ['implicit', 105, 145], ['zero', 0, 0], ['unknown', null, null]]) {
+      expect(history.find(row => row.id === id)).toMatchObject({ avg_heart_rate, max_heart_rate });
+    }
+    expect((await readModel().heartRate('declared', {}, signal())).items[0]).toMatchObject({ unit: 'bpm', min_value: 100, avg_value: 110, max_value: 120 });
+    expect((await readModel().heartRate('unknown', {}, signal())).items[0]).toMatchObject({ unit: null, avg_value: 95 });
+    const details = await rows('health_workout_metrics');
+    expect(details.find(row => row.workout_id === 'declared' && row.metric_name === 'avg_heart_rate')).toMatchObject({ value: 110, unit: 'bpm' });
+    expect(details.find(row => row.workout_id === 'implicit' && row.metric_name === 'avg_heart_rate')).toMatchObject({ value: 105, unit: null });
+    expect((await readModel().history('metrics', { startDate: '2026-10-13', endDate: '2026-10-13' }, signal())).items).toEqual(expect.arrayContaining([
+      expect.objectContaining({ metric_name: 'resting_heart_rate', value: 60, unit: 'bpm' }),
+      expect.objectContaining({ metric_name: 'heart_rate_variability_sdnn', value: 45, unit: 'ms' }),
+    ]));
+    expect(await readModel().workoutDetail('declared', signal())).toMatchObject({ detail: { avgHeartRate: { qty: 110, units: 'count/min' } } });
+    expect((await inbox())[0]).toMatchObject({ raw_bytes: bytes, checksum: sha256(bytes), processing_status: 'processed' });
+  });
+  it('quarantines unsupported heart-rate units without domain writes or false processed freshness and retains raw evidence', async () => {
+    const device = await provision(); await accept(device); await processor().processNext(signal());
+    const domainTables = tableNames.filter(table => !['health_upload_inbox', 'health_upload_capabilities'].includes(table));
+    const before = await Promise.all(domainTables.map(rows));
+    const badWorkouts = [
+      { avgHeartRate: { qty: 2, units: 'Hz' }, maxHeartRate: { qty: 3, units: 'Hz' } },
+      { maxHeartRate: { qty: 3, unit: 'made-up' } },
+      { heartRate: { avg: { qty: 2, units: 'Hz' }, max: { qty: 3, units: 'Hz' } } },
+      { heartRate: { units: 'Hz', Avg: 2, Max: 3 } },
+      { avgHeartRate: { qty: 110, units: 'bpm' }, heartRate: { avg: { qty: 2, units: 'Hz' } } },
+      { heartRateData: [{ date: '2026-10-13T08:00:10Z', qty: 2, units: 'made-up' }] },
+      { heartRateRecovery: [{ date: '2026-10-13T09:00:10Z', qty: 2, units: 'ms' }] },
+    ].map(fields => ({ data: { workouts: [{ ...workout('one'), ...fields }] } }));
+    const rejected: unknown[] = [...badWorkouts, { data: { metrics: [{ name: 'resting_heart_rate', units: 'Hz', data: [{ date: '2026-10-13', qty: 2 }] }] } }];
+    for (const value of rejected) {
+      clock += 1000; const bytes = raw(value); const receipt = await accept(device, bytes);
+      expect(await processor().processNext(signal())).toMatchObject({ state: 'quarantined', reason: 'unsupported_unit' });
+      expect((await inbox()).find(row => row.acceptance_id === receipt.acceptanceId)).toMatchObject({ raw_bytes: bytes, checksum: sha256(bytes),
+        processing_status: 'quarantined', processing_error_code: 'unsupported_unit', processing_attempts: 1, processed_at: null });
+      expect(await Promise.all(domainTables.map(rows))).toEqual(before);
+    }
+  });
   it('keeps heartbeat separate from processed data freshness, including before the first upload', async () => {
     const device = await provision();
     await accept(device, { shortcutName: 'Synthetic shortcut', checkedFeeds: ['metrics', 'workouts'] }, 'heartbeat', 'heartbeat');

@@ -85,17 +85,19 @@ export function unitConversion(metric: string, input: unknown): { unit: string |
   const mass = /^(body_mass|body_weight|weight|lean_body_mass)$/u.test(metric);
   const length = /distance|^height$|waist_circumference/u.test(metric);
   const sleep = metric === 'sleep_analysis';
+  // Rate metrics are not heart-rate variability (a duration, commonly milliseconds).
+  const heartRate = ['heart_rate', 'resting_heart_rate', 'walking_heart_rate_average', 'avg_heart_rate', 'max_heart_rate', 'min_heart_rate', 'heart_rate_data', 'heart_rate_recovery'].includes(metric);
   // Do not guess whether ambiguous "cal" means thermochemical calories or food Calories.
   const mappings: Record<string, number> | null = energy ? { kcal: 1, kilocalories: 1, kj: 1 / 4.184, kilojoules: 1 / 4.184, j: 1 / 4184, joules: 1 / 4184 } :
     mass ? { kg: 1, kilograms: 1, g: 0.001, lb: 0.45359237, lbs: 0.45359237, pounds: 0.45359237 } :
       length ? { m: 1, meter: 1, meters: 1, km: 1000, kilometers: 1000, mi: 1609.344, miles: 1609.344, cm: 0.01, ft: 0.3048, feet: 0.3048, in: 0.0254 } :
-        sleep ? { '': 1, h: 1, hr: 1, hrs: 1, hours: 1, min: 1 / 60, minutes: 1 / 60, s: 1 / 3600, sec: 1 / 3600, seconds: 1 / 3600 } : null;
+        sleep ? { '': 1, h: 1, hr: 1, hrs: 1, hours: 1, min: 1 / 60, minutes: 1 / 60, s: 1 / 3600, sec: 1 / 3600, seconds: 1 / 3600 } :
+          heartRate ? { bpm: 1, 'count/min': 1, 'beats/min': 1 } : null;
   if (mappings) {
     if (!u && !sleep) return { unit: null, factor: 1 }; // Missing units stay unknown, never silently acquire a unit.
-    const factor = mappings[u]; if (factor === undefined) throw new HealthPayloadError('unsupported_unit');
-    return { unit: energy ? 'kcal' : mass ? 'kg' : length ? 'm' : 'h', factor };
+    const factor = Object.hasOwn(mappings, u) ? mappings[u] : undefined; if (factor === undefined) throw new HealthPayloadError('unsupported_unit');
+    return { unit: energy ? 'kcal' : mass ? 'kg' : length ? 'm' : sleep ? 'h' : 'bpm', factor };
   }
-  if (/heart_rate/u.test(metric) && ['bpm', 'count/min', 'beats/min'].includes(u)) return { unit: 'bpm', factor: 1 };
   if (metric === 'body_fat_percentage' && ['%', 'percent', 'fraction', '1'].includes(u)) return { unit: '%', factor: ['fraction', '1'].includes(u) ? 100 : 1 };
   return { unit: declared, factor: 1 };
 }

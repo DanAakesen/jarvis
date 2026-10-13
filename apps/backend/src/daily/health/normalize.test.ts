@@ -63,6 +63,60 @@ describe('source-shaped synthetic health normalization', () => {
     expect(output.workouts[0]?.detail_json).toMatchObject({ metadata: { label: 'synthetic' } });
     validateNormalized(output);
   });
+  it.each(['bpm', 'count/min', 'beats/min', ' BPM ', 'Count / min'])('canonicalizes supported %s heart-rate summaries, series and daily rates consistently', units => {
+    const w = { ...workout(), avgHeartRate: { qty: 110, units }, maxHeartRate: { qty: 120, units },
+      heartRate: { units, avg: { qty: 105 }, Max: 115 },
+      heartRateData: workout().heartRateData.map(row => ({ ...row, units })),
+      heartRateRecovery: [{ date: '2026-10-13T09:00:00Z', qty: 95, unit: units }] };
+    const result = normalizeHealth({ data: { workouts: [w], metrics: [metric('resting_heart_rate', units, [point(60)])] } });
+    expect(result.workouts[0]).toMatchObject({ avg_heart_rate: 110, max_heart_rate: 120 });
+    for (const metricName of ['avg_heart_rate', 'max_heart_rate', 'heart_rate_data', 'heart_rate_recovery']) {
+      expect(result.workoutMetrics.find(row => row.metric_name === metricName)?.unit).toBe('bpm');
+    }
+    expect(result.heartRateMinutes).toEqual(expect.arrayContaining([
+      expect.objectContaining({ metric_name: 'heart_rate_data', min_value: 100, avg_value: 110, max_value: 120, unit: 'bpm' }),
+      expect.objectContaining({ metric_name: 'heart_rate_recovery', avg_value: 95, unit: 'bpm' }),
+    ]));
+    expect(result.metrics[0]).toMatchObject({ value: 60, unit: 'bpm' });
+    expect(result.workouts[0]?.detail_json).toMatchObject({ avgHeartRate: { qty: 110, units } });
+  });
+  it('preserves only the legacy implicit-BPM summary slots, precedence, zero and missing values', () => {
+    const summary = (fields: Record<string, unknown>) => normalizeHealth({ data: { workouts: [{ ...workout(), ...fields }] } }).workouts[0];
+    expect(summary({ avgHeartRate: { qty: 110 }, maxHeartRate: { qty: 150 } })).toMatchObject({ avg_heart_rate: 110, max_heart_rate: 150 });
+    expect(summary({ heartRate: { avg: { qty: 111 }, max: { qty: 151 } } })).toMatchObject({ avg_heart_rate: 111, max_heart_rate: 151 });
+    expect(summary({ heartRate: { Avg: 112, Max: 152 } })).toMatchObject({ avg_heart_rate: 112, max_heart_rate: 152 });
+    expect(summary({ heartRate: { avg: 113, max: 153 } })).toMatchObject({ avg_heart_rate: 113, max_heart_rate: 153 });
+    expect(summary({ heartRate: { unit: 'count/min', avg: { qty: 114 }, Max: 154 } })).toMatchObject({ avg_heart_rate: 114, max_heart_rate: 154 });
+    expect(summary({ avgHeartRate: { qty: 0 }, maxHeartRate: { qty: 0 }, heartRate: { Avg: 100, Max: 150 } })).toMatchObject({ avg_heart_rate: 0, max_heart_rate: 0 });
+    expect(summary({ avgHeartRate: { qty: null }, heartRate: { avg: { qty: 115 }, max: { qty: null } } })).toMatchObject({ avg_heart_rate: 115, max_heart_rate: null });
+    for (const qty of [undefined, null, '', false, true, 'NaN']) expect(summary({ avgHeartRate: { qty }, maxHeartRate: { qty } })).toMatchObject({ avg_heart_rate: null, max_heart_rate: null });
+    // A populated sample series cannot manufacture a missing summary; unsupported scalar summary shapes stay unknown.
+    expect(summary({})).toMatchObject({ avg_heart_rate: null, max_heart_rate: null });
+    expect(summary({ avgHeartRate: 110, maxHeartRate: { value: 150 } })).toMatchObject({ avg_heart_rate: null, max_heart_rate: null });
+  });
+  it.each(['Hz', 'ms', 'made-up', 'constructor'])('refuses explicit %s units across every recognized heart-rate path, including fallbacks', units => {
+    const candidates = [
+      { avgHeartRate: { qty: 2, units } }, { maxHeartRate: { qty: 3, unit: units } },
+      { heartRate: { avg: { qty: 2, units } } }, { heartRate: { max: { qty: 3, unit: units } } },
+      { heartRate: { units, Avg: 2, Max: 3 } }, { heartRate: { unit: units, avg: { qty: 2 }, max: 3 } },
+      { avgHeartRate: { qty: 110, units: 'bpm' }, heartRate: { avg: { qty: 2, units } } },
+      { avgHeartRate: { qty: null, units } },
+      { heartRateData: [{ date: '2026-10-13T08:00:00Z', qty: 2, units }] },
+      { heartRateRecovery: [{ date: '2026-10-13T09:00:00Z', qty: 2, units }] },
+    ];
+    for (const fields of candidates) expect(() => normalizeHealth({ data: { workouts: [{ ...workout(), ...fields }] } })).toThrow('unsupported_unit');
+    for (const name of ['heart_rate', 'resting_heart_rate', 'walking_heart_rate_average']) {
+      expect(() => normalizeHealth({ data: { metrics: [metric(name, units, [point(2)])] } })).toThrow('unsupported_unit');
+    }
+  });
+  it('keeps missing series units unknown, rejects mixed units, and does not misclassify heart-rate variability', () => {
+    const unknown = normalizeHealth({ data: { workouts: [{ ...workout(), heartRateData: [{ date: '2026-10-13T08:00:00Z', qty: 100 }] }],
+      metrics: [{ name: 'heart_rate', data: [point(60)] }, metric('heart_rate_variability_sdnn', 'ms', [point(45)])] } });
+    expect(unknown.workouts[0]?.avg_heart_rate).toBeNull(); expect(unknown.heartRateMinutes[0]).toMatchObject({ unit: null, avg_value: 100 });
+    expect(unknown.metrics).toEqual(expect.arrayContaining([expect.objectContaining({ metric_name: 'heart_rate', value: 60, unit: null }),
+      expect.objectContaining({ metric_name: 'heart_rate_variability_sdnn', value: 45, unit: 'ms' })]));
+    expect(() => normalizeHealth({ data: { workouts: [{ ...workout(), heartRateData: [...workout().heartRateData, { date: '2026-10-13T08:00:30Z', qty: 110 }] }] } })).toThrow('unsupported_unit');
+  });
   it('deduplicates identical workout IDs in one export but refuses changed duplicates', () => {
     expect(normalizeHealth({ data: { workouts: [workout(), workout()] } }).workouts).toHaveLength(1);
     expect(() => normalizeHealth({ data: { workouts: [workout(), { ...workout(), duration: 1 }] } })).toThrow('conflicting_workout');

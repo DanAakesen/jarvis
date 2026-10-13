@@ -70,6 +70,20 @@ function firstQuantity(metric: string, ...values: unknown[]): { value: number | 
   }
   return { value: null, unit: null };
 }
+function workoutHeartRate(direct: unknown, heart: HealthObject, field: 'avg' | 'max'): number | null {
+  const flat = optionalObject(direct); const nested = optionalObject(heart[field]); const parentUnit = text(heart.units, heart.unit);
+  // Preserve the original summary slots and precedence, including their implicit BPM contract.
+  // Validate every declared rate unit, even on an unselected fallback; never infer a summary from a series.
+  return firstNumber(...[
+    { value: flat.qty, unit: text(flat.units, flat.unit) },
+    { value: nested.qty, unit: text(nested.units, nested.unit, parentUnit) },
+    { value: heart[field === 'avg' ? 'Avg' : 'Max'], unit: parentUnit },
+    { value: heart[field], unit: parentUnit },
+  ].map(({ value, unit }) => {
+    const conversion = unitConversion('heart_rate', unit); const v = number(value);
+    return v === null ? null : rounded(v * conversion.factor);
+  }));
+}
 function workoutRows(input: unknown[], output: NormalizedHealth) {
   const seen = new Map<string, string>();
   for (const value of input) {
@@ -118,8 +132,8 @@ function workoutRows(input: unknown[], output: NormalizedHealth) {
       workout_date: day(start_at), start_at, end_at, duration_seconds: rounded(duration_seconds), source_name: text(w.source, w.sourceName, w.device, metadata.source, metadata.sourceName, metadata.device, ...nestedSources),
       is_indoor: typeof w.isIndoor === 'boolean' ? w.isIndoor : null,
       active_energy_value: active.value, active_energy_unit: active.unit, total_energy_value: total.value, total_energy_unit: total.unit,
-      distance_value: distance.value, distance_unit: distance.unit, avg_heart_rate: firstNumber(optionalObject(w.avgHeartRate).qty, optionalObject(heart.avg).qty, heart.Avg, heart.avg),
-      max_heart_rate: firstNumber(optionalObject(w.maxHeartRate).qty, optionalObject(heart.max).qty, heart.Max, heart.max), detail_json: detail });
+      distance_value: distance.value, distance_unit: distance.unit, avg_heart_rate: workoutHeartRate(w.avgHeartRate, heart, 'avg'),
+      max_heart_rate: workoutHeartRate(w.maxHeartRate, heart, 'max'), detail_json: detail });
   }
 }
 
