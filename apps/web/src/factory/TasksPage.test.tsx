@@ -6,6 +6,7 @@ import { ContextPanel, ContextPanelProvider } from '../ContextPanel';
 import { FactoryArea } from './FactoryArea';
 import { factoryBoardColumnIds, type BoardCard, type FactoryBoard, type FactoryBoardColumnId } from '@jarvis/contracts';
 import { publishFactoryBoardStatus, publishFactoryBoardUpdate, resetFactoryBoardForTests } from '../factory-board-store';
+import { FactoryIssueNavigationContext, type FactoryIssueNavigator } from '../page-navigation';
 
 const streamHarness = vi.hoisted(() => ({
   callbacks: new Map<string, (event: { id: string; taskId: string; type: string; summary: string | null; at: string }) => void>(),
@@ -96,9 +97,10 @@ function response(body: unknown, status = 200) {
   });
 }
 
-function renderFactory(path = '/factory/kanban') {
+function renderFactory(path = '/factory/kanban', issueNavigation: { current: FactoryIssueNavigator | null } = { current: null }) {
   return render(
     <ContextPanelProvider>
+      <FactoryIssueNavigationContext.Provider value={issueNavigation}>
       <MemoryRouter initialEntries={[path]}>
         <Routes>
           <Route path="/factory/*" element={
@@ -108,6 +110,7 @@ function renderFactory(path = '/factory/kanban') {
         <button id="context-panel-toggle" type="button">Context panel</button>
         <ContextPanel closeIcon={<span aria-hidden="true">×</span>} />
       </MemoryRouter>
+      </FactoryIssueNavigationContext.Provider>
     </ContextPanelProvider>,
   );
 }
@@ -143,6 +146,58 @@ beforeEach(() => {
 afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
 
 describe('Factory task board', () => {
+  it('reveals an exact issue beyond the display cap by clearing filters and expanding its column', async () => {
+    const user = userEvent.setup();
+    const fixture = boardFixture();
+    fixture.columns.find((column) => column.id === 'in_progress')!.cards.unshift(
+      ...Array.from({ length: 101 }, (_, index) => {
+        const card = makeCard();
+        card.issue.number = 420 + index;
+        card.issue.title = `Other issue ${card.issue.number}`;
+        card.task = null;
+        return card;
+      }),
+    );
+    fetchMock.mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.endsWith('/factory/projects')) return response([project]);
+      if (url.includes('/factory/board?')) return response(fixture);
+      return response(projectRelease);
+    });
+    const navigation: { current: FactoryIssueNavigator | null } = { current: null };
+    const view = renderFactory('/factory/kanban', navigation);
+    await screen.findByRole('article', { name: 'Other issue 420' });
+    expect(screen.queryByRole('article', { name: 'Fix the bug' })).toBeNull();
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Agent' }), 'copilot');
+    await user.type(screen.getByRole('searchbox', { name: 'Search issues' }), 'not this issue');
+    await user.click(screen.getByRole('button', { name: 'In progress' }));
+    act(() => expect(navigation.current?.(42)).toEqual({ status: 'ready', anchorId: 'issue-title-42', taskId: '42' }));
+    expect(screen.getByRole('combobox', { name: 'Agent' })).toHaveProperty('value', '');
+    expect(screen.getByRole('searchbox', { name: 'Search issues' })).toHaveProperty('value', '#42');
+    expect(screen.getByRole('button', { name: 'In progress' }).getAttribute('aria-expanded')).toBe('true');
+    expect(screen.getAllByRole('article')).toHaveLength(1);
+    expect(document.getElementById('task-title-42')).toBe(screen.getByRole('button', { name: 'Fix the bug' }));
+    view.unmount();
+    expect(navigation.current).toBeNull();
+  });
+
+  it('navigates task-free issues without inventing tasks and refuses absent issues or conflicting task ids', async () => {
+    const fixture = boardFixture();
+    fixture.columns.find((column) => column.id === 'in_progress')!.cards[0]!.task = null;
+    fetchMock.mockImplementation(async (input) => {
+      if (String(input).endsWith('/factory/projects')) return response([project]);
+      if (String(input).includes('/factory/board?')) return response(fixture);
+      return response(projectRelease);
+    });
+    const navigation: { current: FactoryIssueNavigator | null } = { current: null };
+    renderFactory('/factory/kanban', navigation);
+    await screen.findByRole('article', { name: 'Fix the bug' });
+    act(() => expect(navigation.current?.(42)).toEqual({ status: 'ready', anchorId: 'issue-title-42' }));
+    expect(screen.getByRole('link', { name: 'Fix the bug' }).getAttribute('href')).toContain('/issues/42');
+    expect(navigation.current?.(42, '42')).toMatchObject({ status: 'refused', reason: expect.stringContaining('not linked') });
+    expect(navigation.current?.(793)).toMatchObject({ status: 'refused', reason: expect.stringContaining('not in') });
+  });
+
   it('shows canonical GitHub Project columns, issue links, local filters and the shared details pane', async () => {
     const user = userEvent.setup();
     renderFactory('/factory/kanban');

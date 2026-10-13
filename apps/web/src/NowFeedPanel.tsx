@@ -3,6 +3,7 @@ import { publishJob } from './jobs-store';
 import { publishVoiceWake } from './wake-store';
 import { publishFactoryBoardStatus, publishFactoryBoardUpdate } from './factory-board-store';
 import { useContext, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import type { PublicClientApplication } from '@azure/msal-browser';
 import { useJarvisActivity } from './activity-context';
 import type { PublicConfig } from '../config/public-config';
@@ -26,11 +27,13 @@ export function NowFeedPanel({
   config,
   getAccessToken,
   applyWorkspaceCommand,
+  portalHost,
 }: {
   client: PublicClientApplication;
   config: PublicConfig;
   getAccessToken: () => Promise<string>;
-  applyWorkspaceCommand: (command: WorkspaceCommand, trustedBlobHost?: string) => boolean | Promise<SessionCommandResult>;
+  applyWorkspaceCommand: (command: WorkspaceCommand, trustedBlobHost?: string, expiresAt?: number, signal?: AbortSignal) => boolean | Promise<SessionCommandResult>;
+  portalHost?: HTMLElement | null;
 }) {
   const { applyRuntimeActivity, clearRuntimeActivities } = useJarvisActivity();
   const [feed, setFeed] = useState<NowFeed>({ status: 'loading' });
@@ -65,8 +68,10 @@ export function NowFeedPanel({
     let active = true;
     let requestNumber = 0;
     let workspaceSessionId: string | null = null;
+    let workspaceEpoch = 0;
     let trustedBlobHost: string | undefined;
     let commandQueue = Promise.resolve();
+    let applying: { commandId: string; controller: AbortController } | null = null;
     const cancelledCommands = new Set<string>();
     const refresh = async () => {
       const currentRequest = ++requestNumber;
@@ -97,6 +102,10 @@ export function NowFeedPanel({
           setStreamStatus(status);
           if (config.backendUrl) publishFactoryBoardStatus(config.backendUrl, status);
           if (status === 'reconnecting') {
+            workspaceEpoch++;
+            workspaceSessionId = null;
+            trustedBlobHost = undefined;
+            applying?.controller.abort();
             clearRuntimeActivities();
             setWorkspaceSession(null);
           }
@@ -109,13 +118,23 @@ export function NowFeedPanel({
         },
         onVoiceWake: publishVoiceWake,
         onWorkspaceReady: (sessionId, blobHost) => {
+          if (!active) return;
+          if (workspaceSessionId !== sessionId) {
+            workspaceEpoch++;
+            applying?.controller.abort();
+          }
           workspaceSessionId = sessionId;
           setWorkspaceSession(sessionId);
           trustedBlobHost = blobHost;
         },
         onWorkspaceCommand: (command, expiresAt, commandBlobHost) => {
+          const commandEpoch = workspaceEpoch;
+          const commandSessionId = workspaceSessionId;
+          const blobHost = commandBlobHost ?? trustedBlobHost;
+          const isCurrentSession = () => active && commandEpoch === workspaceEpoch && commandSessionId === workspaceSessionId;
           commandQueue = commandQueue.then(async () => {
-            if (!active || !config.backendUrl || !workspaceSessionId) return;
+            // The broker declines disconnected sessions; their queued commands must not be replayed.
+            if (!isCurrentSession() || !config.backendUrl || !commandSessionId) return;
             let applied = false;
             let outcome: 'refused' | 'error' = 'refused';
             let reason: string | undefined;
@@ -126,8 +145,10 @@ export function NowFeedPanel({
             } else if (!isCommandForThisDevice(command)) {
               reason = `The workspace command is addressed to the ${command.target} device, not this ${readWorkspaceDeviceKind()}.`;
             } else {
+              const actionController = new AbortController();
+              applying = { commandId: command.commandId, controller: actionController };
               try {
-                const result = await applyWorkspaceCommandRef.current(command, commandBlobHost ?? trustedBlobHost);
+                const result = await applyWorkspaceCommandRef.current(command, blobHost, expiresAt, actionController.signal);
                 if (typeof result === 'boolean') {
                   applied = result;
                   if (!applied) reason = 'The requested view or workspace operation is no longer available.';
@@ -138,13 +159,16 @@ export function NowFeedPanel({
               } catch {
                 outcome = 'error';
                 reason = 'The workspace failed while applying the command.';
+              } finally {
+                applying = null;
               }
             }
+            if (!isCurrentSession()) return;
             try {
               await acknowledgeWorkspaceCommand(
                 config.backendUrl,
                 command.commandId,
-                workspaceSessionId,
+                commandSessionId,
                 applied,
                 getAccessToken,
                 applied ? undefined : outcome,
@@ -156,6 +180,7 @@ export function NowFeedPanel({
           }).catch(() => {});
         },
         onWorkspaceCancel: (commandId) => {
+          if (applying?.commandId === commandId) applying.controller.abort();
           cancelledCommands.add(commandId);
           if (cancelledCommands.size > 8) {
             const oldest = cancelledCommands.values().next().value as string | undefined;
@@ -173,6 +198,7 @@ export function NowFeedPanel({
 
     return () => {
       active = false;
+      applying?.controller.abort();
       controller.abort();
       if (config.backendUrl) publishFactoryBoardStatus(config.backendUrl, 'unavailable');
       refreshRef.current = null;
@@ -196,7 +222,7 @@ export function NowFeedPanel({
     setRetry((value) => value + 1);
   }
 
-  return (
+  const panel = (
     <ActivityPanel
       feed={feed}
       {...(config.backendUrl ? { onDismiss: dismiss } : {})}
@@ -205,4 +231,5 @@ export function NowFeedPanel({
       streamStatus={config.backendUrl ? streamStatus : 'unavailable'}
     />
   );
+  return portalHost ? createPortal(panel, portalHost) : panel;
 }
