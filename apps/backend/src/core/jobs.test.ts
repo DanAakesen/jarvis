@@ -100,6 +100,11 @@ describe('background jobs', () => {
       expect.objectContaining({ title: 'Research: Foundry IQ', status: 'done', resultWindow: 'research-foundry' }),
       expect.objectContaining({ title: 'Research: Failed safely', status: 'failed' }),
     ]));
+    const smokeListed = await listJobsTool.execute({}, {
+      server: app, headers: { 'x-jarvis-smoke': 'true' },
+    } as unknown as FastifyRequest, signal);
+    expect(smokeListed).toEqual({ runningCount: 1, finishedCount: 2 });
+    expect(JSON.stringify(smokeListed)).not.toContain('Research:');
     await expect(getJobTool.execute({ jobId: foundry.jobId }, request, signal)).resolves.toMatchObject({
       job: { title: 'Research: Foundry IQ', status: 'done', viewId: 'research-foundry' },
       steps: [{ status: 'running', step: 0 }, { status: 'done', step: 3, viewId: 'research-foundry' }],

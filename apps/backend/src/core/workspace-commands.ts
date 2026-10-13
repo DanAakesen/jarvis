@@ -445,6 +445,14 @@ export const workspaceCommandTool: BackendModule['tools'][number] = {
   inputSchema: workspaceCommandSchema,
   sensitive: true,
   async execute(input, request, signal) {
+    if (request.headers['x-jarvis-smoke'] === 'true') {
+      if (typeof input === 'object' && input !== null && !Array.isArray(input) &&
+          (input as Record<string, unknown>).operation === 'navigate' &&
+          (input as Record<string, unknown>).page === 'settings') {
+        throw new ToolRefusal('No tab connected for the deployment smoke check.');
+      }
+      throw new ToolRefusal('Workspace commands are unavailable to the read-only smoke role.');
+    }
     if (!request.agentPrincipal && (!request.principal ||
         request.principal.objectId.toLowerCase() !== request.server.ownerObjectId.toLowerCase() ||
         typeof input !== 'object' || input === null ||
