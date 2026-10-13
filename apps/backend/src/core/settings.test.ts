@@ -9,6 +9,7 @@ import type { CredentialStatusStore } from '../credentials/credential-status.js'
 import type { AwayModeStore } from './away-mode.js';
 import { capabilityInstructions } from './capability-instructions.js';
 import { checkAgentContract } from './agent-contract.js';
+import { DANISH_REALTIME_VOICE } from '../voice/realtime.js';
 
 const config = { ...loadConfig({}), logLevel: 'silent' as const };
 const authorization = { authorization: `${['Bear', 'er'].join('')} ${['a', 'b', 'c'].join('.')}` };
@@ -134,6 +135,20 @@ describe('settings API', () => {
       expect((await readSettings(store)).decisions).toEqual({ provider: 'jev' });
     },
   );
+
+  it('shows the live Danish voice and ignores the retired Harper value', async () => {
+    const { store, values } = createStore();
+    const app = fixture(store);
+    expect(defaultSettings.voice.danishVoice).toBe(DANISH_REALTIME_VOICE);
+    expect((await readSettings(store)).voice.danishVoice).toBe(DANISH_REALTIME_VOICE);
+    expect((await app.inject({ url: '/settings', headers: authorization })).json().options.danishVoices)
+      .toEqual([DANISH_REALTIME_VOICE]);
+    values['voice.da.voice'] = JSON.stringify('da-DK-Harper:MAI-Voice-2');
+    expect((await readSettings(store)).voice.danishVoice).toBe(DANISH_REALTIME_VOICE);
+    expect(validateSettingsPatch({ voice: { danishVoice: DANISH_REALTIME_VOICE } }))
+      .toEqual({ voice: { danishVoice: DANISH_REALTIME_VOICE } });
+    expect(validateSettingsPatch({ voice: { danishVoice: 'da-DK-Harper:MAI-Voice-2' } })).toBeNull();
+  });
 
   it('requires authentication and reports unavailable persistence', async () => {
     const denied = fixture();
