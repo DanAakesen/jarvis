@@ -7,7 +7,7 @@ export interface HealthHostConfig {
   ownerObjectId: string; managedIdentityClientId: string; blobUrl: string; queueUrl: string;
   rawContainer: string; deviceContainer: string; queueName: string;
   recoveryEnabled: boolean; recoveryIntervalMs: number; recoveryPageSize: number; recoveryDeadlineMs: number;
-  replayQueued: boolean; shutdownMs: number;
+  replayQueued: boolean; shutdownMs: number; diagnosticsIntervalMs: number;
   ratePolicy: HealthRatePolicy; trustedProxyCidrs: string[];
 }
 function flag(value: string | undefined): boolean {
@@ -43,6 +43,7 @@ export function readHealthHostConfig(env: Record<string,string | undefined>): He
     recoveryIntervalMs: integer(env.DAILY_HEALTH_RECOVERY_INTERVAL_MS,60000,1000,300000),
     recoveryPageSize: integer(env.DAILY_HEALTH_RECOVERY_PAGE_SIZE,25,1,100),
     recoveryDeadlineMs: integer(env.DAILY_HEALTH_RECOVERY_DEADLINE_MS,20000,1000,20000),
+    diagnosticsIntervalMs: integer(env.DAILY_HEALTH_DIAGNOSTICS_INTERVAL_MS,60000,1000,300000),
     replayQueued,shutdownMs: integer(env.DAILY_HEALTH_SHUTDOWN_MS,35000,3000,35000),ratePolicy,trustedProxyCidrs };
   if (!enabled) return { ...base,ownerObjectId: '',managedIdentityClientId: '',blobUrl: '',queueUrl: '',rawContainer: '',deviceContainer: '',queueName: '' };
   const ownerObjectId = ownerId(env.DAILY_HEALTH_OWNER_OBJECT_ID ?? '');

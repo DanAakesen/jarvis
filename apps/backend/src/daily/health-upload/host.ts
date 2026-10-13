@@ -15,8 +15,11 @@ export interface HealthHostStatus {
   acceptedUploads: number; acceptedHeartbeats: number; pendingReceipts: number; queuedReceipts: number; duplicateReceipts: number; rejected: number;
   recovery: RecoveryStatus | null;
 }
+export type HealthReceiptDiagnostics = Omit<HealthHostStatus,'recovery'> & {
+  event: 'health_receipt_events'; semantics: 'cumulative-receipt-events'; reason: 'interval' | 'shutdown';
+};
 /** Separate explicit entry point only. Existing Jarvis main is never changed. */
-export async function startHealthUploadHost(config: HealthHostConfig,injected?: HealthDependencies,observeRecovery?: (status: RecoveryStatus) => void) {
+export async function startHealthUploadHost(config: HealthHostConfig,injected?: HealthDependencies,observeRecovery?: (status: RecoveryStatus) => void,observeDiagnostics?: (status: HealthReceiptDiagnostics) => void) {
   if (config.mode !== 'serve') throw new TypeError('Invalid host mode');
   const dependencies = config.enabled ? injected ?? createManagedHealthDependencies(config) : undefined;
   const controller = new AbortController();
@@ -35,12 +38,18 @@ export async function startHealthUploadHost(config: HealthHostConfig,injected?: 
   try { address = await app.listen({ host: config.host,port: config.port }); }
   catch { controller.abort(); await app.close(); throw new Error('Health host startup failed'); }
   recovery?.start();
+  const diagnostics = (reason: HealthReceiptDiagnostics['reason']) => {
+    try { observeDiagnostics?.({ event: 'health_receipt_events',semantics: 'cumulative-receipt-events',reason,lifecycle,
+      acceptance: config.enabled ? 'configured' : 'inactive',processing: 'not-configured',...counts }); } catch { /* Telemetry cannot change durable acceptance. */ }
+  };
+  const diagnosticsTimer = observeDiagnostics ? setInterval(() => diagnostics('interval'),config.diagnosticsIntervalMs) : undefined;
+  diagnosticsTimer?.unref();
   return {
     address,
     status: (): HealthHostStatus => ({ lifecycle,acceptance: config.enabled ? 'configured' : 'inactive',processing: 'not-configured',...counts,recovery: recovery?.status() ?? null }),
     stop(): Promise<'drained' | 'deadline'> {
       if (stopping) return stopping;
-      lifecycle = 'stopping'; controller.abort();
+      lifecycle = 'stopping'; if (diagnosticsTimer) clearInterval(diagnosticsTimer); controller.abort();
       stopping = (async () => {
         let timer: ReturnType<typeof setTimeout> | undefined;
         const cleanup = Promise.all([recovery?.stop(),app.close()]);
@@ -48,7 +57,7 @@ export async function startHealthUploadHost(config: HealthHostConfig,injected?: 
         const result = await Promise.race([cleanup.then(() => 'drained' as const).catch(() => 'deadline' as const),deadline]);
         if (timer) clearTimeout(timer);
         if (result === 'deadline') app.server.closeAllConnections();
-        lifecycle = 'stopped'; return result;
+        lifecycle = 'stopped'; diagnostics('shutdown'); return result;
       })();
       return stopping;
     },

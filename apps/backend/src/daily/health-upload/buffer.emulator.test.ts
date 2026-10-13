@@ -15,7 +15,7 @@ import { AzureHealthBuffer,createBlobHealthVerifier,type HealthBufferFaults } fr
 import { buildHealthUploadServer } from './server.js';
 import { healthUploadLimit,sha256,type HealthCapability } from './contracts.js';
 import { readHealthHostConfig } from './host-config.js';
-import { startHealthUploadHost } from './host.js';
+import { startHealthUploadHost,type HealthReceiptDiagnostics } from './host.js';
 
 const require = createRequire(import.meta.url); const exec = promisify(execFile);
 const owner = '11111111-1111-4111-8111-111111111111';
@@ -272,16 +272,53 @@ describe('actual HTTP -> private Blob -> pointer Queue on synthetic Azurite',() 
     expect((await post(await start())).status).toBe(202); expect(await manifests()).toHaveLength(1);
     expect((await raw.getBlobClient((await manifests())[0]!.value.rawKey as string).downloadToBuffer()).equals(body)).toBe(true);
   });
+  it('emits bounded cumulative runtime receipts, flushes on shutdown and cancels its timer',async () => {
+    const snapshots: HealthReceiptDiagnostics[] = [];
+    const config = { ...await hostConfig(false),diagnosticsIntervalMs: 1000 };
+    const host = await startHealthUploadHost(config,{ buffer: new AzureHealthBuffer(raw,queue,owner),verifier: createBlobHealthVerifier(auth) },undefined,
+      snapshot => snapshots.push(snapshot)); hosts.push(host);
+    await queue.delete();
+    expect((await post(host.address)).status).toBe(202);
+    expect((await post(host.address)).status).toBe(202);
+    await queue.create(); expect((await post(host.address)).status).toBe(202);
+    expect((await post(host.address,body,{ authorization: 'Bearer invalid' })).status).toBe(403);
+    expect((await post(host.address,Buffer.alloc(0),{},'/api/health/heartbeat')).status).toBe(202);
+    await vi.waitFor(() => expect(snapshots.some(row => row.reason === 'interval' && row.acceptedHeartbeats === 1)).toBe(true),{ timeout: 5000 });
+    await host.stop(); await host.stop();
+    expect(snapshots.at(-1)).toEqual({ event: 'health_receipt_events',semantics: 'cumulative-receipt-events',reason: 'shutdown',
+      lifecycle: 'stopped',acceptance: 'configured',processing: 'not-configured',acceptedUploads: 3,acceptedHeartbeats: 1,
+      pendingReceipts: 2,queuedReceipts: 2,duplicateReceipts: 2,rejected: 1 });
+    const serialized = JSON.stringify(snapshots);
+    for (const secret of [token,owner,'synthetic-phone','sensitive_automation_marker','session-one','synthetic_private_marker',sha256(body)]) expect(serialized).not.toContain(secret);
+    const length = snapshots.length; await new Promise(resolve => setTimeout(resolve,1100)); expect(snapshots).toHaveLength(length);
+    expect(await manifests()).toHaveLength(2);
+  },15000);
+  it('isolates throwing runtime observers from HTTP acceptance and shutdown',async () => {
+    const sink = vi.fn((_snapshot: HealthReceiptDiagnostics) => { throw new Error('synthetic_private_observer_error'); });
+    const host = await startHealthUploadHost({ ...await hostConfig(false),diagnosticsIntervalMs: 1000 },
+      { buffer: new AzureHealthBuffer(raw,queue,owner),verifier: createBlobHealthVerifier(auth) },undefined,sink); hosts.push(host);
+    expect((await post(host.address)).status).toBe(202);
+    await vi.waitFor(() => expect(sink).toHaveBeenCalled(),{ timeout: 5000 });
+    expect((await post(host.address)).status).toBe(202);
+    expect(await host.stop()).toBe('drained');
+    expect(sink.mock.calls.at(-1)?.[0]).toMatchObject({ reason: 'shutdown',acceptedUploads: 2,duplicateReceipts: 1 });
+    const stored = await manifests(); expect(stored).toHaveLength(1);
+    expect((await raw.getBlobClient(stored[0]!.value.rawKey as string).downloadToBuffer()).equals(body)).toBe(true);
+  },10000);
   it('executes the packaged inactive entry point without credentials and handles real SIGTERM',async () => {
     const listenPort = await port();
     const child = spawn(process.execPath,[join(import.meta.dirname,'../../../dist/daily/health-upload/main.js')],{
       env: { ...process.env,DAILY_HEALTH_UPLOAD_ENABLED: 'false',DAILY_HEALTH_RECOVERY_ENABLED: 'false',DAILY_HEALTH_HOST: '127.0.0.1',DAILY_HEALTH_PORT: String(listenPort),
         DAILY_HEALTH_BLOB_URL: 'synthetic-private-config-marker' },stdio: ['ignore','pipe','pipe'] }); children.push(child);
+    let logs = ''; child.stdout!.on('data',chunk => { logs += String(chunk); });
     const [output] = await once(child.stdout!,'data',{ signal: AbortSignal.timeout(10000) }); expect(String(output)).toContain('health_host_started');
     expect(String(output)).not.toContain('synthetic-private-config-marker');
     expect(await (await fetch(`http://127.0.0.1:${listenPort}/health`)).json()).toEqual({ acceptance: 'inactive',processing: 'not-configured' });
     expect((await post(`http://127.0.0.1:${listenPort}`)).status).toBe(404);
     const exited = once(child,'exit'); child.kill('SIGTERM'); expect((await exited)[0]).toBe(0);
+    expect(logs.split('\n').filter(Boolean).map(line => JSON.parse(line))).toContainEqual(expect.objectContaining({
+      event: 'health_receipt_events',semantics: 'cumulative-receipt-events',reason: 'shutdown',lifecycle: 'stopped',acceptance: 'inactive',processing: 'not-configured' }));
+    expect(logs).not.toContain('synthetic-private-config-marker');
   },15000);
   it('retains acknowledged uploads after a recovery owner is SIGKILLed between queue send and checkpoint',async () => {
     await queue.delete(); expect((await post(await start())).status).toBe(202); await queue.create();

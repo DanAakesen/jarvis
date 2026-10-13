@@ -10,13 +10,14 @@ export const syntheticHostEnvironment = {
 };
 describe('dedicated health host nonsecret configuration',() => {
   it('defaults to inactive without requiring or inspecting credentials',() => {
-    expect(readHealthHostConfig({})).toMatchObject({ enabled: false,recoveryEnabled: false,mode: 'serve',port: 3001,managedIdentityClientId: '' });
+    expect(readHealthHostConfig({})).toMatchObject({ enabled: false,recoveryEnabled: false,mode: 'serve',port: 3001,managedIdentityClientId: '',diagnosticsIntervalMs: 60000 });
     expect(readHealthHostConfig({ DAILY_HEALTH_UPLOAD_ENABLED: 'false',DAILY_HEALTH_BLOB_URL: 'synthetic-secret-marker' }).enabled).toBe(false);
   });
   it.each([
     { DAILY_HEALTH_UPLOAD_ENABLED: 'yes' },{ DAILY_HEALTH_RECOVERY_ENABLED: '1' },{ DAILY_HEALTH_PORT: '3001junk' },
     { DAILY_HEALTH_PORT: '80' },{ DAILY_HEALTH_RECOVERY_PAGE_SIZE: '101' },{ DAILY_HEALTH_RECOVERY_DEADLINE_MS: '20001' },
     { DAILY_HEALTH_SHUTDOWN_MS: '35001' },{ DAILY_HEALTH_HOST: 'untrusted.example' },{ DAILY_HEALTH_MODE: 'process' },
+    { DAILY_HEALTH_DIAGNOSTICS_INTERVAL_MS: '999' },{ DAILY_HEALTH_DIAGNOSTICS_INTERVAL_MS: '300001' },{ DAILY_HEALTH_DIAGNOSTICS_INTERVAL_MS: 'NaN' },
     { DAILY_HEALTH_MANAGED_IDENTITY_CLIENT_ID: '' },{ DAILY_HEALTH_OWNER_OBJECT_ID: 'client-email@example.invalid' },
     { DAILY_HEALTH_BLOB_URL: 'http://127.0.0.1:10000/' },{ DAILY_HEALTH_BLOB_URL: 'https://syntheticaccount.blob.core.windows.net/?secret=synthetic' },
     { DAILY_HEALTH_QUEUE_URL: 'https://differentaccount.queue.core.windows.net/' },{ DAILY_HEALTH_DEVICE_CONTAINER: 'synthetic-raw' },

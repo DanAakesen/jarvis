@@ -15,7 +15,8 @@ async function main() {
     } finally { await worker.stop(); process.removeListener('SIGTERM',cancel); process.removeListener('SIGINT',cancel); }
     return;
   }
-  const host = await startHealthUploadHost(config,undefined,status => console.info(JSON.stringify({ event: 'health_recovery',...status })));
+  const host = await startHealthUploadHost(config,undefined,status => console.info(JSON.stringify({ event: 'health_recovery',...status })),
+    status => console.info(JSON.stringify(status)));
   console.info(JSON.stringify({ event: 'health_host_started',acceptance: host.status().acceptance,processing: 'not-configured' }));
   let closing = false;
   const stop = () => {
