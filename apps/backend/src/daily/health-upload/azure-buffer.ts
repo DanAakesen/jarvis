@@ -9,6 +9,7 @@ export interface UploadIdentity { automationId: string; sessionId: string }
 export interface HealthBufferFaults {
   afterRaw?: () => Promise<void>; afterManifest?: () => Promise<void>; afterQueue?: () => Promise<void>;
 }
+export interface OwnedHealthRecovery { ownership: 'owned' | 'busy'; inspected: number; queued: number; failed: number; hasMore: boolean | null }
 function status(error: unknown): number | undefined { return (error as { statusCode?: number })?.statusCode; }
 async function privateContainer(container: ContainerClient,signal: AbortSignal) {
   const properties = await container.getProperties({ abortSignal: signal });
@@ -135,15 +136,51 @@ export class AzureHealthBuffer {
     }
     return { inspected,queued,failed,next };
   }
+  /** One <=20s batch under a shared 60s lease, with durable pagination across restarts. */
+  async recoverOwnedPage(options: { limit: number; replayQueued?: boolean },signal: AbortSignal): Promise<OwnedHealthRecovery> {
+    if (!Number.isInteger(options.limit) || options.limit < 1 || options.limit > 100) throw new TypeError('Invalid recovery page');
+    signal = AbortSignal.any([signal,AbortSignal.timeout(20000)]);
+    await privateContainer(this.container,signal);
+    const key = `control/recovery-${sha256(this.owner)}.json`;
+    const blob = this.container.getBlockBlobClient(key);
+    try {
+      await blob.uploadData(Buffer.from(JSON.stringify({ version: 1,ownerObjectId: this.owner,cursor: null })),{
+        abortSignal: signal,conditions: { ifNoneMatch: '*' },blobHTTPHeaders: { blobContentType: 'application/json' } });
+    } catch (error) { if (![409,412].includes(status(error) ?? 0)) throw new HealthUnavailable(); }
+    const lease = blob.getBlobLeaseClient();
+    try { await lease.acquireLease(60,{ abortSignal: signal }); }
+    catch (error) {
+      if (signal.aborted) throw signal.reason;
+      if (status(error) === 409) return { ownership: 'busy',inspected: 0,queued: 0,failed: 0,hasMore: null };
+      throw new HealthUnavailable();
+    }
+    try {
+      const control = await jsonBlob(this.container,key,signal) as { version: unknown; ownerObjectId: unknown; cursor: unknown };
+      if (!control || Object.keys(control).some(name => !['version','ownerObjectId','cursor'].includes(name)) || control.version !== 1 || control.ownerObjectId !== this.owner ||
+          control.cursor !== null && (typeof control.cursor !== 'string' || !control.cursor.length || control.cursor.length > 4096)) throw new HealthUnavailable();
+      const result = await this.recover({ limit: options.limit,...(typeof control.cursor === 'string' ? { cursor: control.cursor } : {}),
+        ...(options.replayQueued === true ? { replayQueued: true } : {}) },signal);
+      // A crash before this checkpoint repeats work; it cannot skip an unfinished page.
+      await blob.uploadData(Buffer.from(JSON.stringify({ version: 1,ownerObjectId: this.owner,cursor: result.next })),{
+        abortSignal: signal,conditions: { leaseId: lease.leaseId },blobHTTPHeaders: { blobContentType: 'application/json' } });
+      return { ownership: 'owned',inspected: result.inspected,queued: result.queued,failed: result.failed,hasMore: result.next !== null };
+    } finally {
+      try { await lease.releaseLease({ abortSignal: AbortSignal.timeout(3000) }); } catch { /* Expiry bounds abandoned ownership. */ }
+    }
+  }
 }
 /** Configured account URLs only; managed identity TokenCredential is injected, never granted here.
  * Constructs clients without provisioning or contacting Azure. Not called by production index. */
 export function createAzureHealthDependencies(config: { ownerObjectId: string; blobUrl: string; queueUrl: string; rawContainer: string; deviceContainer: string; queueName: string },credential: TokenCredential) {
-  const blob = new URL(config.blobUrl); const queue = new URL(config.queueUrl);
-  if (blob.protocol !== 'https:' || queue.protocol !== 'https:' || blob.username || blob.password || queue.username || queue.password || blob.search || queue.search || blob.hash || queue.hash ||
-      blob.pathname !== '/' || queue.pathname !== '/' || !/^[a-z0-9]+\.blob\.core\.windows\.net$/u.test(blob.hostname) || queue.hostname !== blob.hostname.replace('.blob.','.queue.')) throw new TypeError('Invalid configured storage endpoints');
-  const blobs = new BlobServiceClient(blob.href,credential,{ retryOptions: { maxTries: 3,tryTimeoutInMs: 10000 } });
-  const queues = new QueueServiceClient(queue.href,credential,{ retryOptions: { maxTries: 3,tryTimeoutInMs: 10000 } });
+  const endpoints = validateHealthStorageEndpoints(config.blobUrl,config.queueUrl);
+  const blobs = new BlobServiceClient(endpoints.blobUrl,credential,{ retryOptions: { maxTries: 3,tryTimeoutInMs: 10000 } });
+  const queues = new QueueServiceClient(endpoints.queueUrl,credential,{ retryOptions: { maxTries: 3,tryTimeoutInMs: 10000 } });
   return { buffer: new AzureHealthBuffer(blobs.getContainerClient(config.rawContainer),queues.getQueueClient(config.queueName),config.ownerObjectId),
     verifier: createBlobHealthVerifier(blobs.getContainerClient(config.deviceContainer)) };
+}
+export function validateHealthStorageEndpoints(blobUrl: string,queueUrl: string) {
+  const blob = new URL(blobUrl); const queue = new URL(queueUrl);
+  if (blob.protocol !== 'https:' || queue.protocol !== 'https:' || blob.username || blob.password || queue.username || queue.password || blob.search || queue.search || blob.hash || queue.hash ||
+      blob.pathname !== '/' || queue.pathname !== '/' || !/^[a-z0-9]+\.blob\.core\.windows\.net$/u.test(blob.hostname) || queue.hostname !== blob.hostname.replace('.blob.','.queue.')) throw new TypeError('Invalid configured storage endpoints');
+  return { blobUrl: blob.href,queueUrl: queue.href };
 }
