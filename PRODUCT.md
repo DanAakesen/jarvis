@@ -259,7 +259,12 @@ English voice sessions use Ryan HD and the British butler persona. The backend o
 
 During an English voice session, Jarvis announces task completion, tasks needing attention, ready pull requests, and failed deployments. The backend merges bursts and waits until Dan is no longer speaking or Jarvis has finished its current response. Announcements use fixed, short wording rather than task titles, messages, or logs. `get_status_summary` answers status questions with aggregate counts from the Now feed.
 
-Danish voice uses the authenticated backend `/voice/da` WebSocket to a provisioned Foundry Voice Live agent. The agent bridges to the hosted Jarvis agent, uses MAI Transcribe with language `da` and the Danish phrase list, and fixes Harper to `da-DK`.
+Danish voice uses the authenticated backend `/voice/da` WebSocket to the
+backend-owned Voice Live realtime session, with Jeppe (`da-DK-JeppeNeural`).
+Settings shows Jeppe as read-only: the stored preference does not select the
+live voice. A retired Harper preference remains loadable and resolves to
+Jeppe without changing storage. The provisioned hosted-agent bridge remains
+a fallback when Voice Live is not configured.
 
 Screen sharing uses the browser's explicit screen/window picker. Sharing status and Stop sharing remain visible; Jarvis captures a frame only when Dan asks by button or voice phrase. The authenticated backend validates the active session, JPEG type and size, a three-second minimum interval, and the configurable daily cap before using the existing Foundry project and backend managed identity.
 
@@ -523,7 +528,7 @@ the last-release field is explicitly unavailable rather than inferred.
 | Jarvis: model and reasoning (chat and Danish voice); English speech-to-speech model | Change (applies to new sessions) |
 | Appearance: light/dark/system and approved theme tokens | Change (persisted across visits) |
 | Personality: tone, response style, custom instructions (up to 2,000 characters) | Change or reset (applies to new sessions) |
-| Voice: speech-to-text model, voice per language, default language, minimise windows on voice start (off by default) | Change; play a voice sample |
+| Voice: speech-to-text model, English voice, fixed Danish voice (Jeppe), default language, minimise windows on voice start (off by default) | Change supported preferences; Danish voice is read-only |
 | Coding agents: Codex default model and reasoning; Copilot default model | Change (applies to new tasks) |
 | Global: max parallel tasks; sleep switch | Change |
 | New projects: owner, visibility, templates repository, default agent, policy, max parallel tasks, default branch | Change (applies to projects Jarvis registers) |

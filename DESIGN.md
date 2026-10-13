@@ -1,5 +1,14 @@
 # Design
 
+## Fixed Danish voice in Settings (13 October 2026)
+
+The Voice section shows **Jeppe (Danish)** in a labelled read-only field,
+with "Fixed for Danish voice sessions." as its accessible explanation.
+Reuse the existing Settings grid, field styling and collapsible section.
+There is no selectable Danish voice, new animation or additional save action.
+Legacy Harper payloads still display the actual live voice without dirtying
+the form.
+
 ## Remaining UI release (13 October 2026)
 
 Dan approved the remaining refinements for live testing. This supersedes
