@@ -389,15 +389,17 @@ def register_chat_invocation(
         finally:
             body[:] = b"\0" * len(body)
 
+        smoke = isinstance(payload, dict) and payload.get("smoke") is True
         delegated_authorization = (
-            payload.get("delegatedAuthorization") if isinstance(payload, dict) else None
+            payload.get("delegatedAuthorization")
+            if isinstance(payload, dict) and not smoke else None
         )
         match = (
             re.fullmatch(r"Bear" + r"er ([\w.-]+)", delegated_authorization)
             if isinstance(delegated_authorization, str)
             else None
         )
-        if match is None:
+        if not smoke and match is None:
             return JSONResponse({"error": "Unauthorized"}, status_code=401)
         message_id = payload.get("messageId") if isinstance(payload, dict) else None
         turn_id = payload.get("turnId", message_id) if isinstance(payload, dict) else None
@@ -409,7 +411,10 @@ def register_chat_invocation(
         visual = visual_context(payload.get("visualContext")) if isinstance(payload, dict) else None
         attachments = payload.get("attachments") if isinstance(payload, dict) else None
         reflex_note = payload.get("reflexNote") if isinstance(payload, dict) else None
-        expected_keys = {"messageId", "text", "language", "delegatedAuthorization"}
+        expected_keys = (
+            {"messageId", "text", "language", "smoke"}
+            if smoke else {"messageId", "text", "language", "delegatedAuthorization"}
+        )
         if isinstance(payload, dict) and "turnId" in payload:
             expected_keys.add("turnId")
         if isinstance(payload, dict) and "sessionId" in payload:
@@ -444,6 +449,13 @@ def register_chat_invocation(
             or not text.strip()
             or len(text) > 20_000
             or language not in {"da", "en"}
+            or (
+                smoke and (
+                    message_id != "1"
+                    or text != "Reply with the single word ok."
+                    or language != "en"
+                )
+            )
             or set(payload) != expected_keys
             or ("visualContext" in payload and (visual is None or "screenContext" in payload))
             or (
@@ -501,7 +513,9 @@ def register_chat_invocation(
         phase_timings_token = current_chat_phase_timings.set(phase_timings)
         try:
             current_chat_session_id.set(None)
-            history = await context_loader(match.group(1), message_id, text, language)
+            history = (
+                () if smoke else await context_loader(match.group(1), message_id, text, language)
+            )
             chat_session_id = current_chat_session_id.get()
             current_chat_session_id.set(None)
         except asyncio.CancelledError:
@@ -521,7 +535,9 @@ def register_chat_invocation(
         async def events():
             timing_token = current_chat_phase_timings.set(phase_timings)
             message_token = current_message_id.set(message_id)
-            conversation_token = current_conversation.set(f"chat-{message_id}")
+            conversation_token = current_conversation.set(
+                "smoke" if smoke else f"chat-{message_id}"
+            )
             turn_token = current_turn.set(message_id)
             chat_turn_token = current_chat_turn_id.set(turn_id)
             chat_session_token = current_chat_session_id.set(chat_session_id)
@@ -724,6 +740,7 @@ def register_chat_invocation(
                 chat = model_client.complete_chat(
                     messages,
                     language,
+                    **({"smoke": True} if smoke else {}),
                     **({"reflex_note": reflex_note} if reflex_note is not None else {}),
                 )
                 async with aclosing(chat):

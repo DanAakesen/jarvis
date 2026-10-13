@@ -31,6 +31,7 @@ export interface ConversationAgentInput {
   readonly turnId?: string;
   readonly text: string;
   readonly language: 'da' | 'en';
+  readonly smoke?: boolean;
   readonly screenContext?: string;
   readonly visualContext?: VisualContext;
   readonly attachments?: readonly {
@@ -208,7 +209,7 @@ export function createFoundryInvocationConversationAgent(
   return {
     async *stream(input, authorization, signal) {
       const {
-        onVisualResult, onAgentPhaseTimings, onAgentSessionTelemetry, agentSessionId, ...payload
+        onVisualResult, onAgentPhaseTimings, onAgentSessionTelemetry, agentSessionId, smoke, ...payload
       } = input;
       if (agentSessionId !== undefined && !uuidPattern.test(agentSessionId)) {
         throw new TypeError('Foundry chat session ID is invalid');
@@ -227,7 +228,10 @@ export function createFoundryInvocationConversationAgent(
           'Content-Type': 'application/json',
           'x-ms-debug-latency-enabled': 'true',
         },
-        body: JSON.stringify({ ...payload, delegatedAuthorization: authorization }),
+        body: JSON.stringify({
+          ...payload,
+          ...(smoke ? { smoke: true } : { delegatedAuthorization: authorization }),
+        }),
         signal: requestSignal,
       });
       let response = await request(createFoundryInvocationsEndpoint(

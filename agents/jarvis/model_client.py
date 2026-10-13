@@ -464,6 +464,7 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
         *,
         settings: ModelSettings | None = None,
         reflex_note: str | None = None,
+        smoke: bool = False,
     ) -> AsyncIterator[str]:
         """Stream a written chat reply in the selected language."""
         if language not in CHAT_INSTRUCTIONS:
@@ -477,7 +478,8 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
             )
         try:
             async with aclosing(self._complete(
-                messages, instructions, settings, load_settings=settings is None, role="chat",
+                messages, instructions, settings, load_settings=settings is None,
+                role="smoke" if smoke else "chat",
             )) as response:
                 async for delta in response:
                     yield delta
@@ -543,7 +545,9 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
         ) as span:
             try:
                 catalogue_task = asyncio.create_task(self._tools.tools())
-                context_task = asyncio.create_task(self._tools.context())
+                context_task = asyncio.create_task(
+                    asyncio.sleep(0, result={}) if role == "smoke" else self._tools.context()
+                )
                 setup_tasks = [catalogue_task, context_task]
                 if load_settings or settings is not None:
                     setup_tasks.append(asyncio.create_task(self.session_settings()))
@@ -566,7 +570,8 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                     raise
                 model_name = settings.model if settings is not None else self.model_name
                 use_anthropic = (
-                    role == "chat" or allow_anthropic or any(message.images for message in messages)
+                    role in {"chat", "smoke"} or allow_anthropic or
+                    any(message.images for message in messages)
                 ) and is_claude_model(model_name)
                 span.set_attribute(
                     "gen_ai.provider.name", "Anthropic" if use_anthropic else "Azure OpenAI"
@@ -578,12 +583,15 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                 )
                 span.set_attribute("gen_ai.request.model", model_name)
                 with latency_span("prompt_build") as prompt_span:
-                    if role == "chat" and settings is not None and settings.capability_instructions:
+                    if (
+                        role in {"chat", "smoke"} and settings is not None
+                        and settings.capability_instructions
+                    ):
                         instructions = f"{instructions}\n\n{settings.capability_instructions}"
                     base_instructions = instructions
                     instructions = personalize_instructions(instructions, settings)
                     model_input: list[Any] = []
-                    if messages:
+                    if messages and role != "smoke":
                         model_input.append(
                             {
                                 "role": "user",
@@ -594,7 +602,7 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                             }
                         )
                     model_input.extend(model_message_input(message) for message in messages)
-                    tools = model_tools(catalogue)
+                    tools = [] if role == "smoke" else model_tools(catalogue)
                     prompt_span.set_attribute("message.count", len(model_input))
                     prompt_span.set_attribute("tool.count", len(tools))
                 steering_fetcher = current_steering_fetcher.get()
@@ -833,6 +841,8 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                         int((time.monotonic() - started) * 1000),
                         len(calls),
                     )
+                    if role == "smoke" and calls:
+                        raise RuntimeError("The smoke turn requested a tool")
                     model_input = [
                         {
                             **item,

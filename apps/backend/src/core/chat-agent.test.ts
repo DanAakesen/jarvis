@@ -224,6 +224,23 @@ describe('Foundry Invocations chat agent', () => {
     }));
   });
 
+  it('sends smoke turns through Foundry without a delegated user token', async () => {
+    const fetcher = vi.fn(async () => streamedResponse([
+      'event: delta\ndata: {"text":"ok"}\n\n',
+      'event: done\ndata: {}\n\n',
+    ]));
+    const { agent } = createAgent(fetcher);
+    const chunks: string[] = [];
+    for await (const chunk of agent.stream({
+      ...input, messageId: '1', text: 'Reply with the single word ok.', smoke: true,
+    }, '', new AbortController().signal)) chunks.push(chunk);
+
+    expect(chunks).toEqual(['ok']);
+    expect(JSON.parse(fetcher.mock.calls[0]![1]!.body as string)).toEqual({
+      messageId: '1', text: 'Reply with the single word ok.', language: 'en', smoke: true,
+    });
+  });
+
   it('rejects non-stream and incomplete agent responses', async () => {
     const unavailable = createAgent(vi.fn(async () => new Response('{}', { status: 503 })));
 

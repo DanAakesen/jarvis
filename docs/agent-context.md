@@ -1282,9 +1282,10 @@ Azure Resource Manager access token from the existing OIDC deployment identity
 and calls `GET /status/smoke`. The backend accepts that audience only for the
 bootstrapped deploy service principal and that exact route; Dan can also call it
 with his normal API token. The workflow masks the token, stores the JSON only in
-the runner temp directory, and prints only the six allowlisted check IDs and
-statuses. Google, GitHub App, vault, embeddings, and research failures block
-acceptance; an offline PC bridge is reported but does not block deployment.
+the runner temp directory, requires the six original check IDs while accepting
+additional entries, and prints IDs and statuses only. Google, GitHub App, vault,
+embeddings, research, agent-contract, and chat-canary failures block acceptance;
+an offline PC bridge is reported but does not block deployment.
 
 ### Backend modules
 

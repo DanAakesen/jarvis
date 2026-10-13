@@ -458,7 +458,7 @@ export interface WebResearchResult {
   sources: WebResearchSource[];
 }
 
-export type UsageRole = 'chat' | 'voice' | 'vision' | 'research' | 'embeddings';
+export type UsageRole = 'chat' | 'smoke' | 'voice' | 'vision' | 'research' | 'embeddings';
 export type UsageVerification = 'measured' | 'estimated' | 'unverified';
 export type UsagePeriod = 'today' | '7d' | '30d' | '90d' | 'all';
 export type UsageSource = 'sandbox' | 'jarvis_model' | 'voice' | 'codex' | 'copilot';
@@ -758,6 +758,7 @@ export interface PhoneStatus {
 
 export const systemSmokeCheckIds: readonly [
   'google', 'github_app', 'vault', 'foundry.embeddings', 'research', 'pc_bridge', 'agent_contract',
+  'chat_canary',
 ];
 export type SystemSmokeCheckId = typeof systemSmokeCheckIds[number];
 export interface SystemSmokeEntry {

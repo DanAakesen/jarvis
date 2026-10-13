@@ -416,6 +416,29 @@ async def test_chat_uses_capability_instructions_from_agent_settings() -> None:
 
     assert "Shared backend capability block." in transport.responses.request["instructions"]
 
+
+@pytest.mark.asyncio
+async def test_smoke_chat_validates_catalogue_without_context_or_tool_execution() -> None:
+    tool_call = FakeItem(
+        type="function_call", call_id="smoke_tool", name="create_task", arguments="{}",
+    )
+    backend = FakeBackend()
+    model, transport = client([completed(tool_call)], backend=backend)
+
+    with pytest.raises(RuntimeError, match="smoke turn requested a tool"):
+        _ = [chunk async for chunk in model.complete_chat(
+            [ModelMessage("user", "Reply with the single word ok.")], "en", smoke=True,
+        )]
+
+    assert transport.responses.request is not None
+    assert "tools" not in transport.responses.request
+    assert "Reference context from Jarvis" not in json.dumps(transport.responses.request["input"])
+    assert [request.url.path for request in backend.requests] == [
+        "/tools", "/agent/settings", "/usage/foundry",
+    ]
+    assert json.loads(backend.requests[-1].content)["role"] == "smoke"
+
+
 def test_builds_responses_base_url_from_project_endpoint() -> None:
     assert (
         responses_base_url("https://example.test/api/projects/demo")
