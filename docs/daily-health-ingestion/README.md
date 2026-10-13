@@ -68,7 +68,7 @@ The executable emits fixed-shape private `health_receipt_events` snapshots every
 | Queue message add | Only pointer queue; no receive/peek/update/delete or domain processing. |
 | Existing ACR Pull convention | Named existing registry only, not subscription/platform ownership. |
 
-Custom permission strings and lease behavior must be verified against official provider/RBAC documentation and deployed identity by the trusted operator **before approving/executing grants**. Offline compilation does not prove Azure authorization. Public Microsoft documentation could not be fetched from this Cloud session; installed Microsoft SDK README/declarations and current Jarvis Bicep conventions informed the proposal. Authenticated public storage service endpoints are proposed; this is not private-link/network-isolation verification. Retention, backups, redundancy, networking, log access and quota/alerts need protected approval. No guessed price, free allowance or suggested spending ceiling is treated as approved.
+The coordinator verified Microsoft's public permission mapping on 13 October 2026: [Storage Queue Data Message Sender](https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles/storage#storage-queue-data-message-sender) uses exactly `Microsoft.Storage/storageAccounts/queueServices/queues/messages/add/action` with no management actions; [Lease Blob](https://learn.microsoft.com/en-us/rest/api/storageservices/lease-blob#permissions) is covered by Blob write; [Get Container Properties](https://learn.microsoft.com/en-us/rest/api/storageservices/get-container-properties#permissions) requires container read. The proposal retains separate raw/capability/queue assignment scopes, no Blob delete, capability write or queue consumption/update/delete. The offline `proposal.test.ts` contract checks these exact sets/scopes, inactive/max-one defaults and absence of production references; it reproduced the missing sender `/action` suffix before correction. Bicep compilation and Shared-Key emulator tests do not validate provider RBAC names or deployed authorization. Trusted operator verification of actual grants, identity propagation and private access remains required **before approving/executing grants**. Authenticated public storage service endpoints are proposed, not private-link/network-isolation proof. Retention, backups, redundancy, networking, log access and quota/alerts need protected approval. No guessed price, free allowance or spending ceiling is treated as approved.
 
 ## Readiness and rollback checklist — not executed
 
@@ -85,6 +85,7 @@ After explicit `source /workspace/.jarvis-tools/activate.sh`, run:
 
 ```bash
 npm test --workspace @jarvis/backend -- src/daily/health-upload/buffer.emulator.test.ts src/daily/health-upload/host-config.test.ts src/daily/health-upload/recovery.test.ts
+npm test --workspace @jarvis/backend -- src/daily/health-upload/proposal.test.ts
 npm run lint --workspace @jarvis/backend
 npm run build --workspace @jarvis/backend
 /workspace/.jarvis-tools/bicep build docs/daily-health-ingestion/proposal.bicep --no-restore --outfile /tmp/daily-health-proposal.json

@@ -100,7 +100,7 @@ resource pointersRole 'Microsoft.Authorization/roleDefinitions@2022-04-01' = {
     description: 'Proposed pointer messages add only; no consume/delete.'
     type: 'CustomRole'
     assignableScopes: [resourceGroup().id]
-    permissions: [{ actions: [], notActions: [], dataActions: ['Microsoft.Storage/storageAccounts/queueServices/queues/messages/add'], notDataActions: [] }]
+    permissions: [{ actions: [], notActions: [], dataActions: ['Microsoft.Storage/storageAccounts/queueServices/queues/messages/add/action'], notDataActions: [] }]
   }
 }
 resource rawGrant 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
