@@ -228,7 +228,7 @@ describe('Factory board', () => {
     const reader = createGitHubFactoryBoardReader(async (input) => {
       const url = String(input);
       if (url.includes('/dependencies/blocked_by')) {
-        return new Response(JSON.stringify([{ number: 3 }, { number: 5 }]));
+        return new Response(JSON.stringify([{ number: 3, state: 'open' }, { number: 5, state: 'open' }]));
       }
       if (url.includes('/pulls?')) return new Response('[]');
       if (url.includes('state=closed')) return new Response('[]');
@@ -248,6 +248,49 @@ describe('Factory board', () => {
     await expect(reader.read(project.repo, 'reader-token', timestamp)).resolves.toMatchObject({
       issues: [{ number: 7, blockedBy: [3, 5], blockedByCount: 2 }],
     });
+  });
+
+  it('counts only open blockers when GitHub also lists closed ones', async () => {
+    const reader = createGitHubFactoryBoardReader(async (input) => {
+      const url = String(input);
+      if (url.includes('/dependencies/blocked_by')) {
+        return new Response(JSON.stringify([
+          { number: 3, state: 'open' }, { number: 4, state: 'closed' }, { number: 5, state: 'closed' },
+        ]));
+      }
+      if (url.includes('/pulls?') || url.includes('state=closed')) return new Response('[]');
+      return new Response(JSON.stringify([{
+        number: 7,
+        title: 'Partly unblocked work',
+        html_url: 'https://github.com/DanAakesen/jarvis/issues/7',
+        body: null,
+        state: 'open',
+        updated_at: timestamp,
+        closed_at: null,
+        labels: [],
+        issue_dependencies_summary: { blocked_by: 1, total_blocked_by: 3 },
+      }]));
+    });
+
+    await expect(reader.read(project.repo, 'reader-token', timestamp)).resolves.toMatchObject({
+      issues: [{ number: 7, blockedBy: [3], blockedByCount: 1 }],
+    });
+  });
+
+  it('rejects dependency entries without a known state and counts that disagree with GitHub', async () => {
+    const issueBody = [{
+      number: 7, title: 'Blocked work', html_url: 'https://github.com/DanAakesen/jarvis/issues/7', body: null,
+      state: 'open', updated_at: timestamp, closed_at: null, labels: [],
+      issue_dependencies_summary: { blocked_by: 2 },
+    }];
+    const serve = (dependencies: unknown) => createGitHubFactoryBoardReader(async (input) => {
+      const url = String(input);
+      if (url.includes('/dependencies/blocked_by')) return new Response(JSON.stringify(dependencies));
+      if (url.includes('/pulls?') || url.includes('state=closed')) return new Response('[]');
+      return new Response(JSON.stringify(issueBody));
+    });
+    await expect(serve([{ number: 3 }, { number: 5 }]).read(project.repo, 't', timestamp)).rejects.toThrow();
+    await expect(serve([{ number: 3, state: 'open' }]).read(project.repo, 't', timestamp)).rejects.toThrow();
   });
 
   it('marks an expired cached board stale when GitHub refresh fails', async () => {
