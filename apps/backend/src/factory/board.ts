@@ -263,15 +263,30 @@ function paginationPage(response: Response, path: string, page: number): number 
     leftKey.localeCompare(rightKey) || leftValue.localeCompare(rightValue));
   const relations = new Map<string, number>();
   for (const entry of header.split(/,\s*(?=<)/u)) {
-    const match = /^<([^<>]+)>\s*;\s*rel="([^"]+)"(?:\s*;[^,]+)*$/u.exec(entry);
-    if (!match) throw new FactoryBoardReadError('source', 'invalid_response');
+    const trimmed = entry.trim();
+    const closingBracket = trimmed.indexOf('>');
+    if (!trimmed.startsWith('<') || closingBracket <= 1) {
+      throw new FactoryBoardReadError('source', 'invalid_response');
+    }
+    const target = trimmed.slice(1, closingBracket);
+    let parameters = trimmed.slice(closingBracket + 1).trim();
+    if (!parameters.startsWith(';')) throw new FactoryBoardReadError('source', 'invalid_response');
+    parameters = parameters.slice(1).trim();
+    if (!parameters.startsWith('rel="')) throw new FactoryBoardReadError('source', 'invalid_response');
+    const relationEnd = parameters.indexOf('"', 5);
+    if (relationEnd < 0) throw new FactoryBoardReadError('source', 'invalid_response');
+    const relation = parameters.slice(5, relationEnd);
+    const trailingParameters = parameters.slice(relationEnd + 1).trim();
+    if (trailingParameters && (!trailingParameters.startsWith(';') ||
+        trailingParameters.slice(1).split(';').some((parameter) => !parameter.trim()))) {
+      throw new FactoryBoardReadError('source', 'invalid_response');
+    }
     let url: URL;
     try {
-      url = new URL(match[1]!);
+      url = new URL(target);
     } catch {
       throw new FactoryBoardReadError('source', 'invalid_response');
     }
-    const relation = match[2]!;
     const linkPage = url.searchParams.get('page');
     const linkPageNumber = linkPage === null ? NaN : Number(linkPage);
     const actualQuery = [...url.searchParams.entries()]
