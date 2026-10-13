@@ -294,7 +294,7 @@ describe('actual HTTP -> private Blob -> pointer Queue on synthetic Azurite',() 
     expect(await manifests()).toHaveLength(2);
   },15000);
   it('isolates throwing runtime observers from HTTP acceptance and shutdown',async () => {
-    const sink = vi.fn((_snapshot: HealthReceiptDiagnostics) => { throw new Error('synthetic_private_observer_error'); });
+    const sink = vi.fn((snapshot: HealthReceiptDiagnostics) => { throw new Error(`synthetic_private_observer_error:${snapshot.reason}`); });
     const host = await startHealthUploadHost({ ...await hostConfig(false),diagnosticsIntervalMs: 1000 },
       { buffer: new AzureHealthBuffer(raw,queue,owner),verifier: createBlobHealthVerifier(auth) },undefined,sink); hosts.push(host);
     expect((await post(host.address)).status).toBe(202);
