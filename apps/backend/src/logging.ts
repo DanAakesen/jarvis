@@ -25,7 +25,7 @@ const failureEvents = new Set([
   'project_policy.recheck_failed',
   'dispatcher.operation_failed', 'github.checks_loop_recovery_failed', 'pc_bridge.status_update_failed',
   'google.refresh_token_expired_alert_unavailable', 'google.refresh_token_expired_alert_persistence_failed',
-  'telemetry.close_failed', 'server.shutdown_failed', 'request.failed',
+  'telemetry.close_failed', 'server.shutdown_failed', 'request.failed', 'connection.upgrade_failed',
   'attachment.extraction_failed', 'away_mode.task_notification_failed', 'away_mode.task_route_failed',
   'codex.image_cancel_failed', 'codex.image_session_cleanup_failed', 'conversation_attachments.cleanup_failed',
   'credentials.codex_renewal_failed', 'credentials.copilot_check_failed', 'credentials.github_app_status_failed',
@@ -410,6 +410,13 @@ export function createLogger(
   const stream = new Writable({
     write(chunk: Buffer, _encoding, done) {
       const record = JSON.parse(chunk.toString()) as Record<string, unknown>;
+      // @fastify/websocket logs outside our literal-event source scan.
+      if (record.msg === 'websocket upgrade failed') {
+        record.msg = 'connection.upgrade_failed';
+        const error = record.err as Record<string, unknown> | undefined;
+        Object.assign(record, error?.code === 'ERR_HTTP_SOCKET_ASSIGNED'
+          ? { kind: 'protocol' } : safeErrorFields(error));
+      }
       const event = typeof record.msg === 'string' && events.has(record.msg) ? record.msg : 'backend.event';
       const level = [10, 20, 30, 40, 50, 60].includes(Number(record.level)) ? Number(record.level) : 30;
       const time = typeof record.time === 'number' && Number.isFinite(record.time) ? record.time : Date.now();

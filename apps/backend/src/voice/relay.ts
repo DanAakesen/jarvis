@@ -1,4 +1,6 @@
 import { randomUUID } from 'node:crypto';
+import type { IncomingMessage } from 'node:http';
+import type { Duplex } from 'node:stream';
 import { workspaceContext } from '../core/workspace-context.js';
 import { modeContext } from '../core/presence-instructions.js';
 import { projectContext, type ProjectContextEntry } from '../factory/project-context.js';
@@ -2338,8 +2340,20 @@ export function createVoiceRelayModule(options: VoiceRelayOptions): BackendModul
     id: 'voice',
     tools: [],
     registerRoutes: async (app) => {
+      // Failed/incomplete upgrades are not WebSocketServer clients, but can keep HTTP close waiting.
+      const pendingUpgrades = new Set<Duplex>();
+      const trackUpgrade = (_request: IncomingMessage, socket: Duplex) => {
+        pendingUpgrades.add(socket);
+        socket.once('close', () => { pendingUpgrades.delete(socket); });
+        socket.once('end', () => {
+          if (pendingUpgrades.has(socket)) socket.destroy();
+        });
+      };
+      app.server.on('upgrade', trackUpgrade);
+      app.addHook('onClose', async () => { app.server.removeListener('upgrade', trackUpgrade); });
       await app.register(websocket, {
         preClose: async () => {
+          for (const socket of pendingUpgrades) socket.destroy();
           for (const socket of app.websocketServer.clients) {
             socket.close(1012, 'Service restarting; reconnect');
           }
@@ -2352,6 +2366,9 @@ export function createVoiceRelayModule(options: VoiceRelayOptions): BackendModul
           perMessageDeflate: false,
           handleProtocols: (protocols) => protocols.has(VOICE_SUBPROTOCOL) ? VOICE_SUBPROTOCOL : false,
         },
+      });
+      app.websocketServer.on('connection', (_socket, request) => {
+        pendingUpgrades.delete(request.socket);
       });
       options.registerPhoneMediaRoute?.(app);
       if (options.connect) {

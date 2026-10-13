@@ -707,6 +707,16 @@ cancelled, not automatically replayed (which could duplicate tool side effects),
 and ACS phone media has no browser-style reconnect loop; phone calls follow
 their existing teardown path.
 
+The WebSocket plugin's framework-supplied `websocket upgrade failed` warning
+is normalized to registered `connection.upgrade_failed` at the logging boundary.
+A pipelined health request followed by a voice upgrade locally reproduces
+`ERR_HTTP_SOCKET_ASSIGNED`; it remains warning-level with safe `kind: protocol`,
+without exporting the error message, stack, URL or credentials. Failed/pending
+upgrade sockets are tracked separately from established WebSocket clients and
+released on peer disconnect or shutdown. This confirms a producer of the
+previous unnamed level-40 `backend.event`, not attribution of the production
+takeover warning; the coordinator verifies the named event after deploy.
+
 The factory module exposes authenticated `POST /factory/tasks`, filtered and
 paginated `GET /factory/tasks`, and `GET /factory/tasks/:id` with paginated event
 history. It validates active projects and bounded request/query inputs. Runner

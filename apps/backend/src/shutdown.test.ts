@@ -1,6 +1,7 @@
 import { Writable } from 'node:stream';
 import { once } from 'node:events';
 import { get } from 'node:http';
+import { connect } from 'node:net';
 import WebSocket from 'ws';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { buildApp } from './app.js';
@@ -21,6 +22,77 @@ function fixture() {
 }
 
 describe('graceful shutdown', () => {
+  it('names the framework warning for a pipelined upgrade on a new revision', async () => {
+    const records: string[] = [];
+    let warningLogged!: () => void;
+    const warning = new Promise<void>((resolve) => { warningLogged = resolve; });
+    const output = new Writable({ write(chunk: Buffer, _encoding, done) {
+      const record = chunk.toString();
+      records.push(record);
+      if (JSON.parse(record).msg === 'connection.upgrade_failed') warningLogged();
+      done();
+    } });
+    const app = buildApp(config, createLogger(config, undefined, output), {
+      modules: [coreModule, createVoiceRelayModule({
+        getToken: async () => '',
+        connect: () => { throw new Error('Unexpected upstream connection'); },
+      })],
+    });
+    await app.listen({ host: '127.0.0.1', port: 0 });
+    const socket = connect((app.server.address() as import('node:net').AddressInfo).port, '127.0.0.1');
+    try {
+      await once(socket, 'connect');
+      socket.write([
+        'GET /health HTTP/1.1', 'Host: localhost', '', '',
+        'GET /voice?private-url HTTP/1.1', 'Host: localhost',
+        'Connection: Upgrade', 'Upgrade: websocket', 'Sec-WebSocket-Version: 13',
+        'Sec-WebSocket-Key: Zml4dHVyZS1vZmZsaW5lMQ==', '', '',
+      ].join('\r\n'));
+      await warning;
+      expect(records.map((record) => JSON.parse(record)).filter((record) => record.level >= 40))
+        .toEqual([expect.objectContaining({
+          msg: 'connection.upgrade_failed', level: 40, kind: 'protocol',
+        })]);
+      expect(records.join('')).not.toContain('private-url');
+    } finally {
+      socket.destroy();
+      await shutdown(app);
+    }
+  });
+
+  it('ends a task stream whose in-flight lookup completes after shutdown starts', async () => {
+    let lookupStarted!: () => void;
+    let finishLookup!: () => void;
+    let draining!: () => void;
+    const started = new Promise<void>((resolve) => { lookupStarted = resolve; });
+    const lookup = new Promise<void>((resolve) => { finishLookup = resolve; });
+    const drainStarted = new Promise<void>((resolve) => { draining = resolve; });
+    const app = buildApp({ ...config, logLevel: 'silent' }, undefined, {
+      auth: async () => ({ objectId: config.auth.ownerObjectId, tenantId: config.auth.tenantId }),
+      taskStore: {
+        get: async () => { lookupStarted(); await lookup; return { id: '1' }; },
+        getEventsAfter: async () => [],
+      } as unknown as TaskStore,
+    });
+    app.addHook('preClose', async () => { draining(); });
+    try {
+      const address = await app.listen({ host: '127.0.0.1', port: 0 });
+      const response = fetch(address + '/factory/tasks/1/events', {
+        headers: { authorization: ['Bearer', ['e30', 'e30', 'sig'].join('.')].join(' ') },
+      });
+      await started;
+      const close = shutdown(app, undefined, 1_000);
+      await drainStarted;
+      finishLookup();
+      expect(await (await response).text()).toBe('retry: 1000\nevent: reconnect\ndata: {}\n\n');
+      await close;
+      expect(app.shutdownConnections.size).toBe(0);
+    } finally {
+      finishLookup();
+      await app.close();
+    }
+  });
+
   it('drains live SSE streams and WebSockets with reconnect signals while finishing an in-flight request', async () => {
     const records: string[] = [];
     const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });
