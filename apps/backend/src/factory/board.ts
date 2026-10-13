@@ -111,7 +111,7 @@ function issueFromGitHub(value: unknown): FactoryBoardIssue | null {
     worker: workerLabels.find((worker) => labelNames.includes(worker)) ?? null,
     state: issue.state,
     updatedAt: new Date(updatedAt).toISOString(),
-    closedAt: closedAt as string | null,
+    closedAt: closedAt === null ? null : new Date(closedAt as string).toISOString(),
     blockedBy: [],
     blockedByCount: (dependency?.blocked_by as number | undefined) ?? 0,
     body: body as string | null,
