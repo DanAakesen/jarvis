@@ -1,3 +1,4 @@
+// SUPERSEDED by existing backend + SQL (13 October 2026). Historical regression only; DO NOT DEPLOY.
 // UNREFERENCED PROPOSAL ONLY. No execution, grants, activation or cost approval.
 // Keep outside infra/: the existing planner treats that tree as real redeployment.
 targetScope = 'resourceGroup'

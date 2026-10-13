@@ -1,26 +1,39 @@
-import Fastify,{ type FastifyRequest } from 'fastify';
+import Fastify,{ type FastifyInstance,type FastifyRequest } from 'fastify';
 import { randomUUID } from 'node:crypto';
 import rateLimit,{ type RateLimitOptions } from '@fastify/rate-limit';
 import { authorizeHealth,healthUploadLimit,metadataLimit,opaqueId,sha256,HealthConflict,HealthDenied,HealthUnavailable,
-  type HealthCapability,type HealthCredentialVerifier,type HealthKind } from './contracts.js';
-import type { AzureHealthBuffer,UploadIdentity } from './azure-buffer.js';
+  type HealthBuffer,type UploadIdentity,type HealthCapability,type HealthCredentialVerifier,type HealthKind } from './contracts.js';
 import { healthClientRateKey,validateHealthRatePolicy,validateHealthTrustedProxies,type HealthRatePolicy } from './rate-policy.js';
 
-declare module 'fastify' { interface FastifyRequest { healthUploadCapability: HealthCapability | null; healthUploadIdentity: UploadIdentity | null; healthUploadRelease: (() => void) | null; healthHeartbeatName: string | null } }
-const routes = { '/api/health/ingest': 'upload','/api/health/heartbeat': 'heartbeat' } as const;
+declare module 'fastify' {
+  interface FastifyRequest { healthUploadCapability: HealthCapability | null; healthUploadIdentity: UploadIdentity | null; healthUploadRelease: (() => void) | null; healthHeartbeatName: string | null; healthUploadReference: string | null }
+  interface FastifyContextConfig { jarvisHealthUpload?: boolean }
+}
+export const healthUploadRoutes = { '/api/health/ingest': 'upload','/api/health/heartbeat': 'heartbeat' } as const;
+export interface HealthUploadOptions {
+  enabled?: boolean; buffer?: HealthBuffer; verifier?: HealthCredentialVerifier;
+  shutdownSignal?: AbortSignal; observe?: (event: HealthHttpObservation) => void; ratePolicy?: HealthRatePolicy;
+}
 export type HealthHttpObservation = { type: 'accepted'; kind: HealthKind; queue: 'pending' | 'queued'; duplicate: boolean } | { type: 'rejected'; status: number };
 function header(request: FastifyRequest,name: string): string | undefined {
   if (request.raw.rawHeaders.filter((value,i) => i % 2 === 0 && value.toLowerCase() === name).length > 1) throw new TypeError('Duplicate header');
   const value = request.headers[name]; if (value !== undefined && typeof value !== 'string') throw new TypeError('Invalid header');
   return value;
 }
-/** Dedicated factory only; absent enable/configuration fails closed. No main registration, SQL or agent dependency. */
-export function buildHealthUploadServer(options: { enabled?: boolean; buffer?: AzureHealthBuffer; verifier?: HealthCredentialVerifier; shutdownSignal?: AbortSignal; observe?: (event: HealthHttpObservation) => void; ratePolicy?: HealthRatePolicy; trustedProxyCidrs?: string[] } = {}) {
-  const observe = (event: HealthHttpObservation) => { try { options.observe?.(event); } catch { /* Private diagnostics never affect acceptance. */ } };
-  const policy = validateHealthRatePolicy(options.ratePolicy); const proxies = validateHealthTrustedProxies(options.trustedProxyCidrs);
+/** Superseded standalone proposal, retained for regression tests. Never production-composed. */
+export function buildHealthUploadServer(options: HealthUploadOptions & { trustedProxyCidrs?: string[] } = {}) {
+  const proxies = validateHealthTrustedProxies(options.trustedProxyCidrs);
   const app = Fastify({ logger: false,bodyLimit: healthUploadLimit,requestTimeout: 30000,maxRequestsPerSocket: 100,trustProxy: proxies.length ? proxies : false });
   app.get('/health',async () => ({ acceptance: options.enabled === true && options.buffer && options.verifier ? 'configured' : 'inactive',processing: 'not-configured' }));
   app.setNotFoundHandler((_request,reply) => reply.code(404).send({ error: 'Not found' }));
+  app.register(registerHealthUploadRoutes,options);
+  return app;
+}
+/** Encapsulated parsers/errors/auth; existing backend opts in explicitly, default off. */
+export async function registerHealthUploadRoutes(app: FastifyInstance,options: HealthUploadOptions) {
+  const observe = (event: HealthHttpObservation) => { try { options.observe?.(event); } catch { /* Private diagnostics never affect acceptance. */ } };
+  const policy = validateHealthRatePolicy(options.ratePolicy);
+  if (options.enabled !== true) return;
   app.setErrorHandler((error,_request,reply) => {
     const code = error instanceof HealthDenied ? 403 : error instanceof HealthConflict ? 409 : error instanceof TypeError ? 400
       : (error as { statusCode?: number }).statusCode === 429 ? 429
@@ -30,8 +43,6 @@ export function buildHealthUploadServer(options: { enabled?: boolean; buffer?: A
     reply.header('Cache-Control','no-store').code(code).send({ error: code === 403 ? 'Health capability denied' : code === 409 ? 'Health session conflict'
       : code === 413 ? 'Health upload exceeds limit' : code === 415 ? 'JSON required' : code === 400 ? 'Invalid health request' : code === 429 ? 'Health request rate limited' : 'Health acceptance unavailable' });
   });
-  if (options.enabled !== true) return app;
-  app.register(async app => {
   await app.register(rateLimit,{ global: false,cache: 512,skipOnError: false });
   const clientLimiter = app.rateLimit({ max: policy.perClient,timeWindow: policy.windowMs,cache: 512,keyGenerator: healthClientRateKey,
     errorResponseBuilder: () => ({ statusCode: 429,error: 'Health request rate limited' }) });
@@ -47,6 +58,7 @@ export function buildHealthUploadServer(options: { enabled?: boolean; buffer?: A
   app.decorateRequest('healthUploadCapability',null); app.decorateRequest('healthUploadIdentity',null);
   app.decorateRequest('healthUploadRelease',null); let active = 0;
   app.decorateRequest('healthHeartbeatName',null);
+  app.decorateRequest('healthUploadReference',null);
   app.addHook('onResponse',async request => request.healthUploadRelease?.());
   app.removeContentTypeParser('application/json');
   app.addContentTypeParser('application/json',{ parseAs: 'buffer',bodyLimit: healthUploadLimit },(_request,body,done) => {
@@ -59,7 +71,7 @@ export function buildHealthUploadServer(options: { enabled?: boolean; buffer?: A
     else done(Object.assign(new Error('JSON required'),{ statusCode: 415 }));
   });
   const authorizeRequest = async (request: FastifyRequest) => {
-    const kind: HealthKind | undefined = routes[request.routeOptions.url as keyof typeof routes];
+    const kind: HealthKind | undefined = healthUploadRoutes[request.routeOptions.url as keyof typeof healthUploadRoutes];
     if (!kind) return;
     if (!options.verifier || !options.buffer || options.shutdownSignal?.aborted) throw new HealthUnavailable();
     if (active >= 8) throw Object.assign(new Error('Busy'),{ statusCode: 429 });
@@ -74,6 +86,7 @@ export function buildHealthUploadServer(options: { enabled?: boolean; buffer?: A
     const signal = AbortSignal.any([AbortSignal.timeout(10000),...(options.shutdownSignal ? [options.shutdownSignal] : [])]);
     const capability = await options.verifier(match[1]!,signal); signal.throwIfAborted();
     request.healthUploadCapability = authorizeHealth(capability,options.buffer.owner,kind === 'upload' ? 'health-ingest' : 'health-heartbeat');
+    request.healthUploadReference = sha256(match[1]!);
     const automation = header(request,'automation-id'); const session = header(request,'session-id');
     if (automation !== undefined) opaqueId(automation); if (session !== undefined) opaqueId(session);
     if (kind === 'upload' && (!automation || !session)) throw new TypeError('Missing upload identity');
@@ -83,7 +96,7 @@ export function buildHealthUploadServer(options: { enabled?: boolean; buffer?: A
       opaqueId(name,256); request.healthHeartbeatName = name;
     } else for (const name of ['checksum','x-payload-checksum']) { const checksum = header(request,name); if (checksum !== undefined && !/^[a-f\d]{64}$/iu.test(checksum)) throw new TypeError('Invalid checksum'); }
   };
-  for (const [url,kind] of Object.entries(routes)) app.post(url,{ onRequest: [instanceGuard,clientLimiter,authorizeRequest],bodyLimit: kind === 'heartbeat' ? metadataLimit : healthUploadLimit },async (request,reply) => {
+  for (const [url,kind] of Object.entries(healthUploadRoutes)) app.post(url,{ config: { jarvisHealthUpload: true },onRequest: [instanceGuard,clientLimiter,authorizeRequest],bodyLimit: kind === 'heartbeat' ? metadataLimit : healthUploadLimit },async (request,reply) => {
     reply.header('Cache-Control','no-store');
     // Source heartbeat reads headers, not a body. Retain only bounded private provenance.
     const body = kind === 'heartbeat' ? Buffer.from(JSON.stringify({ shortcutName: request.healthHeartbeatName,checkedFeeds: ['metrics','workouts'] })) : request.body;
@@ -95,12 +108,10 @@ export function buildHealthUploadServer(options: { enabled?: boolean; buffer?: A
     const closed = () => { if (!reply.raw.writableFinished) controller.abort(); }; reply.raw.once('close',closed);
     const signal = AbortSignal.any([controller.signal,AbortSignal.timeout(30000),...(options.shutdownSignal ? [options.shutdownSignal] : [])]);
     try {
-      const receipt = await options.buffer.accept(kind as HealthKind,request.healthUploadCapability,request.healthUploadIdentity,body,signal);
+      const receipt = await options.buffer.accept(kind as HealthKind,request.healthUploadCapability,request.healthUploadIdentity,body,signal,request.healthUploadReference ?? undefined);
       observe({ type: 'accepted',kind: kind as HealthKind,queue: receipt.queue,duplicate: receipt.duplicate });
       return reply.code(202).send(receipt);
     }
     finally { request.raw.removeListener('aborted',aborted); reply.raw.removeListener('close',closed); }
   });
-  });
-  return app;
 }

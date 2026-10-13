@@ -1,31 +1,7 @@
-import { randomBytes } from 'node:crypto';
-import { inspect } from 'node:util';
 import type { ContainerClient } from '@azure/storage-blob';
-import { healthPermissions,metadataLimit,opaqueId,ownerId,sha256,type HealthCapability,type HealthPermission } from './contracts.js';
-
-/** Fixed diagnostics only. A failed/canceled mutation may already have committed. */
-export class HealthCapabilityLifecycleError extends Error {
-  readonly outcome = 'unknown';
-  constructor(readonly code: 'invalid-input' | 'conflict' | 'unavailable' | 'canceled') { super(`Health capability operation ${code}`); }
-}
-const preparedRecords = new WeakMap<PreparedHealthCapability,HealthCapability>();
-/** Retain this opaque operation across retries in a protected operator process.
- * JSON/inspection never exports the bearer or capability body. No secret channel is installed. */
-export class PreparedHealthCapability {
-  readonly #token: string;
-  private constructor(record: HealthCapability) {
-    this.#token = randomBytes(32).toString('base64url');
-    preparedRecords.set(this,{ ...record,permissions: [...record.permissions] }); Object.freeze(this);
-  }
-  static prepare(record: HealthCapability): PreparedHealthCapability { return new PreparedHealthCapability(record); }
-  get reference(): string { return sha256(this.#token); }
-  async useSecret<T>(protectedConsumer: (secret: string) => Promise<T>): Promise<T> {
-    try { return await protectedConsumer(this.#token); } catch { throw new HealthCapabilityLifecycleError('unavailable'); }
-  }
-  toJSON() { return { type: 'prepared-health-capability',secret: 'redacted' }; }
-  toString() { return '[prepared-health-capability: redacted]'; }
-  [inspect.custom]() { return this.toString(); }
-}
+import { healthPermissions,metadataLimit,opaqueId,ownerId,type HealthCapability,type HealthPermission } from './contracts.js';
+import { HealthCapabilityLifecycleError,PreparedHealthCapability,preparedHealthRecord } from './capability-operation.js';
+export { HealthCapabilityLifecycleError,PreparedHealthCapability } from './capability-operation.js';
 type Rotation = { version: 1; ownerObjectId: string; oldReference: string; replacementReference: string; replacement: HealthCapability };
 function httpStatus(error: unknown): number | undefined { return (error as { statusCode?: number })?.statusCode; }
 function reference(value: string) { if (!/^[a-f0-9]{64}$/u.test(value)) throw new HealthCapabilityLifecycleError('invalid-input'); return value; }
@@ -59,7 +35,7 @@ export class HealthCapabilityLifecycle {
     return { version: 1,ownerObjectId: row.ownerObjectId,deviceId: row.deviceId,permissions: [...row.permissions],expiresAt: row.expiresAt,revoked: row.revoked };
   }
   private record(operation: PreparedHealthCapability) {
-    const row = preparedRecords.get(operation);
+    const row = preparedHealthRecord(operation);
     if (!row || row.revoked !== false) throw new HealthCapabilityLifecycleError('invalid-input');
     return this.validate(row);
   }

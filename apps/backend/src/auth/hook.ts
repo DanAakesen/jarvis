@@ -2,6 +2,7 @@ import type { IncomingMessage, Server, ServerResponse } from 'node:http';
 import type { FastifyBaseLogger, FastifyInstance, FastifyRequest } from 'fastify';
 import { localWebOrigin, type BackendConfig } from '../config.js';
 import { exportDevicePaths, validateExportDevice, verifyExportCredential, type NutritionExportCredentialVerifier } from '../daily/nutrition-export/auth.js';
+import { healthUploadRoutes } from '../daily/health-upload/server.js';
 import {
   AuthenticationDenied, createTokenVerifier, isAgentPrincipal, isRunnerPrincipal,
   isPcBridgePrincipal, isPhoneEventGridPrincipal, isDeployPrincipal,
@@ -52,7 +53,7 @@ function voiceWebsocketToken(request: FastifyRequest): string | undefined {
   return token && /^[\w-]+\.[\w-]+\.[\w-]+$/u.test(token) ? token : undefined;
 }
 
-export function installAuthentication<Logger extends FastifyBaseLogger>(app: FastifyInstance<Server, IncomingMessage, ServerResponse, Logger>, config: BackendConfig, verify: TokenVerifier = createTokenVerifier(config.auth), exportDeviceVerifier?: NutritionExportCredentialVerifier) {
+export function installAuthentication<Logger extends FastifyBaseLogger>(app: FastifyInstance<Server, IncomingMessage, ServerResponse, Logger>, config: BackendConfig, verify: TokenVerifier = createTokenVerifier(config.auth), exportDeviceVerifier?: NutritionExportCredentialVerifier, healthUploadEnabled = false) {
   app.decorateRequest('principal', null);
   app.decorateRequest('agentPrincipal', null);
   app.decorateRequest('runnerPrincipal', null);
@@ -68,6 +69,10 @@ export function installAuthentication<Logger extends FastifyBaseLogger>(app: Fas
         request.routeOptions.config?.jarvisPhoneMedia === true) return;
     if (request.method === 'POST' && request.routeOptions.url === '/phone/callback' &&
         request.routeOptions.config?.jarvisPhoneCallback === true) return;
+    // Only the explicitly installed upload plugin owns these exact POST paths.
+    // Its rate/concurrency guards run BEFORE its capability verifier/SQL calls.
+    if (healthUploadEnabled && request.routeOptions.config?.jarvisHealthUpload === true && request.method === 'POST' &&
+        Object.hasOwn(healthUploadRoutes,request.routeOptions.url ?? '')) return;
     // Only the CORS plugin's generated OPTIONS route may run without a token.
     // Explicit business OPTIONS endpoints still require authentication.
     const origin = request.headers.origin;
