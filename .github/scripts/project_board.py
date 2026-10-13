@@ -6,6 +6,7 @@ Board columns (the project's Status field):
   (deferred)   open, unclaimed issue labelled deferred stays in Backlog
   Ready        open, not blocked, no worker label, no open linked PR
   In progress  open issue with a worker label (Codex, Copilot, Dan, Jarvis) or an open draft PR
+               (a parked draft PR on a needs-decision issue stays in Needs Dan)
   In review    open issue with an open, non-draft linked PR
   Done         closed issue; the project's built-in "Item closed" workflow sets it, and
                this script restores it when a run raced with the close (L60)
@@ -42,7 +43,9 @@ def desired_status(issue: dict[str, Any], open_pulls: list[dict[str, Any]]) -> s
     if any(not pull.get("draft") for pull in linked):
         return "In review"
     labels = {label.get("name") for label in issue.get("labels", [])}
-    if linked or labels & WORKER_LABELS:
+    if labels & WORKER_LABELS:
+        return "In progress"
+    if linked and DECISION_LABEL not in labels:
         return "In progress"
     if DECISION_LABEL in labels:
         return "Needs Dan"

@@ -49,6 +49,10 @@ class ProjectBoardTests(unittest.TestCase):
         self.assertEqual(desired_status(issue(labels=["needs-decision"]), []), "Needs Dan")
         self.assertEqual(desired_status(issue(labels=["needs-decision"], blocked_by=1), []), "Needs Dan")
 
+    def test_parked_draft_pr_on_needs_decision_issue_waits_for_dan(self):
+        self.assertEqual(desired_status(issue(labels=["needs-decision"]), [pull("Fixes #7", draft=True)]), "Needs Dan")
+        self.assertEqual(desired_status(issue(labels=["needs-decision"]), [pull("Fixes #7")]), "In review")
+
     def test_claimed_needs_decision_issue_is_in_progress(self):
         self.assertEqual(desired_status(issue(labels=["needs-decision", "Dan"]), []), "In progress")
 
