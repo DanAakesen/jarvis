@@ -60,6 +60,19 @@ chat closes the model stream and joins outstanding preparation reads.
 exception messages. See [P7-23 evidence](../../docs/decisions.md#p7-23-latency-evidence)
 for the outstanding deployed acceptance check.
 
+P9-99 returns `agent_pre_model` (request entry to first model request),
+`model_request` (first request to stream entry), `model_coordination` (first
+steering/phase handshake), `model_to_first_delta` (first request to first text,
+including earlier tool-only rounds), and `agent_first_delta` (entry to outgoing
+text). The existing `model_first_delta` measures only the first text-emitting
+round, so it cannot by itself identify pre-model overhead. The backend adds
+`agent_auth` and computes `session_start` as invocation-to-first-text minus agent
+elapsed time; that residual includes transport/buffering, not just provisioning.
+Setup phases overlap; do not sum parallel fetch times or compare unmatched
+cohort medians. All fields use the existing bounded completion/log allowlists.
+Chat affinity uses a bounded owner/conversation map of random 32-hex IDs; generic
+invocation failures are not replayed. Live latency improvement is unverified.
+
 ## Commands
 
 Setup: `bash scripts/setup-dependencies.sh` from the repository root creates

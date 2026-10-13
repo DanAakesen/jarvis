@@ -18,11 +18,14 @@ _tracer = trace.get_tracer("VoiceHostedAgent.Chat")
 MAX_CHAT_PHASE_DURATION_MS = 600_000
 CHAT_PHASES = frozenset({
     "chat_history_verification", "chat_context", "tool_catalogue", "settings",
-    "turn_context", "prompt_build", "model_first_delta",
+    "turn_context", "prompt_build", "model_coordination", "model_request", "model_first_delta",
+    "model_to_first_delta", "agent_pre_model", "agent_first_delta",
 })
 current_chat_phase_timings: ContextVar[dict[str, float] | None] = ContextVar(
     "chat_phase_timings", default=None
 )
+current_chat_started_at: ContextVar[float | None] = ContextVar("chat_started_at", default=None)
+current_model_started_at: ContextVar[float | None] = ContextVar("model_started_at", default=None)
 
 
 def log_latency(phase: str, started: float, outcome: str = "ok") -> float:

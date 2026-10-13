@@ -116,7 +116,8 @@ const chatLatencyPhases = new Set([
   'reflex_targets', 'jev', 'agent_first_byte', 'turn_first_token', 'turn_complete',
   'recipe_select', 'recipe_verify', 'recipe_plan', 'recipe_run',
   'chat_history_verification', 'chat_context', 'tool_catalogue', 'settings',
-  'turn_context', 'prompt_build', 'model_first_delta',
+  'turn_context', 'prompt_build', 'model_coordination', 'model_request', 'model_first_delta',
+  'model_to_first_delta', 'agent_pre_model', 'agent_first_delta', 'agent_auth', 'session_start',
 ]);
 const reflexReasons = new Set([
   'executed', 'unavailable', 'cancelled', 'not_addressed', 'not_action', 'incomplete_command',
