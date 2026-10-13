@@ -138,6 +138,36 @@ describe('actual HTTP -> private Blob -> pointer Queue on synthetic Azurite',() 
     const foreign = foreignOwner.prepare(deviceDefinition); await foreignOwner.issue(foreign,AbortSignal.timeout(10000));
     expect((await withDevice(address,foreign)).status).toBe(403);
   });
+  it('revokes and rotates accepted lettered mixed-case v1 owner GUIDs without rewriting stored fields',async () => {
+    const letterOwner = 'abcdefab-cdef-4abc-8def-abcdefabcdef';
+    const mixedOwner = 'AbCdEfAb-CdEf-4AbC-8DeF-aBcDeFaBcDeF';
+    const lifecycle = new HealthCapabilityLifecycle(auth,letterOwner.toUpperCase());
+    const app = buildHealthUploadServer({ enabled: true,buffer: new AzureHealthBuffer(raw,queue,letterOwner),verifier: createBlobHealthVerifier(auth) });
+    apps.push(app); const address = await app.listen({ host: '127.0.0.1',port: 0 });
+    const original = { ...capability,ownerObjectId: letterOwner.toUpperCase() };
+    await credential(original); expect((await post(address)).status).toBe(202);
+    expect(await lifecycle.revoke(sha256(token),AbortSignal.timeout(10000))).toEqual({ state: 'revoked' });
+    expect(JSON.parse((await auth.getBlobClient(`health-devices/${sha256(token)}.json`).downloadToBuffer()).toString())).toEqual({ ...original,revoked: true });
+    expect((await post(address)).status).toBe(403);
+
+    const old = lifecycle.prepare(deviceDefinition); await lifecycle.issue(old,AbortSignal.timeout(10000));
+    const blob = auth.getBlockBlobClient(`health-devices/${old.reference}.json`);
+    const stored = { ...JSON.parse((await blob.downloadToBuffer()).toString()),ownerObjectId: mixedOwner };
+    await blob.uploadData(Buffer.from(JSON.stringify(stored)));
+    expect((await withDevice(address,old)).status).toBe(202);
+    expect(await lifecycle.issue(old,AbortSignal.timeout(10000))).toEqual({ state: 'issued' });
+    const next = lifecycle.prepare(deviceDefinition);
+    expect(await lifecycle.rotate(old.reference,next,AbortSignal.timeout(10000))).toEqual({ state: 'rotated' });
+    expect(JSON.parse((await blob.downloadToBuffer()).toString())).toEqual({ ...stored,revoked: true });
+    expect((await withDevice(address,old)).status).toBe(403); expect((await withDevice(address,next)).status).toBe(202);
+
+    const nextBlob = auth.getBlockBlobClient(`health-devices/${next.reference}.json`);
+    const wrong = { ...stored,ownerObjectId: 'bbcdefab-cdef-4abc-8def-abcdefabcdef' };
+    await nextBlob.uploadData(Buffer.from(JSON.stringify(wrong)));
+    await expect(lifecycle.revoke(next.reference,AbortSignal.timeout(10000))).rejects.toMatchObject({ code: 'conflict' });
+    expect(JSON.parse((await nextBlob.downloadToBuffer()).toString())).toEqual(wrong);
+    expect((await withDevice(address,next)).status).toBe(403);
+  });
   it('reserves one rotation replacement, revokes first and handles concurrent identical/different rotations',async () => {
     const lifecycle = new HealthCapabilityLifecycle(auth,owner); const original = lifecycle.prepare(deviceDefinition);
     await lifecycle.issue(original,AbortSignal.timeout(10000)); const replacement = lifecycle.prepare(deviceDefinition);

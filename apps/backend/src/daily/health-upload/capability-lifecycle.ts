@@ -29,8 +29,11 @@ export class PreparedHealthCapability {
 type Rotation = { version: 1; ownerObjectId: string; oldReference: string; replacementReference: string; replacement: HealthCapability };
 function httpStatus(error: unknown): number | undefined { return (error as { statusCode?: number })?.statusCode; }
 function reference(value: string) { if (!/^[a-f0-9]{64}$/u.test(value)) throw new HealthCapabilityLifecycleError('invalid-input'); return value; }
+function sameOwner(value: unknown,expected: string) {
+  try { return typeof value === 'string' && ownerId(value) === ownerId(expected); } catch { return false; }
+}
 function exact(left: HealthCapability,right: HealthCapability,ignoreRevocation = false) {
-  return left.version === right.version && left.ownerObjectId === right.ownerObjectId && left.deviceId === right.deviceId && left.expiresAt === right.expiresAt &&
+  return left.version === right.version && sameOwner(left.ownerObjectId,right.ownerObjectId) && left.deviceId === right.deviceId && left.expiresAt === right.expiresAt &&
     (ignoreRevocation || left.revoked === right.revoked) && left.permissions.length === right.permissions.length && left.permissions.every((scope,i) => scope === right.permissions[i]);
 }
 /** Separate injected write client; never composed into the read-only upload host. */
@@ -49,11 +52,11 @@ export class HealthCapabilityLifecycle {
     const row = value as HealthCapability;
     if (!row || typeof row !== 'object' || Array.isArray(row) || Object.keys(row).length !== 6 ||
         Object.keys(row).some(key => !['version','ownerObjectId','deviceId','permissions','expiresAt','revoked'].includes(key)) || row.version !== 1 ||
-        row.ownerObjectId !== this.#owner || typeof row.revoked !== 'boolean' || !Array.isArray(row.permissions) || row.permissions.length < 1 || row.permissions.length > 2 ||
+        !sameOwner(row.ownerObjectId,this.#owner) || typeof row.revoked !== 'boolean' || !Array.isArray(row.permissions) || row.permissions.length < 1 || row.permissions.length > 2 ||
         new Set(row.permissions).size !== row.permissions.length || row.permissions.some(scope => !healthPermissions.includes(scope)) ||
         typeof row.expiresAt !== 'string' || row.expiresAt.length > 128 || !Number.isFinite(Date.parse(row.expiresAt))) throw new HealthCapabilityLifecycleError('conflict');
     try { opaqueId(row.deviceId,256); } catch { throw new HealthCapabilityLifecycleError('conflict'); }
-    return { version: 1,ownerObjectId: this.#owner,deviceId: row.deviceId,permissions: [...row.permissions],expiresAt: row.expiresAt,revoked: row.revoked };
+    return { version: 1,ownerObjectId: row.ownerObjectId,deviceId: row.deviceId,permissions: [...row.permissions],expiresAt: row.expiresAt,revoked: row.revoked };
   }
   private record(operation: PreparedHealthCapability) {
     const row = preparedRecords.get(operation);
@@ -139,7 +142,7 @@ export class HealthCapabilityLifecycle {
       }
       const saved = await this.read(journalName,bounded); const row = saved?.value as Rotation;
       if (!row || Object.keys(row).length !== 5 || Object.keys(row).some(key => !['version','ownerObjectId','oldReference','replacementReference','replacement'].includes(key)) ||
-          row.version !== 1 || row.ownerObjectId !== this.#owner || row.oldReference !== oldId || row.replacementReference !== replacement.reference || !exact(this.validate(row.replacement),next)) throw new HealthCapabilityLifecycleError('conflict');
+          row.version !== 1 || !sameOwner(row.ownerObjectId,this.#owner) || row.oldReference !== oldId || row.replacementReference !== replacement.reference || !exact(this.validate(row.replacement),next)) throw new HealthCapabilityLifecycleError('conflict');
       if ((await this.revokeRecord(oldId,bounded)).state !== 'revoked') throw new HealthCapabilityLifecycleError('conflict');
       const result = await this.issueRecord(replacement,bounded);
       return { state: result.state === 'issued' ? 'rotated' as const : 'replacement-revoked' as const };
