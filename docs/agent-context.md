@@ -1257,6 +1257,9 @@ Aggregate CI (P0-10), `.github/workflows/ci.yml`:
 - Add a new component workflow as `on: workflow_call`, call it from `ci.yml`, and add it to `CI result`'s `needs`, so it runs once per PR and the gate covers it.
 - Required checks on `main` are not enforced: branch protection on a private repository needs GitHub Pro. When available, Dan requires `CI result`; until then Dan or the authorized merging agent must read the `CI` run result itself.
 
+CodeQL code scanning (P9-93), `.github/workflows/codeql.yml`:
+Advanced CodeQL code scanning analyzes `javascript-typescript`, `python`, and `actions` using the `security-extended` query suite on pushes and PRs to `main` (path-filtered against markdown and docs) and a weekly schedule. CodeQL is non-blocking and operates independently of the `CI result` aggregate gate. Security findings, CWE classifications, and severity levels appear in GitHub under **Security → Code scanning alerts** (`GET /repos/DanAakesen/jarvis/code-scanning/alerts`); triage verdicts should distinguish real security flaws from false positives or test-only code before opening follow-up remediation issues.
+
 Plan status, `.github/workflows/plan-status.yml`:
 
 | Item | Detail |
