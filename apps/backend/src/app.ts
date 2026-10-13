@@ -6,7 +6,7 @@ import type { Logger } from 'pino';
 import type { SystemSmokeCheckId } from '@jarvis/contracts';
 import type { BackgroundJobEvent, JarvisActivityEvent, JarvisVoiceWakeEvent } from '@jarvis/contracts';
 import { localWebOrigin, type BackendConfig } from './config.js';
-import { createLogger } from './logging.js';
+import { createLogger, safeErrorFields } from './logging.js';
 import { installAuthentication } from './auth/hook.js';
 import type { TokenVerifier } from './auth/verify.js';
 import { coreModule } from './core/index.js';
@@ -207,7 +207,11 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
     const candidate = (error as { statusCode?: number }).statusCode;
     const statusCode = candidate && Number.isInteger(candidate) && candidate >= 400 && candidate < 500 ? candidate : 500;
     systemStatusReader.recordError(request.routeOptions.url, statusCode);
-    request.log.error({ statusCode }, 'request.failed');
+    request.log.error({
+      ...safeErrorFields(error),
+      statusCode,
+      ...(request.routeOptions.url === undefined ? {} : { route: request.routeOptions.url }),
+    }, 'request.failed');
     reply.code(statusCode).send({ error: statusCode < 500 ? 'Invalid request' : 'Internal server error' });
   });
   app.setNotFoundHandler((_request, reply) => reply.code(404).send({ error: 'Not found' }));

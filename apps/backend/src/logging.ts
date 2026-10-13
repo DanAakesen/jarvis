@@ -25,7 +25,31 @@ const failureEvents = new Set([
   'project_policy.recheck_failed',
   'dispatcher.operation_failed', 'github.checks_loop_recovery_failed', 'pc_bridge.status_update_failed',
   'google.refresh_token_expired_alert_unavailable', 'google.refresh_token_expired_alert_persistence_failed',
-  'telemetry.close_failed',
+  'telemetry.close_failed', 'server.shutdown_failed', 'request.failed',
+  'attachment.extraction_failed', 'away_mode.task_notification_failed', 'away_mode.task_route_failed',
+  'codex.image_cancel_failed', 'codex.image_session_cleanup_failed', 'conversation_attachments.cleanup_failed',
+  'credentials.codex_renewal_failed', 'credentials.copilot_check_failed', 'credentials.github_app_status_failed',
+  'factory.board_project_lookup_failed', 'factory.board_read_failed', 'factory.board_task_event_failed',
+  'factory.board_webhook_update_failed', 'factory.issue_backfill_failed', 'factory.issue_create_failed',
+  'factory.issue_executor_handoff_failed', 'factory.release_data_read_failed', 'factory.release_graph_read_failed',
+  'factory.release_project_lookup_failed', 'folio.delete_failed', 'folio.open_failed', 'folio.search_failed',
+  'folio.update_failed', 'github.delivery_policy_evaluation_failed', 'github.installation_token_failed',
+  'github.issue_progress_failed', 'github.issue_start_failed', 'github.repository_list_failed',
+  'github.repository_management_failed', 'github.webhook_delivery_store_failed', 'github.webhook_mapping_failed',
+  'github.webhook_secret_unavailable', 'github.webhook_signature_invalid', 'github.webhook_workflow_unavailable',
+  'memory.embedding_backfill_failed', 'memory.vault_forget_failed', 'models.deployment_operation_failed',
+  'models.deployment_request_failed', 'phone.call_answer_failed', 'phone.call_callback_processing_failed',
+  'phone.call_cleanup_failed', 'phone.call_media_cleanup_failed', 'phone.call_shutdown_cleanup_failed',
+  'phone.incoming_call_processing_failed', 'phone.status_unavailable', 'phone.transcript_persistence_failed',
+  'phone.voice_connection_failed', 'task_status_notification.failed', 'usage.codex_tool_counts_unavailable',
+  'usage.embedding_tokens_unavailable', 'voice.away_mode_settings_unavailable', 'voice.memory_settings_unavailable',
+  'voice.partial_reflex_failed', 'voice.personality_settings_unavailable', 'voice.presence_mode_update_failed',
+  'voice.session_persistence_failed', 'voice.transcript_persistence_failed',
+  'health_host_shutdown_failed', 'health_host_configuration_or_startup_failed',
+  'workspace_artifact.html_open_url_failed', 'workspace_artifact.html_pin_failed',
+  'workspace_artifact.html_read_failed', 'workspace_artifact.image_read_failed',
+  'workspace_artifact.image_upload_failed', 'workspace_pins.list_failed', 'workspace_pins.pin_failed',
+  'workspace_pins.unpin_failed',
 ]);
 const errorKinds = new Set(['http', 'auth', 'timeout', 'aborted', 'transport', 'protocol', 'internal']);
 
@@ -44,7 +68,7 @@ export function safeErrorFields(error: unknown): { kind: string; statusCode?: nu
 
 const events = new Set([
   ...failureEvents,
-  'request.started', 'request.completed', 'request.failed', 'request.origin_denied', 'request.auth_denied',
+  'request.started', 'request.completed', 'request.origin_denied', 'request.auth_denied',
   'server.listening', 'server.stopping', 'server.stopped', 'server.failed',
   'database.ready', 'database.not_configured',
   'telemetry.stdout_only', 'telemetry.export_failed',
@@ -57,7 +81,13 @@ const events = new Set([
   'voice.upstream_event_error', 'voice.turn_timing', 'pc_bridge.command_timing', 'pc_bridge.wake_word',
   'credentials.codex_renewal', 'dispatcher.start_failed',
   'tool.invalid_arguments', 'decision.provider_unavailable',
+  'factory.issue_create_outcome_uncertain',
+  'phone.call_callback_processed', 'phone.incoming_call_rejected', 'phone.session_started',
 ]);
+
+export function isRegisteredLogEvent(event: string): boolean {
+  return events.has(event);
+}
 
 // Apply an allowlist before either stdout or Application Insights sees a record.
 // Headers, bodies, URLs, query strings, arbitrary messages and errors are discarded.
@@ -160,6 +190,8 @@ function safeFields(input: Record<string, unknown>): Record<string, unknown> {
     if (typeof input.kind === 'string' && errorKinds.has(input.kind)) fields.kind = input.kind;
     if (typeof input.statusCode === 'number' && Number.isInteger(input.statusCode) &&
         input.statusCode >= 100 && input.statusCode <= 599) fields.statusCode = input.statusCode;
+    if (input.msg === 'request.failed' && typeof input.route === 'string' &&
+        /^\/[\w/:-]{0,100}$/u.test(input.route)) fields.route = input.route;
     return fields;
   }
   const fields: Record<string, unknown> = {};

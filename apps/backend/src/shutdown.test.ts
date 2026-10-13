@@ -8,12 +8,14 @@ import { shutdown } from './shutdown.js';
 afterEach(() => { vi.useRealTimers(); });
 const config = loadConfig({});
 function fixture() {
-  return buildApp(config, createLogger(config, undefined, new Writable({ write(_chunk, _encoding, done) { done(); } })));
+  const records: string[] = [];
+  const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });
+  return { app: buildApp(config, createLogger(config, undefined, output)), records };
 }
 
 describe('graceful shutdown', () => {
   it('closes the server before flushing and disposing telemetry', async () => {
-    const app = fixture();
+    const { app } = fixture();
     const events: string[] = [];
     app.addHook('onClose', async () => { events.push('closed'); });
     await app.ready();
@@ -22,19 +24,30 @@ describe('graceful shutdown', () => {
     expect(events).toEqual(['closed', 'flushed', 'disposed']);
     await expect(app.inject('/health')).rejects.toThrow();
   });
-  it('attempts disposal if the exporter flush rejects and surfaces failure', async () => {
-    const app = fixture();
+  it('warns if telemetry flush rejects and still attempts disposal', async () => {
+    const { app, records } = fixture();
     const sink = { trackTrace: vi.fn(), flush: vi.fn(async () => { throw new Error('Flush failed'); }), shutdown: vi.fn(async () => {}) };
-    await expect(shutdown(app, sink)).rejects.toThrow('Flush failed');
+    await shutdown(app, sink);
     expect(sink.shutdown).toHaveBeenCalledOnce();
+    expect(records.map((record) => JSON.parse(record))).toContainEqual(expect.objectContaining({
+      msg: 'telemetry.close_failed', level: 40, kind: 'internal',
+    }));
   });
   it('bounds a hanging telemetry flush', async () => {
     vi.useFakeTimers();
-    const app = fixture();
+    const { app, records } = fixture();
     const sink = { trackTrace: vi.fn(), flush: vi.fn(() => new Promise<void>(() => {})), shutdown: vi.fn(async () => {}) };
-    const result = expect(shutdown(app, sink, 100)).rejects.toThrow('Backend shutdown timed out');
+    const result = shutdown(app, sink, 100);
     await vi.advanceTimersByTimeAsync(100);
-    await result;
-    await app.close();
+    await expect(result).resolves.toBeUndefined();
+    expect(records.map((record) => JSON.parse(record))).toContainEqual(expect.objectContaining({
+      msg: 'telemetry.close_failed', level: 40, kind: 'timeout',
+    }));
+  });
+  it('surfaces a real server close failure', async () => {
+    const { app } = fixture();
+    app.addHook('onClose', async () => { throw new Error('close failed'); });
+    await app.ready();
+    await expect(shutdown(app)).rejects.toThrow('close failed');
   });
 });

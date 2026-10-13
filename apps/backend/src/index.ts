@@ -1201,7 +1201,7 @@ try {
       await taskEventArchiveJob?.stop();
       await shutdown(app, telemetry);
     }
-    catch (error) { logger.error(safeErrorFields(error), 'telemetry.close_failed'); process.exitCode = 1; }
+    catch (error) { logger.error(safeErrorFields(error), 'server.shutdown_failed'); process.exitCode = 1; }
     // Enforce the shutdown deadline even if an SDK/network handle remains open.
     process.exit(process.exitCode ?? 0);
   };
