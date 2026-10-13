@@ -20,9 +20,48 @@ The card focus resolver fixes the observed narrow-screen return failure after
 reparenting. The 3D room is disabled for these isolated board checks; fixtures
 intercept all API writes, so this is not live GitHub or physical-phone proof.
 
-GitHub Project 2 readback shows #790 Done, #792 Ready and #793 In progress.
-Authenticated live board placement remains to verify. Actual Chrome is signed
-in; a duplicate validation tab preserves Dan's original open Note. Keep port
+PR #806 merged at `100e767d`; exact-head CI 38455208975 passed all 900 Web
+tests and Deploy 38456539127 passed Web/smoke. The authenticated
+`jarvis-live-release` canvas is the live read path; do not disturb Dan's active
+Chrome or extract credentials. After backend #807's Deploy 38464175571 passed,
+one read returned HTTP 200. Actual API placement and fresh GitHub Project 2
+readback agree: #790 Done, #792 Ready, #793 Done. Rendered placement is not yet
+verified: raw closed dates omit `.sss`, so the shared validator correctly
+rejected that snapshot. After #809's Deploy 38469134623, the single authenticated
+Retry returned HTTP 502 again; no cards rendered at 21:30Z. Fresh Project
+placement still reads Done/Ready/Done. At 21:41Z, one authorised read set
+returned `/status` 200 with `github_app` status `ok`, Factory tasks 200 and
+project 2 releases 200. No repeated board retries, credential extraction or
+Note changes. After diagnostic Deploy 38475702418 on `d35f332b`, the one
+authorised project-2 board read returned 200 at 22:18:24Z, with `stale: false`
+and canonical closed dates. The entire response passed web validation and all
+six columns rendered without an alert. Actual visible DOM cards place #790
+and #793 in Done and #792 in Ready, matching fresh Project 2 readback.
+This verifies that rendered-board gate, not a root cause or sustained recovery.
+The coordinator owns backend/provider investigation; do not weaken validation
+or edit backend code.
+
+The user-directed post-merge issue-number navigation follow-up is implemented
+locally with page-owned lookup, exact search/unfold/reveal, truthful bounded
+acknowledgement and cancellation. The shell keeps its Now stream mounted
+while portalling its panel into Settings, avoiding broker disconnection.
+Local navigation checks pass: 121 scoped regressions, a final nine-test
+reveal-cleanup check, TypeScript, zero-warning scoped lint and Vite build.
+Chromium fixtures pass at 1440x1000 dark/ordinary motion and 320x700
+light/touch/reduced motion. They verify an issue visible above the composer,
+task-free and linked-task navigation, the existing task-ID path, filter/cap
+and collapsed-column recovery, delayed acknowledgements, cancellation and a
+single stream through Settings. Settled screenshots preserve the existing
+Settings layout and foreground task-window focus; no document overflow.
+One concurrent run failed to start a Vitest worker; the isolated full rerun
+passed without changes to timeouts or checks. The fixture room is disabled;
+these checks do not prove live voice, physical phones or production navigation.
+PR #810 is held for its review follow-up: epoch/session-bound command queues
+and actual issue-focus workspace selectors with lifecycle clearing. Local
+scoped regressions pass 125 tests, and the separately requested unchanged
+Workspace online pin-recovery regression passes locally without changing its
+assertions or timeout. These are not the full Web suite. Release and live
+navigation acceptance remain outstanding. Keep port
 5173 running, `.ui-session-handoff.md` untracked, `.impeccable` excluded and
 the preservation stashes intact. Ship from `ui/shell-iteration`; report the
 PR immediately and let the coordinator merge on exact-head green CI.

@@ -1,5 +1,27 @@
 # Decisions
 
+## Factory issue-number navigation uses the page snapshot (13 October 2026)
+
+The user added issue-number navigation acceptance after #793's board release
+merged as #806. Resolve the requested issue against the selected project's
+existing validated board, clear local filters, unfold the column and reveal
+the real card before acknowledgement. Do not copy GitHub placement rules,
+fetch a second board in the shell, invent a task, or treat route-only navigation
+as success. Keep task-ID anchors and the Notes draft guard.
+
+Bound waiting to six seconds and the broker-provided expiry, with cancellation
+and explicit refusal reasons. Keep the Now stream mounted in the shell and
+portal its visible panel into Settings: the backend declines a pending command
+when its workspace disconnects, so remounting the stream during navigation
+would invalidate a truthful asynchronous acknowledgement. No backend,
+contract, dependency or workflow change is needed for this navigation path.
+Review follow-up in #810: bind queued commands and their acknowledgements to
+the epoch/session that received them, rather than replaying an old queue after
+reconnect. Publish the contract's existing Factory issue selector from actual
+visible card focus, clearing it on other focus, card removal/collapse or route
+changes. This avoids a sticky app-level selection and conflicting stale
+foreground-window selectors.
+
 ## #811 backend board failure attribution (13 October 2026)
 
 Preserve board authentication, canonical columns, `.sssZ` timestamps and
@@ -14,7 +36,7 @@ grant it board access for a new acceptance check. #811's complete production
 board and #790/#792/#793 rendered-placement gates require an authorized
 post-deploy readback, coordinated with #810. The short production failures and
 successful CLI reader are not evidence of a particular App/SQL/source defect.
-Production cause and recovery remain unverified; see the operations runbook.
+Production cause and sustained recovery remain unverified; see the operations runbook.
 This backend-only addition leaves #810's UI decisions and documents unchanged.
 
 ## P9-99 chat latency attribution and session affinity (13 October 2026)

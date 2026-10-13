@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState, type CSSProperties, type FormEvent } from 'react';
+import { useContext, useEffect, useRef, useState, type CSSProperties, type FormEvent } from 'react';
+import { flushSync } from 'react-dom';
 import {
   isFactoryBoard,
   type BoardCard, type FactoryBoard, type FactoryBoardColumnId, type FactoryBoardTask,
@@ -8,6 +9,7 @@ import { Modal } from '../Modal';
 import { awaitWithSignal, backendFetch } from '../backend-request';
 import { useFactoryBoardLiveState } from '../factory-board-store';
 import { useContextPanel } from '../context-panel-state';
+import { FactoryIssueNavigationContext } from '../page-navigation';
 import { TaskDetailPage } from './TaskDetailPage';
 import { TaskReleaseBar } from './TaskReleaseBar';
 import { TaskControls } from './TaskControls';
@@ -148,6 +150,7 @@ function matchesFilters(card: BoardCard, filters: TaskFilters, updatedAfter: num
   if (filters.state && card.task?.state !== filters.state) return false;
   if (updatedAfter !== null && Date.parse(card.issue.updatedAt) < updatedAfter) return false;
   const search = filters.search.trim().toLowerCase();
+  if (/^#[1-9]\d*$/.test(search)) return search === `#${card.issue.number}`;
   return !search || [
     card.issue.title, `#${card.issue.number}`, card.issue.taskCode ?? '',
     ...card.issue.labels, card.task?.branch ?? '',
@@ -254,6 +257,7 @@ export function TasksPage({ backendUrl, getAccessToken }: Props) {
   const [selectedTaskId, setSelectedTaskId] = useState('');
   const selectedTaskIdRef = useRef('');
   const contextPanel = useContextPanel();
+  const issueNavigation = useContext(FactoryIssueNavigationContext);
   const closeContextPanel = contextPanel.close;
   const createButtonRef = useRef<HTMLButtonElement>(null);
   const createProjectButtonRef = useRef<HTMLButtonElement>(null);
@@ -367,6 +371,43 @@ export function TasksPage({ backendUrl, getAccessToken }: Props) {
     }, 350);
     return () => clearTimeout(timer);
   }, [pendingSearch]);
+
+  useEffect(() => {
+    if (!issueNavigation) return;
+    issueNavigation.current = (issueNumber, taskId) => {
+      if (!backendUrl) return { status: 'refused', reason: 'The Factory board is unavailable.' };
+      if (visibleProjectState === 'error') return { status: 'refused', reason: visibleProjectError };
+      if (visibleProjectState === 'loading') return { status: 'loading' };
+      if (!filters.projectId) return { status: 'refused', reason: 'No active project is available for this issue.' };
+      const column = board?.columns.find((item) => item.cards.some((card) => card.issue.number === issueNumber));
+      const card = column?.cards.find((item) => item.issue.number === issueNumber);
+      if (!card || !column) {
+        if (refreshing || visibleTaskState === 'loading') return { status: 'loading' };
+        if (visibleTaskState === 'error') return { status: 'refused', reason: visibleTaskError };
+        return { status: 'refused', reason: board?.stale ? 'The cached board cannot confirm this issue. Refresh it and try again.' :
+          `Issue #${issueNumber} is not in this project's board of open issues and issues closed in the last 14 days.` };
+      }
+      if (taskId !== undefined && card.task?.id !== taskId) {
+        return { status: 'refused', reason: 'This issue is not linked to the requested Factory task.' };
+      }
+      const next = { ...emptyFilters, projectId: filters.projectId, search: `#${issueNumber}` };
+      flushSync(() => {
+        closeContextPanel();
+        selectedTaskIdRef.current = '';
+        setSelectedTaskId('');
+        setFilters(next);
+        setAppliedFilters(next);
+        setCollapsedColumns((current) => {
+          const expanded = new Set(current);
+          expanded.delete(columnLabels[column.id]);
+          return expanded;
+        });
+      });
+      return { status: 'ready', anchorId: `issue-title-${issueNumber}`, ...(card.task ? { taskId: card.task.id } : {}) };
+    };
+    return () => { issueNavigation.current = null; };
+  }, [backendUrl, board, closeContextPanel, filters.projectId, issueNavigation, refreshing,
+    visibleProjectError, visibleProjectState, visibleTaskError, visibleTaskState]);
 
   const selectTask = (task: FactoryBoardTask, title: string, issueNumber: number, trigger: HTMLElement) => {
     selectedTaskIdRef.current = task.id;
@@ -657,7 +698,7 @@ export function TasksPage({ backendUrl, getAccessToken }: Props) {
                             <article className="task-card kanban-card" data-state={card.task?.state}
                               data-selected={!!card.task && selectedTaskId === card.task.id || undefined} aria-labelledby={`issue-title-${card.issue.number}`}>
                               <h3 id={`issue-title-${card.issue.number}`}>
-                                {card.task ? <button className="task-card-title" type="button" aria-pressed={selectedTaskId === card.task.id}
+                                {card.task ? <button id={`task-title-${card.task.id}`} className="task-card-title" type="button" aria-pressed={selectedTaskId === card.task.id}
                                   aria-controls="context-panel" onClick={(event) => {
                                     if (card.task) selectTask(card.task, card.issue.title, card.issue.number, event.currentTarget);
                                   }}>{card.issue.title}</button> :
