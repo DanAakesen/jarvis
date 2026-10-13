@@ -21,7 +21,12 @@ from azure.ai.agentserver.invocations.voice import VoiceAgentServerHost
 from starlette.requests import Request
 from starlette.responses import JSONResponse, StreamingResponse
 
-from chat_telemetry import current_chat_phase_timings, latency_span, log_latency
+from chat_telemetry import (
+    current_chat_phase_timings,
+    current_chat_started_at,
+    latency_span,
+    log_latency,
+)
 from jarvis_tools import (
     BACKEND_HTTP_TIMEOUT_SECONDS,
     BackendUnavailable,
@@ -576,6 +581,7 @@ def register_chat_invocation(
 
         async def events():
             timing_token = current_chat_phase_timings.set(phase_timings)
+            started_token = current_chat_started_at.set(received_at)
             message_token = current_message_id.set(None if smoke else message_id)
             conversation_token = current_conversation.set(
                 "smoke" if smoke else f"chat-{message_id}"
@@ -802,7 +808,7 @@ def register_chat_invocation(
                             raise RuntimeError("Chat response exceeded the size limit")
                         if first_delta:
                             first_delta = False
-                            log_latency("first_delta_out", received_at)
+                            log_latency("agent_first_delta", received_at)
                         payload = json.dumps({"text": delta}, ensure_ascii=False)
                         yield f"event: delta\ndata: {payload}\n\n"
                 if visual_result is not None:
@@ -849,6 +855,7 @@ def register_chat_invocation(
                 current_smoke_tool_calls.reset(smoke_calls_token)
                 current_smoke_approval.reset(smoke_approval_token)
                 current_smoke_invocation.reset(smoke_token)
+                current_chat_started_at.reset(started_token)
 
         return StreamingResponse(
             events(),

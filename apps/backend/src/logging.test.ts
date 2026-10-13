@@ -439,6 +439,8 @@ describe('structured log export', () => {
     for (const phase of [
       'turn_first_token', 'turn_complete', 'chat_history_verification', 'chat_context',
       'tool_catalogue', 'settings', 'turn_context', 'prompt_build', 'model_first_delta',
+      'model_coordination', 'model_request', 'model_to_first_delta', 'agent_pre_model',
+      'agent_first_delta', 'agent_auth', 'session_start',
     ]) {
       logger.info({ phase, durationMs: 234.5, text: 'prompt-secret' }, 'chat.latency');
     }
@@ -452,9 +454,11 @@ describe('structured log export', () => {
     expect(records.slice(2).map((record) => JSON.parse(record).phase)).toEqual([
       'turn_first_token', 'turn_complete', 'chat_history_verification', 'chat_context',
       'tool_catalogue', 'settings', 'turn_context', 'prompt_build', 'model_first_delta',
+      'model_coordination', 'model_request', 'model_to_first_delta', 'agent_pre_model',
+      'agent_first_delta', 'agent_auth', 'session_start',
     ]);
     expect(records.slice(2).map((record) => JSON.parse(record).durationMs))
-      .toEqual(Array(9).fill(234.5));
+      .toEqual(Array(16).fill(234.5));
     expect(records.join('')).not.toContain('secret');
     expect(JSON.stringify(sdk.trackTrace.mock.calls)).not.toContain('secret');
   });

@@ -22,7 +22,12 @@ from openai import AsyncOpenAI
 from opentelemetry import trace
 from opentelemetry.trace import SpanKind, Status, StatusCode
 
-from chat_telemetry import latency_span, log_latency
+from chat_telemetry import (
+    current_chat_started_at,
+    current_model_started_at,
+    latency_span,
+    log_latency,
+)
 from jarvis_tools import (
     BUILT_IN_MODE_INSTRUCTIONS,
     INSTRUCTIONS,
@@ -438,6 +443,7 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
         role = "chat" if has_image else "voice"
         if has_image and settings is None:
             settings = await self.session_settings()
+        model_timing_token = current_model_started_at.set(None)
         try:
             async with aclosing(
                 self._complete(messages, self._system_prompt, settings, role=role)
@@ -458,6 +464,8 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
             ) as response:
                 async for delta in response:
                     yield delta
+        finally:
+            current_model_started_at.reset(model_timing_token)
 
     async def complete_chat(
         self,
@@ -479,6 +487,7 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                 + " Relay the result honestly and acknowledge briefly. Do not repeat the action."
             )
         smoke_token = current_smoke_invocation.set(smoke)
+        model_timing_token = current_model_started_at.set(None)
         try:
             try:
                 async with aclosing(self._complete(
@@ -500,6 +509,7 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                         yield delta
         finally:
             current_smoke_invocation.reset(smoke_token)
+            current_model_started_at.reset(model_timing_token)
 
     async def _caption_messages(
         self, messages: Sequence[ModelMessage], rejection: ImageInputRejected, role: str,
@@ -708,10 +718,12 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                 max_rounds = 2 if role == "smoke" else MAX_TOOL_ROUNDS
                 smoke_tool_call_count = 0
                 for round_number in range(1, max_rounds + 1):
-                    await append_steering()
-                    if phase_setter is not None and turn_id is not None:
-                        await phase_setter("model")
-                    await append_steering()
+                    first_model_started = current_model_started_at.get()
+                    with latency_span("model_coordination"):
+                        await append_steering()
+                        if phase_setter is not None and turn_id is not None:
+                            await phase_setter("model")
+                        await append_steering()
                     image_request = round_number == 1 and any(
                         message.images for message in messages
                     )
@@ -735,6 +747,12 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                         if prompt_bytes > IMAGE_REQUEST_MAX_TEXT_BYTES:
                             raise ImageInputRejected("image_context_limit", model=model_name)
                     started = time.monotonic()
+                    if first_model_started is None:
+                        first_model_started = started
+                        current_model_started_at.set(started)
+                        chat_started = current_chat_started_at.get()
+                        if chat_started is not None:
+                            log_latency("agent_pre_model", chat_started)
                     first_text_ms: int | None = None
                     final = None
                     request: dict[str, Any] = {
@@ -768,7 +786,9 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                                     stream = self._anthropic_client.messages.stream(
                                         **anthropic_request
                                     )
+                                request_started = time.monotonic()
                                 async with stream:
+                                    log_latency("model_request", request_started)
                                     async for text in stream.text_stream:
                                         if text:
                                             accepted = True
@@ -786,6 +806,9 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                                                     "first_text.duration_ms", first_text_ms
                                                 )
                                                 log_latency("model_first_delta", started)
+                                                log_latency(
+                                                    "model_to_first_delta", first_model_started
+                                                )
                                             yield text
                                     final = await stream.get_final_message()
                             except Exception as exc:
@@ -803,7 +826,10 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                                 ) from exc
                         else:
                             try:
-                                with latency_span("responses_create"):
+                                with (
+                                    latency_span("responses_create"),
+                                    latency_span("model_request"),
+                                ):
                                     stream = await self._client.responses.create(**request)
                             except Exception as exc:
                                 if (
@@ -833,6 +859,9 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                                                 "first_text.duration_ms", first_text_ms
                                             )
                                             log_latency("model_first_delta", started)
+                                            log_latency(
+                                                "model_to_first_delta", first_model_started
+                                            )
                                         yield event.delta
                                     elif event.type == "response.completed":
                                         final = event.response

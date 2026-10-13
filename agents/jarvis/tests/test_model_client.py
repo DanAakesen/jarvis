@@ -14,6 +14,7 @@ from uuid import UUID
 import httpx
 import pytest
 
+import chat_telemetry
 import model_client
 from jarvis_tools import (
     INSTRUCTIONS,
@@ -869,6 +870,84 @@ async def test_chat_picks_up_steering_after_a_tool_round_without_repeating_the_t
     }
     tool_posts = [request for request in backend.requests if request.url.path.startswith("/tools/")]
     assert len(tool_posts) == 1
+
+
+@pytest.mark.asyncio
+async def test_first_delta_timing_includes_prior_model_and_tool_rounds(monkeypatch) -> None:
+    clock = [100.0]
+    monkeypatch.setattr(model_client.time, "monotonic", lambda: clock[0])
+    tool_call = FakeItem(
+        type="function_call", call_id="first", name="create_task", arguments='{"text":"Action"}',
+    )
+
+    class Backend(FakeBackend):
+        def handle(self, request):
+            if request.url.path == "/tools/create_task":
+                clock[0] += 6
+            return super().handle(request)
+
+    backend = Backend(reasoning_effort="low")
+    model, transport = client([], rounds=[
+        [completed(tool_call)],
+        [SimpleNamespace(type="response.output_text.delta", delta="Done."), completed()],
+    ], backend=backend)
+    create = transport.responses.create
+
+    async def timed_create(**request):
+        clock[0] += 5 if not transport.responses.requests else 4
+        return await create(**request)
+
+    monkeypatch.setattr(transport.responses, "create", timed_create)
+    timings = {}
+    timing_token = chat_telemetry.current_chat_phase_timings.set(timings)
+    started_token = chat_telemetry.current_chat_started_at.set(98.0)
+    message_token = current_message_id.set("42")
+    try:
+        assert [chunk async for chunk in model.complete_chat(
+            [ModelMessage("user", "Action")], "en"
+        )] == ["Done."]
+    finally:
+        current_message_id.reset(message_token)
+        chat_telemetry.current_chat_started_at.reset(started_token)
+        chat_telemetry.current_chat_phase_timings.reset(timing_token)
+        await model.close()
+
+    assert timings["agent_pre_model"] == 2_000
+    assert timings["model_request"] == 5_000
+    assert timings["model_first_delta"] == 4_000
+    assert timings["model_to_first_delta"] == 15_000
+    assert all(
+        request["reasoning"] == {"effort": "low"} for request in transport.responses.requests
+    )
+    assert len([r for r in backend.requests if r.url.path == "/tools/create_task"]) == 1
+
+
+@pytest.mark.asyncio
+async def test_claude_model_request_timing_includes_stream_entry(monkeypatch) -> None:
+    clock = [100.0]
+    monkeypatch.setattr(model_client.time, "monotonic", lambda: clock[0])
+
+    class Stream(FakeAnthropicStream):
+        async def __aenter__(self):
+            clock[0] += 3
+            return await super().__aenter__()
+
+    anthropic = FakeAnthropic([Stream(["Hello"], SimpleNamespace(content=[], usage=None))])
+    model, _ = client([], backend=FakeBackend(model_name="claude-sonnet-5"))
+    model._anthropic_client = anthropic
+    timings = {}
+    token = chat_telemetry.current_chat_phase_timings.set(timings)
+    try:
+        assert [chunk async for chunk in model.complete_chat(
+            [ModelMessage("user", "Hello")], "en"
+        )] == ["Hello"]
+    finally:
+        chat_telemetry.current_chat_phase_timings.reset(token)
+        await model.close()
+
+    assert timings["model_request"] == 3_000
+    assert timings["model_to_first_delta"] == 3_000
+    assert anthropic.messages._rounds[0].exited
 
 
 @pytest.mark.asyncio

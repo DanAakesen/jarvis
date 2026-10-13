@@ -1,5 +1,31 @@
 # Decisions
 
+## P9-99 chat latency attribution and session affinity (13 October 2026)
+
+Issue #794 reports 45 production turns with median first token 14.4 s and nine
+agent measurements with median `model_first_delta` 4.0 s; six of eleven session
+starts were cold. These unequal cohorts do not establish a same-turn 10.4 s
+pre-model delay. Code inspection also shows that `model_first_delta` starts at
+the text-emitting model round, excluding earlier tool-only rounds and tool work.
+
+Keep fresh settings/history/context, the existing 60-second catalogue cache,
+the 3600-second idle timeout and all saved model/reasoning choices. Add bounded,
+content-free elapsed preparation/model/first-text timings and a backend-computed
+dispatch/transport residual to the existing completion contract and log allowlist.
+Correct affinity to random 32-hex IDs held in a 256-entry owner/conversation LRU,
+as requested in [#708's correction](https://github.com/DanAakesen/jarvis/issues/708#issuecomment-6119205761)
+and already used by voice. This supersedes the UUIDv5 and generic 4xx fallback
+choice in the historical P9-84 entry below. Without a verified pre-execution
+routing error code, fail visibly rather than replaying a possibly executed turn.
+No scheduled warming, new infrastructure, tool, dependency or migration.
+
+The affinity mismatch is confirmed; its contribution to production cold starts
+is not. Offline regressions validate the timing decomposition, bounded reuse,
+no replay, both providers and tool-first turns. Coordinator acceptance remains:
+deploy, query at least ten turns, median first token below 5 s and warm turns
+below 3 s, with no `conversation.reply_failed`, tool-calling or canary regression.
+The product's ≤2.5 s target remains; no measured improvement is claimed here.
+
 ## Danish voice is Jeppe (13 October 2026)
 
 Dan chose the native male Danish voice Jeppe (`da-DK-JeppeNeural`). It is already the live Danish voice: since P5-08 (6 October) `/voice/da` uses the same backend-owned Voice Live realtime session as English, with `DANISH_REALTIME_VOICE = 'da-DK-JeppeNeural'` (`apps/backend/src/voice/realtime.ts`, asserted in `relay.test.ts`). The provisioned hosted-agent bridge (`jarvis-voice-mai`, Harper) is used only when Voice Live is not configured, so it was left unchanged. #396 was filed from stale documentation (see L134).

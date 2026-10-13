@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import { normalizeFoundryProjectEndpoint } from '../voice/relay.js';
 import type { VisualContext } from './visual-context.js';
 
@@ -9,7 +9,14 @@ export const CHAT_AGENT_PHASES = [
   'settings',
   'turn_context',
   'prompt_build',
+  'model_coordination',
+  'model_request',
   'model_first_delta',
+  'model_to_first_delta',
+  'agent_pre_model',
+  'agent_first_delta',
+  'agent_auth',
+  'session_start',
 ] as const;
 
 export type AgentPhaseTimings = Partial<Record<(typeof CHAT_AGENT_PHASES)[number], number>>;
@@ -83,19 +90,20 @@ const requestTimeoutMs = 120_000;
 const maxDiagnosticDurationMs = 600_000;
 export const FOUNDRY_AGENT_SCOPE = 'https://ai.azure.com/.default';
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
+const agentSessionIdPattern = /^[0-9a-f]{32}$/u;
+const maxChatSessions = 256;
+const chatSessions = new Map<string, string>();
 
 export function createFoundryAgentSessionId(ownerObjectId: string, conversationSessionId: string): string {
   if (!uuidPattern.test(ownerObjectId) || !/^[1-9][0-9]{0,18}$/u.test(conversationSessionId)) {
     throw new TypeError('Foundry chat session identity is invalid');
   }
-  const hash = createHash('sha1')
-    .update(Buffer.from('6ba7b8119dad11d180b400c04fd430c8', 'hex'))
-    .update(`jarvis:foundry-chat-session:v1\0${ownerObjectId.toLowerCase()}\0${conversationSessionId}`)
-    .digest();
-  hash[6] = (hash[6]! & 0x0f) | 0x50;
-  hash[8] = (hash[8]! & 0x3f) | 0x80;
-  const id = hash.subarray(0, 16).toString('hex');
-  return `${id.slice(0, 8)}-${id.slice(8, 12)}-${id.slice(12, 16)}-${id.slice(16, 20)}-${id.slice(20)}`;
+  const key = `${ownerObjectId.toLowerCase()}:${conversationSessionId}`;
+  const id = chatSessions.get(key) ?? randomUUID().replaceAll('-', '');
+  chatSessions.delete(key);
+  chatSessions.set(key, id);
+  if (chatSessions.size > maxChatSessions) chatSessions.delete(chatSessions.keys().next().value!);
+  return id;
 }
 
 function parseEvents(buffer: string): { events: { event: string; data: string }[]; pending: string } {
@@ -153,7 +161,7 @@ export function createFoundryInvocationsEndpoint(
   if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/u.test(agentName)) {
     throw new TypeError('Foundry chat agent name is invalid');
   }
-  if (agentSessionId !== undefined && !uuidPattern.test(agentSessionId)) {
+  if (agentSessionId !== undefined && !agentSessionIdPattern.test(agentSessionId)) {
     throw new TypeError('Foundry chat session ID is invalid');
   }
   const url = new URL(normalizeFoundryProjectEndpoint(projectEndpoint));
@@ -220,18 +228,20 @@ export function createFoundryInvocationConversationAgent(
   getToken: (scope: string, signal: AbortSignal) => Promise<string>,
   fetcher: typeof fetch = fetch,
 ): ConversationAgent {
-  const endpoint = createFoundryInvocationsEndpoint(projectEndpoint, agentName);
+  createFoundryInvocationsEndpoint(projectEndpoint, agentName);
   return {
     async *stream(input, authorization, signal) {
       const {
         onVisualResult, onAgentPhaseTimings, onAgentSessionTelemetry, onAgentToolCalls,
         agentSessionId, smoke, ...payload
       } = input;
-      if (agentSessionId !== undefined && !uuidPattern.test(agentSessionId)) {
+      if (agentSessionId !== undefined && !agentSessionIdPattern.test(agentSessionId)) {
         throw new TypeError('Foundry chat session ID is invalid');
       }
       const requestSignal = AbortSignal.any([signal, AbortSignal.timeout(requestTimeoutMs)]);
+      const authStarted = performance.now();
       const token = await getToken(FOUNDRY_AGENT_SCOPE, requestSignal);
+      const authMs = performance.now() - authStarted;
       if (typeof token !== 'string' || !token.trim() || /[\r\n]/u.test(token)) {
         throw new Error('Foundry authentication unavailable');
       }
@@ -250,18 +260,11 @@ export function createFoundryInvocationConversationAgent(
         }),
         signal: requestSignal,
       });
-      let response = await request(createFoundryInvocationsEndpoint(
+      const invocationStarted = performance.now();
+      const response = await request(createFoundryInvocationsEndpoint(
         projectEndpoint, agentName, agentSessionId,
       ));
-      if (agentSessionId !== undefined && response.status >= 400 && response.status < 500) {
-        const fallbackReason = `http_${response.status}` as const;
-        onAgentSessionTelemetry?.(foundrySessionTelemetry(response.headers, true, fallbackReason));
-        await response.body?.cancel().catch(() => {});
-        response = await request(endpoint);
-        onAgentSessionTelemetry?.(foundrySessionTelemetry(response.headers, false));
-      } else {
-        onAgentSessionTelemetry?.(foundrySessionTelemetry(response.headers, agentSessionId !== undefined));
-      }
+      onAgentSessionTelemetry?.(foundrySessionTelemetry(response.headers, agentSessionId !== undefined));
       if (!response.ok || !response.body ||
           !response.headers.get('content-type')?.toLowerCase().startsWith('text/event-stream')) {
         await response.body?.cancel().catch(() => {});
@@ -273,13 +276,25 @@ export function createFoundryInvocationConversationAgent(
       let buffer = '';
       let receivedBytes = 0;
       let completed = false;
+      let firstDeltaMs: number | undefined;
       const finish = (event: { event: string; data: string }) => {
         if (event.event !== 'done') return;
         completed = true;
         try {
           const result = JSON.parse(event.data) as Record<string, unknown>;
           const phaseTimings = phaseTimingsFromDone(result);
-          if (phaseTimings) onAgentPhaseTimings?.(phaseTimings);
+          if (phaseTimings) {
+            // Agent elapsed time excludes hosted dispatch; the residual also includes transport.
+            const agentMs = phaseTimings.agent_first_delta;
+            delete phaseTimings.agent_auth;
+            delete phaseTimings.session_start;
+            if (authMs <= maxDiagnosticDurationMs) phaseTimings.agent_auth = authMs;
+            if (agentMs !== undefined && firstDeltaMs !== undefined && firstDeltaMs >= agentMs &&
+                firstDeltaMs <= maxDiagnosticDurationMs) {
+              phaseTimings.session_start = firstDeltaMs - agentMs;
+            }
+            onAgentPhaseTimings?.(phaseTimings);
+          }
           if (Array.isArray(result.smokeToolCalls)) {
             const calls = result.smokeToolCalls.flatMap((item): ConversationAgentToolCall[] => {
               if (typeof item !== 'object' || item === null || !('name' in item) ||
@@ -329,7 +344,10 @@ export function createFoundryInvocationConversationAgent(
           for (const event of parsed.events) {
             finish(event);
             const delta = deltaFromEvent(event);
-            if (delta !== undefined) yield delta;
+            if (delta !== undefined) {
+              firstDeltaMs ??= performance.now() - invocationStarted;
+              yield delta;
+            }
           }
           buffer = parsed.pending;
         }
@@ -338,7 +356,10 @@ export function createFoundryInvocationConversationAgent(
         for (const event of finalEvents) {
           finish(event);
           const delta = deltaFromEvent(event);
-          if (delta !== undefined) yield delta;
+          if (delta !== undefined) {
+            firstDeltaMs ??= performance.now() - invocationStarted;
+            yield delta;
+          }
         }
       } finally {
         await reader.cancel().catch(() => {});

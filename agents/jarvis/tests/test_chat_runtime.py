@@ -445,7 +445,15 @@ async def test_responses_delta_reaches_sse_before_model_completion(disconnect, c
         await asyncio.wait_for(task, timeout=2)
         assert stream_closed
         assert (b"event: done" in b"".join(frames)) is not disconnect
-        assert any("phase=first_delta_out " in message for message in caplog.messages)
+        assert any("phase=agent_first_delta " in message for message in caplog.messages)
+        if not disconnect:
+            done = json.loads(
+                b"".join(frames).split(b"event: done\ndata: ", 1)[1].split(b"\n", 1)[0]
+            )["agentTimings"]
+            assert done["agent_first_delta"] >= done["agent_pre_model"]
+            assert done["model_to_first_delta"] >= done["model_first_delta"]
+            assert done["model_request"] >= 0
+            assert done["model_coordination"] >= 0
         assert "private-greeting" not in "\n".join(caplog.messages)
         assert TOKEN not in "\n".join(caplog.messages)
     finally:
