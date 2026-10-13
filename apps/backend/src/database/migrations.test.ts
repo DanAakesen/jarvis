@@ -83,6 +83,7 @@ describe('committed SQL manifest', () => {
       '0043_daily_favorite_definitions.sql',
       '0044_daily_nutrition_export.sql',
       '0045_smoke_usage_role.sql',
+      '0046_daily_health_upload_inbox.sql',
     ]);
     for (const migration of migrations) await expect(readDownMigration(migration.name)).resolves.toMatchObject({ name: migration.name });
   });

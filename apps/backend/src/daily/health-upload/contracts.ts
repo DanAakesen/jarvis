@@ -12,6 +12,12 @@ export interface HealthCapability {
   version: 1; ownerObjectId: string; deviceId: string; permissions: HealthPermission[]; expiresAt: string; revoked: boolean;
 }
 export type HealthCredentialVerifier = (token: string,signal: AbortSignal) => Promise<HealthCapability | null>;
+export interface UploadIdentity { automationId: string; sessionId: string }
+/** Persistence must commit before resolving. The reference is a hash, never a bearer. */
+export interface HealthBuffer {
+  readonly owner: string;
+  accept(kind: HealthKind,capability: HealthCapability,identity: UploadIdentity,body: Buffer,signal: AbortSignal,credentialReference?: string): Promise<HealthReceipt>;
+}
 export interface HealthManifest {
   version: 1; acceptanceId: string; ownerObjectId: string; deviceId: string; kind: HealthKind;
   automationId: string; sessionId: string; checksum: string; rawKey: string; bytes: number; acceptedAt: string;
@@ -19,7 +25,7 @@ export interface HealthManifest {
 }
 export interface HealthReceipt {
   acceptanceId: string; acceptedAt: string; status: 'accepted'; queue: 'pending' | 'queued';
-  processing: 'not-confirmed'; duplicate: boolean;
+  processing: 'not-confirmed'; duplicate: boolean; storage?: 'sql';
 }
 export function sha256(body: string | Buffer): string { return createHash('sha256').update(body).digest('hex'); }
 export function ownerId(value: string): string {

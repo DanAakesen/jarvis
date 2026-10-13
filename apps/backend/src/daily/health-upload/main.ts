@@ -1,3 +1,5 @@
+// SUPERSEDED standalone host. Retained for regression tests; do not activate/deploy.
+// Current default-off composition uses sql-composition.ts in the existing backend.
 import { readHealthHostConfig } from './host-config.js';
 import { createManagedHealthDependencies,startHealthUploadHost } from './host.js';
 import { HealthOutboxRecovery } from './recovery.js';
