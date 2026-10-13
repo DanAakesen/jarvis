@@ -1257,6 +1257,9 @@ Aggregate CI (P0-10), `.github/workflows/ci.yml`:
 - Add a new component workflow as `on: workflow_call`, call it from `ci.yml`, and add it to `CI result`'s `needs`, so it runs once per PR and the gate covers it.
 - Required checks on `main` are not enforced: branch protection on a private repository needs GitHub Pro. When available, Dan requires `CI result`; until then Dan or the authorized merging agent must read the `CI` run result itself.
 
+CodeQL code scanning (P9-93), `.github/workflows/codeql.yml`:
+Advanced CodeQL code scanning analyzes `javascript-typescript`, `python`, and `actions` using the `security-extended` query suite on pushes and PRs to `main` (path-filtered against markdown and docs) and a weekly schedule. CodeQL is non-blocking and operates independently of the `CI result` aggregate gate. Security findings, CWE classifications, and severity levels appear in GitHub under **Security → Code scanning alerts** (`GET /repos/DanAakesen/jarvis/code-scanning/alerts`); triage verdicts should distinguish real security flaws from false positives or test-only code before opening follow-up remediation issues.
+
 Plan status, `.github/workflows/plan-status.yml`:
 
 | Item | Detail |
@@ -1470,6 +1473,7 @@ usage and billed cost remain unverified.
 
 ## Release procedure
 
+- Pin external workflow actions to a full commit SHA. Resolve `refs/tags/<release>` through GitHub's Git refs API; if it returns a tag object, dereference that object through the Git tags API until the target is a commit. Use the commit SHA in `uses:` and keep the release tag as a trailing comment. Dependabot updates GitHub Actions pins weekly.
 - Every change reaches `main` through a PR merged by Dan or an explicitly authorized agent (see [Merge](#merge)). A merge runs the Deploy workflow, which deploys only the changed parts among infrastructure, backend, web, and the Jarvis agent; the backend applies migrations at startup. Redeploy everything with **Actions → Deploy → Run workflow** on `main` (`gh workflow run deploy.yml --ref main`).
 - After the first successful deploy only (P0-16): run `./infra/bootstrap.ps1 -WebRedirectUris 'https://<Static Web App host>/redirect.html'` so sign-in works there (the redirect URI is MSAL's redirect bridge page, L63) (existing URIs are kept), set `backendUrl` in `apps/web/config.json` to the backend URL so `npm run dev` signs in, and set the Actions variable `JARVIS_INFRA_DEPLOYMENT_NAME` to `jarvis-infra` (`gh variable set JARVIS_INFRA_DEPLOYMENT_NAME --body jarvis-infra`). The Deploy run summary lists both URLs.
 - No manual infrastructure portal changes.
