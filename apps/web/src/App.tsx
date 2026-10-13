@@ -37,7 +37,7 @@ import { useGlassLight } from './glass-light';
 import { TaskDetailPage } from './factory/TaskDetailPage';
 import { InputOrbCore } from './InputOrbCore';
 import { TaskWindowsContext, readTaskWindows, saveTaskWindows, taskWindowViewId, type TaskWindowEntry } from './task-windows';
-import { FactoryIssueNavigationContext, NavigationGuardContext, pageForPath, readConversationCommand, readNavigateCommand, resolveNavigation, revealWhenReady, useVisibleSettingsSection, waitForFactoryIssue, type FactoryIssueNavigator, type NavigateRequest } from './page-navigation';
+import { FactoryIssueNavigationContext, NavigationGuardContext, pageForPath, readConversationCommand, readNavigateCommand, resolveNavigation, revealWhenReady, useFocusedFactoryIssue, useVisibleSettingsSection, waitForFactoryIssue, type FactoryIssueNavigator, type NavigateRequest } from './page-navigation';
 import { FolioPane } from './Folio';
 import { CollapsibleSection } from './CollapsibleSection';
 import { MobileCaption, MobileMenu } from './MobileShell';
@@ -228,18 +228,20 @@ function ShellLayout({ signedIn, config, session, camera, screenShare }: {
   const [frontViewId, setFrontViewId] = useState<string | null>(null);
   const viewPage = pageForPath(pathname);
   const viewSection = useVisibleSettingsSection(signedIn && viewPage === 'settings');
+  const viewIssueNumber = useFocusedFactoryIssue(signedIn && viewPage === 'factory');
   const viewTaskId = frontViewId?.startsWith('task-') ? frontViewId.slice(5) : undefined;
   const location: WorkspaceViewLocation = useMemo(() => ({
     page: viewPage,
     ...(viewSection ? { section: viewSection } : {}),
-    ...(viewTaskId ? { taskId: viewTaskId } : {}),
-  }), [viewPage, viewSection, viewTaskId]);
+    ...(viewTaskId && viewIssueNumber === undefined ? { taskId: viewTaskId } : {}),
+    ...(viewIssueNumber !== undefined ? { issueNumber: viewIssueNumber } : {}),
+  }), [viewPage, viewSection, viewTaskId, viewIssueNumber]);
   const [viewHistory, setViewHistory] = useState<{ current: WorkspaceViewLocation; previous?: WorkspaceViewLocation }>({ current: location });
   if (JSON.stringify(viewHistory.current) !== JSON.stringify(location)) setViewHistory({ current: location, previous: viewHistory.current });
   const view: LookingAtView = useMemo(() => ({
     ...location,
     folioOpen,
-    ...(frontViewId ? { focusedViewId: frontViewId } : {}),
+    ...(frontViewId && location.issueNumber === undefined ? { focusedViewId: frontViewId } : {}),
     ...(viewHistory.previous ? { previous: viewHistory.previous } : {}),
   }), [folioOpen, frontViewId, location, viewHistory.previous]);
   // The page and Folio pane Dan is reading, reported as windows with their text (P9-63).

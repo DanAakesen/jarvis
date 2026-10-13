@@ -1,4 +1,4 @@
-import { createContext, useEffect, useState, type RefObject } from 'react';
+import { createContext, useEffect, useState, useSyncExternalStore, type RefObject } from 'react';
 import type { WorkspaceNavigationPage, WorkspaceSettingsSection } from '@jarvis/contracts';
 import { isTaskId } from './task-windows';
 
@@ -142,6 +142,35 @@ const pagePrefixes: readonly [string, WorkspaceNavigationPage][] = [
 /** The shell page for a route, for the `view` Dan is looking at (P9-43). */
 export function pageForPath(pathname: string): WorkspaceNavigationPage {
   return pagePrefixes.find(([prefix]) => pathname === prefix || pathname.startsWith(`${prefix}/`))?.[1] ?? 'home';
+}
+
+function focusedFactoryIssueNumber(): number | undefined {
+  const card = document.activeElement?.closest('.kanban-board .kanban-card');
+  if (!card || card.closest('[hidden], [inert]')) return undefined;
+  const titleId = card.getAttribute('aria-labelledby');
+  const match = titleId?.match(/^issue-title-([1-9]\d*)$/);
+  if (!match || !card.querySelector(`#${titleId}`)) return undefined;
+  const number = Number(match[1]);
+  return Number.isSafeInteger(number) ? number : undefined;
+}
+
+function subscribeFactoryIssueFocus(notify: () => void): () => void {
+  const observer = new MutationObserver(notify);
+  observer.observe(document.body, {
+    childList: true, subtree: true, attributes: true, attributeFilter: ['hidden', 'inert', 'aria-labelledby'],
+  });
+  document.addEventListener('focusin', notify);
+  document.addEventListener('focusout', notify);
+  return () => {
+    observer.disconnect();
+    document.removeEventListener('focusin', notify);
+    document.removeEventListener('focusout', notify);
+  };
+}
+
+export function useFocusedFactoryIssue(active: boolean): number | undefined {
+  const number = useSyncExternalStore(subscribeFactoryIssueFocus, focusedFactoryIssueNumber, () => undefined);
+  return active ? number : undefined;
 }
 
 /**

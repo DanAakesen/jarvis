@@ -257,6 +257,50 @@ describe('live Now panel', () => {
     view.unmount();
   });
 
+  it.each(['before readiness', 'after readiness'])('discards both old-connection commands on reconnect %s', async (settles) => {
+    loadNowFeed.mockResolvedValue(feed);
+    acknowledgeWorkspaceCommand.mockResolvedValue(undefined);
+    let callbacks!: import('./now-feed').NowFeedStreamOptions;
+    streamNowFeed.mockImplementation(async (options: import('./now-feed').NowFeedStreamOptions) => {
+      callbacks = options;
+      await new Promise<void>((resolve) => options.signal.addEventListener('abort', () => resolve(), { once: true }));
+    });
+    let finish!: (value: boolean) => void;
+    const applyWorkspaceCommand = vi.fn()
+      .mockImplementationOnce(() => new Promise<boolean>((resolve) => { finish = resolve; }))
+      .mockResolvedValue(true);
+    const view = render(<MemoryRouter>
+      <NowFeedPanel client={client} config={config} getAccessToken={getAccessToken} applyWorkspaceCommand={applyWorkspaceCommand} />
+    </MemoryRouter>);
+    await waitFor(() => expect(callbacks).toBeDefined());
+    act(() => callbacks.onWorkspaceReady?.('old-session', 'old.example.com'));
+    const first = { commandId: 'old-applying', operation: 'navigate' as const, page: 'factory' as const, issueNumber: 793 };
+    const second = { commandId: 'old-queued', operation: 'navigate' as const, page: 'factory' as const, issueNumber: 792 };
+    act(() => {
+      callbacks.onWorkspaceCommand?.(first, Date.now() + 5000);
+      callbacks.onWorkspaceCommand?.(second, Date.now() + 5000);
+    });
+    await waitFor(() => expect(applyWorkspaceCommand).toHaveBeenCalledOnce());
+    expect(applyWorkspaceCommand.mock.calls[0]?.[1]).toBe('old.example.com');
+    const signal: AbortSignal | undefined = applyWorkspaceCommand.mock.calls[0]?.[3];
+    act(() => callbacks.onStatus('reconnecting'));
+    expect(signal?.aborted).toBe(true);
+    if (settles === 'after readiness') act(() => callbacks.onWorkspaceReady?.('new-session', 'new.example.com'));
+    await act(async () => { finish(true); });
+    expect(applyWorkspaceCommand).toHaveBeenCalledOnce();
+    expect(acknowledgeWorkspaceCommand).not.toHaveBeenCalled();
+    if (settles === 'before readiness') act(() => callbacks.onWorkspaceReady?.('new-session', 'new.example.com'));
+    const current = { commandId: 'new-command', operation: 'navigate' as const, page: 'factory' as const, issueNumber: 790 };
+    act(() => callbacks.onWorkspaceCommand?.(current, Date.now() + 5000));
+    await waitFor(() => expect(acknowledgeWorkspaceCommand).toHaveBeenCalledWith(
+      'https://api.example.com', 'new-command', 'new-session', true, getAccessToken, undefined, undefined,
+    ));
+    expect(applyWorkspaceCommand).toHaveBeenCalledTimes(2);
+    expect(applyWorkspaceCommand.mock.calls[1]?.[0]).toEqual(current);
+    expect(applyWorkspaceCommand.mock.calls[1]?.[1]).toBe('new.example.com');
+    view.unmount();
+  });
+
   it('persists dismissal before hiding the activity item and refreshes the snapshot', async () => {
     const user = userEvent.setup();
     loadNowFeed.mockResolvedValue(feed);

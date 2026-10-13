@@ -951,6 +951,11 @@ describe('App shell', () => {
     });
   }
 
+  function currentWorkspaceView() {
+    const state = fetchMock.mock.calls.filter(([url]) => new URL(String(url)).pathname === '/now/workspace/state').at(-1);
+    return state ? JSON.parse(String(state[1]?.body)).view : undefined;
+  }
+
   it('keeps the broker connected from Settings and acknowledges an issue only after revealing its real card', async () => {
     const workspace = streamWorkspaceCommands();
     let finish!: (response: Response) => void;
@@ -972,6 +977,30 @@ describe('App shell', () => {
     expect(screen.getByRole('button', { name: 'Done' }).getAttribute('aria-expanded')).toBe('true');
     expect(document.querySelector('.workspace-window-task')).toBeNull();
     expect(fetchMock.mock.calls.filter(([url]) => new URL(String(url)).pathname === '/now/events')).toHaveLength(1);
+    await waitFor(() => expect(currentWorkspaceView()).toMatchObject({ page: 'factory', issueNumber: 793 }));
+    act(() => screen.getByRole('searchbox', { name: 'Search issues' }).focus());
+    await waitFor(() => expect(currentWorkspaceView()).not.toHaveProperty('issueNumber'));
+    expect(currentWorkspaceView()).toMatchObject({ previous: { page: 'factory', issueNumber: 793 } });
+    act(() => screen.getByRole('link', { name: 'Canonical board' }).focus());
+    await waitFor(() => expect(currentWorkspaceView()).toHaveProperty('issueNumber', 793));
+    await userEvent.setup().click(screen.getByRole('link', { name: 'Usage' }));
+    await waitFor(() => expect(currentWorkspaceView()).toMatchObject({ page: 'usage' }));
+    expect(currentWorkspaceView()).not.toHaveProperty('issueNumber');
+  });
+
+  it('publishes actual issue focus without conflicting selectors from a previously foreground task', async () => {
+    const workspace = streamWorkspaceCommands();
+    serveIssueBoard(async () => new Response(JSON.stringify(issueBoard())));
+    await renderSignedIn('/factory/tasks/42');
+    await waitFor(() => expect(activityStream).not.toBeNull());
+    workspace.ready();
+    await waitFor(() => expect(currentWorkspaceView()).toMatchObject({ page: 'factory', taskId: '42', focusedViewId: 'task-42' }));
+    workspace.publishCommand({ commandId: 'issue-after-task', operation: 'navigate', page: 'factory', issueNumber: 793 });
+    await waitFor(() => expect(workspace.ack('issue-after-task')).toBeTruthy());
+    expect(JSON.parse(String(workspace.ack('issue-after-task')?.[1]?.body))).toMatchObject({ applied: true });
+    await waitFor(() => expect(currentWorkspaceView()).toMatchObject({ page: 'factory', issueNumber: 793 }));
+    expect(currentWorkspaceView()).not.toHaveProperty('taskId');
+    expect(currentWorkspaceView()).not.toHaveProperty('focusedViewId');
   });
 
   it.each([502, 200])('refuses an issue instead of acknowledging a route-only result (board HTTP %s)', async (status) => {

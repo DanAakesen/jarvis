@@ -24,11 +24,16 @@ PR #806 merged at `100e767d`; exact-head CI 38455208975 passed all 900 Web
 tests and Deploy 38456539127 passed Web/smoke. The authenticated
 `jarvis-live-release` canvas is the live read path; do not disturb Dan's active
 Chrome or extract credentials. After backend #807's Deploy 38464175571 passed,
-Retry returns HTTP 200. Actual API placement and fresh GitHub Project 2
+one read returned HTTP 200. Actual API placement and fresh GitHub Project 2
 readback agree: #790 Done, #792 Ready, #793 Done. Rendered placement is not yet
 verified: raw closed dates omit `.sss`, so the shared validator correctly
-rejects the snapshot. The coordinator has the actual card JSON and owns that
-serialization correction; do not weaken validation or edit backend code.
+rejected that snapshot. After #809's Deploy 38469134623, the single authenticated
+Retry returned HTTP 502 again; no cards rendered at 21:30Z. Fresh Project
+placement still reads Done/Ready/Done. At 21:41Z, one authorised read set
+returned `/status` 200 with `github_app` status `ok`, Factory tasks 200 and
+project 2 releases 200. No repeated board retries, credential extraction or
+Note changes. The coordinator owns backend/provider investigation; do not
+weaken validation or edit backend code. Rendered placement remains unverified.
 
 The user-directed post-merge issue-number navigation follow-up is implemented
 locally with page-owned lookup, exact search/unfold/reveal, truthful bounded
@@ -45,7 +50,12 @@ Settings layout and foreground task-window focus; no document overflow.
 One concurrent run failed to start a Vitest worker; the isolated full rerun
 passed without changes to timeouts or checks. The fixture room is disabled;
 these checks do not prove live voice, physical phones or production navigation.
-Release and live navigation acceptance remain outstanding. Keep port
+PR #810 is held for its review follow-up: epoch/session-bound command queues
+and actual issue-focus workspace selectors with lifecycle clearing. Local
+scoped regressions pass 125 tests, and the separately requested unchanged
+Workspace online pin-recovery regression passes locally without changing its
+assertions or timeout. These are not the full Web suite. Release and live
+navigation acceptance remain outstanding. Keep port
 5173 running, `.ui-session-handoff.md` untracked, `.impeccable` excluded and
 the preservation stashes intact. Ship from `ui/shell-iteration`; report the
 PR immediately and let the coordinator merge on exact-head green CI.

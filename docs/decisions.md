@@ -15,6 +15,12 @@ portal its visible panel into Settings: the backend declines a pending command
 when its workspace disconnects, so remounting the stream during navigation
 would invalidate a truthful asynchronous acknowledgement. No backend,
 contract, dependency or workflow change is needed for this navigation path.
+Review follow-up in #810: bind queued commands and their acknowledgements to
+the epoch/session that received them, rather than replaying an old queue after
+reconnect. Publish the contract's existing Factory issue selector from actual
+visible card focus, clearing it on other focus, card removal/collapse or route
+changes. This avoids a sticky app-level selection and conflicting stale
+foreground-window selectors.
 
 ## P9-99 chat latency attribution and session affinity (13 October 2026)
 

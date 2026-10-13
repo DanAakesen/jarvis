@@ -68,6 +68,7 @@ export function NowFeedPanel({
     let active = true;
     let requestNumber = 0;
     let workspaceSessionId: string | null = null;
+    let workspaceEpoch = 0;
     let trustedBlobHost: string | undefined;
     let commandQueue = Promise.resolve();
     let applying: { commandId: string; controller: AbortController } | null = null;
@@ -101,6 +102,9 @@ export function NowFeedPanel({
           setStreamStatus(status);
           if (config.backendUrl) publishFactoryBoardStatus(config.backendUrl, status);
           if (status === 'reconnecting') {
+            workspaceEpoch++;
+            workspaceSessionId = null;
+            trustedBlobHost = undefined;
             applying?.controller.abort();
             clearRuntimeActivities();
             setWorkspaceSession(null);
@@ -114,13 +118,23 @@ export function NowFeedPanel({
         },
         onVoiceWake: publishVoiceWake,
         onWorkspaceReady: (sessionId, blobHost) => {
+          if (!active) return;
+          if (workspaceSessionId !== sessionId) {
+            workspaceEpoch++;
+            applying?.controller.abort();
+          }
           workspaceSessionId = sessionId;
           setWorkspaceSession(sessionId);
           trustedBlobHost = blobHost;
         },
         onWorkspaceCommand: (command, expiresAt, commandBlobHost) => {
+          const commandEpoch = workspaceEpoch;
+          const commandSessionId = workspaceSessionId;
+          const blobHost = commandBlobHost ?? trustedBlobHost;
+          const isCurrentSession = () => active && commandEpoch === workspaceEpoch && commandSessionId === workspaceSessionId;
           commandQueue = commandQueue.then(async () => {
-            if (!active || !config.backendUrl || !workspaceSessionId) return;
+            // The broker declines disconnected sessions; their queued commands must not be replayed.
+            if (!isCurrentSession() || !config.backendUrl || !commandSessionId) return;
             let applied = false;
             let outcome: 'refused' | 'error' = 'refused';
             let reason: string | undefined;
@@ -134,7 +148,7 @@ export function NowFeedPanel({
               const actionController = new AbortController();
               applying = { commandId: command.commandId, controller: actionController };
               try {
-                const result = await applyWorkspaceCommandRef.current(command, commandBlobHost ?? trustedBlobHost, expiresAt, actionController.signal);
+                const result = await applyWorkspaceCommandRef.current(command, blobHost, expiresAt, actionController.signal);
                 if (typeof result === 'boolean') {
                   applied = result;
                   if (!applied) reason = 'The requested view or workspace operation is no longer available.';
@@ -149,11 +163,12 @@ export function NowFeedPanel({
                 applying = null;
               }
             }
+            if (!isCurrentSession()) return;
             try {
               await acknowledgeWorkspaceCommand(
                 config.backendUrl,
                 command.commandId,
-                workspaceSessionId,
+                commandSessionId,
                 applied,
                 getAccessToken,
                 applied ? undefined : outcome,

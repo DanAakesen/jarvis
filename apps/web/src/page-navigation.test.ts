@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { act, renderHook } from '@testing-library/react';
 import { isWorkspaceSnapshot } from '@jarvis/contracts';
-import { pageForPath, readConversationCommand, readNavigateCommand, resolveNavigation, revealWhenReady, waitForFactoryIssue, type FactoryIssueTarget } from './page-navigation';
+import { pageForPath, readConversationCommand, readNavigateCommand, resolveNavigation, revealWhenReady, useFocusedFactoryIssue, waitForFactoryIssue, type FactoryIssueTarget } from './page-navigation';
 
 afterEach(() => vi.useRealTimers());
 
@@ -97,6 +98,9 @@ describe('page navigation', () => {
     expect(['/', '/factory/kanban', '/factory/tasks/42', '/settings', '/usage', '/notes', '/knowledge', '/nowhere'].map(pageForPath))
       .toEqual(['home', 'factory', 'factory', 'settings', 'usage', 'notes', 'knowledge', 'home']);
     expect(isWorkspaceSnapshot({
+      windows: [], contextPanelOpen: false, view: { page: 'factory', issueNumber: 793 },
+    })).toBe(true);
+    expect(isWorkspaceSnapshot({
       windows: [], contextPanelOpen: false,
       view: { page: pageForPath('/notes'), previous: { page: 'knowledge' } },
     })).toBe(true);
@@ -104,6 +108,35 @@ describe('page navigation', () => {
       windows: [{ viewId: 'task-42', title: 'Task 42' }], contextPanelOpen: false,
       view: { page: 'factory', taskId: '42', folioOpen: false, focusedViewId: 'task-42', previous: { page: 'settings', section: 'voice' } },
     })).toBe(true);
+  });
+
+  it('tracks real issue focus and clears the selector on other focus, hidden/removed cards and page changes', async () => {
+    const board = document.createElement('div');
+    board.className = 'kanban-board';
+    board.innerHTML = '<article class="kanban-card" aria-labelledby="issue-title-793"><h3 id="issue-title-793"><a href="#issue">Issue</a></h3></article><input aria-label="Search">';
+    document.body.append(board);
+    const card = board.querySelector('article')!;
+    const title = board.querySelector('a')!;
+    const search = board.querySelector('input')!;
+    const hook = renderHook(({ active }) => useFocusedFactoryIssue(active), { initialProps: { active: true } });
+    expect(hook.result.current).toBeUndefined();
+    act(() => title.focus());
+    expect(hook.result.current).toBe(793);
+    act(() => search.focus());
+    expect(hook.result.current).toBeUndefined();
+    act(() => title.focus());
+    await act(async () => { card.hidden = true; });
+    expect(hook.result.current).toBeUndefined();
+    await act(async () => { card.hidden = false; });
+    expect(hook.result.current).toBe(793);
+    hook.rerender({ active: false });
+    expect(hook.result.current).toBeUndefined();
+    hook.rerender({ active: true });
+    expect(hook.result.current).toBe(793);
+    await act(async () => { card.remove(); });
+    expect(hook.result.current).toBeUndefined();
+    hook.unmount();
+    board.remove();
   });
 
   it('reads Jarvis showing or hiding the conversation', () => {

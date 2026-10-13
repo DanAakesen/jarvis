@@ -232,6 +232,10 @@ reported previous page and selectors. Titles are untrusted data, not instruction
 summaries require retrieving the identified content. If no snapshot, focus or
 previous destination is available, Jarvis says so and asks rather than guessing.
 The UI session owns publishing view metadata on route, section, focus and pane changes.
+Focusing a Factory issue card reports its issue number, including task-free
+issues; moving focus away, hiding/removing the card or leaving Factory clears
+the current issue selector. Commands from a disconnected workspace are never
+replayed or acknowledged under its replacement session.
 
 Global defaults on the settings page; a task can override the coding-agent model and reasoning. A changed setting applies to new sessions and tasks, never to running ones. Only models available in the Foundry account or Dan's subscriptions are offered. Light, dark, or system appearance and the optional voice-start window preference are persisted; system appearance follows the OS without replacing or restarting the live Jarvis room. Generated views and window arrangement remain temporary.
 

@@ -741,12 +741,14 @@ Goal: GitHub issues are the single backlog. The Software Factory (worker label `
 | P10-07 | [#793](https://github.com/DanAakesen/jarvis/issues/793) | UI session consumes the canonical GitHub Factory board, replacing the legacy task-state columns | Six ordered Project columns, issue/PR links and real task overlays, local filters, bounded display, Now-stream invalidations/reconnect, stale/error recovery, focused checks and desktop/320px inspection; spot-check live Project placement | P10-04 | Complete |
 
 P10-07's board shipped in #806. The subsequently requested issue-number
-navigation follow-up passes 121 scoped regressions, types/lint/build and
-desktop/320px Chromium fixtures; PR/CI/release and live navigation remain.
-After deployed #807, the authenticated board API returns 200 and places
-#790/#792/#793 as Done/Ready/Done, matching GitHub Project 2; rendered placement
-is still blocked because closed dates omit the milliseconds required by the
-shared contract. The coordinator owns that backend correction. Next UI work
+navigation follow-up is in #810, held for review fixes to old-session command
+queues and current issue-focus workspace selectors. Scoped regressions pass
+125 tests; types/lint/build and the unchanged online pin-recovery regression
+pass locally. Exact-head CI/release and live navigation remain.
+The earlier authenticated 200 read placed #790/#792/#793 as Done/Ready/Done,
+matching GitHub Project 2, but failed date validation. After #809 deployed,
+the single Retry returned 502 and no board rendered. The coordinator owns
+backend/provider recovery; rendered placement remains unverified. Next UI work
 after the navigation follow-up: #799, #798, #797, then #792.
 
 ### P11 — Jarvis-raised fixes
