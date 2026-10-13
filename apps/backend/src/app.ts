@@ -27,6 +27,8 @@ import type { ProjectStore } from './factory/projects.js';
 import type { ReleaseGraphReader, ReleaseViewStore } from './factory/release-view.js';
 import type { RepositoryCreator } from './factory/new-project.js';
 import { registerModules, type BackendModule } from './modules.js';
+import { registerHealthUploadRoutes,type HealthUploadOptions } from './daily/health-upload/server.js';
+import { ownerId } from './daily/health-upload/contracts.js';
 import type { SettingsStore } from './core/settings.js';
 import { fallbackModelCatalogue, type ModelCatalogueReader } from './core/model-catalog.js';
 import type { NowFeedEventHub, NowFeedStore, NowFeedUpdate } from './core/now.js';
@@ -58,6 +60,8 @@ export interface BuildAppOptions {
   readonly databaseStatus?: () => boolean;
   readonly auth?: TokenVerifier;
   readonly nutritionExportAuth?: import('./daily/nutrition-export/auth.js').NutritionExportCredentialVerifier;
+  /** Inactive rehearsal composition only. Production index supplies no option/flag. */
+  readonly healthUpload?: HealthUploadOptions;
   readonly modules?: readonly BackendModule[];
   readonly projectStore?: ProjectStore;
   readonly releaseViewStore?: ReleaseViewStore;
@@ -197,7 +201,8 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
     }
   });
   // Authenticate before CORS can finish OPTIONS requests in its onRequest hook.
-  installAuthentication(app, config, options.auth, options.nutritionExportAuth);
+  if (options.healthUpload?.buffer && options.healthUpload.buffer.owner !== ownerId(config.auth.ownerObjectId)) throw new Error('Health upload owner mismatch');
+  installAuthentication(app, config, options.auth, options.nutritionExportAuth, options.healthUpload?.enabled === true);
   app.decorate('ownerObjectId', config.auth.ownerObjectId);
   app.decorate('awayModeStore', options.awayModeStore ?? null);
   app.register(cors, {
@@ -361,6 +366,13 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
     unsubscribeTaskEvents();
     issueProgressQueues.clear();
   });
+  if (options.healthUpload?.enabled === true) {
+    const shutdown = new AbortController();
+    app.shutdownConnections.add(() => shutdown.abort());
+    app.register(registerHealthUploadRoutes,{ ...options.healthUpload,shutdownSignal: AbortSignal.any([
+      shutdown.signal,...(options.healthUpload.shutdownSignal ? [options.healthUpload.shutdownSignal] : []),
+    ]) });
+  }
   registerModules(app, options.modules ?? [
     coreModule,
     conversationModule,

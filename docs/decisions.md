@@ -25,6 +25,13 @@ no replay, both providers and tool-first turns. Coordinator acceptance remains:
 deploy, query at least ten turns, median first token below 5 s and warm turns
 below 3 s, with no `conversation.reply_failed`, tool-calling or canary regression.
 The product's ≤2.5 s target remains; no measured improvement is claimed here.
+## P12-04 reuses the existing backend and SQL (13 October 2026)
+
+Dan asked, "I want data to be in the same sql as we have on jarvis. I dont see why we need infra for this?" ([coordinator record on #719](https://github.com/DanAakesen/jarvis/issues/719)). In DailyMigrationMain he directly confirmed "Yes—use the existing backend and SQL" after being told that SQL outage returns 503 for the phone to retry. This supersedes the dedicated-host/Blob/Queue design and its outstanding resource, idle-recovery and budget questions. It is not approval for production activation, new grants or secret delivery.
+
+The inactive route factory reuses the existing pool and owner. Migration 0046 adds a raw inbox and hashed capability records; 202 follows the SQL commit, exact retries reuse receipts, changed payloads conflict, and rotation is atomic within SQL. #720 owns processing. Raw JSON remains bounded to 8 MiB and retained without automatic deletion within a 256-MiB owner ceiling; future compaction requires verified processing and protected retention/rollback approval. Phone retry, ingress, live capacity and private/device gates remain unverified.
+
+Dan also explicitly moved Jarvis migration implementation into the existing local DailyMigrationMain session. Both cloud workers stay idle. Use a current-main isolated Jarvis branch/worktree, preserve concurrent work and normal review/check/release gates; this exception does not authorize Daily source/data edits or transfer Cloud credentials locally. [Local claim and direct approval](https://github.com/DanAakesen/jarvis/issues/719#issuecomment-6152431889).
 
 ## Danish voice is Jeppe (13 October 2026)
 
