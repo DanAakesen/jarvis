@@ -22,7 +22,7 @@ from openai import AsyncOpenAI
 from opentelemetry import trace
 from opentelemetry.trace import SpanKind, Status, StatusCode
 
-from chat_telemetry import latency_span, log_latency
+from chat_telemetry import current_chat_started_at, latency_span, log_latency
 from jarvis_tools import (
     BUILT_IN_MODE_INSTRUCTIONS,
     INSTRUCTIONS,
@@ -625,11 +625,13 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                         current_message_id.set(message_id)
                     return bool(steering_messages)
 
+                first_model_started = None
                 for round_number in range(1, MAX_TOOL_ROUNDS + 1):
-                    await append_steering()
-                    if phase_setter is not None and turn_id is not None:
-                        await phase_setter("model")
-                    await append_steering()
+                    with latency_span("model_coordination"):
+                        await append_steering()
+                        if phase_setter is not None and turn_id is not None:
+                            await phase_setter("model")
+                        await append_steering()
                     image_request = round_number == 1 and any(
                         message.images for message in messages
                     )
@@ -653,6 +655,11 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                         if prompt_bytes > IMAGE_REQUEST_MAX_TEXT_BYTES:
                             raise ImageInputRejected("image_context_limit", model=model_name)
                     started = time.monotonic()
+                    if first_model_started is None:
+                        first_model_started = started
+                        chat_started = current_chat_started_at.get()
+                        if chat_started is not None:
+                            log_latency("agent_pre_model", chat_started)
                     first_text_ms: int | None = None
                     final = None
                     request: dict[str, Any] = {
@@ -686,7 +693,9 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                                     stream = self._anthropic_client.messages.stream(
                                         **anthropic_request
                                     )
+                                request_started = time.monotonic()
                                 async with stream:
+                                    log_latency("model_request", request_started)
                                     async for text in stream.text_stream:
                                         if text:
                                             accepted = True
@@ -704,6 +713,9 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                                                     "first_text.duration_ms", first_text_ms
                                                 )
                                                 log_latency("model_first_delta", started)
+                                                log_latency(
+                                                    "model_to_first_delta", first_model_started
+                                                )
                                             yield text
                                     final = await stream.get_final_message()
                             except Exception as exc:
@@ -721,7 +733,10 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                                 ) from exc
                         else:
                             try:
-                                with latency_span("responses_create"):
+                                with (
+                                    latency_span("responses_create"),
+                                    latency_span("model_request"),
+                                ):
                                     stream = await self._client.responses.create(**request)
                             except Exception as exc:
                                 if (
@@ -751,6 +766,9 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                                                 "first_text.duration_ms", first_text_ms
                                             )
                                             log_latency("model_first_delta", started)
+                                            log_latency(
+                                                "model_to_first_delta", first_model_started
+                                            )
                                         yield event.delta
                                     elif event.type == "response.completed":
                                         final = event.response

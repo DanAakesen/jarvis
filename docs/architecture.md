@@ -2390,19 +2390,46 @@ sets the hosted Jarvis version's `session_configuration.idle_timeout_seconds` to
 and routes all traffic to the active version. This allows longer session reuse;
 it does not establish an always-warm hosted container.
 
-Every chat invocation derives a UUIDv5 `agent_session_id` from the authenticated
-owner object ID and numeric Jarvis conversation-session ID, then sends it only in
-the Invocations query string. User text and the raw owner/session IDs are never
-part of that key or telemetry. A platform 4xx rejection is logged by status only
-and retried once without session affinity. Each invocation still validates `/me`
+P9-99 replaces UUIDv5 chat affinity with the voice path's random 32-hex
+`agent_session_id`, sent only in the Invocations query string. A process-local
+LRU map keeps IDs for at most 256 authenticated owner/conversation pairs; eviction
+or backend restart gives that conversation a new hosted session. Raw owner/session
+IDs stay in that bounded map, never in the provider key or telemetry. The existing
+3600-second hosted idle timeout remains; no keep-warm requests or costs are added.
+Generic HTTP failures are no longer retried: a 4xx does not prove the agent never
+executed a tool. No verified provider pre-execution routing code is available, so
+automatic routing recovery remains disabled rather than risking duplicate effects.
+Each invocation still validates `/me`
 and reloads its source message and conversation history from the backend; chat
 turns do not depend on prior sandbox memory. The opt-in
 `x-ms-debug-latency-enabled: true` response headers are reduced to the
 `chat.agent_session` allowlist (session start type plus bounded platform,
 provisioning, container and agent milliseconds). Agent phase durations
 (`chat_history_verification`, `chat_context`, `tool_catalogue`, `settings`,
-`turn_context`, `prompt_build`, `model_first_delta`) are returned in the agent
-completion event and logged by the backend as allowlisted `chat.latency` events.
+`turn_context`, `prompt_build`) are returned in the agent completion event and
+logged by the backend as allowlisted `chat.latency` events. P9-99 adds:
+
+- `model_coordination`: the first round's steering reads and phase update.
+- `agent_pre_model`: agent request entry through the first model request,
+  including verified history, visual resolution, parallel setup and coordination.
+- `model_request`: the first model request until stream headers/entry, including
+  provider authentication. This overlaps, rather than adds to, model first delta.
+- `model_first_delta`: the first text-emitting model round's request-to-text time.
+- `model_to_first_delta`: first model request through first text, including any
+  preceding tool-only model rounds, tool execution, usage writes and coordination.
+- `agent_first_delta`: agent request entry through first outgoing text.
+- `agent_auth`: backend authentication to Foundry, measured by the backend.
+- `session_start`: backend invocation-to-first-text minus `agent_first_delta`.
+  This is a hosted-dispatch/transport/SSE-buffering residual, **not** a direct
+  provisioning measurement. Negative or unavailable residuals are omitted.
+
+For a successful text turn, `agent_first_byte` is approximately `agent_auth` +
+`session_start` + `agent_pre_model` + `model_to_first_delta`. Use these same-turn
+durations and the cold/warm debug headers, not differences between medians of
+different cohorts. Existing `model_first_delta` alone excludes earlier tool-only
+rounds. Timings are bounded to 600,000 ms, contain no content, and retain the first
+sample for each agent phase. No saved model/effort, instructions, tools or schemas
+change. Post-deploy latency and failure/canary acceptance remain unverified.
 
 The reported 5–10 s model-to-first-delta interval is not currently attributable
 between prompt processing and reasoning: the provider exposes one elapsed

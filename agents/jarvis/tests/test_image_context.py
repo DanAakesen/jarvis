@@ -573,6 +573,7 @@ def test_budget_denial_survives_image_resolution_into_chat_done(monkeypatch, sta
             "delegatedAuthorization": AUTHORIZATION, "visualContext": VISUAL,
         })
     done = json.loads(response.text.split("event: done\ndata: ", 1)[1].split("\n", 1)[0])
+    assert done.pop("agentTimings")["agent_first_delta"] >= 0
     assert done == {"visualPath": "caption", "visualReason": reason}
     assert not model.messages[-1].images
     assert "private provider text" not in response.text
@@ -845,7 +846,9 @@ def test_done_reports_accepted_image_usage_without_handle(monkeypatch):
             "delegatedAuthorization": AUTHORIZATION, "visualContext": VISUAL,
         })
     done = response.text.split("event: done\ndata: ", 1)[1].split("\n", 1)[0]
-    assert json.loads(done) == {
+    result = json.loads(done)
+    assert result.pop("agentTimings")["agent_first_delta"] >= 0
+    assert result == {
         "visualPath": "image", "model": "gpt-6-luna",
         "inputTokens": 100, "outputTokens": 20,
     }
