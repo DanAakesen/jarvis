@@ -1,5 +1,25 @@
 # Project plan
 
+## Danish voice Settings correction (13 October 2026)
+
+P9-97/#790 replaces the misleading Harper selector with read-only Jeppe.
+The coordinator's backend default/option correction is combined with the web
+change on `ui/shell-iteration`. Old stored Harper values resolve to Jeppe on
+read; the web also accepts legacy payloads and saves only edited preferences.
+No live voice, hosted-agent bridge or storage migration is changed.
+
+Types, zero-warning scoped lint/build and 22 Settings tests pass locally.
+The unchanged Windows date-format assertion remains a full-CI gate.
+Desktop dark and 320px light/reduced-motion fixtures verify the read-only
+field, legacy loading, changed-only saves, folding, reload and no overflow.
+The phone save was keyboard-verified; its pointer target met the existing
+composer overlay. The unrelated 3D renderer was disabled in these checks.
+The coordinator's exact backend commit passes full CI; this UI checkout
+does not have backend dependencies installed.
+
+Next: open the combined PR. Exact-head CI, coordinator merge and deployment
+remain release gates.
+
 ## Remaining UI release (13 October 2026)
 
 Dan authorised all remaining UI for production testing. Ship movable/resizable
@@ -705,6 +725,7 @@ Declined in the audit (do not file): verbosity and max-output-token settings, no
 | P9-94 | [#765](https://github.com/DanAakesen/jarvis/issues/765) | Pin all workflow actions to verified full commit SHAs, enable weekly GitHub Actions Dependabot updates, and document the pinning procedure | Workflows/docs | — | Complete |
 | P9-95 | [#779](https://github.com/DanAakesen/jarvis/issues/779) | Keep backend logs diagnosable without weakening the event/field allowlist: register literal logger events and scan source, add route-template/error-kind to failed requests with privacy coverage, and downgrade bounded telemetry close failures while retaining server-shutdown failure exit behavior | Backend/docs | — | Complete |
 | P9-96 | [#783](https://github.com/DanAakesen/jarvis/issues/783) | Drain backend task/Now/chat streams and voice/phone WebSockets on deploy before resource cleanup; clean exit 0 versus real failure/timeout exit 1; name framework upgrade warnings and release failed upgrade sockets | Live two-revision SIGTERM/upgrade reproduction and focused lifecycle/privacy tests; existing client reconnect behavior checked read-only. Production shutdown/takeover logs require coordinator verification. | — | Complete |
+| P9-97 | [#790](https://github.com/DanAakesen/jarvis/issues/790) | Show the live Danish voice, Jeppe, as fixed/read-only in Settings; coordinator owns backend compatibility and UI session owns web | Settings and API accept retired Harper storage; truthful default/option, no Danish-voice UI patch; focused tests, types/lint and desktop/phone inspection | — | In progress |
 ### P10 — GitHub backlog as source of truth
 Goal: GitHub issues are the single backlog. The Software Factory (worker label `Jarvis`, default agent `codex`) and Copilot (`Copilot`) are executors that pick issues up; the Factory board shows the same columns as the GitHub Project. Decided by Dan on 8 October 2026.
 | ID | Issue | Task | Acceptance criteria | Depends on | Status |

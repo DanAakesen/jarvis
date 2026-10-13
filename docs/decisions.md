@@ -2,7 +2,13 @@
 
 ## Danish voice is Jeppe (13 October 2026)
 
-Dan chose the native male Danish voice Jeppe (`da-DK-JeppeNeural`). It is already the live Danish voice: since P5-08 (6 October) `/voice/da` uses the same backend-owned Voice Live realtime session as English, with `DANISH_REALTIME_VOICE = 'da-DK-JeppeNeural'` (`apps/backend/src/voice/realtime.ts`, asserted in `relay.test.ts`). The provisioned hosted-agent bridge (`jarvis-voice-mai`, Harper) is used only when Voice Live is not configured, so it was left unchanged. The Settings page Danish voice option is a stored preference that nothing reads; aligning it is a separate follow-up. #396 was filed from stale documentation (see L134).
+Dan chose the native male Danish voice Jeppe (`da-DK-JeppeNeural`). It is already the live Danish voice: since P5-08 (6 October) `/voice/da` uses the same backend-owned Voice Live realtime session as English, with `DANISH_REALTIME_VOICE = 'da-DK-JeppeNeural'` (`apps/backend/src/voice/realtime.ts`, asserted in `relay.test.ts`). The provisioned hosted-agent bridge (`jarvis-voice-mai`, Harper) is used only when Voice Live is not configured, so it was left unchanged. #396 was filed from stale documentation (see L134).
+
+P9-97/#790 aligns the Settings default and sole option with Jeppe, and shows
+it read-only with an explanation rather than pretending the unused preference
+switches the live voice. Retired Harper storage falls back to Jeppe on read
+without a migration; old API payloads remain loadable by the web page, and
+saving an editable preference does not emit a Danish-voice patch.
 
 ## Remaining UI release approval (13 October 2026)
 

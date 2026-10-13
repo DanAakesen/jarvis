@@ -16,7 +16,7 @@ const settings = {
     speechToTextModel: 'mai-transcribe',
     englishModel: 'gpt-realtime-2.1',
     englishVoice: 'en-GB-Ryan:DragonHDLatestNeural',
-    danishVoice: 'da-DK-Harper:MAI-Voice-2',
+    danishVoice: 'da-DK-JeppeNeural',
     defaultLanguage: 'da' as 'da' | 'en',
     minimizeWindowsOnVoiceStart: false,
   },
@@ -43,7 +43,7 @@ const options = {
   speechToTextModels: ['mai-transcribe'],
   englishModels: ['gpt-realtime-2.1'],
   englishVoices: ['en-GB-Ryan:DragonHDLatestNeural'],
-  danishVoices: ['da-DK-Harper:MAI-Voice-2'],
+  danishVoices: ['da-DK-JeppeNeural'],
   languages: ['da', 'en'],
   codexModels: ['default'],
   codexReasoningEfforts: ['default'],
@@ -108,6 +108,45 @@ beforeEach(() => {
 afterEach(() => { vi.unstubAllGlobals(); });
 
 describe('SettingsPage', () => {
+  it.each([
+    { name: 'current Jeppe settings', voice: settings.voice.danishVoice, voices: options.danishVoices },
+    { name: 'legacy Harper settings and options', voice: 'da-DK-Harper:MAI-Voice-2', voices: ['da-DK-Harper:MAI-Voice-2'] },
+    { name: 'legacy Harper settings with Jeppe options', voice: 'da-DK-Harper:MAI-Voice-2', voices: options.danishVoices },
+  ])('shows fixed Jeppe with $name and saves only editable settings', async ({ voice, voices }) => {
+    const user = userEvent.setup();
+    const current = { ...settings, voice: { ...settings.voice, danishVoice: voice } };
+    fetchMock
+      .mockResolvedValueOnce(response({
+        ...settingsResponse(current),
+        options: { ...options, danishVoices: voices },
+      }))
+      .mockResolvedValueOnce(response(settingsResponse({
+        ...settings,
+        voice: { ...settings.voice, defaultLanguage: 'en' },
+      })));
+    renderSettingsPage();
+
+    const danishVoice = await screen.findByRole('textbox', { name: 'Danish voice' });
+    expect(danishVoice).toHaveProperty('value', 'Jeppe (Danish)');
+    expect(danishVoice).toHaveProperty('readOnly', true);
+    expect(danishVoice.getAttribute('aria-describedby')).toBe('danish-voice-help');
+    expect(screen.getByText('Fixed for Danish voice sessions.')).not.toBeNull();
+    expect(screen.queryByRole('combobox', { name: 'Danish voice' })).toBeNull();
+    expect(screen.queryByText(/Harper/)).toBeNull();
+    expect(screen.getByRole('button', { name: 'Save settings' })).toHaveProperty('disabled', true);
+
+    await user.type(danishVoice, 'Harper');
+    expect(danishVoice).toHaveProperty('value', 'Jeppe (Danish)');
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Default language' }), 'en');
+    await user.click(screen.getByRole('button', { name: 'Save settings' }));
+
+    expect(await screen.findByText(/Saved\. These are defaults for new sessions and tasks/)).not.toBeNull();
+    expect(JSON.parse(String(fetchMock.mock.calls[1]![1]?.body))).toEqual({
+      settings: { voice: { defaultLanguage: 'en' } },
+    });
+    expect(danishVoice).toHaveProperty('value', 'Jeppe (Danish)');
+  });
+
   it('loads, saves changed settings, and explains which work is deferred', async () => {
     const user = userEvent.setup();
     fetchMock

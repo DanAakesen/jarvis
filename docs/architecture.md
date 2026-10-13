@@ -583,6 +583,11 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   authentication. The backend returns effective defaults with the validated
   model catalog, rejects unknown keys and unsupported values, and writes a
   partial update transactionally to whitelisted `dbo.settings` rows.
+  P9-97 reports `da-DK-JeppeNeural` as the sole Danish voice option and default.
+  A retired Harper value in `voice.da.voice` falls back to Jeppe on read,
+  without a migration or storage write. New Harper patches are rejected.
+  The web field is read-only and does not patch this preference; the live
+  Danish voice remains fixed by `DANISH_REALTIME_VOICE`, not Settings.
   The `appearance.theme` value accepts only `light` or `dark` and reuses the
   global `dbo.settings` key/value table without a migration. The `newProjects`
   settings area validates owner, visibility, templates

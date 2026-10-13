@@ -97,7 +97,7 @@ const optionLabels: Record<string, string> = {
   balanced: 'Balanced',
   detailed: 'Detailed',
   'en-GB-Ryan:DragonHDLatestNeural': 'Ryan HD (British English)',
-  'da-DK-Harper:MAI-Voice-2': 'Harper (Danish)',
+  'da-DK-JeppeNeural': 'Jeppe (Danish)',
   da: 'Danish',
   en: 'English',
   default: 'Provider default',
@@ -599,9 +599,12 @@ export function SettingsPage({ backendUrl, getAccessToken, activity, presence, p
               <SelectField id="english-voice" label="English voice" value={settings.voice.englishVoice}
                 options={options.englishVoices} disabled={saving}
                 onChange={(value) => update('voice', 'englishVoice', value)} />
-              <SelectField id="danish-voice" label="Danish voice" value={settings.voice.danishVoice}
-                options={options.danishVoices} disabled={saving}
-                onChange={(value) => update('voice', 'danishVoice', value)} />
+              <div className="settings-field">
+                <label htmlFor="danish-voice">Danish voice</label>
+                <input id="danish-voice" value={optionLabels['da-DK-JeppeNeural']} readOnly
+                  aria-describedby="danish-voice-help" />
+                <p className="settings-explanation" id="danish-voice-help">Fixed for Danish voice sessions.</p>
+              </div>
               <SelectField id="default-language" label="Default language" value={settings.voice.defaultLanguage}
                 options={options.languages} disabled={saving}
                 onChange={(value) => update('voice', 'defaultLanguage', value as 'da' | 'en')} />
