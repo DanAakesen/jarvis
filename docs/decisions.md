@@ -3,6 +3,40 @@
 ## P12-04 offline proposal Queue sender mapping (13 October 2026)
 
 The coordinator's narrow #719 release corrects the unreferenced proposal's Queue sender DataAction to Microsoft's documented `Microsoft.Storage/storageAccounts/queueServices/queues/messages/add/action` ([official sender role](https://learn.microsoft.com/en-us/azure/role-based-access-control/built-in-roles/storage#storage-queue-data-message-sender)). Keep empty management actions and the existing queue-only assignment scope; add no consumption, update/delete, Blob delete or capability write. An offline source contract locks exact permission/scope sets and default-off/unreferenced/max-one behavior, alongside separate Bicep build/lint. Neither compiler nor Shared-Key emulator proves Azure RBAC; live identity propagation, resource/cost approval, operator access/secret custody, activation and device/private migration acceptance remain unverified. No role is granted or deployment wiring changed.
+## P9-96 backend connection draining (13 October 2026)
+
+Drain long-lived connections in Fastify `preClose`, after stopping the HTTP
+listener and before `onClose` cleanup. Local SIGTERM reproduction with an open
+Now SSE and WebSocket confirmed that the SSE kept HTTP shutdown waiting:
+the previous implementation timed out at 5,005 ms, never reached `onClose`,
+and exited 1. With explicit SSE EOF/reconnect and WebSocket 1012 close frames,
+the same run reached cleanup and exited 0 in 6 ms. Preserve ordinary in-flight
+requests and the existing telemetry-warning/server-failure distinction.
+Do not replay cancelled chat turns automatically: they may have performed
+side effects. Existing task/Now/voice clients reconnect without changes;
+ACS phone media follows existing call teardown, not browser reconnection.
+Injected real close failure and timeout still exit 1 with named error events.
+Production log acceptance remains the coordinator's post-deploy check.
+
+The same two-revision scripted run reproduces the WebSocket plugin warning by
+pipelining a health request and upgrade on the new revision. Register it as
+`connection.upgrade_failed`, retain warning severity for the real protocol
+failure, and export only the safe error kind. Rejected/pending upgrades are not
+WebSocketServer clients and need separate socket cleanup; without it the new
+revision also waits until the shutdown deadline. With cleanup it exits 0 in
+2 ms. This identifies a local producer of the unnamed warning, not a confirmed
+match to the production incident.
+
+Settle every connection drain and retain failures for a final `onClose` rejection:
+Fastify otherwise discards `preClose` errors. Close voice transports before
+awaiting persistence, and start idempotent ACS hang-up/session finalization in
+the early drain rather than waiting for unrelated HTTP/WebSocket completion.
+Focused tests cover resource disposal despite a drain rejection, failed voice
+persistence, and phone hang-up/persistence before `onClose`.
+Phone answering publishes the known connection ID before SQL activation;
+answers arriving after teardown starts are hung up, and a session created while
+stopping is finished/rejected without answering. Race tests hold answer and
+activation across shutdown and verify one finalization.
 
 ## P12-04 protected capability lifecycle preparation (13 October 2026)
 

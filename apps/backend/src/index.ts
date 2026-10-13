@@ -1194,14 +1194,17 @@ try {
   if (!telemetry) logger.info('telemetry.stdout_only');
 
   let stopping = false;
+  app.addHook('preClose', async () => {
+    try { await taskEventArchiveJob?.stop(); }
+    catch (error) { app.shutdownErrors.push(error); }
+  });
   const stop = async () => {
     if (stopping) return;
     stopping = true;
     try {
-      await taskEventArchiveJob?.stop();
       await shutdown(app, telemetry);
     }
-    catch (error) { logger.error(safeErrorFields(error), 'server.shutdown_failed'); process.exitCode = 1; }
+    catch { process.exitCode = 1; }
     // Enforce the shutdown deadline even if an SDK/network handle remains open.
     process.exit(process.exitCode ?? 0);
   };

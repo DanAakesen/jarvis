@@ -13,7 +13,7 @@ import { defaultAwayModeState } from './away-mode.js';
 import { type PresenceMode } from './away-mode.js';
 import type { BrowserConfirmation } from '../teams/service.js';
 import { generatedViewValidationOptions } from './generated-view-validation.js';
-import { formatSseEvent, writeSseEvent } from './sse.js';
+import { formatSseEvent, registerSseShutdown, writeSseEvent } from './sse.js';
 
 const maxSqlBigInt = 9_223_372_036_854_775_807n;
 const idSchema = { type: 'string', pattern: '^[1-9][0-9]{0,18}$', maxLength: 19 };
@@ -252,6 +252,7 @@ export function registerNowRoutes(app: FastifyInstance) {
     if (!writeSseEvent(response, { event: 'workspace-ready', data: ready })) {
       end();
     }
+    registerSseShutdown(app, response, cleanup);
     return reply;
   });
 }
