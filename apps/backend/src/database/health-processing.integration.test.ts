@@ -143,7 +143,8 @@ describe('inactive processor on real isolated SQL Server, synthetic records only
     for (const value of rejected) {
       clock += 1000; const bytes = raw(value); const receipt = await accept(device, bytes);
       expect(await processor().processNext(signal())).toMatchObject({ state: 'quarantined', reason: 'unsupported_unit' });
-      expect((await inbox()).find(row => row.acceptance_id === receipt.acceptanceId)).toMatchObject({ raw_bytes: bytes, checksum: sha256(bytes),
+      // Match the buffer's canonical GUID receipt, not the driver's UUID letter casing.
+      expect((await inbox()).find(row => String(row.acceptance_id).toLowerCase() === receipt.acceptanceId)).toMatchObject({ raw_bytes: bytes, checksum: sha256(bytes),
         processing_status: 'quarantined', processing_error_code: 'unsupported_unit', processing_attempts: 1, processed_at: null });
       expect(await Promise.all(domainTables.map(rows))).toEqual(before);
     }
