@@ -51,6 +51,40 @@ const subsystems: readonly SystemStatusSubsystem[] = [
 ];
 
 const cacheTtlMs = 60_000;
+const safeSmokeReasons: Partial<Record<SystemSmokeCheckId, ReadonlySet<string>>> = {
+  agent_contract: new Set([
+    'Tool count exceeds the agent limit.',
+    'A tool name is invalid.',
+    'Tool names must be unique.',
+    'A tool description is empty.',
+    'A tool description exceeds the agent limit.',
+    'A tool schema is not an object.',
+    'Tool catalogue exceeds the agent size limit.',
+    'Tool catalogue cannot be serialized.',
+    'Agent settings have an invalid shape.',
+    'Agent settings could not be built.',
+    'Agent contract could not be checked.',
+  ]),
+  chat_canary: new Set(['acceptance_check_failed', 'agent_error', 'timeout']),
+  chat_identity: new Set(['catalogue_unavailable', 'identity_reply']),
+  chat_capabilities: new Set([
+    'catalogue_unavailable',
+    'capabilities_discovery_missing',
+    'capabilities_discovery_wrong',
+    'capabilities_discovery_failed',
+    'capabilities_receipt_incomplete',
+    'capabilities_reply_incomplete',
+  ]),
+  chat_github_read: new Set(['catalogue_unavailable', 'github_issue_unavailable']),
+  chat_jobs: new Set(['catalogue_unavailable', 'jobs_unavailable']),
+  chat_navigation: new Set(['catalogue_unavailable', 'navigation_refusal_missing']),
+  chat_no_timestamp: new Set(['catalogue_unavailable', 'capture_time_invented']),
+  chat_plain_approval: new Set(['catalogue_unavailable', 'plain_approval_failed']),
+};
+
+function safeSmokeReason(id: SystemSmokeCheckId, reason: string | undefined): string | undefined {
+  return reason && reason.length <= 120 && safeSmokeReasons[id]?.has(reason) ? reason : undefined;
+}
 
 export const systemStatusResponseSchema = {
   type: 'object',
@@ -262,11 +296,14 @@ export function createSystemSmokeReader(
         const active = activeChecks.get(id);
         const source = sourceFor[id] ? sourceEntries.get(sourceFor[id]!) : undefined;
         if (active) {
+          const reason = active.status === 'down' || active.status === 'degraded'
+            ? safeSmokeReason(id, active.reason)
+            : undefined;
           return {
             id,
             status: isStatus(active.status) ? active.status : 'unknown',
             checkedAt: researchCheckedAt,
-            ...(active.status === 'down' && active.reason ? { reason: active.reason } : {}),
+            ...(reason ? { reason } : {}),
           };
         }
         return {

@@ -39,8 +39,10 @@ explicitly previous data on failed refresh and offer Retry. Mark evidence
 older than five minutes stale without background probe requests.
 The smoke contract has no deployment ID/SHA association; use Recorded smoke
 check with its timestamp, not a claim that the latest release passed.
-No backend, contract or dependency change. Local synthetic browser
-checks are not authenticated production or physical-phone acceptance.
+Only fixed per-check allowlisted reasons are retained for down/degraded smoke
+entries; the original deployed chat-canary failure cause remains unknown.
+Local synthetic browser checks are not authenticated production or
+physical-phone acceptance.
 
 The coordinator authorised the smallest coupled release-gate correction in
 #815 after the title bot truncated P9-101 to P9-10. Normalization, linked-issue

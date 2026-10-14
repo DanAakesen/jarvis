@@ -17,6 +17,10 @@ stale/failing/unknown evidence, missing versions, disabled pending refresh,
 retained HTTP 503 failure and Retry. No document overflow or smoke invocation.
 The fixture room is disabled and API responses are synthetic. Exact-head
 CI/release and authenticated Status/voice acceptance remain pending.
+The 14 October smoke-reader follow-up preserves only fixed per-check allowlisted
+reasons for down/degraded results. The original deployed chat-canary failure
+cause remains unknown; diagnose retained evidence through `/status`, never by
+invoking `/status/smoke` or a model canary.
 Keep this PR separate from latency QA, presence/Routines/phone Save work,
 unrelated pin changes and the coordinator's #811 backend investigation.
 
