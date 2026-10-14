@@ -1,5 +1,38 @@
 # Agent context
 
+## Current required release gate (14-15 October 2026)
+
+Reference #830 was normally squashed into `c0d0aeef` after its reviewed ten CI
+jobs and four CodeQL analyses. Normal Deploy `38649690138` successfully ran the
+other five selected jobs but failed required smoke job `116148437669` at
+22:54:48 UTC. This is not an accepted release. The genuinely signed-in owner
+Status page read the retained report without running another canary:
+`chat_capabilities` displayed "Capabilities reply incomplete"; every other
+individual check displayed OK. The verified C0 canary branch
+`capabilities_reply_incomplete` follows successful actual discovery and a complete
+Notes/Calendar/GitHub receipt. Which reply category was missing is not retained;
+do not infer a raw reply, blame the reference pin or claim the historical #820
+cause.
+
+The local candidate adds one shared model instruction rule for chat, voice and
+smoke: summarize every successfully discovered category without inventing
+categories, treating labels as data, and preserving failure/refusal reporting.
+It does not rewrite model output or change canary predicates, token limits,
+permissions or resources. Fifteen synthetic actual-handler cases cover both
+request rounds, EN/DA chat/smoke, voice, successful/refused/failed discovery and
+unchanged incomplete provider output. The existing Windows Python 3.12.10
+snapshot ran all 398 agent tests successfully; the fifteen new cases fail
+against the asserted exact `3e29a04e` baseline model blob. These are instruction-delivery controls,
+not proof that a real model now answers completely. Independent review, changed
+head full CI/CodeQL and the legitimate normal release gate remain required.
+Only demonstrated `fix-main:` delivery may merge while the release gate is broken.
+
+Existing #848 head `3e29a04e` passed all ten actual CI `38650651609` jobs and four
+CodeQL `38650651464` analyses, including 178 backend files / 3,170 tests and
+strict backend/web builds. It is not merged/released/live-accepted. Keep the
+original Google issues open and preserve their approved write/fixture boundaries.
+The original frozen Google and Factory review receipts remain immutable.
+
 ## Accepted recovery and Factory release (14 October 2026)
 
 Diagnostic #831 merged normally as `51bda5cb` after independent review,
@@ -10,7 +43,7 @@ Backend revision `0000315` is ready with the new image. The bounded
 19:22–19:24 UTC revision-only log query returned 314 backend rows and
 15 smoke events; chat canary, capabilities and GitHub read each reported
 `ok` once at 19:23:18 UTC. No provider/prompt/result text was retrieved.
-This establishes the current accepted release, not the historical cause
+This establishes that accepted release, not the historical cause
 or original phone/voice/Google acceptance. #820 remains open.
 
 The owned #842 integration preserved its two accepted Factory UI blobs

@@ -111,6 +111,7 @@ Keep implementation phases and progress in [PLAN.md](PLAN.md), feature summaries
 - **Purpose:** one Azure platform for building software projects, and later for banking, health and fitness, calendar, and further areas, all controlled through one shared UI and voice.
 - **Language:** Dan speaks Danish and English. UI copy and documentation are English.
 - Jarvis can develop its own repository through the same task flow.
+- For overall capability overviews, chat and voice briefly name every successfully discovered category. They must not invent unavailable categories or describe failed/refused discovery as successful.
 - Prefer Microsoft services, so Dan learns the stack and new Foundry features, unless Dan confirms a different provider for a capability.
 
 ### Roadmap

@@ -1543,6 +1543,15 @@ a connected browser. The confirmation test is an in-memory no-op: the backend
 refuses it until the next smoke invocation contains the exact plain `yes` and
 the fixed preceding transcript.
 
+The model instruction builder adds the same capability-summary rule for ordinary
+chat, voice and smoke, before personality/mode personalization. After successful
+`get_system_health` / `list_capabilities` discovery, overall capability overviews
+should briefly name every returned category, treat labels as data and report
+refusals/failures plainly. Smoke intentionally omits the broader backend capability block, so
+putting this rule there alone would not reach the failing path. This does not
+insert category text into model output, change token limits or relax the actual
+receipt/reply checks. Actual model behavior remains a deployment acceptance gate.
+
 Each scripted check has its own smoke-report entry. Deterministic tool and
 response checks report `down`; the identity and missing-image timestamp wording
 checks report `degraded`, which the Deploy gate excludes from failure decisions.

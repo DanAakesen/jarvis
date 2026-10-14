@@ -1,5 +1,28 @@
 # Decisions
 
+## Require complete tool-grounded capability overviews (14 October 2026)
+
+The new C0 reference release failed its required capability reply check, not
+discovery: a genuine owner read of the retained 22:54 UTC report displayed
+"Capabilities reply incomplete". The deployed canary source requires successful
+discovery and a complete Notes/Calendar/GitHub receipt before that branch.
+The precise omitted category and exclusive cause are not retained.
+
+Use one generic category-summary instruction in the shared model builder for
+chat, voice and smoke. Smoke omits the broader backend capability block; a rule
+only there would miss the failing path. Name categories from successful discovery
+instead of hard-coding categories, synthesizing success text or loosening the
+canary. Preserve failure/refusal reporting, untrusted-data handling, existing
+tokens/tool limits and saved model settings.
+
+Synthetic actual-handler regressions verify instruction delivery across both
+model rounds and unchanged output even when the fake provider omits GitHub.
+The existing Windows Python 3.12.10 snapshot passed all 398 agent tests; the
+fifteen new cases fail on the asserted exact baseline model blob. They do not
+demonstrate real model compliance or resolve #820's earlier
+historical failure. The candidate remains subject to independent review, exact
+changed-head full CI/CodeQL and the normal required release smoke.
+
 ## Accept current recovery separately from historical attribution (14 October 2026)
 
 The reviewed diagnostic tree reached main through #831 as `51bda5cb`.
