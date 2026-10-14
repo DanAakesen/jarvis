@@ -12,6 +12,37 @@ export function refuseGmailComputerAccess(...values: unknown[]): void {
   }
 }
 
+function topLevelCommands(text: string): { text: string; unquoted: string }[] | undefined {
+  const commands: { text: string; unquoted: string }[] = [];
+  let start = 0;
+  let unquoted = '';
+  let closingQuote: string | undefined;
+  const separators = /^(?:[,;]\s*(?:(?:then|and|also|og|derefter)\s+)?|\.\s+|\s+(?:then|derefter)\s+)/iu;
+  for (let index = 0; index < text.length; index += 1) {
+    const character = text[index]!;
+    if (closingQuote) {
+      if (character === closingQuote) closingQuote = undefined;
+      continue;
+    }
+    if (['"', "'", '\u201c', '\u2018'].includes(character) &&
+        !(character === "'" && /[\p{L}\p{N}]/u.test(text[index - 1] ?? '') &&
+          /[\p{L}\p{N}]/u.test(text[index + 1] ?? ''))) {
+      closingQuote = character === '\u201c' ? '\u201d' : character === '\u2018' ? '\u2019' : character;
+      continue;
+    }
+    const separator = separators.exec(text.slice(index));
+    if (separator) {
+      commands.push({ text: text.slice(start, index).trim(), unquoted: unquoted.trim() });
+      unquoted = '';
+      index += separator[0].length - 1;
+      start = index + 1;
+    } else unquoted += character;
+  }
+  if (closingQuote) return undefined;
+  commands.push({ text: text.slice(start).trim(), unquoted: unquoted.trim() });
+  return commands;
+}
+
 async function independentComputerRequest(tool: JarvisTool, input: unknown, request: FastifyRequest): Promise<boolean> {
   const args = input !== null && typeof input === 'object' ? input as Record<string, unknown> : {};
   const target = tool.name === 'pc_open' ? args.value : tool.name === 'pc_close' ? args.app
@@ -36,10 +67,19 @@ async function independentComputerRequest(tool: JarvisTool, input: unknown, requ
   // Only complete, unambiguous command shapes can exempt a mail turn.
   const mail = '(?:please\\s+)?(?:read|check|find|search|l\\u00e6s|tjek|s\\u00f8g)\\s+(?:(?:my|the|min|mine)\\s+)?(?:gmail|(?:e-?)?mails?|inbox)';
   const separator = '(?:\\s*[,;]\\s*(?:(?:then|and|also|og|derefter)\\s+)?|\\s+(?:then|and|also|og|derefter)\\s+|\\.\\s+)';
-  return (['pc_open', 'pc_close', 'codex_prompt'].includes(tool.name) ||
-      /^(?:open|launch|start|visit|navigate to|\u00e5bn)\b/iu.test(target.trim())) &&
-    new RegExp(`^(?:${mail}${separator})?(?:please\\s+)?${intent}(?:${separator}${mail})?[.!?]?\\s*$`, 'iu')
-      .test(message.text.trim());
+  if (!['pc_open', 'pc_close', 'codex_prompt'].includes(tool.name) &&
+      !/^(?:open|launch|start|visit|navigate to|\u00e5bn)\b/iu.test(target.trim())) return false;
+  if (new RegExp(`^(?:${mail}${separator})?(?:please\\s+)?${intent}(?:${separator}${mail})?[.!?]?\\s*$`, 'iu')
+    .test(message.text.trim())) return true;
+  const commands = topLevelCommands(message.text.trim());
+  if (commands?.length !== 2) return false;
+  const computer = new RegExp(`^(?:please\\s+)?${intent}[.!?]?\\s*$`, 'iu');
+  const mailTopic = (command: string) =>
+    /^(?:please\s+)?(?:read|check|find|search|l\u00e6s|tjek|s\u00f8g)\s+/iu.test(command) &&
+    /\b(?:gmail|(?:e-?)?mails?|inbox)\b/iu.test(command) &&
+    !/\b(?:how\s+to|hvordan)\b/iu.test(command);
+  return computer.test(commands[1]!.text) && mailTopic(commands[0]!.unquoted) ||
+    computer.test(commands[0]!.text) && mailTopic(commands[1]!.unquoted);
 }
 
 /** Shared by HTTP chat, voice, reflex and nested registry execution. No private mail is stored. */

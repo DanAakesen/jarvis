@@ -43,7 +43,6 @@ const activeVoiceStates = new Set<JarvisActivityEvent['type']>(['listening', 'th
 const maxTrackedVoiceSessions = 64;
 const wakeWordTimestampPattern = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u;
 const mediaActions = ['play_pause', 'next', 'previous', 'volume_up', 'volume_down', 'mute'] as const;
-const chromeWindowTitle = /(?:^|\s-\s)(?:Google\s+)?Chrome$/iu;
 const clipboardSecretAssignment =
   /(\b(?:password|passwd|pwd|token|access[_ -]?token|refresh[_ -]?token|api[_ -]?key|access[_ -]?key|private[_ -]?key|key|secret|client[_ -]?secret|authorization)\b\s*[:=]\s*)(?:"[^"\r\n]*"|'[^'\r\n]*'|[^\s,;]+)/giu;
 const clipboardBearerToken = /\bBearer\s+\S+/giu;
@@ -570,11 +569,11 @@ export function createPcBridgeModule(options: PcBridgeModuleOptions = {}): PcBri
         description: 'Return the title of the active window on Dan’s PC.',
         inputSchema: { type: 'object', properties: {}, additionalProperties: false },
         execute: async (_input, request, signal) => {
+          const before = await readWindowsObservation(bridge, 'uia_snapshot', signal, request.log);
           const result = await bridge.execute({ name: 'active_window', arguments: {} }, signal, request.log);
-          if (typeof result.title === 'string' && chromeWindowTitle.test(result.title)) {
-            refuseGmailComputerAccess(result.title);
-            await readBrowserTarget(bridge, undefined, signal, request.log);
-          }
+          const after = await readWindowsObservation(bridge, 'uia_snapshot', signal, request.log);
+          if (after.application !== before.application || typeof result.title !== 'string')
+            throw new ToolRefusal('The foreground Windows application cannot be verified.');
           return { title: result.title };
         },
       },
@@ -584,17 +583,16 @@ export function createPcBridgeModule(options: PcBridgeModuleOptions = {}): PcBri
         inputSchema: { type: 'object', properties: {}, additionalProperties: false },
         sensitive: true,
         execute: async (_input, request, signal) => {
-          const window = await bridge.execute({ name: 'active_window', arguments: {} }, signal, request.log);
-          if (typeof window.title === 'string' && chromeWindowTitle.test(window.title)) {
-            refuseGmailComputerAccess(window.title);
-            await readBrowserTarget(bridge, undefined, signal, request.log);
-          }
+          const before = await readWindowsObservation(bridge, 'uia_snapshot', signal, request.log);
           const result = await bridge.execute(
             { name: 'clipboard_read', arguments: {} },
             signal,
             request.log,
           );
           if (!isClipboardReadResult(result)) throw new Error('Invalid clipboard read response');
+          const after = await readWindowsObservation(bridge, 'uia_snapshot', signal, request.log);
+          if (after.application !== before.application)
+            throw new ToolRefusal('The foreground Windows application changed before clipboard export.');
           const readResult: ClipboardReadResult = { text: redactClipboardSecrets(result.text) };
           return readResult;
         },
@@ -726,11 +724,21 @@ export function createPcBridgeModule(options: PcBridgeModuleOptions = {}): PcBri
           return runPcAct(input, request, signal, {
             ...guarded,
             capture: async (commandSignal) => {
-              await guarded.checkWindow(commandSignal);
-              return bridge.execute({ name: 'window_capture', arguments: {} }, commandSignal, request.log);
+              await guarded.checkWindow(commandSignal, 'uia_snapshot');
+              const result = await bridge.execute({ name: 'window_capture', arguments: {} }, commandSignal, request.log);
+              try {
+                await guarded.checkWindow(commandSignal, 'uia_snapshot');
+                return result;
+              } catch (error) {
+                if (typeof result.png === 'string') {
+                  Buffer.from(result.png, 'base64').fill(0);
+                  result.png = '';
+                }
+                throw error;
+              }
             },
             actPoint: async (action, commandSignal) => {
-              await guarded.checkWindow(commandSignal);
+              await guarded.checkWindow(commandSignal, 'uia_snapshot');
               return bridge.execute(
               action.action === 'click'
                 ? {
@@ -888,29 +896,55 @@ async function readBrowserTarget(
   throw new ToolRefusal('The current Chrome target cannot be verified. List the tabs again before acting.');
 }
 
+async function readWindowsObservation(
+  bridge: PcBridgeConnection,
+  source: 'uia_snapshot' | 'window_capture',
+  signal: AbortSignal,
+  logger: PcBridgeTimingLogger,
+): Promise<Record<string, unknown> & { application: string }> {
+  const result = await bridge.execute({ name: source, arguments: {} }, signal, logger);
+  try {
+    if (typeof result.application !== 'string' ||
+        !(source === 'uia_snapshot' ? validUiAutomationSnapshot(result) : validWindowCapture(result)))
+      throw new ToolRefusal('The foreground Windows application cannot be verified.');
+    const application = result.application.toLowerCase();
+    refuseGmailComputerAccess(application);
+    if (/^(?:msedge|edge|firefox|brave|opera|vivaldi|iexplore)$/iu.test(application))
+      throw new ToolRefusal('Website controls are supported only in Chrome, where the current site can be verified.');
+    if (application === 'chrome') await readBrowserTarget(bridge, undefined, signal, logger);
+    return source === 'window_capture' ? { application } : { ...result, application };
+  } finally {
+    if (source === 'window_capture' && typeof result.png === 'string') {
+      Buffer.from(result.png, 'base64').fill(0);
+      result.png = '';
+    }
+  }
+}
+
 function guardedPcActBridge(
   bridge: PcBridgeConnection,
   logger: PcBridgeTimingLogger,
-): PcActBridge & { checkWindow: (signal: AbortSignal) => Promise<void> } {
-  let browserWindow = false;
+): PcActBridge & {
+  checkWindow: (signal: AbortSignal, source?: 'uia_snapshot' | 'window_capture') => Promise<void>;
+} {
+  let observedApplication: string | undefined;
   const windowTitle = async (signal: AbortSignal) => {
     const result = await bridge.execute({ name: 'active_window', arguments: {} }, signal, logger);
     if (typeof result.title !== 'string') throw new ToolRefusal('The foreground Windows window cannot be verified.');
     return result.title;
   };
-  const checkWindow = async (signal: AbortSignal) => {
-    const title = await windowTitle(signal);
-    if (browserWindow || chromeWindowTitle.test(title)) {
-      refuseGmailComputerAccess(title);
-      await readBrowserTarget(bridge, undefined, signal, logger);
-    }
+  // Each recheck uses the other native snapshot store, preserving the action's original binding.
+  const checkWindow = async (signal: AbortSignal, source: 'uia_snapshot' | 'window_capture' = 'window_capture') => {
+    const current = await readWindowsObservation(bridge, source, signal, logger);
+    if (!observedApplication || current.application !== observedApplication)
+      throw new ToolRefusal('The foreground Windows application changed. Observe it again before acting.');
   };
   return {
     windowTitle,
     checkWindow,
     observe: async (signal) => {
-      const result = await bridge.execute({ name: 'uia_snapshot', arguments: {} }, signal, logger);
-      browserWindow = result.application === 'chrome';
+      const result = await readWindowsObservation(bridge, 'uia_snapshot', signal, logger);
+      observedApplication = result.application;
       return result;
     },
     browserContext: (signal) => readBrowserTarget(bridge, undefined, signal, logger),

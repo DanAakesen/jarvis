@@ -871,15 +871,20 @@ Local consolidation of #837/#838/#839 uses the existing #848/task-14 delivery,
 with task-15 calendar evidence/approval hunks and task-12 direct-only access guards.
 Accepted main `36d72090` is integrated locally without replaying generated status
 cells or changing the accepted mobile sources and main diagnostics. Independent
-review rejected frozen `3073B943` and targeted re-review rejected `F3BD79DA`.
-Both artifacts remain unchanged. The original five findings are
+review rejected frozen `3073B943`, `F3BD79DA` and `CEC84A7A`.
+All artifacts remain unchanged. The original five findings are
 corrected locally: approval-scope isolation, observed-site computer guards,
 unrelated-status routing, independently requested same-turn computer actions,
 and decoded-empty-body provenance with separately labelled previews. Three residual
 findings are also corrected: actual appointment mail receipts/read topics cannot
 steal calendar scope, quoted/query-topic commands cannot authorise PC fallback,
 and native Gmail-named editor windows remain usable.
-Local checks pass 296 hosted chat/voice tests, 306 runnable backend tests, backend
+Two newly reproduced faults are corrected: trusted current process/site observations
+replace optional Chrome title-suffix inference, and clear topic-bearing EN/DA
+mail requests retain separately requested computer operations without trusting
+quoted subjects or how-to topics. Original native/visual action bindings remain
+intact through separate observation stores; no C#/wire changes.
+Local checks pass 296 hosted chat/voice tests, 327 runnable backend tests, backend
 lint and changed Python Ruff; actual registry receipt checks and four actual-
 handler-receipt hosted chat/voice scope cases also pass.
 HTTP Google/parity/relay/bridge suites and full types/build remain blocked by

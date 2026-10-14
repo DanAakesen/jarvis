@@ -2426,6 +2426,16 @@ intent found only within mail-query/quoted subjects, and preserve native editor
 windows whose filenames contain Gmail. Full unambiguous EN/DA independent
 commands still work; real Chrome Gmail and later-action guards still refuse.
 
+Targeted re-review passed those exact three cases but rejected `CEC84A7A` for
+suffix-dependent process identification and over-narrow bare-mail command parsing.
+Preserve its patch, receipt and immutable evidence directory. Current corrections
+use actual structured process/site observations, including suffixless and exact
+200-character native titles, missing-identity refusal, late native/confirmed
+switches and window/clipboard export checks. Separate native snapshot stores
+preserve UIA/visual action IDs; identity-only capture images are discarded, never
+sent to a planner/model or audit. Clear topic-bearing EN/DA commands remain
+independent, while quoted commands/how-to topics cannot authorise fallback.
+
 The coordinator authorised normal owned commits to finish the earlier `81580919`
 merge, integrate `51bda5cb`, and now integrate actual main once for these residual
 corrections. Main `36d720909d30dc84b9f94b953758312465d9fec2` is integrated locally;
@@ -2437,6 +2447,8 @@ release evidence. The historical release failure's cause remains unknown.
 No push, PR creation/change, readiness metadata, hosted CI,
 provider call or deployment is authorised here. The corrected frozen patch needs
 independent review; the coordinator owns subsequent publication and release.
+This replacement remains based on already-integrated `36d72090`; do not fetch or
+chase later main. The coordinator owns reconciling later accepted main after PASS.
 
 From `agents/jarvis`, run the isolated Python environment's pytest on
 `tests/test_calendar_flow.py`, `tests/test_model_client.py`,
@@ -2452,7 +2464,7 @@ failed on the feed's `ip-address@10.7.4` 404; official-registry TLS also failed.
 An approved read-only tooling snapshot was copied into isolated dependencies,
 with workspace aliases pointing only to this worktree. Verified portable
 Node 22.23.3 x64 runs snapshot Vitest 5.0.2/Vite 8.3.1, not pinned CI versions.
-306 tests across twelve runnable suites pass, as does full backend zero-warning
+327 tests across twelve runnable suites pass, as does full backend zero-warning
 lint. Both automatic-capture variants retain the unchanged 15,000-code-point
 built-in-mode headroom check. No parity or confirmation check was removed.
 
@@ -2496,6 +2508,12 @@ mutation/status/repeated-yes controls. Actual registry+PC regressions include
 both quoted/topic negatives, clear EN/DA commands, real `vscode` identity with
 `gmail-access-policy.ts` title, native action/clipboard/window positives and a
 native-to-Chrome Gmail switch refusal.
+Fresh proofs run in the new `google-identity-intent-proof-work` session folder;
+do not overwrite any prior frozen evidence. New paired registry regressions
+cover the three exact EN/DA topic-bearing commands and prior how-to/quoted-subject
+negatives. Actual PC module fixtures use fresh independent snapshot IDs to
+detect invalidation, suffixless/truncated Chrome titles, missing identity,
+before-dispatch/confirmation refusal and native metadata/control positives.
 
 Installed CLI help supports `copilot --remote`. Observed existing SDK processes
 run `--server --stdio --no-auto-update`, without `--remote`; this task neither

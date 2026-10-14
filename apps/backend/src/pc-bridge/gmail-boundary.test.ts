@@ -17,6 +17,11 @@ function fixture(options: Parameters<typeof createPcBridgeModule>[0] = {}) {
   let gmailTitle = true;
   let application = 'chrome';
   let nativeTitle = '';
+  let controlName = 'Synthetic control';
+  let uiSnapshotId = snapshotId;
+  let observation = 0;
+  let captureId = snapshotId;
+  let captures = 0;
   const planner = { decide: vi.fn<PcActPlanner['decide']>(async () => ({ operation: 'done', confidence: 0.99 })) };
   const module = createPcBridgeModule({ pcActPlanner: planner, ...options });
   const execute = vi.spyOn(module.connection, 'execute').mockImplementation(async (command) => {
@@ -31,11 +36,23 @@ function fixture(options: Parameters<typeof createPcBridgeModule>[0] = {}) {
     };
     if (command.name === 'active_window') return { title: nativeTitle ||
       (gmail && gmailTitle ? 'Inbox - Gmail - Google Chrome' : 'Search - Google Chrome') };
-    if (command.name === 'uia_snapshot') return {
-      snapshotId, application, elements: [{ index: 0, role: 'button', name: 'Synthetic control' }],
-    };
+    if (command.name === 'uia_snapshot') {
+      uiSnapshotId = `1730aa51-f380-4df9-a345-${(++observation).toString(16).padStart(12, '0')}`;
+      return { snapshotId: uiSnapshotId, application, elements: [{ index: 0, role: 'button', name: controlName }] };
+    }
+    if (command.name === 'window_capture') {
+      captureId = `1730aa51-f380-4df9-a345-${(++captures + 100).toString(16).padStart(12, '0')}`;
+      return { snapshotId: captureId, application, width: 1, height: 1, png: 'iVBORw0KGgo=' };
+    }
+    if (command.name === 'click_point') {
+      if (command.arguments.snapshotId !== captureId) throw new Error('Visual snapshot was invalidated.');
+      return { acted: true, action: 'click' };
+    }
     if (command.name === 'browser_act') return { acted: true, action: command.arguments.action };
-    if (command.name === 'uia_act') return { acted: true, action: command.arguments.action };
+    if (command.name === 'uia_act') {
+      if (command.arguments.snapshotId !== uiSnapshotId) throw new Error('Native snapshot was invalidated.');
+      return { acted: true, action: command.arguments.action };
+    }
     if (command.name === 'open_app') return { opened: true, app: command.arguments.app };
     if (command.name === 'clipboard_read') return { text: 'Synthetic clipboard.' };
     throw new Error(`Unexpected fixture command ${command.name}`);
@@ -43,15 +60,97 @@ function fixture(options: Parameters<typeof createPcBridgeModule>[0] = {}) {
   return { execute, planner, registry: createToolRegistry([module]),
     setGmail: (value: boolean) => { gmail = value; },
     setGmailTitle: (value: boolean) => { gmailTitle = value; },
+    setControlName: (value: string) => { controlName = value; },
     setNative: (process: string, title: string) => { application = process; nativeTitle = title; } };
 }
 
 describe('actual raw PC registry Gmail boundary', () => {
+  const rawTitles = ['Inbox - Gmail', `Gmail ${'x'.repeat(240)} - Google Chrome`.slice(0, 200)];
+  it.each(rawTitles.flatMap(title => ['pc_active_window', 'pc_clipboard_read'].map(name => [title, name])))(
+    'refuses Chrome Gmail raw/truncated title %s before %s export', async (title, name) => {
+      const f = fixture();
+      f.setNative('chrome', title!);
+      expect(title!.length).toBeLessThanOrEqual(200);
+      await expect(f.registry.get(name!)!.execute({}, request(), signal())).rejects.toThrow(GMAIL_DIRECT_ACCESS_REASON);
+      expect(f.execute.mock.calls.filter(([command]) => command.name === 'clipboard_read')).toHaveLength(0);
+    },
+  );
+
+  it.each(rawTitles)('refuses native-to-Chrome %s before the first native dispatch', async (title) => {
+    const f = fixture();
+    f.setNative('vscode', 'gmail-access-policy.ts - jarvis - Visual Studio Code');
+    f.planner.decide.mockImplementation(async () => {
+      f.setNative('chrome', title);
+      return { operation: 'click', confidence: 0.99, targetIndex: 0 };
+    });
+    await expect(f.registry.get('pc_act')!.execute({ goal: 'Run the tests' }, request(), signal()))
+      .rejects.toThrow(GMAIL_DIRECT_ACCESS_REASON);
+    expect(f.planner.decide).toHaveBeenCalledOnce();
+    expect(f.execute.mock.calls.filter(([command]) => command.name === 'uia_act')).toHaveLength(0);
+  });
+
+  it.each(['pc_active_window', 'pc_clipboard_read'])('fails closed on missing structured identity before %s', async (name) => {
+    const f = fixture();
+    f.setNative('', 'gmail-access-policy.ts - jarvis - Visual Studio Code');
+    await expect(f.registry.get(name)!.execute({}, request(), signal())).rejects.toThrow(/application.*verified/iu);
+    expect(f.execute.mock.calls.filter(([command]) => command.name === 'clipboard_read')).toHaveLength(0);
+  });
+
+  it('rechecks structured identity inside actual native confirmation', async () => {
+    const runConfirmed = vi.fn(async (_summary: string, action: () => Promise<unknown>) => {
+      f.setNative('chrome', 'Inbox - Gmail');
+      return action();
+    });
+    const f = fixture({ runConfirmed });
+    f.setNative('vscode', 'gmail-access-policy.ts - jarvis - Visual Studio Code');
+    f.setControlName('Delete');
+    f.planner.decide.mockResolvedValue({ operation: 'click', confidence: 0.99, targetIndex: 0 });
+    await expect(f.registry.get('pc_act')!.execute({ goal: 'Delete the entry' }, request(), signal()))
+      .rejects.toThrow(GMAIL_DIRECT_ACCESS_REASON);
+    expect(runConfirmed).toHaveBeenCalledOnce();
+    expect(f.execute.mock.calls.filter(([command]) => command.name === 'uia_act')).toHaveLength(0);
+  });
+
+  it('rechecks identity before clipboard export when the foreground changes during the read', async () => {
+    const f = fixture();
+    f.setNative('vscode', 'gmail-access-policy.ts - jarvis - Visual Studio Code');
+    const execute = f.execute.getMockImplementation()!;
+    f.execute.mockImplementation(async (command, ...args) => {
+      if (command.name === 'clipboard_read') f.setNative('chrome', 'Inbox - Gmail');
+      return execute(command, ...args);
+    });
+    await expect(f.registry.get('pc_clipboard_read')!.execute({}, request(), signal()))
+      .rejects.toThrow(GMAIL_DIRECT_ACCESS_REASON);
+  });
+
+  it('fails closed on missing late identity without dispatching a native action', async () => {
+    const f = fixture();
+    f.setNative('vscode', 'gmail-access-policy.ts - jarvis - Visual Studio Code');
+    f.planner.decide.mockImplementation(async () => {
+      f.setNative('', 'Unverifiable title');
+      return { operation: 'click', confidence: 0.99, targetIndex: 0 };
+    });
+    await expect(f.registry.get('pc_act')!.execute({ goal: 'Run the tests' }, request(), signal()))
+      .rejects.toThrow(/application.*verified/iu);
+    expect(f.execute.mock.calls.filter(([command]) => command.name === 'uia_act')).toHaveLength(0);
+  });
+
+  it('preserves the separate visual snapshot binding through structured late rechecks', async () => {
+    const image = { locateElements: vi.fn(async () => [{
+      index: 0, role: 'button', name: 'Synthetic visual control',
+      bounds: { x: 0, y: 0, width: 1, height: 1 },
+    }]) };
+    const f = fixture({ pcActVisionModel: image });
+    f.setNative('vscode', 'gmail-access-policy.ts - jarvis - Visual Studio Code');
+    f.planner.decide.mockResolvedValueOnce({ operation: 'click', confidence: 0.99, targetIndex: 0 });
+    await f.registry.get('pc_act')!.execute({ goal: 'Run the tests' }, request(), signal());
+    expect(f.execute.mock.calls.filter(([command]) => command.name === 'click_point')).toHaveLength(1);
+  });
   it('guards real Chrome process identity before exporting a Windows tree to a planner', async () => {
     const f = fixture();
     await expect(f.registry.get('pc_act')!.execute({ goal: 'Find the booking dates' }, request(), signal()))
       .rejects.toThrow(GMAIL_DIRECT_ACCESS_REASON);
-    expect(f.execute.mock.calls.map(([command]) => command.name)).toEqual(['uia_snapshot', 'active_window']);
+    expect(f.execute.mock.calls.map(([command]) => command.name)).toEqual(['uia_snapshot', 'browser_tabs']);
     expect(f.planner.decide).not.toHaveBeenCalled();
   });
 
@@ -79,6 +178,9 @@ describe('actual raw PC registry Gmail boundary', () => {
     f.planner.decide.mockResolvedValueOnce({ operation: 'click', confidence: 0.99, targetIndex: 0 });
     await f.registry.get('pc_act')!.execute({ goal: 'Run the tests' }, request(), signal());
     expect(f.execute.mock.calls.filter(([command]) => command.name === 'uia_act')).toHaveLength(1);
+    const beforeDispatch = f.execute.mock.calls.slice(0, f.execute.mock.calls.findIndex(([command]) => command.name === 'uia_act'));
+    expect(beforeDispatch.filter(([command]) => command.name === 'uia_snapshot')).toHaveLength(1);
+    expect(beforeDispatch.filter(([command]) => command.name === 'window_capture')).toHaveLength(1);
     await expect(f.registry.get('pc_active_window')!.execute({}, request(), signal()))
       .resolves.toEqual({ title });
     await expect(f.registry.get('pc_clipboard_read')!.execute({}, request(), signal()))
@@ -93,7 +195,7 @@ describe('actual raw PC registry Gmail boundary', () => {
     await expect(f.registry.get('pc_act')!.execute({ goal: 'Find the booking dates' }, request(), signal()))
       .rejects.toThrow(GMAIL_DIRECT_ACCESS_REASON);
     expect(f.execute.mock.calls.map(([command]) => command.name))
-      .toEqual(['uia_snapshot', 'active_window', 'browser_tabs']);
+      .toEqual(['uia_snapshot', 'browser_tabs']);
     expect(f.planner.decide).not.toHaveBeenCalled();
     expect(vision.locateElements).not.toHaveBeenCalled();
   });
@@ -126,7 +228,7 @@ describe('actual raw PC registry Gmail boundary', () => {
     const f = fixture();
     await expect(f.registry.get('codex_prompt')!.execute({ prompt: 'Write a unit test.' }, request(), signal()))
       .rejects.toThrow(GMAIL_DIRECT_ACCESS_REASON);
-    expect(f.execute.mock.calls.map(([command]) => command.name)).toEqual(['open_app', 'uia_snapshot', 'active_window']);
+    expect(f.execute.mock.calls.map(([command]) => command.name)).toEqual(['open_app', 'uia_snapshot', 'browser_tabs']);
     expect(f.planner.decide).not.toHaveBeenCalled();
   });
   it('refuses opaque Gmail snapshot IDs before reading private controls', async () => {
@@ -184,6 +286,6 @@ describe('actual raw PC registry Gmail boundary', () => {
   it.each(['pc_active_window', 'pc_clipboard_read'])('does not export Gmail through %s', async (name) => {
     const f = fixture();
     await expect(f.registry.get(name)!.execute({}, request(), signal())).rejects.toThrow(GMAIL_DIRECT_ACCESS_REASON);
-    expect(f.execute.mock.calls.map(([command]) => command.name)).toEqual(['active_window']);
+    expect(f.execute.mock.calls.map(([command]) => command.name)).toEqual(['uia_snapshot', 'browser_tabs']);
   });
 });

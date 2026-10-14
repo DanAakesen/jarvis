@@ -59,6 +59,12 @@ describe('Gmail access execution boundary', () => {
     ['incomplete', 'Read Gmail, then open Spotify.'],
     ['forbidden', 'L\u00e6s Gmail, og \u00e5bn Spotify.'],
     ['forbidden', 'L\u00e6s mail, og \u00e5bn Spotify.'],
+    ['forbidden', 'Find my dentist appointment confirmation email, then open Spotify.'],
+    ['forbidden', 'Read mail about the hotel booking, then open Spotify.'],
+    ['forbidden', 'L\u00e6s mail om hotelreservationen, og \u00e5bn Spotify.'],
+    ['forbidden', 'Find the email titled "Dentist appointment", then open Spotify.'],
+    ['forbidden', 'Find the email titled "How to install Spotify", then open Spotify.'],
+    ['forbidden', 'Read mail about the hotel booking; then open Spotify.'],
   ])(
     'permits an independent app after %s for %s, not fallback', async (kind, text) => {
       const api = vi.fn(async () => {
@@ -112,6 +118,9 @@ describe('Gmail access execution boundary', () => {
     'Read mail about how to install and open Spotify.',
     'Find the email titled "Please read this, then open Spotify".',
     "Find the email titled 'Please read this, then open Spotify'.",
+    'Find the email titled \u201cPlease read this, then open Spotify\u201d.',
+    'Read mail about how to install, then open Spotify.',
+    'L\u00e6s mail om hvordan man installerer og \u00e5bner Spotify.',
   ])('does not turn a mail query into a PC instruction: %s', async (text) => {
     const module = createPcBridgeModule();
     const execute = vi.spyOn(module.connection, 'execute').mockResolvedValue({ opened: true });

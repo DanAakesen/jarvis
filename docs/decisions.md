@@ -2770,3 +2770,38 @@ The coordinator reports Deploy `38629181064` passed Web/deep-link, backend healt
 and actual smoke, while backend/infra/hosted-agent deployment was skipped.
 This Google delivery remains local and awaits the same independent reviewer,
 coordinator-owned exact-head pinned CI and existing-PR publication.
+
+## Google current-identity and topic-command corrections (14 October 2026; local)
+
+The same reviewer passed all three exact F3 residual cases, then rejected
+`CEC84A7A` / tree `438eeb6c` for two new tightly coupled findings. Retain that
+failed freeze and all earlier artifacts.
+
+- Raw Windows titles have no application suffix guarantee and are truncated at
+  200 characters. Replace title-based browser inference with trusted current
+  process identity from existing structured observations and actual Chrome site
+  metadata. Missing or changed identity refuses, never defaults to native.
+  Check window/clipboard data before export and native actions before dispatch,
+  including confirmation and suffixless/truncated Chrome switches.
+- UIA and visual observations replace different native snapshot stores. Use the
+  other store for late identity checks so original action IDs/window/control
+  binding survive. Identity-only capture data remains transient and is discarded
+  without model/planner/audit export. No native-wire/C# change is needed.
+- Preserve exact-current-user independent operations after clear topic-bearing
+  mail requests. Split only explicit top-level separators outside balanced
+  quotes, retain exact requested-operation binding and same-turn scope, and
+  refuse ambiguous unquoted how-to topics. Do not globally reopen mail fallback.
+
+Before the fixes, production-boundary fixtures reproduced 14 failing cases.
+Qualified local evidence: 327 Node tests in twelve files, 296 Python tests
+including 48 calendar fixtures, four actual-handler-receipt hosted chat/voice
+cases, backend zero-warning ESLint and changed Ruff. Strict types still fail on
+the exact same twelve missing-package/consequent diagnostic lines. Prompt
+headroom remains 14978/15000; four app-dependent suites/full relay, pinned CI,
+full build and original live/provider acceptance remain unpassed.
+
+Use the already-integrated accepted base `36d72090` only; no further main fetch.
+All 32 scoped paths, protected mobile/Factory/smoke blobs and PLAN table cells
+remain preserved. A normal scoped local replacement commit is authorised;
+publication/readiness/CI/release and later-main reconciliation remain with the
+coordinator after independent PASS.
