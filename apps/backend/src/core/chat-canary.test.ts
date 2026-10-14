@@ -101,6 +101,81 @@ describe('post-deploy chat acceptance suite', () => {
   });
 
   it.each([
+    'I can help with Notes, calendars and GitHub tools',
+    'I can help with a note, a calendar and GitHub tools',
+  ])('accepts singular/plural category wording with successful discovery: %s', async (text) => {
+    const agent = passingAgent((input) => input.text === prompts[1] ? {
+      text,
+      calls: [{
+        name: 'get_system_health', operation: 'list_capabilities', outcome: 'ok',
+        capabilities: ['Notes: vault_read, vault_search', 'Calendar: calendar_today_agenda', 'GitHub tools: github_read'],
+      }],
+    } : undefined);
+    const suite = probes(agent);
+
+    await expect(suite.chat_capabilities!()).resolves.toEqual({ status: 'ok' });
+    await expect(suite.chat_canary!()).resolves.toEqual({ status: 'ok' });
+    expect(agent.stream).toHaveBeenCalledTimes(8);
+  });
+
+  it.each([
+    'I can help with calendars and GitHub tools',
+    'I can help with Notes and GitHub tools',
+    'I can help with Notes and calendars',
+    'I can help with Notes, scheduling and GitHub tools',
+    'I can help with Notes, calendarish and GitHub tools',
+    'I can help with Notes, mycalendars and GitHub tools',
+    'I can help with Notes, calendarsync and GitHub tools',
+  ])('rejects missing categories, synonyms and partial calendar words: %s', async (text) => {
+    const suite = probes(passingAgent((input) => input.text === prompts[1] ? {
+      text,
+      calls: [{
+        name: 'get_system_health', operation: 'list_capabilities', outcome: 'ok',
+        capabilities: ['Notes: vault_read', 'Calendar: calendar_today_agenda', 'GitHub tools: github_read'],
+      }],
+    } : undefined));
+
+    await expect(suite.chat_capabilities!()).resolves.toEqual({
+      status: 'down', reason: 'capabilities_reply_incomplete',
+    });
+    await expect(suite.chat_canary!()).resolves.toEqual({ status: 'down', reason: 'acceptance_check_failed' });
+  });
+
+  it.each([
+    { reason: 'capabilities_discovery_missing', calls: [] },
+    {
+      reason: 'capabilities_discovery_wrong',
+      calls: [{ name: 'get_system_health', operation: 'health', outcome: 'ok' }],
+    },
+    {
+      reason: 'capabilities_discovery_wrong',
+      calls: [{ name: 'github_read', operation: 'list_capabilities', outcome: 'ok' }],
+    },
+    ...(['error', 'refused'] as const).map((outcome) => ({
+      reason: 'capabilities_discovery_failed',
+      calls: [{ name: 'get_system_health', operation: 'list_capabilities', outcome }],
+    })),
+    ...[
+      [],
+      ['Calendar: calendar_today_agenda', 'GitHub tools: github_read'],
+      ['Notes: vault_read', 'GitHub tools: github_read'],
+      ['Notes: vault_read', 'Calendar: calendar_today_agenda'],
+      ['Notes: vault_read', 'Calendars: scheduling', 'GitHub tools: github_read'],
+    ].map((capabilities) => ({
+      reason: 'capabilities_receipt_incomplete',
+      calls: [{ name: 'get_system_health', operation: 'list_capabilities', outcome: 'ok', capabilities }],
+    })),
+  ])('keeps plural replies failing for $reason', async ({ reason, calls }) => {
+    const suite = probes(passingAgent((input) => input.text === prompts[1] ? {
+      text: 'I can help with Notes, calendars and GitHub tools',
+      calls,
+    } : undefined));
+
+    await expect(suite.chat_capabilities!()).resolves.toEqual({ status: 'down', reason });
+    await expect(suite.chat_canary!()).resolves.toEqual({ status: 'down', reason: 'acceptance_check_failed' });
+  });
+
+  it.each([
     {
       reason: 'capabilities_discovery_missing',
       text: 'I can help with notes, calendar, and GitHub tools.',
@@ -168,17 +243,26 @@ describe('post-deploy chat acceptance suite', () => {
   it('bounds a stalled prompt and returns a safe failure', async () => {
     vi.useFakeTimers();
     try {
+      const signals: AbortSignal[] = [];
       const stalled: ConversationAgent = {
-        stream: () => ({
-          [Symbol.asyncIterator]: () => ({
-            next: () => new Promise<IteratorResult<string>>(() => {}),
-            return: async () => ({ done: true, value: undefined }),
-          }),
-        }),
+        stream: (_input, _owner, signal) => {
+          signals.push(signal);
+          return {
+            [Symbol.asyncIterator]: () => ({
+              next: () => new Promise<IteratorResult<string>>(() => {}),
+              return: async () => ({ done: true, value: undefined }),
+            }),
+          };
+        },
       };
-      const result = probes(stalled).chat_jobs!();
+      const suite = probes(stalled);
+      const result = suite.chat_jobs!();
       await vi.advanceTimersByTimeAsync(25_000);
       await expect(result).resolves.toMatchObject({ status: 'down', reason: 'timeout' });
+      await expect(suite.chat_capabilities!()).resolves.toEqual({ status: 'down', reason: 'timeout' });
+      await expect(suite.chat_canary!()).resolves.toEqual({ status: 'down', reason: 'acceptance_check_failed' });
+      expect(signals).toHaveLength(7);
+      expect(signals.every((signal) => signal.aborted)).toBe(true);
     } finally {
       vi.useRealTimers();
     }

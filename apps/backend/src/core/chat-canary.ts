@@ -118,7 +118,7 @@ async function checkPrompt(
             !(capabilities.capabilities ?? []).some((value) => /\bgithub\b/iu.test(value))) {
           return failed(id, 'capabilities_receipt_incomplete');
         }
-        return /\bnotes?\b/u.test(text) && /\bcalendar\b/u.test(text) && /\bgithub\b/u.test(text)
+        return /\bnotes?\b/u.test(text) && /\bcalendars?\b/u.test(text) && /\bgithub\b/u.test(text)
           ? result('ok')
           : failed(id, 'capabilities_reply_incomplete');
       }
