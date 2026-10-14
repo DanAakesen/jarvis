@@ -2417,3 +2417,10 @@ regressions, plus extraction-limit guidance. Read both plain and alternate HTML
 text; absent details in extracted text do not prove the original email lacks them.
 Computer-use access enforcement stays owned by #837; this change uses only the
 Google API and static HTML parsing. No private email was read for these tests.
+
+Offline evidence for P11-03: 268 selected Google, instruction, registry,
+presentation, approval, authentication, app and module tests pass after the
+sandbox loopback/timing reruns; backend lint/build pass. The stage recovery audit
+remains redacted, and failed/unstaged/replayed actions cannot execute. Python
+instruction syntax is checked; hosted-model and real-account behavior are not
+verified. No calendar change or deployment was performed.

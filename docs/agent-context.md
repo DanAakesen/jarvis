@@ -2152,3 +2152,10 @@ backend TypeScript build passed; the reader's scoped zero-warning lint passes
 following the invisible-character regex correction. Final broader registry/module
 checks and full backend lint/build remain next. Python instructions compile; no
 Python runtime logic changed and its full test environment is not installed.
+
+Final P11-03 validation (14 October 2026):
+- `npm test --workspace @jarvis/backend -- src/google src/core/capability-instructions.test.ts`: 97 passed.
+- `npm test --workspace @jarvis/backend -- src/core/tool-registry.test.ts src/core/work-presentation.test.ts src/core/approval.test.ts src/modules.test.ts src/auth/auth.test.ts src/app.test.ts --maxWorkers=2`: the three core suites passed (79 tests), but the sandbox denied the auth fixture's loopback listener (`EPERM`) and four app/module tests timed out during concurrent checks.
+- Unchanged suites rerun without extending timeouts: `src/auth/auth.test.ts --maxWorkers=1` with loopback permission, 60 passed; `src/modules.test.ts src/app.test.ts --maxWorkers=1`, 32 passed. Total selected coverage: 268 passing tests after reruns.
+- `npm run lint --workspace @jarvis/backend` and `npm run build --workspace @jarvis/backend`: passed on the final code. Agent instruction source compiles; Python ruff/full pytest were not run because that environment is absent. Backend instruction contracts cover both shared and agent guidance; the largest built-in mode prompt is 14,959 code points, under 15,000.
+- Final diff/whitespace review passed. No UI, migration, dependency, OAuth or deployment changes. No live mail was read and no calendar mutation was executed. Hosted-model/chat/voice and private-account acceptance remain unverified. The backend opens the PR; this task does not create one.

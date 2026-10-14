@@ -6,8 +6,11 @@ Calendar recovery now reads the original pending stage through a verified, priva
 read-only tool; chat and voice instructions require actual staging before approval.
 Regression tests cover redacted history, plain approval, no stage, failed staging
 and replay. Task 12 / #837 MIME extraction is reused; nested HTML reservation
-and invisible-padding regressions are added. Next: finish backend validation
-and push the final evidence checkpoint. No live calendar operation is authorized.
+and invisible-padding regressions are added. Offline implementation is complete:
+268 selected tests, backend lint and TypeScript build pass. Next: backend-owned
+PR review, with #837 access-policy changes remaining on task 12; deployed
+chat/voice and account acceptance are unverified. No live calendar operation
+was performed or authorized.
 
 ## Danish voice Settings correction (13 October 2026)
 
@@ -785,6 +788,7 @@ acceptance pending; #798, #797, then #792 remain separate.
 A rolling intake phase. When Dan asks Jarvis to change its own code or a project's code, Jarvis drafts the issue, confirms it with Dan and creates it as `P11-NN` (P10-03). Rows are added here as the issues are created.
 | ID | Issue | Task | Acceptance criteria | Depends on | Status |
 | --- | --- | --- | --- | --- | --- |
+| P11-03 | [#838](https://github.com/DanAakesen/jarvis/issues/838) | Stage calendar changes before approval; recover real pending codes after history redaction; expose Gmail reservation HTML and extraction limits | Fake-provider stage/recover/plain-approve/replay and nested HTML/padding regressions; 268 selected tests plus backend lint/build pass; no live calendar write | #837 owns direct-only access policy | Complete offline; live acceptance pending |
 | P9-42 | [#569](https://github.com/DanAakesen/jarvis/issues/569) | Safe, retryable tool argument refusals in voice/chat, content-free validation telemetry, and repo_search aliases plus incomplete/empty-result guidance; offline checks pass, live acceptance pending | Backend | P7-45, P9-36 | Complete |
 | P9-40 | [#567](https://github.com/DanAakesen/jarvis/issues/567) | Jarvis can switch the page Dan is looking at | Backend + UI session | P8-15, P9-36 | Complete |
 
