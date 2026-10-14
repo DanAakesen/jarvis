@@ -45,6 +45,34 @@ describe('source-shaped synthetic health normalization', () => {
     expect(() => normalizeHealth({ data: { metrics: [metric('active_energy', 'cal', [point(75)])] } })).toThrow('unsupported_unit');
     expect(() => normalizeHealth({ data: { metrics: [metric('body_mass', 'kg', [point(75)]), { name: 'body_mass', data: [point(75)] }] } })).toThrow('unsupported_unit');
   });
+  it.each([['%', 20], ['percent', 20], ['fraction', 0.2], ['1', 0.2], [' PERCENT ', 20]])('canonicalizes body-fat %s without changing zero or missing values', (units, qty) => {
+    for (const value of [qty, 0, null]) {
+      const output = normalizeHealth({ data: { metrics: [metric('body_fat_percentage', String(units), [point(value)])] } });
+      expect(output.metrics[0]).toMatchObject({ unit: '%', value: value === null ? null : value === 0 ? 0 : 20 });
+      expect(output.metrics[0]?.fields_json.latest).toMatchObject({ qty: value });
+      validateNormalized(output);
+    }
+  });
+  it.each(['kg', 'made-up', 'Hz', 'constructor', '__proto__'])('refuses unsupported body-fat %s at the group or point boundary', units => {
+    for (const qty of [20, 0, null]) {
+      expect(() => normalizeHealth({ data: { metrics: [metric('body_fat_percentage', units, [point(qty)])] } })).toThrow('unsupported_unit');
+      for (const unitField of ['units', 'unit']) {
+        expect(() => normalizeHealth({ data: { metrics: [metric('body_fat_percentage', '%', [{ ...point(qty), [unitField]: units }])] } })).toThrow('unsupported_unit');
+      }
+    }
+  });
+  it('keeps missing body-fat units unknown without changing unknown dimensions', () => {
+    for (const units of [undefined, null, '', ' ']) {
+      const output = normalizeHealth({ data: { metrics: [{ name: 'body_fat_percentage', units, data: [point(0.2)] }] } });
+      expect(output.metrics[0]).toMatchObject({ value: 0.2, unit: null });
+    }
+    expect(normalizeHealth({ data: { metrics: [metric('custom_metric', 'made-up', [point(3)])] } }).metrics[0]).toMatchObject({ value: 3, unit: 'made-up' });
+  });
+  it('combines supported body-fat representations but rejects mixed known and missing units', () => {
+    const supported = metric('body_fat_percentage', '%', [point(20), { ...point(0.25, '2026-10-13T12:00:00Z'), unit: 'fraction' }]);
+    expect(normalizeHealth({ data: { metrics: [supported] } }).metrics[0]).toMatchObject({ value: 25, unit: '%', min_value: 20, max_value: 25, avg_value: 22.5 });
+    expect(() => normalizeHealth({ data: { metrics: [supported, { name: 'body_fat_percentage', data: [point(0.2)] }] } })).toThrow('unsupported_unit');
+  });
   it('keeps sleep assigned to its wake day and converts segment minutes to hours without double counting aggregates', () => {
     const output = normalizeHealth({ data: { metrics: [metric('sleep_analysis', 'min', [
       { value: 'core', qty: 180, date: '2026-10-14', startDate: '2026-10-13T22:00:00Z', endDate: '2026-10-14T01:00:00Z' },
