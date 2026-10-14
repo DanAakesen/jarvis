@@ -73,6 +73,19 @@ export class PendingGoogleActions {
     return action.execute(signal);
   }
 
+  /** Recover the real process-local stage after private tool results leave turn history. */
+  pendingCalendarChange() {
+    this.removeExpired();
+    const action = [...this.actions.values()].find((candidate) => candidate.scope === 'calendar');
+    return action ? {
+      status: 'awaiting_confirmation' as const,
+      summary: action.summary,
+      confirmationCode: action.code,
+      expiresAt: new Date(action.createdAt + ACTION_TTL_MS).toISOString(),
+      instruction: `Nothing has changed. ${approvalInstruction}`,
+    } : { status: 'none' as const, detail: 'No calendar change is staged. Nothing has changed.' };
+  }
+
   get size(): number {
     this.removeExpired();
     return this.actions.size;

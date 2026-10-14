@@ -2130,3 +2130,12 @@ P12-01 checks: `npm test --workspace @jarvis/contracts`; `npm test --workspace @
 Dan approved P12 on 12 October 2026 and explicitly released only P12-01 for this worker. The later [execution authorization](https://github.com/DanAakesen/jarvis/issues/716#issuecomment-6124634183) supersedes the original backlog-only and extra cutover-approval wording: eventual production cutover is pre-authorized only after dependency, parity, reconciliation, backup and rollback gates pass. Original Daily continues ordinary authorized food/health writes and remains running/canonical before cutover. Migration tooling must not alter its application/source code/schema or rewrite its records; final-delta reconciliation accounts for ongoing normal use. Read-only export belongs in the protected migration workflow. Legacy operation may be deprecated only after all in-scope data, features and sync are migrated and verified and rollback is protected; never delete the original repository or data. New secrets/access and unapproved paid resources retain their explicit-confirmation boundaries. This issue performs no cutover or production writes.
 
 No direct Azure access, original Daily checkout/Sites edits, private health/food data/exports or production credentials in coding/public Git. Reuse current login/session/owner and single conversation; no TickTick. Live-provider and physical-iPhone acceptance remain separately verified evidence; main-only release workflows apply.
+
+## P11-03 / #838 execution boundary
+
+Work stays on `jarvis/task-14`; commit and push checkpoints, with no manual PR.
+Calendar regression tests use fake Google responses only. No actual reservation
+or calendar mutation is part of this code task. `calendar_get_pending_change`
+requires the verified current Dan message and returns private process-local state.
+Related #837 / `origin/jarvis/task-12` owns direct-only Gmail access policy; reuse
+its MIME reader rather than implementing a second reader or duplicating PC guards.

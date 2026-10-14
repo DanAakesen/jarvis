@@ -18,6 +18,19 @@ describe('shared navigation capability instructions', () => {
     expect(instructions).toContain('name the missing tool permission');
   });
 
+  it('stages calendar changes before requesting approval and recovers real codes across turns', () => {
+    const instructions = capabilityInstructions({ automaticCapture: false });
+    expect(instructions).toContain('before asking for approval');
+    expect(instructions).toContain('only ok + awaiting_confirmation');
+    expect(instructions).toContain('call calendar_confirm_change without asking again');
+    expect(instructions).toContain('calendar_get_pending_change');
+    expect(instructions).toContain('Never invent codes or restage on approval');
+    const voice = readFileSync(new URL('../../../../agents/jarvis/jarvis_tools.py', import.meta.url), 'utf8');
+    expect(voice).toContain('after outcome ok and status awaiting_confirmation');
+    expect(voice).toContain('calendar_get_pending_change');
+    expect(voice).toContain('never invent it or restage on approval');
+  });
+
   it('maps window requests to snapshot-backed intents and reports pin outcomes honestly', () => {
     const instructions = capabilityInstructions({ automaticCapture: false });
     expect(instructions).toContain('Windows: intent, not coordinates');

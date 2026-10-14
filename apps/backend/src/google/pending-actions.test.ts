@@ -19,6 +19,20 @@ function fixture(scope: 'calendar' | 'mail' = 'calendar') {
 }
 
 describe('pending Google actions', () => {
+  it('recovers only a real calendar stage with its original code until expiry', async () => {
+    const f = fixture();
+    expect(f.actions.pendingCalendarChange()).toMatchObject({
+      status: 'awaiting_confirmation', confirmationCode: f.pending.confirmationCode,
+      summary: 'Change.', expiresAt: new Date(601000).toISOString(),
+    });
+    await f.confirm('yes');
+    expect(f.actions.pendingCalendarChange()).toMatchObject({ status: 'none' });
+    f.stage();
+    f.setNow(601000);
+    expect(f.actions.pendingCalendarChange()).toMatchObject({ status: 'none' });
+    expect(fixture('mail').actions.pendingCalendarChange()).toMatchObject({ status: 'none' });
+  });
+
   it.each(['yes', 'approve', 'go ahead', 'do it', ' YES! ', 'Approve.'])('approves calendar with %s only once', async (reply) => {
     const f = fixture();
     await expect(f.confirm(reply)).resolves.toEqual({ status: 'completed' });

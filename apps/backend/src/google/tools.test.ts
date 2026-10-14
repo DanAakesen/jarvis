@@ -387,6 +387,62 @@ describe('Google Calendar and Gmail tools', () => {
     expect(request).not.toHaveBeenCalled();
   });
 
+  it('recovers the original staged code on a later approval after private history is redacted', async () => {
+    const request = vi.fn(async () => ({}));
+    const { app, records, setLatest } = appFor(request);
+    const stage = await app.inject({
+      method: 'POST', url: '/tools/calendar_create_event', headers: confirmHeaders('42'),
+      payload: { subject: 'Copenhagen Marriott stay', startDateTime: '2026-10-14T15:00:00+02:00', endDateTime: '2026-10-17T11:00:00+02:00' },
+    });
+    expect(stage.json()).toMatchObject({ outcome: 'ok', result: { status: 'awaiting_confirmation' } });
+    expect(records[0]?.result).toEqual({ redacted: true });
+    expect(request).not.toHaveBeenCalled();
+    setLatest(conversationMessage('43', 'go ahead', new Date(Date.now() + 10_000)));
+    const recovered = await app.inject({
+      method: 'POST', url: '/tools/calendar_get_pending_change', headers: confirmHeaders('43'), payload: {},
+    });
+    expect(recovered.json()).toMatchObject({ outcome: 'ok', result: {
+      status: 'awaiting_confirmation', confirmationCode: stage.json().result.confirmationCode,
+      summary: expect.stringContaining('Copenhagen Marriott stay'),
+    } });
+    expect(records[1]?.result).toEqual({ redacted: true });
+    expect(request).not.toHaveBeenCalled();
+    const confirmed = await app.inject({
+      method: 'POST', url: '/tools/calendar_confirm_change', headers: confirmHeaders('43'),
+      payload: { confirmationCode: recovered.json().result.confirmationCode },
+    });
+    expect(confirmed.json()).toMatchObject({ outcome: 'ok', result: { status: 'completed' } });
+    const replay = await app.inject({
+      method: 'POST', url: '/tools/calendar_confirm_change', headers: confirmHeaders('43'),
+      payload: { confirmationCode: recovered.json().result.confirmationCode },
+    });
+    expect(replay.json().outcome).toBe('refused');
+    expect(request).toHaveBeenCalledOnce();
+    const consumed = await app.inject({
+      method: 'POST', url: '/tools/calendar_get_pending_change', headers: confirmHeaders('43'), payload: {},
+    });
+    expect(consumed.json()).toMatchObject({ outcome: 'ok', result: { status: 'none' } });
+  });
+
+  it('cannot recover an unstaged, failed or unverified calendar change', async () => {
+    const request = vi.fn(async () => ({}));
+    const { app } = appFor(request);
+    const invalid = await app.inject({
+      method: 'POST', url: '/tools/calendar_create_event', headers: confirmHeaders('42'),
+      payload: { subject: 'Stay', startDateTime: '2026-10-17T15:00:00Z', endDateTime: '2026-10-14T11:00:00Z' },
+    });
+    expect(invalid.json().outcome).toBe('refused');
+    const recovered = await app.inject({
+      method: 'POST', url: '/tools/calendar_get_pending_change', headers: confirmHeaders('42'), payload: {},
+    });
+    expect(recovered.json()).toMatchObject({ outcome: 'ok', result: { status: 'none' } });
+    const unverified = await app.inject({
+      method: 'POST', url: '/tools/calendar_get_pending_change', headers: confirmHeaders('43'), payload: {},
+    });
+    expect(unverified.json().outcome).toBe('refused');
+    expect(request).not.toHaveBeenCalled();
+  });
+
   it('moves a calendar event only after confirmation', async () => {
     const request = vi.fn(async (...args: [GoogleApi, string, GoogleApiRequest]) => args[1].includes('/events/event-1')
       ? {

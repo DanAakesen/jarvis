@@ -1,5 +1,13 @@
 # Project plan
 
+## P11-03 / #838 — Calendar staging and reservation extraction
+
+Calendar recovery now reads the original pending stage through a verified, private
+read-only tool; chat and voice instructions require actual staging before approval.
+Regression tests cover redacted history, plain approval, no stage, failed staging
+and replay. Next: reuse task 12 / #837 MIME extraction, add reservation-padding
+regressions, and finish backend validation. No live calendar operation is authorized.
+
 ## Danish voice Settings correction (13 October 2026)
 
 P9-97/#790 replaces the misleading Harper selector with read-only Jeppe.

@@ -2396,3 +2396,13 @@ Dan approved P12 on 12 October 2026 and explicitly released only P12-01 for this
   behind the generic pin-load message. Regression and rendered checks pending.
 - **Scope:** local correction; phone explicit show/hide and voice lifecycle
   remain unchanged. No backend change or broader draft release.
+
+## P11-03 / #838 (14 October 2026) — Recover actual calendar stages
+
+Private tool audit results omit confirmation codes, so later turns cannot rely on
+conversation history to confirm a staged action. Keep the existing ten-minute,
+one-shot process-local state and add a verified read-only
+`calendar_get_pending_change` tool to recover the actual original code and summary.
+Chat and voice must stage successfully before claiming preparation, then confirm
+on a later plain approval without restaging or asking again. Missing and expired
+stages return `none`. No persistence, migration or live calendar write is added.

@@ -867,6 +867,16 @@ export function createGoogleModule(
       },
     },
     {
+      name: 'calendar_get_pending_change',
+      description: 'Recover the latest actually staged calendar change and its original confirmationCode, summary and expiry. Read-only; requires a verified Dan message. On a later plain approval, use this code with calendar_confirm_change in the same turn; do not stage again or ask for repeated approval. A none status means nothing is staged.',
+      inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+      sensitive: true,
+      execute: async (_input, request) => {
+        await currentDanMessage(request);
+        return pendingActions.pendingCalendarChange();
+      },
+    },
+    {
       name: 'calendar_confirm_change',
       description: 'Approve or discard the latest pending calendar change using its returned code to identify it. Dan’s later message must contain only yes, approve, go ahead or do it to approve, or no/cancel to decline, within ten minutes.',
       inputSchema: confirmationSchema,
