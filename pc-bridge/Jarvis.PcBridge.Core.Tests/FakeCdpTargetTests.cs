@@ -71,25 +71,125 @@ public sealed class FakeCdpTargetTests
         }
     }
 
-    [Fact]
-    public async Task Disposal_reports_unexpected_handler_faults()
+    [Theory]
+    [InlineData(false, "handler")]
+    [InlineData(true, "handler")]
+    [InlineData(true, "cancellation")]
+    [InlineData(true, "socket")]
+    [InlineData(true, "disposed")]
+    public async Task Disposal_reports_unexpected_handler_faults(bool webSocket, string kind)
     {
         var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var failure = new InvalidOperationException("Controlled handler failure.");
+        Exception failure = kind switch
+        {
+            "cancellation" => new OperationCanceledException(new CancellationToken(true)),
+            "socket" => new WebSocketException(WebSocketError.InvalidMessageType),
+            "disposed" => new ObjectDisposedException("System.Net.Sockets.NetworkStream"),
+            _ => new InvalidOperationException("Controlled handler failure."),
+        };
         var target = await FakeCdpTarget.StartAsync();
         target.BeforeHandler = (_, _) =>
         {
             entered.SetResult();
             return Task.FromException(failure);
         };
+        using var http = new HttpClient();
         using var socket = new ClientWebSocket();
-        await socket.ConnectAsync(WebSocketUri(target), CancellationToken.None).WaitAsync(Deadline);
+        Task? request = null;
+        if (webSocket)
+            await socket.ConnectAsync(WebSocketUri(target), CancellationToken.None).WaitAsync(Deadline);
+        else
+            request = http.GetAsync(target.TargetsUri);
         await entered.Task.WaitAsync(Deadline);
 
-        var error = await Assert.ThrowsAsync<InvalidOperationException>(
-            () => target.DisposeAsync().AsTask().WaitAsync(Deadline));
+        var error = await Record.ExceptionAsync(() => target.DisposeAsync().AsTask().WaitAsync(Deadline));
 
         Assert.Same(failure, error);
+        Assert.False(target.IsListening);
+        if (request is not null)
+            Assert.IsType<HttpRequestException>(await Record.ExceptionAsync(() => request.WaitAsync(Deadline)));
+    }
+
+    [Fact]
+    public async Task Disposal_drains_all_concurrent_http_and_websocket_handlers()
+    {
+        var httpEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var socketEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var httpCancelled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var socketCancelled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseHttp = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseSocket = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var httpExited = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var socketExited = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var target = await FakeCdpTarget.StartAsync();
+        target.BeforeHandler = async (webSocket, token) =>
+        {
+            using var registration = token.Register(
+                () => (webSocket ? socketCancelled : httpCancelled).SetResult());
+            (webSocket ? socketEntered : httpEntered).SetResult();
+            try
+            {
+                await (webSocket ? releaseSocket : releaseHttp).Task;
+                token.ThrowIfCancellationRequested();
+            }
+            finally { (webSocket ? socketExited : httpExited).SetResult(); }
+        };
+        using var http = new HttpClient();
+        using var socket = new ClientWebSocket();
+        var request = http.GetAsync(target.TargetsUri);
+        Task? disposal = null;
+        try
+        {
+            await httpEntered.Task.WaitAsync(Deadline);
+            await socket.ConnectAsync(WebSocketUri(target), CancellationToken.None).WaitAsync(Deadline);
+            await socketEntered.Task.WaitAsync(Deadline);
+            disposal = target.DisposeAsync().AsTask();
+            await Task.WhenAll(httpCancelled.Task, socketCancelled.Task).WaitAsync(Deadline);
+            releaseHttp.SetResult();
+            await httpExited.Task.WaitAsync(Deadline);
+            Assert.False(disposal.IsCompleted);
+            Assert.True(target.IsListening);
+            releaseSocket.SetResult();
+            await disposal.WaitAsync(Deadline);
+            Assert.True(socketExited.Task.IsCompletedSuccessfully);
+            Assert.False(target.IsListening);
+            Assert.IsType<HttpRequestException>(await Record.ExceptionAsync(() => request.WaitAsync(Deadline)));
+        }
+        finally
+        {
+            releaseHttp.TrySetResult();
+            releaseSocket.TrySetResult();
+            await (disposal ?? target.DisposeAsync().AsTask()).WaitAsync(Deadline);
+            await Record.ExceptionAsync(() => request.WaitAsync(Deadline));
+        }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Disposal_finishes_after_client_websocket_closure(bool graceful)
+    {
+        var target = await FakeCdpTarget.StartAsync();
+        using var socket = new ClientWebSocket();
+        try
+        {
+            await socket.ConnectAsync(WebSocketUri(target), CancellationToken.None).WaitAsync(Deadline);
+            if (graceful)
+            {
+                await socket.CloseAsync(WebSocketCloseStatus.NormalClosure, "", CancellationToken.None)
+                    .WaitAsync(Deadline);
+                Assert.Equal(WebSocketState.Closed, socket.State);
+            }
+            else
+            {
+                socket.Abort();
+            }
+        }
+        finally
+        {
+            await target.DisposeAsync().AsTask().WaitAsync(Deadline);
+        }
+
         Assert.False(target.IsListening);
     }
 
