@@ -181,6 +181,20 @@ Full CI exposed `current` as a reserved SQL Server alias in the new identity
 fence. Quote it as `[current]`, retaining the typed result and predicate.
 The corrected revision must pass the real isolated SQL suite and full CI;
 mocked dispatcher tests did not exercise that SQL parser.
+## Repository C# CodeQL uses a traced production build (14 October 2026)
+
+Add C# to the existing advanced CodeQL matrix in manual build mode. Initialize
+CodeQL before the pinned .NET 10 setup and Release build of the production
+`Jarvis.PcBridge` application; its project reference brings
+`Jarvis.PcBridge.Core` into the same traced build. This preserves the existing
+CodeQL policy and avoids relying on test-only builds or an untraced prior build.
+Only source compiled by the traced production build is in scope; generated
+source is covered only when surfaced to that compiler invocation. Local
+validation should report both production assemblies. Verify a remote extraction
+from the C# database's nonempty relations/source archive and its extracted-file
+and code-metric diagnostics, then confirm a successful `/language:csharp` upload.
+Associate each result with its PR source head and analyzed merge SHA; neither an
+upload nor zero alerts proves complete generated-code coverage or no defects.
 
 ## #813 bound Factory board source reads (13 October 2026)
 
