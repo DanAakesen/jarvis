@@ -1,5 +1,138 @@
 # Decisions
 
+## Reuse the empty initial-plan draft for reviewed runner delivery (14 October 2026)
+
+PR #850's head `4d57c6ba` adds no source bytes to its `51bda5cb` parent.
+Its original direct-Gmail implementation is consolidated separately through
+existing #848, while #837's real acceptance remains open. Reuse this otherwise
+empty draft for the independently reviewed V2 runner lifecycle correction;
+remove native closing references instead of accidentally closing #837.
+No new PR, issue, worker or live job is created by this publication decision.
+
+Normal current-main integration first produced exactly `c0d0aeef`'s tree.
+Preserve all source outside the eight reviewed runner/context paths and every
+main PLAN task-table line. The parent V2 PASS is bounded source/synthetic proof,
+not full Linux CI, release, actual provider delivery or physical deallocation.
+Main's newer required capability smoke is broken; ordinary runner merge stays
+held until that separate demonstrated correction clears the gate.
+
+## Factory runner terminal publication follows teardown (14-15 October 2026; local)
+
+The frozen `202ead5b41af3247b51c893c59964fef716f5442` runner publishes and
+persists `completed` before provider shutdown and awaited final event delivery.
+Nine initial bounded synthetic cases reproduce an observable premature
+`completed` poll or cancellation response while teardown is still pending,
+including event delivery that later fails. This establishes an ordering defect,
+not the historical cause of an existing production task.
+
+Retain the existing lifecycle owner and public statuses. Stage the turn outcome,
+shield owned finalization from cancellation, drain the current event-chain tail
+before closing its publisher, and retain the session lock until cleanup settles.
+Late stop requests affect the final status without appending to a closing
+publisher. A failed cleanup remains failed, including on cancellation; a
+sanitized 503 reaches the existing Foundry-client/control failure path. No
+scheduler, task-state bypass, artifact shortcut or new dependency is introduced.
+
+Independent parent review rejected the first local correction: disconnecting an
+actual cancel request propagated a second cancellation into an unshielded
+cleanup wait, and a late stop deadline appended `stop_timeout_forced` during
+publisher close. Both parent tests reproduced locally. Shield the handler's
+worker join and every cleanup wait, keeping the lock until the owned finalizer
+settles even under repeated cancellation. Guard all control-event paths,
+including a delayed ACP-cancel acknowledgement; deadline-driven termination of
+the owned process remains effective without appending during finalization.
+
+Thirty-nine lifecycle/control cases and 22 existing token/helper/deployment
+contracts pass locally, as do the two unchanged parent tests. The original 18
+regressions remain red against the exact baseline; 17 of 21 additional control
+cases fail against the first local correction, with four timeout-contract cases
+already passing. Tools are Python 3.12.10, pytest 9.1.1 and Ruff 0.16.10. The lifecycle
+fixture uses real local Git commit/ancestry checks and child processes, but
+in-memory metadata and synthetic provider/event delivery. Existing task/workspace
+tests hit Windows' missing POSIX `os.fchmod`; no permission shim was added.
+The full pinned Linux suite, image checks and live delivery remain separate.
+The coordinator owns review, exact-head CI and both Deploy and Runner deploy,
+followed by the single authorised authentic owner-facing acceptance job.
+
+## Accept current recovery separately from historical attribution (14 October 2026)
+
+The reviewed diagnostic tree reached main through #831 as `51bda5cb`.
+Its exact-head full CI passed all ten actual jobs and CodeQL all three
+analyses. Normal Deploy `38622011802` passed backend/web and actual smoke;
+the ready revision's bounded enum-only telemetry positively reports
+chat canary, capabilities and GitHub read `ok`. This clears the current
+release blocker for the already-approved non-Daily queue.
+
+Do not infer the previous capability failure's cause from this green run,
+close #820 automatically, or substitute it for original phone/voice/Google
+acceptance. Factory #842 preserved its accepted runtime blobs and all
+309 main task rows, passed its integrated head's ten CI jobs and three
+CodeQL analyses, and merged as `36d72090`. Normal Deploy `38629181064`
+passed Web/deep-link and backend health/smoke. Accept that release without
+claiming the original production trigger, performance or human navigation
+acceptance; issue #813 remains open.
+
+Inactive Daily #818 preserved every reviewed health blob and main task cell
+after current-main integration. Its `af5ac2e7` head passed all ten actual
+CI `38631864211` jobs and three CodeQL `38631863844` analyses, then merged
+normally as `5939fb54`. Normal Deploy `38633353086` passed backend image
+deployment, health and actual smoke at 20:43:27 UTC; unchanged web,
+infrastructure and hosted-agent deployment were skipped. Accept that inactive
+correction release, not activation, original data access or cutover. Google's
+`F3BD79DA` also failed targeted re-review on three residual approval-scope,
+quoted-query intent and native-window faults. Both it and `3073B943` remain
+unapproved and immutable. Corrected freeze `CEC84A7A` is with the same
+independent reviewer; publication remains held pending disposition.
+
+## Consolidate the existing maintenance review queue locally (14 October 2026)
+
+Dan directed local implementation and coordinator ownership of both boards,
+including GitHub publication and release. Consolidate the six already-reviewed
+deliveries into existing #841: reference-only urllib3/multidict/PyJWT pins,
+fake-CDP teardown tests, live PR-title validation and production C# CodeQL.
+Preserve the reviewed source and unrelated current-main blobs; do not create
+another PR, restart cloud coding workers or alter main task-table cells.
+
+Individual Python 3.13.16 compatibility receipts remain individual evidence.
+The combined three-pin manifest needs its separate baseline/candidate receipt.
+Local Python 3.13.15 installation failed before tests on a genuine TLS failure,
+also reproduced with default system TLS; do not disable verification or claim
+combined compatibility. Add conditional reference validation to the existing
+agent CI job, not another coding worker or workflow: separate baseline/candidate
+environments, all pinned distributions checked, pip check, offline fixture tests
+and synthetic HS256 readback. Use the reference's existing Python 3.13 major and
+record the actual patch version; production Python pins and model-free agent
+image checks are unchanged.
+Require one normal integrated-head full CI wave and four actual CodeQL
+analyses, with traced production C# extraction, before guarded normal release.
+Reconcile the six issues/cards only after confirmed delivery. This does not
+establish blanket dependency-advisory clearance or close the separate #830
+advisory/compatibility acceptance.
+
+## Coalesce automatic board updates behind scoped reads (#813, 14 October 2026)
+
+Preserve an in-flight same-scope board read and queue at most one automatic
+follow-up instead of repeatedly aborting it. Keep the 150-ms idle debounce,
+full contract validation, explicit Refresh/Retry, retained snapshots and
+visible failures. An update during the follow-up can queue the next read.
+The request effect owns its timer/queue, so project/backend/token-callback
+replacement, explicit reload and unmount cancel obsolete work together.
+No unconditional retries, longer TTL, lost-update shortcut or separate
+stream/cache is introduced.
+
+The issue resolver reads that same owner's pending/queued/timer state before
+definitively refusing a missing issue or requested task link. Actual-context
+fixtures reproduced both refusals in the 150-ms settlement gap and ordinary
+idle debounce. Wait for the known read within the existing navigation budget;
+do not fetch speculatively or act after the bounded wait expires. Failed reads
+return the visible error rather than an unconfirmed task-link miss.
+
+Actual-component fixtures demonstrated cancellation under repeated updates
+with valid deferred 10-second reads. That controlled proof justifies this
+local correction; it does not identify the original production trigger.
+No production acceptance, release or backend change is implied. The separate
+Status snapshot/limits below remain historical evidence; #798 stays held.
+
 ## Keep consolidated recovery diagnostics compatible with live Status clients (14 October 2026; local)
 
 Combine current main `81580919` and the existing #831/#832 diagnostics locally;
@@ -119,7 +252,6 @@ contexts after the mobile handoff; do not substitute another live/model turn.
 Earlier unavailable-user notes below remain historical. #798/#797/#792 and
 merge/deployment remain held. Frozen Factory publication is coordinator-owned
 and isolated; its approval does not authorise mixed mobile/Status publication.
-
 ## P9-116 completed-expiry reconciliation (14 October 2026)
 
 Use the existing bounded Factory reconciler for completed `idle_expired`
@@ -142,6 +274,39 @@ Full CI exposed `current` as a reserved SQL Server alias in the new identity
 fence. Quote it as `[current]`, retaining the typed result and predicate.
 The corrected revision must pass the real isolated SQL suite and full CI;
 mocked dispatcher tests did not exercise that SQL parser.
+## Repository C# CodeQL uses a traced production build (14 October 2026)
+
+Add C# to the existing advanced CodeQL matrix in manual build mode. Initialize
+CodeQL before the SHA-pinned setup action selecting .NET 10.x and Release build of the production
+`Jarvis.PcBridge` application; its project reference brings
+`Jarvis.PcBridge.Core` into the same traced build. This preserves the existing
+CodeQL policy and avoids relying on test-only builds or an untraced prior build.
+Only source compiled by the traced production build is in scope; generated
+source is covered only when surfaced to that compiler invocation. Local
+validation should report both production assemblies. Verify a remote extraction
+from the C# database's nonempty relations/source archive and its extracted-file
+and code-metric diagnostics, then confirm a successful `/language:csharp` upload.
+Associate each result with its PR source head and analyzed merge SHA; neither an
+upload nor zero alerts proves complete generated-code coverage or no defects.
+## 2026-10-14: P9-113 live PR-title validation
+
+- Validate current same-PR title/body from the API, bound to the event's PR
+  number/repository/head, instead of replaying immutable event text. Reuse the
+  existing normalizer and first same-repository linked-issue lookup.
+- Fail closed on API/schema errors and changes observed by a final metadata
+  read. Keep token permissions unchanged and trigger validation on head pushes.
+- Do not automatically write normalized titles: GitHub title edits do not
+  provide an atomic title/head compare-and-set guard. Fail with the canonical
+  suggestion so a stale job cannot overwrite a concurrent edit. This deliberately
+  replaces automatic correction, not normalization rules or missing-ID failures.
+  The final read cannot atomically fence subsequent GitHub check publication;
+  later edits/pushes require their own gate evidence.
+- Evidence: the offline test executes the workflow's actual gate entry with an
+  old unusable event and a canonical same-head API fixture. It fails against the
+  old workflow and passes with live reads. Fixtures also cover invalid current
+  metadata, API failures, identity/head mismatch and observable races without
+  allowing any title-write request. Live exact-head CI/CodeQL evidence is tracked
+  in the PR, separately from local proof.
 
 ## #813 bound Factory board source reads (13 October 2026)
 
@@ -231,6 +396,24 @@ check with its timestamp, not a claim that the latest release passed.
 No backend, contract or dependency change. Local synthetic browser
 checks are not authenticated production or physical-phone acceptance.
 
+The coordinator accepted the bounded signed-in read-only snapshot on
+`1590a1c3`, normal Deploy 38497362534: real Settings-to-Status rail navigation,
+HTTP 200 initial read and ordinary Refresh, accepted HTTP 204 `status`/
+`page-status` metadata/readback and one persistent session/stream. All 26 rows
+rendered; retained smoke was 15/15 OK at 2026-10-14T01:55:08.275Z with stale
+labels, not a new probe or a deployment association. Missing PC versions
+remained "Not reported"; original Note/native Chrome/drafts/settings were
+untouched. [Exact evidence and limits](agent-context.md#read-only-status-page-14-october-2026).
+Dan subsequently performed the ordinary Status turn: it claimed success
+without visibly navigating, then "I dont see it" recovered correctly.
+First-turn live navigation acceptance failed; no cause is established.
+This is no longer an absent-human-turn gate. Recovery does not establish
+acceptance, and an agent-created turn must not substitute for Dan's evidence.
+Broker/voice and physical-phone acceptance remain unproven; #799 remains open
+and #798 held, followed separately by #797 and #792.
+The original failed smoke turn's cause remains unconfirmed under #820;
+diagnostic-only #821 and the subsequent green run are not proof of a repair.
+
 ## P9-107 smoke reason retention follow-up (14 October 2026)
 
 The prior Status-page decision above records its original UI-only scope. This
@@ -253,8 +436,8 @@ with at least two digits and an ID boundary. Retain two-digit formatting,
 WIP/bracket/fix-main/docs behavior and all existing status/ownership policies;
 the separate reopened-issue policy is addressed by #817. Existing
 Python CI discovers the title and PLAN regressions; no other workflow change
-or new tooling. Restore the correct title only after pushing the fix and
-rerun exact-head gates.
+or new tooling. The correct title was restored after pushing the fix and
+exact-head gates passed before #815 merged.
 Cap each dependency-range expansion at 1000 tasks and fail with an actionable
 ValueError before iteration. This replaces the old incidental two-digit
 resource bound without capping valid ID width; no established script bound
@@ -272,6 +455,12 @@ acceptance gates, so open acceptance issues remain open and their status cells
 stay workflow-owned.
 
 ## P12-05 inactive SQL health processing (13 October 2026)
+
+**14 October release authority:** in DailyMigrationMain, Dan approved releasing inactive PR #818 after updating to latest main and passing required checks and review. He also directed that routine CI/CD should flow without repeated release approvals. Already-authorized inactive P12 scopes and corrections may therefore proceed through independent review/merge and normal main-only deployment without a fresh human clearance per PR. Keep exact-head checks, latest-main containment, branch protections, no own merge and issue/dependency truthfulness. Both cloud workers remain idle; this grants no new worker/scope, activation, source/private-data/credential access, paid resource or device change. Existing protected-backup, parity, final-delta and rollback/cutover gates are unchanged.
+
+14 October follow-up to [automatic review finding 4265321733](https://github.com/DanAakesen/jarvis/pull/808#discussion_r4265321733): #808 merged with a reproduced body-fat unit fallthrough. Move its existing `%`/`percent`/`fraction`/`1` representations into the shared strict known-dimension mapping, preserving absent-unit unknowns, zero/missing values and generic unknown dimensions. Add synthetic normalization and SQL canonical-readback/quarantine regressions; no schema, composition, source/data/device or activation changes. This is a separate #720 follow-up from fresh main, not a rewrite of merged #808; exact-head CI and independent review remain required.
+
+[PR #818 review 4271913189](https://github.com/DanAakesen/jarvis/pull/818#discussion_r4271913189) found non-string declarations disappearing through text fallback. Validate raw body-fat group/sample/workout `units` and `unit` before sanitization or alias selection, including empty groups and shadowed units. Numeric `1` is malformed, not the string unit `1`; null/undefined/blank remain missing. Synthetic normalization and atomic SQL quarantine regressions cover the correction; fresh exact-head CI/review still gate release. Other metric dimensions and runtime/activation boundaries are unchanged.
 
 The [local coordinator release for #720](https://github.com/DanAakesen/jarvis/issues/720#issuecomment-6154043444) follows #805's independently reviewed, CI-tested and deployed inactive SQL acceptance. Reuse that inbox/pool/owner lock. A committed claim generation bounds retries; normalization occurs outside the transaction, then domain rows, ingestion lineage, applicable feed freshness and processed receipt commit together. Heartbeat is a separate signal. Retain raw evidence and quarantine rather than deleting poison inputs or retrying forever. No timer, dispatcher, production registration or credential change.
 

@@ -925,6 +925,23 @@ POST route; task details/windows and controls reuse their existing boundaries.
 publishes them and connection state to `factory-board-store.ts`. The board
 debounces matching invalidations and refreshes after connection recovery,
 without opening per-card task streams or duplicating GitHub placement logic.
+The #813 consumer correction keeps an active same-scope read rather than
+aborting it for automatic updates. Its request effect owns a pending flag,
+one queued follow-up and the existing 150-ms idle timer. Settlement schedules
+that follow-up after either success or failure, without allowing later
+notifications to postpone its deadline. Newer notifications during the
+follow-up can queue the next read. Effect cleanup cancels the request,
+timer and queued work on project/backend/token-callback replacement, explicit
+reload or unmount. Full validation and retained-snapshot error handling stay
+unchanged. This fixes a deterministically reproduced client lifecycle; the
+original released trigger and production performance remain unproven.
+The same request owner exposes its pending read, queued follow-up and timer
+to the issue resolver. Missing issues and absent/replaced requested task
+links stay loading across settlement and the idle debounce instead of being
+rejected from an older snapshot. Positive matches still resolve immediately;
+after a failed follow-up, an unresolved task link returns the visible read
+error. Navigation neither starts another read nor extends its existing
+six-second/command-expiry budget. Disposal removes the obsolete owner.
 Task details retain their own task stream. Equal invalidations are deduplicated,
 but a lower version after restart is accepted. Cached/failed-refresh snapshots
 retain the board DOM and show their source timestamp and stale feedback.
@@ -1448,6 +1465,18 @@ The retained smoke report has no deployment ID or commit association; the
 web page cannot present it as certification of a particular release.
 Status also participates in page metadata and bounded/redacted window
 readback. No new backend routes, storage or permission changes.
+
+Released-path evidence on `1590a1c3` / normal Deploy 38497362534 establishes
+actual rail navigation, initial/ordinary Refresh HTTP 200 and accepted HTTP
+204 `status`/`page-status` state/readback, with the same workspace session
+and no new Now stream requests. The retained report at
+2026-10-14T01:55:08.275Z was 15/15 OK and correctly stale; release success
+comes from the normal Deploy result, not an association in this contract.
+Dan's subsequent ordinary Status turn claimed success without visible
+navigation; "I dont see it" recovered. First-turn live navigation acceptance
+failed, with no established cause. Recovery does not establish broker/voice
+or physical-phone acceptance; #799 remains open and #798 held.
+[Exact evidence and limits](agent-context.md#read-only-status-page-14-october-2026).
 
 P9-62 adds always-registered `get_system_health`, returning the shared
 `SystemHealth` contract: 26 fixed-order components with status, safe detail,
@@ -2903,6 +2932,21 @@ credential probe, and Codex renewal handlers. Prototype crash-test mode is remov
 Local Python tests exercise ACP subprocess fixtures; production Azure acceptance
 remains pending #11 and the main-branch runner workflow.
 
+Task turns keep their public and checkpoint status nonterminal until the owned
+provider shutdown, Codex-auth cleanup and ordered event drain/publisher close
+finish. `_finish_task` is shielded from cancellation while the session lock
+remains held, including across repeated worker cancellation. The cancel handler
+shields its worker join so request loss cannot cancel owned teardown.
+Late pause/steer/cancel requests select the final outcome without
+queuing events against a closing publisher. Cancellation waits for that owner,
+and cleanup failures return a sanitized 503 rather than a cancelled success.
+The stop deadline still terminates only the owned process; timeout and delayed
+ACP-cancel acknowledgement events are not queued during finalization.
+Provider-stop failure attempts a bounded kill of only that invocation's process.
+GitHub verification, project policy, authenticated routes, task-state ownership
+and Foundry idle-expiry/checkpoint semantics are unchanged. This local ordering
+correction is not evidence of live cloud sandbox shutdown or artifact delivery.
+
 P6-07 reports writable-filesystem disk snapshots through the P2-03 runner event
 route, checks for low headroom during each active task turn, and stops work before
 a build can exhaust disk. `disk_low` and the NeedsAttention transition commit
@@ -3886,8 +3930,10 @@ The deploy script explicitly uses ARM **Incremental** mode. In that mode, resour
 - One production environment in `rg-jarvis`; no dev environment.
 - Local development: `npm run dev` in the repository root serves the web app on `http://localhost:5173` against the production backend. Backend changes are tested in CI and take effect after deploy.
 - Migrations run in the backend at startup; GitHub runners never connect to Azure SQL.
-- Development of Jarvis itself is remote only: Copilot cloud agent and Codex cloud deliver PRs, `pr-title.yml` keeps PR titles in the `<task ID>: <summary>` format, `worker-label.yml` labels the tasks Copilot takes, `project-board.yml` keeps the Project Jarvis board's columns in step with the issues, `copilot-ready.yml` takes finished Copilot PRs out of draft, Dan or an explicitly authorized agent merges them when checks pass against the latest `main`, and the deploy workflows release them. Rules: [development workflow](agent-context.md#development-workflow).
+- Until Dan directs otherwise, important Jarvis implementation and review happen in local sessions. The coordinator also owns existing GitHub PRs, exact-head CI, normal releases and both boards; cloud coding workers are not restarted merely to clear review cards. `pr-title.yml` validates canonical titles, `worker-label.yml` maintains cloud-worker ownership metadata, and `project-board.yml` synchronizes the Project board with native issues. A worker-complete badge is not reviewed, merged or deployed acceptance. Normal authorised merges require latest-main reconciliation and passing checks; deploy workflows remain the production delivery path. Rules: [development workflow](agent-context.md#development-workflow).
 - PR-title normalization, linked-issue extraction and PLAN row/issue/dependency parsing preserve full task numbers with two or more digits, including P9-101; boundaries prevent prefix-only IDs, and ranges can cross the two-to-three-digit transition. Each range expands at most 1000 tasks; a larger count raises an actionable ValueError before iteration without capping ID width. Existing two-digit formatting and status/ownership policies are unchanged. Their regression tests run in the existing workflow-script unittest discovery.
+- The PR-title gate reads current same-PR metadata and verifies the event head, then rereads title/body/head/update timestamp before success. API failures and observable races fail closed. The existing normalizer supplies canonical-title suggestions, including linked-issue fallback, but the gate does not write titles because GitHub has no atomic title/head compare-and-set. Save a suggested title to trigger fresh validation; head pushes also trigger the gate. Token permissions and PLAN/status policies are unchanged.
+- Changed reference Python manifests additionally run baseline/candidate compatibility in the existing agent image CI job, after its production image checks. Each isolated Python 3.13 environment resolves the full reference runtime/dev pins, checks every installed version and dependency consistency, runs the offline reference fixtures and performs a synthetic HS256 round trip. This does not alter production Python pins, register the prototype or call a model/provider. Record the selected 3.13 patch version and exact-head job evidence; individual prior pin checks are not combined-manifest evidence.
 - `worker-label.yml` maintains the Copilot worker label; Codex, Dan, and Jarvis set their own labels. `plan-status.yml` reconciles every task's Issue link and Status in `PLAN.md` from GitHub issues, worker labels, and pull requests on issue/PR events, Worker label workflow completion, and manual dispatch. A push changing `PLAN.md` also creates missing task issues and ensures their "Blocked by" links. It commits only Issue- and Status-cell changes to `main`, skips no-op commits, and rebases/retries once after a rejected push. It uses `GITHUB_TOKEN`; compatibility with protected `main` remains unverified.
 - Everything except the bootstrap items is created by Bicep and deployed by GitHub Actions on merge to `main`; no portal changes.
 
@@ -3959,6 +4005,8 @@ The reference lockfile is standalone, outside root workspaces, and contains the 
 P12-05's unregistered `daily/health` library consumes the existing SQL inbox through an explicit one-row invocation and shared owner transaction lock. Additive 0047 records claim generations/deadlines and bounded retry/quarantine; no new queue, pool or scheduler. Pure normalization precedes one atomic domain/lineage/feed/receipt commit. Heartbeat writes only phone-sync state; accepted evidence and processing time remain distinct. Parameterized binary-identity upserts preserve newer accepted snapshots and never delete absent workout history. Existing root owner resolution protects bounded history/minute-HR/detail reads. [Source contract, recovery, limits and gates](../apps/backend/src/daily/health/README.md); no production composition or private source read.
 
 Summary extraction and known heart-rate series share strict BPM unit validation before SQL finalization; incompatible declared units quarantine the entire upload. Legacy summary-only implicit BPM does not assign units to unknown series or reinterpret heart-rate variability.
+
+Body-fat percentage also uses the shared strict known-dimension mapping: string `%`/`percent` stay percent and `fraction`/`1` scale by 100. Raw group/sample/workout declarations are checked before sanitization and alias/fallback selection; unsupported strings and non-string values quarantine atomically even when shadowed. Absent/null/blank units retain existing missing-unit semantics. No new persistence or runtime boundary is introduced.
 
 P12-04's inactive `daily/health-upload` uses the existing backend/pool/SQL. `createSqlHealthUpload` returns disabled dependencies; explicit `buildApp.healthUpload` rehearsal composition installs only the two upload/heartbeat POST paths. Root auth delegates only those opt-in paths to early rate guards and a hashed owner/scope/expiry/revocation verifier; ordinary Jarvis authentication is unchanged. Production `index.ts` has no option/flag/credential registration. [Contract and gates](daily-health-ingestion/README.md); #720 owns processing.
 
