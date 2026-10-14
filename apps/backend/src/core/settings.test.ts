@@ -843,11 +843,11 @@ describe('settings API', () => {
     expect(response.body).not.toContain('secret');
   });
 
-  it('returns only effective Jarvis model settings to the agent identity', async () => {
+  it.each([true, false])('returns effective settings to the agent identity with automatic capture %s', async (automaticCapture) => {
     const { store } = createStore();
     await store.write({
       jarvis: { model: 'gpt-5.6-luna', reasoning: 'high' },
-      memory: { automaticCapture: false },
+      memory: { automaticCapture },
       research: { timeoutSeconds: 280 },
       timeouts: {
         toolTimeoutSeconds: 45,
@@ -876,8 +876,14 @@ describe('settings API', () => {
 
     expect(response.statusCode).toBe(200);
     expect(response.json().capabilityInstructions).toBe(
-      capabilityInstructions({ ...defaultSettings.memory, automaticCapture: false }),
+      capabilityInstructions({ ...defaultSettings.memory, automaticCapture }),
     );
+    expect(response.json().capabilityInstructions).toContain(
+      'Status uses workspace_command (operation "navigate", page "status")',
+    );
+    expect(response.json().capabilityInstructions).not.toContain('The UI still refuses Status until its page exists');
+    expect(response.json().capabilityInstructions).toContain('Only report it applied after the tool succeeds');
+    expect(response.json().capabilityInstructions).toContain('relay refusal reasons');
     expect(response.json()).toEqual({
       model: 'gpt-5.6-luna',
       reasoningEffort: 'high',
@@ -895,12 +901,12 @@ describe('settings API', () => {
         similarityThreshold: 0.35,
         searchTopK: 5,
         graphTextSimilarityThreshold: 0.12,
-        automaticCapture: false,
+        automaticCapture,
       },
       research: { timeoutSeconds: 280 },
-      capabilityInstructions: expect.stringContaining(
-        'Do not proactively save memories; save only when Dan directly asks you to write to the vault.',
-      ),
+      capabilityInstructions: expect.stringContaining(automaticCapture
+        ? 'Automatically save clearly stated, durable facts without inferring them.'
+        : 'Do not proactively save memories; save only when Dan directly asks you to write to the vault.'),
       timeouts: {
         toolTimeoutSeconds: 45,
         longToolTimeoutSeconds: 300,
