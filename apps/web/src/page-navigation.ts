@@ -22,11 +22,10 @@ const pages: Record<string, string> = {
   factory: '/factory/kanban',
   settings: '/settings',
   usage: '/usage',
+  status: '/status',
   knowledge: '/notes',
   notes: '/notes',
 };
-// Pages Jarvis may name that this build does not have yet; they are refused rather than sent to a missing route.
-const notYet = new Set(['status']);
 export const settingsAnchors: Record<string, string> = {
   appearance: 'appearance-settings-heading',
   jarvis: 'jarvis-settings-heading',
@@ -64,7 +63,6 @@ export function resolveNavigation({ page, section, taskId, issueNumber }: Naviga
   if (issueNumber !== undefined && (page !== 'factory' || !Number.isSafeInteger(issueNumber) || issueNumber <= 0)) {
     return { ok: false, reason: 'An issue can only be opened on the Software Factory board by its positive whole number.' };
   }
-  if (notYet.has(page)) return { ok: false, reason: `The ${page} page is unavailable.` };
   // The Folio is a pane over the current page rather than a page of its own.
   if (page === 'folio') return section === undefined && taskId === undefined ? { ok: true, pane: 'folio' } : { ok: false, reason: 'The Folio has no sections.' };
   const path = pages[page];
@@ -136,7 +134,7 @@ export function revealWhenReady(find: () => Element | null, reducedMotion: boole
 }
 
 const pagePrefixes: readonly [string, WorkspaceNavigationPage][] = [
-  ['/factory', 'factory'], ['/settings', 'settings'], ['/usage', 'usage'], ['/notes', 'notes'], ['/knowledge', 'knowledge'],
+  ['/factory', 'factory'], ['/settings', 'settings'], ['/usage', 'usage'], ['/status', 'status'], ['/notes', 'notes'], ['/knowledge', 'knowledge'],
 ];
 
 /** The shell page for a route, for the `view` Dan is looking at (P9-43). */

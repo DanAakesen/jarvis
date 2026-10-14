@@ -1,5 +1,42 @@
 # Agent context
 
+## Read-only Status page (14 October 2026)
+
+P9-101/#799 adds `/status`, rail/phone entries, accepted voice/chat navigation
+and page/window readback. It reads only authenticated `GET /status`, validates
+all eleven checks and optional smoke, exposes failure/unavailable reasons,
+PC connection/pause state and timestamps, and marks five-minute-old evidence
+stale. Refresh never calls `/status/smoke` or model canaries; that report lacks
+a release/commit association. Failed refresh retains explicitly previous data.
+
+Local validation: 103 tests across StatusPage, page-navigation and App;
+TypeScript, scoped ESLint with zero warnings and Vite build. Chromium fixtures
+cover 1440x1000 dark/ordinary motion and 320x700 light/touch/reduced motion:
+real controls, broker ack/Status selector, the same Settings-to-Status stream,
+stale/failing/unknown evidence, missing versions, disabled pending refresh,
+retained HTTP 503 failure and Retry. No document overflow or smoke invocation.
+The fixture room is disabled and API responses are synthetic. Exact-head
+CI/release and authenticated Status/voice acceptance remain pending.
+Keep this PR separate from latency QA, presence/Routines/phone Save work,
+unrelated pin changes and the coordinator's #811 backend investigation.
+
+The coordinator authorised one coupled release-gate exception in #815:
+the PR-title normalizer, linked-issue ID extraction and PLAN reconciliation
+must preserve full two-or-more-digit task numbers, including P9-101. The old
+bot renamed it P9-10 and stopped the guarded merge; PLAN parsing also ignored
+full rows/issues and shortened dependencies. Five title-gate and nine PLAN
+unittest methods cover full IDs/idempotence, boundaries, rows, mapping,
+dependencies/ranges and legacy two-digit/WIP/bracket/fix-main/docs formats.
+Each dependency range expands at most 1000 tasks; larger ranges raise an
+actionable ValueError before iteration, without limiting identifier width.
+Allowed-boundary, over-limit and no-large-allocation regressions cover this.
+All 57 workflow-script tests and Bash syntax pass locally. Status/ownership
+policies are unchanged, including reopened-issue handling. No other workflow,
+backend or dependency changes.
+The corrected head must pass fresh exact-head gates before merge.
+Current main through #808 (`446ce371`) is integrated, preserving its scoped
+health documentation and inactive code without activation or live acceptance.
+
 ## GitHub-aligned Factory board (13 October 2026)
 
 P10-07/#793 is owned by Dan and the UI session after merged/deployed #791 and
@@ -56,12 +93,22 @@ Settings layout and foreground task-window focus; no document overflow.
 One concurrent run failed to start a Vitest worker; the isolated full rerun
 passed without changes to timeouts or checks. The fixture room is disabled;
 these checks do not prove live voice, physical phones or production navigation.
-PR #810 is held for its review follow-up: epoch/session-bound command queues
+PR #810 shipped with its review follow-up: epoch/session-bound command queues
 and actual issue-focus workspace selectors with lifecycle clearing. Local
 scoped regressions pass 125 tests, and the separately requested unchanged
 Workspace online pin-recovery regression passes locally without changing its
-assertions or timeout. These are not the full Web suite. Release and live
-navigation acceptance remain outstanding. Keep port
+assertions or timeout. These are not the full Web suite. Exact-head CI and
+CodeQL passed for `177e73e3`; merged at `b4915164`, Deploy 38479582927 passed
+Web/smoke. The signed-in production canvas loaded that release's bundle.
+An ordinary chat request from Settings at 22:49:33Z received an applied HTTP
+204 ack and HTTP 204 Factory state with issueNumber 792 and no stale window
+selector; the real #792 title was focused in Ready. The session/stream
+persisted without a new `/now/events` request. Actual collapse and route
+clearing also received HTTP 204. Pure focus-away-only clearing remains
+fixture-only because this background canvas emits no native focus events.
+Coordinator logs independently corroborate the chat/broker/state/board reads.
+Dan's original Note/native Chrome were untouched; the earlier 502 cause is
+still unconfirmed and backend-owned. Keep port
 5173 running, `.ui-session-handoff.md` untracked, `.impeccable` excluded and
 the preservation stashes intact. Ship from `ui/shell-iteration`; report the
 PR immediately and let the coordinator merge on exact-head green CI.

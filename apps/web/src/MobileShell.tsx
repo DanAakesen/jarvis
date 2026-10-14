@@ -10,6 +10,7 @@ const pages = [
   { to: '/factory/kanban', label: 'Software Factory' },
   { to: '/notes', label: 'Notes' },
   { to: '/usage', label: 'Usage' },
+  { to: '/status', label: 'Status' },
   { to: '/settings', label: 'Settings' },
 ] as const;
 
