@@ -186,15 +186,14 @@ describe('dispatcher SQL coordination', () => {
     const events = createEventHub<TaskEventMessage>();
     const taskStore = createTaskStore(pool, events);
     const store = createDispatcherStore(pool, events);
-    const addRunningInvocation = async (
-      title: string,
+    const addInvocation = async (
+      task: Awaited<ReturnType<typeof createTask>>,
       sessionStatus: 'Active' | 'Ended',
       endReason: string | null,
       stale: boolean,
       turnStatus: 'running' | 'completed',
+      ageMinutes = 10,
     ) => {
-      const task = await createTask(events, title);
-      expect((await taskStore.transition(task.id, 'Running')).kind).toBe('ok');
       const foundrySessionId = `reconcile-${randomUUID()}`;
       const invocationId = `reconcile-invocation-${randomUUID()}`;
       const session = await pool.request()
@@ -202,8 +201,8 @@ describe('dispatcher SQL coordination', () => {
         .input('foundrySessionId', sql.NVarChar(255), foundrySessionId)
         .input('status', sql.NVarChar(8), sessionStatus)
         .input('endReason', sql.NVarChar(32), endReason)
-        .input('startedAt', sql.DateTime2(7), new Date(Date.now() - (stale ? 10 : 0) * 60_000))
-        .input('heartbeatAt', sql.DateTime2(7), stale ? new Date(Date.now() - 10 * 60_000) : null)
+        .input('startedAt', sql.DateTime2(7), new Date(Date.now() - (stale ? ageMinutes : 0) * 60_000))
+        .input('heartbeatAt', sql.DateTime2(7), stale ? new Date(Date.now() - ageMinutes * 60_000) : null)
         .query<{ sandboxSessionId: string }>(`INSERT dbo.sandbox_sessions
           (task_id, foundry_session_id, agent_version, agent_name, size, image, status,
             started_at, last_heartbeat_at, ended_at, end_reason)
@@ -222,30 +221,233 @@ describe('dispatcher SQL coordination', () => {
             ended_at)
           VALUES (@sandboxSessionId, @invocationId, N'task', @foundrySessionId, @status,
             CASE WHEN @status = N'completed' THEN SYSUTCDATETIME() ELSE NULL END);`);
-      return { task, sandboxSessionId };
+      return { sandboxSessionId, foundrySessionId, invocationId };
+    };
+    const addRunningInvocation = async (
+      title: string,
+      sessionStatus: 'Active' | 'Ended',
+      endReason: string | null,
+      stale: boolean,
+      turnStatus: 'running' | 'completed',
+    ) => {
+      const task = await createTask(events, title);
+      expect((await taskStore.transition(task.id, 'Running')).kind).toBe('ok');
+      return { task, ...await addInvocation(task, sessionStatus, endReason, stale, turnStatus) };
     };
 
-    const fixtures: Awaited<ReturnType<typeof addRunningInvocation>>[] = [];
+    const fixtures: Array<{ task: Awaited<ReturnType<typeof createTask>> }> = [];
     try {
       const staleActive = await addRunningInvocation('Stale active invocation', 'Active', null, true, 'running');
-      fixtures.push(staleActive);
+      fixtures.push({ task: staleActive.task });
       const staleCompleted = await addRunningInvocation('Stale completed invocation', 'Ended', 'done', true, 'completed');
-      fixtures.push(staleCompleted);
+      fixtures.push({ task: staleCompleted.task });
       const freshActive = await addRunningInvocation('Fresh active invocation', 'Active', null, false, 'running');
-      fixtures.push(freshActive);
+      fixtures.push({ task: freshActive.task });
+      const olderInvocationId = `older-invocation-${randomUUID()}`;
+      const olderInvocationStartedAt = new Date(Date.now() - 8 * 60_000);
+      await pool.request()
+        .input('sandboxSessionId', sql.BigInt, BigInt(staleActive.sandboxSessionId))
+        .input('invocationId', sql.NVarChar(255), olderInvocationId)
+        .input('foundrySessionId', sql.NVarChar(255), staleActive.foundrySessionId)
+        .input('startedAt', sql.DateTime2(7), olderInvocationStartedAt)
+        .query(`INSERT dbo.sandbox_turns (sandbox_session_id, invocation_id, mode, acp_session_id, status, started_at)
+          VALUES (@sandboxSessionId, @invocationId, N'task', @foundrySessionId, N'running', @startedAt);`);
+      const staleExpired = await addRunningInvocation(
+        'Stale idle-expired invocation', 'Ended', 'idle_expired', true, 'completed',
+      );
+      fixtures.push({ task: staleExpired.task });
+
+      const newerExpiredTask = await createTask(events, 'Newer idle-expired invocation wins');
+      expect((await taskStore.transition(newerExpiredTask.id, 'Running')).kind).toBe('ok');
+      const olderEligible = await addInvocation(newerExpiredTask, 'Active', null, true, 'running', 20);
+      const latestExpired = await addInvocation(newerExpiredTask, 'Ended', 'idle_expired', true, 'completed', 10);
+      fixtures.push({ task: newerExpiredTask });
+
+      const unsupportedLatestTask = await createTask(events, 'Newer unsupported session blocks older');
+      expect((await taskStore.transition(unsupportedLatestTask.id, 'Running')).kind).toBe('ok');
+      await addInvocation(unsupportedLatestTask, 'Active', null, true, 'running', 20);
+      await addInvocation(unsupportedLatestTask, 'Ended', 'cancelled', true, 'completed', 10);
+      fixtures.push({ task: unsupportedLatestTask });
 
       const stale = await store.listStaleRunning(new Date(Date.now() - 5 * 60_000), 5);
       expect(stale.map(({ taskId }) => taskId)).toEqual(expect.arrayContaining([
-        staleActive.task.id, staleCompleted.task.id,
+        staleActive.task.id, staleCompleted.task.id, staleExpired.task.id, newerExpiredTask.id,
       ]));
-      expect(stale).toHaveLength(2);
+      expect(stale).toHaveLength(4);
       expect(stale.find(({ taskId }) => taskId === staleActive.task.id)?.sessionStatus).toBe('Active');
+      expect(stale.find(({ taskId }) => taskId === staleActive.task.id)?.invocationId)
+        .toBe(staleActive.invocationId);
       expect(stale.find(({ taskId }) => taskId === staleCompleted.task.id)?.sessionStatus).toBe('Ended');
+      expect(stale.find(({ taskId }) => taskId === staleExpired.task.id)).toMatchObject({
+        sandboxSessionId: staleExpired.sandboxSessionId,
+        invocationId: staleExpired.invocationId,
+        sessionStatus: 'Ended',
+      });
+      expect(stale.find(({ taskId }) => taskId === newerExpiredTask.id)).toMatchObject({
+        sandboxSessionId: latestExpired.sandboxSessionId,
+        invocationId: latestExpired.invocationId,
+        sessionStatus: 'Ended',
+      });
+      expect(stale.some(({ taskId }) => taskId === unsupportedLatestTask.id)).toBe(false);
+      expect(olderEligible.sandboxSessionId).not.toBe(latestExpired.sandboxSessionId);
+      const latestCandidate = stale.find(({ taskId }) => taskId === newerExpiredTask.id);
+      if (!latestCandidate) throw new Error('Latest expired invocation was not selected');
+      expect(await store.isCurrentStaleTask(latestCandidate)).toBe(true);
+      expect(await store.isCurrentStaleTask({
+        ...latestCandidate,
+        sandboxSessionId: olderEligible.sandboxSessionId,
+        foundrySessionId: olderEligible.foundrySessionId,
+        invocationId: olderEligible.invocationId,
+      })).toBe(false);
+      const recoveryStore = createTaskRecoveryStore(pool, events);
+      await expect(recoveryStore.getRunningTaskForSession({
+        sandboxSessionId: staleActive.sandboxSessionId,
+        foundrySessionId: staleActive.foundrySessionId,
+        agentName: 'jarvis-runner-base-1x2',
+        invocationId: staleActive.invocationId,
+      })).resolves.toBe(staleActive.task.id);
+      await expect(recoveryStore.getRunningTaskForSession({
+        sandboxSessionId: staleActive.sandboxSessionId,
+        foundrySessionId: staleActive.foundrySessionId,
+        agentName: 'jarvis-runner-base-1x2',
+        invocationId: olderInvocationId,
+      })).resolves.toBeNull();
+      const heartbeatBefore = await pool.request()
+        .input('sandboxSessionId', sql.BigInt, BigInt(staleActive.sandboxSessionId))
+        .query<{ lastHeartbeatAt: Date }>(
+          'SELECT last_heartbeat_at AS lastHeartbeatAt FROM dbo.sandbox_sessions WHERE id = @sandboxSessionId;',
+        );
+      await store.recordHeartbeat(staleActive.sandboxSessionId, olderInvocationId, true);
+      const oldInvocation = await pool.request()
+        .input('sandboxSessionId', sql.BigInt, BigInt(staleActive.sandboxSessionId))
+        .input('olderInvocationId', sql.NVarChar(255), olderInvocationId)
+        .input('latestInvocationId', sql.NVarChar(255), staleActive.invocationId)
+        .query<{ lastHeartbeatAt: Date; oldStatus: string; latestStatus: string }>(`SELECT
+          session.last_heartbeat_at AS lastHeartbeatAt,
+          oldTurn.status AS oldStatus, latestTurn.status AS latestStatus
+          FROM dbo.sandbox_sessions AS session
+          INNER JOIN dbo.sandbox_turns AS oldTurn ON oldTurn.sandbox_session_id = session.id
+            AND oldTurn.invocation_id = @olderInvocationId
+          INNER JOIN dbo.sandbox_turns AS latestTurn ON latestTurn.sandbox_session_id = session.id
+            AND latestTurn.invocation_id = @latestInvocationId
+          WHERE session.id = @sandboxSessionId;`);
+      expect(oldInvocation.recordset).toEqual([{
+        lastHeartbeatAt: heartbeatBefore.recordset[0]?.lastHeartbeatAt,
+        oldStatus: 'running',
+        latestStatus: 'running',
+      }]);
     } finally {
       for (const { task } of fixtures) {
         await taskStore.transition(task.id, 'NeedsAttention');
         await store.endTaskSessions(task.id, 'NeedsAttention');
       }
+    }
+  });
+
+  it('reconciles an idle-expired completion through verified policy before admitting the next task', async () => {
+    const events = createEventHub<TaskEventMessage>();
+    const taskStore = createTaskStore(pool, events);
+    const store = createDispatcherStore(pool, events);
+    const projectId = await createProject(1);
+    const completedTask = await createTask(events, 'Completed idle-expired delivery', projectId);
+    const waitingTask = await createTask(events, 'Waiting for project capacity', projectId);
+    expect((await taskStore.transition(completedTask.id, 'Running')).kind).toBe('ok');
+    const foundrySessionId = `expired-${randomUUID()}`;
+    const invocationId = `expired-invocation-${randomUUID()}`;
+    const inserted = await pool.request()
+      .input('taskId', sql.BigInt, BigInt(completedTask.id))
+      .input('foundrySessionId', sql.NVarChar(255), foundrySessionId)
+      .input('startedAt', sql.DateTime2(7), new Date(Date.now() - 10 * 60_000))
+      .query<{ sandboxSessionId: string }>(`INSERT dbo.sandbox_sessions
+        (task_id, foundry_session_id, agent_version, agent_name, size, image, status,
+          started_at, last_heartbeat_at, ended_at, end_reason)
+        OUTPUT CAST(inserted.id AS varchar(19)) AS sandboxSessionId
+        VALUES (@taskId, @foundrySessionId, N'active', N'copilot', N'1x2', N'copilot',
+          N'Ended', @startedAt, @startedAt, SYSUTCDATETIME(), N'idle_expired');`);
+    const sandboxSessionId = inserted.recordset[0]?.sandboxSessionId;
+    if (!sandboxSessionId) throw new Error('Idle-expired session fixture was not created');
+    await pool.request()
+      .input('sandboxSessionId', sql.BigInt, BigInt(sandboxSessionId))
+      .input('foundrySessionId', sql.NVarChar(255), foundrySessionId)
+      .input('invocationId', sql.NVarChar(255), invocationId)
+      .query(`INSERT dbo.sandbox_turns (sandbox_session_id, invocation_id, mode, acp_session_id, status, ended_at)
+        VALUES (@sandboxSessionId, @invocationId, N'task', @foundrySessionId, N'completed', SYSUTCDATETIME());`);
+
+    const startTask = vi.fn(async () => ({
+      invocationId: `waiting-${randomUUID()}`,
+      sessionId: `waiting-session-${randomUUID()}`,
+      status: 'queued' as const,
+      agent: 'copilot' as const,
+    }));
+    const clientFor = vi.fn(() => ({
+      startTask,
+      steer: vi.fn(async () => ({
+        invocationId: 'steered', sessionId: 'waiting-session', status: 'queued' as const, agent: 'copilot' as const,
+      })),
+      pause: vi.fn(async () => ({ sessionId: 'waiting-session', status: 'pausing' as const })),
+      resume: vi.fn(async () => ({
+        invocationId: 'resumed', sessionId: 'waiting-session', status: 'queued' as const, agent: 'copilot' as const,
+      })),
+      cancel: vi.fn(async (id: string) => ({ invocationId: id, status: 'cancelled' as const })),
+      deleteSession: vi.fn(async () => {}),
+      status: vi.fn(async (id: string) => ({
+        invocationId: id,
+        sessionId: foundrySessionId,
+        status: 'completed' as const,
+        agent: 'copilot' as const,
+        startedAt: Date.now() - 60_000,
+        finishedAt: Date.now(),
+        events: [],
+        result: null,
+        error: null,
+      })),
+    }));
+    const dispatcher = new TaskDispatcher(
+      store,
+      taskStore,
+      settings(),
+      clientFor,
+      heartbeat(),
+      events,
+      {
+        recoveryStore: createTaskRecoveryStore(pool, events),
+        workspaceFor: vi.fn(async () => ({
+          repository: 'DanAakesen/dispatch-policy',
+          defaultBranch: 'main',
+          branch: `jarvis/task-${completedTask.id}`,
+        })),
+        verifyDelivery: vi.fn(async (_workspace, _task, gate) => {
+          if (!gate) return { kind: 'refused' as const, reason: 'Completion policy gate unavailable' };
+          const outcome = await gate(async () => {
+            expect((await taskStore.transition(completedTask.id, 'Done', true)).kind).toBe('ok');
+            return true;
+          });
+          return outcome.kind === 'not_running'
+            ? { kind: 'not_running' as const }
+            : { kind: 'awaiting_policy' as const };
+        }),
+      },
+    );
+
+    try {
+      expect(await store.claimNext('before-policy', 120, 3)).toMatchObject({ kind: 'idle' });
+      dispatcher.start();
+      await vi.waitFor(() => expect(startTask).toHaveBeenCalledOnce());
+      expect(await taskStore.get(completedTask.id, 1, 0)).toMatchObject({ state: 'Done' });
+      expect(await taskStore.get(waitingTask.id, 1, 0)).toMatchObject({ state: 'Running' });
+      expect(await store.isCurrentStaleTask({
+        taskId: completedTask.id,
+        sandboxSessionId,
+        foundrySessionId,
+        invocationId,
+        agentName: 'copilot',
+        sessionStatus: 'Ended',
+      })).toBe(false);
+    } finally {
+      await dispatcher.stop();
+      await taskStore.transition(waitingTask.id, 'NeedsAttention');
+      await store.endTaskSessions(waitingTask.id, 'NeedsAttention');
+      await store.endTaskSessions(completedTask.id, 'Done', true);
     }
   });
 
