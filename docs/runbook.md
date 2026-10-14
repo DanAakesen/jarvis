@@ -21,6 +21,24 @@ from the `jarvis-infra` deployment outputs instead of guessing them.
 4. Confirm the relevant Deploy or Runner deploy jobs and smoke checks succeeded.
    A successful build alone is not production acceptance.
 
+### Chat capability smoke diagnosis
+
+Read the retained result with the ordinary authenticated `GET /status`; this
+does not rerun checks. `GET /status/smoke` actively runs provider and chat
+checks, so use it only as part of an authorized normal deployment smoke, not
+for diagnosis or repeated probing. The `chat_capabilities` reason is one of
+`capabilities_discovery_missing` (no matching discovery receipt),
+`capabilities_discovery_wrong` (wrong tool or operation),
+`capabilities_discovery_failed` (matching call did not succeed),
+`capabilities_receipt_incomplete` (successful receipt omitted a required
+Notes, Calendar or GitHub capability), or `capabilities_reply_incomplete`
+(the reply omitted required wording). These reasons classify which existing
+predicate failed; they do not relax the assertion that real successful
+`get_system_health/list_capabilities` discovery, all three capabilities and
+their mention in the reply are required. The reason alone does not establish
+the original production cause; until a normal recovery deployment and released
+acceptance confirm the result, treat that cause as unidentified.
+
 ## Factory board 502 diagnosis and acceptance
 
 For #811, a successful Deploy or `/health` response is not board acceptance.
