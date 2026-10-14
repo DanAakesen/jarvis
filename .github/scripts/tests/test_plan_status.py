@@ -53,7 +53,7 @@ class PlanStatusTests(unittest.TestCase):
             reconciled,
         )
         self.assertIn(
-            "| P0-06 | [#6](https://github.com/DanAakesen/jarvis/issues/6) | Merged task | merged PR | None | Complete |",
+            "| P0-06 | [#6](https://github.com/DanAakesen/jarvis/issues/6) | Merged task | merged PR | None | Not started |",
             reconciled,
         )
         self.assertIn("| P0-07 |  | New task: add a thing | works | P0-01, P0-02 | Not started |", reconciled)
@@ -157,6 +157,75 @@ class PlanStatusTests(unittest.TestCase):
         self.assertEqual(task_status("Not started", issue, []), "Not started")
         self.assertEqual(task_status("In progress", issue, []), "Not started")
         self.assertEqual(task_status("Blocked", issue, []), "Blocked")
+
+    def test_reopened_issue_does_not_complete_from_a_historical_merged_pr(self):
+        issue = {
+            "number": 794,
+            "state": "open",
+            "state_reason": None,
+            "labels": [],
+        }
+        merged_pr = {
+            "number": 802,
+            "state": "closed",
+            "merged_at": "2026-10-03T00:00:00Z",
+            "body": "Fixes #794",
+        }
+
+        self.assertEqual(task_status("Complete", issue, [merged_pr]), "Not started")
+        self.assertEqual(task_status("Blocked", issue, [merged_pr]), "Blocked")
+        self.assertEqual(
+            task_status(
+                "Complete",
+                issue,
+                [merged_pr, {"state": "open", "body": "Fixes #794"}],
+            ),
+            "In progress",
+        )
+        self.assertEqual(
+            task_status(
+                "Complete",
+                {**issue, "labels": [{"name": "Copilot"}]},
+                [merged_pr],
+            ),
+            "In progress",
+        )
+        self.assertEqual(
+            task_status(
+                "Not started",
+                {**issue, "state": "closed", "state_reason": "completed"},
+                [merged_pr],
+            ),
+            "Complete",
+        )
+        self.assertEqual(task_status("In progress", None, [merged_pr]), "In progress")
+
+    def test_reopened_issue_plan_row_is_reconciled_idempotently(self):
+        plan = """| ID | Issue | Task | Acceptance criteria | Depends on | Status |
+| --- | --- | --- | --- | --- | --- |
+| P9-99 |  | Acceptance gate | Warm-speed evidence | None | Complete |
+"""
+        issue = {
+            "number": 794,
+            "title": "P9-99: Acceptance gate",
+            "state": "open",
+            "state_reason": None,
+            "labels": [],
+        }
+        merged_pr = {
+            "number": 802,
+            "state": "closed",
+            "merged_at": "2026-10-03T00:00:00Z",
+            "body": "Fixes #794",
+        }
+
+        once = reconcile_plan(plan, [issue], [merged_pr])
+
+        self.assertEqual(
+            once.splitlines()[-1],
+            "| P9-99 | [#794](https://github.com/DanAakesen/jarvis/issues/794) | Acceptance gate | Warm-speed evidence | None | Not started |",
+        )
+        self.assertEqual(reconcile_plan(once, [issue], [merged_pr]), once)
 
 
 class FullTaskIdentifierTests(unittest.TestCase):

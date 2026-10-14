@@ -47,7 +47,7 @@ The coordinator authorised the smallest coupled release-gate correction in
 extraction and PLAN row/issue/dependency parsing preserve full task numbers
 with at least two digits and an ID boundary. Retain two-digit formatting,
 WIP/bracket/fix-main/docs behavior and all existing status/ownership policies;
-the separate reopened-issue policy is outside this correction. Existing
+the separate reopened-issue policy is addressed by #817. Existing
 Python CI discovers the title and PLAN regressions; no other workflow change
 or new tooling. Restore the correct title only after pushing the fix and
 rerun exact-head gates.
@@ -55,6 +55,17 @@ Cap each dependency-range expansion at 1000 tasks and fail with an actionable
 ValueError before iteration. This replaces the old incidental two-digit
 resource bound without capping valid ID width; no established script bound
 was present. Boundary/over-limit and intercepted huge-range tests cover it.
+
+## Reopened issue completion precedence (#817, 14 October 2026)
+
+For PLAN reconciliation, a merged linked PR does not complete an open or
+reopened issue. The open issue is In progress when it has an open linked PR or
+recognized worker label; otherwise it is Not started. Preserve a manual
+Blocked status unless the issue is closed as completed. Existing unmerged
+not-planned and missing-issue fallbacks remain unchanged. This corrects PLAN
+reporting only: merge proves code integration, not satisfaction of live
+acceptance gates, so open acceptance issues remain open and their status cells
+stay workflow-owned.
 
 ## P12-05 inactive SQL health processing (13 October 2026)
 
