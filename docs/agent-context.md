@@ -1,5 +1,66 @@
 # Agent context
 
+## Accepted recovery and next Factory integration (14 October 2026)
+
+Diagnostic #831 merged normally as `51bda5cb` after independent review,
+all ten actual jobs in CI `38618143799` and all three CodeQL analyses.
+Normal Deploy `38622011802` passed backend, web and actual smoke checks;
+unchanged infrastructure and hosted-agent deployment were skipped.
+Backend revision `0000315` is ready with the new image. The bounded
+19:22–19:24 UTC revision-only log query returned 314 backend rows and
+15 smoke events; chat canary, capabilities and GitHub read each reported
+`ok` once at 19:23:18 UTC. No provider/prompt/result text was retrieved.
+This establishes the current accepted release, not the historical cause
+or original phone/voice/Google acceptance. #820 remains open.
+
+The owned #842 integration preserves its two accepted Factory UI blobs
+and current-main task rows while incorporating that recovery. Its new
+integrated head still needs normal exact-head gates before publication
+acceptance or release; earlier `fe35a166` gates cover the earlier head only.
+The local Google delivery remains held for five independently reproduced
+scope/routing/provenance corrections. No new CI, deployment or private
+provider turn is implied by this local integration.
+
+## Consolidated main recovery (14 October 2026; local)
+
+Dan directed important work to local sessions and deferred the proposed Factory
+release-policy redesign. This recovery combines existing PR #831 (`291cca34`)
+and #832 (`85e55164`) with current main `81580919` in an owned worktree,
+uncommitted and unpublished. The coordinator owns publication and normal release;
+do not create another issue/PR, rerun smoke or redeploy unchanged images.
+Preserve main's unrelated source, including the eight accepted mobile blobs.
+
+Smoke discovery returns Notes, Calendar and GitHub labels from the registered
+tool names; the agent extracts those into its actual tool receipt. The smoke role
+does not receive the normal-chat capability instruction block. Missing explicit
+smoke discovery guidance is a candidate, not an established production cause,
+and this patch does not change model instructions. The authorised fixed-format
+numeric model-round query in the existing Log Analytics workspace returned no
+matching records for 17:32–17:34 UTC. It read no provider or personal text.
+
+Both HTTP Status routes omit reasons unless a check is `down`, preserving
+already-open legacy clients during parallel backend/web deployment. Internal
+snapshots retain allowlisted degraded reasons. Only an authorised smoke run
+emits `system.smoke_check` through the existing stdout/telemetry allowlists;
+ordinary `/status` reads do not rerun or re-log checks. No new access, provider
+experiment, budget/timeout/model or confirmation change. SDK-managed Copilot
+processes omit `--remote`; remote-enabled state remains unverified and no
+duplicate process or shared settings change is made.
+
+Qualified local checks: 169 tests pass across chat-canary, system-status,
+chat-agent and logging; 42 contracts tests, contracts lint/build and all thirteen
+affected backend files' zero-warning lint pass. The independent review passed
+the diagnostic patch, not production recovery. Tooling is an owned copy of a
+read-only snapshot (Vitest 5.0.2, Vite 8.3.1, ESLint 10.11.0, Node types 22.20.4,
+TypeScript 6.0.3), with aliases pointing only to this child source. The supplied
+portable Node 22.23.3 x64 resolves the original ARM64/native-binary mismatch
+without a global Node/PATH change. Five app-dependent suites cannot import
+missing `@fastify/multipart`; the full backend build also lacks `sharp`,
+`pdfjs-dist`, `@azure/storage-queue` and `@fastify/rate-limit`, with derivative
+declaration errors. These are blocked checks, not passing builds or source
+failures. No pins, TLS settings, types or checks were weakened. Exact-head
+pinned CI and the safe live failing predicate remain coordinator-owned gates.
+
 ## Mobile/Status review publication (14 October 2026)
 
 Dan approved commit, push and a separate review PR for the accepted
@@ -123,9 +184,13 @@ cover 1440x1000 dark/ordinary motion and 320x700 light/touch/reduced motion:
 real controls, broker ack/Status selector, the same Settings-to-Status stream,
 stale/failing/unknown evidence, missing versions, disabled pending refresh,
 retained HTTP 503 failure and Retry. No document overflow or smoke invocation.
-The fixture room is disabled and API responses are synthetic; its broker
-acknowledgement, failed-refresh/Retry and phone checks are not live acceptance.
-Keep this scope separate from latency QA, presence/Routines/phone Save work,
+The fixture room is disabled and API responses are synthetic. Exact-head
+CI/release and authenticated Status/voice acceptance remain pending.
+The 14 October smoke-reader follow-up preserves only fixed per-check allowlisted
+reasons for down/degraded results. The original deployed chat-canary failure
+cause remains unknown; diagnose retained evidence through `/status`, never by
+invoking `/status/smoke` or a model canary.
+Keep this PR separate from latency QA, presence/Routines/phone Save work,
 unrelated pin changes and the coordinator's #811 backend investigation.
 
 #815 merged at `6e7d85dd` after the final `8c0f2cb2` exact-head gates passed.

@@ -1,5 +1,21 @@
 # Decisions
 
+## Accept current recovery separately from historical attribution (14 October 2026)
+
+The reviewed diagnostic tree reached main through #831 as `51bda5cb`.
+Its exact-head full CI passed all ten actual jobs and CodeQL all three
+analyses. Normal Deploy `38622011802` passed backend/web and actual smoke;
+the ready revision's bounded enum-only telemetry positively reports
+chat canary, capabilities and GitHub read `ok`. This clears the current
+release blocker for the already-approved non-Daily queue.
+
+Do not infer the previous capability failure's cause from this green run,
+close #820 automatically, or substitute it for original phone/voice/Google
+acceptance. Preserve the accepted Factory runtime blobs and actual main
+task rows when integrating #842; its new head needs its own normal gates.
+The local review's five Google findings remain correction work, not a
+request to publish the previously frozen failing patch.
+
 ## Coalesce automatic board updates behind scoped reads (#813, 14 October 2026)
 
 Preserve an in-flight same-scope board read and queue at most one automatic
@@ -23,6 +39,37 @@ with valid deferred 10-second reads. That controlled proof justifies this
 local correction; it does not identify the original production trigger.
 No production acceptance, release or backend change is implied. The separate
 Status snapshot/limits below remain historical evidence; #798 stays held.
+
+## Keep consolidated recovery diagnostics compatible with live Status clients (14 October 2026; local)
+
+Combine current main `81580919` and the existing #831/#832 diagnostics locally;
+no new micro-ticket or independent publication. PR #832 retains allowlisted
+degraded reasons internally, but already-open web clients accept HTTP reasons
+only for down checks. Keep both HTTP routes legacy-compatible with a
+non-mutating projection. Retain safe degraded reasons in the cached report and
+export `system.smoke_check` through the existing event/field allowlists only
+when an authorised smoke run actually executes. Reject unknown/cross-check
+reasons and provider, prompt, tool or personal payloads at both log outputs.
+No validator weakening, extra probes or release-gate/budget/approval change.
+
+The 17:32–17:34 UTC existing-workspace query selected only exact-format numeric
+model-round metadata and returned no matches. Prior smoke logs record only
+IDs/statuses. Source tracing confirms that `get_system_health/list_capabilities`
+returns the three required categories and that receipt extraction preserves
+them; normal-chat capability instructions are not supplied to the smoke role.
+That absence is a candidate, not a verified failing predicate or root cause.
+Do not change smoke/model instructions or claim recovery without that evidence.
+Local regression checks and the coordinator's normal release remain distinct
+from historical attribution and accepted green production.
+
+The independent review passed the frozen diagnostic code. Qualified local
+validation passes 169 tests in four backend suites, 42 contracts tests and
+affected-file/contracts lint plus contracts build. Five app suites and the
+full backend build remain blocked by absent snapshot dependencies; no missing
+declarations are stubbed and no gates or pins are changed. Local tooling differs
+from the manifest's pinned CI versions. Keep those blocked checks and the
+unknown live failing predicate explicit; neither review nor this local evidence
+clears publication/release or establishes recovered main.
 
 ## Reviewed non-Daily release clearance (14 October 2026)
 
@@ -159,6 +206,52 @@ successful requests (median 10.065 s, p95 12.915 s, maximum 19.211 s) included
 cache hits and is not a cold-only cohort. This is not a diagnosis of #811's
 separate historical 502s.
 
+## #813 Factory board diagnostic follow-up (14 October 2026)
+
+The released latency acceptance for backend `75a3cbe` / Deploy `38507005838`
+failed: two completed board reads took 9.661 s and 10.365 s, with no accepted
+improvement against the prior mixed-cache median of 10.065 s. One actual rail
+entry had 14 client fetch starts, two HTTP 200 completions, and twelve aggregate
+abort errors. API/header/rendered placement and the 100-card Done cap reconciled
+separately; those checks do not establish a latency improvement.
+
+Add diagnostics only; do not change caching, generations, source concurrency,
+retry, client behavior, or the 502 contract. Log bounded monotonic durations at
+the existing project, token, source, task, release, and response work
+boundaries, correlated by request ID. Concurrent source/task/release durations
+are independent wall times and overlap. The summary cache elapsed measurement
+covers the actual awaited cache operation: lookup for a hit, wait for a shared
+caller, and the complete load for its owner; interpret it with `cachePath`, not
+as a separate phase. Phase events indicate that their instrumented boundary
+executed; an absent event cannot establish skipped work because telemetry may
+be missing, sampled, cropped, or outside the observed window. The summary's
+outcome and reply status describe the handler/source-computation decision, not
+HTTP completion or client receipt; correlate the separate `request.completed`
+server-side `onResponse` observation, which also does not prove client receipt.
+Durations over 60 seconds omit the value and set a censored marker instead of
+clipping; invalid clock values are marked unavailable. An observed cache path
+plus stale state distinguish cache hit, shared wait, source load, and stale
+fallback. Keep phase/event fields explicitly
+allowlisted and omit content, credentials, URLs, query strings, and arbitrary
+errors. At the existing publication boundary, log only bounded
+invalidation origin, project/version when known, and webhook request ID when
+available; task-event prelookup invalidation has only its `all_projects` scope.
+
+The bounded production window (03:49:30–03:51:10 UTC, healthy revision 312) after
+#814 had 546 allowlisted rows, two board HTTP 200 completions at 9.661 s /
+10.365 s, 49 webhook HTTP 202, 40 Now HTTP 200, and 62 database-status HTTP 200
+responses. Thirteen GET starts were route-unclassified with no completion in
+the window; they do not prove receipt of every client fetch start. No selected
+request/Factory failure event appeared, which does not establish that client
+aborts did not occur. No captured SSE versions, matching invalidation reasons,
+or per-attempt abort times were available. The separate app-scoped query
+returned zero matching rows. A validated-update/debounce/reload/abort path and
+overlapping backend cache generations remain possible mechanisms, not
+established historical causes. Browser/backend clock domains are not assumed
+synchronized. The diagnostics have not yet been deployed or observed in
+production; this follow-up is not evidence that performance is fixed and does
+not diagnose #811's historical 502.
+
 ## Status reads recorded evidence without running canaries (14 October 2026)
 
 P9-101/#799 uses the existing owner-only `/status` contract and shell
@@ -194,6 +287,21 @@ Broker/voice and physical-phone acceptance remain unproven; #799 remains open
 and #798 held, followed separately by #797 and #792.
 The original failed smoke turn's cause remains unconfirmed under #820;
 diagnostic-only #821 and the subsequent green run are not proof of a repair.
+
+## P9-107 smoke reason retention follow-up (14 October 2026)
+
+The prior Status-page decision above records its original UI-only scope. This
+follow-up preserves fixed per-check smoke reasons for down/degraded results.
+The allowlist includes shared `agent_error` and `timeout` outcomes for each
+chat acceptance check, while rejecting arbitrary provider text and reasons
+belonging only to another check.
+
+Local proof on this branch: exact-reader tests cover real missing-agent,
+controlled stream failure and timeout results, ordered complete report shape,
+contract validation, privacy, and timeout aborts. Backend and contracts checks
+are run for the current head; full exact-head CI and CodeQL status must be
+confirmed on the corrected commit. The original deployed failure cause remains
+unknown, and no production recovery is claimed.
 
 The coordinator authorised the smallest coupled release-gate correction in
 #815 after the title bot truncated P9-101 to P9-10. Normalization, linked-issue
