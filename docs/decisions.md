@@ -1,5 +1,17 @@
 # Decisions
 
+## Repository C# CodeQL uses a traced production build (14 October 2026)
+
+Add C# to the existing advanced CodeQL matrix in manual build mode. Initialize
+CodeQL before the pinned .NET 10 setup and Release build of the production
+`Jarvis.PcBridge` application; its project reference brings
+`Jarvis.PcBridge.Core` into the same traced build. This preserves the existing
+CodeQL policy and avoids relying on test-only builds or an untraced prior build.
+Only source compiled by the traced production build is in scope; generated
+source is covered only when surfaced to that compiler invocation. Local
+validation reports both production assemblies built, but the remote four-language
+run, nonempty C# upload and PR/ref/analyzed-commit association remain pending.
+
 ## #813 bound Factory board source reads (13 October 2026)
 
 Use one eight-request limiter for every GitHub source request in a board snapshot,
