@@ -477,6 +477,51 @@ describe('Factory board', () => {
     });
   });
 
+  it.each([
+    [
+      'different cursors',
+      [
+        ['after', 'cursor-one'],
+        ['after', 'cursor-two'],
+      ],
+    ],
+    [
+      'offset and cursor links',
+      [
+        ['page', '2'],
+        ['after', 'cursor-one'],
+      ],
+    ],
+  ] as const)('rejects duplicate next relations with %s before requesting another page', async (_description, links) => {
+    let closedIssueRequests = 0;
+    const duplicateNextLinks = links.map(([parameter, value]) => {
+      const url = new URL('https://api.github.com/repositories/1403065900/issues');
+      url.searchParams.set('state', 'closed');
+      url.searchParams.set('since', timestamp);
+      url.searchParams.set('per_page', '100');
+      url.searchParams.set('page', '2');
+      if (parameter !== 'page') url.searchParams.set(parameter, value);
+      return `<${url}>; rel="next"`;
+    }).join(', ');
+    const reader = createGitHubFactoryBoardReader(async (input) => {
+      const url = new URL(String(input));
+      if (url.pathname.endsWith('/issues') && url.searchParams.get('state') === 'closed') {
+        closedIssueRequests += 1;
+        return new Response(JSON.stringify(Array.from({ length: 100 }, (_, index) => ({
+          number: index + 1, title: `Closed ${index + 1}`, body: null, state: 'closed', closed_at: timestamp,
+          html_url: `https://github.com/DanAakesen/jarvis/issues/${index + 1}`,
+          updated_at: timestamp, labels: [], issue_dependencies_summary: { blocked_by: 0 },
+        }))), { headers: { link: duplicateNextLinks } });
+      }
+      return new Response('[]');
+    });
+
+    await expect(reader.read(project.repo, 'reader-token', timestamp)).rejects.toMatchObject({
+      stage: 'source', reason: 'invalid_response',
+    });
+    expect(closedIssueRequests).toBe(1);
+  });
+
   it('overlaps complete page and sparse dependency reads within eight requests and preserves page order', async () => {
     const issues = Array.from({ length: 201 }, (_, index) => ({
       number: index + 1,

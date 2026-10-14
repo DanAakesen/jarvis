@@ -277,6 +277,7 @@ function paginationPage(response: Response, path: string, position: PagePosition
   const expectedQuery = [...baseUrl.searchParams.entries()].sort(([leftKey, leftValue], [rightKey, rightValue]) =>
     leftKey.localeCompare(rightKey) || leftValue.localeCompare(rightValue));
   const relations = new Map<string, number>();
+  const seenRelations = new Set<string>();
   let next: PagePosition | undefined;
   let repositoryId: string | undefined;
   const entries = header.split(/,\s*(?=<)/u);
@@ -295,6 +296,10 @@ function paginationPage(response: Response, path: string, position: PagePosition
     const relationEnd = parameters.indexOf('"', 5);
     if (relationEnd < 0) throw new FactoryBoardReadError('source', 'invalid_response');
     const relation = parameters.slice(5, relationEnd);
+    if (!['first', 'prev', 'next', 'last'].includes(relation) || seenRelations.has(relation)) {
+      throw new FactoryBoardReadError('source', 'invalid_response');
+    }
+    seenRelations.add(relation);
     const trailingParameters = parameters.slice(relationEnd + 1).trim();
     if (trailingParameters && (!trailingParameters.startsWith(';') ||
         trailingParameters.slice(1).split(';').some((parameter) => !parameter.trim()))) {
@@ -344,8 +349,7 @@ function paginationPage(response: Response, path: string, position: PagePosition
         (previousCursorValues.length === 1 &&
           (!previousCursor || previousCursor.length > 2048 || relation !== 'prev' || pageValues.length !== 1)) ||
         ((relation === 'first' || relation === 'last' || relation === 'prev') && pageValues.length !== 1) ||
-        JSON.stringify(actualQuery) !== JSON.stringify(expectedQuery) ||
-        !['first', 'prev', 'next', 'last'].includes(relation) || relations.has(relation)) {
+        JSON.stringify(actualQuery) !== JSON.stringify(expectedQuery)) {
       throw new FactoryBoardReadError('source', 'invalid_response');
     }
     if (relation === 'next') {
