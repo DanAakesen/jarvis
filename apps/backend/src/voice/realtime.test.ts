@@ -28,15 +28,21 @@ const tool: RegisteredTool = {
 
 describe('calendar follow-up routing', () => {
   it.each(['Is it raining tomorrow?', 'Did you find my reservation email?',
-    'Have you checked the build status?', 'Is Gmail working now?'])(
+    'Have you checked the build status?', 'Is Gmail working now?',
+    'Find my dentist appointment confirmation email', 'Find the email titled "Calendar appointment"'])(
     'clears unrelated context before intercepting %s', (text) => {
       expect(calendarTurnContext(true, text)).toEqual({ context: false, followup: false });
       expect(calendarTurnContext(false, text)).toEqual({ context: false, followup: false });
     },
   );
-  it.each(['Is it created?', 'Did you create it?', 'Er den oprettet?', 'yes', 'nej'])(
+  it.each(['Is it created?', 'Did you create it?', 'Er den oprettet?', 'Is the appointment created?', 'yes', 'nej'])(
     'retains a genuine later calendar follow-up %s', (text) => {
       expect(calendarTurnContext(true, text)).toEqual({ context: true, followup: true });
+    },
+  );
+  it.each(['Schedule my dentist appointment', 'Add this appointment confirmation email to my calendar'])(
+    'retains explicit calendar intent %s', (text) => {
+      expect(calendarTurnContext(false, text)).toEqual({ context: true, followup: false });
     },
   );
 });

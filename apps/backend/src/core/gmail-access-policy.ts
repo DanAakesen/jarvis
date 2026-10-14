@@ -28,15 +28,18 @@ async function independentComputerRequest(tool: JarvisTool, input: unknown, requ
   }
   if (message?.role !== 'dan') return false;
   const escaped = target.trim().replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
-  const clause = '(?:^|[;,.]\\s*(?:(?:then|and|also|og|derefter)\\s+)?|\\b(?:then|and|also|og|derefter)\\s+)(?:please\\s+)?';
   const intent = ['pc_open', 'pc_close'].includes(tool.name)
-    ? `${clause}(?:${tool.name === 'pc_close' ? 'close|luk' : 'open|launch|start|visit|\\u00e5bn'})\\s+(?:the\\s+)?["']?${escaped}(?=$|[\\s"',.!?;])`
+    ? `(?:${tool.name === 'pc_close' ? 'close|luk' : 'open|launch|start|visit|\\u00e5bn'})\\s+(?:the\\s+)?["']?${escaped}["']?`
     : tool.name === 'codex_prompt'
-      ? `${clause}(?:ask|tell|prompt)\\s+Codex\\s+(?:to\\s+)?["']?${escaped}(?=$|[\\s"',.!?;])`
-      : `${clause}${escaped}(?=$|[\\s"',.!?;])`;
+      ? `(?:ask|tell|prompt)\\s+Codex\\s+(?:to\\s+)?["']?${escaped}["']?`
+      : escaped;
+  // Only complete, unambiguous command shapes can exempt a mail turn.
+  const mail = '(?:please\\s+)?(?:read|check|find|search|l\\u00e6s|tjek|s\\u00f8g)\\s+(?:(?:my|the|min|mine)\\s+)?(?:gmail|(?:e-?)?mails?|inbox)';
+  const separator = '(?:\\s*[,;]\\s*(?:(?:then|and|also|og|derefter)\\s+)?|\\s+(?:then|and|also|og|derefter)\\s+|\\.\\s+)';
   return (['pc_open', 'pc_close', 'codex_prompt'].includes(tool.name) ||
       /^(?:open|launch|start|visit|navigate to|\u00e5bn)\b/iu.test(target.trim())) &&
-    new RegExp(intent, 'iu').test(message.text);
+    new RegExp(`^(?:${mail}${separator})?(?:please\\s+)?${intent}(?:${separator}${mail})?[.!?]?\\s*$`, 'iu')
+      .test(message.text.trim());
 }
 
 /** Shared by HTTP chat, voice, reflex and nested registry execution. No private mail is stored. */

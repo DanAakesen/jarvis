@@ -200,15 +200,20 @@ function toolFailure(name: string): string {
 }
 
 export function calendarStatusQuestion(text: string): boolean {
-  if (/\b(?:gmail|googlemail|e-?mail|draft|kladde\w*)\b/iu.test(text)) return false;
+  if (/\b(?:gmail|googlemail|(?:e-?)?mails?|draft|kladde\w*)\b/iu.test(text)) return false;
   return /\b(?:calendar|kalender\w*|appointments?|begivenhed\w*)\b/iu.test(text) &&
     /^(?:is|did|have|has|status|er|har|blev|tjekkede)\b/iu.test(text.trim()) ||
-    /^(?:(?:is|was|has) (?:it|that|the event) (?:already )?(?:created|staged|added|scheduled|completed|cancelled)|(?:did|have) you (?:already )?(?:create|stage|add|schedule|complete|cancel|check) (?:it|that|the event)|(?:er|blev) (?:den|det) (?:oprettet|klargjort|tilføjet|udført)|har du (?:oprettet|klargjort|tilføjet|tjekket) (?:den|det))\b/iu.test(text.trim());
+    /^(?:(?:is|was|has) (?:it|that|the event|the appointment) (?:already )?(?:created|staged|added|scheduled|completed|cancelled)|(?:did|have) you (?:already )?(?:create|stage|add|schedule|complete|cancel|check) (?:it|that|the event|the appointment)|(?:er|blev) (?:den|det) (?:oprettet|klargjort|tilføjet|udført)|har du (?:oprettet|klargjort|tilføjet|tjekket) (?:den|det))\b/iu.test(text.trim());
 }
 
 export function calendarTurnContext(previous: boolean, text: string) {
   const followup = previous && (classifyApprovalReply(text) !== undefined || calendarStatusQuestion(text));
-  const explicit = /\b(?:calendar|kalender\w*|appointments?|begivenhed\w*)\b|\b(?:add|create|schedule|tilføj|opret|læg)\b.{0,80}\breservation\w*\b/iu.test(text);
+  const scope = text.replace(/"[^"]*"|(?<!\w)'[^']*'(?!\w)|“[^”]*”|‘[^’]*’/gu, '').trim();
+  const reference = /\b(?:calendar|kalender\w*|begivenhed\w*)\b/iu.test(scope);
+  const mail = /\b(?:gmail|googlemail|(?:e-?)?mails?|draft|kladde\w*)\b/iu.test(scope);
+  const explicit = mail
+    ? reference && /^(?:(?:please|can you|could you|vil du|kan du)\s+)?(?:add|create|schedule|move|update|delete|cancel|tilføj|opret|læg|flyt|slet|aflys)\b/iu.test(scope)
+    : reference || /\b(?:add|create|schedule|tilføj|opret|læg)\b.{0,80}\b(?:reservation\w*|appointments?|events?)\b/iu.test(scope);
   return { context: followup || explicit, followup };
 }
 

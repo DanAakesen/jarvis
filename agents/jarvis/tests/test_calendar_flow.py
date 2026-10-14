@@ -15,6 +15,10 @@ SUMMARY = (
     'to 2026-11-06T11:00:00.000Z (Europe/Copenhagen); attendees: none.'
 )
 PENDING = {"status": "awaiting_confirmation", "confirmationCode": "12345678", "summary": SUMMARY}
+MAIL_SUMMARY = (
+    'Reply to "Dentist appointment" from guest@example.test with this exact text:\n'
+    'Synthetic reply.'
+)
 
 
 def delta(text):
@@ -331,7 +335,9 @@ async def test_unrelated_status_question_does_not_query_or_relay_stale_calendar(
         await model.close()
 
 
-@pytest.mark.parametrize("question", ["Is it created?", "Did you create it?", "Er den oprettet?"])
+@pytest.mark.parametrize("question", [
+    "Is it created?", "Did you create it?", "Er den oprettet?", "Is the appointment created?",
+])
 async def test_genuine_calendar_status_still_recovers_receipt_without_confirming(question):
     backend = CalendarBackend(pending=PENDING)
     model, _ = client([delta("I created it."), completed()], backend=backend)
@@ -342,5 +348,71 @@ async def test_genuine_calendar_status_still_recovers_receipt_without_confirming
         ])
         assert SUMMARY in text and "I created it." not in text
         assert backend.calendar_calls == ["calendar_get_pending_change"]
+    finally:
+        await model.close()
+
+
+@pytest.mark.parametrize("voice", [False, True])
+@pytest.mark.parametrize("pending", [None, PENDING])
+async def test_actual_dentist_mail_receipt_approval_cannot_confirm_calendar(pending, voice):
+    backend = CalendarBackend(pending=pending)
+    backend.reply = "approve"
+    model, transport = client([], backend=backend, rounds=[
+        [completed(FakeItem(type="function_call", name="mail_confirm_action",
+                            arguments='{"confirmationCode":"87654321"}', call_id="mail-call"))],
+        [delta("The Gmail reply draft was saved."), completed()],
+    ])
+    history = ([ModelMessage("assistant", "Pending calendar approval: " + SUMMARY)]
+               if pending is not None else [])
+    history += [ModelMessage("assistant", "Pending approval: " + MAIL_SUMMARY),
+                ModelMessage("user", "yes")]
+    try:
+        assert await turn(model, history, "43", voice=voice) == "The Gmail reply draft was saved."
+        assert backend.calendar_calls == []
+        assert backend.pending == pending
+        assert any(r.url.path.endswith("/mail_confirm_action") for r in backend.requests)
+        assert len(transport.responses.requests) == 2
+    finally:
+        await model.close()
+
+
+@pytest.mark.parametrize("pending", [None, PENDING])
+@pytest.mark.parametrize("question", [
+    "Find my dentist appointment confirmation email",
+    "Find my hotel reservation email",
+    'Find the email titled "Calendar appointment"',
+])
+async def test_mail_read_topics_are_not_calendar_intent(pending, question):
+    backend = CalendarBackend(pending=pending)
+    model, transport = client([], backend=backend, rounds=[
+        [completed(tool_call("mail_search"))],
+        [delta("The independent mail answer."), completed()],
+    ])
+    try:
+        assert await turn(model, [
+            ModelMessage("assistant", "Pending calendar approval: " + SUMMARY),
+            ModelMessage("user", question),
+        ]) == "The independent mail answer."
+        assert backend.calendar_calls == []
+        assert backend.pending == pending
+        assert any(r.url.path.endswith("/mail_search") for r in backend.requests)
+        assert len(transport.responses.requests) == 2
+    finally:
+        await model.close()
+
+
+@pytest.mark.parametrize("question", [
+    "Schedule my dentist appointment",
+    "Add this appointment confirmation email to my calendar",
+    "Tilføj min aftalemail til min kalender",
+])
+async def test_explicit_calendar_mutation_intent_is_preserved(question):
+    backend = CalendarBackend()
+    model, _ = client([], backend=backend, rounds=[[
+        completed(tool_call("calendar_create_event")),
+    ]])
+    try:
+        assert SUMMARY in await turn(model, [ModelMessage("user", question)])
+        assert backend.calendar_calls == ["calendar_get_pending_change", "calendar_create_event"]
     finally:
         await model.close()

@@ -43,6 +43,7 @@ const activeVoiceStates = new Set<JarvisActivityEvent['type']>(['listening', 'th
 const maxTrackedVoiceSessions = 64;
 const wakeWordTimestampPattern = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u;
 const mediaActions = ['play_pause', 'next', 'previous', 'volume_up', 'volume_down', 'mute'] as const;
+const chromeWindowTitle = /(?:^|\s-\s)(?:Google\s+)?Chrome$/iu;
 const clipboardSecretAssignment =
   /(\b(?:password|passwd|pwd|token|access[_ -]?token|refresh[_ -]?token|api[_ -]?key|access[_ -]?key|private[_ -]?key|key|secret|client[_ -]?secret|authorization)\b\s*[:=]\s*)(?:"[^"\r\n]*"|'[^'\r\n]*'|[^\s,;]+)/giu;
 const clipboardBearerToken = /\bBearer\s+\S+/giu;
@@ -570,7 +571,10 @@ export function createPcBridgeModule(options: PcBridgeModuleOptions = {}): PcBri
         inputSchema: { type: 'object', properties: {}, additionalProperties: false },
         execute: async (_input, request, signal) => {
           const result = await bridge.execute({ name: 'active_window', arguments: {} }, signal, request.log);
-          refuseGmailComputerAccess(result.title);
+          if (typeof result.title === 'string' && chromeWindowTitle.test(result.title)) {
+            refuseGmailComputerAccess(result.title);
+            await readBrowserTarget(bridge, undefined, signal, request.log);
+          }
           return { title: result.title };
         },
       },
@@ -581,8 +585,8 @@ export function createPcBridgeModule(options: PcBridgeModuleOptions = {}): PcBri
         sensitive: true,
         execute: async (_input, request, signal) => {
           const window = await bridge.execute({ name: 'active_window', arguments: {} }, signal, request.log);
-          refuseGmailComputerAccess(window.title);
-          if (typeof window.title === 'string' && /\bchrome\b/iu.test(window.title)) {
+          if (typeof window.title === 'string' && chromeWindowTitle.test(window.title)) {
+            refuseGmailComputerAccess(window.title);
             await readBrowserTarget(bridge, undefined, signal, request.log);
           }
           const result = await bridge.execute(
@@ -896,8 +900,10 @@ function guardedPcActBridge(
   };
   const checkWindow = async (signal: AbortSignal) => {
     const title = await windowTitle(signal);
-    refuseGmailComputerAccess(title);
-    if (browserWindow || /\bchrome\b/iu.test(title)) await readBrowserTarget(bridge, undefined, signal, logger);
+    if (browserWindow || chromeWindowTitle.test(title)) {
+      refuseGmailComputerAccess(title);
+      await readBrowserTarget(bridge, undefined, signal, logger);
+    }
   };
   return {
     windowTitle,

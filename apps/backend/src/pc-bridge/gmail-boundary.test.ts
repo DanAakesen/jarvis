@@ -15,6 +15,8 @@ const request = () => ({
 function fixture(options: Parameters<typeof createPcBridgeModule>[0] = {}) {
   let gmail = true;
   let gmailTitle = true;
+  let application = 'chrome';
+  let nativeTitle = '';
   const planner = { decide: vi.fn<PcActPlanner['decide']>(async () => ({ operation: 'done', confidence: 0.99 })) };
   const module = createPcBridgeModule({ pcActPlanner: planner, ...options });
   const execute = vi.spyOn(module.connection, 'execute').mockImplementation(async (command) => {
@@ -27,18 +29,21 @@ function fixture(options: Parameters<typeof createPcBridgeModule>[0] = {}) {
       url: gmail ? 'https://mail.google.com/mail/u/0' : 'https://example.test/',
       elements: [{ index: 0, role: 'button', name: 'Synthetic control', value: '' }],
     };
-    if (command.name === 'active_window') return { title: gmail && gmailTitle ? 'Inbox - Gmail - Google Chrome' : 'Search - Google Chrome' };
+    if (command.name === 'active_window') return { title: nativeTitle ||
+      (gmail && gmailTitle ? 'Inbox - Gmail - Google Chrome' : 'Search - Google Chrome') };
     if (command.name === 'uia_snapshot') return {
-      snapshotId, application: 'chrome', elements: [{ index: 0, role: 'button', name: 'Synthetic control' }],
+      snapshotId, application, elements: [{ index: 0, role: 'button', name: 'Synthetic control' }],
     };
     if (command.name === 'browser_act') return { acted: true, action: command.arguments.action };
     if (command.name === 'uia_act') return { acted: true, action: command.arguments.action };
     if (command.name === 'open_app') return { opened: true, app: command.arguments.app };
+    if (command.name === 'clipboard_read') return { text: 'Synthetic clipboard.' };
     throw new Error(`Unexpected fixture command ${command.name}`);
   });
   return { execute, planner, registry: createToolRegistry([module]),
     setGmail: (value: boolean) => { gmail = value; },
-    setGmailTitle: (value: boolean) => { gmailTitle = value; } };
+    setGmailTitle: (value: boolean) => { gmailTitle = value; },
+    setNative: (process: string, title: string) => { application = process; nativeTitle = title; } };
 }
 
 describe('actual raw PC registry Gmail boundary', () => {
@@ -46,7 +51,7 @@ describe('actual raw PC registry Gmail boundary', () => {
     const f = fixture();
     await expect(f.registry.get('pc_act')!.execute({ goal: 'Find the booking dates' }, request(), signal()))
       .rejects.toThrow(GMAIL_DIRECT_ACCESS_REASON);
-    expect(f.execute.mock.calls.map(([command]) => command.name)).toEqual(['active_window']);
+    expect(f.execute.mock.calls.map(([command]) => command.name)).toEqual(['uia_snapshot', 'active_window']);
     expect(f.planner.decide).not.toHaveBeenCalled();
   });
 
@@ -58,6 +63,29 @@ describe('actual raw PC registry Gmail boundary', () => {
     expect(f.planner.decide).toHaveBeenCalledOnce();
   });
 
+  it.each(['index.ts', 'gmail-access-policy.ts'])('allows actual vscode tests with native title %s', async (file) => {
+    const f = fixture();
+    f.setNative('vscode', `${file} - jarvis - Visual Studio Code`);
+    await expect(f.registry.get('pc_act')!.execute({ goal: 'Run the tests' }, request(), signal()))
+      .resolves.toMatchObject({ status: 'completed' });
+    expect(f.planner.decide).toHaveBeenCalledOnce();
+    expect(f.execute.mock.calls.filter(([command]) => command.name === 'browser_tabs')).toHaveLength(0);
+  });
+
+  it('preserves native actions and clipboard/window metadata for a Gmail-named source file', async () => {
+    const f = fixture();
+    const title = 'gmail-access-policy.ts - jarvis - Visual Studio Code';
+    f.setNative('vscode', title);
+    f.planner.decide.mockResolvedValueOnce({ operation: 'click', confidence: 0.99, targetIndex: 0 });
+    await f.registry.get('pc_act')!.execute({ goal: 'Run the tests' }, request(), signal());
+    expect(f.execute.mock.calls.filter(([command]) => command.name === 'uia_act')).toHaveLength(1);
+    await expect(f.registry.get('pc_active_window')!.execute({}, request(), signal()))
+      .resolves.toEqual({ title });
+    await expect(f.registry.get('pc_clipboard_read')!.execute({}, request(), signal()))
+      .resolves.toEqual({ text: 'Synthetic clipboard.' });
+    expect(f.execute.mock.calls.filter(([command]) => command.name === 'browser_tabs')).toHaveLength(0);
+  });
+
   it('guards a Gmail URL behind a generic Chrome window title before planner or vision export', async () => {
     const vision = { locateElements: vi.fn(async () => []) };
     const f = fixture({ pcActVisionModel: vision });
@@ -65,7 +93,7 @@ describe('actual raw PC registry Gmail boundary', () => {
     await expect(f.registry.get('pc_act')!.execute({ goal: 'Find the booking dates' }, request(), signal()))
       .rejects.toThrow(GMAIL_DIRECT_ACCESS_REASON);
     expect(f.execute.mock.calls.map(([command]) => command.name))
-      .toEqual(['active_window', 'uia_snapshot', 'browser_tabs']);
+      .toEqual(['uia_snapshot', 'active_window', 'browser_tabs']);
     expect(f.planner.decide).not.toHaveBeenCalled();
     expect(vision.locateElements).not.toHaveBeenCalled();
   });
@@ -82,11 +110,23 @@ describe('actual raw PC registry Gmail boundary', () => {
     expect(f.execute.mock.calls.filter(([command]) => command.name === 'uia_act')).toHaveLength(0);
   });
 
+  it('refuses a native-to-Chrome Gmail switch before dispatching a stale native action', async () => {
+    const f = fixture();
+    f.setNative('vscode', 'gmail-access-policy.ts - jarvis - Visual Studio Code');
+    f.planner.decide.mockImplementation(async () => {
+      f.setNative('chrome', 'Search - Google Chrome');
+      return { operation: 'click', confidence: 0.99, targetIndex: 0 };
+    });
+    await expect(f.registry.get('pc_act')!.execute({ goal: 'Run the tests' }, request(), signal()))
+      .rejects.toThrow(GMAIL_DIRECT_ACCESS_REASON);
+    expect(f.execute.mock.calls.filter(([command]) => command.name === 'uia_act')).toHaveLength(0);
+  });
+
   it('guards the Codex PC executor if opening Codex leaves the foreground on Gmail', async () => {
     const f = fixture();
     await expect(f.registry.get('codex_prompt')!.execute({ prompt: 'Write a unit test.' }, request(), signal()))
       .rejects.toThrow(GMAIL_DIRECT_ACCESS_REASON);
-    expect(f.execute.mock.calls.map(([command]) => command.name)).toEqual(['open_app', 'active_window']);
+    expect(f.execute.mock.calls.map(([command]) => command.name)).toEqual(['open_app', 'uia_snapshot', 'active_window']);
     expect(f.planner.decide).not.toHaveBeenCalled();
   });
   it('refuses opaque Gmail snapshot IDs before reading private controls', async () => {

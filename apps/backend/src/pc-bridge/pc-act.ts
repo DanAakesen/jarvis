@@ -657,7 +657,6 @@ export async function runPcAct(
     if (deadline.aborted) break;
     let operation: PcActOperation = 'blocked';
     try {
-      if (bridge.windowTitle) refuseGmailComputerAccess(await bridge.windowTitle(deadline));
       const rawSnapshot = await bridge.observe(deadline);
       if (!validSnapshot(rawSnapshot)) throw new ToolFailure('The active Windows application could not be safely observed.');
       refuseGmailComputerAccess(rawSnapshot.application);
@@ -665,6 +664,7 @@ export async function runPcAct(
         throw new ToolRefusal('Website controls are supported only in Chrome, where the current site can be verified.');
       }
       if (rawSnapshot.application === 'chrome') {
+        if (bridge.windowTitle) refuseGmailComputerAccess(await bridge.windowTitle(deadline));
         if (!bridge.browserContext) {
           throw new ToolRefusal('The foreground Chrome site cannot be verified. Use the direct browser tools.');
         }

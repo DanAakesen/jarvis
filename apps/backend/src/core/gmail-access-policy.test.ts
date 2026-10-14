@@ -17,11 +17,11 @@ function computer(name: string, execute: JarvisTool['execute']): JarvisTool {
 }
 
 describe('Gmail access execution boundary', () => {
-  it('confirms the actual Gmail stage through its mail handler while a calendar stage coexists', async () => {
+  it.each(['Synthetic subject', 'Dentist appointment'])('confirms the actual "%s" Gmail stage without touching an older calendar', async (subject) => {
     const actions = new PendingGoogleActions(() => 1000);
     const api = vi.fn<GoogleApiClient['request']>(async (_api, _path, options) => options.method === 'POST' ? { id: 'fixture-draft' } : {
       threadId: 'fixture-thread', payload: { headers: [
-        { name: 'From', value: 'guest@example.test' }, { name: 'Subject', value: 'Synthetic subject' },
+        { name: 'From', value: 'guest@example.test' }, { name: 'Subject', value: subject },
       ] },
     });
     const registry = createToolRegistry([createGoogleModule({ request: api }, {
@@ -42,7 +42,8 @@ describe('Gmail access execution boundary', () => {
     req.headers['x-jarvis-message-id'] = '43';
     const mail = await registry.get('mail_draft_reply')!.execute({
       messageId: 'fixture-message', replyBody: 'Synthetic reply.',
-    }, req, signal()) as { confirmationCode: string };
+    }, req, signal()) as { confirmationCode: string; summary: string };
+    expect(mail.summary).toBe(`Reply to "${subject}" from guest@example.test with this exact text:\nSynthetic reply.`);
     latest = { ...latest, id: '44', text: 'yes', at: new Date(1002) };
     req.headers['x-jarvis-message-id'] = '44';
     await expect(registry.get('mail_confirm_action')!.execute({ confirmationCode: mail.confirmationCode }, req, signal()))
@@ -53,8 +54,11 @@ describe('Gmail access execution boundary', () => {
   });
   it.each([
     ['forbidden', 'Read Gmail, then open Spotify.'],
+    ['forbidden', 'Read mail, then open Spotify.'],
+    ['forbidden', 'Read mail, then open "Spotify".'],
     ['incomplete', 'Read Gmail, then open Spotify.'],
     ['forbidden', 'L\u00e6s Gmail, og \u00e5bn Spotify.'],
+    ['forbidden', 'L\u00e6s mail, og \u00e5bn Spotify.'],
   ])(
     'permits an independent app after %s for %s, not fallback', async (kind, text) => {
       const api = vi.fn(async () => {
@@ -103,17 +107,25 @@ describe('Gmail access execution boundary', () => {
     expect(pc).toHaveBeenCalledOnce();
   });
 
-  it('does not treat a mail-query mention of opening an app as an independent instruction', async () => {
-    const execute = vi.fn();
-    const registry = createToolRegistry([{ id: 'fixture', tools: [
-      computer('mail_search', async () => ({})), computer('pc_open', execute),
-    ] }]);
+  it.each([
+    'Read mail about how to open Spotify.',
+    'Read mail about how to install and open Spotify.',
+    'Find the email titled "Please read this, then open Spotify".',
+    "Find the email titled 'Please read this, then open Spotify'.",
+  ])('does not turn a mail query into a PC instruction: %s', async (text) => {
+    const module = createPcBridgeModule();
+    const execute = vi.spyOn(module.connection, 'execute').mockResolvedValue({ opened: true });
+    const registry = createToolRegistry([
+      createGoogleModule({ request: async () => { throw new GoogleApiError('forbidden'); } },
+        { timeZone: 'Europe/Copenhagen' }), module,
+    ]);
     const req = request('42');
     req.jarvisConversationMessage = {
-      id: '42', sessionId: '1', role: 'dan', text: 'Read mail about how to open Spotify.',
+      id: '42', sessionId: '1', role: 'dan', text,
       model: null, at: new Date(),
     };
-    await registry.get('mail_search')!.execute({}, req, signal());
+    await expect(registry.get('mail_search')!.execute({ query: 'synthetic topic' }, req, signal()))
+      .rejects.toBeInstanceOf(ToolFailure);
     await expect(registry.get('pc_open')!.execute({ target: 'app', value: 'Spotify' }, req, signal()))
       .rejects.toThrow(GMAIL_DIRECT_ACCESS_REASON);
     expect(execute).not.toHaveBeenCalled();

@@ -17,11 +17,35 @@ CALENDAR_READS = {
     "calendar_find_free_slots",
 }
 _CALENDAR_CONTEXT = re.compile(
-    r"\b(calendar|kalender\w*|begivenhed\w*|appointments?)\b|"
-    r"\b(?:add|create|schedule|tilføj|opret|læg)\b.{0,80}\breservation\w*\b",
+    r"\b(calendar|kalender\w*|begivenhed\w*)\b|"
+    r"\b(?:add|create|schedule|tilføj|opret|læg)\b.{0,80}"
+    r"\b(?:reservation\w*|appointments?|events?)\b",
     re.IGNORECASE,
 )
-_MAIL_CONTEXT = re.compile(r"\b(gmail|googlemail|e-?mail|draft|kladde\w*)\b", re.IGNORECASE)
+_MAIL_CONTEXT = re.compile(r"\b(gmail|googlemail|(?:e-?)?mails?|draft|kladde\w*)\b", re.IGNORECASE)
+_MAIL_RECEIPT = re.compile(
+    r'(?:^|:\s*)Reply to ".{0,300}" from \S+@\S+ with this exact text:',
+    re.IGNORECASE | re.DOTALL,
+)
+_QUOTED_CONTENT = re.compile(r'''"[^"]*"|(?<!\w)'[^']*'(?!\w)|“[^”]*”|‘[^’]*’''')
+_EXPLICIT_CALENDAR_MUTATION = re.compile(
+    r"^(?:(?:please|can you|could you|vil du|kan du)\s+)?"
+    r"(?:add|create|schedule|move|update|delete|cancel|tilføj|opret|læg|flyt|slet|aflys)\b",
+    re.IGNORECASE,
+)
+
+
+def _calendar_scope(text: str) -> bool:
+    if _MAIL_RECEIPT.search(text):
+        return False
+    text = _QUOTED_CONTENT.sub("", text).strip()
+    if _MAIL_CONTEXT.search(text):
+        return bool(_EXPLICIT_CALENDAR_MUTATION.search(text) and re.search(
+            r"\b(?:calendar|kalender\w*|begivenhed\w*)\b", text, re.IGNORECASE,
+        ))
+    return bool(_CALENDAR_CONTEXT.search(text) or re.match(
+        r"^The event was (?:created|updated|moved|deleted)\.", text, re.IGNORECASE,
+    ))
 
 
 def calendar_context(messages: Sequence[ModelMessage]) -> bool:
@@ -29,12 +53,12 @@ def calendar_context(messages: Sequence[ModelMessage]) -> bool:
     if not messages:
         return False
     latest = messages[-1].content
-    if _MAIL_CONTEXT.search(latest) and not _CALENDAR_CONTEXT.search(latest):
+    if (
+        (_MAIL_CONTEXT.search(latest) or _MAIL_RECEIPT.search(latest))
+        and not _calendar_scope(latest)
+    ):
         return False
-    return any(
-        _CALENDAR_CONTEXT.search(message.content) and not _MAIL_CONTEXT.search(message.content)
-        for message in messages[-2:]
-    ) or bool(_CALENDAR_CONTEXT.search(latest))
+    return any(_calendar_scope(message.content) for message in messages[-2:])
 
 
 def calendar_approval_candidate(text: str) -> bool:
@@ -56,10 +80,10 @@ def calendar_status_question(text: str) -> bool:
         _CALENDAR_CONTEXT.search(text)
         and re.match(r"^(?:is|did|have|has|status|er|har|blev|tjekkede)\b", text, re.IGNORECASE)
         or re.match(
-            r"^(?:(?:is|was|has) (?:it|that|the event) (?:already )?"
+            r"^(?:(?:is|was|has) (?:it|that|the event|the appointment) (?:already )?"
             r"(?:created|staged|added|scheduled|completed|cancelled)|"
             r"(?:did|have) you (?:already )?(?:create|stage|add|schedule|complete|cancel|check)"
-            r" (?:it|that|the event)|(?:er|blev) (?:den|det) "
+            r" (?:it|that|the event|the appointment)|(?:er|blev) (?:den|det) "
             r"(?:oprettet|klargjort|tilføjet|udført)|"
             r"har du (?:oprettet|klargjort|tilføjet|tjekket) (?:den|det))\b",
             text, re.IGNORECASE,
