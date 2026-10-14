@@ -472,6 +472,13 @@ describe('App shell', () => {
       });
       if (path.startsWith('/workspace/pins/') && init?.method === 'PUT' && pinResponse) return pinResponse;
       if (path.startsWith('/workspace/pins/') && init?.method === 'DELETE') return new Response(null, { status: 204 });
+      if (path === '/status') return new Response(JSON.stringify({
+        checkedAt: new Date().toISOString(),
+        entries: ['database', 'foundry.chat', 'foundry.voice', 'foundry.embeddings', 'vault_index',
+          'github_app', 'google', 'pc_bridge', 'runner', 'deployed_commit', 'last_error'].map(id => ({
+          id, status: 'ok', checkedAt: new Date().toISOString(),
+        })),
+      }));
       return new Response(JSON.stringify({ state: 'awake' }), {
         status: 200, headers: { 'Content-Type': 'application/json' },
       });
@@ -871,7 +878,7 @@ describe('App shell', () => {
     expect(screen.queryByRole('heading', { name: 'Tasks' })).toBeNull();
   });
 
-  it('offers the Software Factory, Notes and Usage areas with a settings entry', async () => {
+  it('offers the Software Factory, Notes, Usage and Status areas with a settings entry', async () => {
     await renderSignedIn();
 
     const areas = screen.getByRole('navigation', { name: 'Areas' });
@@ -880,6 +887,7 @@ describe('App shell', () => {
       'Software Factory',
       'Notes',
       'Usage',
+      'Status',
     ]);
     expect(screen.getByRole('link', { name: 'Settings' }).getAttribute('href')).toBe('/settings');
   });
@@ -902,6 +910,7 @@ describe('App shell', () => {
 
   it.each([
     { page: 'usage' as const },
+    { page: 'status' as const },
     { page: 'factory' as const, issueNumber: 793 },
   ])('refuses Jarvis page navigation while a Notes draft is unsaved (%j)', async (target) => {
     streamWorkspaceCommands();
@@ -925,6 +934,25 @@ describe('App shell', () => {
     expect(JSON.parse(String(ack[1]?.body))).toMatchObject({ applied: false });
     expect((screen.getByRole('textbox', { name: 'Markdown' }) as HTMLTextAreaElement).value).toBe('# Fixture draft\n\n');
     expect(screen.getByRole('link', { name: 'Notes' }).getAttribute('aria-current')).toBe('page');
+  });
+
+  it('opens Status from an authenticated broker command and publishes its actual page and readback', async () => {
+    const workspace = streamWorkspaceCommands();
+    await renderSignedIn('/settings');
+    await waitFor(() => expect(activityStream).not.toBeNull());
+    workspace.ready();
+    workspace.publishCommand({ commandId: 'navigate-status', operation: 'navigate', page: 'status' });
+    await screen.findByRole('heading', { level: 1, name: 'Status' });
+    await screen.findByRole('listitem', { name: 'SQL database' });
+    await waitFor(() => expect(workspace.ack('navigate-status')).toBeTruthy());
+    expect(JSON.parse(String(workspace.ack('navigate-status')?.[1]?.body))).toMatchObject({ applied: true });
+    expect(screen.getByRole('link', { name: 'Status' }).getAttribute('aria-current')).toBe('page');
+    await waitFor(() => expect(fetchMock.mock.calls.some(([url, init]) => {
+      if (!String(url).endsWith('/now/workspace/state')) return false;
+      const body = JSON.parse(String(init?.body)) as { view?: { page: string }; windows?: { viewId: string; content?: string }[] };
+      return body.view?.page === 'status' && body.windows?.some(window => window.viewId === 'page-status' && window.content?.includes('SQL database'));
+    })).toBe(true));
+    expect(fetchMock.mock.calls.filter(([url]) => String(url).endsWith('/now/events'))).toHaveLength(1);
   });
 
   function issueBoard() : FactoryBoard {
@@ -1116,7 +1144,7 @@ describe('App shell', () => {
     await renderSignedIn();
     expect(screen.queryByRole('button', { name: /area navigation/ })).toBeNull();
 
-    for (const [area, heading] of [['Software Factory', 'Kanban'], ['Usage', 'Usage']] as const) {
+    for (const [area, heading] of [['Software Factory', 'Kanban'], ['Usage', 'Usage'], ['Status', 'Status']] as const) {
       await user.click(screen.getByRole('link', { name: area }));
       await screen.findByRole('heading', { level: 1, name: heading });
       expect(screen.queryByRole('button', { name: /area navigation/ })).toBeNull();
