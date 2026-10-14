@@ -4,6 +4,8 @@ Evidence: supplied nonsensitive `db/schema.ts` definitions from original source 
 
 ## Mapping policy
 
+P12-05's additive 0047 extends only that target inbox with attempt/deadline/error-code evidence. The inactive processor writes the mapped health domain, ingestion and sync tables atomically with the processed inbox receipt, under the shared owner lock. It preserves exact historical session identities and refuses incompatible lineage; no source import, ID rewrite or raw deletion. [Normalization/read contracts](../apps/backend/src/daily/health/README.md) distinguish code-shaped synthetic coverage from private schema/data reconciliation.
+
 P12-04 migration 0046 adds **new target-only** `daily.health_upload_capabilities` and `daily.health_upload_inbox`, not source-import mappings. The existing backend stores original accepted bytes and owner/session/checksum receipts in SQL; these are distinct from the historical `health_ingestions` / `health_raw_objects` ledger. #720 owns processing into mapped domain tables. No legacy capability, source record or secret is seeded; rollback refuses retained inbox/capability evidence. [Bounds and retention](daily-health-ingestion/README.md#bounds-and-raw-retention).
 
 - Migration `0041_daily_owner_schema.sql` creates empty tables in a separate `daily` SQL schema. No personal seed DML, import, device/login tables, route/tool registration or Daily activation.
