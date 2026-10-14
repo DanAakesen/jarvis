@@ -20,7 +20,7 @@ import { readWindowTool } from './read-window.js';
 import { cancelJobTool, getJobTool, listJobsTool, registerJobRoutes } from './jobs.js';
 import { findChatReflexReplay } from './reflex.js';
 import { executePhoneTool } from '../phone/approval.js';
-import { systemSmokeResponseSchema, systemStatusResponseSchema } from '../system-status.js';
+import { systemSmokeHttpResponse, systemSmokeResponseSchema, systemStatusResponseSchema } from '../system-status.js';
 import { toolArgumentRefusal, unexpectedToolArgument } from './tool-arguments.js';
 import { startWorkPresentation } from './work-presentation.js';
 
@@ -97,7 +97,8 @@ export const coreModule: BackendModule = {
     } } }, async (request, reply) => {
       if (!request.principal) return reply.code(401).send({ error: 'Unauthorized' });
       reply.header('Cache-Control', 'private, max-age=30');
-      return app.systemStatusReader.read();
+      const snapshot = await app.systemStatusReader.read();
+      return snapshot.smoke ? { ...snapshot, smoke: systemSmokeHttpResponse(snapshot.smoke) } : snapshot;
     });
     app.get('/status/smoke', {
       config: { jarvisDeploySmoke: true },
@@ -113,7 +114,13 @@ export const coreModule: BackendModule = {
     }, async (request, reply) => {
       if (!request.principal && !request.deployPrincipal) return reply.code(401).send({ error: 'Unauthorized' });
       reply.header('Cache-Control', 'no-store');
-      return app.systemSmokeReader.run();
+      const report = await app.systemSmokeReader.run();
+      for (const entry of report.entries) {
+        request.log.info({
+          checkId: entry.id, status: entry.status, reason: entry.reason,
+        }, 'system.smoke_check');
+      }
+      return systemSmokeHttpResponse(report);
     });
     app.get('/health', {
       schema: { response: { 200: { type: 'object', properties: { status: { type: 'string', const: 'ok' } }, required: ['status'], additionalProperties: false } } },
