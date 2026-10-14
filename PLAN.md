@@ -157,7 +157,8 @@ Phase 1 delivers the Software Factory. Requirements and page specifications are 
 
 ## Current focus
 
-- **Main release recovery (14 October; local):** Deploy `38584186160` for `81580919` remains failed after its smoke-only retry (`chat_canary`/`chat_capabilities` down, GitHub read ok). Existing #831/#832 diagnostic surfaces are combined locally with unchanged smoke limits and legacy HTTP Status compatibility. Independent diagnostic review, 169 scoped backend tests, 42 contracts tests and affected-file/contracts lint pass with qualified local tooling; five app suites/full backend build remain blocked by missing snapshot packages. The authorised fixed-format numeric model-round query returned no records for 17:32–17:34 UTC, so the failing capability predicate and live cause remain unknown. Next: coordinator-owned exact-head gates, authorised publication/normal release and retained safe reason readback; keep queued releases held. Instrumentation alone is not recovery. No new issue or PR, speculative model change or blind retry.
+- **Current main release (14 October):** Diagnostics #831 reached accepted main `51bda5cb` through full CI, CodeQL and normal Deploy `38622011802`; revision `0000315` has positive safe canary/capabilities/GitHub-read telemetry. Factory #842 then passed all ten actual CI jobs and three CodeQL analyses, merged as `36d72090`, and passed normal Deploy `38629181064`: Web, deployed deep link, backend health and actual smoke; unchanged backend/infrastructure/hosted-agent deployment was skipped. This establishes the current healthy release, not the historical failure's cause or original performance/private/phone/voice acceptance. Issues #820 and #813 remain open.
+- **Next delivery snapshot (14 October):** Inactive Daily #818's raw body-fat unit correction passed bounded independent review at `4ed24812`; its original P2 thread is resolved and that head's full CI/CodeQL passed. Fresh `36d72090` is integrated locally with every reviewed health blob and all main task-table cells preserved; the integrated head still requires its own normal exact-head gates before release. Google freeze `F3BD79DA` failed targeted re-review on three residual approval-scope, quoted-query intent and native-window faults; the same local author is correcting them, with publication held. No activation, original Daily/data change, private provider turn, blind retry, speculative model change or new issue/PR is authorised.
 
 - **P12-10 (#725):** #746 merged as an inactive intermediate implementation; three feed-boundary corrections continue on `codex/p12-10-feed-boundary-corrections` / draft #754. Shared range validation precedes refresh/storage/provider/model work; numberless deliveries require matching nonempty delivery details; full validated SENT labels preserve alias direction before DTO truncation. Existing resumable scans, protected semantic adapter, exact Danish selectors/keys, owner-local persistence and source serialization safeguards remain intact. Synthetic/isolated SQL regressions and exact-head full CI precede independent correction review; #754 remains draft until explicit coordinator readiness release. CalendarList consent, deployed identity/model/provider parity, private backup/import/reconciliation and device gates remain open. No registration/OAuth/resource changes; #725 stays open/native dependencies intact.
 
@@ -799,11 +800,21 @@ The coordinator authorised the coupled normalizer/linked-ID/PLAN-parser
 width and boundary correction with existing-style regressions in the same
 PR. Each dependency range is capped at 1000 expansions, with an actionable
 pre-iteration failure for larger inputs. All 57 script tests and Bash syntax
-pass locally; status/ownership policies are unchanged. The new head needs
-fresh exact-head CI before merge.
+pass locally; status/ownership policies are unchanged. Final head `8c0f2cb2`
+passed exact-head gates; #815 merged at `6e7d85dd`.
 Main through #808 (`446ce371`) is integrated with both scoped documentation
 additions preserved; health remains inactive without new live acceptance.
-Status release/authenticated acceptance remains pending.
+Initial Deploy 38491884715 failed semantic smoke after rollout; the original
+failed turn's cause remains unconfirmed under #820. Diagnostic-only #821's
+normal Deploy 38497362534 on `1590a1c3` passed all six jobs and fifteen actual
+smoke checks. The coordinator accepted the bounded signed-in rail navigation,
+Status/readback and ordinary Refresh snapshot, with one persistent session
+and no new stream requests. Live broker/chat/voice acknowledgement and
+physical-phone acceptance are not inferred. Dan subsequently reported that
+the ordinary Status turn claimed success without visible navigation; the
+"I dont see it" follow-up recovered. First-turn live navigation acceptance
+failed, with no established cause; #799 remains open and #798 remains held.
+[Exact evidence and limits](docs/agent-context.md#read-only-status-page-14-october-2026).
 
 ### P10 — GitHub backlog as source of truth
 Goal: GitHub issues are the single backlog. The Software Factory (worker label `Jarvis`, default agent `codex`) and Copilot (`Copilot`) are executors that pick issues up; the Factory board shows the same columns as the GitHub Project. Decided by Dan on 8 October 2026.
@@ -833,8 +844,27 @@ fresh, valid complete board; all six columns and visible #790/#792/#793 cards
 render as Done/Ready/Done, matching fresh Project 2. The rendered-board gate
 passes. This does not diagnose a root
 cause or establish sustained backend recovery. Next UI work
-after the navigation follow-up: #799 is implemented locally with release/live
-acceptance pending; #798, #797, then #792 remain separate.
+after the navigation follow-up: #799 is released with bounded signed-in
+rail/readback/Refresh acceptance, but Dan's first-turn live Status navigation
+failed and recovery does not satisfy that criterion. #799 remains open;
+#798 is held, followed separately by #797 and #792.
+
+Separate local #813 consumer correction (14 October): automatic same-scope
+invalidations now queue behind the active read and coalesce into one
+follow-up, including late updates during that follow-up. Deterministic
+actual-component regressions cover deferred reads, failure/recovery and
+scope/disposal. A coupled regression also proved premature missing-issue
+and task-link refusals between an older snapshot and its queued follow-up.
+The resolver now includes pending reads/queued work/idle debounce in its
+loading decision, without extra reads or an expanded navigation budget.
+The refreshed eight-file suite passes all 181 tests; controlled browser
+checks are synthetic only. The earlier
+released two roughly ten-second completions establish no accepted speed
+improvement, and the original triggering event remains unknown. No commit
+or release was made during the frozen local review. Dan subsequently
+authorised this correction's commit, push and review PR only, not merge or
+deployment; #813 production cadence/performance acceptance, #798, the
+main-release gate and P12 holds remain unchanged.
 
 ### P11 — Jarvis-raised fixes
 A rolling intake phase. When Dan asks Jarvis to change its own code or a project's code, Jarvis drafts the issue, confirms it with Dan and creates it as `P11-NN` (P10-03). Rows are added here as the issues are created.
