@@ -179,6 +179,7 @@ describe('Factory board', () => {
   it('serves cached board snapshots and invalidates them after committed task events', async () => {
     const reader = vi.fn(async () => source);
     const { app, tokenIssuer, taskStore, releaseViewStore } = fixture(reader);
+    const info = vi.spyOn(app.log, 'info');
     const first = await app.inject({ url: '/factory/board?project=42', headers });
     const second = await app.inject({ url: '/factory/board?project=42', headers });
 
@@ -198,6 +199,12 @@ describe('Factory board', () => {
       payload: { to: 'Paused' }, payloadTruncated: false, source: 'backend', at: timestamp,
     } satisfies TaskEventMessage);
     await vi.waitFor(() => expect(updates).toContainEqual({ type: 'board', projectId: project.id, version: 1 }));
+    expect(info).toHaveBeenCalledWith(
+      { origin: 'task_event', scope: 'all_projects' }, 'factory.board_invalidated',
+    );
+    expect(info).toHaveBeenCalledWith(
+      { origin: 'task_event', projectId: project.id, version: 1 }, 'factory.board_invalidated',
+    );
     expect((await app.inject({ url: '/factory/board?project=42', headers })).statusCode).toBe(200);
     expect(reader).toHaveBeenCalledTimes(2);
     unsubscribe();

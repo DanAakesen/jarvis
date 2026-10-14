@@ -173,6 +173,7 @@ function safeFields(input: Record<string, unknown>): Record<string, unknown> {
     if (safeRequestId(input.reqId)) fields.reqId = input.reqId;
     if (safeBoardRoute(input.route)) fields.route = input.route;
     if (typeof input.stage === 'string' && boardReadStages.has(input.stage)) fields.stage = input.stage;
+    if (input.part === 'assemble' || input.part === 'serialize') fields.part = input.part;
     if (safeBoardDuration(input.durationMs)) fields.durationMs = input.durationMs;
     return fields;
   }

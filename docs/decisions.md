@@ -24,6 +24,41 @@ successful requests (median 10.065 s, p95 12.915 s, maximum 19.211 s) included
 cache hits and is not a cold-only cohort. This is not a diagnosis of #811's
 separate historical 502s.
 
+## #813 Factory board diagnostic follow-up (14 October 2026)
+
+The released latency acceptance for backend `75a3cbe` / Deploy `38507005838`
+failed: two completed board reads took 9.661 s and 10.365 s, with no accepted
+improvement against the prior mixed-cache median of 10.065 s. One actual rail
+entry had 14 client fetch starts, two HTTP 200 completions, and twelve aggregate
+abort errors. API/header/rendered placement and the 100-card Done cap reconciled
+separately; those checks do not establish a latency improvement.
+
+Add diagnostics only; do not change caching, generations, source concurrency,
+retry, client behavior, or the 502 contract. Log bounded monotonic durations at
+the existing project, token, source, task, release, and response work
+boundaries, correlated by request ID. Concurrent source/task/release durations
+are independent wall times and overlap. Cache path plus stale state distinguish
+cache hit, shared wait, source load, and stale fallback. Keep phase/event fields
+explicitly allowlisted and omit content, credentials, URLs, query strings, and
+arbitrary errors. At the existing publication boundary, log only bounded
+invalidation origin, project/version when known, and webhook request ID when
+available; task-event prelookup invalidation has only its `all_projects` scope.
+
+The bounded production window (03:49:30–03:51:10 UTC, healthy revision 312) after
+#814 had 546 allowlisted rows, two board HTTP 200 completions at 9.661 s /
+10.365 s, 49 webhook HTTP 202, 40 Now HTTP 200, and 62 database-status HTTP 200
+responses. Thirteen GET starts were route-unclassified with no completion in
+the window; they do not prove receipt of every client fetch start. No selected
+request/Factory failure event appeared, which does not establish that client
+aborts did not occur. No captured SSE versions, matching invalidation reasons,
+or per-attempt abort times were available. The separate app-scoped query
+returned zero matching rows. A validated-update/debounce/reload/abort path and
+overlapping backend cache generations remain possible mechanisms, not
+established historical causes. Browser/backend clock domains are not assumed
+synchronized. The diagnostics have not yet been deployed or observed in
+production; this follow-up is not evidence that performance is fixed and does
+not diagnose #811's historical 502.
+
 ## Status reads recorded evidence without running canaries (14 October 2026)
 
 P9-101/#799 uses the existing owner-only `/status` contract and shell

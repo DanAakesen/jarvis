@@ -56,10 +56,10 @@ describe('structured log export', () => {
       const logger = createLogger({ logLevel: 'info' }, sink, output);
       const reqId = '00000000-0000-0000-0000-000000000000';
       const fields = event === 'factory.board_phase'
-        ? { reqId, route: '/factory/board', stage: 'source', durationMs: 25 }
+        ? { reqId, route: '/factory/board', stage: 'response', part: 'assemble', durationMs: 25 }
         : event === 'factory.board_read_timing'
           ? { reqId, route: '/factory/board', outcome: 'success', cachePath: 'cache_hit', stale: false, statusCode: 200 }
-          : { reqId, origin: 'github_webhook', projectId: '42', version: 3 };
+          : { reqId, origin: 'task_event', projectId: '42', version: 3, scope: 'all_projects' };
       logger.info(fields, event);
       expect(JSON.parse(records[0]!)).toEqual({
         level: 30, time: expect.any(Number), service: 'jarvis-backend', ...fields, msg: event,
@@ -82,12 +82,17 @@ describe('structured log export', () => {
         headers: { authorization: 'private-token' },
       }, event);
       expect(JSON.parse(records[1]!)).toEqual({
-        level: 30, time: expect.any(Number), service: 'jarvis-backend', reqId, msg: event,
+        level: 30, time: expect.any(Number), service: 'jarvis-backend', reqId,
+        ...(event === 'factory.board_phase' ? { part: 'assemble' } : {}),
+        msg: event,
       });
       expect(sink.trackTrace).toHaveBeenCalledTimes(2);
       expect(sink.trackTrace).toHaveBeenLastCalledWith(expect.objectContaining({
         message: event,
-        properties: { service: 'jarvis-backend', reqId },
+        properties: {
+          service: 'jarvis-backend', reqId,
+          ...(event === 'factory.board_phase' ? { part: 'assemble' } : {}),
+        },
       }));
       expect(records.join('') + JSON.stringify(sink.trackTrace.mock.calls)).not.toContain('private');
     },

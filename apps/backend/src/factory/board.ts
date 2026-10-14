@@ -916,8 +916,9 @@ export function registerFactoryBoardRoute(app: FastifyInstance): void {
           }, 'factory.board_read_failed');
           return reply.code(413).send({ error: 'Factory board response too large' });
         }
+        const sent = reply.header('Cache-Control', 'no-store').send(response);
         outcome = 'success';
-        return reply.header('Cache-Control', 'no-store').send(response);
+        return sent;
       } catch (error) {
         const { stage, reason, status } = boardReadError('response', error);
         request.log.warn({

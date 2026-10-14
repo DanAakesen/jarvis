@@ -112,6 +112,46 @@ canonical placement. Report any missing telemetry or cache classification as a
 limitation. This comparison measures latency only and does not establish the
 cause of #811's historical 502s.
 
+The 14 October 2026 acceptance of backend `75a3cbe` / Deploy `38507005838`
+failed its latency comparison: the observed actual board read times were
+9.661 s and 10.365 s, with no accepted improvement against the mixed-cache
+10.065 s baseline median. One rail entry produced 14 browser fetch starts, two
+HTTP 200 completions, and twelve aggregate `AbortError`s; this does not prove
+all 14 attempts reached the backend. No manual Refresh, Retry, or cache-bust was
+used. The bounded backend window
+03:49:30–03:51:10 UTC on healthy revision 312 returned 546 rows below its
+600-row limit: two board HTTP 200 completions, 49 webhook HTTP 202 responses,
+40 Now HTTP 200 responses, and 62 database-status HTTP 200 responses. Thirteen
+GET starts were route-unclassified with no completion in the window, so they do
+not establish receipt of the remaining client starts. No selected request or
+Factory failure event appeared, which does not prove client aborts did not
+occur. There were no per-phase events or matching invalidation versions/abort
+times. The separate app-scoped dependency query returned no matching rows.
+Browser/backend clock domains were not assumed synchronized. API contract,
+rendered placement, and the 100-card Done cap reconciled separately from
+performance. Browser fetch-to-header times were 9.748 s / 10.322 s and cloned
+body times were 9.850 s / 10.487 s.
+
+After the diagnostic follow-up is reviewed and deployed, correlate board
+`request.started`, `factory.board_read_timing`, and `factory.board_phase` by
+`reqId`. Compare the summary `cachePath` and `stale` fields before separating
+cache hits, shared waits, source loads, or stale fallbacks. Per-stage values are
+monotonic wall durations; source, task, and release work runs concurrently, so
+their durations overlap and must not be added. A response phase `part` marks
+assembly versus serialization. Correlate webhook invalidations by their
+request ID and bounded origin/project/version fields; task-event prelookup
+invalidations are marked `all_projects` and have no project/version yet.
+These diagnostics were not present in the failed production window and do not
+retrospectively attribute it.
+
+The released consumer/source trace suggests a possible lifecycle of validated
+board update, 150 ms debounce, reload-key change, and effect-cleanup abort.
+Backend invalidations also advance cache generation while earlier loads may be
+in flight. Actual SSE versions, per-attempt abort times, and invalidation
+reasons were not captured, so neither path is established as the historical
+trigger. Do not claim the diagnostic follow-up proves a performance correction
+or explains #811's separate historical 502s.
+
 ## Roll back a deployment
 
 ### Backend Container Apps revision

@@ -814,16 +814,35 @@ permission.
 Board loads validate the complete shared contract before caching a snapshot.
 Failure diagnostics survive both concurrent cache rejection and stale fallback:
 `factory.board_read_failed` exports only allowlisted `stage`, `reason`, HTTP
-`status` (100–599) and boolean `stale`. Project lookup has its own event with
-the same diagnostic allowlist. Token, source, task, release and response
-boundaries never export exception messages or provider content. The 25-second
-source deadline, ten-page/100-row pagination, one-minute/32-entry cache and
-1-MiB byte limits are unchanged. Within a snapshot, one request limiter caps all
-GitHub reads at eight concurrent requests. Offset pages are fetched concurrently
-only when provider metadata supplies a consistent last page; cursor pages,
-including links with both an incrementing page and opaque `after` token, remain
-sequential. Validate `prev` links with their `before` cursor but never follow
-them. Results retain provider page order, and
+`status` (100–599), boolean `stale`, request ID, and matched route template.
+Project lookup has its own event with that safe correlation. The board also
+emits allowlisted `factory.board_phase` timings for each executed project,
+token, source, task, release, and response boundary, plus one
+`factory.board_read_timing` summary with outcome, cache path, stale state, and
+status. Durations use a monotonic clock, are bounded to 60 seconds, and are
+server-only; a missing phase means that work was not performed. Response
+assembly and serialization have separate response entries. Source, task, and
+release durations are individual wall-clock measurements of concurrent work;
+they overlap and must not be summed as if sequential. Cache paths distinguish
+`cache_hit`, `shared_wait`, and `source_load`; `stale` marks either stale
+fallback path. No phase exports exception messages, provider content, headers,
+tokens, SQL, repository URLs, or query strings.
+
+At the existing board publication boundary, `factory.board_invalidated` exports
+only a bounded origin (`task_event` or `github_webhook`), safe project ID and
+in-process version when available, and webhook request ID when present. The
+task-event prelookup invalidation is explicitly marked `all_projects`; its
+project and version are not yet known. Versions are process-local and are not a
+durable event sequence. No polling, endpoint, resource, or client behavior is
+added.
+
+The 25-second source deadline, ten-page/100-row pagination,
+one-minute/32-entry cache and 1-MiB byte limits are unchanged. Within a snapshot,
+one request limiter caps all GitHub reads at eight concurrent requests. Offset
+pages are fetched concurrently only when provider metadata supplies a consistent
+last page; cursor pages, including links with both an incrementing page and
+opaque `after` token, remain sequential. Validate `prev` links with their
+`before` cursor but never follow them. Results retain provider page order, and
 dependency reads share the same limiter. Link metadata is validated against the
 selected repository endpoint, including GitHub's numeric `/repositories/{id}`
 form, but its URL is never followed: requests are constructed locally against
