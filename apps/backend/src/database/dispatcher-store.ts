@@ -252,20 +252,53 @@ export function createDispatcherStore(pool: sql.ConnectionPool, eventHub: TaskEv
             SELECT TOP (1) candidate.*
             FROM dbo.sandbox_sessions AS candidate
             WHERE candidate.task_id = task.id
-              AND (candidate.status = N'Active'
-                OR (candidate.status = N'Ended' AND candidate.end_reason = N'done'))
             ORDER BY candidate.started_at DESC, candidate.id DESC
           ) AS session
           CROSS APPLY (
             SELECT TOP (1) invocation_id, status
             FROM dbo.sandbox_turns
-            WHERE sandbox_session_id = session.id AND status IN (N'running', N'completed')
+            WHERE sandbox_session_id = session.id
             ORDER BY started_at DESC, id DESC
           ) AS turn
-          WHERE task.state = N'Running'
+          WHERE task.state = N'Running' AND task.lease_owner IS NULL
+            AND turn.status IN (N'running', N'completed')
+            AND (session.status = N'Active'
+              OR (session.status = N'Ended' AND (session.end_reason = N'done'
+                OR (session.end_reason = N'idle_expired' AND turn.status = N'completed'))))
             AND COALESCE(session.last_heartbeat_at, session.started_at) <= @heartbeatBefore
           ORDER BY COALESCE(session.last_heartbeat_at, session.started_at), task.id;`);
       return recordset;
+    },
+
+    async isCurrentStaleTask(task) {
+      const { recordset } = await databaseReadRequest(pool)
+        .input('taskId', sql.BigInt, BigInt(task.taskId))
+        .input('sandboxSessionId', sql.BigInt, BigInt(task.sandboxSessionId))
+        .input('foundrySessionId', sql.NVarChar(255), task.foundrySessionId)
+        .input('invocationId', sql.NVarChar(255), task.invocationId)
+        .query<{ current: boolean }>(`SELECT CONVERT(bit, CASE WHEN EXISTS (
+          SELECT 1
+          FROM dbo.tasks AS task
+          CROSS APPLY (
+            SELECT TOP (1) candidate.*
+            FROM dbo.sandbox_sessions AS candidate
+            WHERE candidate.task_id = task.id
+            ORDER BY candidate.started_at DESC, candidate.id DESC
+          ) AS session
+          CROSS APPLY (
+            SELECT TOP (1) invocation_id, status
+            FROM dbo.sandbox_turns
+            WHERE sandbox_session_id = session.id
+            ORDER BY started_at DESC, id DESC
+          ) AS turn
+          WHERE task.id = @taskId AND task.state = N'Running' AND task.lease_owner IS NULL
+            AND session.id = @sandboxSessionId AND session.foundry_session_id = @foundrySessionId
+            AND turn.invocation_id = @invocationId AND turn.status IN (N'running', N'completed')
+            AND (session.status = N'Active'
+              OR (session.status = N'Ended' AND (session.end_reason = N'done'
+                OR (session.end_reason = N'idle_expired' AND turn.status = N'completed'))))
+        ) THEN 1 ELSE 0 END) AS current;`);
+      return recordset[0]?.current === true;
     },
 
     async recordHeartbeat(sandboxSessionId, invocationId, invocationCompleted) {
@@ -273,9 +306,44 @@ export function createDispatcherStore(pool: sql.ConnectionPool, eventHub: TaskEv
         .input('sandboxSessionId', sql.BigInt, BigInt(sandboxSessionId))
         .input('invocationId', sql.NVarChar(255), invocationId)
         .input('invocationCompleted', sql.Bit, invocationCompleted)
-        .query(`UPDATE dbo.sandbox_sessions SET last_heartbeat_at = SYSUTCDATETIME()
-          WHERE id = @sandboxSessionId AND status = N'Active';
-          IF @invocationCompleted = 1
+        .query(`UPDATE session SET last_heartbeat_at = SYSUTCDATETIME()
+          FROM dbo.sandbox_sessions AS session
+          INNER JOIN dbo.tasks AS task ON task.id = session.task_id
+            AND task.state = N'Running' AND task.lease_owner IS NULL
+          CROSS APPLY (
+            SELECT TOP (1) candidate.id
+            FROM dbo.sandbox_sessions AS candidate
+            WHERE candidate.task_id = task.id
+            ORDER BY candidate.started_at DESC, candidate.id DESC
+          ) AS latestSession
+          CROSS APPLY (
+            SELECT TOP (1) turn.invocation_id
+            FROM dbo.sandbox_turns AS turn
+            WHERE turn.sandbox_session_id = latestSession.id
+            ORDER BY turn.started_at DESC, turn.id DESC
+          ) AS latestTurn
+          WHERE session.id = @sandboxSessionId AND session.status = N'Active'
+            AND latestSession.id = session.id AND latestTurn.invocation_id = @invocationId;
+          IF @invocationCompleted = 1 AND EXISTS (
+            SELECT 1
+            FROM dbo.sandbox_sessions AS session
+            INNER JOIN dbo.tasks AS task ON task.id = session.task_id
+              AND task.state = N'Running' AND task.lease_owner IS NULL
+            CROSS APPLY (
+              SELECT TOP (1) candidate.id
+              FROM dbo.sandbox_sessions AS candidate
+              WHERE candidate.task_id = task.id
+              ORDER BY candidate.started_at DESC, candidate.id DESC
+            ) AS latestSession
+            CROSS APPLY (
+              SELECT TOP (1) turn.invocation_id
+              FROM dbo.sandbox_turns AS turn
+              WHERE turn.sandbox_session_id = latestSession.id
+              ORDER BY turn.started_at DESC, turn.id DESC
+            ) AS latestTurn
+            WHERE session.id = @sandboxSessionId AND session.status = N'Active'
+              AND latestSession.id = session.id AND latestTurn.invocation_id = @invocationId
+          )
             UPDATE dbo.sandbox_turns SET status = N'completed', ended_at = SYSUTCDATETIME()
             WHERE sandbox_session_id = @sandboxSessionId AND invocation_id = @invocationId
               AND status = N'running';`);

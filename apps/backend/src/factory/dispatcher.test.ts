@@ -129,7 +129,7 @@ function harness(
   const clientFor = vi.fn(() => ({ startTask, steer, pause, resume, cancel, deleteSession, status }));
   const dispatcher = new TaskDispatcher(store, tasks, settings, clientFor, heartbeat, events, options);
   return {
-    dispatcher, events, settings, tasks, startTask, transition, track, untrack, clientFor, steer, pause, resume,
+    dispatcher, events, settings, tasks, heartbeat, startTask, transition, track, untrack, clientFor, steer, pause, resume,
     cancel, deleteSession, status,
   };
 }
@@ -138,6 +138,7 @@ function idleStore(nextAttemptAt: string | null = null): DispatcherStore {
   return {
     claimNext: vi.fn(async () => ({ kind: 'idle' as const, nextAttemptAt })),
     listStaleRunning: vi.fn(async () => []),
+    isCurrentStaleTask: vi.fn(async () => true),
     recordHeartbeat: vi.fn(async () => {}),
     deferClaim: vi.fn(async () => {}),
     failStart: vi.fn(async () => {}),
@@ -176,10 +177,13 @@ function invocationSnapshot(status: InvocationSnapshot['status']): InvocationSna
 
 function reconciliationHarness(
   status: InvocationSnapshot['status'],
-  verifyDelivery = vi.fn(async () => ({ kind: 'awaiting_policy' as const })),
+  verifyDelivery: DispatcherOptions['verifyDelivery'] | null = vi.fn(async () => ({ kind: 'awaiting_policy' as const })),
   onReconciliation: DispatcherOptions['onReconciliation'] = () => {},
+  sessionStatus: StaleRunningTask['sessionStatus'] = 'Active',
+  hasTrackedSessions = true,
+  workspaceAvailable = true,
 ) {
-  const staleTask: StaleRunningTask = { ...controlTarget, taskId: '42', sessionStatus: 'Active' };
+  const staleTask: StaleRunningTask = { ...controlTarget, taskId: '42', sessionStatus };
   const store: DispatcherStore = {
     ...idleStore(),
     listStaleRunning: vi.fn(async () => [staleTask]),
@@ -193,13 +197,13 @@ function reconciliationHarness(
     staleHeartbeatMs: 100,
     recoveryStore,
     onReconciliation,
-    workspaceFor: vi.fn(async () => ({
+    workspaceFor: vi.fn(async () => workspaceAvailable ? ({
       repository: 'DanAakesen/jarvis-test-target',
       defaultBranch: 'main',
       branch: controlTarget.branch,
-    })),
-    verifyDelivery,
-  }, true);
+    }) : null),
+    ...(verifyDelivery ? { verifyDelivery } : {}),
+  }, hasTrackedSessions);
   test.status.mockResolvedValue(invocationSnapshot(status));
   return { ...test, store, staleTask, verifyDelivery };
 }
@@ -1040,7 +1044,7 @@ describe('task crash recovery', () => {
     await Promise.all([dispatcher.stop(), heartbeat.stop()]);
   });
 
-  it('reconciles a lost completion event against the existing PR and exposes unresolved policy as NeedsAttention', async () => {
+  it('reconciles a lost completion event and preserves a valid awaiting-policy state', async () => {
     vi.useFakeTimers();
     const decisions: unknown[] = [];
     const test = reconciliationHarness('completed', undefined, (decision) => decisions.push(decision));
@@ -1056,18 +1060,85 @@ describe('task crash recovery', () => {
       expect.objectContaining({ id: '42', title: 'Fix the bug' }),
       expect.any(Function),
     );
-    expect(test.tasks.transition).toHaveBeenCalledWith(
-      '42',
-      'NeedsAttention',
-      false,
-      'completed_without_verified_delivery',
-      'Foundry confirms the runner completed, but GitHub and task policy did not confirm a reviewable completion. Review the pull request and task.',
-    );
-    await expect(test.tasks.get('42', 1, 0)).resolves.toMatchObject({ state: 'NeedsAttention' });
+    expect(test.tasks.transition).not.toHaveBeenCalled();
+    expect(test.store.endTaskSessions).toHaveBeenCalledWith('42', 'Done', true);
+    await expect(test.tasks.get('42', 1, 0)).resolves.toMatchObject({ state: 'Running' });
     expect(decisions).toContainEqual(expect.objectContaining({
-      taskId: '42', status: 'completed', decision: 'needs_attention',
+      taskId: '42', status: 'completed', decision: 'awaiting_policy',
     }));
     await dispatcher.stop();
+  });
+
+  it('moves a completed task to NeedsAttention when delivery is unavailable', async () => {
+    vi.useFakeTimers();
+    const refusal = 'The task repository or branch could not be verified.';
+    const test = reconciliationHarness('completed', null, undefined, 'Ended', true, false);
+
+    test.dispatcher.start();
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(test.verifyDelivery).toBeNull();
+    expect(test.tasks.recordEvent).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'pull_request_open_refused',
+      summary: refusal,
+      payload: { reason: refusal },
+    }));
+    expect(test.tasks.transition).toHaveBeenCalledWith('42', 'NeedsAttention', false, 'pull_request_open_refused');
+    await test.dispatcher.stop();
+  });
+
+  it('wakes one idle reconciliation from the persisted expiry event with no tracked session', async () => {
+    vi.useFakeTimers();
+    const test = reconciliationHarness('completed', undefined, undefined, 'Ended', true);
+    vi.mocked(test.store.listStaleRunning).mockResolvedValueOnce([]);
+
+    test.dispatcher.start();
+    await vi.advanceTimersByTimeAsync(0);
+    test.untrack('53');
+    expect(test.heartbeat.hasTrackedSessions()).toBe(false);
+    expect(test.store.listStaleRunning).toHaveBeenCalledOnce();
+
+    test.events.publish({
+      id: 'expiry-1', taskId: '42', type: 'sandbox_idle_expired', summary: null,
+      payload: { reason: 'idle_expired', invocationId: 'invocation-1' },
+      payloadTruncated: false, source: 'backend', at: new Date().toISOString(),
+    });
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(test.store.listStaleRunning).toHaveBeenCalledTimes(2);
+    expect(test.status).toHaveBeenCalledOnce();
+    expect(test.verifyDelivery).toHaveBeenCalledOnce();
+    await vi.advanceTimersByTimeAsync(5 * 60_000);
+    expect(test.store.listStaleRunning).toHaveBeenCalledTimes(2);
+    await test.dispatcher.stop();
+  });
+
+  it.each([
+    ['cancelled', 'Cancelled' as const],
+    ['recovered into a newer invocation', 'Running' as const],
+  ])('ignores a late completed result after the task is %s', async (_race, state) => {
+    vi.useFakeTimers();
+    const test = reconciliationHarness('completed');
+    let finishStatus: ((snapshot: InvocationSnapshot) => void) | undefined;
+    test.status.mockImplementationOnce(() => new Promise((resolve) => { finishStatus = resolve; }));
+
+    test.dispatcher.start();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(test.status).toHaveBeenCalledOnce();
+    if (state === 'Cancelled') {
+      await test.tasks.transition('42', state);
+    } else {
+      await test.tasks.transition('42', 'NeedsAttention');
+      await test.tasks.transition('42', 'Running');
+    }
+    vi.mocked(test.store.isCurrentStaleTask).mockResolvedValue(false);
+    finishStatus?.(invocationSnapshot('completed'));
+    await test.dispatcher.stop();
+
+    expect(test.verifyDelivery).not.toHaveBeenCalled();
+    expect(test.tasks.recordEvent).not.toHaveBeenCalled();
+    expect(test.tasks.transition).toHaveBeenCalledTimes(state === 'Cancelled' ? 1 : 2);
+    expect(test.store.recordHeartbeat).not.toHaveBeenCalled();
   });
 
   it('leaves an active runner Running and refreshes its heartbeat on startup and schedule', async () => {

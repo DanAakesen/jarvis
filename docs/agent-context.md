@@ -988,6 +988,19 @@ Use these fields to distinguish confirmation retries, committed crashes,
 `idle_expired`, unchanged state, and soft/persistence failures; no provider body,
 question, prompt, or credential is included.
 
+P9-116's committed backend `sandbox_idle_expired` event requests one bounded
+reconciliation scan even when no heartbeat session is tracked. Reconciliation
+selects and rechecks the latest session and invocation; it does not infer a
+crash or success from expiry. A verified delivery awaiting project policy keeps
+the task Running and within capacity until the existing policy event resolves it.
+The scan returns to no recurring SQL reads while idle. The original missed
+delivery cause and live recovery of #837 remain unverified.
+Validate the dispatcher with
+`npm test --workspace @jarvis/backend -- --run src/factory/dispatcher.test.ts`
+and SQL selection/admission with
+`npm run test:database --workspace @jarvis/backend -- src/database/dispatcher.integration.test.ts`
+only under the isolated loopback SQL Server configuration.
+
 The optional `VOICE_LIVE_ENDPOINT` enables `/voice`; it must be a secure Azure
 Voice Live WebSocket endpoint without credentials in its URL. The backend pins
 `gpt-realtime-2.1`, gets the `https://ai.azure.com/.default` token with
