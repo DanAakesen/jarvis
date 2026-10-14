@@ -358,9 +358,18 @@ describe('Factory board', () => {
     ]));
   });
 
-  it('reads every provider-shaped cursor page from the selected repository URL in order', async () => {
+  it('reads provider-shaped page-and-cursor links in order and validates backward cursors', async () => {
     const cursorUrls: URL[] = [];
     const authorizationHeaders: string[] = [];
+    const providerLink = (page: number, cursorName: 'after' | 'before', cursor: string, relation: string) => {
+      const url = new URL('https://api.github.com/repositories/1403065900/issues');
+      url.searchParams.set('state', 'closed');
+      url.searchParams.set('since', timestamp);
+      url.searchParams.set('per_page', '100');
+      url.searchParams.set('page', String(page));
+      url.searchParams.set(cursorName, cursor);
+      return `<${url}>; rel="${relation}"`;
+    };
     const closedIssue = (number: number) => ({
       number, title: `Closed ${number}`, body: null, state: 'closed', closed_at: timestamp,
       html_url: `https://github.com/DanAakesen/jarvis/issues/${number}`,
@@ -373,13 +382,21 @@ describe('Factory board', () => {
         cursorUrls.push(url);
         if (cursorUrls.length === 1) {
           return new Response(JSON.stringify(Array.from({ length: 100 }, (_, index) => closedIssue(index + 1))), {
-            headers: {
-              link: `<https://api.github.com/repositories/1403065900/issues?state=closed&since=${encodeURIComponent(timestamp)}&per_page=100&page=1&after=opaque%2Fcursor%2Bone>; rel="next"`,
-            },
+            headers: { link: providerLink(2, 'after', 'opaque/cursor+one', 'next') },
           });
         }
         if (url.searchParams.get('after') === 'opaque/cursor+one') {
-          return new Response(JSON.stringify(Array.from({ length: 50 }, (_, index) => closedIssue(index + 101))));
+          return new Response(JSON.stringify(Array.from({ length: 100 }, (_, index) => closedIssue(index + 101))), {
+            headers: {
+              link: `${providerLink(3, 'after', 'opaque/cursor+two', 'next')}, ` +
+                `${providerLink(1, 'before', 'opaque/previous+one', 'prev')}`,
+            },
+          });
+        }
+        if (url.searchParams.get('after') === 'opaque/cursor+two') {
+          return new Response(JSON.stringify(Array.from({ length: 25 }, (_, index) => closedIssue(index + 201))), {
+            headers: { link: providerLink(2, 'before', 'opaque/previous+two', 'prev') },
+          });
         }
         throw new Error(`Unexpected cursor request: ${url}`);
       }
@@ -388,7 +405,7 @@ describe('Factory board', () => {
 
     const result = await reader.read(project.repo, 'reader-token', timestamp);
 
-    expect(result.issues).toEqual(Array.from({ length: 150 }, (_, index) => {
+    expect(result.issues).toEqual(Array.from({ length: 225 }, (_, index) => {
       const number = index + 1;
       return {
         number,
@@ -406,14 +423,58 @@ describe('Factory board', () => {
       };
     }));
     expect(result.pullRequests).toEqual([]);
-    expect(cursorUrls).toHaveLength(2);
+    expect(cursorUrls).toHaveLength(3);
     expect(cursorUrls.every(({ pathname }) => pathname === '/repos/DanAakesen/jarvis/issues')).toBe(true);
-    expect(cursorUrls[0]?.searchParams.get('page')).toBe('1');
+    expect(cursorUrls.every(({ searchParams }) => !searchParams.has('before'))).toBe(true);
+    expect(cursorUrls.map(({ searchParams }) => [
+      searchParams.get('page'), searchParams.get('after'),
+    ])).toEqual([
+      ['1', null],
+      ['2', 'opaque/cursor+one'],
+      ['3', 'opaque/cursor+two'],
+    ]);
+    expect(cursorUrls[1]?.searchParams.get('page')).toBe('2');
     expect(cursorUrls[1]?.searchParams.get('after')).toBe('opaque/cursor+one');
-    expect(cursorUrls[1]?.searchParams.get('page')).toBe('1');
-    expect(authorizationHeaders).toHaveLength(4);
+    expect(cursorUrls[2]?.searchParams.get('page')).toBe('3');
+    expect(cursorUrls[2]?.searchParams.get('after')).toBe('opaque/cursor+two');
+    expect(authorizationHeaders).toHaveLength(5);
     expect(authorizationHeaders.every((authorization) =>
       authorization === `${['Bear', 'er'].join('')} reader-token`)).toBe(true);
+  });
+
+  it('rejects inconsistent provider previous-page metadata', async () => {
+    const providerLink = (page: number, cursorName: 'after' | 'before', cursor: string, relation: string) => {
+      const url = new URL('https://api.github.com/repositories/1403065900/issues');
+      url.searchParams.set('state', 'closed');
+      url.searchParams.set('since', timestamp);
+      url.searchParams.set('per_page', '100');
+      url.searchParams.set('page', String(page));
+      url.searchParams.set(cursorName, cursor);
+      return `<${url}>; rel="${relation}"`;
+    };
+    const closedIssue = (number: number) => ({
+      number, title: `Closed ${number}`, body: null, state: 'closed', closed_at: timestamp,
+      html_url: `https://github.com/DanAakesen/jarvis/issues/${number}`,
+      updated_at: timestamp, labels: [], issue_dependencies_summary: { blocked_by: 0 },
+    });
+    const reader = createGitHubFactoryBoardReader(async (input) => {
+      const url = new URL(String(input));
+      if (url.pathname.endsWith('/issues') && url.searchParams.get('state') === 'closed') {
+        if (url.searchParams.get('page') === '1') {
+          return new Response(JSON.stringify(Array.from({ length: 100 }, (_, index) => closedIssue(index + 1))), {
+            headers: { link: providerLink(2, 'after', 'opaque/cursor', 'next') },
+          });
+        }
+        return new Response(JSON.stringify([closedIssue(101)]), {
+          headers: { link: providerLink(9, 'before', 'opaque/previous', 'prev') },
+        });
+      }
+      return new Response('[]');
+    });
+
+    await expect(reader.read(project.repo, 'reader-token', timestamp)).rejects.toMatchObject({
+      stage: 'source', reason: 'invalid_response',
+    });
   });
 
   it('overlaps complete page and sparse dependency reads within eight requests and preserves page order', async () => {

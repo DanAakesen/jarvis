@@ -5,11 +5,13 @@
 Use one eight-request limiter for every GitHub source request in a board snapshot,
 including the three primary lists, their pagination pages, and dependency lists.
 Fetch offset pages concurrently only when page 1 provides a consistent bounded
-range; cursor-only and next-only pages remain sequential and preserve provider
-order. Treat Link URLs as untrusted: validate their origin, selected endpoint,
-query, page size, and pagination state, then reconstruct requests against the
-configured `/repos/{owner}/{repo}` endpoint using only the page number or opaque
-cursor. A failed page/dependency read cancels siblings, including queued requests.
+range; cursor pages, including `page` plus `after` links, remain sequential and
+preserve provider order. Validate backward `prev` links and their `before`
+cursors, but never follow them. Treat Link URLs as untrusted: validate their
+origin, selected endpoint, query, page size, and pagination state, then
+reconstruct requests against the configured `/repos/{owner}/{repo}` endpoint
+using only the page number or opaque forward cursor. A failed page/dependency
+read cancels siblings, including queued requests.
 
 The synthetic offset-page fixture demonstrates reduced request waves for that
 provider pagination form, and a separate provider-shaped cursor fixture proves

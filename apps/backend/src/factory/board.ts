@@ -326,51 +326,50 @@ function paginationPage(response: Response, path: string, position: PagePosition
     }
     const pageValues = url.searchParams.getAll('page');
     const cursorValues = url.searchParams.getAll('after');
+    const previousCursorValues = url.searchParams.getAll('before');
     const linkPage = pageValues[0];
     const linkPageNumber = linkPage === undefined || !/^[1-9]\d*$/u.test(linkPage) ? NaN : Number(linkPage);
     const cursor = cursorValues[0];
+    const previousCursor = previousCursorValues[0];
     const actualQuery = [...url.searchParams.entries()]
-      .filter(([key]) => key !== 'page' && key !== 'per_page' && key !== 'after')
+      .filter(([key]) => !['page', 'per_page', 'after', 'before'].includes(key))
       .sort(([leftKey, leftValue], [rightKey, rightValue]) =>
         leftKey.localeCompare(rightKey) || leftValue.localeCompare(rightValue));
     if (url.origin !== githubApi || url.username || url.password || url.hash || url.port ||
         url.searchParams.getAll('per_page').length !== 1 || url.searchParams.get('per_page') !== String(pageSize) ||
-        pageValues.length > 1 || cursorValues.length > 1 ||
-        (pageValues.length !== 1 && cursorValues.length !== 1) ||
+        pageValues.length > 1 || cursorValues.length > 1 || previousCursorValues.length > 1 ||
+        (pageValues.length !== 1 && cursorValues.length !== 1 && previousCursorValues.length !== 1) ||
         (pageValues.length === 1 && (!Number.isSafeInteger(linkPageNumber) || linkPageNumber < 1)) ||
-        (cursorValues.length === 1 && (!cursor || cursor.length > 2048)) ||
-        (pageValues.length === 1 && cursorValues.length === 1 && linkPageNumber !== 1) ||
+        (cursorValues.length === 1 && (!cursor || cursor.length > 2048 || relation !== 'next')) ||
+        (previousCursorValues.length === 1 &&
+          (!previousCursor || previousCursor.length > 2048 || relation !== 'prev' || pageValues.length !== 1)) ||
+        ((relation === 'first' || relation === 'last' || relation === 'prev') && pageValues.length !== 1) ||
         JSON.stringify(actualQuery) !== JSON.stringify(expectedQuery) ||
         !['first', 'prev', 'next', 'last'].includes(relation) || relations.has(relation)) {
       throw new FactoryBoardReadError('source', 'invalid_response');
     }
-    const paginationValue = cursorValues.length === 1 ? undefined : linkPageNumber;
     if (relation === 'next') {
-      if (paginationValue === undefined) {
+      if (cursorValues.length === 1) {
         next = { ...(pageValues.length === 1 ? { page: linkPageNumber } : {}), after: cursor! };
       } else {
-        next = { page: paginationValue };
+        next = { page: linkPageNumber };
       }
     } else if (relation === 'last') {
-      if (paginationValue === undefined) throw new FactoryBoardReadError('source', 'invalid_response');
-      relations.set(relation, paginationValue);
-    } else if (paginationValue !== undefined) {
-      relations.set(relation, paginationValue);
-    } else {
-      throw new FactoryBoardReadError('source', 'invalid_response');
+      relations.set(relation, linkPageNumber);
+    } else if (pageValues.length === 1) {
+      relations.set(relation, linkPageNumber);
     }
   }
 
   const lastPage = relations.get('last');
   const requestedPage = position.page;
   if ((position.after !== undefined && lastPage !== undefined) ||
-      (position.after === undefined && requestedPage !== undefined &&
-        next?.after === undefined && next?.page !== undefined && next.page !== requestedPage + 1) ||
+      (requestedPage !== undefined && next?.page !== undefined && next.page !== requestedPage + 1) ||
       (requestedPage !== undefined && lastPage !== undefined &&
         ((next !== undefined) !== (requestedPage < lastPage) || lastPage < requestedPage)) ||
       (relations.has('first') && relations.get('first') !== 1) ||
-      (relations.has('prev') &&
-        (requestedPage === undefined || requestedPage < 2 || relations.get('prev') !== requestedPage - 1)) ||
+      (relations.has('prev') && requestedPage !== undefined &&
+        (requestedPage < 2 || relations.get('prev') !== requestedPage - 1)) ||
       (requestedPage === 1 && relations.has('prev')) ||
       (next?.after !== undefined && lastPage !== undefined)) {
     throw new FactoryBoardReadError('source', 'invalid_response');

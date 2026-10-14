@@ -820,8 +820,10 @@ boundaries never export exception messages or provider content. The 25-second
 source deadline, ten-page/100-row pagination, one-minute/32-entry cache and
 1-MiB byte limits are unchanged. Within a snapshot, one request limiter caps all
 GitHub reads at eight concurrent requests. Offset pages are fetched concurrently
-only when provider metadata supplies a consistent last page; next-only and
-opaque-cursor pages remain sequential. Results retain provider page order, and
+only when provider metadata supplies a consistent last page; cursor pages,
+including links with both an incrementing page and opaque `after` token, remain
+sequential. Validate `prev` links with their `before` cursor but never follow
+them. Results retain provider page order, and
 dependency reads share the same limiter. Link metadata is validated against the
 selected repository endpoint, including GitHub's numeric `/repositories/{id}`
 form, but its URL is never followed: requests are constructed locally against
