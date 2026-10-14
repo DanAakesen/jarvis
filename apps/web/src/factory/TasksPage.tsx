@@ -262,7 +262,7 @@ export function TasksPage({ backendUrl, getAccessToken }: Props) {
   const createButtonRef = useRef<HTMLButtonElement>(null);
   const createProjectButtonRef = useRef<HTMLButtonElement>(null);
   const [projectDialogOpen, setProjectDialogOpen] = useState(false);
-  const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const automaticRefresh = useRef<{ schedule: () => void; isPending: () => boolean } | null>(null);
   const projectRequestKey = `${backendUrl ?? ''}:${projectRetry}`;
   // Live refreshes change reloadKey, not the dataset identity: keep the board mounted while fetching.
   const taskRequestKey = `${backendUrl ?? ''}:${filters.projectId}`;
@@ -307,8 +307,33 @@ export function TasksPage({ backendUrl, getAccessToken }: Props) {
 
   useEffect(() => {
     let active = true;
+    let pending = true;
+    let queued = false;
+    let refreshTimer: ReturnType<typeof setTimeout> | null = null;
     const controller = new AbortController();
-    if (!backendUrl || !filters.projectId) return () => { active = false; controller.abort(); };
+    const scheduleRefresh = () => {
+      if (!active) return;
+      // Automatic updates wait for this scoped read; explicit reloads still replace it.
+      if (pending) {
+        queued = true;
+        return;
+      }
+      if (refreshTimer !== null) {
+        // Later updates share a queued follow-up instead of postponing its deadline.
+        if (queued) return;
+        clearTimeout(refreshTimer);
+      }
+      refreshTimer = setTimeout(() => setReloadKey((value) => value + 1), 150);
+    };
+    const refresh = { schedule: scheduleRefresh, isPending: () => pending || queued || refreshTimer !== null };
+    const dispose = () => {
+      active = false;
+      controller.abort();
+      if (refreshTimer !== null) clearTimeout(refreshTimer);
+      if (automaticRefresh.current === refresh) automaticRefresh.current = null;
+    };
+    if (!backendUrl || !filters.projectId) return dispose;
+    automaticRefresh.current = refresh;
     const query = new URLSearchParams({ project: filters.projectId });
     void request(backendUrl, getAccessToken, `/factory/board?${query}`, 'GET', undefined, controller.signal).then((value) => {
       if (!active) return;
@@ -326,8 +351,12 @@ export function TasksPage({ backendUrl, getAccessToken }: Props) {
       setError(taskError(reason));
       setSettledTaskKey(taskRequestKey);
       setSettledReloadKey(reloadKey);
+    }).finally(() => {
+      if (!active) return;
+      pending = false;
+      if (queued) scheduleRefresh();
     });
-    return () => { active = false; controller.abort(); };
+    return dispose;
   }, [backendUrl, getAccessToken, filters.projectId, reloadKey, taskRequestKey]);
 
   useEffect(() => {
@@ -339,14 +368,8 @@ export function TasksPage({ backendUrl, getAccessToken }: Props) {
     const reconnected = liveState.status === 'connected' &&
       (previous.status !== 'connected' || previous.backendUrl !== backendUrl);
     if (!boardChanged && !reconnected) return;
-    if (refreshTimer.current) clearTimeout(refreshTimer.current);
-    refreshTimer.current = setTimeout(() => setReloadKey((value) => value + 1), 150);
+    automaticRefresh.current?.schedule();
   }, [backendUrl, filters.projectId, liveState]);
-
-  useEffect(() => () => {
-    if (refreshTimer.current) clearTimeout(refreshTimer.current);
-    refreshTimer.current = null;
-  }, [taskRequestKey]);
 
   const applyFilters = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -379,15 +402,18 @@ export function TasksPage({ backendUrl, getAccessToken }: Props) {
       if (visibleProjectState === 'error') return { status: 'refused', reason: visibleProjectError };
       if (visibleProjectState === 'loading') return { status: 'loading' };
       if (!filters.projectId) return { status: 'refused', reason: 'No active project is available for this issue.' };
+      const loading = refreshing || automaticRefresh.current?.isPending() || visibleTaskState === 'loading';
       const column = board?.columns.find((item) => item.cards.some((card) => card.issue.number === issueNumber));
       const card = column?.cards.find((item) => item.issue.number === issueNumber);
       if (!card || !column) {
-        if (refreshing || visibleTaskState === 'loading') return { status: 'loading' };
+        if (loading) return { status: 'loading' };
         if (visibleTaskState === 'error') return { status: 'refused', reason: visibleTaskError };
         return { status: 'refused', reason: board?.stale ? 'The cached board cannot confirm this issue. Refresh it and try again.' :
           `Issue #${issueNumber} is not in this project's board of open issues and issues closed in the last 14 days.` };
       }
       if (taskId !== undefined && card.task?.id !== taskId) {
+        if (loading) return { status: 'loading' };
+        if (visibleTaskState === 'error') return { status: 'refused', reason: visibleTaskError };
         return { status: 'refused', reason: 'This issue is not linked to the requested Factory task.' };
       }
       const next = { ...emptyFilters, projectId: filters.projectId, search: `#${issueNumber}` };

@@ -925,6 +925,23 @@ POST route; task details/windows and controls reuse their existing boundaries.
 publishes them and connection state to `factory-board-store.ts`. The board
 debounces matching invalidations and refreshes after connection recovery,
 without opening per-card task streams or duplicating GitHub placement logic.
+The #813 consumer correction keeps an active same-scope read rather than
+aborting it for automatic updates. Its request effect owns a pending flag,
+one queued follow-up and the existing 150-ms idle timer. Settlement schedules
+that follow-up after either success or failure, without allowing later
+notifications to postpone its deadline. Newer notifications during the
+follow-up can queue the next read. Effect cleanup cancels the request,
+timer and queued work on project/backend/token-callback replacement, explicit
+reload or unmount. Full validation and retained-snapshot error handling stay
+unchanged. This fixes a deterministically reproduced client lifecycle; the
+original released trigger and production performance remain unproven.
+The same request owner exposes its pending read, queued follow-up and timer
+to the issue resolver. Missing issues and absent/replaced requested task
+links stay loading across settlement and the idle debounce instead of being
+rejected from an older snapshot. Positive matches still resolve immediately;
+after a failed follow-up, an unresolved task link returns the visible read
+error. Navigation neither starts another read nor extends its existing
+six-second/command-expiry budget. Disposal removes the obsolete owner.
 Task details retain their own task stream. Equal invalidations are deduplicated,
 but a lower version after restart is accepted. Cached/failed-refresh snapshots
 retain the board DOM and show their source timestamp and stale feedback.
@@ -1448,6 +1465,18 @@ The retained smoke report has no deployment ID or commit association; the
 web page cannot present it as certification of a particular release.
 Status also participates in page metadata and bounded/redacted window
 readback. No new backend routes, storage or permission changes.
+
+Released-path evidence on `1590a1c3` / normal Deploy 38497362534 establishes
+actual rail navigation, initial/ordinary Refresh HTTP 200 and accepted HTTP
+204 `status`/`page-status` state/readback, with the same workspace session
+and no new Now stream requests. The retained report at
+2026-10-14T01:55:08.275Z was 15/15 OK and correctly stale; release success
+comes from the normal Deploy result, not an association in this contract.
+Dan's subsequent ordinary Status turn claimed success without visible
+navigation; "I dont see it" recovered. First-turn live navigation acceptance
+failed, with no established cause. Recovery does not establish broker/voice
+or physical-phone acceptance; #799 remains open and #798 held.
+[Exact evidence and limits](agent-context.md#read-only-status-page-14-october-2026).
 
 P9-62 adds always-registered `get_system_health`, returning the shared
 `SystemHealth` contract: 26 fixed-order components with status, safe detail,
@@ -3820,7 +3849,8 @@ call linkage remain the post-merge P4-09 acceptance check.
 - Gmail search and draft listing share the bounded MIME reader introduced on #837 / task 12. It reads nested plain/HTML alternatives and API-externalized text parts, returning `bodySource`, `bodyTruncated`, `contentWarnings` and differing `alternateBody`/`alternateBodyTruncated`. Static parse5 extraction skips scripts, styles, hidden attributes and inline hidden styles, strips invisible email padding before the 6000-character text limit, and never executes HTML or fetches remote resources. File attachments, unsupported charsets, missing bodies and traversal limits remain explicit; snippets cannot establish absent reservation details.
 - `calendar_get_pending_change` reads the latest process-local calendar stage (original confirmation code, summary and expiry) and classifies the verified current Dan message. It performs no Google request and returns `none` after expiry, cancellation, consumption or restart. Its audit arguments/results remain redacted. The hosted model loop uses this actual receipt to resolve later approvals before model generation and renders staging/read/confirmation replies from tool results; provisional text is buffered while Calendar is available, trading first-text latency for evidence grounding. Email-only reservation reads and unrelated follow-up requests do not become calendar approval turns. EN/DA realtime approval/status turns use the same tools and relay the actual result with tools disabled; this is not proof of live model speech. Confirmation preserves the original summary and retains the later-message, scope, expiry and one-shot checks, consuming the action before provider execution even on failure.
 - Direct-only Gmail guards are shared by HTTP, voice, reflex and nested registry execution. A bounded process-local turn ledger prevents generic PC/browser fallback once a direct mail tool starts, including failure and incomplete extraction. Independently requested unrelated operations are matched to the verified current Dan message, with nested execution scoped by AsyncLocalStorage to that request and turn; this is not a general fallback exemption. Explicit Gmail targets and observed Gmail tabs/windows are refused before planner/vision export or acting. Raw browser snapshots/actions resolve opaque target IDs through bounded tab metadata; confirmed dispatch rechecks identity without refreshing or invalidating the action snapshot. PC and Codex executors share window/site checks, including before capture and control dispatch; unverifiable non-Chrome website controls are refused. The ledger stores identifiers and expiry only, never email content. The MIME reader preserves successfully decoded empty plain/HTML provenance and returns any snippet separately as bounded `preview`/`previewTruncated`; genuine unavailable-body snippet fallback retains its warning. Read and write provider failures remain explicit.
-- Hosted calendar routing excludes generic staged/draft prose and mail-only context; real mail and calendar stages can coexist without approving the wrong scope. Hosted and EN/DA realtime follow-ups recognise calendar approval/status referents rather than arbitrary question prefixes. Realtime clears unrelated context before interception, so later yes after a weather/mail/build turn is not stolen by an older calendar stage. These routing decisions do not replace backend receipt validation or later-message, ownership, expiry and one-shot authorisation.
+- Hosted calendar routing excludes generic staged/draft prose and mail-only context; real mail and calendar stages can coexist without approving the wrong scope. Appointment nouns alone are not calendar intent: quoted topics and actual `Reply to ... from ... with this exact text` mail receipts remain mail-scoped. Explicit calendar mutations involving email-derived appointments and genuine calendar completion/status referents remain recognised. Hosted and EN/DA realtime follow-ups recognise calendar approval/status referents rather than arbitrary question prefixes. Realtime clears unrelated context before interception, so later yes after a weather/mail/build turn is not stolen by an older calendar stage. These routing decisions do not replace backend receipt validation or later-message, ownership, expiry and one-shot authorisation.
+- Independent computer exemptions accept complete unambiguous current-user command shapes, not conjunctions/punctuation found anywhere in a mail query or quoted subject. Ambiguous mail-topic text cannot exempt a turn; no model intent probe is used. Windows planning obtains the real application identity before applying browser-title/site guards. Native editor filenames containing Gmail do not trigger those guards. Metadata-only clipboard/window reads and late native dispatch use narrow Chrome-caption detection plus current site metadata; native snapshot/action binding remains unchanged, and neither browser nor UIA snapshots are refreshed before an action solely to check identity.
 - Calendar creation, movement, updates to title/time/location/attendees/description, deletion, Gmail draft creation/replacement/deletion, message archive/label changes, and sending are staged in process memory for ten minutes. Calendar executes only after a different, later persisted Dan message is a plain approval accepted by the shared approval classifier (for example yes, approved, confirmed, go ahead or ja); no/cancel discards it. A new calendar stage invalidates the previous calendar action, and the confirmation tool must identify the latest action with its returned code. Gmail also uses later plain approval; the returned eight-digit code identifies the pending action for its confirmation tool. Pending actions are one-shot and lost on restart; the Container App remains at one replica. Sensitive Google tool inputs/results are redacted from persistent tool-call records, and external Google error bodies are not returned or logged. Calendar updates PATCH only the supplied fields; empty location, description, and attendee values can clear those fields. Draft replacement requires recipients, subject, and plain-text body; it preserves reply threading and refuses drafts with attachments or CC/BCC recipients. Gmail draft listing is bounded to ten drafts and returns plain-text bodies; archiving removes `INBOX`, and label changes resolve exact Gmail label names or IDs. Confirmed replies create a Gmail draft; Dan sends it from Gmail.
 - [`infra/bootstrap.ps1`](../infra/bootstrap.ps1) creates what the deploy workflows can't create for themselves: the deploy identity (GitHub OIDC, main branch only, trusting both the name-based and the ID-based subject (L50); Contributor and Role Based Access Control Administrator on `rg-jarvis`), the sign-in apps, `id-jarvis-backend`, and `jarvis-sql-admins`. Its IDs are in `infra/bootstrap.output.json` and in the repository's Actions variables.
 - Managed identities between Azure services; GitHub Actions deploys with OpenID Connect.

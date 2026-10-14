@@ -1,5 +1,26 @@
 # Agent context
 
+## Accepted recovery and next Factory integration (14 October 2026)
+
+Diagnostic #831 merged normally as `51bda5cb` after independent review,
+all ten actual jobs in CI `38618143799` and all three CodeQL analyses.
+Normal Deploy `38622011802` passed backend, web and actual smoke checks;
+unchanged infrastructure and hosted-agent deployment were skipped.
+Backend revision `0000315` is ready with the new image. The bounded
+19:22–19:24 UTC revision-only log query returned 314 backend rows and
+15 smoke events; chat canary, capabilities and GitHub read each reported
+`ok` once at 19:23:18 UTC. No provider/prompt/result text was retrieved.
+This establishes the current accepted release, not the historical cause
+or original phone/voice/Google acceptance. #820 remains open.
+
+The owned #842 integration preserves its two accepted Factory UI blobs
+and current-main task rows while incorporating that recovery. Its new
+integrated head still needs normal exact-head gates before publication
+acceptance or release; earlier `fe35a166` gates cover the earlier head only.
+The local Google delivery remains held for five independently reproduced
+scope/routing/provenance corrections. No new CI, deployment or private
+provider turn is implied by this local integration.
+
 ## Consolidated main recovery (14 October 2026; local)
 
 Dan directed important work to local sessions and deferred the proposed Factory
@@ -150,7 +171,7 @@ to publish this mixed local checkout or merge/deploy these corrections.
 
 ## Read-only Status page (14 October 2026)
 
-P9-101/#799 adds `/status`, rail/phone entries, accepted voice/chat navigation
+P9-101/#799 adds `/status`, rail/phone entries, the existing voice/chat target
 and page/window readback. It reads only authenticated `GET /status`, validates
 all eleven checks and optional smoke, exposes failure/unavailable reasons,
 PC connection/pause state and timestamps, and marks five-minute-old evidence
@@ -172,6 +193,38 @@ invoking `/status/smoke` or a model canary.
 Keep this PR separate from latency QA, presence/Routines/phone Save work,
 unrelated pin changes and the coordinator's #811 backend investigation.
 
+#815 merged at `6e7d85dd` after the final `8c0f2cb2` exact-head gates passed.
+Its initial Deploy 38491884715 rolled out successfully but failed smoke:
+`chat_canary` reported `acceptance_check_failed` and `chat_capabilities`
+reported `capabilities_missing`. The original failed turn's cause remains
+unconfirmed under #820; diagnostic-only #821 is not a proven repair.
+Normal Deploy 38497362534 on `1590a1c3` passed all six jobs and fifteen actual
+production smoke checks. Its Web build and the existing signed-in canvas
+both use `main-KDrAC0O7.js` and `main-CA1t_Hqv.css`; no reload was needed.
+
+The coordinator accepted the bounded released read-only snapshot. Actual
+Settings-to-Status rail navigation returned `/status` 200 at
+2026-10-14T02:15:07.149Z; ordinary Refresh returned 200 at 02:16:07.551Z,
+with a newer snapshot time. Both accepted HTTP 204 workspace state/readback:
+`page: status`, `viewId: page-status`, 2894 UTF-8 bytes. All eleven system
+and fifteen smoke rows rendered without an alert or document overflow at
+897x890. Retained smoke was 15/15 OK at 01:55:08.275Z and correctly stale;
+it still has no deployment association. PC connection/pause state rendered,
+and null bridge/Chrome-extension versions remained "Not reported".
+Settings-to-Status and Refresh kept one workspace session, zero new Now
+stream requests and the live-connected indicator. Native details worked;
+the temporary observer was removed. No extra model/smoke calls, board Retry,
+injected commands, Note/native Chrome/draft interaction or settings changes.
+
+Dan subsequently performed the ordinary Status turn. It claimed success
+without visibly navigating; the follow-up "I dont see it" navigated correctly.
+First-turn live navigation acceptance failed, with no established cause.
+This is no longer an absent-human-turn gate, and recovery does not establish
+acceptance. No agent-created turn substitutes for Dan's evidence.
+Physical-phone, voice and broker acknowledgement are not established by this
+report or the earlier browser snapshot. #799 stays open; #798 is held,
+followed separately by #797 and #792.
+
 The coordinator authorised one coupled release-gate exception in #815:
 the PR-title normalizer, linked-issue ID extraction and PLAN reconciliation
 must preserve full two-or-more-digit task numbers, including P9-101. The old
@@ -185,9 +238,48 @@ Allowed-boundary, over-limit and no-large-allocation regressions cover this.
 All 57 workflow-script tests and Bash syntax pass locally. Status/ownership
 policies are unchanged, including reopened-issue handling. No other workflow,
 backend or dependency changes.
-The corrected head must pass fresh exact-head gates before merge.
-Current main through #808 (`446ce371`) is integrated, preserving its scoped
+The corrected head passed fresh exact-head gates before merge.
+The Status branch integrated #808 (`446ce371`), preserving its scoped
 health documentation and inactive code without activation or live acceptance.
+
+## Factory consumer refresh correction (#813, local only; 14 October 2026)
+
+This is a separate local delta from the preserved Status release-context
+edits above. Controlled actual-component fixtures reproduced repeated
+cancellation of deferred 10-second reads, without establishing which event
+triggered the original released storm. Automatic invalidations now preserve
+an active same-scope read and coalesce into one follow-up; notifications
+during that follow-up remain pending for the next read. Scope/identity
+replacement, explicit reload and unmount still cancel obsolete work.
+Failures remain visible with retained snapshots; there is no unconditional
+retry loop or change to the central Now stream, validation, cache TTL or API.
+
+The coupled actual-context check reproduced premature missing-issue and
+absent/replaced task-link refusals after an older snapshot settled but before
+its queued follow-up started, and during the ordinary idle debounce. The
+resolver now consults the request owner's pending/queue/timer state. It waits
+within the unchanged budget, never starts a speculative read or applies a
+late navigation after timeout, and returns a failed follow-up's visible error.
+
+All 181 focused consumer/store/stream/navigation tests across eight files,
+strict TypeScript and the scratch-output production build pass locally.
+Controlled browser fixtures exercise retained DOM/scroll/focus, queued late
+updates and failure/recovery at desktop and 320px light/reduced motion.
+The final navigation delta also passes isolated actual-context browser checks:
+missing issues and new task links remain loading across the queued/debounce
+gap and active follow-up, then resolve from its snapshot without extra reads.
+These are synthetic fixtures, not production, broker, model or device proof.
+The isolated 320px frame reports 2px document overflow at the release branch
+label; it is not a full-shell layout pass, and no unrelated CSS fix is included.
+The coordinator's isolated repository-pinned tooling linted both changed
+source/test files with the unchanged repository config: zero errors and
+warnings, without altering shared dependencies or manifests.
+The frozen review made no backend, dependency, workflow or settings change,
+commit, push or release. Dan subsequently authorised only this correction's
+commit, push and review PR, not merge or deployment. Publication preserves
+the frozen consumer/test bytes and updates the supplied Status evidence.
+#813 production cadence/performance acceptance, #798, the main-release gate
+and P12 holds remain unchanged.
 
 ## GitHub-aligned Factory board (13 October 2026)
 
@@ -2322,18 +2414,27 @@ The coordinator assigned one local outcome covering #837/#838/#839, seeded from
 behaviour and all unrelated main blobs/generated PLAN cells. No live Google,
 private bodies, browser credentials, permissions, model-setting changes or
 synthetic live approval. The original frozen `3073B943` patch remains unchanged
-and failed independent review. Five source-grounded corrections now cover mail
+and failed independent review. Five source-grounded corrections cover mail
 versus calendar approval, observed Chrome/Gmail boundaries, unrelated status
 queries, separately requested same-turn computer actions and decoded-empty
 plain/HTML provenance with separately labelled snippets.
 
-The coordinator authorised normal commits on this owned delivery branch to finish
-the pending `81580919` merge and integrate fresh main once. Accepted main
-`51bda5cbce94be68169eb3f1342aea975a6dff3f` is now integrated locally; its diagnostics,
-complete unrelated blobs and generated PLAN cells remain authoritative.
-The coordinator reports normal Deploy `38622011802` and revision 315 checks
-accepted that main, not this Google delivery. The historical release failure's
-cause remains unknown. No push, PR creation/change, readiness metadata, hosted CI,
+Targeted re-review rejected frozen `F3BD79DA` for three residuals. Preserve both
+patches and their receipts. Current corrections prevent appointment words inside
+actual mail reply receipts/read topics from selecting calendar scope, refuse PC
+intent found only within mail-query/quoted subjects, and preserve native editor
+windows whose filenames contain Gmail. Full unambiguous EN/DA independent
+commands still work; real Chrome Gmail and later-action guards still refuse.
+
+The coordinator authorised normal owned commits to finish the earlier `81580919`
+merge, integrate `51bda5cb`, and now integrate actual main once for these residual
+corrections. Main `36d720909d30dc84b9f94b953758312465d9fec2` is integrated locally;
+Factory, diagnostics, accepted mobile blobs and generated PLAN cells are unchanged.
+The coordinator reports normal Deploy `38629181064` passed Web/deep-link,
+backend health and actual smoke at 20:09:21 UTC; backend/infra/hosted-agent
+deployment was correctly skipped. This is main evidence, not Google-delivery
+release evidence. The historical release failure's cause remains unknown.
+No push, PR creation/change, readiness metadata, hosted CI,
 provider call or deployment is authorised here. The corrected frozen patch needs
 independent review; the coordinator owns subsequent publication and release.
 
@@ -2341,7 +2442,7 @@ From `agents/jarvis`, run the isolated Python environment's pytest on
 `tests/test_calendar_flow.py`, `tests/test_model_client.py`,
 `tests/test_jarvis_tools.py`, `tests/test_chat_runtime.py` and
 `tests/test_voice_runtime.py`; Ruff checks changed Python sources/tests.
-282 tests and changed Ruff pass on Python 3.12.10, not pinned 3.12.14.
+296 tests and changed Ruff pass on Python 3.12.10, not pinned 3.12.14.
 Development dependencies were restored with locked hashes in the worktree venv;
 Windows-only `colorama==0.4.6` was added locally and `pip check` passes.
 
@@ -2351,7 +2452,7 @@ failed on the feed's `ip-address@10.7.4` 404; official-registry TLS also failed.
 An approved read-only tooling snapshot was copied into isolated dependencies,
 with workspace aliases pointing only to this worktree. Verified portable
 Node 22.23.3 x64 runs snapshot Vitest 5.0.2/Vite 8.3.1, not pinned CI versions.
-290 tests across twelve runnable suites pass, as does full backend zero-warning
+306 tests across twelve runnable suites pass, as does full backend zero-warning
 lint. Both automatic-capture variants retain the unchanged 15,000-code-point
 built-in-mode headroom check. No parity or confirmation check was removed.
 
@@ -2382,6 +2483,19 @@ calendar approval plus pending/none unrelated questions. Sixteen new actual EN/D
 relay cases cover pending/completed status isolation and subsequent yes, but are
 not locally executed because relay collection is blocked. Do not present them as
 passing tests or original live/provider acceptance.
+
+Residual proofs use only synthetic data. `google-residual-handler-check.mjs`
+reruns the unchanged original receipt guarantees, produces the actual
+`mail_draft_reply` Dentist appointment receipt and confirms only its mail scope
+while an older calendar remains staged. `google-residual-hosted-check.py` consumes
+that generated receipt/code/confirmation result in the real hosted chat/voice loop:
+four pending/none cases pass with model/mail handling and no calendar lookup or
+confirmation. These session artifacts do not replace missing HTTP-app tooling.
+The 48 calendar fixtures retain the original 34 cases and explicit calendar
+mutation/status/repeated-yes controls. Actual registry+PC regressions include
+both quoted/topic negatives, clear EN/DA commands, real `vscode` identity with
+`gmail-access-policy.ts` title, native action/clipboard/window positives and a
+native-to-Chrome Gmail switch refusal.
 
 Installed CLI help supports `copilot --remote`. Observed existing SDK processes
 run `--server --stdio --no-auto-update`, without `--remote`; this task neither

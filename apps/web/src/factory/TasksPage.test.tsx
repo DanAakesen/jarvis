@@ -1,12 +1,13 @@
-import { act, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ContextPanel, ContextPanelProvider } from '../ContextPanel';
 import { FactoryArea } from './FactoryArea';
+import { TasksPage } from './TasksPage';
 import { factoryBoardColumnIds, type BoardCard, type FactoryBoard, type FactoryBoardColumnId } from '@jarvis/contracts';
 import { publishFactoryBoardStatus, publishFactoryBoardUpdate, resetFactoryBoardForTests } from '../factory-board-store';
-import { FactoryIssueNavigationContext, type FactoryIssueNavigator } from '../page-navigation';
+import { FactoryIssueNavigationContext, waitForFactoryIssue, type FactoryIssueNavigator } from '../page-navigation';
 
 const streamHarness = vi.hoisted(() => ({
   callbacks: new Map<string, (event: { id: string; taskId: string; type: string; summary: string | null; at: string }) => void>(),
@@ -551,6 +552,289 @@ describe('Factory task board', () => {
     invalidate(3);
     await act(async () => { await vi.advanceTimersByTimeAsync(150); });
     expect(fetchMock.mock.calls.filter(([url]) => String(url).includes('/factory/board?'))).toHaveLength(2);
+  });
+
+  describe('scoped automatic refresh lifecycle', () => {
+    interface BoardRead {
+      signal: AbortSignal;
+      aborted: boolean;
+      finish: (value: Response) => void;
+    }
+    let reads: BoardRead[];
+    let nextBoard: FactoryBoard | null;
+    let navigation: { current: FactoryIssueNavigator | null };
+
+    const readAt = (index: number) => {
+      const read = reads[index];
+      if (!read) throw new Error(`Expected board read ${index + 1}.`);
+      return read;
+    };
+    const advance = async (ms = 0) => {
+      await act(async () => { await vi.advanceTimersByTimeAsync(ms); });
+    };
+    const scopedBoard = (backendUrl = 'https://api.example.com', token = getAccessToken) => (
+      <ContextPanelProvider>
+        <FactoryIssueNavigationContext.Provider value={navigation}>
+        <MemoryRouter><TasksPage backendUrl={backendUrl} getAccessToken={token} /></MemoryRouter>
+        </FactoryIssueNavigationContext.Provider>
+      </ContextPanelProvider>
+    );
+    const mount = async () => {
+      const view = render(scopedBoard());
+      await advance();
+      expect(reads).toHaveLength(1);
+      return view;
+    };
+
+    beforeEach(() => {
+      vi.useFakeTimers();
+      reads = [];
+      nextBoard = null;
+      navigation = { current: null };
+      const original = fetchMock.getMockImplementation()!;
+      fetchMock.mockImplementation((input, init) => {
+        const url = new URL(String(input));
+        if (url.pathname === '/factory/projects') return Promise.resolve(response([
+          project, { ...project, id: '9', name: 'Other', repo: 'DanAakesen/other' },
+        ]));
+        if (url.pathname === '/factory/projects/9/releases') return Promise.resolve(response({
+          ...projectRelease, project: { ...projectRelease.project, id: '9', name: 'Other', repo: 'DanAakesen/other' },
+        }));
+        if (url.pathname !== '/factory/board') return original(input, init);
+        const signal = init?.signal;
+        if (!signal) throw new Error('Expected a cancellable board read.');
+        const projectId = url.searchParams.get('project')!;
+        const snapshot = nextBoard ?? boardFixture([boardTask], 'in_progress', projectId);
+        return new Promise<Response>((resolve, reject) => {
+          const finish = (value: Response) => {
+            clearTimeout(timer);
+            signal.removeEventListener('abort', abort);
+            resolve(value);
+          };
+          const read: BoardRead = { signal, aborted: false, finish };
+          const abort = () => {
+            read.aborted = true;
+            clearTimeout(timer);
+            reject(signal.reason);
+          };
+          const timer = setTimeout(() => finish(response(snapshot)), 10_000);
+          reads.push(read);
+          signal.addEventListener('abort', abort, { once: true });
+        });
+      });
+    });
+
+    it('finishes slow reads and queues one follow-up, including updates arriving during that follow-up', async () => {
+      await mount();
+      for (let version = 1; version <= 4; version++) {
+        await advance(2_000);
+        invalidate(version);
+        await advance(0);
+        expect(reads).toHaveLength(1);
+        expect(readAt(0).signal.aborted).toBe(false);
+      }
+      await advance(2_000);
+      const card = screen.getByRole('article', { name: 'Fix the bug' });
+      expect(reads).toHaveLength(1);
+      await advance(100);
+      invalidate(5);
+      await advance(50);
+      expect(reads).toHaveLength(2);
+      await advance(2_000);
+      invalidate(6);
+      invalidate(7);
+      await advance(8_000);
+      expect(reads).toHaveLength(2);
+      expect(screen.getByRole('article', { name: 'Fix the bug' })).toBe(card);
+      expect(navigation.current?.(999)).toEqual({ status: 'loading' });
+      await advance(150);
+      expect(reads).toHaveLength(3);
+      await advance(10_150);
+      expect(reads).toHaveLength(3);
+      expect(reads.every((read) => !read.aborted)).toBe(true);
+      expect(screen.getByRole('button', { name: 'Refresh board' }).hasAttribute('disabled')).toBe(false);
+      expect(screen.queryAllByRole('alert')).toHaveLength(0);
+    });
+
+    describe.each(['pending read', 'idle debounce'] as const)('navigation during %s', (phase) => {
+      it.each(['missing issue', 'missing task overlay', 'replaced task link'] as const)(
+        'waits for the known follow-up before resolving a %s',
+        async (kind) => {
+          const older = boardFixture();
+          if (kind === 'missing task overlay') older.columns[3]!.cards[0]!.task = null;
+          nextBoard = older;
+          await mount();
+          if (phase === 'idle debounce') await advance(10_000);
+          const issueNumber = kind === 'missing issue' ? 43 : 42;
+          const taskId = kind === 'replaced task link' ? '43' : String(issueNumber);
+          const newer = boardFixture([{ ...boardTask, id: String(issueNumber) }]);
+          newer.columns[3]!.cards[0]!.task!.id = taskId;
+          nextBoard = newer;
+          invalidate(1);
+          if (phase === 'pending read') await advance(10_000);
+          expect(reads).toHaveLength(1);
+          expect(navigation.current?.(issueNumber, taskId)).toEqual({ status: 'loading' });
+          await advance(149);
+          expect(navigation.current?.(issueNumber, taskId)).toEqual({ status: 'loading' });
+          expect(reads).toHaveLength(1);
+          await advance(1);
+          expect(reads).toHaveLength(2);
+          expect(navigation.current?.(issueNumber, taskId)).toEqual({ status: 'loading' });
+          await advance(10_000);
+          act(() => expect(navigation.current?.(issueNumber, taskId)).toEqual({
+            status: 'ready', anchorId: `issue-title-${issueNumber}`, taskId,
+          }));
+          expect(screen.getByRole('searchbox', { name: 'Search issues' })).toHaveProperty('value', `#${issueNumber}`);
+          expect(navigation.current?.(999)).toMatchObject({ status: 'refused', reason: expect.stringContaining('not in') });
+          await advance(1_000);
+          expect(reads).toHaveLength(2);
+          expect(reads.every((read) => !read.aborted)).toBe(true);
+        },
+      );
+    });
+
+    it.each(['issue', 'task link'] as const)('keeps the existing navigation budget and never applies a late %s navigation after timeout', async (kind) => {
+      const older = boardFixture();
+      older.columns[3]!.cards[0]!.task = null;
+      nextBoard = older;
+      await mount();
+      const issueNumber = kind === 'issue' ? 43 : 42;
+      nextBoard = boardFixture([{ ...boardTask, id: String(issueNumber) }]);
+      invalidate(1);
+      await advance(10_000);
+      const find = vi.fn(() => navigation.current?.(issueNumber, String(issueNumber)) ?? null);
+      const startedAt = Date.now();
+      const result = waitForFactoryIssue(find, new AbortController().signal);
+      await advance(5_750);
+      expect(await result).toEqual({
+        status: 'refused', reason: 'The Factory board is still loading. Try the issue again when the board is ready.',
+      });
+      expect(Date.now() - startedAt).toBe(5_750);
+      const calls = find.mock.calls.length;
+      await advance(4_400);
+      expect(find).toHaveBeenCalledTimes(calls);
+      expect(screen.getByRole('searchbox', { name: 'Search issues' })).toHaveProperty('value', '');
+      expect(reads).toHaveLength(2);
+    });
+
+    it('reports a failed follow-up rather than a definitive task-link miss and does not retry on navigation', async () => {
+      const older = boardFixture();
+      older.columns[3]!.cards[0]!.task = null;
+      nextBoard = older;
+      await mount();
+      invalidate(1);
+      await advance(10_150);
+      await act(async () => readAt(1).finish(response({ error: 'Fixture follow-up unavailable' }, 503)));
+      expect(navigation.current?.(42, '42')).toEqual({ status: 'refused', reason: 'Board data could not be loaded. Try again.' });
+      await advance(20_000);
+      expect(reads).toHaveLength(2);
+      expect(screen.getByText('Showing the last loaded board because refresh failed.')).not.toBeNull();
+    });
+
+    it('does not queue duplicate latest versions or unrelated project updates', async () => {
+      invalidate(10);
+      await mount();
+      invalidate(10);
+      invalidate(11, '9');
+      await advance(10_150);
+      expect(reads).toHaveLength(1);
+      expect(readAt(0).aborted).toBe(false);
+      expect(screen.getByRole('article', { name: 'Fix the bug' })).not.toBeNull();
+    });
+
+    it('coalesces reconnection and new-epoch updates without aborting the pending read', async () => {
+      await mount();
+      act(() => publishFactoryBoardStatus('https://api.example.com', 'reconnecting'));
+      act(() => publishFactoryBoardStatus('https://api.example.com', 'connected'));
+      invalidate(1);
+      await advance(500);
+      expect(reads).toHaveLength(1);
+      expect(readAt(0).signal.aborted).toBe(false);
+      await advance(9_650);
+      expect(reads).toHaveLength(2);
+      await advance(10_150);
+      expect(reads).toHaveLength(2);
+    });
+
+    it('keeps a failed refresh visible with the retained snapshot while its queued follow-up recovers', async () => {
+      await mount();
+      await advance(10_000);
+      const board = screen.getByRole('region', { name: 'Issues by GitHub Project column' });
+      const card = screen.getByRole('article', { name: 'Fix the bug' });
+      invalidate(1);
+      await advance(150);
+      invalidate(2);
+      invalidate(3);
+      await advance(1_000);
+      expect(reads).toHaveLength(2);
+      expect(readAt(1).signal.aborted).toBe(false);
+      await act(async () => readAt(1).finish(response({ error: 'unavailable' }, 503)));
+      expect(screen.getByText('Showing the last loaded board because refresh failed.')).not.toBeNull();
+      await advance(150);
+      expect(reads).toHaveLength(3);
+      expect(screen.getByText('Showing the last loaded board because refresh failed.')).not.toBeNull();
+      expect(screen.getByRole('region', { name: 'Issues by GitHub Project column' })).toBe(board);
+      expect(screen.getByRole('article', { name: 'Fix the bug' })).toBe(card);
+      await advance(10_150);
+      expect(reads).toHaveLength(3);
+      expect(screen.queryByText('Showing the last loaded board because refresh failed.')).toBeNull();
+    });
+
+    it('does not retry a failure without a new invalidation and preserves explicit Retry and Refresh', async () => {
+      await mount();
+      await act(async () => readAt(0).finish(response({ error: 'unavailable' }, 503)));
+      await advance(10_150);
+      expect(reads).toHaveLength(1);
+      fireEvent.click(screen.getByRole('button', { name: 'Retry board' }));
+      await advance();
+      expect(reads).toHaveLength(2);
+      await advance(10_000);
+      fireEvent.click(screen.getByRole('button', { name: 'Refresh board' }));
+      await advance();
+      expect(reads).toHaveLength(3);
+      await advance(10_000);
+      expect(screen.queryAllByRole('alert')).toHaveLength(0);
+    });
+
+    it.each(['backend', 'identity'] as const)('cancels %s replacement and discards the old pending invalidation', async (kind) => {
+      const view = await mount();
+      invalidate(1);
+      const backend = kind === 'backend' ? 'https://other.example.com' : 'https://api.example.com';
+      const token = kind === 'identity' ? vi.fn(async () => 'replacement-token') : getAccessToken;
+      view.rerender(scopedBoard(backend, token));
+      await advance();
+      expect(reads).toHaveLength(2);
+      expect(readAt(0).signal.aborted).toBe(true);
+      await advance(10_150);
+      expect(reads).toHaveLength(2);
+      expect(screen.getByRole('article', { name: 'Fix the bug' })).not.toBeNull();
+      expect(navigation.current?.(999)).toMatchObject({ status: 'refused', reason: expect.stringContaining('not in') });
+    });
+
+    it('cancels project replacement without carrying its queued refresh into the new project', async () => {
+      await mount();
+      invalidate(1);
+      fireEvent.change(screen.getByRole('combobox', { name: 'Project' }), { target: { value: '9' } });
+      await advance();
+      expect(reads).toHaveLength(2);
+      expect(readAt(0).signal.aborted).toBe(true);
+      await advance(10_150);
+      expect(reads).toHaveLength(2);
+      expect(screen.getByText('DanAakesen/other')).not.toBeNull();
+      expect(navigation.current?.(999)).toMatchObject({ status: 'refused', reason: expect.stringContaining('not in') });
+    });
+
+    it.each(['pending', 'settled'] as const)('disposes %s reads and queued work on unmount', async (state) => {
+      const view = await mount();
+      if (state === 'settled') await advance(10_000);
+      invalidate(1);
+      view.unmount();
+      expect(navigation.current).toBeNull();
+      await advance(20_000);
+      expect(reads).toHaveLength(1);
+      expect(readAt(0).signal.aborted).toBe(true);
+      expect(readAt(0).aborted).toBe(state === 'pending');
+    });
   });
 
   it('marks cached data and permits manual refresh when live updates are unavailable', async () => {
