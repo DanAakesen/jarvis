@@ -1344,6 +1344,19 @@ Dan-only `GET /status` returns the shared `SystemStatus` contract with one
 sets a private 30-second HTTP cache. `get_status_summary` reads the same snapshot
 and combines health counts with the existing Now-feed counts.
 
+The P9-101 web consumer lives at `/status`, reachable from the shell rail,
+phone menu and existing acknowledged workspace navigation. It validates all
+eleven unique subsystem entries and the optional shared smoke report before
+rendering. Authenticated reads bypass the browser cache but still honour
+the backend's 60-second snapshot cache. A 30-second deadline and lifecycle
+abort bound loading; a failed refresh explicitly retains previous evidence.
+Local ageing marks individual/snapshot/smoke timestamps stale after five
+minutes without additional API requests. Refresh never calls `/status/smoke`.
+The retained smoke report has no deployment ID or commit association; the
+web page cannot present it as certification of a particular release.
+Status also participates in page metadata and bounded/redacted window
+readback. No new backend routes, storage or permission changes.
+
 P9-62 adds always-registered `get_system_health`, returning the shared
 `SystemHealth` contract: 26 fixed-order components with status, safe detail,
 nullable evidence timestamp and available recovery tool descriptions.
@@ -3784,6 +3797,7 @@ The deploy script explicitly uses ARM **Incremental** mode. In that mode, resour
 - Local development: `npm run dev` in the repository root serves the web app on `http://localhost:5173` against the production backend. Backend changes are tested in CI and take effect after deploy.
 - Migrations run in the backend at startup; GitHub runners never connect to Azure SQL.
 - Development of Jarvis itself is remote only: Copilot cloud agent and Codex cloud deliver PRs, `pr-title.yml` keeps PR titles in the `<task ID>: <summary>` format, `worker-label.yml` labels the tasks Copilot takes, `project-board.yml` keeps the Project Jarvis board's columns in step with the issues, `copilot-ready.yml` takes finished Copilot PRs out of draft, Dan or an explicitly authorized agent merges them when checks pass against the latest `main`, and the deploy workflows release them. Rules: [development workflow](agent-context.md#development-workflow).
+- PR-title normalization, linked-issue extraction and PLAN row/issue/dependency parsing preserve full task numbers with two or more digits, including P9-101; boundaries prevent prefix-only IDs, and ranges can cross the two-to-three-digit transition. Each range expands at most 1000 tasks; a larger count raises an actionable ValueError before iteration without capping ID width. Existing two-digit formatting and status/ownership policies are unchanged. Their regression tests run in the existing workflow-script unittest discovery.
 - `worker-label.yml` maintains the Copilot worker label; Codex, Dan, and Jarvis set their own labels. `plan-status.yml` reconciles every task's Issue link and Status in `PLAN.md` from GitHub issues, worker labels, and pull requests on issue/PR events, Worker label workflow completion, and manual dispatch. A push changing `PLAN.md` also creates missing task issues and ensures their "Blocked by" links. It commits only Issue- and Status-cell changes to `main`, skips no-op commits, and rebases/retries once after a rejected push. It uses `GITHUB_TOKEN`; compatibility with protected `main` remains unverified.
 - Everything except the bootstrap items is created by Bicep and deployed by GitHub Actions on merge to `main`; no portal changes.
 

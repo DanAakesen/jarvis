@@ -1,5 +1,37 @@
 # Decisions
 
+## Status reads recorded evidence without running canaries (14 October 2026)
+
+P9-101/#799 uses the existing owner-only `/status` contract and shell
+navigation. Show reported status, reasons, check times and safe details,
+including visible PC connection/pause state; do not invent overall health.
+Foundry configuration is not a live model test, the commit belongs to the
+backend image, and last_error is historical.
+
+Manual Refresh never calls `/status/smoke`: that endpoint invokes real models.
+Validate the full eleven-entry snapshot and optional shared smoke contract,
+bound reading to 30 seconds, cancel on backend replacement/unmount, retain
+explicitly previous data on failed refresh and offer Retry. Mark evidence
+older than five minutes stale without background probe requests.
+The smoke contract has no deployment ID/SHA association; use Recorded smoke
+check with its timestamp, not a claim that the latest release passed.
+No backend, contract or dependency change. Local synthetic browser
+checks are not authenticated production or physical-phone acceptance.
+
+The coordinator authorised the smallest coupled release-gate correction in
+#815 after the title bot truncated P9-101 to P9-10. Normalization, linked-issue
+extraction and PLAN row/issue/dependency parsing preserve full task numbers
+with at least two digits and an ID boundary. Retain two-digit formatting,
+WIP/bracket/fix-main/docs behavior and all existing status/ownership policies;
+the separate reopened-issue policy is outside this correction. Existing
+Python CI discovers the title and PLAN regressions; no other workflow change
+or new tooling. Restore the correct title only after pushing the fix and
+rerun exact-head gates.
+Cap each dependency-range expansion at 1000 tasks and fail with an actionable
+ValueError before iteration. This replaces the old incidental two-digit
+resource bound without capping valid ID width; no established script bound
+was present. Boundary/over-limit and intercepted huge-range tests cover it.
+
 ## P12-05 inactive SQL health processing (13 October 2026)
 
 The [local coordinator release for #720](https://github.com/DanAakesen/jarvis/issues/720#issuecomment-6154043444) follows #805's independently reviewed, CI-tested and deployed inactive SQL acceptance. Reuse that inbox/pool/owner lock. A committed claim generation bounds retries; normalization occurs outside the transaction, then domain rows, ingestion lineage, applicable feed freshness and processed receipt commit together. Heartbeat is a separate signal. Retain raw evidence and quarantine rather than deleting poison inputs or retrying forever. No timer, dispatcher, production registration or credential change.
@@ -29,6 +61,16 @@ reconnect. Publish the contract's existing Factory issue selector from actual
 visible card focus, clearing it on other focus, card removal/collapse or route
 changes. This avoids a sticky app-level selection and conflicting stale
 foreground-window selectors.
+
+Released as #810 at `b4915164`, Deploy 38479582927. Authenticated production
+chat navigation received an applied HTTP 204 ack and HTTP 204 state selecting
+#792, with its real title focused in Ready and no stale window selector.
+Settings-to-Factory retained one session/stream. Collapse and route changes
+cleared the current issue selector with accepted state updates. Pure
+focus-away-only clearing remains fixture-only: the background production
+canvas changes activeElement without emitting native focus events.
+The coordinator independently corroborated the broker/state and board reads.
+Positive board placement/recovery evidence does not diagnose the earlier 502.
 
 ## #811 backend board failure attribution (13 October 2026)
 

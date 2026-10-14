@@ -2756,12 +2756,14 @@ a.task-chip:hover { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--glass-e
 :root[data-motion="reduced"] :is(.loader, .loader-core, .loader-core::before, .loader-core::after, .skeleton, .skeleton-bar, .skeleton-slab, .skeleton-star) { animation: none; }
 @media (prefers-reduced-motion: reduce) { :is(.loader, .loader-core, .loader-core::before, .loader-core::after, .skeleton, .skeleton-bar, .skeleton-slab, .skeleton-star) { animation: none; } }
 /* Data arrival: what replaces the loader rises gently into place instead of popping in. */
-:is(.task-window, .task-detail, .memory-results, .settings-page, .usage-page, .projects-page, .release-page, .workspace-view-content) > :not(.loader, .skeleton) {
+:is(.task-window, .task-detail, .memory-results, .settings-page, .usage-page, .status-page, .projects-page, .release-page, .workspace-view-content) > :not(.loader, .skeleton) {
   transition: opacity 380ms var(--ease-standard), translate 480ms var(--ease-enter);
 }
 @starting-style {
-  :is(.task-window, .task-detail, .memory-results, .settings-page, .usage-page, .projects-page, .release-page, .workspace-view-content) > :not(.loader, .skeleton) { opacity: 0; translate: 0 8px; }
+  :is(.task-window, .task-detail, .memory-results, .settings-page, .usage-page, .status-page, .projects-page, .release-page, .workspace-view-content) > :not(.loader, .skeleton) { opacity: 0; translate: 0 8px; }
 }
+:root[data-motion="reduced"] .status-page > :not(.loader, .skeleton) { transition: none; }
+@media (prefers-reduced-motion: reduce) { .status-page > :not(.loader, .skeleton) { transition: none; } }
 
 /* Side panels: the grid column eases open and shut instead of jumping, the slab swings back to its hinge when it
    closes (not only when it opens), and its contents settle in just after the glass arrives. */
@@ -3100,6 +3102,44 @@ a.task-chip:hover { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--glass-e
 /* Usage (Dan, 8 October): visual and quiet. A cost hero with metric tiles, glass cards with a cost-split bar, ranked
    bars and today's tool calls; every figure has a text label. Detail tables fold away under "All usage". */
 .usage-page { display: grid; gap: 16px; }
+.status-page { display: grid; gap: 16px; min-width: 0; }
+.system-status-header, .system-status-row-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+.system-status-header h1, .system-status-panel h2 { margin: 0; }
+.system-status-panel { min-width: 0; padding: 20px; border-radius: 22px; background: var(--stage-slab);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--glass-rim-light) 26%, transparent), var(--soft-shadow);
+  backdrop-filter: blur(var(--glass-blur-window)) saturate(1.3); }
+.system-status-panel h2 { font-size: 18px; }
+.system-status-note, .system-status-snapshot, .system-status-reason { margin: 10px 0; font-size: var(--type-small); overflow-wrap: anywhere; }
+.system-status-note, .system-status-time { color: var(--text-muted); }
+.system-status-feedback { padding: 16px; border-radius: 16px; background: var(--error-wash); color: var(--text); }
+.system-status-feedback p { margin: 0; }
+.system-status-feedback p + p { margin-top: 8px; }
+.system-status-list { margin: 16px 0 0; padding: 0; list-style: none; }
+.system-status-row { min-width: 0; padding: 16px 0; }
+.system-status-row + .system-status-row { border-top: 1px solid var(--rule); }
+.system-status-row-heading strong { min-width: 0; overflow-wrap: anywhere; }
+.system-status-badge { --status-tone: var(--text-muted); display: inline-flex; align-items: center; gap: 7px; min-height: 28px;
+  padding: 3px 10px; border-radius: var(--radius-pill); color: var(--text); background: color-mix(in srgb, var(--status-tone) 16%, transparent);
+  font-size: var(--type-caption); font-weight: 650; }
+.system-status-badge::before { content: ''; width: 8px; height: 8px; flex: 0 0 8px; border-radius: 50%; background: var(--status-tone); }
+.system-status-badge[data-status="ok"] { --status-tone: var(--success); }
+.system-status-badge[data-status="degraded"] { --status-tone: var(--warning); }
+.system-status-badge[data-status="down"] { --status-tone: var(--error); }
+.system-status-time { display: inline-flex; flex-wrap: wrap; gap: 8px; align-items: baseline; font-size: var(--type-caption); }
+.system-status-stale { color: var(--text); font-weight: 650; }
+.system-status-details { margin-top: 8px; }
+.system-status-details summary { display: list-item; width: fit-content; min-height: 44px; align-content: center; color: var(--text); cursor: pointer; font-size: var(--type-small); }
+.system-status-details summary:hover { color: var(--focus); }
+.system-status-details summary:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; border-radius: 4px; }
+.system-status-details dl { display: grid; gap: 8px; margin: 0; padding: 12px; border-radius: 12px; background: color-mix(in srgb, var(--text) 4%, transparent); }
+.system-status-details dl > div { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: 12px; }
+.system-status-details dt { color: var(--text-muted); }
+.system-status-details dd { margin: 0; }
+.system-status-details :is(dt, dd) { overflow-wrap: anywhere; font-size: var(--type-small); }
+@media (max-width: 700px) {
+  .system-status-panel { padding: 14px; }
+  .system-status-details dl > div { grid-template-columns: minmax(0, 1fr); gap: 3px; }
+}
 .usage-header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
 .usage-header h1 { margin: 0; }
 .usage-results { display: grid; gap: 16px; }
