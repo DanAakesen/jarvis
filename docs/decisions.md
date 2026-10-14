@@ -1,5 +1,29 @@
 # Decisions
 
+## Coalesce automatic board updates behind scoped reads (#813, 14 October 2026)
+
+Preserve an in-flight same-scope board read and queue at most one automatic
+follow-up instead of repeatedly aborting it. Keep the 150-ms idle debounce,
+full contract validation, explicit Refresh/Retry, retained snapshots and
+visible failures. An update during the follow-up can queue the next read.
+The request effect owns its timer/queue, so project/backend/token-callback
+replacement, explicit reload and unmount cancel obsolete work together.
+No unconditional retries, longer TTL, lost-update shortcut or separate
+stream/cache is introduced.
+
+The issue resolver reads that same owner's pending/queued/timer state before
+definitively refusing a missing issue or requested task link. Actual-context
+fixtures reproduced both refusals in the 150-ms settlement gap and ordinary
+idle debounce. Wait for the known read within the existing navigation budget;
+do not fetch speculatively or act after the bounded wait expires. Failed reads
+return the visible error rather than an unconfirmed task-link miss.
+
+Actual-component fixtures demonstrated cancellation under repeated updates
+with valid deferred 10-second reads. That controlled proof justifies this
+local correction; it does not identify the original production trigger.
+No production acceptance, release or backend change is implied. The separate
+Status snapshot/limits below remain historical evidence; #798 stays held.
+
 ## #813 bound Factory board source reads (13 October 2026)
 
 Use one eight-request limiter for every GitHub source request in a board snapshot,
@@ -42,6 +66,24 @@ check with its timestamp, not a claim that the latest release passed.
 No backend, contract or dependency change. Local synthetic browser
 checks are not authenticated production or physical-phone acceptance.
 
+The coordinator accepted the bounded signed-in read-only snapshot on
+`1590a1c3`, normal Deploy 38497362534: real Settings-to-Status rail navigation,
+HTTP 200 initial read and ordinary Refresh, accepted HTTP 204 `status`/
+`page-status` metadata/readback and one persistent session/stream. All 26 rows
+rendered; retained smoke was 15/15 OK at 2026-10-14T01:55:08.275Z with stale
+labels, not a new probe or a deployment association. Missing PC versions
+remained "Not reported"; original Note/native Chrome/drafts/settings were
+untouched. [Exact evidence and limits](agent-context.md#read-only-status-page-14-october-2026).
+Dan subsequently performed the ordinary Status turn: it claimed success
+without visibly navigating, then "I dont see it" recovered correctly.
+First-turn live navigation acceptance failed; no cause is established.
+This is no longer an absent-human-turn gate. Recovery does not establish
+acceptance, and an agent-created turn must not substitute for Dan's evidence.
+Broker/voice and physical-phone acceptance remain unproven; #799 remains open
+and #798 held, followed separately by #797 and #792.
+The original failed smoke turn's cause remains unconfirmed under #820;
+diagnostic-only #821 and the subsequent green run are not proof of a repair.
+
 The coordinator authorised the smallest coupled release-gate correction in
 #815 after the title bot truncated P9-101 to P9-10. Normalization, linked-issue
 extraction and PLAN row/issue/dependency parsing preserve full task numbers
@@ -49,8 +91,8 @@ with at least two digits and an ID boundary. Retain two-digit formatting,
 WIP/bracket/fix-main/docs behavior and all existing status/ownership policies;
 the separate reopened-issue policy is addressed by #817. Existing
 Python CI discovers the title and PLAN regressions; no other workflow change
-or new tooling. Restore the correct title only after pushing the fix and
-rerun exact-head gates.
+or new tooling. The correct title was restored after pushing the fix and
+exact-head gates passed before #815 merged.
 Cap each dependency-range expansion at 1000 tasks and fail with an actionable
 ValueError before iteration. This replaces the old incidental two-digit
 resource bound without capping valid ID width; no established script bound

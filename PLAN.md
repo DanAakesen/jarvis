@@ -727,7 +727,7 @@ Declined in the audit (do not file): verbosity and max-output-token settings, no
 | P9-95 | [#779](https://github.com/DanAakesen/jarvis/issues/779) | Keep backend logs diagnosable without weakening the event/field allowlist: register literal logger events and scan source, add route-template/error-kind to failed requests with privacy coverage, and downgrade bounded telemetry close failures while retaining server-shutdown failure exit behavior | Backend/docs | — | Complete |
 | P9-96 | [#783](https://github.com/DanAakesen/jarvis/issues/783) | Drain backend task/Now/chat streams and voice/phone WebSockets on deploy before resource cleanup; clean exit 0 versus real failure/timeout exit 1; name framework upgrade warnings and release failed upgrade sockets | Live two-revision SIGTERM/upgrade reproduction and focused lifecycle/privacy tests; existing client reconnect behavior checked read-only. Production shutdown/takeover logs require coordinator verification. | — | Complete |
 | P9-97 | [#790](https://github.com/DanAakesen/jarvis/issues/790) | Show the live Danish voice, Jeppe, as fixed/read-only in Settings; coordinator owns backend compatibility and UI session owns web | Settings and API accept retired Harper storage; truthful default/option, no Danish-voice UI patch; focused tests, types/lint and desktop/phone inspection | — | Complete |
-| P9-101 | [#799](https://github.com/DanAakesen/jarvis/issues/799) | Read-only Status page, rail/phone navigation and existing voice/chat target | Eleven reported checks, failure reasons, visible PC connection/pause state, timestamps/stale markers, retained smoke with no invented release association; Refresh never runs canaries. Local types/lint/build, 103 scoped tests and desktop/320px synthetic browser checks pass; exact-head CI/release/live acceptance pending | P9-20 | In progress |
+| P9-101 | [#799](https://github.com/DanAakesen/jarvis/issues/799) | Read-only Status page, rail/phone navigation and existing voice/chat target | Eleven reported checks, failure reasons, visible PC connection/pause state, timestamps/stale markers, retained smoke with no invented release association; Refresh never runs canaries. Local types/lint/build, 103 scoped tests and desktop/320px fixtures pass; exact-head gates/release and bounded signed-in rail/readback/Refresh accepted. Dan's ordinary Status turn claimed success without visible navigation; "I dont see it" recovered. First-turn live navigation acceptance failed; cause unconfirmed and #799 stays open | P9-20 | In progress |
 | P9-104 | [#796](https://github.com/DanAakesen/jarvis/issues/796) | Reconcile `docs/features.md` with completed tasks and verified production state | Correct targeted statuses with evidence; count Live/Built not verified/Offline only/Planned; record #787/#791 release, P9-82 chat-image logs with voice check outstanding, P10-04 backend/P10-07 web ownership, and Daily reuse of existing SQL without new infrastructure | — | Complete |
 
 #815's guarded merge caught the title bot truncating P9-101 to P9-10.
@@ -735,11 +735,21 @@ The coordinator authorised the coupled normalizer/linked-ID/PLAN-parser
 width and boundary correction with existing-style regressions in the same
 PR. Each dependency range is capped at 1000 expansions, with an actionable
 pre-iteration failure for larger inputs. All 57 script tests and Bash syntax
-pass locally; status/ownership policies are unchanged. The new head needs
-fresh exact-head CI before merge.
+pass locally; status/ownership policies are unchanged. Final head `8c0f2cb2`
+passed exact-head gates; #815 merged at `6e7d85dd`.
 Main through #808 (`446ce371`) is integrated with both scoped documentation
 additions preserved; health remains inactive without new live acceptance.
-Status release/authenticated acceptance remains pending.
+Initial Deploy 38491884715 failed semantic smoke after rollout; the original
+failed turn's cause remains unconfirmed under #820. Diagnostic-only #821's
+normal Deploy 38497362534 on `1590a1c3` passed all six jobs and fifteen actual
+smoke checks. The coordinator accepted the bounded signed-in rail navigation,
+Status/readback and ordinary Refresh snapshot, with one persistent session
+and no new stream requests. Live broker/chat/voice acknowledgement and
+physical-phone acceptance are not inferred. Dan subsequently reported that
+the ordinary Status turn claimed success without visible navigation; the
+"I dont see it" follow-up recovered. First-turn live navigation acceptance
+failed, with no established cause; #799 remains open and #798 remains held.
+[Exact evidence and limits](docs/agent-context.md#read-only-status-page-14-october-2026).
 
 ### P10 — GitHub backlog as source of truth
 Goal: GitHub issues are the single backlog. The Software Factory (worker label `Jarvis`, default agent `codex`) and Copilot (`Copilot`) are executors that pick issues up; the Factory board shows the same columns as the GitHub Project. Decided by Dan on 8 October 2026.
@@ -769,8 +779,27 @@ fresh, valid complete board; all six columns and visible #790/#792/#793 cards
 render as Done/Ready/Done, matching fresh Project 2. The rendered-board gate
 passes. This does not diagnose a root
 cause or establish sustained backend recovery. Next UI work
-after the navigation follow-up: #799 is implemented locally with release/live
-acceptance pending; #798, #797, then #792 remain separate.
+after the navigation follow-up: #799 is released with bounded signed-in
+rail/readback/Refresh acceptance, but Dan's first-turn live Status navigation
+failed and recovery does not satisfy that criterion. #799 remains open;
+#798 is held, followed separately by #797 and #792.
+
+Separate local #813 consumer correction (14 October): automatic same-scope
+invalidations now queue behind the active read and coalesce into one
+follow-up, including late updates during that follow-up. Deterministic
+actual-component regressions cover deferred reads, failure/recovery and
+scope/disposal. A coupled regression also proved premature missing-issue
+and task-link refusals between an older snapshot and its queued follow-up.
+The resolver now includes pending reads/queued work/idle debounce in its
+loading decision, without extra reads or an expanded navigation budget.
+The refreshed eight-file suite passes all 181 tests; controlled browser
+checks are synthetic only. The earlier
+released two roughly ten-second completions establish no accepted speed
+improvement, and the original triggering event remains unknown. No commit
+or release was made during the frozen local review. Dan subsequently
+authorised this correction's commit, push and review PR only, not merge or
+deployment; #813 production cadence/performance acceptance, #798, the
+main-release gate and P12 holds remain unchanged.
 
 ### P11 — Jarvis-raised fixes
 A rolling intake phase. When Dan asks Jarvis to change its own code or a project's code, Jarvis drafts the issue, confirms it with Dan and creates it as `P11-NN` (P10-03). Rows are added here as the issues are created.

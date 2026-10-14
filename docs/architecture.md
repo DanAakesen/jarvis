@@ -843,6 +843,23 @@ POST route; task details/windows and controls reuse their existing boundaries.
 publishes them and connection state to `factory-board-store.ts`. The board
 debounces matching invalidations and refreshes after connection recovery,
 without opening per-card task streams or duplicating GitHub placement logic.
+The #813 consumer correction keeps an active same-scope read rather than
+aborting it for automatic updates. Its request effect owns a pending flag,
+one queued follow-up and the existing 150-ms idle timer. Settlement schedules
+that follow-up after either success or failure, without allowing later
+notifications to postpone its deadline. Newer notifications during the
+follow-up can queue the next read. Effect cleanup cancels the request,
+timer and queued work on project/backend/token-callback replacement, explicit
+reload or unmount. Full validation and retained-snapshot error handling stay
+unchanged. This fixes a deterministically reproduced client lifecycle; the
+original released trigger and production performance remain unproven.
+The same request owner exposes its pending read, queued follow-up and timer
+to the issue resolver. Missing issues and absent/replaced requested task
+links stay loading across settlement and the idle debounce instead of being
+rejected from an older snapshot. Positive matches still resolve immediately;
+after a failed follow-up, an unresolved task link returns the visible read
+error. Navigation neither starts another read nor extends its existing
+six-second/command-expiry budget. Disposal removes the obsolete owner.
 Task details retain their own task stream. Equal invalidations are deduplicated,
 but a lower version after restart is accepted. Cached/failed-refresh snapshots
 retain the board DOM and show their source timestamp and stale feedback.
@@ -1366,6 +1383,18 @@ The retained smoke report has no deployment ID or commit association; the
 web page cannot present it as certification of a particular release.
 Status also participates in page metadata and bounded/redacted window
 readback. No new backend routes, storage or permission changes.
+
+Released-path evidence on `1590a1c3` / normal Deploy 38497362534 establishes
+actual rail navigation, initial/ordinary Refresh HTTP 200 and accepted HTTP
+204 `status`/`page-status` state/readback, with the same workspace session
+and no new Now stream requests. The retained report at
+2026-10-14T01:55:08.275Z was 15/15 OK and correctly stale; release success
+comes from the normal Deploy result, not an association in this contract.
+Dan's subsequent ordinary Status turn claimed success without visible
+navigation; "I dont see it" recovered. First-turn live navigation acceptance
+failed, with no established cause. Recovery does not establish broker/voice
+or physical-phone acceptance; #799 remains open and #798 held.
+[Exact evidence and limits](agent-context.md#read-only-status-page-14-october-2026).
 
 P9-62 adds always-registered `get_system_health`, returning the shared
 `SystemHealth` contract: 26 fixed-order components with status, safe detail,
