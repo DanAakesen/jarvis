@@ -39,10 +39,23 @@ explicitly previous data on failed refresh and offer Retry. Mark evidence
 older than five minutes stale without background probe requests.
 The smoke contract has no deployment ID/SHA association; use Recorded smoke
 check with its timestamp, not a claim that the latest release passed.
-Only fixed per-check allowlisted reasons are retained for down/degraded smoke
-entries; the original deployed chat-canary failure cause remains unknown.
-Local synthetic browser checks are not authenticated production or
-physical-phone acceptance.
+No backend, contract or dependency change. Local synthetic browser
+checks are not authenticated production or physical-phone acceptance.
+
+## P9-107 smoke reason retention follow-up (14 October 2026)
+
+The prior Status-page decision above records its original UI-only scope. This
+follow-up preserves fixed per-check smoke reasons for down/degraded results.
+The allowlist includes shared `agent_error` and `timeout` outcomes for each
+chat acceptance check, while rejecting arbitrary provider text and reasons
+belonging only to another check.
+
+Local proof on this branch: exact-reader tests cover real missing-agent,
+controlled stream failure and timeout results, ordered complete report shape,
+contract validation, privacy, and timeout aborts. Backend and contracts checks
+are run for the current head; full exact-head CI and CodeQL status must be
+confirmed on the corrected commit. The original deployed failure cause remains
+unknown, and no production recovery is claimed.
 
 The coordinator authorised the smallest coupled release-gate correction in
 #815 after the title bot truncated P9-101 to P9-10. Normalization, linked-issue

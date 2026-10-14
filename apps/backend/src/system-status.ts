@@ -51,6 +51,7 @@ const subsystems: readonly SystemStatusSubsystem[] = [
 ];
 
 const cacheTtlMs = 60_000;
+const sharedChatFailureReasons = ['agent_error', 'timeout'] as const;
 const safeSmokeReasons: Partial<Record<SystemSmokeCheckId, ReadonlySet<string>>> = {
   agent_contract: new Set([
     'Tool count exceeds the agent limit.',
@@ -65,8 +66,8 @@ const safeSmokeReasons: Partial<Record<SystemSmokeCheckId, ReadonlySet<string>>>
     'Agent settings could not be built.',
     'Agent contract could not be checked.',
   ]),
-  chat_canary: new Set(['acceptance_check_failed', 'agent_error', 'timeout']),
-  chat_identity: new Set(['catalogue_unavailable', 'identity_reply']),
+  chat_canary: new Set(['acceptance_check_failed', ...sharedChatFailureReasons]),
+  chat_identity: new Set(['catalogue_unavailable', 'identity_reply', ...sharedChatFailureReasons]),
   chat_capabilities: new Set([
     'catalogue_unavailable',
     'capabilities_discovery_missing',
@@ -74,12 +75,13 @@ const safeSmokeReasons: Partial<Record<SystemSmokeCheckId, ReadonlySet<string>>>
     'capabilities_discovery_failed',
     'capabilities_receipt_incomplete',
     'capabilities_reply_incomplete',
+    ...sharedChatFailureReasons,
   ]),
-  chat_github_read: new Set(['catalogue_unavailable', 'github_issue_unavailable']),
-  chat_jobs: new Set(['catalogue_unavailable', 'jobs_unavailable']),
-  chat_navigation: new Set(['catalogue_unavailable', 'navigation_refusal_missing']),
-  chat_no_timestamp: new Set(['catalogue_unavailable', 'capture_time_invented']),
-  chat_plain_approval: new Set(['catalogue_unavailable', 'plain_approval_failed']),
+  chat_github_read: new Set(['catalogue_unavailable', 'github_issue_unavailable', ...sharedChatFailureReasons]),
+  chat_jobs: new Set(['catalogue_unavailable', 'jobs_unavailable', ...sharedChatFailureReasons]),
+  chat_navigation: new Set(['catalogue_unavailable', 'navigation_refusal_missing', ...sharedChatFailureReasons]),
+  chat_no_timestamp: new Set(['catalogue_unavailable', 'capture_time_invented', ...sharedChatFailureReasons]),
+  chat_plain_approval: new Set(['catalogue_unavailable', 'plain_approval_failed', ...sharedChatFailureReasons]),
 };
 
 function safeSmokeReason(id: SystemSmokeCheckId, reason: string | undefined): string | undefined {
