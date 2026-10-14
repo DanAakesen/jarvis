@@ -100,6 +100,45 @@ describe('post-deploy chat acceptance suite', () => {
     });
   });
 
+  it.each([
+    {
+      reason: 'capabilities_discovery_missing',
+      text: 'I can help with notes, calendar, and GitHub tools.',
+      calls: [],
+    },
+    {
+      reason: 'capabilities_discovery_wrong',
+      text: 'I can help with notes, calendar, and GitHub tools.',
+      calls: [{ name: 'get_system_health', operation: 'health', outcome: 'ok' }],
+    },
+    {
+      reason: 'capabilities_discovery_failed',
+      text: 'I can help with notes, calendar, and GitHub tools.',
+      calls: [{ name: 'get_system_health', operation: 'list_capabilities', outcome: 'error' }],
+    },
+    {
+      reason: 'capabilities_receipt_incomplete',
+      text: 'I can help with notes, calendar, and GitHub tools.',
+      calls: [{
+        name: 'get_system_health', operation: 'list_capabilities', outcome: 'ok',
+        capabilities: ['Notes: vault_read', 'Calendar: calendar_today_agenda'],
+      }],
+    },
+    {
+      reason: 'capabilities_reply_incomplete',
+      text: 'I can help with notes and calendar.',
+      calls: [{
+        name: 'get_system_health', operation: 'list_capabilities', outcome: 'ok',
+        capabilities: ['Notes: vault_read', 'Calendar: calendar_today_agenda', 'GitHub tools: github_read'],
+      }],
+    },
+  ] as const)('reports a content-free $reason diagnosis', async ({ reason, text, calls }) => {
+    const suite = probes(passingAgent((input) => input.text === prompts[1] ? { text, calls: [...calls] } : undefined));
+
+    await expect(suite.chat_capabilities!()).resolves.toEqual({ status: 'down', reason });
+    await expect(suite.chat_canary!()).resolves.toEqual({ status: 'down', reason: 'acceptance_check_failed' });
+  });
+
   it('reports wording-only identity and missing-image timestamp failures as warnings', async () => {
     const suite = probes(passingAgent((input) => input.text === prompts[0]
       ? { text: 'I am a generic assistant named Jarvis.' }

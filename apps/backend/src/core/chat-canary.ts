@@ -107,13 +107,20 @@ async function checkPrompt(
           : failed(id, 'identity_reply');
       case 'chat_capabilities': {
         const capabilities = callFor(response.toolCalls, 'get_system_health', 'list_capabilities');
-        return capabilities?.outcome === 'ok' &&
-          (capabilities.capabilities ?? []).some((value) => /\bnotes?\b/iu.test(value)) &&
-          (capabilities.capabilities ?? []).some((value) => /\bcalendar\b/iu.test(value)) &&
-          (capabilities.capabilities ?? []).some((value) => /\bgithub\b/iu.test(value)) &&
-          /\bnotes?\b/u.test(text) && /\bcalendar\b/u.test(text) && /\bgithub\b/u.test(text)
+        if (!capabilities) {
+          const wrongDiscovery = response.toolCalls.some((call) =>
+            call.name === 'get_system_health' || call.operation === 'list_capabilities');
+          return failed(id, wrongDiscovery ? 'capabilities_discovery_wrong' : 'capabilities_discovery_missing');
+        }
+        if (capabilities.outcome !== 'ok') return failed(id, 'capabilities_discovery_failed');
+        if (!(capabilities.capabilities ?? []).some((value) => /\bnotes?\b/iu.test(value)) ||
+            !(capabilities.capabilities ?? []).some((value) => /\bcalendar\b/iu.test(value)) ||
+            !(capabilities.capabilities ?? []).some((value) => /\bgithub\b/iu.test(value))) {
+          return failed(id, 'capabilities_receipt_incomplete');
+        }
+        return /\bnotes?\b/u.test(text) && /\bcalendar\b/u.test(text) && /\bgithub\b/u.test(text)
           ? result('ok')
-          : failed(id, 'capabilities_missing');
+          : failed(id, 'capabilities_reply_incomplete');
       }
       case 'chat_github_read': {
         const issue = callFor(response.toolCalls, 'github_read', 'issue_get');
