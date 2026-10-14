@@ -66,6 +66,8 @@ Keep Health Auto Export JSON uploads and heartbeat. Device credentials are owner
 
 ### [P12-05: Health processor & sync read models](https://github.com/DanAakesen/jarvis/issues/720)
 
+**Current inactive local slice:** the [coordinator release](https://github.com/DanAakesen/jarvis/issues/720#issuecomment-6154043444) follows reviewed/deployed #805's revised existing-backend/SQL design. `daily/health` supplies a pure source-shaped normalizer, explicit one-row transactional processor and authenticated owner read models; migration 0047 adds bounded retry/lease/quarantine evidence. No automatic processing or production route/tool composition. [Contract and acceptance limits](../apps/backend/src/daily/health/README.md); live/device/privacy gates remain open even when code dependencies are closed.
+
 **NEW DAILY CAPABILITY — permanent** · Backend & migration rehearsal
 
 Metrics, sleep, workouts, workout detail and minute HR; unit conversion, local dates, retry / poison-queue handling.
