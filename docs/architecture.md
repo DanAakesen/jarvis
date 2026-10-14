@@ -2523,8 +2523,12 @@ transition, final steering check, per-request delegated authorization, configure
 timeout, disabled redirects and failure semantics are unchanged. Neither clients
 nor caller-specific cookies, history or authorization cross invocation boundaries.
 The local loopback comparison and coordinator's reported post-#802 timings are
-recorded in `docs/decisions.md`; they do not establish a warm session classification
-or a passing repeated-turn latency gate.
+recorded in `docs/decisions.md`. Coordinator content-free event/span correlation
+now classifies baseline turn 1 cold and turns 2–10 warm, with affinity 10/10 and
+no fallback. Warm-nine medians are 3.370 s backend and 3.467 s UI; only 3/9 are
+below 3 s, so the baseline warm gate fails. Classification is not inferred from
+elapsed time. No resume or post-fix improvement is established; this remains a
+partial overhead correction awaiting real post-deploy acceptance.
 
 The reported 5–10 s model-to-first-delta interval is not currently attributable
 between prompt processing and reasoning: the provider exposes one elapsed

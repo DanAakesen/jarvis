@@ -23,7 +23,7 @@ The coordinator authorised the smallest coupled release-gate correction in
 extraction and PLAN row/issue/dependency parsing preserve full task numbers
 with at least two digits and an ID boundary. Retain two-digit formatting,
 WIP/bracket/fix-main/docs behavior and all existing status/ownership policies;
-the separate reopened-issue policy is outside this correction. Existing
+the separate reopened-issue policy is addressed by #817. Existing
 Python CI discovers the title and PLAN regressions; no other workflow change
 or new tooling. Restore the correct title only after pushing the fix and
 rerun exact-head gates.
@@ -31,6 +31,17 @@ Cap each dependency-range expansion at 1000 tasks and fail with an actionable
 ValueError before iteration. This replaces the old incidental two-digit
 resource bound without capping valid ID width; no established script bound
 was present. Boundary/over-limit and intercepted huge-range tests cover it.
+
+## Reopened issue completion precedence (#817, 14 October 2026)
+
+For PLAN reconciliation, a merged linked PR does not complete an open or
+reopened issue. The open issue is In progress when it has an open linked PR or
+recognized worker label; otherwise it is Not started. Preserve a manual
+Blocked status unless the issue is closed as completed. Existing unmerged
+not-planned and missing-issue fallbacks remain unchanged. This corrects PLAN
+reporting only: merge proves code integration, not satisfaction of live
+acceptance gates, so open acceptance issues remain open and their status cells
+stay workflow-owned.
 
 ## P12-05 inactive SQL health processing (13 October 2026)
 
@@ -119,16 +130,20 @@ The product's ≤2.5 s target remains; no measured improvement is claimed here.
 
 The coordinator's 13 October sample attributes the remaining delay as follows.
 These are reported production observations, not independently queried here.
-Medians from different cohorts must not be added.
+Medians from different cohorts must not be added. The coordinator's 14 October
+content-free correlation refresh identifies original baseline turn 1 as cold
+and turns 2–10 as warm, with affinity on 10/10 and no fallback. Ten unique
+sequential event/span associations and eight exact captured model timings
+support this evidence; classification is not inferred from elapsed time.
 
 | Observation | Duration | Interpretation |
 | --- | --- | --- |
 | First post-release turn, backend first text | 13.968 s | Session residual 6.289 s + agent preparation 0.492 s + model-to-first-text 7.128 s; remaining 0.059 s is outside those reported phases |
 | Ten sequential turns, backend first-text median | 3.646 s | Overall <5 s gate met in this sample; no reply failures reported |
-| First of those ten, backend first text / session residual | 10.978 s / 6.538 s | Residual is not proof of a cold session |
-| Subsequent nine, backend first-text median | 3.370 s | Only three were below 3 s; repeated-turn gate remains open |
+| First of those ten, backend first text / session residual | 10.978 s / 6.538 s | Correlated turn 1 is cold; residual alone is not proof |
+| Warm nine, backend / UI first-text median | 3.370 s / 3.467 s | Only 3/9 below 3 s: warm gate FAIL |
 | Subsequent nine, model-to-first-text median | 2.790 s | Dominant remaining measured interval; prompt processing versus reasoning is not separately exposed |
-| Subsequent nine, session residual range | 0.089–0.346 s | All platform session types remain absent/unclassified |
+| Warm nine, session residual range | 0.089–0.346 s | Turns 2–10 are warm by correlated telemetry, not duration |
 
 Code inspection finds a new `httpx.AsyncClient` for every steering GET and
 phase POST, including the two steering reads bracketing each model transition.
@@ -149,7 +164,9 @@ These demonstrate a bounded local saving, not production TLS/network cost or a
 sub-three-second guarantee. Preserve model/reasoning, providers, auth, prompts
 and real first-text timing. No package, resource, scheduler or live canary change.
 Refs DanAakesen/jarvis#794: coordinator post-deploy acceptance and broader #801
-acceptance remain open; merging this follow-up must not close them.
+acceptance remain open. No resume or post-fix improvement is established. The
+release/UI temporary snapshot hold is settled, but release is distinct from the
+failed baseline warm-speed gate and pending real post-deploy acceptance.
 
 ## P12-04 reuses the existing backend and SQL (13 October 2026)
 
