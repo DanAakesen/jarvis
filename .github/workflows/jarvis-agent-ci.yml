@@ -115,7 +115,9 @@ jobs:
           print(json.dumps({
               "python": sys.version.split()[0],
               "verified_pins": len(pins),
-              "selected": {name: actual[name] for name in ("urllib3", "multidict", "PyJWT")},
+              "selected": {
+                  name: actual[name] for name in ("urllib3", "multidict", "PyJWT", "oauthlib")
+              },
               "offline_hs256": "passed",
           }))
           PY
