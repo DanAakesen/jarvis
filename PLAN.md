@@ -733,8 +733,10 @@ Declined in the audit (do not file): verbosity and max-output-token settings, no
 #815's guarded merge caught the title bot truncating P9-101 to P9-10.
 The coordinator authorised the coupled normalizer/linked-ID/PLAN-parser
 width and boundary correction with existing-style regressions in the same
-PR. All 54 script tests and Bash syntax pass locally; status/ownership policies
-are unchanged. The new head needs fresh exact-head CI before merge.
+PR. Each dependency range is capped at 1000 expansions, with an actionable
+pre-iteration failure for larger inputs. All 57 script tests and Bash syntax
+pass locally; status/ownership policies are unchanged. The new head needs
+fresh exact-head CI before merge.
 Main through #808 (`446ce371`) is integrated with both scoped documentation
 additions preserved; health remains inactive without new live acceptance.
 Status release/authenticated acceptance remains pending.

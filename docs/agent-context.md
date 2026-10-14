@@ -24,10 +24,13 @@ The coordinator authorised one coupled release-gate exception in #815:
 the PR-title normalizer, linked-issue ID extraction and PLAN reconciliation
 must preserve full two-or-more-digit task numbers, including P9-101. The old
 bot renamed it P9-10 and stopped the guarded merge; PLAN parsing also ignored
-full rows/issues and shortened dependencies. Five title-gate and six PLAN
+full rows/issues and shortened dependencies. Five title-gate and nine PLAN
 unittest methods cover full IDs/idempotence, boundaries, rows, mapping,
 dependencies/ranges and legacy two-digit/WIP/bracket/fix-main/docs formats.
-All 54 workflow-script tests and Bash syntax pass locally. Status/ownership
+Each dependency range expands at most 1000 tasks; larger ranges raise an
+actionable ValueError before iteration, without limiting identifier width.
+Allowed-boundary, over-limit and no-large-allocation regressions cover this.
+All 57 workflow-script tests and Bash syntax pass locally. Status/ownership
 policies are unchanged, including reopened-issue handling. No other workflow,
 backend or dependency changes.
 The corrected head must pass fresh exact-head gates before merge.

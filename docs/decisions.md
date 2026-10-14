@@ -27,6 +27,10 @@ the separate reopened-issue policy is outside this correction. Existing
 Python CI discovers the title and PLAN regressions; no other workflow change
 or new tooling. Restore the correct title only after pushing the fix and
 rerun exact-head gates.
+Cap each dependency-range expansion at 1000 tasks and fail with an actionable
+ValueError before iteration. This replaces the old incidental two-digit
+resource bound without capping valid ID width; no established script bound
+was present. Boundary/over-limit and intercepted huge-range tests cover it.
 
 ## P12-05 inactive SQL health processing (13 October 2026)
 

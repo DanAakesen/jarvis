@@ -1,6 +1,7 @@
 import json
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from plan_status import (
     dependencies_from_text,
@@ -233,6 +234,28 @@ class FullTaskIdentifierTests(unittest.TestCase):
             with self.subTest(task_id=task_id):
                 self.assertEqual(plan_tasks(plan), [])
                 self.assertEqual(reconcile_plan(plan, self.issues, []), plan)
+
+    def test_dependency_range_allows_the_boundary_without_limiting_id_width(self):
+        dependencies = dependencies_from_text("P9-99...1098")
+        self.assertEqual(len(dependencies), 1000)
+        self.assertEqual(dependencies[0], "P9-99")
+        self.assertEqual(dependencies[-1], "P9-1098")
+        self.assertEqual(
+            dependencies_from_text("P9-999999999...1000000000"),
+            ["P9-999999999", "P9-1000000000"],
+        )
+
+    def test_dependency_range_over_limit_fails_with_actionable_error(self):
+        with self.assertRaisesRegex(
+            ValueError, r"P9-99\.\.\.1099.*1001 tasks; limit is 1000.*Shorten the range",
+        ):
+            dependencies_from_text("P9-99...1099")
+
+    def test_oversized_dependency_range_never_starts_iteration(self):
+        with patch("plan_status.range", side_effect=AssertionError("must not iterate"), create=True) as iterate:
+            with self.assertRaisesRegex(ValueError, r"999999901 tasks; limit is 1000"):
+                dependencies_from_text("P9-99...999999999")
+            iterate.assert_not_called()
 
 
 if __name__ == "__main__":
