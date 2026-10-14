@@ -121,8 +121,8 @@ describe('English realtime session', () => {
     expect(session.input_audio_transcription).toEqual({ model: 'mai-transcribe' });
   });
 
-  it('includes the persisted automatic-capture policy in voice instructions', () => {
-    const memory = { ...defaultSettings.memory, automaticCapture: false };
+  it.each([true, false])('includes the persisted automatic-capture policy in voice instructions (%s)', (automaticCapture) => {
+    const memory = { ...defaultSettings.memory, automaticCapture };
     const session = createRealtimeSessionUpdate(
       registry,
       undefined,
@@ -144,8 +144,20 @@ describe('English realtime session', () => {
       memory,
     ).session;
 
-    expect(session.instructions).toContain('Do not proactively save memories');
-    expect(danish.instructions).toContain('Do not proactively save memories');
+    expect(session.instructions).toContain(automaticCapture
+      ? 'Automatically save clearly stated, durable facts without inferring them.'
+      : 'Do not proactively save memories');
+    expect(danish.instructions).toContain(automaticCapture
+      ? 'Automatically save clearly stated, durable facts without inferring them.'
+      : 'Do not proactively save memories');
+    for (const instructions of [session.instructions, danish.instructions]) {
+      expect(instructions).toContain('Status uses workspace_command (operation "navigate", page "status")');
+      expect(instructions).not.toContain('The UI still refuses Status until its page exists');
+      expect(instructions).toContain('Only say an action succeeded when its tool result reports success');
+      expect(instructions).toContain('Only report it applied after the tool succeeds');
+      expect(instructions).toContain('relay refusal reasons');
+      expect(instructions).toContain('never claim navigation succeeded on send');
+    }
     expect(danish.instructions).toContain('"jeg", "mig" og "min/mit"');
     expect(danish.instructions).toContain('Its code, PRs, issues');
     expect(danish.instructions).toContain('Jeg fandt en fejl i min kode');
