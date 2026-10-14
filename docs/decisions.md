@@ -2413,9 +2413,9 @@ never the code or authorization. Two loopback relay regressions prove one execut
 across repeated approvals in both routes; hosted tests also cover missing codes,
 expiry represented by absent state, provider failures and fabricated status/read
 claims. Calendar reads still feed subsequent model rounds so a lookup can precede
-staging in the same turn; provisional claims stay withheld. Fourteen new hosted
-calendar regressions, 177 hosted model/tool tests, 57 chat HTTP tests, 137 focused
+staging in the same turn; provisional claims stay withheld. Seventeen new hosted
+calendar regressions, 180 hosted model/tool tests, 57 chat HTTP tests, 137 focused
 backend tests and all 154 relay tests pass. Backend lint/build and changed Python
-Ruff pass. Module/registry/conversation parity is the remaining local check; normal
-CI/review and live Google/speech acceptance remain separate. No live provider writes,
+Ruff and 93 module/registry/reflex/conversation checks pass. Normal CI/review
+and live Google/speech acceptance remain separate. No live provider writes,
 permissions, migration or deployment.

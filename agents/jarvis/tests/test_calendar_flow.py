@@ -33,6 +33,7 @@ class CalendarBackend(FakeBackend):
                          "calendar_create_event", "calendar_list_events"]
         ])
         self.pending = pending
+        self.stage_result = PENDING.copy()
         self.outcome = outcome
         self.fail_confirmation = fail_confirmation
         self.reply = None
@@ -44,8 +45,8 @@ class CalendarBackend(FakeBackend):
             if name == "calendar_pending_change":
                 payload = {**(self.pending or {"status": "none"}), "reply": self.reply}
             elif name == "calendar_create_event":
-                self.pending = PENDING.copy() if self.outcome == "ok" else None
-                payload = PENDING.copy()
+                self.pending = self.stage_result.copy() if self.outcome == "ok" else None
+                payload = self.stage_result.copy()
             elif name == "calendar_confirm_change":
                 assert json.loads(request.content) == {"confirmationCode": "12345678"}
                 self.pending = None  # Consumption happens before provider execution.
@@ -211,5 +212,39 @@ async def test_calendar_clarification_can_ask_for_dates_without_claiming_staging
         text = await turn(model, [ModelMessage("user", "Add my calendar reservation")])
         assert text == "What dates should I use for the calendar reservation?"
         assert backend.calendar_calls == ["calendar_pending_change"]
+    finally:
+        await model.close()
+
+
+async def test_new_request_cannot_claim_staging_or_checking_without_any_mutation_or_read():
+    backend = CalendarBackend()
+    model, _ = client([delta("I checked the calendar and staged the event. Reply yes."),
+                       completed()], backend=backend)
+    try:
+        text = await turn(model, [ModelMessage("user", "Add my Marriott reservation")])
+        assert "Reply yes" not in text and "I checked" not in text
+        assert "no pending calendar change" in text
+        assert backend.calendar_calls == ["calendar_pending_change"]
+    finally:
+        await model.close()
+
+
+@pytest.mark.parametrize("code", [None, "invalid"])
+async def test_successful_staging_envelope_without_valid_code_cannot_start_approval_flow(code):
+    backend = CalendarBackend()
+    backend.stage_result = {"status": "awaiting_confirmation", "summary": SUMMARY}
+    if code is not None:
+        backend.stage_result["confirmationCode"] = code
+    model, _ = client([], backend=backend, rounds=[[
+        completed(tool_call("calendar_create_event")),
+    ]])
+    try:
+        text = await turn(model, [ModelMessage("user", "Add my calendar reservation")])
+        assert SUMMARY not in text and "Reply yes" not in text
+        backend.reply = "approve"
+        repeated = await turn(model, [ModelMessage("assistant", text),
+                                     ModelMessage("user", "yes")], "43")
+        assert "Reply yes" not in repeated
+        assert "calendar_confirm_change" not in backend.calendar_calls
     finally:
         await model.close()

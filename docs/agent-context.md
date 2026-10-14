@@ -2134,3 +2134,11 @@ No direct Azure access, original Daily checkout/Sites edits, private health/food
 ## Calendar approval regressions (P11-04 / #839)
 
 Run `npm test --workspace @jarvis/backend -- src/google src/core/capability-instructions.test.ts src/core/work-presentation.test.ts src/voice/realtime.test.ts src/voice/relay.test.ts`, backend lint/build, and from `agents/jarvis` run `python -m pytest -q tests/test_calendar_flow.py tests/test_model_client.py tests/test_chat_runtime.py tests/test_jarvis_tools.py` plus Ruff on changed Python files. Use the component's pinned development requirements in an isolated environment. Relay checks need loopback socket permission; this runner's sandbox also stalled Starlette TestClient, while the same chat suite passed outside the sandbox (57 tests). The new tests use synthetic state/providers and do not create a real reservation. Hosted provisional text waits for the completed model round when Calendar is available. Pending actions remain process-local and disappear on restart; a restart cannot establish successful creation. Live Google and realtime speech acceptance is separate.
+
+Final local evidence: 180 hosted model/tool/calendar tests plus 57 chat HTTP tests,
+137 Google/prompt/presentation/realtime tests, 154 relay tests and 93 module/registry/
+reflex/conversation tests pass. Backend lint/build, changed Python Ruff and diff
+whitespace checks pass. The 17 new hosted cases include no-tool staging claims,
+missing or invalid codes even under an ok envelope, same-turn lookup followed by
+staging, clarification, repeated approval, failure consumption and status/read claims.
+No live Google call, deployment or browser/UI change was performed.
