@@ -1138,3 +1138,22 @@ describe('pc_act bounded Windows control loop', () => {
     expect(pcBridge.act).toHaveBeenCalledTimes(20);
   });
 });
+
+
+describe('Gmail Windows access refusal', () => {
+  it('refuses a Gmail goal before observing the PC', async () => {
+    const pc = bridge();
+    const planner = { decide: vi.fn(async () => decision('done')) };
+    await expect(runPcAct({ goal: 'Read Gmail booking dates' }, request(), new AbortController().signal, pc, { planner })).rejects.toThrow('Gmail access requires the direct mail integration');
+    expect(pc.observe).not.toHaveBeenCalled();
+    expect(planner.decide).not.toHaveBeenCalled();
+  });
+
+  it('refuses an observed Gmail window before planning or acting', async () => {
+    const pc = bridge({ observe: vi.fn(async () => ({ ...snapshot, application: 'gmail' })) });
+    const planner = { decide: vi.fn(async () => decision('done')) };
+    await expect(runPcAct({ goal: 'Find the booking dates' }, request(), new AbortController().signal, pc, { planner })).rejects.toThrow('Gmail access requires the direct mail integration');
+    expect(planner.decide).not.toHaveBeenCalled();
+    expect(pc.act).not.toHaveBeenCalled();
+  });
+});

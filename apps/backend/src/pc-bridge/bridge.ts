@@ -1,3 +1,4 @@
+import { refuseGmailComputerAccess } from '../core/gmail-access-policy.js';
 import { randomUUID } from 'node:crypto';
 import type { FastifyRequest } from 'fastify';
 import websocket from '@fastify/websocket';
@@ -998,6 +999,7 @@ async function runPcOpen(
     throw new ToolRefusal('Provide one valid PC action and its value.');
   }
 
+  refuseGmailComputerAccess(input.value);
   let command: PcCommand;
   switch (input.target) {
     case 'url': {

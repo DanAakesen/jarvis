@@ -1,3 +1,4 @@
+import { refuseGmailComputerAccess } from '../core/gmail-access-policy.js';
 import type { FastifyRequest } from 'fastify';
 import { defaultSettings } from '../core/settings.js';
 import { ToolFailure, ToolRefusal } from '../core/tool-registry.js';
@@ -642,6 +643,7 @@ export async function runPcAct(
     throw new ToolRefusal("I won't handle passwords, payment-card numbers, one-time codes, or sensitive identity numbers.");
   }
 
+  refuseGmailComputerAccess(input.goal);
   const runStartedAt = performance.now();
   const deadline = AbortSignal.any([signal, AbortSignal.timeout(maxRunMs)]);
   const goal = input.goal.trim();
@@ -655,6 +657,7 @@ export async function runPcAct(
     try {
       const rawSnapshot = await bridge.observe(deadline);
       if (!validSnapshot(rawSnapshot)) throw new ToolFailure('The active Windows application could not be safely observed.');
+      refuseGmailComputerAccess(rawSnapshot.application);
       let snapshot: PcActSnapshot = rawSnapshot;
       let capture: PcActCapture | undefined;
       if (rawSnapshot.elements.length < minActionableElements &&
