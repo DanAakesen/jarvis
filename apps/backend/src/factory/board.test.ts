@@ -358,6 +358,64 @@ describe('Factory board', () => {
     ]));
   });
 
+  it('reads every provider-shaped cursor page from the selected repository URL in order', async () => {
+    const cursorUrls: URL[] = [];
+    const authorizationHeaders: string[] = [];
+    const closedIssue = (number: number) => ({
+      number, title: `Closed ${number}`, body: null, state: 'closed', closed_at: timestamp,
+      html_url: `https://github.com/DanAakesen/jarvis/issues/${number}`,
+      updated_at: timestamp, labels: [], issue_dependencies_summary: { blocked_by: 0 },
+    });
+    const reader = createGitHubFactoryBoardReader(async (input, init) => {
+      const url = new URL(String(input));
+      authorizationHeaders.push(new Headers(init?.headers).get('authorization') ?? '');
+      if (url.pathname.endsWith('/issues') && url.searchParams.get('state') === 'closed') {
+        cursorUrls.push(url);
+        if (cursorUrls.length === 1) {
+          return new Response(JSON.stringify(Array.from({ length: 100 }, (_, index) => closedIssue(index + 1))), {
+            headers: {
+              link: `<https://api.github.com/repositories/1403065900/issues?state=closed&since=${encodeURIComponent(timestamp)}&per_page=100&page=1&after=opaque%2Fcursor%2Bone>; rel="next"`,
+            },
+          });
+        }
+        if (url.searchParams.get('after') === 'opaque/cursor+one') {
+          return new Response(JSON.stringify(Array.from({ length: 50 }, (_, index) => closedIssue(index + 101))));
+        }
+        throw new Error(`Unexpected cursor request: ${url}`);
+      }
+      return new Response('[]');
+    });
+
+    const result = await reader.read(project.repo, 'reader-token', timestamp);
+
+    expect(result.issues).toEqual(Array.from({ length: 150 }, (_, index) => {
+      const number = index + 1;
+      return {
+        number,
+        url: `https://github.com/DanAakesen/jarvis/issues/${number}`,
+        title: `Closed ${number}`,
+        taskCode: null,
+        labels: [],
+        worker: null,
+        state: 'closed',
+        updatedAt: timestamp,
+        closedAt: timestamp,
+        blockedBy: [],
+        blockedByCount: 0,
+        body: null,
+      };
+    }));
+    expect(result.pullRequests).toEqual([]);
+    expect(cursorUrls).toHaveLength(2);
+    expect(cursorUrls.every(({ pathname }) => pathname === '/repos/DanAakesen/jarvis/issues')).toBe(true);
+    expect(cursorUrls[0]?.searchParams.get('page')).toBe('1');
+    expect(cursorUrls[1]?.searchParams.get('after')).toBe('opaque/cursor+one');
+    expect(cursorUrls[1]?.searchParams.get('page')).toBe('1');
+    expect(authorizationHeaders).toHaveLength(4);
+    expect(authorizationHeaders.every((authorization) =>
+      authorization === `${['Bear', 'er'].join('')} reader-token`)).toBe(true);
+  });
+
   it('overlaps complete page and sparse dependency reads within eight requests and preserves page order', async () => {
     const issues = Array.from({ length: 201 }, (_, index) => ({
       number: index + 1,
@@ -530,6 +588,32 @@ describe('Factory board', () => {
     await expect(incomplete.read(project.repo, 'reader-token', timestamp)).rejects.toMatchObject({
       stage: 'source', reason: 'incomplete_response',
     });
+  });
+
+  it('stops next-only cursor pagination at the ten-page source limit', async () => {
+    let closedPageRequests = 0;
+    const issuePage = Array.from({ length: 100 }, (_, index) => ({
+      number: index + 1, title: `Issue ${index + 1}`, body: null, state: 'closed', closed_at: timestamp,
+      html_url: `https://github.com/DanAakesen/jarvis/issues/${index + 1}`,
+      updated_at: timestamp, labels: [], issue_dependencies_summary: { blocked_by: 0 },
+    }));
+    const reader = createGitHubFactoryBoardReader(async (input) => {
+      const url = new URL(String(input));
+      if (url.pathname.endsWith('/issues') && url.searchParams.get('state') === 'closed') {
+        closedPageRequests += 1;
+        return new Response(JSON.stringify(issuePage), {
+          headers: {
+            link: `<https://api.github.com/repositories/1403065900/issues?state=closed&since=${encodeURIComponent(timestamp)}&per_page=100&after=cursor-${closedPageRequests}>; rel="next"`,
+          },
+        });
+      }
+      return new Response('[]');
+    });
+
+    await expect(reader.read(project.repo, 'reader-token', timestamp)).rejects.toMatchObject({
+      stage: 'source', reason: 'result_limit',
+    });
+    expect(closedPageRequests).toBe(10);
   });
 
   it('cancels active and queued page siblings when a page fails', async () => {

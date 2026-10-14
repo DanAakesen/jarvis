@@ -819,14 +819,16 @@ the same diagnostic allowlist. Token, source, task, release and response
 boundaries never export exception messages or provider content. The 25-second
 source deadline, ten-page/100-row pagination, one-minute/32-entry cache and
 1-MiB byte limits are unchanged. Within a snapshot, one request limiter caps all
-GitHub reads at eight concurrent requests. Pages are fetched concurrently after
-page 1 establishes the bounded range, returned in page order, and shared with
-dependency reads through that same limiter. Link metadata is validated against
-the requested repository endpoint and is used only to determine page numbers;
-request URLs are constructed locally. A failed page or dependency read cancels
-queued and active siblings. The deploy smoke identity cannot call this Dan-only
-endpoint; complete live board acceptance remains an authorized operator/UI gate
-in the runbook.
+GitHub reads at eight concurrent requests. Offset pages are fetched concurrently
+only when provider metadata supplies a consistent last page; next-only and
+opaque-cursor pages remain sequential. Results retain provider page order, and
+dependency reads share the same limiter. Link metadata is validated against the
+selected repository endpoint, including GitHub's numeric `/repositories/{id}`
+form, but its URL is never followed: requests are constructed locally against
+the configured `/repos/{owner}/{repo}` path, with only a validated page or
+opaque cursor copied. A failed page or dependency read cancels queued and active
+siblings. The deploy smoke identity cannot call this Dan-only endpoint; complete
+live board acceptance remains an authorized operator/UI gate in the runbook.
 
 P10-07's `TasksPage` consumes that contract directly with `isFactoryBoard`,
 verifies the requested project ID, and cancels stale project reads. It selects

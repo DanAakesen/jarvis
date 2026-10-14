@@ -254,15 +254,34 @@ function createRequestLimiter(fetchImpl: typeof fetch, token: string): RequestLi
   };
 }
 
-function paginationPage(response: Response, path: string, page: number): number {
+interface PagePosition {
+  readonly page?: number;
+  readonly after?: string;
+}
+
+interface PageLinks {
+  readonly next?: PagePosition;
+  readonly lastPage?: number;
+  readonly repositoryId?: string;
+}
+
+function paginationPage(response: Response, path: string, position: PagePosition): PageLinks {
   const header = response.headers.get('link');
-  if (!header) return page;
+  if (!header) return {};
+  if (header.length > 8192) throw new FactoryBoardReadError('source', 'invalid_response');
 
   const baseUrl = new URL(`${githubApi}${path}`);
+  const repositoryPath = /^\/repos\/[^/]+\/[^/]+(?=\/|$)/u.exec(baseUrl.pathname)?.[0];
+  if (!repositoryPath) throw new FactoryBoardReadError('source', 'invalid_response');
+  const endpointSuffix = baseUrl.pathname.slice(repositoryPath.length);
   const expectedQuery = [...baseUrl.searchParams.entries()].sort(([leftKey, leftValue], [rightKey, rightValue]) =>
     leftKey.localeCompare(rightKey) || leftValue.localeCompare(rightValue));
   const relations = new Map<string, number>();
-  for (const entry of header.split(/,\s*(?=<)/u)) {
+  let next: PagePosition | undefined;
+  let repositoryId: string | undefined;
+  const entries = header.split(/,\s*(?=<)/u);
+  if (entries.length > 4) throw new FactoryBoardReadError('source', 'invalid_response');
+  for (const entry of entries) {
     const trimmed = entry.trim();
     const closingBracket = trimmed.indexOf('>');
     if (!trimmed.startsWith('<') || closingBracket <= 1) {
@@ -287,35 +306,77 @@ function paginationPage(response: Response, path: string, page: number): number 
     } catch {
       throw new FactoryBoardReadError('source', 'invalid_response');
     }
-    const linkPage = url.searchParams.get('page');
-    const linkPageNumber = linkPage === null ? NaN : Number(linkPage);
+    let linkRepositoryId: string | undefined;
+    if (url.pathname !== baseUrl.pathname) {
+      const canonicalPrefix = '/repositories/';
+      if (!url.pathname.startsWith(canonicalPrefix)) {
+        throw new FactoryBoardReadError('source', 'invalid_response');
+      }
+      const canonicalPath = url.pathname.slice(canonicalPrefix.length);
+      const slash = canonicalPath.indexOf('/');
+      linkRepositoryId = slash < 0 ? canonicalPath : canonicalPath.slice(0, slash);
+      const suffix = slash < 0 ? '' : canonicalPath.slice(slash);
+      if (!/^[1-9]\d{0,19}$/u.test(linkRepositoryId) || suffix !== endpointSuffix) {
+        throw new FactoryBoardReadError('source', 'invalid_response');
+      }
+      if (repositoryId !== undefined && repositoryId !== linkRepositoryId) {
+        throw new FactoryBoardReadError('source', 'incomplete_response');
+      }
+      repositoryId = linkRepositoryId;
+    }
+    const pageValues = url.searchParams.getAll('page');
+    const cursorValues = url.searchParams.getAll('after');
+    const linkPage = pageValues[0];
+    const linkPageNumber = linkPage === undefined || !/^[1-9]\d*$/u.test(linkPage) ? NaN : Number(linkPage);
+    const cursor = cursorValues[0];
     const actualQuery = [...url.searchParams.entries()]
-      .filter(([key]) => key !== 'page' && key !== 'per_page')
+      .filter(([key]) => key !== 'page' && key !== 'per_page' && key !== 'after')
       .sort(([leftKey, leftValue], [rightKey, rightValue]) =>
         leftKey.localeCompare(rightKey) || leftValue.localeCompare(rightValue));
-    if (url.origin !== githubApi || url.pathname !== baseUrl.pathname || url.username || url.password ||
-        url.hash || url.port || url.searchParams.getAll('page').length !== 1 ||
+    if (url.origin !== githubApi || url.username || url.password || url.hash || url.port ||
         url.searchParams.getAll('per_page').length !== 1 || url.searchParams.get('per_page') !== String(pageSize) ||
-        !Number.isSafeInteger(linkPageNumber) || linkPageNumber < 1 ||
+        pageValues.length > 1 || cursorValues.length > 1 ||
+        (pageValues.length !== 1 && cursorValues.length !== 1) ||
+        (pageValues.length === 1 && (!Number.isSafeInteger(linkPageNumber) || linkPageNumber < 1)) ||
+        (cursorValues.length === 1 && (!cursor || cursor.length > 2048)) ||
+        (pageValues.length === 1 && cursorValues.length === 1 && linkPageNumber !== 1) ||
         JSON.stringify(actualQuery) !== JSON.stringify(expectedQuery) ||
         !['first', 'prev', 'next', 'last'].includes(relation) || relations.has(relation)) {
       throw new FactoryBoardReadError('source', 'invalid_response');
     }
-    relations.set(relation, linkPageNumber);
+    const paginationValue = cursorValues.length === 1 ? undefined : linkPageNumber;
+    if (relation === 'next') {
+      if (paginationValue === undefined) {
+        next = { ...(pageValues.length === 1 ? { page: linkPageNumber } : {}), after: cursor! };
+      } else {
+        next = { page: paginationValue };
+      }
+    } else if (relation === 'last') {
+      if (paginationValue === undefined) throw new FactoryBoardReadError('source', 'invalid_response');
+      relations.set(relation, paginationValue);
+    } else if (paginationValue !== undefined) {
+      relations.set(relation, paginationValue);
+    } else {
+      throw new FactoryBoardReadError('source', 'invalid_response');
+    }
   }
 
-  const lastPage = relations.get('last') ?? page;
-  const nextPage = relations.get('next');
-  if ((nextPage !== undefined) !== (page < lastPage) ||
-      (nextPage !== undefined && nextPage !== page + 1) ||
-      lastPage < page ||
-      (relations.has('last') && !relations.has('next') && lastPage !== page) ||
+  const lastPage = relations.get('last');
+  const requestedPage = position.page;
+  if ((position.after !== undefined && lastPage !== undefined) ||
+      (position.after === undefined && requestedPage !== undefined &&
+        next?.after === undefined && next?.page !== undefined && next.page !== requestedPage + 1) ||
+      (requestedPage !== undefined && lastPage !== undefined &&
+        ((next !== undefined) !== (requestedPage < lastPage) || lastPage < requestedPage)) ||
       (relations.has('first') && relations.get('first') !== 1) ||
-      (relations.has('prev') && (page < 2 || relations.get('prev') !== page - 1)) ||
-      (page === 1 && relations.has('prev'))) {
+      (relations.has('prev') &&
+        (requestedPage === undefined || requestedPage < 2 || relations.get('prev') !== requestedPage - 1)) ||
+      (requestedPage === 1 && relations.has('prev')) ||
+      (next?.after !== undefined && lastPage !== undefined)) {
     throw new FactoryBoardReadError('source', 'invalid_response');
   }
-  return lastPage;
+  return { ...(next ? { next } : {}), ...(lastPage !== undefined ? { lastPage } : {}),
+    ...(repositoryId ? { repositoryId } : {}) };
 }
 
 async function readPages(
@@ -323,32 +384,87 @@ async function readPages(
   path: string,
   signal: AbortSignal,
 ): Promise<unknown[]> {
-  async function readPage(page: number, pageSignal = signal): Promise<{ items: unknown[]; lastPage: number }> {
-    const url = `${githubApi}${path}${path.includes('?') ? '&' : '?'}per_page=${pageSize}&page=${page}`;
-    const { response, result } = await limiter.read(url, pageSignal);
-    if (!Array.isArray(result) || result.length > pageSize) throw new FactoryBoardReadError('source', 'invalid_response');
-    const lastPage = paginationPage(response, path, page);
-    if (lastPage > page && result.length !== pageSize || lastPage > maxPages) {
-      throw new FactoryBoardReadError('source', lastPage > maxPages ? 'result_limit' : 'incomplete_response');
+  async function readPage(
+    position: PagePosition,
+    pageSignal = signal,
+  ): Promise<{ items: unknown[]; links: PageLinks }> {
+    const url = new URL(`${githubApi}${path}`);
+    url.searchParams.set('per_page', String(pageSize));
+    if (position.after !== undefined) {
+      if (position.page === undefined) url.searchParams.delete('page');
+      else url.searchParams.set('page', String(position.page));
+      url.searchParams.set('after', position.after);
+    } else {
+      url.searchParams.delete('after');
+      url.searchParams.set('page', String(position.page));
     }
-    if (lastPage > 1 && page === lastPage && result.length === 0) {
+    const { response, result } = await limiter.read(url.toString(), pageSignal);
+    if (!Array.isArray(result) || result.length > pageSize) throw new FactoryBoardReadError('source', 'invalid_response');
+    const links = paginationPage(response, path, position);
+    if (links.lastPage !== undefined && links.lastPage > maxPages) {
+      throw new FactoryBoardReadError('source', 'result_limit');
+    }
+    if (links.next && result.length !== pageSize) {
       throw new FactoryBoardReadError('source', 'incomplete_response');
     }
-    return { items: result, lastPage };
+    if ((position.page !== 1 || position.after !== undefined) && result.length === 0) {
+      throw new FactoryBoardReadError('source', 'incomplete_response');
+    }
+    return { items: result, links };
   }
 
-  const first = await readPage(1);
-  const pages = await readTogether(
-    Array.from({ length: first.lastPage - 1 }, (_, index) => async (pageSignal) => {
-      const result = await readPage(index + 2, pageSignal);
-      if (result.lastPage !== first.lastPage) {
+  const first = await readPage({ page: 1 });
+  const items = [...first.items];
+  let repositoryId = first.links.repositoryId;
+  let next = first.links.next;
+  let pageCount = 1;
+  const lastPage = first.links.lastPage;
+  if (lastPage !== undefined) {
+    if (lastPage > 1 && next?.page !== 2) {
+      throw new FactoryBoardReadError('source', 'incomplete_response');
+    }
+    const pages = await readTogether(
+      Array.from({ length: lastPage - 1 }, (_, index) => async (pageSignal) => {
+        const page = index + 2;
+        const result = await readPage({ page }, pageSignal);
+        if (result.links.lastPage !== undefined && result.links.lastPage !== lastPage ||
+            (result.links.next?.page !== undefined && result.links.next.page !== page + 1) ||
+            (page < lastPage && result.links.next?.page !== page + 1) ||
+            (page === lastPage && result.links.next !== undefined) ||
+            (repositoryId !== undefined && result.links.repositoryId !== undefined &&
+              result.links.repositoryId !== repositoryId)) {
+          throw new FactoryBoardReadError('source', 'incomplete_response');
+        }
+        repositoryId ??= result.links.repositoryId;
+        return result.items;
+      }),
+      signal,
+    );
+    items.push(...pages.flat());
+  } else {
+    const seenCursors = new Set<string>();
+    while (next) {
+      if (pageCount >= maxPages) throw new FactoryBoardReadError('source', 'result_limit');
+      if (next.after !== undefined) {
+        if (seenCursors.has(next.after)) throw new FactoryBoardReadError('source', 'incomplete_response');
+        seenCursors.add(next.after);
+      }
+      const requested = next;
+      const result = await readPage(requested);
+      if (repositoryId !== undefined && result.links.repositoryId !== undefined &&
+          result.links.repositoryId !== repositoryId) {
         throw new FactoryBoardReadError('source', 'incomplete_response');
       }
-      return result;
-    }),
-    signal,
-  );
-  const items = [first, ...pages].flatMap(({ items: pageItems }) => pageItems);
+      repositoryId ??= result.links.repositoryId;
+      if (requested.after !== undefined && result.links.next !== undefined &&
+          result.links.next.after === undefined) {
+        throw new FactoryBoardReadError('source', 'incomplete_response');
+      }
+      items.push(...result.items);
+      next = result.links.next;
+      pageCount += 1;
+    }
+  }
   const identities = new Set<string>();
   for (const item of items) {
     const value = record(item);
