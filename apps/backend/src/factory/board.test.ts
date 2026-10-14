@@ -203,6 +203,47 @@ describe('Factory board', () => {
     unsubscribe();
   });
 
+  it('logs bounded phase timings and distinguishes source loads from cache hits', async () => {
+    const reader = vi.fn(async () => source);
+    const { app } = fixture(reader);
+    const info = vi.fn();
+    app.addHook('onRequest', async (request) => { request.log.info = info; });
+    const first = await app.inject({ url: '/factory/board?project=42', headers });
+    expect(first.statusCode).toBe(200);
+    expect(first.headers['content-type']).toContain('application/json');
+    const firstPhases = info.mock.calls
+      .filter(([, event]) => event === 'factory.board_phase')
+      .map(([fields]) => fields as Record<string, unknown>);
+    expect(firstPhases.map(({ stage }) => stage).sort()).toEqual([
+      'project', 'release', 'response', 'response', 'source', 'task', 'token',
+    ]);
+    expect(firstPhases.filter(({ stage }) => stage === 'response').map(({ part }) => part).sort())
+      .toEqual(['assemble', 'serialize']);
+    for (const phase of firstPhases) {
+      expect(phase).toMatchObject({
+        reqId: expect.stringMatching(/^[\da-f-]{36}$/u),
+        route: '/factory/board',
+      });
+      expect(phase.durationMs).toEqual(expect.any(Number));
+      expect(phase.durationMs as number).toBeGreaterThanOrEqual(0);
+      expect(phase.durationMs as number).toBeLessThanOrEqual(60_000);
+    }
+    expect(info.mock.calls.find(([, event]) => event === 'factory.board_read_timing')?.[0])
+      .toMatchObject({ cachePath: 'source_load', stale: false, outcome: 'success', statusCode: 200 });
+
+    info.mockClear();
+    const second = await app.inject({ url: '/factory/board?project=42', headers });
+    expect(second.statusCode).toBe(200);
+    expect(second.json()).toEqual(first.json());
+    expect(reader).toHaveBeenCalledOnce();
+    const cachedPhases = info.mock.calls
+      .filter(([, event]) => event === 'factory.board_phase')
+      .map(([fields]) => fields as Record<string, unknown>);
+    expect(cachedPhases.map(({ stage }) => stage)).toEqual(['project', 'response']);
+    expect(info.mock.calls.find(([, event]) => event === 'factory.board_read_timing')?.[0])
+      .toMatchObject({ cachePath: 'cache_hit', stale: false, outcome: 'success', statusCode: 200 });
+  });
+
   it.each([
     ['token', new GitHubAppRequestError(401), 'request_failed', 401],
     ['token', new GitHubAppRequestError(403), 'request_failed', 403],
@@ -225,9 +266,10 @@ describe('Factory board', () => {
     const response = await app.inject({ url: '/factory/board?project=42', headers });
     expect(response.statusCode).toBe(502);
     expect(response.json()).toEqual({ error: 'Factory board unavailable' });
-    expect(warn).toHaveBeenCalledExactlyOnceWith(
-      { stage, reason, status, stale: false }, 'factory.board_read_failed',
-    );
+    expect(warn).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
+      stage, reason, status, stale: false, route: '/factory/board',
+      reqId: expect.stringMatching(/^[\da-f-]{36}$/u),
+    }), 'factory.board_read_failed');
     expect(JSON.stringify(warn.mock.calls)).not.toContain('sensitive');
     if (stage === 'token') expect(reader).not.toHaveBeenCalled();
   });
@@ -240,9 +282,10 @@ describe('Factory board', () => {
     vi.mocked(taskStore.list).mockResolvedValueOnce([{ ...task, startedAt: 'invalid' }]);
     const failed = await app.inject({ url: '/factory/board?project=42', headers });
     expect(failed.statusCode).toBe(502);
-    expect(warn).toHaveBeenCalledWith({
+    expect(warn).toHaveBeenCalledWith(expect.objectContaining({
       stage: 'response', reason: 'invalid_response', status: undefined, stale: false,
-    }, 'factory.board_read_failed');
+      route: '/factory/board', reqId: expect.stringMatching(/^[\da-f-]{36}$/u),
+    }), 'factory.board_read_failed');
     const response = await app.inject({ url: '/factory/board?project=42', headers });
     expect(response.statusCode).toBe(200);
     expect(isFactoryBoard(response.json())).toBe(true);
@@ -254,20 +297,32 @@ describe('Factory board', () => {
     const reader = vi.fn(async () => source);
     const { app } = fixture(reader);
     const warn = vi.fn();
-    app.addHook('onRequest', async (request) => { request.log.warn = warn; });
+    const info = vi.fn();
+    app.addHook('onRequest', async (request) => {
+      request.log.warn = warn;
+      request.log.info = info;
+    });
     let now = Date.now();
     app.factoryBoardCache = new FactoryBoardCache(() => now, 10);
     await app.inject({ url: '/factory/board?project=42', headers });
     now += 11;
+    info.mockClear();
     reader.mockRejectedValueOnce(error);
     const response = await app.inject({ url: '/factory/board?project=42', headers });
     expect(response.statusCode).toBe(200);
     expect(response.json().stale).toBe(true);
     expect(isFactoryBoard(response.json())).toBe(true);
     expect(response.body).not.toContain('failure');
-    expect(warn).toHaveBeenCalledExactlyOnceWith({
+    expect(warn).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
       stage: 'source', reason: 'request_failed', status: 503, stale: true,
-    }, 'factory.board_read_failed');
+      route: '/factory/board', reqId: expect.stringMatching(/^[\da-f-]{36}$/u),
+    }), 'factory.board_read_failed');
+    const failureFields = warn.mock.calls[0]![0] as Record<string, unknown>;
+    expect(info.mock.calls.find(([, event]) => event === 'factory.board_read_timing')?.[0])
+      .toMatchObject({
+        reqId: failureFields.reqId, cachePath: 'source_load', stale: true,
+        outcome: 'success', statusCode: 200, route: '/factory/board',
+      });
   });
 
   it('retains the response byte limit with a safe response-stage diagnostic', async () => {
@@ -282,9 +337,10 @@ describe('Factory board', () => {
     app.addHook('onRequest', async (request) => { request.log.warn = warn; });
     const response = await app.inject({ url: '/factory/board?project=42', headers });
     expect(response.statusCode).toBe(413);
-    expect(warn).toHaveBeenCalledExactlyOnceWith({
+    expect(warn).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
       stage: 'response', reason: 'response_too_large', status: 413,
-    }, 'factory.board_read_failed');
+      route: '/factory/board', reqId: expect.stringMatching(/^[\da-f-]{36}$/u),
+    }), 'factory.board_read_failed');
   });
 
   it.each([401, 403, 429, 500, 503])('preserves source HTTP %s without reading the external error body', async (status) => {
@@ -870,8 +926,10 @@ describe('Factory board', () => {
     now += 11;
     let reject!: (error: unknown) => void;
     const load = vi.fn(() => new Promise<FactoryBoard>((_resolve, fail) => { reject = fail; }));
-    const first = cache.get(project.id, load);
-    const second = cache.get(project.id, load);
+    const cachePaths: string[] = [];
+    const first = cache.get(project.id, load, (path) => cachePaths.push(path));
+    const second = cache.get(project.id, load, (path) => cachePaths.push(path));
+    expect(cachePaths).toEqual(['source_load', 'shared_wait']);
     const failure = new FactoryBoardReadError('token', 'invalid_token_lifetime');
     const results = Promise.allSettled([first, second]);
     reject(failure);

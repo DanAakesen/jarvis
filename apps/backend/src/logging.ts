@@ -82,6 +82,7 @@ const events = new Set([
   'credentials.codex_renewal', 'dispatcher.start_failed',
   'tool.invalid_arguments', 'decision.provider_unavailable',
   'factory.issue_create_outcome_uncertain',
+  'factory.board_phase', 'factory.board_read_timing', 'factory.board_invalidated',
   'phone.call_callback_processed', 'phone.incoming_call_rejected', 'phone.session_started',
 ]);
 
@@ -139,15 +140,63 @@ const boardReadReasons = new Set([
   'response_too_large', 'result_limit', 'incomplete_response', 'invalid_token_lifetime',
   'invalid_token_permissions', 'unexpected',
 ]);
+const boardReadOutcomes = new Set(['success', 'failure', 'not_found', 'unavailable']);
+const boardCachePaths = new Set(['not_started', 'cache_hit', 'shared_wait', 'source_load']);
+const boardInvalidationOrigins = new Set(['task_event', 'github_webhook']);
+
+function safeRequestId(value: unknown): value is string {
+  return typeof value === 'string' && /^[\da-f-]{36}$/iu.test(value);
+}
+
+function safeBoardRoute(value: unknown): value is string {
+  return typeof value === 'string' && /^\/[\w/:-]{0,100}$/u.test(value);
+}
+
+function safeBoardDuration(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 60_000;
+}
 
 function safeFields(input: Record<string, unknown>): Record<string, unknown> {
   if (input.msg === 'factory.board_read_failed' || input.msg === 'factory.board_project_lookup_failed') {
     const fields: Record<string, unknown> = {};
+    if (safeRequestId(input.reqId)) fields.reqId = input.reqId;
+    if (safeBoardRoute(input.route)) fields.route = input.route;
     if (typeof input.stage === 'string' && boardReadStages.has(input.stage)) fields.stage = input.stage;
     if (typeof input.reason === 'string' && boardReadReasons.has(input.reason)) fields.reason = input.reason;
     if (typeof input.status === 'number' && Number.isInteger(input.status) &&
         input.status >= 100 && input.status <= 599) fields.status = input.status;
     if (typeof input.stale === 'boolean') fields.stale = input.stale;
+    return fields;
+  }
+  if (input.msg === 'factory.board_phase') {
+    const fields: Record<string, unknown> = {};
+    if (safeRequestId(input.reqId)) fields.reqId = input.reqId;
+    if (safeBoardRoute(input.route)) fields.route = input.route;
+    if (typeof input.stage === 'string' && boardReadStages.has(input.stage)) fields.stage = input.stage;
+    if (safeBoardDuration(input.durationMs)) fields.durationMs = input.durationMs;
+    return fields;
+  }
+  if (input.msg === 'factory.board_read_timing') {
+    const fields: Record<string, unknown> = {};
+    if (safeRequestId(input.reqId)) fields.reqId = input.reqId;
+    if (safeBoardRoute(input.route)) fields.route = input.route;
+    if (typeof input.outcome === 'string' && boardReadOutcomes.has(input.outcome)) fields.outcome = input.outcome;
+    if (typeof input.cachePath === 'string' && boardCachePaths.has(input.cachePath)) fields.cachePath = input.cachePath;
+    if (typeof input.stale === 'boolean') fields.stale = input.stale;
+    if (Number.isInteger(input.statusCode) && Number(input.statusCode) >= 100 &&
+        Number(input.statusCode) <= 599) fields.statusCode = input.statusCode;
+    return fields;
+  }
+  if (input.msg === 'factory.board_invalidated') {
+    const fields: Record<string, unknown> = {};
+    if (typeof input.origin === 'string' && boardInvalidationOrigins.has(input.origin)) fields.origin = input.origin;
+    if (typeof input.projectId === 'string' && /^[1-9]\d{0,18}$/u.test(input.projectId)) {
+      fields.projectId = input.projectId;
+    }
+    if (Number.isSafeInteger(input.version) && Number(input.version) >= 1 &&
+        Number(input.version) <= 1_000_000_000) fields.version = input.version;
+    if (input.scope === 'all_projects') fields.scope = input.scope;
+    if (safeRequestId(input.reqId)) fields.reqId = input.reqId;
     return fields;
   }
   if (input.msg === 'visual.path') {

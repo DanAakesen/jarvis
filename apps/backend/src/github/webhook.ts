@@ -106,7 +106,7 @@ export function createGithubWebhookModule(options: WebhookOptions): BackendModul
           try {
             const project = (await app.projectStore?.list())?.find((candidate) =>
               candidate.active && candidate.repo.toLowerCase() === repo.toLowerCase());
-            if (project) app.publishFactoryBoardChange(project.id);
+            if (project) app.publishFactoryBoardChange(project.id, 'github_webhook', request.id);
           } catch {
             request.log.warn('factory.board_webhook_update_failed');
           }

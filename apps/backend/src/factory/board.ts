@@ -1,8 +1,9 @@
 import type {
   BoardCard, FactoryBoard, FactoryBoardColumn, FactoryBoardColumnId, FactoryBoardTask,
 } from '@jarvis/contracts';
+import { performance } from 'node:perf_hooks';
 import { isFactoryBoard } from '@jarvis/contracts';
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { GitHubAppTokenIssuer } from '../github-app.js';
 import type { TaskRecord } from './task-store.js';
 import { boardReadError, FactoryBoardReadError, readBoardStage } from './board-errors.js';
@@ -26,6 +27,28 @@ const linkedIssuePattern = /\b(?:fixes|closes|resolves)\s+(?:#(\d+)|([A-Za-z0-9_
 const decisionLabel = 'needs-decision';
 const deferredLabel = 'deferred';
 const closedIssueWindowMs = 14 * 24 * 60 * 60 * 1000;
+type FactoryBoardStage = 'project' | 'token' | 'source' | 'task' | 'release' | 'response';
+type FactoryBoardCachePath = 'cache_hit' | 'shared_wait' | 'source_load';
+
+async function logBoardPhase<T>(
+  request: FastifyRequest,
+  stage: FactoryBoardStage,
+  work: () => Promise<T>,
+  part?: 'assemble' | 'serialize',
+): Promise<T> {
+  const startedAt = performance.now();
+  try {
+    return await work();
+  } finally {
+    request.log.info({
+      reqId: request.id,
+      route: request.routeOptions.url,
+      stage,
+      ...(part === undefined ? {} : { part }),
+      durationMs: Math.min(60_000, Math.max(0, Math.round(performance.now() - startedAt))),
+    }, 'factory.board_phase');
+  }
+}
 
 export interface FactoryBoardIssue {
   readonly number: number;
@@ -644,24 +667,31 @@ export class FactoryBoardCache {
 
   constructor(private readonly now: () => number = Date.now, private readonly ttlMs = 60_000) {}
 
-  async get(projectId: string, load: () => Promise<FactoryBoard>): Promise<{
+  async get(
+    projectId: string,
+    load: () => Promise<FactoryBoard>,
+    onCachePath?: (path: FactoryBoardCachePath) => void,
+  ): Promise<{
     board: FactoryBoard; stale: boolean; failure?: unknown;
   }> {
     const key = projectId;
     const cached = this.entries.get(key);
     if (cached && cached.expiresAt > this.now()) {
+      onCachePath?.('cache_hit');
       this.entries.delete(key);
       this.entries.set(key, cached);
       return { board: cached.board, stale: false };
     }
     const pending = this.pending.get(key);
     if (pending?.generation === this.generation) {
+      onCachePath?.('shared_wait');
       return pending.promise.then((board) => ({ board, stale: false }), (error: unknown) => {
         if (cached) return { board: cached.board, stale: true, failure: error };
         throw error;
       });
     }
 
+    onCachePath?.('source_load');
     const generation = this.generation;
     const promise = load().then((board) => {
       if (generation === this.generation) {
@@ -813,60 +843,97 @@ export function registerFactoryBoardRoute(app: FastifyInstance): void {
       },
     },
   }, async (request, reply) => {
-    const projects = app.projectStore;
-    const tasks = app.taskStore;
-    const releases = app.releaseViewStore;
-    const tokenIssuer: GitHubAppTokenIssuer | null = app.githubAppTokenIssuer;
-    if (!isSqlBigInt(request.query.project)) return reply.code(400).send({ error: 'Invalid project ID' });
-    if (!projects || !tasks || !releases || !tokenIssuer) {
-      return reply.code(503).send({ error: 'Factory board service unavailable' });
-    }
-    let project;
+    let outcome: 'success' | 'failure' | 'not_found' | 'unavailable' = 'failure';
+    let cachePath: FactoryBoardCachePath | 'not_started' = 'not_started';
+    let stale = false;
     try {
-      project = (await projects.list()).find((candidate) => candidate.id === request.query.project && candidate.active);
-    } catch (error) {
-      const { stage, reason, status } = boardReadError('project', error);
-      request.log.warn({ stage, reason, status }, 'factory.board_project_lookup_failed');
-      return reply.code(503).send({ error: 'Factory board service unavailable' });
-    }
-    if (!project) return reply.code(404).send({ error: 'Project not found' });
+      const projects = app.projectStore;
+      const tasks = app.taskStore;
+      const releases = app.releaseViewStore;
+      const tokenIssuer: GitHubAppTokenIssuer | null = app.githubAppTokenIssuer;
+      if (!isSqlBigInt(request.query.project)) return reply.code(400).send({ error: 'Invalid project ID' });
+      if (!projects || !tasks || !releases || !tokenIssuer) {
+        outcome = 'unavailable';
+        return reply.code(503).send({ error: 'Factory board service unavailable' });
+      }
+      let project;
+      try {
+        project = await logBoardPhase(request, 'project', async () =>
+          (await projects.list()).find((candidate) => candidate.id === request.query.project && candidate.active));
+      } catch (error) {
+        const { stage, reason, status } = boardReadError('project', error);
+        request.log.warn({
+          reqId: request.id, route: request.routeOptions.url, stage, reason, status,
+        }, 'factory.board_project_lookup_failed');
+        outcome = 'unavailable';
+        return reply.code(503).send({ error: 'Factory board service unavailable' });
+      }
+      if (!project) {
+        outcome = 'not_found';
+        return reply.code(404).send({ error: 'Project not found' });
+      }
 
-    try {
-      const { board, stale, failure } = await app.factoryBoardCache.get(project.id, async () => {
-        const now = Date.now();
-        const closedSince = new Date(now - closedIssueWindowMs).toISOString();
-        const token = await readBoardStage('token', () => tokenIssuer.issueForRepositoryRead(project.repo));
-        const [source, taskRecords, releaseRecords] = await Promise.all([
-          readBoardStage('source', () => app.factoryBoardReader.read(project.repo, token, closedSince)),
-          readBoardStage('task', () => tasks.list({ projectId: project!.id, limit: 1000, offset: 0 })),
-          readBoardStage('release', () => releases.read(project!.id)),
-        ]);
-        const board = createFactoryBoard(
-          project!.id,
-          project!.repo,
-          source,
-          taskRecords,
-          releaseRecords.pullRequests,
-          now,
-        );
-        if (!isFactoryBoard(board)) throw new FactoryBoardReadError('response', 'invalid_response');
-        return board;
-      });
-      if (stale) {
-        const { stage, reason, status } = boardReadError('response', failure);
-        request.log.warn({ stage, reason, status, stale: true }, 'factory.board_read_failed');
+      try {
+        const { board, stale: usedStale, failure } = await app.factoryBoardCache.get(project.id, async () => {
+          const now = Date.now();
+          const closedSince = new Date(now - closedIssueWindowMs).toISOString();
+          const token = await logBoardPhase(request, 'token', () =>
+            readBoardStage('token', () => tokenIssuer.issueForRepositoryRead(project.repo)));
+          const [source, taskRecords, releaseRecords] = await Promise.all([
+            logBoardPhase(request, 'source', () =>
+              readBoardStage('source', () => app.factoryBoardReader.read(project.repo, token, closedSince))),
+            logBoardPhase(request, 'task', () =>
+              readBoardStage('task', () => tasks.list({ projectId: project!.id, limit: 1000, offset: 0 }))),
+            logBoardPhase(request, 'release', () =>
+              readBoardStage('release', () => releases.read(project!.id))),
+          ]);
+          return logBoardPhase(request, 'response', async () => {
+            const board = createFactoryBoard(
+              project!.id,
+              project!.repo,
+              source,
+              taskRecords,
+              releaseRecords.pullRequests,
+              now,
+            );
+            if (!isFactoryBoard(board)) throw new FactoryBoardReadError('response', 'invalid_response');
+            return board;
+          }, 'assemble');
+        }, (path) => { cachePath = path; });
+        stale = usedStale;
+        if (stale) {
+          const { stage, reason, status } = boardReadError('response', failure);
+          request.log.warn({
+            reqId: request.id, route: request.routeOptions.url, stage, reason, status, stale: true,
+          }, 'factory.board_read_failed');
+        }
+        const response = { ...board, stale };
+        const serialized = await logBoardPhase(request, 'response', async () => JSON.stringify(response), 'serialize');
+        if (Buffer.byteLength(serialized) > 1024 * 1024) {
+          request.log.warn({
+            reqId: request.id, route: request.routeOptions.url,
+            stage: 'response', reason: 'response_too_large', status: 413,
+          }, 'factory.board_read_failed');
+          return reply.code(413).send({ error: 'Factory board response too large' });
+        }
+        outcome = 'success';
+        return reply.header('Cache-Control', 'no-store').send(response);
+      } catch (error) {
+        const { stage, reason, status } = boardReadError('response', error);
+        request.log.warn({
+          reqId: request.id, route: request.routeOptions.url, stage, reason, status, stale: false,
+        }, 'factory.board_read_failed');
+        return reply.code(502).send({ error: 'Factory board unavailable' });
       }
-      const response = { ...board, stale };
-      const serialized = JSON.stringify(response);
-      if (Buffer.byteLength(serialized) > 1024 * 1024) {
-        request.log.warn({ stage: 'response', reason: 'response_too_large', status: 413 }, 'factory.board_read_failed');
-        return reply.code(413).send({ error: 'Factory board response too large' });
-      }
-      return reply.header('Cache-Control', 'no-store').send(response);
-    } catch (error) {
-      const { stage, reason, status } = boardReadError('response', error);
-      request.log.warn({ stage, reason, status, stale: false }, 'factory.board_read_failed');
-      return reply.code(502).send({ error: 'Factory board unavailable' });
+    } finally {
+      request.log.info({
+        reqId: request.id,
+        route: request.routeOptions.url,
+        outcome,
+        cachePath,
+        stale,
+        statusCode: reply.statusCode,
+      }, 'factory.board_read_timing');
     }
   });
 }

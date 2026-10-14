@@ -48,6 +48,51 @@ describe('structured log export', () => {
     },
   );
 
+  it.each(['factory.board_phase', 'factory.board_read_timing', 'factory.board_invalidated'])(
+    'exports only allowlisted fields for %s', (event) => {
+      const records: string[] = [];
+      const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });
+      const sink = { ...sdk, trackTrace: vi.fn() };
+      const logger = createLogger({ logLevel: 'info' }, sink, output);
+      const reqId = '00000000-0000-0000-0000-000000000000';
+      const fields = event === 'factory.board_phase'
+        ? { reqId, route: '/factory/board', stage: 'source', durationMs: 25 }
+        : event === 'factory.board_read_timing'
+          ? { reqId, route: '/factory/board', outcome: 'success', cachePath: 'cache_hit', stale: false, statusCode: 200 }
+          : { reqId, origin: 'github_webhook', projectId: '42', version: 3 };
+      logger.info(fields, event);
+      expect(JSON.parse(records[0]!)).toEqual({
+        level: 30, time: expect.any(Number), service: 'jarvis-backend', ...fields, msg: event,
+      });
+      logger.info({
+        ...fields,
+        route: 'https://private.example/path?token=secret',
+        stage: 'private-stage',
+        durationMs: 60_001,
+        outcome: 'private-outcome',
+        cachePath: 'private-path',
+        stale: 'private-stale',
+        statusCode: 600,
+        origin: 'private-origin',
+        projectId: 'private-project',
+        version: Number.MAX_SAFE_INTEGER,
+        scope: 'private-scope',
+        repo: 'private-repo',
+        body: 'private-body',
+        headers: { authorization: 'private-token' },
+      }, event);
+      expect(JSON.parse(records[1]!)).toEqual({
+        level: 30, time: expect.any(Number), service: 'jarvis-backend', reqId, msg: event,
+      });
+      expect(sink.trackTrace).toHaveBeenCalledTimes(2);
+      expect(sink.trackTrace).toHaveBeenLastCalledWith(expect.objectContaining({
+        message: event,
+        properties: { service: 'jarvis-backend', reqId },
+      }));
+      expect(records.join('') + JSON.stringify(sink.trackTrace.mock.calls)).not.toContain('private');
+    },
+  );
+
   it('names the WebSocket plugin warning without exporting framework error details', () => {
     const records: string[] = [];
     const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });
