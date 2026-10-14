@@ -9,6 +9,7 @@ from plan_status import (
     plan_tasks,
     reconcile_plan,
     task_status,
+    task_issue_map,
 )
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -155,6 +156,83 @@ class PlanStatusTests(unittest.TestCase):
         self.assertEqual(task_status("Not started", issue, []), "Not started")
         self.assertEqual(task_status("In progress", issue, []), "Not started")
         self.assertEqual(task_status("Blocked", issue, []), "Blocked")
+
+
+class FullTaskIdentifierTests(unittest.TestCase):
+    plan = """| ID | Issue | Task | Acceptance criteria | Depends on | Status |
+| --- | --- | --- | --- | --- | --- |
+| P9-99 |  | Legacy | Existing behavior | None | Not started |
+| P9-100 |  | Completed | Closed issue | P9-99 | Not started |
+|  P9-101  |  | Status page | Real checks | P9-99, P9-100 | Not started |
+| P12-106 |  | Blocked | Manual block | P9-100...102 | Blocked |
+| P9-12345 |  | New task: details | Tests | P9-100, P12-106 | Not started |
+"""
+    issues = [
+        {"number": 99, "title": "P9-99: Legacy", "state": "open"},
+        {"number": 100, "title": "P9-100: Completed", "state": "closed", "state_reason": "completed"},
+        {"number": 799, "title": "P9-101: Status page", "state": "open", "labels": [{"name": "Dan"}]},
+        {"number": 106, "title": "P12-106: Blocked", "state": "open", "labels": [{"name": "Copilot"}]},
+    ]
+
+    def test_full_plan_rows_and_issue_mapping_keep_whole_ids(self):
+        self.assertEqual(
+            [task["id"] for task in plan_tasks(self.plan)],
+            ["P9-99", "P9-100", "P9-101", "P12-106", "P9-12345"],
+        )
+        mapped = task_issue_map(self.issues)
+        self.assertEqual(list(mapped), ["P9-99", "P9-100", "P9-101", "P12-106"])
+        self.assertEqual(mapped["P9-101"]["number"], 799)
+
+    def test_reconciliation_is_idempotent_and_preserves_other_cells_and_policies(self):
+        once = reconcile_plan(self.plan, self.issues, [])
+        self.assertEqual(reconcile_plan(once, self.issues, []), once)
+        self.assertIn("|  P9-101  | [#799](https://github.com/DanAakesen/jarvis/issues/799)", once)
+        self.assertEqual(
+            [task["status"] for task in plan_tasks(once)],
+            ["Not started", "Complete", "In progress", "Blocked", "Not started"],
+        )
+        for original, updated in zip(self.plan.splitlines(), once.splitlines()):
+            for index, (before, after) in enumerate(zip(original.split("|"), updated.split("|"))):
+                if index not in {2, 6}:
+                    self.assertEqual(before, after)
+
+    def test_new_issue_generation_uses_full_id_and_dependencies(self):
+        pending = new_tasks(self.plan, self.issues, "DanAakesen/jarvis")
+        self.assertEqual(len(pending), 1)
+        self.assertEqual(pending[0]["task_id"], "P9-12345")
+        self.assertEqual(pending[0]["title"], "P9-12345: New task")
+        self.assertEqual(pending[0]["labels"], ["P9"])
+        self.assertEqual(pending[0]["depends_on"], ["P9-100", "P12-106"])
+
+    def test_dependency_ids_require_boundaries_and_deduplicate_without_shortening(self):
+        self.assertEqual(
+            dependencies_from_text("P9-99, P9-100; P12-106; P9-100"),
+            ["P9-99", "P9-100", "P12-106"],
+        )
+        self.assertEqual(dependencies_from_text("XP9-101 P9-101x P9-101_suffix"), [])
+        self.assertEqual(dependencies_from_text("P9-12345"), ["P9-12345"])
+
+    def test_full_ranges_expand_across_digit_widths_and_keep_legacy_order(self):
+        for value in ("P9-99...101", "P9-99\N{HORIZONTAL ELLIPSIS}P9-101", "P9-99\N{EN DASH}101", "P9-99-101"):
+            with self.subTest(value=value):
+                self.assertEqual(dependencies_from_text(value), ["P9-99", "P9-100", "P9-101"])
+        self.assertEqual(
+            dependencies_from_text("P12-106, P9-100...102, P9-101"),
+            ["P9-100", "P9-101", "P9-102", "P12-106"],
+        )
+        self.assertEqual(dependencies_from_text("P10-01\N{EN DASH}03"), ["P10-01", "P10-02", "P10-03"])
+        self.assertEqual(dependencies_from_text("P9-100...102x"), ["P9-100"])
+
+    def test_missing_title_or_row_separator_never_maps_a_shorter_id(self):
+        for title in ("P9-101", "P9-101:", "P9-101 Summary", "P9-101x: Summary"):
+            with self.subTest(title=title):
+                self.assertEqual(task_issue_map([{"title": title, "number": 101}]), {})
+        header = self.plan.splitlines()[0] + "\n"
+        for task_id in ("P9-101x", "P9-101 Summary", "P9-101:"):
+            plan = header + f"| {task_id} |  | Summary | Tests | None | Not started |\n"
+            with self.subTest(task_id=task_id):
+                self.assertEqual(plan_tasks(plan), [])
+                self.assertEqual(reconcile_plan(plan, self.issues, []), plan)
 
 
 if __name__ == "__main__":

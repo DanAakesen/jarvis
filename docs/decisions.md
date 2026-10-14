@@ -19,12 +19,14 @@ No backend, contract or dependency change. Local synthetic browser
 checks are not authenticated production or physical-phone acceptance.
 
 The coordinator authorised the smallest coupled release-gate correction in
-#815 after the title bot truncated P9-101 to P9-10. Both normalization and
-linked-issue extraction preserve full task numbers with at least two digits
-and an ID boundary, while retaining two-digit/WIP/bracket/fix-main/docs
-behavior. Existing Python CI discovers the new regressions; no other workflow
-change or new tooling. Restore the correct title only after pushing the fix
-and rerun exact-head gates.
+#815 after the title bot truncated P9-101 to P9-10. Normalization, linked-issue
+extraction and PLAN row/issue/dependency parsing preserve full task numbers
+with at least two digits and an ID boundary. Retain two-digit formatting,
+WIP/bracket/fix-main/docs behavior and all existing status/ownership policies;
+the separate reopened-issue policy is outside this correction. Existing
+Python CI discovers the title and PLAN regressions; no other workflow change
+or new tooling. Restore the correct title only after pushing the fix and
+rerun exact-head gates.
 
 ## Factory issue-number navigation uses the page snapshot (13 October 2026)
 

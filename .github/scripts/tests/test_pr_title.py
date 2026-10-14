@@ -60,7 +60,10 @@ class PrTitleTests(unittest.TestCase):
                 self.assertEqual(normalize(expected).stdout.strip(), expected)
 
     def test_an_id_boundary_and_nonempty_summary_are_required(self):
-        for title in ("P0-05", "P9-101", "P9-101x: Summary", "P9-101_suffix: Summary", "No task ID"):
+        for title in (
+            "P0-05", "P9-101", "P9-101:", "[P9-101]", "P12-106",
+            "P9-101x: Summary", "P9-101_suffix: Summary", "No task ID",
+        ):
             with self.subTest(title=title):
                 self.assertEqual(normalize(title).returncode, 1)
 

@@ -731,9 +731,10 @@ Declined in the audit (do not file): verbosity and max-output-token settings, no
 | P9-104 | [#796](https://github.com/DanAakesen/jarvis/issues/796) | Reconcile `docs/features.md` with completed tasks and verified production state | Correct targeted statuses with evidence; count Live/Built not verified/Offline only/Planned; record #787/#791 release, P9-82 chat-image logs with voice check outstanding, P10-04 backend/P10-07 web ownership, and Daily reuse of existing SQL without new infrastructure | — | Complete |
 
 #815's guarded merge caught the title bot truncating P9-101 to P9-10.
-The coordinator authorised the coupled normalizer/linked-ID correction and
-existing-style regressions in the same PR. All 48 script tests and Bash
-syntax pass locally; the new head needs fresh exact-head CI before merge.
+The coordinator authorised the coupled normalizer/linked-ID/PLAN-parser
+width and boundary correction with existing-style regressions in the same
+PR. All 54 script tests and Bash syntax pass locally; status/ownership policies
+are unchanged. The new head needs fresh exact-head CI before merge.
 Status release/authenticated acceptance remains pending.
 
 ### P10 — GitHub backlog as source of truth
