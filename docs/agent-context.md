@@ -1,6 +1,6 @@
 # Agent context
 
-## Accepted recovery and next Factory integration (14 October 2026)
+## Accepted recovery and Factory release (14 October 2026)
 
 Diagnostic #831 merged normally as `51bda5cb` after independent review,
 all ten actual jobs in CI `38618143799` and all three CodeQL analyses.
@@ -13,13 +13,26 @@ Backend revision `0000315` is ready with the new image. The bounded
 This establishes the current accepted release, not the historical cause
 or original phone/voice/Google acceptance. #820 remains open.
 
-The owned #842 integration preserves its two accepted Factory UI blobs
-and current-main task rows while incorporating that recovery. Its new
-integrated head still needs normal exact-head gates before publication
-acceptance or release; earlier `fe35a166` gates cover the earlier head only.
-The local Google delivery remains held for five independently reproduced
-scope/routing/provenance corrections. No new CI, deployment or private
-provider turn is implied by this local integration.
+The owned #842 integration preserved its two accepted Factory UI blobs
+and all 309 main task rows. Head `8c630f7e` passed all ten actual jobs in
+CI `38625737093` and all three CodeQL analyses, then merged normally as
+`36d72090`. Normal Deploy `38629181064` passed Web, its deployed deep-link
+check, backend health and actual smoke at 20:09:21 UTC. Backend,
+infrastructure and hosted-agent deployment were correctly skipped.
+This accepts the asset release, not the original production trigger,
+performance or human first-turn navigation; issue #813 remains open.
+
+Local next-delivery snapshot: #818's inactive body-fat correction passed
+bounded independent review at `4ed24812`; its original raw-unit P2 thread
+is resolved and exact-head CI `38624893939`/CodeQL `38624894029` passed all
+ten/three actual jobs. Fresh `36d72090` is integrated without changing any
+reviewed health blob or main task-table cell. The integrated head requires
+its own normal exact-head gates before release. No registration, migration,
+activation, original Daily/data or private/device acceptance is implied.
+Google's `F3BD79DA` freeze failed targeted re-review on three residual
+approval-scope, quoted-query intent and native-window faults. The same
+local author is correcting them; that freeze remains immutable and
+unapproved, with publication held. No Google release is accepted.
 
 ## Consolidated main recovery (14 October 2026; local)
 
@@ -382,7 +395,9 @@ stashes. Keep `.ui-session-handoff.md` untracked and `.impeccable` cache out of
 the release. Dependencies still use the corporate-feed junction; local
 Vite 8.3.1/Vitest 5.0.2 do not replace CI's pinned 8.3.2/5.0.3.
 
-Current P12 release (13 October 2026): Dan moved implementation to **local DailyMigrationMain**; both cloud workers stay idle. After #805's verified review/full CI/deploy, the coordinator [released and claimed #720](https://github.com/DanAakesen/jarvis/issues/720#issuecomment-6154043444): inactive synthetic health processing only, `C:\Repo\Jarvis-daily-migration`, branch `codex/p12-05-health-processor`, one Refs #720 PR. Fetch moving main, preserve unrelated work and require exact-head full CI/independent review; no own merge or next issue. No original Daily/source/data/credential, phone, resource/grant or activation changes. See [current boundary](#dailydevelopercloud--p12-execution-boundary) and [processing contract](../apps/backend/src/daily/health/README.md).
+Current P12 release (14 October 2026): Dan moved implementation to **local DailyMigrationMain**; both cloud workers stay idle. #808 delivered #720's inactive synthetic health processing; its automatic review found an unsupported body-fat unit fallthrough. The [existing #720 claim continues](https://github.com/DanAakesen/jarvis/issues/720#issuecomment-6157857536) for only that correction and synthetic normalization/SQL regressions in `C:\Repo\Jarvis-daily-migration`, branch `codex/p12-05-body-fat-units`, a separate Refs #720 follow-up from fresh main. Do not push the merged #808 branch. Fetch moving main, preserve unrelated work and require exact-head full CI/independent review; no own merge or next issue. No original Daily/source/data/credential, phone, resource/grant or activation changes. See [current boundary](#dailydevelopercloud--p12-execution-boundary) and [processing contract](../apps/backend/src/daily/health/README.md).
+
+**Release clearance, 14 October 2026:** Dan directly approved inactive PR #818 after latest-main integration, required checks and independent review, and said routine CI/CD must not need approval again each time. For already-authorized inactive P12 scopes and their corrections, the independent release path may merge and use normal main-only deployment once those gates pass; do not add another per-PR human release-clearance gate. This supersedes the earlier #818 hold, not scope/dependency gates, branch protections or the no-own-merge rule. Both cloud workers stay idle. Activation, protected credentials/private-data operations, live/device acceptance and eventual cutover retain their existing authority and evidence gates; this does not start another scope or authorize a new worker.
 
 ## Workspace window release (12 October 2026)
 

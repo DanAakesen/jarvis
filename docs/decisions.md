@@ -11,10 +11,22 @@ release blocker for the already-approved non-Daily queue.
 
 Do not infer the previous capability failure's cause from this green run,
 close #820 automatically, or substitute it for original phone/voice/Google
-acceptance. Preserve the accepted Factory runtime blobs and actual main
-task rows when integrating #842; its new head needs its own normal gates.
-The local review's five Google findings remain correction work, not a
-request to publish the previously frozen failing patch.
+acceptance. Factory #842 preserved its accepted runtime blobs and all
+309 main task rows, passed its integrated head's ten CI jobs and three
+CodeQL analyses, and merged as `36d72090`. Normal Deploy `38629181064`
+passed Web/deep-link and backend health/smoke. Accept that release without
+claiming the original production trigger, performance or human navigation
+acceptance; issue #813 remains open.
+
+The local next-delivery snapshot integrates that actual main into inactive
+Daily #818 after bounded independent review of `4ed24812`, resolution of its
+raw-unit P2 and that head's full CI/CodeQL. Preserve every reviewed health
+blob and main task-table cell; require the integrated head's own normal
+gates and deployment. This is previously authorised inactive correction
+delivery, not activation, original data access or cutover. Google's
+`F3BD79DA` also failed targeted re-review on three residual approval-scope,
+quoted-query intent and native-window faults. Both it and `3073B943` remain
+unapproved and immutable while the same local author corrects the delivery.
 
 ## Coalesce automatic board updates behind scoped reads (#813, 14 October 2026)
 
@@ -329,6 +341,12 @@ acceptance gates, so open acceptance issues remain open and their status cells
 stay workflow-owned.
 
 ## P12-05 inactive SQL health processing (13 October 2026)
+
+**14 October release authority:** in DailyMigrationMain, Dan approved releasing inactive PR #818 after updating to latest main and passing required checks and review. He also directed that routine CI/CD should flow without repeated release approvals. Already-authorized inactive P12 scopes and corrections may therefore proceed through independent review/merge and normal main-only deployment without a fresh human clearance per PR. Keep exact-head checks, latest-main containment, branch protections, no own merge and issue/dependency truthfulness. Both cloud workers remain idle; this grants no new worker/scope, activation, source/private-data/credential access, paid resource or device change. Existing protected-backup, parity, final-delta and rollback/cutover gates are unchanged.
+
+14 October follow-up to [automatic review finding 4265321733](https://github.com/DanAakesen/jarvis/pull/808#discussion_r4265321733): #808 merged with a reproduced body-fat unit fallthrough. Move its existing `%`/`percent`/`fraction`/`1` representations into the shared strict known-dimension mapping, preserving absent-unit unknowns, zero/missing values and generic unknown dimensions. Add synthetic normalization and SQL canonical-readback/quarantine regressions; no schema, composition, source/data/device or activation changes. This is a separate #720 follow-up from fresh main, not a rewrite of merged #808; exact-head CI and independent review remain required.
+
+[PR #818 review 4271913189](https://github.com/DanAakesen/jarvis/pull/818#discussion_r4271913189) found non-string declarations disappearing through text fallback. Validate raw body-fat group/sample/workout `units` and `unit` before sanitization or alias selection, including empty groups and shadowed units. Numeric `1` is malformed, not the string unit `1`; null/undefined/blank remain missing. Synthetic normalization and atomic SQL quarantine regressions cover the correction; fresh exact-head CI/review still gate release. Other metric dimensions and runtime/activation boundaries are unchanged.
 
 The [local coordinator release for #720](https://github.com/DanAakesen/jarvis/issues/720#issuecomment-6154043444) follows #805's independently reviewed, CI-tested and deployed inactive SQL acceptance. Reuse that inbox/pool/owner lock. A committed claim generation bounds retries; normalization occurs outside the transaction, then domain rows, ingestion lineage, applicable feed freshness and processed receipt commit together. Heartbeat is a separate signal. Retain raw evidence and quarantine rather than deleting poison inputs or retrying forever. No timer, dispatcher, production registration or credential change.
 

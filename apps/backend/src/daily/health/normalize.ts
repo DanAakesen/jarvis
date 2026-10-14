@@ -25,6 +25,12 @@ function stats(points: Point[], metric: string) {
       latest: points.at(-1)?.row ?? null, latest_value_is_source_units: true, latest_conversion_factor: points.at(-1)?.factor ?? null } };
 }
 function optionalRange(values: (string | null)[], end = false): string | null { const valid = values.filter((v): v is string => v !== null).sort(); return (end ? valid.at(-1) : valid[0]) ?? null; }
+/** Check raw declarations before text fallback or sanitization can discard malformed evidence. */
+function validateBodyFatUnits(value: unknown): void {
+  const row = optionalObject(value);
+  unitConversion('body_fat_percentage', row.units);
+  unitConversion('body_fat_percentage', row.unit);
+}
 function samplePoints(samples: unknown[], metric: string, inputUnit?: unknown): Point[] {
   return samples.map(value => { const row = object(value); return { row, ...unitConversion(metric, text(row.units, row.unit, inputUnit)), order: text(row.date, row.endDate, row.startDate) ?? '' }; });
 }
@@ -87,7 +93,11 @@ function workoutHeartRate(direct: unknown, heart: HealthObject, field: 'avg' | '
 function workoutRows(input: unknown[], output: NormalizedHealth) {
   const seen = new Map<string, string>();
   for (const value of input) {
-    const w = object(sanitize(value)); const id = key(w.id ?? w.uuid); const serialized = JSON.stringify(w);
+    const raw = object(value);
+    for (const [field, entry] of Object.entries(raw)) {
+      if (name(field) === 'body_fat_percentage') for (const sample of Array.isArray(entry) ? entry : [entry]) validateBodyFatUnits(sample);
+    }
+    const w = object(sanitize(raw)); const id = key(w.id ?? w.uuid); const serialized = JSON.stringify(w);
     if (seen.has(id)) { if (seen.get(id) !== serialized) throw new HealthPayloadError('conflicting_workout'); continue; }
     seen.set(id, serialized);
     const workout_type = key(text(w.name, w.workoutType, w.activityType));
@@ -151,6 +161,10 @@ export function normalizeHealth(payload: unknown): NormalizedHealth {
     const rawGroup = object(item); const metric = key(name(rawGroup.name));
     if (!Array.isArray(rawGroup.data)) throw new HealthPayloadError('invalid_payload');
     if (isNutrition(metric)) { excludedNutrition++; continue; } // Sites/Jarvis canonical meals, never Apple Health feedback.
+    if (metric === 'body_fat_percentage') {
+      validateBodyFatUnits(rawGroup);
+      rawGroup.data.forEach(validateBodyFatUnits);
+    }
     const group = object(sanitize(rawGroup));
     if (metric === 'sleep_analysis') sleeps.push(group);
     for (const point of samplePoints(group.data as unknown[], metric, text(group.units, group.unit))) {
