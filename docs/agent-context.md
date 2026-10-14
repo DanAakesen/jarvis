@@ -281,7 +281,7 @@ Dan follows the work on the [Project Jarvis board](https://github.com/users/DanA
 3. Check that `main` is green: the latest `CI` and deploy runs on `main` passed (before P0-11 adds deploy, only `CI` counts). If not, stop. The only allowed work is a fix for `main` (PR title `fix-main: …`).
 4. Check your task: not Complete, not claimed by anyone else, and every task in its "Depends on" column Complete. If any check fails, stop and report it on the issue.
 5. Look at the running tasks (issues with a worker label, In progress rows, and open PRs). Stay out of files they change, or say in your PR why you overlap.
-6. Use one branch and one PR. The PR title is exactly `<task ID>: <short summary>`, for example `P0-05: Foundry account and project`: the ID, a colon, a space, no brackets. Copilot's temporary `[WIP] ` prefix is fine. Work outside a task uses `fix-main: …` or `docs: …`. The [PR title](../.github/workflows/pr-title.yml) workflow corrects small deviations and fails otherwise. The PR body contains `Fixes #<issue>`. When the PR merges, GitHub closes the issue, and the tasks it blocked unblock automatically. Never remove "Blocked by" links by hand; they stay as history. If a task needs more than one PR, use `Refs #<issue>` in all but the last.
+6. Use one branch and one PR. The PR title is exactly `<task ID>: <short summary>`, for example `P0-05: Foundry account and project`: the ID, a colon, a space, no brackets. Copilot's temporary `[WIP] ` prefix is fine. Work outside a task uses `fix-main: …` or `docs: …`. The [PR title](../.github/workflows/pr-title.yml) workflow validates current same-PR/head metadata and fails with the normalizer's suggested title for small deviations; save that title rather than expecting an automatic edit. The PR body contains `Fixes #<issue>`. When the PR merges, GitHub closes the issue, and the tasks it blocked unblock automatically. Never remove "Blocked by" links by hand; they stay as history. If a task needs more than one PR, use `Refs #<issue>` in all but the last.
 
 ### Finish a task
 
@@ -1429,6 +1429,27 @@ Aggregate CI (P0-10), `.github/workflows/ci.yml`:
 
 CodeQL code scanning (P9-93), `.github/workflows/codeql.yml`:
 Advanced CodeQL code scanning analyzes `javascript-typescript`, `python`, and `actions` using the `security-extended` query suite on pushes and PRs to `main` (path-filtered against markdown and docs) and a weekly schedule. CodeQL is non-blocking and operates independently of the `CI result` aggregate gate. Security findings, CWE classifications, and severity levels appear in GitHub under **Security → Code scanning alerts** (`GET /repos/DanAakesen/jarvis/code-scanning/alerts`); triage verdicts should distinguish real security flaws from false positives or test-only code before opening follow-up remediation issues.
+
+PR title (P9-113), `.github/workflows/pr-title.yml`:
+
+- `validate-pr-title.sh` reads the event's PR number from the GitHub API and
+  requires its current repository/number/head to match the event identity.
+  Current title/body, not immutable event text, feed the existing normalizer.
+  Issue lookup accepts `Fixes`, `Closes`, `Resolves`, or `Refs` with `#123`
+  or `DanAakesen/jarvis#123`; the first matching same-repository link is used.
+- API calls have a 30-second timeout. A second PR read must match the initial
+  title/body/head/update timestamp before success. API/schema/identity/race
+  failures fail closed: fix access or metadata and run a fresh current-head gate.
+  Head pushes trigger the gate too. A replay after a head change must fail.
+- The gate never writes PR titles: GitHub title updates have no atomic
+  title/head compare-and-set guard. Noncanonical titles fail with the unchanged
+  normalizer's suggestion; save the canonical title to trigger a fresh gate.
+  Token permissions remain unchanged. Changes after the final API read are not
+  atomically fenced by GitHub check publication; the new edit/push needs its own
+  gate, and reviewers must use current-head/current-metadata evidence.
+- Offline entry-path regressions and normalizer tests run with
+  `PYTHONPATH=.github/scripts python3 -m unittest discover -s .github/scripts/tests -v`.
+  Fixtures reject every unplanned `gh` request and never use the network.
 
 Plan status, `.github/workflows/plan-status.yml`:
 

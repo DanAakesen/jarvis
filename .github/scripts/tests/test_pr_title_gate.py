@@ -88,6 +88,19 @@ class PrTitleGateTests(unittest.TestCase):
     def test_old_event_uses_current_same_head_metadata(self):
         self.assert_gate(self.stable(metadata()), True, "Validated current PR")
 
+    def test_workflow_binds_identity_and_head_not_event_text(self):
+        workflow = WORKFLOW.read_text(encoding="utf-8")
+        for binding in (
+            "GH_TOKEN: ${{ github.token }}",
+            "REPO: ${{ github.repository }}",
+            "PR_NUMBER: ${{ github.event.pull_request.number }}",
+            "PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}",
+        ):
+            self.assertIn(binding, workflow)
+        self.assertNotIn("github.event.pull_request.title", workflow)
+        self.assertNotIn("github.event.pull_request.body", workflow)
+        self.assertIn("synchronize", workflow)
+
     def test_invalid_current_title_does_not_use_valid_event(self):
         self.assert_gate(
             self.stable(metadata("No task ID", None)), False, "No task ID",
@@ -113,9 +126,8 @@ class PrTitleGateTests(unittest.TestCase):
                 self.assert_gate(self.stable(metadata("Summary"), issue_title), False, "No task ID")
 
     def test_foreign_repo_link_is_not_a_local_issue(self):
-        self.assert_gate(self.stable(metadata("Summary", None))[:1] + [
-            response(READ, metadata("Summary", "Closes other/repo#826"))
-        ], False)
+        current = metadata("Summary", "Closes other/repo#826")
+        self.assert_gate([response(READ, current), response(READ, current)], False, "No task ID")
 
     def test_wip_fix_main_docs_and_normalization(self):
         for title in ("[WIP] P9-113: Summary", "fix-main: Summary", "docs: Summary",

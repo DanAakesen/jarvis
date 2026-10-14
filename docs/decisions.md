@@ -1,5 +1,25 @@
 # Decisions
 
+## 2026-10-14: P9-113 live PR-title validation
+
+- Validate current same-PR title/body from the API, bound to the event's PR
+  number/repository/head, instead of replaying immutable event text. Reuse the
+  existing normalizer and first same-repository linked-issue lookup.
+- Fail closed on API/schema errors and changes observed by a final metadata
+  read. Keep token permissions unchanged and trigger validation on head pushes.
+- Do not automatically write normalized titles: GitHub title edits do not
+  provide an atomic title/head compare-and-set guard. Fail with the canonical
+  suggestion so a stale job cannot overwrite a concurrent edit. This deliberately
+  replaces automatic correction, not normalization rules or missing-ID failures.
+  The final read cannot atomically fence subsequent GitHub check publication;
+  later edits/pushes require their own gate evidence.
+- Evidence: the offline test executes the workflow's actual gate entry with an
+  old unusable event and a canonical same-head API fixture. It fails against the
+  old workflow and passes with live reads. Fixtures also cover invalid current
+  metadata, API failures, identity/head mismatch and observable races without
+  allowing any title-write request. Live exact-head CI/CodeQL evidence is tracked
+  in the PR, separately from local proof.
+
 ## #813 bound Factory board source reads (13 October 2026)
 
 Use one eight-request limiter for every GitHub source request in a board snapshot,

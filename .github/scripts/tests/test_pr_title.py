@@ -15,8 +15,8 @@ def normalize(title, linked_id=""):
 
 
 def linked_id(title):
-    workflow = (ROOT / ".github/workflows/pr-title.yml").read_text(encoding="utf-8")
-    line = next(line for line in workflow.splitlines() if "linked_id=$(gh issue view" in line)
+    helper = (ROOT / ".github/scripts/validate-pr-title.sh").read_text(encoding="utf-8")
+    line = next(line for line in helper.splitlines() if "linked_id=$(grep" in line)
     pattern = re.search(r"grep -oE '([^']+)'", line).group(1)
     return subprocess.run(
         ["bash", "-c", f"grep -oE '{pattern}' || true"],
