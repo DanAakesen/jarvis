@@ -297,7 +297,7 @@ export function createDispatcherStore(pool: sql.ConnectionPool, eventHub: TaskEv
             AND (session.status = N'Active'
               OR (session.status = N'Ended' AND (session.end_reason = N'done'
                 OR (session.end_reason = N'idle_expired' AND turn.status = N'completed'))))
-        ) THEN 1 ELSE 0 END) AS current;`);
+        ) THEN 1 ELSE 0 END) AS [current];`);
       return recordset[0]?.current === true;
     },
 

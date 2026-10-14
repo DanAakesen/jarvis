@@ -18,6 +18,11 @@ isolated loopback SQL regressions are added; run the SQL suite only with the
 disposable loopback service. The original missed-delivery cause and any live
 recovery of #837 remain unconfirmed and are not claimed.
 
+Full CI exposed `current` as a reserved SQL Server alias in the new identity
+fence. Quote it as `[current]`, retaining the typed result and predicate.
+The corrected revision must pass the real isolated SQL suite and full CI;
+mocked dispatcher tests did not exercise that SQL parser.
+
 ## #813 bound Factory board source reads (13 October 2026)
 
 Use one eight-request limiter for every GitHub source request in a board snapshot,
