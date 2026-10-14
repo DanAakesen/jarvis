@@ -31,6 +31,13 @@ describe('shared navigation capability instructions', () => {
     expect(voice).toContain('never invent it or restage on approval');
   });
 
+  it('distinguishes extraction limits from missing original email content', () => {
+    const instructions = capabilityInstructions({ automaticCapture: false });
+    expect(instructions).toContain('inspect body and alternateBody');
+    expect(instructions).toContain('Extraction limits do not prove original details absent');
+    expect(instructions).toContain('Never guess reservation dates');
+  });
+
   it('maps window requests to snapshot-backed intents and reports pin outcomes honestly', () => {
     const instructions = capabilityInstructions({ automaticCapture: false });
     expect(instructions).toContain('Windows: intent, not coordinates');

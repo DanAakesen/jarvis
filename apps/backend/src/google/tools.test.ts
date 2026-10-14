@@ -718,6 +718,38 @@ describe('Google Calendar and Gmail tools', () => {
     expect(JSON.stringify(records)).not.toContain('PRIVATE GMAIL BODY');
   });
 
+  it('returns booking dates from HTML alternatives with explicit extraction status and a redacted audit', async () => {
+    const request = vi.fn<GoogleApiClient['request']>(async (_api, path) => path.includes('?q=')
+      ? { messages: [{ id: 'reservation' }] }
+      : { id: 'reservation', snippet: 'Booking confirmed', payload: {
+        mimeType: 'multipart/alternative', parts: [
+          { mimeType: 'text/plain', body: { data: Buffer.from('Thank you for booking.').toString('base64url') } },
+          { mimeType: 'text/html', body: { data: Buffer.from('<p>Copenhagen Marriott</p><p>Check-in 14 October 2026</p><p>Check-out 17 October 2026</p>').toString('base64url') } },
+        ],
+      } });
+    const { app, records } = appFor(request);
+    const result = await app.inject({ method: 'POST', url: '/tools/mail_search', headers: confirmHeaders('42'), payload: { query: 'Marriott' } });
+    expect(result.json()).toMatchObject({ outcome: 'ok', result: { messages: [{
+      body: 'Thank you for booking.', bodySource: 'plain-text', bodyTruncated: false,
+      alternateBody: 'Copenhagen Marriott Check-in 14 October 2026 Check-out 17 October 2026',
+      alternateBodyTruncated: false, contentWarnings: [],
+    }] } });
+    expect(records[0]).toMatchObject({ arguments: { redacted: true }, result: { redacted: true } });
+    expect(request).toHaveBeenCalledTimes(2);
+  });
+
+  it('reports snippet-only booking extraction as incomplete', async () => {
+    const request = vi.fn<GoogleApiClient['request']>(async (_api, path) => path.includes('?q=')
+      ? { messages: [{ id: 'reservation' }] } : { snippet: 'Booking confirmed', payload: { mimeType: 'text/html', body: {} } });
+    const { app } = appFor(request);
+    const result = await app.inject({ method: 'POST', url: '/tools/mail_search', headers: confirmHeaders('42'), payload: { query: 'Marriott' } });
+    expect(result.json()).toMatchObject({ outcome: 'ok', result: { messages: [{
+      body: 'Booking confirmed', bodySource: 'snippet', contentWarnings: expect.arrayContaining([
+        'Full message text is unavailable; a preview cannot establish missing reservation details.',
+      ]),
+    }] } });
+  });
+
   it('lists bounded Gmail drafts with plain-text content', async () => {
     const body = 'PRIVATE DRAFT BODY';
     const request = vi.fn(async (...args: [GoogleApi, string, GoogleApiRequest]) =>
@@ -750,6 +782,9 @@ describe('Google Calendar and Gmail tools', () => {
         to: 'dan@example.com',
         subject: 'Private draft',
         body,
+        bodySource: 'plain-text',
+        bodyTruncated: false,
+        contentWarnings: [],
       }],
       truncated: false,
     });

@@ -2406,3 +2406,14 @@ one-shot process-local state and add a verified read-only
 Chat and voice must stage successfully before claiming preparation, then confirm
 on a later plain approval without restaging or asking again. Missing and expired
 stages return `none`. No persistence, migration or live calendar write is added.
+
+### P11-03 Gmail ownership and extraction
+
+Reuse the MIME reader and its regressions from #837 / task 12 at `bd052c0`,
+with the same file path and return fields, rather than add a competing decoder.
+#837 remains open and no task-12 PR was visible at this checkpoint. This task
+adds hidden-preheader/invisible-padding cleanup and nested hotel-booking
+regressions, plus extraction-limit guidance. Read both plain and alternate HTML
+text; absent details in extracted text do not prove the original email lacks them.
+Computer-use access enforcement stays owned by #837; this change uses only the
+Google API and static HTML parsing. No private email was read for these tests.

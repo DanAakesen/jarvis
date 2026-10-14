@@ -2139,3 +2139,16 @@ or calendar mutation is part of this code task. `calendar_get_pending_change`
 requires the verified current Dan message and returns private process-local state.
 Related #837 / `origin/jarvis/task-12` owns direct-only Gmail access policy; reuse
 its MIME reader rather than implementing a second reader or duplicating PC guards.
+
+Focused validation command: `npm test --workspace @jarvis/backend -- src/google
+src/core/capability-instructions.test.ts`. Backend lint/build also apply; changed
+agent instructions are covered by the backend contract test. Synthetic HTML
+contains booking dates, nested alternatives and invisible padding; no personal
+email, live Google call or computer-use session is required. The copied task-12
+reader stays at its original path for the eventual related-branch merge.
+
+Extraction checkpoint: 97 tests across six Google/instruction suites pass. The
+backend TypeScript build passed; the reader's scoped zero-warning lint passes
+following the invisible-character regex correction. Final broader registry/module
+checks and full backend lint/build remain next. Python instructions compile; no
+Python runtime logic changed and its full test environment is not installed.

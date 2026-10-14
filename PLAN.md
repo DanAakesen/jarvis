@@ -5,8 +5,9 @@
 Calendar recovery now reads the original pending stage through a verified, private
 read-only tool; chat and voice instructions require actual staging before approval.
 Regression tests cover redacted history, plain approval, no stage, failed staging
-and replay. Next: reuse task 12 / #837 MIME extraction, add reservation-padding
-regressions, and finish backend validation. No live calendar operation is authorized.
+and replay. Task 12 / #837 MIME extraction is reused; nested HTML reservation
+and invisible-padding regressions are added. Next: finish backend validation
+and push the final evidence checkpoint. No live calendar operation is authorized.
 
 ## Danish voice Settings correction (13 October 2026)
 
