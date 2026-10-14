@@ -19,6 +19,10 @@ const agentObjectId = '3a1f0c2e-7b4d-4e8a-9c6f-1d2e3f405162';
 const bridgeToken = 'bridge.payload.signature';
 const agentToken = 'agent.payload.signature';
 const danToken = 'dan.payload.signature';
+const browserTabs = {
+  tabs: [{ id: 'tab_1', title: 'Search', url: 'https://example.test/', focused: true }],
+  nextOffset: null,
+};
 
 afterEach(async () => {
   vi.useRealTimers();
@@ -127,6 +131,10 @@ describe('authenticated PC bridge protocol', () => {
     ].join('\n');
     bridge.on('message', (data) => {
       const command = JSON.parse(data.toString()) as Record<string, unknown>;
+      if (command.command === 'active_window') {
+        bridge.send(JSON.stringify({ id: command.id, type: 'result', result: { title: 'VS Code' } }));
+        return;
+      }
       expect(command).toMatchObject({ command: 'clipboard_read', arguments: {} });
       bridge.send(JSON.stringify({ id: command.id, type: 'result', result: { text: clipboardText } }));
     });
@@ -396,7 +404,8 @@ describe('authenticated PC bridge protocol', () => {
     bridge.on('message', (data) => {
       const command = JSON.parse(data.toString()) as Record<string, unknown>;
       commands.push(command);
-      const result = command.command === 'uia_snapshot'
+      const result = command.command === 'active_window' ? { title: 'Spotify' }
+        : command.command === 'uia_snapshot'
         ? {
           snapshotId: '1730aa51-f380-4df9-a345-1feb862cb1c4',
           application: 'spotify',
@@ -414,9 +423,9 @@ describe('authenticated PC bridge protocol', () => {
       result: { status: 'completed', steps: 2 },
     });
     expect(commands.map(command => command.command)).toEqual([
-      'uia_snapshot', 'uia_act', 'uia_snapshot',
+      'active_window', 'uia_snapshot', 'active_window', 'uia_act', 'active_window', 'uia_snapshot',
     ]);
-    expect(commands[1]!.arguments).toMatchObject({ action: 'click', confirmed: false });
+    expect(commands[3]!.arguments).toMatchObject({ action: 'click', confirmed: false });
     expect(planner.decide).toHaveBeenCalledTimes(2);
     expect(onPcActStep.mock.calls.map(([event]) => event)).toEqual([
       { step: 1, action: 'click', outcome: 'completed' },
@@ -447,7 +456,8 @@ describe('authenticated PC bridge protocol', () => {
       const arguments_ = command.arguments as Record<string, unknown>;
       const result = command.command === 'open_app'
         ? { opened: true, app: 'Codex' }
-        : command.command === 'uia_snapshot'
+        : command.command === 'active_window' ? { title: 'Codex' }
+          : command.command === 'uia_snapshot'
           ? {
             snapshotId: '1730aa51-f380-4df9-a345-1feb862cb1c4',
             application: 'codex',
@@ -470,10 +480,11 @@ describe('authenticated PC bridge protocol', () => {
 
     expect(response.json()).toMatchObject({ outcome: 'ok', result: { status: 'completed' } });
     expect(commands.map(({ command }) => command)).toEqual([
-      'open_app', 'uia_snapshot', 'uia_act', 'uia_snapshot', 'uia_act', 'uia_snapshot',
+      'open_app', 'active_window', 'uia_snapshot', 'active_window', 'uia_act',
+      'active_window', 'uia_snapshot', 'active_window', 'uia_act', 'active_window', 'uia_snapshot',
     ]);
-    expect(commands[2]!.arguments).toMatchObject({ action: 'type', text: prompt, confirmed: false });
-    expect(commands[4]!.arguments).toMatchObject({ action: 'click', confirmed: true });
+    expect(commands[4]!.arguments).toMatchObject({ action: 'type', text: prompt, confirmed: false });
+    expect(commands[8]!.arguments).toMatchObject({ action: 'click', confirmed: true });
     expect(runConfirmed).toHaveBeenCalledTimes(1);
     expect(runConfirmed).toHaveBeenCalledWith(
       'Click the button "Submit" in codex.',
@@ -521,7 +532,8 @@ describe('authenticated PC bridge protocol', () => {
       const command = JSON.parse(data.toString()) as Record<string, unknown>;
       const result = command.command === 'open_app'
         ? { opened: true, app: 'Codex' }
-        : command.command === 'uia_snapshot'
+        : command.command === 'active_window' ? { title: 'Codex' }
+          : command.command === 'uia_snapshot'
           ? {
             snapshotId: '1730aa51-f380-4df9-a345-1feb862cb1c4',
             application: 'codex',
@@ -627,12 +639,14 @@ describe('authenticated PC bridge protocol', () => {
         expect.any(AbortSignal),
       );
       expect(commands.map(command => command.command)).toEqual([
-        'browser_tabs', 'browser_snapshot', 'browser_act', 'browser_act', 'browser_act',
+        'browser_tabs', 'browser_tabs', 'browser_snapshot', 'browser_tabs', 'browser_act',
+        'browser_tabs', 'browser_act', 'browser_tabs', 'browser_act',
       ]);
-      expect(commands[2]!.arguments).toMatchObject({ action: 'type', text: 'sample text' });
-      expect((commands[2]!.arguments as Record<string, unknown>).confirmed).toBeUndefined();
-      expect((commands[3]!.arguments as Record<string, unknown>).confirmed).toBe(false);
-      expect((commands[4]!.arguments as Record<string, unknown>).confirmed).toBe(true);
+      const actionCommands = commands.filter(({ command }) => command === 'browser_act');
+      expect(actionCommands[0]!.arguments).toMatchObject({ action: 'type', text: 'sample text' });
+      expect((actionCommands[0]!.arguments as Record<string, unknown>).confirmed).toBeUndefined();
+      expect((actionCommands[1]!.arguments as Record<string, unknown>).confirmed).toBe(false);
+      expect((actionCommands[2]!.arguments as Record<string, unknown>).confirmed).toBe(true);
       expect(record.mock.calls.map(([call]) => call.arguments)).toEqual([
         { redacted: true }, { redacted: true }, { redacted: true }, { redacted: true },
       ]);
@@ -654,7 +668,7 @@ describe('authenticated PC bridge protocol', () => {
         bridge.send(JSON.stringify({
           id: command.id,
           type: 'result',
-          result: { acted: true, action },
+          result: command.command === 'browser_tabs' ? browserTabs : { acted: true, action },
         }));
       });
 
@@ -680,7 +694,10 @@ describe('authenticated PC bridge protocol', () => {
         expect.any(Function),
         expect.any(AbortSignal),
       );
-      expect(commands.map(({ arguments: arguments_ }) => arguments_)).toEqual([
+      expect(commands.map(({ command }) => command)).toEqual([
+        'browser_tabs', 'browser_act', 'browser_tabs', 'browser_act',
+      ]);
+      expect(commands.filter(({ command }) => command === 'browser_act').map(({ arguments: arguments_ }) => arguments_)).toEqual([
         {
           tabId: 'tab_1',
           snapshotId: '1730aa51-f380-4df9-a345-1feb862cb1c4',
@@ -714,7 +731,7 @@ describe('authenticated PC bridge protocol', () => {
           const command = JSON.parse(data.toString()) as Record<string, unknown>;
           commands.push(command);
           const arguments_ = command.arguments as Record<string, unknown>;
-          const result = command.command === 'browser_snapshot'
+          const result = command.command === 'browser_tabs' ? browserTabs : command.command === 'browser_snapshot'
             ? {
               tabId: 'tab_1',
               snapshotId: '1730aa51-f380-4df9-a345-1feb862cb1c4',
@@ -738,8 +755,10 @@ describe('authenticated PC bridge protocol', () => {
 
         expect(response.json()).toMatchObject({ outcome: 'ok', result: { acted: true, action: 'click' } });
         expect(runConfirmed).toHaveBeenCalledWith(`Click "${label}" in Chrome.`, expect.any(Function), expect.any(AbortSignal));
-        expect(commands.map(({ command }) => command)).toEqual(['browser_snapshot', 'browser_act', 'browser_act']);
-        expect(commands.map(({ arguments: arguments_ }) => (arguments_ as Record<string, unknown>).confirmed))
+        expect(commands.map(({ command }) => command)).toEqual([
+          'browser_tabs', 'browser_snapshot', 'browser_tabs', 'browser_act', 'browser_tabs', 'browser_act',
+        ]);
+        expect(commands.filter(({ command }) => command !== 'browser_tabs').map(({ arguments: arguments_ }) => (arguments_ as Record<string, unknown>).confirmed))
           .toEqual([undefined, false, true]);
       },
     );
@@ -755,7 +774,8 @@ describe('authenticated PC bridge protocol', () => {
         bridge.send(JSON.stringify({
           id: command.id,
           type: 'result',
-          result: { confirmationRequired: true, actionKind: 'computer_use', summary: 'Delete this item in Chrome.' },
+          result: command.command === 'browser_tabs' ? browserTabs
+            : { confirmationRequired: true, actionKind: 'computer_use', summary: 'Delete this item in Chrome.' },
         }));
       });
 
@@ -781,15 +801,16 @@ describe('authenticated PC bridge protocol', () => {
         outcome: 'refused',
         result: { refused: 'Dan’s confirmation service is unavailable; the browser action was not performed.' },
       });
-      expect(commands).toHaveLength(1);
-      expect(commands[0]!.arguments).toEqual({
+      expect(commands).toHaveLength(2);
+      expect(commands[0]!.command).toBe('browser_tabs');
+      expect(commands[1]!.arguments).toEqual({
         tabId: 'tab_1',
         snapshotId: '1730aa51-f380-4df9-a345-1feb862cb1c4',
         elementIndex: 0,
         action: 'click',
         confirmed: false,
       });
-      expect(JSON.stringify(commands[0])).not.toContain('#delete');
+      expect(JSON.stringify(commands)).not.toContain('#delete');
     });
 
     it('returns safe refusals for stale or covered browser targets', async () => {
@@ -798,7 +819,9 @@ describe('authenticated PC bridge protocol', () => {
       const bridge = await connectBridge(url);
       bridge.on('message', (data) => {
         const command = JSON.parse(data.toString()) as Record<string, unknown>;
-        bridge.send(JSON.stringify({ id: command.id, type: 'error', error: 'covered' }));
+        bridge.send(JSON.stringify(command.command === 'browser_tabs'
+          ? { id: command.id, type: 'result', result: browserTabs }
+          : { id: command.id, type: 'error', error: 'covered' }));
       });
       const response = await callTool(app, 'pc_browser_act', {
         tabId: 'tab_1',
@@ -887,7 +910,9 @@ describe('authenticated PC bridge protocol', () => {
       const command = JSON.parse(data.toString()) as Record<string, unknown>;
       commands.push(command);
       let result: Record<string, unknown>;
-      if (command.command === 'uia_snapshot') {
+      if (command.command === 'active_window') {
+        result = { title: 'Spotify' };
+      } else if (command.command === 'uia_snapshot') {
         observations += 1;
         result = {
           snapshotId: '1730aa51-f380-4df9-a345-1feb862cb1c4',
@@ -917,14 +942,19 @@ describe('authenticated PC bridge protocol', () => {
     expect(response.statusCode).toBe(200);
     expect(response.json()).toMatchObject({ outcome: 'ok', result: { status: 'completed', steps: 2 } });
     expect(commands.map(({ command }) => command)).toEqual([
-      'uia_snapshot', 'window_capture', 'click_point', 'uia_snapshot',
+      'active_window', 'uia_snapshot', 'active_window', 'window_capture',
+      'active_window', 'click_point', 'active_window', 'uia_snapshot',
     ]);
     const timings = records.map((line) => JSON.parse(line) as Record<string, unknown>)
       .filter((entry) => entry.msg === 'pc_bridge.command_timing');
     expect(timings.map(({ command, outcome }) => [command, outcome])).toEqual([
+      ['active_window', 'ok'],
       ['uia_snapshot', 'ok'],
+      ['active_window', 'ok'],
       ['window_capture', 'ok'],
+      ['active_window', 'ok'],
       ['click_point', 'ok'],
+      ['active_window', 'ok'],
       ['uia_snapshot', 'ok'],
     ]);
     expect(JSON.stringify(commands)).not.toContain('image');
@@ -964,7 +994,8 @@ describe('authenticated PC bridge protocol', () => {
     bridge.on('message', (data) => {
       const command = JSON.parse(data.toString()) as Record<string, unknown>;
       commands.push(command);
-      const result = command.command === 'uia_snapshot'
+      const result = command.command === 'active_window' ? { title: 'Spotify' }
+        : command.command === 'uia_snapshot'
         ? {
           snapshotId: '1730aa51-f380-4df9-a345-1feb862cb1c4',
           application: 'spotify',
@@ -987,13 +1018,13 @@ describe('authenticated PC bridge protocol', () => {
       outcome: 'refused',
       result: { refused: 'Jarvis control is paused in the PC bridge. Resume it from the tray menu to act on the PC.' },
     });
-    expect(commands.map(({ command }) => command)).toEqual(['uia_snapshot']);
+    expect(commands.map(({ command }) => command)).toEqual(['active_window', 'uia_snapshot']);
 
     bridge.send(JSON.stringify({ type: 'status', controlPaused: false }));
     await resumed;
     const resumedAction = await callTool(app, 'pc_open', { target: 'app', value: 'vscode' });
     expect(resumedAction.json()).toMatchObject({ outcome: 'ok', result: { opened: true } });
-    expect(commands.map(({ command }) => command)).toEqual(['uia_snapshot', 'open_app']);
+    expect(commands.map(({ command }) => command)).toEqual(['active_window', 'uia_snapshot', 'open_app']);
     expect(statuses).toEqual([[false, false], [true, false], [true, true], [true, false]]);
   });
 

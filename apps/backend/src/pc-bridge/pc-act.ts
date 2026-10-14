@@ -1,3 +1,4 @@
+import { refuseGmailComputerAccess } from '../core/gmail-access-policy.js';
 import type { FastifyRequest } from 'fastify';
 import { defaultSettings } from '../core/settings.js';
 import { ToolFailure, ToolRefusal } from '../core/tool-registry.js';
@@ -95,6 +96,8 @@ export interface PcActStepActivity {
 
 export interface PcActBridge {
   observe(signal: AbortSignal): Promise<unknown>;
+  windowTitle?(signal: AbortSignal): Promise<string>;
+  browserContext?(signal: AbortSignal): Promise<{ title: string; url: string }>;
   capture?(signal: AbortSignal): Promise<unknown>;
   act(action: PcActBridgeAction, signal: AbortSignal): Promise<unknown>;
   actPoint?(action: {
@@ -642,6 +645,7 @@ export async function runPcAct(
     throw new ToolRefusal("I won't handle passwords, payment-card numbers, one-time codes, or sensitive identity numbers.");
   }
 
+  refuseGmailComputerAccess(input.goal);
   const runStartedAt = performance.now();
   const deadline = AbortSignal.any([signal, AbortSignal.timeout(maxRunMs)]);
   const goal = input.goal.trim();
@@ -653,8 +657,21 @@ export async function runPcAct(
     if (deadline.aborted) break;
     let operation: PcActOperation = 'blocked';
     try {
+      if (bridge.windowTitle) refuseGmailComputerAccess(await bridge.windowTitle(deadline));
       const rawSnapshot = await bridge.observe(deadline);
       if (!validSnapshot(rawSnapshot)) throw new ToolFailure('The active Windows application could not be safely observed.');
+      refuseGmailComputerAccess(rawSnapshot.application);
+      if (/^(?:msedge|edge|firefox|brave|opera|vivaldi|iexplore)$/iu.test(rawSnapshot.application)) {
+        throw new ToolRefusal('Website controls are supported only in Chrome, where the current site can be verified.');
+      }
+      if (rawSnapshot.application === 'chrome') {
+        if (!bridge.browserContext) {
+          throw new ToolRefusal('The foreground Chrome site cannot be verified. Use the direct browser tools.');
+        }
+        const context = await bridge.browserContext(deadline);
+        refuseGmailComputerAccess(context.url, context.title);
+        if (!context.url) throw new ToolRefusal('The foreground Chrome site cannot be verified.');
+      }
       let snapshot: PcActSnapshot = rawSnapshot;
       let capture: PcActCapture | undefined;
       if (rawSnapshot.elements.length < minActionableElements &&

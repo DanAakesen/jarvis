@@ -33,7 +33,7 @@ describe('shared navigation capability instructions', () => {
 
   it('distinguishes extraction limits from missing original email content', () => {
     const instructions = capabilityInstructions({ automaticCapture: false });
-    expect(instructions).toContain('inspect body and alternateBody');
+    expect(instructions).toContain('Inspect body and alternateBody');
     expect(instructions).toContain('Extraction limits do not prove original details absent');
     expect(instructions).toContain('Never guess reservation dates');
   });
@@ -92,7 +92,11 @@ describe('shared navigation capability instructions', () => {
     expect(instructions).toContain('If view.previous is unavailable, ask Dan');
     expect(instructions).toContain('Without snapshot/focus, ask rather than guess');
     expect(instructions).toContain('The Folio is a pane');
-    expect(instructions).toContain('The UI still refuses Status until its page exists');
+    expect(instructions).not.toContain('The UI still refuses Status until its page exists');
+    expect(instructions).toContain('Status uses workspace_command (operation "navigate", page "status")');
+    expect(instructions).toContain('Only say an action succeeded when its tool result reports success');
+    expect(instructions).toContain('never claim navigation succeeded on send');
+    expect(instructions).toContain('relay unavailable-device refusals');
     expect(instructions).not.toContain('refuses Folio and Status');
     expect(instructions).toContain('For "show me", "visualise", chart or timeline requests');
     expect(instructions).toContain('with the chart or timeline renderer');

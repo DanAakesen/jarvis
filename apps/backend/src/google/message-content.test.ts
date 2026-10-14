@@ -70,7 +70,7 @@ describe('direct Gmail message content', () => {
     expect(request).toHaveBeenCalledTimes(1);
   });
 
-  it.each([undefined, { mimeType: 'application/pkcs7-mime' }, part('text/plain', '')])('labels incomplete content instead of presenting a preview as full text', async (payload) => {
+  it.each([undefined, { mimeType: 'application/pkcs7-mime' }])('labels incomplete content instead of presenting a preview as full text', async (payload) => {
     const content = await gmailMessageContent({ request: vi.fn() }, 'm', { payload, snippet: 'Booking confirmed' }, signal());
     expect(content).toMatchObject({ body: 'Booking confirmed', bodySource: 'snippet' });
     expect(content.contentWarnings.join(' ')).toContain('Full message text is unavailable');
@@ -102,6 +102,40 @@ describe('direct Gmail message content', () => {
       expect(content.contentWarnings.length).toBeGreaterThan(0);
     }
     expect(request).not.toHaveBeenCalled();
+  });
+
+  it.each(['text/plain', 'text/html'])('reports a successfully decoded empty %s body as empty, not unavailable', async (mimeType) => {
+    const content = await gmailMessageContent({ request: vi.fn() }, 'empty-fixture', {
+      payload: part(mimeType, ''),
+    }, signal());
+    expect(content).toEqual({
+      body: '', bodySource: mimeType === 'text/plain' ? 'plain-text' : 'html-text',
+      bodyTruncated: false, contentWarnings: [],
+    });
+  });
+
+  it.each([
+    ['text/plain', ''],
+    ['text/html', '<div hidden>Hidden padding</div><style>hidden</style>'],
+  ])('keeps decoded-empty %s provenance when a preview is present', async (mimeType, body) => {
+    const content = await gmailMessageContent({ request: vi.fn() }, 'empty-preview-fixture', {
+      payload: part(mimeType, body), snippet: 'Synthetic snippet',
+    }, signal());
+    expect(content).toEqual({
+      body: '', bodySource: mimeType === 'text/plain' ? 'plain-text' : 'html-text',
+      bodyTruncated: false, preview: 'Synthetic snippet', previewTruncated: false, contentWarnings: [],
+    });
+  });
+
+  it('bounds deep MIME traversal and does not pretend a snippet is the full message', async () => {
+    let payload: Record<string, unknown> = part('text/plain', 'Details below the traversal limit');
+    for (let depth = 0; depth < 22; depth += 1) payload = { mimeType: 'multipart/mixed', parts: [payload] };
+    const content = await gmailMessageContent({ request: vi.fn() }, 'deep-fixture', {
+      payload, snippet: 'Preview only',
+    }, signal());
+    expect(content).toMatchObject({ body: 'Preview only', bodySource: 'snippet', bodyTruncated: false });
+    expect(content.contentWarnings.join(' ')).toContain('nesting limit');
+    expect(content.contentWarnings.join(' ')).toContain('Full message text is unavailable');
   });
 });
 

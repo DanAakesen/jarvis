@@ -3350,3 +3350,130 @@ describe('backend-relayed Voice Live WebSocket', () => {
     expect(received.some((event) => event.type === 'conversation.item.create')).toBe(false);
   });
 });
+
+describe('calendar confirmation turns', () => {
+  it.each(['/voice', '/voice/da'])('executes once and supplies actual evidence on repeated yes in %s', async (path) => {
+    let pending = true;
+    const summary = 'Create "Reservation" from 2026-11-05T15:00:00Z to 2026-11-06T11:00:00Z (Europe/Copenhagen); attendees: none.';
+    const confirm = vi.fn(async () => {
+      pending = false;
+      return { status: 'completed', detail: 'The event was created.', summary };
+    });
+    const state = vi.fn(async (_input, request: FastifyRequest) => ({
+      ...(pending ? { status: 'awaiting_confirmation', confirmationCode: '12345678', summary }
+        : { status: 'none' }),
+      reply: request.jarvisConversationMessage?.text === 'yes' ? 'approve' : null,
+    }));
+    const module: BackendModule = {
+      id: 'calendar-confirmation-test', registerRoutes: async () => {}, tools: [
+        { name: 'calendar_get_pending_change', description: 'Read pending.',
+          inputSchema: { type: 'object' }, execute: state },
+        { name: 'calendar_confirm_change', description: 'Confirm pending.',
+          inputSchema: { type: 'object' }, execute: confirm },
+      ],
+    };
+    let upstream!: WebSocket;
+    const received: Record<string, unknown>[] = [];
+    const upstreamUrl = await echoServer((socket) => {
+      upstream = socket;
+      socket.on('message', (data) => {
+        const event = JSON.parse(data.toString()) as Record<string, unknown>;
+        received.push(event);
+        if (event.type === 'session.update') socket.send(JSON.stringify({ type: 'session.updated' }));
+      });
+    });
+    const connect = (token: string, signal: AbortSignal) => new WebSocket(upstreamUrl, {
+      headers: { Authorization: ['Bearer', token].join(' ') }, signal,
+    });
+    const { app } = appFor(connect, undefined, [], [module], connect);
+    await app.listen({ host: '127.0.0.1', port: 0 });
+    const address = app.server.address() as AddressInfo;
+    await openBrowser(`ws://127.0.0.1:${address.port}${path}`);
+    await vi.waitFor(() => expect(upstream).toBeDefined());
+    // Establish calendar context without inventing staging or calling a provider.
+    upstream.send(JSON.stringify({ type: 'conversation.item.input_audio_transcription.completed',
+      item_id: 'calendar-request', transcript: 'Add my calendar reservation.' }));
+    await vi.waitFor(() => expect(app.conversationStore!.addMessage).toHaveBeenCalled());
+    // Wait for end-of-turn processing before the later approval.
+    await vi.waitFor(() => expect(received.some((event) => event.type === 'response.create')).toBe(true));
+    for (const itemId of ['approval-1', 'approval-2']) {
+      upstream.send(JSON.stringify({ type: 'response.done' }));
+      upstream.send(JSON.stringify({ type: 'conversation.item.input_audio_transcription.completed',
+        item_id: itemId, transcript: 'yes' }));
+      await vi.waitFor(() => expect(state).toHaveBeenCalledTimes(itemId === 'approval-1' ? 1 : 2));
+    }
+    await vi.waitFor(() => expect(received.filter((event) => event.type === 'response.create' &&
+      (event.response as Record<string, unknown> | undefined)?.tool_choice === 'none')).toHaveLength(2));
+    expect(confirm).toHaveBeenCalledOnce();
+    expect(confirm).toHaveBeenCalledWith({ confirmationCode: '12345678' }, expect.anything(), expect.anything());
+    const evidence = received.filter((event) => event.type === 'conversation.item.create' &&
+      JSON.stringify(event).includes('Actual calendar approval result'));
+    expect(evidence).toHaveLength(2);
+    expect(JSON.stringify(evidence[0])).toContain('completed');
+    expect(JSON.stringify(evidence[0])).toContain('Europe/Copenhagen');
+    expect(JSON.stringify(evidence[1])).toContain('none');
+  });
+
+  it.each(['/voice', '/voice/da'].flatMap((path) =>
+    ['pending', 'completed'].flatMap((phase) =>
+      ['Is it raining tomorrow?', 'Did you find my reservation email?',
+        'Have you checked the build status?', 'Is Gmail working now?'].map((question) =>
+        ({ path, phase, question })))))(
+    'does not hijack $question after a $phase calendar turn in $path', async ({ path, phase, question }) => {
+      let pending = true;
+      const state = vi.fn(async () => pending ? {
+        status: 'awaiting_confirmation', confirmationCode: '12345678', summary: 'Synthetic calendar stage.',
+        reply: 'approve',
+      } : { status: 'none', reply: 'approve' });
+      const confirm = vi.fn(async () => {
+        pending = false;
+        return { status: 'completed', summary: 'Synthetic calendar stage.', detail: 'Fixture completed.' };
+      });
+      const module: BackendModule = { id: 'calendar-status-isolation', registerRoutes: async () => {}, tools: [
+        { name: 'calendar_get_pending_change', description: 'Pending fixture.',
+          inputSchema: { type: 'object' }, execute: state },
+        { name: 'calendar_confirm_change', description: 'Confirmation fixture.',
+          inputSchema: { type: 'object' }, execute: confirm },
+      ] };
+      let upstream!: WebSocket;
+      const received: Record<string, unknown>[] = [];
+      const upstreamUrl = await echoServer((socket) => {
+        upstream = socket;
+        socket.on('message', (data) => {
+          const event = JSON.parse(data.toString()) as Record<string, unknown>;
+          received.push(event);
+          if (event.type === 'session.update') socket.send(JSON.stringify({ type: 'session.updated' }));
+        });
+      });
+      const connect = (token: string, signal: AbortSignal) => new WebSocket(upstreamUrl, {
+        headers: { Authorization: ['Bearer', token].join(' ') }, signal,
+      });
+      const { app } = appFor(connect, undefined, [], [module], connect);
+      await app.listen({ host: '127.0.0.1', port: 0 });
+      const address = app.server.address() as AddressInfo;
+      await openBrowser(`ws://127.0.0.1:${address.port}${path}`);
+      await vi.waitFor(() => expect(upstream).toBeDefined());
+      const sendTurn = async (id: string, transcript: string) => {
+        const count = received.filter(({ type }) => type === 'response.create').length;
+        upstream.send(JSON.stringify({ type: 'response.done' }));
+        upstream.send(JSON.stringify({ type: 'conversation.item.input_audio_transcription.completed',
+          item_id: id, transcript }));
+        await vi.waitFor(() => expect(received.filter(({ type }) => type === 'response.create')).toHaveLength(count + 1));
+      };
+      await sendTurn('calendar-context', 'Add my calendar reservation.');
+      if (phase === 'completed') {
+        await sendTurn('calendar-approval', 'yes');
+        expect(confirm).toHaveBeenCalledOnce();
+      }
+      const previousReads = state.mock.calls.length;
+      const resultOnly = () => received.filter((event) => event.type === 'response.create' &&
+        (event.response as Record<string, unknown> | undefined)?.tool_choice === 'none').length;
+      const previousResultOnly = resultOnly();
+      await sendTurn('unrelated-question', question);
+      await sendTurn('unrelated-yes', 'yes');
+      expect(state).toHaveBeenCalledTimes(previousReads);
+      expect(confirm).toHaveBeenCalledTimes(phase === 'completed' ? 1 : 0);
+      expect(resultOnly()).toBe(previousResultOnly);
+    },
+  );
+});

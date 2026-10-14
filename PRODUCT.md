@@ -1,5 +1,36 @@
 # Product
 
+## Mobile/Status review publication (14 October 2026)
+
+Dan approved commit, push and a separate review PR for the accepted phone
+composer and page-acknowledgement correction. The requirements below are
+unchanged; approval supersedes earlier local-only publication holds, not
+merge, deployment or live/device acceptance gates. No backend or Factory
+change belongs to this publication.
+
+## Page navigation acknowledgement correction (14 October 2026; local)
+
+A page-navigation command may acknowledge success only after the requested
+route has committed in the shell, not merely after requesting the switch.
+Status can acknowledge its mounted loading/error page without waiting for
+health data. Cancellation, supersession, disposal and the existing command
+deadline must settle truthfully; preserve drafts and the shared stream.
+Successful completion must recheck the captured deadline, including an
+already-current page or pane; a delayed timeout callback is not an expiry
+check. A late route may still appear, but it must not acknowledge success.
+Local evidence of an acknowledgement race does not establish the cause of
+Dan's reported first-turn failure or release acceptance.
+
+## Phone typing keyboard correction (14 October 2026; local)
+
+The chat frame and composer must stay joined when the phone keyboard opens,
+the visible viewport pans, or iOS Hide Keyboard restores space without
+blurring the input. An outside touch dismisses Message Jarvis without
+swallowing the tapped action; composer/menu controls and other editors keep
+their own focus behaviour. Preserve unsent text and saved chat geometry.
+This correction changes neither voice nor backend behaviour and is not a
+production or physical-iPhone acceptance claim.
+
 ## Remaining UI release (13 October 2026)
 
 Dan authorised "Deploy everything. so i can test live." This releases the
@@ -149,8 +180,8 @@ flowchart TB
 
 - Each area owns its pages and registers its tools with Jarvis. The backend exposes every registered tool's input schema and executes calls, recording each result so new modules become available without agent changes. Jarvis's reply about an action comes from that recorded result: a refused or failed call is reported as refused or failed, never as done. The Jarvis agent uses only these backend tools.
 - In chat and voice, Jarvis can list active projects and filtered tasks, inspect a task, create work, and steer, pause, resume, or cancel it. The backend applies the existing task validation and lifecycle rules to every action.
-- Gmail reads expose body source, truncation and extraction warnings, plus alternate HTML text when it contains different content. Jarvis checks both bodies for reservation details and describes incomplete extraction without claiming the original email lacks them; booking dates must come from readable source text.
-- Calendar changes must return `awaiting_confirmation` before Jarvis claims they are prepared or requests approval. Later plain approval uses the original pending code; if private history omits it, a verified read-only tool recovers the live stage without restaging or requesting repeated approval. Expired or absent stages are reported as no change.
+- Gmail access uses direct mail tools only, never PC, browser or screen fallback after failed or incomplete reads. Reads expose body source, truncation and extraction warnings, plus alternate HTML text when it contains different content. Successfully decoded empty bodies stay distinguishable from unavailable content. Jarvis checks both bodies for reservation details and describes incomplete extraction without claiming the original email lacks them; booking dates must come from readable source text.
+- Calendar changes must return `ok` with `awaiting_confirmation`, an eight-digit code and the actual summary before Jarvis claims preparation or requests approval. Later plain approval uses the original pending code; if private history omits it, a verified read-only tool recovers the live stage without restaging or requesting repeated approval. Expired or absent stages are reported as no pending change, not proof that an event exists or does not exist. Calendar checks require actual reads; completed writes require actual confirmation results. Subject, timezone-aware dates, attendees and returned summary survive the approval flow.
 - Google tools use the authenticated backend registry for agenda/free-slot reads, mail search and draft listing, calendar changes, draft updates/deletion, archiving, label changes, reply drafts and sending. The backend uses OAuth credentials held only in Key Vault for Dan's `danaakesen@gmail.com` account, redacts private tool inputs/results from persistence, and requires a one-time confirmation from a later verified Dan message before any write.
 - Page requirements list every data point and action, not the look. Dan creates the visual design from them with an image generator (see [DESIGN.md](DESIGN.md)).
 

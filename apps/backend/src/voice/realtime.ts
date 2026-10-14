@@ -8,6 +8,7 @@ import { defaultAwayModeState, type AwayModeState } from '../core/away-mode.js';
 import { builtInModeInstructions, modeContext } from '../core/presence-instructions.js';
 import type { VoiceTuningSettings } from '@jarvis/contracts';
 import { toolArgumentRefusal, unexpectedToolArgument } from '../core/tool-arguments.js';
+import { classifyApprovalReply } from '../core/approval.js';
 
 export const ENGLISH_REALTIME_MODEL = defaultSettings.roles.voice.model;
 export const ENGLISH_REALTIME_VOICE = 'en-GB-Ryan:DragonHDLatestNeural';
@@ -196,6 +197,48 @@ function toolOutput(name: string, outcome: ToolCallOutcome, result: unknown): st
 
 function toolFailure(name: string): string {
   return toolOutput(name, 'error', { error: 'Tool execution failed' });
+}
+
+export function calendarStatusQuestion(text: string): boolean {
+  if (/\b(?:gmail|googlemail|e-?mail|draft|kladde\w*)\b/iu.test(text)) return false;
+  return /\b(?:calendar|kalender\w*|appointments?|begivenhed\w*)\b/iu.test(text) &&
+    /^(?:is|did|have|has|status|er|har|blev|tjekkede)\b/iu.test(text.trim()) ||
+    /^(?:(?:is|was|has) (?:it|that|the event) (?:already )?(?:created|staged|added|scheduled|completed|cancelled)|(?:did|have) you (?:already )?(?:create|stage|add|schedule|complete|cancel|check) (?:it|that|the event)|(?:er|blev) (?:den|det) (?:oprettet|klargjort|tilføjet|udført)|har du (?:oprettet|klargjort|tilføjet|tjekket) (?:den|det))\b/iu.test(text.trim());
+}
+
+export function calendarTurnContext(previous: boolean, text: string) {
+  const followup = previous && (classifyApprovalReply(text) !== undefined || calendarStatusQuestion(text));
+  const explicit = /\b(?:calendar|kalender\w*|appointments?|begivenhed\w*)\b|\b(?:add|create|schedule|tilføj|opret|læg)\b.{0,80}\breservation\w*\b/iu.test(text);
+  return { context: followup || explicit, followup };
+}
+
+/** Resolve calendar approval from backend state, never a model-supplied or cached code. */
+export async function confirmPendingCalendarReply(
+  tools: ToolRegistry,
+  request: FastifyRequest,
+  signal: AbortSignal,
+): Promise<string> {
+  const pendingOutput = await executeRealtimeToolCall({
+    type: 'response.function_call_arguments.done', name: 'calendar_get_pending_change',
+    call_id: 'calendar-pending', arguments: '{}',
+  }, tools, request, signal);
+  const pending = JSON.parse(pendingOutput) as {
+    outcome: string;
+    result?: { status?: string; confirmationCode?: string; summary?: string; reply?: string };
+  };
+  const action = pending.result;
+  if (pending.outcome !== 'ok' || action?.status !== 'awaiting_confirmation') return pendingOutput;
+  if (typeof action.confirmationCode !== 'string' || !/^[0-9]{8}$/u.test(action.confirmationCode) ||
+      typeof action.summary !== 'string' || !action.summary.trim()) {
+    return toolOutput('calendar_get_pending_change', 'error', {
+      failure: 'No valid pending calendar receipt is available. No change was confirmed.',
+    });
+  }
+  if (action.reply !== 'approve' && action.reply !== 'decline') return pendingOutput;
+  return executeRealtimeToolCall({
+    type: 'response.function_call_arguments.done', name: 'calendar_confirm_change',
+    call_id: 'calendar-confirm', arguments: JSON.stringify({ confirmationCode: action.confirmationCode }),
+  }, tools, request, signal);
 }
 
 export async function executeRealtimeToolCall(

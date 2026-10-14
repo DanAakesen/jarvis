@@ -1,5 +1,53 @@
 # Architecture
 
+## Mobile/Status review publication (14 October 2026)
+
+The publication candidate retains all eight accepted code/test/CSS paths
+byte-exact, including the two already LF-normalised hook files. Only additive
+documentation is adapted to current main; page completion ownership,
+deadline/cancellation behaviour and phone viewport ownership below are
+unchanged. No Factory, backend, contract, dependency or runtime boundary
+is added. Publication approval does not authorise merge or deployment.
+
+## Page command completion ownership (14 October 2026; local)
+
+`ShellLayout` retains synchronous direct workspace dispatch, but its broker
+page-command applier owns a bounded pending-route completion. The pathname
+layout effect settles success only on destination commit, or refuses a
+superseding route. Abort, unmount and the command deadline remove the waiter
+and its timer/listener. The maximum wait retains the existing six-second
+navigation ceiling and 250-ms acknowledgement reserve; it starts no fetch.
+Both a successful waiter settlement and the post-dispatch page/pane fast
+return check the same captured deadline against the completion-time clock.
+Late success becomes the existing deadline refusal even if its timeout has
+not run; cancellation and other refusals keep their reason. This observes
+completion only and does not roll back a requested router transition.
+
+Actual-App fixtures observed applied acknowledgements before the Status
+heading/selected rail entry existed. The surrounding `flushSync` and the
+navigation function's return alone did not guarantee route commit. The new
+owner observes the shell commit rather than polling DOM or awaiting health
+reads. Existing Factory issue resolution, Notes draft guard, Folio pane,
+session/pin handlers and persistent Now session remain separate.
+
+## Phone typing viewport ownership (14 October 2026; local)
+
+`ShellLayout` enables `usePhoneChatViewport` only for signed-in phone typing.
+The hook publishes shell-scoped top/bottom visual-viewport insets synchronously
+on resize, pan, page restore and focus changes; unchanged values are not
+rewritten. This precedes the workspace's scheduled anchor measurement,
+including pan-only events where canvas dimensions do not change. Pinch zoom
+and browsers without VisualViewport retain ordinary dock behaviour.
+
+`Workspace` remeasures an existing manual composer anchor through one
+animation-frame callback on viewport/window resize and captured scrolling,
+deduplicates unchanged coordinates, and removes listeners/pending work on
+disposal. Both phone chat halves use the same insets and measured composer
+height. No viewport event writes persisted layout or remounts the draft owner.
+The hook dismisses only an active in-shell Message Jarvis textarea on outside
+touch, excluding composer/menu controls and preserving the native tap.
+Voice, authentication, APIs, model requests and dependencies are unchanged.
+
 ## Remaining UI release (13 October 2026)
 
 `Workspace` owns conversation gestures and device-local normalized geometry
@@ -3727,7 +3775,8 @@ call linkage remain the post-merge P4-09 acceptance check.
 - Google Calendar and Gmail tools are registered only in the backend and use the official Google APIs over HTTPS. The backend reads `google-oauth-client-id`, `google-oauth-client-secret`, and `google-refresh-token` only from Key Vault, exchanges the refresh token for a short-lived access token, and caches only that access token in memory. The single OAuth grant is for `danaakesen@gmail.com` and uses `gmail.readonly`, `gmail.compose`, `gmail.send`, `gmail.modify`, `calendar.events`, and `calendar.calendarlist.readonly` (read-only calendar list for the Daily all-calendars feed; Daily reuses this single grant); `gmail.modify` is the least-privilege scope for Gmail message labels and draft update/deletion. No Google credential or token is a deployment variable or client-bundle value. An `invalid_grant` records a deduplicated `credential_expiry` activity alert; tool calls return a visible reconnect message. Dan must add `gmail.modify` to Google Auth Platform's Data Access scopes and rerun `infra/setup-google.ps1` to re-consent and replace the Key Vault refresh token before using the new mail tools.
 - Calendar range reads interpret date-only `start`/`end` in `JARVIS_GOOGLE_TIME_ZONE` (inclusive dates and an exclusive next-midnight API boundary); timezone-aware date-times are queried as instants. `calendar_list_events` pages up to 100 events across no more than 62 days and maps optional `query` to Google's `q`; `calendar_next_event` searches up to 60 days and skips events where Dan's attendee response is declined. All-day start/end values remain date-only, including multi-day events, while timed events remain instants. Calendar agenda, range, and next-event reads are reflex-safe and sensitive results remain redacted from the durable tool-call audit.
 - Gmail search and draft listing share the bounded MIME reader introduced on #837 / task 12. It reads nested plain/HTML alternatives and API-externalized text parts, returning `bodySource`, `bodyTruncated`, `contentWarnings` and differing `alternateBody`/`alternateBodyTruncated`. Static parse5 extraction skips scripts, styles, hidden attributes and inline hidden styles, strips invisible email padding before the 6000-character text limit, and never executes HTML or fetches remote resources. File attachments, unsupported charsets, missing bodies and traversal limits remain explicit; snippets cannot establish absent reservation details.
-- `calendar_get_pending_change` reads the latest process-local calendar stage (original confirmation code, summary and expiry), only for a verified current Dan message. It performs no Google request and returns `none` after expiry, cancellation, consumption or restart. Its audit arguments/results remain redacted. Chat and voice instructions require a successful staging result before claiming preparation and recover this code on a later plain approval before calling `calendar_confirm_change`; confirmation retains the later-message, scope, expiry and one-shot checks.
+- `calendar_get_pending_change` reads the latest process-local calendar stage (original confirmation code, summary and expiry) and classifies the verified current Dan message. It performs no Google request and returns `none` after expiry, cancellation, consumption or restart. Its audit arguments/results remain redacted. The hosted model loop uses this actual receipt to resolve later approvals before model generation and renders staging/read/confirmation replies from tool results; provisional text is buffered while Calendar is available, trading first-text latency for evidence grounding. Email-only reservation reads and unrelated follow-up requests do not become calendar approval turns. EN/DA realtime approval/status turns use the same tools and relay the actual result with tools disabled; this is not proof of live model speech. Confirmation preserves the original summary and retains the later-message, scope, expiry and one-shot checks, consuming the action before provider execution even on failure.
+- Direct-only Gmail guards are shared by HTTP, voice, reflex and nested registry execution. A bounded process-local turn ledger prevents generic PC/browser fallback once a direct mail tool starts, including failure and incomplete extraction. Explicit Gmail targets and observed Gmail tabs/windows are refused before planning or acting. The ledger stores identifiers and expiry only, never email content. The MIME reader distinguishes successfully decoded empty text from missing/malformed bodies; read and write provider failures remain explicit.
 - Calendar creation, movement, updates to title/time/location/attendees/description, deletion, Gmail draft creation/replacement/deletion, message archive/label changes, and sending are staged in process memory for ten minutes. Calendar executes only after a different, later persisted Dan message is a plain approval accepted by the shared approval classifier (for example yes, approved, confirmed, go ahead or ja); no/cancel discards it. A new calendar stage invalidates the previous calendar action, and the confirmation tool must identify the latest action with its returned code. Gmail also uses later plain approval; the returned eight-digit code identifies the pending action for its confirmation tool. Pending actions are one-shot and lost on restart; the Container App remains at one replica. Sensitive Google tool inputs/results are redacted from persistent tool-call records, and external Google error bodies are not returned or logged. Calendar updates PATCH only the supplied fields; empty location, description, and attendee values can clear those fields. Draft replacement requires recipients, subject, and plain-text body; it preserves reply threading and refuses drafts with attachments or CC/BCC recipients. Gmail draft listing is bounded to ten drafts and returns plain-text bodies; archiving removes `INBOX`, and label changes resolve exact Gmail label names or IDs. Confirmed replies create a Gmail draft; Dan sends it from Gmail.
 - [`infra/bootstrap.ps1`](../infra/bootstrap.ps1) creates what the deploy workflows can't create for themselves: the deploy identity (GitHub OIDC, main branch only, trusting both the name-based and the ID-based subject (L50); Contributor and Role Based Access Control Administrator on `rg-jarvis`), the sign-in apps, `id-jarvis-backend`, and `jarvis-sql-admins`. Its IDs are in `infra/bootstrap.output.json` and in the repository's Actions variables.
 - Managed identities between Azure services; GitHub Actions deploys with OpenID Connect.

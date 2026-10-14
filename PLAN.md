@@ -1,16 +1,65 @@
 # Project plan
 
-## P11-03 / #838 — Calendar staging and reservation extraction
+## Mobile/Status review publication (14 October 2026)
 
-Calendar recovery now reads the original pending stage through a verified, private
-read-only tool; chat and voice instructions require actual staging before approval.
-Regression tests cover redacted history, plain approval, no stage, failed staging
-and replay. Task 12 / #837 MIME extraction is reused; nested HTML reservation
-and invisible-padding regressions are added. Offline implementation is complete:
-268 selected tests, backend lint and TypeScript build pass. Next: backend-owned
-PR review, with #837 access-policy changes remaining on task 12; deployed
-chat/voice and account acceptance are unverified. No live calendar operation
-was performed or authorized.
+Dan approved the reviewed #799/mobile correction for isolated commit,
+push and a separate review PR. This supersedes the pre-approval publication
+holds recorded below; merge/deployment and #798/#797/#792 remain held.
+The publication artifact preserves the eight accepted code/test/CSS files
+byte-for-byte and adds documentation to main `439a000` without replaying
+an older PLAN table. All actual generated cells remain unchanged, including
+P9-101's current `In progress` cell.
+
+The retained clean-main runtime receipt records 258 passing tests across
+nine files, strict types and a scratch build on available tools, not pinned
+CI. Main's two generated PLAN updates since that receipt's `b787788` base
+restored the original cell; implementation and configuration are unchanged.
+The seven-file lint receipt remains applicable by source/config equivalence;
+the two LF-normalised hook files have distinct raw hashes and CSS is excluded.
+No tests or implementation were repeated for publication preparation.
+Next: the separately scoped publisher applies this artifact and opens the
+review PR. Factory #842, merge/deployment and live acceptance stay separate.
+
+## Page completion deadline review correction (14 October 2026; local)
+
+The bounded review follow-up confirms late success on the reviewed applier:
+four failing expiry probes and two passing pre-deadline controls. Recheck the
+captured deadline at successful waiter completion and synchronous fast return,
+without altering cancellation, refusals, the timeout or router ownership.
+Six final probes and all five directly affected suites pass 149 assertions;
+strict types and a scratch production build pass. Final exact-hash scoped
+lint passes seven TS/TSX files with zero errors/warnings; CSS is excluded.
+The local correction is complete. Current-main integration is artifact-only,
+retaining main's documentation and workflow cells, not changing a checkout.
+
+The earlier nine-file/252-test and lint evidence below is preserved as the
+previous revision, not repeated or relabelled as a fresh full run. This work
+does not establish Dan's original trigger, phone/voice acceptance or rollback.
+Factory #842 remains separate. No publication, merge/deployment, live call or
+release of #798/#797/#792 is authorised.
+
+## Phone keyboard correction and next Status trace (14 October 2026; local)
+
+The user-directed mobile correction keeps chat/composer joined through
+keyboard resize, viewport pan, outside touch and focused Hide Keyboard.
+Saved geometry and draft ownership are unchanged. Scoped local checks and
+controlled browser geometry do not establish physical-phone acceptance;
+this work has no mixed-branch publication or deployment permission.
+
+The subsequent bounded #799 trace reproduced an acknowledgement-before-route-
+commit edge in four actual-App cases; already-on-Status cases passed. A local
+route-commit waiter corrects that edge, with ten new first-ack/lifecycle cases.
+Nine affected test files pass 252 assertions; types/build and final seven-file
+TypeScript/TSX scoped lint pass with zero errors/warnings. CSS has no existing
+lint configuration and is excluded. The local implementation is complete;
+Dan's original cause and live acceptance remain unestablished. His human turn happened, the
+first claim lacked visible navigation and his follow-up recovered.
+Do not send another live/model turn or start held #798, #797 or #792.
+The frozen #813 files/patch and mobile-only source snapshot remain separate;
+no mixed publication, merge or deployment is authorised.
+The coordinator reports isolated Factory [#842](https://github.com/DanAakesen/jarvis/pull/842)
+open at `281bd1a`, excluding these mobile/Status changes; this grants no
+publication or live acceptance for the separate coupled correction.
 
 ## Danish voice Settings correction (13 October 2026)
 
@@ -741,6 +790,7 @@ Declined in the audit (do not file): verbosity and max-output-token settings, no
 | P9-97 | [#790](https://github.com/DanAakesen/jarvis/issues/790) | Show the live Danish voice, Jeppe, as fixed/read-only in Settings; coordinator owns backend compatibility and UI session owns web | Settings and API accept retired Harper storage; truthful default/option, no Danish-voice UI patch; focused tests, types/lint and desktop/phone inspection | — | Complete |
 | P9-101 | [#799](https://github.com/DanAakesen/jarvis/issues/799) | Read-only Status page, rail/phone navigation and existing voice/chat target | Eleven reported checks, failure reasons, visible PC connection/pause state, timestamps/stale markers, retained smoke with no invented release association; Refresh never runs canaries. Local types/lint/build, 103 scoped tests and desktop/320px synthetic browser checks pass; exact-head CI/release/live acceptance pending | P9-20 | Not started |
 | P9-104 | [#796](https://github.com/DanAakesen/jarvis/issues/796) | Reconcile `docs/features.md` with completed tasks and verified production state | Correct targeted statuses with evidence; count Live/Built not verified/Offline only/Planned; record #787/#791 release, P9-82 chat-image logs with voice check outstanding, P10-04 backend/P10-07 web ownership, and Daily reuse of existing SQL without new infrastructure | — | Complete |
+| P9-115 | [#843](https://github.com/DanAakesen/jarvis/issues/843) | Align shared Status navigation instructions with the shipped page | Remove the stale unavailable-page instruction; require canonical `workspace_command` navigate/status guidance and truthful applied/refused semantics across hosted settings and English/Danish realtime, both automatic-capture values, preserving budget/BMP/tool-parity checks. Source/instruction consistency only; not live, model, or voice acceptance and not attribution of a production turn | P9-40 | Complete |
 
 #815's guarded merge caught the title bot truncating P9-101 to P9-10.
 The coordinator authorised the coupled normalizer/linked-ID/PLAN-parser
@@ -785,10 +835,22 @@ after the navigation follow-up: #799 is implemented locally with release/live
 acceptance pending; #798, #797, then #792 remain separate.
 
 ### P11 — Jarvis-raised fixes
+
+Local consolidation of #837/#838/#839 uses the existing #848/task-14 delivery,
+with task-15 calendar evidence/approval hunks and task-12 direct-only access guards.
+Current main is integrated without replaying generated status cells or changing
+the accepted mobile sources. One pending-state tool serves hosted and realtime
+flows; synthetic regressions cover actual read/stage/later-confirmation receipts,
+failure consumption and extraction limits. Local checks pass 267 hosted chat/voice
+tests, 251 runnable backend tests and backend lint; actual registry receipt checks
+also pass. HTTP Google/parity/relay suites and full types/build are blocked by
+missing local packages. Exact-head pinned CI, review and original Gmail/calendar
+acceptance remain open. No issue closure, new PR,
+publication, merge or deployment is authorised by this preparation.
+
 A rolling intake phase. When Dan asks Jarvis to change its own code or a project's code, Jarvis drafts the issue, confirms it with Dan and creates it as `P11-NN` (P10-03). Rows are added here as the issues are created.
 | ID | Issue | Task | Acceptance criteria | Depends on | Status |
 | --- | --- | --- | --- | --- | --- |
-| P11-03 | [#838](https://github.com/DanAakesen/jarvis/issues/838) | Stage calendar changes before approval; recover real pending codes after history redaction; expose Gmail reservation HTML and extraction limits | Fake-provider stage/recover/plain-approve/replay and nested HTML/padding regressions; 268 selected tests plus backend lint/build pass; no live calendar write | #837 owns direct-only access policy | Complete offline; live acceptance pending |
 | P9-42 | [#569](https://github.com/DanAakesen/jarvis/issues/569) | Safe, retryable tool argument refusals in voice/chat, content-free validation telemetry, and repo_search aliases plus incomplete/empty-result guidance; offline checks pass, live acceptance pending | Backend | P7-45, P9-36 | Complete |
 | P9-40 | [#567](https://github.com/DanAakesen/jarvis/issues/567) | Jarvis can switch the page Dan is looking at | Backend + UI session | P8-15, P9-36 | Complete |
 

@@ -5,6 +5,7 @@ import type { BackendModule } from '../modules.js';
 import { GoogleApiError, type GoogleApiClient } from './api-client.js';
 import { gmailMessageContent } from './message-content.js';
 import { PendingGoogleActions, type GoogleActionScope } from './pending-actions.js';
+import { classifyApprovalReply } from '../core/approval.js';
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -241,9 +242,13 @@ function googleFailure(error: unknown): never {
 }
 
 function gmailItems(payload: Record<string, unknown>): Record<string, unknown>[] {
-  if (!Array.isArray(payload.messages)) return [];
-  return payload.messages.filter((item): item is Record<string, unknown> =>
-    item !== null && typeof item === 'object' && !Array.isArray(item));
+  if (payload.messages === undefined && !payload.nextPageToken &&
+      (payload.resultSizeEstimate === undefined || payload.resultSizeEstimate === 0)) return [];
+  if (!Array.isArray(payload.messages) || payload.messages.some((message) => {
+    const item = object(message);
+    return typeof item?.id !== 'string' || !item.id || item.id.length > 512;
+  })) throw new ToolFailure('Gmail returned an invalid message list. Direct mail access is incomplete.');
+  return payload.messages as Record<string, unknown>[];
 }
 
 function gmailDrafts(payload: Record<string, unknown>): Record<string, unknown>[] {
@@ -674,7 +679,7 @@ export function createGoogleModule(
         return pendingActions.stage({
           scope: 'calendar',
           sourceMessageId: source.id,
-          summary: `Create "${subject}" from ${start.toISOString()} to ${end.toISOString()}${validatedAttendees.length ? `; invite ${validatedAttendees.join(', ')}.` : '.'}`,
+          summary: `Create "${subject}" from ${start.toISOString()} to ${end.toISOString()} (${timeZone}); attendees: ${validatedAttendees.length ? validatedAttendees.join(', ') : 'none'}.`,
           execute: async (signal) => {
             try {
               await google.request('calendar', '/calendars/primary/events', {
@@ -850,12 +855,12 @@ export function createGoogleModule(
     },
     {
       name: 'calendar_get_pending_change',
-      description: 'Recover the latest actually staged calendar change and its original confirmationCode, summary and expiry. Read-only; requires a verified Dan message. On a later plain approval, use this code with calendar_confirm_change in the same turn; do not stage again or ask for repeated approval. A none status means nothing is staged.',
+      description: 'Recover the latest actually staged calendar change and its original confirmationCode, summary, expiry and reply classification from the verified current Dan message. Read-only; does not check Google Calendar. On a later plain approval use this code with calendar_confirm_change without restaging or asking again. A none status means nothing is staged.',
       inputSchema: { type: 'object', properties: {}, additionalProperties: false },
       sensitive: true,
       execute: async (_input, request) => {
-        await currentDanMessage(request);
-        return pendingActions.pendingCalendarChange();
+        const message = await currentDanMessage(request);
+        return { ...pendingActions.pendingCalendarChange(), reply: classifyApprovalReply(message.text) ?? null };
       },
     },
     {

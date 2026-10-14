@@ -98,8 +98,10 @@ export async function gmailMessageContent(
   const plainBody = plain.map((text) => text.replace(/(?:\u00ad|\u034f|\u200b|\u2060|\ufeff)/gu, '')).join('\n').trim();
   const htmlBody = html.length ? htmlText(html.join('\n')) : '';
   const source = plainBody ? 'plain-text' : htmlBody ? 'html-text' :
-    typeof message.snippet === 'string' && message.snippet ? 'snippet' : 'unavailable';
-  const text = plainBody || htmlBody || (typeof message.snippet === 'string' ? message.snippet : '');
+    plain.length ? 'plain-text' : html.length ? 'html-text' :
+      typeof message.snippet === 'string' && message.snippet ? 'snippet' : 'unavailable';
+  const preview = typeof message.snippet === 'string' ? message.snippet : '';
+  const text = plainBody || htmlBody || (source === 'snippet' ? preview : '');
   if (source === 'snippet' || source === 'unavailable') {
     warnings.add('Full message text is unavailable; a preview cannot establish missing reservation details.');
   }
@@ -107,6 +109,9 @@ export async function gmailMessageContent(
   const alternate = plainBody && htmlBody && plainBody.replace(/\s+/gu, ' ') !== htmlBody ? htmlBody : '';
   if (alternate.length > maxBodyCharacters) warnings.add('Alternate HTML text is truncated at 6000 characters.');
   return {
+    ...(!text && preview && source !== 'snippet' ? {
+      preview: preview.slice(0, maxBodyCharacters), previewTruncated: preview.length > maxBodyCharacters,
+    } : {}),
     ...(alternate ? { alternateBody: alternate.slice(0, maxBodyCharacters), alternateBodyTruncated: alternate.length > maxBodyCharacters } : {}),
     body: text.slice(0, maxBodyCharacters),
     bodySource: source,
