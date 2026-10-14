@@ -818,15 +818,22 @@ Failure diagnostics survive both concurrent cache rejection and stale fallback:
 Project lookup has its own event with that safe correlation. The board also
 emits allowlisted `factory.board_phase` timings for each executed project,
 token, source, task, release, and response boundary, plus one
-`factory.board_read_timing` summary with outcome, cache path, stale state, and
-status. Durations use a monotonic clock, are bounded to 60 seconds, and are
-server-only; a missing phase means that work was not performed. Response
-assembly and serialization have separate response entries. Source, task, and
-release durations are individual wall-clock measurements of concurrent work;
-they overlap and must not be summed as if sequential. Cache paths distinguish
-`cache_hit`, `shared_wait`, and `source_load`; `stale` marks either stale
-fallback path. No phase exports exception messages, provider content, headers,
-tokens, SQL, repository URLs, or query strings.
+`factory.board_read_timing` summary with outcome, cache path, stale state, status,
+and monotonic `cacheElapsedMs`. That elapsed value measures the awaited cache
+operation: lookup for a hit, wait for a shared caller, or the complete source
+load for its owner. Interpret it with `cachePath`; it is not a stage duration.
+Durations are bounded to 60 seconds and server-only. Values beyond that limit
+omit the numeric duration and set the corresponding `durationCensored` or
+`cacheElapsedCensored` marker rather than reporting a clipped value. Invalid
+or unavailable clock values omit the numeric duration and set
+`durationUnavailable` or `cacheElapsedUnavailable`. A missing phase means that
+work was not performed. Response assembly and serialization
+have separate response entries (`part`). Source, task, and release durations
+are individual wall-clock measurements of concurrent work; they overlap and
+must not be summed as if sequential. Cache paths distinguish `cache_hit`,
+`shared_wait`, and `source_load`; `stale` marks either stale fallback path. No
+phase exports exception messages, provider content, headers, tokens, SQL,
+repository URLs, or query strings.
 
 At the existing board publication boundary, `factory.board_invalidated` exports
 only a bounded origin (`task_event` or `github_webhook`), safe project ID and

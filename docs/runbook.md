@@ -135,10 +135,16 @@ body times were 9.850 s / 10.487 s.
 After the diagnostic follow-up is reviewed and deployed, correlate board
 `request.started`, `factory.board_read_timing`, and `factory.board_phase` by
 `reqId`. Compare the summary `cachePath` and `stale` fields before separating
-cache hits, shared waits, source loads, or stale fallbacks. Per-stage values are
-monotonic wall durations; source, task, and release work runs concurrently, so
-their durations overlap and must not be added. A response phase `part` marks
-assembly versus serialization. Correlate webhook invalidations by their
+cache hits, shared waits, source loads, or stale fallbacks. `cacheElapsedMs` is
+the awaited cache operation time (including the full load for `source_load`);
+it is not an additional phase duration. Per-stage values are monotonic wall
+durations; source, task, and release work runs concurrently, so their durations
+overlap and must not be added. A response phase `part` marks assembly versus
+serialization. `durationCensored` and `cacheElapsedCensored` mean the actual
+duration exceeded the 60-second reporting bound and was omitted, not clipped.
+`durationUnavailable` and `cacheElapsedUnavailable` mean a valid clock duration
+could not be produced; no numeric value is exported.
+Correlate webhook invalidations by their
 request ID and bounded origin/project/version fields; task-event prelookup
 invalidations are marked `all_projects` and have no project/version yet.
 These diagnostics were not present in the failed production window and do not

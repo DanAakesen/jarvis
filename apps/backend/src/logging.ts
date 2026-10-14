@@ -174,7 +174,9 @@ function safeFields(input: Record<string, unknown>): Record<string, unknown> {
     if (safeBoardRoute(input.route)) fields.route = input.route;
     if (typeof input.stage === 'string' && boardReadStages.has(input.stage)) fields.stage = input.stage;
     if (input.part === 'assemble' || input.part === 'serialize') fields.part = input.part;
-    if (safeBoardDuration(input.durationMs)) fields.durationMs = input.durationMs;
+    if (input.durationUnavailable === true) fields.durationUnavailable = true;
+    else if (input.durationCensored === true) fields.durationCensored = true;
+    else if (safeBoardDuration(input.durationMs)) fields.durationMs = input.durationMs;
     return fields;
   }
   if (input.msg === 'factory.board_read_timing') {
@@ -184,6 +186,9 @@ function safeFields(input: Record<string, unknown>): Record<string, unknown> {
     if (typeof input.outcome === 'string' && boardReadOutcomes.has(input.outcome)) fields.outcome = input.outcome;
     if (typeof input.cachePath === 'string' && boardCachePaths.has(input.cachePath)) fields.cachePath = input.cachePath;
     if (typeof input.stale === 'boolean') fields.stale = input.stale;
+    if (input.cacheElapsedUnavailable === true) fields.cacheElapsedUnavailable = true;
+    else if (input.cacheElapsedCensored === true) fields.cacheElapsedCensored = true;
+    else if (safeBoardDuration(input.cacheElapsedMs)) fields.cacheElapsedMs = input.cacheElapsedMs;
     if (Number.isInteger(input.statusCode) && Number(input.statusCode) >= 100 &&
         Number(input.statusCode) <= 599) fields.statusCode = input.statusCode;
     return fields;

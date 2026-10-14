@@ -56,9 +56,10 @@ describe('structured log export', () => {
       const logger = createLogger({ logLevel: 'info' }, sink, output);
       const reqId = '00000000-0000-0000-0000-000000000000';
       const fields = event === 'factory.board_phase'
-        ? { reqId, route: '/factory/board', stage: 'response', part: 'assemble', durationMs: 25 }
+          ? { reqId, route: '/factory/board', stage: 'response', part: 'assemble', durationCensored: true }
         : event === 'factory.board_read_timing'
-          ? { reqId, route: '/factory/board', outcome: 'success', cachePath: 'cache_hit', stale: false, statusCode: 200 }
+            ? { reqId, route: '/factory/board', outcome: 'success', cachePath: 'shared_wait',
+              stale: false, cacheElapsedMs: 42, statusCode: 200 }
           : { reqId, origin: 'task_event', projectId: '42', version: 3, scope: 'all_projects' };
       logger.info(fields, event);
       expect(JSON.parse(records[0]!)).toEqual({
@@ -69,6 +70,8 @@ describe('structured log export', () => {
         route: 'https://private.example/path?token=secret',
         stage: 'private-stage',
         durationMs: 60_001,
+        cacheElapsedMs: 60_001,
+        cacheElapsedCensored: true,
         outcome: 'private-outcome',
         cachePath: 'private-path',
         stale: 'private-stale',
@@ -83,7 +86,9 @@ describe('structured log export', () => {
       }, event);
       expect(JSON.parse(records[1]!)).toEqual({
         level: 30, time: expect.any(Number), service: 'jarvis-backend', reqId,
-        ...(event === 'factory.board_phase' ? { part: 'assemble' } : {}),
+        ...(event === 'factory.board_phase'
+          ? { part: 'assemble', durationCensored: true }
+          : event === 'factory.board_read_timing' ? { cacheElapsedCensored: true } : {}),
         msg: event,
       });
       expect(sink.trackTrace).toHaveBeenCalledTimes(2);
@@ -91,12 +96,54 @@ describe('structured log export', () => {
         message: event,
         properties: {
           service: 'jarvis-backend', reqId,
-          ...(event === 'factory.board_phase' ? { part: 'assemble' } : {}),
+          ...(event === 'factory.board_phase'
+            ? { part: 'assemble', durationCensored: true }
+            : event === 'factory.board_read_timing' ? { cacheElapsedCensored: true } : {}),
         },
       }));
       expect(records.join('') + JSON.stringify(sink.trackTrace.mock.calls)).not.toContain('private');
     },
   );
+
+  it('exports unavailable board duration markers without numeric values', () => {
+    const records: string[] = [];
+    const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });
+    const sink = { ...sdk, trackTrace: vi.fn() };
+    const logger = createLogger({ logLevel: 'info' }, sink, output);
+    logger.info({
+      reqId: '00000000-0000-0000-0000-000000000000',
+      stage: 'source',
+      durationMs: Number.NaN,
+      durationUnavailable: true,
+    }, 'factory.board_phase');
+    logger.info({
+      reqId: '00000000-0000-0000-0000-000000000000',
+      cacheElapsedMs: Number.NaN,
+      cacheElapsedUnavailable: true,
+    }, 'factory.board_read_timing');
+
+    expect(JSON.parse(records[0]!)).toEqual({
+      level: 30, time: expect.any(Number), service: 'jarvis-backend',
+      reqId: '00000000-0000-0000-0000-000000000000',
+      stage: 'source',
+      durationUnavailable: true,
+      msg: 'factory.board_phase',
+    });
+    expect(JSON.parse(records[1]!)).toEqual({
+      level: 30, time: expect.any(Number), service: 'jarvis-backend',
+      reqId: '00000000-0000-0000-0000-000000000000',
+      cacheElapsedUnavailable: true,
+      msg: 'factory.board_read_timing',
+    });
+    expect(sink.trackTrace).toHaveBeenNthCalledWith(1, expect.objectContaining({
+      message: 'factory.board_phase',
+      properties: expect.objectContaining({ durationUnavailable: true }),
+    }));
+    expect(sink.trackTrace).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      message: 'factory.board_read_timing',
+      properties: expect.objectContaining({ cacheElapsedUnavailable: true }),
+    }));
+  });
 
   it('names the WebSocket plugin warning without exporting framework error details', () => {
     const records: string[] = [];

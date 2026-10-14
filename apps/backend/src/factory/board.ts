@@ -30,6 +30,14 @@ const closedIssueWindowMs = 14 * 24 * 60 * 60 * 1000;
 type FactoryBoardStage = 'project' | 'token' | 'source' | 'task' | 'release' | 'response';
 type FactoryBoardCachePath = 'cache_hit' | 'shared_wait' | 'source_load';
 
+export function boardDurationFields(
+  durationMs: number,
+): { durationMs: number } | { durationCensored: true } | { durationUnavailable: true } {
+  if (!Number.isFinite(durationMs) || durationMs < 0) return { durationUnavailable: true };
+  if (durationMs > 60_000) return { durationCensored: true };
+  return { durationMs: Math.round(durationMs) };
+}
+
 async function logBoardPhase<T>(
   request: FastifyRequest,
   stage: FactoryBoardStage,
@@ -45,7 +53,7 @@ async function logBoardPhase<T>(
       route: request.routeOptions.url,
       stage,
       ...(part === undefined ? {} : { part }),
-      durationMs: Math.min(60_000, Math.max(0, Math.round(performance.now() - startedAt))),
+      ...boardDurationFields(performance.now() - startedAt),
     }, 'factory.board_phase');
   }
 }
@@ -845,6 +853,7 @@ export function registerFactoryBoardRoute(app: FastifyInstance): void {
   }, async (request, reply) => {
     let outcome: 'success' | 'failure' | 'not_found' | 'unavailable' = 'failure';
     let cachePath: FactoryBoardCachePath | 'not_started' = 'not_started';
+    let cacheElapsedFields: ReturnType<typeof boardDurationFields> | undefined;
     let stale = false;
     try {
       const projects = app.projectStore;
@@ -874,32 +883,39 @@ export function registerFactoryBoardRoute(app: FastifyInstance): void {
       }
 
       try {
-        const { board, stale: usedStale, failure } = await app.factoryBoardCache.get(project.id, async () => {
-          const now = Date.now();
-          const closedSince = new Date(now - closedIssueWindowMs).toISOString();
-          const token = await logBoardPhase(request, 'token', () =>
-            readBoardStage('token', () => tokenIssuer.issueForRepositoryRead(project.repo)));
-          const [source, taskRecords, releaseRecords] = await Promise.all([
-            logBoardPhase(request, 'source', () =>
-              readBoardStage('source', () => app.factoryBoardReader.read(project.repo, token, closedSince))),
-            logBoardPhase(request, 'task', () =>
-              readBoardStage('task', () => tasks.list({ projectId: project!.id, limit: 1000, offset: 0 }))),
-            logBoardPhase(request, 'release', () =>
-              readBoardStage('release', () => releases.read(project!.id))),
-          ]);
-          return logBoardPhase(request, 'response', async () => {
-            const board = createFactoryBoard(
-              project!.id,
-              project!.repo,
-              source,
-              taskRecords,
-              releaseRecords.pullRequests,
-              now,
-            );
-            if (!isFactoryBoard(board)) throw new FactoryBoardReadError('response', 'invalid_response');
-            return board;
-          }, 'assemble');
-        }, (path) => { cachePath = path; });
+        const cacheStartedAt = performance.now();
+        let cached;
+        try {
+          cached = await app.factoryBoardCache.get(project.id, async () => {
+            const now = Date.now();
+            const closedSince = new Date(now - closedIssueWindowMs).toISOString();
+            const token = await logBoardPhase(request, 'token', () =>
+              readBoardStage('token', () => tokenIssuer.issueForRepositoryRead(project.repo)));
+            const [source, taskRecords, releaseRecords] = await Promise.all([
+              logBoardPhase(request, 'source', () =>
+                readBoardStage('source', () => app.factoryBoardReader.read(project.repo, token, closedSince))),
+              logBoardPhase(request, 'task', () =>
+                readBoardStage('task', () => tasks.list({ projectId: project!.id, limit: 1000, offset: 0 }))),
+              logBoardPhase(request, 'release', () =>
+                readBoardStage('release', () => releases.read(project!.id))),
+            ]);
+            return logBoardPhase(request, 'response', async () => {
+              const board = createFactoryBoard(
+                project!.id,
+                project!.repo,
+                source,
+                taskRecords,
+                releaseRecords.pullRequests,
+                now,
+              );
+              if (!isFactoryBoard(board)) throw new FactoryBoardReadError('response', 'invalid_response');
+              return board;
+            }, 'assemble');
+          }, (path) => { cachePath = path; });
+        } finally {
+          cacheElapsedFields = boardDurationFields(performance.now() - cacheStartedAt);
+        }
+        const { board, stale: usedStale, failure } = cached;
         stale = usedStale;
         if (stale) {
           const { stage, reason, status } = boardReadError('response', failure);
@@ -933,6 +949,11 @@ export function registerFactoryBoardRoute(app: FastifyInstance): void {
         outcome,
         cachePath,
         stale,
+        ...(cacheElapsedFields && 'durationMs' in cacheElapsedFields
+          ? { cacheElapsedMs: cacheElapsedFields.durationMs }
+          : cacheElapsedFields && 'durationCensored' in cacheElapsedFields
+            ? { cacheElapsedCensored: true }
+            : cacheElapsedFields ? { cacheElapsedUnavailable: true } : {}),
         statusCode: reply.statusCode,
       }, 'factory.board_read_timing');
     }

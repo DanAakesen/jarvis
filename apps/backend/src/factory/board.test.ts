@@ -12,6 +12,7 @@ import {
   FactoryBoardCache,
   createFactoryBoard,
   createGitHubFactoryBoardReader,
+  boardDurationFields,
   desiredFactoryBoardStatus,
   type FactoryBoardIssue,
   type FactoryBoardSource,
@@ -103,6 +104,13 @@ function fixture(reader: ReturnType<typeof vi.fn>, options: { modules?: readonly
 }
 
 describe('Factory board', () => {
+  it('reports bounded phase durations without presenting clipped values as exact', () => {
+    expect(boardDurationFields(0)).toEqual({ durationMs: 0 });
+    expect(boardDurationFields(60_000)).toEqual({ durationMs: 60_000 });
+    expect(boardDurationFields(60_001)).toEqual({ durationCensored: true });
+    expect(boardDurationFields(Number.NaN)).toEqual({ durationUnavailable: true });
+  });
+
   it('keeps the board private and refuses the existing deployment smoke identity', async () => {
     const reader = vi.fn(async () => source);
     const { app, tokenIssuer } = fixture(reader, {
@@ -236,7 +244,10 @@ describe('Factory board', () => {
       expect(phase.durationMs as number).toBeLessThanOrEqual(60_000);
     }
     expect(info.mock.calls.find(([, event]) => event === 'factory.board_read_timing')?.[0])
-      .toMatchObject({ cachePath: 'source_load', stale: false, outcome: 'success', statusCode: 200 });
+      .toMatchObject({
+        cachePath: 'source_load', cacheElapsedMs: expect.any(Number),
+        stale: false, outcome: 'success', statusCode: 200,
+      });
 
     info.mockClear();
     const second = await app.inject({ url: '/factory/board?project=42', headers });
@@ -248,7 +259,39 @@ describe('Factory board', () => {
       .map(([fields]) => fields as Record<string, unknown>);
     expect(cachedPhases.map(({ stage }) => stage)).toEqual(['project', 'response']);
     expect(info.mock.calls.find(([, event]) => event === 'factory.board_read_timing')?.[0])
-      .toMatchObject({ cachePath: 'cache_hit', stale: false, outcome: 'success', statusCode: 200 });
+      .toMatchObject({
+        cachePath: 'cache_hit', cacheElapsedMs: expect.any(Number),
+        stale: false, outcome: 'success', statusCode: 200,
+      });
+  });
+
+  it('measures cache wait time separately for shared callers', async () => {
+    let finishRead!: (result: FactoryBoardSource) => void;
+    const reader = vi.fn(() => new Promise<FactoryBoardSource>((resolve) => { finishRead = resolve; }));
+    const { app } = fixture(reader);
+    const info = vi.fn();
+    app.addHook('onRequest', async (request) => { request.log.info = info; });
+    const first = app.inject({ url: '/factory/board?project=42', headers });
+    await vi.waitFor(() => expect(reader).toHaveBeenCalledOnce());
+    const second = app.inject({ url: '/factory/board?project=42', headers });
+    await vi.waitFor(() => expect(info.mock.calls.filter(([fields, event]) =>
+      event === 'factory.board_phase' && (fields as Record<string, unknown>).stage === 'project',
+    )).toHaveLength(2));
+    finishRead(source);
+    const [firstResponse, secondResponse] = await Promise.all([first, second]);
+    expect(firstResponse.statusCode).toBe(200);
+    expect(secondResponse.statusCode).toBe(200);
+
+    const summaries = info.mock.calls
+      .filter(([, event]) => event === 'factory.board_read_timing')
+      .map(([fields]) => fields as Record<string, unknown>);
+    expect(summaries).toHaveLength(2);
+    expect(summaries.map(({ cachePath }) => cachePath).sort()).toEqual(['shared_wait', 'source_load']);
+    for (const summary of summaries) {
+      expect(summary.cacheElapsedMs).toEqual(expect.any(Number));
+      expect(summary.cacheElapsedMs as number).toBeGreaterThanOrEqual(0);
+      expect(summary.cacheElapsedMs as number).toBeLessThanOrEqual(60_000);
+    }
   });
 
   it.each([
@@ -328,6 +371,7 @@ describe('Factory board', () => {
     expect(info.mock.calls.find(([, event]) => event === 'factory.board_read_timing')?.[0])
       .toMatchObject({
         reqId: failureFields.reqId, cachePath: 'source_load', stale: true,
+        cacheElapsedMs: expect.any(Number),
         outcome: 'success', statusCode: 200, route: '/factory/board',
       });
   });

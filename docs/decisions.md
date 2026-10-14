@@ -37,10 +37,15 @@ Add diagnostics only; do not change caching, generations, source concurrency,
 retry, client behavior, or the 502 contract. Log bounded monotonic durations at
 the existing project, token, source, task, release, and response work
 boundaries, correlated by request ID. Concurrent source/task/release durations
-are independent wall times and overlap. Cache path plus stale state distinguish
-cache hit, shared wait, source load, and stale fallback. Keep phase/event fields
-explicitly allowlisted and omit content, credentials, URLs, query strings, and
-arbitrary errors. At the existing publication boundary, log only bounded
+are independent wall times and overlap. The summary cache elapsed measurement
+covers the actual awaited cache operation: lookup for a hit, wait for a shared
+caller, and the complete load for its owner; interpret it with `cachePath`, not
+as a separate phase. Durations over 60 seconds omit the value and set a censored
+marker instead of clipping; invalid clock values are marked unavailable. Cache
+path plus stale state distinguish cache hit, shared wait, source load, and stale
+fallback. Keep phase/event fields explicitly
+allowlisted and omit content, credentials, URLs, query strings, and arbitrary
+errors. At the existing publication boundary, log only bounded
 invalidation origin, project/version when known, and webhook request ID when
 available; task-event prelookup invalidation has only its `all_projects` scope.
 
