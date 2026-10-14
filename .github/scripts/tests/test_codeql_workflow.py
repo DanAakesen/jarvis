@@ -16,6 +16,12 @@ class CodeQlWorkflowTests(unittest.TestCase):
         ).read_text(encoding="utf-8-sig")
 
     def test_codeql_keeps_existing_languages_and_manually_builds_csharp(self):
+        self.assertIn("queries: security-extended", self.workflow)
+        self.assertIn(
+            "category: '/language:${{ matrix.language }}'",
+            self.workflow,
+        )
+
         languages = dict(
             re.findall(
                 r"^\s+- language: ([\w-]+)\n\s+build-mode: (\w+)$",

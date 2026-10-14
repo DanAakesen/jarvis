@@ -9,8 +9,11 @@ CodeQL before the pinned .NET 10 setup and Release build of the production
 CodeQL policy and avoids relying on test-only builds or an untraced prior build.
 Only source compiled by the traced production build is in scope; generated
 source is covered only when surfaced to that compiler invocation. Local
-validation reports both production assemblies built, but the remote four-language
-run, nonempty C# upload and PR/ref/analyzed-commit association remain pending.
+validation should report both production assemblies. Verify a remote extraction
+from the C# database's nonempty relations/source archive and its extracted-file
+and code-metric diagnostics, then confirm a successful `/language:csharp` upload.
+Associate each result with its PR source head and analyzed merge SHA; neither an
+upload nor zero alerts proves complete generated-code coverage or no defects.
 
 ## #813 bound Factory board source reads (13 October 2026)
 
