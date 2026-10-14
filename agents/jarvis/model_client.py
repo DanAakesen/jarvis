@@ -25,6 +25,7 @@ from opentelemetry.trace import SpanKind, Status, StatusCode
 from calendar_flow import (
     CALENDAR_MUTATIONS,
     CALENDAR_READS,
+    calendar_clarification,
     calendar_context,
     calendar_reply,
     no_calendar_evidence,
@@ -749,6 +750,7 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
 
                 max_rounds = 2 if role == "smoke" else MAX_TOOL_ROUNDS
                 smoke_tool_call_count = 0
+                calendar_evidence = []
                 for round_number in range(1, max_rounds + 1):
                     first_model_started = current_model_started_at.get()
                     with latency_span("model_coordination"):
@@ -1013,11 +1015,16 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                             continue
                         if calendar_enabled:
                             text = "".join(calendar_text)
-                            if calendar_turn or calendar_context([ModelMessage("assistant", text)]):
+                            if calendar_evidence:
+                                name, result = calendar_evidence[-1]
+                                yield calendar_reply(name, result, danish)
+                            elif (
+                                calendar_turn or calendar_context([ModelMessage("assistant", text)])
+                            ) and not calendar_clarification(text):
                                 yield (
                                     calendar_reply(
-                                    "calendar_pending_change", calendar_state, danish
-                                )
+                                        "calendar_pending_change", calendar_state, danish
+                                    )
                                     if calendar_state is not None else no_calendar_evidence(danish)
                                 )
                             elif text:
@@ -1047,8 +1054,12 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                         result = await self._tools.call(
                             call.name, arguments, current_message_id.get()
                         )
-                        if call.name in CALENDAR_MUTATIONS | CALENDAR_READS:
+                        if call.name in CALENDAR_MUTATIONS:
                             calendar_results.append((call.name, result))
+                        elif call.name in CALENDAR_READS:
+                            calendar_evidence.append((call.name, result))
+                        elif call.name == "calendar_pending_change":
+                            calendar_state = result
                         if (
                             call.name in {"set_presence_mode", "set_away_mode"}
                             and result.get("outcome") == "ok"

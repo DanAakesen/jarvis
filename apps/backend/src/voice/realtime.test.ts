@@ -11,6 +11,7 @@ import {
   createRealtimeSessionUpdate,
   DANISH_REALTIME_VOICE,
   executeRealtimeToolCall,
+  confirmPendingCalendarReply,
   toModelToolSchema,
   ENGLISH_REALTIME_VOICE,
   type RealtimeFunctionCall,
@@ -389,5 +390,56 @@ describe('English realtime session', () => {
         confirmation: 'Not done: echo was refused. Browser task stopped before completion.',
       }),
     );
+  });
+});
+
+describe('calendar approval orchestration', () => {
+  function calendarRegistry(state: Record<string, unknown>, fail = false) {
+    const pending = vi.fn(async () => state);
+    const confirm = vi.fn(async () => {
+      state.status = 'none';
+      if (fail) throw new Error('Provider unavailable');
+      return { status: 'completed', detail: 'The event was created.', summary: 'Reservation; no attendees.' };
+    });
+    const tools: RegisteredTool[] = [
+      { ...tool, name: 'calendar_pending_change', inputSchema: { type: 'object' }, execute: pending },
+      { ...tool, name: 'calendar_confirm_change', inputSchema: { type: 'object' }, execute: confirm },
+    ];
+    const request = { validateInput: vi.fn(() => true) } as unknown as FastifyRequest;
+    return { pending, confirm, request,
+      tools: { list: () => tools, get: (name: string) => tools.find((item) => item.name === name) } };
+  }
+
+  it('confirms the actual pending code once on repeated approval turns', async () => {
+    const f = calendarRegistry({ status: 'awaiting_confirmation', reply: 'approve',
+      confirmationCode: '12345678', summary: 'Reservation; no attendees.' });
+    const signal = new AbortController().signal;
+    expect(JSON.parse(await confirmPendingCalendarReply(f.tools, f.request, signal)))
+      .toMatchObject({ outcome: 'ok', result: { status: 'completed', summary: 'Reservation; no attendees.' } });
+    expect(JSON.parse(await confirmPendingCalendarReply(f.tools, f.request, signal)))
+      .toMatchObject({ result: { status: 'none' } });
+    expect(f.confirm).toHaveBeenCalledOnce();
+    expect(f.confirm).toHaveBeenCalledWith({ confirmationCode: '12345678' }, f.request, signal);
+  });
+
+  it.each([
+    { status: 'none', reply: 'approve' },
+    { status: 'awaiting_confirmation', reply: 'approve', summary: 'Reservation' },
+    { status: 'awaiting_confirmation', reply: 'approve', confirmationCode: 'fake', summary: 'Reservation' },
+    { status: 'awaiting_confirmation', reply: null, confirmationCode: '12345678', summary: 'Reservation' },
+  ])('never confirms absent/expired/invalid state or a status question: %j', async (state) => {
+    const f = calendarRegistry(state);
+    await confirmPendingCalendarReply(f.tools, f.request, new AbortController().signal);
+    expect(f.confirm).not.toHaveBeenCalled();
+  });
+
+  it('reports execution failure without retrying or inventing completion', async () => {
+    const f = calendarRegistry({ status: 'awaiting_confirmation', reply: 'approve',
+      confirmationCode: '12345678', summary: 'Reservation' }, true);
+    const output = await confirmPendingCalendarReply(f.tools, f.request, new AbortController().signal);
+    expect(JSON.parse(output)).toMatchObject({ outcome: 'error' });
+    await confirmPendingCalendarReply(f.tools, f.request, new AbortController().signal);
+    expect(f.confirm).toHaveBeenCalledOnce();
+    expect(output).not.toContain('completed');
   });
 });

@@ -775,9 +775,13 @@ acceptance pending; #798, #797, then #792 remain separate.
 
 ### P11 — Jarvis-raised fixes
 
-P11-04 (#839) is in progress on the runner task branch: authoritative pending state
-and hosted chat/voice evidence rendering are implemented; 12 new regressions and
-99 focused backend tests pass. Next: realtime approval handling and final validation.
+P11-04 (#839) is implemented on the runner task branch: authoritative pending state,
+hosted chat/voice evidence rendering, and realtime EN/DA approval/status handling.
+Hosted model/tool suites pass 177 tests, chat HTTP passes 57 outside the sandbox,
+137 focused backend tests and all 154 relay tests pass; backend lint/build and
+changed Python Ruff pass. Reads can precede staging within the same turn, and
+clarification questions remain available. Next: module/registry/conversation parity,
+normal CI/review and live provider acceptance after deployment.
 
 A rolling intake phase. When Dan asks Jarvis to change its own code or a project's code, Jarvis drafts the issue, confirms it with Dan and creates it as `P11-NN` (P10-03). Rows are added here as the issues are created.
 | ID | Issue | Task | Acceptance criteria | Depends on | Status |

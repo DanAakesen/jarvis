@@ -198,6 +198,31 @@ function toolFailure(name: string): string {
   return toolOutput(name, 'error', { error: 'Tool execution failed' });
 }
 
+/** Resolve calendar approval from backend state, never a model-supplied or cached code. */
+export async function confirmPendingCalendarReply(
+  tools: ToolRegistry,
+  request: FastifyRequest,
+  signal: AbortSignal,
+): Promise<string> {
+  const pendingOutput = await executeRealtimeToolCall({
+    type: 'response.function_call_arguments.done', name: 'calendar_pending_change',
+    call_id: 'calendar-pending', arguments: '{}',
+  }, tools, request, signal);
+  const pending = JSON.parse(pendingOutput) as {
+    outcome: string;
+    result?: { status?: string; confirmationCode?: string; summary?: string; reply?: string };
+  };
+  const action = pending.result;
+  if (pending.outcome !== 'ok' || action?.status !== 'awaiting_confirmation' ||
+      typeof action.confirmationCode !== 'string' || !/^[0-9]{8}$/u.test(action.confirmationCode) ||
+      typeof action.summary !== 'string' || !action.summary.trim() ||
+      (action.reply !== 'approve' && action.reply !== 'decline')) return pendingOutput;
+  return executeRealtimeToolCall({
+    type: 'response.function_call_arguments.done', name: 'calendar_confirm_change',
+    call_id: 'calendar-confirm', arguments: JSON.stringify({ confirmationCode: action.confirmationCode }),
+  }, tools, request, signal);
+}
+
 export async function executeRealtimeToolCall(
   call: RealtimeFunctionCall,
   tools: ToolRegistry,

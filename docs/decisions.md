@@ -2406,6 +2406,16 @@ through that tool and `calendar_confirm_change` before asking the model. Codes n
 come from transcript text. Calendar staging and completion replies use actual tool
 results and preserve the exact summary. Provisional text is buffered when Calendar
 is available, so unsupported staging/check/completion claims cannot stream first.
-This trades first-text latency for evidence-grounded responses. Twelve synthetic
-regression cases pass; default realtime voice orchestration and broader validation
-are in progress. No provider writes, permissions, migration or deployment.
+This trades first-text latency for evidence-grounded responses. Realtime EN/DA
+calendar approval/status turns also read backend state and confirm before speech,
+with tools disabled for the evidence relay. Conversation text selects the flow,
+never the code or authorization. Two loopback relay regressions prove one execution
+across repeated approvals in both routes; hosted tests also cover missing codes,
+expiry represented by absent state, provider failures and fabricated status/read
+claims. Calendar reads still feed subsequent model rounds so a lookup can precede
+staging in the same turn; provisional claims stay withheld. Fourteen new hosted
+calendar regressions, 177 hosted model/tool tests, 57 chat HTTP tests, 137 focused
+backend tests and all 154 relay tests pass. Backend lint/build and changed Python
+Ruff pass. Module/registry/conversation parity is the remaining local check; normal
+CI/review and live Google/speech acceptance remain separate. No live provider writes,
+permissions, migration or deployment.

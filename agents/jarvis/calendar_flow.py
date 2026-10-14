@@ -17,7 +17,7 @@ CALENDAR_READS = {
     "calendar_find_free_slots",
 }
 _CALENDAR_CONTEXT = re.compile(
-    r"\b(calendar|kalender\w*|event|events|begivenhed\w*|reservation\w*|staged|klargjort)\b",
+    r"\b(calendar|kalender\w*|begivenhed\w*|reservation\w*|appointments?|staged|klargjort)\b",
     re.IGNORECASE,
 )
 
@@ -25,6 +25,23 @@ _CALENDAR_CONTEXT = re.compile(
 def calendar_context(messages: Sequence[ModelMessage]) -> bool:
     # Context selects a workflow; it never supplies an action or approval code.
     return any(_CALENDAR_CONTEXT.search(message.content) for message in messages[-2:])
+
+
+def calendar_claim(text: str) -> bool:
+    return bool(re.search(
+        r"\b(staged|prepared|created|scheduled|booked|checked|added|completed|done|"
+        r"klargjort|oprettet|tjekket|tilføjet|udført)\b|"
+        r"\b(?:reply|say|answer|svar)\b.{0,40}\b(?:yes|ja)\b",
+        text, re.IGNORECASE,
+    ))
+
+
+def calendar_clarification(text: str) -> bool:
+    return bool(
+        text.strip().endswith("?") and not calendar_claim(text)
+        and re.match(r"^(?:what|which|when|where|who|hvad|hvilke|hvornår|hvor|hvem)\b",
+                     text.strip(), re.IGNORECASE)
+    )
 
 
 def pending_calendar(result: dict[str, Any]) -> dict[str, Any] | None:
@@ -53,7 +70,11 @@ def no_calendar_evidence(danish: bool) -> str:
 def calendar_reply(name: str, evidence: dict[str, Any], danish: bool) -> str:
     payload = evidence.get("result")
     if evidence.get("outcome") != "ok" or not isinstance(payload, dict):
-        return no_calendar_evidence(danish)
+        reason = None
+        if isinstance(payload, dict):
+            reason = next((payload[key] for key in ("refused", "failure", "error")
+                           if isinstance(payload.get(key), str)), None)
+        return no_calendar_evidence(danish) + (" " + reason if reason else "")
     pending = pending_calendar(evidence)
     if pending is not None and name in CALENDAR_MUTATIONS | {"calendar_pending_change"}:
         prefix = "Afventer kalendergodkendelse: " if danish else "Pending calendar approval: "

@@ -169,7 +169,7 @@ async def test_actual_read_renders_only_returned_events_not_provisional_success(
     backend = CalendarBackend()
     model, _ = client([], backend=backend, rounds=[[
         delta("I created the event."), completed(tool_call("calendar_list_events")),
-    ]])
+    ], [delta("The event exists and was created."), completed()]])
     try:
         text = await turn(model, [ModelMessage("user", "Check my calendar")])
         assert text == "The calendar read returned no events."
@@ -185,3 +185,31 @@ def test_success_requires_confirmation_tool_and_pending_requires_code():
     text = calendar_reply("calendar_create_event", {"outcome": "ok", "result": {
         "status": "completed", "detail": "The event was created."}}, False)
     assert "The event was created" not in text
+
+
+async def test_calendar_read_can_be_followed_by_staging_in_the_same_turn():
+    backend = CalendarBackend()
+    model, _ = client([], backend=backend, rounds=[
+        [completed(tool_call("calendar_list_events"))],
+        [delta("I created it already."), completed(tool_call("calendar_create_event"))],
+    ])
+    try:
+        text = await turn(model, [ModelMessage("user", "Find and add my calendar reservation")])
+        assert SUMMARY in text and "Nothing has changed" in text
+        assert "created it already" not in text
+        assert backend.calendar_calls == ["calendar_pending_change", "calendar_list_events",
+                                          "calendar_create_event"]
+    finally:
+        await model.close()
+
+
+async def test_calendar_clarification_can_ask_for_dates_without_claiming_staging():
+    backend = CalendarBackend()
+    model, _ = client([delta("What dates should I use for the calendar reservation?"), completed()],
+                      backend=backend)
+    try:
+        text = await turn(model, [ModelMessage("user", "Add my calendar reservation")])
+        assert text == "What dates should I use for the calendar reservation?"
+        assert backend.calendar_calls == ["calendar_pending_change"]
+    finally:
+        await model.close()
