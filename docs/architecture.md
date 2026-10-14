@@ -818,17 +818,25 @@ Failure diagnostics survive both concurrent cache rejection and stale fallback:
 Project lookup has its own event with that safe correlation. The board also
 emits allowlisted `factory.board_phase` timings for each executed project,
 token, source, task, release, and response boundary, plus one
-`factory.board_read_timing` summary with outcome, cache path, stale state, status,
-and monotonic `cacheElapsedMs`. That elapsed value measures the awaited cache
-operation: lookup for a hit, wait for a shared caller, or the complete source
-load for its owner. Interpret it with `cachePath`; it is not a stage duration.
+`factory.board_read_timing` summary with handler/source-computation outcome,
+reply status, cache path, stale state, and monotonic `cacheElapsedMs`. The
+summary records the handler's decision, not proof of HTTP completion or client
+receipt. `request.completed` is a separate server-side `onResponse` observation
+of reply status and response time; neither event proves that the client received
+the response. The cache elapsed value measures the awaited cache operation:
+lookup for a hit, wait for a shared caller, or the complete source load for its
+owner. Interpret it with `cachePath`; it is not a stage duration.
 Durations are bounded to 60 seconds and server-only. Values beyond that limit
 omit the numeric duration and set the corresponding `durationCensored` or
 `cacheElapsedCensored` marker rather than reporting a clipped value. Invalid
 or unavailable clock values omit the numeric duration and set
-`durationUnavailable` or `cacheElapsedUnavailable`. A missing phase means that
-work was not performed. Response assembly and serialization
-have separate response entries (`part`). Source, task, and release durations
+`durationUnavailable` or `cacheElapsedUnavailable`. Each phase event is emitted
+when its instrumented work boundary executes; absence of an event cannot prove
+that work was skipped, since telemetry may be missing, sampled, cropped, or
+outside the observed window. When present, `cachePath` explicitly classifies the
+cache operation as `not_started`, `cache_hit`, `shared_wait`, or `source_load`.
+Response assembly and serialization have separate response entries (`part`).
+Source, task, and release durations
 are individual wall-clock measurements of concurrent work; they overlap and
 must not be summed as if sequential. Cache paths distinguish `cache_hit`,
 `shared_wait`, and `source_load`; `stale` marks either stale fallback path. No

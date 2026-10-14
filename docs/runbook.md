@@ -134,10 +134,17 @@ body times were 9.850 s / 10.487 s.
 
 After the diagnostic follow-up is reviewed and deployed, correlate board
 `request.started`, `factory.board_read_timing`, and `factory.board_phase` by
-`reqId`. Compare the summary `cachePath` and `stale` fields before separating
-cache hits, shared waits, source loads, or stale fallbacks. `cacheElapsedMs` is
-the awaited cache operation time (including the full load for `source_load`);
-it is not an additional phase duration. Per-stage values are monotonic wall
+`reqId`. The summary `outcome` and `statusCode` describe the handler/source
+computation decision and reply status, not proof of HTTP completion or client
+receipt. Use `request.completed` separately as the server-side `onResponse`
+status/time observation; even it does not establish client receipt. Compare an
+observed summary `cachePath` and `stale` fields before separating cache hits,
+shared waits, source loads, or stale fallbacks. `cacheElapsedMs` is the awaited
+cache operation time (including the full load for `source_load`); it is not an
+additional phase duration. A phase event is emitted when its instrumented work
+boundary executes, but a missing event cannot establish that work was skipped:
+telemetry can be missing, sampled, cropped, or outside the observation window.
+Per-stage values are monotonic wall
 durations; source, task, and release work runs concurrently, so their durations
 overlap and must not be added. A response phase `part` marks assembly versus
 serialization. `durationCensored` and `cacheElapsedCensored` mean the actual
