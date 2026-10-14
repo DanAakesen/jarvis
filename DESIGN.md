@@ -1,5 +1,33 @@
 # Design
 
+## Mobile/Status review publication (14 October 2026)
+
+Publish the already accepted phone chat geometry, focus behaviour and
+route-commit acknowledgement without another UI iteration. The local
+sections below retain the reviewed design and controlled-fixture evidence.
+Publication approval is not physical-iPhone/Safari or voice acceptance,
+and does not authorise merge, deployment or another live turn.
+
+## Page navigation acknowledgement correction (14 October 2026; local)
+
+Keep the existing Status page and navigation appearance. Broker success now
+corresponds to the committed destination, including its normal loading/error
+states. No new animation, toast, health probe or replacement composer is
+introduced. Offline actual-App checks cover desktop/phone route commits;
+they are not production, physical-phone or voice acceptance.
+
+## Phone typing keyboard correction (14 October 2026; local)
+
+Keep the existing glass frame and composer as one joined chat surface.
+Home and off-home typing share visual-viewport insets, safe-area spacing and
+the measured composer height. Manually positioned chat keeps its existing
+two-pixel seam and device-local preferred geometry; viewport fitting never
+saves a replacement layout. Keyboard space follows viewport events rather
+than focus alone, since iOS can hide its keyboard while leaving focus intact.
+Outside touch blurs only Message Jarvis, without cancelling the tap.
+Do not animate keyboard fitting or treat pinch zoom as keyboard space.
+Controlled actual-component Chromium checks are not physical Safari proof.
+
 ## Fixed Danish voice in Settings (13 October 2026)
 
 The Voice section shows **Jeppe (Danish)** in a labelled read-only field,

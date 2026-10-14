@@ -1,5 +1,53 @@
 # Architecture
 
+## Mobile/Status review publication (14 October 2026)
+
+The publication candidate retains all eight accepted code/test/CSS paths
+byte-exact, including the two already LF-normalised hook files. Only additive
+documentation is adapted to current main; page completion ownership,
+deadline/cancellation behaviour and phone viewport ownership below are
+unchanged. No Factory, backend, contract, dependency or runtime boundary
+is added. Publication approval does not authorise merge or deployment.
+
+## Page command completion ownership (14 October 2026; local)
+
+`ShellLayout` retains synchronous direct workspace dispatch, but its broker
+page-command applier owns a bounded pending-route completion. The pathname
+layout effect settles success only on destination commit, or refuses a
+superseding route. Abort, unmount and the command deadline remove the waiter
+and its timer/listener. The maximum wait retains the existing six-second
+navigation ceiling and 250-ms acknowledgement reserve; it starts no fetch.
+Both a successful waiter settlement and the post-dispatch page/pane fast
+return check the same captured deadline against the completion-time clock.
+Late success becomes the existing deadline refusal even if its timeout has
+not run; cancellation and other refusals keep their reason. This observes
+completion only and does not roll back a requested router transition.
+
+Actual-App fixtures observed applied acknowledgements before the Status
+heading/selected rail entry existed. The surrounding `flushSync` and the
+navigation function's return alone did not guarantee route commit. The new
+owner observes the shell commit rather than polling DOM or awaiting health
+reads. Existing Factory issue resolution, Notes draft guard, Folio pane,
+session/pin handlers and persistent Now session remain separate.
+
+## Phone typing viewport ownership (14 October 2026; local)
+
+`ShellLayout` enables `usePhoneChatViewport` only for signed-in phone typing.
+The hook publishes shell-scoped top/bottom visual-viewport insets synchronously
+on resize, pan, page restore and focus changes; unchanged values are not
+rewritten. This precedes the workspace's scheduled anchor measurement,
+including pan-only events where canvas dimensions do not change. Pinch zoom
+and browsers without VisualViewport retain ordinary dock behaviour.
+
+`Workspace` remeasures an existing manual composer anchor through one
+animation-frame callback on viewport/window resize and captured scrolling,
+deduplicates unchanged coordinates, and removes listeners/pending work on
+disposal. Both phone chat halves use the same insets and measured composer
+height. No viewport event writes persisted layout or remounts the draft owner.
+The hook dismisses only an active in-shell Message Jarvis textarea on outside
+touch, excluding composer/menu controls and preserving the native tap.
+Voice, authentication, APIs, model requests and dependencies are unchanged.
+
 ## Remaining UI release (13 October 2026)
 
 `Workspace` owns conversation gestures and device-local normalized geometry
