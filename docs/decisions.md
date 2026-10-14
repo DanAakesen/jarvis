@@ -2396,3 +2396,16 @@ Dan approved P12 on 12 October 2026 and explicitly released only P12-01 for this
   behind the generic pin-load message. Regression and rendered checks pending.
 - **Scope:** local correction; phone explicit show/hide and voice lifecycle
   remain unchanged. No backend change or broader draft release.
+
+## P11-04 (#839), 14 October 2026 — Calendar approval evidence
+
+Pending state stays in the existing backend process and is read through the sensitive
+`calendar_pending_change` tool. Reading this state is not a Google Calendar check.
+The hosted model loop resolves a later plain approval in the calendar conversation
+through that tool and `calendar_confirm_change` before asking the model. Codes never
+come from transcript text. Calendar staging and completion replies use actual tool
+results and preserve the exact summary. Provisional text is buffered when Calendar
+is available, so unsupported staging/check/completion claims cannot stream first.
+This trades first-text latency for evidence-grounded responses. Twelve synthetic
+regression cases pass; default realtime voice orchestration and broader validation
+are in progress. No provider writes, permissions, migration or deployment.

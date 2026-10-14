@@ -774,6 +774,11 @@ after the navigation follow-up: #799 is implemented locally with release/live
 acceptance pending; #798, #797, then #792 remain separate.
 
 ### P11 — Jarvis-raised fixes
+
+P11-04 (#839) is in progress on the runner task branch: authoritative pending state
+and hosted chat/voice evidence rendering are implemented; 12 new regressions and
+99 focused backend tests pass. Next: realtime approval handling and final validation.
+
 A rolling intake phase. When Dan asks Jarvis to change its own code or a project's code, Jarvis drafts the issue, confirms it with Dan and creates it as `P11-NN` (P10-03). Rows are added here as the issues are created.
 | ID | Issue | Task | Acceptance criteria | Depends on | Status |
 | --- | --- | --- | --- | --- | --- |
