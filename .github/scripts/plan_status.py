@@ -101,8 +101,6 @@ def task_status(
         if issue_number is not None
         and issue_number in (int(number) for number in FIXES_ISSUE.findall(pull.get("body") or ""))
     ]
-    if any(pull.get("merged_at") for pull in linked_prs):
-        return "Complete"
     if issue.get("state") == "closed" and issue.get("state_reason") == "completed":
         return "Complete"
     if current == "Blocked":
@@ -112,6 +110,8 @@ def task_status(
     worker_claimed = issue.get("state") == "open" and bool(labels & WORKER_LABELS)
     if open_pr or worker_claimed:
         return "In progress"
+    if issue.get("state") == "closed" and any(pull.get("merged_at") for pull in linked_prs):
+        return "Complete"
     # Not completed and nothing open: an open issue waits, a closed one (for example not_planned) was dropped.
     return "Not started"
 
