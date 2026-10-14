@@ -144,7 +144,7 @@ flowchart TB
     J["Jarvis (main page)<br/>conversation: chat + voice<br/>'now': activity across areas"]
     J --> SF["Area: Software Factory<br/>task view · task detail · release view · projects"]
     J --> X["Later areas (not in phase 1)"]
-    J --- S["Shared: settings · usage and cost · activity"]
+    J --- S["Shared: settings · status · usage and cost · activity"]
 ```
 
 - Each area owns its pages and registers its tools with Jarvis. The backend exposes every registered tool's input schema and executes calls, recording each result so new modules become available without agent changes. Jarvis's reply about an action comes from that recorded result: a refused or failed call is reported as refused or failed, never as done. The Jarvis agent uses only these backend tools.
@@ -220,10 +220,10 @@ select home. Navigation is reversible and needs no confirmation. The backend
 delivers it to all open signed-in tabs through the existing workspace broker
 and reports success only after an applied acknowledgement; refusals and failures
 remain visible. The navigation contract and backend are built offline; shell
-routing, the usual page transition and live acceptance remain the UI session's work.
+routing, the usual page transition and live acceptance belong to the UI session.
 Factory task navigation opens the task window over the board and focuses its
 card; issue-number navigation focuses that issue's card. The UI refuses missing
-tasks/issues and Status until its page exists, returning a reason. Folio is a
+tasks/issues with a reason. Status is a read-only shell page. Folio is a
 pane: navigating to `folio` opens it over the current page.
 
 P9-43 supplies a short, content-free workspace reference on every voice and chat
@@ -374,6 +374,22 @@ mode and Stop sharing screen remain available.
 Camera access stops when voice or the signed-in app session ends, when its owner unmounts, or after ten minutes without a user turn. Chat submission, speech start and completed voice turns reset that idle timer, not preview rendering or docking. Idle shutdown brings the preview's explanation and recovery into view; it must not interrupt an active conversation at a fixed elapsed time. Raw frames remain in memory only and never enter transcripts, logs or task events. Capture/connection failures and local-preview playback failures are visible with recovery, and a failed inspection never silently becomes a successful camera answer. This idle lifecycle is implemented locally; deployment and full every-turn acceptance remain pending.
 
 P7-38 adds continuous watching alongside that existing on-demand path. Dan controls screen and camera sharing independently; the client sends changed JPEGs to `POST /vision/watch` only while that source is on, at most every 2.5 seconds per source. Jarvis remains silent except for a visible screen error/problem, a match for an active `watch_for` instruction, or a direct answer to Dan's latest question. `stop_watching_for` clears instructions for one or both sources without changing sharing. Frames are never stored, and there is no automatic sensitive-content pause. Summaries and instructions stay in memory for the session; only useful comments enter chat/voice. The shared `global.vision_daily_budget_usd` defaults to USD 1 (0 disables watching); exhaustion refuses further watch frames and comments until the next UTC day. P9-21 adds the web side: once a source is shared, the More menu offers Watch/Stop watching for that source. Watching is a feature-owned loop (`apps/web/src/vision-watch.ts`) that never starts capture itself, skips unchanged frames, shows the shared daily budget used, and ends when the share ends, the conversation session changes, Dan stops it, the budget is spent or the backend refuses it.
+
+### Status
+
+Dan can open `/status` from the rail, phone menu or voice/chat navigation.
+It reads the authenticated `GET /status` snapshot and shows each reported
+subsystem result, failure/unavailable reason, check time and safe details.
+PC connection and pause state are visible without expanding details; missing
+versions are not invented. Foundry configuration checks do not prove a live
+model turn, and the last backend error is historical, not current health.
+
+Refresh reads only `/status`; it never runs `/status/smoke` or model canaries.
+Checks and retained smoke evidence older than five minutes are marked stale.
+A failed refresh explicitly retains the previous snapshot with Retry.
+The recorded smoke report includes its time but has no deployment/commit
+association, so it cannot certify the latest release. No retained report means
+unavailable, including after backend restart.
 
 ### Web notifications and confirmations (P6-22)
 

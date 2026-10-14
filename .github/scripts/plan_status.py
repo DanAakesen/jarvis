@@ -9,12 +9,13 @@ import re
 from pathlib import Path
 from typing import Any
 
-TASK_ID = re.compile(r"P\d{1,2}-\d{2}")
-ISSUE_TITLE = re.compile(r"^(P\d{1,2}-\d{2}):\s*(.+)$")
+TASK_ID = re.compile(r"\bP\d{1,2}-\d{2,}\b")
+ISSUE_TITLE = re.compile(r"^(P\d{1,2}-\d{2,}):\s*(.+)$")
 FIXES_ISSUE = re.compile(r"\bFixes\s+#(\d+)\b", re.IGNORECASE)
 DEPENDENCY_RANGE = re.compile(
-    r"(P\d{1,2})-(\d{2})\s*(?:…|\.{3}|–|-)\s*(?:P\d{1,2}-)?(\d{2})"
+    r"\b(P\d{1,2})-(\d{2,})\s*(?:…|\.{3}|–|-)\s*(?:P\d{1,2}-)?(\d{2,})\b"
 )
+MAX_DEPENDENCY_RANGE_SIZE = 1000
 WORKER_LABELS = {"Codex", "Copilot", "Dan", "Jarvis"}
 
 
@@ -30,7 +31,15 @@ def dependencies_from_text(value: str) -> list[str]:
     dependencies: list[str] = []
     for match in DEPENDENCY_RANGE.finditer(value):
         phase, start, end = match.groups()
-        dependencies.extend(f"{phase}-{number:02}" for number in range(int(start), int(end) + 1))
+        start_number, end_number = int(start), int(end)
+        count = end_number - start_number + 1
+        if count > MAX_DEPENDENCY_RANGE_SIZE:
+            raise ValueError(
+                f"Dependency range {match.group(0)!r} expands to {count} tasks; "
+                f"limit is {MAX_DEPENDENCY_RANGE_SIZE}. "
+                "Shorten the range or list dependencies explicitly."
+            )
+        dependencies.extend(f"{phase}-{number:02}" for number in range(start_number, end_number + 1))
     without_ranges = DEPENDENCY_RANGE.sub("", value)
     dependencies.extend(TASK_ID.findall(without_ranges))
     return list(dict.fromkeys(dependencies))
@@ -44,7 +53,7 @@ def plan_tasks(plan: str) -> list[dict[str, Any]]:
         if "ID" in cells and "Task" in cells and "Status" in cells:
             columns = {name: index for index, name in enumerate(cells)}
             continue
-        if not columns or not re.match(r"^\|\s*P\d{1,2}-\d{2}\s*\|", line):
+        if not columns or not re.match(r"^\|\s*P\d{1,2}-\d{2,}\s*\|", line):
             continue
         if len(cells) <= max(columns.values()):
             continue
@@ -128,7 +137,7 @@ def reconcile_plan(
             columns = {name: index for index, name in enumerate(cells)}
             rows.append(line)
             continue
-        if not columns or not re.match(r"^\|\s*P\d{1,2}-\d{2}\s*\|", line):
+        if not columns or not re.match(r"^\|\s*P\d{1,2}-\d{2,}\s*\|", line):
             rows.append(line)
             continue
         if len(cells) <= max(columns.values()):

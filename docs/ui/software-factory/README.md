@@ -27,6 +27,18 @@ The mockup is generated and uses illustrative data. Implement actual controls an
 - Issue-number navigation resolves the selected project's complete board before acknowledging success. Clear other local filters, apply an exact `#number` search, expand the target column and reuse the existing glow/scroll behavior. Task-free issues focus their real title link; linked tasks open the existing task window. Missing, loading, unavailable, expired or cancelled targets refuse with a reason. Preserve Notes drafts and task-ID anchors; keep the shell's broker stream connected when navigating from Settings.
 - Report actual visible card focus through the existing workspace `issueNumber` selector; other focus, card removal/collapse or leaving Factory clears it. Discard commands received by a disconnected connection rather than replaying or acknowledging them in its replacement session.
 
+### Released navigation acceptance (13 October 2026)
+
+#810 merged at `b4915164`; Deploy 38479582927 passed Web/smoke. An
+authenticated ordinary chat request from Settings navigated to the real #792
+card in Ready, with an applied HTTP 204 ack, HTTP 204 Factory issue selector
+and one unchanged workspace stream. Collapse and route clearing were also
+accepted. Pure focus-away-only clearing remains fixture-only because the
+background production canvas does not emit native focus events. The complete
+board and visible #790/#793 Done and #792 Ready match Project 2 readback.
+These checks do not diagnose the earlier 502 or prove sustained recovery,
+all task-overlay controls, live board invalidations or physical-device UX.
+
 ### Acceptance criteria
 
 - [x] Implement the approved composition with existing task/release data contracts; retain all six states, create/search/filter and state-valid controls; scope release context to the selected project; preserve selection and board position; cover loading/empty/error/stale states and both appearances.

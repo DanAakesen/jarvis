@@ -161,10 +161,10 @@ export function useReadback<T>(collect: () => T, enabled: boolean, key: string):
   return enabled ? value : undefined;
 }
 
-const pageTitles: Partial<Record<WorkspaceNavigationPage, string>> = { settings: 'Settings', knowledge: 'Graph', notes: 'Notes' };
+const pageTitles: Partial<Record<WorkspaceNavigationPage, string>> = { settings: 'Settings', knowledge: 'Graph', notes: 'Notes', status: 'Status' };
 
 /**
- * The page Dan is on (Settings section, Graph, Notes) and the Folio pane as snapshot windows, so `read_window` can
+ * The page Dan is on (Settings section, Graph, Notes, Status) and the Folio pane as snapshot windows, so `read_window` can
  * read them as `page-<page>` and `folio-pane`. Credentials are never read.
  */
 export function readPageWindows(page: WorkspaceNavigationPage, section: WorkspaceSettingsSection | undefined, folioOpen: boolean): WorkspaceSnapshotWindow[] {
