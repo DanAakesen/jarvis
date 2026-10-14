@@ -694,6 +694,9 @@ describe('Google Calendar and Gmail tools', () => {
         to: 'dan@example.com',
         subject: 'Private draft',
         body,
+        bodySource: 'plain-text',
+        bodyTruncated: false,
+        contentWarnings: [],
       }],
       truncated: false,
     });
