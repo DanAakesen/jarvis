@@ -25,6 +25,20 @@ const headers = {
   authorization: `${['Bear', 'er'].join('')} ${['test', 'token', 'signature'].join('.')}`,
 };
 const timestamp = '2026-10-08T00:00:00.000Z';
+
+function pageLink(url: string, page: number, lastPage: number): string {
+  const link = (targetPage: number) => {
+    const target = new URL(url);
+    target.searchParams.set('per_page', '100');
+    target.searchParams.set('page', String(targetPage));
+    return `<${target}>`;
+  };
+  return [
+    ...(page < lastPage ? [`${link(page + 1)}; rel="next"`] : []),
+    ...(page < lastPage ? [`${link(lastPage)}; rel="last"`] : []),
+  ].join(', ');
+}
+
 const project: Project = {
   id: '42', name: 'Jarvis', description: null, repo: 'DanAakesen/jarvis', default_branch: 'main',
   default_agent: 'codex', policy: 'deliver_pr', merge_rules: null, sandbox_size: '1x2', tech: 'node',
@@ -285,10 +299,11 @@ describe('Factory board', () => {
     ['json', 'invalid_response'],
     ['pagination', 'result_limit'],
   ] as const)('reports the bounded source %s failure', async (failure, reason) => {
-    const reader = createGitHubFactoryBoardReader(async () => {
+    const reader = createGitHubFactoryBoardReader(async (input) => {
       if (failure === 'size') return new Response('private-response', { headers: { 'content-length': String(1024 * 1024 + 1) } });
       if (failure === 'json') return new Response('private-invalid-json');
-      return new Response('[]', { headers: { link: '<https://api.github.com/next>; rel="next"' } });
+      const url = String(input);
+      return new Response('[]', { headers: { link: pageLink(url, 1, 11) } });
     });
     await expect(reader.read(project.repo, 'reader-token', timestamp)).rejects.toMatchObject({
       stage: 'source', reason,
@@ -341,6 +356,406 @@ describe('Factory board', () => {
       expect.stringContaining('/issues?state=closed&since='),
       expect.stringContaining('/pulls?state=open'),
     ]));
+  });
+
+  it('reads provider-shaped page-and-cursor links in order and validates backward cursors', async () => {
+    const cursorUrls: URL[] = [];
+    const authorizationHeaders: string[] = [];
+    const providerLink = (page: number, cursorName: 'after' | 'before', cursor: string, relation: string) => {
+      const url = new URL('https://api.github.com/repositories/1403065900/issues');
+      url.searchParams.set('state', 'closed');
+      url.searchParams.set('since', timestamp);
+      url.searchParams.set('per_page', '100');
+      url.searchParams.set('page', String(page));
+      url.searchParams.set(cursorName, cursor);
+      return `<${url}>; rel="${relation}"`;
+    };
+    const closedIssue = (number: number) => ({
+      number, title: `Closed ${number}`, body: null, state: 'closed', closed_at: timestamp,
+      html_url: `https://github.com/DanAakesen/jarvis/issues/${number}`,
+      updated_at: timestamp, labels: [], issue_dependencies_summary: { blocked_by: 0 },
+    });
+    const reader = createGitHubFactoryBoardReader(async (input, init) => {
+      const url = new URL(String(input));
+      authorizationHeaders.push(new Headers(init?.headers).get('authorization') ?? '');
+      if (url.pathname.endsWith('/issues') && url.searchParams.get('state') === 'closed') {
+        cursorUrls.push(url);
+        if (cursorUrls.length === 1) {
+          return new Response(JSON.stringify(Array.from({ length: 100 }, (_, index) => closedIssue(index + 1))), {
+            headers: { link: providerLink(2, 'after', 'opaque/cursor+one', 'next') },
+          });
+        }
+        if (url.searchParams.get('after') === 'opaque/cursor+one') {
+          return new Response(JSON.stringify(Array.from({ length: 100 }, (_, index) => closedIssue(index + 101))), {
+            headers: {
+              link: `${providerLink(3, 'after', 'opaque/cursor+two', 'next')}, ` +
+                `${providerLink(1, 'before', 'opaque/previous+one', 'prev')}`,
+            },
+          });
+        }
+        if (url.searchParams.get('after') === 'opaque/cursor+two') {
+          return new Response(JSON.stringify(Array.from({ length: 25 }, (_, index) => closedIssue(index + 201))), {
+            headers: { link: providerLink(2, 'before', 'opaque/previous+two', 'prev') },
+          });
+        }
+        throw new Error(`Unexpected cursor request: ${url}`);
+      }
+      return new Response('[]');
+    });
+
+    const result = await reader.read(project.repo, 'reader-token', timestamp);
+
+    expect(result.issues).toEqual(Array.from({ length: 225 }, (_, index) => {
+      const number = index + 1;
+      return {
+        number,
+        url: `https://github.com/DanAakesen/jarvis/issues/${number}`,
+        title: `Closed ${number}`,
+        taskCode: null,
+        labels: [],
+        worker: null,
+        state: 'closed',
+        updatedAt: timestamp,
+        closedAt: timestamp,
+        blockedBy: [],
+        blockedByCount: 0,
+        body: null,
+      };
+    }));
+    expect(result.pullRequests).toEqual([]);
+    expect(cursorUrls).toHaveLength(3);
+    expect(cursorUrls.every(({ pathname }) => pathname === '/repos/DanAakesen/jarvis/issues')).toBe(true);
+    expect(cursorUrls.every(({ searchParams }) => !searchParams.has('before'))).toBe(true);
+    expect(cursorUrls.map(({ searchParams }) => [
+      searchParams.get('page'), searchParams.get('after'),
+    ])).toEqual([
+      ['1', null],
+      ['2', 'opaque/cursor+one'],
+      ['3', 'opaque/cursor+two'],
+    ]);
+    expect(cursorUrls[1]?.searchParams.get('page')).toBe('2');
+    expect(cursorUrls[1]?.searchParams.get('after')).toBe('opaque/cursor+one');
+    expect(cursorUrls[2]?.searchParams.get('page')).toBe('3');
+    expect(cursorUrls[2]?.searchParams.get('after')).toBe('opaque/cursor+two');
+    expect(authorizationHeaders).toHaveLength(5);
+    expect(authorizationHeaders.every((authorization) =>
+      authorization === `${['Bear', 'er'].join('')} reader-token`)).toBe(true);
+  });
+
+  it('rejects inconsistent provider previous-page metadata', async () => {
+    const providerLink = (page: number, cursorName: 'after' | 'before', cursor: string, relation: string) => {
+      const url = new URL('https://api.github.com/repositories/1403065900/issues');
+      url.searchParams.set('state', 'closed');
+      url.searchParams.set('since', timestamp);
+      url.searchParams.set('per_page', '100');
+      url.searchParams.set('page', String(page));
+      url.searchParams.set(cursorName, cursor);
+      return `<${url}>; rel="${relation}"`;
+    };
+    const closedIssue = (number: number) => ({
+      number, title: `Closed ${number}`, body: null, state: 'closed', closed_at: timestamp,
+      html_url: `https://github.com/DanAakesen/jarvis/issues/${number}`,
+      updated_at: timestamp, labels: [], issue_dependencies_summary: { blocked_by: 0 },
+    });
+    const reader = createGitHubFactoryBoardReader(async (input) => {
+      const url = new URL(String(input));
+      if (url.pathname.endsWith('/issues') && url.searchParams.get('state') === 'closed') {
+        if (url.searchParams.get('page') === '1') {
+          return new Response(JSON.stringify(Array.from({ length: 100 }, (_, index) => closedIssue(index + 1))), {
+            headers: { link: providerLink(2, 'after', 'opaque/cursor', 'next') },
+          });
+        }
+        return new Response(JSON.stringify([closedIssue(101)]), {
+          headers: { link: providerLink(9, 'before', 'opaque/previous', 'prev') },
+        });
+      }
+      return new Response('[]');
+    });
+
+    await expect(reader.read(project.repo, 'reader-token', timestamp)).rejects.toMatchObject({
+      stage: 'source', reason: 'invalid_response',
+    });
+  });
+
+  it.each([
+    [
+      'different cursors',
+      [
+        ['after', 'cursor-one'],
+        ['after', 'cursor-two'],
+      ],
+    ],
+    [
+      'offset and cursor links',
+      [
+        ['page', '2'],
+        ['after', 'cursor-one'],
+      ],
+    ],
+  ] as const)('rejects duplicate next relations with %s before requesting another page', async (_description, links) => {
+    let closedIssueRequests = 0;
+    const duplicateNextLinks = links.map(([parameter, value]) => {
+      const url = new URL('https://api.github.com/repositories/1403065900/issues');
+      url.searchParams.set('state', 'closed');
+      url.searchParams.set('since', timestamp);
+      url.searchParams.set('per_page', '100');
+      url.searchParams.set('page', '2');
+      if (parameter !== 'page') url.searchParams.set(parameter, value);
+      return `<${url}>; rel="next"`;
+    }).join(', ');
+    const reader = createGitHubFactoryBoardReader(async (input) => {
+      const url = new URL(String(input));
+      if (url.pathname.endsWith('/issues') && url.searchParams.get('state') === 'closed') {
+        closedIssueRequests += 1;
+        return new Response(JSON.stringify(Array.from({ length: 100 }, (_, index) => ({
+          number: index + 1, title: `Closed ${index + 1}`, body: null, state: 'closed', closed_at: timestamp,
+          html_url: `https://github.com/DanAakesen/jarvis/issues/${index + 1}`,
+          updated_at: timestamp, labels: [], issue_dependencies_summary: { blocked_by: 0 },
+        }))), { headers: { link: duplicateNextLinks } });
+      }
+      return new Response('[]');
+    });
+
+    await expect(reader.read(project.repo, 'reader-token', timestamp)).rejects.toMatchObject({
+      stage: 'source', reason: 'invalid_response',
+    });
+    expect(closedIssueRequests).toBe(1);
+  });
+
+  it('overlaps complete page and sparse dependency reads within eight requests and preserves page order', async () => {
+    const issues = Array.from({ length: 201 }, (_, index) => ({
+      number: index + 1,
+      title: `Issue ${index + 1}`,
+      body: null,
+      state: 'open',
+      closed_at: null,
+      html_url: `https://github.com/DanAakesen/jarvis/issues/${index + 1}`,
+      updated_at: timestamp,
+      labels: [],
+      issue_dependencies_summary: { blocked_by: index < 20 && index % 2 === 0 ? 1 : 0 },
+    }));
+    let active = 0;
+    let maximumActive = 0;
+    let requestCount = 0;
+    let initialRequests = 0;
+    let dependencyRequests = 0;
+    let dependencyWave = 0;
+    let dependencyWaveRelease = Promise.withResolvers<void>();
+    const pageThreeReturned = Promise.withResolvers<void>();
+    const initialRelease = Promise.withResolvers<void>();
+    const page = (url: string, items: unknown[], current: number, last: number) =>
+      new Response(JSON.stringify(items), { headers: { link: pageLink(url, current, last) } });
+    const reader = createGitHubFactoryBoardReader(async (input) => {
+      active += 1;
+      requestCount += 1;
+      maximumActive = Math.max(maximumActive, active);
+      const url = String(input);
+      try {
+        if (url.includes('/dependencies/blocked_by')) {
+          dependencyRequests += 1;
+          const waveRelease = dependencyWaveRelease;
+          if (dependencyRequests % 8 === 0 || dependencyRequests === 10) {
+            dependencyWave += 1;
+            dependencyWaveRelease = Promise.withResolvers<void>();
+            waveRelease.resolve();
+          }
+          await waveRelease.promise;
+          return new Response(JSON.stringify([{ number: 1000 + Number(url.match(/\/issues\/(\d+)\/dependencies/u)?.[1]), state: 'open' }]));
+        }
+        if (url.includes('state=closed') || url.includes('/pulls?')) {
+          initialRequests += 1;
+          if (initialRequests === 3) initialRelease.resolve();
+          await initialRelease.promise;
+          return new Response('[]');
+        }
+        if (url.includes('/issues?state=open')) {
+          const current = Number(new URL(url).searchParams.get('page'));
+          initialRequests += current === 1 ? 1 : 0;
+          if (current === 1) {
+            if (initialRequests === 3) initialRelease.resolve();
+            await initialRelease.promise;
+            return page(url, issues.slice(0, 100), current, 3);
+          }
+          if (current === 2) {
+            await pageThreeReturned.promise;
+            return page(url, issues.slice(100, 200), current, 3);
+          }
+          pageThreeReturned.resolve();
+          return page(url, issues.slice(200), current, 3);
+        }
+        throw new Error(`Unexpected source URL: ${url}`);
+      } finally {
+        active -= 1;
+      }
+    });
+
+    const result = await reader.read(project.repo, 'reader-token', timestamp);
+
+    expect(result.issues.map(({ number }) => number)).toEqual(issues.map(({ number }) => number));
+    expect(result.issues.filter(({ blockedByCount }) => blockedByCount === 0)).toHaveLength(191);
+    expect(result.issues.filter(({ blockedByCount }) => blockedByCount === 1)
+      .map(({ number, blockedBy }) => [number, blockedBy])).toEqual(
+      issues.slice(0, 20).filter((_, index) => index % 2 === 0)
+        .map(({ number }) => [number, [1000 + number]]),
+    );
+    expect(requestCount).toBe(15);
+    expect(dependencyRequests).toBe(10);
+    expect(maximumActive).toBeLessThanOrEqual(8);
+    expect(maximumActive).toBe(8);
+    expect(dependencyWave).toBe(2);
+    const serialRequestWaves = requestCount;
+    const parallelRequestWaves = 2 + dependencyWave;
+    expect(parallelRequestWaves).toBe(4);
+    expect(parallelRequestWaves).toBeLessThan(serialRequestWaves);
+    expect(result).toEqual({
+      issues: issues.map((issue) => ({
+        number: issue.number,
+        url: issue.html_url,
+        title: issue.title,
+        taskCode: null,
+        labels: [],
+        worker: null,
+        state: 'open',
+        updatedAt: timestamp,
+        closedAt: null,
+        blockedBy: issue.issue_dependencies_summary.blocked_by === 0 ? [] : [1000 + issue.number],
+        blockedByCount: issue.issue_dependencies_summary.blocked_by,
+        body: null,
+      })),
+      pullRequests: [],
+    });
+    expect(new Set(result.issues.map(({ number }) => number)).size).toBe(201);
+  });
+
+  it('accepts the complete ten-page, 100-item boundary', async () => {
+    const issues = Array.from({ length: 1_000 }, (_, index) => ({
+      number: index + 1, title: `Issue ${index + 1}`, body: null, state: 'open', closed_at: null,
+      html_url: `https://github.com/DanAakesen/jarvis/issues/${index + 1}`,
+      updated_at: timestamp, labels: [], issue_dependencies_summary: { blocked_by: 0 },
+    }));
+    const reader = createGitHubFactoryBoardReader(async (input) => {
+      const url = String(input);
+      if (!url.includes('/issues?state=open')) return new Response('[]');
+      const pageNumber = Number(new URL(url).searchParams.get('page'));
+      const responseHeaders = pageNumber < 10 ? { link: pageLink(url, pageNumber, 10) } : undefined;
+      return new Response(JSON.stringify(issues.slice((pageNumber - 1) * 100, pageNumber * 100)), {
+        headers: responseHeaders,
+      });
+    });
+
+    const result = await reader.read(project.repo, 'reader-token', timestamp);
+
+    expect(result.issues.map(({ number }) => number)).toEqual(issues.map(({ number }) => number));
+  });
+
+  it('rejects unsafe, changing, and incomplete page metadata without following supplied URLs', async () => {
+    const issuePage = Array.from({ length: 100 }, (_, index) => ({ number: index + 1 }));
+    const unsafeUrls: string[] = [];
+    const unsafe = createGitHubFactoryBoardReader(async (input, init) => {
+      const url = String(input);
+      unsafeUrls.push(url);
+      if (url.includes('state=open')) {
+        return new Response(JSON.stringify(issuePage), {
+          headers: { link: pageLink(url, 1, 2).replace('https://api.github.com', 'https://attacker.example') },
+        });
+      }
+      expect(new Headers(init?.headers).get('authorization')).toBe(`${['Bear', 'er'].join('')} reader-token`);
+      return new Response('[]');
+    });
+    await expect(unsafe.read(project.repo, 'reader-token', timestamp)).rejects.toMatchObject({
+      stage: 'source', reason: 'invalid_response',
+    });
+    expect(unsafeUrls.every((url) => url.startsWith('https://api.github.com/repos/DanAakesen/jarvis/'))).toBe(true);
+
+    const changing = createGitHubFactoryBoardReader(async (input) => {
+      const url = String(input);
+      if (url.includes('state=open')) {
+        const pageNumber = Number(new URL(url).searchParams.get('page'));
+        return new Response(JSON.stringify(issuePage), {
+          headers: { link: pageLink(url, pageNumber, pageNumber === 1 ? 2 : 3) },
+        });
+      }
+      return new Response('[]');
+    });
+    await expect(changing.read(project.repo, 'reader-token', timestamp)).rejects.toMatchObject({
+      stage: 'source', reason: 'incomplete_response',
+    });
+
+    const incomplete = createGitHubFactoryBoardReader(async (input) => {
+      const url = String(input);
+      if (url.includes('state=open')) {
+        const pageNumber = Number(new URL(url).searchParams.get('page'));
+        return new Response(JSON.stringify(pageNumber === 2 ? issuePage.slice(0, 99) : issuePage), {
+          headers: { link: pageLink(url, pageNumber, 3) },
+        });
+      }
+      return new Response('[]');
+    });
+    await expect(incomplete.read(project.repo, 'reader-token', timestamp)).rejects.toMatchObject({
+      stage: 'source', reason: 'incomplete_response',
+    });
+  });
+
+  it('stops next-only cursor pagination at the ten-page source limit', async () => {
+    let closedPageRequests = 0;
+    const issuePage = Array.from({ length: 100 }, (_, index) => ({
+      number: index + 1, title: `Issue ${index + 1}`, body: null, state: 'closed', closed_at: timestamp,
+      html_url: `https://github.com/DanAakesen/jarvis/issues/${index + 1}`,
+      updated_at: timestamp, labels: [], issue_dependencies_summary: { blocked_by: 0 },
+    }));
+    const reader = createGitHubFactoryBoardReader(async (input) => {
+      const url = new URL(String(input));
+      if (url.pathname.endsWith('/issues') && url.searchParams.get('state') === 'closed') {
+        closedPageRequests += 1;
+        return new Response(JSON.stringify(issuePage), {
+          headers: {
+            link: `<https://api.github.com/repositories/1403065900/issues?state=closed&since=${encodeURIComponent(timestamp)}&per_page=100&after=cursor-${closedPageRequests}>; rel="next"`,
+          },
+        });
+      }
+      return new Response('[]');
+    });
+
+    await expect(reader.read(project.repo, 'reader-token', timestamp)).rejects.toMatchObject({
+      stage: 'source', reason: 'result_limit',
+    });
+    expect(closedPageRequests).toBe(10);
+  });
+
+  it('cancels active and queued page siblings when a page fails', async () => {
+    let active = 0;
+    let maximumActive = 0;
+    let requestCount = 0;
+    const reader = createGitHubFactoryBoardReader(async (input, init) => {
+      const url = String(input);
+      const signal = init?.signal as AbortSignal;
+      active += 1;
+      requestCount += 1;
+      maximumActive = Math.max(maximumActive, active);
+      try {
+        if (url.includes('/issues?state=open') && new URL(url).searchParams.get('page') === '1') {
+          return new Response(JSON.stringify(Array.from({ length: 100 }, (_, index) => ({ number: index + 1 }))), {
+            headers: { link: pageLink(url, 1, 10) },
+          });
+        }
+        if (url.includes('/issues?state=open') && new URL(url).searchParams.get('page') === '2') {
+          return new Response('invalid JSON');
+        }
+        return await new Promise<Response>((_resolve, reject) => {
+          signal.addEventListener('abort', () => reject(signal.reason), { once: true });
+        });
+      } finally {
+        active -= 1;
+      }
+    });
+
+    await expect(reader.read(project.repo, 'reader-token', timestamp)).rejects.toMatchObject({
+      stage: 'source', reason: 'invalid_response',
+    });
+
+    expect(active).toBe(0);
+    expect(maximumActive).toBeLessThanOrEqual(8);
+    expect(requestCount).toBeLessThan(12);
   });
 
   it('loads exact blocked issue numbers through the GitHub dependency API', async () => {

@@ -12,6 +12,7 @@ const repositoryPattern = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/u;
 const maxResponseBytes = 1024 * 1024;
 const maxPages = 10;
 const pageSize = 100;
+const maxConcurrentRequests = 8;
 const boardColumns: readonly { id: FactoryBoardColumnId; label: string }[] = [
   { id: 'backlog', label: 'Backlog' },
   { id: 'needs_dan', label: 'Needs Dan' },
@@ -178,33 +179,326 @@ async function readResponse(response: Response): Promise<unknown> {
   }
 }
 
+interface RequestLimiter {
+  read(url: string, signal: AbortSignal): Promise<{ response: Response; result: unknown }>;
+}
+
+function createRequestLimiter(fetchImpl: typeof fetch, token: string): RequestLimiter {
+  let active = 0;
+  const waiting: {
+    signal: AbortSignal;
+    resolve: () => void;
+    reject: (error: unknown) => void;
+    onAbort: () => void;
+  }[] = [];
+
+  function acquire(signal: AbortSignal): Promise<() => void> {
+    if (signal.aborted) return Promise.reject(signal.reason);
+    return new Promise((resolve, reject) => {
+      const grant = () => {
+        signal.removeEventListener('abort', onAbort);
+        active += 1;
+        resolve(() => {
+          active -= 1;
+          while (waiting.length > 0) {
+            const next = waiting.shift()!;
+            next.signal.removeEventListener('abort', next.onAbort);
+            if (next.signal.aborted) {
+              next.reject(next.signal.reason);
+              continue;
+            }
+            next.resolve();
+            break;
+          }
+        });
+      };
+      const onAbort = () => {
+        const index = waiting.findIndex((entry) => entry.onAbort === onAbort);
+        if (index >= 0) waiting.splice(index, 1);
+        reject(signal.reason);
+      };
+      if (active < maxConcurrentRequests) {
+        grant();
+      } else {
+        waiting.push({ signal, resolve: grant, reject, onAbort });
+        signal.addEventListener('abort', onAbort, { once: true });
+      }
+    });
+  }
+
+  return {
+    async read(url, signal) {
+      let release: (() => void) | undefined;
+      try {
+        release = await acquire(signal);
+        const response = await fetchImpl(url, {
+          headers: {
+            Accept: 'application/vnd.github+json',
+            Authorization: `${['Bear', 'er'].join('')} ${token}`,
+            'X-GitHub-Api-Version': '2022-11-28',
+          },
+          signal,
+          redirect: 'error',
+        });
+        return { response, result: await readResponse(response) };
+      } catch (error) {
+        if (error instanceof FactoryBoardReadError) throw error;
+        const diagnostic = boardReadError('source', error);
+        throw diagnostic.reason === 'unexpected'
+          ? new FactoryBoardReadError('source', 'transport_failed')
+          : diagnostic;
+      } finally {
+        release?.();
+      }
+    },
+  };
+}
+
+interface PagePosition {
+  readonly page?: number;
+  readonly after?: string;
+}
+
+interface PageLinks {
+  readonly next?: PagePosition;
+  readonly lastPage?: number;
+  readonly repositoryId?: string;
+}
+
+function paginationPage(response: Response, path: string, position: PagePosition): PageLinks {
+  const header = response.headers.get('link');
+  if (!header) return {};
+  if (header.length > 8192) throw new FactoryBoardReadError('source', 'invalid_response');
+
+  const baseUrl = new URL(`${githubApi}${path}`);
+  const repositoryPath = /^\/repos\/[^/]+\/[^/]+(?=\/|$)/u.exec(baseUrl.pathname)?.[0];
+  if (!repositoryPath) throw new FactoryBoardReadError('source', 'invalid_response');
+  const endpointSuffix = baseUrl.pathname.slice(repositoryPath.length);
+  const expectedQuery = [...baseUrl.searchParams.entries()].sort(([leftKey, leftValue], [rightKey, rightValue]) =>
+    leftKey.localeCompare(rightKey) || leftValue.localeCompare(rightValue));
+  const relations = new Map<string, number>();
+  const seenRelations = new Set<string>();
+  let next: PagePosition | undefined;
+  let repositoryId: string | undefined;
+  const entries = header.split(/,\s*(?=<)/u);
+  if (entries.length > 4) throw new FactoryBoardReadError('source', 'invalid_response');
+  for (const entry of entries) {
+    const trimmed = entry.trim();
+    const closingBracket = trimmed.indexOf('>');
+    if (!trimmed.startsWith('<') || closingBracket <= 1) {
+      throw new FactoryBoardReadError('source', 'invalid_response');
+    }
+    const target = trimmed.slice(1, closingBracket);
+    let parameters = trimmed.slice(closingBracket + 1).trim();
+    if (!parameters.startsWith(';')) throw new FactoryBoardReadError('source', 'invalid_response');
+    parameters = parameters.slice(1).trim();
+    if (!parameters.startsWith('rel="')) throw new FactoryBoardReadError('source', 'invalid_response');
+    const relationEnd = parameters.indexOf('"', 5);
+    if (relationEnd < 0) throw new FactoryBoardReadError('source', 'invalid_response');
+    const relation = parameters.slice(5, relationEnd);
+    if (!['first', 'prev', 'next', 'last'].includes(relation) || seenRelations.has(relation)) {
+      throw new FactoryBoardReadError('source', 'invalid_response');
+    }
+    seenRelations.add(relation);
+    const trailingParameters = parameters.slice(relationEnd + 1).trim();
+    if (trailingParameters && (!trailingParameters.startsWith(';') ||
+        trailingParameters.slice(1).split(';').some((parameter) => !parameter.trim()))) {
+      throw new FactoryBoardReadError('source', 'invalid_response');
+    }
+    let url: URL;
+    try {
+      url = new URL(target);
+    } catch {
+      throw new FactoryBoardReadError('source', 'invalid_response');
+    }
+    let linkRepositoryId: string | undefined;
+    if (url.pathname !== baseUrl.pathname) {
+      const canonicalPrefix = '/repositories/';
+      if (!url.pathname.startsWith(canonicalPrefix)) {
+        throw new FactoryBoardReadError('source', 'invalid_response');
+      }
+      const canonicalPath = url.pathname.slice(canonicalPrefix.length);
+      const slash = canonicalPath.indexOf('/');
+      linkRepositoryId = slash < 0 ? canonicalPath : canonicalPath.slice(0, slash);
+      const suffix = slash < 0 ? '' : canonicalPath.slice(slash);
+      if (!/^[1-9]\d{0,19}$/u.test(linkRepositoryId) || suffix !== endpointSuffix) {
+        throw new FactoryBoardReadError('source', 'invalid_response');
+      }
+      if (repositoryId !== undefined && repositoryId !== linkRepositoryId) {
+        throw new FactoryBoardReadError('source', 'incomplete_response');
+      }
+      repositoryId = linkRepositoryId;
+    }
+    const pageValues = url.searchParams.getAll('page');
+    const cursorValues = url.searchParams.getAll('after');
+    const previousCursorValues = url.searchParams.getAll('before');
+    const linkPage = pageValues[0];
+    const linkPageNumber = linkPage === undefined || !/^[1-9]\d*$/u.test(linkPage) ? NaN : Number(linkPage);
+    const cursor = cursorValues[0];
+    const previousCursor = previousCursorValues[0];
+    const actualQuery = [...url.searchParams.entries()]
+      .filter(([key]) => !['page', 'per_page', 'after', 'before'].includes(key))
+      .sort(([leftKey, leftValue], [rightKey, rightValue]) =>
+        leftKey.localeCompare(rightKey) || leftValue.localeCompare(rightValue));
+    if (url.origin !== githubApi || url.username || url.password || url.hash || url.port ||
+        url.searchParams.getAll('per_page').length !== 1 || url.searchParams.get('per_page') !== String(pageSize) ||
+        pageValues.length > 1 || cursorValues.length > 1 || previousCursorValues.length > 1 ||
+        (pageValues.length !== 1 && cursorValues.length !== 1 && previousCursorValues.length !== 1) ||
+        (pageValues.length === 1 && (!Number.isSafeInteger(linkPageNumber) || linkPageNumber < 1)) ||
+        (cursorValues.length === 1 && (!cursor || cursor.length > 2048 || relation !== 'next')) ||
+        (previousCursorValues.length === 1 &&
+          (!previousCursor || previousCursor.length > 2048 || relation !== 'prev' || pageValues.length !== 1)) ||
+        ((relation === 'first' || relation === 'last' || relation === 'prev') && pageValues.length !== 1) ||
+        JSON.stringify(actualQuery) !== JSON.stringify(expectedQuery)) {
+      throw new FactoryBoardReadError('source', 'invalid_response');
+    }
+    if (relation === 'next') {
+      if (cursorValues.length === 1) {
+        next = { ...(pageValues.length === 1 ? { page: linkPageNumber } : {}), after: cursor! };
+      } else {
+        next = { page: linkPageNumber };
+      }
+    } else if (relation === 'last') {
+      relations.set(relation, linkPageNumber);
+    } else if (pageValues.length === 1) {
+      relations.set(relation, linkPageNumber);
+    }
+  }
+
+  const lastPage = relations.get('last');
+  const requestedPage = position.page;
+  if ((position.after !== undefined && lastPage !== undefined) ||
+      (requestedPage !== undefined && next?.page !== undefined && next.page !== requestedPage + 1) ||
+      (requestedPage !== undefined && lastPage !== undefined &&
+        ((next !== undefined) !== (requestedPage < lastPage) || lastPage < requestedPage)) ||
+      (relations.has('first') && relations.get('first') !== 1) ||
+      (relations.has('prev') && requestedPage !== undefined &&
+        (requestedPage < 2 || relations.get('prev') !== requestedPage - 1)) ||
+      (requestedPage === 1 && relations.has('prev')) ||
+      (next?.after !== undefined && lastPage !== undefined)) {
+    throw new FactoryBoardReadError('source', 'invalid_response');
+  }
+  return { ...(next ? { next } : {}), ...(lastPage !== undefined ? { lastPage } : {}),
+    ...(repositoryId ? { repositoryId } : {}) };
+}
+
 async function readPages(
-  fetchImpl: typeof fetch,
+  limiter: RequestLimiter,
   path: string,
-  token: string,
   signal: AbortSignal,
 ): Promise<unknown[]> {
-  const items: unknown[] = [];
-  for (let page = 1; page <= maxPages; page += 1) {
-    const url = `${githubApi}${path}${path.includes('?') ? '&' : '?'}per_page=${pageSize}&page=${page}`;
-    const response = await fetchImpl(url, {
-      headers: {
-        Accept: 'application/vnd.github+json',
-        Authorization: `${['Bear', 'er'].join('')} ${token}`,
-        'X-GitHub-Api-Version': '2022-11-28',
-      },
-      signal,
-      redirect: 'error',
-    }).catch((error: unknown) => {
-      const diagnostic = boardReadError('source', error);
-      throw diagnostic.reason === 'unexpected' ? new FactoryBoardReadError('source', 'transport_failed') : diagnostic;
-    });
-    const result = await readResponse(response);
+  async function readPage(
+    position: PagePosition,
+    pageSignal = signal,
+  ): Promise<{ items: unknown[]; links: PageLinks }> {
+    const url = new URL(`${githubApi}${path}`);
+    url.searchParams.set('per_page', String(pageSize));
+    if (position.after !== undefined) {
+      if (position.page === undefined) url.searchParams.delete('page');
+      else url.searchParams.set('page', String(position.page));
+      url.searchParams.set('after', position.after);
+    } else {
+      url.searchParams.delete('after');
+      url.searchParams.set('page', String(position.page));
+    }
+    const { response, result } = await limiter.read(url.toString(), pageSignal);
     if (!Array.isArray(result) || result.length > pageSize) throw new FactoryBoardReadError('source', 'invalid_response');
-    items.push(...result);
-    if (!response.headers.get('link')?.match(/<[^>]+>;\s*rel="next"/u)) return items;
+    const links = paginationPage(response, path, position);
+    if (links.lastPage !== undefined && links.lastPage > maxPages) {
+      throw new FactoryBoardReadError('source', 'result_limit');
+    }
+    if (links.next && result.length !== pageSize) {
+      throw new FactoryBoardReadError('source', 'incomplete_response');
+    }
+    if ((position.page !== 1 || position.after !== undefined) && result.length === 0) {
+      throw new FactoryBoardReadError('source', 'incomplete_response');
+    }
+    return { items: result, links };
   }
-  throw new FactoryBoardReadError('source', 'result_limit');
+
+  const first = await readPage({ page: 1 });
+  const items = [...first.items];
+  let repositoryId = first.links.repositoryId;
+  let next = first.links.next;
+  let pageCount = 1;
+  const lastPage = first.links.lastPage;
+  if (lastPage !== undefined) {
+    if (lastPage > 1 && next?.page !== 2) {
+      throw new FactoryBoardReadError('source', 'incomplete_response');
+    }
+    const pages = await readTogether(
+      Array.from({ length: lastPage - 1 }, (_, index) => async (pageSignal) => {
+        const page = index + 2;
+        const result = await readPage({ page }, pageSignal);
+        if (result.links.lastPage !== undefined && result.links.lastPage !== lastPage ||
+            (result.links.next?.page !== undefined && result.links.next.page !== page + 1) ||
+            (page < lastPage && result.links.next?.page !== page + 1) ||
+            (page === lastPage && result.links.next !== undefined) ||
+            (repositoryId !== undefined && result.links.repositoryId !== undefined &&
+              result.links.repositoryId !== repositoryId)) {
+          throw new FactoryBoardReadError('source', 'incomplete_response');
+        }
+        repositoryId ??= result.links.repositoryId;
+        return result.items;
+      }),
+      signal,
+    );
+    items.push(...pages.flat());
+  } else {
+    const seenCursors = new Set<string>();
+    while (next) {
+      if (pageCount >= maxPages) throw new FactoryBoardReadError('source', 'result_limit');
+      if (next.after !== undefined) {
+        if (seenCursors.has(next.after)) throw new FactoryBoardReadError('source', 'incomplete_response');
+        seenCursors.add(next.after);
+      }
+      const requested = next;
+      const result = await readPage(requested);
+      if (repositoryId !== undefined && result.links.repositoryId !== undefined &&
+          result.links.repositoryId !== repositoryId) {
+        throw new FactoryBoardReadError('source', 'incomplete_response');
+      }
+      repositoryId ??= result.links.repositoryId;
+      if (requested.after !== undefined && result.links.next !== undefined &&
+          result.links.next.after === undefined) {
+        throw new FactoryBoardReadError('source', 'incomplete_response');
+      }
+      items.push(...result.items);
+      next = result.links.next;
+      pageCount += 1;
+    }
+  }
+  const identities = new Set<string>();
+  for (const item of items) {
+    const value = record(item);
+    const identity = Number.isSafeInteger(value?.number) && (value!.number as number) > 0
+      ? `number:${value!.number}`
+      : typeof value?.id === 'string' || Number.isSafeInteger(value?.id) ? `id:${value?.id}` : undefined;
+    if (identity && identities.has(identity)) throw new FactoryBoardReadError('source', 'incomplete_response');
+    if (identity) identities.add(identity);
+  }
+  return items;
+}
+
+async function readTogether<T extends readonly unknown[]>(
+  reads: { [K in keyof T]: (signal: AbortSignal) => Promise<T[K]> },
+  signal: AbortSignal,
+): Promise<T> {
+  const controller = new AbortController();
+  const combinedSignal = AbortSignal.any([signal, controller.signal]);
+  let failed = false;
+  let firstError: unknown;
+  const pending = reads.map((read) => Promise.resolve().then(() => read(combinedSignal)).catch((error: unknown) => {
+    if (!failed) {
+      failed = true;
+      firstError = error;
+      controller.abort(error);
+    }
+    throw error;
+  }));
+  const results = await Promise.allSettled(pending);
+  if (failed) throw firstError;
+  return results.map((result) => (result as PromiseFulfilledResult<T[number]>).value) as unknown as T;
 }
 
 export function createGitHubFactoryBoardReader(fetchImpl: typeof fetch = fetch): FactoryBoardReader {
@@ -244,8 +538,11 @@ export function createGitHubFactoryBoardReader(fetchImpl: typeof fetch = fetch):
         incomplete: data.incomplete_results === true || (data.total_count as number) > 10 };
     },
     async issuePullRequests(repository, token, issue) {
-      const events = await readPages(fetchImpl, `${root(repository)}/issues/${issue}/timeline`, token,
-        AbortSignal.timeout(25_000));
+      const events = await readPages(
+        createRequestLimiter(fetchImpl, token),
+        `${root(repository)}/issues/${issue}/timeline`,
+        AbortSignal.timeout(25_000),
+      );
       return [...new Set(events.flatMap((value) => {
         const event = record(value);
         const source = record(record(event?.source)?.issue);
@@ -300,42 +597,41 @@ export function createGitHubFactoryBoardReader(fetchImpl: typeof fetch = fetch):
       const [owner, name] = repository.split('/');
       const root = `/repos/${encodeURIComponent(owner!)}/${encodeURIComponent(name!)}`;
       const signal = AbortSignal.timeout(25_000);
-      const [openIssues, recentlyUpdatedClosedIssues, openPulls] = await Promise.all([
-        readPages(fetchImpl, `${root}/issues?state=open`, token, signal),
-        readPages(fetchImpl, `${root}/issues?state=closed&since=${encodeURIComponent(closedSince)}`, token, signal),
-        readPages(fetchImpl, `${root}/pulls?state=open`, token, signal),
-      ]);
+      const limiter = createRequestLimiter(fetchImpl, token);
+      const [openIssues, recentlyUpdatedClosedIssues, openPulls] = await readTogether([
+        (readSignal) => readPages(limiter, `${root}/issues?state=open`, readSignal),
+        (readSignal) => readPages(limiter, `${root}/issues?state=closed&since=${encodeURIComponent(closedSince)}`, readSignal),
+        (readSignal) => readPages(limiter, `${root}/pulls?state=open`, readSignal),
+      ] as const, signal);
       const cutoff = Date.parse(closedSince);
       const candidates = [...openIssues, ...recentlyUpdatedClosedIssues]
         .map(issueFromGitHub)
         .filter((issue): issue is FactoryBoardIssue => issue !== null)
         .filter((issue) => issue.state === 'open' ||
           (issue.closedAt !== null && Date.parse(issue.closedAt) >= cutoff));
-      const issues: FactoryBoardIssue[] = [];
-      for (let offset = 0; offset < candidates.length; offset += 8) {
-        const batch = candidates.slice(offset, offset + 8);
-        issues.push(...await Promise.all(batch.map(async (issue) => {
-          if (issue.blockedByCount === 0) return issue;
-          const dependencies = await readPages(
-            fetchImpl,
-            `${root}/issues/${issue.number}/dependencies/blocked_by`,
-            token,
-            signal,
-          );
-          // The summary's blocked_by counts OPEN blockers only, while the list also returns closed ones.
-          const blockedBy = dependencies.flatMap((dependency) => {
-            const blockedIssue = record(dependency);
-            if (!blockedIssue || !Number.isSafeInteger(blockedIssue.number) ||
-                (blockedIssue.number as number) < 1 ||
-                (blockedIssue.state !== 'open' && blockedIssue.state !== 'closed')) {
-              throw new FactoryBoardReadError('source', 'invalid_response');
-            }
-            return blockedIssue.state === 'open' ? [blockedIssue.number as number] : [];
-          });
-          if (blockedBy.length !== issue.blockedByCount) throw new FactoryBoardReadError('source', 'incomplete_response');
-          return { ...issue, blockedBy };
-        })));
+      if (new Set(candidates.map(({ number }) => number)).size !== candidates.length) {
+        throw new FactoryBoardReadError('source', 'incomplete_response');
       }
+      const issues = await readTogether(candidates.map((issue) => async (readSignal) => {
+        if (issue.blockedByCount === 0) return issue;
+        const dependencies = await readPages(
+          limiter,
+          `${root}/issues/${issue.number}/dependencies/blocked_by`,
+          readSignal,
+        );
+        // The summary's blocked_by counts OPEN blockers only, while the list also returns closed ones.
+        const blockedBy = dependencies.flatMap((dependency) => {
+          const blockedIssue = record(dependency);
+          if (!blockedIssue || !Number.isSafeInteger(blockedIssue.number) ||
+              (blockedIssue.number as number) < 1 ||
+              (blockedIssue.state !== 'open' && blockedIssue.state !== 'closed')) {
+            throw new FactoryBoardReadError('source', 'invalid_response');
+          }
+          return blockedIssue.state === 'open' ? [blockedIssue.number as number] : [];
+        });
+        if (blockedBy.length !== issue.blockedByCount) throw new FactoryBoardReadError('source', 'incomplete_response');
+        return { ...issue, blockedBy };
+      }), signal);
       return { issues, pullRequests: openPulls.map(pullRequestFromGitHub) };
     },
   };
