@@ -655,6 +655,32 @@
   .conversation-resize-border-bottom-left { bottom: -22px; left: -22px; }
   .conversation-resize-border-bottom-right { bottom: -22px; right: -22px; }
 }
-.app-shell[data-voice-active="false"][data-home="false"]:has(.workspace[data-conversation-positioned]):not(.app-signed-out) .workspace-shell-area {
+.app-shell[data-phone="false"][data-voice-active="false"][data-home="false"]:has(.workspace[data-conversation-positioned]):not(.app-signed-out) .workspace-shell-area {
   bottom: calc(var(--conversation-composer-height, 52px) + 16px);
+}
+
+/* Both halves of phone chat use the visible viewport, including keyboard pan and dismissal. */
+.app-shell.app-shell[data-phone="true"][data-voice-active="false"]:not(.app-signed-out) .jarvis-page {
+  position: fixed; z-index: 40; top: auto;
+  right: calc(env(safe-area-inset-right) + 8px);
+  bottom: calc(var(--phone-chat-bottom, 0px) + var(--phone-dock-bottom));
+  left: calc(env(safe-area-inset-left) + 8px);
+  width: auto; max-width: none; height: auto; min-height: 0; margin: 0; padding: 0; pointer-events: none;
+}
+.app-shell.app-shell[data-phone="true"][data-voice-active="false"]:not(.app-signed-out) .jarvis-page .conversation-history {
+  flex: 0 0 auto;
+}
+.app-shell.app-shell[data-phone="true"][data-voice-active="false"]:not(.app-signed-out) .conversation-input {
+  pointer-events: auto;
+}
+.app-shell.app-shell[data-phone="true"][data-voice-active="false"]:not(.app-signed-out) .workspace-shell-area {
+  position: fixed; z-index: 30;
+  top: calc(var(--phone-chat-top, 0px) + env(safe-area-inset-top) + var(--rail-size) + 8px);
+  right: calc(env(safe-area-inset-right) + 8px);
+  bottom: calc(var(--phone-chat-bottom, 0px) + var(--phone-dock-bottom) + var(--conversation-composer-height, 52px) - 2px);
+  left: calc(env(safe-area-inset-left) + 8px);
+  padding: 0; pointer-events: none;
+}
+.app-shell.app-shell[data-phone="true"][data-voice-active="false"] .workspace-shell-area :is(.workspace-window, .workspace-view-switcher) {
+  pointer-events: auto;
 }

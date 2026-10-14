@@ -1,5 +1,66 @@
 # Project plan
 
+## Mobile/Status review publication (14 October 2026)
+
+Dan approved the reviewed #799/mobile correction for isolated commit,
+push and a separate review PR. This supersedes the pre-approval publication
+holds recorded below; merge/deployment and #798/#797/#792 remain held.
+The publication artifact preserves the eight accepted code/test/CSS files
+byte-for-byte and adds documentation to main `439a000` without replaying
+an older PLAN table. All actual generated cells remain unchanged, including
+P9-101's current `In progress` cell.
+
+The retained clean-main runtime receipt records 258 passing tests across
+nine files, strict types and a scratch build on available tools, not pinned
+CI. Main's two generated PLAN updates since that receipt's `b787788` base
+restored the original cell; implementation and configuration are unchanged.
+The seven-file lint receipt remains applicable by source/config equivalence;
+the two LF-normalised hook files have distinct raw hashes and CSS is excluded.
+No tests or implementation were repeated for publication preparation.
+Next: the separately scoped publisher applies this artifact and opens the
+review PR. Factory #842, merge/deployment and live acceptance stay separate.
+
+## Page completion deadline review correction (14 October 2026; local)
+
+The bounded review follow-up confirms late success on the reviewed applier:
+four failing expiry probes and two passing pre-deadline controls. Recheck the
+captured deadline at successful waiter completion and synchronous fast return,
+without altering cancellation, refusals, the timeout or router ownership.
+Six final probes and all five directly affected suites pass 149 assertions;
+strict types and a scratch production build pass. Final exact-hash scoped
+lint passes seven TS/TSX files with zero errors/warnings; CSS is excluded.
+The local correction is complete. Current-main integration is artifact-only,
+retaining main's documentation and workflow cells, not changing a checkout.
+
+The earlier nine-file/252-test and lint evidence below is preserved as the
+previous revision, not repeated or relabelled as a fresh full run. This work
+does not establish Dan's original trigger, phone/voice acceptance or rollback.
+Factory #842 remains separate. No publication, merge/deployment, live call or
+release of #798/#797/#792 is authorised.
+
+## Phone keyboard correction and next Status trace (14 October 2026; local)
+
+The user-directed mobile correction keeps chat/composer joined through
+keyboard resize, viewport pan, outside touch and focused Hide Keyboard.
+Saved geometry and draft ownership are unchanged. Scoped local checks and
+controlled browser geometry do not establish physical-phone acceptance;
+this work has no mixed-branch publication or deployment permission.
+
+The subsequent bounded #799 trace reproduced an acknowledgement-before-route-
+commit edge in four actual-App cases; already-on-Status cases passed. A local
+route-commit waiter corrects that edge, with ten new first-ack/lifecycle cases.
+Nine affected test files pass 252 assertions; types/build and final seven-file
+TypeScript/TSX scoped lint pass with zero errors/warnings. CSS has no existing
+lint configuration and is excluded. The local implementation is complete;
+Dan's original cause and live acceptance remain unestablished. His human turn happened, the
+first claim lacked visible navigation and his follow-up recovered.
+Do not send another live/model turn or start held #798, #797 or #792.
+The frozen #813 files/patch and mobile-only source snapshot remain separate;
+no mixed publication, merge or deployment is authorised.
+The coordinator reports isolated Factory [#842](https://github.com/DanAakesen/jarvis/pull/842)
+open at `281bd1a`, excluding these mobile/Status changes; this grants no
+publication or live acceptance for the separate coupled correction.
+
 ## Danish voice Settings correction (13 October 2026)
 
 P9-97/#790 replaces the misleading Harper selector with read-only Jeppe.
@@ -95,6 +156,8 @@ Next: camera-only PR, coordinator merge on green CI, then loading recovery and
 Phase 1 delivers the Software Factory. Requirements and page specifications are in [PRODUCT.md](PRODUCT.md); the system and stack in [docs/architecture.md](docs/architecture.md); the data model in [docs/data-model.md](docs/data-model.md); decisions and learnings in [docs/decisions.md](docs/decisions.md).
 
 ## Current focus
+
+- **Main release recovery (14 October; local):** Deploy `38584186160` for `81580919` remains failed after its smoke-only retry (`chat_canary`/`chat_capabilities` down, GitHub read ok). Existing #831/#832 diagnostic surfaces are combined locally with unchanged smoke limits and legacy HTTP Status compatibility. Independent diagnostic review, 169 scoped backend tests, 42 contracts tests and affected-file/contracts lint pass with qualified local tooling; five app suites/full backend build remain blocked by missing snapshot packages. The authorised fixed-format numeric model-round query returned no records for 17:32–17:34 UTC, so the failing capability predicate and live cause remain unknown. Next: coordinator-owned exact-head gates, authorised publication/normal release and retained safe reason readback; keep queued releases held. Instrumentation alone is not recovery. No new issue or PR, speculative model change or blind retry.
 
 - **P12-10 (#725):** #746 merged as an inactive intermediate implementation; three feed-boundary corrections continue on `codex/p12-10-feed-boundary-corrections` / draft #754. Shared range validation precedes refresh/storage/provider/model work; numberless deliveries require matching nonempty delivery details; full validated SENT labels preserve alias direction before DTO truncation. Existing resumable scans, protected semantic adapter, exact Danish selectors/keys, owner-local persistence and source serialization safeguards remain intact. Synthetic/isolated SQL regressions and exact-head full CI precede independent correction review; #754 remains draft until explicit coordinator readiness release. CalendarList consent, deployed identity/model/provider parity, private backup/import/reconciliation and device gates remain open. No registration/OAuth/resource changes; #725 stays open/native dependencies intact.
 

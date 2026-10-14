@@ -1,5 +1,53 @@
 # Architecture
 
+## Mobile/Status review publication (14 October 2026)
+
+The publication candidate retains all eight accepted code/test/CSS paths
+byte-exact, including the two already LF-normalised hook files. Only additive
+documentation is adapted to current main; page completion ownership,
+deadline/cancellation behaviour and phone viewport ownership below are
+unchanged. No Factory, backend, contract, dependency or runtime boundary
+is added. Publication approval does not authorise merge or deployment.
+
+## Page command completion ownership (14 October 2026; local)
+
+`ShellLayout` retains synchronous direct workspace dispatch, but its broker
+page-command applier owns a bounded pending-route completion. The pathname
+layout effect settles success only on destination commit, or refuses a
+superseding route. Abort, unmount and the command deadline remove the waiter
+and its timer/listener. The maximum wait retains the existing six-second
+navigation ceiling and 250-ms acknowledgement reserve; it starts no fetch.
+Both a successful waiter settlement and the post-dispatch page/pane fast
+return check the same captured deadline against the completion-time clock.
+Late success becomes the existing deadline refusal even if its timeout has
+not run; cancellation and other refusals keep their reason. This observes
+completion only and does not roll back a requested router transition.
+
+Actual-App fixtures observed applied acknowledgements before the Status
+heading/selected rail entry existed. The surrounding `flushSync` and the
+navigation function's return alone did not guarantee route commit. The new
+owner observes the shell commit rather than polling DOM or awaiting health
+reads. Existing Factory issue resolution, Notes draft guard, Folio pane,
+session/pin handlers and persistent Now session remain separate.
+
+## Phone typing viewport ownership (14 October 2026; local)
+
+`ShellLayout` enables `usePhoneChatViewport` only for signed-in phone typing.
+The hook publishes shell-scoped top/bottom visual-viewport insets synchronously
+on resize, pan, page restore and focus changes; unchanged values are not
+rewritten. This precedes the workspace's scheduled anchor measurement,
+including pan-only events where canvas dimensions do not change. Pinch zoom
+and browsers without VisualViewport retain ordinary dock behaviour.
+
+`Workspace` remeasures an existing manual composer anchor through one
+animation-frame callback on viewport/window resize and captured scrolling,
+deduplicates unchanged coordinates, and removes listeners/pending work on
+disposal. Both phone chat halves use the same insets and measured composer
+height. No viewport event writes persisted layout or remounts the draft owner.
+The hook dismisses only an active in-shell Message Jarvis textarea on outside
+touch, excluding composer/menu controls and preserving the native tap.
+Voice, authentication, APIs, model requests and dependencies are unchanged.
+
 ## Remaining UI release (13 October 2026)
 
 `Workspace` owns conversation gestures and device-local normalized geometry
@@ -814,16 +862,50 @@ permission.
 Board loads validate the complete shared contract before caching a snapshot.
 Failure diagnostics survive both concurrent cache rejection and stale fallback:
 `factory.board_read_failed` exports only allowlisted `stage`, `reason`, HTTP
-`status` (100–599) and boolean `stale`. Project lookup has its own event with
-the same diagnostic allowlist. Token, source, task, release and response
-boundaries never export exception messages or provider content. The 25-second
-source deadline, ten-page/100-row pagination, one-minute/32-entry cache and
-1-MiB byte limits are unchanged. Within a snapshot, one request limiter caps all
-GitHub reads at eight concurrent requests. Offset pages are fetched concurrently
-only when provider metadata supplies a consistent last page; cursor pages,
-including links with both an incrementing page and opaque `after` token, remain
-sequential. Validate `prev` links with their `before` cursor but never follow
-them. Results retain provider page order, and
+`status` (100–599), boolean `stale`, request ID, and matched route template.
+Project lookup has its own event with that safe correlation. The board also
+emits allowlisted `factory.board_phase` timings for each executed project,
+token, source, task, release, and response boundary, plus one
+`factory.board_read_timing` summary with handler/source-computation outcome,
+reply status, cache path, stale state, and monotonic `cacheElapsedMs`. The
+summary records the handler's decision, not proof of HTTP completion or client
+receipt. `request.completed` is a separate server-side `onResponse` observation
+of reply status and response time; neither event proves that the client received
+the response. The cache elapsed value measures the awaited cache operation:
+lookup for a hit, wait for a shared caller, or the complete source load for its
+owner. Interpret it with `cachePath`; it is not a stage duration.
+Durations are bounded to 60 seconds and server-only. Values beyond that limit
+omit the numeric duration and set the corresponding `durationCensored` or
+`cacheElapsedCensored` marker rather than reporting a clipped value. Invalid
+or unavailable clock values omit the numeric duration and set
+`durationUnavailable` or `cacheElapsedUnavailable`. Each phase event is emitted
+when its instrumented work boundary executes; absence of an event cannot prove
+that work was skipped, since telemetry may be missing, sampled, cropped, or
+outside the observed window. When present, `cachePath` explicitly classifies the
+cache operation as `not_started`, `cache_hit`, `shared_wait`, or `source_load`.
+Response assembly and serialization have separate response entries (`part`).
+Source, task, and release durations
+are individual wall-clock measurements of concurrent work; they overlap and
+must not be summed as if sequential. Cache paths distinguish `cache_hit`,
+`shared_wait`, and `source_load`; `stale` marks either stale fallback path. No
+phase exports exception messages, provider content, headers, tokens, SQL,
+repository URLs, or query strings.
+
+At the existing board publication boundary, `factory.board_invalidated` exports
+only a bounded origin (`task_event` or `github_webhook`), safe project ID and
+in-process version when available, and webhook request ID when present. The
+task-event prelookup invalidation is explicitly marked `all_projects`; its
+project and version are not yet known. Versions are process-local and are not a
+durable event sequence. No polling, endpoint, resource, or client behavior is
+added.
+
+The 25-second source deadline, ten-page/100-row pagination,
+one-minute/32-entry cache and 1-MiB byte limits are unchanged. Within a snapshot,
+one request limiter caps all GitHub reads at eight concurrent requests. Offset
+pages are fetched concurrently only when provider metadata supplies a consistent
+last page; cursor pages, including links with both an incrementing page and
+opaque `after` token, remain sequential. Validate `prev` links with their
+`before` cursor but never follow them. Results retain provider page order, and
 dependency reads share the same limiter. Link metadata is validated against the
 selected repository endpoint, including GitHub's numeric `/repositories/{id}`
 form, but its URL is never followed: requests are constructed locally against
@@ -1435,12 +1517,21 @@ the fixed preceding transcript.
 Each scripted check has its own smoke-report entry. Deterministic tool and
 response checks report `down`; the identity and missing-image timestamp wording
 checks report `degraded`, which the Deploy gate excludes from failure decisions.
-The suite summary fails only for deterministic checks. The report contains IDs,
-statuses, timestamps and fixed failure reasons only; it never includes reply
+The suite summary fails only for deterministic checks. The internal report contains IDs,
+statuses, timestamps and per-check allowlisted failure reasons for down/degraded
+checks; it never includes reply
 text, tool arguments/results, settings or provider error text. The endpoint
 never reads note contents. The latest report is kept in
-the backend's in-memory status snapshot and is returned as `smoke` by `GET /status`
-for the status page; it is lost when the backend restarts. The embedding vector is
+the backend's in-memory status snapshot; it is lost when the backend restarts.
+Both `GET /status/smoke` and the retained `smoke` in `GET /status` use a
+non-mutating HTTP projection that omits non-down reasons. This preserves the
+legacy validator in already-open clients during parallel web/backend deploys.
+An authorised smoke run emits one `system.smoke_check` event per check through
+the existing stdout/Application Insights export boundary, containing only its
+allowlisted ID, status and check-specific safe failure reason. Retained Status
+reads neither invoke probes nor repeat these events. Degraded diagnostics remain
+internal/telemetry-only; no new endpoint, storage or permission is added.
+The embedding vector is
 discarded, and the temporary research invocation is cleaned up without writing
 research output or other user data. Dan may call the endpoint with his normal
 token; the configured deployment service principal may call only this exact GET

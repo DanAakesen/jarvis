@@ -1,5 +1,36 @@
 # Product
 
+## Mobile/Status review publication (14 October 2026)
+
+Dan approved commit, push and a separate review PR for the accepted phone
+composer and page-acknowledgement correction. The requirements below are
+unchanged; approval supersedes earlier local-only publication holds, not
+merge, deployment or live/device acceptance gates. No backend or Factory
+change belongs to this publication.
+
+## Page navigation acknowledgement correction (14 October 2026; local)
+
+A page-navigation command may acknowledge success only after the requested
+route has committed in the shell, not merely after requesting the switch.
+Status can acknowledge its mounted loading/error page without waiting for
+health data. Cancellation, supersession, disposal and the existing command
+deadline must settle truthfully; preserve drafts and the shared stream.
+Successful completion must recheck the captured deadline, including an
+already-current page or pane; a delayed timeout callback is not an expiry
+check. A late route may still appear, but it must not acknowledge success.
+Local evidence of an acknowledgement race does not establish the cause of
+Dan's reported first-turn failure or release acceptance.
+
+## Phone typing keyboard correction (14 October 2026; local)
+
+The chat frame and composer must stay joined when the phone keyboard opens,
+the visible viewport pans, or iOS Hide Keyboard restores space without
+blurring the input. An outside touch dismisses Message Jarvis without
+swallowing the tapped action; composer/menu controls and other editors keep
+their own focus behaviour. Preserve unsent text and saved chat geometry.
+This correction changes neither voice nor backend behaviour and is not a
+production or physical-iPhone acceptance claim.
+
 ## Remaining UI release (13 October 2026)
 
 Dan authorised "Deploy everything. so i can test live." This releases the
