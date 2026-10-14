@@ -2502,6 +2502,17 @@ rounds. Timings are bounded to 600,000 ms, contain no content, and retain the fi
 sample for each agent phase. No saved model/effort, instructions, tools or schemas
 change. Post-deploy latency and failure/canary acceptance remain unverified.
 
+The P9-99 follow-up gives each verified chat invocation one coordination
+`httpx.AsyncClient`, opened only for session-backed model streaming and closed
+after the model generator. Steering reads and model/tools phase writes reuse
+that connection pool across rounds. Their ordering, both reads around a model
+transition, final steering check, per-request delegated authorization, configured
+timeout, disabled redirects and failure semantics are unchanged. Neither clients
+nor caller-specific cookies, history or authorization cross invocation boundaries.
+The local loopback comparison and coordinator's reported post-#802 timings are
+recorded in `docs/decisions.md`; they do not establish a warm session classification
+or a passing repeated-turn latency gate.
+
 The reported 5–10 s model-to-first-delta interval is not currently attributable
 between prompt processing and reasoning: the provider exposes one elapsed
 first-delta duration, not separate prompt-ingestion and reasoning durations.
