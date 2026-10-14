@@ -1,5 +1,29 @@
 # Decisions
 
+## #813 bound Factory board source reads (13 October 2026)
+
+Use one eight-request limiter for every GitHub source request in a board snapshot,
+including the three primary lists, their pagination pages, and dependency lists.
+Fetch offset pages concurrently only when page 1 provides a consistent bounded
+range; cursor pages, including `page` plus `after` links, remain sequential and
+preserve provider order. Validate backward `prev` links and their `before`
+cursors, but never follow them. Treat Link URLs as untrusted: validate their
+origin, selected endpoint, query, page size, and pagination state, then
+reconstruct requests against the configured `/repos/{owner}/{repo}` endpoint
+using only the page number or opaque forward cursor. A failed page/dependency
+read cancels siblings, including queued requests.
+
+The synthetic offset-page fixture demonstrates reduced request waves for that
+provider pagination form, and a separate provider-shaped cursor fixture proves
+complete ordered results without requesting the numeric `/repositories/{id}`
+Link URL. The authorized closed-issues endpoint was observed to use a next-only
+cursor, so its pages remain serial; these tests do not establish a speedup for
+that endpoint or the production baseline. Actual latency and cache-hit
+attribution remain post-deploy operator checks. The 2026-10-13 baseline of 90
+successful requests (median 10.065 s, p95 12.915 s, maximum 19.211 s) included
+cache hits and is not a cold-only cohort. This is not a diagnosis of #811's
+separate historical 502s.
+
 ## Status reads recorded evidence without running canaries (14 October 2026)
 
 P9-101/#799 uses the existing owner-only `/status` contract and shell

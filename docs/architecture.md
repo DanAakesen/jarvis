@@ -816,11 +816,21 @@ Failure diagnostics survive both concurrent cache rejection and stale fallback:
 `factory.board_read_failed` exports only allowlisted `stage`, `reason`, HTTP
 `status` (100–599) and boolean `stale`. Project lookup has its own event with
 the same diagnostic allowlist. Token, source, task, release and response
-boundaries never export exception messages or provider content. The existing
-25-second source deadline, ten-page/100-row pagination, eight concurrent
-dependency reads, one-minute/32-entry cache and 1-MiB byte limits are unchanged.
-The deploy smoke identity cannot call this Dan-only endpoint; complete live
-board acceptance remains an authorized operator/UI gate in the runbook.
+boundaries never export exception messages or provider content. The 25-second
+source deadline, ten-page/100-row pagination, one-minute/32-entry cache and
+1-MiB byte limits are unchanged. Within a snapshot, one request limiter caps all
+GitHub reads at eight concurrent requests. Offset pages are fetched concurrently
+only when provider metadata supplies a consistent last page; cursor pages,
+including links with both an incrementing page and opaque `after` token, remain
+sequential. Validate `prev` links with their `before` cursor but never follow
+them. Results retain provider page order, and
+dependency reads share the same limiter. Link metadata is validated against the
+selected repository endpoint, including GitHub's numeric `/repositories/{id}`
+form, but its URL is never followed: requests are constructed locally against
+the configured `/repos/{owner}/{repo}` path, with only a validated page or
+opaque cursor copied. A failed page or dependency read cancels queued and active
+siblings. The deploy smoke identity cannot call this Dan-only endpoint; complete
+live board acceptance remains an authorized operator/UI gate in the runbook.
 
 P10-07's `TasksPage` consumes that contract directly with `isFactoryBoard`,
 verifies the requested project ID, and cancels stale project reads. It selects
