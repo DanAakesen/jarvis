@@ -11,10 +11,81 @@ release blocker for the already-approved non-Daily queue.
 
 Do not infer the previous capability failure's cause from this green run,
 close #820 automatically, or substitute it for original phone/voice/Google
-acceptance. Preserve the accepted Factory runtime blobs and actual main
-task rows when integrating #842; its new head needs its own normal gates.
-The local review's five Google findings remain correction work, not a
-request to publish the previously frozen failing patch.
+acceptance. Factory #842 preserved its accepted runtime blobs and all
+309 main task rows, passed its integrated head's ten CI jobs and three
+CodeQL analyses, and merged as `36d72090`. Normal Deploy `38629181064`
+passed Web/deep-link and backend health/smoke. Accept that release without
+claiming the original production trigger, performance or human navigation
+acceptance; issue #813 remains open.
+
+Inactive Daily #818 preserved every reviewed health blob and main task cell
+after current-main integration. Its `af5ac2e7` head passed all ten actual
+CI `38631864211` jobs and three CodeQL `38631863844` analyses, then merged
+normally as `5939fb54`. Normal Deploy `38633353086` passed backend image
+deployment, health and actual smoke at 20:43:27 UTC; unchanged web,
+infrastructure and hosted-agent deployment were skipped. Accept that inactive
+correction release, not activation, original data access or cutover. Google's
+`F3BD79DA` also failed targeted re-review on three residual approval-scope,
+quoted-query intent and native-window faults. Both it and `3073B943` remain
+unapproved and immutable. The same reviewer also rejected `CEC84A7A`,
+then passed replacement `3AF653B5` / `139ca8f7` / `05c77007` for the exact
+two residuals and coupled controls. The coordinator's normal `5064afe4`
+integration is conflict-free. Full pinned CI, normal release and actual
+Google acceptance remain pending; the bounded PASS is not those gates.
+
+## Consolidate the existing maintenance review queue locally (14 October 2026)
+
+Dan directed local implementation and coordinator ownership of both boards,
+including GitHub publication and release. Consolidate the six already-reviewed
+deliveries into existing #841: reference-only urllib3/multidict/PyJWT pins,
+fake-CDP teardown tests, live PR-title validation and production C# CodeQL.
+Preserve the reviewed source and unrelated current-main blobs; do not create
+another PR, restart cloud coding workers or alter main task-table cells.
+
+Individual Python 3.13.16 compatibility receipts remain individual evidence.
+The combined three-pin manifest needs its separate baseline/candidate receipt.
+Local Python 3.13.15 installation failed before tests on a genuine TLS failure,
+also reproduced with default system TLS; do not disable verification or claim
+combined compatibility. Add conditional reference validation to the existing
+agent CI job, not another coding worker or workflow: separate baseline/candidate
+environments, all pinned distributions checked, pip check, offline fixture tests
+and synthetic HS256 readback. Use the reference's existing Python 3.13 major and
+record the actual patch version; production Python pins and model-free agent
+image checks are unchanged.
+Require one normal integrated-head full CI wave and four actual CodeQL
+analyses, with traced production C# extraction, before guarded normal release.
+Reconcile the six issues/cards only after confirmed delivery. This does not
+establish blanket dependency-advisory clearance or close the separate #830
+advisory/compatibility acceptance.
+
+Accepted outcome: #841 merged as `202ead5b` after ten actual CI
+`38636782270` jobs and four CodeQL `38636782376` analyses. Actual
+Python 3.13.16 baseline/combined environments each verified all 90 pins,
+clean pip check, 42 offline tests and HS256 readback. Normal Deploy
+`38638073176` passed all six selected jobs, including infrastructure and
+hosted agent; none was skipped. All six original issues completed and
+superseded review PRs closed after acceptance. This leaves separate
+advisory dispositions qualified, not blanket cleared.
+
+## Parallel overnight delivery and bounded live acceptance (14 October 2026)
+
+Dan directed a ten-hour local-first delivery push with sensible parallel
+subsessions and selective Copilot cloud work. Keep one owner per lane:
+Google implementation/review, Factory lifecycle and inactive Daily acceptance
+remain local; existing #830's reference compatibility is cloud-owned.
+The coordinator handles current-main integration, existing PRs, review,
+normal CI/releases and both boards. This supersedes the earlier blanket
+no-cloud direction, not publication, privacy, access or release protections.
+
+Dan explicitly approved one live acceptance run after review, normal CI
+and release: one synthetic Gmail draft, never sent; one calendar event
+named `Jarvis acceptance test` without attendees or notifications; readback
+and cleanup of only these newly created fixtures; and one isolated sandbox
+delivery job using existing resources and delivery PRs. Use genuine owner
+authentication, preserve unrelated pending actions, and report missing
+access rather than scraping tokens, bypassing consent or forging approval.
+No personal emails, original Daily/data migration or activation, new
+resources/permissions, extra jobs or private/device acceptance is implied.
 
 ## Coalesce automatic board updates behind scoped reads (#813, 14 October 2026)
 
@@ -181,6 +252,39 @@ Full CI exposed `current` as a reserved SQL Server alias in the new identity
 fence. Quote it as `[current]`, retaining the typed result and predicate.
 The corrected revision must pass the real isolated SQL suite and full CI;
 mocked dispatcher tests did not exercise that SQL parser.
+## Repository C# CodeQL uses a traced production build (14 October 2026)
+
+Add C# to the existing advanced CodeQL matrix in manual build mode. Initialize
+CodeQL before the SHA-pinned setup action selecting .NET 10.x and Release build of the production
+`Jarvis.PcBridge` application; its project reference brings
+`Jarvis.PcBridge.Core` into the same traced build. This preserves the existing
+CodeQL policy and avoids relying on test-only builds or an untraced prior build.
+Only source compiled by the traced production build is in scope; generated
+source is covered only when surfaced to that compiler invocation. Local
+validation should report both production assemblies. Verify a remote extraction
+from the C# database's nonempty relations/source archive and its extracted-file
+and code-metric diagnostics, then confirm a successful `/language:csharp` upload.
+Associate each result with its PR source head and analyzed merge SHA; neither an
+upload nor zero alerts proves complete generated-code coverage or no defects.
+## 2026-10-14: P9-113 live PR-title validation
+
+- Validate current same-PR title/body from the API, bound to the event's PR
+  number/repository/head, instead of replaying immutable event text. Reuse the
+  existing normalizer and first same-repository linked-issue lookup.
+- Fail closed on API/schema errors and changes observed by a final metadata
+  read. Keep token permissions unchanged and trigger validation on head pushes.
+- Do not automatically write normalized titles: GitHub title edits do not
+  provide an atomic title/head compare-and-set guard. Fail with the canonical
+  suggestion so a stale job cannot overwrite a concurrent edit. This deliberately
+  replaces automatic correction, not normalization rules or missing-ID failures.
+  The final read cannot atomically fence subsequent GitHub check publication;
+  later edits/pushes require their own gate evidence.
+- Evidence: the offline test executes the workflow's actual gate entry with an
+  old unusable event and a canonical same-head API fixture. It fails against the
+  old workflow and passes with live reads. Fixtures also cover invalid current
+  metadata, API failures, identity/head mismatch and observable races without
+  allowing any title-write request. Live exact-head CI/CodeQL evidence is tracked
+  in the PR, separately from local proof.
 
 ## #813 bound Factory board source reads (13 October 2026)
 
@@ -329,6 +433,12 @@ acceptance gates, so open acceptance issues remain open and their status cells
 stay workflow-owned.
 
 ## P12-05 inactive SQL health processing (13 October 2026)
+
+**14 October release authority:** in DailyMigrationMain, Dan approved releasing inactive PR #818 after updating to latest main and passing required checks and review. He also directed that routine CI/CD should flow without repeated release approvals. Already-authorized inactive P12 scopes and corrections may therefore proceed through independent review/merge and normal main-only deployment without a fresh human clearance per PR. Keep exact-head checks, latest-main containment, branch protections, no own merge and issue/dependency truthfulness. Both cloud workers remain idle; this grants no new worker/scope, activation, source/private-data/credential access, paid resource or device change. Existing protected-backup, parity, final-delta and rollback/cutover gates are unchanged.
+
+14 October follow-up to [automatic review finding 4265321733](https://github.com/DanAakesen/jarvis/pull/808#discussion_r4265321733): #808 merged with a reproduced body-fat unit fallthrough. Move its existing `%`/`percent`/`fraction`/`1` representations into the shared strict known-dimension mapping, preserving absent-unit unknowns, zero/missing values and generic unknown dimensions. Add synthetic normalization and SQL canonical-readback/quarantine regressions; no schema, composition, source/data/device or activation changes. This is a separate #720 follow-up from fresh main, not a rewrite of merged #808; exact-head CI and independent review remain required.
+
+[PR #818 review 4271913189](https://github.com/DanAakesen/jarvis/pull/818#discussion_r4271913189) found non-string declarations disappearing through text fallback. Validate raw body-fat group/sample/workout `units` and `unit` before sanitization or alias selection, including empty groups and shadowed units. Numeric `1` is malformed, not the string unit `1`; null/undefined/blank remain missing. Synthetic normalization and atomic SQL quarantine regressions cover the correction; fresh exact-head CI/review still gate release. Other metric dimensions and runtime/activation boundaries are unchanged.
 
 The [local coordinator release for #720](https://github.com/DanAakesen/jarvis/issues/720#issuecomment-6154043444) follows #805's independently reviewed, CI-tested and deployed inactive SQL acceptance. Reuse that inbox/pool/owner lock. A committed claim generation bounds retries; normalization occurs outside the transaction, then domain rows, ingestion lineage, applicable feed freshness and processed receipt commit together. Heartbeat is a separate signal. Retain raw evidence and quarantine rather than deleting poison inputs or retrying forever. No timer, dispatcher, production registration or credential change.
 
