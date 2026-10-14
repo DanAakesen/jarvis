@@ -1,5 +1,66 @@
 # Project plan
 
+## Mobile/Status review publication (14 October 2026)
+
+Dan approved the reviewed #799/mobile correction for isolated commit,
+push and a separate review PR. This supersedes the pre-approval publication
+holds recorded below; merge/deployment and #798/#797/#792 remain held.
+The publication artifact preserves the eight accepted code/test/CSS files
+byte-for-byte and adds documentation to main `439a000` without replaying
+an older PLAN table. All actual generated cells remain unchanged, including
+P9-101's current `In progress` cell.
+
+The retained clean-main runtime receipt records 258 passing tests across
+nine files, strict types and a scratch build on available tools, not pinned
+CI. Main's two generated PLAN updates since that receipt's `b787788` base
+restored the original cell; implementation and configuration are unchanged.
+The seven-file lint receipt remains applicable by source/config equivalence;
+the two LF-normalised hook files have distinct raw hashes and CSS is excluded.
+No tests or implementation were repeated for publication preparation.
+Next: the separately scoped publisher applies this artifact and opens the
+review PR. Factory #842, merge/deployment and live acceptance stay separate.
+
+## Page completion deadline review correction (14 October 2026; local)
+
+The bounded review follow-up confirms late success on the reviewed applier:
+four failing expiry probes and two passing pre-deadline controls. Recheck the
+captured deadline at successful waiter completion and synchronous fast return,
+without altering cancellation, refusals, the timeout or router ownership.
+Six final probes and all five directly affected suites pass 149 assertions;
+strict types and a scratch production build pass. Final exact-hash scoped
+lint passes seven TS/TSX files with zero errors/warnings; CSS is excluded.
+The local correction is complete. Current-main integration is artifact-only,
+retaining main's documentation and workflow cells, not changing a checkout.
+
+The earlier nine-file/252-test and lint evidence below is preserved as the
+previous revision, not repeated or relabelled as a fresh full run. This work
+does not establish Dan's original trigger, phone/voice acceptance or rollback.
+Factory #842 remains separate. No publication, merge/deployment, live call or
+release of #798/#797/#792 is authorised.
+
+## Phone keyboard correction and next Status trace (14 October 2026; local)
+
+The user-directed mobile correction keeps chat/composer joined through
+keyboard resize, viewport pan, outside touch and focused Hide Keyboard.
+Saved geometry and draft ownership are unchanged. Scoped local checks and
+controlled browser geometry do not establish physical-phone acceptance;
+this work has no mixed-branch publication or deployment permission.
+
+The subsequent bounded #799 trace reproduced an acknowledgement-before-route-
+commit edge in four actual-App cases; already-on-Status cases passed. A local
+route-commit waiter corrects that edge, with ten new first-ack/lifecycle cases.
+Nine affected test files pass 252 assertions; types/build and final seven-file
+TypeScript/TSX scoped lint pass with zero errors/warnings. CSS has no existing
+lint configuration and is excluded. The local implementation is complete;
+Dan's original cause and live acceptance remain unestablished. His human turn happened, the
+first claim lacked visible navigation and his follow-up recovered.
+Do not send another live/model turn or start held #798, #797 or #792.
+The frozen #813 files/patch and mobile-only source snapshot remain separate;
+no mixed publication, merge or deployment is authorised.
+The coordinator reports isolated Factory [#842](https://github.com/DanAakesen/jarvis/pull/842)
+open at `281bd1a`, excluding these mobile/Status changes; this grants no
+publication or live acceptance for the separate coupled correction.
+
 ## Danish voice Settings correction (13 October 2026)
 
 P9-97/#790 replaces the misleading Harper selector with read-only Jeppe.

@@ -56,6 +56,17 @@ function contrast(first: Color, second: Color): number {
 }
 
 describe('shared glass tokens', () => {
+  it('anchors both phone chat surfaces to the same visual viewport and measured composer height', () => {
+    const history = readFileSync('src/ConversationHistory.css', 'utf8');
+    const phoneChat = history.slice(history.indexOf('/* Both halves of phone chat'));
+    expect(phoneChat).toContain('top: calc(var(--phone-chat-top, 0px) + env(safe-area-inset-top) + var(--rail-size) + 8px)');
+    expect(phoneChat).toContain('bottom: calc(var(--phone-chat-bottom, 0px) + var(--phone-dock-bottom))');
+    expect(phoneChat).toContain('bottom: calc(var(--phone-chat-bottom, 0px) + var(--phone-dock-bottom) + var(--conversation-composer-height, 52px) - 2px)');
+    expect(phoneChat).toContain('[data-phone="true"][data-voice-active="false"]');
+    expect(phoneChat).not.toContain('transform:');
+    expect(history).toContain('.app-shell[data-phone="false"][data-voice-active="false"][data-home="false"]:has(.workspace[data-conversation-positioned])');
+  });
+
   it('enables edge-to-edge phone viewports and a standalone Home Screen app using the existing icon', () => {
     const html = readFileSync('index.html', 'utf8');
     const manifest = JSON.parse(readFileSync('public/manifest.webmanifest', 'utf8'));
