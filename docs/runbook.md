@@ -39,6 +39,16 @@ their mention in the reply are required. The reason alone does not establish
 the original production cause; until a normal recovery deployment and released
 acceptance confirm the result, treat that cause as unidentified.
 
+P9-107 deterministic fixtures demonstrate a separate reply false-negative:
+successful discovery with all three canonical receipt categories followed by
+“I can help with Notes, calendars and GitHub tools” failed only the reply
+predicate. The reply now accepts whole-word `calendar` or `calendars`, as Notes
+already accepts singular/plural wording. Receipt requirements are unchanged;
+synonyms, partial words, missing categories and missing/failed/wrong discovery
+still fail. This controlled equivalence does not identify the historical
+deployed cause or establish live recovery. Production acceptance remains open
+under #820; the coordinator owns normal deployment smoke and released acceptance.
+
 ## Factory board 502 diagnosis and acceptance
 
 For #811, a successful Deploy or `/health` response is not board acceptance.
