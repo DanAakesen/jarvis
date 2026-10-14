@@ -4,6 +4,7 @@ import type { ConversationMessage } from '../core/conversation-store.js';
 import type { BackendModule } from '../modules.js';
 import { GoogleApiError, type GoogleApiClient } from './api-client.js';
 import { PendingGoogleActions, type GoogleActionScope } from './pending-actions.js';
+import { classifyApprovalReply } from '../core/approval.js';
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -531,6 +532,16 @@ export function createGoogleModule(
 
   const tools: JarvisTool[] = [
     {
+      name: 'calendar_pending_change',
+      description: 'Read actual unexpired pending calendar confirmation state. This does not read Google Calendar or establish that an event exists. Never infer pending state from conversation text.',
+      inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+      sensitive: true,
+      execute: async (_input, request) => {
+        const message = await currentDanMessage(request);
+        return { ...pendingActions.pending('calendar'), reply: classifyApprovalReply(message.text) ?? null };
+      },
+    },
+    {
       name: 'calendar_today_agenda',
       description: 'Read Dan’s Google Calendar events for today in his configured local time zone. Read-only and safe for a quick reflex answer.',
       inputSchema: { type: 'object', properties: {}, additionalProperties: false },
@@ -692,7 +703,7 @@ export function createGoogleModule(
         return pendingActions.stage({
           scope: 'calendar',
           sourceMessageId: source.id,
-          summary: `Create "${subject}" from ${start.toISOString()} to ${end.toISOString()}${validatedAttendees.length ? `; invite ${validatedAttendees.join(', ')}.` : '.'}`,
+          summary: `Create "${subject}" from ${start.toISOString()} to ${end.toISOString()} (${timeZone}); attendees: ${validatedAttendees.length ? validatedAttendees.join(', ') : 'none'}.`,
           execute: async (signal) => {
             try {
               await google.request('calendar', '/calendars/primary/events', {

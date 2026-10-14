@@ -19,9 +19,23 @@ function fixture(scope: 'calendar' | 'mail' = 'calendar') {
 }
 
 describe('pending Google actions', () => {
+  it('reports actual unexpired state and consumes it even on execution failure', async () => {
+    const f = fixture();
+    expect(f.actions.pending('calendar')).toMatchObject({
+      status: 'awaiting_confirmation', confirmationCode: f.pending.confirmationCode,
+      summary: 'Change.', expiresAt: new Date(601000).toISOString(),
+    });
+    expect(f.actions.pending('mail')).toEqual({ status: 'none' });
+    f.execute.mockRejectedValueOnce(new Error('Provider unavailable'));
+    await expect(f.confirm('yes')).rejects.toThrow('Provider unavailable');
+    expect(f.actions.pending('calendar')).toEqual({ status: 'none' });
+    f.stage();
+    f.setNow(601000);
+    expect(f.actions.pending('calendar')).toEqual({ status: 'none' });
+  });
   it.each(['yes', 'approve', 'go ahead', 'do it', ' YES! ', 'Approve.'])('approves calendar with %s only once', async (reply) => {
     const f = fixture();
-    await expect(f.confirm(reply)).resolves.toEqual({ status: 'completed' });
+    await expect(f.confirm(reply)).resolves.toEqual({ status: 'completed', summary: 'Change.' });
     await expect(f.confirm(reply)).rejects.toMatchObject({ name: 'ToolRefusal' });
     expect(f.execute).toHaveBeenCalledOnce();
   });

@@ -68,6 +68,40 @@ function decodedMimeBody(raw: string): string {
 afterEach(async () => { await Promise.all(apps.splice(0).map((app) => app.close())); });
 
 describe('Google Calendar and Gmail tools', () => {
+  it('exposes pending state without a provider read and preserves the exact create summary', async () => {
+    const request = vi.fn(async () => ({}));
+    const { app, setLatest } = appFor(request);
+    const pending = () => app.inject({ method: 'POST', url: '/tools/calendar_pending_change',
+      headers: confirmHeaders('42'), payload: {} });
+    expect((await pending()).json().result).toEqual({ status: 'none', reply: null });
+    const staged = (await app.inject({ method: 'POST', url: '/tools/calendar_create_event',
+      headers: confirmHeaders('42'), payload: {
+        subject: 'Copenhagen Marriott reservation 99210189',
+        startDateTime: '2026-11-05T16:00:00+01:00',
+        endDateTime: '2026-11-06T12:00:00+01:00', attendees: [],
+      } })).json().result;
+    expect((await pending()).json().result).toMatchObject({
+      status: 'awaiting_confirmation', confirmationCode: staged.confirmationCode,
+      summary: staged.summary,
+    });
+    expect(staged.summary).toContain('Europe/Copenhagen');
+    expect(staged.summary).toContain('attendees: none');
+    expect(request).not.toHaveBeenCalled();
+    confirmMessage(setLatest);
+    const confirmed = (await app.inject({ method: 'POST', url: '/tools/calendar_confirm_change',
+      headers: confirmHeaders('43'), payload: { confirmationCode: staged.confirmationCode },
+    })).json();
+    expect(confirmed).toMatchObject({ outcome: 'ok', result: {
+      status: 'completed', summary: staged.summary,
+    } });
+    expect(request).toHaveBeenCalledWith('calendar', '/calendars/primary/events',
+      expect.objectContaining({ body: {
+        summary: 'Copenhagen Marriott reservation 99210189',
+        start: { dateTime: '2026-11-05T15:00:00.000Z', timeZone: 'UTC' },
+        end: { dateTime: '2026-11-06T11:00:00.000Z', timeZone: 'UTC' },
+      } }));
+  });
+
   it('makes read-only calendar tools reflex-safe and keeps their audit data sensitive', () => {
     const module = createGoogleModule(
       { request: vi.fn(async () => ({ items: [] })) },

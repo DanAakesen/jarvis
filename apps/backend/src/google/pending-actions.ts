@@ -22,6 +22,17 @@ export class PendingGoogleActions {
 
   constructor(private readonly now: () => number = Date.now) {}
 
+  pending(scope: GoogleActionScope) {
+    this.removeExpired();
+    const action = [...this.actions.values()].find((candidate) => candidate.scope === scope);
+    return action ? {
+      status: 'awaiting_confirmation' as const,
+      summary: action.summary,
+      confirmationCode: action.code,
+      expiresAt: new Date(action.createdAt + ACTION_TTL_MS).toISOString(),
+    } : { status: 'none' as const };
+  }
+
   stage(input: Omit<PendingAction, 'code' | 'createdAt'>): {
     readonly status: 'awaiting_confirmation';
     readonly summary: string;
@@ -70,7 +81,10 @@ export class PendingGoogleActions {
     if (reply === 'decline') {
       return { status: 'cancelled', detail: `The pending ${scope === 'calendar' ? 'calendar' : 'Google'} change was discarded. No change was made.` };
     }
-    return action.execute(signal);
+    const result = await action.execute(signal);
+    return typeof result === 'object' && result !== null
+      ? { ...result, summary: action.summary }
+      : result;
   }
 
   get size(): number {
