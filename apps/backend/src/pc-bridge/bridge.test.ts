@@ -1001,9 +1001,10 @@ describe('authenticated PC bridge protocol', () => {
     const planner: PcActPlanner = {
       decide: vi.fn().mockResolvedValue({ operation: 'click', confidence: 0.99, targetIndex: 0 }),
     };
+    const locateElements = vi.fn(async () => []);
     const { app } = fixture({
       pcActPlanner: planner,
-      pcActVisionModel: { locateElements: vi.fn(async () => []) },
+      pcActVisionModel: { locateElements },
       onStatusChange: (online, controlPaused) => {
         statuses.push([online, controlPaused]);
         if (online && controlPaused) resolvePaused();
@@ -1040,13 +1041,15 @@ describe('authenticated PC bridge protocol', () => {
       outcome: 'refused',
       result: { refused: 'Jarvis control is paused in the PC bridge. Resume it from the tray menu to act on the PC.' },
     });
-    expect(commands.map(({ command }) => command)).toEqual(['uia_snapshot']);
+    expect(commands.map(({ command }) => command)).toEqual(['uia_snapshot', 'uia_snapshot']);
+    expect(planner.decide).not.toHaveBeenCalled();
+    expect(locateElements).not.toHaveBeenCalled();
 
     bridge.send(JSON.stringify({ type: 'status', controlPaused: false }));
     await resumed;
     const resumedAction = await callTool(app, 'pc_open', { target: 'app', value: 'vscode' });
     expect(resumedAction.json()).toMatchObject({ outcome: 'ok', result: { opened: true } });
-    expect(commands.map(({ command }) => command)).toEqual(['uia_snapshot', 'open_app']);
+    expect(commands.map(({ command }) => command)).toEqual(['uia_snapshot', 'uia_snapshot', 'open_app']);
     expect(statuses).toEqual([[false, false], [true, false], [true, true], [true, false]]);
   });
 

@@ -2515,6 +2515,40 @@ negatives. Actual PC module fixtures use fresh independent snapshot IDs to
 detect invalidation, suffixless/truncated Chrome titles, missing identity,
 before-dispatch/confirmation refusal and native metadata/control positives.
 
+### Published Google delivery: pinned-CI fixture correction
+
+Independent review passed frozen `3AF653B5`; the coordinator integrated its
+runtime/test blobs into `f2afaca9` and published existing #848. Normal pinned
+CI `38644147405` failed five backend tests (3163 passed, 176/178 files passed).
+Both Backend and Web jobs report these same backend failures; Web's 75 frontend
+files passed before the root test command also ran backend tests.
+
+Four calendar HTTP fixtures registered `/fixture/calendar-reply` without
+`config.jarvisAgent: true`. The unchanged authentication hook correctly denied
+their agent identity before the confirmation helper ran. Explicitly opt in
+only that test route, retaining verified-current-Dan, later-message, expiry,
+cancellation, provider-failure and one-shot assertions. An unmarked-route
+negative control asserts 403 with zero handler/provider calls.
+
+The paused-PC fixture enables visual fallback with a one-element UIA tree.
+Its first observation is followed by a second identity-only UIA read before
+the paused connection refuses `window_capture` without dispatch. Assert the
+exact two-read sequence and zero planner/vision calls; retain strict paused
+refusal and resumed `open_app` dispatch. A dependency-light actual registry,
+connection and synthetic WebSocket broker regression also checks zero
+`pc_open`, capture or native-action dispatch while paused.
+The corrected twelve-file Node selection passes 328 tests, including that
+broker case and all 34 mail-policy controls. Changed-test zero-warning lint
+passes; strict types retain exactly the earlier twelve environment errors.
+Earlier Python and coupled hosted proof receipts apply to unchanged runtime
+blobs and were not rerun for this test-only correction.
+
+These are test-harness corrections, not production authentication or pause
+policy changes. Local HTTP execution remains blocked by missing
+`@fastify/multipart`; normal corrected-head pinned CI is coordinator-owned
+and still required. Do not treat the published failing wave or local fixture
+evidence as CI-green, original provider acceptance or release approval.
+
 Installed CLI help supports `copilot --remote`. Observed existing SDK processes
 run `--server --stdio --no-auto-update`, without `--remote`; this task neither
 relaunches them nor claims in-session `/remote` is enabled. Remote session control

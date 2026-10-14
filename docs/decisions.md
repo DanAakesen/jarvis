@@ -2805,3 +2805,37 @@ All 32 scoped paths, protected mobile/Factory/smoke blobs and PLAN table cells
 remain preserved. A normal scoped local replacement commit is authorised;
 publication/readiness/CI/release and later-main reconciliation remain with the
 coordinator after independent PASS.
+
+## Google pinned-CI fixture corrections (14 October 2026; local)
+
+Independent review passed `3AF653B5`. The coordinator published its normally
+integrated runtime/test blobs as `f2afaca9` in existing #848. Pinned CI
+`38644147405` reported five backend failures in both Backend and Web jobs;
+the 75 frontend files passed, so no frontend or CI configuration change is
+indicated.
+
+Four calendar approval fixtures omitted the test route's explicit agent
+opt-in. Keep production authentication unchanged and add
+`config.jarvisAgent: true` only to `/fixture/calendar-reply` in the tests.
+Retain actual receipt/later-message/one-shot and failure-state assertions,
+with a denied unmarked-route control proving zero handler/provider execution.
+
+The paused sparse-tree PC fixture expected one observation despite enabling
+visual fallback. Current process verification requires a second read before
+capture, which the paused connection correctly refuses before RPC dispatch.
+Assert exactly two UIA reads, no capture/action/planner/vision dispatch, and
+the existing successful resumed action. Add an executable registry/connection
+regression through a synthetic local WebSocket peer, not a real device.
+
+Qualified correction checks pass 328 Node tests across twelve files and
+zero-warning lint on the three changed test files. The two changed HTTP suites
+still cannot collect locally because multipart is absent; strict types report
+the same twelve dependency/consequent errors, with no new fixture diagnostic.
+Earlier 296 Python/four coupled hosted proofs remain evidence for unchanged
+runtime blobs, not newly executed checks or a passing corrected-head CI wave.
+
+No production runtime, permissions, native wire, dependencies, check
+configuration, protected blobs or PLAN cells change. Local app-dependent
+execution remains package-blocked; the coordinator owns corrected-head
+normal pinned CI, publication and release. Original Google provider/live
+acceptance remains unproven.

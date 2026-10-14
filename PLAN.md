@@ -887,12 +887,17 @@ intact through separate observation stores; no C#/wire changes.
 Local checks pass 296 hosted chat/voice tests, 327 runnable backend tests, backend
 lint and changed Python Ruff; actual registry receipt checks and four actual-
 handler-receipt hosted chat/voice scope cases also pass.
-HTTP Google/parity/relay/bridge suites and full types/build remain blocked by
-missing local packages. Next: independent review of the corrected frozen delivery,
-then coordinator-owned pinned CI and existing-PR publication. Original
-Gmail/calendar acceptance remains open. Normal owned local integration commits
-are authorised; no issue closure, new PR, push, hosted CI or deployment is
-authorised by this preparation.
+HTTP Google/parity/relay/bridge suites and full types/build remain locally
+package-blocked. Independent review passed frozen `3AF653B5`; the coordinator
+published its integrated runtime/test blobs in existing #848 as `f2afaca9`.
+Normal pinned CI `38644147405` reported five backend fixture failures in both
+Backend and Web jobs after all 75 frontend files passed. Local corrections
+explicitly opt the calendar test route into agent authentication and assert the
+paused sparse-tree PC's two read-only observations with zero control/model
+dispatch. Production auth/approval/pause policy stays unchanged. Next:
+coordinator-owned review and corrected-head normal pinned CI. Original
+Gmail/calendar acceptance remains open; this local correction does not authorise
+issue closure, new PR, push, hosted CI or deployment by this worker.
 
 A rolling intake phase. When Dan asks Jarvis to change its own code or a project's code, Jarvis drafts the issue, confirms it with Dan and creates it as `P11-NN` (P10-03). Rows are added here as the issues are created.
 | ID | Issue | Task | Acceptance criteria | Depends on | Status |
