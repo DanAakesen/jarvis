@@ -186,6 +186,32 @@ describe('inactive processor on real isolated SQL Server, synthetic records only
       expect(await Promise.all(domainTables.map(rows))).toEqual(before);
     }
   });
+  it('quarantines malformed or shadowed body-fat declarations before sanitization or fallback writes', async () => {
+    const device = await provision(); await accept(device); await processor().processNext(signal());
+    const domainTables = tableNames.filter(table => !['health_upload_inbox', 'health_upload_capabilities'].includes(table));
+    const before = await Promise.all(domainTables.map(rows));
+    const sample = { date: '2026-10-13', qty: 0.2 };
+    const candidates = [
+      { metrics: [{ name: 'body_fat_percentage', units: 1, data: [sample] }] },
+      { metrics: [{ name: 'body_fat_percentage', unit: false, data: [{ ...sample, units: 'fraction' }] }] },
+      { metrics: [{ name: 'body_fat_percentage', units: '%', data: [{ ...sample, units: 1 }] }] },
+      { metrics: [{ name: 'body_fat_percentage', units: '%', data: [{ ...sample, units: '%', unit: false }] }] },
+      { metrics: [{ name: 'body_fat_percentage', units: '%', data: [{ ...sample, units: { type: 'dietary_energy' } }] }] },
+      { metrics: [{ name: 'body_fat_percentage', units: 'kg', data: [{ ...sample, unit: 'fraction' }] }] },
+      { metrics: [{ name: 'body_fat_percentage', units: [], data: [] }] },
+      { workouts: [{ ...workout('must-not-commit'), bodyFatPercentage: { qty: 0, units: 1 } }] },
+      { workouts: [{ ...workout('must-not-commit'), bodyFatPercentage: [{ ...sample, units: { type: 'dietary_energy' } }] }] },
+    ];
+    for (const candidate of candidates) {
+      clock += 1000;
+      const bytes = raw({ data: { ...payload(999, [workout('must-not-commit')]).data, ...candidate } });
+      const receipt = await accept(device, bytes);
+      expect(await processor().processNext(signal())).toMatchObject({ state: 'quarantined', reason: 'unsupported_unit' });
+      expect((await inbox()).find(row => String(row.acceptance_id).toLowerCase() === receipt.acceptanceId)).toMatchObject({ raw_bytes: bytes, checksum: sha256(bytes),
+        processing_status: 'quarantined', processing_error_code: 'unsupported_unit', processing_attempts: 1, processed_at: null });
+      expect(await Promise.all(domainTables.map(rows))).toEqual(before);
+    }
+  });
   it('keeps heartbeat separate from processed data freshness, including before the first upload', async () => {
     const device = await provision();
     await accept(device, { shortcutName: 'Synthetic shortcut', checkedFeeds: ['metrics', 'workouts'] }, 'heartbeat', 'heartbeat');

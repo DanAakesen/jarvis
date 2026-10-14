@@ -86,6 +86,7 @@ export function unitConversion(metric: string, input: unknown): { unit: string |
   const length = /distance|^height$|waist_circumference/u.test(metric);
   const sleep = metric === 'sleep_analysis';
   const bodyFat = metric === 'body_fat_percentage';
+  if (bodyFat && input !== undefined && input !== null && typeof input !== 'string') throw new HealthPayloadError('unsupported_unit');
   // Rate metrics are not heart-rate variability (a duration, commonly milliseconds).
   const heartRate = ['heart_rate', 'resting_heart_rate', 'walking_heart_rate_average', 'avg_heart_rate', 'max_heart_rate', 'min_heart_rate', 'heart_rate_data', 'heart_rate_recovery'].includes(metric);
   // Do not guess whether ambiguous "cal" means thermochemical calories or food Calories.
