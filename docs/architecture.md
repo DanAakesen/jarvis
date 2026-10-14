@@ -862,16 +862,50 @@ permission.
 Board loads validate the complete shared contract before caching a snapshot.
 Failure diagnostics survive both concurrent cache rejection and stale fallback:
 `factory.board_read_failed` exports only allowlisted `stage`, `reason`, HTTP
-`status` (100–599) and boolean `stale`. Project lookup has its own event with
-the same diagnostic allowlist. Token, source, task, release and response
-boundaries never export exception messages or provider content. The 25-second
-source deadline, ten-page/100-row pagination, one-minute/32-entry cache and
-1-MiB byte limits are unchanged. Within a snapshot, one request limiter caps all
-GitHub reads at eight concurrent requests. Offset pages are fetched concurrently
-only when provider metadata supplies a consistent last page; cursor pages,
-including links with both an incrementing page and opaque `after` token, remain
-sequential. Validate `prev` links with their `before` cursor but never follow
-them. Results retain provider page order, and
+`status` (100–599), boolean `stale`, request ID, and matched route template.
+Project lookup has its own event with that safe correlation. The board also
+emits allowlisted `factory.board_phase` timings for each executed project,
+token, source, task, release, and response boundary, plus one
+`factory.board_read_timing` summary with handler/source-computation outcome,
+reply status, cache path, stale state, and monotonic `cacheElapsedMs`. The
+summary records the handler's decision, not proof of HTTP completion or client
+receipt. `request.completed` is a separate server-side `onResponse` observation
+of reply status and response time; neither event proves that the client received
+the response. The cache elapsed value measures the awaited cache operation:
+lookup for a hit, wait for a shared caller, or the complete source load for its
+owner. Interpret it with `cachePath`; it is not a stage duration.
+Durations are bounded to 60 seconds and server-only. Values beyond that limit
+omit the numeric duration and set the corresponding `durationCensored` or
+`cacheElapsedCensored` marker rather than reporting a clipped value. Invalid
+or unavailable clock values omit the numeric duration and set
+`durationUnavailable` or `cacheElapsedUnavailable`. Each phase event is emitted
+when its instrumented work boundary executes; absence of an event cannot prove
+that work was skipped, since telemetry may be missing, sampled, cropped, or
+outside the observed window. When present, `cachePath` explicitly classifies the
+cache operation as `not_started`, `cache_hit`, `shared_wait`, or `source_load`.
+Response assembly and serialization have separate response entries (`part`).
+Source, task, and release durations
+are individual wall-clock measurements of concurrent work; they overlap and
+must not be summed as if sequential. Cache paths distinguish `cache_hit`,
+`shared_wait`, and `source_load`; `stale` marks either stale fallback path. No
+phase exports exception messages, provider content, headers, tokens, SQL,
+repository URLs, or query strings.
+
+At the existing board publication boundary, `factory.board_invalidated` exports
+only a bounded origin (`task_event` or `github_webhook`), safe project ID and
+in-process version when available, and webhook request ID when present. The
+task-event prelookup invalidation is explicitly marked `all_projects`; its
+project and version are not yet known. Versions are process-local and are not a
+durable event sequence. No polling, endpoint, resource, or client behavior is
+added.
+
+The 25-second source deadline, ten-page/100-row pagination,
+one-minute/32-entry cache and 1-MiB byte limits are unchanged. Within a snapshot,
+one request limiter caps all GitHub reads at eight concurrent requests. Offset
+pages are fetched concurrently only when provider metadata supplies a consistent
+last page; cursor pages, including links with both an incrementing page and
+opaque `after` token, remain sequential. Validate `prev` links with their
+`before` cursor but never follow them. Results retain provider page order, and
 dependency reads share the same limiter. Link metadata is validated against the
 selected repository endpoint, including GitHub's numeric `/repositories/{id}`
 form, but its URL is never followed: requests are constructed locally against
@@ -1483,12 +1517,21 @@ the fixed preceding transcript.
 Each scripted check has its own smoke-report entry. Deterministic tool and
 response checks report `down`; the identity and missing-image timestamp wording
 checks report `degraded`, which the Deploy gate excludes from failure decisions.
-The suite summary fails only for deterministic checks. The report contains IDs,
-statuses, timestamps and fixed failure reasons only; it never includes reply
+The suite summary fails only for deterministic checks. The internal report contains IDs,
+statuses, timestamps and per-check allowlisted failure reasons for down/degraded
+checks; it never includes reply
 text, tool arguments/results, settings or provider error text. The endpoint
 never reads note contents. The latest report is kept in
-the backend's in-memory status snapshot and is returned as `smoke` by `GET /status`
-for the status page; it is lost when the backend restarts. The embedding vector is
+the backend's in-memory status snapshot; it is lost when the backend restarts.
+Both `GET /status/smoke` and the retained `smoke` in `GET /status` use a
+non-mutating HTTP projection that omits non-down reasons. This preserves the
+legacy validator in already-open clients during parallel web/backend deploys.
+An authorised smoke run emits one `system.smoke_check` event per check through
+the existing stdout/Application Insights export boundary, containing only its
+allowlisted ID, status and check-specific safe failure reason. Retained Status
+reads neither invoke probes nor repeat these events. Degraded diagnostics remain
+internal/telemetry-only; no new endpoint, storage or permission is added.
+The embedding vector is
 discarded, and the temporary research invocation is cleaned up without writing
 research output or other user data. Dan may call the endpoint with his normal
 token; the configured deployment service principal may call only this exact GET
@@ -3776,7 +3819,8 @@ call linkage remain the post-merge P4-09 acceptance check.
 - Calendar range reads interpret date-only `start`/`end` in `JARVIS_GOOGLE_TIME_ZONE` (inclusive dates and an exclusive next-midnight API boundary); timezone-aware date-times are queried as instants. `calendar_list_events` pages up to 100 events across no more than 62 days and maps optional `query` to Google's `q`; `calendar_next_event` searches up to 60 days and skips events where Dan's attendee response is declined. All-day start/end values remain date-only, including multi-day events, while timed events remain instants. Calendar agenda, range, and next-event reads are reflex-safe and sensitive results remain redacted from the durable tool-call audit.
 - Gmail search and draft listing share the bounded MIME reader introduced on #837 / task 12. It reads nested plain/HTML alternatives and API-externalized text parts, returning `bodySource`, `bodyTruncated`, `contentWarnings` and differing `alternateBody`/`alternateBodyTruncated`. Static parse5 extraction skips scripts, styles, hidden attributes and inline hidden styles, strips invisible email padding before the 6000-character text limit, and never executes HTML or fetches remote resources. File attachments, unsupported charsets, missing bodies and traversal limits remain explicit; snippets cannot establish absent reservation details.
 - `calendar_get_pending_change` reads the latest process-local calendar stage (original confirmation code, summary and expiry) and classifies the verified current Dan message. It performs no Google request and returns `none` after expiry, cancellation, consumption or restart. Its audit arguments/results remain redacted. The hosted model loop uses this actual receipt to resolve later approvals before model generation and renders staging/read/confirmation replies from tool results; provisional text is buffered while Calendar is available, trading first-text latency for evidence grounding. Email-only reservation reads and unrelated follow-up requests do not become calendar approval turns. EN/DA realtime approval/status turns use the same tools and relay the actual result with tools disabled; this is not proof of live model speech. Confirmation preserves the original summary and retains the later-message, scope, expiry and one-shot checks, consuming the action before provider execution even on failure.
-- Direct-only Gmail guards are shared by HTTP, voice, reflex and nested registry execution. A bounded process-local turn ledger prevents generic PC/browser fallback once a direct mail tool starts, including failure and incomplete extraction. Explicit Gmail targets and observed Gmail tabs/windows are refused before planning or acting. The ledger stores identifiers and expiry only, never email content. The MIME reader distinguishes successfully decoded empty text from missing/malformed bodies; read and write provider failures remain explicit.
+- Direct-only Gmail guards are shared by HTTP, voice, reflex and nested registry execution. A bounded process-local turn ledger prevents generic PC/browser fallback once a direct mail tool starts, including failure and incomplete extraction. Independently requested unrelated operations are matched to the verified current Dan message, with nested execution scoped by AsyncLocalStorage to that request and turn; this is not a general fallback exemption. Explicit Gmail targets and observed Gmail tabs/windows are refused before planner/vision export or acting. Raw browser snapshots/actions resolve opaque target IDs through bounded tab metadata; confirmed dispatch rechecks identity without refreshing or invalidating the action snapshot. PC and Codex executors share window/site checks, including before capture and control dispatch; unverifiable non-Chrome website controls are refused. The ledger stores identifiers and expiry only, never email content. The MIME reader preserves successfully decoded empty plain/HTML provenance and returns any snippet separately as bounded `preview`/`previewTruncated`; genuine unavailable-body snippet fallback retains its warning. Read and write provider failures remain explicit.
+- Hosted calendar routing excludes generic staged/draft prose and mail-only context; real mail and calendar stages can coexist without approving the wrong scope. Hosted and EN/DA realtime follow-ups recognise calendar approval/status referents rather than arbitrary question prefixes. Realtime clears unrelated context before interception, so later yes after a weather/mail/build turn is not stolen by an older calendar stage. These routing decisions do not replace backend receipt validation or later-message, ownership, expiry and one-shot authorisation.
 - Calendar creation, movement, updates to title/time/location/attendees/description, deletion, Gmail draft creation/replacement/deletion, message archive/label changes, and sending are staged in process memory for ten minutes. Calendar executes only after a different, later persisted Dan message is a plain approval accepted by the shared approval classifier (for example yes, approved, confirmed, go ahead or ja); no/cancel discards it. A new calendar stage invalidates the previous calendar action, and the confirmation tool must identify the latest action with its returned code. Gmail also uses later plain approval; the returned eight-digit code identifies the pending action for its confirmation tool. Pending actions are one-shot and lost on restart; the Container App remains at one replica. Sensitive Google tool inputs/results are redacted from persistent tool-call records, and external Google error bodies are not returned or logged. Calendar updates PATCH only the supplied fields; empty location, description, and attendee values can clear those fields. Draft replacement requires recipients, subject, and plain-text body; it preserves reply threading and refuses drafts with attachments or CC/BCC recipients. Gmail draft listing is bounded to ten drafts and returns plain-text bodies; archiving removes `INBOX`, and label changes resolve exact Gmail label names or IDs. Confirmed replies create a Gmail draft; Dan sends it from Gmail.
 - [`infra/bootstrap.ps1`](../infra/bootstrap.ps1) creates what the deploy workflows can't create for themselves: the deploy identity (GitHub OIDC, main branch only, trusting both the name-based and the ID-based subject (L50); Contributor and Role Based Access Control Administrator on `rg-jarvis`), the sign-in apps, `id-jarvis-backend`, and `jarvis-sql-admins`. Its IDs are in `infra/bootstrap.output.json` and in the repository's Actions variables.
 - Managed identities between Azure services; GitHub Actions deploys with OpenID Connect.

@@ -1,5 +1,45 @@
 # Agent context
 
+## Consolidated main recovery (14 October 2026; local)
+
+Dan directed important work to local sessions and deferred the proposed Factory
+release-policy redesign. This recovery combines existing PR #831 (`291cca34`)
+and #832 (`85e55164`) with current main `81580919` in an owned worktree,
+uncommitted and unpublished. The coordinator owns publication and normal release;
+do not create another issue/PR, rerun smoke or redeploy unchanged images.
+Preserve main's unrelated source, including the eight accepted mobile blobs.
+
+Smoke discovery returns Notes, Calendar and GitHub labels from the registered
+tool names; the agent extracts those into its actual tool receipt. The smoke role
+does not receive the normal-chat capability instruction block. Missing explicit
+smoke discovery guidance is a candidate, not an established production cause,
+and this patch does not change model instructions. The authorised fixed-format
+numeric model-round query in the existing Log Analytics workspace returned no
+matching records for 17:32–17:34 UTC. It read no provider or personal text.
+
+Both HTTP Status routes omit reasons unless a check is `down`, preserving
+already-open legacy clients during parallel backend/web deployment. Internal
+snapshots retain allowlisted degraded reasons. Only an authorised smoke run
+emits `system.smoke_check` through the existing stdout/telemetry allowlists;
+ordinary `/status` reads do not rerun or re-log checks. No new access, provider
+experiment, budget/timeout/model or confirmation change. SDK-managed Copilot
+processes omit `--remote`; remote-enabled state remains unverified and no
+duplicate process or shared settings change is made.
+
+Qualified local checks: 169 tests pass across chat-canary, system-status,
+chat-agent and logging; 42 contracts tests, contracts lint/build and all thirteen
+affected backend files' zero-warning lint pass. The independent review passed
+the diagnostic patch, not production recovery. Tooling is an owned copy of a
+read-only snapshot (Vitest 5.0.2, Vite 8.3.1, ESLint 10.11.0, Node types 22.20.4,
+TypeScript 6.0.3), with aliases pointing only to this child source. The supplied
+portable Node 22.23.3 x64 resolves the original ARM64/native-binary mismatch
+without a global Node/PATH change. Five app-dependent suites cannot import
+missing `@fastify/multipart`; the full backend build also lacks `sharp`,
+`pdfjs-dist`, `@azure/storage-queue` and `@fastify/rate-limit`, with derivative
+declaration errors. These are blocked checks, not passing builds or source
+failures. No pins, TLS settings, types or checks were weakened. Exact-head
+pinned CI and the safe live failing predicate remain coordinator-owned gates.
+
 ## Mobile/Status review publication (14 October 2026)
 
 Dan approved commit, push and a separate review PR for the accepted
@@ -125,6 +165,10 @@ stale/failing/unknown evidence, missing versions, disabled pending refresh,
 retained HTTP 503 failure and Retry. No document overflow or smoke invocation.
 The fixture room is disabled and API responses are synthetic. Exact-head
 CI/release and authenticated Status/voice acceptance remain pending.
+The 14 October smoke-reader follow-up preserves only fixed per-check allowlisted
+reasons for down/degraded results. The original deployed chat-canary failure
+cause remains unknown; diagnose retained evidence through `/status`, never by
+invoking `/status/smoke` or a model canary.
 Keep this PR separate from latency QA, presence/Routines/phone Save work,
 unrelated pin changes and the coordinator's #811 backend investigation.
 
@@ -2277,14 +2321,27 @@ The coordinator assigned one local outcome covering #837/#838/#839, seeded from
 `calendar_get_pending_change` catalogue entry. Preserve actual-main smoke/model
 behaviour and all unrelated main blobs/generated PLAN cells. No live Google,
 private bodies, browser credentials, permissions, model-setting changes or
-synthetic live approval. No commit, push, PR creation, GitHub metadata change,
-merge, deployment or hosted CI until the coordinator's publication handoff.
+synthetic live approval. The original frozen `3073B943` patch remains unchanged
+and failed independent review. Five source-grounded corrections now cover mail
+versus calendar approval, observed Chrome/Gmail boundaries, unrelated status
+queries, separately requested same-turn computer actions and decoded-empty
+plain/HTML provenance with separately labelled snippets.
+
+The coordinator authorised normal commits on this owned delivery branch to finish
+the pending `81580919` merge and integrate fresh main once. Accepted main
+`51bda5cbce94be68169eb3f1342aea975a6dff3f` is now integrated locally; its diagnostics,
+complete unrelated blobs and generated PLAN cells remain authoritative.
+The coordinator reports normal Deploy `38622011802` and revision 315 checks
+accepted that main, not this Google delivery. The historical release failure's
+cause remains unknown. No push, PR creation/change, readiness metadata, hosted CI,
+provider call or deployment is authorised here. The corrected frozen patch needs
+independent review; the coordinator owns subsequent publication and release.
 
 From `agents/jarvis`, run the isolated Python environment's pytest on
 `tests/test_calendar_flow.py`, `tests/test_model_client.py`,
 `tests/test_jarvis_tools.py`, `tests/test_chat_runtime.py` and
 `tests/test_voice_runtime.py`; Ruff checks changed Python sources/tests.
-267 tests and changed Ruff pass on Python 3.12.10, not pinned 3.12.14.
+282 tests and changed Ruff pass on Python 3.12.10, not pinned 3.12.14.
 Development dependencies were restored with locked hashes in the worktree venv;
 Windows-only `colorama==0.4.6` was added locally and `pip check` passes.
 
@@ -2294,11 +2351,12 @@ failed on the feed's `ip-address@10.7.4` 404; official-registry TLS also failed.
 An approved read-only tooling snapshot was copied into isolated dependencies,
 with workspace aliases pointing only to this worktree. Verified portable
 Node 22.23.3 x64 runs snapshot Vitest 5.0.2/Vite 8.3.1, not pinned CI versions.
-251 tests across eleven runnable suites pass, as does full backend zero-warning
+290 tests across twelve runnable suites pass, as does full backend zero-warning
 lint. Both automatic-capture variants retain the unchanged 15,000-code-point
 built-in-mode headroom check. No parity or confirmation check was removed.
 
-`src/google/tools.test.ts` and `src/tool-parity.test.ts` cannot load because
+`src/google/tools.test.ts`, `src/tool-parity.test.ts` and
+`src/pc-bridge/bridge.test.ts` cannot load because
 `@fastify/multipart` is absent; `src/voice/relay.test.ts` cannot load because
 `sharp` is absent. Full TypeScript/build validation is blocked by those packages
 plus `pdfjs-dist`, `@azure/storage-queue` and `@fastify/rate-limit`, with consequent
@@ -2313,6 +2371,17 @@ and summary, once-only replay/failure/expiry, and refusal of computer fallback
 after incomplete or failed mail reads. This bypasses only missing HTTP-app tooling,
 not the actual Google handlers or approval guard; it does not replace blocked
 HTTP/relay tests or pinned exact-head CI.
+
+Additional runnable production-boundary fixtures execute the actual registered
+PC module with synthetic broker metadata and the actual Google module/registry:
+opaque Gmail IDs, real `chrome` identity, guard-before-planner/vision, rechecking
+actions and confirmed dispatch, Codex's guarded executor, independent Spotify
+after failed/incomplete Gmail, and coexisting mail/calendar stages with mail-only
+confirmation. Actual hosted-loop regressions exercise Gmail-only and Gmail-after-
+calendar approval plus pending/none unrelated questions. Sixteen new actual EN/DA
+relay cases cover pending/completed status isolation and subsequent yes, but are
+not locally executed because relay collection is blocked. Do not present them as
+passing tests or original live/provider acceptance.
 
 Installed CLI help supports `copilot --remote`. Observed existing SDK processes
 run `--server --stdio --no-auto-update`, without `--remote`; this task neither

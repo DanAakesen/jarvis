@@ -157,6 +157,8 @@ Phase 1 delivers the Software Factory. Requirements and page specifications are 
 
 ## Current focus
 
+- **Main release recovery (14 October; local):** Deploy `38584186160` for `81580919` remains failed after its smoke-only retry (`chat_canary`/`chat_capabilities` down, GitHub read ok). Existing #831/#832 diagnostic surfaces are combined locally with unchanged smoke limits and legacy HTTP Status compatibility. Independent diagnostic review, 169 scoped backend tests, 42 contracts tests and affected-file/contracts lint pass with qualified local tooling; five app suites/full backend build remain blocked by missing snapshot packages. The authorised fixed-format numeric model-round query returned no records for 17:32–17:34 UTC, so the failing capability predicate and live cause remain unknown. Next: coordinator-owned exact-head gates, authorised publication/normal release and retained safe reason readback; keep queued releases held. Instrumentation alone is not recovery. No new issue or PR, speculative model change or blind retry.
+
 - **P12-10 (#725):** #746 merged as an inactive intermediate implementation; three feed-boundary corrections continue on `codex/p12-10-feed-boundary-corrections` / draft #754. Shared range validation precedes refresh/storage/provider/model work; numberless deliveries require matching nonempty delivery details; full validated SENT labels preserve alias direction before DTO truncation. Existing resumable scans, protected semantic adapter, exact Danish selectors/keys, owner-local persistence and source serialization safeguards remain intact. Synthetic/isolated SQL regressions and exact-head full CI precede independent correction review; #754 remains draft until explicit coordinator readiness release. CalendarList consent, deployed identity/model/provider parity, private backup/import/reconciliation and device gates remain open. No registration/OAuth/resource changes; #725 stays open/native dependencies intact.
 
 - **P12-07 (#722):** Inactive nutrition services/typed handlers and source-pinned Frida lookup are implemented offline in draft #743 on `codex/p12-07-nutrition-services`. Supplied source/public format contracts drive exact-key logging/history/corrections, legacy vocabulary, favourite definition/name reuse, server-resolved 3–50-slot plans and Frida release 10 / 5.5 with attribution/unknowns/subtotals. Local lint/build and 97 focused tests pass; prior repaired head passed full CI and all 109 SQL tests. Next: final format-tightening head full CI and independent coordinator review before readiness/release. Cloud provider CONNECT is denied with HTTP 403; live/import/phone gates remain open. No registration/activation; parked #717/#741 remains untouched.
@@ -838,15 +840,20 @@ acceptance pending; #798, #797, then #792 remain separate.
 
 Local consolidation of #837/#838/#839 uses the existing #848/task-14 delivery,
 with task-15 calendar evidence/approval hunks and task-12 direct-only access guards.
-Current main is integrated without replaying generated status cells or changing
-the accepted mobile sources. One pending-state tool serves hosted and realtime
-flows; synthetic regressions cover actual read/stage/later-confirmation receipts,
-failure consumption and extraction limits. Local checks pass 267 hosted chat/voice
-tests, 251 runnable backend tests and backend lint; actual registry receipt checks
-also pass. HTTP Google/parity/relay suites and full types/build are blocked by
-missing local packages. Exact-head pinned CI, review and original Gmail/calendar
-acceptance remain open. No issue closure, new PR,
-publication, merge or deployment is authorised by this preparation.
+Accepted main `51bda5cb` is integrated locally without replaying generated status
+cells or changing the accepted mobile sources and main diagnostics. Independent
+review rejected the original frozen `3073B943` patch. Its five findings are
+corrected locally: approval-scope isolation, observed-site computer guards,
+unrelated-status routing, independently requested same-turn computer actions,
+and decoded-empty-body provenance with separately labelled previews.
+Local checks pass 282 hosted chat/voice tests, 290 runnable backend tests, backend
+lint and changed Python Ruff; actual registry receipt checks also pass.
+HTTP Google/parity/relay/bridge suites and full types/build remain blocked by
+missing local packages. Next: independent review of the corrected frozen delivery,
+then coordinator-owned pinned CI and existing-PR publication. Original
+Gmail/calendar acceptance remains open. Normal owned local integration commits
+are authorised; no issue closure, new PR, push, hosted CI or deployment is
+authorised by this preparation.
 
 A rolling intake phase. When Dan asks Jarvis to change its own code or a project's code, Jarvis drafts the issue, confirms it with Dan and creates it as `P11-NN` (P10-03). Rows are added here as the issues are created.
 | ID | Issue | Task | Acceptance criteria | Depends on | Status |

@@ -243,6 +243,7 @@ describe('GitHub webhook receiver', () => {
 
   it.each(['issues', 'pull_request'])('invalidates cached Factory boards for signed %s events', async (event) => {
     const { app } = fixture();
+    const info = vi.spyOn(app.log, 'info');
     const board = {
       projectId: '42', repository: repository.full_name, fetchedAt: timestamp, columns: [],
     };
@@ -255,6 +256,10 @@ describe('GitHub webhook receiver', () => {
     const response = await deliver(app, `board-${event}`, event, body);
 
     expect(response.statusCode).toBe(202);
+    expect(info).toHaveBeenCalledWith(expect.objectContaining({
+      origin: 'github_webhook', projectId: '42', version: 1,
+      reqId: expect.stringMatching(/^[\da-f-]{36}$/u),
+    }), 'factory.board_invalidated');
     await app.factoryBoardCache.get(repository.full_name, load);
     expect(load).toHaveBeenCalledTimes(2);
   });

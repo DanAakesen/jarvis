@@ -39,6 +39,24 @@ their mention in the reply are required. The reason alone does not establish
 the original production cause; until a normal recovery deployment and released
 acceptance confirm the result, treat that cause as unidentified.
 
+For mixed backend/web versions, both HTTP routes retain the legacy rule that
+only down checks include a reason. Internal snapshots also retain allowlisted
+degraded reasons. An authorised normal smoke run exports `system.smoke_check`
+with only `checkId`, `status` and an allowlisted check-specific failure `reason`
+to stdout and Application Insights; an ordinary retained Status read does not
+repeat it. Use those events for safe warning details instead of broadening the
+wire contract or retrieving raw provider text. The event is diagnostic evidence,
+not an accepted-green release certificate.
+
+The local consolidated #831/#832 recovery trace on main `81580919` found no
+matching exact-format numeric model-round records in the authorised existing
+workspace for 14 October 17:32–17:34 UTC. The failed smoke-only retry therefore
+does not establish which capability predicate failed. The smoke role omits
+normal-chat capability instructions; do not treat that source observation or
+timings as a proved live cause. Review/publication and a normal release's safe
+reason readback remain coordinator-owned. No blind smoke retry, new credentials
+or access grant is required or authorised by this diagnostic change.
+
 P9-107 deterministic fixtures demonstrate a separate reply false-negative:
 successful discovery with all three canonical receipt categories followed by
 “I can help with Notes, calendars and GitHub tools” failed only the reply
@@ -111,6 +129,59 @@ Use the authorized readback above to confirm a fresh, complete shared board and
 canonical placement. Report any missing telemetry or cache classification as a
 limitation. This comparison measures latency only and does not establish the
 cause of #811's historical 502s.
+
+The 14 October 2026 acceptance of backend `75a3cbe` / Deploy `38507005838`
+failed its latency comparison: the observed actual board read times were
+9.661 s and 10.365 s, with no accepted improvement against the mixed-cache
+10.065 s baseline median. One rail entry produced 14 browser fetch starts, two
+HTTP 200 completions, and twelve aggregate `AbortError`s; this does not prove
+all 14 attempts reached the backend. No manual Refresh, Retry, or cache-bust was
+used. The bounded backend window
+03:49:30–03:51:10 UTC on healthy revision 312 returned 546 rows below its
+600-row limit: two board HTTP 200 completions, 49 webhook HTTP 202 responses,
+40 Now HTTP 200 responses, and 62 database-status HTTP 200 responses. Thirteen
+GET starts were route-unclassified with no completion in the window, so they do
+not establish receipt of the remaining client starts. No selected request or
+Factory failure event appeared, which does not prove client aborts did not
+occur. There were no per-phase events or matching invalidation versions/abort
+times. The separate app-scoped dependency query returned no matching rows.
+Browser/backend clock domains were not assumed synchronized. API contract,
+rendered placement, and the 100-card Done cap reconciled separately from
+performance. Browser fetch-to-header times were 9.748 s / 10.322 s and cloned
+body times were 9.850 s / 10.487 s.
+
+After the diagnostic follow-up is reviewed and deployed, correlate board
+`request.started`, `factory.board_read_timing`, and `factory.board_phase` by
+`reqId`. The summary `outcome` and `statusCode` describe the handler/source
+computation decision and reply status, not proof of HTTP completion or client
+receipt. Use `request.completed` separately as the server-side `onResponse`
+status/time observation; even it does not establish client receipt. Compare an
+observed summary `cachePath` and `stale` fields before separating cache hits,
+shared waits, source loads, or stale fallbacks. `cacheElapsedMs` is the awaited
+cache operation time (including the full load for `source_load`); it is not an
+additional phase duration. A phase event is emitted when its instrumented work
+boundary executes, but a missing event cannot establish that work was skipped:
+telemetry can be missing, sampled, cropped, or outside the observation window.
+Per-stage values are monotonic wall
+durations; source, task, and release work runs concurrently, so their durations
+overlap and must not be added. A response phase `part` marks assembly versus
+serialization. `durationCensored` and `cacheElapsedCensored` mean the actual
+duration exceeded the 60-second reporting bound and was omitted, not clipped.
+`durationUnavailable` and `cacheElapsedUnavailable` mean a valid clock duration
+could not be produced; no numeric value is exported.
+Correlate webhook invalidations by their
+request ID and bounded origin/project/version fields; task-event prelookup
+invalidations are marked `all_projects` and have no project/version yet.
+These diagnostics were not present in the failed production window and do not
+retrospectively attribute it.
+
+The released consumer/source trace suggests a possible lifecycle of validated
+board update, 150 ms debounce, reload-key change, and effect-cleanup abort.
+Backend invalidations also advance cache generation while earlier loads may be
+in flight. Actual SSE versions, per-attempt abort times, and invalidation
+reasons were not captured, so neither path is established as the historical
+trigger. Do not claim the diagnostic follow-up proves a performance correction
+or explains #811's separate historical 502s.
 
 ## Roll back a deployment
 

@@ -97,6 +97,11 @@ describe('Fastify backend', () => {
     const completed = records.map((record) => JSON.parse(record)).filter((record) => record.msg === 'request.completed');
     expect(completed).toHaveLength(3);
     expect(completed[0]).toMatchObject({ service: 'jarvis-backend', method: 'GET', route: '/health', statusCode: 200, responseTime: expect.any(Number), reqId: expect.stringMatching(/^[\da-f-]{36}$/) });
+    const started = records.map((record) => JSON.parse(record)).filter((record) => record.msg === 'request.started');
+    expect(started).toHaveLength(3);
+    expect(started.find((record) => record.route === '/failure/:name')).toMatchObject({
+      method: 'POST', route: '/failure/:name', reqId: expect.stringMatching(/^[\da-f-]{36}$/),
+    });
     expect(sink.trackTrace).toHaveBeenCalledWith(expect.objectContaining({
       message: 'request.failed', severity: 'Error',
       properties: expect.objectContaining({ statusCode: 500, route: '/failure/:name', kind: 'internal' }),

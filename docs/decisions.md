@@ -1,5 +1,36 @@
 # Decisions
 
+## Keep consolidated recovery diagnostics compatible with live Status clients (14 October 2026; local)
+
+Combine current main `81580919` and the existing #831/#832 diagnostics locally;
+no new micro-ticket or independent publication. PR #832 retains allowlisted
+degraded reasons internally, but already-open web clients accept HTTP reasons
+only for down checks. Keep both HTTP routes legacy-compatible with a
+non-mutating projection. Retain safe degraded reasons in the cached report and
+export `system.smoke_check` through the existing event/field allowlists only
+when an authorised smoke run actually executes. Reject unknown/cross-check
+reasons and provider, prompt, tool or personal payloads at both log outputs.
+No validator weakening, extra probes or release-gate/budget/approval change.
+
+The 17:32–17:34 UTC existing-workspace query selected only exact-format numeric
+model-round metadata and returned no matches. Prior smoke logs record only
+IDs/statuses. Source tracing confirms that `get_system_health/list_capabilities`
+returns the three required categories and that receipt extraction preserves
+them; normal-chat capability instructions are not supplied to the smoke role.
+That absence is a candidate, not a verified failing predicate or root cause.
+Do not change smoke/model instructions or claim recovery without that evidence.
+Local regression checks and the coordinator's normal release remain distinct
+from historical attribution and accepted green production.
+
+The independent review passed the frozen diagnostic code. Qualified local
+validation passes 169 tests in four backend suites, 42 contracts tests and
+affected-file/contracts lint plus contracts build. Five app suites and the
+full backend build remain blocked by absent snapshot dependencies; no missing
+declarations are stubbed and no gates or pins are changed. Local tooling differs
+from the manifest's pinned CI versions. Keep those blocked checks and the
+unknown live failing predicate explicit; neither review nor this local evidence
+clears publication/release or establishes recovered main.
+
 ## Reviewed non-Daily release clearance (14 October 2026)
 
 Dan's direct "yes you may" clears the merge and normal-deployment hold for
@@ -136,6 +167,52 @@ successful requests (median 10.065 s, p95 12.915 s, maximum 19.211 s) included
 cache hits and is not a cold-only cohort. This is not a diagnosis of #811's
 separate historical 502s.
 
+## #813 Factory board diagnostic follow-up (14 October 2026)
+
+The released latency acceptance for backend `75a3cbe` / Deploy `38507005838`
+failed: two completed board reads took 9.661 s and 10.365 s, with no accepted
+improvement against the prior mixed-cache median of 10.065 s. One actual rail
+entry had 14 client fetch starts, two HTTP 200 completions, and twelve aggregate
+abort errors. API/header/rendered placement and the 100-card Done cap reconciled
+separately; those checks do not establish a latency improvement.
+
+Add diagnostics only; do not change caching, generations, source concurrency,
+retry, client behavior, or the 502 contract. Log bounded monotonic durations at
+the existing project, token, source, task, release, and response work
+boundaries, correlated by request ID. Concurrent source/task/release durations
+are independent wall times and overlap. The summary cache elapsed measurement
+covers the actual awaited cache operation: lookup for a hit, wait for a shared
+caller, and the complete load for its owner; interpret it with `cachePath`, not
+as a separate phase. Phase events indicate that their instrumented boundary
+executed; an absent event cannot establish skipped work because telemetry may
+be missing, sampled, cropped, or outside the observed window. The summary's
+outcome and reply status describe the handler/source-computation decision, not
+HTTP completion or client receipt; correlate the separate `request.completed`
+server-side `onResponse` observation, which also does not prove client receipt.
+Durations over 60 seconds omit the value and set a censored marker instead of
+clipping; invalid clock values are marked unavailable. An observed cache path
+plus stale state distinguish cache hit, shared wait, source load, and stale
+fallback. Keep phase/event fields explicitly
+allowlisted and omit content, credentials, URLs, query strings, and arbitrary
+errors. At the existing publication boundary, log only bounded
+invalidation origin, project/version when known, and webhook request ID when
+available; task-event prelookup invalidation has only its `all_projects` scope.
+
+The bounded production window (03:49:30–03:51:10 UTC, healthy revision 312) after
+#814 had 546 allowlisted rows, two board HTTP 200 completions at 9.661 s /
+10.365 s, 49 webhook HTTP 202, 40 Now HTTP 200, and 62 database-status HTTP 200
+responses. Thirteen GET starts were route-unclassified with no completion in
+the window; they do not prove receipt of every client fetch start. No selected
+request/Factory failure event appeared, which does not establish that client
+aborts did not occur. No captured SSE versions, matching invalidation reasons,
+or per-attempt abort times were available. The separate app-scoped query
+returned zero matching rows. A validated-update/debounce/reload/abort path and
+overlapping backend cache generations remain possible mechanisms, not
+established historical causes. Browser/backend clock domains are not assumed
+synchronized. The diagnostics have not yet been deployed or observed in
+production; this follow-up is not evidence that performance is fixed and does
+not diagnose #811's historical 502.
+
 ## Status reads recorded evidence without running canaries (14 October 2026)
 
 P9-101/#799 uses the existing owner-only `/status` contract and shell
@@ -153,6 +230,21 @@ The smoke contract has no deployment ID/SHA association; use Recorded smoke
 check with its timestamp, not a claim that the latest release passed.
 No backend, contract or dependency change. Local synthetic browser
 checks are not authenticated production or physical-phone acceptance.
+
+## P9-107 smoke reason retention follow-up (14 October 2026)
+
+The prior Status-page decision above records its original UI-only scope. This
+follow-up preserves fixed per-check smoke reasons for down/degraded results.
+The allowlist includes shared `agent_error` and `timeout` outcomes for each
+chat acceptance check, while rejecting arbitrary provider text and reasons
+belonging only to another check.
+
+Local proof on this branch: exact-reader tests cover real missing-agent,
+controlled stream failure and timeout results, ordered complete report shape,
+contract validation, privacy, and timeout aborts. Backend and contracts checks
+are run for the current head; full exact-head CI and CodeQL status must be
+confirmed on the corrected commit. The original deployed failure cause remains
+unknown, and no production recovery is claimed.
 
 The coordinator authorised the smallest coupled release-gate correction in
 #815 after the title bot truncated P9-101 to P9-10. Normalization, linked-issue
@@ -2547,3 +2639,41 @@ The shared prompt's original 15,000-code-point headroom check remains intact;
 compact equivalent PC/mail wording leaves room for explicit calendar evidence
 and ten-minute approval semantics. Exact-head pinned CI and original live Gmail/
 calendar/speech acceptance are unproven.
+
+## Google independent-review corrections (14 October 2026; local)
+
+Independent review rejected frozen patch `3073B943`; retain that original
+artifact, not a rewritten passing receipt. Repair the five findings within the
+same #848 delivery, without issue closure or a second publication stream.
+
+- Generic staged/klargjort prose cannot establish calendar context. Mail-only
+  history and actual mail confirmation stay separate from an older calendar
+  stage; both pending scopes may coexist.
+- Raw PC/browser operations check observed site/window metadata rather than
+  trust input keywords or pretend the native application is named Gmail.
+  Chrome's real process identity and opaque tab IDs must be guarded before
+  planner/vision export and before action/confirmed dispatch. Reuse that boundary
+  in the Codex executor; unknown site identity is a visible refusal.
+- Weather, mail and build status questions are not calendar status referents.
+  Reset unrelated realtime context before interception, retaining genuine
+  calendar status and later-approval semantics.
+- A mail tool does not forbid a separately requested unrelated computer action.
+  Match independent intent to the verified current Dan message and scope nested
+  execution to the same request/turn; observed Gmail and fallback remain refused.
+- Successfully decoded empty plain or static HTML bodies retain their original
+  body source even when a snippet exists. Return the snippet separately as a
+  bounded preview; warn about unavailable full text only for genuine fallback.
+
+Qualified local evidence: 290 Node tests in twelve runnable suites, 282 Python
+tests, backend zero-warning ESLint, changed Python Ruff and actual handler
+receipt proofs. Node/Vitest/Vite/Python qualifications and the original prompt
+headroom are unchanged. Four app-dependent suites and full types/build remain
+blocked by the same five missing packages; relay regressions are added, not
+claimed executed. No provider/private-account or hosted speech acceptance.
+
+The coordinator authorised normal owned local commits and one fresh-main
+integration. Main `51bda5cb` is integrated with its diagnostics, generated PLAN
+cells and protected mobile blobs preserved. The coordinator reports its normal
+Deploy `38622011802` accepted revision 315; this is not Google-delivery release
+evidence. Independent re-review, pinned exact-head CI and existing-PR publication
+remain coordinator-owned. No push, new PR, metadata change or deployment here.
