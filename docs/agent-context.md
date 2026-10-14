@@ -22,17 +22,35 @@ infrastructure and hosted-agent deployment were correctly skipped.
 This accepts the asset release, not the original production trigger,
 performance or human first-turn navigation; issue #813 remains open.
 
-Local next-delivery snapshot: #818's inactive body-fat correction passed
-bounded independent review at `4ed24812`; its original raw-unit P2 thread
-is resolved and exact-head CI `38624893939`/CodeQL `38624894029` passed all
-ten/three actual jobs. Fresh `36d72090` is integrated without changing any
-reviewed health blob or main task-table cell. The integrated head requires
-its own normal exact-head gates before release. No registration, migration,
-activation, original Daily/data or private/device acceptance is implied.
+Next-delivery snapshot: #818's independently reviewed inactive body-fat
+correction preserved every reviewed health blob and main task-table cell
+after integrating `36d72090`. Head `af5ac2e7` passed all ten actual jobs in
+CI `38631864211` and all three CodeQL `38631863844` analyses, then merged
+normally as `5939fb54`. Normal Deploy `38633353086` passed backend image
+deployment, backend health and actual smoke at 20:43:27 UTC; unchanged web,
+infrastructure and hosted-agent deployment were skipped. This accepts the
+inactive correction release, not registration, activation, original Daily/data
+or private/device acceptance; #720 remains open.
+The six existing maintenance deliveries (#822/#823/#824/#834/#836/#841)
+are consolidated locally against that main for existing #841, with reviewed
+source retained and all main task cells protected. Local parser/CodeQL
+regressions pass six tests on Python 3.13.15. Individual Python 3.13.16
+reference-pin receipts are not evidence for the combined three-pin manifest.
+The local baseline install failed on TLS before tests; the candidate was not
+started and certificate checks were not weakened. The existing agent CI job
+now detects changed reference manifests, uses the existing SHA-pinned setup
+action for the reference's Python 3.13 major, and checks baseline/candidate
+in separate environments: full pin readback, pip check, offline tests and a
+synthetic HS256 round trip. The selected patch version is reported, not assumed.
+The integrated head requires that check, normal exact-head full CI and four
+actual CodeQL analyses before release. No cloud coding worker is restarted
+and no extra PR is created.
 Google's `F3BD79DA` freeze failed targeted re-review on three residual
 approval-scope, quoted-query intent and native-window faults. The same
 local author is correcting them; that freeze remains immutable and
-unapproved, with publication held. No Google release is accepted.
+unapproved. Corrected immutable freeze `CEC84A7A` is with the same independent
+reviewer; publication remains held pending disposition. No Google release is
+accepted.
 
 ## Consolidated main recovery (14 October 2026; local)
 
@@ -484,13 +502,13 @@ Project-specific working context for agents. The generated `AGENTS.md` is not ed
 
 ## Development workflow
 
-Every coding agent on this repository follows these rules. This project requires one pull request per task; that overrides the template's "no PR required".
+Every coding agent on this repository follows these rules. Normally this project requires one pull request per task; that overrides the template's "no PR required". Dan's current coordinator-directed consolidation uses the existing delivery PRs rather than creating duplicate PRs.
 
 ### Where work happens
 
-- **Remote by default.** Agents work in GitHub Copilot cloud agent or Codex cloud and deliver through a pull request. Dan's explicit 13 October DailyMigrationMain local exception applies only to the scoped P12 migration, with both cloud workers idle. `main` on GitHub is the only source of truth; authorized local work still requires the normal branch/PR/check/review flow and must be pushed before handoff.
+- **Important implementation stays local until Dan says otherwise.** Dan's 14 October direction supersedes the earlier remote-default rule and P12-only local exception. Local sessions implement and review; the coordinator also owns existing GitHub delivery PRs, normal CI, releases and both boards. Do not restart cloud coding workers merely to move review cards. `main` on GitHub remains the shared source of truth, and authorised delivery still requires current-main reconciliation, independent review and exact-head checks.
 - The runner instructs coding agents on every turn, including resumed or recovered sessions, to commit and push small work-in-progress changes to the existing task branch after each meaningful step. Never force-push or push to `main`; report commit or push failures.
-- **Local work needs Dan's permission.** An agent running on Dan's PC (Copilot CLI, Codex CLI, or an editor agent) asks Dan before changing anything and stops without a clear yes. Known local-only steps: `infra/bootstrap.ps1` and the Codex login seed, because both need Dan's sign-in.
+- **Stay within Dan's local authorisation.** The current direction already authorises scoped local implementation, review and coordinator integration; do not repeatedly request that permission. New destructive, access, private-data or otherwise unauthorised actions still need approval. Bootstrap and credential/login prompts remain human-owned.
 - **No Azure access for agents.** Changes reach Azure only through the deploy workflows on `main`; GitHub Actions can sign in to Azure only for `main`. In a PR, check infrastructure without Azure (`az bicep build`, linter); the deploy after merge proves it against Azure. Verify Azure behaviour from those workflow runs, or ask Dan.
 
 ### Task status
@@ -540,7 +558,7 @@ Dan follows the work on the [Project Jarvis board](https://github.com/users/DanA
 3. Check that `main` is green: the latest `CI` and deploy runs on `main` passed (before P0-11 adds deploy, only `CI` counts). If not, stop. The only allowed work is a fix for `main` (PR title `fix-main: …`).
 4. Check your task: not Complete, not claimed by anyone else, and every task in its "Depends on" column Complete. If any check fails, stop and report it on the issue.
 5. Look at the running tasks (issues with a worker label, In progress rows, and open PRs). Stay out of files they change, or say in your PR why you overlap.
-6. Use one branch and one PR. The PR title is exactly `<task ID>: <short summary>`, for example `P0-05: Foundry account and project`: the ID, a colon, a space, no brackets. Copilot's temporary `[WIP] ` prefix is fine. Work outside a task uses `fix-main: …` or `docs: …`. The [PR title](../.github/workflows/pr-title.yml) workflow corrects small deviations and fails otherwise. The PR body contains `Fixes #<issue>`. When the PR merges, GitHub closes the issue, and the tasks it blocked unblock automatically. Never remove "Blocked by" links by hand; they stay as history. If a task needs more than one PR, use `Refs #<issue>` in all but the last.
+6. Use one branch and one PR. The PR title is exactly `<task ID>: <short summary>`, for example `P0-05: Foundry account and project`: the ID, a colon, a space, no brackets. Copilot's temporary `[WIP] ` prefix is fine. Work outside a task uses `fix-main: …` or `docs: …`. The [PR title](../.github/workflows/pr-title.yml) workflow validates current same-PR/head metadata and fails with the normalizer's suggested title for small deviations; save that title rather than expecting an automatic edit. The PR body contains `Fixes #<issue>`. When the PR merges, GitHub closes the issue, and the tasks it blocked unblock automatically. Never remove "Blocked by" links by hand; they stay as history. If a task needs more than one PR, use `Refs #<issue>` in all but the last.
 
 ### Finish a task
 
@@ -1700,7 +1718,28 @@ Aggregate CI (P0-10), `.github/workflows/ci.yml`:
 - Required checks on `main` are not enforced: branch protection on a private repository needs GitHub Pro. When available, Dan requires `CI result`; until then Dan or the authorized merging agent must read the `CI` run result itself.
 
 CodeQL code scanning (P9-93), `.github/workflows/codeql.yml`:
-Advanced CodeQL code scanning analyzes `javascript-typescript`, `python`, and `actions` using the `security-extended` query suite on pushes and PRs to `main` (path-filtered against markdown and docs) and a weekly schedule. CodeQL is non-blocking and operates independently of the `CI result` aggregate gate. Security findings, CWE classifications, and severity levels appear in GitHub under **Security → Code scanning alerts** (`GET /repos/DanAakesen/jarvis/code-scanning/alerts`); triage verdicts should distinguish real security flaws from false positives or test-only code before opening follow-up remediation issues.
+Advanced CodeQL code scanning analyzes `javascript-typescript`, `python`, `actions`, and `csharp` using the `security-extended` query suite on pushes and PRs to `main` (path-filtered against markdown and docs) and a weekly schedule. The C# matrix entry uses manual build tracing: after CodeQL initialization, the workflow sets up .NET 10 and builds `pc-bridge/Jarvis.PcBridge/Jarvis.PcBridge.csproj` in Release configuration. This production application project references `Jarvis.PcBridge.Core`; tests are not built as part of extraction. Coverage is limited to source compiled by the traced production build; generated source is covered only when surfaced to that compiler invocation, and no separate generated-code guarantee is made. CodeQL remains non-blocking and operates independently of the `CI result` aggregate gate. Security findings, CWE classifications, and severity levels appear in GitHub under **Security → Code scanning alerts** (`GET /repos/DanAakesen/jarvis/code-scanning/alerts`); triage verdicts should distinguish real security flaws from false positives or test-only code before opening follow-up remediation issues. A successful job and populated `/language:csharp` upload are required evidence of extraction; zero alerts alone do not establish complete coverage or absence of vulnerabilities.
+
+PR title (P9-113), `.github/workflows/pr-title.yml`:
+
+- `validate-pr-title.sh` reads the event's PR number from the GitHub API and
+  requires its current repository/number/head to match the event identity.
+  Current title/body, not immutable event text, feed the existing normalizer.
+  Issue lookup accepts `Fixes`, `Closes`, `Resolves`, or `Refs` with `#123`
+  or `DanAakesen/jarvis#123`; the first matching same-repository link is used.
+- API calls have a 30-second timeout. A second PR read must match the initial
+  title/body/head/update timestamp before success. API/schema/identity/race
+  failures fail closed: fix access or metadata and run a fresh current-head gate.
+  Head pushes trigger the gate too. A replay after a head change must fail.
+- The gate never writes PR titles: GitHub title updates have no atomic
+  title/head compare-and-set guard. Noncanonical titles fail with the unchanged
+  normalizer's suggestion; save the canonical title to trigger a fresh gate.
+  Token permissions remain unchanged. Changes after the final API read are not
+  atomically fenced by GitHub check publication; the new edit/push needs its own
+  gate, and reviewers must use current-head/current-metadata evidence.
+- Offline entry-path regressions and normalizer tests run with
+  `PYTHONPATH=.github/scripts python3 -m unittest discover -s .github/scripts/tests -v`.
+  Fixtures reject every unplanned `gh` request and never use the network.
 
 Plan status, `.github/workflows/plan-status.yml`:
 
