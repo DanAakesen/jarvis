@@ -16,7 +16,11 @@ Named file attachments, images, encryption and non-UTF-8/ASCII encodings remain
 unsupported. No new consent, credentials, dependency or browser path is added.
 The process-local guard is bounded and has no restart or cross-replica persistence.
 Regression fixtures use synthetic reservations and failed/incomplete provider reads;
-live account and model behavior remain post-deployment acceptance.
+live account and model behavior remain post-deployment acceptance. Local focused
+runs pass 307 and 103 tests; build/lint and Python syntax pass. The broad backend
+run passed 2,991 tests and failed four: two instruction wording checks corrected
+without weakening them, and two unchanged health-upload waits. All 51 tests in
+those three suites pass in the isolated rerun. The broad run itself was not clean.
 
 
 ## #813 bound Factory board source reads (13 October 2026)

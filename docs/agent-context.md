@@ -18,6 +18,16 @@ src/auth/auth.test.ts`; backend lint/build. Fake bridge/auth fixtures need loopb
 access. The sandbox denied loopback on the initial run; rerun with the permitted
 execution profile rather than weakening fixtures. The locked dependency install
 succeeded with `/tmp` npm cache and the permitted network execution profile.
+Local results: 307 focused integration/guard tests and 103 final content/guard
+tests pass. Backend build, zero-warning lint and Python syntax pass. The full
+backend run completed 177 files: 2,991 passed and four failed tests. Two voice
+instruction wording assertions were fixed while preserving the existing checks
+and instruction budget. Two unchanged health-upload waits failed before their
+acceptance mocks were called. An isolated rerun of health-upload backend, voice
+realtime and capability instructions passes all 51 tests; no timeout or assertion
+was weakened. Do not call the earlier combined run clean. Exact-head CI remains
+a delivery gate owned by the backend-created PR.
+
 Live Gmail, model adherence and deployment are separate from local regression proof.
 
 
