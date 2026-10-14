@@ -30,7 +30,16 @@ normally as `5939fb54`. Normal Deploy `38633353086` passed backend image
 deployment, backend health and actual smoke at 20:43:27 UTC; unchanged web,
 infrastructure and hosted-agent deployment were skipped. This accepts the
 inactive correction release, not registration, activation, original Daily/data
-or private/device acceptance; #720 remains open.
+or private/device acceptance. #720 subsequently closed at 22:13 UTC for its
+original inactive code/synthetic scope: the acceptance lane found no new gap,
+and the coordinator verified 63 relevant inputs against the actual tested
+#841 head, accepted `202ead5b` and later main. That tested/accepted tree is
+`b05a2380`. Actual CI `38636782270` passed health-processing SQL 18,
+health-upload SQL 12, normalization 45, read-model 2, upload 15 and lint/build.
+The lane's npm proxy/TLS failures remain unexecuted local checks, not those
+hosted results. Existing #808/#818 source and native #718/#719 dependencies
+needed no new code/release. Activation, real HAE/source/phone parity and
+private backup/import/cutover remain separate unverified gates.
 The six maintenance deliveries reached accepted main `202ead5b` through
 existing #841. Exact-head CI `38636782270` passed all ten actual jobs and
 CodeQL `38636782376` all four analyses, including real production C#
@@ -2591,6 +2600,40 @@ cover the three exact EN/DA topic-bearing commands and prior how-to/quoted-subje
 negatives. Actual PC module fixtures use fresh independent snapshot IDs to
 detect invalidation, suffixless/truncated Chrome titles, missing identity,
 before-dispatch/confirmation refusal and native metadata/control positives.
+
+### Published Google delivery: pinned-CI fixture correction
+
+Independent review passed frozen `3AF653B5`; the coordinator integrated its
+runtime/test blobs into `f2afaca9` and published existing #848. Normal pinned
+CI `38644147405` failed five backend tests (3163 passed, 176/178 files passed).
+Both Backend and Web jobs report these same backend failures; Web's 75 frontend
+files passed before the root test command also ran backend tests.
+
+Four calendar HTTP fixtures registered `/fixture/calendar-reply` without
+`config.jarvisAgent: true`. The unchanged authentication hook correctly denied
+their agent identity before the confirmation helper ran. Explicitly opt in
+only that test route, retaining verified-current-Dan, later-message, expiry,
+cancellation, provider-failure and one-shot assertions. An unmarked-route
+negative control asserts 403 with zero handler/provider calls.
+
+The paused-PC fixture enables visual fallback with a one-element UIA tree.
+Its first observation is followed by a second identity-only UIA read before
+the paused connection refuses `window_capture` without dispatch. Assert the
+exact two-read sequence and zero planner/vision calls; retain strict paused
+refusal and resumed `open_app` dispatch. A dependency-light actual registry,
+connection and synthetic WebSocket broker regression also checks zero
+`pc_open`, capture or native-action dispatch while paused.
+The corrected twelve-file Node selection passes 328 tests, including that
+broker case and all 34 mail-policy controls. Changed-test zero-warning lint
+passes; strict types retain exactly the earlier twelve environment errors.
+Earlier Python and coupled hosted proof receipts apply to unchanged runtime
+blobs and were not rerun for this test-only correction.
+
+These are test-harness corrections, not production authentication or pause
+policy changes. Local HTTP execution remains blocked by missing
+`@fastify/multipart`; normal corrected-head pinned CI is coordinator-owned
+and still required. Do not treat the published failing wave or local fixture
+evidence as CI-green, original provider acceptance or release approval.
 
 Installed CLI help supports `copilot --remote`. Observed existing SDK processes
 run `--server --stdio --no-auto-update`, without `--remote`; this task neither

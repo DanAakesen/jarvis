@@ -33,6 +33,38 @@ two residuals and coupled controls. The coordinator's normal `5064afe4`
 integration is conflict-free. Full pinned CI, normal release and actual
 Google acceptance remain pending; the bounded PASS is not those gates.
 
+Subsequent actual pinned CI `38644147405` at published #848 head `f2afaca9`
+failed four calendar receipt-flow HTTP fixtures and one paused-PC fixture.
+The frontend's 75 files passed before its root workspace command repeated
+the same backend failures; do not create a separate UI owner or retry this
+unchanged head. The same author produced six-path harness correction
+`568666e1` with explicit internal fixture-route opt-in, an unmarked-route
+403/zero-execution negative, exact two-read paused identity checks and zero
+capture/action/model dispatch. The same reviewer passed that bounded
+disposition at exact head `568666e1`: unchanged production/auth blobs and
+all original receipt/approval assertions were verified; the real synthetic
+connection reproduced the exact paused/resumed sequence. Its HTTP import
+was still blocked on a missing local package, not a passing HTTP test.
+Normal corrected-head full CI and release remain required.
+Previous immutable PASS/FAIL receipts remain unchanged.
+
+## Accept original inactive health code without private activation (14 October 2026)
+
+The independent #720 lane found no demonstrable code/synthetic gap. Original
+#808 and reviewed #818 already delivered its implementation. The coordinator
+hashed the no-change receipt and verified 63 source/schema/auth/runtime/lock
+inputs against actually tested #841 head `eea9a06f`, accepted `202ead5b`
+and later main. Tested and accepted trees both equal `b05a2380`; actual
+CI `38636782270` passed all ten jobs, including health-processing SQL 18,
+health-upload SQL 12, normalization 45, read-model 2, upload 15 and lint/build.
+Normal Deploy `38638073176` already accepted that tree.
+
+Close original #720 code acceptance without a dummy PR or repeated release;
+retain closed #718/#719 dependency links. The lane did not rerun npm locally
+because of proxy/TLS failures. This does not accept or authorise activation,
+private export/import, HAE/physical-phone/source parity, backup/cutover or
+deployed health capacity. Those downstream gates remain separate.
+
 ## Consolidate the existing maintenance review queue locally (14 October 2026)
 
 Dan directed local implementation and coordinator ownership of both boards,
@@ -86,6 +118,13 @@ authentication, preserve unrelated pending actions, and report missing
 access rather than scraping tokens, bypassing consent or forging approval.
 No personal emails, original Daily/data migration or activation, new
 resources/permissions, extra jobs or private/device acceptance is implied.
+
+Dan subsequently completed Microsoft sign-in/MFA himself in the shared
+browser panel. Jarvis uses MSAL and backend `/me` verification; the SWA
+`/.auth/me` response is not its session authority. Use the existing verified
+UI/client, not token extraction, forged caller fields or a substitute
+service principal. Successful sign-in does not itself accept any live
+Google write, sandbox job, cleanup or physical platform-stop result.
 
 ## Coalesce automatic board updates behind scoped reads (#813, 14 October 2026)
 
@@ -2915,3 +2954,37 @@ All 32 scoped paths, protected mobile/Factory/smoke blobs and PLAN table cells
 remain preserved. A normal scoped local replacement commit is authorised;
 publication/readiness/CI/release and later-main reconciliation remain with the
 coordinator after independent PASS.
+
+## Google pinned-CI fixture corrections (14 October 2026; local)
+
+Independent review passed `3AF653B5`. The coordinator published its normally
+integrated runtime/test blobs as `f2afaca9` in existing #848. Pinned CI
+`38644147405` reported five backend failures in both Backend and Web jobs;
+the 75 frontend files passed, so no frontend or CI configuration change is
+indicated.
+
+Four calendar approval fixtures omitted the test route's explicit agent
+opt-in. Keep production authentication unchanged and add
+`config.jarvisAgent: true` only to `/fixture/calendar-reply` in the tests.
+Retain actual receipt/later-message/one-shot and failure-state assertions,
+with a denied unmarked-route control proving zero handler/provider execution.
+
+The paused sparse-tree PC fixture expected one observation despite enabling
+visual fallback. Current process verification requires a second read before
+capture, which the paused connection correctly refuses before RPC dispatch.
+Assert exactly two UIA reads, no capture/action/planner/vision dispatch, and
+the existing successful resumed action. Add an executable registry/connection
+regression through a synthetic local WebSocket peer, not a real device.
+
+Qualified correction checks pass 328 Node tests across twelve files and
+zero-warning lint on the three changed test files. The two changed HTTP suites
+still cannot collect locally because multipart is absent; strict types report
+the same twelve dependency/consequent errors, with no new fixture diagnostic.
+Earlier 296 Python/four coupled hosted proofs remain evidence for unchanged
+runtime blobs, not newly executed checks or a passing corrected-head CI wave.
+
+No production runtime, permissions, native wire, dependencies, check
+configuration, protected blobs or PLAN cells change. Local app-dependent
+execution remains package-blocked; the coordinator owns corrected-head
+normal pinned CI, publication and release. Original Google provider/live
+acceptance remains unproven.

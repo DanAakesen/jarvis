@@ -4,6 +4,7 @@ import { createToolRegistry } from '../core/tool-registry.js';
 import { GMAIL_DIRECT_ACCESS_REASON } from '../core/gmail-access-policy.js';
 import { createPcBridgeModule } from './bridge.js';
 import type { PcActPlanner } from './pc-act.js';
+import WebSocket, { WebSocketServer } from 'ws';
 
 const snapshotId = '1730aa51-f380-4df9-a345-1feb862cb1c4';
 const signal = () => new AbortController().signal;
@@ -65,6 +66,54 @@ function fixture(options: Parameters<typeof createPcBridgeModule>[0] = {}) {
 }
 
 describe('actual raw PC registry Gmail boundary', () => {
+  it('preserves paused sparse-tree control with two reads and zero capture/action/model dispatches', async () => {
+    const server = new WebSocketServer({ host: '127.0.0.1', port: 0 });
+    await new Promise<void>((resolve) => server.once('listening', resolve));
+    const address = server.address();
+    if (!address || typeof address === 'string') throw new Error('No synthetic broker address');
+    const connected = new Promise<WebSocket>((resolve) => server.once('connection', resolve));
+    const client = new WebSocket(`ws://127.0.0.1:${address.port}`);
+    const socket = await connected;
+    const commands: string[] = [];
+    const locateElements = vi.fn(async () => []);
+    const decide = vi.fn<PcActPlanner['decide']>(async () => ({ operation: 'done', confidence: 0.99 }));
+    let paused!: () => void;
+    const pause = new Promise<void>((resolve) => { paused = resolve; });
+    const module = createPcBridgeModule({
+      pcActPlanner: { decide }, pcActVisionModel: { locateElements },
+      onStatusChange: (_online, controlPaused) => { if (controlPaused) paused(); },
+    });
+    client.on('message', (data) => {
+      const command = JSON.parse(data.toString()) as { id: string; command: string };
+      commands.push(command.command);
+      client.send(JSON.stringify({ id: command.id, type: 'result', result: {
+        snapshotId, application: 'spotify', elements: [{ index: 0, role: 'button', name: 'Search' }],
+      } }));
+    });
+    module.connection.attach(socket);
+    try {
+      if (client.readyState !== WebSocket.OPEN) await new Promise<void>((resolve) => client.once('open', resolve));
+      client.send(JSON.stringify({ type: 'status', controlPaused: true }));
+      await pause;
+      expect(module.connection.readStatus()).toMatchObject({ connected: true, controlPaused: true });
+      const registry = createToolRegistry([module]);
+      await expect(registry.get('pc_open')!.execute({ target: 'app', value: 'vscode' }, request(), signal()))
+        .rejects.toThrow('Jarvis control is paused');
+      expect(commands).toEqual([]);
+      await expect(registry.get('pc_act')!.execute({ goal: 'Click Search in Spotify' }, request(), signal()))
+        .rejects.toThrow('Jarvis control is paused');
+      expect(commands).toEqual(['uia_snapshot', 'uia_snapshot']);
+      expect(commands.some(name => ['window_capture', 'uia_act', 'click_point'].includes(name))).toBe(false);
+      expect(decide).not.toHaveBeenCalled();
+      expect(locateElements).not.toHaveBeenCalled();
+    } finally {
+      const closed = new Promise<void>((resolve) => client.once('close', resolve));
+      await module.connection.close();
+      await closed;
+      await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
+    }
+  });
+
   const rawTitles = ['Inbox - Gmail', `Gmail ${'x'.repeat(240)} - Google Chrome`.slice(0, 200)];
   it.each(rawTitles.flatMap(title => ['pc_active_window', 'pc_clipboard_read'].map(name => [title, name])))(
     'refuses Chrome Gmail raw/truncated title %s before %s export', async (title, name) => {

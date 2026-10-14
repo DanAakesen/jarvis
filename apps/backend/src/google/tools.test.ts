@@ -74,11 +74,25 @@ function decodedMimeBody(raw: string): string {
 afterEach(async () => { await Promise.all(apps.splice(0).map((app) => app.close())); });
 
 describe('Google Calendar and Gmail tools', () => {
+  it('keeps an unmarked fixture route closed to agent identities before handler or provider execution', async () => {
+    const request = vi.fn<GoogleApiClient['request']>(async () => ({ items: [] }));
+    const { app } = appFor(request);
+    const handler = vi.fn(async () => ({}));
+    app.post('/fixture/calendar-agent-denied', handler);
+    const response = await app.inject({
+      method: 'POST', url: '/fixture/calendar-agent-denied', headers: confirmHeaders('42'), payload: {},
+    });
+    expect(response.statusCode).toBe(403);
+    expect(response.json()).toEqual({ error: 'Forbidden' });
+    expect(handler).not.toHaveBeenCalled();
+    expect(request).not.toHaveBeenCalled();
+  });
+
   it('grounds a real read/stage/later-approval/repeated-yes flow in actual tool receipts', async () => {
     const request = vi.fn<GoogleApiClient['request']>(async (_api, _path, options) =>
       options.method === 'POST' ? { id: 'fixture-created-event' } : { items: [] });
     const { app, records, setLatest } = appFor(request);
-    app.post('/fixture/calendar-reply', async (req) => JSON.parse(await confirmPendingCalendarReply(
+    app.post('/fixture/calendar-reply', { config: { jarvisAgent: true } }, async (req) => JSON.parse(await confirmPendingCalendarReply(
       app.jarvisTools, req, new AbortController().signal,
     )));
     const reply = (id: string) => app.inject({
@@ -132,7 +146,7 @@ describe('Google Calendar and Gmail tools', () => {
       let now = Date.now();
       const request = vi.fn<GoogleApiClient['request']>(async () => { throw new GoogleApiError('uncertain'); });
       const { app, setLatest } = appFor(request, { pendingActions: new PendingGoogleActions(() => now) });
-      app.post('/fixture/calendar-reply', async (req) => JSON.parse(await confirmPendingCalendarReply(
+      app.post('/fixture/calendar-reply', { config: { jarvisAgent: true } }, async (req) => JSON.parse(await confirmPendingCalendarReply(
         app.jarvisTools, req, new AbortController().signal,
       )));
       const stage = await app.inject({
