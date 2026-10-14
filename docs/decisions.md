@@ -1,5 +1,13 @@
 # Decisions
 
+## P12-05 inactive SQL health processing (13 October 2026)
+
+The [local coordinator release for #720](https://github.com/DanAakesen/jarvis/issues/720#issuecomment-6154043444) follows #805's independently reviewed, CI-tested and deployed inactive SQL acceptance. Reuse that inbox/pool/owner lock. A committed claim generation bounds retries; normalization occurs outside the transaction, then domain rows, ingestion lineage, applicable feed freshness and processed receipt commit together. Heartbeat is a separate signal. Retain raw evidence and quarantine rather than deleting poison inputs or retrying forever. No timer, dispatcher, production registration or credential change.
+
+Pure original Site code at `9e193554c9c8c7c23a788ed3d2b0582580b76c0f` establishes shapes, not private-data parity. Preserve distinct workout IDs/detail/minute HR, exclude nutrition feedback and spatial derived details, and correct missing-number-to-zero and array-order assumptions with explicit unknowns and timestamp ordering. Copenhagen days and supported physical-unit conversions are explicit; ambiguous units, malformed timestamps and oversized identities quarantine without truncation. Accept-time ordering prevents stale retries from overwriting newer arrivals but does not prove source-event ordering. [Bounds, reads and live gates](../apps/backend/src/daily/health/README.md).
+
+[PR #808 review](https://github.com/DanAakesen/jarvis/pull/808#issuecomment-6157206506) exposed a synthetic unit defect: summary quantities bypassed conversion and accepted `Hz` as unitless BPM. The correction uses the strict BPM alias mapping for summaries and known rate series, rejects unsupported declared units before writes, and validates fallback units too. Only the source code's existing summary slots retain implicit BPM; absent series units stay unknown and heart-rate variability keeps its separate dimension. Native synthetic checks and isolated SQL readback/quarantine regression cases cover this boundary; exact-head CI and independent review still gate release. No new units, source mutation or live acceptance are inferred.
+
 ## Factory issue-number navigation uses the page snapshot (13 October 2026)
 
 The user added issue-number navigation acceptance after #793's board release
