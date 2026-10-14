@@ -12,6 +12,70 @@ vi.mock('applicationinsights', () => ({
 }));
 
 describe('structured log export', () => {
+  it.each([
+    ['chat_identity', 'degraded', 'identity_reply'],
+    ['chat_no_timestamp', 'degraded', 'capture_time_invented'],
+    ['chat_capabilities', 'down', 'capabilities_discovery_missing'],
+    ['chat_capabilities', 'down', 'capabilities_discovery_wrong'],
+    ['chat_capabilities', 'down', 'capabilities_discovery_failed'],
+    ['chat_capabilities', 'down', 'capabilities_receipt_incomplete'],
+    ['chat_capabilities', 'down', 'capabilities_reply_incomplete'],
+    ['chat_canary', 'down', 'acceptance_check_failed'],
+    ['chat_jobs', 'down', 'jobs_unavailable'],
+    ['chat_navigation', 'down', 'navigation_refusal_missing'],
+    ['chat_plain_approval', 'down', 'plain_approval_failed'],
+    ['agent_contract', 'down', 'Agent settings have an invalid shape.'],
+  ])('exports only the safe %s smoke reason %s/%s to stdout and telemetry', (checkId, status, reason) => {
+    const records: string[] = [];
+    const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });
+    const sink = { ...sdk, trackTrace: vi.fn() };
+    const logger = createLogger({ logLevel: 'info' }, sink, output).child({
+      token: 'private-token', reply: 'private-reply', err: new Error('private-error'),
+    });
+    const fields = { checkId, status, reason };
+    logger.info({
+      ...fields, prompt: 'private-prompt', arguments: { private: 'input' }, result: 'private-result',
+    }, 'system.smoke_check');
+    expect(JSON.parse(records[0]!)).toEqual({
+      level: 30, time: expect.any(Number), service: 'jarvis-backend', msg: 'system.smoke_check', ...fields,
+    });
+    expect(sink.trackTrace).toHaveBeenLastCalledWith(expect.objectContaining({
+      message: 'system.smoke_check', properties: { service: 'jarvis-backend', ...fields },
+    }));
+    expect(records.join('') + JSON.stringify(sink.trackTrace.mock.calls)).not.toContain('private');
+  });
+
+  it('drops unknown, cross-check and non-failure smoke reasons at both export boundaries', () => {
+    const records: string[] = [];
+    const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });
+    const sink = { ...sdk, trackTrace: vi.fn() };
+    const logger = createLogger({ logLevel: 'info' }, sink, output);
+    const cases = [
+      [{ checkId: 'private-check', status: 'down', reason: 'identity_reply' }, {}],
+      [{ checkId: 'chat_identity', status: 'private-status', reason: 'identity_reply' }, { checkId: 'chat_identity' }],
+      [{ checkId: 'chat_identity', status: 'degraded', reason: 'capabilities_discovery_missing' },
+        { checkId: 'chat_identity', status: 'degraded' }],
+      [{ checkId: 'chat_capabilities', status: 'down', reason: 'private-provider-text' },
+        { checkId: 'chat_capabilities', status: 'down' }],
+      [{ checkId: 'chat_identity', status: 'ok', reason: 'identity_reply' }, { checkId: 'chat_identity', status: 'ok' }],
+      [{ checkId: 'chat_identity', status: 'unknown', reason: 'identity_reply' }, { checkId: 'chat_identity', status: 'unknown' }],
+      [{ checkId: 'chat_identity', status: 'degraded', reason: { toString: () => 'identity_reply' } },
+        { checkId: 'chat_identity', status: 'degraded' }],
+      [{ checkId: 'chat_identity', status: 'degraded', reason: 'identity_reply\nprivate' },
+        { checkId: 'chat_identity', status: 'degraded' }],
+    ];
+    for (const [input, expected] of cases) {
+      logger.info({ ...input, body: 'private-body', toolCalls: 'private-calls' }, 'system.smoke_check');
+      expect(JSON.parse(records.at(-1)!)).toEqual({
+        level: 30, time: expect.any(Number), service: 'jarvis-backend', msg: 'system.smoke_check', ...expected,
+      });
+      expect(sink.trackTrace).toHaveBeenLastCalledWith(expect.objectContaining({
+        message: 'system.smoke_check', properties: { service: 'jarvis-backend', ...expected },
+      }));
+    }
+    expect(records.join('') + JSON.stringify(sink.trackTrace.mock.calls)).not.toContain('private');
+  });
+
   it.each(['factory.board_read_failed', 'factory.board_project_lookup_failed'])(
     'exports only allowlisted board diagnostics for %s to stdout and telemetry', (event) => {
       const records: string[] = [];

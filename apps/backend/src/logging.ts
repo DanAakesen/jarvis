@@ -2,6 +2,8 @@ import { Writable } from 'node:stream';
 import pino from 'pino';
 import type { Contracts } from 'applicationinsights';
 import type { BackendConfig } from './config.js';
+import { systemSmokeCheckIds } from '@jarvis/contracts';
+import { safeSmokeReason } from './system-status.js';
 
 // This is the external export boundary, replaced by an offline sink in tests.
 export interface TelemetrySink {
@@ -83,6 +85,7 @@ const events = new Set([
   'tool.invalid_arguments', 'decision.provider_unavailable',
   'factory.issue_create_outcome_uncertain',
   'factory.board_phase', 'factory.board_read_timing', 'factory.board_invalidated',
+  'system.smoke_check',
   'phone.call_callback_processed', 'phone.incoming_call_rejected', 'phone.session_started',
 ]);
 
@@ -157,6 +160,18 @@ function safeBoardDuration(value: unknown): value is number {
 }
 
 function safeFields(input: Record<string, unknown>): Record<string, unknown> {
+  if (input.msg === 'system.smoke_check') {
+    const checkId = systemSmokeCheckIds.find((id) => id === input.checkId);
+    if (!checkId) return {};
+    const fields: Record<string, unknown> = { checkId };
+    if (input.status === 'ok' || input.status === 'degraded' ||
+        input.status === 'down' || input.status === 'unknown') fields.status = input.status;
+    if (input.status === 'down' || input.status === 'degraded') {
+      const reason = safeSmokeReason(checkId, input.reason);
+      if (reason) fields.reason = reason;
+    }
+    return fields;
+  }
   if (input.msg === 'factory.board_read_failed' || input.msg === 'factory.board_project_lookup_failed') {
     const fields: Record<string, unknown> = {};
     if (safeRequestId(input.reqId)) fields.reqId = input.reqId;

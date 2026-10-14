@@ -39,6 +39,24 @@ their mention in the reply are required. The reason alone does not establish
 the original production cause; until a normal recovery deployment and released
 acceptance confirm the result, treat that cause as unidentified.
 
+For mixed backend/web versions, both HTTP routes retain the legacy rule that
+only down checks include a reason. Internal snapshots also retain allowlisted
+degraded reasons. An authorised normal smoke run exports `system.smoke_check`
+with only `checkId`, `status` and an allowlisted check-specific failure `reason`
+to stdout and Application Insights; an ordinary retained Status read does not
+repeat it. Use those events for safe warning details instead of broadening the
+wire contract or retrieving raw provider text. The event is diagnostic evidence,
+not an accepted-green release certificate.
+
+The local consolidated #831/#832 recovery trace on main `81580919` found no
+matching exact-format numeric model-round records in the authorised existing
+workspace for 14 October 17:32–17:34 UTC. The failed smoke-only retry therefore
+does not establish which capability predicate failed. The smoke role omits
+normal-chat capability instructions; do not treat that source observation or
+timings as a proved live cause. Review/publication and a normal release's safe
+reason readback remain coordinator-owned. No blind smoke retry, new credentials
+or access grant is required or authorised by this diagnostic change.
+
 P9-107 deterministic fixtures demonstrate a separate reply false-negative:
 successful discovery with all three canonical receipt categories followed by
 “I can help with Notes, calendars and GitHub tools” failed only the reply

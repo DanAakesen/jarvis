@@ -588,7 +588,8 @@ export function isSystemSmokeStatus(value) {
     entry.id === systemSmokeCheckIds[index] &&
     ['ok', 'degraded', 'down', 'unknown'].includes(entry.status) &&
     (entry.reason === undefined ||
-      (entry.status === 'down' && boundedString(entry.reason, 120, 1) && !hasControlCharacters(entry.reason))) &&
+      (['degraded', 'down'].includes(entry.status) &&
+        boundedString(entry.reason, 120, 1) && !hasControlCharacters(entry.reason))) &&
     validTime(entry.checkedAt));
 }
 

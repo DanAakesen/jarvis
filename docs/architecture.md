@@ -1,5 +1,53 @@
 # Architecture
 
+## Mobile/Status review publication (14 October 2026)
+
+The publication candidate retains all eight accepted code/test/CSS paths
+byte-exact, including the two already LF-normalised hook files. Only additive
+documentation is adapted to current main; page completion ownership,
+deadline/cancellation behaviour and phone viewport ownership below are
+unchanged. No Factory, backend, contract, dependency or runtime boundary
+is added. Publication approval does not authorise merge or deployment.
+
+## Page command completion ownership (14 October 2026; local)
+
+`ShellLayout` retains synchronous direct workspace dispatch, but its broker
+page-command applier owns a bounded pending-route completion. The pathname
+layout effect settles success only on destination commit, or refuses a
+superseding route. Abort, unmount and the command deadline remove the waiter
+and its timer/listener. The maximum wait retains the existing six-second
+navigation ceiling and 250-ms acknowledgement reserve; it starts no fetch.
+Both a successful waiter settlement and the post-dispatch page/pane fast
+return check the same captured deadline against the completion-time clock.
+Late success becomes the existing deadline refusal even if its timeout has
+not run; cancellation and other refusals keep their reason. This observes
+completion only and does not roll back a requested router transition.
+
+Actual-App fixtures observed applied acknowledgements before the Status
+heading/selected rail entry existed. The surrounding `flushSync` and the
+navigation function's return alone did not guarantee route commit. The new
+owner observes the shell commit rather than polling DOM or awaiting health
+reads. Existing Factory issue resolution, Notes draft guard, Folio pane,
+session/pin handlers and persistent Now session remain separate.
+
+## Phone typing viewport ownership (14 October 2026; local)
+
+`ShellLayout` enables `usePhoneChatViewport` only for signed-in phone typing.
+The hook publishes shell-scoped top/bottom visual-viewport insets synchronously
+on resize, pan, page restore and focus changes; unchanged values are not
+rewritten. This precedes the workspace's scheduled anchor measurement,
+including pan-only events where canvas dimensions do not change. Pinch zoom
+and browsers without VisualViewport retain ordinary dock behaviour.
+
+`Workspace` remeasures an existing manual composer anchor through one
+animation-frame callback on viewport/window resize and captured scrolling,
+deduplicates unchanged coordinates, and removes listeners/pending work on
+disposal. Both phone chat halves use the same insets and measured composer
+height. No viewport event writes persisted layout or remounts the draft owner.
+The hook dismisses only an active in-shell Message Jarvis textarea on outside
+touch, excluding composer/menu controls and preserving the native tap.
+Voice, authentication, APIs, model requests and dependencies are unchanged.
+
 ## Remaining UI release (13 October 2026)
 
 `Workspace` owns conversation gestures and device-local normalized geometry
@@ -1469,12 +1517,21 @@ the fixed preceding transcript.
 Each scripted check has its own smoke-report entry. Deterministic tool and
 response checks report `down`; the identity and missing-image timestamp wording
 checks report `degraded`, which the Deploy gate excludes from failure decisions.
-The suite summary fails only for deterministic checks. The report contains IDs,
-statuses, timestamps and fixed failure reasons only; it never includes reply
+The suite summary fails only for deterministic checks. The internal report contains IDs,
+statuses, timestamps and per-check allowlisted failure reasons for down/degraded
+checks; it never includes reply
 text, tool arguments/results, settings or provider error text. The endpoint
 never reads note contents. The latest report is kept in
-the backend's in-memory status snapshot and is returned as `smoke` by `GET /status`
-for the status page; it is lost when the backend restarts. The embedding vector is
+the backend's in-memory status snapshot; it is lost when the backend restarts.
+Both `GET /status/smoke` and the retained `smoke` in `GET /status` use a
+non-mutating HTTP projection that omits non-down reasons. This preserves the
+legacy validator in already-open clients during parallel web/backend deploys.
+An authorised smoke run emits one `system.smoke_check` event per check through
+the existing stdout/Application Insights export boundary, containing only its
+allowlisted ID, status and check-specific safe failure reason. Retained Status
+reads neither invoke probes nor repeat these events. Degraded diagnostics remain
+internal/telemetry-only; no new endpoint, storage or permission is added.
+The embedding vector is
 discarded, and the temporary research invocation is cleaned up without writing
 research output or other user data. Dan may call the endpoint with his normal
 token; the configured deployment service principal may call only this exact GET
@@ -2697,13 +2754,13 @@ These boxes are responsibilities; they do not each need a separate service.
 | Retries | `attempt_count` and `next_attempt_at` on the task row. Safe pre-start failures retry after 15 and 30 seconds, up to three attempts; ambiguous Foundry starts and exhausted attempts move to Needs attention. Expired startup leases move to Needs attention rather than being replayed, avoiding duplicate remote sessions. |
 | Sandbox heartbeat | At startup, the backend loads active sessions with their current invocation status once; the dispatcher registers new turns. Each registered invocation is checked immediately and about once a minute, and `last_heartbeat_at` is updated after a valid response. The poller holds active sessions in memory and makes no recurring SQL reads while idle. A runner `needs_attention` status ends monitoring and transactionally moves the task to NeedsAttention with the bounded question. A `session_question` event marks the turn completed and moves the task to NeedsAttention but keeps its session monitored so later expiry can be classified. |
 | Crash detection | Two consecutive HTTP 424/404/5xx responses, with a confirming poll after 30 s, mark an active invocation's sandbox Crashed and move its task to NeedsAttention. If the correlated turn already completed, the sandbox instead ends as `Ended`/`idle_expired`, and task state is unchanged. Both outcomes persist in one transaction and publish the committed task event through the in-process hub. Event gaps alone never trigger a crash (L22). |
-| Stale task reconciliation | At dispatcher startup, scan at most five Running tasks whose latest sandbox heartbeat is at least five minutes old. While a sandbox is tracked, repeat at five-minute intervals. Query the recorded Foundry invocation with a 15-second timeout. A live invocation refreshes its heartbeat; a completed invocation uses the normal GitHub delivery and project-policy path, persisting a discovered PR through the P3-04 mapping first. Failed, unavailable, mismatched, or otherwise unverifiable states move to NeedsAttention with a user-visible reason; Done requires the existing verified completion path. Each outcome logs an allowlisted `task_reconciliation.decision` with task/session/invocation IDs and bounded status/decision fields only. This bounded scan is the recovery path for lost completion/webhook events, not a substitute for webhook delivery. |
+| Stale task reconciliation | At dispatcher startup, scan at most five Running tasks whose latest sandbox heartbeat is at least five minutes old. Select the actual latest session and its latest turn before applying eligibility: Active sessions, Ended/done sessions, and Ended/idle_expired sessions only when the latest turn completed. A stale older session or turn cannot stand in for a newer invocation. While a sandbox is tracked, repeat at five-minute intervals; a committed backend `sandbox_idle_expired` event requests one bounded scan even without a tracked session. Query the recorded Foundry invocation with a 15-second timeout and recheck the task/session/invocation under the existing project-policy lock before delivery or state mutation. A live invocation refreshes its heartbeat; a completed invocation uses the normal GitHub delivery and project-policy path, persisting a discovered PR through the P3-04 mapping first. A legitimate awaiting-policy task stays Running (and consumes capacity) until the existing policy outcome arrives; missing, refused, failed, unavailable, mismatched, or otherwise unverifiable delivery follows its existing visible NeedsAttention outcome. Expiry alone is not a crash, and Done still requires the existing verified completion path. Each outcome logs an allowlisted `task_reconciliation.decision` with task/session/invocation IDs and bounded status/decision fields only. This bounded scan is the recovery path for lost completion/webhook events, not a substitute for webhook delivery. |
 | Recovery and completion | Recover atomically claims a NeedsAttention task after an actual crash; Continue after `idle_expired` uses the same branch-recovery path. Both start a fresh Foundry session from the existing task branch with the original request, bounded steering history, and event summary. A completed invocation is correlated to its active task session; the backend accepts Done only after a repository-scoped GitHub App check confirms both the branch and a pull request. Missing evidence returns the task to NeedsAttention; API failures do not produce false success. Migration `0010_idle_expired_sessions.sql` extends the session end-reason vocabulary. Offline fake tests cover both heartbeat outcomes and continuation; SQL Server CI, live runner, Foundry, and GitHub behavior remain unverified. |
 | Live progress | The runner posts task-scoped events to `POST /factory/sandbox-events` with its managed identity; the backend records each through P1-05's transaction and publishes only after commit. The dispatcher sends `task_id` in every start and resume invocation; a runner deployed with `JARVIS_BACKEND_URL` rejects task invocations without one (L59). Browser streaming is P1-06. |
 | Build and release status | GitHub App webhooks: `pull_request`, `check_run`, `workflow_run`, `deployment_status`, and `push`. No polling. Signed `issues`, `pull_request`, `check_run` and `workflow_run` events also invalidate Factory board snapshots for tracked repositories; issue payloads are not persisted. |
 | Board updates | `GET /factory/tasks/:id/events` authenticates the bearer token, replays typed `task_events` after `Last-Event-ID`, then streams committed hub events and a 25-second heartbeat. Shared contracts define the task frame; one typed backend helper serializes it. The fetch client reconnects with its last delivered ID and ignores repeats. |
 | Factory task view | P1-08 loads up to 100 tasks from the filtered task API, opens task-scoped SSE streams for nonterminal cards, and refreshes the snapshot after updates. P2-14 exposes the latest session end reason so an expired completed invocation offers Continue rather than Recover. P6-21 supplies recorded PR/check/usage summaries and a Dan-only retry API for failed starts without sandbox history; UI rendering and retry controls are owned separately. |
-| Idle | The dispatcher subscribes to committed task events and schedules the next retry deadline. It performs one startup stale-task scan, then schedules five-minute scans only while a sandbox is tracked. The event-archive timer also skips SQL until active sandbox work exists. |
+| Idle | The dispatcher subscribes to committed task events and schedules the next retry deadline. It performs one startup stale-task scan, then schedules five-minute scans only while a sandbox is tracked. A committed `sandbox_idle_expired` event requests one immediate bounded reconciliation, including when no heartbeat session is tracked; an overlapping scan coalesces the signal into one follow-up scan. It returns to no recurring SQL scans while idle. The event-archive timer also skips SQL until active sandbox work exists. |
 | Always on | The backend normally runs with a minimum of 1 replica, so timers remain alive. The main-page sleep switch sets the minimum to 0 (it wakes on the next request) and is refused while a task is Ready, Running, or PauseRequested. SQL can pause between genuine accesses; the daily Codex renewal lease check and request-driven endpoints remain deliberate exceptions. |
 
 ### Credential health and repair (P6-18, #457)

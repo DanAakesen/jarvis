@@ -1,5 +1,148 @@
 # Decisions
 
+## Keep consolidated recovery diagnostics compatible with live Status clients (14 October 2026; local)
+
+Combine current main `81580919` and the existing #831/#832 diagnostics locally;
+no new micro-ticket or independent publication. PR #832 retains allowlisted
+degraded reasons internally, but already-open web clients accept HTTP reasons
+only for down checks. Keep both HTTP routes legacy-compatible with a
+non-mutating projection. Retain safe degraded reasons in the cached report and
+export `system.smoke_check` through the existing event/field allowlists only
+when an authorised smoke run actually executes. Reject unknown/cross-check
+reasons and provider, prompt, tool or personal payloads at both log outputs.
+No validator weakening, extra probes or release-gate/budget/approval change.
+
+The 17:32–17:34 UTC existing-workspace query selected only exact-format numeric
+model-round metadata and returned no matches. Prior smoke logs record only
+IDs/statuses. Source tracing confirms that `get_system_health/list_capabilities`
+returns the three required categories and that receipt extraction preserves
+them; normal-chat capability instructions are not supplied to the smoke role.
+That absence is a candidate, not a verified failing predicate or root cause.
+Do not change smoke/model instructions or claim recovery without that evidence.
+Local regression checks and the coordinator's normal release remain distinct
+from historical attribution and accepted green production.
+
+The independent review passed the frozen diagnostic code. Qualified local
+validation passes 169 tests in four backend suites, 42 contracts tests and
+affected-file/contracts lint plus contracts build. Five app suites and the
+full backend build remain blocked by absent snapshot dependencies; no missing
+declarations are stubbed and no gates or pins are changed. Local tooling differs
+from the manifest's pinned CI versions. Keep those blocked checks and the
+unknown live failing predicate explicit; neither review nor this local evidence
+clears publication/release or establishes recovered main.
+
+## Reviewed non-Daily release clearance (14 October 2026)
+
+Dan's direct "yes you may" clears the merge and normal-deployment hold for
+independently reviewed, green non-Daily changes, including #846, #845, #842
+and #847. Use the existing serial production pipeline and verify the actual
+deployment; a published PR, successful coding run or green CI is not a release.
+Daily/P12, protected-data, extra live/model/device tests and downstream
+acceptance remain separate. Earlier publication-only holds below are historical,
+not a request for the same approval again.
+
+Factory recovery #846 reached production on `f545976` through Deploy
+`38575246180` at 13:58:22 UTC. Backend and smoke jobs passed; infrastructure,
+web and hosted-agent deployment were correctly skipped. Revision `0000313`
+is ready. Content-free lifecycle evidence at 14:02:53 UTC shows task 12/#837
+in NeedsAttention and task 14/#838 running with an active sandbox. This proves
+the stale Running slot was reconciled and ordinary queued work resumed, not
+that the original Gmail issue was fixed. No manual task-state/capacity override,
+restart, replay or new coordinator-created model turn was used.
+
+## Mobile/Status review publication (14 October 2026)
+
+Dan's "Approved", relayed by the coordinator, authorises commit, push and
+a separate review PR for the accepted fourteen-file mobile/Status patch.
+This supersedes its earlier local-only publication restriction, not any
+merge, deployment, live/device or downstream-work hold.
+
+Keep the eight accepted code/test/CSS files byte-exact. Rebase only additive
+documentation onto actual main and retain every original document byte and
+generated PLAN cell. Use a separately scoped app publisher rather than the
+mixed UI branch. Reuse the qualified clean-main runtime and lint receipts;
+publication preparation is not a new implementation or validation loop.
+Factory #842 remains separate. Neither publication nor these local fixtures
+identify Dan's original production trigger or establish phone/voice acceptance.
+
+## Check the deadline when page application completes (14 October 2026; local)
+
+Review found that route commit and the synchronous page/pane fast return
+could acknowledge success after the captured deadline but before the
+timeout callback ran. Six final actual-App probes replayed against the
+reviewed `759B8BDA` source confirm four late false-success cases; the two
+pre-deadline controls pass. Hold only the expiry callback and advance the
+clock independently: expiry is tested at the boundary, inside the 250-ms
+reserve and after command expiry, without a longer product timeout.
+
+Recheck the captured deadline only when settling success. Reuse the
+deadline refusal, preserve cancellation/supersession/disposal and keep
+the original deadline and reserve. The router may still commit the late
+page; no rollback is promised. This is a locally reproduced completion
+edge, not attribution of Dan's original production turn or live acceptance.
+
+## Acknowledge page commands after shell route commit (14 October 2026; local)
+
+Four offline actual-App cases from home/Settings, on desktop and phone,
+posted `applied: true` before Status's heading and selected rail entry
+existed; two already-on-Status cases passed. Wait for the existing shell's
+route commit rather than treating `navigate` dispatch as completion.
+Keep the six-second ceiling, command expiry and 250-ms reserve; cancellation,
+supersession and unmount dispose the waiter. No extra read, retry, health
+probe, timeout expansion or draft/stream replacement is introduced.
+
+Ten new actual-context cases cover first-ack state and held-route lifecycle.
+This proves and locally corrects a UI edge, not the cause of Dan's original
+turn. The origin/session/target/model decision and acknowledgement sequence
+were not captured. Coordinator-reported active-session routing and stale
+Status capability wording remain separate backend possibilities, not
+attribution or permission to edit another owner's source.
+
+## Keep phone chat joined to the visible viewport (14 October 2026; local)
+
+Use one shell-scoped VisualViewport inset owner for both phone typing
+surfaces, not a keyboard-open flag derived from focus. Actual Workspace
+regression evidence showed that viewport pan alone did not update the fixed
+composer anchor. Insets update before its coalesced measurement, and unchanged
+coordinates do not republish shell state. Keep existing normalized geometry,
+draft ownership, voice layout and two-pixel seam; never save viewport fitting.
+Outside touch dismisses only Message Jarvis without preventing the action.
+Controlled browser geometry is not physical-iPhone/iOS acceptance.
+
+## Status first-turn report supersedes the absent-human-turn gate (14 October 2026)
+
+Dan reports that the ordinary Open Status turn claimed completion without
+visible navigation, then "I dont see it" recovered. The human turn happened;
+first-turn visible acceptance did not pass. This is evidence of the symptom,
+not its cause. Trace application/acknowledgement locally in controlled actual
+contexts after the mobile handoff; do not substitute another live/model turn.
+Earlier unavailable-user notes below remain historical. #798/#797/#792 and
+merge/deployment remain held. Frozen Factory publication is coordinator-owned
+and isolated; its approval does not authorise mixed mobile/Status publication.
+
+## P9-116 completed-expiry reconciliation (14 October 2026)
+
+Use the existing bounded Factory reconciler for completed `idle_expired`
+sessions. It selects the task's actual latest session and latest turn, rechecks
+the session/invocation before processing late provider results, and wakes once
+from the committed backend expiry event when heartbeat no longer tracks a
+session. No recurring idle SQL scan, new service, restart, or replay is added.
+
+Expiry after a confirmed completed turn remains a sandbox lifecycle outcome,
+not a crash or task success. Reconciliation reuses GitHub delivery and project
+policy: refusal or missing verification keeps the existing reasoned
+NeedsAttention path; an awaiting-policy task remains Running and consumes
+capacity until the existing policy outcome changes its state. Only that
+verified policy path can mark Done. Deterministic dispatcher regressions and
+isolated loopback SQL regressions are added; run the SQL suite only with the
+disposable loopback service. The original missed-delivery cause and any live
+recovery of #837 remain unconfirmed and are not claimed.
+
+Full CI exposed `current` as a reserved SQL Server alias in the new identity
+fence. Quote it as `[current]`, retaining the typed result and predicate.
+The corrected revision must pass the real isolated SQL suite and full CI;
+mocked dispatcher tests did not exercise that SQL parser.
+
 ## #813 bound Factory board source reads (13 October 2026)
 
 Use one eight-request limiter for every GitHub source request in a board snapshot,
@@ -87,6 +230,21 @@ The smoke contract has no deployment ID/SHA association; use Recorded smoke
 check with its timestamp, not a claim that the latest release passed.
 No backend, contract or dependency change. Local synthetic browser
 checks are not authenticated production or physical-phone acceptance.
+
+## P9-107 smoke reason retention follow-up (14 October 2026)
+
+The prior Status-page decision above records its original UI-only scope. This
+follow-up preserves fixed per-check smoke reasons for down/degraded results.
+The allowlist includes shared `agent_error` and `timeout` outcomes for each
+chat acceptance check, while rejecting arbitrary provider text and reasons
+belonging only to another check.
+
+Local proof on this branch: exact-reader tests cover real missing-agent,
+controlled stream failure and timeout results, ordered complete report shape,
+contract validation, privacy, and timeout aborts. Backend and contracts checks
+are run for the current head; full exact-head CI and CodeQL status must be
+confirmed on the corrected commit. The original deployed failure cause remains
+unknown, and no production recovery is claimed.
 
 The coordinator authorised the smallest coupled release-gate correction in
 #815 after the title bot truncated P9-101 to P9-10. Normalization, linked-issue
