@@ -1,5 +1,24 @@
 # Decisions
 
+## Reviewed non-Daily release clearance (14 October 2026)
+
+Dan's direct "yes you may" clears the merge and normal-deployment hold for
+independently reviewed, green non-Daily changes, including #846, #845, #842
+and #847. Use the existing serial production pipeline and verify the actual
+deployment; a published PR, successful coding run or green CI is not a release.
+Daily/P12, protected-data, extra live/model/device tests and downstream
+acceptance remain separate. Earlier publication-only holds below are historical,
+not a request for the same approval again.
+
+Factory recovery #846 reached production on `f545976` through Deploy
+`38575246180` at 13:58:22 UTC. Backend and smoke jobs passed; infrastructure,
+web and hosted-agent deployment were correctly skipped. Revision `0000313`
+is ready. Content-free lifecycle evidence at 14:02:53 UTC shows task 12/#837
+in NeedsAttention and task 14/#838 running with an active sandbox. This proves
+the stale Running slot was reconciled and ordinary queued work resumed, not
+that the original Gmail issue was fixed. No manual task-state/capacity override,
+restart, replay or new coordinator-created model turn was used.
+
 ## Mobile/Status review publication (14 October 2026)
 
 Dan's "Approved", relayed by the coordinator, authorises commit, push and
@@ -69,6 +88,29 @@ contexts after the mobile handoff; do not substitute another live/model turn.
 Earlier unavailable-user notes below remain historical. #798/#797/#792 and
 merge/deployment remain held. Frozen Factory publication is coordinator-owned
 and isolated; its approval does not authorise mixed mobile/Status publication.
+
+## P9-116 completed-expiry reconciliation (14 October 2026)
+
+Use the existing bounded Factory reconciler for completed `idle_expired`
+sessions. It selects the task's actual latest session and latest turn, rechecks
+the session/invocation before processing late provider results, and wakes once
+from the committed backend expiry event when heartbeat no longer tracks a
+session. No recurring idle SQL scan, new service, restart, or replay is added.
+
+Expiry after a confirmed completed turn remains a sandbox lifecycle outcome,
+not a crash or task success. Reconciliation reuses GitHub delivery and project
+policy: refusal or missing verification keeps the existing reasoned
+NeedsAttention path; an awaiting-policy task remains Running and consumes
+capacity until the existing policy outcome changes its state. Only that
+verified policy path can mark Done. Deterministic dispatcher regressions and
+isolated loopback SQL regressions are added; run the SQL suite only with the
+disposable loopback service. The original missed-delivery cause and any live
+recovery of #837 remain unconfirmed and are not claimed.
+
+Full CI exposed `current` as a reserved SQL Server alias in the new identity
+fence. Quote it as `[current]`, retaining the typed result and predicate.
+The corrected revision must pass the real isolated SQL suite and full CI;
+mocked dispatcher tests did not exercise that SQL parser.
 
 ## #813 bound Factory board source reads (13 October 2026)
 

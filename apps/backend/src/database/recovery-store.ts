@@ -74,10 +74,21 @@ export function createTaskRecoveryStore(pool: sql.ConnectionPool, eventHub: Task
           INNER JOIN dbo.sandbox_sessions AS session
             ON session.task_id = task.id AND session.id = @sandboxSessionId
               AND session.foundry_session_id = @foundrySessionId AND session.status = N'Active'
-          INNER JOIN dbo.sandbox_turns AS turn
-            ON turn.sandbox_session_id = session.id AND turn.invocation_id = @invocationId
-              AND turn.status IN (N'running', N'completed')
-          WHERE task.state = N'Running';`);
+          CROSS APPLY (
+            SELECT TOP (1) candidate.id
+            FROM dbo.sandbox_sessions AS candidate
+            WHERE candidate.task_id = task.id
+            ORDER BY candidate.started_at DESC, candidate.id DESC
+          ) AS latestSession
+          CROSS APPLY (
+            SELECT TOP (1) invocation_id, status
+            FROM dbo.sandbox_turns
+            WHERE sandbox_session_id = latestSession.id
+            ORDER BY started_at DESC, id DESC
+          ) AS latestTurn
+          WHERE task.state = N'Running' AND task.lease_owner IS NULL
+            AND latestSession.id = session.id AND latestTurn.invocation_id = @invocationId
+            AND latestTurn.status IN (N'running', N'completed');`);
       return recordset[0]?.taskId ?? null;
     },
 
