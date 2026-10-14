@@ -1,5 +1,53 @@
 # Architecture
 
+## Mobile/Status review publication (14 October 2026)
+
+The publication candidate retains all eight accepted code/test/CSS paths
+byte-exact, including the two already LF-normalised hook files. Only additive
+documentation is adapted to current main; page completion ownership,
+deadline/cancellation behaviour and phone viewport ownership below are
+unchanged. No Factory, backend, contract, dependency or runtime boundary
+is added. Publication approval does not authorise merge or deployment.
+
+## Page command completion ownership (14 October 2026; local)
+
+`ShellLayout` retains synchronous direct workspace dispatch, but its broker
+page-command applier owns a bounded pending-route completion. The pathname
+layout effect settles success only on destination commit, or refuses a
+superseding route. Abort, unmount and the command deadline remove the waiter
+and its timer/listener. The maximum wait retains the existing six-second
+navigation ceiling and 250-ms acknowledgement reserve; it starts no fetch.
+Both a successful waiter settlement and the post-dispatch page/pane fast
+return check the same captured deadline against the completion-time clock.
+Late success becomes the existing deadline refusal even if its timeout has
+not run; cancellation and other refusals keep their reason. This observes
+completion only and does not roll back a requested router transition.
+
+Actual-App fixtures observed applied acknowledgements before the Status
+heading/selected rail entry existed. The surrounding `flushSync` and the
+navigation function's return alone did not guarantee route commit. The new
+owner observes the shell commit rather than polling DOM or awaiting health
+reads. Existing Factory issue resolution, Notes draft guard, Folio pane,
+session/pin handlers and persistent Now session remain separate.
+
+## Phone typing viewport ownership (14 October 2026; local)
+
+`ShellLayout` enables `usePhoneChatViewport` only for signed-in phone typing.
+The hook publishes shell-scoped top/bottom visual-viewport insets synchronously
+on resize, pan, page restore and focus changes; unchanged values are not
+rewritten. This precedes the workspace's scheduled anchor measurement,
+including pan-only events where canvas dimensions do not change. Pinch zoom
+and browsers without VisualViewport retain ordinary dock behaviour.
+
+`Workspace` remeasures an existing manual composer anchor through one
+animation-frame callback on viewport/window resize and captured scrolling,
+deduplicates unchanged coordinates, and removes listeners/pending work on
+disposal. Both phone chat halves use the same insets and measured composer
+height. No viewport event writes persisted layout or remounts the draft owner.
+The hook dismisses only an active in-shell Message Jarvis textarea on outside
+touch, excluding composer/menu controls and preserving the native tap.
+Voice, authentication, APIs, model requests and dependencies are unchanged.
+
 ## Remaining UI release (13 October 2026)
 
 `Workspace` owns conversation gestures and device-local normalized geometry
@@ -814,16 +862,50 @@ permission.
 Board loads validate the complete shared contract before caching a snapshot.
 Failure diagnostics survive both concurrent cache rejection and stale fallback:
 `factory.board_read_failed` exports only allowlisted `stage`, `reason`, HTTP
-`status` (100–599) and boolean `stale`. Project lookup has its own event with
-the same diagnostic allowlist. Token, source, task, release and response
-boundaries never export exception messages or provider content. The 25-second
-source deadline, ten-page/100-row pagination, one-minute/32-entry cache and
-1-MiB byte limits are unchanged. Within a snapshot, one request limiter caps all
-GitHub reads at eight concurrent requests. Offset pages are fetched concurrently
-only when provider metadata supplies a consistent last page; cursor pages,
-including links with both an incrementing page and opaque `after` token, remain
-sequential. Validate `prev` links with their `before` cursor but never follow
-them. Results retain provider page order, and
+`status` (100–599), boolean `stale`, request ID, and matched route template.
+Project lookup has its own event with that safe correlation. The board also
+emits allowlisted `factory.board_phase` timings for each executed project,
+token, source, task, release, and response boundary, plus one
+`factory.board_read_timing` summary with handler/source-computation outcome,
+reply status, cache path, stale state, and monotonic `cacheElapsedMs`. The
+summary records the handler's decision, not proof of HTTP completion or client
+receipt. `request.completed` is a separate server-side `onResponse` observation
+of reply status and response time; neither event proves that the client received
+the response. The cache elapsed value measures the awaited cache operation:
+lookup for a hit, wait for a shared caller, or the complete source load for its
+owner. Interpret it with `cachePath`; it is not a stage duration.
+Durations are bounded to 60 seconds and server-only. Values beyond that limit
+omit the numeric duration and set the corresponding `durationCensored` or
+`cacheElapsedCensored` marker rather than reporting a clipped value. Invalid
+or unavailable clock values omit the numeric duration and set
+`durationUnavailable` or `cacheElapsedUnavailable`. Each phase event is emitted
+when its instrumented work boundary executes; absence of an event cannot prove
+that work was skipped, since telemetry may be missing, sampled, cropped, or
+outside the observed window. When present, `cachePath` explicitly classifies the
+cache operation as `not_started`, `cache_hit`, `shared_wait`, or `source_load`.
+Response assembly and serialization have separate response entries (`part`).
+Source, task, and release durations
+are individual wall-clock measurements of concurrent work; they overlap and
+must not be summed as if sequential. Cache paths distinguish `cache_hit`,
+`shared_wait`, and `source_load`; `stale` marks either stale fallback path. No
+phase exports exception messages, provider content, headers, tokens, SQL,
+repository URLs, or query strings.
+
+At the existing board publication boundary, `factory.board_invalidated` exports
+only a bounded origin (`task_event` or `github_webhook`), safe project ID and
+in-process version when available, and webhook request ID when present. The
+task-event prelookup invalidation is explicitly marked `all_projects`; its
+project and version are not yet known. Versions are process-local and are not a
+durable event sequence. No polling, endpoint, resource, or client behavior is
+added.
+
+The 25-second source deadline, ten-page/100-row pagination,
+one-minute/32-entry cache and 1-MiB byte limits are unchanged. Within a snapshot,
+one request limiter caps all GitHub reads at eight concurrent requests. Offset
+pages are fetched concurrently only when provider metadata supplies a consistent
+last page; cursor pages, including links with both an incrementing page and
+opaque `after` token, remain sequential. Validate `prev` links with their
+`before` cursor but never follow them. Results retain provider page order, and
 dependency reads share the same limiter. Link metadata is validated against the
 selected repository endpoint, including GitHub's numeric `/repositories/{id}`
 form, but its URL is never followed: requests are constructed locally against
@@ -843,6 +925,23 @@ POST route; task details/windows and controls reuse their existing boundaries.
 publishes them and connection state to `factory-board-store.ts`. The board
 debounces matching invalidations and refreshes after connection recovery,
 without opening per-card task streams or duplicating GitHub placement logic.
+The #813 consumer correction keeps an active same-scope read rather than
+aborting it for automatic updates. Its request effect owns a pending flag,
+one queued follow-up and the existing 150-ms idle timer. Settlement schedules
+that follow-up after either success or failure, without allowing later
+notifications to postpone its deadline. Newer notifications during the
+follow-up can queue the next read. Effect cleanup cancels the request,
+timer and queued work on project/backend/token-callback replacement, explicit
+reload or unmount. Full validation and retained-snapshot error handling stay
+unchanged. This fixes a deterministically reproduced client lifecycle; the
+original released trigger and production performance remain unproven.
+The same request owner exposes its pending read, queued follow-up and timer
+to the issue resolver. Missing issues and absent/replaced requested task
+links stay loading across settlement and the idle debounce instead of being
+rejected from an older snapshot. Positive matches still resolve immediately;
+after a failed follow-up, an unresolved task link returns the visible read
+error. Navigation neither starts another read nor extends its existing
+six-second/command-expiry budget. Disposal removes the obsolete owner.
 Task details retain their own task stream. Equal invalidations are deduplicated,
 but a lower version after restart is accepted. Cached/failed-refresh snapshots
 retain the board DOM and show their source timestamp and stale feedback.
@@ -1367,6 +1466,18 @@ web page cannot present it as certification of a particular release.
 Status also participates in page metadata and bounded/redacted window
 readback. No new backend routes, storage or permission changes.
 
+Released-path evidence on `1590a1c3` / normal Deploy 38497362534 establishes
+actual rail navigation, initial/ordinary Refresh HTTP 200 and accepted HTTP
+204 `status`/`page-status` state/readback, with the same workspace session
+and no new Now stream requests. The retained report at
+2026-10-14T01:55:08.275Z was 15/15 OK and correctly stale; release success
+comes from the normal Deploy result, not an association in this contract.
+Dan's subsequent ordinary Status turn claimed success without visible
+navigation; "I dont see it" recovered. First-turn live navigation acceptance
+failed, with no established cause. Recovery does not establish broker/voice
+or physical-phone acceptance; #799 remains open and #798 held.
+[Exact evidence and limits](agent-context.md#read-only-status-page-14-october-2026).
+
 P9-62 adds always-registered `get_system_health`, returning the shared
 `SystemHealth` contract: 26 fixed-order components with status, safe detail,
 nullable evidence timestamp and available recovery tool descriptions.
@@ -1435,12 +1546,21 @@ the fixed preceding transcript.
 Each scripted check has its own smoke-report entry. Deterministic tool and
 response checks report `down`; the identity and missing-image timestamp wording
 checks report `degraded`, which the Deploy gate excludes from failure decisions.
-The suite summary fails only for deterministic checks. The report contains IDs,
-statuses, timestamps and fixed failure reasons only; it never includes reply
+The suite summary fails only for deterministic checks. The internal report contains IDs,
+statuses, timestamps and per-check allowlisted failure reasons for down/degraded
+checks; it never includes reply
 text, tool arguments/results, settings or provider error text. The endpoint
 never reads note contents. The latest report is kept in
-the backend's in-memory status snapshot and is returned as `smoke` by `GET /status`
-for the status page; it is lost when the backend restarts. The embedding vector is
+the backend's in-memory status snapshot; it is lost when the backend restarts.
+Both `GET /status/smoke` and the retained `smoke` in `GET /status` use a
+non-mutating HTTP projection that omits non-down reasons. This preserves the
+legacy validator in already-open clients during parallel web/backend deploys.
+An authorised smoke run emits one `system.smoke_check` event per check through
+the existing stdout/Application Insights export boundary, containing only its
+allowlisted ID, status and check-specific safe failure reason. Retained Status
+reads neither invoke probes nor repeat these events. Degraded diagnostics remain
+internal/telemetry-only; no new endpoint, storage or permission is added.
+The embedding vector is
 discarded, and the temporary research invocation is cleaned up without writing
 research output or other user data. Dan may call the endpoint with his normal
 token; the configured deployment service principal may call only this exact GET
@@ -3795,8 +3915,10 @@ The deploy script explicitly uses ARM **Incremental** mode. In that mode, resour
 - One production environment in `rg-jarvis`; no dev environment.
 - Local development: `npm run dev` in the repository root serves the web app on `http://localhost:5173` against the production backend. Backend changes are tested in CI and take effect after deploy.
 - Migrations run in the backend at startup; GitHub runners never connect to Azure SQL.
-- Development of Jarvis itself is remote only: Copilot cloud agent and Codex cloud deliver PRs, `pr-title.yml` keeps PR titles in the `<task ID>: <summary>` format, `worker-label.yml` labels the tasks Copilot takes, `project-board.yml` keeps the Project Jarvis board's columns in step with the issues, `copilot-ready.yml` takes finished Copilot PRs out of draft, Dan or an explicitly authorized agent merges them when checks pass against the latest `main`, and the deploy workflows release them. Rules: [development workflow](agent-context.md#development-workflow).
+- Until Dan directs otherwise, important Jarvis implementation and review happen in local sessions. The coordinator also owns existing GitHub PRs, exact-head CI, normal releases and both boards; cloud coding workers are not restarted merely to clear review cards. `pr-title.yml` validates canonical titles, `worker-label.yml` maintains cloud-worker ownership metadata, and `project-board.yml` synchronizes the Project board with native issues. A worker-complete badge is not reviewed, merged or deployed acceptance. Normal authorised merges require latest-main reconciliation and passing checks; deploy workflows remain the production delivery path. Rules: [development workflow](agent-context.md#development-workflow).
 - PR-title normalization, linked-issue extraction and PLAN row/issue/dependency parsing preserve full task numbers with two or more digits, including P9-101; boundaries prevent prefix-only IDs, and ranges can cross the two-to-three-digit transition. Each range expands at most 1000 tasks; a larger count raises an actionable ValueError before iteration without capping ID width. Existing two-digit formatting and status/ownership policies are unchanged. Their regression tests run in the existing workflow-script unittest discovery.
+- The PR-title gate reads current same-PR metadata and verifies the event head, then rereads title/body/head/update timestamp before success. API failures and observable races fail closed. The existing normalizer supplies canonical-title suggestions, including linked-issue fallback, but the gate does not write titles because GitHub has no atomic title/head compare-and-set. Save a suggested title to trigger fresh validation; head pushes also trigger the gate. Token permissions and PLAN/status policies are unchanged.
+- Changed reference Python manifests additionally run baseline/candidate compatibility in the existing agent image CI job, after its production image checks. Each isolated Python 3.13 environment resolves the full reference runtime/dev pins, checks every installed version and dependency consistency, runs the offline reference fixtures and performs a synthetic HS256 round trip. This does not alter production Python pins, register the prototype or call a model/provider. Record the selected 3.13 patch version and exact-head job evidence; individual prior pin checks are not combined-manifest evidence.
 - `worker-label.yml` maintains the Copilot worker label; Codex, Dan, and Jarvis set their own labels. `plan-status.yml` reconciles every task's Issue link and Status in `PLAN.md` from GitHub issues, worker labels, and pull requests on issue/PR events, Worker label workflow completion, and manual dispatch. A push changing `PLAN.md` also creates missing task issues and ensures their "Blocked by" links. It commits only Issue- and Status-cell changes to `main`, skips no-op commits, and rebases/retries once after a rejected push. It uses `GITHUB_TOKEN`; compatibility with protected `main` remains unverified.
 - Everything except the bootstrap items is created by Bicep and deployed by GitHub Actions on merge to `main`; no portal changes.
 
@@ -3868,6 +3990,8 @@ The reference lockfile is standalone, outside root workspaces, and contains the 
 P12-05's unregistered `daily/health` library consumes the existing SQL inbox through an explicit one-row invocation and shared owner transaction lock. Additive 0047 records claim generations/deadlines and bounded retry/quarantine; no new queue, pool or scheduler. Pure normalization precedes one atomic domain/lineage/feed/receipt commit. Heartbeat writes only phone-sync state; accepted evidence and processing time remain distinct. Parameterized binary-identity upserts preserve newer accepted snapshots and never delete absent workout history. Existing root owner resolution protects bounded history/minute-HR/detail reads. [Source contract, recovery, limits and gates](../apps/backend/src/daily/health/README.md); no production composition or private source read.
 
 Summary extraction and known heart-rate series share strict BPM unit validation before SQL finalization; incompatible declared units quarantine the entire upload. Legacy summary-only implicit BPM does not assign units to unknown series or reinterpret heart-rate variability.
+
+Body-fat percentage also uses the shared strict known-dimension mapping: string `%`/`percent` stay percent and `fraction`/`1` scale by 100. Raw group/sample/workout declarations are checked before sanitization and alias/fallback selection; unsupported strings and non-string values quarantine atomically even when shadowed. Absent/null/blank units retain existing missing-unit semantics. No new persistence or runtime boundary is introduced.
 
 P12-04's inactive `daily/health-upload` uses the existing backend/pool/SQL. `createSqlHealthUpload` returns disabled dependencies; explicit `buildApp.healthUpload` rehearsal composition installs only the two upload/heartbeat POST paths. Root auth delegates only those opt-in paths to early rate guards and a hashed owner/scope/expiry/revocation verifier; ordinary Jarvis authentication is unchanged. Production `index.ts` has no option/flag/credential registration. [Contract and gates](daily-health-ingestion/README.md); #720 owns processing.
 

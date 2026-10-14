@@ -1,5 +1,203 @@
 # Decisions
 
+## Accept current recovery separately from historical attribution (14 October 2026)
+
+The reviewed diagnostic tree reached main through #831 as `51bda5cb`.
+Its exact-head full CI passed all ten actual jobs and CodeQL all three
+analyses. Normal Deploy `38622011802` passed backend/web and actual smoke;
+the ready revision's bounded enum-only telemetry positively reports
+chat canary, capabilities and GitHub read `ok`. This clears the current
+release blocker for the already-approved non-Daily queue.
+
+Do not infer the previous capability failure's cause from this green run,
+close #820 automatically, or substitute it for original phone/voice/Google
+acceptance. Factory #842 preserved its accepted runtime blobs and all
+309 main task rows, passed its integrated head's ten CI jobs and three
+CodeQL analyses, and merged as `36d72090`. Normal Deploy `38629181064`
+passed Web/deep-link and backend health/smoke. Accept that release without
+claiming the original production trigger, performance or human navigation
+acceptance; issue #813 remains open.
+
+Inactive Daily #818 preserved every reviewed health blob and main task cell
+after current-main integration. Its `af5ac2e7` head passed all ten actual
+CI `38631864211` jobs and three CodeQL `38631863844` analyses, then merged
+normally as `5939fb54`. Normal Deploy `38633353086` passed backend image
+deployment, health and actual smoke at 20:43:27 UTC; unchanged web,
+infrastructure and hosted-agent deployment were skipped. Accept that inactive
+correction release, not activation, original data access or cutover. Google's
+`F3BD79DA` also failed targeted re-review on three residual approval-scope,
+quoted-query intent and native-window faults. Both it and `3073B943` remain
+unapproved and immutable. Corrected freeze `CEC84A7A` is with the same
+independent reviewer; publication remains held pending disposition.
+
+## Consolidate the existing maintenance review queue locally (14 October 2026)
+
+Dan directed local implementation and coordinator ownership of both boards,
+including GitHub publication and release. Consolidate the six already-reviewed
+deliveries into existing #841: reference-only urllib3/multidict/PyJWT pins,
+fake-CDP teardown tests, live PR-title validation and production C# CodeQL.
+Preserve the reviewed source and unrelated current-main blobs; do not create
+another PR, restart cloud coding workers or alter main task-table cells.
+
+Individual Python 3.13.16 compatibility receipts remain individual evidence.
+The combined three-pin manifest needs its separate baseline/candidate receipt.
+Local Python 3.13.15 installation failed before tests on a genuine TLS failure,
+also reproduced with default system TLS; do not disable verification or claim
+combined compatibility. Add conditional reference validation to the existing
+agent CI job, not another coding worker or workflow: separate baseline/candidate
+environments, all pinned distributions checked, pip check, offline fixture tests
+and synthetic HS256 readback. Use the reference's existing Python 3.13 major and
+record the actual patch version; production Python pins and model-free agent
+image checks are unchanged.
+Require one normal integrated-head full CI wave and four actual CodeQL
+analyses, with traced production C# extraction, before guarded normal release.
+Reconcile the six issues/cards only after confirmed delivery. This does not
+establish blanket dependency-advisory clearance or close the separate #830
+advisory/compatibility acceptance.
+
+## Coalesce automatic board updates behind scoped reads (#813, 14 October 2026)
+
+Preserve an in-flight same-scope board read and queue at most one automatic
+follow-up instead of repeatedly aborting it. Keep the 150-ms idle debounce,
+full contract validation, explicit Refresh/Retry, retained snapshots and
+visible failures. An update during the follow-up can queue the next read.
+The request effect owns its timer/queue, so project/backend/token-callback
+replacement, explicit reload and unmount cancel obsolete work together.
+No unconditional retries, longer TTL, lost-update shortcut or separate
+stream/cache is introduced.
+
+The issue resolver reads that same owner's pending/queued/timer state before
+definitively refusing a missing issue or requested task link. Actual-context
+fixtures reproduced both refusals in the 150-ms settlement gap and ordinary
+idle debounce. Wait for the known read within the existing navigation budget;
+do not fetch speculatively or act after the bounded wait expires. Failed reads
+return the visible error rather than an unconfirmed task-link miss.
+
+Actual-component fixtures demonstrated cancellation under repeated updates
+with valid deferred 10-second reads. That controlled proof justifies this
+local correction; it does not identify the original production trigger.
+No production acceptance, release or backend change is implied. The separate
+Status snapshot/limits below remain historical evidence; #798 stays held.
+
+## Keep consolidated recovery diagnostics compatible with live Status clients (14 October 2026; local)
+
+Combine current main `81580919` and the existing #831/#832 diagnostics locally;
+no new micro-ticket or independent publication. PR #832 retains allowlisted
+degraded reasons internally, but already-open web clients accept HTTP reasons
+only for down checks. Keep both HTTP routes legacy-compatible with a
+non-mutating projection. Retain safe degraded reasons in the cached report and
+export `system.smoke_check` through the existing event/field allowlists only
+when an authorised smoke run actually executes. Reject unknown/cross-check
+reasons and provider, prompt, tool or personal payloads at both log outputs.
+No validator weakening, extra probes or release-gate/budget/approval change.
+
+The 17:32–17:34 UTC existing-workspace query selected only exact-format numeric
+model-round metadata and returned no matches. Prior smoke logs record only
+IDs/statuses. Source tracing confirms that `get_system_health/list_capabilities`
+returns the three required categories and that receipt extraction preserves
+them; normal-chat capability instructions are not supplied to the smoke role.
+That absence is a candidate, not a verified failing predicate or root cause.
+Do not change smoke/model instructions or claim recovery without that evidence.
+Local regression checks and the coordinator's normal release remain distinct
+from historical attribution and accepted green production.
+
+The independent review passed the frozen diagnostic code. Qualified local
+validation passes 169 tests in four backend suites, 42 contracts tests and
+affected-file/contracts lint plus contracts build. Five app suites and the
+full backend build remain blocked by absent snapshot dependencies; no missing
+declarations are stubbed and no gates or pins are changed. Local tooling differs
+from the manifest's pinned CI versions. Keep those blocked checks and the
+unknown live failing predicate explicit; neither review nor this local evidence
+clears publication/release or establishes recovered main.
+
+## Reviewed non-Daily release clearance (14 October 2026)
+
+Dan's direct "yes you may" clears the merge and normal-deployment hold for
+independently reviewed, green non-Daily changes, including #846, #845, #842
+and #847. Use the existing serial production pipeline and verify the actual
+deployment; a published PR, successful coding run or green CI is not a release.
+Daily/P12, protected-data, extra live/model/device tests and downstream
+acceptance remain separate. Earlier publication-only holds below are historical,
+not a request for the same approval again.
+
+Factory recovery #846 reached production on `f545976` through Deploy
+`38575246180` at 13:58:22 UTC. Backend and smoke jobs passed; infrastructure,
+web and hosted-agent deployment were correctly skipped. Revision `0000313`
+is ready. Content-free lifecycle evidence at 14:02:53 UTC shows task 12/#837
+in NeedsAttention and task 14/#838 running with an active sandbox. This proves
+the stale Running slot was reconciled and ordinary queued work resumed, not
+that the original Gmail issue was fixed. No manual task-state/capacity override,
+restart, replay or new coordinator-created model turn was used.
+
+## Mobile/Status review publication (14 October 2026)
+
+Dan's "Approved", relayed by the coordinator, authorises commit, push and
+a separate review PR for the accepted fourteen-file mobile/Status patch.
+This supersedes its earlier local-only publication restriction, not any
+merge, deployment, live/device or downstream-work hold.
+
+Keep the eight accepted code/test/CSS files byte-exact. Rebase only additive
+documentation onto actual main and retain every original document byte and
+generated PLAN cell. Use a separately scoped app publisher rather than the
+mixed UI branch. Reuse the qualified clean-main runtime and lint receipts;
+publication preparation is not a new implementation or validation loop.
+Factory #842 remains separate. Neither publication nor these local fixtures
+identify Dan's original production trigger or establish phone/voice acceptance.
+
+## Check the deadline when page application completes (14 October 2026; local)
+
+Review found that route commit and the synchronous page/pane fast return
+could acknowledge success after the captured deadline but before the
+timeout callback ran. Six final actual-App probes replayed against the
+reviewed `759B8BDA` source confirm four late false-success cases; the two
+pre-deadline controls pass. Hold only the expiry callback and advance the
+clock independently: expiry is tested at the boundary, inside the 250-ms
+reserve and after command expiry, without a longer product timeout.
+
+Recheck the captured deadline only when settling success. Reuse the
+deadline refusal, preserve cancellation/supersession/disposal and keep
+the original deadline and reserve. The router may still commit the late
+page; no rollback is promised. This is a locally reproduced completion
+edge, not attribution of Dan's original production turn or live acceptance.
+
+## Acknowledge page commands after shell route commit (14 October 2026; local)
+
+Four offline actual-App cases from home/Settings, on desktop and phone,
+posted `applied: true` before Status's heading and selected rail entry
+existed; two already-on-Status cases passed. Wait for the existing shell's
+route commit rather than treating `navigate` dispatch as completion.
+Keep the six-second ceiling, command expiry and 250-ms reserve; cancellation,
+supersession and unmount dispose the waiter. No extra read, retry, health
+probe, timeout expansion or draft/stream replacement is introduced.
+
+Ten new actual-context cases cover first-ack state and held-route lifecycle.
+This proves and locally corrects a UI edge, not the cause of Dan's original
+turn. The origin/session/target/model decision and acknowledgement sequence
+were not captured. Coordinator-reported active-session routing and stale
+Status capability wording remain separate backend possibilities, not
+attribution or permission to edit another owner's source.
+
+## Keep phone chat joined to the visible viewport (14 October 2026; local)
+
+Use one shell-scoped VisualViewport inset owner for both phone typing
+surfaces, not a keyboard-open flag derived from focus. Actual Workspace
+regression evidence showed that viewport pan alone did not update the fixed
+composer anchor. Insets update before its coalesced measurement, and unchanged
+coordinates do not republish shell state. Keep existing normalized geometry,
+draft ownership, voice layout and two-pixel seam; never save viewport fitting.
+Outside touch dismisses only Message Jarvis without preventing the action.
+Controlled browser geometry is not physical-iPhone/iOS acceptance.
+
+## Status first-turn report supersedes the absent-human-turn gate (14 October 2026)
+
+Dan reports that the ordinary Open Status turn claimed completion without
+visible navigation, then "I dont see it" recovered. The human turn happened;
+first-turn visible acceptance did not pass. This is evidence of the symptom,
+not its cause. Trace application/acknowledgement locally in controlled actual
+contexts after the mobile handoff; do not substitute another live/model turn.
+Earlier unavailable-user notes below remain historical. #798/#797/#792 and
+merge/deployment remain held. Frozen Factory publication is coordinator-owned
+and isolated; its approval does not authorise mixed mobile/Status publication.
 ## P9-116 completed-expiry reconciliation (14 October 2026)
 
 Use the existing bounded Factory reconciler for completed `idle_expired`
@@ -22,6 +220,39 @@ Full CI exposed `current` as a reserved SQL Server alias in the new identity
 fence. Quote it as `[current]`, retaining the typed result and predicate.
 The corrected revision must pass the real isolated SQL suite and full CI;
 mocked dispatcher tests did not exercise that SQL parser.
+## Repository C# CodeQL uses a traced production build (14 October 2026)
+
+Add C# to the existing advanced CodeQL matrix in manual build mode. Initialize
+CodeQL before the SHA-pinned setup action selecting .NET 10.x and Release build of the production
+`Jarvis.PcBridge` application; its project reference brings
+`Jarvis.PcBridge.Core` into the same traced build. This preserves the existing
+CodeQL policy and avoids relying on test-only builds or an untraced prior build.
+Only source compiled by the traced production build is in scope; generated
+source is covered only when surfaced to that compiler invocation. Local
+validation should report both production assemblies. Verify a remote extraction
+from the C# database's nonempty relations/source archive and its extracted-file
+and code-metric diagnostics, then confirm a successful `/language:csharp` upload.
+Associate each result with its PR source head and analyzed merge SHA; neither an
+upload nor zero alerts proves complete generated-code coverage or no defects.
+## 2026-10-14: P9-113 live PR-title validation
+
+- Validate current same-PR title/body from the API, bound to the event's PR
+  number/repository/head, instead of replaying immutable event text. Reuse the
+  existing normalizer and first same-repository linked-issue lookup.
+- Fail closed on API/schema errors and changes observed by a final metadata
+  read. Keep token permissions unchanged and trigger validation on head pushes.
+- Do not automatically write normalized titles: GitHub title edits do not
+  provide an atomic title/head compare-and-set guard. Fail with the canonical
+  suggestion so a stale job cannot overwrite a concurrent edit. This deliberately
+  replaces automatic correction, not normalization rules or missing-ID failures.
+  The final read cannot atomically fence subsequent GitHub check publication;
+  later edits/pushes require their own gate evidence.
+- Evidence: the offline test executes the workflow's actual gate entry with an
+  old unusable event and a canonical same-head API fixture. It fails against the
+  old workflow and passes with live reads. Fixtures also cover invalid current
+  metadata, API failures, identity/head mismatch and observable races without
+  allowing any title-write request. Live exact-head CI/CodeQL evidence is tracked
+  in the PR, separately from local proof.
 
 ## #813 bound Factory board source reads (13 October 2026)
 
@@ -47,6 +278,52 @@ successful requests (median 10.065 s, p95 12.915 s, maximum 19.211 s) included
 cache hits and is not a cold-only cohort. This is not a diagnosis of #811's
 separate historical 502s.
 
+## #813 Factory board diagnostic follow-up (14 October 2026)
+
+The released latency acceptance for backend `75a3cbe` / Deploy `38507005838`
+failed: two completed board reads took 9.661 s and 10.365 s, with no accepted
+improvement against the prior mixed-cache median of 10.065 s. One actual rail
+entry had 14 client fetch starts, two HTTP 200 completions, and twelve aggregate
+abort errors. API/header/rendered placement and the 100-card Done cap reconciled
+separately; those checks do not establish a latency improvement.
+
+Add diagnostics only; do not change caching, generations, source concurrency,
+retry, client behavior, or the 502 contract. Log bounded monotonic durations at
+the existing project, token, source, task, release, and response work
+boundaries, correlated by request ID. Concurrent source/task/release durations
+are independent wall times and overlap. The summary cache elapsed measurement
+covers the actual awaited cache operation: lookup for a hit, wait for a shared
+caller, and the complete load for its owner; interpret it with `cachePath`, not
+as a separate phase. Phase events indicate that their instrumented boundary
+executed; an absent event cannot establish skipped work because telemetry may
+be missing, sampled, cropped, or outside the observed window. The summary's
+outcome and reply status describe the handler/source-computation decision, not
+HTTP completion or client receipt; correlate the separate `request.completed`
+server-side `onResponse` observation, which also does not prove client receipt.
+Durations over 60 seconds omit the value and set a censored marker instead of
+clipping; invalid clock values are marked unavailable. An observed cache path
+plus stale state distinguish cache hit, shared wait, source load, and stale
+fallback. Keep phase/event fields explicitly
+allowlisted and omit content, credentials, URLs, query strings, and arbitrary
+errors. At the existing publication boundary, log only bounded
+invalidation origin, project/version when known, and webhook request ID when
+available; task-event prelookup invalidation has only its `all_projects` scope.
+
+The bounded production window (03:49:30–03:51:10 UTC, healthy revision 312) after
+#814 had 546 allowlisted rows, two board HTTP 200 completions at 9.661 s /
+10.365 s, 49 webhook HTTP 202, 40 Now HTTP 200, and 62 database-status HTTP 200
+responses. Thirteen GET starts were route-unclassified with no completion in
+the window; they do not prove receipt of every client fetch start. No selected
+request/Factory failure event appeared, which does not establish that client
+aborts did not occur. No captured SSE versions, matching invalidation reasons,
+or per-attempt abort times were available. The separate app-scoped query
+returned zero matching rows. A validated-update/debounce/reload/abort path and
+overlapping backend cache generations remain possible mechanisms, not
+established historical causes. Browser/backend clock domains are not assumed
+synchronized. The diagnostics have not yet been deployed or observed in
+production; this follow-up is not evidence that performance is fixed and does
+not diagnose #811's historical 502.
+
 ## Status reads recorded evidence without running canaries (14 October 2026)
 
 P9-101/#799 uses the existing owner-only `/status` contract and shell
@@ -65,6 +342,39 @@ check with its timestamp, not a claim that the latest release passed.
 No backend, contract or dependency change. Local synthetic browser
 checks are not authenticated production or physical-phone acceptance.
 
+The coordinator accepted the bounded signed-in read-only snapshot on
+`1590a1c3`, normal Deploy 38497362534: real Settings-to-Status rail navigation,
+HTTP 200 initial read and ordinary Refresh, accepted HTTP 204 `status`/
+`page-status` metadata/readback and one persistent session/stream. All 26 rows
+rendered; retained smoke was 15/15 OK at 2026-10-14T01:55:08.275Z with stale
+labels, not a new probe or a deployment association. Missing PC versions
+remained "Not reported"; original Note/native Chrome/drafts/settings were
+untouched. [Exact evidence and limits](agent-context.md#read-only-status-page-14-october-2026).
+Dan subsequently performed the ordinary Status turn: it claimed success
+without visibly navigating, then "I dont see it" recovered correctly.
+First-turn live navigation acceptance failed; no cause is established.
+This is no longer an absent-human-turn gate. Recovery does not establish
+acceptance, and an agent-created turn must not substitute for Dan's evidence.
+Broker/voice and physical-phone acceptance remain unproven; #799 remains open
+and #798 held, followed separately by #797 and #792.
+The original failed smoke turn's cause remains unconfirmed under #820;
+diagnostic-only #821 and the subsequent green run are not proof of a repair.
+
+## P9-107 smoke reason retention follow-up (14 October 2026)
+
+The prior Status-page decision above records its original UI-only scope. This
+follow-up preserves fixed per-check smoke reasons for down/degraded results.
+The allowlist includes shared `agent_error` and `timeout` outcomes for each
+chat acceptance check, while rejecting arbitrary provider text and reasons
+belonging only to another check.
+
+Local proof on this branch: exact-reader tests cover real missing-agent,
+controlled stream failure and timeout results, ordered complete report shape,
+contract validation, privacy, and timeout aborts. Backend and contracts checks
+are run for the current head; full exact-head CI and CodeQL status must be
+confirmed on the corrected commit. The original deployed failure cause remains
+unknown, and no production recovery is claimed.
+
 The coordinator authorised the smallest coupled release-gate correction in
 #815 after the title bot truncated P9-101 to P9-10. Normalization, linked-issue
 extraction and PLAN row/issue/dependency parsing preserve full task numbers
@@ -72,8 +382,8 @@ with at least two digits and an ID boundary. Retain two-digit formatting,
 WIP/bracket/fix-main/docs behavior and all existing status/ownership policies;
 the separate reopened-issue policy is addressed by #817. Existing
 Python CI discovers the title and PLAN regressions; no other workflow change
-or new tooling. Restore the correct title only after pushing the fix and
-rerun exact-head gates.
+or new tooling. The correct title was restored after pushing the fix and
+exact-head gates passed before #815 merged.
 Cap each dependency-range expansion at 1000 tasks and fail with an actionable
 ValueError before iteration. This replaces the old incidental two-digit
 resource bound without capping valid ID width; no established script bound
@@ -91,6 +401,12 @@ acceptance gates, so open acceptance issues remain open and their status cells
 stay workflow-owned.
 
 ## P12-05 inactive SQL health processing (13 October 2026)
+
+**14 October release authority:** in DailyMigrationMain, Dan approved releasing inactive PR #818 after updating to latest main and passing required checks and review. He also directed that routine CI/CD should flow without repeated release approvals. Already-authorized inactive P12 scopes and corrections may therefore proceed through independent review/merge and normal main-only deployment without a fresh human clearance per PR. Keep exact-head checks, latest-main containment, branch protections, no own merge and issue/dependency truthfulness. Both cloud workers remain idle; this grants no new worker/scope, activation, source/private-data/credential access, paid resource or device change. Existing protected-backup, parity, final-delta and rollback/cutover gates are unchanged.
+
+14 October follow-up to [automatic review finding 4265321733](https://github.com/DanAakesen/jarvis/pull/808#discussion_r4265321733): #808 merged with a reproduced body-fat unit fallthrough. Move its existing `%`/`percent`/`fraction`/`1` representations into the shared strict known-dimension mapping, preserving absent-unit unknowns, zero/missing values and generic unknown dimensions. Add synthetic normalization and SQL canonical-readback/quarantine regressions; no schema, composition, source/data/device or activation changes. This is a separate #720 follow-up from fresh main, not a rewrite of merged #808; exact-head CI and independent review remain required.
+
+[PR #818 review 4271913189](https://github.com/DanAakesen/jarvis/pull/818#discussion_r4271913189) found non-string declarations disappearing through text fallback. Validate raw body-fat group/sample/workout `units` and `unit` before sanitization or alias selection, including empty groups and shadowed units. Numeric `1` is malformed, not the string unit `1`; null/undefined/blank remain missing. Synthetic normalization and atomic SQL quarantine regressions cover the correction; fresh exact-head CI/review still gate release. Other metric dimensions and runtime/activation boundaries are unchanged.
 
 The [local coordinator release for #720](https://github.com/DanAakesen/jarvis/issues/720#issuecomment-6154043444) follows #805's independently reviewed, CI-tested and deployed inactive SQL acceptance. Reuse that inbox/pool/owner lock. A committed claim generation bounds retries; normalization occurs outside the transaction, then domain rows, ingestion lineage, applicable feed freshness and processed receipt commit together. Heartbeat is a separate signal. Retain raw evidence and quarantine rather than deleting poison inputs or retrying forever. No timer, dispatcher, production registration or credential change.
 

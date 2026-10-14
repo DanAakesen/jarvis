@@ -1,5 +1,36 @@
 # Product
 
+## Mobile/Status review publication (14 October 2026)
+
+Dan approved commit, push and a separate review PR for the accepted phone
+composer and page-acknowledgement correction. The requirements below are
+unchanged; approval supersedes earlier local-only publication holds, not
+merge, deployment or live/device acceptance gates. No backend or Factory
+change belongs to this publication.
+
+## Page navigation acknowledgement correction (14 October 2026; local)
+
+A page-navigation command may acknowledge success only after the requested
+route has committed in the shell, not merely after requesting the switch.
+Status can acknowledge its mounted loading/error page without waiting for
+health data. Cancellation, supersession, disposal and the existing command
+deadline must settle truthfully; preserve drafts and the shared stream.
+Successful completion must recheck the captured deadline, including an
+already-current page or pane; a delayed timeout callback is not an expiry
+check. A late route may still appear, but it must not acknowledge success.
+Local evidence of an acknowledgement race does not establish the cause of
+Dan's reported first-turn failure or release acceptance.
+
+## Phone typing keyboard correction (14 October 2026; local)
+
+The chat frame and composer must stay joined when the phone keyboard opens,
+the visible viewport pans, or iOS Hide Keyboard restores space without
+blurring the input. An outside touch dismisses Message Jarvis without
+swallowing the tapped action; composer/menu controls and other editors keep
+their own focus behaviour. Preserve unsent text and saved chat geometry.
+This correction changes neither voice nor backend behaviour and is not a
+production or physical-iPhone acceptance claim.
+
 ## Remaining UI release (13 October 2026)
 
 Dan authorised "Deploy everything. so i can test live." This releases the
@@ -102,7 +133,7 @@ Only phase 1 is in scope now, extended by P7 (Jarvis everywhere: web and voice c
 | **Jarvis** | Jarvis is the app and its main page. Dan talks to Jarvis in one continuous conversation (chat and voice), with saved messages and streamed chat replies. Chat turns save the source message before invoking the hosted agent; only a completed reply is saved, and tool calls link to that source message. Dan can discuss Jarvis's code and features through read-only repository tools; files and issues are untrusted data, and Jarvis proposes tracked code changes conversationally, creating a task only after Dan confirms. |
 | **Notifications and approvals** | Notifications appear in the authenticated Now feed; gated actions await Dan's single-use approval in the browser. When an English browser voice session is active, Jarvis speaks concise task-status and pending-approval notices. Teams and Microsoft 365 integrations are not used in Dan's personal tenant. |
 | **Board** | Kanban-style task view: add, start, steer, pause, resume, cancel, and follow tasks. |
-| **Updates** | Events update state and progress live, without manual refresh. |
+| **Updates** | Events update state and progress live, without manual refresh. Automatic board updates preserve an in-flight read in the same scope and coalesce into one follow-up; project, backend, identity and unmount changes still cancel obsolete reads. |
 | **Assignment** | One active coding agent per task. |
 | **Plan tracking** | The repository's `PLAN.md` is the shared task-status view, with each task linked to its GitHub issue. An open issue with a worker label (`Codex`, `Copilot`, `Dan`, or `Jarvis`) or an open linked PR sets In progress (assignees are ignored), completed tasks set Complete, and all other tasks, including issues closed without completion, reset to Not started unless Blocked is set by hand. New task rows get a labelled issue with dependency links. |
 | **Parallel work** | Dan controls concurrency across projects; capacity depends on provider limits and compute. |
@@ -465,6 +496,12 @@ The board reads the canonical `GET /factory/board?project=<id>` snapshot for one
 
 Jarvis can navigate to an issue by a positive whole `issueNumber` on the selected project's Factory board. An exact `#number` search clears other local filters and expands the issue's column, so the display cap cannot hide the requested card. A real linked task opens its existing window; a task-free issue stays on the board with its title link focused. Unknown, unavailable, cancelled or still-loading targets return a reason rather than acknowledging a route change as success. Navigation waits at most six seconds and stays within the command expiry; ordinary board loading may continue without a late focus or window action. Notes' unsaved-draft guard and task-ID navigation remain intact.
 
+An older snapshot cannot definitively exclude an issue or its requested task
+link while the selected scope has a pending read or known automatic follow-up,
+including the idle debounce. Navigation waits within its existing budget,
+without starting a speculative read; a failed follow-up returns the visible
+read error rather than a definitive task-link miss.
+
 GitHub issues are the single backlog and source of truth; the Software Factory and Copilot execute them, with Codex as the default for Jarvis-raised work. Dan can start an existing issue with the `Jarvis` label, the `start_issue` tool, or the authenticated Factory API. Duplicate starts reuse the active task, and task progress links back to the issue without copying code or issue content into comments.
 
 Jarvis exposes the operations its installed GitHub App actually permits. It reads and caches the installation permission map at runtime, reports missing grants by name, and scopes each API token to the permission required by that operation. Read tools cover issue contents/comments/search, pull requests and comments, workflow runs/jobs, branches, commits, comparisons, labels and milestones. Write tools update issues and pull requests, comment/review/merge, mark PRs ready, create branches, dispatch/rerun workflows, write branch files and create labels. These tools accept any repository where the App is installed and default to Jarvis's own repository. Ordinary writes execute when Dan asks; closing issues, merging PRs, writing the default branch and public-repository publication require a later simple approval word, never a generated phrase.
@@ -785,6 +822,8 @@ Dan decided that GitHub issues are the single backlog. When Dan asks Jarvis to c
 P12-05 adds an inactive, explicitly invoked health processor over the existing SQL inbox: metrics/sleep/workouts/detail/minute HR, canonical physical units, Copenhagen dates, exact session/checksum replay and bounded retry/quarantine. Domain changes, ingestion lineage and processed-feed freshness commit together; phone heartbeat stays separate. Empty workout exports cannot erase history, missing values stay unknown, and native nutrition cannot feed back into canonical meals. Owner history/detail reads are bounded and unregistered. No scheduler, source import, live device changes or activation; protected/live parity remains gated.
 
 Heart-rate summaries and series must validate declared units consistently. Unsupported rate units quarantine without changing processed freshness; only established legacy summary fields imply BPM when their unit is absent. Missing samples and summaries remain unknown, not inferred.
+
+Body-fat percentage accepts string `%`/`percent` or `fraction`/`1` and normalizes to percent. Unsupported strings and non-string unit declarations quarantine even when another unit could override them. Absent/null/blank units remain missing; without a supported inherited unit they stay unknown without inferred conversion. Preserve zero, missing values and raw evidence.
 
 P12-04 reuses the existing backend and SQL for an inactive Health Auto Export upload/heartbeat boundary. Owner-bound hashed, scoped, revocable device credentials remain separate from human login. An 8-MiB upload is accepted only after the SQL raw inbox transaction commits; SQL outage/capacity returns 503 for the phone to retry. Exact sessions/checksums deduplicate and changed bytes conflict. The bounded inbox retains raw evidence without automatic deletion; processing/approved compaction belong downstream. No separate Blob/Queue/host or new resources are needed. Accepted and processed freshness stay distinct. Source/device settings and production enablement remain unchanged; protected/live/phone acceptance remains gated.
 

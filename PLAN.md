@@ -1,5 +1,66 @@
 # Project plan
 
+## Mobile/Status review publication (14 October 2026)
+
+Dan approved the reviewed #799/mobile correction for isolated commit,
+push and a separate review PR. This supersedes the pre-approval publication
+holds recorded below; merge/deployment and #798/#797/#792 remain held.
+The publication artifact preserves the eight accepted code/test/CSS files
+byte-for-byte and adds documentation to main `439a000` without replaying
+an older PLAN table. All actual generated cells remain unchanged, including
+P9-101's current `In progress` cell.
+
+The retained clean-main runtime receipt records 258 passing tests across
+nine files, strict types and a scratch build on available tools, not pinned
+CI. Main's two generated PLAN updates since that receipt's `b787788` base
+restored the original cell; implementation and configuration are unchanged.
+The seven-file lint receipt remains applicable by source/config equivalence;
+the two LF-normalised hook files have distinct raw hashes and CSS is excluded.
+No tests or implementation were repeated for publication preparation.
+Next: the separately scoped publisher applies this artifact and opens the
+review PR. Factory #842, merge/deployment and live acceptance stay separate.
+
+## Page completion deadline review correction (14 October 2026; local)
+
+The bounded review follow-up confirms late success on the reviewed applier:
+four failing expiry probes and two passing pre-deadline controls. Recheck the
+captured deadline at successful waiter completion and synchronous fast return,
+without altering cancellation, refusals, the timeout or router ownership.
+Six final probes and all five directly affected suites pass 149 assertions;
+strict types and a scratch production build pass. Final exact-hash scoped
+lint passes seven TS/TSX files with zero errors/warnings; CSS is excluded.
+The local correction is complete. Current-main integration is artifact-only,
+retaining main's documentation and workflow cells, not changing a checkout.
+
+The earlier nine-file/252-test and lint evidence below is preserved as the
+previous revision, not repeated or relabelled as a fresh full run. This work
+does not establish Dan's original trigger, phone/voice acceptance or rollback.
+Factory #842 remains separate. No publication, merge/deployment, live call or
+release of #798/#797/#792 is authorised.
+
+## Phone keyboard correction and next Status trace (14 October 2026; local)
+
+The user-directed mobile correction keeps chat/composer joined through
+keyboard resize, viewport pan, outside touch and focused Hide Keyboard.
+Saved geometry and draft ownership are unchanged. Scoped local checks and
+controlled browser geometry do not establish physical-phone acceptance;
+this work has no mixed-branch publication or deployment permission.
+
+The subsequent bounded #799 trace reproduced an acknowledgement-before-route-
+commit edge in four actual-App cases; already-on-Status cases passed. A local
+route-commit waiter corrects that edge, with ten new first-ack/lifecycle cases.
+Nine affected test files pass 252 assertions; types/build and final seven-file
+TypeScript/TSX scoped lint pass with zero errors/warnings. CSS has no existing
+lint configuration and is excluded. The local implementation is complete;
+Dan's original cause and live acceptance remain unestablished. His human turn happened, the
+first claim lacked visible navigation and his follow-up recovered.
+Do not send another live/model turn or start held #798, #797 or #792.
+The frozen #813 files/patch and mobile-only source snapshot remain separate;
+no mixed publication, merge or deployment is authorised.
+The coordinator reports isolated Factory [#842](https://github.com/DanAakesen/jarvis/pull/842)
+open at `281bd1a`, excluding these mobile/Status changes; this grants no
+publication or live acceptance for the separate coupled correction.
+
 ## Danish voice Settings correction (13 October 2026)
 
 P9-97/#790 replaces the misleading Harper selector with read-only Jeppe.
@@ -95,6 +156,9 @@ Next: camera-only PR, coordinator merge on green CI, then loading recovery and
 Phase 1 delivers the Software Factory. Requirements and page specifications are in [PRODUCT.md](PRODUCT.md); the system and stack in [docs/architecture.md](docs/architecture.md); the data model in [docs/data-model.md](docs/data-model.md); decisions and learnings in [docs/decisions.md](docs/decisions.md).
 
 ## Current focus
+
+- **Current main release (14 October):** Diagnostics #831 reached accepted main `51bda5cb` through full CI, CodeQL and normal Deploy `38622011802`; revision `0000315` has positive safe canary/capabilities/GitHub-read telemetry. Factory #842 then passed all ten actual CI jobs and three CodeQL analyses, merged as `36d72090`, and passed normal Deploy `38629181064`: Web, deployed deep link, backend health and actual smoke; unchanged backend/infrastructure/hosted-agent deployment was skipped. Inactive Daily #818 subsequently passed all ten CI `38631864211` jobs and three CodeQL `38631863844` analyses at `af5ac2e7`, merged as `5939fb54`, and passed normal Deploy `38633353086`: backend image, health and actual smoke at 20:43:27 UTC; unchanged web/infrastructure/hosted-agent deployment was skipped. This establishes the current healthy release, not activation, historical attribution or original performance/private/phone/voice acceptance. Issues #820, #813 and #720 remain open.
+- **Next delivery snapshot (14 October):** The six existing maintenance review deliveries are consolidated locally into existing #841 against accepted `5939fb54`, without restarting cloud coding workers. Their integrated head still needs full CI and four actual CodeQL analyses. Local combined reference-pin validation stopped before tests on a genuine TLS failure; the existing agent CI job now checks baseline and combined manifests in separate Python 3.13 environments when reference manifests change. That hosted check must pass; individual receipts do not prove the combination. Google freeze `F3BD79DA` failed targeted re-review on three residual faults; corrected immutable freeze `CEC84A7A` has been sent to the same independent reviewer, with publication held pending disposition. No activation, original Daily/data change, private provider turn, blind retry, speculative model change or new issue/PR is authorised.
 
 - **P12-10 (#725):** #746 merged as an inactive intermediate implementation; three feed-boundary corrections continue on `codex/p12-10-feed-boundary-corrections` / draft #754. Shared range validation precedes refresh/storage/provider/model work; numberless deliveries require matching nonempty delivery details; full validated SENT labels preserve alias direction before DTO truncation. Existing resumable scans, protected semantic adapter, exact Danish selectors/keys, owner-local persistence and source serialization safeguards remain intact. Synthetic/isolated SQL regressions and exact-head full CI precede independent correction review; #754 remains draft until explicit coordinator readiness release. CalendarList consent, deployed identity/model/provider parity, private backup/import/reconciliation and device gates remain open. No registration/OAuth/resource changes; #725 stays open/native dependencies intact.
 
@@ -736,11 +800,21 @@ The coordinator authorised the coupled normalizer/linked-ID/PLAN-parser
 width and boundary correction with existing-style regressions in the same
 PR. Each dependency range is capped at 1000 expansions, with an actionable
 pre-iteration failure for larger inputs. All 57 script tests and Bash syntax
-pass locally; status/ownership policies are unchanged. The new head needs
-fresh exact-head CI before merge.
+pass locally; status/ownership policies are unchanged. Final head `8c0f2cb2`
+passed exact-head gates; #815 merged at `6e7d85dd`.
 Main through #808 (`446ce371`) is integrated with both scoped documentation
 additions preserved; health remains inactive without new live acceptance.
-Status release/authenticated acceptance remains pending.
+Initial Deploy 38491884715 failed semantic smoke after rollout; the original
+failed turn's cause remains unconfirmed under #820. Diagnostic-only #821's
+normal Deploy 38497362534 on `1590a1c3` passed all six jobs and fifteen actual
+smoke checks. The coordinator accepted the bounded signed-in rail navigation,
+Status/readback and ordinary Refresh snapshot, with one persistent session
+and no new stream requests. Live broker/chat/voice acknowledgement and
+physical-phone acceptance are not inferred. Dan subsequently reported that
+the ordinary Status turn claimed success without visible navigation; the
+"I dont see it" follow-up recovered. First-turn live navigation acceptance
+failed, with no established cause; #799 remains open and #798 remains held.
+[Exact evidence and limits](docs/agent-context.md#read-only-status-page-14-october-2026).
 
 ### P10 — GitHub backlog as source of truth
 Goal: GitHub issues are the single backlog. The Software Factory (worker label `Jarvis`, default agent `codex`) and Copilot (`Copilot`) are executors that pick issues up; the Factory board shows the same columns as the GitHub Project. Decided by Dan on 8 October 2026.
@@ -770,8 +844,27 @@ fresh, valid complete board; all six columns and visible #790/#792/#793 cards
 render as Done/Ready/Done, matching fresh Project 2. The rendered-board gate
 passes. This does not diagnose a root
 cause or establish sustained backend recovery. Next UI work
-after the navigation follow-up: #799 is implemented locally with release/live
-acceptance pending; #798, #797, then #792 remain separate.
+after the navigation follow-up: #799 is released with bounded signed-in
+rail/readback/Refresh acceptance, but Dan's first-turn live Status navigation
+failed and recovery does not satisfy that criterion. #799 remains open;
+#798 is held, followed separately by #797 and #792.
+
+Separate local #813 consumer correction (14 October): automatic same-scope
+invalidations now queue behind the active read and coalesce into one
+follow-up, including late updates during that follow-up. Deterministic
+actual-component regressions cover deferred reads, failure/recovery and
+scope/disposal. A coupled regression also proved premature missing-issue
+and task-link refusals between an older snapshot and its queued follow-up.
+The resolver now includes pending reads/queued work/idle debounce in its
+loading decision, without extra reads or an expanded navigation budget.
+The refreshed eight-file suite passes all 181 tests; controlled browser
+checks are synthetic only. The earlier
+released two roughly ten-second completions establish no accepted speed
+improvement, and the original triggering event remains unknown. No commit
+or release was made during the frozen local review. Dan subsequently
+authorised this correction's commit, push and review PR only, not merge or
+deployment; #813 production cadence/performance acceptance, #798, the
+main-release gate and P12 holds remain unchanged.
 
 ### P11 — Jarvis-raised fixes
 A rolling intake phase. When Dan asks Jarvis to change its own code or a project's code, Jarvis drafts the issue, confirms it with Dan and creates it as `P11-NN` (P10-03). Rows are added here as the issues are created.
@@ -909,9 +1002,13 @@ Proposals only; an idea enters a phase only when Dan accepts it into scope.
 | Backend request rate limiting | Limits authenticated and unauthenticated request rates at the root authentication hook (CodeQL `js/missing-rate-limiting` on `apps/backend/src/auth/hook.ts`, raised during P4-01). | A new dependency (for example `@fastify/rate-limit`) and limits that must not throttle Dan or the Jarvis agent; one replica keeps in-memory counters sufficient. | Before the backend URL is public (P0-11), or when abuse or cost appears. |
 ## P12 — Daily migration to Jarvis
 
-Current released slice: **P12-05 (#720)** inactive synthetic SQL processing/read models on `codex/p12-05-health-processor`, [claimed locally](https://github.com/DanAakesen/jarvis/issues/720#issuecomment-6154043444) after #805's independent review, full combined-main CI and normal deploy/smoke passed. Both cloud workers remain idle. Migration 0047 adds bounded retry/quarantine evidence to the existing inbox; normalization and atomic domain/lineage/feed commits preserve identities, empty history and truthful freshness. No scheduler, production composition, source/device/resource/grant/secret change or activation. Exact-current-main full CI/isolated SQL and independent review remain release gates. #719 was externally closed, but live/private/device acceptance remains unverified; issue closure is not that evidence. #725 still needs actual CalendarList consent, and #717/#741 remains the protected backup blocker. Preserve others and workflow-owned Status columns.
+Current released slice: **P12-05 (#720)** inactive synthetic SQL processing/read models delivered in #808, with its [existing local claim continued](https://github.com/DanAakesen/jarvis/issues/720#issuecomment-6157857536) for the narrow body-fat unit correction on `codex/p12-05-body-fat-units`. Both cloud workers remain idle. Existing migration 0047 adds bounded retry/quarantine evidence to the inbox; normalization and atomic domain/lineage/feed commits preserve identities, empty history and truthful freshness. No scheduler, production composition, source/device/resource/grant/secret change or activation. Exact-current-main full CI/isolated SQL and independent review remain follow-up release gates. #719 was externally closed, but live/private/device acceptance remains unverified; issue closure is not that evidence. #725 still needs actual CalendarList consent, and #717/#741 remains the protected backup blocker. Preserve others and workflow-owned Status columns.
 
 PR #808's review follow-up corrects heart-rate unit validation across summaries and series. Synthetic regressions cover BPM aliases, legacy implicit summaries, missing values and SQL quarantine/readback. Fresh full CI and independent exact-head review remain required; no downstream scope is released.
+
+14 October: #808 merged; its automatic review exposed an unsupported body-fat unit fallthrough. The existing #720 claim continues on `codex/p12-05-body-fat-units` from fresh main for only strict body-fat unit handling and synthetic normalization/SQL regressions. #818's review also found malformed declarations lost before mapping; raw unit checks now precede sanitization and fallback selection. Missing/null/blank-unit semantics and retained evidence stay intact. No next scope or activation; follow-up full CI and independent review are required.
+
+14 October release clearance: Dan approved inactive #818 after latest-main integration, required checks and review. Already-authorized inactive P12 scopes/corrections need no repeated human release approval; independent merge and normal main-only deployment remain gated by exact-head checks, current main and protections. This does not release another scope, activate processing or satisfy private/live/device/backup/rollback acceptance. Both cloud workers remain idle; #720 stays open for its outstanding acceptance.
 
 Standing requirement: downstream React/rich UI must fully match current Jarvis DESIGN.md/styles.css/shared components/theme/density/motion and native phone/workspace patterns. No legacy Daily skin or second shell/theme. Generated theme context stays within existing bridge permissions. UI/browser/mobile acceptance is enforced in #730/#731/#732/#726; backend work does not start blocked UI tasks. Execution proceeds through approved coordinator dependency/gate releases; #717's protected export acceptance stays open.
 

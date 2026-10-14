@@ -221,8 +221,10 @@ describe('post-deploy chat acceptance suite', () => {
         ? { text: 'The image was captured at 12:34.' }
         : undefined));
 
-    await expect(suite.chat_identity!()).resolves.toMatchObject({ status: 'degraded' });
-    await expect(suite.chat_no_timestamp!()).resolves.toMatchObject({ status: 'degraded' });
+    await expect(suite.chat_identity!()).resolves.toEqual({ status: 'degraded', reason: 'identity_reply' });
+    await expect(suite.chat_no_timestamp!()).resolves.toEqual({
+      status: 'degraded', reason: 'capture_time_invented',
+    });
     await expect(suite.chat_canary!()).resolves.toMatchObject({ status: 'ok' });
   });
 

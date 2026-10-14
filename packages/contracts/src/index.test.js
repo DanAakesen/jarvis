@@ -246,6 +246,19 @@ test('system smoke contract requires the ordered allowlisted checks and sanitize
       : entry),
   };
   assert.equal(isSystemSmokeStatus(failedAgentContract), true);
+  const degradedIdentity = {
+    ...report,
+    entries: report.entries.map((entry, index) => index === systemSmokeCheckIds.indexOf('chat_identity')
+      ? { ...entry, status: 'degraded', reason: 'identity_reply' }
+      : entry),
+  };
+  assert.equal(isSystemSmokeStatus(degradedIdentity), true);
+  assert.equal(isSystemSmokeStatus({
+    ...degradedIdentity,
+    entries: degradedIdentity.entries.map((entry, index) => index === systemSmokeCheckIds.indexOf('chat_identity')
+      ? { ...entry, status: 'ok' }
+      : entry),
+  }), false);
   assert.equal(isSystemSmokeStatus({
     ...failedAgentContract,
     entries: failedAgentContract.entries.map((entry, index) => index === agentContractIndex

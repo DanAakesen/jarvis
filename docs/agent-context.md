@@ -1,8 +1,208 @@
 # Agent context
 
+## Accepted recovery and Factory release (14 October 2026)
+
+Diagnostic #831 merged normally as `51bda5cb` after independent review,
+all ten actual jobs in CI `38618143799` and all three CodeQL analyses.
+Normal Deploy `38622011802` passed backend, web and actual smoke checks;
+unchanged infrastructure and hosted-agent deployment were skipped.
+Backend revision `0000315` is ready with the new image. The bounded
+19:22–19:24 UTC revision-only log query returned 314 backend rows and
+15 smoke events; chat canary, capabilities and GitHub read each reported
+`ok` once at 19:23:18 UTC. No provider/prompt/result text was retrieved.
+This establishes the current accepted release, not the historical cause
+or original phone/voice/Google acceptance. #820 remains open.
+
+The owned #842 integration preserved its two accepted Factory UI blobs
+and all 309 main task rows. Head `8c630f7e` passed all ten actual jobs in
+CI `38625737093` and all three CodeQL analyses, then merged normally as
+`36d72090`. Normal Deploy `38629181064` passed Web, its deployed deep-link
+check, backend health and actual smoke at 20:09:21 UTC. Backend,
+infrastructure and hosted-agent deployment were correctly skipped.
+This accepts the asset release, not the original production trigger,
+performance or human first-turn navigation; issue #813 remains open.
+
+Next-delivery snapshot: #818's independently reviewed inactive body-fat
+correction preserved every reviewed health blob and main task-table cell
+after integrating `36d72090`. Head `af5ac2e7` passed all ten actual jobs in
+CI `38631864211` and all three CodeQL `38631863844` analyses, then merged
+normally as `5939fb54`. Normal Deploy `38633353086` passed backend image
+deployment, backend health and actual smoke at 20:43:27 UTC; unchanged web,
+infrastructure and hosted-agent deployment were skipped. This accepts the
+inactive correction release, not registration, activation, original Daily/data
+or private/device acceptance; #720 remains open.
+The six existing maintenance deliveries (#822/#823/#824/#834/#836/#841)
+are consolidated locally against that main for existing #841, with reviewed
+source retained and all main task cells protected. Local parser/CodeQL
+regressions pass six tests on Python 3.13.15. Individual Python 3.13.16
+reference-pin receipts are not evidence for the combined three-pin manifest.
+The local baseline install failed on TLS before tests; the candidate was not
+started and certificate checks were not weakened. The existing agent CI job
+now detects changed reference manifests, uses the existing SHA-pinned setup
+action for the reference's Python 3.13 major, and checks baseline/candidate
+in separate environments: full pin readback, pip check, offline tests and a
+synthetic HS256 round trip. The selected patch version is reported, not assumed.
+The integrated head requires that check, normal exact-head full CI and four
+actual CodeQL analyses before release. No cloud coding worker is restarted
+and no extra PR is created.
+Google's `F3BD79DA` freeze failed targeted re-review on three residual
+approval-scope, quoted-query intent and native-window faults. The same
+local author is correcting them; that freeze remains immutable and
+unapproved. Corrected immutable freeze `CEC84A7A` is with the same independent
+reviewer; publication remains held pending disposition. No Google release is
+accepted.
+
+## Consolidated main recovery (14 October 2026; local)
+
+Dan directed important work to local sessions and deferred the proposed Factory
+release-policy redesign. This recovery combines existing PR #831 (`291cca34`)
+and #832 (`85e55164`) with current main `81580919` in an owned worktree,
+uncommitted and unpublished. The coordinator owns publication and normal release;
+do not create another issue/PR, rerun smoke or redeploy unchanged images.
+Preserve main's unrelated source, including the eight accepted mobile blobs.
+
+Smoke discovery returns Notes, Calendar and GitHub labels from the registered
+tool names; the agent extracts those into its actual tool receipt. The smoke role
+does not receive the normal-chat capability instruction block. Missing explicit
+smoke discovery guidance is a candidate, not an established production cause,
+and this patch does not change model instructions. The authorised fixed-format
+numeric model-round query in the existing Log Analytics workspace returned no
+matching records for 17:32–17:34 UTC. It read no provider or personal text.
+
+Both HTTP Status routes omit reasons unless a check is `down`, preserving
+already-open legacy clients during parallel backend/web deployment. Internal
+snapshots retain allowlisted degraded reasons. Only an authorised smoke run
+emits `system.smoke_check` through the existing stdout/telemetry allowlists;
+ordinary `/status` reads do not rerun or re-log checks. No new access, provider
+experiment, budget/timeout/model or confirmation change. SDK-managed Copilot
+processes omit `--remote`; remote-enabled state remains unverified and no
+duplicate process or shared settings change is made.
+
+Qualified local checks: 169 tests pass across chat-canary, system-status,
+chat-agent and logging; 42 contracts tests, contracts lint/build and all thirteen
+affected backend files' zero-warning lint pass. The independent review passed
+the diagnostic patch, not production recovery. Tooling is an owned copy of a
+read-only snapshot (Vitest 5.0.2, Vite 8.3.1, ESLint 10.11.0, Node types 22.20.4,
+TypeScript 6.0.3), with aliases pointing only to this child source. The supplied
+portable Node 22.23.3 x64 resolves the original ARM64/native-binary mismatch
+without a global Node/PATH change. Five app-dependent suites cannot import
+missing `@fastify/multipart`; the full backend build also lacks `sharp`,
+`pdfjs-dist`, `@azure/storage-queue` and `@fastify/rate-limit`, with derivative
+declaration errors. These are blocked checks, not passing builds or source
+failures. No pins, TLS settings, types or checks were weakened. Exact-head
+pinned CI and the safe live failing predicate remain coordinator-owned gates.
+
+## Mobile/Status review publication (14 October 2026)
+
+Dan approved commit, push and a separate review PR for the accepted
+fourteen-file mobile/Status correction. Use its separately scoped app
+publication worktree, not mixed `ui/shell-iteration` history. This supersedes
+the earlier publication holds below, but not merge/deployment, live turns,
+physical-phone/voice acceptance or downstream #798/#797/#792 holds.
+
+The publication base is `439a000b07199060cdfcf9d424638950394e9be5`.
+Main's generated PLAN updates restored the original `In progress` cell;
+implementation and configuration match reviewed runtime base `b787788`.
+Preserve complete current-main document bytes and actual cells.
+The eight source paths remain byte-identical to accepted patch `427F2A2E`;
+its two hook files already use LF, distinct from the linted CRLF raw hashes.
+
+Retained runtime receipt `validation-evidence.json` has SHA256
+`B94CC9E8C855B0F42F52723E2AAF61AF2089D1B43A86E3020878568635195CBA`:
+nine files/258 passing tests, types/build/whitespace, with actual main Factory
+and contracts rather than frozen Factory runtime. Available Vite 8.3.1,
+Vitest 5.0.2 and Node types 22.20.4 differ from declared 8.3.2, 5.0.3 and
+22.20.5; this is not pinned-toolchain CI. No additional local gate ran here.
+Retain `F77C1785` seven-file lint evidence through normalised source and
+unchanged configuration equivalence; CSS remains excluded, not linted.
+
+Preparation uses a read-only seed and an owned bare clone/worktree. Parent/UI
+working files, HEAD, drafts, shared dependencies and original5173 are not
+changed. The configured checkouts share Git metadata; do not claim the
+common metadata globally unchanged. Existing `/remote` state remains
+unverified; do not start a duplicate CLI or change shared settings.
+The original production trigger, phone/voice acceptance and router rollback
+are not established by this publication.
+
+## Page completion deadline follow-up (14 October 2026; local)
+
+This supersedes the previous coupled App/test hashes and their final lint
+receipt below, without changing the preserved mobile-only or Factory work.
+The current App hash is
+`F87741542F326E4CE407BAA4F2206B4D133B1C337FB698EC099FC8A898ABC85F`;
+the current App.test hash is
+`C74809A4CF7B7C006415057D0A3303F5ABC7B673BD66686B7490FA8DA00B0F75`.
+Both successful completion paths recheck the captured deadline. Existing
+refusal reasons and disposal remain intact; late routing is not rolled back.
+
+Final six probes replayed against the pinned reviewed `759B8BDA` actual App
+produce four false-success failures and two pre-deadline passes. The same
+probes pass against the correction, with 149 passing assertions across App,
+page-navigation, now-feed, NowFeedPanel and StatusPage. Only the deadline
+callback is held; React/testing timers remain native and the command timeout
+is not extended. The fixture also tests one late callback without a second ACK.
+Final strict types pass. Scratch production build covers the unchanged
+`F8774154` runtime source; the native-timer fixture correction subsequently
+passed types/tests. Final seven-file scoped lint passes with zero errors and
+warnings at 2026-10-14T10:56:26.341Z, with unchanged original configuration
+and all seven raw source hashes plus CSS checked before/after. CSS is
+excluded. The new coordinator receipt is
+`status-phone-deadline-lint-receipt.json`, SHA256
+`F77C1785D7BB8DF87F8F4428A7B0E9966FFD71CD456D6B80FFC538441010968B`.
+The previous receipt remains byte-exact. Neither receipt claims subsequent
+LF-normalized hook hashes or new-main CI.
+
+The previous nine-file/252-test receipt remains historical, not a fresh run of
+unchanged mobile suites. No new-main CI, original production attribution,
+physical-phone/voice acceptance, publication or live activity is claimed.
+Original5173, settings/drafts and shared dependencies remain untouched.
+
+## Phone keyboard correction and current Status gate (14 October 2026; local)
+
+The user-directed phone correction uses the actual Workspace/transcript/input
+in an owned offline Chromium fixture. All API/provider fetches are blocked;
+its messages and VisualViewport events are explicitly synthetic. Draft
+preservation uses the native textarea value setter plus bubbling input, not
+an untracked DOM assignment. Geometry proof does not establish an actual
+iPhone keyboard, Safari, device audio or voice acceptance.
+
+The mobile-only five affected suites pass 186 assertions; strict TypeScript
+and a scratch-output production build pass. The earlier expanded six-suite run
+passed 243/244: its unchanged voice-unit assertion expects `2.5`, whereas this
+machine's default en-DK formatter returns `2,5`. No test or format is weakened.
+The preserved mobile-only snapshots pass isolated scoped lint for six
+TypeScript/TSX files, zero errors/warnings, with the unchanged project config
+and seven before/after source hashes. CSS is explicitly excluded: existing
+ESLint has no CSS configuration. That receipt covers the preserved F607 App,
+not the later coupled Status App revision. No shared dependencies/manifests
+or config are changed.
+
+The final coupled revision also passes isolated scoped lint for seven
+TypeScript/TSX files, zero errors/warnings, checked at
+2026-10-14T09:47:49.171Z. All seven requested source hashes and the unchanged
+CSS hash were verified before/after against the original config; CSS remains
+excluded from lint. Receipt: coordinator session artifacts
+`status-phone-lint-receipt.json`. The final App/test hashes are
+`759B8BDAC2EDE7FDBD81A0CE58FA65EA353A9ECEFD4059DD0498C9247A3E0D1C`
+and `2FECAD811EE1D45C97F63D9334479C5DBD80FFCBCCB89BB623858D4E064B03BF`.
+
+Dan has now performed the ordinary Status turn: first completion claim
+without visible navigation, then follow-up recovery. Earlier absent-user
+statements below are historical, not the current #799 blocker. The local
+actual-App trace reproduced a first-ack route-commit race, not the original
+live cause. Six first-ack cases and four held-route cancel/deadline/supersede/
+unmount cases cover the correction; all nine affected test files pass 252 tests,
+with exact final types/build/whitespace checks. A pending route's waiter
+observes completion only; it does not roll back an already-requested route.
+Held-loader recovery fixtures explicitly change route before releasing old
+work and prove no stale success acknowledgement. No substitute live/model turn,
+production navigation, physical-phone claim or downstream #798/#797/#792.
+Coordinator-only isolated Factory publication approval is not permission
+to publish this mixed local checkout or merge/deploy these corrections.
+
 ## Read-only Status page (14 October 2026)
 
-P9-101/#799 adds `/status`, rail/phone entries, accepted voice/chat navigation
+P9-101/#799 adds `/status`, rail/phone entries, the existing voice/chat target
 and page/window readback. It reads only authenticated `GET /status`, validates
 all eleven checks and optional smoke, exposes failure/unavailable reasons,
 PC connection/pause state and timestamps, and marks five-minute-old evidence
@@ -17,8 +217,44 @@ stale/failing/unknown evidence, missing versions, disabled pending refresh,
 retained HTTP 503 failure and Retry. No document overflow or smoke invocation.
 The fixture room is disabled and API responses are synthetic. Exact-head
 CI/release and authenticated Status/voice acceptance remain pending.
+The 14 October smoke-reader follow-up preserves only fixed per-check allowlisted
+reasons for down/degraded results. The original deployed chat-canary failure
+cause remains unknown; diagnose retained evidence through `/status`, never by
+invoking `/status/smoke` or a model canary.
 Keep this PR separate from latency QA, presence/Routines/phone Save work,
 unrelated pin changes and the coordinator's #811 backend investigation.
+
+#815 merged at `6e7d85dd` after the final `8c0f2cb2` exact-head gates passed.
+Its initial Deploy 38491884715 rolled out successfully but failed smoke:
+`chat_canary` reported `acceptance_check_failed` and `chat_capabilities`
+reported `capabilities_missing`. The original failed turn's cause remains
+unconfirmed under #820; diagnostic-only #821 is not a proven repair.
+Normal Deploy 38497362534 on `1590a1c3` passed all six jobs and fifteen actual
+production smoke checks. Its Web build and the existing signed-in canvas
+both use `main-KDrAC0O7.js` and `main-CA1t_Hqv.css`; no reload was needed.
+
+The coordinator accepted the bounded released read-only snapshot. Actual
+Settings-to-Status rail navigation returned `/status` 200 at
+2026-10-14T02:15:07.149Z; ordinary Refresh returned 200 at 02:16:07.551Z,
+with a newer snapshot time. Both accepted HTTP 204 workspace state/readback:
+`page: status`, `viewId: page-status`, 2894 UTF-8 bytes. All eleven system
+and fifteen smoke rows rendered without an alert or document overflow at
+897x890. Retained smoke was 15/15 OK at 01:55:08.275Z and correctly stale;
+it still has no deployment association. PC connection/pause state rendered,
+and null bridge/Chrome-extension versions remained "Not reported".
+Settings-to-Status and Refresh kept one workspace session, zero new Now
+stream requests and the live-connected indicator. Native details worked;
+the temporary observer was removed. No extra model/smoke calls, board Retry,
+injected commands, Note/native Chrome/draft interaction or settings changes.
+
+Dan subsequently performed the ordinary Status turn. It claimed success
+without visibly navigating; the follow-up "I dont see it" navigated correctly.
+First-turn live navigation acceptance failed, with no established cause.
+This is no longer an absent-human-turn gate, and recovery does not establish
+acceptance. No agent-created turn substitutes for Dan's evidence.
+Physical-phone, voice and broker acknowledgement are not established by this
+report or the earlier browser snapshot. #799 stays open; #798 is held,
+followed separately by #797 and #792.
 
 The coordinator authorised one coupled release-gate exception in #815:
 the PR-title normalizer, linked-issue ID extraction and PLAN reconciliation
@@ -33,9 +269,48 @@ Allowed-boundary, over-limit and no-large-allocation regressions cover this.
 All 57 workflow-script tests and Bash syntax pass locally. Status/ownership
 policies are unchanged, including reopened-issue handling. No other workflow,
 backend or dependency changes.
-The corrected head must pass fresh exact-head gates before merge.
-Current main through #808 (`446ce371`) is integrated, preserving its scoped
+The corrected head passed fresh exact-head gates before merge.
+The Status branch integrated #808 (`446ce371`), preserving its scoped
 health documentation and inactive code without activation or live acceptance.
+
+## Factory consumer refresh correction (#813, local only; 14 October 2026)
+
+This is a separate local delta from the preserved Status release-context
+edits above. Controlled actual-component fixtures reproduced repeated
+cancellation of deferred 10-second reads, without establishing which event
+triggered the original released storm. Automatic invalidations now preserve
+an active same-scope read and coalesce into one follow-up; notifications
+during that follow-up remain pending for the next read. Scope/identity
+replacement, explicit reload and unmount still cancel obsolete work.
+Failures remain visible with retained snapshots; there is no unconditional
+retry loop or change to the central Now stream, validation, cache TTL or API.
+
+The coupled actual-context check reproduced premature missing-issue and
+absent/replaced task-link refusals after an older snapshot settled but before
+its queued follow-up started, and during the ordinary idle debounce. The
+resolver now consults the request owner's pending/queue/timer state. It waits
+within the unchanged budget, never starts a speculative read or applies a
+late navigation after timeout, and returns a failed follow-up's visible error.
+
+All 181 focused consumer/store/stream/navigation tests across eight files,
+strict TypeScript and the scratch-output production build pass locally.
+Controlled browser fixtures exercise retained DOM/scroll/focus, queued late
+updates and failure/recovery at desktop and 320px light/reduced motion.
+The final navigation delta also passes isolated actual-context browser checks:
+missing issues and new task links remain loading across the queued/debounce
+gap and active follow-up, then resolve from its snapshot without extra reads.
+These are synthetic fixtures, not production, broker, model or device proof.
+The isolated 320px frame reports 2px document overflow at the release branch
+label; it is not a full-shell layout pass, and no unrelated CSS fix is included.
+The coordinator's isolated repository-pinned tooling linted both changed
+source/test files with the unchanged repository config: zero errors and
+warnings, without altering shared dependencies or manifests.
+The frozen review made no backend, dependency, workflow or settings change,
+commit, push or release. Dan subsequently authorised only this correction's
+commit, push and review PR, not merge or deployment. Publication preserves
+the frozen consumer/test bytes and updates the supplied Status evidence.
+#813 production cadence/performance acceptance, #798, the main-release gate
+and P12 holds remain unchanged.
 
 ## GitHub-aligned Factory board (13 October 2026)
 
@@ -138,7 +413,9 @@ stashes. Keep `.ui-session-handoff.md` untracked and `.impeccable` cache out of
 the release. Dependencies still use the corporate-feed junction; local
 Vite 8.3.1/Vitest 5.0.2 do not replace CI's pinned 8.3.2/5.0.3.
 
-Current P12 release (13 October 2026): Dan moved implementation to **local DailyMigrationMain**; both cloud workers stay idle. After #805's verified review/full CI/deploy, the coordinator [released and claimed #720](https://github.com/DanAakesen/jarvis/issues/720#issuecomment-6154043444): inactive synthetic health processing only, `C:\Repo\Jarvis-daily-migration`, branch `codex/p12-05-health-processor`, one Refs #720 PR. Fetch moving main, preserve unrelated work and require exact-head full CI/independent review; no own merge or next issue. No original Daily/source/data/credential, phone, resource/grant or activation changes. See [current boundary](#dailydevelopercloud--p12-execution-boundary) and [processing contract](../apps/backend/src/daily/health/README.md).
+Current P12 release (14 October 2026): Dan moved implementation to **local DailyMigrationMain**; both cloud workers stay idle. #808 delivered #720's inactive synthetic health processing; its automatic review found an unsupported body-fat unit fallthrough. The [existing #720 claim continues](https://github.com/DanAakesen/jarvis/issues/720#issuecomment-6157857536) for only that correction and synthetic normalization/SQL regressions in `C:\Repo\Jarvis-daily-migration`, branch `codex/p12-05-body-fat-units`, a separate Refs #720 follow-up from fresh main. Do not push the merged #808 branch. Fetch moving main, preserve unrelated work and require exact-head full CI/independent review; no own merge or next issue. No original Daily/source/data/credential, phone, resource/grant or activation changes. See [current boundary](#dailydevelopercloud--p12-execution-boundary) and [processing contract](../apps/backend/src/daily/health/README.md).
+
+**Release clearance, 14 October 2026:** Dan directly approved inactive PR #818 after latest-main integration, required checks and independent review, and said routine CI/CD must not need approval again each time. For already-authorized inactive P12 scopes and their corrections, the independent release path may merge and use normal main-only deployment once those gates pass; do not add another per-PR human release-clearance gate. This supersedes the earlier #818 hold, not scope/dependency gates, branch protections or the no-own-merge rule. Both cloud workers stay idle. Activation, protected credentials/private-data operations, live/device acceptance and eventual cutover retain their existing authority and evidence gates; this does not start another scope or authorize a new worker.
 
 ## Workspace window release (12 October 2026)
 
@@ -225,13 +502,13 @@ Project-specific working context for agents. The generated `AGENTS.md` is not ed
 
 ## Development workflow
 
-Every coding agent on this repository follows these rules. This project requires one pull request per task; that overrides the template's "no PR required".
+Every coding agent on this repository follows these rules. Normally this project requires one pull request per task; that overrides the template's "no PR required". Dan's current coordinator-directed consolidation uses the existing delivery PRs rather than creating duplicate PRs.
 
 ### Where work happens
 
-- **Remote by default.** Agents work in GitHub Copilot cloud agent or Codex cloud and deliver through a pull request. Dan's explicit 13 October DailyMigrationMain local exception applies only to the scoped P12 migration, with both cloud workers idle. `main` on GitHub is the only source of truth; authorized local work still requires the normal branch/PR/check/review flow and must be pushed before handoff.
+- **Important implementation stays local until Dan says otherwise.** Dan's 14 October direction supersedes the earlier remote-default rule and P12-only local exception. Local sessions implement and review; the coordinator also owns existing GitHub delivery PRs, normal CI, releases and both boards. Do not restart cloud coding workers merely to move review cards. `main` on GitHub remains the shared source of truth, and authorised delivery still requires current-main reconciliation, independent review and exact-head checks.
 - The runner instructs coding agents on every turn, including resumed or recovered sessions, to commit and push small work-in-progress changes to the existing task branch after each meaningful step. Never force-push or push to `main`; report commit or push failures.
-- **Local work needs Dan's permission.** An agent running on Dan's PC (Copilot CLI, Codex CLI, or an editor agent) asks Dan before changing anything and stops without a clear yes. Known local-only steps: `infra/bootstrap.ps1` and the Codex login seed, because both need Dan's sign-in.
+- **Stay within Dan's local authorisation.** The current direction already authorises scoped local implementation, review and coordinator integration; do not repeatedly request that permission. New destructive, access, private-data or otherwise unauthorised actions still need approval. Bootstrap and credential/login prompts remain human-owned.
 - **No Azure access for agents.** Changes reach Azure only through the deploy workflows on `main`; GitHub Actions can sign in to Azure only for `main`. In a PR, check infrastructure without Azure (`az bicep build`, linter); the deploy after merge proves it against Azure. Verify Azure behaviour from those workflow runs, or ask Dan.
 
 ### Task status
@@ -281,7 +558,7 @@ Dan follows the work on the [Project Jarvis board](https://github.com/users/DanA
 3. Check that `main` is green: the latest `CI` and deploy runs on `main` passed (before P0-11 adds deploy, only `CI` counts). If not, stop. The only allowed work is a fix for `main` (PR title `fix-main: …`).
 4. Check your task: not Complete, not claimed by anyone else, and every task in its "Depends on" column Complete. If any check fails, stop and report it on the issue.
 5. Look at the running tasks (issues with a worker label, In progress rows, and open PRs). Stay out of files they change, or say in your PR why you overlap.
-6. Use one branch and one PR. The PR title is exactly `<task ID>: <short summary>`, for example `P0-05: Foundry account and project`: the ID, a colon, a space, no brackets. Copilot's temporary `[WIP] ` prefix is fine. Work outside a task uses `fix-main: …` or `docs: …`. The [PR title](../.github/workflows/pr-title.yml) workflow corrects small deviations and fails otherwise. The PR body contains `Fixes #<issue>`. When the PR merges, GitHub closes the issue, and the tasks it blocked unblock automatically. Never remove "Blocked by" links by hand; they stay as history. If a task needs more than one PR, use `Refs #<issue>` in all but the last.
+6. Use one branch and one PR. The PR title is exactly `<task ID>: <short summary>`, for example `P0-05: Foundry account and project`: the ID, a colon, a space, no brackets. Copilot's temporary `[WIP] ` prefix is fine. Work outside a task uses `fix-main: …` or `docs: …`. The [PR title](../.github/workflows/pr-title.yml) workflow validates current same-PR/head metadata and fails with the normalizer's suggested title for small deviations; save that title rather than expecting an automatic edit. The PR body contains `Fixes #<issue>`. When the PR merges, GitHub closes the issue, and the tasks it blocked unblock automatically. Never remove "Blocked by" links by hand; they stay as history. If a task needs more than one PR, use `Refs #<issue>` in all but the last.
 
 ### Finish a task
 
@@ -1441,7 +1718,28 @@ Aggregate CI (P0-10), `.github/workflows/ci.yml`:
 - Required checks on `main` are not enforced: branch protection on a private repository needs GitHub Pro. When available, Dan requires `CI result`; until then Dan or the authorized merging agent must read the `CI` run result itself.
 
 CodeQL code scanning (P9-93), `.github/workflows/codeql.yml`:
-Advanced CodeQL code scanning analyzes `javascript-typescript`, `python`, and `actions` using the `security-extended` query suite on pushes and PRs to `main` (path-filtered against markdown and docs) and a weekly schedule. CodeQL is non-blocking and operates independently of the `CI result` aggregate gate. Security findings, CWE classifications, and severity levels appear in GitHub under **Security → Code scanning alerts** (`GET /repos/DanAakesen/jarvis/code-scanning/alerts`); triage verdicts should distinguish real security flaws from false positives or test-only code before opening follow-up remediation issues.
+Advanced CodeQL code scanning analyzes `javascript-typescript`, `python`, `actions`, and `csharp` using the `security-extended` query suite on pushes and PRs to `main` (path-filtered against markdown and docs) and a weekly schedule. The C# matrix entry uses manual build tracing: after CodeQL initialization, the workflow sets up .NET 10 and builds `pc-bridge/Jarvis.PcBridge/Jarvis.PcBridge.csproj` in Release configuration. This production application project references `Jarvis.PcBridge.Core`; tests are not built as part of extraction. Coverage is limited to source compiled by the traced production build; generated source is covered only when surfaced to that compiler invocation, and no separate generated-code guarantee is made. CodeQL remains non-blocking and operates independently of the `CI result` aggregate gate. Security findings, CWE classifications, and severity levels appear in GitHub under **Security → Code scanning alerts** (`GET /repos/DanAakesen/jarvis/code-scanning/alerts`); triage verdicts should distinguish real security flaws from false positives or test-only code before opening follow-up remediation issues. A successful job and populated `/language:csharp` upload are required evidence of extraction; zero alerts alone do not establish complete coverage or absence of vulnerabilities.
+
+PR title (P9-113), `.github/workflows/pr-title.yml`:
+
+- `validate-pr-title.sh` reads the event's PR number from the GitHub API and
+  requires its current repository/number/head to match the event identity.
+  Current title/body, not immutable event text, feed the existing normalizer.
+  Issue lookup accepts `Fixes`, `Closes`, `Resolves`, or `Refs` with `#123`
+  or `DanAakesen/jarvis#123`; the first matching same-repository link is used.
+- API calls have a 30-second timeout. A second PR read must match the initial
+  title/body/head/update timestamp before success. API/schema/identity/race
+  failures fail closed: fix access or metadata and run a fresh current-head gate.
+  Head pushes trigger the gate too. A replay after a head change must fail.
+- The gate never writes PR titles: GitHub title updates have no atomic
+  title/head compare-and-set guard. Noncanonical titles fail with the unchanged
+  normalizer's suggestion; save the canonical title to trigger a fresh gate.
+  Token permissions remain unchanged. Changes after the final API read are not
+  atomically fenced by GitHub check publication; the new edit/push needs its own
+  gate, and reviewers must use current-head/current-metadata evidence.
+- Offline entry-path regressions and normalizer tests run with
+  `PYTHONPATH=.github/scripts python3 -m unittest discover -s .github/scripts/tests -v`.
+  Fixtures reject every unplanned `gh` request and never use the network.
 
 Plan status, `.github/workflows/plan-status.yml`:
 
