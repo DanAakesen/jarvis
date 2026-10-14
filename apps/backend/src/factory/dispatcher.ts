@@ -36,6 +36,7 @@ export interface StaleRunningTask extends RunningSandbox {
 export interface DispatcherStore {
   claimNext(owner: string, leaseSeconds: number, maxAttempts: number): Promise<DispatchClaimResult>;
   listStaleRunning(heartbeatBefore: Date, limit: number): Promise<StaleRunningTask[]>;
+  isCurrentStaleTask(task: StaleRunningTask): Promise<boolean>;
   recordHeartbeat(sandboxSessionId: string, invocationId: string, invocationCompleted: boolean): Promise<void>;
   deferClaim(owner: string, task: DispatchClaim, delayMs: number): Promise<void>;
   failStart(owner: string, task: DispatchClaim, retryAt: string | null, reason: string): Promise<void>;
@@ -185,6 +186,7 @@ export class TaskDispatcher implements TaskController {
   private timer: NodeJS.Timeout | undefined;
   private reconciliationTimer: NodeJS.Timeout | undefined;
   private reconciling: Promise<void> | undefined;
+  private reconciliationWakePending = false;
   private unsubscribe: (() => void) | undefined;
 
   constructor(
@@ -227,17 +229,32 @@ export class TaskDispatcher implements TaskController {
     this.timer = undefined;
     if (this.reconciliationTimer) clearTimeout(this.reconciliationTimer);
     this.reconciliationTimer = undefined;
+    this.reconciliationWakePending = false;
     this.wakePending = false;
     await Promise.all([this.pumping, this.reconciling]);
   }
 
   private scheduleReconciliation(delayMs: number, allowIdle = false): void {
-    if (!this.started || this.reconciliationTimer || (!allowIdle && !this.heartbeat.hasTrackedSessions())) return;
+    if (!this.started || (!allowIdle && !this.heartbeat.hasTrackedSessions())) return;
+    if (this.reconciling) {
+      if (allowIdle) this.reconciliationWakePending = true;
+      return;
+    }
+    if (this.reconciliationTimer) {
+      if (!allowIdle || delayMs > 0) return;
+      clearTimeout(this.reconciliationTimer);
+      this.reconciliationTimer = undefined;
+    }
     this.reconciliationTimer = setTimeout(() => {
       this.reconciliationTimer = undefined;
       this.reconciling = this.reconcileStaleTasks().catch(this.onError).finally(() => {
         this.reconciling = undefined;
-        this.scheduleReconciliation(this.reconciliationIntervalMs);
+        if (this.reconciliationWakePending) {
+          this.reconciliationWakePending = false;
+          this.scheduleReconciliation(0, true);
+        } else {
+          this.scheduleReconciliation(this.reconciliationIntervalMs);
+        }
       });
     }, delayMs);
     this.reconciliationTimer.unref();
@@ -278,7 +295,7 @@ export class TaskDispatcher implements TaskController {
     } catch (error) {
       this.onError(error);
       const changed = await this.moveToNeedsAttention(
-        task.taskId,
+        task,
         'I could not verify the task runner after its heartbeat stopped. Review the task before retrying.',
         'runner_status_unavailable',
       );
@@ -288,11 +305,16 @@ export class TaskDispatcher implements TaskController {
 
     if (snapshot.invocationId !== task.invocationId || snapshot.sessionId !== task.foundrySessionId) {
       const changed = await this.moveToNeedsAttention(
-        task.taskId,
+        task,
         'Foundry returned a different runner session than the one recorded for this task. Review the task before retrying.',
         'runner_session_mismatch',
       );
       log(snapshot.status, changed ? 'needs_attention' : 'unchanged');
+      return;
+    }
+
+    if (!await this.store.isCurrentStaleTask(task)) {
+      log(snapshot.status, 'stale_invocation');
       return;
     }
 
@@ -302,7 +324,7 @@ export class TaskDispatcher implements TaskController {
         log(snapshot.status, 'runner_alive');
       } else {
         const changed = await this.moveToNeedsAttention(
-          task.taskId,
+          task,
           'Foundry reports that the task runner is still active, but its saved sandbox session has already ended. Review the task before retrying.',
           'ended_session_still_running',
         );
@@ -313,15 +335,21 @@ export class TaskDispatcher implements TaskController {
 
     if (snapshot.status === 'completed') {
       await this.store.recordHeartbeat(task.sandboxSessionId, task.invocationId, true);
-      await this.acceptCompleted(task, task.taskId);
+      const accepted = await this.acceptCompleted(task, task.taskId, task);
       const current = await this.tasks.get(task.taskId, 1, 0);
       if (current?.state === 'Running') {
-        const changed = await this.moveToNeedsAttention(
-          task.taskId,
-          'Foundry confirms the runner completed, but GitHub and task policy did not confirm a reviewable completion. Review the pull request and task.',
-          'completed_without_verified_delivery',
-        );
-        log(snapshot.status, changed ? 'needs_attention' : 'unchanged');
+        if (!await this.store.isCurrentStaleTask(task)) {
+          log(snapshot.status, 'stale_invocation');
+        } else if (!accepted) {
+          const changed = await this.moveToNeedsAttention(
+            task,
+            'Foundry confirms the runner completed, but GitHub and task policy did not confirm a reviewable completion. Review the pull request and task.',
+            'completed_without_verified_delivery',
+          );
+          log(snapshot.status, changed ? 'needs_attention' : 'unchanged');
+        } else {
+          log(snapshot.status, 'awaiting_policy');
+        }
       } else {
         log(snapshot.status, current?.state === 'Done' ? 'done' : current?.state ?? 'task_missing');
       }
@@ -333,17 +361,22 @@ export class TaskDispatcher implements TaskController {
       : snapshot.status === 'needs_attention'
         ? 'Foundry reports that the task runner needs input. Review the task history before continuing.'
         : 'I could not determine the task runner status. Review the task before retrying.';
-    const changed = await this.moveToNeedsAttention(task.taskId, reason, `foundry_${snapshot.status}`);
+    const changed = await this.moveToNeedsAttention(task, reason, `foundry_${snapshot.status}`);
     log(snapshot.status, changed ? 'needs_attention' : 'unchanged');
   }
 
-  private async moveToNeedsAttention(taskId: string, reason: string, reasonCode: string): Promise<boolean> {
-    return this.store.withTaskPolicyLock(taskId, async () => {
-      const current = await this.tasks.get(taskId, 1, 0);
+  private async moveToNeedsAttention(
+    task: StaleRunningTask,
+    reason: string,
+    reasonCode: string,
+  ): Promise<boolean> {
+    return this.store.withTaskPolicyLock(task.taskId, async () => {
+      if (!await this.store.isCurrentStaleTask(task)) return false;
+      const current = await this.tasks.get(task.taskId, 1, 0);
       if (!current || current.state !== 'Running') return false;
-      const result = await this.tasks.transition(taskId, 'NeedsAttention', false, reasonCode, reason);
+      const result = await this.tasks.transition(task.taskId, 'NeedsAttention', false, reasonCode, reason);
       if (result.kind !== 'ok') return false;
-      const ended = await this.store.endTaskSessions(taskId, 'NeedsAttention');
+      const ended = await this.store.endTaskSessions(task.taskId, 'NeedsAttention');
       ended.forEach((sandboxSessionId) => this.heartbeat.untrack(sandboxSessionId));
       return true;
     });
@@ -358,7 +391,13 @@ export class TaskDispatcher implements TaskController {
     const continueWithSteering = command.action === 'steer' && task.latestSessionEndReason === 'idle_expired';
     if (command.action === 'recover' || continueWithSteering) {
       if (task.state === 'Running' && task.latestSessionEndReason === 'idle_expired') {
-        const attention = await this.tasks.transition(taskId, 'NeedsAttention');
+        const attention = await this.store.withTaskPolicyLock(taskId, async () => {
+          const current = await this.tasks.get(taskId, 1, 0);
+          if (!current || current.state !== 'Running' || current.latestSessionEndReason !== 'idle_expired') {
+            return { kind: 'invalid-transition' as const };
+          }
+          return this.tasks.transition(taskId, 'NeedsAttention');
+        });
         if (attention.kind !== 'ok') return transitionResult(attention.kind);
         task = { ...task, ...attention.task };
       }
@@ -566,17 +605,24 @@ export class TaskDispatcher implements TaskController {
     }
   }
 
-  private async acceptCompleted(sandbox: RunningSandbox, knownTaskId?: string): Promise<boolean> {
+  private async acceptCompleted(
+    sandbox: RunningSandbox,
+    knownTaskId?: string,
+    reconciliationTask?: StaleRunningTask,
+  ): Promise<boolean> {
     const taskId = knownTaskId ?? await this.recoveryStore?.getRunningTaskForSession(sandbox);
-    if (!this.recoveryStore) return true;
     if (!taskId) return false;
+    const expectedTask = reconciliationTask ?? { ...sandbox, taskId, sessionStatus: 'Active' as const };
+    const isCurrent = () => this.store.isCurrentStaleTask(expectedTask);
     const detail = await this.tasks.get(taskId, recoveryEventLimit, 0);
     if (!detail) return false;
     if (detail.state === 'NeedsAttention') return false;
     if (detail.state !== 'Running') return true;
     const gate: TaskCompletionGate = async (operation) => this.store.withTaskPolicyLock(taskId, async () => {
       const latestTask = await this.tasks.get(taskId, 1, 0);
-      if (!latestTask || latestTask.state !== 'Running') return { kind: 'not_running' as const };
+      if (!latestTask || latestTask.state !== 'Running' || !await isCurrent()) {
+        return { kind: 'not_running' as const };
+      }
       return { kind: 'ran' as const, value: await operation() };
     });
     const workspace = await this.workspaceFor?.(detail) ?? null;
@@ -590,7 +636,7 @@ export class TaskDispatcher implements TaskController {
     return this.store.withTaskPolicyLock(taskId, async () => {
       const latestTask = await this.tasks.get(taskId, recoveryEventLimit, 0);
       if (!latestTask) return false;
-      if (latestTask.state !== 'Running') return true;
+      if (latestTask.state !== 'Running' || !await isCurrent()) return true;
       if (result.kind === 'refused') {
         await this.tasks.recordEvent({
           taskId,
@@ -612,6 +658,9 @@ export class TaskDispatcher implements TaskController {
   }
 
   private onTaskEvent(event: TaskEventMessage): void {
+    if (event.type === 'sandbox_idle_expired' && event.source === 'backend') {
+      this.scheduleReconciliation(0, true);
+    }
     if (event.type === 'state_changed') {
       const payload = event.payload;
       const state = typeof payload === 'object' && payload !== null && 'to' in payload
