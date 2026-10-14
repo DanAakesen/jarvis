@@ -1,5 +1,26 @@
 # Agent context
 
+## Gmail direct-only recovery (#837)
+
+Gmail reads/actions use direct mail tools, including when permission, integration,
+credentials or message content are unavailable. No PC/browser/screen recovery.
+HTML is parsed as static text; externalized text bodies use the existing Gmail
+API. Read `bodySource`, `bodyTruncated`, optional `alternateBody` /
+`alternateBodyTruncated` and `contentWarnings` before answering reservation questions.
+Named file attachments, images/encryption, unsupported encodings and bounded reads
+have explicit limitations. No additional OAuth scope, setting or setup is required.
+
+Focused checks: `npm test --workspace @jarvis/backend -- src/google
+src/core/gmail-access-policy.test.ts src/core/capability-instructions.test.ts
+src/core/tool-registry.test.ts src/core/browser-agent.test.ts
+src/pc-bridge/pc-act.test.ts src/pc-bridge/bridge.test.ts src/modules.test.ts
+src/auth/auth.test.ts`; backend lint/build. Fake bridge/auth fixtures need loopback
+access. The sandbox denied loopback on the initial run; rerun with the permitted
+execution profile rather than weakening fixtures. The locked dependency install
+succeeded with `/tmp` npm cache and the permitted network execution profile.
+Live Gmail, model adherence and deployment are separate from local regression proof.
+
+
 ## Read-only Status page (14 October 2026)
 
 P9-101/#799 adds `/status`, rail/phone entries, accepted voice/chat navigation

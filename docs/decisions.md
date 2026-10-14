@@ -1,5 +1,24 @@
 # Decisions
 
+## P11-02: Gmail uses direct access only (#837, 14 October 2026)
+
+Confirmed: Gmail lookups and mailbox actions use the existing server-owned Google
+integration. Failed, unavailable or incomplete reads never authorize PC, Chrome,
+browser automation or screen inspection. A shared execution guard blocks computer
+tools during a mail turn, and explicit/observed Gmail targets are refused before
+planning. Shared instructions cover missing integrations and truthful recovery.
+
+Retain bounded private results and existing confirmation/OAuth behavior. Decode
+plain text and static HTML, expose differing HTML alternatives and retrieve
+externalized text bodies through the Gmail API. Return explicit source,
+truncation and content warnings rather than presenting previews as full messages.
+Named file attachments, images, encryption and non-UTF-8/ASCII encodings remain
+unsupported. No new consent, credentials, dependency or browser path is added.
+The process-local guard is bounded and has no restart or cross-replica persistence.
+Regression fixtures use synthetic reservations and failed/incomplete provider reads;
+live account and model behavior remain post-deployment acceptance.
+
+
 ## #813 bound Factory board source reads (13 October 2026)
 
 Use one eight-request limiter for every GitHub source request in a board snapshot,

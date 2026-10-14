@@ -23,7 +23,7 @@ describe('direct Gmail message content', () => {
     const content = await gmailMessageContent({ request: vi.fn() }, 'm', {
       payload: { mimeType: 'multipart/alternative', parts: [part('text/html', '<p>Alternative</p>'), part('text/plain', 'Booking dates')] },
     }, signal());
-    expect(content).toMatchObject({ body: 'Booking dates', bodySource: 'plain-text' });
+    expect(content).toMatchObject({ body: 'Booking dates', bodySource: 'plain-text', alternateBody: 'Alternative', alternateBodyTruncated: false });
   });
 
   it('retrieves externalized text bodies only through the Gmail API', async () => {
@@ -75,4 +75,13 @@ describe('direct Gmail message content', () => {
     }
     expect(request).not.toHaveBeenCalled();
   });
+});
+
+
+it('reports a declared unsupported charset even when its bytes happen to be ASCII', async () => {
+  const content = await gmailMessageContent({ request: vi.fn() }, 'm', { payload: {
+    ...part('text/plain', 'Booking'), headers: [{ name: 'Content-Type', value: 'text/plain; charset=iso-8859-1' }],
+  } }, signal());
+  expect(content.bodySource).toBe('unavailable');
+  expect(content.contentWarnings.join(' ')).toContain('encoding is unsupported');
 });

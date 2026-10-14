@@ -935,3 +935,14 @@ describe('Google Calendar and Gmail tools', () => {
     expect(decodedMimeBody(draftBody.message.raw)).toContain('Hello, I can attend.');
   });
 });
+
+
+describe('Gmail incomplete list responses', () => {
+  it.each([{ messages: 'invalid' }, { messages: [{}] }, { nextPageToken: 'missing-page' }, { resultSizeEstimate: 1 }])('reports malformed message lists as failures: %j', async (listing) => {
+    const request = vi.fn(async () => listing);
+    const { app } = appFor(request);
+    const response = await app.inject({ method: 'POST', url: '/tools/mail_search', headers: confirmHeaders('42'), payload: { query: 'reservation' } });
+    expect(response.json()).toMatchObject({ outcome: 'error', result: { error: 'Gmail returned an invalid message list. Direct mail access is incomplete.' } });
+    expect(request).toHaveBeenCalledTimes(1);
+  });
+});

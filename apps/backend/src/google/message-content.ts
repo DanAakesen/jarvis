@@ -57,6 +57,13 @@ export async function gmailMessageContent(
       warnings.add('Non-text content (including images and encrypted content) is unsupported.');
       continue;
     }
+    const headers = Array.isArray(part.headers) ? part.headers.map(object) : [];
+    const contentType = headers.find((header) => typeof header?.name === 'string' && header.name.toLowerCase() === 'content-type')?.value;
+    const charset = typeof contentType === 'string' ? /charset\s*=\s*["']?([^\s;"']+)/iu.exec(contentType)?.[1]?.toLowerCase() : undefined;
+    if (charset && !['utf-8', 'utf8', 'us-ascii'].includes(charset)) {
+      warnings.add('Text-body encoding is unsupported; only UTF-8 and ASCII are supported.');
+      continue;
+    }
     let body = object(part.body);
     if (body?.data === undefined && typeof body?.attachmentId === 'string' && body.attachmentId) {
       if (++fetched > 4 || typeof body.size === 'number' && body.size > 750_000) {
@@ -87,7 +94,10 @@ export async function gmailMessageContent(
     warnings.add('Full message text is unavailable; a preview cannot establish missing reservation details.');
   }
   if (text.length > maxBodyCharacters) warnings.add('Message text is truncated at 6000 characters.');
+  const alternate = plainBody && htmlBody && plainBody.replace(/\s+/gu, ' ') !== htmlBody ? htmlBody : '';
+  if (alternate.length > maxBodyCharacters) warnings.add('Alternate HTML text is truncated at 6000 characters.');
   return {
+    ...(alternate ? { alternateBody: alternate.slice(0, maxBodyCharacters), alternateBodyTruncated: alternate.length > maxBodyCharacters } : {}),
     body: text.slice(0, maxBodyCharacters),
     bodySource: source,
     bodyTruncated: text.length > maxBodyCharacters,
