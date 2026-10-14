@@ -386,18 +386,43 @@ export const Workspace = forwardRef<WorkspaceController, {
     : {}, [canvasSize, layoutIds, layoutKind, layoutPreference, managed, placements]);
 
   useLayoutEffect(() => {
-    const bounds = canvas.current?.getBoundingClientRect();
-    if (!conversationLayout || !bounds?.width || !bounds.height) {
-      onConversationPositionChange?.(null);
-      return;
-    }
-    const rect = activeMaximizedViewId === 'conversation' ? { x: 0, y: 0, width: 1, height: 1 }
-      : fitConversationLayout(conversationLayout, { width: bounds.width, height: bounds.height }, conversationLayoutState.size);
-    onConversationPositionChange?.({
-      left: bounds.left + rect.x * bounds.width,
-      top: bounds.top + (rect.y + rect.height) * bounds.height - 2,
-      width: rect.width * bounds.width,
-    });
+    let frame = 0;
+    let previous: ConversationPosition | null = null;
+    const measure = () => {
+      frame = 0;
+      const bounds = canvas.current?.getBoundingClientRect();
+      if (!conversationLayout || !bounds?.width || !bounds.height) {
+        onConversationPositionChange?.(null);
+        return;
+      }
+      const rect = activeMaximizedViewId === 'conversation' ? { x: 0, y: 0, width: 1, height: 1 }
+        : fitConversationLayout(conversationLayout, { width: bounds.width, height: bounds.height }, conversationLayoutState.size);
+      const position = {
+        left: bounds.left + rect.x * bounds.width,
+        top: bounds.top + (rect.y + rect.height) * bounds.height - 2,
+        width: rect.width * bounds.width,
+      };
+      if (previous && previous.left === position.left && previous.top === position.top && previous.width === position.width) return;
+      previous = position;
+      onConversationPositionChange?.(position);
+    };
+    const schedule = () => {
+      if (!frame) frame = requestAnimationFrame(measure);
+    };
+    measure();
+    if (!conversationLayout || !onConversationPositionChange) return;
+    const viewport = window.visualViewport;
+    viewport?.addEventListener('resize', schedule);
+    viewport?.addEventListener('scroll', schedule);
+    window.addEventListener('resize', schedule);
+    window.addEventListener('scroll', schedule, true);
+    return () => {
+      cancelAnimationFrame(frame);
+      viewport?.removeEventListener('resize', schedule);
+      viewport?.removeEventListener('scroll', schedule);
+      window.removeEventListener('resize', schedule);
+      window.removeEventListener('scroll', schedule, true);
+    };
   }, [activeMaximizedViewId, canvasSize, conversationComposerHeight, conversationLayout, conversationLayoutState.size, onConversationPositionChange]);
 
   const frontId = (phone ? foreground?.id : activeMaximizedViewId ?? visibleViews.at(-1)?.id) ?? null;

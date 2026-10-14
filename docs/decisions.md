@@ -1,5 +1,75 @@
 # Decisions
 
+## Mobile/Status review publication (14 October 2026)
+
+Dan's "Approved", relayed by the coordinator, authorises commit, push and
+a separate review PR for the accepted fourteen-file mobile/Status patch.
+This supersedes its earlier local-only publication restriction, not any
+merge, deployment, live/device or downstream-work hold.
+
+Keep the eight accepted code/test/CSS files byte-exact. Rebase only additive
+documentation onto actual main and retain every original document byte and
+generated PLAN cell. Use a separately scoped app publisher rather than the
+mixed UI branch. Reuse the qualified clean-main runtime and lint receipts;
+publication preparation is not a new implementation or validation loop.
+Factory #842 remains separate. Neither publication nor these local fixtures
+identify Dan's original production trigger or establish phone/voice acceptance.
+
+## Check the deadline when page application completes (14 October 2026; local)
+
+Review found that route commit and the synchronous page/pane fast return
+could acknowledge success after the captured deadline but before the
+timeout callback ran. Six final actual-App probes replayed against the
+reviewed `759B8BDA` source confirm four late false-success cases; the two
+pre-deadline controls pass. Hold only the expiry callback and advance the
+clock independently: expiry is tested at the boundary, inside the 250-ms
+reserve and after command expiry, without a longer product timeout.
+
+Recheck the captured deadline only when settling success. Reuse the
+deadline refusal, preserve cancellation/supersession/disposal and keep
+the original deadline and reserve. The router may still commit the late
+page; no rollback is promised. This is a locally reproduced completion
+edge, not attribution of Dan's original production turn or live acceptance.
+
+## Acknowledge page commands after shell route commit (14 October 2026; local)
+
+Four offline actual-App cases from home/Settings, on desktop and phone,
+posted `applied: true` before Status's heading and selected rail entry
+existed; two already-on-Status cases passed. Wait for the existing shell's
+route commit rather than treating `navigate` dispatch as completion.
+Keep the six-second ceiling, command expiry and 250-ms reserve; cancellation,
+supersession and unmount dispose the waiter. No extra read, retry, health
+probe, timeout expansion or draft/stream replacement is introduced.
+
+Ten new actual-context cases cover first-ack state and held-route lifecycle.
+This proves and locally corrects a UI edge, not the cause of Dan's original
+turn. The origin/session/target/model decision and acknowledgement sequence
+were not captured. Coordinator-reported active-session routing and stale
+Status capability wording remain separate backend possibilities, not
+attribution or permission to edit another owner's source.
+
+## Keep phone chat joined to the visible viewport (14 October 2026; local)
+
+Use one shell-scoped VisualViewport inset owner for both phone typing
+surfaces, not a keyboard-open flag derived from focus. Actual Workspace
+regression evidence showed that viewport pan alone did not update the fixed
+composer anchor. Insets update before its coalesced measurement, and unchanged
+coordinates do not republish shell state. Keep existing normalized geometry,
+draft ownership, voice layout and two-pixel seam; never save viewport fitting.
+Outside touch dismisses only Message Jarvis without preventing the action.
+Controlled browser geometry is not physical-iPhone/iOS acceptance.
+
+## Status first-turn report supersedes the absent-human-turn gate (14 October 2026)
+
+Dan reports that the ordinary Open Status turn claimed completion without
+visible navigation, then "I dont see it" recovered. The human turn happened;
+first-turn visible acceptance did not pass. This is evidence of the symptom,
+not its cause. Trace application/acknowledgement locally in controlled actual
+contexts after the mobile handoff; do not substitute another live/model turn.
+Earlier unavailable-user notes below remain historical. #798/#797/#792 and
+merge/deployment remain held. Frozen Factory publication is coordinator-owned
+and isolated; its approval does not authorise mixed mobile/Status publication.
+
 ## #813 bound Factory board source reads (13 October 2026)
 
 Use one eight-request limiter for every GitHub source request in a board snapshot,

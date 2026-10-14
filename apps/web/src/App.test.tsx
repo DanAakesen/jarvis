@@ -955,6 +955,227 @@ describe('App shell', () => {
     expect(fetchMock.mock.calls.filter(([url]) => String(url).endsWith('/now/events'))).toHaveLength(1);
   });
 
+  it.each([
+    { path: '/', phone: false }, { path: '/settings', phone: false }, { path: '/status', phone: false },
+    { path: '/', phone: true }, { path: '/settings', phone: true }, { path: '/status', phone: true },
+  ])('commits the actual Status page before its first acknowledgement, even with a held read (%j)', async ({ path, phone }) => {
+    if (phone) vi.stubGlobal('matchMedia', vi.fn((query: string) => ({
+      matches: query.includes('max-width: 700px'),
+      media: query, addEventListener: vi.fn(), removeEventListener: vi.fn(),
+    })));
+    const workspace = streamWorkspaceCommands();
+    const original = fetchMock.getMockImplementation()!;
+    let finish!: (response: Response) => void;
+    const heldStatus = new Promise<Response>((resolve) => { finish = resolve; });
+    const atAcknowledgement: unknown[] = [];
+    fetchMock.mockImplementation(async (input, init) => {
+      const pathname = new URL(String(input)).pathname;
+      if (pathname === '/status') return heldStatus;
+      if (pathname.endsWith('/commands/status-first/ack')) {
+        const composer = document.getElementById('message');
+        atAcknowledgement.push({
+          body: JSON.parse(String(init?.body)),
+          heading: screen.queryByRole('heading', { level: 1, name: 'Status' })?.textContent,
+          current: screen.queryByRole('link', { name: 'Status' })?.getAttribute('aria-current'),
+          home: document.querySelector('.app-shell')?.getAttribute('data-home'),
+          draft: composer instanceof HTMLTextAreaElement ? composer.value : null,
+        });
+      }
+      return original(input, init);
+    });
+    await renderSignedIn(path);
+    await waitFor(() => expect(activityStream).not.toBeNull());
+    const input = screen.getByRole('textbox', { name: 'Message Jarvis' });
+    fireEvent.change(input, { target: { value: 'Unsent navigation fixture' } });
+    workspace.ready();
+    workspace.publishCommand({ commandId: 'status-first', operation: 'navigate', page: 'status' });
+    await waitFor(() => expect(workspace.ack('status-first')).toBeTruthy());
+    expect(atAcknowledgement).toEqual([{
+      body: { sessionId: '12345678-1234-4234-8234-123456789abc', applied: true },
+      heading: 'Status', current: 'page', home: 'false', draft: 'Unsent navigation fixture',
+    }]);
+    expect(screen.getByRole('textbox', { name: 'Message Jarvis' })).toBe(input);
+    expect(input).toHaveProperty('value', 'Unsent navigation fixture');
+    expect(screen.queryByRole('listitem', { name: 'SQL database' })).toBeNull();
+    workspace.publishCommand({ commandId: 'status-follow-up', operation: 'navigate', page: 'status' });
+    await waitFor(() => expect(workspace.ack('status-follow-up')).toBeTruthy());
+    expect(JSON.parse(String(workspace.ack('status-follow-up')?.[1]?.body))).toMatchObject({ applied: true });
+    expect(fetchMock.mock.calls.filter(([url]) => new URL(String(url)).pathname === '/now/events')).toHaveLength(1);
+    expect(fetchMock.mock.calls.filter(([url]) => new URL(String(url)).pathname === '/status')).toHaveLength(1);
+    await act(async () => { finish(new Response(null, { status: 503 })); });
+    expect(screen.getByRole('heading', { level: 1, name: 'Status' }).closest('[hidden], [aria-hidden="true"], [inert]')).toBeNull();
+    expect(fetchMock.mock.calls.some(([url]) => new URL(String(url)).pathname === '/status/smoke')).toBe(false);
+  });
+
+  it.each(['cancel', 'deadline', 'supersede', 'unmount'] as const)(
+    'bounds a held Status route commit and disposes its acknowledgement owner (%s)', async (outcome) => {
+      const workspace = streamWorkspaceCommands();
+      let finish!: () => void;
+      let started = false;
+      const heldCommit = new Promise<null>((resolve) => { finish = () => resolve(null); });
+      const router = createMemoryRouter([{
+        path: '*',
+        element: <App config={config} />,
+        loader: ({ request }) => {
+          if (new URL(request.url).pathname !== '/status') return null;
+          started = true;
+          return heldCommit;
+        },
+      }], { initialEntries: ['/settings'] });
+      restoreProfile.mockResolvedValue({ name: 'Dan Aakesen' });
+      const view = render(<RouterProvider router={router} />);
+      await screen.findByRole('navigation', { name: 'Areas' });
+      await waitFor(() => expect(activityStream).not.toBeNull());
+      workspace.ready();
+      act(() => activityStream!.enqueue(new TextEncoder().encode(
+        `event: workspace-command\ndata: ${JSON.stringify({
+          command: { commandId: 'held-status', operation: 'navigate', page: 'status' },
+          expiresAt: Date.now() + (outcome === 'deadline' ? 650 : 5000),
+        })}\n\n`,
+      )));
+      await waitFor(() => expect(started).toBe(true));
+      expect(workspace.ack('held-status')).toBeUndefined();
+      expect(screen.queryByRole('heading', { level: 1, name: 'Status' })).toBeNull();
+      if (outcome === 'cancel') act(() => activityStream!.enqueue(new TextEncoder().encode(
+        'event: workspace-cancel\ndata: {"commandId":"held-status"}\n\n',
+      )));
+      if (outcome === 'supersede' || outcome === 'unmount') {
+        if (outcome === 'unmount') view.unmount();
+        else await act(async () => { await router.navigate('/usage'); });
+      }
+      if (outcome !== 'unmount') {
+        await waitFor(() => expect(workspace.ack('held-status')).toBeTruthy());
+        expect(JSON.parse(String(workspace.ack('held-status')?.[1]?.body))).toMatchObject({
+          applied: false, outcome: 'refused',
+          reason: outcome === 'deadline' ? 'The requested page did not finish opening before the command deadline.' :
+            outcome === 'cancel' ? 'Page navigation was cancelled before completion.' :
+              'Page navigation was superseded before completion.',
+        });
+        if (outcome !== 'supersede') await act(async () => { await router.navigate('/usage'); });
+      } else router.dispose();
+      await act(async () => { finish(); });
+      if (outcome === 'unmount') expect(workspace.ack('held-status')).toBeUndefined();
+      else {
+        expect(screen.queryByRole('heading', { level: 1, name: 'Status' })).toBeNull();
+        expect(fetchMock.mock.calls.filter(([url]) => String(url).endsWith('/commands/held-status/ack'))).toHaveLength(1);
+        expect(screen.getByRole('link', { name: 'Usage' }).getAttribute('aria-current')).toBe('page');
+      }
+      expect(fetchMock.mock.calls.filter(([url]) => new URL(String(url)).pathname === '/status')).toHaveLength(0);
+      expect(fetchMock.mock.calls.filter(([url]) => new URL(String(url)).pathname === '/now/events')).toHaveLength(1);
+    },
+  );
+
+  it.each([4749, 4750, 4751, 5001])(
+    'checks the completion clock before acknowledging a held Status route, without firing its timer (%s ms)', async (elapsed) => {
+      const workspace = streamWorkspaceCommands();
+      const original = fetchMock.getMockImplementation()!;
+      const atAcknowledgement: unknown[] = [];
+      fetchMock.mockImplementation(async (input, init) => {
+        if (String(input).endsWith('/commands/commit-clock/ack')) {
+          atAcknowledgement.push({
+            body: JSON.parse(String(init?.body)),
+            heading: screen.queryByRole('heading', { level: 1, name: 'Status' })?.textContent,
+            current: screen.queryByRole('link', { name: 'Status' })?.getAttribute('aria-current'),
+            at: Date.now(),
+          });
+        }
+        return original(input, init);
+      });
+      let finish!: () => void;
+      let started = false;
+      const heldCommit = new Promise<null>((resolve) => { finish = () => resolve(null); });
+      const router = createMemoryRouter([{
+        path: '*', element: <App config={config} />,
+        loader: ({ request }) => {
+          if (new URL(request.url).pathname !== '/status') return null;
+          started = true;
+          return heldCommit;
+        },
+      }], { initialEntries: ['/settings'] });
+      restoreProfile.mockResolvedValue({ name: 'Dan Aakesen' });
+      const view = render(<RouterProvider router={router} />);
+      await screen.findByRole('navigation', { name: 'Areas' });
+      await waitFor(() => expect(activityStream).not.toBeNull());
+      await act(async () => { workspace.ready(); });
+      const startedAt = Date.now();
+      const clock = vi.spyOn(Date, 'now').mockReturnValue(startedAt);
+      const schedule = window.setTimeout;
+      const timers = vi.spyOn(window, 'setTimeout');
+      let expire!: () => void;
+      let timeoutFired = false;
+      timers.mockImplementation((callback, delay, ...args) => {
+        if (delay !== 4750) return schedule.call(window, callback, delay, ...args);
+        if (typeof callback !== 'function') throw new TypeError('Expected the page deadline callback.');
+        expire = () => { timeoutFired = true; callback(...args); };
+        return schedule.call(window, () => {}, delay);
+      });
+      try {
+        await act(async () => {
+          workspace.publishCommand({ commandId: 'commit-clock', operation: 'navigate', page: 'status' });
+        });
+        expect(started).toBe(true);
+        expect(timers.mock.calls.some(([, delay]) => delay === 4750)).toBe(true);
+        expect(workspace.ack('commit-clock')).toBeUndefined();
+        expect(screen.queryByRole('heading', { level: 1, name: 'Status' })).toBeNull();
+        clock.mockReturnValue(startedAt + elapsed);
+        await act(async () => { finish(); });
+        expect(router.state.location.pathname).toBe('/status');
+        expect(timeoutFired).toBe(false);
+        expect(atAcknowledgement).toEqual([{
+          body: {
+            sessionId: '12345678-1234-4234-8234-123456789abc',
+            ...(elapsed < 4750 ? { applied: true } : {
+              applied: false, outcome: 'refused',
+              reason: 'The requested page did not finish opening before the command deadline.',
+            }),
+          },
+          heading: 'Status', current: 'page', at: startedAt + elapsed,
+        }]);
+        await act(async () => { expire(); });
+        expect(fetchMock.mock.calls.filter(([url]) => String(url).endsWith('/commands/commit-clock/ack'))).toHaveLength(1);
+      } finally {
+        view.unmount();
+        router.dispose();
+        timers.mockRestore();
+      }
+    },
+  );
+
+  it.each([4749, 4750])(
+    'checks the completion clock after synchronous same-page Status application (%s ms)', async (elapsed) => {
+      const workspace = streamWorkspaceCommands();
+      await renderSignedIn('/status');
+      await waitFor(() => expect(activityStream).not.toBeNull());
+      await act(async () => { workspace.ready(); });
+      fireEvent.click(screen.getByRole('button', { name: 'Folio' }));
+      const content = document.getElementById('content')!;
+      act(() => { screen.getByRole('button', { name: 'Close the Folio' }).focus(); });
+      expect(document.activeElement?.closest('#folio-pane')).not.toBeNull();
+      const startedAt = Date.now();
+      const clock = vi.spyOn(Date, 'now').mockReturnValue(startedAt);
+      const advanceClock = () => { clock.mockReturnValue(startedAt + elapsed); };
+      content.addEventListener('focus', advanceClock, { once: true });
+      try {
+        await act(async () => {
+          workspace.publishCommand({ commandId: 'same-page-clock', operation: 'navigate', page: 'status' });
+        });
+        expect(document.activeElement).toBe(content);
+        expect(Date.now()).toBe(startedAt + elapsed);
+        expect(JSON.parse(String(workspace.ack('same-page-clock')?.[1]?.body))).toMatchObject(
+          elapsed < 4750 ? { applied: true } : {
+            applied: false, outcome: 'refused',
+            reason: 'The requested page did not finish opening before the command deadline.',
+          },
+        );
+        expect(screen.getByRole('heading', { level: 1, name: 'Status' })).not.toBeNull();
+        expect(document.querySelector('.app-shell')?.getAttribute('data-folio-open')).toBe('false');
+        expect(fetchMock.mock.calls.filter(([url]) => String(url).endsWith('/commands/same-page-clock/ack'))).toHaveLength(1);
+      } finally {
+        content.removeEventListener('focus', advanceClock);
+      }
+    },
+  );
+
   function issueBoard() : FactoryBoard {
     return {
       project: { id: '7', repo: 'DanAakesen/jarvis' }, fetchedAt: new Date().toISOString(), stale: false,

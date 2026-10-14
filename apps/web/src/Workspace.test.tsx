@@ -1105,6 +1105,48 @@ describe('Workspace', () => {
     expect(anchor).toHaveBeenLastCalledWith(expect.objectContaining({ left: 200, top: 578, width: 740 }));
   });
 
+  it('keeps the saved chat and composer joined when the phone visual viewport pans without resizing the canvas', async () => {
+    phoneViewport();
+    localStorage.setItem(conversationLayoutKey, JSON.stringify({ x: .1, y: .2, width: .8, height: .6 }));
+    const saved = localStorage.getItem(conversationLayoutKey);
+    const viewport = new EventTarget();
+    vi.stubGlobal('visualViewport', viewport);
+    const anchor = vi.fn();
+    const view = render(<Workspace views={[{
+      id: 'conversation', title: 'Conversation', presentation: 'conversation',
+      content: { status: 'ready', content: <p>History</p> },
+    }]} onConversationPositionChange={anchor} defaultArrangement="layered" arrangeMenu={false} />);
+    const canvas = screen.getByRole('region', { name: 'Temporary workspace views' });
+    let top = 80;
+    vi.spyOn(canvas, 'getBoundingClientRect').mockImplementation(() => ({
+      x: 10, y: top, left: 10, top, right: 400, bottom: top + 500, width: 390, height: 500, toJSON: () => ({}),
+    }));
+    viewport.dispatchEvent(new Event('resize'));
+    await waitFor(() => expect(anchor).toHaveBeenLastCalledWith({ left: 49, top: 478, width: 320 }));
+    top = -20;
+    viewport.dispatchEvent(new Event('scroll'));
+    await waitFor(() => expect(anchor).toHaveBeenLastCalledWith({ left: 49, top: 378, width: 320 }));
+    top = 80;
+    viewport.dispatchEvent(new Event('resize'));
+    await waitFor(() => expect(anchor).toHaveBeenLastCalledWith({ left: 49, top: 478, width: 320 }));
+    expect(localStorage.getItem(conversationLayoutKey)).toBe(saved);
+    const calls = anchor.mock.calls.length;
+    await act(async () => {
+      window.dispatchEvent(new Event('scroll'));
+      viewport.dispatchEvent(new Event('scroll'));
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    });
+    expect(anchor).toHaveBeenCalledTimes(calls);
+    top = 600;
+    viewport.dispatchEvent(new Event('scroll'));
+    view.unmount();
+    await act(async () => {
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    });
+    expect(anchor).toHaveBeenCalledTimes(calls);
+    expect(localStorage.getItem(conversationLayoutKey)).toBe(saved);
+  });
+
   it('bounds Arrange to its window and keeps mobile lifecycle actions in one row with 44px targets', () => {
     const workspaceStyles = readFileSync('src/styles.css', 'utf8');
     expect(workspaceStyles).toMatch(/\.workspace-window-heading \{\s*position: relative;/);

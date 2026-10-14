@@ -1,5 +1,113 @@
 # Agent context
 
+## Mobile/Status review publication (14 October 2026)
+
+Dan approved commit, push and a separate review PR for the accepted
+fourteen-file mobile/Status correction. Use its separately scoped app
+publication worktree, not mixed `ui/shell-iteration` history. This supersedes
+the earlier publication holds below, but not merge/deployment, live turns,
+physical-phone/voice acceptance or downstream #798/#797/#792 holds.
+
+The publication base is `439a000b07199060cdfcf9d424638950394e9be5`.
+Main's generated PLAN updates restored the original `In progress` cell;
+implementation and configuration match reviewed runtime base `b787788`.
+Preserve complete current-main document bytes and actual cells.
+The eight source paths remain byte-identical to accepted patch `427F2A2E`;
+its two hook files already use LF, distinct from the linted CRLF raw hashes.
+
+Retained runtime receipt `validation-evidence.json` has SHA256
+`B94CC9E8C855B0F42F52723E2AAF61AF2089D1B43A86E3020878568635195CBA`:
+nine files/258 passing tests, types/build/whitespace, with actual main Factory
+and contracts rather than frozen Factory runtime. Available Vite 8.3.1,
+Vitest 5.0.2 and Node types 22.20.4 differ from declared 8.3.2, 5.0.3 and
+22.20.5; this is not pinned-toolchain CI. No additional local gate ran here.
+Retain `F77C1785` seven-file lint evidence through normalised source and
+unchanged configuration equivalence; CSS remains excluded, not linted.
+
+Preparation uses a read-only seed and an owned bare clone/worktree. Parent/UI
+working files, HEAD, drafts, shared dependencies and original5173 are not
+changed. The configured checkouts share Git metadata; do not claim the
+common metadata globally unchanged. Existing `/remote` state remains
+unverified; do not start a duplicate CLI or change shared settings.
+The original production trigger, phone/voice acceptance and router rollback
+are not established by this publication.
+
+## Page completion deadline follow-up (14 October 2026; local)
+
+This supersedes the previous coupled App/test hashes and their final lint
+receipt below, without changing the preserved mobile-only or Factory work.
+The current App hash is
+`F87741542F326E4CE407BAA4F2206B4D133B1C337FB698EC099FC8A898ABC85F`;
+the current App.test hash is
+`C74809A4CF7B7C006415057D0A3303F5ABC7B673BD66686B7490FA8DA00B0F75`.
+Both successful completion paths recheck the captured deadline. Existing
+refusal reasons and disposal remain intact; late routing is not rolled back.
+
+Final six probes replayed against the pinned reviewed `759B8BDA` actual App
+produce four false-success failures and two pre-deadline passes. The same
+probes pass against the correction, with 149 passing assertions across App,
+page-navigation, now-feed, NowFeedPanel and StatusPage. Only the deadline
+callback is held; React/testing timers remain native and the command timeout
+is not extended. The fixture also tests one late callback without a second ACK.
+Final strict types pass. Scratch production build covers the unchanged
+`F8774154` runtime source; the native-timer fixture correction subsequently
+passed types/tests. Final seven-file scoped lint passes with zero errors and
+warnings at 2026-10-14T10:56:26.341Z, with unchanged original configuration
+and all seven raw source hashes plus CSS checked before/after. CSS is
+excluded. The new coordinator receipt is
+`status-phone-deadline-lint-receipt.json`, SHA256
+`F77C1785D7BB8DF87F8F4428A7B0E9966FFD71CD456D6B80FFC538441010968B`.
+The previous receipt remains byte-exact. Neither receipt claims subsequent
+LF-normalized hook hashes or new-main CI.
+
+The previous nine-file/252-test receipt remains historical, not a fresh run of
+unchanged mobile suites. No new-main CI, original production attribution,
+physical-phone/voice acceptance, publication or live activity is claimed.
+Original5173, settings/drafts and shared dependencies remain untouched.
+
+## Phone keyboard correction and current Status gate (14 October 2026; local)
+
+The user-directed phone correction uses the actual Workspace/transcript/input
+in an owned offline Chromium fixture. All API/provider fetches are blocked;
+its messages and VisualViewport events are explicitly synthetic. Draft
+preservation uses the native textarea value setter plus bubbling input, not
+an untracked DOM assignment. Geometry proof does not establish an actual
+iPhone keyboard, Safari, device audio or voice acceptance.
+
+The mobile-only five affected suites pass 186 assertions; strict TypeScript
+and a scratch-output production build pass. The earlier expanded six-suite run
+passed 243/244: its unchanged voice-unit assertion expects `2.5`, whereas this
+machine's default en-DK formatter returns `2,5`. No test or format is weakened.
+The preserved mobile-only snapshots pass isolated scoped lint for six
+TypeScript/TSX files, zero errors/warnings, with the unchanged project config
+and seven before/after source hashes. CSS is explicitly excluded: existing
+ESLint has no CSS configuration. That receipt covers the preserved F607 App,
+not the later coupled Status App revision. No shared dependencies/manifests
+or config are changed.
+
+The final coupled revision also passes isolated scoped lint for seven
+TypeScript/TSX files, zero errors/warnings, checked at
+2026-10-14T09:47:49.171Z. All seven requested source hashes and the unchanged
+CSS hash were verified before/after against the original config; CSS remains
+excluded from lint. Receipt: coordinator session artifacts
+`status-phone-lint-receipt.json`. The final App/test hashes are
+`759B8BDAC2EDE7FDBD81A0CE58FA65EA353A9ECEFD4059DD0498C9247A3E0D1C`
+and `2FECAD811EE1D45C97F63D9334479C5DBD80FFCBCCB89BB623858D4E064B03BF`.
+
+Dan has now performed the ordinary Status turn: first completion claim
+without visible navigation, then follow-up recovery. Earlier absent-user
+statements below are historical, not the current #799 blocker. The local
+actual-App trace reproduced a first-ack route-commit race, not the original
+live cause. Six first-ack cases and four held-route cancel/deadline/supersede/
+unmount cases cover the correction; all nine affected test files pass 252 tests,
+with exact final types/build/whitespace checks. A pending route's waiter
+observes completion only; it does not roll back an already-requested route.
+Held-loader recovery fixtures explicitly change route before releasing old
+work and prove no stale success acknowledgement. No substitute live/model turn,
+production navigation, physical-phone claim or downstream #798/#797/#792.
+Coordinator-only isolated Factory publication approval is not permission
+to publish this mixed local checkout or merge/deploy these corrections.
+
 ## Read-only Status page (14 October 2026)
 
 P9-101/#799 adds `/status`, rail/phone entries, accepted voice/chat navigation

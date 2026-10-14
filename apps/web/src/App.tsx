@@ -51,6 +51,7 @@ import { KnowledgeBackendContext } from './knowledge/knowledge-context';
 import { PresenceChip, PresenceSettings } from './Presence';
 import { MemorySettings } from './MemorySettings';
 import { createWorkspacePinsClient } from './workspace-pins';
+import { usePhoneChatViewport } from './phone-chat-viewport';
 
 const SettingsActivityHostContext = createContext<((host: HTMLDivElement | null) => void) | null>(null);
 
@@ -140,7 +141,16 @@ function ShellLayout({ signedIn, config, session, camera, screenShare }: {
   const navigate = useNavigate();
   const home = pathname === '/';
   const pathnameRef = useRef(pathname);
-  useLayoutEffect(() => { pathnameRef.current = pathname; }, [pathname]);
+  const pendingPageNavigation = useRef<{ path: string; finish: (result: SessionCommandResult) => void } | null>(null);
+  useLayoutEffect(() => {
+    pathnameRef.current = pathname;
+    const pending = pendingPageNavigation.current;
+    pending?.finish(pathname === pending.path ? { applied: true } :
+      { applied: false, reason: 'Page navigation was superseded before completion.' });
+  }, [pathname]);
+  useEffect(() => () => pendingPageNavigation.current?.finish({
+    applied: false, reason: 'Page navigation was cancelled before completion.',
+  }), []);
   const getAccessToken = session.getAccessToken;
   const { working, latestActivity, workText } = useJarvisActivity();
   const activityText = activityLabel(latestActivity);
@@ -177,6 +187,8 @@ function ShellLayout({ signedIn, config, session, camera, screenShare }: {
   }, [signedIn, pathname]);
   const [voiceHasWindows, setVoiceHasWindows] = useState(false);
   const [phone, setPhone] = useState(() => window.matchMedia?.(PHONE_LAYOUT_MEDIA_QUERY).matches ?? false);
+  const shellElement = useRef<HTMLDivElement>(null);
+  usePhoneChatViewport(shellElement, signedIn && phone && !voiceActive);
   // Phone shell: the open windows list and the page menu are sheets opened from the top bar.
   const [windowsSheetOpen, setWindowsSheetOpen] = useState(false);
   const windowCount = openWindows.filter((window) => window.viewId !== conversationViewId).length;
@@ -320,6 +332,42 @@ function ShellLayout({ signedIn, config, session, camera, screenShare }: {
         cancelReveal.current();
         cancelReveal.current = revealWhenReady(() => document.getElementById(result.anchorId), reduced);
         return { applied: true };
+      });
+    }
+    const navigation = readNavigateCommand(command);
+    if (navigation) {
+      const target = resolveNavigation(navigation);
+      if (!target.ok) return false;
+      const deadline = Math.min(expiresAt ?? Date.now() + 6000, Date.now() + 6000) - 250;
+      if (cancelSignal?.aborted || deadline <= Date.now()) {
+        return Promise.resolve({ applied: false, reason: 'Page navigation expired or was cancelled before application.' });
+      }
+      const deadlineResult: SessionCommandResult = {
+        applied: false, reason: 'The requested page did not finish opening before the command deadline.',
+      };
+      let applied = false;
+      flushSync(() => { applied = navigateTo(navigation); });
+      const path = target.path;
+      if (!applied || path === undefined || pathnameRef.current === path) {
+        return applied && deadline <= Date.now() ? Promise.resolve(deadlineResult) : applied;
+      }
+      // The data router can commit the page after the dispatch's flushSync returns.
+      return new Promise<SessionCommandResult>((resolve) => {
+        let settled = false;
+        const finish = (result: SessionCommandResult) => {
+          if (settled) return;
+          settled = true;
+          window.clearTimeout(timer);
+          cancelSignal?.removeEventListener('abort', cancel);
+          if (pendingPageNavigation.current?.finish === finish) pendingPageNavigation.current = null;
+          resolve(result.applied && deadline <= Date.now() ? deadlineResult : result);
+        };
+        const cancel = () => finish({ applied: false, reason: 'Page navigation was cancelled before completion.' });
+        const timer = window.setTimeout(() => finish(deadlineResult), Math.max(0, deadline - Date.now()));
+        pendingPageNavigation.current?.finish({ applied: false, reason: 'Page navigation was superseded before completion.' });
+        pendingPageNavigation.current = { path, finish };
+        cancelSignal?.addEventListener('abort', cancel, { once: true });
+        if (cancelSignal?.aborted) cancel();
       });
     }
     if (command.operation === 'session') return workspaceCommands.applySession(command);
@@ -599,7 +647,7 @@ function ShellLayout({ signedIn, config, session, camera, screenShare }: {
 
   return (
     <TaskWindowsContext.Provider value={signedIn ? taskWindowsApi : null}>
-    <div className={`app app-shell${signedIn ? '' : ' app-signed-out'}`} data-navigation-open={signedIn && (navigationShown || folioOpen)} data-folio-open={signedIn && folioOpen}
+    <div ref={shellElement} className={`app app-shell${signedIn ? '' : ' app-signed-out'}`} data-navigation-open={signedIn && (navigationShown || folioOpen)} data-folio-open={signedIn && folioOpen}
       data-context-open={signedIn && contextPanel.isOpen} data-voice-active={voiceActive}
       data-voice-has-windows={voiceHasWindows} data-conversation-open={signedIn && conversationOpen}
       style={{ ...panelWidths, '--conversation-composer-height': `${conversationComposerHeight}px` } as CSSProperties}
