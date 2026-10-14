@@ -38,6 +38,8 @@ internal sealed class FakeCdpTarget : IAsyncDisposable
     public List<string> Methods { get; } = [];
     public List<JsonElement> Calls { get; } = [];
     public Uri TargetsUri => new($"http://127.0.0.1:{_port}/json/list");
+    public Func<bool, CancellationToken, Task>? BeforeHandler { get; set; }
+    public bool IsListening => _listener.IsListening;
 
     public static Task<FakeCdpTarget> StartAsync(
         string role = "button",
@@ -68,6 +70,8 @@ internal sealed class FakeCdpTarget : IAsyncDisposable
 
     private async Task WriteTargetsAsync(HttpListenerContext context)
     {
+        if (BeforeHandler is { } beforeHandler)
+            await beforeHandler(false, _stopping.Token);
         context.Response.ContentType = "application/json";
         var json = JsonSerializer.SerializeToUtf8Bytes(new[]
         {
@@ -88,6 +92,8 @@ internal sealed class FakeCdpTarget : IAsyncDisposable
     private async Task HandleWebSocketAsync(HttpListenerContext context)
     {
         using var socket = (await context.AcceptWebSocketAsync(null)).WebSocket;
+        if (BeforeHandler is { } beforeHandler)
+            await beforeHandler(true, _stopping.Token);
         var buffer = new byte[8192];
         using var message = new MemoryStream();
         while (!_stopping.IsCancellationRequested && socket.State == WebSocketState.Open)
