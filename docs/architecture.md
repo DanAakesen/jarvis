@@ -1,6 +1,6 @@
 # Architecture
 
-## Delivery after verified writer stop (15 October 2026; V4e local, not released)
+## Delivery after verified writer stop (15 October 2026; V4f local, not released)
 
 Runner invocation metadata separately records successful work and successful
 owned-provider teardown as exact booleans, with the full verified local work
@@ -38,6 +38,11 @@ The backend completion event retains the work commit. The SQL policy gate
 compares that commit with the policy candidate's expected PR head while holding
 the task lock, including after deferred approval. A different green PR cannot
 substitute for unpublished current work.
+Proof identity expressions use explicit `Latin1_General_100_BIN2` comparison.
+JSON inherits the payload column's database-default collation, which can
+differ from the binary Foundry-session column and otherwise fail the gate with
+SQL error 468. Explicit comparison also keeps opaque session/invocation IDs
+case-sensitive without changing persisted schema or the database collation.
 Backend proof events and heartbeat decisions distinguish cleanup-failed delivery
 from clean completion and preserve sanitized secondary phases. Runner failure
 is not rewritten as success. Untracking ends keep-alive polling; Foundry's

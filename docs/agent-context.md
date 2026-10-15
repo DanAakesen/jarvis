@@ -1,6 +1,6 @@
 # Agent context
 
-## Reviewed recovery correction (15 October 2026; V4e local and held)
+## Reviewed recovery correction (15 October 2026; V4f local and held)
 
 Preserve the pinned V1/V2 snapshots, Codex HOLD evidence and source-reviewed V3
 tree `7303f6e5`. V3 corrects the
@@ -60,6 +60,26 @@ the three newly changed backend files passed lint. Full production types still
 fail on the same 12 missing-dependency/derivative diagnostics, not a build pass.
 Runner source is unchanged from V4d; its 198/11 qualified receipt is not a fresh
 Linux or full-source acceptance pass.
+
+V4e received SOURCE-ONLY PASS and was published as ready PR #856 at `dbfff31d`
+with tree `e7d02384`. Its automatic attempt-one CI `38816753978` genuinely
+passed full backend build, eight component jobs and the pinned Python step,
+but real SQL failed with error 468; aggregate CI correctly failed. CodeQL
+`38816754153` passed. JSON proof inherits the database-default collation,
+whereas `foundry_session_id` is explicitly binary-collated. V4f uses explicit
+`Latin1_General_100_BIN2` for proof-identity comparisons, retaining exact opaque
+IDs without changing database/schema collation. Added SQL controls reject
+case-only session/invocation mismatches. The same SQL batch also showed three
+rollback controls blocked by 0048's correctly enforced generation-retention
+guard: their shared fixture had already executed tasks. V4f gives those controls
+fresh disposable loopback databases and adds a real-SQL control for unused
+rollback versus retained used generations. No guard or stored generation is
+reset to make rollback succeed. Preserve the failed batch; no unchanged rerun
+or merge. Fresh source review and normal new-head SQL/CI acceptance remain
+required. V4f's eight local unit suites passed 359 tests and its three changed
+backend files passed lint; local production types still report the same 12
+missing-dependency/derivative errors. These are not real-SQL acceptance, and the
+local dependency limitation is separate from the genuine V4e full-build pass.
 
 The relocated V3 harness initially failed because deeper Windows fixture paths
 made Git clone exceed its path limit. A separate short-temp-path harness passed

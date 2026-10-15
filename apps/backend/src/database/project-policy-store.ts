@@ -31,12 +31,14 @@ export function createProjectPolicyStore(pool: sql.ConnectionPool): ProjectPolic
               SELECT 1 FROM dbo.task_events AS event
               WHERE event.task_id = task.id AND event.source = N'backend'
                 AND event.type = N'runner_completion_verified'
-                AND JSON_VALUE(event.payload, '$.workCommitSha') = @headSha
-                AND JSON_VALUE(event.payload, '$.executionGeneration') = CONVERT(varchar(19), task.execution_generation)
+                AND JSON_VALUE(event.payload, '$.workCommitSha') COLLATE Latin1_General_100_BIN2 = @headSha
+                AND JSON_VALUE(event.payload, '$.executionGeneration') COLLATE Latin1_General_100_BIN2
+                  = CONVERT(varchar(19), task.execution_generation)
                 AND session.execution_generation = task.execution_generation
-                AND JSON_VALUE(event.payload, '$.sandboxSessionId') = CONVERT(varchar(19), session.id)
-                AND JSON_VALUE(event.payload, '$.foundrySessionId') = session.foundry_session_id
-                AND JSON_VALUE(event.payload, '$.invocationId') = turn.invocation_id
+                AND JSON_VALUE(event.payload, '$.sandboxSessionId') COLLATE Latin1_General_100_BIN2
+                  = CONVERT(varchar(19), session.id)
+                AND JSON_VALUE(event.payload, '$.foundrySessionId') COLLATE Latin1_General_100_BIN2 = session.foundry_session_id
+                AND JSON_VALUE(event.payload, '$.invocationId') COLLATE Latin1_General_100_BIN2 = turn.invocation_id
                 AND turn.status = N'completed'
                 AND (session.status = N'Active' OR (session.status = N'Ended'
                   AND session.end_reason IN (N'done', N'idle_expired')))

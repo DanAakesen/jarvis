@@ -556,7 +556,7 @@ describe('dispatcher SQL coordination', () => {
   it.each([
     'no-runtime', 'missing', 'early-completed', 'runner-proof', 'wrong-session', 'wrong-foundry-session',
     'wrong-invocation', 'older-turn', 'newer-session', 'crashed', 'cancelled',
-    'unbound-commit', 'wrong-commit',
+    'unbound-commit', 'wrong-commit', 'case-foundry-session', 'case-invocation',
     'current', 'ended', 'idle-expired',
   ] as const)('gates project policy on the current backend-verified runner: %s', async (scenario) => {
     const events = createEventHub<TaskEventMessage>();
@@ -606,8 +606,10 @@ describe('dispatcher SQL coordination', () => {
               workCommitSha: scenario === 'wrong-commit' ? 'b'.repeat(40) : workCommitSha,
             }),
             sandboxSessionId: scenario === 'wrong-session' ? '0' : sandboxSessionId,
-            foundrySessionId: scenario === 'wrong-foundry-session' ? 'other-session' : foundrySessionId,
-            invocationId: scenario === 'wrong-invocation' ? 'other-invocation' : invocationId,
+            foundrySessionId: scenario === 'wrong-foundry-session' ? 'other-session'
+              : scenario === 'case-foundry-session' ? foundrySessionId.toUpperCase() : foundrySessionId,
+            invocationId: scenario === 'wrong-invocation' ? 'other-invocation'
+              : scenario === 'case-invocation' ? invocationId.toUpperCase() : invocationId,
           },
         });
       }

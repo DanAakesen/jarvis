@@ -68,6 +68,23 @@ its existing classification. Offline controls reproduced both incorrect
 cleanup flags; added SQL controls must verify Ended/done/completed lifecycle
 alongside task attention and denied policy. SQL/Linux/release/live remain held.
 
+V4e received source-only PASS and normal ready PR #856, but its first genuine
+automatic SQL run failed with collation error 468. Preserve that failure rather
+than rerunning it unchanged: JSON proof text inherits the database default,
+while Foundry session IDs use explicit binary collation. V4f applies explicit
+`Latin1_General_100_BIN2` to proof-identity comparisons. Do not alter database
+collation, rewrite stored IDs or relax the identity gate. Case-only changes to
+opaque session/invocation IDs must be refused; add real-SQL controls alongside
+the matching positives. V4e's full backend build and Python component step
+passed, but neither those component passes nor its CodeQL success accepts
+changed V4f source. Exact new-head review/SQL/CI/release/live gates remain.
+That failed SQL batch also blocked three existing rollback controls because
+their shared fixture now held used execution generations. Keep 0048's refusal:
+give rollback controls disposable fresh databases, and explicitly test that
+unused rollback succeeds while a used generation, its columns and ledger remain
+intact after refusal. Never clear generation history or weaken the production
+down migration merely to pass a fixture.
+
 ## Fail closed on explicit runner failure and finalization deadlines (15 October 2026; implemented locally)
 
 Independent read-only source reproductions showed that early result events
