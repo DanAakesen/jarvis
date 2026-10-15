@@ -13,6 +13,8 @@ replacement cleanup. Add controller/actual-transition and real-SQL positive/race
 controls; this new finding blocks release until exact-diff review and fresh
 complete CI/SQL/CodeQL. Prior freezes/green evidence remain historical, and
 neither this correction nor standing delivery authority grants another live job.
+Implementation/tests were published as `e6a41696`; final gate and deployment
+evidence is tracked in PR #853.
 
 ## Standing authority for guarded delivery (15 October 2026)
 

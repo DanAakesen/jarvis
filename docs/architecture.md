@@ -1,6 +1,6 @@
 # Architecture
 
-## Trusted pre-start runtime absence (15 October 2026; local correction)
+## Trusted pre-start runtime absence (15 October 2026)
 
 The existing runtime getter distinguishes no task (null result) from an existing
 task with no recorded session (all four projected fields null via OUTER APPLY).

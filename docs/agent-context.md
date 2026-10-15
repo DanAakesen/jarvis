@@ -1,17 +1,17 @@
 # Agent context
 
-## Current pre-start cancellation release blocker (15 October 2026)
+## Pre-start cancellation boundary and release evidence (15 October 2026)
 
 Published `0b4e79c2` passed all ten actual CI jobs (SQL 176 tests) and all four
 CodeQL analyses. Later complete review found a distinct correctness gap:
 `failStart`, exhausted retries or expired pre-start leases can leave an existing
 NeedsAttention task with no session ever recorded and no end reason.
-The local follow-up recognises only the trusted runtime getter's four-null
+The published correction recognises only the trusted runtime getter's four-null
 generation, never a missing getter result, partial record or absent target alone.
 No provider call is made for trusted absence. Existing transactional identity
 checks still reject insertion of the first runtime after capture before
-terminal events or cleanup. New focused controls and SQL cases require their
-own validation/review and fresh complete exact-head gates; prior-head green is
+terminal events or cleanup. New focused controls and SQL cases retain their
+own validation qualifications and fresh complete exact-head gates; prior-head green is
 not acceptance of this follow-up. Historical freezes remain immutable.
 
 ## Standing delivery authority (15 October 2026)

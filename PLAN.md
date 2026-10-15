@@ -1,6 +1,6 @@
 # Project plan
 
-## Pre-start attention cancellation follow-up (15 October 2026; local candidate)
+## Pre-start attention cancellation follow-up (15 October 2026)
 
 Published `0b4e79c2` passed all ten CI jobs, including 176 real-SQL tests,
 and all four CodeQL analyses. A subsequent complete review found a release
@@ -11,8 +11,12 @@ null; keep unknown, partial and mismatched ownership fail-closed. Preserve the
 atomic expected-state/runtime check so a first session inserted after capture
 rejects cancellation without terminal events or cleanup of that replacement.
 Deterministic controller/transaction and real-SQL regression cases cover this
-boundary. Local checks and exact-diff review are pending; require fresh complete
-CI/SQL/CodeQL after accepted publication. No release/live/deallocation claim,
+boundary. The implementation and tests were published as `e6a41696` after
+independent exact-source review; 125 focused tests and four-file lint passed,
+with selected snapshot type diagnostics unchanged from baseline and local SQL
+prerequisite-blocked. Current publication/gate results are tracked in PR #853;
+fresh complete exact-head CI/SQL/CodeQL is required before release.
+No release/live/deallocation claim,
 additional job or physical mobile-composer fix is implied.
 
 ## Combined V5 and header delivery (15 October 2026; awaiting exact-tree review)
