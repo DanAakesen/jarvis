@@ -12,6 +12,15 @@ function fakePool(recordset: unknown[] = []) {
 }
 
 describe('SQL project policy store', () => {
+  it.each(['', 'a'.repeat(39), 'g'.repeat(40)])('refuses an invalid expected work commit before SQL: %s', async (sha) => {
+    const { pool, query } = fakePool();
+    const operation = vi.fn(async () => undefined);
+    await expect(createProjectPolicyStore(pool).withActiveTask('7', operation, sha))
+      .resolves.toEqual({ kind: 'awaiting_runner' });
+    expect(operation).not.toHaveBeenCalled();
+    expect(query).not.toHaveBeenCalled();
+  });
+
   it('loads policy evidence for the task-linked pull request by repository and number', async () => {
     const row = {
       taskId: '7',

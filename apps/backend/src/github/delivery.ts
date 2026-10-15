@@ -10,6 +10,7 @@ interface DeliveryTask {
   id: string;
   title: string;
   issueNumber?: number | null;
+  workCommitSha?: string;
 }
 
 interface PullRequest {
@@ -117,7 +118,9 @@ async function request(
   return readJson(response);
 }
 
-function pullRequest(value: unknown, repository: string, branch: string, baseBranch: string): PullRequest | null {
+function pullRequest(
+  value: unknown, repository: string, branch: string, baseBranch: string, expectedHeadSha?: string,
+): PullRequest | null {
   if (!object(value)) return null;
   const response = value;
   if (!object(response.head) || !object(response.base)) return null;
@@ -136,6 +139,7 @@ function pullRequest(value: unknown, repository: string, branch: string, baseBra
     head.ref !== branch || typeof headRepository.full_name !== 'string' ||
     headRepository.full_name.toLowerCase() !== repository.toLowerCase() || base.ref !== baseBranch ||
     typeof headSha !== 'string' || !/^[\da-f]{40}$/iu.test(headSha) ||
+    (expectedHeadSha !== undefined && headSha.toLowerCase() !== expectedHeadSha.toLowerCase()) ||
     typeof openedAt !== 'string' || !Number.isFinite(Date.parse(openedAt)) ||
     typeof draft !== 'boolean' || (body !== null && typeof body !== 'string') ||
     (nodeId !== undefined && (typeof nodeId !== 'string' || nodeId.length === 0 || nodeId.length > 255)) ||
@@ -167,6 +171,7 @@ async function findOpenPullRequest(
   owner: string,
   token: string,
   timeoutMs?: number,
+  expectedHeadSha?: string,
 ): Promise<PullRequest | null> {
   const query = new URLSearchParams({
     base: baseBranch,
@@ -178,7 +183,8 @@ async function findOpenPullRequest(
   if (!Array.isArray(response) || response.length > 1) {
     throw new Error('GitHub pull request response is invalid');
   }
-  const found = response.length === 1 ? pullRequest(response[0], repository, branch, baseBranch) : null;
+  const found = response.length === 1
+    ? pullRequest(response[0], repository, branch, baseBranch, expectedHeadSha) : null;
   if (response.length === 1 && !found) throw new Error('GitHub pull request response is invalid');
   return found ? { ...found, reused: true } : null;
 }
@@ -196,6 +202,7 @@ export function createGitHubDeliveryHandler(
     if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/u.test(repository) ||
       !defaultBranch || defaultBranch.length > 255 || !branch || branch.length > 255 ||
       !/^[1-9][0-9]{0,18}$/u.test(task.id) || !task.title.trim() ||
+      (task.workCommitSha !== undefined && !/^[\da-f]{40}$/iu.test(task.workCommitSha)) ||
       (task.issueNumber != null && (!Number.isSafeInteger(task.issueNumber) || task.issueNumber < 1))) {
       return { kind: 'refused', reason: 'The task repository, branch, or title could not be verified.' };
     }
@@ -222,8 +229,18 @@ export function createGitHubDeliveryHandler(
       if (!object(branchBody) || branchBody.name !== branch) {
         throw new Error('GitHub branch response is invalid');
       }
+      if (task.workCommitSha !== undefined && (!object(branchBody.commit) ||
+        typeof branchBody.commit.sha !== 'string' ||
+        branchBody.commit.sha.toLowerCase() !== task.workCommitSha.toLowerCase())) {
+        return {
+          kind: 'refused',
+          reason: 'The published task branch does not match the current runner work commit.',
+        };
+      }
 
-      pull = await findOpenPullRequest(fetchImpl, repositoryPath, repository, branch, defaultBranch, owner!, token);
+      pull = await findOpenPullRequest(
+        fetchImpl, repositoryPath, repository, branch, defaultBranch, owner!, token, undefined, task.workCommitSha,
+      );
       if (!pull) {
         const comparison = await request(
           fetchImpl,
@@ -254,7 +271,7 @@ export function createGitHubDeliveryHandler(
                   : `Completed by Jarvis task #${task.id} (task details: ${taskPath}).`,
               ].filter((line): line is string => line !== undefined).join('\n\n'),
             }, 6_000);
-            const opened = pullRequest(created, repository, branch, defaultBranch);
+            const opened = pullRequest(created, repository, branch, defaultBranch, task.workCommitSha);
             if (!opened) throw new Error('GitHub pull request response is invalid');
             const mapping = await recordOpenedPull(tasks, task.id, opened, branch, defaultBranch, repository, onPullRequest);
             return { kind: 'opened' as const, mapping };
@@ -263,7 +280,7 @@ export function createGitHubDeliveryHandler(
               return { kind: 'duplicate' as const };
             }
             const reconciled = await findOpenPullRequest(
-              fetchImpl, repositoryPath, repository, branch, defaultBranch, owner!, token, 3_000,
+              fetchImpl, repositoryPath, repository, branch, defaultBranch, owner!, token, 3_000, task.workCommitSha,
             );
             if (reconciled) {
               await prepareReusedPullRequest(fetchImpl, repositoryPath, token, reconciled, task);
@@ -292,7 +309,9 @@ export function createGitHubDeliveryHandler(
           return { kind: 'awaiting_policy' };
         }
         if (guardedCreate.value.kind === 'duplicate') {
-          pull = await findOpenPullRequest(fetchImpl, repositoryPath, repository, branch, defaultBranch, owner!, token);
+          pull = await findOpenPullRequest(
+            fetchImpl, repositoryPath, repository, branch, defaultBranch, owner!, token, undefined, task.workCommitSha,
+          );
           if (!pull) throw new Error('GitHub could not verify the task pull request after a duplicate create');
         }
       }

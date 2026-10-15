@@ -4,6 +4,7 @@ import type { RecoveryClaimResult, TaskRecoveryStore } from '../factory/recovery
 
 interface RecoveryTaskRow {
   taskId: string;
+  executionGeneration: string;
   projectId: string;
   title: string;
   request: string;
@@ -69,6 +70,7 @@ export function createTaskRecoveryStore(pool: sql.ConnectionPool, eventHub: Task
         .input('sandboxSessionId', sql.BigInt, BigInt(sandbox.sandboxSessionId))
         .input('foundrySessionId', sql.NVarChar(255), sandbox.foundrySessionId)
         .input('invocationId', sql.NVarChar(255), sandbox.invocationId)
+        .input('executionGeneration', sql.BigInt, BigInt(sandbox.executionGeneration))
         .query<{ taskId: string }>(`SELECT CAST(task.id AS varchar(19)) AS taskId
           FROM dbo.tasks AS task
           INNER JOIN dbo.sandbox_sessions AS session
@@ -87,6 +89,8 @@ export function createTaskRecoveryStore(pool: sql.ConnectionPool, eventHub: Task
             ORDER BY started_at DESC, id DESC
           ) AS latestTurn
           WHERE task.state = N'Running' AND task.lease_owner IS NULL
+            AND task.execution_generation = session.execution_generation
+            AND task.execution_generation = @executionGeneration
             AND latestSession.id = session.id AND latestTurn.invocation_id = @invocationId
             AND latestTurn.status IN (N'running', N'completed');`);
       return recordset[0]?.taskId ?? null;
@@ -96,11 +100,13 @@ export function createTaskRecoveryStore(pool: sql.ConnectionPool, eventHub: Task
       const transaction = new sql.Transaction(pool);
       await transaction.begin();
       try {
+        await acquireLock(transaction, `jarvis.project-policy:${taskId}`, 'Exclusive');
         await acquireLock(transaction, 'jarvis.backend-sleep-switch', 'Shared');
         await acquireLock(transaction, 'jarvis.task-dispatcher', 'Exclusive');
         const { recordset } = await new sql.Request(transaction)
           .input('taskId', sql.BigInt, BigInt(taskId))
           .query<RecoveryTaskRow>(`SELECT CAST(t.id AS varchar(19)) AS taskId, CAST(t.project_id AS varchar(19)) AS projectId,
+              CAST(t.execution_generation + 1 AS varchar(19)) AS executionGeneration,
               t.title, t.request, t.agent, t.model_override AS modelOverride,
               t.reasoning_override AS reasoningOverride, t.attempt_count AS attemptCount,
             t.next_attempt_at AS nextAttemptAt, p.sandbox_size AS sandboxSize, p.tech,
@@ -144,6 +150,7 @@ export function createTaskRecoveryStore(pool: sql.ConnectionPool, eventHub: Task
           .input('owner', sql.NVarChar(100), owner)
           .input('leaseSeconds', sql.Int, leaseSeconds)
           .query(`UPDATE dbo.tasks SET state = N'Running', lease_owner = @owner,
+              execution_generation = execution_generation + 1,
               lease_until = DATEADD(second, @leaseSeconds, SYSUTCDATETIME()),
               next_attempt_at = NULL
             WHERE id = @taskId AND state = N'NeedsAttention' AND branch IS NOT NULL;`);

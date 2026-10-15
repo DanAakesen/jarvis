@@ -1,5 +1,7 @@
 import asyncio
+import json
 import os
+import signal
 import sys
 
 import pytest
@@ -185,6 +187,123 @@ def test_start_tracks_and_stop_joins_both_real_pipe_readers(shutdown_client, mon
     asyncio.run(exercise())
 
 
+@pytest.mark.skipif(sys.platform != "linux", reason="Production Linux process-group ownership")
+@pytest.mark.parametrize("inherit_pipes", [False, True])
+@pytest.mark.parametrize("parent_exits", [False, True])
+def test_stop_exits_owned_group_even_after_leader_exit(
+    shutdown_client, tmp_path, monkeypatch, inherit_pipes, parent_exits,
+):
+    monkeypatch.setattr(app, "ACP_STOP_TIMEOUT_SECONDS", 1)
+    ready = tmp_path / "owned-child.json"
+    child = (
+        "import json,os,signal,sys,time;from pathlib import Path;"
+        "signal.signal(signal.SIGTERM,signal.SIG_IGN);"
+        "p=Path(sys.argv[1]);t=p.with_suffix('.tmp');"
+        "t.write_text(json.dumps({'pid':os.getpid(),'group':os.getpgrp()}));t.replace(p);"
+        "time.sleep(30)"
+    )
+    parent = (
+        "import subprocess,sys,time;"
+        f"subprocess.Popen([sys.executable,'-c',{child!r},{str(ready)!r}]"
+        + (");" if inherit_pipes else ",stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL);")
+        + ("pass" if parent_exits else "time.sleep(30)")
+    )
+
+    async def exercise():
+        client = shutdown_client
+        client.command = [sys.executable, "-c", parent]
+        client.env = {}
+        child_pid = None
+        child_group = None
+        stopped = False
+
+        async def request(_method, _params):
+            return {}
+
+        monkeypatch.setattr(client, "request", request)
+        try:
+            await client.start()
+            async with asyncio.timeout(5):
+                while not ready.exists() or (parent_exits and client.process.returncode is None):
+                    await asyncio.sleep(0.01)
+            metadata = json.loads(ready.read_text())
+            child_pid, child_group = metadata["pid"], metadata["group"]
+            assert child_group == client.process.pid == client._process_group_id
+            assert child_group != os.getpgrp()
+            await asyncio.wait_for(client.stop(), 5)
+            stopped = True
+            assert client.process.returncode is not None
+            assert client._reader_task.done()
+            assert client._stderr_task.done()
+            assert not client._owned_processes_running()
+            await client.stop()
+        finally:
+            group = client._process_group_id
+            if not stopped and group is not None:
+                assert group == client.process.pid and group != os.getpgrp()
+                try:
+                    os.killpg(group, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+            if not stopped and child_pid is not None:
+                try:
+                    if os.getpgid(child_pid) == child_group:
+                        os.kill(child_pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+            if client.process is not None:
+                if client.process.returncode is None:
+                    client.process.kill()
+                readers = [task for task in (client._reader_task, client._stderr_task) if task is not None]
+                for reader in readers:
+                    if not reader.done():
+                        reader.cancel()
+                await asyncio.wait_for(asyncio.gather(*readers, return_exceptions=True), 5)
+                await asyncio.wait_for(client.process.wait(), 5)
+
+    asyncio.run(exercise())
+
+
+@pytest.mark.skipif(sys.platform != "linux", reason="Production Linux procfs process states")
+@pytest.mark.parametrize(
+    ("state", "group", "running"),
+    [("Z", 123, False), ("X", 123, False), ("S", 123, True), ("T", 123, True), ("R", 456, False)],
+)
+def test_owned_group_checks_live_members_not_unreaped_zombies(
+    shutdown_client, tmp_path, monkeypatch, state, group, running,
+):
+    process = tmp_path / "789"
+    process.mkdir()
+    (process / "stat").write_text(f"789 (name with ) parentheses) {state} 1 {group} 0 0", encoding="utf-8")
+    scandir = os.scandir
+    monkeypatch.setattr(os, "scandir", lambda path: scandir(tmp_path if path == "/proc" else path))
+    monkeypatch.setattr(os, "killpg", lambda _group, _signal: None)
+    shutdown_client._process_group_id = 123
+
+    assert shutdown_client._owned_processes_running() is running
+
+
+@pytest.mark.skipif(sys.platform != "linux", reason="Production Linux procfs process states")
+def test_unreadable_group_membership_is_a_cleanup_failure(shutdown_client, monkeypatch):
+    def unavailable(_path):
+        raise PermissionError("PRIVATE synthetic process diagnostic")
+
+    shutdown_client._process_group_id = 123
+    monkeypatch.setattr(os, "killpg", lambda _group, _signal: None)
+    monkeypatch.setattr(os, "scandir", unavailable)
+
+    async def exercise():
+        process = UnresponsiveProcess()
+        process.returncode = 0
+        process.exited.set()
+        shutdown_client.process = process
+        with pytest.raises(app.ACPShutdownError, match="process_exit") as error:
+            await shutdown_client.stop()
+        assert "PRIVATE" not in str(error.value)
+
+    asyncio.run(exercise())
+
+
 @pytest.mark.parametrize("replacement", [False, True])
 def test_failed_finalization_is_bounded_and_retains_only_its_owned_client(
     shutdown_client, tmp_path, monkeypatch, replacement,
@@ -206,6 +325,10 @@ def test_failed_finalization_is_bounded_and_retains_only_its_owned_client(
         assert "ACPShutdownError" in client.state.error
         assert app.session_clients[client.state.session_id] is (other if replacement else client)
         assert any(event["kind"] == "failed" for event in client.state.events)
+        assert any(
+            event["kind"] == "failed" and event["data"].get("cleanup_phase") == "process_exit"
+            for event in client.state.events
+        )
         assert credentials == {}
 
     asyncio.run(exercise())

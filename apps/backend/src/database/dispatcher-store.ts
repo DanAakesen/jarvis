@@ -10,6 +10,7 @@ import type { TaskEventHub, TaskEventMessage } from '../factory/task-store.js';
 
 interface DispatchTaskRow {
   taskId: string;
+  executionGeneration: string;
   projectId: string;
   title: string;
   request: string;
@@ -213,10 +214,12 @@ export function createDispatcherStore(pool: sql.ConnectionPool, eventHub: TaskEv
                     OR (projectActive.state = N'Ready' AND projectActive.lease_until > @now))) < p.max_parallel_tasks
             ORDER BY t.priority DESC, t.created_at, t.id;
             UPDATE t SET attempt_count = t.attempt_count + 1,
+              execution_generation = t.execution_generation + 1,
               lease_owner = @owner, lease_until = DATEADD(second, @leaseSeconds, @now),
               branch = COALESCE(t.branch, CONCAT(N'jarvis/task-', t.id))
             FROM dbo.tasks AS t INNER JOIN @candidate AS c ON c.task_id = t.id;
             SELECT CAST(c.task_id AS varchar(19)) AS taskId, CAST(c.project_id AS varchar(19)) AS projectId,
+              CAST(t.execution_generation AS varchar(19)) AS executionGeneration,
               c.title, c.request, c.agent, c.model_override AS modelOverride,
               c.reasoning_override AS reasoningOverride, c.attempt_count + 1 AS attemptCount,
               t.next_attempt_at AS nextAttemptAt, c.sandbox_size AS sandboxSize, c.tech,
@@ -240,12 +243,14 @@ export function createDispatcherStore(pool: sql.ConnectionPool, eventHub: TaskEv
       }
     },
 
-    async listStaleRunning(heartbeatBefore, limit) {
+    async listStaleRunning(heartbeatBefore, limit, afterTaskId) {
       const { recordset } = await databaseReadRequest(pool)
         .input('heartbeatBefore', sql.DateTime2(7), heartbeatBefore)
         .input('limit', sql.Int, limit)
+        .input('afterTaskId', sql.BigInt, BigInt(afterTaskId ?? '0'))
         .query<StaleRunningTask>(`SELECT TOP (@limit) CAST(task.id AS varchar(19)) AS taskId,
           CAST(session.id AS varchar(19)) AS sandboxSessionId,
+          CAST(session.execution_generation AS varchar(19)) AS executionGeneration,
           session.foundry_session_id AS foundrySessionId, session.agent_name AS agentName,
           turn.invocation_id AS invocationId, session.status AS sessionStatus
           FROM dbo.tasks AS task
@@ -261,19 +266,21 @@ export function createDispatcherStore(pool: sql.ConnectionPool, eventHub: TaskEv
             WHERE sandbox_session_id = session.id
             ORDER BY started_at DESC, id DESC
           ) AS turn
-          WHERE task.state = N'Running' AND task.lease_owner IS NULL
+          WHERE task.state = N'Running' AND task.lease_owner IS NULL AND task.id > @afterTaskId
             AND turn.status IN (N'running', N'completed')
             AND (session.status = N'Active'
               OR (session.status = N'Ended' AND (session.end_reason = N'done'
                 OR (session.end_reason = N'idle_expired' AND turn.status = N'completed'))))
-            AND COALESCE(session.last_heartbeat_at, session.started_at) <= @heartbeatBefore
-          ORDER BY COALESCE(session.last_heartbeat_at, session.started_at), task.id;`);
+            AND (session.status = N'Ended'
+              OR COALESCE(session.last_heartbeat_at, session.started_at) <= @heartbeatBefore)
+          ORDER BY task.id;`);
       return recordset;
     },
 
     async isCurrentStaleTask(task) {
       const { recordset } = await databaseReadRequest(pool)
         .input('taskId', sql.BigInt, BigInt(task.taskId))
+        .input('executionGeneration', sql.BigInt, BigInt(task.executionGeneration))
         .input('sandboxSessionId', sql.BigInt, BigInt(task.sandboxSessionId))
         .input('foundrySessionId', sql.NVarChar(255), task.foundrySessionId)
         .input('invocationId', sql.NVarChar(255), task.invocationId)
@@ -293,6 +300,8 @@ export function createDispatcherStore(pool: sql.ConnectionPool, eventHub: TaskEv
             ORDER BY started_at DESC, id DESC
           ) AS turn
           WHERE task.id = @taskId AND task.state = N'Running' AND task.lease_owner IS NULL
+            AND task.execution_generation = @executionGeneration
+            AND session.execution_generation = task.execution_generation
             AND session.id = @sandboxSessionId AND session.foundry_session_id = @foundrySessionId
             AND turn.invocation_id = @invocationId AND turn.status IN (N'running', N'completed')
             AND (session.status = N'Active'
@@ -358,11 +367,13 @@ export function createDispatcherStore(pool: sql.ConnectionPool, eventHub: TaskEv
           .input('taskId', sql.BigInt, BigInt(task.taskId))
           .input('owner', sql.NVarChar(100), owner)
           .input('attemptCount', sql.Int, task.attemptCount - 1)
+          .input('executionGeneration', sql.BigInt, BigInt(task.executionGeneration))
           .input('delayMs', sql.Int, delayMs)
           .query(`UPDATE dbo.tasks SET attempt_count = @attemptCount,
             next_attempt_at = DATEADD(millisecond, @delayMs, SYSUTCDATETIME()),
             lease_owner = NULL, lease_until = NULL
-            WHERE id = @taskId AND state = N'Ready' AND lease_owner = @owner;`);
+            WHERE id = @taskId AND state = N'Ready' AND lease_owner = @owner
+              AND execution_generation = @executionGeneration;`);
         if ((rowsAffected[0] ?? 0) === 0) {
           await transaction.commit();
           return;
@@ -386,8 +397,10 @@ export function createDispatcherStore(pool: sql.ConnectionPool, eventHub: TaskEv
         const current = await new sql.Request(transaction)
           .input('taskId', sql.BigInt, BigInt(task.taskId))
           .input('owner', sql.NVarChar(100), owner)
+          .input('executionGeneration', sql.BigInt, BigInt(task.executionGeneration))
           .query<{ state: string }>(`SELECT state FROM dbo.tasks WITH (UPDLOCK, ROWLOCK)
-            WHERE id = @taskId AND lease_owner = @owner AND state IN (N'Ready', N'Running');`);
+            WHERE id = @taskId AND lease_owner = @owner AND state IN (N'Ready', N'Running')
+              AND execution_generation = @executionGeneration;`);
         const from = current.recordset[0]?.state;
         if (!from) throw new Error();
         const to = retryAt === null ? 'NeedsAttention' : 'Ready';
@@ -420,20 +433,23 @@ export function createDispatcherStore(pool: sql.ConnectionPool, eventHub: TaskEv
         const owned = await new sql.Request(transaction)
           .input('taskId', sql.BigInt, BigInt(task.taskId))
           .input('owner', sql.NVarChar(100), owner)
+          .input('executionGeneration', sql.BigInt, BigInt(task.executionGeneration))
           .query<{ id: string }>(`SELECT CAST(id AS varchar(19)) AS id FROM dbo.tasks WITH (UPDLOCK, ROWLOCK)
             WHERE id = @taskId AND state = N'Running' AND lease_owner = @owner
+              AND execution_generation = @executionGeneration
               AND lease_until > SYSUTCDATETIME();`);
         if (!owned.recordset[0]) throw new Error();
         const inserted = await new sql.Request(transaction)
           .input('taskId', sql.BigInt, BigInt(task.taskId))
+          .input('executionGeneration', sql.BigInt, BigInt(task.executionGeneration))
           .input('sessionId', sql.NVarChar(255), accepted.sessionId)
           .input('runnerName', sql.NVarChar(255), runnerName)
           .input('size', sql.NVarChar(8), task.sandboxSize)
           .input('image', sql.NVarChar(255), runnerName)
           .query<{ sandboxSessionId: string }>(`INSERT dbo.sandbox_sessions
-            (task_id, foundry_session_id, agent_version, agent_name, size, image, status)
+            (task_id, foundry_session_id, agent_version, agent_name, size, image, status, execution_generation)
             OUTPUT CAST(inserted.id AS varchar(19)) AS sandboxSessionId
-            VALUES (@taskId, @sessionId, N'active', @runnerName, @size, @image, N'Active');`);
+            VALUES (@taskId, @sessionId, N'active', @runnerName, @size, @image, N'Active', @executionGeneration);`);
         const sandboxSessionId = inserted.recordset[0]?.sandboxSessionId;
         if (!sandboxSessionId) throw new Error();
         await new sql.Request(transaction)
@@ -450,6 +466,7 @@ export function createDispatcherStore(pool: sql.ConnectionPool, eventHub: TaskEv
         if ((updated.rowsAffected[0] ?? 0) !== 1) throw new Error();
         const event = await insertEvent(transaction, task.taskId, 'sandbox_started', 'Sandbox session started', {
           sandboxSessionId, foundrySessionId: accepted.sessionId, invocationId: accepted.invocationId,
+          executionGeneration: task.executionGeneration,
         });
         await transaction.commit();
         eventHub.publish(event);
@@ -471,6 +488,7 @@ export function createDispatcherStore(pool: sql.ConnectionPool, eventHub: TaskEv
           t.agent, t.request, t.model_override AS modelOverride, t.reasoning_override AS reasoningOverride,
           p.repo AS repository, p.default_branch AS defaultBranch, t.branch,
           CAST(s.id AS varchar(19)) AS sandboxSessionId, s.foundry_session_id AS foundrySessionId,
+          CAST(s.execution_generation AS varchar(19)) AS executionGeneration,
           s.agent_name AS agentName, s.size AS sandboxSize, s.image, s.status AS sessionStatus,
           CAST(latestTurn.id AS varchar(19)) AS latestTurnId,
           CASE WHEN s.status = N'Active' THEN activeTurn.invocation_id ELSE latestTurn.invocation_id END AS invocationId
@@ -580,6 +598,7 @@ export function createDispatcherStore(pool: sql.ConnectionPool, eventHub: TaskEv
         eventHub.publish(event);
         return {
           sandboxSessionId,
+          executionGeneration: target.executionGeneration,
           foundrySessionId: accepted.sessionId,
           agentName: target.agentName,
           invocationId: accepted.invocationId,

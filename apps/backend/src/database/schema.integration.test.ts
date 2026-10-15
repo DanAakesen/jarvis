@@ -1639,6 +1639,7 @@ describe('committed domain schema (groups 1-8)', () => {
     const running = (await store.listRunning()).filter((row) => row.sandboxSessionId === String(sandboxSessionId));
     expect(running).toEqual([{
       sandboxSessionId: String(sandboxSessionId), foundrySessionId: 'heartbeat-session',
+      executionGeneration: '0',
       agentName: 'jarvis-runner-base-1x2', invocationId: 'heartbeat-invocation',
       invocationCompleted: false,
     }]);
@@ -1755,6 +1756,7 @@ describe('committed domain schema (groups 1-8)', () => {
     const heartbeatStore = createSandboxHeartbeatStore(pool, eventHub);
     expect(await heartbeatStore.listRunning()).toContainEqual({
       sandboxSessionId: String(sandboxSessionId), foundrySessionId: `idle-expiry-session-${type}`,
+      executionGeneration: '0',
       agentName: 'jarvis-runner-base-1x2', invocationId, invocationCompleted: true,
     });
     expect(await heartbeatStore.markNeedsAttention(

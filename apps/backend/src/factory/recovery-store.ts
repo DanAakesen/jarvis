@@ -1,4 +1,5 @@
 import type { DispatchClaim } from './dispatcher.js';
+import type { RunningSandbox } from './heartbeat.js';
 
 export type RecoveryClaimResult =
   | { kind: 'claimed'; task: DispatchClaim }
@@ -6,9 +7,5 @@ export type RecoveryClaimResult =
 
 export interface TaskRecoveryStore {
   claimRecovery(taskId: string, owner: string, leaseSeconds: number): Promise<RecoveryClaimResult>;
-  getRunningTaskForSession(sandbox: {
-    sandboxSessionId: string;
-    foundrySessionId: string;
-    invocationId: string;
-  }): Promise<string | null>;
+  getRunningTaskForSession(sandbox: RunningSandbox): Promise<string | null>;
 }

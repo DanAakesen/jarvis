@@ -48,16 +48,23 @@ function github(options: {
   requestStatus?: number;
   rateLimitHeaders?: Record<string, string>;
   requestBody?: string;
+  enforceTokenPermissions?: boolean;
 } = {}, onBaseBranchRead?: () => void) {
-  const calls: { url: string; method: string; body?: string }[] = [];
+  const calls: { url: string; method: string; authorization: string | null; body?: string }[] = [];
   const fetch = vi.fn<typeof globalThis.fetch>(async (input, init) => {
     const url = String(input);
     const method = init?.method ?? 'GET';
-    calls.push({ url, method, ...(typeof init?.body === 'string' ? { body: init.body } : {}) });
+    const authorization = new Headers(init?.headers).get('authorization');
+    calls.push({ url, method, authorization, ...(typeof init?.body === 'string' ? { body: init.body } : {}) });
+    if (options.enforceTokenPermissions) {
+      const expected = url.endsWith('/merge') ? 'installation-token' : 'repository-read-token';
+      if (authorization !== `Bearer ${expected}`) return new Response('{}', { status: 403 });
+    }
     if (options.requestStatus) {
       return new Response(options.requestBody ?? '{}', { status: options.requestStatus, headers: options.rateLimitHeaders });
     }
     if (url.endsWith('/pulls/42/merge')) {
+      if (method !== 'PUT') return new Response('{}', { status: 405 });
       if (options.mergeStatus && options.mergeStatus !== 200) {
         return new Response('{}', { status: options.mergeStatus });
       }
@@ -106,32 +113,41 @@ function fixture(
 ) {
   const getPullRequest = vi.fn(async () => project);
   let taskActive = true;
+  let runnerCompleted = true;
+  let runnerHeadSha = project.headSha;
   const store: ProjectPolicyStore = {
     getPullRequest,
-    async withActiveTask<T>(_taskId: string, operation: () => Promise<T>) {
+    async withActiveTask<T>(_taskId: string, operation: () => Promise<T>, expectedHeadSha: string) {
+      if (taskActive && (!runnerCompleted || expectedHeadSha !== runnerHeadSha)) {
+        return { kind: 'awaiting_runner' as const };
+      }
       return taskActive
         ? { kind: 'active' as const, value: await operation() }
         : { kind: 'inactive' as const };
     },
   };
-  const transition = vi.fn(async () => ({ kind: 'ok' as const, task: {} as never }));
+  const transition = vi.fn<TaskStore['transition']>(async () => ({ kind: 'ok' as const, task: {} as never }));
   const recordEvent = vi.fn(async () => ({ id: '1' } as never));
   const tasks = { transition, recordEvent } as unknown as Pick<TaskStore, 'transition' | 'recordEvent'>;
   const issue = vi.fn(async () => 'installation-token');
+  const issueForRepositoryRead = vi.fn(async () => 'repository-read-token');
   const tokenIssuer: GitHubAppTokenIssuer = {
     issue,
     issueForActions: vi.fn(async () => 'actions-token'),
+    issueForChecks: vi.fn(async () => 'checks-token'),
     issueForContents: vi.fn(async () => 'contents-token'),
-    issueForRepositoryRead: vi.fn(async () => 'repository-read-token'),
+    issueForRepositoryRead,
     issueForContentsWrite: vi.fn(async () => 'contents-write-token'),
+    issueForIssuesWrite: vi.fn(async () => 'issues-write-token'),
   };
   const api = github(githubOptions, onBaseBranchRead);
-  const runConfirmed = confirmationEnabled
-    ? vi.fn(<T>(_summary: string, action: () => Promise<T>) => action())
-    : undefined;
+  const confirmation = {
+    run<T>(_summary: string, action: () => Promise<T>): Promise<T> { return action(); },
+  };
+  const runConfirmed = confirmationEnabled ? vi.spyOn(confirmation, 'run') : undefined;
   const evaluator = createProjectPolicyEvaluator({
     store, tasks, tokenIssuer, fetch: api.fetch,
-    ...(runConfirmed ? { runConfirmed } : {}),
+    ...(runConfirmed ? { runConfirmed: confirmation.run } : {}),
   });
   return {
     evaluator,
@@ -140,19 +156,95 @@ function fixture(
     transition,
     recordEvent,
     issue,
+    issueForRepositoryRead,
     runConfirmed,
     setTaskActive(active: boolean) { taskActive = active; },
+    setRunnerCompleted(completed: boolean) { runnerCompleted = completed; },
+    setRunnerHeadSha(sha: string) { runnerHeadSha = sha; },
   };
 }
 
 describe('GitHub project completion policies', () => {
-  it('marks deliver_pr Done after verified green GitHub state and never merges', async () => {
+  it('does not mark Done from a green PR before the current runner completion is verified', async () => {
+    const test = fixture(candidate('deliver_pr'), { enforceTokenPermissions: true });
+    test.setRunnerCompleted(false);
+
+    await test.evaluator.handle(mapping);
+
+    expect(test.transition).not.toHaveBeenCalled();
+    expect(test.issue).not.toHaveBeenCalled();
+    expect(test.recordEvent).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'project_policy_blocked',
+      summary: expect.stringContaining('Runner completion has not been verified'),
+    }));
+    test.setRunnerCompleted(true);
+    await test.evaluator.handle(mapping);
+    expect(test.transition).toHaveBeenCalledExactlyOnceWith('7', 'Done', true);
+  });
+
+  it('does not request merge approval before the current runner completion is verified', async () => {
+    const test = fixture();
+    test.setRunnerCompleted(false);
+
+    await test.evaluator.handle(mapping);
+
+    expect(test.runConfirmed).not.toHaveBeenCalled();
+    expect(test.issue).not.toHaveBeenCalled();
+    expect(test.api.calls.some((call) => call.url.endsWith('/merge'))).toBe(false);
+  });
+
+  it.each(['completion', 'work_commit'] as const)('rechecks %s after deferred merge approval', async (control) => {
+    const test = fixture();
+    let approve: (() => Promise<unknown>) | undefined;
+    test.runConfirmed?.mockImplementationOnce(<T>(_summary: string, action: () => Promise<T>) => new Promise<T>((resolve, reject) => {
+      approve = () => action().then(resolve, reject);
+    }));
+    await test.evaluator.handle(mapping);
+    if (control === 'completion') test.setRunnerCompleted(false);
+    else test.setRunnerHeadSha('d'.repeat(40));
+    await approve?.();
+    await vi.waitFor(() => expect(test.recordEvent).toHaveBeenCalledWith(expect.objectContaining({
+      summary: 'The task runner changed before approval; the approved merge was not attempted.',
+    })));
+    expect(test.issue).not.toHaveBeenCalled();
+    expect(test.api.calls.some((call) => call.url.endsWith('/merge'))).toBe(false);
+  });
+
+  it('does not mark Done using a green PR for a different work commit', async () => {
     const test = fixture(candidate('deliver_pr'));
+    test.setRunnerHeadSha('d'.repeat(40));
+    await test.evaluator.handle(mapping);
+    expect(test.transition).not.toHaveBeenCalled();
+    expect(test.issue).not.toHaveBeenCalled();
+    expect(test.recordEvent).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'project_policy_blocked', summary: expect.stringContaining('Runner completion has not been verified'),
+    }));
+  });
+
+  it('does not report no-check completion when the task transition was rejected', async () => {
+    const project = candidate('deliver_pr');
+    const test = fixture({ ...project, openedAt: new Date(Date.now() - 180_000).toISOString() }, { checkRuns: [] });
+    test.transition.mockResolvedValueOnce({ kind: 'invalid-transition' });
+
+    await test.evaluator.handle(mapping);
+
+    expect(test.recordEvent).toHaveBeenCalledWith(expect.objectContaining({
+      summary: 'The task changed before policy completion; completion was not applied.',
+    }));
+    expect(test.recordEvent).not.toHaveBeenCalledWith(expect.objectContaining({
+      type: 'project_policy_completed_without_checks',
+    }));
+  });
+
+  it('marks deliver_pr Done after verified green GitHub state and never merges', async () => {
+    const test = fixture(candidate('deliver_pr'), { enforceTokenPermissions: true });
 
     await test.evaluator.handle(mapping);
 
     expect(test.transition).toHaveBeenCalledWith('7', 'Done', true);
     expect(test.api.calls.some((call) => call.url.endsWith('/merge'))).toBe(false);
+    expect(test.issue).not.toHaveBeenCalled();
+    expect(test.issueForRepositoryRead).toHaveBeenCalledExactlyOnceWith(repository);
     expect(test.recordEvent).not.toHaveBeenCalled();
   });
 
@@ -241,7 +333,7 @@ describe('GitHub project completion policies', () => {
 
     expect(test.api.calls.at(-1)).toMatchObject({
       url: `https://api.github.com/repos/${repository}/pulls/42/merge`,
-      method: 'POST',
+      method: 'PUT',
       body: JSON.stringify({ merge_method: 'squash', sha: headSha }),
     });
     expect(test.transition).not.toHaveBeenCalled();
@@ -261,6 +353,59 @@ describe('GitHub project completion policies', () => {
     await confirmation.evaluator.handle({ ...mapping, state: 'merged', mergedAt: '2026-10-04T12:05:00.000Z' });
     expect(confirmation.transition).toHaveBeenCalledWith('7', 'Done', true);
     expect(test.issue).toHaveBeenCalledOnce();
+  });
+
+  it('uses a separate write token only inside the approved active-task merge', async () => {
+    const test = fixture(candidate(), { enforceTokenPermissions: true });
+    let approve!: () => void;
+    const approved = new Promise<void>((resolve) => { approve = resolve; });
+    test.runConfirmed?.mockImplementation(async (_summary, action) => {
+      await approved;
+      return await action();
+    });
+
+    try {
+      await test.evaluator.handle(mapping);
+      expect(test.issueForRepositoryRead).toHaveBeenCalledExactlyOnceWith(repository);
+      expect(test.issue).not.toHaveBeenCalled();
+    } finally {
+      approve();
+    }
+    await vi.waitFor(() => expect(test.recordEvent).toHaveBeenCalled());
+    expect(test.issue).toHaveBeenCalledExactlyOnceWith(repository);
+    expect(test.api.calls.at(-1)).toMatchObject({
+      method: 'PUT',
+      authorization: 'Bearer installation-token',
+      body: JSON.stringify({ merge_method: 'squash', sha: headSha }),
+    });
+    expect(test.transition).not.toHaveBeenCalled();
+  });
+
+  it('does not mint a write token if the task becomes inactive before merge approval', async () => {
+    const test = fixture(candidate(), { enforceTokenPermissions: true });
+    test.runConfirmed?.mockImplementation(async (_summary, action) => {
+      test.setTaskActive(false);
+      return await action();
+    });
+
+    await test.evaluator.handle(mapping);
+    await vi.waitFor(() => expect(test.recordEvent).toHaveBeenCalled());
+    expect(test.issue).not.toHaveBeenCalled();
+    expect(test.api.calls.some((call) => call.url.endsWith('/merge'))).toBe(false);
+  });
+
+  it('fails closed when approved merge credentials cannot be obtained without blaming Dan or leaking errors', async () => {
+    const test = fixture(candidate(), { enforceTokenPermissions: true });
+    test.issue.mockRejectedValue(new Error('PRIVATE synthetic credential error'));
+
+    await test.evaluator.handle(mapping);
+    await vi.waitFor(() => expect(test.recordEvent).toHaveBeenCalled());
+    expect(test.api.calls.some((call) => call.url.endsWith('/merge'))).toBe(false);
+    expect(test.transition).not.toHaveBeenCalled();
+    expect(test.recordEvent).toHaveBeenCalledWith(expect.objectContaining({
+      summary: 'Merge approval or credentials could not be verified; no merge was attempted.',
+    }));
+    expect(JSON.stringify(test.recordEvent.mock.calls)).not.toContain('PRIVATE');
   });
 
   it('does not request a merge when the task was cancelled during GitHub verification', async () => {

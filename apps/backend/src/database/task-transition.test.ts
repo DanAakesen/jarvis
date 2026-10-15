@@ -83,6 +83,7 @@ describe('attention cancellation transition persistence', () => {
       latestSessionEndReason: initial === 'absent' ? 'idle_expired' : null, events: [], usage: [],
     };
     const target: TaskControlTarget = {
+      executionGeneration: '1',
       taskId: '42', agent: 'copilot', request: task.request, modelOverride: null, reasoningOverride: null,
       sandboxSessionId: '53', foundrySessionId: 'old-session', agentName: 'synthetic-runner',
       invocationId: initial === 'completed' ? '' : 'old-invocation', latestTurnId: '71',
