@@ -1,5 +1,21 @@
 # Architecture
 
+## Production lifecycle evidence (15 October 2026)
+
+The contract below is now released in `6e702e7a`; its held/source-only labels
+record the earlier freeze stages. Fresh Task 19 exercised the clean path:
+current generation/session/invocation proof carried work commit `549fe564`,
+the remote task branch and new PR matched that commit, and normal project
+policy reached Done after the existing no-CI grace. Durable reload retained
+Done and the backend reported zero tracked active sessions.
+
+The worker is disposable; its artifact survives in
+`DanAakesen/jarvis-test-target#6`. This observed backend proof establishes
+verified owned-writer teardown, not physical Foundry deallocation. The normal
+runner release enforces a 120-second idle timeout; no previously denied
+provider inspection was retried. This clean live run does not exercise the
+alternative cleanup-failed path or identify Task 18's original shutdown cause.
+
 ## Delivery after verified writer stop (15 October 2026; V4g fixture successor, not released)
 
 Runner invocation metadata separately records successful work and successful

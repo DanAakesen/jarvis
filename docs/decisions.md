@@ -1,5 +1,22 @@
 # Decisions
 
+## Accept the released clean Factory lifecycle (15 October 2026)
+
+Accept PR #856's exact reviewed source `6e702e7a` after fresh full CI,
+219 passing real-SQL cases, four CodeQL analyses and normal backend/four-runner
+release. Fresh native Task 19 then delivered a new exact artifact in
+`DanAakesen/jarvis-test-target#6`; current-generation commit-bound stopped-writer
+proof preceded automatic Done at 23:49:53 UTC. Full reload retained Done and
+Status reported zero tracked sessions. Existing no-CI grace and all policy
+checks remained; no manual completion, cancellation or merge supplied success.
+
+Keep artifact durability, owned-writer teardown, logical session accounting and
+physical cloud deallocation distinct. The last remains unverified under the
+existing Foundry 403 boundary. This clean run neither proves the cleanup-failed
+live branch nor explains Task 18's historical failure. Preserve those open
+qualifications and the earlier failed trials/SQL batches. The held entries
+below remain historical evidence, not the current clean-path release state.
+
 ## Fence recovery before provider start (15 October 2026; implemented locally, held)
 
 Independent V2 review reproduced policy Done and an approved merge using the

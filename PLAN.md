@@ -1,5 +1,24 @@
 # Project plan
 
+## Factory lifecycle accepted (15 October 2026; production)
+
+PR #856 released exact source `6e702e7a` after independent review, fresh full
+CI/CodeQL and all 219 real-SQL cases passed. Normal backend deployment and
+all four runner variants succeeded. Fresh native Task 19 delivered the sole
+requested 53-byte artifact in `DanAakesen/jarvis-test-target#6`, with matching
+generation/session/invocation and commit-bound stopped-writer proof. It reached
+Done automatically at 23:49:53 UTC, about 122 seconds after PR creation, under
+the unchanged no-CI grace policy. A full reload retained Done; Status reported
+zero tracked sessions. No manual completion, cancellation, steering or PR merge.
+
+This accepts the fresh clean-completion and logical lifecycle path, not physical
+cloud deallocation, the cleanup-failure live branch or Task 18's historical
+cause. Earlier failed trials and V4e/V4f2 SQL batches remain failed evidence.
+The older held/source-only entries below describe their recorded stages.
+Next: assess #837 against the already released direct-Gmail correction before
+repeating implementation or starting a worker. Daily/new-coaching, device,
+private-data/product-confirmation and Foundry 403 boundaries remain unchanged.
+
 ## Fixed stage performance correction (15 October 2026; local)
 
 Implemented Dan's single balanced stage policy without tiers or settings

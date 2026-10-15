@@ -1,5 +1,34 @@
 # Agent context
 
+## Released Factory lifecycle acceptance (15 October 2026; 23:51 UTC)
+
+PR #856 is released as `6e702e7a` / tree `628d7ca5`. Fresh attempt-one
+CI `38822420126` passed all ten jobs: backend lint/actual build and 3,344 tests,
+219/219 real-SQL cases with zero skips, and pinned Python 3.12.14 runner 374,
+agent 431 and scripts 73. CodeQL `38822420647` passed all four analyses.
+Keep the genuine earlier V4e and V4f2 SQL failures; do not relabel or rerun them.
+Normal Deploy `38823507753` readied backend revision 324 with image `8a8408d4`
+and passed required smoke; optional PC bridge stayed down. Unchanged infra,
+web and main-agent components were skipped, not newly released. Normal Runner
+deploy `38823507866` published all four variants, retaining their identities:
+base 1x2 version 26; base 2x4 and both dotnet tiers version 21.
+
+One new native Task 19 delivered the exact 53-byte synthetic artifact in
+`DanAakesen/jarvis-test-target#6`, head `549fe564`. Backend proof matched session
+18, generation 1, its invocation and that exact remote work commit. Automatic
+Done at 23:49:53 UTC survived a full reload; fresh Status at 23:51 UTC reported
+current source, SQL OK and zero tracked sessions, with no active runner probe.
+Both the 12-minute overall and three-minute after-artifact bounds passed.
+The no-check repository used its existing two-minute grace, not fabricated CI.
+No manual Done, cancellation, steering, second task or merge was needed.
+
+This is clean-completion/logical lifecycle acceptance only. Physical cloud
+deallocation and Task 18's original failure remain unproved; do not retry the
+denied Foundry read or infer either from accounting. The held records below are
+historical. Continue eligible board work without releasing Daily/new coaching,
+device/private or genuine product-confirmation holds. Remote-enabled state
+remains unverified; do not start a duplicate CLI or change shared settings.
+
 ## Reviewed recovery correction (15 October 2026; V4g local and held)
 
 Preserve the pinned V1/V2 snapshots, Codex HOLD evidence and source-reviewed V3
