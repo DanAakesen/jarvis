@@ -1,5 +1,54 @@
 # Project plan
 
+## Current runner delivery after accepted recovery (15 October 2026)
+
+Recovery #852 normally reached main `5765d882` / reviewed tree `c5831563`
+after independent review and fresh ten-job CI `38665077108` / four-analysis
+CodeQL `38665077057`. Automatic Deploy `38666983966` passed all six actual jobs
+and required smoke `116203572330` at 01:51 UTC. Ready backend320 and the
+genuine owner's retained fifteen OK smoke entries confirm the current release
+gate, not exclusive timeout causation or original Google/private/device acceptance.
+
+Normally compose that accepted main into existing #850, preserving the exact V2
+runner/test blobs, every outside-eight-path main entry and all 381 PLAN pipe lines.
+Prior `467cb5d` passed ten actual CI `38659103136` jobs, four CodeQL
+`38659103178` analyses and pinned Linux runner204/agent398. Next: publish the
+composed head normally, require its fresh full gates, then normal guarded squash,
+normal Deploy and actual exact-released-SHA Runner deploy. The original E9
+rejection and all previous receipts remain immutable.
+
+No approved fixture/job has been consumed. Existing public isolated test-target
+PR/task candidates are not verified owner-side eligibility or authentic restart
+confirmation. Stop before live acceptance if either is missing; provider/session
+ending is not physical Foundry deallocation.
+
+## Required release and terminal transport correction (15 October 2026)
+
+#848 merged normally as `bce6e02a` after independent review and fresh full
+ten-job CI/four CodeQL analyses. Its normal Deploy `38658184723` passed five
+deployment jobs but failed required smoke `116175695208`: the retained owner
+report shows a whole-suite timeout. The existing suite catch replaces all
+individual results, so it does not establish which prompt stalled or whether the
+shared capability rule failed. C0's earlier incomplete reply remains separate.
+
+Local actual-transport regressions demonstrate that the backend waits for EOF
+after application `done`, including a real loopback socket held open by its
+fixture server. The narrow correction stops at `done`, retains bounded metadata
+once and awaits reader disposal. Existing limits, canary predicates and
+`chat_runtime.py` remain unchanged. Local transport/canary checks pass 71 cases
+on the existing Windows Node 22.23.3/Vitest 5.0.2 snapshot, not pinned CI.
+This reproduces a transport defect, not exclusive live timeout causation.
+Next: freeze, independent narrow review, fresh exact-head full CI/CodeQL and
+normal required release; do not retry the unchanged failed release.
+
+Factory #850's `467cb5d` composition passed fresh ten-job CI/four CodeQL
+analyses and actual pinned Linux runner204/agent398. It remains unmerged while
+main's required release is broken. Normal Deploy and exact-released-SHA Runner
+deploy are both required before the authorised single live job. No Google
+fixture or sandbox job has been consumed; genuine later confirmation and an
+eligible existing isolated task/matching open PR remain prerequisites.
+All generated task-table cells below remain unchanged.
+
 ## Mobile/Status review publication (14 October 2026)
 
 Dan approved the reviewed #799/mobile correction for isolated commit,

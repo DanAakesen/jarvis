@@ -1,3 +1,4 @@
+import { createServer } from 'node:http';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   ChatAgentError,
@@ -347,6 +348,209 @@ describe('Foundry Invocations chat agent', () => {
       }
     }).rejects.toThrow('Chat agent failed');
     expect(chunks).toEqual([]);
+  });
+
+  it.each([false, true])('settles terminal metadata and cancels an open upstream body (smoke=%s)', async (smoke) => {
+    const encoder = new TextEncoder();
+    let upstream!: ReadableStreamDefaultController<Uint8Array>;
+    let doneSeen!: () => void;
+    const terminal = new Promise<void>((resolve) => { doneSeen = resolve; });
+    const cancel = vi.fn();
+    const onVisualResult = vi.fn();
+    const onAgentPhaseTimings = vi.fn();
+    const calls = [{ name: 'list_capabilities', outcome: 'ok', capabilities: ['Notes', 'Calendar', 'GitHub'] }];
+    const onAgentToolCalls = vi.fn(() => { doneSeen(); });
+    const fetcher = vi.fn<typeof fetch>(async () => new Response(new ReadableStream<Uint8Array>({
+      start(controller) {
+        upstream = controller;
+        controller.enqueue(encoder.encode('event: delta\ndata: {"text":"Complete reply"}\n\n'));
+        controller.enqueue(encoder.encode(`event: done\ndata: ${JSON.stringify({
+          smokeToolCalls: calls, agentTimings: { model_request: 2 },
+          visualPath: 'image', model: 'gpt-6-luna', inputTokens: 10, outputTokens: 3,
+        })}\n\n`));
+      },
+      cancel,
+    }), { headers: { 'content-type': 'text/event-stream' } }));
+    const { agent } = createAgent(fetcher);
+    const iterator = agent.stream({
+      ...input, smoke, onVisualResult, onAgentPhaseTimings, onAgentToolCalls,
+    }, delegatedAuthorization, new AbortController().signal)[Symbol.asyncIterator]();
+    let completion: ReturnType<typeof iterator.next> | undefined;
+    try {
+      await expect(iterator.next()).resolves.toEqual({ value: 'Complete reply', done: false });
+      completion = iterator.next();
+      await terminal;
+      expect(cancel).toHaveBeenCalledOnce();
+      await expect(completion).resolves.toEqual({ value: undefined, done: true });
+      expect(onAgentToolCalls).toHaveBeenCalledExactlyOnceWith(calls);
+      expect(onAgentPhaseTimings).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ model_request: 2 }));
+      expect(onVisualResult).toHaveBeenCalledExactlyOnceWith({
+        visualPath: 'image', model: 'gpt-6-luna', inputTokens: 10, outputTokens: 3,
+      });
+      expect(JSON.parse(fetcher.mock.calls[0]![1]!.body as string))
+        .toHaveProperty(smoke ? 'smoke' : 'delegatedAuthorization', smoke ? true : delegatedAuthorization);
+    } finally {
+      if (!cancel.mock.calls.length) upstream.close();
+      await completion;
+      await iterator.return?.();
+    }
+  });
+
+  it('recognizes a split done frame without requiring socket EOF', async () => {
+    const encoder = new TextEncoder();
+    let upstream!: ReadableStreamDefaultController<Uint8Array>;
+    let doneSeen!: () => void;
+    const terminal = new Promise<void>((resolve) => { doneSeen = resolve; });
+    const cancel = vi.fn();
+    const { agent } = createAgent(vi.fn(async () => new Response(new ReadableStream<Uint8Array>({
+      start(controller) {
+        upstream = controller;
+        for (const chunk of ['event: do', 'ne\ndata: {"smokeTool', 'Calls":[]}\n', '\n']) {
+          controller.enqueue(encoder.encode(chunk));
+        }
+      },
+      cancel,
+    }), { headers: { 'content-type': 'text/event-stream' } })));
+    const iterator = agent.stream({
+      ...input, onAgentToolCalls: () => { doneSeen(); },
+    }, delegatedAuthorization, new AbortController().signal)[Symbol.asyncIterator]();
+    const completion = iterator.next();
+    try {
+      await terminal;
+      expect(cancel).toHaveBeenCalledOnce();
+      await expect(completion).resolves.toEqual({ value: undefined, done: true });
+    } finally {
+      if (!cancel.mock.calls.length) upstream.close();
+      await completion;
+      await iterator.return?.();
+    }
+  });
+
+  it('releases a real loopback HTTP socket after application done without server EOF', async () => {
+    let peerClosed!: () => void;
+    const closed = new Promise<void>((resolve) => { peerClosed = resolve; });
+    let serverEnded = false;
+    const server = createServer((_request, response) => {
+      response.writeHead(200, { 'content-type': 'text/event-stream' });
+      response.once('close', () => {
+        serverEnded = response.writableEnded;
+        peerClosed();
+      });
+      response.write('event: delta\ndata: {"text":"Complete reply"}\n\n');
+      response.write('event: done\ndata: {"smokeToolCalls":[]}\n\n');
+    });
+    await new Promise<void>((resolve, reject) => {
+      server.once('error', reject);
+      server.listen(0, '127.0.0.1', () => {
+        server.off('error', reject);
+        resolve();
+      });
+    });
+    const address = server.address();
+    if (!address || typeof address === 'string') throw new Error('Fixture requires a loopback TCP port');
+    const caller = new AbortController();
+    const deadline = setTimeout(() => { caller.abort(new Error('Fixture stream did not settle')); }, 2_000);
+    const fetcher: typeof fetch = (_url, options) => fetch(`http://127.0.0.1:${address.port}`, options);
+    const { agent } = createAgent(fetcher);
+    const onAgentToolCalls = vi.fn();
+    try {
+      const chunks: string[] = [];
+      for await (const chunk of agent.stream({
+        ...input, onAgentToolCalls,
+      }, delegatedAuthorization, caller.signal)) chunks.push(chunk);
+      await closed;
+      expect(chunks).toEqual(['Complete reply']);
+      expect(onAgentToolCalls).toHaveBeenCalledExactlyOnceWith([]);
+      expect(serverEnded).toBe(false);
+    } finally {
+      clearTimeout(deadline);
+      caller.abort();
+      await new Promise<void>((resolve, reject) => {
+        server.close((error) => { if (error) reject(error); else resolve(); });
+        server.closeAllConnections();
+      });
+    }
+  });
+
+  it('does not consume duplicate completion or trailing frames after terminal done', async () => {
+    const onAgentToolCalls = vi.fn();
+    const { agent } = createAgent(vi.fn(async () => streamedResponse([
+      'event: delta\ndata: {"text":"Complete reply"}\n\n' +
+      'event: done\ndata: {"smokeToolCalls":[]}\n\n' +
+      'event: done\ndata: {"smokeToolCalls":[]}\n\n' +
+      'event: delta\ndata: {"text":"late text"}\n\n' +
+      'event: error\ndata: {"error":"private provider details"}\n\n',
+    ])));
+    const chunks: string[] = [];
+    for await (const chunk of agent.stream({
+      ...input, onAgentToolCalls,
+    }, delegatedAuthorization, new AbortController().signal)) chunks.push(chunk);
+    expect(chunks).toEqual(['Complete reply']);
+    expect(onAgentToolCalls).toHaveBeenCalledExactlyOnceWith([]);
+  });
+
+  it('preserves EOF parsing of an unterminated legacy done frame', async () => {
+    const { agent } = createAgent(vi.fn(async () => streamedResponse([
+      'event: delta\ndata: {"text":"Complete reply"}\n\nevent: done\ndata: {}',
+    ])));
+    const chunks: string[] = [];
+    for await (const chunk of agent.stream(input, delegatedAuthorization, new AbortController().signal)) {
+      chunks.push(chunk);
+    }
+    expect(chunks).toEqual(['Complete reply']);
+  });
+
+  it.each([1024 * 1024, 1024 * 1024 + 1])('preserves the exact stream byte limit even with done (%s bytes)', async (bytes) => {
+    const prefix = 'event: done\ndata: {}\n\n:';
+    const frame = prefix + 'x'.repeat(bytes - prefix.length);
+    const { agent } = createAgent(vi.fn(async () => streamedResponse([frame])));
+    const run = async () => {
+      const chunks: string[] = [];
+      for await (const chunk of agent.stream(input, delegatedAuthorization, new AbortController().signal)) {
+        chunks.push(chunk);
+      }
+      return chunks;
+    };
+    if (bytes > 1024 * 1024) await expect(run()).rejects.toThrow('Chat response exceeded the size limit');
+    else await expect(run()).resolves.toEqual([]);
+  });
+
+  it('does not let terminal done conceal an earlier provider error', async () => {
+    const { agent } = createAgent(vi.fn(async () => streamedResponse([
+      'event: error\ndata: {"error":"private provider details"}\n\nevent: done\ndata: {}\n\n',
+    ])));
+    await expect(async () => {
+      for await (const chunk of agent.stream(input, delegatedAuthorization, new AbortController().signal)) {
+        void chunk;
+      }
+    }).rejects.toThrow('Chat agent failed');
+  });
+
+  it('preserves cancellation before terminal done rather than accepting partial text', async () => {
+    const encoder = new TextEncoder();
+    const caller = new AbortController();
+    let upstream!: ReadableStreamDefaultController<Uint8Array>;
+    const fetcher = vi.fn<typeof fetch>(async (_url, options) => {
+      const signal = options?.signal;
+      if (!signal) throw new Error('Fixture requires the actual request signal');
+      return new Response(new ReadableStream<Uint8Array>({
+        start(controller) {
+          upstream = controller;
+          signal.addEventListener('abort', () => {
+            controller.error(signal.reason);
+          }, { once: true });
+          controller.enqueue(encoder.encode('event: delta\ndata: {"text":"Partial"}\n\n'));
+        },
+      }), { headers: { 'content-type': 'text/event-stream' } });
+    });
+    const { agent } = createAgent(fetcher);
+    const iterator = agent.stream(input, delegatedAuthorization, caller.signal)[Symbol.asyncIterator]();
+    await expect(iterator.next()).resolves.toEqual({ value: 'Partial', done: false });
+    const abort = new DOMException('Fixture cancelled', 'AbortError');
+    caller.abort(abort);
+    await expect(iterator.next()).rejects.toBe(abort);
+    expect(() => upstream.enqueue(encoder.encode('event: done\ndata: {}\n\n'))).toThrow();
+    await iterator.return?.();
   });
 
   it('surfaces only a short diagnostic code from an agent error', async () => {

@@ -2465,6 +2465,17 @@ in pages of 50 (maximum 100), ordered oldest-to-newest within each page and
 continued with a message-ID cursor. Each entry includes its session's chat/voice
 channel and language. It returns tool-call names, outcomes and task IDs, not the
 stored arguments or results.
+
+The Foundry Invocations consumer treats the application's `done` SSE frame as
+terminal, rather than waiting for HTTP EOF. It processes that frame's bounded
+tool/visual/timing metadata once, stops later-frame consumption and awaits
+cancellation of its owned response reader. A finite stream without `done` still
+fails; pre-terminal provider errors, partial-delta streaming, authentication,
+response-size limits and request/caller cancellation retain their contracts.
+Legacy completion frames without a final separator remain accepted at genuine
+EOF. This changes only the backend response consumer, not the separately owned
+hosted chat runtime, Factory finalization or cloud-resource expiry.
+
 P9-24 adds owner-authenticated `GET /conversation/search?q&from&to&source&limit`
 and the `conversation_search` tool through the shared registry. Search dates are
 inclusive UTC calendar days; `source` filters the stored session channel. Results

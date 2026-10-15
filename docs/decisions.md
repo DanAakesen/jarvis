@@ -1,5 +1,24 @@
 # Decisions
 
+## Compose reviewed runner delivery after genuine recovery acceptance (15 October 2026)
+
+Exact reviewed #852 normally reached main `5765d882` / tree `c5831563`.
+Its automatic Deploy `38666983966` actually passed all six jobs and required
+smoke `116203572330`; ready backend320 and the owner's retained fifteen OK
+smoke entries corroborate current health. This clears the ordinary main release
+hold, not original Google acceptance, historical attribution or physical capacity
+proof. Preserve both C0's incomplete reply and BCE's whole-suite timeout.
+
+Normally integrate that accepted source into the existing #850 branch, retaining
+the V2 runner/test blobs and every main entry outside its eight reviewed paths,
+including all PLAN table lines. Earlier `467cb5d` passed actual ten/four gates
+and pinned runner204/agent398; require fresh gates for the composed head,
+then normal Deploy plus actual exact-released-SHA Runner deploy. No new PR,
+task, worker, permission or live fixture/job is authorised by composition.
+
+Earlier decisions below remain historical; their then-pending release statements
+do not supersede this actual acceptance or waive the remaining delivery gates.
+
 ## Integrate tested recovery source without prematurely accepting its release (15 October 2026)
 
 Existing #848's independently reviewed `0519d12d` passed all ten actual CI
@@ -70,6 +89,31 @@ tests hit Windows' missing POSIX `os.fchmod`; no permission shim was added.
 The full pinned Linux suite, image checks and live delivery remain separate.
 The coordinator owns review, exact-head CI and both Deploy and Runner deploy,
 followed by the single authorised authentic owner-facing acceptance job.
+## End the backend chat response at application done (15 October 2026)
+
+The existing Invocations consumer marked application SSE `done` as completion,
+but continued awaiting HTTP EOF. Exact-baseline actual-module tests reproduce
+the stalled lifetime with ordinary and smoke completion, a split frame and a
+real loopback HTTP server that deliberately never ends its response. A separate
+control exposes duplicate metadata and trailing-frame consumption after `done`.
+
+Treat `done` as the terminal application frame: consume its existing bounded
+metadata once, stop reading later frames and await disposal of the owned reader.
+Do not extend deadlines, synthesize replies, relax canary receipts or change
+the separately owned hosted runtime. Retain partial deltas, pre-terminal errors,
+caller abort, missing-completion failures and legacy EOF parsing.
+The original five defect cases fail on exact BCE source; five preservation
+controls already pass. Corrected transport and unchanged canary checks pass
+71 cases on existing Windows snapshot tools, not pinned Linux CI.
+
+This fixes an independently reproduced transport contract defect, not proven
+exclusive production causation. BCE's normal release failed with a whole-suite
+timeout after five successful deployment jobs. Its unchanged global catch
+replaces individual results, so the retained report cannot establish which
+prompt stalled or shared-rule failure. Preserve C0's distinct incomplete-reply
+evidence and #820's unresolved original attribution. Independent review, fresh
+exact-head full CI/CodeQL and normal required release remain delivery gates;
+Factory merge and approved live fixtures/job remain held.
 
 ## Require complete tool-grounded capability overviews (14 October 2026)
 
