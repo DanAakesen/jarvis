@@ -1,4 +1,5 @@
 import type { FastifyRequest } from 'fastify';
+import { gmailAccessGuard } from './gmail-access-policy.js';
 
 export interface JarvisTool {
   readonly name: string;
@@ -66,6 +67,7 @@ export const MAX_CATALOGUE_BYTES = 1024 * 1024;
 
 export function createToolRegistry(modules: readonly { id: string; tools: readonly JarvisTool[] }[]): ToolRegistry {
   const tools = new Map<string, RegisteredTool>();
+  const guardGmailAccess = gmailAccessGuard();
   for (const module of modules) {
     for (const tool of module.tools) {
       if (!/^[A-Za-z0-9_-]{1,64}$/.test(tool.name) || !tool.description.trim() || tools.has(tool.name)) {
@@ -79,7 +81,7 @@ export function createToolRegistry(modules: readonly { id: string; tools: readon
       }
       const inputSchema = structuredClone(tool.inputSchema);
       freezeSchema(inputSchema);
-      tools.set(tool.name, Object.freeze({ ...tool, inputSchema, moduleId: module.id }));
+      tools.set(tool.name, Object.freeze({ ...tool, execute: guardGmailAccess(tool), inputSchema, moduleId: module.id }));
     }
   }
   if (tools.size > MAX_AGENT_TOOLS) {

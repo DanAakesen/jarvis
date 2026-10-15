@@ -68,9 +68,28 @@ export class PendingGoogleActions {
     }
     this.actions.delete(code);
     if (reply === 'decline') {
-      return { status: 'cancelled', detail: `The pending ${scope === 'calendar' ? 'calendar' : 'Google'} change was discarded. No change was made.` };
+      return { status: 'cancelled', summary: action.summary, detail: `The pending ${scope === 'calendar' ? 'calendar' : 'Google'} change was discarded. No change was made.` };
     }
-    return action.execute(signal);
+    const result = await action.execute(signal);
+    return typeof result === 'object' && result !== null
+      ? { ...result, summary: action.summary }
+      : result;
+  }
+
+  /** Recover the real process-local stage after private tool results leave turn history. */
+  pendingCalendarChange() {
+    this.removeExpired();
+    const action = [...this.actions.values()].find((candidate) => candidate.scope === 'calendar');
+    return action ? {
+      status: 'awaiting_confirmation' as const,
+      summary: action.summary,
+      confirmationCode: action.code,
+      expiresAt: new Date(action.createdAt + ACTION_TTL_MS).toISOString(),
+      instruction: `Nothing has changed. ${approvalInstruction}`,
+    } : {
+      status: 'none' as const,
+      detail: 'No calendar change is pending. Pending state does not establish whether an event exists.',
+    };
   }
 
   get size(): number {

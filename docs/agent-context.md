@@ -2,6 +2,14 @@
 
 ## Reviewed runner delivery and current release hold (14-15 October 2026)
 
+Recovery #848 passed all ten actual CI `38656025688` jobs and four CodeQL
+`38656025581` analyses at reviewed head `0519d12d`. Pinned Linux ran
+runner165/agent398 and backend178files/3170tests. Normal squash reached main
+`bce6e02a` with exactly reviewed tree `6c0c9aa7`; normal Deploy `38658184723`
+is in progress, not yet accepted. The last completed C0 release failed.
+Original Google/private/device acceptance and historical #820 attribution remain
+separate. No additional smoke, provider job or private record was consumed.
+
 The parent independently passed frozen Factory V2: two unchanged parent controls
 and 61 selected repository tests, with the exact runner/test blobs and eight-path
 replay verified. These are Windows Python 3.12.10 synthetic provider/publisher/
@@ -15,8 +23,19 @@ open; Google implementation/release belongs to existing #848. Normal integration
 of source main `c0d0aeef` first produced exactly main's tree, so this does not
 roll back accepted maintenance, Factory, Status or inactive Daily changes.
 Only the eight reviewed runner/context paths may differ from that main.
+Published-ready `99fdb727` passed ten actual normal-dispatch CI `38656814220`
+jobs and four CodeQL `38656417765` analyses: pinned Linux runner204/agent335,
+with neither component skipped. Its preceding ready PR event skipped every
+component with zero steps; that event is not validation. The existing documented
+ready-Copilot workflow dispatch supplied the real full gate, without a rerun.
+This is prior C0-based evidence, not the next BCE-composed head's gate.
 
-Latest normal Deploy `38649690138` failed the required capability reply smoke.
+The owned source now normally integrates tested main `bce6e02a` while its
+release runs. Preserve the exact V2 runner/test blobs, all other main entries
+and every PLAN table line. This preparation is not an ordinary main merge or
+release acceptance. Require new composed-head full CI/CodeQL.
+
+Last completed normal Deploy `38649690138` failed the required capability reply smoke.
 Do not merge this unrelated runner correction until the main release gate
 recovers. Full exact-head Linux runner/backend/SQL/image CI remains required,
 followed by normal Deploy AND exact-released-SHA Runner deploy. Normal Deploy
@@ -25,6 +44,39 @@ requires an eligible existing isolated non-Google/non-private test task and
 matching open PR; none is claimed selected. Stop on missing eligibility or
 actual restart confirmation, never invent another task/approval/provider retry.
 Recorded provider/session end is not physical Foundry deallocation.
+
+## Current required release gate (14-15 October 2026)
+
+Reference #830 was normally squashed into `c0d0aeef` after its reviewed ten CI
+jobs and four CodeQL analyses. Normal Deploy `38649690138` successfully ran the
+other five selected jobs but failed required smoke job `116148437669` at
+22:54:48 UTC. This is not an accepted release. The genuinely signed-in owner
+Status page read the retained report without running another canary:
+`chat_capabilities` displayed "Capabilities reply incomplete"; every other
+individual check displayed OK. The verified C0 canary branch
+`capabilities_reply_incomplete` follows successful actual discovery and a complete
+Notes/Calendar/GitHub receipt. Which reply category was missing is not retained;
+do not infer a raw reply, blame the reference pin or claim the historical #820
+cause.
+
+The local candidate adds one shared model instruction rule for chat, voice and
+smoke: summarize every successfully discovered category without inventing
+categories, treating labels as data, and preserving failure/refusal reporting.
+It does not rewrite model output or change canary predicates, token limits,
+permissions or resources. Fifteen synthetic actual-handler cases cover both
+request rounds, EN/DA chat/smoke, voice, successful/refused/failed discovery and
+unchanged incomplete provider output. The existing Windows Python 3.12.10
+snapshot ran all 398 agent tests successfully; the fifteen new cases fail
+against the asserted exact `3e29a04e` baseline model blob. These are instruction-delivery controls,
+not proof that a real model now answers completely. Independent review, changed
+head full CI/CodeQL and the legitimate normal release gate remain required.
+Only demonstrated `fix-main:` delivery may merge while the release gate is broken.
+
+Existing #848 head `3e29a04e` passed all ten actual CI `38650651609` jobs and four
+CodeQL `38650651464` analyses, including 178 backend files / 3,170 tests and
+strict backend/web builds. It is not merged/released/live-accepted. Keep the
+original Google issues open and preserve their approved write/fixture boundaries.
+The original frozen Google and Factory review receipts remain immutable.
 
 ## Accepted recovery and Factory release (14 October 2026)
 
@@ -36,7 +88,7 @@ Backend revision `0000315` is ready with the new image. The bounded
 19:22–19:24 UTC revision-only log query returned 314 backend rows and
 15 smoke events; chat canary, capabilities and GitHub read each reported
 `ok` once at 19:23:18 UTC. No provider/prompt/result text was retrieved.
-This establishes the current accepted release, not the historical cause
+This establishes that accepted release, not the historical cause
 or original phone/voice/Google acceptance. #820 remains open.
 
 The owned #842 integration preserved its two accepted Factory UI blobs
@@ -56,27 +108,38 @@ normally as `5939fb54`. Normal Deploy `38633353086` passed backend image
 deployment, backend health and actual smoke at 20:43:27 UTC; unchanged web,
 infrastructure and hosted-agent deployment were skipped. This accepts the
 inactive correction release, not registration, activation, original Daily/data
-or private/device acceptance; #720 remains open.
-The six existing maintenance deliveries (#822/#823/#824/#834/#836/#841)
-are consolidated locally against that main for existing #841, with reviewed
-source retained and all main task cells protected. Local parser/CodeQL
-regressions pass six tests on Python 3.13.15. Individual Python 3.13.16
-reference-pin receipts are not evidence for the combined three-pin manifest.
-The local baseline install failed on TLS before tests; the candidate was not
-started and certificate checks were not weakened. The existing agent CI job
-now detects changed reference manifests, uses the existing SHA-pinned setup
-action for the reference's Python 3.13 major, and checks baseline/candidate
-in separate environments: full pin readback, pip check, offline tests and a
-synthetic HS256 round trip. The selected patch version is reported, not assumed.
-The integrated head requires that check, normal exact-head full CI and four
-actual CodeQL analyses before release. No cloud coding worker is restarted
-and no extra PR is created.
-Google's `F3BD79DA` freeze failed targeted re-review on three residual
-approval-scope, quoted-query intent and native-window faults. The same
-local author is correcting them; that freeze remains immutable and
-unapproved. Corrected immutable freeze `CEC84A7A` is with the same independent
-reviewer; publication remains held pending disposition. No Google release is
-accepted.
+or private/device acceptance. #720 subsequently closed at 22:13 UTC for its
+original inactive code/synthetic scope: the acceptance lane found no new gap,
+and the coordinator verified 63 relevant inputs against the actual tested
+#841 head, accepted `202ead5b` and later main. That tested/accepted tree is
+`b05a2380`. Actual CI `38636782270` passed health-processing SQL 18,
+health-upload SQL 12, normalization 45, read-model 2, upload 15 and lint/build.
+The lane's npm proxy/TLS failures remain unexecuted local checks, not those
+hosted results. Existing #808/#818 source and native #718/#719 dependencies
+needed no new code/release. Activation, real HAE/source/phone parity and
+private backup/import/cutover remain separate unverified gates.
+The six maintenance deliveries reached accepted main `202ead5b` through
+existing #841. Exact-head CI `38636782270` passed all ten actual jobs and
+CodeQL `38636782376` all four analyses, including real production C#
+extraction. The reference check actually used Python 3.13.16: both baseline
+and combined manifests verified all 90 pins, passed pip check, 42 offline
+tests and a synthetic HS256 round trip. The earlier local TLS failure
+remains a failed local installation, not that hosted evidence.
+Normal Deploy `38638073176` passed all six selected jobs: Plan,
+Infrastructure, Backend, Hosted agent, Web and Smoke. None was skipped.
+The six original issues completed after acceptance; superseded PRs
+#822/#823/#824/#834/#836 closed without another release. Project run
+`38640886223` executed token-backed Sync board successfully; this is not
+browser observation or blanket advisory clearance.
+
+Google freezes `3073B943`, `F3BD79DA` and `CEC84A7A` remain immutable FAIL.
+The same independent reviewer passed replacement `3AF653B5`, head
+`139ca8f7` / tree `05c77007`, for the two CEC residuals and coupled controls.
+The coordinator integrated current main `5064afe4` normally without conflicts;
+the later main commit changes only generated PLAN status cells. Reviewed
+runtime/test blobs remain the publication boundary. Full pinned CI, the
+previously unrun app/relay checks and normal release remain pending; no
+Google release or original live acceptance is claimed.
 
 ## Consolidated main recovery (14 October 2026; local)
 
@@ -532,7 +595,7 @@ Every coding agent on this repository follows these rules. Normally this project
 
 ### Where work happens
 
-- **Important implementation stays local until Dan says otherwise.** Dan's 14 October direction supersedes the earlier remote-default rule and P12-only local exception. Local sessions implement and review; the coordinator also owns existing GitHub delivery PRs, normal CI, releases and both boards. Do not restart cloud coding workers merely to move review cards. `main` on GitHub remains the shared source of truth, and authorised delivery still requires current-main reconciliation, independent review and exact-head checks.
+- **Important implementation stays local; use selective cloud work when useful.** Dan's 14 October overnight direction permits parallel local subsessions and bounded Copilot cloud work for independent lanes. Google, Factory lifecycle and Daily acceptance stay separately owned locally; the existing #830 reference-compatibility continuation is cloud-owned. The coordinator owns existing delivery PRs, normal CI, releases and both boards. Do not duplicate owners or start cloud workers merely to move cards. This supersedes the earlier remote-default, P12-only exception and blanket no-cloud rule. `main` remains the shared source of truth; delivery requires current-main reconciliation, independent review and exact-head checks.
 - The runner instructs coding agents on every turn, including resumed or recovered sessions, to commit and push small work-in-progress changes to the existing task branch after each meaningful step. Never force-push or push to `main`; report commit or push failures.
 - **Stay within Dan's local authorisation.** The current direction already authorises scoped local implementation, review and coordinator integration; do not repeatedly request that permission. New destructive, access, private-data or otherwise unauthorised actions still need approval. Bootstrap and credential/login prompts remain human-owned.
 - **No Azure access for agents.** Changes reach Azure only through the deploy workflows on `main`; GitHub Actions can sign in to Azure only for `main`. In a PR, check infrastructure without Azure (`az bicep build`, linter); the deploy after merge proves it against Azure. Verify Azure behaviour from those workflow runs, or ask Dan.
@@ -2472,3 +2535,204 @@ P12-01 checks: `npm test --workspace @jarvis/contracts`; `npm test --workspace @
 Dan approved P12 on 12 October 2026 and explicitly released only P12-01 for this worker. The later [execution authorization](https://github.com/DanAakesen/jarvis/issues/716#issuecomment-6124634183) supersedes the original backlog-only and extra cutover-approval wording: eventual production cutover is pre-authorized only after dependency, parity, reconciliation, backup and rollback gates pass. Original Daily continues ordinary authorized food/health writes and remains running/canonical before cutover. Migration tooling must not alter its application/source code/schema or rewrite its records; final-delta reconciliation accounts for ongoing normal use. Read-only export belongs in the protected migration workflow. Legacy operation may be deprecated only after all in-scope data, features and sync are migrated and verified and rollback is protected; never delete the original repository or data. New secrets/access and unapproved paid resources retain their explicit-confirmation boundaries. This issue performs no cutover or production writes.
 
 No direct Azure access, original Daily checkout/Sites edits, private health/food data/exports or production credentials in coding/public Git. Reuse current login/session/owner and single conversation; no TickTick. Live-provider and physical-iPhone acceptance remain separately verified evidence; main-only release workflows apply.
+
+## P11-03 / #838 execution boundary
+
+Historical task-14 boundary (superseded by the local consolidation hold below):
+work stayed on `jarvis/task-14` with backend-owned publication.
+Calendar regression tests use fake Google responses only. No actual reservation
+or calendar mutation is part of this code task. `calendar_get_pending_change`
+requires the verified current Dan message and returns private process-local state.
+Related #837 / `origin/jarvis/task-12` owns direct-only Gmail access policy; reuse
+its MIME reader rather than implementing a second reader or duplicating PC guards.
+
+Focused validation command: `npm test --workspace @jarvis/backend -- src/google
+src/core/capability-instructions.test.ts`. Backend lint/build also apply; changed
+agent instructions are covered by the backend contract test. Synthetic HTML
+contains booking dates, nested alternatives and invisible padding; no personal
+email, live Google call or computer-use session is required. The copied task-12
+reader stays at its original path for the eventual related-branch merge.
+
+Extraction checkpoint: 97 tests across six Google/instruction suites pass. The
+backend TypeScript build passed; the reader's scoped zero-warning lint passes
+following the invisible-character regex correction. Final broader registry/module
+checks and full backend lint/build remain next. Python instructions compile; no
+Python runtime logic changed and its full test environment is not installed.
+
+Final P11-03 validation (14 October 2026):
+- `npm test --workspace @jarvis/backend -- src/google src/core/capability-instructions.test.ts`: 97 passed.
+- `npm test --workspace @jarvis/backend -- src/core/tool-registry.test.ts src/core/work-presentation.test.ts src/core/approval.test.ts src/modules.test.ts src/auth/auth.test.ts src/app.test.ts --maxWorkers=2`: the three core suites passed (79 tests), but the sandbox denied the auth fixture's loopback listener (`EPERM`) and four app/module tests timed out during concurrent checks.
+- Unchanged suites rerun without extending timeouts: `src/auth/auth.test.ts --maxWorkers=1` with loopback permission, 60 passed; `src/modules.test.ts src/app.test.ts --maxWorkers=1`, 32 passed. Total selected coverage: 268 passing tests after reruns.
+- `npm run lint --workspace @jarvis/backend` and `npm run build --workspace @jarvis/backend`: passed on the final code. Agent instruction source compiles; Python ruff/full pytest were not run because that environment is absent. Backend instruction contracts cover both shared and agent guidance; the largest built-in mode prompt is 14,959 code points, under 15,000.
+- Final diff/whitespace review passed. No UI, migration, dependency, OAuth or deployment changes. No live mail was read and no calendar mutation was executed. Hosted-model/chat/voice and private-account acceptance remain unverified. The backend opens the PR; this task does not create one.
+
+## Local Google delivery consolidation (14 October 2026)
+
+The coordinator assigned one local outcome covering #837/#838/#839, seeded from
+#848/task-14 `2c17c386`, integrating main `81580919`, useful #849/task-15
+`2ae8e4f9` hunks and task-12 `bd052c0` direct-only guards. Keep one
+`calendar_get_pending_change` catalogue entry. Preserve actual-main smoke/model
+behaviour and all unrelated main blobs/generated PLAN cells. That author-only
+preparation did not authorise live Google, private bodies, browser credentials,
+permissions, model-setting changes or synthetic live approval. The original
+frozen `3073B943` patch remains unchanged
+and failed independent review. Five source-grounded corrections cover mail
+versus calendar approval, observed Chrome/Gmail boundaries, unrelated status
+queries, separately requested same-turn computer actions and decoded-empty
+plain/HTML provenance with separately labelled snippets.
+
+Targeted re-review rejected frozen `F3BD79DA` for three residuals. Preserve both
+patches and their receipts. Current corrections prevent appointment words inside
+actual mail reply receipts/read topics from selecting calendar scope, refuse PC
+intent found only within mail-query/quoted subjects, and preserve native editor
+windows whose filenames contain Gmail. Full unambiguous EN/DA independent
+commands still work; real Chrome Gmail and later-action guards still refuse.
+
+Targeted re-review passed those exact three cases but rejected `CEC84A7A` for
+suffix-dependent process identification and over-narrow bare-mail command parsing.
+Preserve its patch, receipt and immutable evidence directory. Current corrections
+use actual structured process/site observations, including suffixless and exact
+200-character native titles, missing-identity refusal, late native/confirmed
+switches and window/clipboard export checks. Separate native snapshot stores
+preserve UIA/visual action IDs; identity-only capture images are discarded, never
+sent to a planner/model or audit. Clear topic-bearing EN/DA commands remain
+independent, while quoted commands/how-to topics cannot authorise fallback.
+
+Coordinator disposition: the same independent reviewer passed immutable
+`3AF653B5` / `139ca8f7` / `05c77007` on the exact two residuals and coupled
+compatibility controls. This is a bounded source/synthetic PASS, not full
+build, pinned CI, provider/device acceptance or release. The coordinator's
+normal integration with accepted `5064afe4` is conflict-free; all runtime/test
+blobs must remain identical to this freeze. Existing #848 is the publication
+surface; original issues stay open until their actual criteria are met.
+
+Dan then explicitly approved one bounded live acceptance run after review,
+normal CI and release: one synthetic Gmail draft, never sent; one calendar
+event titled `Jarvis acceptance test`, without attendees or notifications;
+readback and cleanup of only those newly created fixtures; and one isolated
+Jarvis sandbox delivery job using existing resources and delivery PRs.
+The coordinator owns the genuine authenticated owner path. Do not read
+personal emails, overwrite existing pending actions, forge approvals or
+provenance, scrape credentials, bypass consent, create new resources/access,
+run extra jobs or treat synthetic fixtures as live evidence. Record unavailable
+owner authentication as a blocker. Original Daily/data, activation, private
+migration and physical-phone gates are unchanged.
+
+The coordinator authorised normal owned commits to finish the earlier `81580919`
+merge, integrate `51bda5cb`, and now integrate actual main once for these residual
+corrections. Main `36d720909d30dc84b9f94b953758312465d9fec2` is integrated locally;
+Factory, diagnostics, accepted mobile blobs and generated PLAN cells are unchanged.
+The coordinator reports normal Deploy `38629181064` passed Web/deep-link,
+backend health and actual smoke at 20:09:21 UTC; backend/infra/hosted-agent
+deployment was correctly skipped. This is main evidence, not Google-delivery
+release evidence. The historical release failure's cause remains unknown.
+No push, PR creation/change, readiness metadata, hosted CI,
+provider call or deployment is authorised here. The corrected frozen patch needs
+independent review; the coordinator owns subsequent publication and release.
+This replacement remains based on already-integrated `36d72090`; do not fetch or
+chase later main. The coordinator owns reconciling later accepted main after PASS.
+
+From `agents/jarvis`, run the isolated Python environment's pytest on
+`tests/test_calendar_flow.py`, `tests/test_model_client.py`,
+`tests/test_jarvis_tools.py`, `tests/test_chat_runtime.py` and
+`tests/test_voice_runtime.py`; Ruff checks changed Python sources/tests.
+296 tests and changed Ruff pass on Python 3.12.10, not pinned 3.12.14.
+Development dependencies were restored with locked hashes in the worktree venv;
+Windows-only `colorama==0.4.6` was added locally and `pip check` passes.
+
+Combined Node checks cover `src/google`, instruction/parity, registry, browser,
+PC and realtime/relay suites, plus backend lint/types/build. Frozen npm restore
+failed on the feed's `ip-address@10.7.4` 404; official-registry TLS also failed.
+An approved read-only tooling snapshot was copied into isolated dependencies,
+with workspace aliases pointing only to this worktree. Verified portable
+Node 22.23.3 x64 runs snapshot Vitest 5.0.2/Vite 8.3.1, not pinned CI versions.
+327 tests across twelve runnable suites pass, as does full backend zero-warning
+lint. Both automatic-capture variants retain the unchanged 15,000-code-point
+built-in-mode headroom check. No parity or confirmation check was removed.
+
+`src/google/tools.test.ts`, `src/tool-parity.test.ts` and
+`src/pc-bridge/bridge.test.ts` cannot load because
+`@fastify/multipart` is absent; `src/voice/relay.test.ts` cannot load because
+`sharp` is absent. Full TypeScript/build validation is blocked by those packages
+plus `pdfjs-dist`, `@azure/storage-queue` and `@fastify/rate-limit`, with consequent
+request types unresolved. This is not passing CI. Do not stub packages, change
+lockfiles, weaken TLS or repeat independent download loops.
+
+The session artifact `google-local-receipt-check.mjs`, run from the worktree with
+Node's experimental TypeScript transform, directly executes the actual Google
+module, shared registry, pending store and direct-only guards. Synthetic receipts
+prove read/stage/status/same-turn refusal/later approval, the exact provider payload
+and summary, once-only replay/failure/expiry, and refusal of computer fallback
+after incomplete or failed mail reads. This bypasses only missing HTTP-app tooling,
+not the actual Google handlers or approval guard; it does not replace blocked
+HTTP/relay tests or pinned exact-head CI.
+
+Additional runnable production-boundary fixtures execute the actual registered
+PC module with synthetic broker metadata and the actual Google module/registry:
+opaque Gmail IDs, real `chrome` identity, guard-before-planner/vision, rechecking
+actions and confirmed dispatch, Codex's guarded executor, independent Spotify
+after failed/incomplete Gmail, and coexisting mail/calendar stages with mail-only
+confirmation. Actual hosted-loop regressions exercise Gmail-only and Gmail-after-
+calendar approval plus pending/none unrelated questions. Sixteen new actual EN/DA
+relay cases cover pending/completed status isolation and subsequent yes, but are
+not locally executed because relay collection is blocked. Do not present them as
+passing tests or original live/provider acceptance.
+
+Residual proofs use only synthetic data. `google-residual-handler-check.mjs`
+reruns the unchanged original receipt guarantees, produces the actual
+`mail_draft_reply` Dentist appointment receipt and confirms only its mail scope
+while an older calendar remains staged. `google-residual-hosted-check.py` consumes
+that generated receipt/code/confirmation result in the real hosted chat/voice loop:
+four pending/none cases pass with model/mail handling and no calendar lookup or
+confirmation. These session artifacts do not replace missing HTTP-app tooling.
+The 48 calendar fixtures retain the original 34 cases and explicit calendar
+mutation/status/repeated-yes controls. Actual registry+PC regressions include
+both quoted/topic negatives, clear EN/DA commands, real `vscode` identity with
+`gmail-access-policy.ts` title, native action/clipboard/window positives and a
+native-to-Chrome Gmail switch refusal.
+Fresh proofs run in the new `google-identity-intent-proof-work` session folder;
+do not overwrite any prior frozen evidence. New paired registry regressions
+cover the three exact EN/DA topic-bearing commands and prior how-to/quoted-subject
+negatives. Actual PC module fixtures use fresh independent snapshot IDs to
+detect invalidation, suffixless/truncated Chrome titles, missing identity,
+before-dispatch/confirmation refusal and native metadata/control positives.
+
+### Published Google delivery: pinned-CI fixture correction
+
+Independent review passed frozen `3AF653B5`; the coordinator integrated its
+runtime/test blobs into `f2afaca9` and published existing #848. Normal pinned
+CI `38644147405` failed five backend tests (3163 passed, 176/178 files passed).
+Both Backend and Web jobs report these same backend failures; Web's 75 frontend
+files passed before the root test command also ran backend tests.
+
+Four calendar HTTP fixtures registered `/fixture/calendar-reply` without
+`config.jarvisAgent: true`. The unchanged authentication hook correctly denied
+their agent identity before the confirmation helper ran. Explicitly opt in
+only that test route, retaining verified-current-Dan, later-message, expiry,
+cancellation, provider-failure and one-shot assertions. An unmarked-route
+negative control asserts 403 with zero handler/provider calls.
+
+The paused-PC fixture enables visual fallback with a one-element UIA tree.
+Its first observation is followed by a second identity-only UIA read before
+the paused connection refuses `window_capture` without dispatch. Assert the
+exact two-read sequence and zero planner/vision calls; retain strict paused
+refusal and resumed `open_app` dispatch. A dependency-light actual registry,
+connection and synthetic WebSocket broker regression also checks zero
+`pc_open`, capture or native-action dispatch while paused.
+The corrected twelve-file Node selection passes 328 tests, including that
+broker case and all 34 mail-policy controls. Changed-test zero-warning lint
+passes; strict types retain exactly the earlier twelve environment errors.
+Earlier Python and coupled hosted proof receipts apply to unchanged runtime
+blobs and were not rerun for this test-only correction.
+
+These are test-harness corrections, not production authentication or pause
+policy changes. Local HTTP execution remains blocked by missing
+`@fastify/multipart`; normal corrected-head pinned CI is coordinator-owned
+and still required. Do not treat the published failing wave or local fixture
+evidence as CI-green, original provider acceptance or release approval.
+
+Installed CLI help supports `copilot --remote`. Observed existing SDK processes
+run `--server --stdio --no-auto-update`, without `--remote`; this task neither
+relaunches them nor claims in-session `/remote` is enabled. Remote session control
+and original hosted-model/realtime speech/private-account acceptance remain
+unverified.

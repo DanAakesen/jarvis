@@ -1,3 +1,4 @@
+import { refuseGmailComputerAccess } from '../core/gmail-access-policy.js';
 import { randomUUID } from 'node:crypto';
 import type { FastifyRequest } from 'fastify';
 import websocket from '@fastify/websocket';
@@ -21,6 +22,7 @@ import {
 } from '../core/keyboard-actions.js';
 import {
   runPcAct,
+  type PcActBridge,
   type PcActOptions,
   type PcActOperation,
   type PcActPlanner,
@@ -567,7 +569,11 @@ export function createPcBridgeModule(options: PcBridgeModuleOptions = {}): PcBri
         description: 'Return the title of the active window on Dan’s PC.',
         inputSchema: { type: 'object', properties: {}, additionalProperties: false },
         execute: async (_input, request, signal) => {
+          const before = await readWindowsObservation(bridge, 'uia_snapshot', signal, request.log);
           const result = await bridge.execute({ name: 'active_window', arguments: {} }, signal, request.log);
+          const after = await readWindowsObservation(bridge, 'uia_snapshot', signal, request.log);
+          if (after.application !== before.application || typeof result.title !== 'string')
+            throw new ToolRefusal('The foreground Windows application cannot be verified.');
           return { title: result.title };
         },
       },
@@ -577,12 +583,16 @@ export function createPcBridgeModule(options: PcBridgeModuleOptions = {}): PcBri
         inputSchema: { type: 'object', properties: {}, additionalProperties: false },
         sensitive: true,
         execute: async (_input, request, signal) => {
+          const before = await readWindowsObservation(bridge, 'uia_snapshot', signal, request.log);
           const result = await bridge.execute(
             { name: 'clipboard_read', arguments: {} },
             signal,
             request.log,
           );
           if (!isClipboardReadResult(result)) throw new Error('Invalid clipboard read response');
+          const after = await readWindowsObservation(bridge, 'uia_snapshot', signal, request.log);
+          if (after.application !== before.application)
+            throw new ToolRefusal('The foreground Windows application changed before clipboard export.');
           const readResult: ClipboardReadResult = { text: redactClipboardSecrets(result.text) };
           return readResult;
         },
@@ -647,10 +657,12 @@ export function createPcBridgeModule(options: PcBridgeModuleOptions = {}): PcBri
               typeof input.tabId !== 'string' || !isTabId(input.tabId)) {
             throw new ToolRefusal('Choose a tab returned by pc_browser_tabs.');
           }
+          await readBrowserTarget(bridge, input.tabId, signal, request.log);
           const result = await bridge.execute({
             name: 'browser_snapshot', arguments: { tabId: input.tabId },
           }, signal, request.log);
           if (!validBrowserSnapshot(result, input.tabId)) throw new Error('Invalid browser snapshot response');
+          refuseGmailComputerAccess(result.url, result.title);
           return result;
         },
       },
@@ -708,23 +720,26 @@ export function createPcBridgeModule(options: PcBridgeModuleOptions = {}): PcBri
           const settings = request.server.settingsStore
             ? await readSettings(request.server.settingsStore, await request.server.modelCatalogue.read())
             : defaultSettings;
+          const guarded = guardedPcActBridge(bridge, request.log);
           return runPcAct(input, request, signal, {
-            observe: (commandSignal) => bridge.execute(
-              { name: 'uia_snapshot', arguments: {} },
-              commandSignal,
-              request.log,
-            ),
-            capture: (commandSignal) => bridge.execute(
-              { name: 'window_capture', arguments: {} },
-              commandSignal,
-              request.log,
-            ),
-            act: (action, commandSignal) => bridge.execute(
-              { name: 'uia_act', arguments: action },
-              commandSignal,
-              request.log,
-            ),
-            actPoint: (action, commandSignal) => bridge.execute(
+            ...guarded,
+            capture: async (commandSignal) => {
+              await guarded.checkWindow(commandSignal, 'uia_snapshot');
+              const result = await bridge.execute({ name: 'window_capture', arguments: {} }, commandSignal, request.log);
+              try {
+                await guarded.checkWindow(commandSignal, 'uia_snapshot');
+                return result;
+              } catch (error) {
+                if (typeof result.png === 'string') {
+                  Buffer.from(result.png, 'base64').fill(0);
+                  result.png = '';
+                }
+                throw error;
+              }
+            },
+            actPoint: async (action, commandSignal) => {
+              await guarded.checkWindow(commandSignal, 'uia_snapshot');
+              return bridge.execute(
               action.action === 'click'
                 ? {
                   name: 'click_point',
@@ -746,7 +761,8 @@ export function createPcBridgeModule(options: PcBridgeModuleOptions = {}): PcBri
                 },
               commandSignal,
               request.log,
-            ),
+              );
+            },
           }, {
             planner: options.pcActPlanner!,
             ...(options.pcActVisionModel ? { visionModel: options.pcActVisionModel } : {}),
@@ -823,7 +839,7 @@ async function runBrowserAction(
       throw new ToolRefusal('Dan’s confirmation service is unavailable; the browser action was not performed.');
     }
     return runConfirmed('Send an irreversible keyboard action in Chrome.', async () => {
-      const approved = await bridge.execute({
+      const approved = await executeBrowserAction(bridge, {
         name: 'browser_act',
         arguments: { ...bridgeAction, confirmed: true },
       }, signal, logger);
@@ -835,7 +851,7 @@ async function runBrowserAction(
     name: 'browser_act',
     arguments: { ...bridgeAction, ...(bridgeAction.action === 'click' || bridgeAction.action === 'keys' ? { confirmed: false } : {}) },
   };
-  const result = await bridge.execute(command, signal, logger);
+  const result = await executeBrowserAction(bridge, command, signal, logger);
   if (!isConfirmationRequired(result)) {
     if (!validBrowserActionFor(result, action.action)) throw new Error('Invalid browser action response');
     return result;
@@ -845,13 +861,108 @@ async function runBrowserAction(
     throw new ToolRefusal('Dan’s confirmation service is unavailable; the browser action was not performed.');
   }
   return runConfirmed(result.summary, async () => {
-    const approved = await bridge.execute({
+    const approved = await executeBrowserAction(bridge, {
       name: 'browser_act',
       arguments: { ...bridgeAction, confirmed: true },
     }, signal, logger);
     if (!validBrowserActionFor(approved, bridgeAction.action)) throw new Error('Invalid browser action response');
     return approved;
   }, signal);
+}
+
+async function readBrowserTarget(
+  bridge: PcBridgeConnection,
+  tabId: string | undefined,
+  signal: AbortSignal,
+  logger: PcBridgeTimingLogger,
+): Promise<{ title: string; url: string }> {
+  let offset = 0;
+  const deadline = AbortSignal.any([signal, AbortSignal.timeout(15_000)]);
+  while (offset <= 5000) {
+    const result = await bridge.execute({ name: 'browser_tabs', arguments: { offset } }, deadline, logger);
+    if (!validBrowserTabs(result)) throw new Error('Invalid browser tab response');
+    const tabs = result.tabs as { id: string; title: string; url: string; focused: boolean }[];
+    const target = tabs.find((tab) => tabId === undefined ? tab.focused : tab.id === tabId);
+    if (target) {
+      refuseGmailComputerAccess(target.url, target.title);
+      if (!target.url) throw new ToolRefusal('The current Chrome site cannot be verified.');
+      return target;
+    }
+    if (result.nextOffset === null) break;
+    const next = result.nextOffset as number;
+    if (next <= offset) throw new Error('Invalid browser tab pagination');
+    offset = next;
+  }
+  throw new ToolRefusal('The current Chrome target cannot be verified. List the tabs again before acting.');
+}
+
+async function readWindowsObservation(
+  bridge: PcBridgeConnection,
+  source: 'uia_snapshot' | 'window_capture',
+  signal: AbortSignal,
+  logger: PcBridgeTimingLogger,
+): Promise<Record<string, unknown> & { application: string }> {
+  const result = await bridge.execute({ name: source, arguments: {} }, signal, logger);
+  try {
+    if (typeof result.application !== 'string' ||
+        !(source === 'uia_snapshot' ? validUiAutomationSnapshot(result) : validWindowCapture(result)))
+      throw new ToolRefusal('The foreground Windows application cannot be verified.');
+    const application = result.application.toLowerCase();
+    refuseGmailComputerAccess(application);
+    if (/^(?:msedge|edge|firefox|brave|opera|vivaldi|iexplore)$/iu.test(application))
+      throw new ToolRefusal('Website controls are supported only in Chrome, where the current site can be verified.');
+    if (application === 'chrome') await readBrowserTarget(bridge, undefined, signal, logger);
+    return source === 'window_capture' ? { application } : { ...result, application };
+  } finally {
+    if (source === 'window_capture' && typeof result.png === 'string') {
+      Buffer.from(result.png, 'base64').fill(0);
+      result.png = '';
+    }
+  }
+}
+
+function guardedPcActBridge(
+  bridge: PcBridgeConnection,
+  logger: PcBridgeTimingLogger,
+): PcActBridge & {
+  checkWindow: (signal: AbortSignal, source?: 'uia_snapshot' | 'window_capture') => Promise<void>;
+} {
+  let observedApplication: string | undefined;
+  const windowTitle = async (signal: AbortSignal) => {
+    const result = await bridge.execute({ name: 'active_window', arguments: {} }, signal, logger);
+    if (typeof result.title !== 'string') throw new ToolRefusal('The foreground Windows window cannot be verified.');
+    return result.title;
+  };
+  // Each recheck uses the other native snapshot store, preserving the action's original binding.
+  const checkWindow = async (signal: AbortSignal, source: 'uia_snapshot' | 'window_capture' = 'window_capture') => {
+    const current = await readWindowsObservation(bridge, source, signal, logger);
+    if (!observedApplication || current.application !== observedApplication)
+      throw new ToolRefusal('The foreground Windows application changed. Observe it again before acting.');
+  };
+  return {
+    windowTitle,
+    checkWindow,
+    observe: async (signal) => {
+      const result = await readWindowsObservation(bridge, 'uia_snapshot', signal, logger);
+      observedApplication = result.application;
+      return result;
+    },
+    browserContext: (signal) => readBrowserTarget(bridge, undefined, signal, logger),
+    act: async (action, signal) => {
+      await checkWindow(signal);
+      return bridge.execute({ name: 'uia_act', arguments: action }, signal, logger);
+    },
+  };
+}
+
+async function executeBrowserAction(
+  bridge: PcBridgeConnection,
+  command: Extract<PcCommand, { name: 'browser_act' }>,
+  signal: AbortSignal,
+  logger: PcBridgeTimingLogger,
+): Promise<Record<string, unknown>> {
+  await readBrowserTarget(bridge, command.arguments.tabId, signal, logger);
+  return bridge.execute(command, signal, logger);
 }
 
 function validateBrowserAction(input: unknown): BrowserActionRequest | undefined {
@@ -998,6 +1109,7 @@ async function runPcOpen(
     throw new ToolRefusal('Provide one valid PC action and its value.');
   }
 
+  refuseGmailComputerAccess(input.value);
   let command: PcCommand;
   switch (input.target) {
     case 'url': {
@@ -1061,18 +1173,7 @@ async function runCodexPrompt(
   const goal = `In the Codex desktop app, enter the exact prompt ${JSON.stringify(input.prompt)} in the prompt field and submit it.`;
   if (goal.length > 4_000) throw new ToolRefusal('That Codex prompt is too long to enter safely.');
   const completedActions = new Set<PcActOperation>();
-  const result = await runPcAct({ goal }, request, signal, {
-    observe: (commandSignal) => bridge.execute(
-      { name: 'uia_snapshot', arguments: {} },
-      commandSignal,
-      request.log,
-    ),
-    act: (action, commandSignal) => bridge.execute(
-      { name: 'uia_act', arguments: action },
-      commandSignal,
-      request.log,
-    ),
-  }, {
+  const result = await runPcAct({ goal }, request, signal, guardedPcActBridge(bridge, request.log), {
     planner: options.pcActPlanner!,
     confirmOverwrites: false,
     ...(options.runConfirmed ? { runConfirmed: options.runConfirmed } : {}),

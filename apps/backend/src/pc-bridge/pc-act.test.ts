@@ -1138,3 +1138,52 @@ describe('pc_act bounded Windows control loop', () => {
     expect(pcBridge.act).toHaveBeenCalledTimes(20);
   });
 });
+
+
+describe('Gmail Windows access refusal', () => {
+  it('refuses a Gmail goal before observing the PC', async () => {
+    const pc = bridge();
+    const planner = { decide: vi.fn(async () => decision('done')) };
+    await expect(runPcAct({ goal: 'Read Gmail booking dates' }, request(), new AbortController().signal, pc, { planner })).rejects.toThrow('Gmail access requires the direct mail integration');
+    expect(pc.observe).not.toHaveBeenCalled();
+    expect(planner.decide).not.toHaveBeenCalled();
+  });
+
+  it('refuses an observed Gmail window before planning or acting', async () => {
+    const pc = bridge({
+      observe: vi.fn(async () => ({ ...snapshot, application: 'chrome' })),
+      browserContext: vi.fn(async () => ({ title: 'Inbox - Gmail', url: 'https://mail.google.com/mail/u/0' })),
+    });
+    const planner = { decide: vi.fn(async () => decision('done')) };
+    await expect(runPcAct({ goal: 'Find the booking dates' }, request(), new AbortController().signal, pc, { planner })).rejects.toThrow('Gmail access requires the direct mail integration');
+    expect(planner.decide).not.toHaveBeenCalled();
+    expect(pc.act).not.toHaveBeenCalled();
+  });
+
+  it('preserves unrelated Chrome controls when the actual focused site is verified', async () => {
+    const pc = bridge({
+      observe: vi.fn(async () => ({ ...snapshot, application: 'chrome' })),
+      browserContext: vi.fn(async () => ({ title: 'Search', url: 'https://example.test/' })),
+    });
+    const planner = { decide: vi.fn(async () => decision('done')) };
+    await expect(runPcAct({ goal: 'Find the answer' }, request(), new AbortController().signal, pc, { planner }))
+      .resolves.toMatchObject({ status: 'completed' });
+    expect(planner.decide).toHaveBeenCalledOnce();
+  });
+
+  it('does not export a Chrome tree to the planner if its site cannot be verified', async () => {
+    const pc = bridge({ observe: vi.fn(async () => ({ ...snapshot, application: 'chrome' })) });
+    const planner = { decide: vi.fn(async () => decision('done')) };
+    await expect(runPcAct({ goal: 'Find the booking dates' }, request(), new AbortController().signal, pc, { planner }))
+      .rejects.toThrow('Chrome site cannot be verified');
+    expect(planner.decide).not.toHaveBeenCalled();
+  });
+
+  it.each(['msedge', 'firefox', 'brave'])('does not export an unverifiable %s website to the planner', async (application) => {
+    const pc = bridge({ observe: vi.fn(async () => ({ ...snapshot, application })) });
+    const planner = { decide: vi.fn(async () => decision('done')) };
+    await expect(runPcAct({ goal: 'Find the answer' }, request(), new AbortController().signal, pc, { planner }))
+      .rejects.toThrow('Website controls are supported only in Chrome');
+    expect(planner.decide).not.toHaveBeenCalled();
+  });
+});

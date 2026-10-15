@@ -19,9 +19,24 @@ function fixture(scope: 'calendar' | 'mail' = 'calendar') {
 }
 
 describe('pending Google actions', () => {
+  it('recovers only a real calendar stage with its original code until expiry', async () => {
+    const f = fixture();
+    expect(f.actions.pendingCalendarChange()).toMatchObject({
+      status: 'awaiting_confirmation', confirmationCode: f.pending.confirmationCode,
+      summary: 'Change.', expiresAt: new Date(601000).toISOString(),
+    });
+    await f.confirm('yes');
+    expect(f.actions.pendingCalendarChange()).toMatchObject({ status: 'none' });
+    expect(f.actions.pendingCalendarChange().detail).not.toContain('Nothing has changed');
+    f.stage();
+    f.setNow(601000);
+    expect(f.actions.pendingCalendarChange()).toMatchObject({ status: 'none' });
+    expect(fixture('mail').actions.pendingCalendarChange()).toMatchObject({ status: 'none' });
+  });
+
   it.each(['yes', 'approve', 'go ahead', 'do it', ' YES! ', 'Approve.'])('approves calendar with %s only once', async (reply) => {
     const f = fixture();
-    await expect(f.confirm(reply)).resolves.toEqual({ status: 'completed' });
+    await expect(f.confirm(reply)).resolves.toEqual({ status: 'completed', summary: 'Change.' });
     await expect(f.confirm(reply)).rejects.toMatchObject({ name: 'ToolRefusal' });
     expect(f.execute).toHaveBeenCalledOnce();
   });
@@ -59,6 +74,15 @@ describe('pending Google actions', () => {
     await expect(f.actions.confirm('calendar', f.pending.confirmationCode, undefined, new AbortController().signal))
       .rejects.toMatchObject({ name: 'ToolRefusal' });
     expect(f.execute).not.toHaveBeenCalled();
+  });
+
+  it('consumes a real stage before a failed provider call and never retries on another yes', async () => {
+    const f = fixture();
+    f.execute.mockRejectedValueOnce(new Error('Provider unavailable'));
+    await expect(f.confirm('yes')).rejects.toThrow('Provider unavailable');
+    expect(f.actions.pendingCalendarChange()).toMatchObject({ status: 'none' });
+    await expect(f.confirm('yes', message('12', 'yes', 1002))).rejects.toMatchObject({ name: 'ToolRefusal' });
+    expect(f.execute).toHaveBeenCalledOnce();
   });
 
   it('supersedes older calendar actions without restoring them after cancellation', async () => {
