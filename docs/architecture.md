@@ -2952,6 +2952,21 @@ credential probe, and Codex renewal handlers. Prototype crash-test mode is remov
 Local Python tests exercise ACP subprocess fixtures; production Azure acceptance
 remains pending #11 and the main-branch runner workflow.
 
+Task turns keep their public and checkpoint status nonterminal until the owned
+provider shutdown, Codex-auth cleanup and ordered event drain/publisher close
+finish. `_finish_task` is shielded from cancellation while the session lock
+remains held, including across repeated worker cancellation. The cancel handler
+shields its worker join so request loss cannot cancel owned teardown.
+Late pause/steer/cancel requests select the final outcome without
+queuing events against a closing publisher. Cancellation waits for that owner,
+and cleanup failures return a sanitized 503 rather than a cancelled success.
+The stop deadline still terminates only the owned process; timeout and delayed
+ACP-cancel acknowledgement events are not queued during finalization.
+Provider-stop failure attempts a bounded kill of only that invocation's process.
+GitHub verification, project policy, authenticated routes, task-state ownership
+and Foundry idle-expiry/checkpoint semantics are unchanged. This local ordering
+correction is not evidence of live cloud sandbox shutdown or artifact delivery.
+
 P6-07 reports writable-filesystem disk snapshots through the P2-03 runner event
 route, checks for low headroom during each active task turn, and stops work before
 a build can exhaust disk. `disk_low` and the NeedsAttention transition commit

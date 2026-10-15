@@ -228,14 +228,17 @@ async def _publish_after(
 async def _flush_event_delivery(state: "TaskState") -> None:
     delivery_exception: Exception | None = None
     try:
-        if state.event_delivery is not None:
-            await state.event_delivery
-    except Exception as exc:
-        delivery_exception = exc
+        while state.event_delivery is not None:
+            pending = state.event_delivery
+            try:
+                await pending
+            except Exception as exc:
+                delivery_exception = exc
+            if state.event_delivery is pending:
+                break
     finally:
+        failed = state.event_delivery_failed
         if state.event_delivery_failed:
-            state.status = "failed"
-            state.error = "Runner event delivery failed"
             LOGGER.error(
                 "task event delivery failed (%s)",
                 type(delivery_exception).__name__ if delivery_exception is not None else "earlier event",
@@ -244,9 +247,11 @@ async def _flush_event_delivery(state: "TaskState") -> None:
             try:
                 await state.event_publisher.close()
             except Exception as exc:
-                state.status = "failed"
-                state.error = "Runner event delivery failed"
+                failed = True
                 LOGGER.error("task event delivery cleanup failed (%s)", type(exc).__name__)
+        if failed:
+            state.status = "failed"
+            state.error = "Runner event delivery failed"
 
 
 @dataclass
@@ -273,6 +278,7 @@ class TaskState:
     process: asyncio.subprocess.Process | None = None
     worker: asyncio.Task[None] | None = None
     cancel_requested: bool = False
+    finalizing: bool = False
     # Set to "steer" or "pause" when the current turn is stopped on purpose.
     stop_requested: str | None = None
     event_count: int = 0
@@ -1504,7 +1510,8 @@ class ACPClient:
             ).encode()
         )
         await self.process.stdin.drain()
-        self.state.event("acp_cancel_sent", session_id=self.acp_session_id)
+        if not self.state.finalizing:
+            self.state.event("acp_cancel_sent", session_id=self.acp_session_id)
         return True
 
     async def stop(self) -> None:
@@ -1660,6 +1667,58 @@ async def _stop_session_client(session_id: str) -> None:
         await client.stop()
 
 
+async def _finish_task(
+    state: TaskState,
+    client: ACPClient | None,
+    worktree: Path,
+    credentials: dict[str, str],
+    lock_acquired: bool,
+    outcome: str,
+) -> None:
+    if client is not None:
+        if session_clients.get(state.session_id) is client:
+            session_clients.pop(state.session_id)
+        try:
+            await client.stop()
+        except Exception as exc:
+            outcome = "failed"
+            state.error = f"Runner cleanup failed: {type(exc).__name__}"
+            state.event("failed", error=state.error)
+            if state.process is not None and state.process.returncode is None:
+                try:
+                    state.process.kill()
+                    await asyncio.wait_for(state.process.wait(), timeout=10)
+                except (OSError, asyncio.TimeoutError) as stop_error:
+                    LOGGER.error("provider cleanup failed (%s)", type(stop_error).__name__)
+    if lock_acquired and state.agent == "codex":
+        auth_path = worktree / ".codex" / "auth.json"
+        try:
+            if auth_path.exists() and await _store_codex_login_if_newer(auth_path.read_text(encoding="utf-8")):
+                state.event("codex_login_stored")
+        except Exception as exc:
+            state.event("codex_login_store_failed", error=type(exc).__name__)
+        finally:
+            try:
+                auth_path.unlink(missing_ok=True)
+            except OSError as exc:
+                outcome = "failed"
+                state.error = f"Runner cleanup failed: {type(exc).__name__}"
+                state.event("failed", error=state.error)
+    capacity = _capacity_snapshot()
+    state.event("capacity", **capacity)
+    LOGGER.info("capacity %s", json.dumps(capacity, sort_keys=True))
+    credentials.clear()
+    await _flush_event_delivery(state)
+    if state.status != "failed":
+        state.status = (
+            "failed" if outcome == "failed" else
+            "cancelled" if state.cancel_requested else
+            STOPPED_STATUS[state.stop_requested] if state.stop_requested else outcome
+        )
+    state.finished_at = time.time()
+    _persist_task(state)
+
+
 async def _run_task(
     state: TaskState,
     *,
@@ -1675,6 +1734,7 @@ async def _run_task(
     client: ACPClient | None = None
     session_lock = session_locks.setdefault(state.session_id, asyncio.Lock())
     lock_acquired = False
+    outcome = "cancelled"
     try:
         if state.task_id is not None:
             backend_url = os.environ.get("JARVIS_BACKEND_URL")
@@ -1761,20 +1821,20 @@ async def _run_task(
             return
         state.result = await _run_with_disk_watch(state, client, threshold_bytes)
         if state.stop_requested:
-            state.status = STOPPED_STATUS[state.stop_requested]
-            state.event(state.status, result=state.result)
+            outcome = STOPPED_STATUS[state.stop_requested]
+            state.event(outcome, result=state.result)
         elif isinstance(state.result, dict) and isinstance(state.result.get("jarvis_needs_attention"), str):
             question = state.result.pop("jarvis_needs_attention").strip()
             if question:
-                state.status = "needs_attention"
+                outcome = "needs_attention"
                 state.error = question[:MAX_ATTENTION_QUESTION_LENGTH]
                 state.event("needs_attention", question=state.error)
             else:
-                state.status = "completed"
+                outcome = "completed"
                 state.event("completed", result=state.result)
         else:
             has_commit = await _turn_has_commit(state, project, env, starting_commit)
-            state.status = "completed"
+            outcome = "completed"
             response = state.result.get("response", {})
             if isinstance(response, dict) and response.get("stopReason") == "end_turn" and not has_commit:
                 state.event(
@@ -1785,57 +1845,49 @@ async def _run_task(
             else:
                 state.event("completed", result=state.result)
     except asyncio.CancelledError:
-        state.status = "cancelled"
+        outcome = "cancelled"
         state.event("cancelled")
         raise
     except DiskLowExceeded:
-        state.status = "cancelled"
+        outcome = "cancelled"
     except Exception as exc:  # sanitized: exception text never includes credentials
         if state.stop_requested:
             # A forced stop after the cancel timeout closes the ACP stream.
-            state.status = STOPPED_STATUS[state.stop_requested]
-            state.event(state.status, forced=True, error=type(exc).__name__)
-        elif state.status != "cancelled" and isinstance(exc, CodexUsageLimitReached):
-            state.status = "failed"
+            outcome = STOPPED_STATUS[state.stop_requested]
+            state.event(outcome, forced=True, error=type(exc).__name__)
+        elif isinstance(exc, CodexUsageLimitReached):
+            outcome = "failed"
             state.error = "Codex usage limit reached"
             state.event("failed", error=state.error, reason="codex_usage_limit")
-        elif state.status != "cancelled":
-            state.status = "failed"
+        else:
+            outcome = "failed"
             state.error = str(exc) if isinstance(exc, WorkspaceError) else f"Runner task failed: {type(exc).__name__}"
             state.event("failed", error=state.error)
     finally:
         try:
-            # Keep the Foundry session's filesystem and ACP session id, but do not
-            # retain a provider process between turns.  A subsequent steer or
-            # resume creates a fresh ACP process and uses session/load, so events
-            # are attributed to the new invocation and the process cannot hang on
-            # a stale request stream.
-            # start() can fail after spawning but before registration. Dispose the
-            # locally owned client even in that case, and never stop a newer turn's
-            # client belonging to a different invocation.
-            if client is not None:
-                if session_clients.get(state.session_id) is client:
-                    session_clients.pop(state.session_id)
-                await client.stop()
-            if lock_acquired and state.agent == "codex":
-                # Codex may have renewed its login during the turn (for example after
-                # a 401). Keep the newest copy in Key Vault so other sandboxes stay valid.
-                auth_path = worktree / ".codex" / "auth.json"
+            # Cancellation must not interrupt owned teardown or publish a premature terminal checkpoint.
+            state.finalizing = True
+            cleanup = asyncio.create_task(_finish_task(state, client, worktree, credentials, lock_acquired, outcome))
+            try:
+                cancelled = False
+                while not cleanup.done():
+                    try:
+                        await asyncio.shield(cleanup)
+                    except asyncio.CancelledError:
+                        cancelled = True
+                cleanup.result()
+                if cancelled:
+                    raise asyncio.CancelledError
+            except Exception as exc:
+                state.status = "failed"
+                state.error = f"Runner cleanup failed: {type(exc).__name__}"
+                state.finished_at = time.time()
+                LOGGER.error("task finalization failed (%s)", type(exc).__name__)
                 try:
-                    if auth_path.exists() and await _store_codex_login_if_newer(auth_path.read_text(encoding="utf-8")):
-                        state.event("codex_login_stored")
-                except Exception as exc:  # sanitized: names the error type only
-                    state.event("codex_login_store_failed", error=type(exc).__name__)
-                finally:
-                    auth_path.unlink(missing_ok=True)
-            capacity = _capacity_snapshot()
-            state.event("capacity", **capacity)
-            LOGGER.info("capacity %s", json.dumps(capacity, sort_keys=True))
-            credentials.clear()
-            await _flush_event_delivery(state)
-            state.finished_at = time.time()
-            _persist_task(state)
-
+                    _persist_task(state)
+                except OSError as persist_error:
+                    LOGGER.error("task failure checkpoint failed (%s)", type(persist_error).__name__)
+                raise
         finally:
             if lock_acquired:
                 session_lock.release()
@@ -1853,15 +1905,19 @@ async def _stop_running_turn(session_id: str, reason: str, exclude: str | None =
     if running is None:
         return None
     running.stop_requested = reason
-    running.event(f"{reason}_requested")
+    if not running.finalizing:
+        running.event(f"{reason}_requested")
     client = session_clients.get(session_id)
-    if client is not None:
+    if client is not None and not running.finalizing:
         await client.cancel_turn()
     deadline = time.monotonic() + STOP_WAIT_SECONDS
     while running.status in ACTIVE_STATUSES and time.monotonic() < deadline:
         await asyncio.sleep(1)
     if running.status in ACTIVE_STATUSES:
-        running.event("stop_timeout_forced", seconds=STOP_WAIT_SECONDS)
+        if running.finalizing:
+            LOGGER.warning("turn stop deadline reached during finalization (%s)", running.invocation_id)
+        else:
+            running.event("stop_timeout_forced", seconds=STOP_WAIT_SECONDS)
         if running.process and running.process.returncode is None:
             running.process.terminate()
         deadline = time.monotonic() + 30
@@ -2139,11 +2195,14 @@ async def cancel_invocation(request: Request) -> Response:
     first_cancel = not state.cancel_requested
     state.cancel_requested = True
     state.status = "cancelling"
-    state.event("cancel_requested")
+    if state.finalizing:
+        _persist_task(state)
+    else:
+        state.event("cancel_requested")
     if state.worker is not None:
         if first_cancel:
             state.worker.cancel()
-        await asyncio.gather(state.worker, return_exceptions=True)
+        await asyncio.shield(asyncio.gather(state.worker, return_exceptions=True))
     elif state.process and state.process.returncode is None:
         state.process.terminate()
         await state.process.wait()
@@ -2151,6 +2210,8 @@ async def cancel_invocation(request: Request) -> Response:
     client = session_clients.get(state.session_id)
     if client is not None and client.state is state:
         await _stop_session_client(state.session_id)
+    if state.status == "failed":
+        return JSONResponse({"error": "Runner cancellation cleanup failed"}, status_code=503)
     state.status = "cancelled"
     state.finished_at = time.time()
     _persist_task(state)

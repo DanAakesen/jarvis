@@ -1,5 +1,27 @@
 # Project plan
 
+## Current runner delivery after accepted recovery (15 October 2026)
+
+Recovery #852 normally reached main `5765d882` / reviewed tree `c5831563`
+after independent review and fresh ten-job CI `38665077108` / four-analysis
+CodeQL `38665077057`. Automatic Deploy `38666983966` passed all six actual jobs
+and required smoke `116203572330` at 01:51 UTC. Ready backend320 and the
+genuine owner's retained fifteen OK smoke entries confirm the current release
+gate, not exclusive timeout causation or original Google/private/device acceptance.
+
+Normally compose that accepted main into existing #850, preserving the exact V2
+runner/test blobs, every outside-eight-path main entry and all 381 PLAN pipe lines.
+Prior `467cb5d` passed ten actual CI `38659103136` jobs, four CodeQL
+`38659103178` analyses and pinned Linux runner204/agent398. Next: publish the
+composed head normally, require its fresh full gates, then normal guarded squash,
+normal Deploy and actual exact-released-SHA Runner deploy. The original E9
+rejection and all previous receipts remain immutable.
+
+No approved fixture/job has been consumed. Existing public isolated test-target
+PR/task candidates are not verified owner-side eligibility or authentic restart
+confirmation. Stop before live acceptance if either is missing; provider/session
+ending is not physical Foundry deallocation.
+
 ## Required release and terminal transport correction (15 October 2026)
 
 #848 merged normally as `bce6e02a` after independent review and fresh full
@@ -184,6 +206,8 @@ Phase 1 delivers the Software Factory. Requirements and page specifications are 
 
 ## Current focus
 
+- **Recovery source merged; release pending (15 October):** Existing #848 head `0519d12d` and exact tree `6c0c9aa7` passed ten actual CI `38656025688` jobs/four CodeQL `38656025581` analyses after independent review. Pinned Linux ran runner165/agent398 and backend178files/3170tests. Normal squash reached `bce6e02a`; actual normal Deploy `38658184723` is running, not accepted. The last completed C0 release failed; ordinary merges and approved live acceptance stay held until the new required smoke passes. This is not original #820 attribution or private/device acceptance.
+- **Factory runner finalization (15 October; published, composing current main):** Exact V2 source on existing ready #850 `99fdb727` passed ten actual normal-dispatch CI `38656814220` jobs and four CodeQL `38656417765` analyses; pinned Linux ran runner204/agent335, neither skipped. Earlier ready-event zero-step skips do not count. Preserve the independently reviewed runtime/test blobs, all other main entries and all task-table lines when normally composing tested BCE source on the owned surface while its release runs. Next: fresh composed-head full CI/CodeQL, then ordinary merge only after main recovers, normal Deploy AND exact-released-SHA Runner deploy. No Google/private task is repurposed; an eligible existing isolated live target remains unselected.
 - **Required main gate failed (14-15 October):** Reference #830 normally squashed into `c0d0aeef`; its actual Deploy `38649690138` failed required smoke `116148437669` at 22:54 UTC despite the other five selected jobs succeeding. A genuine owner Status-page GET read the retained `capabilities_reply_incomplete` branch without a new probe: actual discovery succeeded and its Notes/Calendar/GitHub receipt was complete; the final reply did not satisfy all category predicates. The exact omitted category and historical #820 cause are not retained. The local candidate adds one shared tool-grounded summary rule for chat/voice/smoke, not fabricated output or weakened checks. Independent review, changed-head full CI/CodeQL and actual normal release remain required; ordinary merges and the approved live fixtures/job remain held.
 - **Current main release (14 October):** Diagnostics #831 reached accepted main `51bda5cb` through full CI, CodeQL and normal Deploy `38622011802`; revision `0000315` has positive safe canary/capabilities/GitHub-read telemetry. Factory #842 then passed all ten actual CI jobs and three CodeQL analyses, merged as `36d72090`, and passed normal Deploy `38629181064`: Web, deployed deep link, backend health and actual smoke; unchanged backend/infrastructure/hosted-agent deployment was skipped. Inactive Daily #818 subsequently passed all ten CI `38631864211` jobs and three CodeQL `38631863844` analyses at `af5ac2e7`, merged as `5939fb54`, and passed normal Deploy `38633353086`: backend image, health and actual smoke at 20:43:27 UTC; unchanged web/infrastructure/hosted-agent deployment was skipped. This establishes the current healthy release, not activation, historical attribution or original performance/private/phone/voice acceptance. Issues #820 and #813 remain open.
 - **Maintenance delivered (14 October):** Existing #841 reached accepted main `202ead5b` after all ten actual CI `38636782270` jobs and four CodeQL `38636782376` analyses. The hosted Python 3.13.16 reference baseline and combined manifests each verified 90 pins, clean pip check, 42 offline tests and HS256 readback; this does not relabel the earlier failed local installation. Normal Deploy `38638073176` passed all six selected components, with none skipped. Original #840/#826/#825/#827/#833/#835 completed after acceptance; superseded review PRs closed and token-backed Project sync passed.

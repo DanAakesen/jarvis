@@ -1,5 +1,79 @@
 # Agent context
 
+## Current Factory composition after accepted recovery (15 October 2026)
+
+Recovery #852 passed narrow independent review and exact-head CI `38665077108`
+with ten actual jobs and CodeQL `38665077057` with four actual analyses.
+Normal squash reached main `5765d882`, exactly reviewed tree `c5831563`.
+Automatic Deploy `38666983966` passed all six actual jobs, including required
+smoke `116203572330` at 01:51 UTC. Backend revision `0000320` is ready; the
+genuine owner's refreshed retained Status report shows all fifteen smoke entries
+OK without another model call. This accepts the current normal release, not
+exclusive timeout causation, original Google/private/device acceptance or #820
+historical attribution. The older BCE/C0 failures below remain historical.
+
+Normally integrate accepted `5765d882` into the existing #850 delivery, retaining
+the exact V2 runner/test blobs, every outside-eight-path main entry and all 381
+PLAN pipe lines. Prior `467cb5d` genuinely passed ten CI `38659103136` jobs and
+four CodeQL `38659103178` analyses, including pinned runner204/agent398.
+That is prior-head proof: the newly composed head requires fresh full CI/CodeQL
+before normal squash. Normal Deploy AND exact-released-SHA Runner deploy with
+actual deploy steps remain mandatory; normal Deploy alone does not ship runners.
+
+No approved live fixture or sandbox job has been consumed. Public existing
+`DanAakesen/jarvis-test-target` PRs 3/2/1 link tasks 9/8/6, but current owner
+task/project/session isolation and later authentic product-write confirmation
+remain unverified. Stop before launch on any missing eligibility or confirmation;
+do not invent a task, approval or provider retry. Recorded provider/session
+ending is still not physical Foundry deallocation.
+
+The following earlier preparation snapshots are preserved, not current holds.
+
+## Reviewed runner delivery and current release hold (14-15 October 2026)
+
+Recovery #848 passed all ten actual CI `38656025688` jobs and four CodeQL
+`38656025581` analyses at reviewed head `0519d12d`. Pinned Linux ran
+runner165/agent398 and backend178files/3170tests. Normal squash reached main
+`bce6e02a` with exactly reviewed tree `6c0c9aa7`; normal Deploy `38658184723`
+is in progress, not yet accepted. The last completed C0 release failed.
+Original Google/private/device acceptance and historical #820 attribution remain
+separate. No additional smoke, provider job or private record was consumed.
+
+The parent independently passed frozen Factory V2: two unchanged parent controls
+and 61 selected repository tests, with the exact runner/test blobs and eight-path
+replay verified. These are Windows Python 3.12.10 synthetic provider/publisher/
+metadata fixtures with real temporary Git and owned children, not Linux/POSIX
+or live acceptance. Original E9 remains rejected and immutable.
+
+Existing draft #850 contained only an empty "Initial plan" commit on `51bda5cb`;
+its unique source diff is empty. Use it for the remaining reviewed runner
+delivery rather than adding another PR. Its original Gmail issue #837 remains
+open; Google implementation/release belongs to existing #848. Normal integration
+of source main `c0d0aeef` first produced exactly main's tree, so this does not
+roll back accepted maintenance, Factory, Status or inactive Daily changes.
+Only the eight reviewed runner/context paths may differ from that main.
+Published-ready `99fdb727` passed ten actual normal-dispatch CI `38656814220`
+jobs and four CodeQL `38656417765` analyses: pinned Linux runner204/agent335,
+with neither component skipped. Its preceding ready PR event skipped every
+component with zero steps; that event is not validation. The existing documented
+ready-Copilot workflow dispatch supplied the real full gate, without a rerun.
+This is prior C0-based evidence, not the next BCE-composed head's gate.
+
+The owned source now normally integrates tested main `bce6e02a` while its
+release runs. Preserve the exact V2 runner/test blobs, all other main entries
+and every PLAN table line. This preparation is not an ordinary main merge or
+release acceptance. Require new composed-head full CI/CodeQL.
+
+Last completed normal Deploy `38649690138` failed the required capability reply smoke.
+Do not merge this unrelated runner correction until the main release gate
+recovers. Full exact-head Linux runner/backend/SQL/image CI remains required,
+followed by normal Deploy AND exact-released-SHA Runner deploy. Normal Deploy
+alone does not ship `runner/app.py`. The one approved owner job additionally
+requires an eligible existing isolated non-Google/non-private test task and
+matching open PR; none is claimed selected. Stop on missing eligibility or
+actual restart confirmation, never invent another task/approval/provider retry.
+Recorded provider/session end is not physical Foundry deallocation.
+
 ## Current required release and terminal transport (15 October 2026)
 
 #848 normally merged as `bce6e02a` with independently reviewed tree6c after
@@ -2342,6 +2416,24 @@ chat/realtime model image delivery has been verified.
 - Prototype reports keep only run instructions and raw evidence; decisions and learnings belong in [decisions.md](decisions.md).
 
 ## Runner setup and release
+
+Factory finalization correction (14-15 October; local): the focused regression is
+`python -m pytest -q tests/test_task_finalization.py` from `runner/`, using its
+isolated environment. It covers delayed/failed provider teardown, event delivery
+and publisher close, late pause/cancellation, and an appended event-chain tail.
+It also exercises actual cancel-handler disconnects, repeated worker cancellation,
+late stop deadlines, delayed ACP-cancel acknowledgements and forced termination.
+The 39 cases use real temporary Git commits and child processes, with simulated
+metadata/provider/event boundaries; they are not live E2E or POSIX-permission
+proof. The full runner suite and packaged images still require normal Linux CI.
+The Windows snapshot uses Python 3.12.10, pinned pytest 9.1.1/Ruff 0.16.10 and
+existing system colorama 0.4.6; it does not establish the pinned Python 3.12.14
+Linux result. Backend Vitest was unavailable after package-proxy 404 and normal
+canonical-registry TLS failure; no pins, TLS checks or shared settings changed.
+No supported session `/remote` control was available, so remote-enabled state
+remains unverified; do not infer it from CLI help or start another CLI.
+For this runner change, successful normal Deploy alone is insufficient: the
+main-only Runner deploy must publish the exact released runner revision too.
 
 Issue #28 adds the Python runner independently of the npm workspaces. With Python
 3.12.14, create `runner/.venv` and install `runner/requirements-dev.txt` with

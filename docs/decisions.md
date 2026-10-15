@@ -1,5 +1,94 @@
 # Decisions
 
+## Compose reviewed runner delivery after genuine recovery acceptance (15 October 2026)
+
+Exact reviewed #852 normally reached main `5765d882` / tree `c5831563`.
+Its automatic Deploy `38666983966` actually passed all six jobs and required
+smoke `116203572330`; ready backend320 and the owner's retained fifteen OK
+smoke entries corroborate current health. This clears the ordinary main release
+hold, not original Google acceptance, historical attribution or physical capacity
+proof. Preserve both C0's incomplete reply and BCE's whole-suite timeout.
+
+Normally integrate that accepted source into the existing #850 branch, retaining
+the V2 runner/test blobs and every main entry outside its eight reviewed paths,
+including all PLAN table lines. Earlier `467cb5d` passed actual ten/four gates
+and pinned runner204/agent398; require fresh gates for the composed head,
+then normal Deploy plus actual exact-released-SHA Runner deploy. No new PR,
+task, worker, permission or live fixture/job is authorised by composition.
+
+Earlier decisions below remain historical; their then-pending release statements
+do not supersede this actual acceptance or waive the remaining delivery gates.
+
+## Integrate tested recovery source without prematurely accepting its release (15 October 2026)
+
+Existing #848's independently reviewed `0519d12d` passed all ten actual CI
+`38656025688` jobs/four CodeQL `38656025581` analyses and normally squashed
+into main `bce6e02a`, exactly tree `6c0c9aa7`. Its normal Deploy `38658184723`
+is still running. Keep ordinary main merges and approved live acceptance held
+until the required smoke passes; a source merge alone does not clear C0's failure.
+
+Published-ready Factory `99fdb727` independently passed its normal documented
+full dispatch `38656814220` and four CodeQL `38656417765` analyses, including
+actual pinned Linux runner204/agent335 with neither component skipped.
+The earlier ready event executed zero steps and does not count. Normally compose
+tested BCE source in the owned Factory surface while release runs, preserving
+the exact V2 runtime/tests and every outside-eight-path main entry/task row.
+The composed head requires its own full gate; normal Deploy and exact-SHA Runner
+deploy remain necessary before the one eligible authentic owner job.
+
+## Reuse the empty initial-plan draft for reviewed runner delivery (14 October 2026)
+
+PR #850's head `4d57c6ba` adds no source bytes to its `51bda5cb` parent.
+Its original direct-Gmail implementation is consolidated separately through
+existing #848, while #837's real acceptance remains open. Reuse this otherwise
+empty draft for the independently reviewed V2 runner lifecycle correction;
+remove native closing references instead of accidentally closing #837.
+No new PR, issue, worker or live job is created by this publication decision.
+
+Normal current-main integration first produced exactly `c0d0aeef`'s tree.
+Preserve all source outside the eight reviewed runner/context paths and every
+main PLAN task-table line. The parent V2 PASS is bounded source/synthetic proof,
+not full Linux CI, release, actual provider delivery or physical deallocation.
+Main's newer required capability smoke is broken; ordinary runner merge stays
+held until that separate demonstrated correction clears the gate.
+
+## Factory runner terminal publication follows teardown (14-15 October 2026; local)
+
+The frozen `202ead5b41af3247b51c893c59964fef716f5442` runner publishes and
+persists `completed` before provider shutdown and awaited final event delivery.
+Nine initial bounded synthetic cases reproduce an observable premature
+`completed` poll or cancellation response while teardown is still pending,
+including event delivery that later fails. This establishes an ordering defect,
+not the historical cause of an existing production task.
+
+Retain the existing lifecycle owner and public statuses. Stage the turn outcome,
+shield owned finalization from cancellation, drain the current event-chain tail
+before closing its publisher, and retain the session lock until cleanup settles.
+Late stop requests affect the final status without appending to a closing
+publisher. A failed cleanup remains failed, including on cancellation; a
+sanitized 503 reaches the existing Foundry-client/control failure path. No
+scheduler, task-state bypass, artifact shortcut or new dependency is introduced.
+
+Independent parent review rejected the first local correction: disconnecting an
+actual cancel request propagated a second cancellation into an unshielded
+cleanup wait, and a late stop deadline appended `stop_timeout_forced` during
+publisher close. Both parent tests reproduced locally. Shield the handler's
+worker join and every cleanup wait, keeping the lock until the owned finalizer
+settles even under repeated cancellation. Guard all control-event paths,
+including a delayed ACP-cancel acknowledgement; deadline-driven termination of
+the owned process remains effective without appending during finalization.
+
+Thirty-nine lifecycle/control cases and 22 existing token/helper/deployment
+contracts pass locally, as do the two unchanged parent tests. The original 18
+regressions remain red against the exact baseline; 17 of 21 additional control
+cases fail against the first local correction, with four timeout-contract cases
+already passing. Tools are Python 3.12.10, pytest 9.1.1 and Ruff 0.16.10. The lifecycle
+fixture uses real local Git commit/ancestry checks and child processes, but
+in-memory metadata and synthetic provider/event delivery. Existing task/workspace
+tests hit Windows' missing POSIX `os.fchmod`; no permission shim was added.
+The full pinned Linux suite, image checks and live delivery remain separate.
+The coordinator owns review, exact-head CI and both Deploy and Runner deploy,
+followed by the single authorised authentic owner-facing acceptance job.
 ## End the backend chat response at application done (15 October 2026)
 
 The existing Invocations consumer marked application SSE `done` as completion,

@@ -78,6 +78,19 @@ waits for delivery before reporting completion. Payloads are bounded to 256 KiB;
 a delivery failure marks the invocation failed. The backend's runner-only app
 role is assigned after Runner deploy using the principal IDs in its evidence
 artifact. Browser streaming remains P1-06.
+Task status and its checkpoint remain nonterminal until the provider process,
+private Codex auth file and final event/publisher cleanup settle. Cancellation
+cannot interrupt that owned finalization or release its session lock early.
+Every cleanup wait stays shielded across repeated cancellation; losing a control
+request does not cancel the worker it is joining. A stop deadline still forces
+only the owned process, but neither its timeout nor a delayed ACP cancellation
+acknowledgement appends events after finalization starts.
+A late pause or cancellation retains its requested terminal outcome; it does
+not append events to a closing publisher. Cleanup failure stays failed and
+returns a sanitized 503 from an in-flight cancellation, not false success.
+`tests/test_task_finalization.py` exercises this ordering with synthetic delivery
+and metadata boundaries, actual temporary Git commits and owned child processes;
+it is not authenticated Foundry/GitHub acceptance.
 Every agent prompt, including resumed and recovered turns, is prefixed with
 instructions to commit and push small work-in-progress changes to the existing
 task branch after each meaningful step. Agents must not force-push or push to
