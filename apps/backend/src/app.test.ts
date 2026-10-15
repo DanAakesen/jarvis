@@ -1,24 +1,83 @@
 import { Writable } from 'node:stream';
+import { ContainerClient } from '@azure/storage-blob';
+import sql from 'mssql';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { buildApp } from './app.js';
+import { buildApp, type BuildAppOptions } from './app.js';
 import { loadConfig } from './config.js';
+import { ConversationAttachmentStore } from './database/conversation-attachment-store.js';
 import { createLogger } from './logging.js';
 
 const staticOrigin = 'https://fixture.azurestaticapps.net';
 const config = loadConfig({ STATIC_WEB_APP_ORIGIN: staticOrigin });
 const apps: ReturnType<typeof buildApp>[] = [];
-afterEach(async () => { await Promise.all(apps.splice(0).map((app) => app.close())); });
+afterEach(async () => {
+  await Promise.all(apps.splice(0).map((app) => app.close()));
+  vi.useRealTimers();
+});
 
-function fixture() {
+function fixture(options: BuildAppOptions = {}) {
   const records: string[] = [];
   const sink = { trackTrace: vi.fn(), flush: vi.fn(async () => {}), shutdown: vi.fn(async () => {}) };
   const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });
-  const app = buildApp(config, createLogger(config, sink, output), { auth: async () => ({ objectId: config.auth.ownerObjectId, tenantId: config.auth.tenantId, displayName: 'Dan Aakesen' }) });
+  const app = buildApp(config, createLogger(config, sink, output), {
+    auth: async () => ({ objectId: config.auth.ownerObjectId, tenantId: config.auth.tenantId, displayName: 'Dan Aakesen' }),
+    ...options,
+  });
   apps.push(app);
   return { app, records, sink };
 }
 
+function attachmentStoreFixture() {
+  const store = new ConversationAttachmentStore({
+    pool: new sql.ConnectionPool({ server: 'fixture.invalid', database: 'fixture' }),
+    container: new ContainerClient('https://fixture.blob.core.windows.net/attachments'),
+    storageAccount: 'fixturestore',
+    artifacts: { privateReadUrl: async () => 'https://fixture.invalid/unused' },
+    retentionDays: 30,
+  });
+  const cleanupExpired = vi.spyOn(store, 'cleanupExpired').mockResolvedValue(0);
+  return { store, cleanupExpired };
+}
+
 describe('Fastify backend', () => {
+  it('owns one attachment cleanup timer independently of post-listen re-embedding', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+    const { store, cleanupExpired } = attachmentStoreFixture();
+    const onEmbeddingModelChanged = vi.fn(async () => {});
+    const { app } = fixture({ conversationAttachments: store, onEmbeddingModelChanged });
+
+    expect(cleanupExpired).not.toHaveBeenCalled();
+    await app.listen({ port: 0, host: '127.0.0.1' });
+    expect(cleanupExpired).toHaveBeenCalledExactlyOnceWith(100);
+    await app.onEmbeddingModelChanged?.(app.backgroundJobs);
+    await app.onEmbeddingModelChanged?.(app.backgroundJobs);
+    expect(onEmbeddingModelChanged).toHaveBeenCalledTimes(2);
+    expect((await app.inject({ url: '/health' })).statusCode).toBe(200);
+
+    await vi.advanceTimersByTimeAsync(60 * 60_000);
+    expect(cleanupExpired).toHaveBeenCalledTimes(2);
+    await app.close();
+    await vi.advanceTimersByTimeAsync(60 * 60_000);
+    expect(cleanupExpired).toHaveBeenCalledTimes(2);
+  });
+  it('starts cleanup without re-embedding and reports failures without private details', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+    const { store, cleanupExpired } = attachmentStoreFixture();
+    cleanupExpired.mockRejectedValue(new Error('private attachment storage details'));
+    const { app, records, sink } = fixture({ conversationAttachments: store });
+
+    await app.ready();
+    await Promise.resolve();
+    expect(cleanupExpired).toHaveBeenCalledExactlyOnceWith(100);
+    expect(records.join('')).toContain('conversation_attachments.cleanup_failed');
+    expect(JSON.stringify(sink.trackTrace.mock.calls)).toContain('conversation_attachments.cleanup_failed');
+    expect(records.join('')).not.toContain('private attachment storage details');
+    expect(JSON.stringify(sink.trackTrace.mock.calls)).not.toContain('private attachment storage details');
+    expect((await app.inject({ url: '/health' })).statusCode).toBe(200);
+    await app.close();
+    await vi.advanceTimersByTimeAsync(60 * 60_000);
+    expect(cleanupExpired).toHaveBeenCalledOnce();
+  });
   it('reports the in-memory database wait without querying SQL or caching status', async () => {
     let waking = true;
     const databaseStatus = vi.fn(() => waking);

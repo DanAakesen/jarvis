@@ -798,6 +798,12 @@ The backend factory is separate from the process entrypoint. `/health` returns
 200 with `{"status":"ok"}`; it does not claim SQL or Azure readiness. The process
 binds to `0.0.0.0:3000` by default, validates configuration before listening and
 handles SIGTERM/SIGINT with a five-second close and telemetry flush deadline.
+When conversation attachments are configured, the app factory registers their
+existing cleanup hooks before readiness: `onReady` starts one immediate
+100-item pass and the hourly interval, while `onClose` stops further scheduling.
+This lifecycle is independent of re-embedding and does not register Fastify
+hooks after listen. The existing retention policy and sanitized
+`conversation_attachments.cleanup_failed` warning remain unchanged.
 Browser requests allow only the exact configured `STATIC_WEB_APP_ORIGIN` and
 `http://localhost:5173`; other Origin values receive 403. A root `onRequest`
 authentication hook runs before CORS and protects current and future nested routes.

@@ -1,5 +1,29 @@
 # Decisions
 
+## Register attachment cleanup before Fastify listens (15 October 2026; source correction)
+
+Own the existing conversation-attachment cleanup job in `buildApp`, with its
+hooks registered once during construction. Start it in `onReady` and stop
+its interval in `onClose`, independently of embedding configuration or
+re-embedding requests. Preserve the existing hourly interval, immediate bounded
+100-item cleanup, retention policy and content-free failure event.
+
+Exact `e17cbb0` source incorrectly registers these hooks inside
+`onEmbeddingModelChanged`, which startup can invoke after `app.listen`.
+Real Fastify 5.12.5 rejects late hook registration with
+`FST_ERR_INSTANCE_ALREADY_LISTENING`; the same callback is also reachable on a
+later embedding-model change. Remove that registration from the callback rather
+than extending readiness timeouts, suppressing startup failures or changing
+production configuration.
+
+Backend revision 322 repeatedly exited after `database.ready` and two generic
+events; revision 321 remained healthy. The fatal catch discarded the exception,
+so the reproduced source defect is not proof of the precise historical live
+exception. Offline regression, normal reviewed release, new backend readiness
+and required smoke remain separate evidence. No new Factory shutdown trial,
+Daily activation, private-record query or manual Azure change belongs to this
+correction.
+
 ## One balanced stage, not quality tiers (15 October 2026; local)
 
 Dan approved the stage-performance review but rejected tiers and choices.

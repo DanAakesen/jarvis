@@ -1,5 +1,35 @@
 # Agent context
 
+## Backend attachment-cleanup startup correction (15 October 2026; local candidate)
+
+The exact `e17cbb0` normal deployment failed backend revision 322 readiness;
+agent, web and smoke were skipped. Runner deployment succeeded separately.
+Source tracing found attachment-cleanup hooks inside post-listen re-embedding;
+real Fastify 5.12.5 reproduces `FST_ERR_INSTANCE_ALREADY_LISTENING` for that
+operation. The historical fatal exception was discarded, so do not describe
+the live cause or recovery as proved.
+
+The correction moves this existing job to app construction/readiness/close,
+without changing retention, batch size, interval, authentication, SQL schema
+or startup failure policy. Required validation is `src/app.test.ts` and
+`src/core/conversation-attachment-cleanup.test.ts`, then existing shutdown,
+attachment, settings and logging regressions plus backend types/lint/build.
+Use the exact-base owned snapshot and declared lockfile; do not mutate the
+parent checkout, shared dependencies or frozen release receipts.
+
+The AST-extracted actual production callback rejects after real Fastify listen
+before the correction and resolves afterward, using fake jobs/vault and no
+provider, SQL or private-record calls. Strict local dependency restoration
+failed on the proxy's missing `ip-address` tarball and the public registry's TLS
+handshake; TLS and pins were not weakened. Repository tests and types/build
+remain unverified locally, not passed by the callback-only reproduction.
+
+No unchanged redeploy or timeout increase. Normal independent review,
+exact-head automatic gates, actual backend readiness and required smoke still
+precede a fresh Factory shutdown acceptance job. Daily #724 remains explicitly
+held; new coaching remains excluded. Existing `/remote` state is unverified;
+do not start a duplicate CLI or change shared settings to claim otherwise.
+
 ## Fixed stage performance work (15 October 2026; local)
 
 Dan approved one balanced implementation and accepts the current local look;
