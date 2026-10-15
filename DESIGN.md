@@ -1,5 +1,23 @@
 # Design
 
+## Fixed balanced stage rendering (15 October 2026; local)
+
+Dan accepted a single middle ground and said the changed stage still looks
+good. Keep the existing room/orb/mirror composition, with no quality selector
+or automatic tiers. The persistent room animates on home/sign-in and during
+voice, and holds its last frame on other pages. Meaningful state, theme and
+size changes can redraw that still frame without rebuilding the scene.
+
+Use bounded ambient/voice rendering and a separately refreshed, cached mirror.
+Reduce mesh detail and combine compatible static geometry; preserve nine
+orb ribbons as one additive single-pass mesh. Filter fine shader bands rather
+than letting subpixel detail shimmer. Resize the drawing buffer only when
+dimensions/density actually change, before the next draw, not after it.
+The window remains the glass boundary; nested panels keep their surfaces
+without another backdrop blur. Pause the ambient CSS field behind work pages.
+This supersedes the older adaptive-tier and route-only descriptions below;
+historical measurements are not results for this revision.
+
 ## Header tab overflow correction (15 October 2026; combined candidate)
 
 Keep the existing glass header, fixed brand and fixed action group. Tabs
@@ -1065,5 +1083,7 @@ that the repository is public. Text, not colour alone, conveys every state; no
 new animation is introduced.
 
 ## Daily migration visual requirement (12 October 2026)
+
+15 October clarification for the inactive P12-08 service handoff: the current user-directed surface is one Daily page and existing on-demand GenUI, not a widget, separate Workouts/Nutrition pages or four fixed native views. Preserve their underlying data capabilities. This backend candidate changes no UI or visual implementation and does not start downstream #724.
 
 Confirmed by Dan for #730/#731/#732/#726: all migrated React/rich UI fully follows the current Jarvis layout and styling. Current DESIGN.md direction, `apps/web/src/styles.css` tokens, shared components, theme/density/motion settings and native phone/workspace patterns are the source of truth. Preserve capabilities and data semantics while restyling/recomposing legacy Daily content; do not carry its navy/plum/card skin, create a second theme or replace the shared shell, voice or window manager. Generated/ad-hoc views receive only safe trusted Jarvis theme context through the existing bridge, without widened permissions. UI issues require full mobile-first real-browser visual acceptance. P12-03 remains backend/schema-only; this records the standing direction, not completed visual work.

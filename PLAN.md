@@ -1,5 +1,62 @@
 # Project plan
 
+## Fixed stage performance correction (15 October 2026; local)
+
+Implemented Dan's single balanced stage policy without tiers or settings
+choices: capped ambient/voice draws, cached bounded mirror, coalesced
+size changes before rendering, reduced/batched geometry, filtered fine
+shader bands, cached layout/palette work and still frames behind work pages.
+The same scene, truthful activity/audio and recovery controls remain.
+Dan reports that the stage still looks good.
+
+Retained local evidence covers 213 passing unique tests across eight suites. Scene tests cover the real
+Reflector with only the GPU boundary mocked. Strict types, ten-file zero-warning lint and a
+scratch production build pass. Browser inspection covers the actual stage on
+desktop and 390px phone, synthetic voice and holding the room on Settings.
+Final source evidence is retained separately from the immutable header release. Preserve all
+generated PLAN rows and unrelated mobile/Status/Factory work; do not publish
+this mixed checkout. Real-PC utilisation/battery and production flicker
+acceptance remain unmeasured. A pre-existing phone voice orb occlusion is
+also visible with the retained pre-change scene; it is not corrected or
+claimed as accepted by this performance work.
+The stage-only fresh-main artifact preserves all eleven reviewed source,
+test and CSS blobs. These retained local results are not fresh-main or
+pinned-toolchain CI; all existing main bytes and PLAN rows are preserved.
+
+
+## Model-round timing visibility (15 October 2026; source candidate only)
+
+The bounded follow-up from exact `6e2c1b95` retains all existing first-sample
+timings and adds optional content-free maxima for model-token acquisition and
+awaited model-stream setup across rounds. Both existing provider paths are
+instrumented, with error/cancellation propagation unchanged. Backend decoding
+and logging accept the fields; legacy browser replies do not gain new phases.
+Regression cases cover a quick first round followed by slower setup, token
+isolation, failures/cancellation, duration bounds and reply compatibility.
+Local validation and dependency limitations are recorded in agent context.
+No latency improvement or deployed acceptance is claimed. Next: coordinator
+review and compatible release/CI batching; Factory live acceptance and the
+separately owned physical composer remain outside this source-only increment.
+
+## Bounded ACP shutdown preparation (15 October 2026)
+
+The local correction based on main `6e2c1b95` bounds the existing terminate,
+post-kill exit and owned stdout/stderr reader phases. Stop callers join the
+same teardown despite cancellation; an unverified shutdown fails explicitly
+and retains its session owner rather than admitting another provider turn.
+Successful terminal publication still follows verified process/reader cleanup
+and final event delivery. No delivery classification or Done gate changes.
+Deterministic source regressions and local validation qualifications belong
+with the candidate receipt; independent review and fresh complete CI remain
+required before any separately authorised publication/release.
+
+The parent observed Task 17 deliver its synthetic artifact in the approved private test repository but fail
+automatic finalisation acceptance. Its later supported Cancel returned HTTP
+200; that is not proof of the exact stalled await, provider deletion or physical
+release. This patch neither diagnoses that live await nor repairs the old image.
+No live runtime action or publication is part of this local preparation.
+Historical evidence and all managed plan rows below remain unchanged.
+
 ## Pre-start attention cancellation follow-up (15 October 2026)
 
 Published `0b4e79c2` passed all ten CI jobs, including 176 real-SQL tests,
@@ -1183,7 +1240,9 @@ Proposals only; an idea enters a phase only when Dan accepts it into scope.
 | Backend request rate limiting | Limits authenticated and unauthenticated request rates at the root authentication hook (CodeQL `js/missing-rate-limiting` on `apps/backend/src/auth/hook.ts`, raised during P4-01). | A new dependency (for example `@fastify/rate-limit`) and limits that must not throttle Dan or the Jarvis agent; one replica keeps in-memory counters sufficient. | Before the backend URL is public (P0-11), or when abuse or cost appears. |
 ## P12 — Daily migration to Jarvis
 
-Current released slice: **P12-05 (#720)** inactive synthetic SQL processing/read models delivered in #808, with its [existing local claim continued](https://github.com/DanAakesen/jarvis/issues/720#issuecomment-6157857536) for the narrow body-fat unit correction on `codex/p12-05-body-fat-units`. Both cloud workers remain idle. Existing migration 0047 adds bounded retry/quarantine evidence to the inbox; normalization and atomic domain/lineage/feed commits preserve identities, empty history and truthful freshness. No scheduler, production composition, source/device/resource/grant/secret change or activation. Exact-current-main full CI/isolated SQL and independent review remain follow-up release gates. #719 was externally closed, but live/private/device acceptance remains unverified; issue closure is not that evidence. #725 still needs actual CalendarList consent, and #717/#741 remains the protected backup blocker. Preserve others and workflow-owned Status columns.
+**15 October current execution:** #720 and #722 are closed/accepted dependencies. The coordinator released original **P12-08 (#723)** for one local inactive synthetic source candidate on exact main `6e2c1b958e96d7f2b7ab1a6dca53df47351a17ab`. Shared calculations and owner-bound existing-table services are prepared without #724 registration, new persistence, UI or activation. Maintenance/TDEE and nutrition-day completeness remain unspecified, so owner budgets/deficit consistency are unavailable; synthetic supplied-maintenance arithmetic is not live/source acceptance. Focused Vitest/SQL cases await parent integrated execution; local native pure-source checks are separately qualified. Next: parent source review/batched pinned checks and the missing semantic contract, not issue closure or deployment by this lane. All 381 PLAN table rows (309 task-ID rows) and workflow-owned Status cells remain untouched; they are not execution evidence. Current UI direction is one Daily page plus existing on-demand GenUI, no widget.
+
+Historical P12-05 release notes (superseded by current execution above): inactive synthetic SQL processing/read models were delivered in #808, with its [existing local claim continued](https://github.com/DanAakesen/jarvis/issues/720#issuecomment-6157857536) for the narrow body-fat unit correction on `codex/p12-05-body-fat-units`. Both cloud workers remained idle. Existing migration 0047 adds bounded retry/quarantine evidence to the inbox; normalization and atomic domain/lineage/feed commits preserve identities, empty history and truthful freshness. No scheduler, production composition, source/device/resource/grant/secret change or activation. Exact-current-main full CI/isolated SQL and independent review were follow-up release gates. #719 was externally closed, but live/private/device acceptance remained unverified; issue closure is not that evidence. #725 still needs actual CalendarList consent, and #717/#741 remains the protected backup blocker. Preserve others and workflow-owned Status columns.
 
 PR #808's review follow-up corrects heart-rate unit validation across summaries and series. Synthetic regressions cover BPM aliases, legacy implicit summaries, missing values and SQL quarantine/readback. Fresh full CI and independent exact-head review remain required; no downstream scope is released.
 

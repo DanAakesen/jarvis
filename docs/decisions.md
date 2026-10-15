@@ -1,5 +1,63 @@
 # Decisions
 
+## One balanced stage, not quality tiers (15 October 2026; local)
+
+Dan approved the stage-performance review but rejected tiers and choices.
+Use one fixed rendering budget, bounded ambient/voice/mirror cadence and
+cheaper geometry/shader detail. Keep the room mounted across routes but
+hold its last frame behind work pages, preserving the agreed one-room feel.
+Remove adaptive resolution changes rather than tuning their oscillation.
+Coalesce real size changes before drawing and never clear the buffer after
+rendering a frame. Keep the actual mirror, cyan shell/open amber core,
+truthful audio/activity, reduced motion and context recovery.
+
+Dan said the changed stage still looks good. That accepts the local visual
+direction, not measured machine-power savings, physical-phone performance
+or absence of production flicker. This work is separate from the frozen
+header/cancellation release and the unresolved mobile composer report.
+
+## Retain model-round maxima without changing first samples (15 October 2026; source candidate)
+
+The diagnostic turn exposed a visibility gap: `model_request` retains the first
+Responses create observation, so a slower later tool round is not represented
+by that field. Add only optional content-free `model_auth_max` and
+`model_request_max` in the existing turn-local timing collector. Instrument
+the shared model-token provider and both providers' awaited stream setup;
+finalize on success, error and cancellation without changing propagation.
+Keep existing first-observation fields, bounded finite durations, model
+arguments, retries, deadlines, settings, permissions and resource lifecycle.
+
+Log the new diagnostics at the backend but do not widen the legacy browser
+reply's timing field set; mixed agent/backend deployments remain optional-field
+compatible. There are no timing-phase constants in baseline `6e2c1b95`'s
+contracts package, so no new public contract is introduced. Maxima can describe
+different attempts and token time overlaps setup. The underlying delay remains
+unknown; SDK retry, token refresh, throttling and provider queueing are not
+proved causes. This candidate does not fix latency or accept the release,
+Factory task cancellation, or the separately owned physical mobile composer.
+No new live/model/tool/job call belongs to this source/test handoff.
+
+## Bound owned ACP teardown without early terminal success (15 October 2026)
+
+The source has an unbounded post-kill process wait and an unbounded stdout
+reader join; stderr previously had no retained task owner. Deterministic
+owned-process/reader controls reproduce these lifetime risks separately from
+the parent's real artifact-delivered/automatic-finalisation-failed trial.
+Bound each shutdown phase, retain and join both readers, share stop work across
+callers and preserve cancellation after teardown. Report sanitized explicit
+failure if exit or reader cleanup cannot be verified; never silently treat a
+reader exception, timeout or attempted kill as successful cleanup.
+
+Remove only a successfully stopped matching client. Retain failed ownership
+to prevent another turn sharing an unverified provider, without removing a
+replacement client. Keep accepted terminal-after-teardown/event delivery,
+delivery verification and cancellation confirmation contracts unchanged.
+This is a local implementation choice pending independent review and exact
+head gates, not a proved diagnosis or retroactive repair of the live runtime.
+Task 17's later supported cancellation success does not change that distinction.
+No publication, extra live action, access workaround or resource change is
+authorised by this record; historical freezes remain immutable.
+
 ## Cancel attention after a failed pre-start without inventing ownership (15 October 2026)
 
 Complete review after published `0b4e79c2` passed ten CI jobs / SQL 176 tests
@@ -685,6 +743,16 @@ not-planned and missing-issue fallbacks remain unchanged. This corrects PLAN
 reporting only: merge proves code integration, not satisfaction of live
 acceptance gates, so open acceptance issues remain open and their status cells
 stay workflow-owned.
+
+## P12-08 inactive coaching boundary (15 October 2026)
+
+Independent actual-source synthetic review reproduced a missing waist trend: the existing row adapter retained canonical metres, but the first service/model freeze dropped `waist_circumference`. The bounded correction carries actual waist into dated/provenanced fourteen-day points and trends, with existing stale/recovery exclusions. Recorded metrics are weight, waist, fat percentage and actual lean mass; fat mass remains separately marked as derived. Retain the first freeze byte-exact and issue a replacement exact-base patch/receipt. Nine focused native checks fail eight cases on the first freeze and pass all nine on the correction; their explicit read-boundary doubles are not authentication, real SQL, Vitest or strict-type evidence. Missing maintenance/completeness and full acceptance gates remain open.
+
+The coordinator released original #723 as one synthetic, inactive source slice after #720/#722 closed. Keep one authoritative calculation path behind existing authenticated owner seams and mapped profile/readiness/recovery/experiment tables. No runtime/API/tool/UI activation, new persistence, worker, source/private record or device/provider work follows from that release.
+
+No authoritative maintenance/TDEE derivation, nutrition-day completeness or readiness scale exists in the supplied approved context. Do not invent them: owner reads expose partial evidence and unavailable budgets/deficit comparisons; explicitly supplied synthetic maintenance tests only arithmetic. Keep readiness as rating/context without classification. Historical partial shortfalls are unknown, recovery measurements are retained but excluded from eligible aggregates, and four body metrics use actual lean mass. Reuse the existing owner transaction/commit boundary for explicit policy/recovery/readiness and one-experiment changes, with profile revision CAS and canonical operation replay. Full #723 acceptance still needs the missing semantic contract and normal integrated validation.
+
+The current user-directed UI contract is one Daily page plus existing on-demand GenUI, no widget, separate Workouts/Nutrition pages or fixed four-view implementation. This source slice supplies no UI and does not start #724. Original Daily stays unchanged/canonical; protected export/backup, parity, physical-device, final-delta and rollback/cutover gates are unaltered.
 
 ## P12-05 inactive SQL health processing (13 October 2026)
 

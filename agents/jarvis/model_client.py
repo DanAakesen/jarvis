@@ -10,7 +10,7 @@ import logging
 import os
 import time
 from collections.abc import AsyncIterator, Sequence
-from contextlib import aclosing
+from contextlib import ExitStack, aclosing
 from dataclasses import replace
 from typing import Any
 from urllib.parse import urlsplit, urlunsplit
@@ -410,7 +410,8 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
         tools = BackendToolClient.for_identity(credential, backend_url, backend_scope)
 
         async def token() -> str:
-            return (await credential.get_token(FOUNDRY_TOKEN_SCOPE)).token
+            with latency_span("model_auth_max"):
+                return (await credential.get_token(FOUNDRY_TOKEN_SCOPE)).token
 
         anthropic_client = AsyncAnthropicFoundry(
             resource=anthropic_resource,
@@ -839,38 +840,41 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                                 anthropic_request["tools"] = anthropic_tools(tools)
                             accepted = False
                             try:
-                                with latency_span("messages_create"):
-                                    stream = self._anthropic_client.messages.stream(
-                                        **anthropic_request
-                                    )
-                                request_started = time.monotonic()
-                                async with stream:
-                                    log_latency("model_request", request_started)
-                                    async for text in stream.text_stream:
-                                        if text:
-                                            accepted = True
-                                            visual_result = current_visual_result.get()
-                                            if (
-                                                image_request and visual_result is not None
-                                            ):
-                                                visual_result["visualPath"] = "image"
-                                                visual_result["model"] = model_name
-                                            if first_text_ms is None:
-                                                first_text_ms = int(
-                                                    (time.monotonic() - started) * 1000
-                                                )
-                                                model_span.set_attribute(
-                                                    "first_text.duration_ms", first_text_ms
-                                                )
-                                                log_latency("model_first_delta", started)
-                                                log_latency(
-                                                    "model_to_first_delta", first_model_started
-                                                )
-                                            if calendar_enabled:
-                                                calendar_text.append(text)
-                                            else:
-                                                yield text
-                                    final = await stream.get_final_message()
+                                with ExitStack() as request_timings:
+                                    with latency_span("messages_create"):
+                                        stream = self._anthropic_client.messages.stream(
+                                            **anthropic_request
+                                        )
+                                    request_started = time.monotonic()
+                                    request_timings.enter_context(latency_span("model_request_max"))
+                                    async with stream:
+                                        request_timings.close()
+                                        log_latency("model_request", request_started)
+                                        async for text in stream.text_stream:
+                                            if text:
+                                                accepted = True
+                                                visual_result = current_visual_result.get()
+                                                if (
+                                                    image_request and visual_result is not None
+                                                ):
+                                                    visual_result["visualPath"] = "image"
+                                                    visual_result["model"] = model_name
+                                                if first_text_ms is None:
+                                                    first_text_ms = int(
+                                                        (time.monotonic() - started) * 1000
+                                                    )
+                                                    model_span.set_attribute(
+                                                        "first_text.duration_ms", first_text_ms
+                                                    )
+                                                    log_latency("model_first_delta", started)
+                                                    log_latency(
+                                                        "model_to_first_delta", first_model_started
+                                                    )
+                                                if calendar_enabled:
+                                                    calendar_text.append(text)
+                                                else:
+                                                    yield text
+                                        final = await stream.get_final_message()
                             except Exception as exc:
                                 if (
                                     not accepted and image_request
@@ -889,6 +893,7 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                                 with (
                                     latency_span("responses_create"),
                                     latency_span("model_request"),
+                                    latency_span("model_request_max"),
                                 ):
                                     stream = await self._client.responses.create(**request)
                             except Exception as exc:

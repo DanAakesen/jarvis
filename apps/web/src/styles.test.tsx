@@ -56,6 +56,14 @@ function contrast(first: Color, second: Color): number {
 }
 
 describe('shared glass tokens', () => {
+  it('avoids nested window blur and pauses ambient CSS motion behind work pages', () => {
+    const source = readFileSync('src/styles.css', 'utf8');
+    expect(ruleDeclaration(source, /\.workspace-window \.panel\s*\{([^}]*)\}/, 'backdrop-filter')).toBe('none');
+    expect(ruleDeclaration(source,
+      /\.app-shell\[data-home="false"\]\[data-voice-active="false"\]::before,\s*\.app-shell[^{}]+\{([^}]*)\}/,
+      'animation-play-state')).toBe('paused');
+  });
+
   it('shrinks header tabs before scrolling without borrowing the fixed controls space', () => {
     const source = readFileSync('src/styles.css', 'utf8');
     expect(ruleDeclaration(source, /\.topbar-context\s*\{([^}]*)\}/, 'flex')).toBe('0 0 auto');

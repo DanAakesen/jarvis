@@ -50,7 +50,8 @@ vi.mock('./conversation-history', () => ({
   waitForChatSetup: <T,>(operation: () => Promise<T>) => operation(),
 }));
 vi.mock('./JarvisStage', () => ({
-  JarvisStage: ({ children }: { children?: ReactNode }) => <div data-testid="jarvis-stage">{children}</div>,
+  JarvisStage: ({ children, active }: { children?: ReactNode; active: boolean }) =>
+    <div data-testid="jarvis-stage" data-active={active}>{children}</div>,
 }));
 vi.mock('./voice-client', () => ({
   BrowserVoiceClient: class {
@@ -376,13 +377,21 @@ describe('App shell', () => {
     await renderSignedIn();
 
     const stage = screen.getByTestId('jarvis-stage');
+    expect(stage.dataset.active).toBe('true');
     await user.click(screen.getByRole('link', { name: 'Software Factory' }));
     await screen.findByRole('heading', { level: 1, name: 'Kanban' });
     expect(screen.getByTestId('jarvis-stage')).toBe(stage);
+    expect(stage.dataset.active).toBe('false');
 
     await user.click(screen.getByRole('link', { name: 'Settings' }));
     await screen.findByRole('heading', { name: 'Settings' });
     expect(screen.getByTestId('jarvis-stage')).toBe(stage);
+    expect(stage.dataset.active).toBe('false');
+
+    await user.click(screen.getByRole('link', { name: 'Jarvis home' }));
+    await screen.findByRole('textbox', { name: 'Message Jarvis' });
+    expect(screen.getByTestId('jarvis-stage')).toBe(stage);
+    expect(stage.dataset.active).toBe('true');
   });
 
   it('renders backend-reported waking in the shared signed-in shell', async () => {

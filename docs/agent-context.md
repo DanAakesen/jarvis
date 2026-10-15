@@ -1,5 +1,127 @@
 # Agent context
 
+## Fixed stage performance work (15 October 2026; local)
+
+Dan approved one balanced implementation and accepts the current local look;
+no tiers, quality modes or new settings are authorised. Stage work stays
+separate from the parent's immutable header/cancellation release. Preserve
+the dirty phone/Status and frozen Factory paths and do not publish mixed
+`ui/shell-iteration` history.
+
+Owned `stage-performance-before` snapshots preserve the pre-stage source/docs.
+Owned `stage-performance-fixture` retains local test/lint/browser evidence;
+its offline App uses synthetic auth/chat/voice and the actual Three.js stage.
+The scene tests use actual geometry/Reflector/scheduling with a fake GPU
+boundary. Run tests from `apps\web` because existing CSS tests read relative
+paths. Scope: stage scene/quality/owner/motion, App, Workspace, styles and
+VoiceOrbStatus; use original Vite configuration with an owned cache/output.
+Available Vite 8.3.1/Vitest 5.0.2 remain distinct from declared 8.3.2/5.0.3.
+CSS is not linted; retained ESLint tooling uses original-equivalent rules.
+Final gates: 26 scene/owner/quality/motion tests, 94 App, 66 Workspace,
+24 styles and three VoiceOrbStatus tests (213 unique tests across eight
+suites); `tsc --noEmit`; ten TS/TSX files with zero lint errors/warnings;
+and an owned-output production build with the existing chunk-size warning.
+The initial root-cwd run failed existing relative CSS reads and exposed a
+new test's wrong home-link label, which was corrected. The proper-cwd fork
+run completed App/voice but hit worker-start timeouts for the other suites;
+Workspace/voice and styles passed using the supported thread pool without
+changing test timeouts. These failed attempts remain in the evidence.
+Browser inspection uses actual WebGL on the local Adreno/ANGLE renderer,
+not a GPU timer, CPU-utilisation or battery profile. In a 2s desktop sample
+the stage drew 60 main frames and 26 mirrors; on Settings it drew none.
+The phone typing stage fits 390px; synthetic voice retains the same canvas.
+The pre-change phone scene also obscures the docked voice orb and produces
+the same geometry coordinates; this separate existing defect remains open.
+
+Port 5173 was restarted and responded HTTP 200 during this work; do not
+assume it survives Dan's reboot. Temporary fixture 5399 is for bounded local
+inspection only. No production/model/provider/device call, shared dependency
+edit, duplicate CLI or shared settings change is part of this correction.
+Existing `/remote` state remains unverified.
+A separate fresh-main artifact applies the frozen stage increment without
+source adaptation or replaying mixed UI history. The eleven source/test/CSS
+blobs match the retained evidence. The new scene test was LF-normalised
+after execution with code unchanged and final-byte lint; browser samples
+precede the final still-mirror invalidation guard covered by scene tests.
+This is evidence reuse, not a new-main or pinned-toolchain CI run.
+All prior main document bytes and PLAN rows remain; no publication or new
+live/device/provider run is part of this packaging step.
+
+
+## Model-round timing source candidate (15 October 2026; not released)
+
+The diagnostics-only increment is based on exact `6e2c1b95`, not the separately
+accepted stage/UI candidate. New optional `model_auth_max` and
+`model_request_max` retain bounded per-turn maxima while every existing timing
+keeps its first observation. Backend decoding/logging accepts them; browser
+completion replies retain only the existing phase field set. No model arguments,
+reasoning, retries, deadlines, settings, permissions or stream lifecycle change.
+This does not explain or fix latency, verify Factory cancellation, or resolve the
+separately owned physical composer.
+
+Owned-fixture validation uses the existing read-only local Node 22.23.3 /
+Vitest 5.0.2 / TypeScript 6.0.3 snapshot, not complete pinned CI dependencies.
+New decoder/logging controls first reproduced three missing-phase failures
+against baseline production; final two suites pass 152 tests. All six changed
+backend files pass existing scoped ESLint, and four changed Python files pass
+Ruff and syntax compilation. Strict production plus selected-test comparison
+retains the same 28 diagnostics as exact baseline, with no new diagnostic;
+this is not a clean production type build.
+
+Both exact baseline and candidate Python pytest collection stop on missing
+`opentelemetry`; model SDK prerequisites are also incomplete. The conversation
+suite cannot load missing `sharp`. The unchanged logging-source registry scan
+exceeds its existing five-second limit on both baseline and candidate. No
+dependency was installed, package stub added, or check/timeout weakened.
+These limits remain for coordinator review and the meaningful combined CI batch.
+The immutable source/test/docs handoff makes no commit, publication, deployment,
+live provider/tool/job call or overall Factory acceptance claim.
+
+## ACP shutdown validation boundary (15 October 2026)
+
+The bounded ACP shutdown candidate is prepared only in an owned archive of
+main `6e2c1b95`; it does not change the existing checkout/index/refs or live
+runtime. Use `runner/tests/test_acp_shutdown.py` with the existing finalization,
+app and workspace controls. Synthetic subprocesses/reader gates prove local
+lifetime behavior, not the exact await responsible for Task 17's live stall.
+The parent's later supported Task 17 Cancel HTTP 200 is separate evidence,
+not automatic-Done acceptance, provider DELETE or physical release proof.
+Do not bypass the existing agent-read 403 or infer the old image was patched.
+
+Local validation uses an owned Python 3.12.10 venv, not pinned CI's 3.12.14.
+Initial collection lacked Azure SDK packages. The authorised strict dependency
+restore found pytest's Windows-only colorama missing from the Linux lock.
+Only existing hash-pinned entries were restored with `--require-hashes
+--no-deps`; the pre-existing Python 3.12 colorama is read after venv packages,
+without changing shared packages or manifests. Disable unrelated pytest plugin
+autoload for these local checks and preserve initial failures in the receipt.
+Require fresh pinned Linux CI; no local image/provider/live claim follows.
+
+## P12-08 inactive coaching candidate (15 October 2026)
+
+Original #723 has a coordinator-released source candidate under
+`apps/backend/src/daily/coaching`, with no production registration or new schema.
+Use the existing backend package cwd and focused command
+`npm test -- src/daily/coaching/model.test.ts src/daily/coaching/evidence.test.ts src/daily/coaching/service.test.ts`.
+The existing `npm run test:database -- src/database/coaching.integration.test.ts`
+runner requires isolated loopback SQL and synthetic fixtures. The bounded waist
+correction passes the three unit suites, 47 tests, in an owned fixture reusing
+approved read-only Node 22.23.3 x64/Vitest 5.0.2 dependencies. Its contracts alias
+points only to the exact candidate; caches stay owned. The initial ARM64 native
+binding failure remains in the receipt; no dependencies were installed or
+changed. Package-command/pinned Vitest 5.0.3 CI, strict types, lint and real SQL
+remain unexecuted. The separate 24 native regression and nine waist checks do
+not substitute for those gates; native service checks use explicit read doubles.
+
+Keep maintenance/TDEE and nutrition-completeness gaps explicit; do not infer
+budgets, zeros or a readiness scale. See the
+[service contract](../apps/backend/src/daily/coaching/README.md).
+This frozen patch is for parent review/batched checks, not full #723 acceptance
+or #724 activation. Preserve workflow-owned PLAN cells and all protected
+export/backup/private/device/cutover gates. No commit/publication, new worker or
+shared setting was authorised in this source assignment; broader standing
+release authority below does not override that bounded handoff.
+
 ## Pre-start cancellation boundary and release evidence (15 October 2026)
 
 Published `0b4e79c2` passed all ten actual CI jobs (SQL 176 tests) and all four

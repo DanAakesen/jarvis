@@ -1,5 +1,23 @@
 # Architecture
 
+## Owned ACP shutdown boundary (15 October 2026)
+
+`ACPClient` owns its process and both pipe-reader tasks. Concurrent stop callers
+share one shielded shutdown, preserving cancellation until bounded teardown
+settles. The existing ten-second terminate phase is followed by at most ten
+seconds for post-kill exit and ten seconds for reader completion; cancellation
+joins are separately capped at one second each. Reader errors are no longer
+silently accepted. Pending protocol requests fail when shutdown ends.
+Unverified exit or reader cleanup raises a sanitized `ACPShutdownError`.
+
+The finalizer keeps its existing terminal-after-cleanup/event-flush ordering.
+Only successful stop removes the matching session client; failed cleanup keeps
+that owner fenced, including normal session-stop and cancellation paths.
+An older finalizer never removes a replacement client. A failed invocation is
+not successful delivery or cancellation, and retaining a local owner is not
+proof of physical cloud cleanup. No API, schema, model, capacity or Done-policy
+change is introduced. A new runner image cannot patch an already-running image.
+
 ## Trusted pre-start runtime absence (15 October 2026)
 
 The existing runtime getter distinguishes no task (null result) from an existing
@@ -2688,6 +2706,27 @@ rounds. Timings are bounded to 600,000 ms, contain no content, and retain the fi
 sample for each agent phase. No saved model/effort, instructions, tools or schemas
 change. Post-deploy latency and failure/canary acceptance remain unverified.
 
+The 15 October diagnostics-only source candidate based on `6e2c1b95` adds
+optional `model_auth_max` and `model_request_max` completion diagnostics.
+The former is the maximum elapsed managed-identity model-token provider call;
+it is absent when that provider is not called, including the OpenAI API-key path.
+The latter is the maximum awaited OpenAI Responses creation or Anthropic stream
+entry time across model rounds, excluding subsequent stream consumption.
+Both finalize on success, error or cancellation, reject nonfinite/negative
+samples and cap retained milliseconds at 600,000 in the existing turn ContextVar.
+Existing phase fields still retain their first observation. Agent logs/spans
+measure each attempt; the completion envelope carries the retained maxima.
+The backend validates and logs the optional maxima but strips them from its
+browser-facing `done.agentTimings`, preserving the legacy reply field set.
+Older agents may omit them and older backends ignore them.
+
+Token acquisition overlaps request setup; the two maxima can come from different
+attempts and must not be summed or subtracted to assign the remaining delay.
+This is additional observability, not a latency fix or evidence of SDK retry,
+token refresh, throttling or provider queueing. Model arguments, reasoning,
+tokens, retries, deadlines, settings, permissions and stream lifecycle are unchanged.
+Source-only checks do not establish deployed or Factory acceptance.
+
 The reported 5–10 s model-to-first-delta interval is not currently attributable
 between prompt processing and reasoning: the provider exposes one elapsed
 first-delta duration, not separate prompt-ingestion and reasoning durations.
@@ -4058,6 +4097,31 @@ flowchart LR
 
 ## Jarvis 3D presentation boundary (P8-28–P8-33)
 
+**Current local policy (15 October 2026):** one shell-owned scene persists
+behind every route and sign-in. `ShellLayout` supplies `active` for home,
+sign-in or voice; other pages retain a still frame. State/theme/size changes
+can request one coalesced redraw, and returning home resumes the same scene.
+This supersedes the historical route-only and adaptive-tier descriptions below.
+
+`jarvis-stage-quality.ts` now applies one fixed budget: DPR at most 1,
+2,073,600 backing pixels, hardware texture limits and a 384px mirror target.
+There are no frame-time-driven levels or user quality settings. The scene
+caps ambient draws at 30fps and voice at 60fps; the real Reflector updates at
+up to 15fps, retaining its texture/matrix between updates and invalidating on
+meaningful changes. Three.js retains ownership of reflection renderer-state
+restoration. Resize sources coalesce; only changed dimensions/density call
+`setDrawingBufferSize`, before drawing. Layout/camera calculations and palette
+reads no longer repeat on every frame or unrelated option update.
+
+Static opaque chamber geometry is merged by material; separately scalable
+phone walls remain separate. The orb uses a lighter shell/core and one
+single-pass additive mesh for its nine ribbons, with derivative-filtered
+fine bands. Ambient particles are fixed at 128. The renderer requests
+low-power hardware, and nested window panels omit duplicate backdrop blur.
+Hidden/lost contexts stop all scheduled draws; reduced motion and inactive
+pages redraw only when invalidated. Recovery renders before clearing the
+visible fallback. There is no API, backend, dependency or audio/device change.
+
 P8-31 (#376) applies the selected smoky glass through shared light/dark tokens and sans headings to the existing shell, conversation, temporary workspace, contextual panel, Factory and Settings. It changes no API, persistence, deployment or dependency version. Its existing contrast tests cover text, muted text, icons and focus on glass against black and white backdrops.
 The accepted [stage reference](reference/ui-stage-prototype/README.md) uses Three.js, shaders, a planar floor reflector and HTML controls. P8-28 (#375) ports the scene into the web app with managed allocation/disposal and off-route/hidden-tab lifecycle. The scene is mounted only on Jarvis. Its geometry/viewpoint persist across typing/voice and dark/light; light appearance re-lights the same room.
 
@@ -4085,6 +4149,10 @@ P8-30 scratch Chromium recorded 73 desktop CDP frames across empty, visible-wind
 P8-33 scratch Chromium checks cover the adaptive quality thresholds, compact phone/landscape layouts, menu bounds, reduced motion, hidden-tab pause/resume, route teardown/re-entry, resize, page-scale and simulated keyboard-height changes, forced WebGL loss/restore and unavailable WebGL. Dark/light, voice-ready, loss/fallback captures are in `docs/ui/screenshots/p8-33-*`; local voice fixture state remained ready across rendering loss, and HTML chat/voice/window actions stayed mounted. ANGLE SwiftShader at quality tier 2 (backing scale ≈0.70) measured 90 RAF intervals averaging 327ms (p50 333ms, p95 350ms) at 1440×900 and 151ms (p50 150ms, p95 167ms) at 390×844. These are software RAF intervals, not hardware GPU timings, and demonstrate poor cadence rather than acceptance; physical GPU/battery, phone/keyboard, Safari, live voice/provider and normal-rate motion remain unverified.
 The reference lockfile is standalone, outside root workspaces, and contains the prototype's dependencies only. Bundled Three.js/Phosphor notices are retained. Physical/hardware performance, live activity/voice behavior and normal-rate flicker acceptance remain unverified; P8-31 adds no production Three.js dependency.
 ## Daily integration boundary (P12-01)
+
+P12-08's independent-review correction carries canonical `waist_circumference` metres from the existing row adapter through service evidence, dated/provenanced fourteen-day points and observed trends. It shares stale/pending/quarantine and recovery exclusions with the other recorded body metrics. Actual lean mass is unchanged; calculated fat mass is explicitly derived and never substitutes for recorded waist. No storage, owner or runtime boundary changes.
+
+P12-08's unregistered `daily/coaching` candidate supplies the shared pure calculation path and mapped-row adapters for future UI/tools. `DailyCoachingService` resolves the existing server owner, reuses bounded health/nutrition/exact-key reads and the existing cancellable owner-locked SQL transaction helper. Explicit trusted policy/readiness/recovery/experiment changes use only mapped 0041 tables; profile policy uses revision CAS and experiment identity/replay permits only one active experiment. No migration, pool, dispatcher, route/tool, module-index or production composition change. Cross-domain reads remain independent/partial; heartbeat is not processed freshness. Maintenance/TDEE, nutrition completeness and expiry policy are unverified, so budgets/deficit consistency remain unavailable in the owner adapter. [Contract, checks and limits](../apps/backend/src/daily/coaching/README.md). Protected/live/phone and integrated source/CI acceptance remain separate.
 
 P12-05's unregistered `daily/health` library consumes the existing SQL inbox through an explicit one-row invocation and shared owner transaction lock. Additive 0047 records claim generations/deadlines and bounded retry/quarantine; no new queue, pool or scheduler. Pure normalization precedes one atomic domain/lineage/feed/receipt commit. Heartbeat writes only phone-sync state; accepted evidence and processing time remain distinct. Parameterized binary-identity upserts preserve newer accepted snapshots and never delete absent workout history. Existing root owner resolution protects bounded history/minute-HR/detail reads. [Source contract, recovery, limits and gates](../apps/backend/src/daily/health/README.md); no production composition or private source read.
 

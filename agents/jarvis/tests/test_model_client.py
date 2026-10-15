@@ -1029,6 +1029,167 @@ async def test_claude_model_request_timing_includes_stream_entry(monkeypatch) ->
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("provider", ["openai", "anthropic"])
+@pytest.mark.parametrize("outcome", ["ok", "error", "cancelled"])
+async def test_request_maximum_includes_later_setup_and_preserves_failures(
+    monkeypatch, provider, outcome,
+) -> None:
+    clock = [100.0]
+    monkeypatch.setattr(model_client.time, "monotonic", lambda: clock[0])
+    error = {
+        "ok": None, "error": RuntimeError("private-provider-content"),
+        "cancelled": asyncio.CancelledError("private-provider-content"),
+    }[outcome]
+    call = FakeItem(
+        type="function_call", call_id="first", name="create_task", arguments='{"text":"Action"}',
+    )
+    model, transport = client([], rounds=[[completed(call)], [completed()]])
+    attempts = []
+    streams = []
+    if provider == "openai":
+        create = transport.responses.create
+
+        async def timed_create(**request):
+            attempts.append(request)
+            clock[0] += 1 if len(attempts) == 1 else 20
+            if len(attempts) == 2 and error is not None:
+                raise error
+            stream = await create(**request)
+            streams.append(stream)
+            return stream
+
+        monkeypatch.setattr(transport.responses, "create", timed_create)
+    else:
+        warning = model_client.logger.warning
+
+        def slow_warning(*args, **kwargs):
+            clock[0] += 40
+            warning(*args, **kwargs)
+
+        monkeypatch.setattr(model_client.logger, "warning", slow_warning)
+
+        class Stream(FakeAnthropicStream):
+            async def __aenter__(self):
+                attempts.append(True)
+                clock[0] += 1 if len(attempts) == 1 else 20
+                if len(attempts) == 2 and error is not None:
+                    raise error
+                return await super().__aenter__()
+
+            async def get_final_message(self):
+                clock[0] += 40
+                return await super().get_final_message()
+
+        streams = [
+            Stream([], SimpleNamespace(content=[SimpleNamespace(
+                type="tool_use", id="first", name="create_task", input={"text": "Action"},
+            )], usage=None)),
+            Stream(["Done."], SimpleNamespace(content=[], usage=None)),
+        ]
+        model._anthropic_client = FakeAnthropic(streams)
+
+    timings = {}
+    token = chat_telemetry.current_chat_phase_timings.set(timings)
+    message_token = current_message_id.set("42")
+    try:
+        settings = ModelSettings("claude-sonnet-5" if provider == "anthropic" else "deployment",
+                                 "none")
+        if error is None:
+            _ = [chunk async for chunk in model.complete_chat(
+                [ModelMessage("user", "Action")], "en", settings=settings,
+            )]
+        else:
+            with pytest.raises(type(error)) as caught:
+                _ = [chunk async for chunk in model.complete_chat(
+                    [ModelMessage("user", "Action")], "en", settings=settings,
+                )]
+            if provider == "openai" or outcome == "cancelled":
+                assert caught.value is error
+            else:
+                assert caught.value.__cause__ is error
+    finally:
+        current_message_id.reset(message_token)
+        chat_telemetry.current_chat_phase_timings.reset(token)
+        await model.close()
+    assert len(attempts) == 2
+    assert timings["model_request"] == 1_000
+    assert timings["model_request_max"] == 20_000
+    assert "model_auth_max" not in timings
+    assert streams[0].exited
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("provider", ["openai", "anthropic"])
+@pytest.mark.parametrize("outcome", ["ok", "error", "cancelled"])
+async def test_model_token_provider_maximum_is_scoped_and_preserves_failures(
+    monkeypatch, caplog, provider, outcome,
+) -> None:
+    clock = [100.0]
+    monkeypatch.setattr(model_client.time, "monotonic", lambda: clock[0])
+    error = {
+        "ok": None, "error": RuntimeError("private-token-error"),
+        "cancelled": asyncio.CancelledError("private-token-error"),
+    }[outcome]
+
+    class Credential:
+        async def get_token(self, scope):
+            assert scope == model_client.FOUNDRY_TOKEN_SCOPE
+            clock[0] += 1 if clock[0] == 100.0 else 7
+            if clock[0] > 101.0 and error is not None:
+                raise error
+            return SimpleNamespace(token="private-managed-token")
+
+        async def close(self):
+            pass
+
+    captured = {}
+    monkeypatch.setenv("FOUNDRY_PROJECT_ENDPOINT",
+                       "https://jarvis.services.ai.azure.com/api/projects/jarvis")
+    monkeypatch.setenv("AZURE_AI_MODEL_DEPLOYMENT_NAME", "deployment")
+    monkeypatch.setenv("AZURE_OPENAI_API_KEY", "")
+    monkeypatch.setattr(model_client, "DefaultAzureCredential", Credential)
+    monkeypatch.setattr(model_client, "backend_settings_from_environment",
+                       lambda: ("https://backend.example", "api://backend/.default"))
+    monkeypatch.setattr(model_client, "AsyncOpenAI",
+                       lambda **kwargs: captured.update(openai=kwargs["api_key"]) or FakeOpenAI([]))
+    monkeypatch.setattr(model_client, "AsyncAnthropicFoundry",
+                       lambda **kwargs: captured.update(
+                           anthropic=kwargs["azure_ad_token_provider"],
+                       ) or FakeAnthropic([]))
+    model = AzureOpenAIResponsesClient.from_environment()
+    timings = {}
+    token = chat_telemetry.current_chat_phase_timings.set(timings)
+    try:
+        with caplog.at_level("INFO", logger="chat_telemetry"):
+            assert await captured[provider]() == "private-managed-token"
+            if error is None:
+                assert await captured[provider]() == "private-managed-token"
+            else:
+                with pytest.raises(type(error)) as caught:
+                    await captured[provider]()
+                assert caught.value is error
+        assert timings == {"model_auth_max": 7_000}
+        assert "private" not in caplog.text
+        assert f"outcome={outcome}" in caplog.text
+        other_timings = {}
+        other_token = chat_telemetry.current_chat_phase_timings.set(other_timings)
+        try:
+            if error is None:
+                assert await captured[provider]() == "private-managed-token"
+            else:
+                with pytest.raises(type(error)):
+                    await captured[provider]()
+            assert other_timings == {"model_auth_max": 7_000}
+        finally:
+            chat_telemetry.current_chat_phase_timings.reset(other_token)
+        assert timings == {"model_auth_max": 7_000}
+    finally:
+        chat_telemetry.current_chat_phase_timings.reset(token)
+        await model.close()
+    assert chat_telemetry.current_chat_phase_timings.get() is None
+
+
+@pytest.mark.asyncio
 async def test_fetches_settings_tool_catalogue_and_live_context_concurrently() -> None:
     model, transport = client([completed()])
     started: set[str] = set()

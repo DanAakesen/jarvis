@@ -73,6 +73,17 @@ cohort medians. All fields use the existing bounded completion/log allowlists.
 Chat affinity uses a bounded owner/conversation map of random 32-hex IDs; generic
 invocation failures are not replayed. Live latency improvement is unverified.
 
+The 15 October source candidate additionally retains optional `model_auth_max`
+(maximum model-token provider duration) and `model_request_max` (maximum awaited
+Responses creation / Anthropic stream entry) across rounds. Existing fields
+remain first observations. These content-free maxima include failed/cancelled
+attempts, reject invalid samples and cap at 600,000 ms. Agent per-attempt
+logs/spans remain available even when no completion is sent. The backend logs
+the completion maxima without adding them to browser-facing replies.
+Token time overlaps setup, and maxima may come from different attempts; do not
+sum or subtract them or treat them as proof of latency causation or improvement.
+There are no new configuration knobs or changes to model/network behavior.
+
 ## Commands
 
 Setup: `bash scripts/setup-dependencies.sh` from the repository root creates

@@ -132,7 +132,11 @@ def test_completion_waits_for_cleanup_and_final_event_delivery(finalization_fixt
             assert saved[app._task_state_path(state.session_id, state.invocation_id)]["status"] == state.status
             assert "PRIVATE" not in json.dumps(state.events)
             assert all(process.returncode is not None for process in processes)
-            assert app.session_clients == {}
+            if fail and stage == "provider":
+                assert set(app.session_clients) == {state.session_id}
+                assert app.session_clients[state.session_id].state is state
+            else:
+                assert app.session_clients == {}
             assert not app.session_locks[state.session_id].locked()
             assert "capacity" in delivered
             assert closed == ([] if fail and stage == "publisher" else [True])
@@ -173,7 +177,11 @@ def test_cancel_during_finalization_waits_for_owned_cleanup(finalization_fixture
             assert all(process.returncode is not None for process in processes)
             assert "capacity" in delivered
             assert closed == ([] if fail and stage == "publisher" else [True])
-            assert app.session_clients == {}
+            if fail and stage == "provider":
+                assert set(app.session_clients) == {state.session_id}
+                assert app.session_clients[state.session_id].state is state
+            else:
+                assert app.session_clients == {}
             assert not app.session_locks[state.session_id].locked()
         finally:
             await stop_fixture(state, release, processes)
@@ -349,7 +357,11 @@ def test_cancel_request_disconnect_keeps_owned_cleanup(
             assert state.status == ("failed" if fail else "cancelled")
             assert saved[app._task_state_path(state.session_id, state.invocation_id)]["status"] == state.status
             assert all(process.returncode is not None for process in processes)
-            assert app.session_clients == {}
+            if fail and stage == "provider":
+                assert set(app.session_clients) == {state.session_id}
+                assert app.session_clients[state.session_id].state is state
+            else:
+                assert app.session_clients == {}
             assert not app.session_locks[state.session_id].locked()
         finally:
             await stop_fixture(state, release, processes)

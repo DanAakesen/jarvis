@@ -637,7 +637,7 @@ describe('structured log export', () => {
       'turn_first_token', 'turn_complete', 'chat_history_verification', 'chat_context',
       'tool_catalogue', 'settings', 'turn_context', 'prompt_build', 'model_first_delta',
       'model_coordination', 'model_request', 'model_to_first_delta', 'agent_pre_model',
-      'agent_first_delta', 'agent_auth', 'session_start',
+      'agent_first_delta', 'agent_auth', 'session_start', 'model_auth_max', 'model_request_max',
     ]) {
       logger.info({ phase, durationMs: 234.5, text: 'prompt-secret' }, 'chat.latency');
     }
@@ -652,12 +652,31 @@ describe('structured log export', () => {
       'turn_first_token', 'turn_complete', 'chat_history_verification', 'chat_context',
       'tool_catalogue', 'settings', 'turn_context', 'prompt_build', 'model_first_delta',
       'model_coordination', 'model_request', 'model_to_first_delta', 'agent_pre_model',
-      'agent_first_delta', 'agent_auth', 'session_start',
+      'agent_first_delta', 'agent_auth', 'session_start', 'model_auth_max', 'model_request_max',
     ]);
     expect(records.slice(2).map((record) => JSON.parse(record).durationMs))
-      .toEqual(Array(16).fill(234.5));
+      .toEqual(Array(18).fill(234.5));
     expect(records.join('')).not.toContain('secret');
     expect(JSON.stringify(sdk.trackTrace.mock.calls)).not.toContain('secret');
+  });
+  it.each(['model_auth_max', 'model_request_max'])('rejects invalid %s log durations', (phase) => {
+    const records: string[] = [];
+    const output = new Writable({ write(chunk: Buffer, _encoding, done) {
+      records.push(chunk.toString());
+      done();
+    } });
+    const logger = createLogger({ logLevel: 'info' }, sdk, output);
+    for (const durationMs of [-1, 600001, Infinity, -Infinity, NaN, '4', null]) {
+      logger.info({ phase, durationMs, text: 'private-content' }, 'chat.latency');
+    }
+    for (const record of records) {
+      expect(JSON.parse(record)).toMatchObject({ phase, msg: 'chat.latency' });
+      expect(JSON.parse(record)).not.toHaveProperty('durationMs');
+    }
+    expect(records.join('')).not.toContain('private-content');
+    expect(JSON.stringify(sdk.trackTrace.mock.calls)).not.toContain('private-content');
+    expect(sdk.trackTrace.mock.calls.every(([event]) =>
+      event.message !== 'chat.latency' || !Object.hasOwn(event.properties!, 'durationMs'))).toBe(true);
   });
   it('exports only allowlisted hosted-agent session diagnostics', () => {
     const records: string[] = [];

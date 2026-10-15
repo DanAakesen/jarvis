@@ -122,6 +122,7 @@ const chatLatencyPhases = new Set([
   'chat_history_verification', 'chat_context', 'tool_catalogue', 'settings',
   'turn_context', 'prompt_build', 'model_coordination', 'model_request', 'model_first_delta',
   'model_to_first_delta', 'agent_pre_model', 'agent_first_delta', 'agent_auth', 'session_start',
+  'model_auth_max', 'model_request_max',
 ]);
 const reflexReasons = new Set([
   'executed', 'unavailable', 'cancelled', 'not_addressed', 'not_action', 'incomplete_command',
