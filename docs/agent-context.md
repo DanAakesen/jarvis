@@ -1,5 +1,66 @@
 # Agent context
 
+## Attention cancellation candidate (15 October 2026; local only)
+
+The bounded patch based on exact main `2c7ce24a` permits confirmed cancellation
+of NeedsAttention tasks without answering their question or starting work.
+Active owned invocations require a matching cancellation acknowledgement;
+replacement targets, pending merges and unknown runtime ownership fail closed.
+The terminal task-store transaction checks expected state and runtime generation
+under the task update lock and session/turn range locks. Runtime generation
+retains the latest session across all statuses and its latest turn, including
+when no control target remains. Existing session-end accounting and owned-session deletion are
+awaited and cleanup errors remain failures. Runner and hosted-chat runtime
+blobs, recovery/resume safety, capacity, settings and authentication are untouched.
+
+Local checks use the coordinator-provided read-only dependency snapshot through
+an owned junction: portable x64 Node 22.23.3, Vitest 5.0.2, Vite 8.3.1,
+TypeScript 6.0.3 and ESLint 10.11.0, not the complete pinned CI toolchain.
+Scratch configs retain project strict compiler options, map contracts only to
+this worktree and keep generated output/caches in session artifacts. The
+controller/lifecycle/heartbeat/store checks pass 180 tests; TaskControls plus
+task-list/detail interactions pass 70. Exact-main implementation with new tests
+reproduces 27 backend failures and five UI failures. Scoped lint and web strict
+types pass; backend production types have the same twelve diagnostics as exact
+main with this incomplete snapshot. Selected backend tests retain 47 diagnostics
+versus the original baseline's 49, with none in the new runtime regression tests.
+Route checks cannot load missing `@fastify/multipart`; the added isolated SQL
+state/generation/recovery integration cases were not run.
+Do not install or stub packages to disguise those limits.
+
+V4 corrects only the cancellation route's negative verifier fixture: a non-owner
+case injects `AuthenticationDenied(403)`, rather than returning a trusted
+`UserPrincipal`. It checks propagated verifier denial and zero controller calls;
+anonymous 401 and runner 403 remain separate. Owner-OID/scope enforcement belongs
+to `createTokenVerifier`, not a second controls-route ownership check. Existing
+signed-token owner/scope denial cases in `auth/auth.test.ts` were attempted but
+cannot load the full app with this snapshot. A supplemental offline check of the
+unchanged actual verifier passes five owner/denial cases with ephemeral locally
+signed JWTs and an in-memory JWK set; it is not full-app HTTP proof. No production
+auth or V3 runtime implementation changed. V2/V3 freezes remain immutable.
+
+Independent review rejected V2's state-only guard: NeedsAttention can change to
+Running and back while recovery replaces its runtime. Eleven deterministic
+actual-dispatcher/actual-transition regressions fail against V2 and pass here,
+covering Active, completed, Idle and absent targets, already-ended replacements
+and newer completed turns in the same session. V2's freeze and all earlier
+receipts remain unchanged; neither V2 nor this local candidate is release PASS.
+
+An offline actual-component browser fixture exercised desktop and 390 px iframe
+confirmation, recovery coexistence, pending/failure and terminal rendering.
+It used synthetic data and made no live request. Its unchanged UI/style blobs
+are preserved in this revision; no fresh browser or deployed acceptance is claimed.
+Existing SDK CLI launch
+arguments do not show `--remote`; no supported in-session `/remote` control was
+available, and nothing was relaunched or reconfigured.
+
+The coordinator's one authorised sandbox job has been consumed. Its later
+owner cancel returned 409 while NeedsAttention; physical cleanup remains
+coordinator-owned and is not claimed here. The older preparation statements
+below that no job was consumed are historical, not permission for another run.
+This uncommitted candidate requires independent review; no release, original
+acceptance or live cancellation/deallocation proof is established.
+
 ## Current Factory composition after accepted recovery (15 October 2026)
 
 Recovery #852 passed narrow independent review and exact-head CI `38665077108`

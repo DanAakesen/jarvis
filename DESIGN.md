@@ -481,9 +481,20 @@ filter. Controls display pending, success, and error feedback beside the action;
 unavailable PR/artifact links have adjacent explanations rather than implying an
 action is ready.
 
-Needs attention presents a Recover action with a short explanation that recovery
-starts a new sandbox from the task branch and saved history. The action keeps its
-identity while pending and reports success or failure beside the control.
+Needs attention offers **Cancel task** using the shared two-step confirmation,
+**Keep task**, pending label and adjacent error feedback. It does not offer
+Steer, Pause or Resume. Crash Recover and expired-session Continue remain beside
+Cancel when their existing end-reason conditions apply; all actions are disabled
+while one request is pending. Recovery starts a new sandbox from the task branch
+and saved history; cancellation does not start work.
+
+The local cancellation candidate was inspected with the actual component and
+existing styles in an offline browser fixture at 1280 px and in a 390 px iframe.
+Question cancellation, Recover/Continue coexistence, confirmation, synthetic
+pending/failure and terminal refresh were exercised without a live service.
+No horizontal overflow was observed; mobile buttons were approximately 44 px.
+This is isolated component evidence, not deployed task-page or live cleanup
+acceptance. No layout, token or animation change was introduced.
 
 At narrow widths the metadata and controls stack into one column and timeline
 payloads scroll within the page. Existing 44 px controls and focus styles are

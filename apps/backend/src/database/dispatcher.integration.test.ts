@@ -68,6 +68,85 @@ function heartbeat(): SandboxHeartbeat {
 }
 
 describe('dispatcher SQL coordination', () => {
+  it.each(['Active', 'completed', 'Idle', 'absent'] as const)(
+    'rejects recovered runtime ABA after capturing a %s attention target', async (initial) => {
+      const events = createEventHub<TaskEventMessage>();
+      const tasks = createTaskStore(pool, events);
+      const sessions = createDispatcherStore(pool, events);
+      const task = await createTask(events, 'Attention runtime generation guard');
+      try {
+        expect((await tasks.transition(task.id, 'Running')).kind).toBe('ok');
+        expect((await tasks.transition(task.id, 'NeedsAttention')).kind).toBe('ok');
+        const original = await pool.request()
+          .input('taskId', sql.BigInt, BigInt(task.id))
+          .input('status', sql.NVarChar(8), initial === 'absent' ? 'Ended' : initial === 'completed' ? 'Active' : initial)
+          .input('foundryId', sql.NVarChar(255), `old-attention-${randomUUID()}`)
+          .query<{ id: string }>(`UPDATE dbo.tasks SET branch = N'jarvis/attention-fixture' WHERE id = @taskId;
+            INSERT dbo.sandbox_sessions (task_id, foundry_session_id, agent_version, agent_name, size, image, status, started_at)
+            OUTPUT CAST(inserted.id AS varchar(19)) AS id
+            VALUES (@taskId, @foundryId, N'1', N'jarvis-runner-base-1x2', N'1x2', N'fixture', @status,
+              DATEADD(minute, -2, SYSUTCDATETIME()));`);
+        const originalId = original.recordset[0]?.id;
+        if (!originalId) throw new Error('Attention session fixture was not created');
+        await pool.request()
+          .input('sessionId', sql.BigInt, BigInt(originalId))
+          .input('status', sql.NVarChar(32), initial === 'Active' ? 'running' : 'completed')
+          .query(`INSERT dbo.sandbox_turns (sandbox_session_id, invocation_id, mode, acp_session_id, status)
+            VALUES (@sessionId, N'old-invocation', N'task', N'fixture-acp', @status);`);
+        const expected = await sessions.getRuntimeVersion(task.id);
+        if (!expected) throw new Error('Attention runtime snapshot was not read');
+        const target = await sessions.getControlTarget(task.id);
+        expect(target?.sandboxSessionId ?? null).toBe(initial === 'absent' ? null : originalId);
+        if (target) expect(target.latestTurnId).toBe(expected.latestTurnId);
+
+        await pool.request().input('sessionId', sql.BigInt, BigInt(originalId))
+          .query(`INSERT dbo.sandbox_turns (sandbox_session_id, invocation_id, mode, acp_session_id, status)
+            VALUES (@sessionId, N'new-completed-turn', N'task', N'fixture-acp', N'completed');`);
+        await expect(tasks.transition(task.id, 'Cancelled', false, undefined, undefined, 'NeedsAttention', expected))
+          .resolves.toEqual({ kind: 'invalid-transition' });
+        const beforeRecovery = await sessions.getRuntimeVersion(task.id);
+        if (!beforeRecovery) throw new Error('Updated attention runtime snapshot was not read');
+        await sessions.endTaskSessions(task.id, 'NeedsAttention');
+        const owner = randomUUID();
+        const recovery = await createTaskRecoveryStore(pool, events).claimRecovery(task.id, owner, 120);
+        if (recovery.kind !== 'claimed') throw new Error('Synthetic recovery claim was not acquired');
+        const replacementId = await sessions.recordStarted(owner, recovery.task, 'jarvis-runner-base-1x2', {
+          sessionId: `replacement-attention-${randomUUID()}`, invocationId: `replacement-${randomUUID()}`,
+        });
+        expect((await tasks.transition(task.id, 'NeedsAttention')).kind).toBe('ok');
+        const publish = vi.spyOn(events, 'publish');
+        await expect(tasks.transition(task.id, 'Cancelled', false, undefined, undefined, 'NeedsAttention', beforeRecovery))
+          .resolves.toEqual({ kind: 'invalid-transition' });
+        expect((await tasks.get(task.id, 1, 0))?.state).toBe('NeedsAttention');
+        expect((await sessions.getControlTarget(task.id))?.sandboxSessionId).toBe(replacementId);
+        expect(publish).not.toHaveBeenCalled();
+
+        const current = await sessions.getRuntimeVersion(task.id);
+        if (!current) throw new Error('Replacement attention runtime snapshot was not read');
+        await expect(tasks.transition(task.id, 'Cancelled', false, undefined, undefined, 'NeedsAttention', current))
+          .resolves.toMatchObject({ kind: 'ok', task: { state: 'Cancelled' } });
+      } finally {
+        await sessions.endTaskSessions(task.id, 'Cancelled');
+        await tasks.transition(task.id, 'Cancelled');
+      }
+    },
+  );
+
+  it('atomically refuses attention cancellation after recovery changed state', async () => {
+    const events = createEventHub<TaskEventMessage>();
+    const store = createTaskStore(pool, events);
+    const task = await createTask(events, 'Attention cancellation state guard');
+    expect((await store.transition(task.id, 'Running')).kind).toBe('ok');
+    expect((await store.transition(task.id, 'NeedsAttention')).kind).toBe('ok');
+    expect((await store.transition(task.id, 'Running')).kind).toBe('ok');
+    await expect(store.transition(task.id, 'Cancelled', false, undefined, undefined, 'NeedsAttention'))
+      .resolves.toEqual({ kind: 'invalid-transition' });
+    expect(await store.get(task.id, 1, 0)).toMatchObject({ state: 'Running' });
+    expect((await store.transition(task.id, 'NeedsAttention')).kind).toBe('ok');
+    await expect(store.transition(task.id, 'Cancelled', false, undefined, undefined, 'NeedsAttention'))
+      .resolves.toMatchObject({ kind: 'ok', task: { state: 'Cancelled' } });
+  });
+
   it.each(['Active', 'Ended'] as const)('exposes finishing delivery and cancels a completed turn in an %s session', async (sessionStatus) => {
     const events = createEventHub<TaskEventMessage>();
     const taskStore = createTaskStore(pool, events);

@@ -1,5 +1,41 @@
 # Project plan
 
+## Attention cancellation correction (15 October 2026; local candidate)
+
+The genuine owner's cancellation of isolated task 9 returned HTTP 409 while
+NeedsAttention, after the one authorised provider job had been consumed.
+The local candidate against exact main `2c7ce24a` adds the missing lifecycle and
+confirmed UI action, reusing owned runtime cancellation and awaited session
+cleanup. It retains policy/merge and stale-target guards, refuses unknown
+runtime ownership and atomically checks the expected attention state plus
+latest session/turn identity before terminal mutation. Independent review
+rejected V2's state-only guard because recovery can return replacement work to
+NeedsAttention. Eleven new actual-controller/actual-transition regressions
+reproduce that race against V2; its freeze and receipts remain immutable, not PASS.
+The revised candidate does not answer questions, recover work, bypass Done
+verification or alter the accepted runner/transport implementations.
+
+Local controller/lifecycle/heartbeat/fake-SQL checks pass 180 cases and web
+interaction checks pass 70; selected exact-main regressions fail as expected.
+Scoped lint and web strict types pass. Backend types retain twelve identical
+baseline diagnostics with the incomplete existing snapshot; owner-route tests
+are blocked by missing multipart, and added real-SQL runtime generation/recovery
+coverage remains unexecuted. Offline V2 component inspection covered 1280 px
+and a 390 px iframe; the revised candidate preserves those UI/style blobs.
+
+V4 separately corrects the non-owner route fixture to propagate verifier
+`AuthenticationDenied(403)` while retaining 403 and zero-controller assertions.
+Existing real-verifier HTTP tests remain missing-multipart blocked; five
+supplemental actual-verifier checks pass with synthetic local signed JWT/JWK
+data. Production auth and V3 runtime source are unchanged; V2/V3 are immutable,
+not PASS.
+
+Next: independent coordinator review of the frozen uncommitted full-index patch
+and qualified receipt. No commit, push, issue/PR, deployment or new
+live job is authorised here. Parent owns the current live session's cleanup;
+neither deallocation nor end-to-end delivery is claimed. All generated PLAN
+pipe lines below are preserved byte-for-byte; earlier receipts remain immutable.
+
 ## Current runner delivery after accepted recovery (15 October 2026)
 
 Recovery #852 normally reached main `5765d882` / reviewed tree `c5831563`

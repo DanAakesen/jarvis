@@ -213,10 +213,12 @@ stateDiagram-v2
     Ready --> Cancelled: Cancel
     Running --> Cancelled: Cancel
     Paused --> Cancelled: Cancel
+    NeedsAttention --> Cancelled: Cancel
 ```
 
 - **Steer** submits a bounded text correction to the current turn, or starts a new session on the task branch when the completed turn's session has expired. **Pause** requests a safe stop and remains `PauseRequested` until the backend confirms the turn has stopped; the heartbeat resolves an unsuccessful pause to `Running` or `NeedsAttention`. **Resume** continues the same Foundry session after a clean pause; **cancel** ends the task and requests deletion of its Foundry session.
 - Task controls are offered only for valid task states, with pending and failure feedback beside the action. The backend enforces every transition; a browser cannot set task state directly.
+- Needs attention, including an agent question, offers the same confirmed Cancel action. Cancellation stops only the task's current owned invocation, awaits session-end recording and owned-session deletion, and reports cleanup failures rather than success. Unknown runtime ownership blocks cancellation. Crash Recover and expired-session Continue remain separate actions; cancellation never answers the question or starts another turn.
 - Chat-created tasks retain their originating message. When a task becomes Done, Needs attention, or Cancelled, or opens a pull request, Jarvis posts one task-ID/outcome update with the PR link when available to that conversation. An active voice session speaks the update; away mode uses the existing Teams notification path.
 - If writable disk falls below the configured threshold, the runner reports `disk_low`, stops the current turn, and the backend moves the task to Needs attention with reason `disk_low`.
 - If Codex rejects a turn because the Jarvis login's usage limit is reached, the runner reports the failure as `Codex usage limit reached` (reason `codex_usage_limit`) instead of a generic runner error. The task moves to Needs attention, and other tasks keep running.

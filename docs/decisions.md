@@ -1,5 +1,38 @@
 # Decisions
 
+## Allow safe cancellation of attention tasks (15 October 2026; local candidate)
+
+The coordinator observed a genuine-owner cancellation of the existing isolated
+task 9 return HTTP 409 at 03:37:35 UTC while it was NeedsAttention with a null
+latest session end reason. Its earlier authorised recovery produced a real
+provider turn but a `session_question`, not verified Done. Existing public
+artifact content is not evidence of a newly produced delivery. Earlier release
+and rejection receipts remain historical and immutable; this work grants no
+new live job or cleanup action.
+
+Extend the existing cancellation lifecycle and shared confirmed Cancel control,
+not recovery, automatic question answering or completion classification. Keep
+the policy lock and merge guard, require an authentic owned-invocation cancel
+acknowledgement, and reject replaced targets after the request. Add an optional
+expected-state and expected-runtime check to the existing terminal transaction.
+Runtime identity includes the latest session across all statuses and its latest
+turn, even if the control target is absent or the turn already completed. Keep
+the task update lock and session/turn range locks through terminal persistence.
+A replacement must cause rollback before task mutation, event publication or
+cleanup. Await existing session accounting and
+deletion; preserve explicit failure and unknown-runtime outcomes. No new
+service, state, migration, dependency or permission is needed.
+
+Independent review rejected V2's state-only guard: recovery can return a new
+runtime to NeedsAttention before the cancellation row check. Eleven deterministic
+actual-dispatcher/actual-transition controls reproduce that defect against V2
+and pass with the revised guard. V2 and its receipts stay immutable, not PASS.
+The added real-SQL generation/recovery cases remain unexecuted locally.
+
+The patch is local only against exact `2c7ce24a`; no commit, publication, release
+or live deallocation is claimed. Independent review and the coordinator's
+subsequent authorised delivery remain separate.
+
 ## Compose reviewed runner delivery after genuine recovery acceptance (15 October 2026)
 
 Exact reviewed #852 normally reached main `5765d882` / tree `c5831563`.
