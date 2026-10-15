@@ -143,6 +143,57 @@ describe('task controls', () => {
     );
   });
 
+  it.each([null, 'crashed', 'idle_expired', 'done'] as const)(
+    'offers confirmed Cancel for attention without adding steer or resume (%s)', async (endReason) => {
+      const user = userEvent.setup();
+      fetchMock.mockResolvedValue(response({ id: '42', state: 'Cancelled' }));
+      vi.stubGlobal('fetch', fetchMock);
+      const onComplete = renderControls('NeedsAttention', endReason);
+      expect(screen.queryByRole('button', { name: 'Steer' })).toBeNull();
+      expect(screen.queryByRole('button', { name: 'Pause' })).toBeNull();
+      expect(screen.queryByRole('button', { name: 'Resume' })).toBeNull();
+      if (endReason === 'crashed') expect(screen.getByRole('button', { name: 'Recover' })).not.toBeNull();
+      if (endReason === 'idle_expired') expect(screen.getByRole('button', { name: 'Continue' })).not.toBeNull();
+      await user.click(screen.getByRole('button', { name: 'Cancel task' }));
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(getAccessToken).not.toHaveBeenCalled();
+      await user.click(screen.getByRole('button', { name: 'Keep task' }));
+      expect(fetchMock).not.toHaveBeenCalled();
+      await user.click(screen.getByRole('button', { name: 'Cancel task' }));
+      await user.click(screen.getByRole('button', { name: 'Confirm cancel task' }));
+      expect(fetchMock).toHaveBeenCalledOnce();
+      expect(fetchMock).toHaveBeenCalledWith(expect.any(String),
+        expect.objectContaining({ body: JSON.stringify({ action: 'cancel' }) }));
+      expect(onComplete).toHaveBeenCalledWith('Cancelled');
+      expect((await screen.findByRole('status')).textContent).toContain('Task cancelled.');
+    },
+  );
+
+  it('keeps recovery and cancellation disabled until attention cleanup finishes, then shows a failure', async () => {
+    const user = userEvent.setup();
+    let finish!: (value: Response) => void;
+    fetchMock.mockImplementation(() => new Promise<Response>((resolve) => { finish = resolve; }));
+    vi.stubGlobal('fetch', fetchMock);
+    const onComplete = renderControls('NeedsAttention', 'crashed');
+    await user.click(screen.getByRole('button', { name: 'Cancel task' }));
+    await user.click(screen.getByRole('button', { name: 'Confirm cancel task' }));
+    expect(screen.getByRole('button', { name: 'Cancelling…' })).toHaveProperty('disabled', true);
+    expect(screen.getByRole('button', { name: 'Recover' })).toHaveProperty('disabled', true);
+    expect(screen.getByRole('button', { name: 'Keep task' })).toHaveProperty('disabled', true);
+    await user.click(screen.getByRole('button', { name: 'Cancelling…' }));
+    expect(fetchMock).toHaveBeenCalledOnce();
+    finish(response({ error: 'Task is Cancelled, but sandbox cleanup could not be completed' }, 502));
+    expect((await screen.findByRole('alert')).textContent).toContain('could not complete this action');
+    expect(onComplete).not.toHaveBeenCalled();
+    expect(screen.queryByRole('status')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Confirm cancel task' })).toHaveProperty('disabled', false);
+  });
+
+  it.each(['Done', 'Cancelled'] as const)('offers no cancellation for terminal state %s', (state) => {
+    renderControls(state);
+    expect(screen.queryByRole('button')).toBeNull();
+  });
+
   it('shows pending pause status without actions while the turn is stopping', () => {
     renderControls('PauseRequested');
     expect(screen.getByRole('status').textContent).toContain('Pausing…');

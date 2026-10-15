@@ -7,7 +7,8 @@ import {
 import type { RunningSandbox, SandboxHeartbeat } from './heartbeat.js';
 import type { RecoveryClaimResult, TaskRecoveryStore } from './recovery-store.js';
 import type {
-  TaskControlCommand, TaskControlResult, TaskController, TaskDetail, TaskEventHub, TaskEventMessage, TaskRecord, TaskStore,
+  TaskControlCommand, TaskControlResult, TaskController, TaskDetail, TaskEventHub, TaskEventMessage, TaskRecord,
+  TaskRuntimeVersion, TaskStore,
 } from './task-store.js';
 
 export interface DispatchClaim extends TaskWorkspace {
@@ -45,6 +46,7 @@ export interface DispatcherStore {
     invocationId: string;
   }): Promise<string>;
   getControlTarget(taskId: string): Promise<TaskControlTarget | null>;
+  getRuntimeVersion(taskId: string): Promise<TaskRuntimeVersion | null>;
   withTaskPolicyLock<T>(taskId: string, operation: () => Promise<T>): Promise<T>;
   hasPendingProjectPolicyMerge(taskId: string): Promise<boolean>;
   recordControlTurn(target: TaskControlTarget, accepted: InvocationAccepted, message: string): Promise<boolean>;
@@ -61,6 +63,7 @@ export interface TaskControlTarget extends RunningSandbox, TaskWorkspace {
   sandboxSize: '1x2' | '2x4';
   image: string;
   sessionStatus: 'Active' | 'Idle';
+  latestTurnId: string | null;
 }
 
 export interface DispatcherOptions {
@@ -479,7 +482,8 @@ export class TaskDispatcher implements TaskController {
       }
     }
 
-    if (task.state !== 'Ready' && task.state !== 'Running' && task.state !== 'Paused') {
+    if (task.state !== 'Ready' && task.state !== 'Running' && task.state !== 'Paused' &&
+        !(task.state === 'NeedsAttention' && command.action === 'cancel')) {
       return { kind: 'invalid-transition' };
     }
     if (command.action === 'pause' && task.state !== 'Running') return { kind: 'invalid-transition' };
@@ -490,26 +494,68 @@ export class TaskDispatcher implements TaskController {
         return { kind: 'state-changed' as const, state: latestTask?.state };
       }
       if (await this.store.hasPendingProjectPolicyMerge(taskId)) return { kind: 'merge-pending' as const };
+      let expectedRuntime: TaskRuntimeVersion | undefined;
+      if (task.state === 'NeedsAttention') {
+        const runtime = await this.store.getRuntimeVersion(taskId);
+        if (!runtime) return { kind: 'state-changed' as const, state: latestTask.state };
+        expectedRuntime = runtime;
+      }
       target = await this.store.getControlTarget(taskId);
+      if (target && target.taskId !== taskId) return { kind: 'runtime-unknown' as const };
+      if (expectedRuntime && (target
+        ? expectedRuntime.sandboxSessionId !== target.sandboxSessionId ||
+          expectedRuntime.foundrySessionId !== target.foundrySessionId ||
+          expectedRuntime.sessionStatus !== target.sessionStatus ||
+          expectedRuntime.latestTurnId !== target.latestTurnId
+        : expectedRuntime.sessionStatus !== null &&
+          expectedRuntime.sessionStatus !== 'Ended' && expectedRuntime.sessionStatus !== 'Crashed')) {
+        return { kind: 'state-changed' as const, state: latestTask.state };
+      }
+      const runtimeAbsent = expectedRuntime !== undefined &&
+        expectedRuntime.sandboxSessionId === null && expectedRuntime.foundrySessionId === null &&
+        expectedRuntime.sessionStatus === null && expectedRuntime.latestTurnId === null;
+      if (expectedRuntime && !runtimeAbsent &&
+          (expectedRuntime.sandboxSessionId === null || expectedRuntime.foundrySessionId === null ||
+            expectedRuntime.sessionStatus === null)) {
+        return { kind: 'runtime-unknown' as const };
+      }
+      if (task.state === 'NeedsAttention' && !target && !latestTask.latestSessionEndReason && !runtimeAbsent) {
+        return { kind: 'runtime-unknown' as const };
+      }
       if (task.state === 'Running' && !target &&
           latestTask.activity !== 'Finishing delivery' && latestTask.latestSessionEndReason !== 'done' &&
           latestTask.pullRequest?.state !== 'open' && !finishingDelivery) {
         return { kind: 'runtime-unknown' as const };
       }
       if (command.action === 'pause' && !target) return { kind: 'session-ended' as const };
-      if (task.state === 'Running' && target?.sessionStatus === 'Active' && target.invocationId) {
+      if ((task.state === 'Running' || task.state === 'NeedsAttention') &&
+          target?.sessionStatus === 'Active' && target.invocationId) {
         if (command.action === 'pause') return { kind: 'state-changed' as const, state: latestTask.state };
         try {
-          await this.clientFor(target.agentName).cancel(target.invocationId);
+          const acknowledgement = await this.clientFor(target.agentName).cancel(target.invocationId);
+          if (acknowledgement.invocationId !== target.invocationId || acknowledgement.status !== 'cancelled') {
+            return { kind: 'cancel-failed' as const };
+          }
         } catch {
           return { kind: 'cancel-failed' as const };
+        }
+        const currentTask = await this.tasks.get(taskId, 1, 0);
+        const currentTarget = await this.store.getControlTarget(taskId);
+        if (!currentTask || currentTask.state !== latestTask.state ||
+            !currentTarget || currentTarget.taskId !== taskId ||
+            currentTarget.sandboxSessionId !== target.sandboxSessionId ||
+            currentTarget.foundrySessionId !== target.foundrySessionId ||
+            currentTarget.invocationId !== target.invocationId) {
+          return { kind: 'state-changed' as const, state: currentTask?.state };
         }
       }
       if (endState === 'Paused') {
         const requested = await this.tasks.transition(taskId, 'PauseRequested');
         if (requested.kind !== 'ok') return { kind: 'transitioned' as const, result: requested };
       }
-      return { kind: 'transitioned' as const, result: await this.tasks.transition(taskId, endState) };
+      return { kind: 'transitioned' as const, result: task.state === 'NeedsAttention'
+        ? await this.tasks.transition(taskId, endState, false, undefined, undefined, 'NeedsAttention', expectedRuntime)
+        : await this.tasks.transition(taskId, endState) };
     });
     if (cancellation.kind === 'cancel-failed') return {
       kind: 'failed', reason: 'Task runtime could not be reached to cancel the active invocation',

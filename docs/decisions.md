@@ -1,5 +1,82 @@
 # Decisions
 
+## Cancel attention after a failed pre-start without inventing ownership (15 October 2026)
+
+Complete review after published `0b4e79c2` passed ten CI jobs / SQL 176 tests
+and four CodeQL analyses found that a valid pre-start failure has no session
+end reason. Refusing all such tasks prevents supported owner cancellation.
+Permit only the trusted getter's existing-task/all-four-null runtime generation,
+preserving unknown/partial/mismatched refusal and provider-free absent handling.
+Keep the atomic expected-state and expected-generation terminal guard: a first
+runtime appearing after capture must roll back without cancellation events or
+replacement cleanup. Add controller/actual-transition and real-SQL positive/race
+controls; this new finding blocks release until exact-diff review and fresh
+complete CI/SQL/CodeQL. Prior freezes/green evidence remain historical, and
+neither this correction nor standing delivery authority grants another live job.
+Implementation/tests were published as `e6a41696`; final gate and deployment
+evidence is tracked in PR #853.
+
+## Standing authority for guarded delivery (15 October 2026)
+
+Dan explicitly approved V5 continuation, then stated that committing,
+pushing, merging and deploying authorised Jarvis work need no repeated
+permission question. Record standing delivery authority rather than
+reinstating candidate-specific consent gates from historical sections.
+Independent source review, exact current-main/ownership checks, complete
+fresh CI/CodeQL and serial guarded merge/deploy/smoke acceptance still apply.
+Normal publication must preserve the user's checkout and owned history.
+This does not authorise extra jobs/provider turns, private/device/access/model
+scope, resource creation, shared settings changes or bypassing authentic
+product-action confirmation. Release ownership remains with the coordinator.
+
+## Shrink header tabs before native scrolling (15 October 2026; combined candidate)
+
+Dan requested Chrome-like shrinking followed by horizontal scrolling,
+without covering Presence or Settings, and inclusion in the next deploy.
+Use the reviewed bounded flex containers and 140px minimum tab widths rather
+than measured-width JavaScript. Keep window/job groups separate and job details
+outside their scrolling child. Hide scrollbar tracks to preserve the compact
+header. The phone sheet resets the desktop flex basis and keeps 44px rows.
+Remove only duplicated runtime header feedback; chat, voice and backend-waking
+feedback retain their owners. Preserve V5 runtime/fixture source exactly.
+Fresh combined review, SQL/CI/CodeQL and release remain pending. The physical
+mobile-composer report is separate and unresolved.
+
+## Allow safe cancellation of attention tasks (15 October 2026; local candidate)
+
+The coordinator observed a genuine-owner cancellation of the existing isolated
+task 9 return HTTP 409 at 03:37:35 UTC while it was NeedsAttention with a null
+latest session end reason. Its earlier authorised recovery produced a real
+provider turn but a `session_question`, not verified Done. Existing public
+artifact content is not evidence of a newly produced delivery. Earlier release
+and rejection receipts remain historical and immutable; this work grants no
+new live job or cleanup action.
+
+Extend the existing cancellation lifecycle and shared confirmed Cancel control,
+not recovery, automatic question answering or completion classification. Keep
+the policy lock and merge guard, require an authentic owned-invocation cancel
+acknowledgement, and reject replaced targets after the request. Add an optional
+expected-state and expected-runtime check to the existing terminal transaction.
+Runtime identity includes the latest session across all statuses and its latest
+turn, even if the control target is absent or the turn already completed. Keep
+the task update lock and session/turn range locks through terminal persistence.
+A replacement must cause rollback before task mutation, event publication or
+cleanup. Await existing session accounting and
+deletion; preserve explicit failure and unknown-runtime outcomes. No new
+service, state, migration, dependency or permission is needed.
+
+Independent review rejected V2's state-only guard: recovery can return a new
+runtime to NeedsAttention before the cancellation row check. Eleven deterministic
+actual-dispatcher/actual-transition controls reproduce that defect against V2
+and pass with the revised guard. V2 and its receipts stay immutable, not PASS.
+The added real-SQL generation/recovery cases remain unexecuted locally.
+
+V4 was published as `428555d5`; its two new actual-SQL fixture setup failures
+did not reach replacement assertions. V5 corrects completed-invocation fixture
+accounting without changing production guards and has independent source-only
+PASS. The combined header candidate still requires exact-tree review and fresh
+SQL/CI/CodeQL/release gates. No live cancellation or deallocation is claimed.
+
 ## Compose reviewed runner delivery after genuine recovery acceptance (15 October 2026)
 
 Exact reviewed #852 normally reached main `5765d882` / tree `c5831563`.

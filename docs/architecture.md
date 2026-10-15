@@ -1,5 +1,28 @@
 # Architecture
 
+## Trusted pre-start runtime absence (15 October 2026)
+
+The existing runtime getter distinguishes no task (null result) from an existing
+task with no recorded session (all four projected fields null via OUTER APPLY).
+Only the latter can bypass missing-session-end evidence for attention
+cancellation; reject partially known identity and incoherent/live targets.
+Pass that exact absent generation to the unchanged terminal transaction.
+Its task/session/turn locks and full-field comparison reject a concurrently
+inserted first runtime before mutation/events/cleanup. The absent path uses
+existing session accounting but never invokes a provider without an owned
+target. No new store, schema, API or recovery/classification policy is added.
+
+## Bounded header tab groups (15 October 2026; combined candidate)
+
+CSS bounds the existing Workspace portal host and tab navigation between
+the brand and fixed shell actions. Tabs shrink to their minimum; overflow
+belongs to the window navigation and a new inner `JobsChip` list, not the
+header. The job popover remains a sibling of that list, retaining its
+existing dismissal/focus owner. No resize observer, tab-width state,
+backend contract or window lifecycle changes are introduced.
+`ShellLayout` no longer renders generic runtime activity in the header;
+the activity subscription still supplies phone and conversation feedback.
+
 ## Mobile/Status review publication (14 October 2026)
 
 The publication candidate retains all eight accepted code/test/CSS paths
@@ -2811,6 +2834,41 @@ These boxes are responsibilities; they do not each need a separate service.
 | Factory task view | P1-08 loads up to 100 tasks from the filtered task API, opens task-scoped SSE streams for nonterminal cards, and refreshes the snapshot after updates. P2-14 exposes the latest session end reason so an expired completed invocation offers Continue rather than Recover. P6-21 supplies recorded PR/check/usage summaries and a Dan-only retry API for failed starts without sandbox history; UI rendering and retry controls are owned separately. |
 | Idle | The dispatcher subscribes to committed task events and schedules the next retry deadline. It performs one startup stale-task scan, then schedules five-minute scans only while a sandbox is tracked. A committed `sandbox_idle_expired` event requests one immediate bounded reconciliation, including when no heartbeat session is tracked; an overlapping scan coalesces the signal into one follow-up scan. It returns to no recurring SQL scans while idle. The event-archive timer also skips SQL until active sandbox work exists. |
 | Always on | The backend normally runs with a minimum of 1 replica, so timers remain alive. The main-page sleep switch sets the minimum to 0 (it wakes on the next request) and is refused while a task is Ready, Running, or PauseRequested. SQL can pause between genuine accesses; the daily Codex renewal lease check and request-driven endpoints remain deliberate exceptions. |
+
+### Needs-attention cancellation (15 October 2026; local candidate)
+
+The existing owner-only controls route and dispatcher now permit cancellation
+from NeedsAttention as well as Ready, Running and Paused. The dispatcher reloads
+the task and its control target inside the existing task-policy lock and retains
+the pending-policy-merge guard. An active invocation requires a matching
+`cancelled` acknowledgement; its task/session/invocation are checked again after
+the await, before terminal mutation. The dispatcher also captures the latest
+session (including Ended/Crashed) and latest turn identity and verifies that
+the control target agrees before runtime side effects. The existing task-store
+transition checks both expected state and that runtime version in the terminal
+transaction, under the task update lock and session/turn range locks. Replacement
+sessions, newer completed turns and replacement work that already ended cause
+rollback before terminal mutation or cleanup. A missing control target therefore
+does not erase the ended session's identity. Recovery behaviour is unchanged.
+An absent target with a Starting, Active or Idle latest session is refused,
+not mistaken for completed cleanup.
+
+Independent review rejected V2: its expected-state check alone accepted
+NeedsAttention -> Running -> NeedsAttention and could end an uncancelled
+replacement session. The revised candidate adds the atomic runtime check;
+another out-of-transaction re-read would not close that race.
+
+Completed attention turns have no active invocation to cancel, but their owned
+session is still deleted. A recorded session end permits task cancellation
+without another runtime call; absent both a target and end reason, an attention
+task is unavailable even if it has an open PR. Session-end accounting and owned
+Foundry-session deletion are awaited through existing helpers; failures return
+the existing explicit failure result, including after terminal state was saved.
+No recovery claim, capacity calculation, runner classification, verified-Done
+path, confirmation gate or authentication rule is changed.
+
+This candidate has local synthetic controller, lifecycle and fake-SQL evidence,
+not deployed SQL/Foundry cleanup acceptance.
 
 ### Credential health and repair (P6-18, #457)
 

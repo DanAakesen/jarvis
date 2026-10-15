@@ -37,6 +37,7 @@ const {
       options: {
         onStatus: (status: string, message: string) => void;
         onSessionEnded?: () => void;
+        onMicrophoneState?: (state: 'live') => void;
       };
     }>,
   };
@@ -56,6 +57,7 @@ vi.mock('./voice-client', () => ({
     constructor(private readonly options: {
       onStatus: (status: string, message: string) => void;
       onSessionEnded?: () => void;
+      onMicrophoneState?: (state: 'live') => void;
     }) {
       voiceSessions.push({ options, setCameraState: this.setCameraState });
     }
@@ -816,7 +818,7 @@ describe('App shell', () => {
     expect(screen.queryByRole('menuitem', { name: 'Share screen' })).toBeNull();
     expect(screen.getByRole('menuitem', { name: 'Turn camera on' })).not.toBeNull();
   });
-  it('shows chat work only after a runtime event and clears it on the reported terminal event', async () => {
+  it('keeps chat progress and tool feedback in the conversation, never in the header', async () => {
     const user = userEvent.setup();
     let finish: (() => void) | undefined;
     fetchMock.mockImplementation(async (input) => {
@@ -845,6 +847,7 @@ describe('App shell', () => {
       });
     });
     await renderSignedIn();
+    const header = document.querySelector('.app-topbar') as HTMLElement;
 
     await user.type(screen.getByRole('textbox', { name: 'Message Jarvis' }), 'Start the task.');
     await user.click(screen.getByRole('button', { name: 'Send' }));
@@ -854,20 +857,41 @@ describe('App shell', () => {
       activityStream?.enqueue(new TextEncoder().encode(`event: jarvis-activity\ndata: ${JSON.stringify(event)}\n\n`));
     };
     publish({ type: 'thinking', activityId: '22222222-2222-4222-8222-222222222222', source: 'chat' });
-    expect(await screen.findByRole('status', { name: 'Jarvis is thinking' })).not.toBeNull();
+    expect(await screen.findByText('Jarvis is thinking…')).not.toBeNull();
+    expect(within(header).queryByText(/thinking|working/i)).toBeNull();
     const tool = (type: string, outcome?: string) => activityStream?.enqueue(new TextEncoder().encode(`event: jarvis-activity\ndata: ${JSON.stringify({
       type, activityId: '33333333-3333-4333-8333-333333333333', source: 'chat', toolName: 'web_search', ...(outcome ? { outcome } : {}),
     })}\n\n`));
     tool('tool-call-started');
     const trail = await screen.findByRole('list', { name: 'Tools Jarvis is using' });
     expect(within(trail).getByTitle('web_search · running')).not.toBeNull();
+    expect(within(header).queryByText(/web_search|working/i)).toBeNull();
     tool('tool-call-finished', 'ok');
     expect(await within(trail).findByTitle('web_search · done')).not.toBeNull();
     expect(within(trail).getAllByRole('listitem')).toHaveLength(1);
 
     finish?.();
     publish({ type: 'ended', activityId: '22222222-2222-4222-8222-222222222222', source: 'chat' });
-    expect(await screen.findByRole('status', { name: 'Jarvis activity ended' })).not.toBeNull();
+    await waitFor(() => expect(screen.queryByText('Jarvis is thinking…')).toBeNull());
+    expect(within(header).queryByText(/Jarvis activity ended|web_search|thinking|working/i)).toBeNull();
+    expect(header.querySelector('.topbar-working')).toBeNull();
+  });
+
+  it('keeps voice progress beneath the orb rather than duplicating it in the header', async () => {
+    const user = userEvent.setup();
+    await renderSignedIn();
+    await user.click(screen.getByRole('button', { name: 'Start voice' }));
+    const header = document.querySelector('.app-topbar') as HTMLElement;
+    act(() => {
+      voiceSessions[0]!.options.onMicrophoneState!('live');
+      voiceSessions[0]!.options.onStatus('thinking', 'Jarvis is thinking.');
+    });
+    const voiceStatus = document.querySelector('.voice-status') as HTMLElement;
+    expect(within(voiceStatus).getByText('Thinking')).not.toBeNull();
+    expect(within(header).queryByText(/thinking|working/i)).toBeNull();
+    act(() => voiceSessions[0]!.options.onStatus('speaking', 'Jarvis is speaking.'));
+    expect(within(voiceStatus).getByText('Speaking')).not.toBeNull();
+    expect(within(header).queryByText(/speaking/i)).toBeNull();
   });
 
   it('hides navigation and area pages until Dan is signed in', async () => {

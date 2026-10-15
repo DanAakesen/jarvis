@@ -1,5 +1,6 @@
 import sql from 'mssql';
 import { databaseReadRequest } from './wake-retry.js';
+import { readTaskRuntimeVersion } from './task-store.js';
 import { withTaskPolicyLock as withProjectPolicyTaskLock } from './task-policy-lock.js';
 import type {
   DispatcherStore, DispatchClaimResult, StaleRunningTask, TaskControlTarget,
@@ -459,6 +460,10 @@ export function createDispatcherStore(pool: sql.ConnectionPool, eventHub: TaskEv
       }
     },
 
+    async getRuntimeVersion(taskId) {
+      return readTaskRuntimeVersion(databaseReadRequest(pool), taskId);
+    },
+
     async getControlTarget(taskId): Promise<TaskControlTarget | null> {
       const { recordset } = await databaseReadRequest(pool)
         .input('taskId', sql.BigInt, BigInt(taskId))
@@ -467,6 +472,7 @@ export function createDispatcherStore(pool: sql.ConnectionPool, eventHub: TaskEv
           p.repo AS repository, p.default_branch AS defaultBranch, t.branch,
           CAST(s.id AS varchar(19)) AS sandboxSessionId, s.foundry_session_id AS foundrySessionId,
           s.agent_name AS agentName, s.size AS sandboxSize, s.image, s.status AS sessionStatus,
+          CAST(latestTurn.id AS varchar(19)) AS latestTurnId,
           CASE WHEN s.status = N'Active' THEN activeTurn.invocation_id ELSE latestTurn.invocation_id END AS invocationId
           FROM dbo.tasks AS t
           INNER JOIN dbo.projects AS p ON p.id = t.project_id
@@ -481,7 +487,7 @@ export function createDispatcherStore(pool: sql.ConnectionPool, eventHub: TaskEv
             ORDER BY started_at DESC, id DESC
           ) AS activeTurn
           OUTER APPLY (
-            SELECT TOP (1) invocation_id FROM dbo.sandbox_turns
+            SELECT TOP (1) id, invocation_id FROM dbo.sandbox_turns
             WHERE sandbox_session_id = s.id
             ORDER BY started_at DESC, id DESC
           ) AS latestTurn

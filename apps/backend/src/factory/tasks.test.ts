@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { buildApp } from '../app.js';
 import { loadConfig } from '../config.js';
-import type { TokenVerifier } from '../auth/verify.js';
+import { AuthenticationDenied, type TokenVerifier } from '../auth/verify.js';
 import { createEventHub } from '../core/event-hub.js';
 import type {
   RunningTaskContextSnapshot, TaskController, TaskDetail, TaskEventMessage, TaskRecord, TaskStore,
@@ -310,6 +310,47 @@ describe('factory tasks API', () => {
     });
     expect(response.statusCode).toBe(status);
     expect(response.json()).toEqual({ error: reason });
+  });
+
+  it('routes owner cancellation of attention without restart confirmation or another turn', async () => {
+    const cancelled = { ...task, state: 'Cancelled' as const };
+    const controller: TaskController = { control: vi.fn(async () => ({ kind: 'ok' as const, task: cancelled })) };
+    const { app, store } = fixture({
+      get: vi.fn(async () => ({ ...detail, state: 'NeedsAttention' as const })),
+    }, undefined, controller);
+    const result = await app.inject({
+      method: 'POST', url: '/factory/tasks/42/controls', headers, payload: { action: 'cancel' },
+    });
+    expect(result.statusCode).toBe(200);
+    expect(result.json()).toEqual(cancelled);
+    expect(controller.control).toHaveBeenCalledExactlyOnceWith('42', { action: 'cancel' });
+    expect(store.get).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    { caller: 'anonymous', status: 401 },
+    { caller: 'verifier-denied non-owner', status: 403 },
+    { caller: 'runner', status: 403 },
+  ] as const)('denies $caller cancellation before the controller', async ({ caller, status }) => {
+    const controller: TaskController = { control: vi.fn(async () => ({ kind: 'ok' as const, task })) };
+    const auth: TokenVerifier = async () => {
+      if (caller === 'verifier-denied non-owner') throw new AuthenticationDenied(403);
+      return caller === 'runner' ? {
+        kind: 'jarvis-runner',
+        objectId: '11111111-1111-4111-8111-111111111111',
+        tenantId: config.auth.tenantId,
+      } : {
+        objectId: config.auth.ownerObjectId,
+        tenantId: config.auth.tenantId, displayName: 'Dan',
+      };
+    };
+    const { app } = fixture({}, auth, controller);
+    const result = await app.inject({
+      method: 'POST', url: '/factory/tasks/42/controls',
+      ...(caller !== 'anonymous' ? { headers } : {}), payload: { action: 'cancel' },
+    });
+    expect(result.statusCode).toBe(status);
+    expect(controller.control).not.toHaveBeenCalled();
   });
 
   it('mints a task repository token only for its runner session', async () => {

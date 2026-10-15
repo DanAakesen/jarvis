@@ -1,5 +1,98 @@
 # Project plan
 
+## Pre-start attention cancellation follow-up (15 October 2026)
+
+Published `0b4e79c2` passed all ten CI jobs, including 176 real-SQL tests,
+and all four CodeQL analyses. A subsequent complete review found a release
+blocker: failed/exhausted starts can reach NeedsAttention before any session
+exists, but the cancellation guard rejects their trusted all-null runtime.
+Allow only an existing task's captured generation with all four runtime fields
+null; keep unknown, partial and mismatched ownership fail-closed. Preserve the
+atomic expected-state/runtime check so a first session inserted after capture
+rejects cancellation without terminal events or cleanup of that replacement.
+Deterministic controller/transaction and real-SQL regression cases cover this
+boundary. The implementation and tests were published as `e6a41696` after
+independent exact-source review; 125 focused tests and four-file lint passed,
+with selected snapshot type diagnostics unchanged from baseline and local SQL
+prerequisite-blocked. Current publication/gate results are tracked in PR #853;
+fresh complete exact-head CI/SQL/CodeQL is required before release.
+No release/live/deallocation claim,
+additional job or physical mobile-composer fix is implied.
+
+## Combined V5 and header delivery (15 October 2026; awaiting exact-tree review)
+
+V5's four-case SQL fixture correction has independent source-only PASS;
+corrected real-SQL execution and fresh combined CI/CodeQL remain pending.
+Dan requested the reviewed header shrink/scroll and activity correction in the
+next deploy. Integrate only its six frozen web source/test blobs with V5;
+reconcile additive docs without restoring older main content.
+The header owner's 189 tests and offline actual-App desktop/phone evidence
+apply to identical source blobs, not a new combined or physical-device run.
+The combined candidate passes eight relevant UI suites (259 tests), full
+strict web types and package-scoped five-file header TSX lint. V5's exact
+fixture retains its final-file lint pass; corrected real SQL is still pending.
+Dan's physical mobile-composer report remains unresolved; this is not its fix.
+
+Next: independent combined-tree acceptance, normal publication on existing
+PR #853, fresh complete exact-head CI/CodeQL, then serial guarded release.
+Standing delivery authority is recorded in agent-context and decisions;
+reviews and gates remain mandatory. No additional live/provider job is
+authorised, and physical cleanup/deallocation remains coordinator-owned.
+
+## Attention cancellation correction (15 October 2026; local candidate)
+
+The genuine owner's cancellation of isolated task 9 returned HTTP 409 while
+NeedsAttention, after the one authorised provider job had been consumed.
+The local candidate against exact main `2c7ce24a` adds the missing lifecycle and
+confirmed UI action, reusing owned runtime cancellation and awaited session
+cleanup. It retains policy/merge and stale-target guards, refuses unknown
+runtime ownership and atomically checks the expected attention state plus
+latest session/turn identity before terminal mutation. Independent review
+rejected V2's state-only guard because recovery can return replacement work to
+NeedsAttention. Eleven new actual-controller/actual-transition regressions
+reproduce that race against V2; its freeze and receipts remain immutable, not PASS.
+The revised candidate does not answer questions, recover work, bypass Done
+verification or alter the accepted runner/transport implementations.
+
+Local controller/lifecycle/heartbeat/fake-SQL checks pass 180 cases and web
+interaction checks pass 70; selected exact-main regressions fail as expected.
+Scoped lint and web strict types pass. Backend types retain twelve identical
+baseline diagnostics with the incomplete existing snapshot; owner-route tests
+are locally blocked by missing multipart, and real-SQL runtime generation/recovery
+coverage was unexecuted at the local V4 freeze. Offline V2 component inspection covered 1280 px
+and a 390 px iframe; the revised candidate preserves those UI/style blobs.
+
+V4 separately corrects the non-owner route fixture to propagate verifier
+`AuthenticationDenied(403)` while retaining 403 and zero-controller assertions.
+Existing real-verifier HTTP tests remain missing-multipart blocked; five
+supplemental actual-verifier checks pass with synthetic local signed JWT/JWK
+data. Production auth and V3 runtime source are unchanged; V2/V3 are immutable,
+not PASS.
+
+V4 was published as `428555d5`. Its actual CI SQL job `116295620002`
+executed 176 tests: 174 passed and the Active/completed ABA fixtures failed
+before replacement construction. Their default session-end call deliberately
+preserved an Active session whose latest turn completed, so genuine recovery
+could not claim it. This is a fixture-contract error, not a production-guard
+failure. V5 uses the existing completed-invocation accounting path after capture
+and asserts recoverable prior state, an actual recovery claim, replacement
+construction and atomic rejection. Production source remains byte-identical.
+The failed CI evidence and earlier freezes remain immutable; V5 SQL execution
+and complete fresh CI/release acceptance are not claimed.
+At that published V4 head, backend job `116295620202` passed all 179 files /
+3241 tests, including Factory HTTP 37 and authentication HTTP 60, plus backend
+lint and production tsc build. All four CodeQL analyses passed. These Linux
+results supersede local full-app loading limits for V4 only; complete CI still
+failed from the two SQL fixtures and aggregate, not a V5 or live/E2E result.
+
+V5 is now independently source-reviewed. Dan's renewed approval and standing
+delivery authority supersede the earlier candidate-specific publication hold,
+not source review, complete fresh CI/CodeQL or release gates. The combined
+header candidate awaits exact-tree acceptance. No new live job is authorised.
+Parent owns the current live session's cleanup;
+neither deallocation nor end-to-end delivery is claimed. All generated PLAN
+pipe lines below are preserved byte-for-byte; earlier receipts remain immutable.
+
 ## Current runner delivery after accepted recovery (15 October 2026)
 
 Recovery #852 normally reached main `5765d882` / reviewed tree `c5831563`

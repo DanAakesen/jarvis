@@ -736,13 +736,6 @@ function ShellLayout({ signedIn, config, session, camera, screenShare }: {
             {config.backendUrl && (
               <DatabaseWakeStatus backendUrl={config.backendUrl} getAccessToken={session.getAccessToken} />
             )}
-            {(working || latestActivity) && (
-              <span className={`topbar-working${working ? '' : ' topbar-activity-terminal'}`} role="status" aria-label={activityText} aria-live="polite">
-                <span className="topbar-working-mark" aria-hidden="true" />
-                <span className="topbar-working-wide" aria-hidden="true">{activityText}</span>
-                <span className="topbar-working-compact" aria-hidden="true">{working ? 'Working' : activityText}</span>
-              </span>
-            )}
             <button
               id="context-panel-toggle"
               className="topbar-icon-button"

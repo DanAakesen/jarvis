@@ -1,14 +1,15 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createEventHub } from '../core/event-hub.js';
 import type { SettingsStore } from '../core/settings.js';
-import { FoundryClientError, type InvocationSnapshot } from '../foundry/client.js';
+import { FoundryClientError, type CancelAcknowledgement, type InvocationSnapshot } from '../foundry/client.js';
 import { SandboxHeartbeat } from './heartbeat.js';
+import { canTransitionTask } from './task-lifecycle.js';
 import {
   TaskDispatcher, type DispatchClaim, type DispatcherOptions, type DispatcherStore, type StaleRunningTask,
   type TaskControlTarget,
 } from './dispatcher.js';
 import type { TaskRecoveryStore } from './recovery-store.js';
-import type { TaskEventHub, TaskEventMessage, TaskRecord, TaskStore } from './task-store.js';
+import type { TaskEventHub, TaskEventMessage, TaskRecord, TaskRuntimeVersion, TaskStore } from './task-store.js';
 
 const task: DispatchClaim = {
   taskId: '42',
@@ -58,6 +59,7 @@ const controlTarget: TaskControlTarget = {
   foundrySessionId: 'session-1',
   agentName: 'jarvis-runner-base-1x2',
   invocationId: 'invocation-1',
+  latestTurnId: '71',
   sandboxSize: '1x2',
   image: 'jarvis-runner:latest',
   sessionStatus: 'Active',
@@ -88,7 +90,11 @@ function harness(
     transition: vi.fn(async (
       id: string,
       state: TaskRecord['state'],
+      completionVerified = false,
     ) => {
+      if (currentState !== state && !canTransitionTask(currentState, state, completionVerified)) {
+        return { kind: 'invalid-transition' as const };
+      }
       currentState = state;
       return transition(id, state);
     }),
@@ -99,7 +105,7 @@ function harness(
   })), write: vi.fn(async () => {}) };
   const tracked = { value: hasTrackedSessions };
   const track = vi.fn(() => { tracked.value = true; });
-  const untrack = vi.fn(() => { tracked.value = false; });
+  const untrack = vi.fn<(sandboxSessionId: string) => void>(() => { tracked.value = false; });
   const setCompletionHandler = vi.fn();
   const heartbeat = {
     track, untrack, setCompletionHandler, hasTrackedSessions: () => tracked.value,
@@ -113,7 +119,7 @@ function harness(
   const resume = vi.fn(async () => ({
     invocationId: 'invocation-resume', sessionId: 'session-1', status: 'queued' as const, agent: 'codex' as const,
   }));
-  const cancel = vi.fn(async (invocationId: string) => ({ invocationId, status: 'cancelled' as const }));
+  const cancel = vi.fn(async (invocationId: string): Promise<CancelAcknowledgement> => ({ invocationId, status: 'cancelled' }));
   const deleteSession = vi.fn(async () => {});
   const status = vi.fn(async (invocationId: string): Promise<InvocationSnapshot> => ({
     invocationId,
@@ -135,7 +141,7 @@ function harness(
 }
 
 function idleStore(nextAttemptAt: string | null = null): DispatcherStore {
-  return {
+  const store: DispatcherStore = {
     claimNext: vi.fn(async () => ({ kind: 'idle' as const, nextAttemptAt })),
     listStaleRunning: vi.fn(async () => []),
     isCurrentStaleTask: vi.fn(async () => true),
@@ -144,7 +150,16 @@ function idleStore(nextAttemptAt: string | null = null): DispatcherStore {
     failStart: vi.fn(async () => {}),
     recordStarted: vi.fn(async () => '53'),
     getControlTarget: vi.fn(async () => null),
-    withTaskPolicyLock: vi.fn(async (_taskId: string, operation: () => Promise<unknown>) => operation()),
+    getRuntimeVersion: vi.fn(async function (this: DispatcherStore) {
+      const target = await vi.mocked(this.getControlTarget).mock.results.at(-1)?.value;
+      return {
+        sandboxSessionId: target?.sandboxSessionId ?? null,
+        foundrySessionId: target?.foundrySessionId ?? null,
+        sessionStatus: target?.sessionStatus ?? null,
+        latestTurnId: target?.latestTurnId ?? null,
+      };
+    }),
+    withTaskPolicyLock: async <T>(_taskId: string, operation: () => Promise<T>): Promise<T> => operation(),
     hasPendingProjectPolicyMerge: vi.fn(async () => false),
     recordControlTurn: vi.fn(async () => true),
     recordResumedTurn: vi.fn(async () => ({
@@ -155,6 +170,7 @@ function idleStore(nextAttemptAt: string | null = null): DispatcherStore {
     })),
     endTaskSessions: vi.fn(async () => []),
   };
+  return store;
 }
 
 async function flush(): Promise<void> {
@@ -578,6 +594,314 @@ describe('task dispatcher', () => {
     expect(cancel).not.toHaveBeenCalled();
     expect(store.endTaskSessions).toHaveBeenCalledWith('42', 'Cancelled');
     expect(deleteSession).toHaveBeenCalledWith('session-1');
+  });
+
+  it.each(['Active', 'Idle'] as const)('cancels only the owned %s attention session and awaits cleanup', async (sessionStatus) => {
+    const target = { ...controlTarget, sessionStatus };
+    let endSessions!: (ids: string[]) => void;
+    let deleted!: () => void;
+    const store = {
+      ...idleStore(),
+      getControlTarget: vi.fn(async () => target),
+      endTaskSessions: vi.fn(() => new Promise<string[]>((resolve) => { endSessions = resolve; })),
+    };
+    const test = harness(store, undefined, { ...controlTask, state: 'NeedsAttention' });
+    test.deleteSession.mockImplementation(() => new Promise<void>((resolve) => { deleted = resolve; }));
+    let settled = false;
+    const result = test.dispatcher.control('42', { action: 'cancel' }).then((value) => {
+      settled = true;
+      return value;
+    });
+    await flush();
+    expect(store.endTaskSessions).toHaveBeenCalledWith('42', 'Cancelled');
+    expect(test.cancel.mock.calls).toEqual(sessionStatus === 'Active' ? [['invocation-1']] : []);
+    expect(test.deleteSession).not.toHaveBeenCalled();
+    expect(settled).toBe(false);
+    endSessions(['53']);
+    await flush();
+    expect(test.deleteSession.mock.calls).toEqual([['session-1']]);
+    expect(settled).toBe(false);
+    deleted();
+    await expect(result).resolves.toMatchObject({ kind: 'ok', task: { state: 'Cancelled' } });
+    expect(test.untrack.mock.calls.every(([id]) => id === '53')).toBe(true);
+    expect(test.startTask).not.toHaveBeenCalled();
+    expect(test.steer).not.toHaveBeenCalled();
+    expect(test.resume).not.toHaveBeenCalled();
+  });
+
+  it('deletes a completed attention session without cancelling its old invocation', async () => {
+    const store = {
+      ...idleStore(),
+      getControlTarget: vi.fn(async () => ({ ...controlTarget, invocationId: '' })),
+    };
+    const test = harness(store, undefined, { ...controlTask, state: 'NeedsAttention' });
+    await expect(test.dispatcher.control('42', { action: 'cancel' }))
+      .resolves.toMatchObject({ kind: 'ok', task: { state: 'Cancelled' } });
+    expect(test.cancel).not.toHaveBeenCalled();
+    expect(test.deleteSession).toHaveBeenCalledWith('session-1');
+  });
+
+  it.each(['crashed', 'idle_expired', 'done', 'cancelled', 'idle'] as const)(
+    'cancels attention after recorded session end %s without contacting another runtime', async (latestSessionEndReason) => {
+      const test = harness(idleStore(), undefined, { ...controlTask, state: 'NeedsAttention', latestSessionEndReason });
+      await expect(test.dispatcher.control('42', { action: 'cancel' }))
+        .resolves.toMatchObject({ kind: 'ok', task: { state: 'Cancelled' } });
+      expect(test.clientFor).not.toHaveBeenCalled();
+    },
+  );
+
+  it('refuses attention cancellation when its runtime is unknown, even with an open PR', async () => {
+    const store = idleStore();
+    vi.mocked(store.getRuntimeVersion).mockResolvedValue({
+      sandboxSessionId: '53', foundrySessionId: 'session-1', sessionStatus: 'Ended', latestTurnId: '71',
+    });
+    const test = harness(store, undefined, {
+      ...controlTask, state: 'NeedsAttention', latestSessionEndReason: null,
+      pullRequest: { number: 3, url: 'https://github.com/DanAakesen/jarvis-test-target/pull/3', state: 'open' },
+    });
+    await expect(test.dispatcher.control('42', { action: 'cancel' })).resolves.toEqual({
+      kind: 'unavailable', reason: 'No task runtime session or completed delivery evidence could be found',
+    });
+    expect(test.transition).not.toHaveBeenCalled();
+    expect(store.endTaskSessions).not.toHaveBeenCalled();
+    expect(test.clientFor).not.toHaveBeenCalled();
+  });
+
+  it('cancels pre-start attention with a trusted absent runtime without contacting a provider', async () => {
+    const runtime: TaskRuntimeVersion = {
+      sandboxSessionId: null, foundrySessionId: null, sessionStatus: null, latestTurnId: null,
+    };
+    const store = idleStore();
+    vi.mocked(store.getRuntimeVersion).mockResolvedValue(runtime);
+    const test = harness(store, undefined, {
+      ...controlTask, state: 'NeedsAttention', attemptCount: 3, latestSessionEndReason: null,
+    });
+
+    await expect(test.dispatcher.control('42', { action: 'cancel' }))
+      .resolves.toMatchObject({ kind: 'ok', task: { state: 'Cancelled' } });
+    expect(test.tasks.transition).toHaveBeenCalledWith(
+      '42', 'Cancelled', false, undefined, undefined, 'NeedsAttention', runtime,
+    );
+    expect(store.endTaskSessions).toHaveBeenCalledWith('42', 'Cancelled');
+    expect(test.clientFor).not.toHaveBeenCalled();
+    expect(test.untrack).not.toHaveBeenCalled();
+  });
+
+  it.each((['missing', 'session', 'foundry', 'status', 'turn'] as const).flatMap(
+    (field) => ([null, 'done'] as const).map((latestSessionEndReason) => ({ field, latestSessionEndReason })),
+  ))(
+    'rejects pre-start attention with $field runtime and end reason $latestSessionEndReason', async ({
+      field, latestSessionEndReason,
+    }) => {
+      const store = idleStore();
+      vi.mocked(store.getRuntimeVersion).mockResolvedValue(field === 'missing' ? null : {
+        sandboxSessionId: field === 'session' ? '53' : null,
+        foundrySessionId: field === 'foundry' ? 'session-1' : null,
+        sessionStatus: field === 'status' ? 'Ended' : null,
+        latestTurnId: field === 'turn' ? '71' : null,
+      });
+      const test = harness(store, undefined, {
+        ...controlTask, state: 'NeedsAttention', latestSessionEndReason,
+      });
+
+      await expect(test.dispatcher.control('42', { action: 'cancel' }))
+        .resolves.toMatchObject({ kind: field === 'missing' ? 'invalid-transition' : 'unavailable' });
+      expect(test.tasks.transition).not.toHaveBeenCalled();
+      expect(store.endTaskSessions).not.toHaveBeenCalled();
+      expect(test.clientFor).not.toHaveBeenCalled();
+      expect(test.untrack).not.toHaveBeenCalled();
+    },
+  );
+
+  it('rejects pre-start attention when a live target does not match captured absence', async () => {
+    const store = { ...idleStore(), getControlTarget: vi.fn(async () => controlTarget) };
+    vi.mocked(store.getRuntimeVersion).mockResolvedValue({
+      sandboxSessionId: null, foundrySessionId: null, sessionStatus: null, latestTurnId: null,
+    });
+    const test = harness(store, undefined, {
+      ...controlTask, state: 'NeedsAttention', latestSessionEndReason: null,
+    });
+
+    await expect(test.dispatcher.control('42', { action: 'cancel' }))
+      .resolves.toMatchObject({ kind: 'invalid-transition' });
+    expect(test.tasks.transition).not.toHaveBeenCalled();
+    expect(store.endTaskSessions).not.toHaveBeenCalled();
+    expect(test.clientFor).not.toHaveBeenCalled();
+  });
+
+  it('refuses attention cancellation while a policy merge is pending', async () => {
+    const store = {
+      ...idleStore(),
+      getControlTarget: vi.fn(async () => controlTarget),
+      hasPendingProjectPolicyMerge: vi.fn(async () => true),
+    };
+    const test = harness(store, undefined, { ...controlTask, state: 'NeedsAttention' });
+    await expect(test.dispatcher.control('42', { action: 'cancel' })).resolves.toMatchObject({ kind: 'invalid-transition' });
+    expect(test.cancel).not.toHaveBeenCalled();
+    expect(test.transition).not.toHaveBeenCalled();
+    expect(store.endTaskSessions).not.toHaveBeenCalled();
+    expect(test.deleteSession).not.toHaveBeenCalled();
+  });
+
+  it.each(['cancel', 'end', 'delete'] as const)('reports attention %s failure without false success', async (failure) => {
+    const onError = vi.fn();
+    const store = { ...idleStore(), getControlTarget: vi.fn(async () => controlTarget) };
+    const test = harness(store, undefined, { ...controlTask, state: 'NeedsAttention' }, { onError });
+    const error = new Error('synthetic cleanup failure');
+    if (failure === 'cancel') test.cancel.mockRejectedValue(error);
+    if (failure === 'end') vi.mocked(store.endTaskSessions).mockRejectedValue(error);
+    if (failure === 'delete') test.deleteSession.mockRejectedValue(error);
+    await expect(test.dispatcher.control('42', { action: 'cancel' })).resolves.toEqual({
+      kind: 'failed',
+      reason: failure === 'cancel'
+        ? 'Task runtime could not be reached to cancel the active invocation'
+        : 'Task is Cancelled, but sandbox cleanup could not be completed',
+    });
+    if (failure === 'cancel') {
+      expect(test.transition).not.toHaveBeenCalled();
+      expect(store.endTaskSessions).not.toHaveBeenCalled();
+      expect(test.deleteSession).not.toHaveBeenCalled();
+    } else {
+      expect(test.deleteSession).toHaveBeenCalledWith('session-1');
+      expect(onError).toHaveBeenCalledWith(error);
+    }
+  });
+
+  it.each(['running', 'queued', 'cancelling', 'unknown', 'failed', 'completed', 'needs_attention'] as const)(
+    'refuses a non-cancelled attention acknowledgement (%s)', async (status) => {
+      const store = { ...idleStore(), getControlTarget: vi.fn(async () => controlTarget) };
+      const test = harness(store, undefined, { ...controlTask, state: 'NeedsAttention' });
+      vi.mocked(test.clientFor().cancel).mockResolvedValue({ invocationId: 'invocation-1', status });
+      await expect(test.dispatcher.control('42', { action: 'cancel' })).resolves.toMatchObject({ kind: 'failed' });
+      expect(test.transition).not.toHaveBeenCalled();
+      expect(store.endTaskSessions).not.toHaveBeenCalled();
+      expect(test.deleteSession).not.toHaveBeenCalled();
+    },
+  );
+
+  it('refuses an acknowledgement for a different invocation', async () => {
+    const store = { ...idleStore(), getControlTarget: vi.fn(async () => controlTarget) };
+    const test = harness(store, undefined, { ...controlTask, state: 'NeedsAttention' });
+    test.cancel.mockResolvedValue({ invocationId: 'unrelated-invocation', status: 'cancelled' });
+    await expect(test.dispatcher.control('42', { action: 'cancel' })).resolves.toMatchObject({ kind: 'failed' });
+    expect(test.transition).not.toHaveBeenCalled();
+    expect(test.deleteSession).not.toHaveBeenCalled();
+  });
+
+  it('rechecks the owned attention invocation under the policy lock', async () => {
+    let locked = false;
+    const current = { ...controlTarget, invocationId: 'current-invocation' };
+    const store = {
+      ...idleStore(),
+      getControlTarget: vi.fn(async () => locked ? current : controlTarget),
+      withTaskPolicyLock: async <T>(_taskId: string, operation: () => Promise<T>): Promise<T> => {
+        locked = true;
+        try { return await operation(); }
+        finally { locked = false; }
+      },
+    };
+    const test = harness(store, undefined, { ...controlTask, state: 'NeedsAttention' });
+    test.cancel.mockImplementation(async (invocationId) => {
+      expect(locked).toBe(true);
+      return { invocationId, status: 'cancelled' };
+    });
+    await expect(test.dispatcher.control('42', { action: 'cancel' })).resolves.toMatchObject({ kind: 'ok' });
+    expect(test.cancel.mock.calls).toEqual([['current-invocation']]);
+    expect(test.deleteSession.mock.calls).toEqual([['session-1']]);
+  });
+
+  it('does not cancel a target belonging to another task', async () => {
+    const store = { ...idleStore(), getControlTarget: vi.fn(async () => ({ ...controlTarget, taskId: '99' })) };
+    const test = harness(store, undefined, { ...controlTask, state: 'NeedsAttention' });
+    await expect(test.dispatcher.control('42', { action: 'cancel' })).resolves.toMatchObject({ kind: 'unavailable' });
+    expect(test.cancel).not.toHaveBeenCalled();
+    expect(test.transition).not.toHaveBeenCalled();
+    expect(test.deleteSession).not.toHaveBeenCalled();
+  });
+
+  it('rejects attention cancellation when its state changes before the policy lock', async () => {
+    const store = { ...idleStore(), getControlTarget: vi.fn(async () => controlTarget) };
+    const test = harness(store, undefined, { ...controlTask, state: 'NeedsAttention' });
+    vi.mocked(test.tasks.get)
+      .mockResolvedValueOnce({ ...controlTask, state: 'NeedsAttention', events: [], usage: [] })
+      .mockResolvedValue({ ...controlTask, state: 'Running', events: [], usage: [] });
+    await expect(test.dispatcher.control('42', { action: 'cancel' })).resolves.toMatchObject({ kind: 'invalid-transition' });
+    expect(test.cancel).not.toHaveBeenCalled();
+    expect(test.transition).not.toHaveBeenCalled();
+    expect(test.deleteSession).not.toHaveBeenCalled();
+  });
+
+  it('does not end or delete a replacement session after the cancellation wait', async () => {
+    const store = {
+      ...idleStore(),
+      getControlTarget: vi.fn(async () => controlTarget),
+    };
+    const test = harness(store, undefined, { ...controlTask, state: 'NeedsAttention' });
+    test.cancel.mockImplementation(async (invocationId) => {
+      store.getControlTarget.mockResolvedValue({ ...controlTarget, sandboxSessionId: '99', foundrySessionId: 'replacement' });
+      return { invocationId, status: 'cancelled' };
+    });
+    await expect(test.dispatcher.control('42', { action: 'cancel' })).resolves.toMatchObject({ kind: 'invalid-transition' });
+    expect(test.transition).not.toHaveBeenCalled();
+    expect(store.endTaskSessions).not.toHaveBeenCalled();
+    expect(test.deleteSession).not.toHaveBeenCalled();
+  });
+
+  it('requires the attention state atomically at transition and does not clean up if recovery won', async () => {
+    const store = { ...idleStore(), getControlTarget: vi.fn(async () => controlTarget) };
+    const test = harness(store, undefined, { ...controlTask, state: 'NeedsAttention' });
+    vi.mocked(test.tasks.transition).mockResolvedValue({ kind: 'invalid-transition' });
+    await expect(test.dispatcher.control('42', { action: 'cancel' })).resolves.toMatchObject({ kind: 'invalid-transition' });
+    expect(test.tasks.transition).toHaveBeenCalledWith('42', 'Cancelled', false, undefined, undefined, 'NeedsAttention', {
+      sandboxSessionId: '53', foundrySessionId: 'session-1', latestTurnId: '71', sessionStatus: 'Active',
+    });
+    expect(store.endTaskSessions).not.toHaveBeenCalled();
+    expect(test.deleteSession).not.toHaveBeenCalled();
+  });
+
+  it.each(['missing', 'session', 'runtime', 'status', 'turn'] as const)(
+    'rejects an incoherent attention snapshot (%s) before runtime side effects', async (change) => {
+      const store = { ...idleStore(), getControlTarget: vi.fn(async () => controlTarget) };
+      vi.mocked(store.getRuntimeVersion).mockResolvedValue(change === 'missing' ? null : {
+        sandboxSessionId: change === 'session' ? '99' : '53',
+        foundrySessionId: change === 'runtime' ? 'replacement' : 'session-1',
+        sessionStatus: change === 'status' ? 'Ended' : 'Active',
+        latestTurnId: change === 'turn' ? '100' : '71',
+      });
+      const test = harness(store, undefined, { ...controlTask, state: 'NeedsAttention' });
+      await expect(test.dispatcher.control('42', { action: 'cancel' }))
+        .resolves.toMatchObject({ kind: 'invalid-transition' });
+      expect(test.cancel).not.toHaveBeenCalled();
+      expect(test.transition).not.toHaveBeenCalled();
+      expect(store.endTaskSessions).not.toHaveBeenCalled();
+      expect(test.deleteSession).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(['Starting', 'Active', 'Idle'] as const)(
+    'rejects an absent control target if its captured runtime is still %s', async (sessionStatus) => {
+      const store = idleStore();
+      vi.mocked(store.getRuntimeVersion).mockResolvedValue({
+        sandboxSessionId: '99', foundrySessionId: 'replacement', sessionStatus, latestTurnId: '100',
+      });
+      const test = harness(store, undefined, {
+        ...controlTask, state: 'NeedsAttention', latestSessionEndReason: 'idle_expired',
+      });
+      await expect(test.dispatcher.control('42', { action: 'cancel' }))
+        .resolves.toMatchObject({ kind: 'invalid-transition' });
+      expect(test.clientFor).not.toHaveBeenCalled();
+      expect(test.transition).not.toHaveBeenCalled();
+      expect(store.endTaskSessions).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(['pause', 'resume', 'steer'] as const)('does not enable %s for an active attention task', async (action) => {
+    const store = { ...idleStore(), getControlTarget: vi.fn(async () => controlTarget) };
+    const test = harness(store, undefined, { ...controlTask, state: 'NeedsAttention' });
+    await expect(test.dispatcher.control('42', action === 'steer' ? { action, message: 'Synthetic' } : { action }))
+      .resolves.toMatchObject({ kind: 'invalid-transition' });
+    expect(test.clientFor).not.toHaveBeenCalled();
+    expect(test.transition).not.toHaveBeenCalled();
   });
 
   it('serializes running-task cancellation with project-policy merges', async () => {

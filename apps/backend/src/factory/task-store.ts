@@ -123,6 +123,13 @@ export type TaskModelUpdateResult =
   | { kind: 'not-found' }
   | { kind: 'not-ready' };
 
+export interface TaskRuntimeVersion {
+  sandboxSessionId: string | null;
+  foundrySessionId: string | null;
+  sessionStatus: 'Starting' | 'Active' | 'Idle' | 'Ended' | 'Crashed' | null;
+  latestTurnId: string | null;
+}
+
 export interface TaskStore {
   create(input: CreateTaskInput): Promise<TaskRecord | null>;
   findActiveByIssue?(projectId: string, issueNumber: number): Promise<TaskRecord | null>;
@@ -140,6 +147,8 @@ export interface TaskStore {
     completionVerified?: boolean,
     eventReason?: string,
     eventSummary?: string,
+    expectedState?: TaskState,
+    expectedRuntime?: TaskRuntimeVersion,
   ): Promise<TaskTransitionResult>;
   withNoActiveTasks<T>(operation: () => Promise<T>): Promise<ActiveTaskGuardResult<T>>;
   /** Persist the timeline and activity entries atomically, then publish the committed event. */

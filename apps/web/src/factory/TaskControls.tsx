@@ -119,25 +119,6 @@ export function TaskControls({
   if (state === 'PauseRequested') {
     return <p className="task-control-feedback" role="status">Pausing… The current turn is stopping.</p>;
   }
-  if (state === 'NeedsAttention' && (continueExpiredSession || recoverCrashedTask)) {
-    return (
-      <div className="task-controls">
-        <div className="action-row">
-          <button className="secondary-button" type="button" disabled={busy !== null}
-            onClick={() => void run('recover')}>
-            {busy === 'recover'
-              ? continueExpiredSession ? 'Continuing…' : 'Recovering…'
-              : continueExpiredSession ? 'Continue' : 'Recover'}
-          </button>
-        </div>
-        {error && <p className="task-control-error" role="alert">{error}</p>}
-        {feedback && <p className="task-control-feedback" role="status" aria-live="polite">{feedback}</p>}
-      </div>
-    );
-  }
-  if (state === 'NeedsAttention') {
-    return null;
-  }
   if (state === 'Done' || state === 'Cancelled') {
     return null;
   }
@@ -145,6 +126,14 @@ export function TaskControls({
   return (
     <div className="task-controls">
       <div className="action-row">
+        {state === 'NeedsAttention' && (continueExpiredSession || recoverCrashedTask) && (
+          <button className="secondary-button" type="button" disabled={busy !== null}
+            onClick={() => void run('recover')}>
+            {busy === 'recover'
+              ? continueExpiredSession ? 'Continuing…' : 'Recovering…'
+              : continueExpiredSession ? 'Continue' : 'Recover'}
+          </button>
+        )}
         {state === 'Running' && (
           <>
             {continueExpiredSession && (

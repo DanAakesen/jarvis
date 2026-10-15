@@ -13,6 +13,7 @@ const allowed: readonly [TaskState, TaskState][] = [
   ['Paused', 'Running'],
   ['Paused', 'Cancelled'],
   ['NeedsAttention', 'Running'],
+  ['NeedsAttention', 'Cancelled'],
 ];
 
 describe('task lifecycle', () => {

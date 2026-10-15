@@ -221,7 +221,6 @@
   --motion-ambient: 0ms;
 }
 :root[data-motion="reduced"] .app-shell::before,
-:root[data-motion="reduced"] .topbar-working-mark,
 :root[data-motion="reduced"] .topbar-status-mark,
 :root[data-motion="reduced"] .activity-running::before,
 :root[data-motion="reduced"] .workspace-window-jarvis-updating::after,
@@ -367,7 +366,7 @@ a:focus-visible { outline: 3px solid var(--focus); outline-offset: 5px; }
   border-bottom: 1px solid var(--rule);
   transition: background-color var(--motion-panel) var(--ease-standard), border-color var(--motion-panel) var(--ease-standard);
 }
-.topbar-context { display: flex; min-width: 0; align-items: center; gap: 12px; color: var(--text-muted); }
+.topbar-context { display: flex; flex: 0 0 auto; min-width: 0; align-items: center; gap: 12px; color: var(--text-muted); }
 .brand { display: inline-flex; align-items: center; min-height: 44px; font-size: 20px; font-weight: 650; text-decoration: none; color: var(--text); }
 .brand:hover { text-decoration: underline; }
 .topbar-area-label, .topbar-page-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -375,30 +374,6 @@ a:focus-visible { outline: 3px solid var(--focus); outline-offset: 5px; }
 .topbar-capture-menu { display: contents; }
 .topbar-capture-menu > summary, .topbar-capture-guidance { display: none; }
 .topbar-capture-controls { display: flex; align-items: center; gap: 8px; }
-.topbar-working {
-  display: inline-flex;
-  flex: 0 1 auto;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-  min-height: 34px;
-  padding: 0 12px;
-  border-radius: var(--radius-pill);
-  background: var(--disabled-surface);
-  color: var(--text);
-  font-size: var(--type-caption);
-  font-weight: 650;
-  white-space: nowrap;
-}
-.topbar-working-compact { display: none; }
-.topbar-working-mark {
-  width: 8px;
-  height: 8px;
-  flex: 0 0 auto;
-  border-radius: var(--radius-pill);
-  background: var(--state-listening);
-  animation: working-pulse 1.8s ease-in-out infinite;
-}
 @keyframes working-pulse {
   50% { opacity: .48; transform: scale(.8); }
 }
@@ -1693,10 +1668,6 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
   .settings-link { min-height: 44px; gap: 4px; padding-inline: 6px; font-size: 12px; }
   .settings-link svg { width: 17px; height: 17px; }
   .topbar-icon-button, .settings-link { width: 44px; min-width: 44px; }
-  .topbar-working { min-height: 32px; padding-inline: 8px; }
-  .topbar-working-wide { display: none; }
-  .topbar-working-compact { display: none; }
-  .topbar-working { min-width: 32px; padding-inline: 8px; }
   .topbar-status { width: 32px; min-width: 32px; justify-content: center; padding: 0; }
   .topbar-status-text { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
   .workspace[data-phone="true"] { display: flex; height: 100%; min-height: 0; flex-direction: column; gap: var(--space-2); padding: var(--space-3); }
@@ -1798,7 +1769,7 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
     --motion-state: var(--motion-fade);
     --motion-panel: var(--motion-fade);
   }
-  .app-shell::before, .topbar-working-mark, .topbar-status-mark, .activity-running::before, .workspace-window-jarvis-updating::after,
+  .app-shell::before, .topbar-status-mark, .activity-running::before, .workspace-window-jarvis-updating::after,
   .more-menu-list, .more-menu-flyout, .voice-status-glyph * { animation: none !important; }
   .workspace-tab { animation: none; transition: none; }
   .workspace-window { transition: none; transform: none; }
@@ -2655,18 +2626,19 @@ a.task-chip:hover { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--glass-e
 /* Chrome-style tab strip (Dan, 7 October): every window is a tab, then one tab per background job. Tabs share the
    room and shrink to a minimum before trimming their titles, so the strip never overflows into the controls. */
 .app-topbar .window-tabstrip { position: relative; display: flex; flex: 1 1 auto; min-width: 0; height: 40px; margin: 0 var(--space-3); align-items: center; gap: 6px; }
-.app-topbar .window-tabstrip .window-tabbar { flex: 0 1 auto; min-width: 0; margin: 0; }
-.app-topbar .window-tabbar .workspace-tabs { flex-wrap: nowrap; min-width: 0; overflow-x: auto; }
-.window-tabstrip .workspace-tab-item { flex: 0 0 auto; min-width: 140px; max-width: 240px; }
+.app-topbar .window-tabstrip .window-tabbar { flex: 1 1 auto; min-width: 0; margin: 0; }
+.app-topbar .window-tabstrip .workspace-tabs { flex: 1 1 auto; width: 100%; flex-wrap: nowrap; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+.window-tabstrip .workspace-tab-item { flex: 0 1 240px; min-width: 140px; max-width: 240px; }
 .window-tabstrip .workspace-tab { flex: 1 1 auto; min-width: 0; }
 .window-tabstrip .workspace-tab span { min-width: 0; max-width: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .job-tabs { position: relative; display: flex; flex: 0 1 auto; min-width: 0; gap: 6px; }
+.job-tab-list { display: flex; flex: 1 1 auto; min-width: 0; gap: 6px; overflow-x: auto; overflow-y: hidden; padding: 2px; scrollbar-width: none; }
 .job-tab .workspace-tab { padding-right: 12px; border-radius: 6px; }
 .job-tab .jobs-ring, .job-tab .jobs-mark { width: 16px; height: 16px; }
 .job-tab[data-tone="running"] { background: color-mix(in srgb, var(--glass-edge-cool) 12%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--glass-edge-cool) 40%, transparent); }
 .job-tab[data-tone="failed"] { background: color-mix(in srgb, var(--warning) 18%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--warning) 55%, transparent); }
 .job-tab[data-tone="done"] { background: color-mix(in srgb, var(--success) 16%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--success) 55%, transparent); animation: jobs-ready 1.4s var(--ease-enter) 2; }
-.job-tabs .jobs-popover { left: 0; right: auto; }
+.job-tabs .jobs-popover { left: auto; right: 0; }
 @media (prefers-reduced-motion: reduce) { .job-tab[data-tone="done"] { animation: none; } }
 
 /* Sharp screens (Dan's 1.9× display, 7 October): hairline rims are drawn finer there, so they get more light and
@@ -2948,9 +2920,10 @@ a.task-chip:hover { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--glass-e
   backdrop-filter: blur(16px) saturate(1.3); animation: mobile-drop 320ms var(--ease-enter) both;
 }
 .app-shell[data-phone="true"][data-windows-open="true"] :is(.window-tabbar, .workspace-tabs) { display: flex; width: 100%; height: auto; flex-direction: column; gap: 4px; overflow: visible; }
-.app-shell[data-phone="true"][data-windows-open="true"] .workspace-tab-item { width: 100%; max-width: none; }
+.app-shell[data-phone="true"][data-windows-open="true"] .workspace-tab-item { flex: 0 0 auto; width: 100%; max-width: none; height: 44px; padding: 0; }
 .app-shell[data-phone="true"][data-windows-open="true"] .workspace-tab { width: 100%; max-width: none; min-height: 44px; justify-content: flex-start; }
 .app-shell[data-phone="true"][data-windows-open="true"] .workspace-tab span { max-width: none; }
+.app-shell[data-phone="true"][data-windows-open="true"] :is(.job-tabs, .job-tab-list) { width: 100%; flex-direction: column; overflow: visible; }
 .mobile-windows-button { display: grid; place-items: center; }
 .mobile-windows-count { display: grid; min-width: 24px; height: 22px; padding: 0 6px; place-items: center; border-radius: 7px;
   box-shadow: inset 0 0 0 1.5px currentColor, 3px -3px 0 -1.5px color-mix(in srgb, currentColor 55%, transparent); font-size: 12px; font-weight: 700; }

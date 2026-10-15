@@ -68,6 +68,182 @@ function heartbeat(): SandboxHeartbeat {
 }
 
 describe('dispatcher SQL coordination', () => {
+  it.each(['unchanged', 'first-session'] as const)(
+    'guards pre-start attention cancellation against an %s runtime', async (runtimeChange) => {
+      const events = createEventHub<TaskEventMessage>();
+      const tasks = createTaskStore(pool, events);
+      const sessions = createDispatcherStore(pool, events);
+      const task = await createTask(events, 'Failed before recording a session');
+      const owner = randomUUID();
+      const transition = tasks.transition.bind(tasks);
+      const transitionSpy = vi.spyOn(tasks, 'transition');
+      const endSessions = vi.spyOn(sessions, 'endTaskSessions');
+      const client = {
+        startTask: vi.fn(), steer: vi.fn(), pause: vi.fn(), resume: vi.fn(), status: vi.fn(),
+        cancel: vi.fn(async (invocationId: string) => ({ invocationId, status: 'cancelled' as const })),
+        deleteSession: vi.fn(async () => {}),
+      };
+      const clientFor = vi.fn(() => client);
+      const dispatcher = new TaskDispatcher(sessions, tasks, settings(), clientFor, heartbeat(), events);
+      try {
+        const claim = await sessions.claimNext(owner, 120, 3);
+        if (claim.kind !== 'claimed') throw new Error('Pre-start task was not claimed');
+        expect(claim.task.taskId).toBe(task.id);
+        await sessions.failStart(owner, claim.task, null, 'synthetic_prestart_failure');
+        expect(await tasks.get(task.id, 1, 0)).toMatchObject({
+          state: 'NeedsAttention', latestSessionEndReason: null,
+        });
+        const absent = {
+          sandboxSessionId: null, foundrySessionId: null, sessionStatus: null, latestTurnId: null,
+        };
+        expect(await sessions.getRuntimeVersion(task.id)).toEqual(absent);
+        expect(await sessions.getControlTarget(task.id)).toBeNull();
+        const publish = vi.spyOn(events, 'publish');
+        const foundryId = `first-runtime-${randomUUID()}`;
+        const invocationId = `first-invocation-${randomUUID()}`;
+        if (runtimeChange === 'first-session') {
+          transitionSpy.mockImplementationOnce(async (...args) => {
+            expect(args[6]).toEqual(absent);
+            const recovery = await createTaskRecoveryStore(pool, events).claimRecovery(task.id, owner, 120);
+            if (recovery.kind !== 'claimed') throw new Error('Pre-start recovery was not claimed');
+            await sessions.recordStarted(owner, recovery.task, 'jarvis-runner-base-1x2', {
+              sessionId: foundryId, invocationId,
+            });
+            expect((await transition(task.id, 'NeedsAttention')).kind).toBe('ok');
+            publish.mockClear();
+            return transition(...args);
+          });
+          await expect(dispatcher.control(task.id, { action: 'cancel' }))
+            .resolves.toMatchObject({ kind: 'invalid-transition' });
+          expect(await tasks.get(task.id, 1, 0)).toMatchObject({ state: 'NeedsAttention' });
+          expect(await sessions.getRuntimeVersion(task.id)).toMatchObject({
+            foundrySessionId: foundryId, sessionStatus: 'Active',
+          });
+          expect((await sessions.getControlTarget(task.id))?.invocationId).toBe(invocationId);
+          expect(endSessions).not.toHaveBeenCalled();
+          expect(clientFor).not.toHaveBeenCalled();
+          expect(publish).not.toHaveBeenCalled();
+          const cancelledEvents = await pool.request().input('taskId', sql.BigInt, BigInt(task.id))
+            .query(`SELECT id FROM dbo.task_events WHERE task_id = @taskId
+              AND type = N'state_changed' AND JSON_VALUE(payload, '$.to') = N'Cancelled';`);
+          expect(cancelledEvents.recordset).toEqual([]);
+        }
+
+        await expect(dispatcher.control(task.id, { action: 'cancel' }))
+          .resolves.toMatchObject({ kind: 'ok', task: { state: 'Cancelled' } });
+        expect(await tasks.get(task.id, 1, 0)).toMatchObject({ state: 'Cancelled' });
+        if (runtimeChange === 'unchanged') {
+          expect(await sessions.getRuntimeVersion(task.id)).toEqual(absent);
+          expect(clientFor).not.toHaveBeenCalled();
+        } else {
+          expect(client.cancel).toHaveBeenCalledExactlyOnceWith(invocationId);
+          expect(client.deleteSession).toHaveBeenCalledExactlyOnceWith(foundryId);
+          expect(await sessions.getRuntimeVersion(task.id)).toMatchObject({
+            foundrySessionId: foundryId, sessionStatus: 'Ended',
+          });
+        }
+        expect(publish).toHaveBeenCalledWith(expect.objectContaining({
+          taskId: task.id, type: 'state_changed', payload: { from: 'NeedsAttention', to: 'Cancelled' },
+        }));
+      } finally {
+        transitionSpy.mockRestore();
+        await sessions.endTaskSessions(task.id, 'Cancelled');
+        await tasks.transition(task.id, 'Cancelled');
+      }
+    },
+  );
+
+  it.each(['Active', 'completed', 'Idle', 'absent'] as const)(
+    'rejects recovered runtime ABA after capturing a %s attention target', async (initial) => {
+      const events = createEventHub<TaskEventMessage>();
+      const tasks = createTaskStore(pool, events);
+      const sessions = createDispatcherStore(pool, events);
+      const task = await createTask(events, 'Attention runtime generation guard');
+      try {
+        expect((await tasks.transition(task.id, 'Running')).kind).toBe('ok');
+        expect((await tasks.transition(task.id, 'NeedsAttention')).kind).toBe('ok');
+        const original = await pool.request()
+          .input('taskId', sql.BigInt, BigInt(task.id))
+          .input('status', sql.NVarChar(8), initial === 'absent' ? 'Ended' : initial === 'completed' ? 'Active' : initial)
+          .input('foundryId', sql.NVarChar(255), `old-attention-${randomUUID()}`)
+          .query<{ id: string }>(`UPDATE dbo.tasks SET branch = N'jarvis/attention-fixture' WHERE id = @taskId;
+            INSERT dbo.sandbox_sessions (task_id, foundry_session_id, agent_version, agent_name, size, image, status, started_at)
+            OUTPUT CAST(inserted.id AS varchar(19)) AS id
+            VALUES (@taskId, @foundryId, N'1', N'jarvis-runner-base-1x2', N'1x2', N'fixture', @status,
+              DATEADD(minute, -2, SYSUTCDATETIME()));`);
+        const originalId = original.recordset[0]?.id;
+        if (!originalId) throw new Error('Attention session fixture was not created');
+        await pool.request()
+          .input('sessionId', sql.BigInt, BigInt(originalId))
+          .input('status', sql.NVarChar(32), initial === 'Active' ? 'running' : 'completed')
+          .query(`INSERT dbo.sandbox_turns (sandbox_session_id, invocation_id, mode, acp_session_id, status)
+            VALUES (@sessionId, N'old-invocation', N'task', N'fixture-acp', @status);`);
+        const expected = await sessions.getRuntimeVersion(task.id);
+        if (!expected) throw new Error('Attention runtime snapshot was not read');
+        const target = await sessions.getControlTarget(task.id);
+        expect(target?.sandboxSessionId ?? null).toBe(initial === 'absent' ? null : originalId);
+        if (target) expect(target.latestTurnId).toBe(expected.latestTurnId);
+
+        await pool.request().input('sessionId', sql.BigInt, BigInt(originalId))
+          .query(`INSERT dbo.sandbox_turns (sandbox_session_id, invocation_id, mode, acp_session_id, status)
+            VALUES (@sessionId, N'new-completed-turn', N'task', N'fixture-acp', N'completed');`);
+        await expect(tasks.transition(task.id, 'Cancelled', false, undefined, undefined, 'NeedsAttention', expected))
+          .resolves.toEqual({ kind: 'invalid-transition' });
+        const beforeRecovery = await sessions.getRuntimeVersion(task.id);
+        if (!beforeRecovery) throw new Error('Updated attention runtime snapshot was not read');
+        // Crash cleanup preserves completed Active sessions; account for this completed turn instead.
+        expect(await sessions.endTaskSessions(task.id, 'NeedsAttention', true))
+          .toEqual(initial === 'Active' || initial === 'completed' ? [originalId] : []);
+        const recoverable = await sessions.getRuntimeVersion(task.id);
+        expect(recoverable).toEqual({
+          ...beforeRecovery, sessionStatus: initial === 'Idle' ? 'Idle' : 'Ended',
+        });
+        expect((await tasks.get(task.id, 1, 0))?.state).toBe('NeedsAttention');
+        const owner = randomUUID();
+        const recovery = await createTaskRecoveryStore(pool, events).claimRecovery(task.id, owner, 120);
+        if (recovery.kind !== 'claimed') throw new Error(`Synthetic recovery claim was not acquired: ${recovery.kind}`);
+        expect((await tasks.get(task.id, 1, 0))?.state).toBe('Running');
+        const replacementId = await sessions.recordStarted(owner, recovery.task, 'jarvis-runner-base-1x2', {
+          sessionId: `replacement-attention-${randomUUID()}`, invocationId: `replacement-${randomUUID()}`,
+        });
+        expect(replacementId).not.toBe(originalId);
+        expect(await sessions.getRuntimeVersion(task.id)).toMatchObject({
+          sandboxSessionId: replacementId, sessionStatus: 'Active',
+        });
+        expect((await tasks.transition(task.id, 'NeedsAttention')).kind).toBe('ok');
+        const publish = vi.spyOn(events, 'publish');
+        await expect(tasks.transition(task.id, 'Cancelled', false, undefined, undefined, 'NeedsAttention', beforeRecovery))
+          .resolves.toEqual({ kind: 'invalid-transition' });
+        expect((await tasks.get(task.id, 1, 0))?.state).toBe('NeedsAttention');
+        expect((await sessions.getControlTarget(task.id))?.sandboxSessionId).toBe(replacementId);
+        expect(publish).not.toHaveBeenCalled();
+
+        const current = await sessions.getRuntimeVersion(task.id);
+        if (!current) throw new Error('Replacement attention runtime snapshot was not read');
+        await expect(tasks.transition(task.id, 'Cancelled', false, undefined, undefined, 'NeedsAttention', current))
+          .resolves.toMatchObject({ kind: 'ok', task: { state: 'Cancelled' } });
+      } finally {
+        await sessions.endTaskSessions(task.id, 'Cancelled');
+        await tasks.transition(task.id, 'Cancelled');
+      }
+    },
+  );
+
+  it('atomically refuses attention cancellation after recovery changed state', async () => {
+    const events = createEventHub<TaskEventMessage>();
+    const store = createTaskStore(pool, events);
+    const task = await createTask(events, 'Attention cancellation state guard');
+    expect((await store.transition(task.id, 'Running')).kind).toBe('ok');
+    expect((await store.transition(task.id, 'NeedsAttention')).kind).toBe('ok');
+    expect((await store.transition(task.id, 'Running')).kind).toBe('ok');
+    await expect(store.transition(task.id, 'Cancelled', false, undefined, undefined, 'NeedsAttention'))
+      .resolves.toEqual({ kind: 'invalid-transition' });
+    expect(await store.get(task.id, 1, 0)).toMatchObject({ state: 'Running' });
+    expect((await store.transition(task.id, 'NeedsAttention')).kind).toBe('ok');
+    await expect(store.transition(task.id, 'Cancelled', false, undefined, undefined, 'NeedsAttention'))
+      .resolves.toMatchObject({ kind: 'ok', task: { state: 'Cancelled' } });
+  });
+
   it.each(['Active', 'Ended'] as const)('exposes finishing delivery and cancels a completed turn in an %s session', async (sessionStatus) => {
     const events = createEventHub<TaskEventMessage>();
     const taskStore = createTaskStore(pool, events);
