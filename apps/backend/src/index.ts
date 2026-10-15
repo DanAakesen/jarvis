@@ -117,7 +117,6 @@ import { parsePhoneAllowlist } from './phone/caller.js';
 import { createImageGenerationModule } from './core/image-generation.js';
 import { WorkspaceArtifactStore } from './database/workspace-artifact-store.js';
 import { attachmentRetentionDays, ConversationAttachmentStore } from './database/conversation-attachment-store.js';
-import { startConversationAttachmentCleanupJob } from './core/conversation-attachment-cleanup.js';
 import { WorkspaceHtmlArtifactStore } from './database/workspace-html-artifact-store.js';
 import { createHtmlViewModule } from './core/html-view.js';
 import { createFolioModule } from './core/folio.js';
@@ -1105,16 +1104,6 @@ try {
             await job.fail('Re-embedding failed').catch(() => undefined);
             logger.warn(safeErrorFields(error), 'memory.embedding_backfill_failed');
           });
-          if (conversationAttachments) {
-            let stopAttachmentCleanup: (() => void) | undefined;
-            app.addHook('onClose', async () => { stopAttachmentCleanup?.(); });
-            app.addHook('onReady', async () => {
-              stopAttachmentCleanup = startConversationAttachmentCleanupJob(
-                conversationAttachments,
-                () => logger.warn('conversation_attachments.cleanup_failed'),
-              );
-            });
-          }
         activeEmbeddingReindex = { controller, pending };
         const clearActive = () => {
           if (activeEmbeddingReindex?.controller === controller) activeEmbeddingReindex = undefined;

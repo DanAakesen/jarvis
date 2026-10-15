@@ -49,6 +49,7 @@ import { recordIssueTaskProgress } from './factory/issues.js';
 import { WorkspaceCommandBroker } from './core/workspace-commands.js';
 import type { WorkspaceHtmlArtifactStore } from './database/workspace-html-artifact-store.js';
 import type { ConversationAttachmentStore } from './database/conversation-attachment-store.js';
+import { startConversationAttachmentCleanupJob } from './core/conversation-attachment-cleanup.js';
 import { createTaskStatusNotificationHandler } from './factory/task-status-notifications.js';
 import type { ModelDeploymentWorkflow } from './core/model-deployments.js';
 import {
@@ -306,6 +307,17 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
   app.decorate('usageStore', options.usageStore ?? null);
   app.decorate('conversationStore', options.conversationStore ?? null);
   app.decorate('conversationAttachments', options.conversationAttachments ?? null);
+  if (options.conversationAttachments) {
+    const store = options.conversationAttachments;
+    let stopAttachmentCleanup: (() => void) | undefined;
+    app.addHook('onClose', async () => { stopAttachmentCleanup?.(); });
+    app.addHook('onReady', async () => {
+      stopAttachmentCleanup = startConversationAttachmentCleanupJob(
+        store,
+        () => app.log.warn('conversation_attachments.cleanup_failed'),
+      );
+    });
+  }
   app.decorate('attachmentVision', options.attachmentVision ?? null);
   app.decorate('sandboxHeartbeat', options.sandboxHeartbeat ?? null);
   if (options.sandboxHeartbeat) {
