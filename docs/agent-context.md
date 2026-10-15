@@ -1,5 +1,164 @@
 # Agent context
 
+## Reviewed recovery correction (15 October 2026; V4g local and held)
+
+Preserve the pinned V1/V2 snapshots, Codex HOLD evidence and source-reviewed V3
+tree `7303f6e5`. V3 corrects the
+reproduced pending-recovery policy race using migration 0048's task/session
+generation, the existing policy lock, and an absent start lease. Both Done and
+the deferred approved merge compare proof/session/task generation. Failed start
+retains the new task generation; an old runtime cannot receive a fresh valid
+proof for it. Apply the additive migration before starting this backend.
+
+Local real-SQL execution reports missing isolated loopback SQL configuration;
+it is not a mock pass. Full backend types still report the existing missing
+multipart/image/PDF/health-upload dependencies. The migration manifest's existing
+POSIX-path-only assertion also fails on Windows and has not been weakened.
+Obtain exact-source Linux/SQL/build evidence through the normal gates.
+Do not reuse V2's 283-test receipt for changed V3 source.
+
+The signed-in overnight browser was read successfully through its existing
+canvas. Dan authorised workers, release and bounded live trials, then the next
+eligible board task after actual shutdown acceptance. Retain the specific Daily
+hold and Foundry 403 no-workaround rule. Do not call graceful cleanup a necessary
+condition for durable work to exist, or use a PR alone as current-execution and
+stopped-writer proof. V4 adds persisted successful-work and verified-provider-stop
+booleans for final cleanup-failed invocations. Only post-provider cleanup phases
+qualify, and ordinary generation/GitHub/policy checks still apply. Failed work,
+unknown teardown, legacy/malformed markers, cancelled/nonterminal status and
+idle expiry stay ineligible. Runner failure remains visible. Source review,
+actual SQL/Linux/build/release and fresh live acceptance remain required.
+
+V4b's independent review held its generic-completed-outcome work marker: actual
+no-commit question turns share that outcome. V4c's marker must originate in the
+verified delivery-work branch, including an actual-worker delayed question
+publication-failure control. The backend also rejects question-bearing snapshots.
+Keep the held V4b evidence and do not publish it.
+
+V4c corrected that question-only finding and passed 142 offline runner controls
+with 11 POSIX skips, but its source review remains HOLD: a local commit was not
+bound to the published PR. V4d records `work_commit_sha`, verifies that exact
+remote branch/PR head on all delivery paths, and compares the proof commit with
+the policy candidate under the shared SQL lock, including deferred approval.
+Both clean and cleanup-failed completion require the binding. Legacy unbound
+snapshots remain readable but cannot authorise new Done/merge; obtain fresh
+verified runtime work rather than backfilling old events. Completed unbound
+invocations receive explicit verification attention, not invented runner
+failure. Preserve all held snapshots and receipts. Fresh pinned review and
+normal actual SQL/Linux/build/release/live gates remain required.
+
+V4d's source review confirmed commit binding but held the unverified-completion
+cleanup path: without an early completion event, it could persist a completed
+invocation as a crashed session and failed turn. V4e passes observed completion
+to both explicit attention cleanup and its concurrent state-change subscriber,
+without recording completion proof or invoking delivery. The task remains
+NeedsAttention and policy remains denied. Four offline controls reproduced the
+old flags; real-SQL controls assert session/turn status for heartbeat and
+reconciliation, including the subscriber race. SQL remains unexecuted locally.
+All eight focused backend suites passed 359 controls on owned Windows tooling;
+the three newly changed backend files passed lint. Full production types still
+fail on the same 12 missing-dependency/derivative diagnostics, not a build pass.
+Runner source is unchanged from V4d; its 198/11 qualified receipt is not a fresh
+Linux or full-source acceptance pass.
+
+V4e received SOURCE-ONLY PASS and was published as ready PR #856 at `dbfff31d`
+with tree `e7d02384`. Its automatic attempt-one CI `38816753978` genuinely
+passed full backend build, eight component jobs and the pinned Python step,
+but real SQL failed with error 468; aggregate CI correctly failed. CodeQL
+`38816754153` passed. JSON proof inherits the database-default collation,
+whereas `foundry_session_id` is explicitly binary-collated. V4f uses explicit
+`Latin1_General_100_BIN2` for proof-identity comparisons, retaining exact opaque
+IDs without changing database/schema collation. Added SQL controls reject
+case-only session/invocation mismatches. The same SQL batch also showed three
+rollback controls blocked by 0048's correctly enforced generation-retention
+guard: their shared fixture had already executed tasks. V4f gives those controls
+fresh disposable loopback databases and adds a real-SQL control for unused
+rollback versus retained used generations. No guard or stored generation is
+reset to make rollback succeed. Preserve the failed batch; no unchanged rerun
+or merge. Fresh source review and normal new-head SQL/CI acceptance remain
+required. V4f's eight local unit suites passed 359 tests and its three changed
+backend files passed lint; local production types still report the same 12
+missing-dependency/derivative errors. These are not real-SQL acceptance, and the
+local dependency limitation is separate from the genuine V4e full-build pass.
+
+Reviewed V4f2 was published exactly at `3ae3ff51`, tree `7aadc27d`. Automatic
+CI `38820033386` passed eight component jobs, including actual backend build
+and pinned Linux Python, but SQL remained failed: 210 passed / 9 failed / 219,
+zero skipped. CodeQL `38820033362` passed all four analyses. The binary-identity,
+generation/policy and all rollback controls passed; reconciliation tried to
+backdate a heartbeat before its session start, and another fixture mixed a
+JavaScript start time with SQL's end time. The pre-start cancellation test also
+attempted recovery from inside the cancellation policy lock that now excludes
+it. V4g changes fixtures only: use the existing dispatcher observation clock for
+staleness, one SQL clock for lifecycle timestamps, and exercise an absent-runtime
+SQL snapshot after legitimate recovery, then cancel through the dispatcher.
+Register fixtures before fallible inserts and cancel them in `finally` so an
+insertion failure cannot strand a Running capacity consumer. Production runtime,
+constraints, deadlines, migrations and all test cases remain. The other failed
+claims must still be observed passing in fresh exact-head SQL; source analysis
+is not that acceptance. No unchanged rerun, merge or release is authorised.
+
+The relocated V3 harness initially failed because deeper Windows fixture paths
+made Git clone exceed its path limit. A separate short-temp-path harness passed
+84 tests with 11 POSIX skips, without changing frozen source. Preserve that
+qualified evidence; do not reuse it as a V4 or Linux pass.
+
+## Factory failure-recovery follow-up (15 October 2026; local candidate)
+
+Exact normal release `5c5be688`/tree `326e8e3a` passed backend/agent/web release
+and required smoke, separately from the retained e17 runner image receipt.
+Task 18 then delivered the exact new artifact in test-target PR 5, but reported
+GitHub policy refusal and `ACPShutdownError` before remaining Running.
+Supported native cancellation reached Cancelled at 15:56:43.568Z. The 30.026s
+runner-epoch gap does not identify its hidden failed cleanup phase. Do not
+resubmit its fixture or relabel cancellation as automatic Done or physical
+deallocation.
+
+The separate exact-5c source candidate adds owned POSIX group teardown, safe
+phase diagnostics, existing read-token/PUT policy repair, and current-runtime
+completion proof before policy Done/merge. It also gives explicit runner failure
+precedence over early result events, immediately admits eligible ended sessions
+to reconciliation, and bounds finalization work. It does not change pins, identity
+grants, model settings, existing ACP phase limits or capacity. Migration 0048
+adds task/session execution generations. Existing nonterminal
+tasks without fresh backend proof remain held; no historical proof backfill.
+The original checkout, older snapshots and failed release/trial receipts stay
+unchanged.
+
+Focused Node tests use existing owned x64 Node 22.23.3/Vitest 5.0.2 tooling,
+not the pinned Linux toolchain. Local Python hashed restore is blocked by the
+Linux lock's missing pinned Windows pytest/colorama dependency; do not weaken
+hashes or install OS features. Linux real-child/procfs controls, real SQL
+policy-provenance regressions, full backend types/build and all normal
+automatic gates remain required. Local full backend types are blocked by
+missing existing multipart, image/PDF and health-upload dependencies, not a
+passed build. Read-only dependency reuse must not alter shared packages.
+
+The first candidate's seven focused backend suites passed 278 tests, with ESLint
+passing all 13 changed backend files. Revision two adds five backlog controls;
+use its exact manifest for final results, not the earlier candidate's counts.
+An actual-source AST harness reproduced the three unbounded
+released IO waits and passed nine candidate controls, including cancellation
+resistance, exhausted budgets, shared-deadline clamping and queued-turn ownership.
+This is synthetic IO on Windows Python 3.11.15, not full pytest, real SQL,
+Linux process or live provider proof. Full runner pytest cannot load the missing
+Azure dependency locally. A first 200ms shared-budget test mixed filesystem
+latency with IO deadlines; measured credential-file reading exhausted that budget
+before its gate started. IO tests retain their one-second terminal assertion and
+short IO caps; a separate no-filesystem test checks the shared deadline.
+
+Independent review of the revised frozen exact patch precedes publication.
+The first candidate stranded multi-batch work in three reproduced controls.
+Revision two adds stable task-ID keyset paging, idle follow-up for full batches,
+deferred rescan for expiry wakes, delayed SQL-error retry and stop handling.
+The real SQL selector/pagination controls still require normal SQL CI.
+
+After exact reviewed publication, one normal automatic gate/release batch and
+one genuinely new bounded Factory artifact trial are the acceptance path.
+Foundry 403 STOP, separate physical-proof qualification, Daily #724 hold and
+new-coaching exclusion remain. `/remote` remains unverified; do not launch a
+duplicate CLI or alter shared settings to claim otherwise.
+
 ## Backend attachment-cleanup startup correction (15 October 2026; local candidate)
 
 The exact `e17cbb0` normal deployment failed backend revision 322 readiness;

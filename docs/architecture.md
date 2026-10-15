@@ -1,5 +1,165 @@
 # Architecture
 
+## Delivery after verified writer stop (15 October 2026; V4g fixture successor, not released)
+
+Runner invocation metadata separately records successful work and successful
+owned-provider teardown as exact booleans, with the full verified local work
+commit in `work_commit_sha`. Local advancement alone is not published delivery.
+The backend requires that exact commit at the remote task branch and on every
+created, reused or reconciled PR before recording delivery. Legacy or malformed metadata supplies
+neither fact; no missing client, early result event or expiry supplies stop proof.
+Successful-work indication originates only in the actual verified delivery-work
+branch. A generic completed turn can instead be a no-commit question and does
+not establish work proof, even if question publication fails. The backend also
+rejects alternative proof containing a current-invocation question event.
+Provider stop still requires the owned process-group and reader checks.
+Credential, event-delivery or publisher failure can therefore leave the runner
+failed while its completed work and stopped writer remain independently known.
+
+The Foundry decoder validates optional lifecycle booleans and bounded allowlisted
+cleanup phases, discarding secondary diagnostic text. One shared completion-proof
+classifier serves heartbeat and stale reconciliation. Only final failed status,
+both positive facts and exclusively post-provider cleanup phases qualify for the
+alternative path. Cancelled/nonterminal states, failed work, failed or unknown
+provider stop, and missing phases remain ineligible. Both clean and cleanup-failed
+completion require positive work/stop facts and a valid commit identity.
+Legacy unbound snapshots remain readable but cannot authorise new completion.
+An unbound completed invocation reaches explicit verification attention rather
+than being labelled runner failure or polled indefinitely.
+Both direct attention cleanup and its state-change subscriber retain the
+observed completed turn and end its session normally. That invocation-level
+completion is not task Done, successful delivery or backend completion proof.
+Missing proof still prevents GitHub delivery and policy eligibility; genuine
+runner-failure attention retains crash classification.
+
+Both paths still require the same current generation/session/invocation,
+no-start-lease policy gate and ordinary GitHub delivery/policy verification.
+The backend completion event retains the work commit. The SQL policy gate
+compares that commit with the policy candidate's expected PR head while holding
+the task lock, including after deferred approval. A different green PR cannot
+substitute for unpublished current work.
+Proof identity expressions use explicit `Latin1_General_100_BIN2` comparison.
+JSON inherits the payload column's database-default collation, which can
+differ from the binary Foundry-session column and otherwise fail the gate with
+SQL error 468. Explicit comparison also keeps opaque session/invocation IDs
+case-sensitive without changing persisted schema or the database collation.
+Backend proof events and heartbeat decisions distinguish cleanup-failed delivery
+from clean completion and preserve sanitized secondary phases. Runner failure
+is not rewritten as success. Untracking ends keep-alive polling; Foundry's
+configured idle timeout still owns automatic compute release. Stopped-writer
+proof is not a claim of physical cloud deallocation. Real SQL, Linux process,
+normal release and a fresh bounded live trial remain acceptance gates.
+
+## Recovery-generation fencing (15 October 2026; local correction, not released)
+
+Migration 0048 adds a persisted bigint execution generation to tasks and sandbox
+sessions, initially zero for existing rows. Each dispatch or recovery claim
+advances the task generation before contacting Foundry. A persisted session
+copies the claimed generation; start persistence, start failure and deferred
+claims reject an obsolete generation even if the dispatcher owner is reused.
+The generation is separate from the retry counter and is never reset by a
+failed start or removed by event archival.
+
+Recovery takes the same per-task policy application lock before its existing
+sleep/dispatcher locks and commits its generation with the start lease.
+Completion proof carries the tracked session's generation, not a newly inferred
+task value. The locked policy gate requires an absent start lease and equality
+between task, session and proof generations, as well as the existing latest
+session/turn identifiers. This gate is shared by Done and approved merge,
+including the callback after deferred approval. Clearing a failed start's lease
+cannot restore the previous proof. No transaction is held across Foundry start.
+
+Existing completion events are not backfilled. Existing session generation zero
+can receive fresh runtime verification, but old proof without a generation is
+ineligible. Apply the additive migration before this backend; do not revert the
+generation columns after use. An application rollback must pause dispatch and
+retain generation evidence, rather than silently reverting to an unfenced writer.
+Real-SQL pending/failed-start, deferred-approval and replacement-completion
+controls are added; local execution remains blocked without loopback SQL.
+
+## Explicit failure and bounded finalization (15 October 2026; local candidate)
+
+Heartbeat handling processes a valid explicit failed snapshot before recording
+a heartbeat. A trusted internal failure flag overrides earlier completion and
+question hints, crashes the current session and fails its current turn, then
+records `NeedsAttention`/`foundry_failed`. Current-invocation fencing remains;
+late raw completion events cannot turn a failed turn back into completed.
+
+The reconciliation selector admits eligible Ended sessions without waiting for
+the active-session five-minute freshness cutoff. Active sessions retain that
+cutoff. The existing persisted expiry event can therefore wake a scan even
+after the last tracked session disappears. Five-row batches advance by a stable
+task-ID keyset, not mutable heartbeat timestamps or an offset. A full batch
+schedules another zero-delay, yielding pass even without tracked sessions;
+awaiting-policy or failed earlier rows cannot occupy every later page. An
+expiry received during a sweep retains a rescan request until the sweep ends,
+so a newly eligible lower-ID task is not skipped. A failed SQL scan or row
+operation logs the failure and retries at the existing reconciliation interval,
+not in a hot loop; row failures do not stop later pages. Stopping cancels
+follow-up scheduling; a successful exhausted sweep does not keep polling idle
+SQL. Real SQL and independent exact-patch review remain required.
+
+Runner finalization shares a 60-second monotonic work deadline across provider
+shutdown, credential persistence, event drain and publisher close. IO phases
+also have ten-second caps; cancellation joins have one-second caps. This is not
+an exact wall-clock bound on synchronous filesystem operations. An exhausted
+budget does not start a new credential write.
+
+Cancellation-resistant timed-out Futures remain owned until they settle.
+They fence reuse of the same session; unsettled credential persistence also
+fences new Codex turns across sessions. The guard runs before startup and again
+after acquiring the session lock. Normal in-progress cleanup is not registered
+as a residual failure. These Futures are process-local, not persisted recovery
+records, and failure is not proof of resource release.
+
+Heartbeat decisions expose only an allowlisted cleanup phase parsed from the
+sanitized error. Existing bootstrap logging passes the complete decision object;
+provider output and credentials are not added to logs. Normal exact-head gates,
+independent review and fresh live acceptance remain outstanding.
+
+The first actual failure retains terminal-error precedence, including a work
+failure that preceded cleanup. Ordered `cleanup_failures` separately retain
+allowlisted phases and sanitized classifications. Safe metadata persists these
+diagnostics and the invocation endpoint exposes validated values after reload;
+arbitrary work-error text is not persisted and rehydrates generically. A later
+credential, delivery or publisher timeout cannot replace an original
+`reader_shutdown` error. This does not extend any deadline or establish the
+historical failure phase.
+
+## Process-group exit and policy completion proof (15 October 2026; local candidate)
+
+The POSIX ACP provider starts in an isolated process group. TERM and bounded
+KILL escalation target that captured group, including when the leader has
+already exited. Shutdown joins the leader and readers and checks that no live
+group member remains. Linux procfs excludes exited zombies, which may await
+PID 1 reaping without executing or retaining pipes; inaccessible or malformed
+membership information fails closed. Existing phase deadlines and shielded
+ownership remain. Automatic failure events add an allowlisted cleanup phase.
+Group exit is not proof of cloud session deletion or physical deallocation.
+
+GitHub policy reads use the existing repository-read token, including checks
+and statuses permissions. Only an approved, still-eligible merge mints the
+existing write token; the merge endpoint uses PUT with the reviewed head SHA.
+No installation grants, identity roles or OAuth scopes change.
+
+The dispatcher records `runner_completion_verified` only after a clean final
+completed runtime snapshot or the separately verified V4 stopped-writer proof,
+while its task-policy lock rechecks the current session/invocation and Running
+state. The wire decoder still rejects completed snapshots without a finish time
+or with an error; cleanup-failed delivery retains failed runner status. The existing event store
+retains only backend provenance and sandbox/session/invocation identifiers,
+and safe alternative-path cleanup phases, not result text. Policy's locked SQL gate requires that proof for the latest
+session and latest completed turn before Done or merge, and rechecks after
+merge approval. A raw runner `completed`/question event or idle-expired turn
+does not supply this proof. A rejected task transition is not reported as
+successful no-check completion.
+
+Migration 0048 adds execution-generation fencing without proof backfill. Existing nonterminal tasks
+without this proof require fresh runtime verification; a missing runtime
+cannot be declared complete from an old event. Existing Done/Cancelled tasks
+remain unchanged. These source changes require normal exact-head gates and
+fresh acceptance; they do not retroactively prove Task 18 cleanup.
+
 ## Owned ACP shutdown boundary (15 October 2026)
 
 `ACPClient` owns its process and both pipe-reader tasks. Concurrent stop callers

@@ -1,5 +1,174 @@
 # Decisions
 
+## Fence recovery before provider start (15 October 2026; implemented locally, held)
+
+Independent V2 review reproduced policy Done and an approved merge using the
+previous invocation's proof after recovery was claimed but before its
+replacement session was persisted. Use a task/session execution generation,
+advanced atomically when claiming work, with the existing policy lock and a
+no-start-lease condition. Match the generation on backend proof as well as the
+latest session and invocation. A failed start does not restore the old value.
+
+Use dedicated additive columns rather than the retry counter (which can reset)
+or event timestamps/IDs (task events can be archived while a task is active).
+Normal dispatch and recovery both advance the generation; late start/failure
+callbacks also carry it. Zero preserves the existing task/session association
+for fresh verification only; do not backfill historical completion proofs.
+Normal migration/SQL/build/Linux gates and independent pinned review remain
+required. These changes do not identify Task 18's original cleanup failure.
+
+Dan authorised workers, normal delivery and bounded live testing overnight, then
+continuation with the next eligible board task after shutdown acceptance. This
+does not release the specifically held Daily scope or bypass the Foundry 403.
+
+Durable delivery, policy completion and runtime release remain separate facts.
+The desired artifact-plus-authoritative-stop/fence completion path must not
+discard a valid delivered PR merely because graceful finalization failed.
+V3 received an independent source-only PASS at tree `7303f6e5`; real SQL,
+Linux/build/release and the alternative completion path remained held.
+Preserve that snapshot. V4 adds independently recorded successful-work and
+successful-owned-provider-stop facts, not a timeout or absent-owner inference.
+Only final failed snapshots with both facts and exclusively post-provider
+credential/event/publisher cleanup failures can enter normal delivery policy.
+Keep runner failure and sanitized diagnostics visible; require the same
+generation/session/invocation and GitHub/policy gates. No external deletion or
+cloud deallocation is inferred. This resolves the source contract, not its
+unexecuted SQL/Linux/live acceptance.
+
+Independent V4b review then found that a no-commit question turn also used the
+generic completed outcome. Failed question delivery could therefore mint work
+proof and reuse an existing PR. Preserve the held V4b pin. V4c derives successful
+work only from the verified delivery-work branch and additionally rejects a
+question-bearing snapshot. Actual worker controls must cover delayed question
+delivery failure, not just direct-finalizer synthetic outcomes.
+
+Independent V4c review confirmed that correction but held the candidate because
+a new local commit did not prove it was pushed. Preserve V4c and its qualified
+142-pass/11-POSIX-skip offline results. V4d binds runner work to its actual
+verified commit SHA and requires the remote branch and delivered PR to match
+it. Require the same binding for clean completion, not only the alternative
+cleanup-failed path; otherwise clean teardown could still accept an old PR.
+Unbound legacy snapshots remain readable but require fresh current-runtime
+verification before Done or merge. Do not backfill or infer a commit identity.
+The locked SQL policy gate compares proof commit with the expected candidate
+head, including after deferred approval. A mismatched or unpublished commit
+must not complete the task or obtain an approved merge. An unbound completed
+snapshot produces verification attention without inventing a runner failure.
+Exact-source review, real SQL/Linux/build gates and fresh live acceptance remain
+outstanding; this does not establish the original shutdown cause.
+
+Independent V4d review confirmed commit binding but found that verification
+attention reused crash cleanup. With a running saved turn and no early result
+event, a clean completed snapshot without commit binding became Crashed/failed.
+Preserve V4d. V4e retains the observed completed invocation in both direct
+cleanup and the state-change subscriber, since either can run first.
+Use the existing invocation-completed SQL argument; do not infer work proof,
+backfill events, invoke delivery or mark the task Done. Genuine failure keeps
+its existing classification. Offline controls reproduced both incorrect
+cleanup flags; added SQL controls must verify Ended/done/completed lifecycle
+alongside task attention and denied policy. SQL/Linux/release/live remain held.
+
+V4e received source-only PASS and normal ready PR #856, but its first genuine
+automatic SQL run failed with collation error 468. Preserve that failure rather
+than rerunning it unchanged: JSON proof text inherits the database default,
+while Foundry session IDs use explicit binary collation. V4f applies explicit
+`Latin1_General_100_BIN2` to proof-identity comparisons. Do not alter database
+collation, rewrite stored IDs or relax the identity gate. Case-only changes to
+opaque session/invocation IDs must be refused; add real-SQL controls alongside
+the matching positives. V4e's full backend build and Python component step
+passed, but neither those component passes nor its CodeQL success accepts
+changed V4f source. Exact new-head review/SQL/CI/release/live gates remain.
+That failed SQL batch also blocked three existing rollback controls because
+their shared fixture now held used execution generations. Keep 0048's refusal:
+give rollback controls disposable fresh databases, and explicitly test that
+unused rollback succeeds while a used generation, its columns and ledger remain
+intact after refusal. Never clear generation history or weaken the production
+down migration merely to pass a fixture.
+
+V4f2's first genuine SQL batch passed those identity and rollback controls, but
+still failed nine tests. Keep that failure. V4g corrects the observed fixture
+boundaries without changing runtime: advance the existing reconciliation
+observation clock rather than persist a heartbeat older than its session;
+derive session start/heartbeat/end from one SQL timestamp; and exercise the
+saved absent-runtime cancellation snapshot after a legitimate recovery rather
+than deadlock by requesting recovery inside the cancellation policy lock.
+Retain actual dispatcher cancellation of the recovered runtime. Register
+synthetic tasks before fallible fixture setup and cancel them in `finally`;
+the previous helper could strand a Running task when an insert failed, consuming
+global capacity. Do not relax constraints, raise concurrency, remove cases or
+increase timeouts. Fresh real SQL must establish that all remaining failures
+clear before normal release or live acceptance.
+
+## Fail closed on explicit runner failure and finalization deadlines (15 October 2026; implemented locally)
+
+Independent read-only source reproductions showed that early result events
+could misclassify a later failed runner as idle expiry, refresh its heartbeat
+and leave the last reconciliation scan too early. Give the explicit current
+runner failure precedence; do not treat a prior completion/question event as
+finalization proof.
+
+For the reproduced freshness gap, admit already-ended eligible sessions
+immediately rather than introducing another five-minute eligibility timer.
+Keep the active-session freshness guard, latest-generation fences and five-row
+batch bound. Additional source controls reproduced three failures in the first
+candidate: coalesced expiries beyond five rows, starvation behind five failed
+rows, and an earlier task expiring during an in-flight scan.
+
+Advance a stable task-ID keyset through bounded batches, scheduling another
+yielding pass when a batch is full even without tracked sessions. Keep pending
+expiry wakes until the sweep completes, then rescan from its beginning. Do not
+refresh an ended session's heartbeat merely to manipulate ordering or use an
+offset that skips rows as state changes. SQL scan and row-operation failures are
+visible and retry at the existing interval; successful idle sweeps stop. Add stop and outage
+controls alongside the three before/after reproductions. This revision remains
+unreleased pending independent exact-patch review and normal Linux/SQL gates.
+
+Use one 60-second finalization work budget, ten-second IO caps and one-second
+cancellation joins. Timeout is an unknown/failed outcome, not successful
+cleanup. Retain unsettled asynchronous owners and refuse unsafe retries,
+including a queued turn that acquired its lock after an earlier timeout.
+Do not begin another credential write after the shared deadline expires.
+Process-local fencing does not survive process restart and does not establish
+cloud deallocation. No new access grant, provider workaround or Daily scope
+is authorised by this correction.
+
+Local actual-source controls cover blocked IO, cancellation resistance and
+ownership races. They do not establish the historical Task 17/18 cleanup phase,
+real SQL correctness, Linux process behaviour, release success or live shutdown.
+Freeze the source and obtain independent read-only review before publication.
+
+## Require current runtime proof before GitHub policy completion (15 October 2026; implemented locally)
+
+Normal source `5c5be688` recovered backend revision 323 and passed required
+release smoke; advisory chat identity remains degraded. The one subsequent
+Factory trial, Task 18, delivered the exact new 47-byte artifact in
+[DanAakesen/jarvis-test-target#5](https://github.com/DanAakesen/jarvis-test-target/pull/5),
+but emitted `ACPShutdownError` and never automatically reached Done. Supported
+cancellation later reached Cancelled. Neither that nor idle expiry proves
+physical deallocation. Its cleanup phase and GitHub refusal's HTTP status were
+not exported.
+
+Offline source reproduction demonstrates that descendants can retain pipes
+after their ACP leader exits. Isolate and stop the owned POSIX group rather
+than extending deadlines or killing unrelated processes. Check live Linux
+members, not unreaped zombie presence, and retain explicit process/reader
+failure. New group ownership and phase diagnostics remain unaccepted until
+normal gates and a fresh released trial.
+
+Source and permission-faithful offline controls also demonstrate that the
+policy evaluator's write token lacks its checks/statuses read capabilities,
+and its merge method was POST rather than PUT. Reuse existing scoped helpers;
+do not add installation permissions or mint write credentials before approval.
+
+Repairing reads must not enable a green PR to bypass runner cleanup. Record a
+backend-only, current-session/invocation proof from the dispatcher's verified
+terminal snapshot, using existing event storage and coordination locks. Require
+it for Done and merge, including after deferred approval. Early runner events,
+expired sessions, absent runtimes and historical evidence are not substituted
+for this proof. Do not backfill completion or weaken no-check grace, branch
+protection, cancellation fencing or Daily holds. Existing nonterminal tasks
+without proof remain fail-closed pending fresh runtime verification.
+
 ## Register attachment cleanup before Fastify listens (15 October 2026; source correction)
 
 Own the existing conversation-attachment cleanup job in `buildApp`, with its

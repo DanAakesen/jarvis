@@ -63,14 +63,47 @@ export interface PauseAcknowledgement {
   pausedInvocationId: string | null;
 }
 export interface InvocationEvent { at: number; kind: string; data: JsonObject }
+export const runnerCleanupPhases = [
+  "process_exit", "reader_shutdown", "reader_failed", "provider_shutdown",
+  "credential_persist", "event_delivery", "publisher_close",
+] as const;
+export type RunnerCleanupPhase = typeof runnerCleanupPhases[number];
+export type RunnerCompletionProof =
+  | { kind: "runner_completed"; workCommitSha: string }
+  | { kind: "work_completed_writer_stopped"; workCommitSha: string; cleanupPhases: readonly RunnerCleanupPhase[] };
 export interface InvocationSnapshot extends InvocationAccepted {
   startedAt: number;
   finishedAt: number | null;
   events: InvocationEvent[];
   result: JsonObject | null;
   error: string | null;
+  workCompleted?: boolean;
+  providerStopped?: boolean;
+  workCommitSha?: string;
+  cleanupPhases?: readonly RunnerCleanupPhase[];
 }
 export interface CancelAcknowledgement { invocationId: string; status: InvocationStatus }
+
+export function runnerCompletionProof(snapshot: InvocationSnapshot): RunnerCompletionProof | undefined {
+  if (snapshot.finishedAt === null || snapshot.finishedAt < snapshot.startedAt ||
+      snapshot.workCompleted !== true || snapshot.providerStopped !== true ||
+      !workCommitSha(snapshot.workCommitSha) ||
+      snapshot.events.some((event) => event.kind === "session_question")) return undefined;
+  const commit = snapshot.workCommitSha.toLowerCase();
+  if (snapshot.status === "completed" && snapshot.error === null) {
+    return { kind: "runner_completed", workCommitSha: commit };
+  }
+  if (snapshot.status === "failed" && snapshot.error &&
+      snapshot.cleanupPhases?.length && snapshot.cleanupPhases.every((phase) =>
+        phase === "credential_persist" || phase === "event_delivery" || phase === "publisher_close")) {
+    return { kind: "work_completed_writer_stopped", workCommitSha: commit, cleanupPhases: snapshot.cleanupPhases };
+  }
+  return undefined;
+}
+
+function workCommitSha(value: unknown): value is string {
+  return typeof value === "string" && /^[\da-f]{40}$/iu.test(value);
+}
 
 const STATUSES = new Set<unknown>([
   "queued", "running", "completed", "failed", "cancelled", "needs_attention",
@@ -327,14 +360,38 @@ export class FoundryClient {
     const accepted = this.accepted(body, "status");
     if (!object(body) || accepted.invocationId !== invocationId || !timestamp(body["started_at"]) ||
         !(body["finished_at"] === null || timestamp(body["finished_at"])) ||
+        (accepted.status === "completed" && (body["finished_at"] === null || body["error"] !== null)) ||
         !Array.isArray(body["events"]) || body["events"].length > 10_000 ||
         !(body["result"] === null || object(body["result"])) ||
-        !(body["error"] === null || typeof body["error"] === "string")) throw this.protocol("status");
+        !(body["error"] === null || typeof body["error"] === "string") ||
+        !(body["work_completed"] === undefined || typeof body["work_completed"] === "boolean") ||
+        !(body["work_commit_sha"] === undefined || body["work_commit_sha"] === null ||
+          workCommitSha(body["work_commit_sha"])) ||
+        !(body["provider_stopped"] === undefined || typeof body["provider_stopped"] === "boolean")) throw this.protocol("status");
     const events = body["events"].map((event: unknown): InvocationEvent => {
       if (!object(event) || !timestamp(event["at"]) || !wireString(event["kind"]) || !object(event["data"])) throw this.protocol("status");
       return { at: event["at"], kind: event["kind"], data: event["data"] };
     });
-    return { ...accepted, startedAt: body["started_at"], finishedAt: body["finished_at"], events, result: body["result"], error: body["error"] };
+    const failures = body["cleanup_failures"];
+    let cleanupPhases: RunnerCleanupPhase[] | undefined;
+    if (failures !== undefined) {
+      if (!Array.isArray(failures) || failures.length > 32) throw this.protocol("status");
+      cleanupPhases = [];
+      for (const failure of failures) {
+        if (!object(failure)) throw this.protocol("status");
+        const phase = runnerCleanupPhases.find((candidate) => candidate === failure["phase"]);
+        if (!phase) throw this.protocol("status");
+        if (!cleanupPhases.includes(phase)) cleanupPhases.push(phase);
+      }
+    }
+    return {
+      ...accepted, startedAt: body["started_at"], finishedAt: body["finished_at"], events,
+      result: body["result"], error: body["error"],
+      ...(body["work_completed"] === undefined ? {} : { workCompleted: body["work_completed"] }),
+      ...(body["provider_stopped"] === undefined ? {} : { providerStopped: body["provider_stopped"] }),
+      ...(workCommitSha(body["work_commit_sha"]) ? { workCommitSha: body["work_commit_sha"].toLowerCase() } : {}),
+      ...(cleanupPhases === undefined ? {} : { cleanupPhases }),
+    };
   }
 
   /** Session owner explicitly deletes after delivery/cancel, or in a probe's finally block (L14). */

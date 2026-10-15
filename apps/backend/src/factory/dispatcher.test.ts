@@ -13,6 +13,7 @@ import type { TaskEventHub, TaskEventMessage, TaskRecord, TaskRuntimeVersion, Ta
 
 const task: DispatchClaim = {
   taskId: '42',
+  executionGeneration: '1',
   projectId: '7',
   title: 'Fix the bug',
   request: 'Find and fix it',
@@ -51,6 +52,7 @@ const controlTask: TaskRecord = {
 
 const controlTarget: TaskControlTarget = {
   taskId: '42',
+  executionGeneration: '1',
   agent: 'codex',
   request: 'Find and fix it',
   modelOverride: 'gpt-5.4',
@@ -164,6 +166,7 @@ function idleStore(nextAttemptAt: string | null = null): DispatcherStore {
     recordControlTurn: vi.fn(async () => true),
     recordResumedTurn: vi.fn(async () => ({
       sandboxSessionId: '54',
+      executionGeneration: '1',
       foundrySessionId: 'session-1',
       agentName: 'jarvis-runner-base-1x2',
       invocationId: 'invocation-resume',
@@ -185,6 +188,9 @@ function invocationSnapshot(status: InvocationSnapshot['status']): InvocationSna
     agent: 'codex',
     startedAt: 1,
     finishedAt: status === 'running' || status === 'queued' ? null : 2,
+    workCompleted: status === 'completed',
+    providerStopped: status === 'completed',
+    workCommitSha: 'a'.repeat(40),
     events: [],
     result: null,
     error: null,
@@ -225,6 +231,51 @@ function reconciliationHarness(
 }
 
 afterEach(() => { vi.useRealTimers(); });
+
+function pagedReconciliationHarness(count: number) {
+  const rows: StaleRunningTask[] = Array.from({ length: count }, (_, index) => ({
+    ...controlTarget, taskId: String(100 + index), sessionStatus: 'Ended',
+    sandboxSessionId: String(200 + index), foundrySessionId: `session-${index}`,
+    invocationId: `invocation-${index}`,
+  }));
+  const eligible = new Set(rows.map(({ taskId }) => taskId));
+  const states = new Map<string, TaskRecord['state']>(rows.map(({ taskId }) => [taskId, 'Running']));
+  const errors: unknown[] = [];
+  const store = idleStore();
+  store.listStaleRunning = vi.fn(async (_before: Date, limit: number, afterTaskId?: string) =>
+    rows.filter(({ taskId }) => eligible.has(taskId) && states.get(taskId) === 'Running'
+      && BigInt(taskId) > BigInt(afterTaskId ?? '0')).slice(0, limit));
+  store.isCurrentStaleTask = vi.fn(async ({ taskId }) =>
+    eligible.has(taskId) && states.get(taskId) === 'Running');
+  store.endTaskSessions = vi.fn(async (taskId) => rows
+    .filter((row) => row.taskId === taskId).map(({ sandboxSessionId }) => sandboxSessionId));
+  const test = harness(store, undefined, controlTask, {
+    onError: (error) => errors.push(error),
+    workspaceFor: async () => ({
+      repository: 'DanAakesen/jarvis-test-target', defaultBranch: 'main', branch: controlTarget.branch,
+    }),
+    verifyDelivery: async () => ({ kind: 'awaiting_policy' }),
+  });
+  vi.mocked(test.tasks.get).mockImplementation(async (taskId) => {
+    const state = states.get(taskId);
+    return state ? { ...controlTask, id: taskId, state, events: [], usage: [] } : null;
+  });
+  vi.mocked(test.tasks.transition).mockImplementation(async (taskId, state) => {
+    states.set(taskId, state);
+    return { kind: 'ok', task: { ...controlTask, id: taskId, state } };
+  });
+  const snapshot = (invocationId: string): InvocationSnapshot => {
+    const row = rows.find((candidate) => candidate.invocationId === invocationId);
+    if (!row) throw new Error('Unexpected synthetic invocation');
+    return { ...invocationSnapshot('completed'), invocationId, sessionId: row.foundrySessionId };
+  };
+  test.status.mockImplementation(async (invocationId) => snapshot(invocationId));
+  const expire = (taskId: string) => test.events.publish({
+    id: `expiry-${taskId}`, taskId, type: 'sandbox_idle_expired', summary: null,
+    payload: { reason: 'idle_expired' }, payloadTruncated: false, source: 'backend', at: new Date().toISOString(),
+  });
+  return { ...test, store, rows, eligible, errors, expire, snapshot };
+}
 
 describe('task dispatcher', () => {
   it('runs one startup reconciliation but skips recurring SQL scans while no sandbox is tracked', async () => {
@@ -1092,6 +1143,7 @@ describe('task crash recovery', () => {
     const settings: SettingsStore = { read: vi.fn(async () => ({})), write: vi.fn(async () => {}) };
     let completionHandler: ((sandbox: {
       sandboxSessionId: string;
+      executionGeneration: string;
       foundrySessionId: string;
       agentName: string;
       invocationId: string;
@@ -1121,6 +1173,7 @@ describe('task crash recovery', () => {
 
     await expect(completionHandler?.({
       sandboxSessionId: '53',
+      executionGeneration: '1',
       foundrySessionId: 'session-1',
       agentName: 'runner',
       invocationId: 'invocation-1',
@@ -1266,6 +1319,7 @@ describe('task crash recovery', () => {
     let statusCount = 0;
     const heartbeatStore = {
       listRunning: vi.fn(async () => [{
+        executionGeneration: '1',
         sandboxSessionId: 'old-sandbox', foundrySessionId: 'old-session',
         agentName: 'jarvis-runner-base-1x2', invocationId: 'old-invocation',
       }]),
@@ -1289,6 +1343,9 @@ describe('task crash recovery', () => {
             invocationId: 'recovered-invocation',
             sessionId: 'recovered-session',
             status: 'completed' as const,
+            workCompleted: true,
+            providerStopped: true,
+            workCommitSha: 'a'.repeat(40),
             agent: 'codex' as const,
             startedAt: 1,
             finishedAt: 2,
@@ -1379,6 +1436,19 @@ describe('task crash recovery', () => {
 
     expect(test.status).toHaveBeenCalledWith('invocation-1', expect.objectContaining({ signal: expect.any(AbortSignal) }));
     expect(test.store.recordHeartbeat).toHaveBeenCalledWith('53', 'invocation-1', true);
+    expect(test.tasks.recordEvent).toHaveBeenCalledWith({
+      taskId: '42',
+      type: 'runner_completion_verified',
+      summary: 'Backend verified the current runner reached its final completed state',
+      payload: {
+        executionGeneration: '1',
+        sandboxSessionId: '53', foundrySessionId: 'session-1', invocationId: 'invocation-1',
+        workCommitSha: 'a'.repeat(40),
+      },
+      source: 'backend',
+    });
+    expect(vi.mocked(test.tasks.recordEvent).mock.invocationCallOrder[0])
+      .toBeLessThan(vi.mocked(test.verifyDelivery!).mock.invocationCallOrder[0]!);
     expect(test.verifyDelivery).toHaveBeenCalledWith(
       { repository: 'DanAakesen/jarvis-test-target', defaultBranch: 'main', branch: 'jarvis/task-42' },
       expect.objectContaining({ id: '42', title: 'Fix the bug' }),
@@ -1411,6 +1481,128 @@ describe('task crash recovery', () => {
     await test.dispatcher.stop();
   });
 
+  it.each(['missing', 'malformed'] as const)(
+    'holds an unbound completed invocation without manufacturing proof: %s', async (control) => {
+      vi.useFakeTimers();
+      const test = reconciliationHarness('completed');
+      const snapshot = invocationSnapshot('completed');
+      if (control === 'missing') delete snapshot.workCommitSha;
+      else snapshot.workCommitSha = 'not-a-commit';
+      test.status.mockResolvedValue(snapshot);
+      test.dispatcher.start();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(test.verifyDelivery).not.toHaveBeenCalled();
+      expect(test.tasks.recordEvent).not.toHaveBeenCalledWith(expect.objectContaining({
+        type: 'runner_completion_verified',
+      }));
+      expect(test.tasks.transition).toHaveBeenCalledWith(
+        '42', 'NeedsAttention', false, 'unverified_completion', expect.stringContaining('commit-bound'),
+      );
+      expect(test.store.endTaskSessions).toHaveBeenCalledWith('42', 'NeedsAttention', true);
+      await test.dispatcher.stop();
+    },
+  );
+
+  it.each(['heartbeat', 'reconciliation'] as const)(
+    'preserves unverified completed lifecycle in explicit and event cleanup: %s', async (route) => {
+      vi.useFakeTimers();
+      const test = reconciliationHarness('completed');
+      const snapshot = invocationSnapshot('completed');
+      delete snapshot.workCommitSha;
+      test.status.mockResolvedValue(snapshot);
+      if (route === 'heartbeat') vi.mocked(test.store.listStaleRunning).mockResolvedValue([]);
+      const transition = vi.mocked(test.tasks.transition).getMockImplementation();
+      if (!transition) throw new Error('Transition fixture is unavailable');
+      vi.mocked(test.tasks.transition).mockImplementation(async (...args) => {
+        const result = await transition(...args);
+        if (result.kind === 'ok') test.events.publish({
+          id: 'unverified-transition', taskId: args[0], type: 'state_changed',
+          summary: 'Task state changed', source: 'backend', at: new Date().toISOString(),
+          payload: { from: 'Running', to: args[1], reason: args[3] },
+          payloadTruncated: false,
+        });
+        return result;
+      });
+      test.dispatcher.start();
+      await vi.advanceTimersByTimeAsync(0);
+      if (route === 'heartbeat') {
+        const onCompleted = vi.mocked(test.heartbeat.setCompletionHandler).mock.calls[0]?.[0];
+        if (!onCompleted) throw new Error('Completion fixture is unavailable');
+        await expect(onCompleted(controlTarget)).resolves.toBe(true);
+      }
+      const cleanup = vi.mocked(test.store.endTaskSessions).mock.calls
+        .filter(([taskId, state]) => taskId === '42' && state === 'NeedsAttention');
+      expect(cleanup).toHaveLength(2);
+      expect(cleanup.map(([, , invocationCompleted]) => invocationCompleted)).toEqual([true, true]);
+      expect(test.verifyDelivery).not.toHaveBeenCalled();
+      expect(test.tasks.recordEvent).not.toHaveBeenCalledWith(expect.objectContaining({
+        type: 'runner_completion_verified',
+      }));
+      await expect(test.tasks.get('42', 1, 0)).resolves.toMatchObject({ state: 'NeedsAttention' });
+      await test.dispatcher.stop();
+    },
+  );
+
+  it('uses current-generation stopped-writer proof without bypassing GitHub or project policy', async () => {
+    vi.useFakeTimers();
+    const test = reconciliationHarness('failed');
+    test.status.mockResolvedValue({
+      ...invocationSnapshot('failed'), workCompleted: true, providerStopped: true,
+      error: 'Runner finalization timed out: credential_persist', cleanupPhases: ['credential_persist'],
+    });
+    test.dispatcher.start();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(test.tasks.recordEvent).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'runner_completion_verified', source: 'backend',
+      payload: {
+        executionGeneration: '1', sandboxSessionId: '53', foundrySessionId: 'session-1',
+        invocationId: 'invocation-1', completionKind: 'work_completed_writer_stopped',
+        workCommitSha: 'a'.repeat(40),
+        cleanupPhases: ['credential_persist'],
+      },
+    }));
+    expect(test.verifyDelivery).toHaveBeenCalledOnce();
+    expect(test.verifyDelivery).toHaveBeenCalledWith(
+      expect.any(Object), expect.objectContaining({ workCommitSha: 'a'.repeat(40) }), expect.any(Function),
+    );
+    expect(test.tasks.transition).not.toHaveBeenCalled();
+    expect(test.store.endTaskSessions).toHaveBeenCalledWith('42', 'Done', true);
+    await test.dispatcher.stop();
+  });
+
+  it('preserves delivered-work proof but refuses Done when GitHub cannot verify the artifact', async () => {
+    vi.useFakeTimers();
+    const test = reconciliationHarness('failed', vi.fn(async () => ({
+      kind: 'refused', reason: 'The current branch could not be verified.',
+    })));
+    test.status.mockResolvedValue({
+      ...invocationSnapshot('failed'), workCompleted: true, providerStopped: true,
+      error: 'Runner finalization timed out: publisher_close', cleanupPhases: ['publisher_close'],
+    });
+    test.dispatcher.start();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(test.verifyDelivery).toHaveBeenCalledOnce();
+    expect(test.tasks.transition).toHaveBeenCalledWith('42', 'NeedsAttention', false, 'pull_request_open_refused');
+    expect(test.store.endTaskSessions).not.toHaveBeenCalledWith('42', 'Done', true);
+    await test.dispatcher.stop();
+  });
+
+  it('rejects stopped-writer proof from an obsolete execution before recording or using it', async () => {
+    vi.useFakeTimers();
+    const test = reconciliationHarness('failed');
+    test.status.mockResolvedValue({
+      ...invocationSnapshot('failed'), workCompleted: true, providerStopped: true,
+      error: 'Runner finalization timed out: event_delivery', cleanupPhases: ['event_delivery'],
+    });
+    vi.mocked(test.store.isCurrentStaleTask).mockResolvedValue(false);
+    test.dispatcher.start();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(test.tasks.recordEvent).not.toHaveBeenCalled();
+    expect(test.verifyDelivery).not.toHaveBeenCalled();
+    expect(test.tasks.transition).not.toHaveBeenCalled();
+    await test.dispatcher.stop();
+  });
+
   it('wakes one idle reconciliation from the persisted expiry event with no tracked session', async () => {
     vi.useFakeTimers();
     const test = reconciliationHarness('completed', undefined, undefined, 'Ended', true);
@@ -1435,6 +1627,110 @@ describe('task crash recovery', () => {
     await vi.advanceTimersByTimeAsync(5 * 60_000);
     expect(test.store.listStaleRunning).toHaveBeenCalledTimes(2);
     await test.dispatcher.stop();
+  });
+
+  it('drains eleven coalesced idle expiries without revisiting awaiting-policy rows', async () => {
+    vi.useFakeTimers();
+    const test = pagedReconciliationHarness(11);
+    vi.mocked(test.store.listStaleRunning).mockResolvedValueOnce([]);
+    test.dispatcher.start();
+    await vi.advanceTimersByTimeAsync(0);
+    test.rows.forEach(({ taskId }) => test.expire(taskId));
+    await vi.advanceTimersByTimeAsync(25);
+
+    expect(test.heartbeat.hasTrackedSessions()).toBe(false);
+    expect(test.status.mock.calls.map(([id]) => id)).toEqual(test.rows.map(({ invocationId }) => invocationId));
+    expect(test.store.listStaleRunning).toHaveBeenCalledTimes(4);
+    expect(test.errors).toEqual([]);
+    await vi.advanceTimersByTimeAsync(5 * 60_000);
+    expect(test.store.listStaleRunning).toHaveBeenCalledTimes(4);
+    await test.dispatcher.stop();
+  });
+
+  it('advances past five failed rows instead of starving later idle expiries', async () => {
+    vi.useFakeTimers();
+    const test = pagedReconciliationHarness(8);
+    let failLocks = true;
+    test.store.withTaskPolicyLock = async (taskId, operation) => {
+      if (failLocks && BigInt(taskId) < 105n) throw new Error('Synthetic policy lock failure');
+      return operation();
+    };
+    test.dispatcher.start();
+    await vi.advanceTimersByTimeAsync(25);
+
+    expect(test.status.mock.calls.map(([id]) => id)).toEqual(test.rows.map(({ invocationId }) => invocationId));
+    expect(test.errors).toHaveLength(5);
+    expect(test.tasks.recordEvent).toHaveBeenCalledWith(expect.objectContaining({
+      taskId: '107', type: 'runner_completion_verified',
+    }));
+    expect(test.store.listStaleRunning).toHaveBeenCalledTimes(2);
+    failLocks = false;
+    await vi.advanceTimersByTimeAsync(5 * 60_000 + 25);
+    expect(test.status).toHaveBeenCalledTimes(16);
+    expect(test.store.listStaleRunning).toHaveBeenCalledTimes(4);
+    expect(test.errors).toHaveLength(5);
+    await vi.advanceTimersByTimeAsync(5 * 60_000);
+    expect(test.store.listStaleRunning).toHaveBeenCalledTimes(4);
+    await test.dispatcher.stop();
+  });
+
+  it('rescans an earlier task that expires while a later page is in flight', async () => {
+    vi.useFakeTimers();
+    const test = pagedReconciliationHarness(7);
+    test.eligible.delete('100');
+    vi.mocked(test.store.listStaleRunning).mockResolvedValueOnce([]);
+    let release: ((snapshot: InvocationSnapshot) => void) | undefined;
+    test.status.mockImplementationOnce(() => new Promise((resolve) => { release = resolve; }));
+    test.dispatcher.start();
+    await vi.advanceTimersByTimeAsync(0);
+    test.expire('101');
+    await vi.advanceTimersByTimeAsync(0);
+    expect(test.status).toHaveBeenCalledTimes(5);
+    test.eligible.add('100');
+    test.expire('100');
+    release?.(test.snapshot(test.rows[1]!.invocationId));
+    await vi.advanceTimersByTimeAsync(25);
+
+    for (const row of test.rows) {
+      expect(test.status).toHaveBeenCalledWith(row.invocationId, expect.any(Object));
+    }
+    expect(test.errors).toEqual([]);
+    const scans = vi.mocked(test.store.listStaleRunning).mock.calls.length;
+    await vi.advanceTimersByTimeAsync(5 * 60_000);
+    expect(test.store.listStaleRunning).toHaveBeenCalledTimes(scans);
+    await test.dispatcher.stop();
+  });
+
+  it('retries a failed idle scan at the existing interval without a hot loop', async () => {
+    vi.useFakeTimers();
+    const test = pagedReconciliationHarness(8);
+    vi.mocked(test.store.listStaleRunning).mockRejectedValueOnce(new Error('Synthetic SQL outage'));
+    test.dispatcher.start();
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(test.store.listStaleRunning).toHaveBeenCalledOnce();
+    expect(test.errors).toHaveLength(1);
+    await vi.advanceTimersByTimeAsync(4 * 60_000 + 25);
+    expect(test.status).toHaveBeenCalledTimes(8);
+    expect(test.store.listStaleRunning).toHaveBeenCalledTimes(3);
+    await vi.advanceTimersByTimeAsync(5 * 60_000);
+    expect(test.store.listStaleRunning).toHaveBeenCalledTimes(3);
+    await test.dispatcher.stop();
+  });
+
+  it('does not schedule the next backlog page after stopping', async () => {
+    vi.useFakeTimers();
+    const test = pagedReconciliationHarness(8);
+    let release: ((snapshot: InvocationSnapshot) => void) | undefined;
+    test.status.mockImplementationOnce(() => new Promise((resolve) => { release = resolve; }));
+    test.dispatcher.start();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(test.status).toHaveBeenCalledTimes(5);
+    const stopping = test.dispatcher.stop();
+    release?.(test.snapshot(test.rows[0]!.invocationId));
+    await stopping;
+    await vi.advanceTimersByTimeAsync(5 * 60_000);
+    expect(test.store.listStaleRunning).toHaveBeenCalledOnce();
+    expect(test.status).toHaveBeenCalledTimes(5);
   });
 
   it.each([
@@ -1474,6 +1770,9 @@ describe('task crash recovery', () => {
     expect(test.store.listStaleRunning).toHaveBeenCalledOnce();
     expect(test.store.recordHeartbeat).toHaveBeenCalledWith('53', 'invocation-1', false);
     expect(test.verifyDelivery).not.toHaveBeenCalled();
+    expect(test.tasks.recordEvent).not.toHaveBeenCalledWith(expect.objectContaining({
+      type: 'runner_completion_verified',
+    }));
     await vi.advanceTimersByTimeAsync(60_000);
     expect(test.store.listStaleRunning).toHaveBeenCalledTimes(2);
     expect(test.status).toHaveBeenCalledTimes(2);
@@ -1489,6 +1788,9 @@ describe('task crash recovery', () => {
     await vi.advanceTimersByTimeAsync(0);
 
     expect(test.verifyDelivery).not.toHaveBeenCalled();
+    expect(test.tasks.recordEvent).not.toHaveBeenCalledWith(expect.objectContaining({
+      type: 'runner_completion_verified',
+    }));
     expect(test.tasks.transition).toHaveBeenCalledWith(
       '42',
       'NeedsAttention',

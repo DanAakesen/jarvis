@@ -1,7 +1,11 @@
-import { FoundryClientError, type InvocationSnapshot, type RequestOptions } from '../foundry/client.js';
+import {
+  FoundryClientError, runnerCompletionProof, type InvocationSnapshot, type RequestOptions,
+  type RunnerCleanupPhase, type RunnerCompletionProof,
+} from '../foundry/client.js';
 
 export interface RunningSandbox {
   sandboxSessionId: string;
+  executionGeneration: string;
   foundrySessionId: string;
   agentName: string;
   invocationId: string;
@@ -16,6 +20,7 @@ export interface SandboxHeartbeatStore {
     question?: string,
     invocationId?: string,
     invocationCompleted?: boolean,
+    runnerFailed?: boolean,
   ): Promise<'crashed' | 'idle_expired' | 'needs_attention' | false>;
   resolvePause(sandboxSessionId: string, state: 'Running' | 'Paused'): Promise<boolean>;
 }
@@ -37,6 +42,8 @@ export interface HeartbeatDecision {
   invocationId: string;
   httpStatus: number | null;
   decision: string;
+  cleanupPhase?: string;
+  cleanupPhases?: readonly RunnerCleanupPhase[];
 }
 
 interface TrackedSandbox {
@@ -66,7 +73,7 @@ export class SandboxHeartbeat {
   private readonly now: () => number;
   private readonly onError: (error: unknown) => void;
   private readonly onDecision: (decision: HeartbeatDecision) => void;
-  private completionHandler: ((sandbox: RunningSandbox) => Promise<boolean>) | undefined;
+  private completionHandler: ((sandbox: RunningSandbox, proof?: RunnerCompletionProof) => Promise<boolean>) | undefined;
   private started = false;
 
   constructor(
@@ -99,7 +106,7 @@ export class SandboxHeartbeat {
     if (this.started) this.poll(entry);
   }
 
-  setCompletionHandler(handler: (sandbox: RunningSandbox) => Promise<boolean>): void {
+  setCompletionHandler(handler: (sandbox: RunningSandbox, proof?: RunnerCompletionProof) => Promise<boolean>): void {
     this.completionHandler = handler;
   }
 
@@ -140,11 +147,14 @@ export class SandboxHeartbeat {
 
   private async pollOnce(entry: TrackedSandbox, signal: AbortSignal): Promise<void> {
     let httpStatus: number | null = null;
-    const log = (decision: string) => this.onDecision({
+    let cleanupPhases: readonly RunnerCleanupPhase[] | undefined;
+    const log = (decision: string, cleanupPhase?: string) => this.onDecision({
       sandboxSessionId: entry.sandbox.sandboxSessionId,
       invocationId: entry.sandbox.invocationId,
       httpStatus,
       decision,
+      ...(cleanupPhase ? { cleanupPhase } : {}),
+      ...(cleanupPhases?.length ? { cleanupPhases } : {}),
     });
     try {
       const result = await this.clientFor(entry.sandbox.agentName).status(entry.sandbox.invocationId, {
@@ -154,8 +164,20 @@ export class SandboxHeartbeat {
       if (result.sessionId !== entry.sandbox.foundrySessionId) {
         throw new Error('Foundry status did not match the tracked session');
       }
+      cleanupPhases = result.cleanupPhases;
+      const proof = runnerCompletionProof(result);
+      if (result.status === 'failed' && !proof) {
+        const decision = await this.store.markNeedsAttention(
+          entry.sandbox.sandboxSessionId, undefined, entry.sandbox.invocationId, false, true,
+        );
+        const cleanupPhase = /^(?:Runner finalization timed out|Runner cleanup failed: ACPShutdownError): (provider_shutdown|credential_persist|event_delivery|publisher_close|process_exit|reader_shutdown|reader_failed)$/
+          .exec(result.error ?? '')?.[1];
+        log(decision || 'unchanged', cleanupPhase);
+        if (!signal.aborted) this.untrack(entry.sandbox.sandboxSessionId);
+        return;
+      }
       await this.store.recordHeartbeat(
-        entry.sandbox.sandboxSessionId, entry.sandbox.invocationId, result.status === 'completed',
+        entry.sandbox.sandboxSessionId, entry.sandbox.invocationId, proof !== undefined,
       );
       if (signal.aborted) { log('cancelled'); return; }
       entry.failures = 0;
@@ -167,23 +189,24 @@ export class SandboxHeartbeat {
       } else if (result.status === 'running' || result.status === 'queued') {
         await this.store.resolvePause(entry.sandbox.sandboxSessionId, 'Running');
         log(result.status);
-      } else if (result.status === 'completed') {
+      } else if (proof) {
         entry.invocationCompleted = true;
         if (this.completionHandler && !entry.completionHandled) {
-          const handled = await this.completionHandler(entry.sandbox);
+          const handled = await this.completionHandler(entry.sandbox, proof);
           entry.completionHandled = true;
           if (handled && !signal.aborted) this.untrack(entry.sandbox.sandboxSessionId);
         }
-        log('completed');
+        log(proof.kind === 'runner_completed' ? 'completed' : 'completed_with_cleanup_failure');
+      } else if (result.status === 'completed') {
+        if (this.completionHandler && !entry.completionHandled) {
+          const handled = await this.completionHandler(entry.sandbox);
+          entry.completionHandled = handled;
+          if (handled && !signal.aborted) this.untrack(entry.sandbox.sandboxSessionId);
+        }
+        log('completion_unverified');
       } else if (result.status === 'needs_attention') {
         const decision = await this.store.markNeedsAttention(
           entry.sandbox.sandboxSessionId, result.error ?? undefined, entry.sandbox.invocationId, entry.invocationCompleted,
-        );
-        log(decision || 'unchanged');
-        if (!signal.aborted) this.untrack(entry.sandbox.sandboxSessionId);
-      } else if (result.status === 'failed') {
-        const decision = await this.store.markNeedsAttention(
-          entry.sandbox.sandboxSessionId, undefined, entry.sandbox.invocationId, entry.invocationCompleted,
         );
         log(decision || 'unchanged');
         if (!signal.aborted) this.untrack(entry.sandbox.sandboxSessionId);

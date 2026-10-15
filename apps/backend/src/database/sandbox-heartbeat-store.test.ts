@@ -91,4 +91,36 @@ describe('heartbeat expiry persistence', () => {
     expect(transactions.events).toEqual(['begin', 'rollback']);
     expect(publish).not.toHaveBeenCalled();
   });
+
+  it.each(['Running', 'PauseRequested', 'NeedsAttention'])(
+    'does not classify an explicit failure after early completion as expiry from %s',
+    async (state) => {
+      transactions.events.length = 0;
+      const inserted = {
+        id: '9', taskId: '42', type: 'state_changed', summary: null, payload: null,
+        payloadTruncated: false, source: 'backend', at: new Date('2026-10-15T18:00:00Z'),
+      };
+      const query = vi.fn()
+        .mockResolvedValueOnce({ recordset: [{ taskId: '42' }] })
+        .mockResolvedValueOnce({ recordset: [{ status: 'completed', invocationId: 'invocation' }] })
+        .mockResolvedValueOnce({ recordset: [{ state }] })
+        .mockResolvedValueOnce({ rowsAffected: [1], recordset: [] })
+        .mockResolvedValueOnce({ recordset: [inserted] })
+        .mockResolvedValue({ recordset: [] });
+      const hub = createEventHub<TaskEventMessage>();
+      const publish = vi.spyOn(hub, 'publish');
+      const store = createSandboxHeartbeatStore({ query } as unknown as sql.ConnectionPool, hub);
+
+      await expect(store.markNeedsAttention('7', undefined, 'invocation', true, true)).resolves.toBe('crashed');
+
+      expect(publish).toHaveBeenCalledWith(expect.objectContaining({
+        type: 'state_changed',
+        payload: { from: state, to: 'NeedsAttention', reason: 'foundry_failed' },
+      }));
+      const statements = query.mock.calls.map(([text]) => text).join('\n');
+      expect(statements).not.toContain("end_reason = N'idle_expired'");
+      expect(statements).toContain("SET status = N'failed'");
+      expect(transactions.events).toEqual(['begin', 'commit']);
+    },
+  );
 });

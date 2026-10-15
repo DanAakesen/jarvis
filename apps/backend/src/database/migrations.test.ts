@@ -13,6 +13,15 @@ async function directory() {
 afterEach(async () => { await Promise.all(directories.splice(0).map((path) => rm(path, { recursive: true }))); });
 
 describe('committed SQL manifest', () => {
+  it('adds durable Factory generations without backfilling completion proof and protects rollback', async () => {
+    const migration = (await readMigrations()).find(({ name }) => name === '0048_factory_execution_generation.sql');
+    expect(migration?.sql).toContain('ALTER TABLE dbo.tasks ADD execution_generation bigint NOT NULL');
+    expect(migration?.sql).toContain('ALTER TABLE dbo.sandbox_sessions ADD execution_generation bigint NOT NULL');
+    expect(migration?.sql).not.toContain('UPDATE dbo.task_events');
+    const down = await readDownMigration('0048_factory_execution_generation.sql');
+    expect(down.sql).toContain('WHERE execution_generation <> 0');
+    expect(down.sql).toContain('THROW 51000');
+  });
   it('bounds inactive health attempts and protects processing evidence on rollback', async () => {
     const migration = (await readMigrations()).find(({ name }) => name === '0047_daily_health_processing.sql');
     expect(migration?.sql).toContain('processing_attempts BETWEEN 0 AND 3');
@@ -93,6 +102,7 @@ describe('committed SQL manifest', () => {
       '0045_smoke_usage_role.sql',
       '0046_daily_health_upload_inbox.sql',
       '0047_daily_health_processing.sql',
+      '0048_factory_execution_generation.sql',
     ]);
     for (const migration of migrations) await expect(readDownMigration(migration.name)).resolves.toMatchObject({ name: migration.name });
   });

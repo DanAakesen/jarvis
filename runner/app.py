@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import builtins
 from io import BytesIO
 import json
 import logging
@@ -18,6 +19,7 @@ import os
 import re
 import shlex
 import shutil
+import signal
 import socket
 import sys
 import tempfile
@@ -49,6 +51,13 @@ MAX_EVENT_PAYLOAD_BYTES = 256 * 1024
 ACP_LINE_LIMIT_BYTES = 32 * 1024 * 1024
 ACP_STOP_TIMEOUT_SECONDS = 10
 ACP_STOP_CANCEL_TIMEOUT_SECONDS = 1
+FINALIZATION_TIMEOUT_SECONDS = 60
+FINALIZATION_IO_TIMEOUT_SECONDS = 10
+FINALIZATION_CANCEL_TIMEOUT_SECONDS = 1
+CLEANUP_PHASES = {
+    "process_exit", "reader_shutdown", "reader_failed", "provider_shutdown",
+    "credential_persist", "event_delivery", "publisher_close",
+}
 MAX_ATTENTION_QUESTION_LENGTH = 500
 DEFAULT_DISK_LOW_THRESHOLD_BYTES = 1024**3
 MAX_GENERATED_IMAGE_BYTES = 5 * 1024 * 1024
@@ -224,36 +233,136 @@ async def _publish_after(
         await publisher.publish(task_id, invocation_id, event_index, event)
     except Exception:
         state.event_delivery_failed = True
+        _record_cleanup_failure(state, "event_delivery", "Runner event delivery failed")
         raise
 
 
-async def _flush_event_delivery(state: "TaskState") -> None:
+def _safe_failure_error(value: Any) -> str | None:
+    if not isinstance(value, str):
+        return None
+    if value in {
+        "Runner event delivery failed", "Runner cleanup failed", "Runner task failed", "Codex usage limit reached",
+    }:
+        return value
+    if re.fullmatch(
+        r"Runner cleanup failed: ACPShutdownError: (process_exit|reader_shutdown|reader_failed)"
+        r"|Runner finalization timed out: (provider_shutdown|credential_persist|event_delivery|publisher_close)",
+        value,
+    ):
+        return value
+    match = re.fullmatch(r"Runner (?:task|cleanup|credential persistence) failed: ([A-Za-z]{1,80})", value)
+    error_type = getattr(builtins, match[1], None) if match else None
+    if isinstance(error_type, type) and issubclass(error_type, Exception):
+        return value
+    return None
+
+
+def _safe_cleanup_failures(value: Any) -> list[dict[str, str]]:
+    failures: list[dict[str, str]] = []
+    if not isinstance(value, list):
+        return failures
+    for entry in value:
+        if not isinstance(entry, dict) or not isinstance(entry.get("phase"), str):
+            continue
+        phase = entry["phase"]
+        error = _safe_failure_error(entry.get("error"))
+        if phase in CLEANUP_PHASES and error is not None and not any(item["phase"] == phase for item in failures):
+            failures.append({"phase": phase, "error": error})
+        if len(failures) == len(CLEANUP_PHASES):
+            break
+    return failures
+
+
+def _record_cleanup_failure(state: "TaskState", phase: str, error: str) -> None:
+    if phase not in CLEANUP_PHASES:
+        raise ValueError("Unsupported cleanup phase")
+    safe_error = _safe_failure_error(error) or "Runner cleanup failed"
+    if state.error is None:
+        state.error = safe_error
+    if not any(item["phase"] == phase for item in state.cleanup_failures):
+        state.cleanup_failures.append({"phase": phase, "error": safe_error})
+
+
+class FinalizationTimeout(RuntimeError):
+    def __init__(self, phase: str):
+        if phase not in {"provider_shutdown", "credential_persist", "event_delivery", "publisher_close"}:
+            raise ValueError("Unsupported finalization phase")
+        self.phase = phase
+        super().__init__(phase)
+
+
+async def _await_finalization(state: "TaskState", awaitable, phase: str, deadline: float, timeout: float):
+    task = asyncio.ensure_future(awaitable)
+
+    def settled(completed):
+        state.finalization_tasks.pop(completed, None)
+        if not completed.cancelled() and completed.exception() is not None:
+            LOGGER.error("finalization phase %s failed (%s)", phase, type(completed.exception()).__name__)
+
+    task.add_done_callback(settled)
+    remaining = max(0, min(timeout, deadline - asyncio.get_running_loop().time()))
+    if remaining == 0:
+        task.cancel()
+    done, _pending = await asyncio.wait({task}, timeout=remaining)
+    if not done or remaining == 0:
+        task.cancel()
+        await asyncio.wait({task}, timeout=FINALIZATION_CANCEL_TIMEOUT_SECONDS)
+        if not task.done():
+            state.finalization_tasks[task] = phase
+        LOGGER.error("finalization phase %s exceeded its deadline", phase)
+        raise FinalizationTimeout(phase)
+    if task.cancelled():
+        LOGGER.error("finalization phase %s was cancelled", phase)
+        raise RuntimeError("Finalization phase was cancelled")
+    return task.result()
+
+
+async def _flush_event_delivery(state: "TaskState", deadline: float | None = None) -> None:
+    if deadline is None:
+        deadline = asyncio.get_running_loop().time() + FINALIZATION_TIMEOUT_SECONDS
     delivery_exception: Exception | None = None
     try:
         while state.event_delivery is not None:
             pending = state.event_delivery
             try:
-                await pending
+                await _await_finalization(
+                    state, pending, "event_delivery", deadline, FINALIZATION_IO_TIMEOUT_SECONDS,
+                )
             except Exception as exc:
                 delivery_exception = exc
+                state.event_delivery_failed = True
+                _record_cleanup_failure(
+                    state, "event_delivery",
+                    f"Runner finalization timed out: {exc.phase}"
+                    if isinstance(exc, FinalizationTimeout) else "Runner event delivery failed",
+                )
+                break
             if state.event_delivery is pending:
                 break
     finally:
         failed = state.event_delivery_failed
         if state.event_delivery_failed:
+            _record_cleanup_failure(state, "event_delivery", "Runner event delivery failed")
             LOGGER.error(
                 "task event delivery failed (%s)",
                 type(delivery_exception).__name__ if delivery_exception is not None else "earlier event",
             )
         if state.event_publisher is not None:
             try:
-                await state.event_publisher.close()
+                await _await_finalization(
+                    state, state.event_publisher.close(), "publisher_close",
+                    deadline, FINALIZATION_IO_TIMEOUT_SECONDS,
+                )
             except Exception as exc:
                 failed = True
+                _record_cleanup_failure(
+                    state, "publisher_close",
+                    f"Runner finalization timed out: {exc.phase}"
+                    if isinstance(exc, FinalizationTimeout) else "Runner event delivery failed",
+                )
                 LOGGER.error("task event delivery cleanup failed (%s)", type(exc).__name__)
         if failed:
             state.status = "failed"
-            state.error = "Runner event delivery failed"
 
 
 @dataclass
@@ -277,6 +386,10 @@ class TaskState:
     events: list[dict[str, Any]] = field(default_factory=list)
     result: dict[str, Any] | None = None
     error: str | None = None
+    cleanup_failures: list[dict[str, str]] = field(default_factory=list)
+    work_completed: bool = False
+    provider_stopped: bool = False
+    work_commit_sha: str | None = None
     process: asyncio.subprocess.Process | None = None
     worker: asyncio.Task[None] | None = None
     cancel_requested: bool = False
@@ -287,6 +400,7 @@ class TaskState:
     event_delivery_failed: bool = False
     event_publisher: RunnerEventPublisher | None = field(default=None, repr=False)
     event_delivery: asyncio.Task[None] | None = field(default=None, repr=False)
+    finalization_tasks: dict[asyncio.Future, str] = field(default_factory=dict, repr=False)
 
     def event(self, kind: str, **data: Any) -> None:
         event = {"at": time.time(), "kind": kind, "data": data}
@@ -324,6 +438,12 @@ class WorkspaceError(RuntimeError):
 
 class ACPShutdownError(RuntimeError):
     """Owned provider teardown did not settle within its bounded phases."""
+
+    def __init__(self, phase: str):
+        if phase not in {"process_exit", "reader_shutdown", "reader_failed"}:
+            raise ValueError("Unsupported ACP shutdown phase")
+        self.phase = phase
+        super().__init__(phase)
 
 
 def _is_codex_usage_limit(error: Any) -> bool:
@@ -439,6 +559,12 @@ async def _run_with_disk_watch(state: TaskState, client: "ACPClient", threshold_
         await asyncio.gather(watcher, return_exceptions=True)
 
 
+def _safe_work_commit_sha(value: Any) -> str | None:
+    if isinstance(value, str) and re.fullmatch(r"[0-9a-fA-F]{40}", value):
+        return value.lower()
+    return None
+
+
 def _persist_task(state: TaskState) -> None:
     """Persist safe invocation metadata and only allowlisted Codex renewal results."""
     saved: dict[str, Any] = {
@@ -449,7 +575,14 @@ def _persist_task(state: TaskState) -> None:
         "status": state.status,
         "started_at": state.started_at,
         "finished_at": state.finished_at,
+        "work_completed": state.work_completed is True,
+        "provider_stopped": state.provider_stopped is True,
+        "work_commit_sha": _safe_work_commit_sha(state.work_commit_sha),
     }
+    cleanup_failures = _safe_cleanup_failures(state.cleanup_failures)
+    if cleanup_failures:
+        saved["cleanup_failures"] = cleanup_failures
+        saved["error"] = _safe_failure_error(state.error) or "Runner task failed"
     if state.mode == "renew-codex":
         saved["mode"] = state.mode
         if isinstance(state.result, dict):
@@ -521,7 +654,13 @@ def _load_task(invocation_id: str) -> TaskState | None:
             status=str(saved.get("status", "unknown")),
             started_at=float(saved.get("started_at", time.time())),
             finished_at=saved.get("finished_at"),
+            work_completed=saved.get("work_completed") is True,
+            provider_stopped=saved.get("provider_stopped") is True,
+            work_commit_sha=_safe_work_commit_sha(saved.get("work_commit_sha")),
         )
+        state.cleanup_failures = _safe_cleanup_failures(saved.get("cleanup_failures"))
+        if state.cleanup_failures:
+            state.error = _safe_failure_error(saved.get("error"))
         if state.mode == "renew-codex" and isinstance(saved.get("result"), dict):
             state.result = saved["result"]
         if state.mode == "codex-tool":
@@ -1292,6 +1431,7 @@ class ACPClient:
         self._reader_task: asyncio.Task[None] | None = None
         self._stderr_task: asyncio.Task[None] | None = None
         self._stop_task: asyncio.Task[None] | None = None
+        self._process_group_id: int | None = None
         self.acp_session_id: str | None = persisted_session_id
         self._assistant_text = ""
         self._agent_message_active = False
@@ -1323,7 +1463,9 @@ class ACPClient:
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             limit=ACP_LINE_LIMIT_BYTES,
+            start_new_session=os.name == "posix",
         )
+        self._process_group_id = self.process.pid if os.name == "posix" else None
         self.state.process = self.process
         self._reader_task = asyncio.create_task(self._read_stdout())
         self._stderr_task = asyncio.create_task(self._read_stderr())
@@ -1535,24 +1677,61 @@ class ACPClient:
         if cancelled:
             raise asyncio.CancelledError
 
+    def _signal_process(self, *, force: bool = False) -> None:
+        assert self.process is not None
+        if self._process_group_id is not None:
+            os.killpg(self._process_group_id, signal.SIGKILL if force else signal.SIGTERM)
+        elif self.process.returncode is None:
+            if force:
+                self.process.kill()
+            else:
+                self.process.terminate()
+
+    def _owned_processes_running(self) -> bool:
+        if self._process_group_id is None:
+            return False
+        try:
+            os.killpg(self._process_group_id, 0)
+        except ProcessLookupError:
+            return False
+        if sys.platform != "linux":
+            return True
+        # Container PID 1 may retain exited orphans; zombies no longer own pipes or execute work.
+        with os.scandir("/proc") as processes:
+            for process in processes:
+                if not process.name.isdecimal():
+                    continue
+                try:
+                    fields = (Path(process.path) / "stat").read_text(encoding="utf-8").rsplit(")", 1)[1].split()
+                except (FileNotFoundError, ProcessLookupError):
+                    continue
+                if int(fields[2]) == self._process_group_id and fields[0] not in {"Z", "X"}:
+                    return True
+        return False
+
+    async def _wait_process_exit(self) -> int:
+        assert self.process is not None
+        return_code = await self.process.wait()
+        while self._owned_processes_running():
+            await asyncio.sleep(0.01)
+        return return_code
+
     async def _stop(self) -> None:
         error: Exception | None = None
         waiter: asyncio.Task[int] | None = None
         try:
             if self.process is not None:
-                waiter = asyncio.create_task(self.process.wait())
-                if self.process.returncode is None:
-                    try:
-                        self.process.terminate()
-                    except ProcessLookupError:
-                        pass  # Exit raced the signal; still verify the owned process below.
+                waiter = asyncio.create_task(self._wait_process_exit())
+                try:
+                    self._signal_process()
+                except ProcessLookupError:
+                    pass
                 _done, pending = await asyncio.wait({waiter}, timeout=ACP_STOP_TIMEOUT_SECONDS)
                 if pending:
-                    if self.process.returncode is None:
-                        try:
-                            self.process.kill()
-                        except ProcessLookupError:
-                            pass
+                    try:
+                        self._signal_process(force=True)
+                    except ProcessLookupError:
+                        pass
                     _done, pending = await asyncio.wait({waiter}, timeout=ACP_STOP_TIMEOUT_SECONDS)
                 if pending or self.process.returncode is None:
                     error = ACPShutdownError("process_exit")
@@ -1710,13 +1889,17 @@ async def _prepare_workspace(state: TaskState, root: Path, env: dict[str, str]) 
     return project, await _workspace_head(state, project, env)
 
 
-async def _turn_has_commit(state: TaskState, project: Path, env: dict[str, str], before: str) -> bool:
+async def _turn_commit_sha(state: TaskState, project: Path, env: dict[str, str], before: str) -> str | None:
     after = await _workspace_head(state, project, env)
     if after == before:
-        return False
+        return None
     if await _git(project, env, "merge-base", "--is-ancestor", before, after, allow_missing=True) is None:
         raise WorkspaceError("Task branch no longer contains the turn's starting commit")
-    return True
+    return after
+
+
+async def _turn_has_commit(state: TaskState, project: Path, env: dict[str, str], before: str) -> bool:
+    return await _turn_commit_sha(state, project, env, before) is not None
 
 
 async def _stop_session_client(session_id: str) -> None:
@@ -1734,47 +1917,95 @@ async def _finish_task(
     credentials: dict[str, str],
     lock_acquired: bool,
     outcome: str,
+    *,
+    delivery_work_completed: bool = False,
+    work_commit_sha: str | None = None,
 ) -> None:
+    deadline = asyncio.get_running_loop().time() + FINALIZATION_TIMEOUT_SECONDS
+    verified_commit = _safe_work_commit_sha(work_commit_sha)
+    state.work_completed = (
+        delivery_work_completed is True and state.mode == "task" and outcome == "completed" and state.error is None
+        and not state.cleanup_failures and not state.cancel_requested and state.stop_requested is None
+        and verified_commit is not None
+    )
+    state.work_commit_sha = verified_commit if state.work_completed else None
+    state.provider_stopped = False
+    # A needs-attention question is not a work failure and must not mask cleanup failure.
+    question = state.error if outcome == "needs_attention" and not state.cleanup_failures else None
+    if outcome == "needs_attention":
+        state.error = state.cleanup_failures[0]["error"] if state.cleanup_failures else None
     if client is not None:
         try:
-            await client.stop()
+            await _await_finalization(
+                state, client.stop(), "provider_shutdown", deadline, FINALIZATION_TIMEOUT_SECONDS,
+            )
         except Exception as exc:
             # Keep a failed provider owner fenced from subsequent turns.
             session_clients.setdefault(state.session_id, client)
+            cleanup_error = (
+                f"Runner finalization timed out: {exc.phase}" if isinstance(exc, FinalizationTimeout)
+                else f"Runner cleanup failed: {type(exc).__name__}"
+                + (f": {exc.phase}" if isinstance(exc, ACPShutdownError) else "")
+            )
+            phase = exc.phase if isinstance(exc, (ACPShutdownError, FinalizationTimeout)) else "provider_shutdown"
+            _record_cleanup_failure(state, phase, cleanup_error)
             outcome = "failed"
-            state.error = f"Runner cleanup failed: {type(exc).__name__}"
-            state.event("failed", error=state.error)
+            state.event(
+                "failed", error=cleanup_error, cleanup_phase=phase,
+            )
             if (
                 not isinstance(exc, ACPShutdownError)
                 and state.process is not None and state.process.returncode is None
             ):
                 try:
                     state.process.kill()
-                    await asyncio.wait_for(state.process.wait(), timeout=10)
-                except (OSError, asyncio.TimeoutError) as stop_error:
+                    await _await_finalization(
+                        state, state.process.wait(), "provider_shutdown", deadline, FINALIZATION_IO_TIMEOUT_SECONDS,
+                    )
+                except (OSError, FinalizationTimeout) as stop_error:
+                    _record_cleanup_failure(
+                        state, "provider_shutdown",
+                        f"Runner finalization timed out: {stop_error.phase}"
+                        if isinstance(stop_error, FinalizationTimeout)
+                        else f"Runner cleanup failed: {type(stop_error).__name__}",
+                    )
                     LOGGER.error("provider cleanup failed (%s)", type(stop_error).__name__)
         else:
+            state.provider_stopped = (
+                state.process is not None and getattr(client, "state", None) is state
+                and getattr(client, "process", None) is state.process
+            )
             if session_clients.get(state.session_id) is client:
                 session_clients.pop(state.session_id)
     if lock_acquired and state.agent == "codex":
         auth_path = worktree / ".codex" / "auth.json"
         try:
-            if auth_path.exists() and await _store_codex_login_if_newer(auth_path.read_text(encoding="utf-8")):
+            if auth_path.exists() and await _await_finalization(
+                state, _store_codex_login_if_newer(auth_path.read_text(encoding="utf-8")),
+                "credential_persist", deadline, FINALIZATION_IO_TIMEOUT_SECONDS,
+            ):
                 state.event("codex_login_stored")
         except Exception as exc:
-            state.event("codex_login_store_failed", error=type(exc).__name__)
+            outcome = "failed"
+            cleanup_error = (
+                f"Runner finalization timed out: {exc.phase}" if isinstance(exc, FinalizationTimeout)
+                else f"Runner credential persistence failed: {type(exc).__name__}"
+            )
+            _record_cleanup_failure(state, "credential_persist", cleanup_error)
+            state.event("codex_login_store_failed", error=type(exc).__name__, cleanup_phase="credential_persist")
         finally:
             try:
                 auth_path.unlink(missing_ok=True)
             except OSError as exc:
                 outcome = "failed"
-                state.error = f"Runner cleanup failed: {type(exc).__name__}"
-                state.event("failed", error=state.error)
+                cleanup_error = f"Runner cleanup failed: {type(exc).__name__}"
+                _record_cleanup_failure(state, "credential_persist", cleanup_error)
+                state.event("failed", error=cleanup_error, cleanup_phase="credential_persist")
     capacity = _capacity_snapshot()
     state.event("capacity", **capacity)
     LOGGER.info("capacity %s", json.dumps(capacity, sort_keys=True))
     credentials.clear()
-    await _flush_event_delivery(state)
+    await _flush_event_delivery(state, deadline)
     if state.status != "failed":
         state.status = (
             "failed" if outcome == "failed" else
@@ -1782,7 +2013,20 @@ async def _finish_task(
             STOPPED_STATUS[state.stop_requested] if state.stop_requested else outcome
         )
     state.finished_at = time.time()
+    if state.status != "failed" and question is not None:
+        state.error = question
     _persist_task(state)
+
+
+def _has_pending_finalization(state: TaskState) -> bool:
+    return any(
+        not pending.done() and (
+            owner.session_id == state.session_id
+            or (state.agent == "codex" and phase == "credential_persist")
+        )
+        for owner in tasks.values() if owner is not state
+        for pending, phase in owner.finalization_tasks.items()
+    )
 
 
 async def _run_task(
@@ -1793,6 +2037,12 @@ async def _run_task(
 ) -> None:
     if state.cancel_requested:
         return
+    if _has_pending_finalization(state):
+        state.status = "failed"
+        state.error = "Runner cleanup is still active; review the previous invocation before retrying"
+        state.finished_at = time.time()
+        state.event("failed", error=state.error)
+        return
     state.status = "running"
     worktree = WORK_ROOT / state.session_id
     worktree.mkdir(parents=True, exist_ok=True)
@@ -1801,6 +2051,8 @@ async def _run_task(
     session_lock = session_locks.setdefault(state.session_id, asyncio.Lock())
     lock_acquired = False
     outcome = "cancelled"
+    delivery_work_completed = False
+    work_commit_sha = None
     try:
         if state.task_id is not None:
             backend_url = os.environ.get("JARVIS_BACKEND_URL")
@@ -1821,6 +2073,10 @@ async def _run_task(
             raise DiskLowExceeded
         await session_lock.acquire()
         lock_acquired = True
+        if _has_pending_finalization(state):
+            session_lock.release()
+            lock_acquired = False
+            raise WorkspaceError("Runner cleanup is still active; review the previous invocation before retrying")
         if state.cancel_requested:
             return
         if state.session_id in session_clients:
@@ -1893,22 +2149,25 @@ async def _run_task(
             question = state.result.pop("jarvis_needs_attention").strip()
             if question:
                 outcome = "needs_attention"
-                state.error = question[:MAX_ATTENTION_QUESTION_LENGTH]
-                state.event("needs_attention", question=state.error)
+                question = question[:MAX_ATTENTION_QUESTION_LENGTH]
+                state.error = state.error or question
+                state.event("needs_attention", question=question)
             else:
                 outcome = "completed"
                 state.event("completed", result=state.result)
         else:
-            has_commit = await _turn_has_commit(state, project, env, starting_commit)
+            turn_commit_sha = await _turn_commit_sha(state, project, env, starting_commit)
             outcome = "completed"
             response = state.result.get("response", {})
-            if isinstance(response, dict) and response.get("stopReason") == "end_turn" and not has_commit:
+            if isinstance(response, dict) and response.get("stopReason") == "end_turn" and turn_commit_sha is None:
                 state.event(
                     "session_question",
                     question=state.last_agent_message or "The agent ended without a new commit.",
                     result=state.result,
                 )
             else:
+                delivery_work_completed = turn_commit_sha is not None
+                work_commit_sha = turn_commit_sha
                 state.event("completed", result=state.result)
     except asyncio.CancelledError:
         outcome = "cancelled"
@@ -1923,17 +2182,23 @@ async def _run_task(
             state.event(outcome, forced=True, error=type(exc).__name__)
         elif isinstance(exc, CodexUsageLimitReached):
             outcome = "failed"
-            state.error = "Codex usage limit reached"
+            state.error = state.error or "Codex usage limit reached"
             state.event("failed", error=state.error, reason="codex_usage_limit")
         else:
             outcome = "failed"
-            state.error = str(exc) if isinstance(exc, WorkspaceError) else f"Runner task failed: {type(exc).__name__}"
+            state.error = state.error or (
+                str(exc) if isinstance(exc, WorkspaceError) else f"Runner task failed: {type(exc).__name__}"
+            )
             state.event("failed", error=state.error)
     finally:
         try:
             # Cancellation must not interrupt owned teardown or publish a premature terminal checkpoint.
             state.finalizing = True
-            cleanup = asyncio.create_task(_finish_task(state, client, worktree, credentials, lock_acquired, outcome))
+            cleanup = asyncio.create_task(_finish_task(
+                state, client, worktree, credentials, lock_acquired, outcome,
+                delivery_work_completed=delivery_work_completed,
+                work_commit_sha=work_commit_sha,
+            ))
             try:
                 cancelled = False
                 while not cleanup.done():
@@ -1946,7 +2211,7 @@ async def _run_task(
                     raise asyncio.CancelledError
             except Exception as exc:
                 state.status = "failed"
-                state.error = f"Runner cleanup failed: {type(exc).__name__}"
+                state.error = state.error or f"Runner cleanup failed: {type(exc).__name__}"
                 state.finished_at = time.time()
                 LOGGER.error("task finalization failed (%s)", type(exc).__name__)
                 try:
@@ -2246,6 +2511,10 @@ async def get_invocation(request: Request) -> Response:
             "events": state.events,
             "result": state.result,
             "error": state.error,
+            "cleanup_failures": _safe_cleanup_failures(state.cleanup_failures),
+            "work_completed": state.work_completed is True,
+            "provider_stopped": state.provider_stopped is True,
+            "work_commit_sha": _safe_work_commit_sha(state.work_commit_sha),
         }
     )
 
@@ -2285,7 +2554,13 @@ async def cancel_invocation(request: Request) -> Response:
             await _stop_session_client(state.session_id)
         except Exception as exc:
             state.status = "failed"
-            state.error = f"Runner cleanup failed: {type(exc).__name__}"
+            cleanup_error = (
+                f"Runner cleanup failed: {type(exc).__name__}"
+                + (f": {exc.phase}" if isinstance(exc, ACPShutdownError) else "")
+            )
+            _record_cleanup_failure(
+                state, exc.phase if isinstance(exc, ACPShutdownError) else "provider_shutdown", cleanup_error,
+            )
             state.finished_at = time.time()
             _persist_task(state)
             return JSONResponse({"error": "Runner cancellation cleanup failed"}, status_code=503)

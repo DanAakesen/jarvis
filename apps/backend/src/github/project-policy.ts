@@ -20,7 +20,8 @@ export interface ProjectPolicyStore {
   withActiveTask<T>(
     taskId: string,
     operation: () => Promise<T>,
-  ): Promise<{ kind: 'active'; value: T } | { kind: 'inactive' }>;
+    expectedHeadSha: string,
+  ): Promise<{ kind: 'active'; value: T } | { kind: 'inactive' } | { kind: 'awaiting_runner' }>;
 }
 
 interface ProjectPolicyOptions {
@@ -99,7 +100,7 @@ async function requestJson(
   body?: unknown,
 ): Promise<Record<string, unknown>> {
   const response = await fetchImpl(`${githubApi}${path}`, {
-    method: body === undefined ? 'GET' : 'POST',
+    method: body === undefined ? 'GET' : 'PUT',
     headers: {
       Accept: 'application/vnd.github+json',
       Authorization: `${['Bear', 'er'].join('')} ${token}`,
@@ -284,9 +285,17 @@ export function createProjectPolicyEvaluator({
   async function markDone(candidate: PolicyPullRequest, withoutChecks = false): Promise<void> {
     if (candidate.taskState !== 'Running' && candidate.taskState !== 'NeedsAttention') return;
     const result = await store.withActiveTask(candidate.taskId, async () => {
-      await tasks.transition(candidate.taskId, 'Done', true);
-    });
+      return tasks.transition(candidate.taskId, 'Done', true);
+    }, candidate.headSha);
     clearNoChecksRecheck(candidate);
+    if (result.kind === 'awaiting_runner') {
+      await recordReason(candidate.taskId, 'Runner completion has not been verified for the current task session; policy completion is waiting.');
+      return;
+    }
+    if (result.kind === 'active' && result.value.kind !== 'ok') {
+      await recordReason(candidate.taskId, 'The task changed before policy completion; completion was not applied.');
+      return;
+    }
     if (result.kind === 'active' && withoutChecks) {
       await tasks.recordEvent({
         taskId: candidate.taskId,
@@ -301,21 +310,32 @@ export function createProjectPolicyEvaluator({
   async function requestConfirmedMerge(
     candidate: PolicyPullRequest,
     path: string,
-    token: string,
     headSha: string,
   ): Promise<void> {
     if (!runConfirmed) {
       await recordReason(candidate.taskId, 'Dan confirmation is unavailable; the merge was not attempted.');
       return;
     }
+    const eligible = await store.withActiveTask(candidate.taskId, async () => undefined, headSha);
+    if (eligible.kind === 'awaiting_runner') {
+      await recordReason(candidate.taskId, 'Runner completion has not been verified for the current task session; the merge was not attempted.');
+      return;
+    }
+    if (eligible.kind === 'inactive') {
+      await recordReason(candidate.taskId, 'The task is no longer active; the merge was not attempted.');
+      return;
+    }
     const key = `${candidate.repository}:${candidate.number}:${headSha}`;
     if (pendingMerges.has(key)) return;
     pendingMerges.add(key);
     const process = async () => {
+      let mergeAttempted = false;
       try {
         const merge = await runConfirmed(
           `Squash-merge pull request #${candidate.number} in ${candidate.repository} at ${headSha.slice(0, 7)}.`,
           () => store.withActiveTask(candidate.taskId, async () => {
+            const token = await tokenIssuer.issue(candidate.repository);
+            mergeAttempted = true;
             const result = await requestJson(fetchImpl, `${path}/merge`, token, {
               merge_method: 'squash',
               sha: headSha,
@@ -330,9 +350,11 @@ export function createProjectPolicyEvaluator({
               });
             }
             return result;
-          }),
+          }, headSha),
         );
-        if (merge.kind === 'inactive') {
+        if (merge.kind === 'awaiting_runner') {
+          await recordReason(candidate.taskId, 'The task runner changed before approval; the approved merge was not attempted.');
+        } else if (merge.kind === 'inactive') {
           await recordReason(candidate.taskId, 'The task is no longer active; the approved merge was not attempted.');
         } else if (merge.value.merged !== true) {
           await recordReason(candidate.taskId, 'GitHub did not confirm the approved squash merge.');
@@ -341,7 +363,9 @@ export function createProjectPolicyEvaluator({
         const reason = error instanceof GithubRequestError && !error.rateLimited &&
           error.status >= 400 && error.status < 500
           ? 'GitHub refused the approved squash merge because merge rules or branch protection prevent it.'
-          : 'Dan rejected the merge or its approval expired; no merge was attempted.';
+          : mergeAttempted
+            ? 'The GitHub merge result could not be verified; check the pull request before retrying.'
+            : 'Merge approval or credentials could not be verified; no merge was attempted.';
         try { await recordReason(candidate.taskId, reason); }
         catch (error) { onConfirmationError?.(error); }
       } finally {
@@ -379,7 +403,7 @@ export function createProjectPolicyEvaluator({
     }
 
     try {
-      const token = await tokenIssuer.issue(candidate.repository);
+      const token = await tokenIssuer.issueForRepositoryRead(candidate.repository);
       const encodedRepository = candidate.repository.split('/').map(encodeURIComponent).join('/');
       const path = `/repos/${encodedRepository}/pulls/${candidate.number}`;
       const pullRequest = pullRequestSnapshot(await requestJson(fetchImpl, path, token));
@@ -462,7 +486,7 @@ export function createProjectPolicyEvaluator({
         return;
       }
 
-      await requestConfirmedMerge(candidate, path, token, pullRequest.headSha);
+      await requestConfirmedMerge(candidate, path, pullRequest.headSha);
     } catch (error) {
       if (error instanceof GithubRequestError && !error.rateLimited && error.status >= 400 && error.status < 500) {
         await recordReason(candidate.taskId, 'GitHub refused to verify the pull request state.');

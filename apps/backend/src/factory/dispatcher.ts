@@ -2,7 +2,8 @@ import { randomUUID } from 'node:crypto';
 import { defaultSettings, type SettingsStore } from '../core/settings.js';
 import type { GitHubDeliveryResult, TaskCompletionGate } from '../github/delivery.js';
 import {
-  FoundryClientError, type CodingAgent, type FoundryClient, type InvocationAccepted, type TaskRequest, type TaskWorkspace,
+  FoundryClientError, runnerCompletionProof, type CodingAgent, type FoundryClient, type InvocationAccepted,
+  type RunnerCompletionProof, type TaskRequest, type TaskWorkspace,
 } from '../foundry/client.js';
 import type { RunningSandbox, SandboxHeartbeat } from './heartbeat.js';
 import type { RecoveryClaimResult, TaskRecoveryStore } from './recovery-store.js';
@@ -13,6 +14,7 @@ import type {
 
 export interface DispatchClaim extends TaskWorkspace {
   taskId: string;
+  executionGeneration: string;
   projectId: string;
   title: string;
   request: string;
@@ -36,7 +38,7 @@ export interface StaleRunningTask extends RunningSandbox {
 
 export interface DispatcherStore {
   claimNext(owner: string, leaseSeconds: number, maxAttempts: number): Promise<DispatchClaimResult>;
-  listStaleRunning(heartbeatBefore: Date, limit: number): Promise<StaleRunningTask[]>;
+  listStaleRunning(heartbeatBefore: Date, limit: number, afterTaskId?: string): Promise<StaleRunningTask[]>;
   isCurrentStaleTask(task: StaleRunningTask): Promise<boolean>;
   recordHeartbeat(sandboxSessionId: string, invocationId: string, invocationCompleted: boolean): Promise<void>;
   deferClaim(owner: string, task: DispatchClaim, delayMs: number): Promise<void>;
@@ -79,7 +81,7 @@ export interface DispatcherOptions {
   workspaceFor?: (task: TaskRecord) => Promise<TaskWorkspace | null>;
   verifyDelivery?: (
     workspace: TaskWorkspace,
-    task: Pick<TaskRecord, 'id' | 'title'>,
+    task: Pick<TaskRecord, 'id' | 'title'> & { workCommitSha: string },
     gate?: TaskCompletionGate,
   ) => Promise<GitHubDeliveryResult>;
 }
@@ -190,6 +192,8 @@ export class TaskDispatcher implements TaskController {
   private reconciliationTimer: NodeJS.Timeout | undefined;
   private reconciling: Promise<void> | undefined;
   private reconciliationWakePending = false;
+  private reconciliationCursor: string | undefined;
+  private reconciliationRetryPending = false;
   private unsubscribe: (() => void) | undefined;
 
   constructor(
@@ -213,7 +217,7 @@ export class TaskDispatcher implements TaskController {
     this.recoveryStore = options.recoveryStore;
     this.workspaceFor = options.workspaceFor;
     this.verifyDelivery = options.verifyDelivery;
-    this.heartbeat.setCompletionHandler((sandbox) => this.acceptCompleted(sandbox));
+    this.heartbeat.setCompletionHandler((sandbox, proof) => this.acceptCompleted(sandbox, proof));
   }
 
   start(): void {
@@ -235,6 +239,8 @@ export class TaskDispatcher implements TaskController {
     this.reconciliationWakePending = false;
     this.wakePending = false;
     await Promise.all([this.pumping, this.reconciling]);
+    this.reconciliationCursor = undefined;
+    this.reconciliationRetryPending = false;
   }
 
   private scheduleReconciliation(delayMs: number, allowIdle = false): void {
@@ -250,26 +256,46 @@ export class TaskDispatcher implements TaskController {
     }
     this.reconciliationTimer = setTimeout(() => {
       this.reconciliationTimer = undefined;
-      this.reconciling = this.reconcileStaleTasks().catch(this.onError).finally(() => {
+      let hasMore = false;
+      let failed = false;
+      this.reconciling = this.reconcileStaleTasks().then((more) => {
+        hasMore = more;
+      }).catch((error) => {
+        failed = true;
+        this.onError(error);
+      }).finally(() => {
         this.reconciling = undefined;
-        if (this.reconciliationWakePending) {
-          this.reconciliationWakePending = false;
+        if (failed) {
+          this.scheduleReconciliation(this.reconciliationIntervalMs, true);
+        } else if (hasMore) {
           this.scheduleReconciliation(0, true);
         } else {
-          this.scheduleReconciliation(this.reconciliationIntervalMs);
+          const retry = this.reconciliationRetryPending;
+          this.reconciliationRetryPending = false;
+          if (this.reconciliationWakePending) {
+            this.reconciliationWakePending = false;
+            this.scheduleReconciliation(0, true);
+          } else {
+            this.scheduleReconciliation(this.reconciliationIntervalMs, retry);
+          }
         }
       });
     }, delayMs);
     this.reconciliationTimer.unref();
   }
 
-  private async reconcileStaleTasks(): Promise<void> {
+  private async reconcileStaleTasks(): Promise<boolean> {
     const heartbeatBefore = new Date(this.now() - this.staleHeartbeatMs);
-    const stale = await this.store.listStaleRunning(heartbeatBefore, maxStaleTasksPerPass);
+    const stale = await this.store.listStaleRunning(
+      heartbeatBefore, maxStaleTasksPerPass, this.reconciliationCursor,
+    );
+    const hasMore = stale.length === maxStaleTasksPerPass;
+    this.reconciliationCursor = hasMore ? stale.at(-1)?.taskId : undefined;
     await Promise.all(stale.map(async (task) => {
       try {
         await this.reconcileTask(task);
       } catch (error) {
+        this.reconciliationRetryPending = true;
         this.onError(error);
         this.onReconciliation({
           taskId: task.taskId,
@@ -280,6 +306,7 @@ export class TaskDispatcher implements TaskController {
         });
       }
     }));
+    return hasMore;
   }
 
   private async reconcileTask(task: StaleRunningTask): Promise<void> {
@@ -336,9 +363,10 @@ export class TaskDispatcher implements TaskController {
       return;
     }
 
-    if (snapshot.status === 'completed') {
+    const proof = runnerCompletionProof(snapshot);
+    if (proof) {
       await this.store.recordHeartbeat(task.sandboxSessionId, task.invocationId, true);
-      const accepted = await this.acceptCompleted(task, task.taskId, task);
+      const accepted = await this.acceptCompleted(task, proof, task.taskId, task);
       const current = await this.tasks.get(task.taskId, 1, 0);
       if (current?.state === 'Running') {
         if (!await this.store.isCurrentStaleTask(task)) {
@@ -361,10 +389,14 @@ export class TaskDispatcher implements TaskController {
 
     const reason = snapshot.status === 'failed'
       ? 'Foundry reports that the task runner failed. Review its task history, then recover the task.'
+      : snapshot.status === 'completed'
+        ? 'The runner finished without current commit-bound delivery proof. Review the task before recovering it.'
       : snapshot.status === 'needs_attention'
         ? 'Foundry reports that the task runner needs input. Review the task history before continuing.'
         : 'I could not determine the task runner status. Review the task before retrying.';
-    const changed = await this.moveToNeedsAttention(task, reason, `foundry_${snapshot.status}`);
+    const changed = await this.moveToNeedsAttention(
+      task, reason, snapshot.status === 'completed' ? 'unverified_completion' : `foundry_${snapshot.status}`,
+    );
     log(snapshot.status, changed ? 'needs_attention' : 'unchanged');
   }
 
@@ -379,7 +411,9 @@ export class TaskDispatcher implements TaskController {
       if (!current || current.state !== 'Running') return false;
       const result = await this.tasks.transition(task.taskId, 'NeedsAttention', false, reasonCode, reason);
       if (result.kind !== 'ok') return false;
-      const ended = await this.store.endTaskSessions(task.taskId, 'NeedsAttention');
+      const ended = await this.store.endTaskSessions(
+        task.taskId, 'NeedsAttention', reasonCode === 'unverified_completion',
+      );
       ended.forEach((sandboxSessionId) => this.heartbeat.untrack(sandboxSessionId));
       return true;
     });
@@ -634,6 +668,7 @@ export class TaskDispatcher implements TaskController {
       const sandboxSessionId = await this.store.recordStarted(this.owner, claim, runnerName, accepted);
       this.heartbeat.track({
         sandboxSessionId,
+        executionGeneration: claim.executionGeneration,
         foundrySessionId: accepted.sessionId,
         agentName: runnerName,
         invocationId: accepted.invocationId,
@@ -653,6 +688,7 @@ export class TaskDispatcher implements TaskController {
 
   private async acceptCompleted(
     sandbox: RunningSandbox,
+    proof?: RunnerCompletionProof,
     knownTaskId?: string,
     reconciliationTask?: StaleRunningTask,
   ): Promise<boolean> {
@@ -662,8 +698,16 @@ export class TaskDispatcher implements TaskController {
     const isCurrent = () => this.store.isCurrentStaleTask(expectedTask);
     const detail = await this.tasks.get(taskId, recoveryEventLimit, 0);
     if (!detail) return false;
-    if (detail.state === 'NeedsAttention') return false;
+    if (detail.state === 'NeedsAttention') return proof === undefined;
     if (detail.state !== 'Running') return true;
+    if (!proof) {
+      await this.moveToNeedsAttention(
+        expectedTask,
+        'The runner finished without current commit-bound delivery proof. Review the task before recovering it.',
+        'unverified_completion',
+      );
+      return true;
+    }
     const gate: TaskCompletionGate = async (operation) => this.store.withTaskPolicyLock(taskId, async () => {
       const latestTask = await this.tasks.get(taskId, 1, 0);
       if (!latestTask || latestTask.state !== 'Running' || !await isCurrent()) {
@@ -671,9 +715,27 @@ export class TaskDispatcher implements TaskController {
       }
       return { kind: 'ran' as const, value: await operation() };
     });
+    const verified = await gate(() => this.tasks.recordEvent({
+      taskId,
+      type: 'runner_completion_verified',
+      summary: proof.kind === 'runner_completed'
+        ? 'Backend verified the current runner reached its final completed state'
+        : 'Backend verified completed work and stopped writer; runner cleanup reported a failure',
+      payload: {
+        sandboxSessionId: sandbox.sandboxSessionId,
+        executionGeneration: sandbox.executionGeneration,
+        foundrySessionId: sandbox.foundrySessionId,
+        invocationId: sandbox.invocationId,
+        workCommitSha: proof.workCommitSha,
+        ...(proof.kind === 'work_completed_writer_stopped'
+          ? { completionKind: proof.kind, cleanupPhases: proof.cleanupPhases } : {}),
+      },
+      source: 'backend',
+    }));
+    if (verified.kind === 'not_running') return true;
     const workspace = await this.workspaceFor?.(detail) ?? null;
     const result = workspace && this.verifyDelivery
-      ? await this.verifyDelivery(workspace, detail, gate)
+      ? await this.verifyDelivery(workspace, { ...detail, workCommitSha: proof.workCommitSha }, gate)
       : {
         kind: 'refused' as const,
         reason: 'The task repository or branch could not be verified.',
@@ -705,6 +767,7 @@ export class TaskDispatcher implements TaskController {
 
   private onTaskEvent(event: TaskEventMessage): void {
     if (event.type === 'sandbox_idle_expired' && event.source === 'backend') {
+      if (this.reconciliationCursor !== undefined) this.reconciliationWakePending = true;
       this.scheduleReconciliation(0, true);
     }
     if (event.type === 'state_changed') {
@@ -718,7 +781,8 @@ export class TaskDispatcher implements TaskController {
       const keepCompletedQuestionSession = state === 'NeedsAttention' && reason === 'session_question';
       if (!keepCompletedQuestionSession &&
         (state === 'Paused' || state === 'NeedsAttention' || state === 'Done' || state === 'Cancelled')) {
-        void this.store.endTaskSessions(event.taskId, state, reason === 'pull_request_open_refused')
+        const invocationCompleted = reason === 'pull_request_open_refused' || reason === 'unverified_completion';
+        void this.store.endTaskSessions(event.taskId, state, invocationCompleted)
           .then((sessionIds) => sessionIds.forEach((id) => this.heartbeat.untrack(id)))
           .catch(this.onError);
       }
@@ -807,6 +871,7 @@ export class TaskDispatcher implements TaskController {
     }
     this.heartbeat.track({
       sandboxSessionId,
+      executionGeneration: task.executionGeneration,
       foundrySessionId: accepted.sessionId,
       agentName: runnerName,
       invocationId: accepted.invocationId,

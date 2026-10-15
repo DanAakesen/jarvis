@@ -33,6 +33,7 @@ const configuration = loadDatabaseConfig();
 if (!configuration || process.env.NODE_ENV !== 'test' || configuration.server !== '127.0.0.1') {
   throw new Error('Database integration tests require an isolated loopback SQL Server test configuration');
 }
+const rollbackConfiguration: sql.config = configuration;
 const database = `jarvis_ci_${randomUUID().replaceAll('-', '')}`;
 const administrator = new sql.ConnectionPool({ ...configuration, database: 'master' });
 const pool = new sql.ConnectionPool({ ...configuration, database });
@@ -48,18 +49,37 @@ const tablesInSchema = [
   'workspace_html_artifact_versions', 'workspace_html_artifacts', 'workspace_pins',
 ];
 
-async function tables(): Promise<string[]> {
-  const { recordset } = await pool.request().query<{ name: string }>(
+async function tables(databasePool = pool): Promise<string[]> {
+  const { recordset } = await databasePool.request().query<{ name: string }>(
     "SELECT name FROM sys.tables WHERE schema_id = SCHEMA_ID(N'dbo') AND name <> N'schema_migrations' ORDER BY name");
   return recordset.map((row) => row.name).sort();
 }
-async function ledger(): Promise<string[]> {
-  const { recordset } = await pool.request().query<{ name: string }>('SELECT name FROM dbo.schema_migrations ORDER BY name');
+async function ledger(databasePool = pool): Promise<string[]> {
+  const { recordset } = await databasePool.request().query<{ name: string }>('SELECT name FROM dbo.schema_migrations ORDER BY name');
   return recordset.map((row) => row.name);
 }
-async function scalar(text: string): Promise<number> {
-  const { recordset } = await pool.request().query<{ id: number }>(`${text}; SELECT CAST(SCOPE_IDENTITY() AS int) AS id;`);
+async function scalar(text: string, databasePool = pool): Promise<number> {
+  const { recordset } = await databasePool.request().query<{ id: number }>(`${text}; SELECT CAST(SCOPE_IDENTITY() AS int) AS id;`);
   return recordset[0]?.id ?? 0;
+}
+
+async function withRollbackDatabase(
+  test: (rollbackPool: sql.ConnectionPool, committed: Migration[]) => Promise<void>,
+): Promise<void> {
+  const name = `jarvis_rollback_${randomUUID().replaceAll('-', '')}`;
+  const rollbackPool = new sql.ConnectionPool({ ...rollbackConfiguration, database: name });
+  await administrator.request().batch(`CREATE DATABASE [${name}];`);
+  try {
+    await rollbackPool.connect();
+    const committed = await readMigrations();
+    await applyMigrations(rollbackPool, committed);
+    await test(rollbackPool, committed);
+  } finally {
+    await rollbackPool.close();
+    await administrator.request().batch(`IF DB_ID(N'${name}') IS NOT NULL BEGIN
+      ALTER DATABASE [${name}] SET SINGLE_USER WITH ROLLBACK IMMEDIATE;
+      DROP DATABASE [${name}]; END;`);
+  }
 }
 
 function createMemoryArchiveBlobStore() {
@@ -1639,6 +1659,7 @@ describe('committed domain schema (groups 1-8)', () => {
     const running = (await store.listRunning()).filter((row) => row.sandboxSessionId === String(sandboxSessionId));
     expect(running).toEqual([{
       sandboxSessionId: String(sandboxSessionId), foundrySessionId: 'heartbeat-session',
+      executionGeneration: '0',
       agentName: 'jarvis-runner-base-1x2', invocationId: 'heartbeat-invocation',
       invocationCompleted: false,
     }]);
@@ -1755,6 +1776,7 @@ describe('committed domain schema (groups 1-8)', () => {
     const heartbeatStore = createSandboxHeartbeatStore(pool, eventHub);
     expect(await heartbeatStore.listRunning()).toContainEqual({
       sandboxSessionId: String(sandboxSessionId), foundrySessionId: `idle-expiry-session-${type}`,
+      executionGeneration: '0',
       agentName: 'jarvis-runner-base-1x2', invocationId, invocationCompleted: true,
     });
     expect(await heartbeatStore.markNeedsAttention(
@@ -1867,10 +1889,34 @@ describe('committed domain schema (groups 1-8)', () => {
     await pool.request().query(`DELETE dbo.tool_calls WHERE id = ${String(call)}`);
   });
 
-  it('records smoke usage and preserves it when migration 0045 is reverted', async () => {
+  it('preserves used execution generations and only reverts unused migration 0048', () => withRollbackDatabase(async (rollbackPool, committed) => {
+    const projectId = await scalar(`INSERT dbo.projects
+      (name, repo, default_branch, default_agent, policy, sandbox_size, tech)
+      VALUES (N'Rollback', N'DanAakesen/rollback', N'main', N'copilot', N'deliver_pr', N'1x2', N'node')`, rollbackPool);
+    const taskId = await scalar(`INSERT dbo.tasks (project_id, title, request, source, agent)
+      VALUES (${String(projectId)}, N'Rollback proof', N'Preserve generation', N'board', N'copilot')`, rollbackPool);
+    const down = await readDownMigration('0048_factory_execution_generation.sql');
+
+    expect(await revertMigration(rollbackPool, committed, down)).toBe(down.name);
+    expect(await applyMigrations(rollbackPool, committed)).toEqual([down.name]);
+    await rollbackPool.request().input('taskId', sql.BigInt, taskId)
+      .query('UPDATE dbo.tasks SET execution_generation = execution_generation + 1 WHERE id = @taskId;');
+    await expect(revertMigration(rollbackPool, committed, down))
+      .rejects.toThrow('Factory execution generations must be retained');
+    expect(await ledger(rollbackPool)).toEqual(committed.map((migration) => migration.name));
+    const retained = await rollbackPool.request().input('taskId', sql.BigInt, taskId)
+      .query<{ generation: string }>(`SELECT CONVERT(varchar(19), execution_generation) AS generation
+        FROM dbo.tasks WHERE id = @taskId;`);
+    expect(retained.recordset).toEqual([{ generation: '1' }]);
+    const columns = await rollbackPool.request().query<{ task_bytes: number; session_bytes: number }>(
+      `SELECT COL_LENGTH(N'dbo.tasks', N'execution_generation') AS task_bytes,
+        COL_LENGTH(N'dbo.sandbox_sessions', N'execution_generation') AS session_bytes;`);
+    expect(columns.recordset).toEqual([{ task_bytes: 8, session_bytes: 8 }]);
+  }));
+
+  it('records smoke usage and preserves it when migration 0045 is reverted', () => withRollbackDatabase(async (rollbackPool, committed) => {
     const eventId = randomUUID();
-    const committed = await readMigrations();
-    await createUsageStore(pool).recordFoundryUsage!({
+    await createUsageStore(rollbackPool).recordFoundryUsage!({
       role: 'smoke',
       model: 'gpt-6-luna',
       inputTokens: 1,
@@ -1881,52 +1927,51 @@ describe('committed domain schema (groups 1-8)', () => {
     try {
       // Later additive migrations must be reversed first; do not weaken 0045's evidence guard.
       for (const migration of committed.filter(migration => migration.name > '0045_smoke_usage_role.sql').reverse()) {
-        await revertMigration(pool, committed, await readDownMigration(migration.name));
+        await revertMigration(rollbackPool, committed, await readDownMigration(migration.name));
       }
-      const usage = await pool.request()
+      const usage = await rollbackPool.request()
         .input('eventId', sql.NVarChar(300), eventId)
         .query<{ role: string }>('SELECT DISTINCT role FROM dbo.usage WHERE source_event_id = @eventId;');
       expect(usage.recordset).toEqual([{ role: 'smoke' }]);
       await expect(revertMigration(
-        pool, committed, await readDownMigration('0045_smoke_usage_role.sql'),
+        rollbackPool, committed, await readDownMigration('0045_smoke_usage_role.sql'),
       )).rejects.toThrow('Smoke usage rows must be retained');
-      const retainedUsage = await pool.request()
+      const retainedUsage = await rollbackPool.request()
         .input('eventId', sql.NVarChar(300), eventId)
         .query<{ role: string }>('SELECT DISTINCT role FROM dbo.usage WHERE source_event_id = @eventId;');
       expect(retainedUsage.recordset).toEqual([{ role: 'smoke' }]);
     } finally {
-      await pool.request()
+      await rollbackPool.request()
         .input('eventId', sql.NVarChar(300), eventId)
         .query('DELETE FROM dbo.usage WHERE source_event_id = @eventId;');
-      await applyMigrations(pool, committed);
+      await applyMigrations(rollbackPool, committed);
     }
-  });
+  }));
 
-  it('preserves steering metadata when reverting migration 0020', async () => {
-    const committed = await readMigrations();
-    const session = await scalar("INSERT dbo.jarvis_sessions (channel, language) VALUES (N'chat', N'en')");
+  it('preserves steering metadata when reverting migration 0020', () => withRollbackDatabase(async (rollbackPool, committed) => {
+    const session = await scalar("INSERT dbo.jarvis_sessions (channel, language) VALUES (N'chat', N'en')", rollbackPool);
     const message = await scalar(`INSERT dbo.messages
       (jarvis_session_id, role, text, language, interrupted)
-      VALUES (${String(session)}, N'jarvis', N'Partial reply', N'en', 1)`);
+      VALUES (${String(session)}, N'jarvis', N'Partial reply', N'en', 1)`, rollbackPool);
     const newer = committed.filter((migration) => migration.name > '0020_chat_message_steering.sql').reverse();
     for (const migration of newer) {
       const script = await readDownMigration(migration.name);
-      expect(await revertMigration(pool, committed, script)).toBe(script.name);
+      expect(await revertMigration(rollbackPool, committed, script)).toBe(script.name);
     }
     const down = await readDownMigration('0020_chat_message_steering.sql');
 
-    await expect(revertMigration(pool, committed, down))
+    await expect(revertMigration(rollbackPool, committed, down))
       .rejects.toThrow('Message language and interruption data must be retained');
-    expect((await pool.request().query(
+    expect((await rollbackPool.request().query(
       `SELECT language, interrupted FROM dbo.messages WHERE id = ${String(message)}`,
     )).recordset).toEqual([{ language: 'en', interrupted: true }]);
 
-    await pool.request().query(
+    await rollbackPool.request().query(
       `UPDATE dbo.messages SET language = NULL, interrupted = 0 WHERE id = ${String(message)}`,
     );
-    expect(await revertMigration(pool, committed, down)).toBe(down.name);
-    expect(await applyMigrations(pool, committed)).toEqual([down.name, ...[...newer].reverse().map((migration) => migration.name)]);
-  });
+    expect(await revertMigration(rollbackPool, committed, down)).toBe(down.name);
+    expect(await applyMigrations(rollbackPool, committed)).toEqual([down.name, ...[...newer].reverse().map((migration) => migration.name)]);
+  }));
 
   it('refuses to revert a migration that is not the latest applied one and keeps state on failure', async () => {
     const committed = await readMigrations();
@@ -1941,15 +1986,14 @@ describe('committed domain schema (groups 1-8)', () => {
     expect(await ledger()).toEqual(committed.map((migration) => migration.name));
   });
 
-  it('reverts every committed migration with its down script, newest first, and applies them again', async () => {
-    const committed = await readMigrations();
+  it('reverts every committed migration with its down script, newest first, and applies them again', () => withRollbackDatabase(async (rollbackPool, committed) => {
     for (const migration of [...committed].reverse()) {
-      expect(await revertMigration(pool, committed, await readDownMigration(migration.name))).toBe(migration.name);
+      expect(await revertMigration(rollbackPool, committed, await readDownMigration(migration.name))).toBe(migration.name);
     }
-    expect(await tables()).toEqual([]);
-    expect(await ledger()).toEqual([]);
-    await expect(revertMigration(pool, committed, await readDownMigration(core))).rejects.toThrow('latest applied');
-    expect(await applyMigrations(pool, committed)).toEqual(committed.map((migration) => migration.name));
-    expect(await tables()).toEqual(tablesInSchema);
-  });
+    expect(await tables(rollbackPool)).toEqual([]);
+    expect(await ledger(rollbackPool)).toEqual([]);
+    await expect(revertMigration(rollbackPool, committed, await readDownMigration(core))).rejects.toThrow('latest applied');
+    expect(await applyMigrations(rollbackPool, committed)).toEqual(committed.map((migration) => migration.name));
+    expect(await tables(rollbackPool)).toEqual(tablesInSchema);
+  }));
 });

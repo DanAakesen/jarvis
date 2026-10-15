@@ -40,6 +40,8 @@ function github(options: {
   pullRepository?: string;
   pullBody?: string | null;
   draft?: boolean;
+  branchSha?: string;
+  pullSha?: string;
 } = {}) {
   let pullBody = options.pullBody ?? pullRequest.body;
   let draft = options.draft ?? pullRequest.draft;
@@ -49,7 +51,7 @@ function github(options: {
     draft,
     head: {
       ref: workspace.branch,
-      sha: 'a'.repeat(40),
+      sha: options.pullSha ?? 'a'.repeat(40),
       repo: { full_name: options.pullRepository ?? workspace.repository },
     },
   });
@@ -65,7 +67,7 @@ function github(options: {
     if (parsed.pathname.endsWith(`/branches/${encodeURIComponent(workspace.branch)}`)) {
       return options.branchStatus
         ? jsonResponse({}, options.branchStatus)
-        : jsonResponse({ name: workspace.branch });
+        : jsonResponse({ name: workspace.branch, commit: { sha: options.branchSha ?? 'a'.repeat(40) } });
     }
     if (parsed.pathname.endsWith('/pulls') && method === 'GET') {
       return jsonResponse(created ? [matchingPullRequest()] : []);
@@ -124,6 +126,35 @@ function fixture(
 }
 
 describe('GitHub task delivery', () => {
+  it('refuses an unpushed current commit instead of reusing a previous green PR', async () => {
+    const api = github({ existing: true });
+    const test = fixture(api.fetch);
+    await expect(test.handler(workspace, { ...task, workCommitSha: 'b'.repeat(40) })).resolves.toEqual({
+      kind: 'refused', reason: 'The published task branch does not match the current runner work commit.',
+    });
+    expect(api.calls).toHaveLength(1);
+    expect(test.recordEvent).not.toHaveBeenCalled();
+    expect(test.recordPullRequest).not.toHaveBeenCalled();
+    expect(api.creates).toBe(0);
+  });
+
+  it.each([false, true])('accepts the exact published work commit with existing PR %s', async (existing) => {
+    const api = github({ existing, branchSha: 'b'.repeat(40), pullSha: 'b'.repeat(40) });
+    const test = fixture(api.fetch);
+    await expect(test.handler(workspace, { ...task, workCommitSha: 'b'.repeat(40) }))
+      .resolves.toEqual({ kind: 'awaiting_policy' });
+    expect(test.recordPullRequest).toHaveBeenCalledWith(expect.objectContaining({ headSha: 'b'.repeat(40) }));
+  });
+
+  it.each([false, true])('rejects a mismatched created or reused PR head: existing %s', async (existing) => {
+    const api = github({ existing, branchSha: 'b'.repeat(40), pullSha: 'a'.repeat(40) });
+    const test = fixture(api.fetch);
+    await expect(test.handler(workspace, { ...task, workCommitSha: 'b'.repeat(40) }))
+      .resolves.toMatchObject({ kind: 'refused' });
+    expect(test.recordPullRequest).not.toHaveBeenCalled();
+    expect(test.recordEvent).not.toHaveBeenCalled();
+  });
+
   it('does not create a PR when cancellation wins the completion gate', async () => {
     const api = github();
     const test = fixture(api.fetch);
