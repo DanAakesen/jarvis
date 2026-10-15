@@ -41,3 +41,84 @@ jobs:
             sleep 2
           done
           exit 1
+      - name: Detect reference Python manifest changes
+        if: github.event_name == 'pull_request'
+        id: reference
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          [[ "$BASE_SHA" =~ ^[a-f0-9]{40}$ ]]
+          git fetch --no-tags --depth=1 origin "$BASE_SHA"
+          changes=$(git diff --name-only "$BASE_SHA" HEAD -- \
+            docs/reference/voice-prototype/agent/requirements.txt \
+            docs/reference/voice-prototype/agent/requirements-dev.txt)
+          if [[ -n "$changes" ]]; then
+            echo 'changed=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'changed=false' >> "$GITHUB_OUTPUT"
+          fi
+      - name: Setup reference Python
+        if: steps.reference.outputs.changed == 'true'
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.13'
+      - name: Verify baseline and combined reference Python dependencies
+        if: steps.reference.outputs.changed == 'true'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          APPLICATIONINSIGHTS_CONNECTION_STRING: ''
+          OTEL_EXPORTER_OTLP_ENDPOINT: ''
+        run: |
+          set -euo pipefail
+          reference=docs/reference/voice-prototype/agent
+          baseline="$RUNNER_TEMP/reference-compat-baseline"
+          mkdir "$baseline"
+          git archive "$BASE_SHA" "$reference" | tar -x -C "$baseline"
+          for candidate in baseline combined; do
+            source="$GITHUB_WORKSPACE/$reference"
+            if [[ "$candidate" == baseline ]]; then
+              source="$baseline/$reference"
+            fi
+            venv="$RUNNER_TEMP/reference-compat-$candidate-venv"
+            python -m venv "$venv"
+            interpreter="$venv/bin/python"
+            "$interpreter" -m pip --disable-pip-version-check install --quiet \
+              --requirement "$source/requirements.txt" \
+              --requirement "$source/requirements-dev.txt" \
+              --report "$RUNNER_TEMP/reference-$candidate-install.json"
+            "$interpreter" -m pip check
+            (
+              cd "$source"
+              "$interpreter" -m pytest -q \
+                --junitxml="$RUNNER_TEMP/reference-$candidate-tests.xml"
+            )
+            "$interpreter" - "$source" <<'PY'
+          import importlib.metadata as metadata
+          import json
+          import pathlib
+          import sys
+          import jwt
+
+          root = pathlib.Path(sys.argv[1])
+          pins = dict(
+              line.strip().split("==")
+              for file in ("requirements.txt", "requirements-dev.txt")
+              for line in (root / file).read_text().splitlines()
+              if line.strip() and not line.lstrip().startswith("#")
+          )
+          actual = {name: metadata.version(name) for name in pins}
+          assert actual == pins, (pins, actual)
+          key = "local-offline-synthetic-key-not-a-secret"
+          token = jwt.encode({"probe": "synthetic"}, key, algorithm="HS256")
+          assert jwt.decode(token, key, algorithms=["HS256"]) == {"probe": "synthetic"}
+          print(json.dumps({
+              "python": sys.version.split()[0],
+              "verified_pins": len(pins),
+              "selected": {
+                  name: actual[name] for name in ("urllib3", "multidict", "PyJWT", "oauthlib")
+              },
+              "offline_hs256": "passed",
+          }))
+          PY
+          done

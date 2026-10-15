@@ -1,5 +1,14 @@
 # Product
 
+## Hosted chat terminal response (15 October 2026)
+
+The hosted chat application's `done` SSE event ends that response. Process its
+bounded completion metadata once, stop consuming later frames and await disposal
+of the owned response reader; do not require the server to close its HTTP socket
+first. Preserve partial-text streaming, pre-completion errors, cancellation,
+authentication and existing response-size and request deadlines. This is not a
+Factory task-completion or physical cloud-deallocation signal.
+
 ## Mobile/Status review publication (14 October 2026)
 
 Dan approved commit, push and a separate review PR for the accepted phone
@@ -111,6 +120,7 @@ Keep implementation phases and progress in [PLAN.md](PLAN.md), feature summaries
 - **Purpose:** one Azure platform for building software projects, and later for banking, health and fitness, calendar, and further areas, all controlled through one shared UI and voice.
 - **Language:** Dan speaks Danish and English. UI copy and documentation are English.
 - Jarvis can develop its own repository through the same task flow.
+- For overall capability overviews, chat and voice briefly name every successfully discovered category. They must not invent unavailable categories or describe failed/refused discovery as successful.
 - Prefer Microsoft services, so Dan learns the stack and new Foundry features, unless Dan confirms a different provider for a capability.
 
 ### Roadmap
@@ -824,6 +834,8 @@ Dan decided that GitHub issues are the single backlog. When Dan asks Jarvis to c
 P12-05 adds an inactive, explicitly invoked health processor over the existing SQL inbox: metrics/sleep/workouts/detail/minute HR, canonical physical units, Copenhagen dates, exact session/checksum replay and bounded retry/quarantine. Domain changes, ingestion lineage and processed-feed freshness commit together; phone heartbeat stays separate. Empty workout exports cannot erase history, missing values stay unknown, and native nutrition cannot feed back into canonical meals. Owner history/detail reads are bounded and unregistered. No scheduler, source import, live device changes or activation; protected/live parity remains gated.
 
 Heart-rate summaries and series must validate declared units consistently. Unsupported rate units quarantine without changing processed freshness; only established legacy summary fields imply BPM when their unit is absent. Missing samples and summaries remain unknown, not inferred.
+
+Body-fat percentage accepts string `%`/`percent` or `fraction`/`1` and normalizes to percent. Unsupported strings and non-string unit declarations quarantine even when another unit could override them. Absent/null/blank units remain missing; without a supported inherited unit they stay unknown without inferred conversion. Preserve zero, missing values and raw evidence.
 
 P12-04 reuses the existing backend and SQL for an inactive Health Auto Export upload/heartbeat boundary. Owner-bound hashed, scoped, revocable device credentials remain separate from human login. An 8-MiB upload is accepted only after the SQL raw inbox transaction commits; SQL outage/capacity returns 503 for the phone to retry. Exact sessions/checksums deduplicate and changed bytes conflict. The bounded inbox retains raw evidence without automatic deletion; processing/approved compaction belong downstream. No separate Blob/Queue/host or new resources are needed. Accepted and processed freshness stay distinct. Source/device settings and production enablement remain unchanged; protected/live/phone acceptance remains gated.
 

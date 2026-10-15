@@ -334,7 +334,7 @@ export function createFoundryInvocationConversationAgent(
         } catch { /* Legacy completion has no visual metadata. */ }
       };
       try {
-        while (true) {
+        while (!completed) {
           const { done, value } = await reader.read();
           if (done) break;
           receivedBytes += value.byteLength;
@@ -343,6 +343,7 @@ export function createFoundryInvocationConversationAgent(
           const parsed = parseEvents(buffer);
           for (const event of parsed.events) {
             finish(event);
+            if (completed) break;
             const delta = deltaFromEvent(event);
             if (delta !== undefined) {
               firstDeltaMs ??= performance.now() - invocationStarted;
@@ -351,14 +352,17 @@ export function createFoundryInvocationConversationAgent(
           }
           buffer = parsed.pending;
         }
-        buffer += decoder.decode();
-        const finalEvents = parseEvents(`${buffer}\n\n`).events;
-        for (const event of finalEvents) {
-          finish(event);
-          const delta = deltaFromEvent(event);
-          if (delta !== undefined) {
-            firstDeltaMs ??= performance.now() - invocationStarted;
-            yield delta;
+        if (!completed) {
+          buffer += decoder.decode();
+          const finalEvents = parseEvents(`${buffer}\n\n`).events;
+          for (const event of finalEvents) {
+            finish(event);
+            if (completed) break;
+            const delta = deltaFromEvent(event);
+            if (delta !== undefined) {
+              firstDeltaMs ??= performance.now() - invocationStarted;
+              yield delta;
+            }
           }
         }
       } finally {
