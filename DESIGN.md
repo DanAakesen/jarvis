@@ -1084,6 +1084,16 @@ new animation is introduced.
 
 ## Daily migration visual requirement (12 October 2026)
 
-15 October clarification for the inactive P12-08 service handoff: the current user-directed surface is one Daily page and existing on-demand GenUI, not a widget, separate Workouts/Nutrition pages or four fixed native views. Preserve their underlying data capabilities. This backend candidate changes no UI or visual implementation and does not start downstream #724.
+### Current Daily scope (15 October 2026)
+
+Dan excluded new P12-08/#723 coaching/recovery/recomp automation. Preserve one
+Daily page plus existing on-demand GenUI in the single assistant conversation:
+no widget, separate Workouts/Nutrition pages or four mandatory native command
+views. Existing health/nutrition/workout tracking and retained records are not
+removed. Do not add coaching controls or generated coaching views under #724.
+Earlier issue/view descriptions are historical where they conflict with this
+confirmed scope; exclusion is not completed acceptance or UI implementation.
+Existing Jarvis styling, accessibility, mobile/browser and protected migration
+gates remain unchanged.
 
 Confirmed by Dan for #730/#731/#732/#726: all migrated React/rich UI fully follows the current Jarvis layout and styling. Current DESIGN.md direction, `apps/web/src/styles.css` tokens, shared components, theme/density/motion settings and native phone/workspace patterns are the source of truth. Preserve capabilities and data semantics while restyling/recomposing legacy Daily content; do not carry its navy/plum/card skin, create a second theme or replace the shared shell, voice or window manager. Generated/ad-hoc views receive only safe trusted Jarvis theme context through the existing bridge, without widened permissions. UI issues require full mobile-first real-browser visual acceptance. P12-03 remains backend/schema-only; this records the standing direction, not completed visual work.

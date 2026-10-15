@@ -58,6 +58,39 @@ Task 17's later supported cancellation success does not change that distinction.
 No publication, extra live action, access workaround or resource change is
 authorised by this record; historical freezes remain immutable.
 
+## Exclude new Daily coaching, preserve core integration (15 October 2026)
+
+**Confirmed user decision, not a proposal or completed acceptance.** Dan:
+"Also i dont know what that coaching is, but you dont need to add that, you can take that out of scope."
+
+Withdraw NEW P12-08/#723 coaching/recovery/recomp automation from the planned
+scope and combined release. Retain the first and waist-corrected unmerged
+source freezes byte-exact as archived evidence, not accepted/merged work.
+This does not remove existing main Daily health, nutrition, workout/tracking,
+integration capabilities or retained readiness/recovery/measurement records.
+No original application, schema or data change is authorized.
+
+Core P12-09/#724 API/tools work excludes new coaching; a deliberately excluded
+optional feature and its missing maintenance/TDEE, completeness, expiry or
+readiness interpretation must not remain semantic completion prerequisites.
+Do not invent those rules or activate #724. Existing core validation remains.
+Keep one Daily page plus existing on-demand GenUI, no widget, extra
+Workouts/Nutrition pages or mandatory four native views. Parent owns native
+issue/dependency/board reconciliation after this source update. The coordinator
+verified that plan-status derives native dependency links from PLAN, so update
+only P12-09's dependency cell from `P12-08` to completed `P12-05, P12-07`
+(#720/#722), not an empty or bypassed dependency. All 381 row positions,
+309 task IDs, every Status cell and the other 380 rows remain byte-exact;
+retain #723's row. Conflicting older scope descriptions are historical.
+
+Protected backup/export, authoritative-original-source/parity,
+real-device/provider, final-delta, rollback and cutover evidence remain
+required for retained core scope. Original Daily stays canonical before
+cutover. The coordinator reports that original-repository identity matches
+GitHub main, but collector metadata is not proof of the earlier health-schema
+source or live parity; this docs-only lane performs no further source search.
+This scope decision alone is not code removal, a release or acceptance proof.
+
 ## Cancel attention after a failed pre-start without inventing ownership (15 October 2026)
 
 Complete review after published `0b4e79c2` passed ten CI jobs / SQL 176 tests
@@ -743,16 +776,6 @@ not-planned and missing-issue fallbacks remain unchanged. This corrects PLAN
 reporting only: merge proves code integration, not satisfaction of live
 acceptance gates, so open acceptance issues remain open and their status cells
 stay workflow-owned.
-
-## P12-08 inactive coaching boundary (15 October 2026)
-
-Independent actual-source synthetic review reproduced a missing waist trend: the existing row adapter retained canonical metres, but the first service/model freeze dropped `waist_circumference`. The bounded correction carries actual waist into dated/provenanced fourteen-day points and trends, with existing stale/recovery exclusions. Recorded metrics are weight, waist, fat percentage and actual lean mass; fat mass remains separately marked as derived. Retain the first freeze byte-exact and issue a replacement exact-base patch/receipt. Nine focused native checks fail eight cases on the first freeze and pass all nine on the correction; their explicit read-boundary doubles are not authentication, real SQL, Vitest or strict-type evidence. Missing maintenance/completeness and full acceptance gates remain open.
-
-The coordinator released original #723 as one synthetic, inactive source slice after #720/#722 closed. Keep one authoritative calculation path behind existing authenticated owner seams and mapped profile/readiness/recovery/experiment tables. No runtime/API/tool/UI activation, new persistence, worker, source/private record or device/provider work follows from that release.
-
-No authoritative maintenance/TDEE derivation, nutrition-day completeness or readiness scale exists in the supplied approved context. Do not invent them: owner reads expose partial evidence and unavailable budgets/deficit comparisons; explicitly supplied synthetic maintenance tests only arithmetic. Keep readiness as rating/context without classification. Historical partial shortfalls are unknown, recovery measurements are retained but excluded from eligible aggregates, and four body metrics use actual lean mass. Reuse the existing owner transaction/commit boundary for explicit policy/recovery/readiness and one-experiment changes, with profile revision CAS and canonical operation replay. Full #723 acceptance still needs the missing semantic contract and normal integrated validation.
-
-The current user-directed UI contract is one Daily page plus existing on-demand GenUI, no widget, separate Workouts/Nutrition pages or fixed four-view implementation. This source slice supplies no UI and does not start #724. Original Daily stays unchanged/canonical; protected export/backup, parity, physical-device, final-delta and rollback/cutover gates are unaltered.
 
 ## P12-05 inactive SQL health processing (13 October 2026)
 

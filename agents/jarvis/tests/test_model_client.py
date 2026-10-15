@@ -1081,7 +1081,7 @@ async def test_request_maximum_includes_later_setup_and_preserves_failures(
                 return await super().get_final_message()
 
         streams = [
-            Stream([], SimpleNamespace(content=[SimpleNamespace(
+            Stream([], SimpleNamespace(content=[FakeItem(
                 type="tool_use", id="first", name="create_task", input={"text": "Action"},
             )], usage=None)),
             Stream(["Done."], SimpleNamespace(content=[], usage=None)),

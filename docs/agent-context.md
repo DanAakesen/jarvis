@@ -97,30 +97,36 @@ without changing shared packages or manifests. Disable unrelated pytest plugin
 autoload for these local checks and preserve initial failures in the receipt.
 Require fresh pinned Linux CI; no local image/provider/live claim follows.
 
-## P12-08 inactive coaching candidate (15 October 2026)
+## Confirmed Daily scope exclusion (15 October 2026)
 
-Original #723 has a coordinator-released source candidate under
-`apps/backend/src/daily/coaching`, with no production registration or new schema.
-Use the existing backend package cwd and focused command
-`npm test -- src/daily/coaching/model.test.ts src/daily/coaching/evidence.test.ts src/daily/coaching/service.test.ts`.
-The existing `npm run test:database -- src/database/coaching.integration.test.ts`
-runner requires isolated loopback SQL and synthetic fixtures. The bounded waist
-correction passes the three unit suites, 47 tests, in an owned fixture reusing
-approved read-only Node 22.23.3 x64/Vitest 5.0.2 dependencies. Its contracts alias
-points only to the exact candidate; caches stay owned. The initial ARM64 native
-binding failure remains in the receipt; no dependencies were installed or
-changed. Package-command/pinned Vitest 5.0.3 CI, strict types, lint and real SQL
-remain unexecuted. The separate 24 native regression and nine waist checks do
-not substitute for those gates; native service checks use explicit read doubles.
+Dan removed NEW P12-08/#723 coaching/recovery/recomp automation from planned
+scope and the combined release. Withdraw the candidate; retain its first and
+waist-corrected freezes byte-exact as archived evidence, not accepted/merged
+work. Do not remove existing main Daily health, nutrition, workout/tracking,
+integration capabilities or records. Original Daily stays canonical and its
+source/schema/data are untouched.
 
-Keep maintenance/TDEE and nutrition-completeness gaps explicit; do not infer
-budgets, zeros or a readiness scale. See the
-[service contract](../apps/backend/src/daily/coaching/README.md).
-This frozen patch is for parent review/batched checks, not full #723 acceptance
-or #724 activation. Preserve workflow-owned PLAN cells and all protected
-export/backup/private/device/cutover gates. No commit/publication, new worker or
-shared setting was authorised in this source assignment; broader standing
-release authority below does not override that bounded handoff.
+Core P12-09/#724 API/tools work must exclude new coaching and must not wait for
+#723 acceptance or missing coaching semantics. No activation is released here.
+Keep one Daily page plus existing on-demand GenUI in the same conversation,
+no widget, extra Workouts/Nutrition pages or mandatory four native views.
+Parent handles GitHub dependency/issue/board changes after this source update.
+The coordinator verified plan-status recreates native links from PLAN: change
+only P12-09's dependency cell from `P12-08` to retained completed
+`P12-05, P12-07` (#720/#722). Preserve all 381 row positions, 309 task IDs,
+every Status cell and the other 380 rows byte-exact; do not delete #723's row.
+This retains actual prerequisites rather than bypassing dependency gates.
+
+Do not chase or guess maintenance/TDEE, nutrition-completeness,
+freshness-expiry or readiness-scale contracts for the excluded feature.
+Existing core validation/freshness and protected backup/export,
+authoritative-original-source/parity, real-device/provider, final-delta,
+rollback and cutover gates remain. The coordinator's read-only original-repo
+identity comparison is not health-schema or data-parity proof; this lane must
+not search that original app. This is a docs-only exact-base handoff: no
+source/build/test/lint/SQL, dependency, provider/device, setting or publication
+work follows from it. Earlier coaching scope/validation statements are
+historical and do not override this confirmed exclusion.
 
 ## Pre-start cancellation boundary and release evidence (15 October 2026)
 

@@ -1,5 +1,36 @@
 # Approved Daily migration to Jarvis
 
+## Current approved scope (15 October 2026)
+
+Dan explicitly excluded NEW P12-08/#723 coaching/recovery/recomp automation
+from planned scope and the combined release. This is a confirmed exclusion,
+not a proposal, completed acceptance or permission to remove existing main
+Daily health, nutrition, workout/tracking, integration capabilities or records.
+The first and corrected unmerged coaching freezes remain byte-exact archived
+evidence only; they are not release inputs.
+
+Keep one mobile-first Daily page plus existing on-demand GenUI in the single
+assistant conversation: no widget, separate Workouts/Nutrition pages or four
+mandatory Status/Recomp/Review/Ready views. Conflicting widget/fixed-view and
+coaching descriptions in the historical issue inventory below are superseded.
+Core #724 API/tools work excludes new coaching and does not require #723
+completion; replace only PLAN P12-09's dependency cell with retained completed
+P12-05/#720 and P12-07/#722 so plan-status cannot recreate the removed blocker.
+All Status cells, task IDs and the other 380 table rows remain byte-exact;
+parent owns native dependency/issue reconciliation after the source update.
+Neither this scope decision nor retained reserved IDs activates Daily or
+releases #724.
+
+Do not invent maintenance/TDEE, nutrition-completeness, elapsed freshness
+expiry or readiness-scale semantics for an excluded feature. Missing new
+coaching contracts are not completion gates for retained core work. Existing
+core validation, truthful unknowns/freshness and protected backup/export,
+authoritative-original-source/parity, real-device/provider, final-delta,
+rollback and cutover gates remain unchanged. Scope the acceptance campaign to
+retained capabilities, not removed coaching/widget/fixed-view deliverables.
+Original Daily continues normal authorized use and remains canonical before
+cutover; original source/schema/data and retained records are not changed.
+
 Dan approved P12 on 12 October 2026 and explicitly released only P12-01 for this worker. The later [execution authorization](https://github.com/DanAakesen/jarvis/issues/716#issuecomment-6124634183) supersedes the original backlog-only and extra cutover-approval wording: eventual production cutover is pre-authorized only after dependency, parity, reconciliation, backup and rollback gates pass. Original Daily continues ordinary authorized food/health writes and remains running/canonical before cutover. Migration tooling must not alter its application/source code/schema or rewrite its records; final-delta reconciliation accounts for ongoing normal use. Read-only export belongs in the protected migration workflow. Legacy operation may be deprecated only after all in-scope data, features and sync are migrated and verified and rollback is protected; never delete the original repository or data. New secrets/access and unapproved paid resources retain their explicit-confirmation boundaries. This issue performs no cutover or production writes.
 
 ## Integration contract implemented by P12-01
@@ -94,15 +125,20 @@ Text/voice/photo lookup and current Frida data; exact-once confirmed food loggin
 
 ### [P12-08: Coaching, recovery & recomp services](https://github.com/DanAakesen/jarvis/issues/723)
 
-15 October: the coordinator released one inactive synthetic source candidate after closed #720/#722, retaining their native dependency links. The [shared service boundary](../apps/backend/src/daily/coaching/README.md) reuses owner-bound health/nutrition/exact-key reads and existing profile/readiness/recovery/experiment tables. It registers no routes, tools, UI, scheduler or new persistence. Focused synthetic cases and isolated SQL cases are supplied for integrated review; local native arithmetic/row-adapter evidence is not full pinned CI or SQL acceptance.
+**WITHDRAWN NEW FEATURE - confirmed 15 October 2026.** Retain this native issue
+link as historical scope context, not an active implementation or acceptance
+requirement.
 
-The source contract does not yet establish authoritative maintenance/TDEE or nutrition-day completeness. Owner reads leave budgets and deficit consistency unavailable, preserve partial logged totals and expose independent-read/freshness limits. A synthetic complete-maintenance input proves only the >=15% arithmetic, not an approved source formula. Readiness has no invented scale. Full #723 acceptance and downstream #724 registration remain gated.
+The earlier proposal covered automated coaching/targets, deficit comparisons,
+recomp trends, consistency, readiness/recovery guidance and experiment
+commitments. Dan has excluded that new automation; neither missing semantic
+contracts nor its candidate tests are remaining core-delivery prerequisites.
+The two frozen candidates are archived, not accepted/merged release inputs.
 
-**NEW DAILY CAPABILITY — permanent** · Backend & migration rehearsal
-
-Profile, targets, consistency, four body metrics, review / experiments, readiness and sick-day treatment.
-
-Preserve tough-but-fair concise coaching with natural profanity, evidence-based praise and contextual orders. Status: deficit-target kcal remaining, protein remaining first, active separate from resting, 8,000 steps, 7 hours sleep, protein max(180 g, 2 g/kg), 14-day body trends and 7-day eligible consistency. Deficits >=15% count; keep maintenance and deficit budgets distinct. Four recorded body metrics are weight, waist circumference in canonical metres, fat percentage and actual lean mass, not invented muscle-only values. Derived fat mass is explicitly separate and cannot substitute for waist; dated waist points preserve provenance and existing stale/recovery exclusions. Readiness accepts rating plus context and asks only when missing; no extra steps/workout after the target/session is met. Keep sick-day measurements but exclude those dates from eligible aggregates/misses; no imputation or blaming missing/stale data. Weekly review preserves the one-experiment commitment flow.
+Preserve existing main tracking capabilities, measurements and retained
+readiness/recovery records. Exclusion does not authorize original-source,
+schema or data changes, deletion, invented budgets/classifications or weaker
+core parity/backup/device/cutover gates.
 
 ### [P12-09: Daily API, tool registry & live revisions](https://github.com/DanAakesen/jarvis/issues/724)
 
@@ -111,6 +147,14 @@ Preserve tough-but-fair concise coaching with natural profanity, evidence-based 
 Gated Daily BackendModule, source IDs, shared read-model contracts, sensitive outcome audit and UI invalidation.
 
 Register Daily through BackendModule, with shared services for UI and tools, owner validation for user and hosted-agent calls, source-message idempotency and sensitive audit metadata only. Refresh stable views after committed revisions/reconnect/refocus. Gated-off Daily contributes no accidental routes/tools/navigation or production writes; no new dispatcher or alternate user authentication.
+
+Current core scope explicitly excludes NEW P12-08/#723 coaching/recovery/recomp
+automation and its routes/tools/views. #723 completion and missing
+coaching-specific semantics are not prerequisites for this retained
+integration. Its PLAN dependency cell instead retains completed P12-05/#720
+and P12-07/#722 prerequisites, not bypassed checks. Parent reconciles native
+dependencies separately after this source update; no #724 implementation or
+activation is released by this documentation change.
 
 ### [P12-10: Google feed, all calendars & attention](https://github.com/DanAakesen/jarvis/issues/725)
 

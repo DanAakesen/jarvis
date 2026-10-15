@@ -4150,9 +4150,25 @@ P8-33 scratch Chromium checks cover the adaptive quality thresholds, compact pho
 The reference lockfile is standalone, outside root workspaces, and contains the prototype's dependencies only. Bundled Three.js/Phosphor notices are retained. Physical/hardware performance, live activity/voice behavior and normal-rate flicker acceptance remain unverified; P8-31 adds no production Three.js dependency.
 ## Daily integration boundary (P12-01)
 
-P12-08's independent-review correction carries canonical `waist_circumference` metres from the existing row adapter through service evidence, dated/provenanced fourteen-day points and observed trends. It shares stale/pending/quarantine and recovery exclusions with the other recorded body metrics. Actual lean mass is unchanged; calculated fat mass is explicitly derived and never substitutes for recorded waist. No storage, owner or runtime boundary changes.
+### Confirmed core-only scope (15 October 2026)
 
-P12-08's unregistered `daily/coaching` candidate supplies the shared pure calculation path and mapped-row adapters for future UI/tools. `DailyCoachingService` resolves the existing server owner, reuses bounded health/nutrition/exact-key reads and the existing cancellable owner-locked SQL transaction helper. Explicit trusted policy/readiness/recovery/experiment changes use only mapped 0041 tables; profile policy uses revision CAS and experiment identity/replay permits only one active experiment. No migration, pool, dispatcher, route/tool, module-index or production composition change. Cross-domain reads remain independent/partial; heartbeat is not processed freshness. Maintenance/TDEE, nutrition completeness and expiry policy are unverified, so budgets/deficit consistency remain unavailable in the owner adapter. [Contract, checks and limits](../apps/backend/src/daily/coaching/README.md). Protected/live/phone and integrated source/CI acceptance remain separate.
+Dan excluded NEW P12-08/#723 coaching/recovery/recomp automation from planned
+scope and the combined release. The unmerged candidate and its corrected
+freeze are archived evidence, not an accepted production boundary. Preserve
+existing main health/nutrition/workout tracking, owner/auth, persistence and
+integration seams; exclusion authorizes no record/schema/source removal.
+
+Core P12-09/#724 data API/tools and committed-revision integration must exclude
+new coaching and must not depend on #723 completion. This docs-only decision
+registers or activates nothing. Retain one Daily page with existing on-demand
+GenUI in the one conversation, no widget or required four native views.
+Reserved IDs and older scope descriptions below are historical, not a mandate
+to implement withdrawn views. No new service, API, table, dispatcher or model.
+Missing coaching-specific maintenance/TDEE, completeness, expiry or readiness
+interpretation is not a core completion gate and must not be guessed.
+Existing core validation, processed freshness and protected export/backup,
+authoritative-source/parity, device/provider, final-delta, rollback and cutover
+gates remain unchanged; original Daily stays canonical before cutover.
 
 P12-05's unregistered `daily/health` library consumes the existing SQL inbox through an explicit one-row invocation and shared owner transaction lock. Additive 0047 records claim generations/deadlines and bounded retry/quarantine; no new queue, pool or scheduler. Pure normalization precedes one atomic domain/lineage/feed/receipt commit. Heartbeat writes only phone-sync state; accepted evidence and processing time remain distinct. Parameterized binary-identity upserts preserve newer accepted snapshots and never delete absent workout history. Existing root owner resolution protects bounded history/minute-HR/detail reads. [Source contract, recovery, limits and gates](../apps/backend/src/daily/health/README.md); no production composition or private source read.
 
