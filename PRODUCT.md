@@ -1,5 +1,14 @@
 # Product
 
+## Hosted chat terminal response (15 October 2026)
+
+The hosted chat application's `done` SSE event ends that response. Process its
+bounded completion metadata once, stop consuming later frames and await disposal
+of the owned response reader; do not require the server to close its HTTP socket
+first. Preserve partial-text streaming, pre-completion errors, cancellation,
+authentication and existing response-size and request deadlines. This is not a
+Factory task-completion or physical cloud-deallocation signal.
+
 ## Mobile/Status review publication (14 October 2026)
 
 Dan approved commit, push and a separate review PR for the accepted phone

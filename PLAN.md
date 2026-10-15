@@ -1,5 +1,32 @@
 # Project plan
 
+## Required release and terminal transport correction (15 October 2026)
+
+#848 merged normally as `bce6e02a` after independent review and fresh full
+ten-job CI/four CodeQL analyses. Its normal Deploy `38658184723` passed five
+deployment jobs but failed required smoke `116175695208`: the retained owner
+report shows a whole-suite timeout. The existing suite catch replaces all
+individual results, so it does not establish which prompt stalled or whether the
+shared capability rule failed. C0's earlier incomplete reply remains separate.
+
+Local actual-transport regressions demonstrate that the backend waits for EOF
+after application `done`, including a real loopback socket held open by its
+fixture server. The narrow correction stops at `done`, retains bounded metadata
+once and awaits reader disposal. Existing limits, canary predicates and
+`chat_runtime.py` remain unchanged. Local transport/canary checks pass 71 cases
+on the existing Windows Node 22.23.3/Vitest 5.0.2 snapshot, not pinned CI.
+This reproduces a transport defect, not exclusive live timeout causation.
+Next: freeze, independent narrow review, fresh exact-head full CI/CodeQL and
+normal required release; do not retry the unchanged failed release.
+
+Factory #850's `467cb5d` composition passed fresh ten-job CI/four CodeQL
+analyses and actual pinned Linux runner204/agent398. It remains unmerged while
+main's required release is broken. Normal Deploy and exact-released-SHA Runner
+deploy are both required before the authorised single live job. No Google
+fixture or sandbox job has been consumed; genuine later confirmation and an
+eligible existing isolated task/matching open PR remain prerequisites.
+All generated task-table cells below remain unchanged.
+
 ## Mobile/Status review publication (14 October 2026)
 
 Dan approved the reviewed #799/mobile correction for isolated commit,

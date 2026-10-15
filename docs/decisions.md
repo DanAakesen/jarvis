@@ -1,5 +1,31 @@
 # Decisions
 
+## End the backend chat response at application done (15 October 2026)
+
+The existing Invocations consumer marked application SSE `done` as completion,
+but continued awaiting HTTP EOF. Exact-baseline actual-module tests reproduce
+the stalled lifetime with ordinary and smoke completion, a split frame and a
+real loopback HTTP server that deliberately never ends its response. A separate
+control exposes duplicate metadata and trailing-frame consumption after `done`.
+
+Treat `done` as the terminal application frame: consume its existing bounded
+metadata once, stop reading later frames and await disposal of the owned reader.
+Do not extend deadlines, synthesize replies, relax canary receipts or change
+the separately owned hosted runtime. Retain partial deltas, pre-terminal errors,
+caller abort, missing-completion failures and legacy EOF parsing.
+The original five defect cases fail on exact BCE source; five preservation
+controls already pass. Corrected transport and unchanged canary checks pass
+71 cases on existing Windows snapshot tools, not pinned Linux CI.
+
+This fixes an independently reproduced transport contract defect, not proven
+exclusive production causation. BCE's normal release failed with a whole-suite
+timeout after five successful deployment jobs. Its unchanged global catch
+replaces individual results, so the retained report cannot establish which
+prompt stalled or shared-rule failure. Preserve C0's distinct incomplete-reply
+evidence and #820's unresolved original attribution. Independent review, fresh
+exact-head full CI/CodeQL and normal required release remain delivery gates;
+Factory merge and approved live fixtures/job remain held.
+
 ## Require complete tool-grounded capability overviews (14 October 2026)
 
 The new C0 reference release failed its required capability reply check, not

@@ -1,6 +1,49 @@
 # Agent context
 
-## Current required release gate (14-15 October 2026)
+## Current required release and terminal transport (15 October 2026)
+
+#848 normally merged as `bce6e02a` with independently reviewed tree6c after
+fresh exact0519 ten-job CI/four CodeQL analyses. Actual Deploy `38658184723`
+passed five deployment jobs and health/runtime-host checks but failed required
+smoke `116175695208`. Ready backend revision `0000319` and the genuine owner's
+retained Status report show a whole-suite timeout. The unchanged 55-second suite
+catch overwrites individual results; do not infer that every prompt failed,
+that the shared capability rule failed or that #820's original cause is known.
+C0's earlier incomplete capability reply remains a separate historical failure.
+
+The narrow local backend correction treats application SSE `done` as terminal
+and awaits its owned reader cancellation instead of waiting for socket EOF.
+Ten added transport cases cover ordinary/smoke metadata, split completion,
+real loopback HTTP cancellation, trailing frames, legacy EOF parsing,
+pre-terminal errors, caller abort and exact 1 MiB/1 MiB+1 byte limits.
+The exact baseline transport blob
+`e31e80454675df83d120e42a3e8669ad6d6aa8ac` fails five of those cases; the five
+preservation controls already pass. Corrected transport plus unchanged canary
+tests pass 71 cases. Existing Windows Node 22.23.3/Vitest 5.0.2 tools were reused
+through an owned local dependency junction; no restore, pins, TLS, shared settings
+or runtime limits changed. Scoped lint passes. Strict types still report twelve
+local missing-package/coupled diagnostics, independently identical to the exact
+baseline under unchanged full-program compiler options; a complete pinned build
+is not claimed.
+This is actual module/reader and loopback transport evidence, not a live Foundry
+reproduction or exclusive explanation of the release timeout.
+
+Freeze and independent narrow review, fresh changed-head full Linux CI/CodeQL
+and normal required release remain mandatory. Preserve `chat_runtime.py`'s
+separate #816 owner. Existing Foundry agent-read permission returned 403;
+no new grant, alternative identity, token extraction or bypass is allowed.
+Do not increase deadlines, weaken smoke or retry the unchanged failed release.
+
+Factory #850 is ready at `467cb5d`, with eight-path BCE containment, exact V2
+runtime/tests and all 381 PLAN pipe lines preserved. Fresh CI `38659103136`
+passed ten actual jobs, CodeQL `38659103178` four analyses; pinned Linux
+runner204/agent398 both executed. Merge remains held on main release recovery.
+Require normal Deploy and exact-released-SHA Runner deploy before the one
+authorised existing-task sandbox job. No approved fixture/job has been consumed.
+#851 was externally closed on 14 October, not closed by this coordinator;
+#849 contains real source and must not be treated as an empty delivery surface.
+
+## Historical required release gate (14-15 October 2026)
 
 Reference #830 was normally squashed into `c0d0aeef` after its reviewed ten CI
 jobs and four CodeQL analyses. Normal Deploy `38649690138` successfully ran the
