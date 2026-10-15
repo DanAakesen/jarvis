@@ -134,20 +134,22 @@ export function JobsChip({ backendUrl, getAccessToken, onResult }: {
       setOpenId(null);
       root.current?.querySelector<HTMLElement>(`[data-job-id="${id}"] .workspace-tab`)?.focus();
     }}>
-      {visible.map((job) => {
-        const label = job.status === 'running' ? `${job.title} · ${job.step}/${job.steps}` : job.title;
-        const status = job.status === 'running' ? 'running' : job.status === 'done' ? 'ready' : job.status === 'failed' ? 'failed' : 'cancelled';
-        return (
-          <span key={job.jobId} className="workspace-tab-item job-tab" data-job-id={job.jobId} data-tone={job.status}>
-            <button className="workspace-tab" type="button" aria-expanded={openId === job.jobId} aria-controls={popoverId}
-              aria-label={`${kindLabel[job.kind]} ${status}: ${label}. Show details`} title={label}
-              onClick={() => { setNow(Date.now()); setOpenId((current) => current === job.jobId ? null : job.jobId); }}>
-              {job.status === 'running' ? <ProgressRing value={job.step / Math.max(1, job.steps)} /> : <StatusMark status={job.status} />}
-              <span>{label}</span>
-            </button>
-          </span>
-        );
-      })}
+      <div className="job-tab-list">
+        {visible.map((job) => {
+          const label = job.status === 'running' ? `${job.title} · ${job.step}/${job.steps}` : job.title;
+          const status = job.status === 'running' ? 'running' : job.status === 'done' ? 'ready' : job.status === 'failed' ? 'failed' : 'cancelled';
+          return (
+            <span key={job.jobId} className="workspace-tab-item job-tab" data-job-id={job.jobId} data-tone={job.status}>
+              <button className="workspace-tab" type="button" aria-expanded={openId === job.jobId} aria-controls={popoverId}
+                aria-label={`${kindLabel[job.kind]} ${status}: ${label}. Show details`} title={label}
+                onClick={() => { setNow(Date.now()); setOpenId((current) => current === job.jobId ? null : job.jobId); }}>
+                {job.status === 'running' ? <ProgressRing value={job.step / Math.max(1, job.steps)} /> : <StatusMark status={job.status} />}
+                <span>{label}</span>
+              </button>
+            </span>
+          );
+        })}
+      </div>
       <span className="visually-hidden" role="status" aria-live="polite">
         {visible.some((job) => job.status === 'running') ? `${visible.filter((job) => job.status === 'running').length} background job running` : ''}
       </span>

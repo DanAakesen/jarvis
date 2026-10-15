@@ -1,5 +1,25 @@
 # Project plan
 
+## Combined V5 and header delivery (15 October 2026; awaiting exact-tree review)
+
+V5's four-case SQL fixture correction has independent source-only PASS;
+corrected real-SQL execution and fresh combined CI/CodeQL remain pending.
+Dan requested the reviewed header shrink/scroll and activity correction in the
+next deploy. Integrate only its six frozen web source/test blobs with V5;
+reconcile additive docs without restoring older main content.
+The header owner's 189 tests and offline actual-App desktop/phone evidence
+apply to identical source blobs, not a new combined or physical-device run.
+The combined candidate passes eight relevant UI suites (259 tests), full
+strict web types and package-scoped five-file header TSX lint. V5's exact
+fixture retains its final-file lint pass; corrected real SQL is still pending.
+Dan's physical mobile-composer report remains unresolved; this is not its fix.
+
+Next: independent combined-tree acceptance, normal publication on existing
+PR #853, fresh complete exact-head CI/CodeQL, then serial guarded release.
+Standing delivery authority is recorded in agent-context and decisions;
+reviews and gates remain mandatory. No additional live/provider job is
+authorised, and physical cleanup/deallocation remains coordinator-owned.
+
 ## Attention cancellation correction (15 October 2026; local candidate)
 
 The genuine owner's cancellation of isolated task 9 returned HTTP 409 while
@@ -19,8 +39,8 @@ Local controller/lifecycle/heartbeat/fake-SQL checks pass 180 cases and web
 interaction checks pass 70; selected exact-main regressions fail as expected.
 Scoped lint and web strict types pass. Backend types retain twelve identical
 baseline diagnostics with the incomplete existing snapshot; owner-route tests
-are blocked by missing multipart, and added real-SQL runtime generation/recovery
-coverage remains unexecuted. Offline V2 component inspection covered 1280 px
+are locally blocked by missing multipart, and real-SQL runtime generation/recovery
+coverage was unexecuted at the local V4 freeze. Offline V2 component inspection covered 1280 px
 and a 390 px iframe; the revised candidate preserves those UI/style blobs.
 
 V4 separately corrects the non-owner route fixture to propagate verifier
@@ -30,9 +50,27 @@ supplemental actual-verifier checks pass with synthetic local signed JWT/JWK
 data. Production auth and V3 runtime source are unchanged; V2/V3 are immutable,
 not PASS.
 
-Next: independent coordinator review of the frozen uncommitted full-index patch
-and qualified receipt. No commit, push, issue/PR, deployment or new
-live job is authorised here. Parent owns the current live session's cleanup;
+V4 was published as `428555d5`. Its actual CI SQL job `116295620002`
+executed 176 tests: 174 passed and the Active/completed ABA fixtures failed
+before replacement construction. Their default session-end call deliberately
+preserved an Active session whose latest turn completed, so genuine recovery
+could not claim it. This is a fixture-contract error, not a production-guard
+failure. V5 uses the existing completed-invocation accounting path after capture
+and asserts recoverable prior state, an actual recovery claim, replacement
+construction and atomic rejection. Production source remains byte-identical.
+The failed CI evidence and earlier freezes remain immutable; V5 SQL execution
+and complete fresh CI/release acceptance are not claimed.
+At that published V4 head, backend job `116295620202` passed all 179 files /
+3241 tests, including Factory HTTP 37 and authentication HTTP 60, plus backend
+lint and production tsc build. All four CodeQL analyses passed. These Linux
+results supersede local full-app loading limits for V4 only; complete CI still
+failed from the two SQL fixtures and aggregate, not a V5 or live/E2E result.
+
+V5 is now independently source-reviewed. Dan's renewed approval and standing
+delivery authority supersede the earlier candidate-specific publication hold,
+not source review, complete fresh CI/CodeQL or release gates. The combined
+header candidate awaits exact-tree acceptance. No new live job is authorised.
+Parent owns the current live session's cleanup;
 neither deallocation nor end-to-end delivery is claimed. All generated PLAN
 pipe lines below are preserved byte-for-byte; earlier receipts remain immutable.
 

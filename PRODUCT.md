@@ -1,5 +1,16 @@
 # Product
 
+## Header tab overflow correction (15 October 2026; combined candidate)
+
+Window and background-job tabs must shrink as their number increases, then
+scroll horizontally within the available header space. Presence and Settings
+retain their own space. Keep full titles accessible and preserve Show/Restore,
+Pin, Close and job details. The phone window sheet stays a vertical list.
+Generic thinking, speaking and tool activity belongs in the conversation and
+beneath the voice orb, not in the header. Backend-waking feedback remains.
+Dan requested this correction in the next deploy; his physical mobile-composer
+report remains unresolved, with no device-fix or live acceptance claim.
+
 ## Hosted chat terminal response (15 October 2026)
 
 The hosted chat application's `done` SSE event ends that response. Process its

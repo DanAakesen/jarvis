@@ -1,5 +1,16 @@
 # Architecture
 
+## Bounded header tab groups (15 October 2026; combined candidate)
+
+CSS bounds the existing Workspace portal host and tab navigation between
+the brand and fixed shell actions. Tabs shrink to their minimum; overflow
+belongs to the window navigation and a new inner `JobsChip` list, not the
+header. The job popover remains a sibling of that list, retaining its
+existing dismissal/focus owner. No resize observer, tab-width state,
+backend contract or window lifecycle changes are introduced.
+`ShellLayout` no longer renders generic runtime activity in the header;
+the activity subscription still supplies phone and conversation feedback.
+
 ## Mobile/Status review publication (14 October 2026)
 
 The publication candidate retains all eight accepted code/test/CSS paths

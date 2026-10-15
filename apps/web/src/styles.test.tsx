@@ -56,6 +56,31 @@ function contrast(first: Color, second: Color): number {
 }
 
 describe('shared glass tokens', () => {
+  it('shrinks header tabs before scrolling without borrowing the fixed controls space', () => {
+    const source = readFileSync('src/styles.css', 'utf8');
+    expect(ruleDeclaration(source, /\.topbar-context\s*\{([^}]*)\}/, 'flex')).toBe('0 0 auto');
+    expect(ruleDeclaration(source, /\.topbar-actions\s*\{([^}]*)\}/, 'flex')).toBe('0 0 auto');
+    expect(ruleDeclaration(source, /\.app-topbar \.window-tabstrip \.window-tabbar\s*\{([^}]*)\}/, 'min-width')).toBe('0');
+    expect(ruleDeclaration(source, /\.app-topbar \.window-tabstrip \.workspace-tabs\s*\{([^}]*)\}/, 'width')).toBe('100%');
+    expect(ruleDeclaration(source, /\.app-topbar \.window-tabstrip \.workspace-tabs\s*\{([^}]*)\}/, 'overflow-x')).toBe('auto');
+    expect(ruleDeclaration(source, /\.window-tabstrip \.workspace-tab-item\s*\{([^}]*)\}/, 'flex')).toBe('0 1 240px');
+    expect(ruleDeclaration(source, /\.window-tabstrip \.workspace-tab-item\s*\{([^}]*)\}/, 'min-width')).toBe('140px');
+    expect(ruleDeclaration(source, /\.job-tab-list\s*\{([^}]*)\}/, 'overflow-x')).toBe('auto');
+    expect(ruleDeclaration(source, /\.job-tab-list\s*\{([^}]*)\}/, 'overflow-y')).toBe('hidden');
+    expect(ruleDeclaration(source, /\.job-tab-list\s*\{([^}]*)\}/, 'scrollbar-width')).toBe('none');
+    expect(source).toContain(':is(.job-tabs, .job-tab-list) { width: 100%; flex-direction: column; overflow: visible; }');
+  });
+
+  it('keeps phone window rows at their natural touch height rather than the desktop tab basis', () => {
+    const source = readFileSync('src/styles.css', 'utf8');
+    const phoneRow = /\.app-shell\[data-phone="true"\]\[data-windows-open="true"\] \.workspace-tab-item\s*\{([^}]*)\}/;
+    expect(ruleDeclaration(source, phoneRow, 'flex')).toBe('0 0 auto');
+    expect(ruleDeclaration(source, phoneRow, 'width')).toBe('100%');
+    expect(ruleDeclaration(source, phoneRow, 'max-width')).toBe('none');
+    expect(ruleDeclaration(source, phoneRow, 'height')).toBe('44px');
+    expect(ruleDeclaration(source, phoneRow, 'padding')).toBe('0');
+  });
+
   it('anchors both phone chat surfaces to the same visual viewport and measured composer height', () => {
     const history = readFileSync('src/ConversationHistory.css', 'utf8');
     const phoneChat = history.slice(history.indexOf('/* Both halves of phone chat'));

@@ -38,8 +38,11 @@ describe('job tabs', () => {
 
     act(() => publishJob(job()));
     const chip = screen.getByRole('button', { name: /Research running: Research: Microsoft Foundry IQ · 1\/3/ });
+    expect(chip.closest('.job-tab-list')).not.toBeNull();
     fireEvent.click(chip);
-    expect(screen.getByText('Searching: Key findings')).not.toBeNull();
+    const details = screen.getByRole('group', { name: 'Research: Microsoft Foundry IQ details' });
+    expect(details.textContent).toContain('Searching: Key findings');
+    expect(details.closest('.job-tab-list')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('https://api.example.com/jobs/11111111-1111-4111-8111-111111111111/cancel', expect.objectContaining({ method: 'POST' })));
 

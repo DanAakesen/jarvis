@@ -1,5 +1,31 @@
 # Decisions
 
+## Standing authority for guarded delivery (15 October 2026)
+
+Dan explicitly approved V5 continuation, then stated that committing,
+pushing, merging and deploying authorised Jarvis work need no repeated
+permission question. Record standing delivery authority rather than
+reinstating candidate-specific consent gates from historical sections.
+Independent source review, exact current-main/ownership checks, complete
+fresh CI/CodeQL and serial guarded merge/deploy/smoke acceptance still apply.
+Normal publication must preserve the user's checkout and owned history.
+This does not authorise extra jobs/provider turns, private/device/access/model
+scope, resource creation, shared settings changes or bypassing authentic
+product-action confirmation. Release ownership remains with the coordinator.
+
+## Shrink header tabs before native scrolling (15 October 2026; combined candidate)
+
+Dan requested Chrome-like shrinking followed by horizontal scrolling,
+without covering Presence or Settings, and inclusion in the next deploy.
+Use the reviewed bounded flex containers and 140px minimum tab widths rather
+than measured-width JavaScript. Keep window/job groups separate and job details
+outside their scrolling child. Hide scrollbar tracks to preserve the compact
+header. The phone sheet resets the desktop flex basis and keeps 44px rows.
+Remove only duplicated runtime header feedback; chat, voice and backend-waking
+feedback retain their owners. Preserve V5 runtime/fixture source exactly.
+Fresh combined review, SQL/CI/CodeQL and release remain pending. The physical
+mobile-composer report is separate and unresolved.
+
 ## Allow safe cancellation of attention tasks (15 October 2026; local candidate)
 
 The coordinator observed a genuine-owner cancellation of the existing isolated
@@ -29,9 +55,11 @@ actual-dispatcher/actual-transition controls reproduce that defect against V2
 and pass with the revised guard. V2 and its receipts stay immutable, not PASS.
 The added real-SQL generation/recovery cases remain unexecuted locally.
 
-The patch is local only against exact `2c7ce24a`; no commit, publication, release
-or live deallocation is claimed. Independent review and the coordinator's
-subsequent authorised delivery remain separate.
+V4 was published as `428555d5`; its two new actual-SQL fixture setup failures
+did not reach replacement assertions. V5 corrects completed-invocation fixture
+accounting without changing production guards and has independent source-only
+PASS. The combined header candidate still requires exact-tree review and fresh
+SQL/CI/CodeQL/release gates. No live cancellation or deallocation is claimed.
 
 ## Compose reviewed runner delivery after genuine recovery acceptance (15 October 2026)
 

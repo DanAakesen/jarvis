@@ -1,5 +1,16 @@
 # Design
 
+## Header tab overflow correction (15 October 2026; combined candidate)
+
+Keep the existing glass header, fixed brand and fixed action group. Tabs
+shrink from 240px to a readable 140px minimum before their bounded groups
+scroll horizontally; retain title ellipsis, tooltips and focus reveal.
+Use native scrolling without a scrollbar track consuming the compact
+header height. Job details sit outside the scrolling job list.
+Phone window/job rows stay full-width and 44px tall in the existing sheet.
+Remove duplicated runtime activity from the header, preserving the chat
+and voice-orb feedback and distinct backend-availability status.
+
 ## Mobile/Status review publication (14 October 2026)
 
 Publish the already accepted phone chat geometry, focus behaviour and

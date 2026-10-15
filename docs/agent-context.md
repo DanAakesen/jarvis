@@ -1,5 +1,45 @@
 # Agent context
 
+## Standing delivery authority (15 October 2026)
+
+Dan approved V5 continuation and stated that authorised Jarvis work does not
+need repeated approval for committing, pushing, gated merging or deploying.
+This supersedes historical per-candidate publication/release permission holds.
+Keep independent review, current-main/ownership checks, complete exact-head
+CI/CodeQL and serial guarded release/smoke checks. Source review holds are
+not another user-permission question. Use normal publication on the owned
+branch; do not force, rewrite history or mutate the user's checkout.
+This grants no extra sandbox/provider job or turn, private/device/access/model
+scope, resource creation or shared settings change. Existing live-job limits
+and genuine product-action confirmation requirements remain.
+
+## Combined header validation and release status (15 October 2026)
+
+The combined candidate preserves reviewed V5 cancellation/runtime production
+source and its exact corrected SQL fixture, adding only the header owner's
+six frozen App/JobsChip/styles source/test blobs and reconciled docs.
+The header owner's five suites passed 189 tests, strict web types, scratch
+build and five-file TSX lint; CSS was not linted. Those retained results and
+offline actual-App Chromium checks apply to identical header blobs, not
+fresh combined CI. Desktop checks covered 701/800/1280/1920 px, crowded tabs
+and jobs, focus/Close/details/Escape and retained chat/voice feedback.
+Phone checks covered 320/390 px sheets with 44px rows; reduced motion was
+checked. Data/auth were synthetic, non-fixture fetches blocked and the room
+renderer disabled. This is not physical-device/provider/full-scene acceptance.
+
+V5 has independent source-only PASS and final-file fixture lint. Its corrected
+real-SQL cases, combined exact-head CI/CodeQL and release remain pending.
+Final combined local checks pass eight UI suites / 259 tests, full strict web
+types and package-scoped five-file header TSX lint. The initial generic test
+wrapper lacked the app's public config define and package working directory;
+the corrected run uses existing Vite configuration and the actual package cwd.
+Mixed-package lint hit parser root ambiguity; separate package execution passes.
+These execution-context failures remain in artifacts, not hidden source fixes.
+Dan requested the header correction in the next deploy. His physical
+mobile-composer report remains unresolved and is not claimed fixed here.
+Earlier candidate-specific approval and local-only statements below are
+historical where superseded by this current authority/status.
+
 ## Attention cancellation candidate (15 October 2026; local only)
 
 The bounded patch based on exact main `2c7ce24a` permits confirmed cancellation
@@ -24,8 +64,8 @@ reproduces 27 backend failures and five UI failures. Scoped lint and web strict
 types pass; backend production types have the same twelve diagnostics as exact
 main with this incomplete snapshot. Selected backend tests retain 47 diagnostics
 versus the original baseline's 49, with none in the new runtime regression tests.
-Route checks cannot load missing `@fastify/multipart`; the added isolated SQL
-state/generation/recovery integration cases were not run.
+Local route checks cannot load missing `@fastify/multipart`; the added isolated SQL
+state/generation/recovery integration cases were not run at the V4 local freeze.
 Do not install or stub packages to disguise those limits.
 
 V4 corrects only the cancellation route's negative verifier fixture: a non-owner
@@ -38,6 +78,27 @@ cannot load the full app with this snapshot. A supplemental offline check of the
 unchanged actual verifier passes five owner/denial cases with ephemeral locally
 signed JWTs and an in-memory JWK set; it is not full-app HTTP proof. No production
 auth or V3 runtime implementation changed. V2/V3 freezes remain immutable.
+
+Published V4 (`428555d5`) subsequently reached real CI SQL execution:
+job `116295620002` passed 174 of 176 tests. The two new Active/completed ABA
+fixtures failed before constructing a replacement: `endTaskSessions` with its
+default `invocationCompleted=false` intentionally leaves completed Active
+sessions alone, while `claimRecovery` requires no Active session. V5 corrects
+only that fixture contract by using the existing completed-invocation end and
+usage-accounting helper after capturing the old expectation. It asserts prior
+Ended/Idle state, actual Running recovery, a distinct Active replacement and
+the original atomic rejection. All four cases and production guards remain.
+Existing V4 CI/CodeQL/backend observations are not V5 validation or release
+acceptance. V5 real-SQL execution remains pending; standing delivery authority
+now covers normal publication after exact combined-source review and fresh
+CI/release gates. No additional provider turn or live action is authorised.
+The same published V4 head's Linux backend job `116295620202` passed all
+179 files / 3241 tests, including `factory/tasks.test.ts` (37) and
+`auth/auth.test.ts` (60), plus lint and the production tsc build. All four
+CodeQL analyses passed. Full-app HTTP is therefore executed for published V4
+under CI, despite local snapshot loading limits. Complete CI still failed
+from the two SQL setup cases and aggregate; none of these prior-head results
+are fresh V5 CI, real-SQL success or live/E2E proof.
 
 Independent review rejected V2's state-only guard: NeedsAttention can change to
 Running and back while recovery replaces its runtime. Eleven deterministic
@@ -58,8 +119,9 @@ The coordinator's one authorised sandbox job has been consumed. Its later
 owner cancel returned 409 while NeedsAttention; physical cleanup remains
 coordinator-owned and is not claimed here. The older preparation statements
 below that no job was consumed are historical, not permission for another run.
-This uncommitted candidate requires independent review; no release, original
-acceptance or live cancellation/deallocation proof is established.
+V5 source review passed; the combined uncommitted candidate requires exact-tree
+review. No release, original acceptance or live cancellation/deallocation
+proof is established.
 
 ## Current Factory composition after accepted recovery (15 October 2026)
 

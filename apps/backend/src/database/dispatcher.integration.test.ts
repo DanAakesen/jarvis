@@ -106,12 +106,24 @@ describe('dispatcher SQL coordination', () => {
           .resolves.toEqual({ kind: 'invalid-transition' });
         const beforeRecovery = await sessions.getRuntimeVersion(task.id);
         if (!beforeRecovery) throw new Error('Updated attention runtime snapshot was not read');
-        await sessions.endTaskSessions(task.id, 'NeedsAttention');
+        // Crash cleanup preserves completed Active sessions; account for this completed turn instead.
+        expect(await sessions.endTaskSessions(task.id, 'NeedsAttention', true))
+          .toEqual(initial === 'Active' || initial === 'completed' ? [originalId] : []);
+        const recoverable = await sessions.getRuntimeVersion(task.id);
+        expect(recoverable).toEqual({
+          ...beforeRecovery, sessionStatus: initial === 'Idle' ? 'Idle' : 'Ended',
+        });
+        expect((await tasks.get(task.id, 1, 0))?.state).toBe('NeedsAttention');
         const owner = randomUUID();
         const recovery = await createTaskRecoveryStore(pool, events).claimRecovery(task.id, owner, 120);
-        if (recovery.kind !== 'claimed') throw new Error('Synthetic recovery claim was not acquired');
+        if (recovery.kind !== 'claimed') throw new Error(`Synthetic recovery claim was not acquired: ${recovery.kind}`);
+        expect((await tasks.get(task.id, 1, 0))?.state).toBe('Running');
         const replacementId = await sessions.recordStarted(owner, recovery.task, 'jarvis-runner-base-1x2', {
           sessionId: `replacement-attention-${randomUUID()}`, invocationId: `replacement-${randomUUID()}`,
+        });
+        expect(replacementId).not.toBe(originalId);
+        expect(await sessions.getRuntimeVersion(task.id)).toMatchObject({
+          sandboxSessionId: replacementId, sessionStatus: 'Active',
         });
         expect((await tasks.transition(task.id, 'NeedsAttention')).kind).toBe('ok');
         const publish = vi.spyOn(events, 'publish');
