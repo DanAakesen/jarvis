@@ -1,5 +1,17 @@
 # Architecture
 
+## Trusted pre-start runtime absence (15 October 2026; local correction)
+
+The existing runtime getter distinguishes no task (null result) from an existing
+task with no recorded session (all four projected fields null via OUTER APPLY).
+Only the latter can bypass missing-session-end evidence for attention
+cancellation; reject partially known identity and incoherent/live targets.
+Pass that exact absent generation to the unchanged terminal transaction.
+Its task/session/turn locks and full-field comparison reject a concurrently
+inserted first runtime before mutation/events/cleanup. The absent path uses
+existing session accounting but never invokes a provider without an owned
+target. No new store, schema, API or recovery/classification policy is added.
+
 ## Bounded header tab groups (15 October 2026; combined candidate)
 
 CSS bounds the existing Workspace portal host and tab navigation between

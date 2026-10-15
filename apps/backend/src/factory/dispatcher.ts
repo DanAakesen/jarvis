@@ -511,7 +511,15 @@ export class TaskDispatcher implements TaskController {
           expectedRuntime.sessionStatus !== 'Ended' && expectedRuntime.sessionStatus !== 'Crashed')) {
         return { kind: 'state-changed' as const, state: latestTask.state };
       }
-      if (task.state === 'NeedsAttention' && !target && !latestTask.latestSessionEndReason) {
+      const runtimeAbsent = expectedRuntime !== undefined &&
+        expectedRuntime.sandboxSessionId === null && expectedRuntime.foundrySessionId === null &&
+        expectedRuntime.sessionStatus === null && expectedRuntime.latestTurnId === null;
+      if (expectedRuntime && !runtimeAbsent &&
+          (expectedRuntime.sandboxSessionId === null || expectedRuntime.foundrySessionId === null ||
+            expectedRuntime.sessionStatus === null)) {
+        return { kind: 'runtime-unknown' as const };
+      }
+      if (task.state === 'NeedsAttention' && !target && !latestTask.latestSessionEndReason && !runtimeAbsent) {
         return { kind: 'runtime-unknown' as const };
       }
       if (task.state === 'Running' && !target &&

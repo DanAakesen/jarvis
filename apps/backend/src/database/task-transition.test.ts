@@ -28,6 +28,12 @@ vi.mock('mssql', async (importOriginal) => {
 });
 
 describe('attention cancellation transition persistence', () => {
+  it.each(['session', 'ended-session'] as const)(
+    'rejects the first %s after a pre-start attention absence capture', async (replacement) => {
+      await ownershipRace('never-started', replacement);
+    },
+  );
+
   it.each(['Active', 'completed', 'Idle', 'absent'] as const)(
     'refuses replacement of the captured %s runtime even when state returns to NeedsAttention', async (initial) => {
       await ownershipRace(initial, 'session');
@@ -65,7 +71,7 @@ describe('attention cancellation transition persistence', () => {
   });
 
   async function ownershipRace(
-    initial: 'Active' | 'completed' | 'Idle' | 'absent',
+    initial: 'Active' | 'completed' | 'Idle' | 'absent' | 'never-started',
     replacement: 'session' | 'ended-session' | 'turn',
   ) {
     const at = new Date('2026-10-15T04:00:00.000Z');
@@ -83,12 +89,14 @@ describe('attention cancellation transition persistence', () => {
       sandboxSize: '1x2', image: 'synthetic-image', sessionStatus: initial === 'Idle' ? 'Idle' : 'Active',
       repository: 'DanAakesen/jarvis-test-target', defaultBranch: 'main', branch: 'jarvis/task-42',
     };
-    let runtime: TaskRuntimeVersion = {
+    let runtime: TaskRuntimeVersion = initial === 'never-started' ? {
+      sandboxSessionId: null, foundrySessionId: null, latestTurnId: null, sessionStatus: null,
+    } : {
       sandboxSessionId: '53', foundrySessionId: 'old-session', latestTurnId: '71',
       sessionStatus: initial === 'absent' ? 'Ended' : target.sessionStatus,
     };
     const expected = { ...runtime };
-    let currentTarget: TaskControlTarget | null = initial === 'absent' ? null : target;
+    let currentTarget: TaskControlTarget | null = initial === 'absent' || initial === 'never-started' ? null : target;
     const sequence: string[] = [];
     const query = vi.fn(async (text: string, inputs: Map<string, unknown>) => {
       if (text.includes('sp_getapplock')) return { recordset: [{ result: 0 }] };

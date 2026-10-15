@@ -1,5 +1,20 @@
 # Project plan
 
+## Pre-start attention cancellation follow-up (15 October 2026; local candidate)
+
+Published `0b4e79c2` passed all ten CI jobs, including 176 real-SQL tests,
+and all four CodeQL analyses. A subsequent complete review found a release
+blocker: failed/exhausted starts can reach NeedsAttention before any session
+exists, but the cancellation guard rejects their trusted all-null runtime.
+Allow only an existing task's captured generation with all four runtime fields
+null; keep unknown, partial and mismatched ownership fail-closed. Preserve the
+atomic expected-state/runtime check so a first session inserted after capture
+rejects cancellation without terminal events or cleanup of that replacement.
+Deterministic controller/transaction and real-SQL regression cases cover this
+boundary. Local checks and exact-diff review are pending; require fresh complete
+CI/SQL/CodeQL after accepted publication. No release/live/deallocation claim,
+additional job or physical mobile-composer fix is implied.
+
 ## Combined V5 and header delivery (15 October 2026; awaiting exact-tree review)
 
 V5's four-case SQL fixture correction has independent source-only PASS;

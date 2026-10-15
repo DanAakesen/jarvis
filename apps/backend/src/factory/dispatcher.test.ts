@@ -9,7 +9,7 @@ import {
   type TaskControlTarget,
 } from './dispatcher.js';
 import type { TaskRecoveryStore } from './recovery-store.js';
-import type { TaskEventHub, TaskEventMessage, TaskRecord, TaskStore } from './task-store.js';
+import type { TaskEventHub, TaskEventMessage, TaskRecord, TaskRuntimeVersion, TaskStore } from './task-store.js';
 
 const task: DispatchClaim = {
   taskId: '42',
@@ -652,6 +652,9 @@ describe('task dispatcher', () => {
 
   it('refuses attention cancellation when its runtime is unknown, even with an open PR', async () => {
     const store = idleStore();
+    vi.mocked(store.getRuntimeVersion).mockResolvedValue({
+      sandboxSessionId: '53', foundrySessionId: 'session-1', sessionStatus: 'Ended', latestTurnId: '71',
+    });
     const test = harness(store, undefined, {
       ...controlTask, state: 'NeedsAttention', latestSessionEndReason: null,
       pullRequest: { number: 3, url: 'https://github.com/DanAakesen/jarvis-test-target/pull/3', state: 'open' },
@@ -660,6 +663,68 @@ describe('task dispatcher', () => {
       kind: 'unavailable', reason: 'No task runtime session or completed delivery evidence could be found',
     });
     expect(test.transition).not.toHaveBeenCalled();
+    expect(store.endTaskSessions).not.toHaveBeenCalled();
+    expect(test.clientFor).not.toHaveBeenCalled();
+  });
+
+  it('cancels pre-start attention with a trusted absent runtime without contacting a provider', async () => {
+    const runtime: TaskRuntimeVersion = {
+      sandboxSessionId: null, foundrySessionId: null, sessionStatus: null, latestTurnId: null,
+    };
+    const store = idleStore();
+    vi.mocked(store.getRuntimeVersion).mockResolvedValue(runtime);
+    const test = harness(store, undefined, {
+      ...controlTask, state: 'NeedsAttention', attemptCount: 3, latestSessionEndReason: null,
+    });
+
+    await expect(test.dispatcher.control('42', { action: 'cancel' }))
+      .resolves.toMatchObject({ kind: 'ok', task: { state: 'Cancelled' } });
+    expect(test.tasks.transition).toHaveBeenCalledWith(
+      '42', 'Cancelled', false, undefined, undefined, 'NeedsAttention', runtime,
+    );
+    expect(store.endTaskSessions).toHaveBeenCalledWith('42', 'Cancelled');
+    expect(test.clientFor).not.toHaveBeenCalled();
+    expect(test.untrack).not.toHaveBeenCalled();
+  });
+
+  it.each((['missing', 'session', 'foundry', 'status', 'turn'] as const).flatMap(
+    (field) => ([null, 'done'] as const).map((latestSessionEndReason) => ({ field, latestSessionEndReason })),
+  ))(
+    'rejects pre-start attention with $field runtime and end reason $latestSessionEndReason', async ({
+      field, latestSessionEndReason,
+    }) => {
+      const store = idleStore();
+      vi.mocked(store.getRuntimeVersion).mockResolvedValue(field === 'missing' ? null : {
+        sandboxSessionId: field === 'session' ? '53' : null,
+        foundrySessionId: field === 'foundry' ? 'session-1' : null,
+        sessionStatus: field === 'status' ? 'Ended' : null,
+        latestTurnId: field === 'turn' ? '71' : null,
+      });
+      const test = harness(store, undefined, {
+        ...controlTask, state: 'NeedsAttention', latestSessionEndReason,
+      });
+
+      await expect(test.dispatcher.control('42', { action: 'cancel' }))
+        .resolves.toMatchObject({ kind: field === 'missing' ? 'invalid-transition' : 'unavailable' });
+      expect(test.tasks.transition).not.toHaveBeenCalled();
+      expect(store.endTaskSessions).not.toHaveBeenCalled();
+      expect(test.clientFor).not.toHaveBeenCalled();
+      expect(test.untrack).not.toHaveBeenCalled();
+    },
+  );
+
+  it('rejects pre-start attention when a live target does not match captured absence', async () => {
+    const store = { ...idleStore(), getControlTarget: vi.fn(async () => controlTarget) };
+    vi.mocked(store.getRuntimeVersion).mockResolvedValue({
+      sandboxSessionId: null, foundrySessionId: null, sessionStatus: null, latestTurnId: null,
+    });
+    const test = harness(store, undefined, {
+      ...controlTask, state: 'NeedsAttention', latestSessionEndReason: null,
+    });
+
+    await expect(test.dispatcher.control('42', { action: 'cancel' }))
+      .resolves.toMatchObject({ kind: 'invalid-transition' });
+    expect(test.tasks.transition).not.toHaveBeenCalled();
     expect(store.endTaskSessions).not.toHaveBeenCalled();
     expect(test.clientFor).not.toHaveBeenCalled();
   });

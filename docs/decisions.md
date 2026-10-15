@@ -1,5 +1,19 @@
 # Decisions
 
+## Cancel attention after a failed pre-start without inventing ownership (15 October 2026)
+
+Complete review after published `0b4e79c2` passed ten CI jobs / SQL 176 tests
+and four CodeQL analyses found that a valid pre-start failure has no session
+end reason. Refusing all such tasks prevents supported owner cancellation.
+Permit only the trusted getter's existing-task/all-four-null runtime generation,
+preserving unknown/partial/mismatched refusal and provider-free absent handling.
+Keep the atomic expected-state and expected-generation terminal guard: a first
+runtime appearing after capture must roll back without cancellation events or
+replacement cleanup. Add controller/actual-transition and real-SQL positive/race
+controls; this new finding blocks release until exact-diff review and fresh
+complete CI/SQL/CodeQL. Prior freezes/green evidence remain historical, and
+neither this correction nor standing delivery authority grants another live job.
+
 ## Standing authority for guarded delivery (15 October 2026)
 
 Dan explicitly approved V5 continuation, then stated that committing,
