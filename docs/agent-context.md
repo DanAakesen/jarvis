@@ -1,6 +1,6 @@
 # Agent context
 
-## Reviewed recovery correction (15 October 2026; V4f local and held)
+## Reviewed recovery correction (15 October 2026; V4g local and held)
 
 Preserve the pinned V1/V2 snapshots, Codex HOLD evidence and source-reviewed V3
 tree `7303f6e5`. V3 corrects the
@@ -80,6 +80,23 @@ required. V4f's eight local unit suites passed 359 tests and its three changed
 backend files passed lint; local production types still report the same 12
 missing-dependency/derivative errors. These are not real-SQL acceptance, and the
 local dependency limitation is separate from the genuine V4e full-build pass.
+
+Reviewed V4f2 was published exactly at `3ae3ff51`, tree `7aadc27d`. Automatic
+CI `38820033386` passed eight component jobs, including actual backend build
+and pinned Linux Python, but SQL remained failed: 210 passed / 9 failed / 219,
+zero skipped. CodeQL `38820033362` passed all four analyses. The binary-identity,
+generation/policy and all rollback controls passed; reconciliation tried to
+backdate a heartbeat before its session start, and another fixture mixed a
+JavaScript start time with SQL's end time. The pre-start cancellation test also
+attempted recovery from inside the cancellation policy lock that now excludes
+it. V4g changes fixtures only: use the existing dispatcher observation clock for
+staleness, one SQL clock for lifecycle timestamps, and exercise an absent-runtime
+SQL snapshot after legitimate recovery, then cancel through the dispatcher.
+Register fixtures before fallible inserts and cancel them in `finally` so an
+insertion failure cannot strand a Running capacity consumer. Production runtime,
+constraints, deadlines, migrations and all test cases remain. The other failed
+claims must still be observed passing in fresh exact-head SQL; source analysis
+is not that acceptance. No unchanged rerun, merge or release is authorised.
 
 The relocated V3 harness initially failed because deeper Windows fixture paths
 made Git clone exceed its path limit. A separate short-temp-path harness passed

@@ -141,16 +141,14 @@ describe('dispatcher SQL coordination', () => {
       }, () => client, { onError: (error) => errors.push(error) });
       const verifyDelivery = vi.fn(async () => ({ kind: 'awaiting_policy' as const }));
       vi.spyOn(sessions, 'claimNext').mockResolvedValue({ kind: 'idle', nextAttemptAt: null });
+      const observationTime = Date.now() + (route === 'reconciliation' ? 10 * 60_000 : 0);
       const dispatcher = new TaskDispatcher(sessions, tasks, settings(), () => client, monitor, events, {
         recoveryStore: recovery, workspaceFor: async () => claim.task, verifyDelivery,
+        now: () => observationTime,
         onError: (error) => errors.push(error),
       });
       try {
         expect(await lifecycle()).toEqual({ sessionStatus: 'Active', endReason: null, turnStatus: 'running' });
-        if (route === 'reconciliation') await pool.request()
-          .input('sessionId', sql.BigInt, BigInt(sandboxSessionId))
-          .query(`UPDATE dbo.sandbox_sessions SET last_heartbeat_at = DATEADD(minute, -10, SYSUTCDATETIME())
-            WHERE id = @sessionId;`);
         dispatcher.start();
         if (route === 'heartbeat') await monitor.start();
         await vi.waitFor(async () => {
@@ -648,14 +646,13 @@ describe('dispatcher SQL coordination', () => {
   });
 
   it.each(['unchanged', 'first-session'] as const)(
-    'guards pre-start attention cancellation against an %s runtime', async (runtimeChange) => {
+    'guards pre-start attention cancellation when runtime is %s', async (runtimeChange) => {
       const events = createEventHub<TaskEventMessage>();
       const tasks = createTaskStore(pool, events);
       const sessions = createDispatcherStore(pool, events);
       const task = await createTask(events, 'Failed before recording a session');
       const owner = randomUUID();
       const transition = tasks.transition.bind(tasks);
-      const transitionSpy = vi.spyOn(tasks, 'transition');
       const endSessions = vi.spyOn(sessions, 'endTaskSessions');
       const client = {
         startTask: vi.fn(), steer: vi.fn(), pause: vi.fn(), resume: vi.fn(), status: vi.fn(),
@@ -681,18 +678,15 @@ describe('dispatcher SQL coordination', () => {
         const foundryId = `first-runtime-${randomUUID()}`;
         const invocationId = `first-invocation-${randomUUID()}`;
         if (runtimeChange === 'first-session') {
-          transitionSpy.mockImplementationOnce(async (...args) => {
-            expect(args[6]).toEqual(absent);
-            const recovery = await createTaskRecoveryStore(pool, events).claimRecovery(task.id, owner, 120);
-            if (recovery.kind !== 'claimed') throw new Error('Pre-start recovery was not claimed');
-            await sessions.recordStarted(owner, recovery.task, 'jarvis-runner-base-1x2', {
-              sessionId: foundryId, invocationId,
-            });
-            expect((await transition(task.id, 'NeedsAttention')).kind).toBe('ok');
-            publish.mockClear();
-            return transition(...args);
+          // Recovery must finish before testing the stale snapshot, not wait inside cancellation's policy lock.
+          const recovery = await createTaskRecoveryStore(pool, events).claimRecovery(task.id, owner, 120);
+          if (recovery.kind !== 'claimed') throw new Error('Pre-start recovery was not claimed');
+          await sessions.recordStarted(owner, recovery.task, 'jarvis-runner-base-1x2', {
+            sessionId: foundryId, invocationId,
           });
-          await expect(dispatcher.control(task.id, { action: 'cancel' }))
+          expect((await transition(task.id, 'NeedsAttention')).kind).toBe('ok');
+          publish.mockClear();
+          await expect(transition(task.id, 'Cancelled', false, undefined, undefined, 'NeedsAttention', absent))
             .resolves.toMatchObject({ kind: 'invalid-transition' });
           expect(await tasks.get(task.id, 1, 0)).toMatchObject({ state: 'NeedsAttention' });
           expect(await sessions.getRuntimeVersion(task.id)).toMatchObject({
@@ -725,7 +719,6 @@ describe('dispatcher SQL coordination', () => {
           taskId: task.id, type: 'state_changed', payload: { from: 'NeedsAttention', to: 'Cancelled' },
         }));
       } finally {
-        transitionSpy.mockRestore();
         await sessions.endTaskSessions(task.id, 'Cancelled');
         await tasks.transition(task.id, 'Cancelled');
       }
@@ -941,6 +934,7 @@ describe('dispatcher SQL coordination', () => {
     const events = createEventHub<TaskEventMessage>();
     const taskStore = createTaskStore(pool, events);
     const store = createDispatcherStore(pool, events);
+    const fixtures: Array<{ task: Awaited<ReturnType<typeof createTask>> }> = [];
     const addInvocation = async (
       task: Awaited<ReturnType<typeof createTask>>,
       sessionStatus: 'Active' | 'Ended',
@@ -956,15 +950,17 @@ describe('dispatcher SQL coordination', () => {
         .input('foundrySessionId', sql.NVarChar(255), foundrySessionId)
         .input('status', sql.NVarChar(8), sessionStatus)
         .input('endReason', sql.NVarChar(32), endReason)
-        .input('startedAt', sql.DateTime2(7), new Date(Date.now() - (stale ? ageMinutes : 0) * 60_000))
-        .input('heartbeatAt', sql.DateTime2(7), stale ? new Date(Date.now() - ageMinutes * 60_000) : null)
-        .query<{ sandboxSessionId: string }>(`INSERT dbo.sandbox_sessions
+        .input('ageMinutes', sql.Int, stale ? ageMinutes : 0)
+        .input('stale', sql.Bit, stale)
+        .query<{ sandboxSessionId: string }>(`DECLARE @now datetime2(7) = SYSUTCDATETIME();
+          DECLARE @startedAt datetime2(7) = DATEADD(minute, -@ageMinutes, @now);
+          INSERT dbo.sandbox_sessions
           (task_id, foundry_session_id, agent_version, agent_name, size, image, status,
             started_at, last_heartbeat_at, ended_at, end_reason)
           OUTPUT CAST(inserted.id AS varchar(19)) AS sandboxSessionId
           VALUES (@taskId, @foundrySessionId, N'active', N'jarvis-runner-base-1x2', N'1x2',
-            N'jarvis-runner-base-1x2', @status, @startedAt, @heartbeatAt,
-            CASE WHEN @status = N'Ended' THEN SYSUTCDATETIME() ELSE NULL END, @endReason);`);
+            N'jarvis-runner-base-1x2', @status, @startedAt, CASE WHEN @stale = 1 THEN @startedAt ELSE NULL END,
+            CASE WHEN @status = N'Ended' THEN @now ELSE NULL END, @endReason);`);
       const sandboxSessionId = session.recordset[0]?.sandboxSessionId;
       if (!sandboxSessionId) throw new Error('Stale-task session fixture was not created');
       await pool.request()
@@ -986,24 +982,19 @@ describe('dispatcher SQL coordination', () => {
       turnStatus: 'running' | 'completed',
     ) => {
       const task = await createTask(events, title);
+      fixtures.push({ task });
       expect((await taskStore.transition(task.id, 'Running')).kind).toBe('ok');
       return { task, ...await addInvocation(task, sessionStatus, endReason, stale, turnStatus) };
     };
 
-    const fixtures: Array<{ task: Awaited<ReturnType<typeof createTask>> }> = [];
     try {
       const staleActive = await addRunningInvocation('Stale active invocation', 'Active', null, true, 'running');
-      fixtures.push({ task: staleActive.task });
       const staleCompleted = await addRunningInvocation('Stale completed invocation', 'Ended', 'done', true, 'completed');
-      fixtures.push({ task: staleCompleted.task });
       const freshActive = await addRunningInvocation('Fresh active invocation', 'Active', null, false, 'running');
-      fixtures.push({ task: freshActive.task });
       const freshEnded = await addRunningInvocation('Fresh ended invocation', 'Ended', 'done', false, 'completed');
-      fixtures.push({ task: freshEnded.task });
       const freshExpired = await addRunningInvocation(
         'Fresh idle-expired invocation', 'Ended', 'idle_expired', false, 'completed',
       );
-      fixtures.push({ task: freshExpired.task });
       const olderInvocationId = `older-invocation-${randomUUID()}`;
       const olderInvocationStartedAt = new Date(Date.now() - 8 * 60_000);
       await pool.request()
@@ -1016,19 +1007,18 @@ describe('dispatcher SQL coordination', () => {
       const staleExpired = await addRunningInvocation(
         'Stale idle-expired invocation', 'Ended', 'idle_expired', true, 'completed',
       );
-      fixtures.push({ task: staleExpired.task });
 
       const newerExpiredTask = await createTask(events, 'Newer idle-expired invocation wins');
+      fixtures.push({ task: newerExpiredTask });
       expect((await taskStore.transition(newerExpiredTask.id, 'Running')).kind).toBe('ok');
       const olderEligible = await addInvocation(newerExpiredTask, 'Active', null, true, 'running', 20);
       const latestExpired = await addInvocation(newerExpiredTask, 'Ended', 'idle_expired', true, 'completed', 10);
-      fixtures.push({ task: newerExpiredTask });
 
       const unsupportedLatestTask = await createTask(events, 'Newer unsupported session blocks older');
+      fixtures.push({ task: unsupportedLatestTask });
       expect((await taskStore.transition(unsupportedLatestTask.id, 'Running')).kind).toBe('ok');
       await addInvocation(unsupportedLatestTask, 'Active', null, true, 'running', 20);
       await addInvocation(unsupportedLatestTask, 'Ended', 'cancelled', true, 'completed', 10);
-      fixtures.push({ task: unsupportedLatestTask });
 
       const stale = await store.listStaleRunning(new Date(Date.now() - 5 * 60_000), 10);
       expect(stale.map(({ taskId }) => taskId)).toEqual(expect.arrayContaining([
@@ -1036,6 +1026,7 @@ describe('dispatcher SQL coordination', () => {
         freshEnded.task.id, freshExpired.task.id,
       ]));
       expect(stale).toHaveLength(6);
+      expect(stale.some(({ taskId }) => taskId === freshActive.task.id)).toBe(false);
       const cutoff = new Date(Date.now() - 5 * 60_000);
       const firstPage = await store.listStaleRunning(cutoff, 2);
       const secondPage = await store.listStaleRunning(cutoff, 2, firstPage.at(-1)?.taskId);
@@ -1110,8 +1101,8 @@ describe('dispatcher SQL coordination', () => {
       }]);
     } finally {
       for (const { task } of fixtures) {
-        await taskStore.transition(task.id, 'NeedsAttention');
-        await store.endTaskSessions(task.id, 'NeedsAttention');
+        await store.endTaskSessions(task.id, 'Cancelled');
+        await taskStore.transition(task.id, 'Cancelled');
       }
     }
   });

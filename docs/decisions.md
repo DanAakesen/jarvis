@@ -85,6 +85,20 @@ unused rollback succeeds while a used generation, its columns and ledger remain
 intact after refusal. Never clear generation history or weaken the production
 down migration merely to pass a fixture.
 
+V4f2's first genuine SQL batch passed those identity and rollback controls, but
+still failed nine tests. Keep that failure. V4g corrects the observed fixture
+boundaries without changing runtime: advance the existing reconciliation
+observation clock rather than persist a heartbeat older than its session;
+derive session start/heartbeat/end from one SQL timestamp; and exercise the
+saved absent-runtime cancellation snapshot after a legitimate recovery rather
+than deadlock by requesting recovery inside the cancellation policy lock.
+Retain actual dispatcher cancellation of the recovered runtime. Register
+synthetic tasks before fallible fixture setup and cancel them in `finally`;
+the previous helper could strand a Running task when an insert failed, consuming
+global capacity. Do not relax constraints, raise concurrency, remove cases or
+increase timeouts. Fresh real SQL must establish that all remaining failures
+clear before normal release or live acceptance.
+
 ## Fail closed on explicit runner failure and finalization deadlines (15 October 2026; implemented locally)
 
 Independent read-only source reproductions showed that early result events

@@ -1,6 +1,6 @@
 # Architecture
 
-## Delivery after verified writer stop (15 October 2026; V4f local, not released)
+## Delivery after verified writer stop (15 October 2026; V4g fixture successor, not released)
 
 Runner invocation metadata separately records successful work and successful
 owned-provider teardown as exact booleans, with the full verified local work
