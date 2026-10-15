@@ -762,7 +762,8 @@ function ShellLayout({ signedIn, config, session, camera, screenShare }: {
       <main id="content" className="shell-main" tabIndex={-1}>
         {presenceError && <p className="browser-presence-error" role="alert">{presenceError}</p>}
         {/* One room behind every page (and sign-in), so navigation never swaps or reloads the scene. */}
-        <JarvisStage theme={themePreference.resolvedTheme} appearance={themePreference.appearance}>
+        <JarvisStage theme={themePreference.resolvedTheme} appearance={themePreference.appearance}
+          active={!signedIn || home || voiceActive}>
         <KnowledgeBackendContext.Provider value={knowledgeBackend}>
         <WorkspaceCommandContext.Provider value={workspaceCommands}>
           <SessionCommandRegistryContext.Provider value={sessionCommands}>

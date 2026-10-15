@@ -91,6 +91,15 @@ returns a sanitized 503 from an in-flight cancellation, not false success.
 `tests/test_task_finalization.py` exercises this ordering with synthetic delivery
 and metadata boundaries, actual temporary Git commits and owned child processes;
 it is not authenticated Foundry/GitHub acceptance.
+ACP shutdown retains both stdout/stderr readers and shares one teardown across
+concurrent callers. Terminate, post-kill exit and reader completion each have a
+ten-second bound; cancellation joins have a one-second bound. A timeout or
+reader exception fails explicitly rather than reporting successful cleanup.
+Failed cleanup retains the session client to refuse another provider turn;
+only successful stop removes the matching owner. These are local process/pipe
+guarantees, not cloud deallocation evidence or a repair of an old runner image.
+`tests/test_acp_shutdown.py` covers these boundaries with synthetic readers and
+owned child processes.
 Every agent prompt, including resumed and recovered turns, is prefixed with
 instructions to commit and push small work-in-progress changes to the existing
 task branch after each meaningful step. Agents must not force-push or push to

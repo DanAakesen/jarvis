@@ -274,6 +274,8 @@ a:focus-visible { outline: 3px solid var(--focus); outline-offset: 5px; }
 :root[data-theme="dark"] .app-shell::before {
   animation: aurora-drift var(--motion-ambient) var(--ease-standard) infinite alternate;
 }
+.app-shell[data-home="false"][data-voice-active="false"]::before,
+.app-shell[data-home="false"][data-voice-active="false"] .jarvis-stage[data-failed="true"]::after { animation-play-state: paused; }
 @keyframes aurora-drift {
   from { opacity: .64; transform: translate3d(-1.4%, -1%, 0) scale(1); }
   to { opacity: var(--ambient-opacity); transform: translate3d(1.4%, 1%, 0) scale(1.03); }
@@ -747,6 +749,8 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
     color-mix(in srgb, var(--glass-edge-cool) 55%, transparent) 100%);
 }
 .workspace-window.luminous-glass:focus-within { box-shadow: 0 26px 60px -18px rgb(0 0 0 / 55%), inset 0 1px 0 var(--glass-rim-light), 0 0 0 2px var(--focus); }
+/* The window already frosts the room; inner panels need only their existing surface. */
+.workspace-window .panel { backdrop-filter: none; }
 /* Conversation bubbles carry their own surfaces, so its window and the composer can be clearer glass. */
 .workspace-window-conversation.luminous-glass, .conversation-input.luminous-glass { background: var(--stage-glass); }
 /* While typing, the conversation window is the upper part of the composer: square lower corners, no lower glow. */

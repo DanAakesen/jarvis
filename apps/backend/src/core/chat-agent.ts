@@ -19,7 +19,11 @@ export const CHAT_AGENT_PHASES = [
   'session_start',
 ] as const;
 
-export type AgentPhaseTimings = Partial<Record<(typeof CHAT_AGENT_PHASES)[number], number>>;
+export const CHAT_AGENT_DIAGNOSTIC_PHASES = ['model_auth_max', 'model_request_max'] as const;
+
+export type AgentPhaseTimings = Partial<Record<
+  (typeof CHAT_AGENT_PHASES)[number] | (typeof CHAT_AGENT_DIAGNOSTIC_PHASES)[number], number
+>>;
 
 export interface FoundryAgentSessionTelemetry {
   readonly sessionIdUsed: boolean;
@@ -212,7 +216,7 @@ function phaseTimingsFromDone(payload: unknown): AgentPhaseTimings | undefined {
       typeof payload.agentTimings !== 'object' || payload.agentTimings === null) return undefined;
   const agentTimings = payload.agentTimings as Record<string, unknown>;
   const timings: AgentPhaseTimings = {};
-  for (const phase of CHAT_AGENT_PHASES) {
+  for (const phase of [...CHAT_AGENT_PHASES, ...CHAT_AGENT_DIAGNOSTIC_PHASES]) {
     const durationMs = agentTimings[phase];
     if (typeof durationMs === 'number' && Number.isFinite(durationMs) &&
         durationMs >= 0 && durationMs <= maxDiagnosticDurationMs) {

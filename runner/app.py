@@ -47,6 +47,8 @@ MAX_EVENTS = 500
 MAX_EVENT_PAYLOAD_BYTES = 256 * 1024
 # One ACP message per line; tool output (for example a large file dump) can exceed asyncio's 64 KiB default (L126).
 ACP_LINE_LIMIT_BYTES = 32 * 1024 * 1024
+ACP_STOP_TIMEOUT_SECONDS = 10
+ACP_STOP_CANCEL_TIMEOUT_SECONDS = 1
 MAX_ATTENTION_QUESTION_LENGTH = 500
 DEFAULT_DISK_LOW_THRESHOLD_BYTES = 1024**3
 MAX_GENERATED_IMAGE_BYTES = 5 * 1024 * 1024
@@ -318,6 +320,10 @@ class CodexUsageLimitReached(RuntimeError):
 
 class WorkspaceError(RuntimeError):
     """A safe, credential-free workspace failure."""
+
+
+class ACPShutdownError(RuntimeError):
+    """Owned provider teardown did not settle within its bounded phases."""
 
 
 def _is_codex_usage_limit(error: Any) -> bool:
@@ -1284,6 +1290,8 @@ class ACPClient:
         self._next_id = 1
         self._pending: dict[int, asyncio.Future[dict[str, Any]]] = {}
         self._reader_task: asyncio.Task[None] | None = None
+        self._stderr_task: asyncio.Task[None] | None = None
+        self._stop_task: asyncio.Task[None] | None = None
         self.acp_session_id: str | None = persisted_session_id
         self._assistant_text = ""
         self._agent_message_active = False
@@ -1318,7 +1326,7 @@ class ACPClient:
         )
         self.state.process = self.process
         self._reader_task = asyncio.create_task(self._read_stdout())
-        asyncio.create_task(self._read_stderr())
+        self._stderr_task = asyncio.create_task(self._read_stderr())
         initialized = await self.request(
             "initialize",
             {
@@ -1515,17 +1523,67 @@ class ACPClient:
         return True
 
     async def stop(self) -> None:
-        if not self.process:
-            return
-        if self.process.returncode is None:
-            self.process.terminate()
+        if self._stop_task is None:
+            self._stop_task = asyncio.create_task(self._stop())
+        cancelled = False
+        while not self._stop_task.done():
             try:
-                await asyncio.wait_for(self.process.wait(), timeout=10)
-            except asyncio.TimeoutError:
-                self.process.kill()
-                await self.process.wait()
-        if self._reader_task:
-            await asyncio.gather(self._reader_task, return_exceptions=True)
+                await asyncio.shield(self._stop_task)
+            except asyncio.CancelledError:
+                cancelled = True
+        self._stop_task.result()
+        if cancelled:
+            raise asyncio.CancelledError
+
+    async def _stop(self) -> None:
+        error: Exception | None = None
+        waiter: asyncio.Task[int] | None = None
+        try:
+            if self.process is not None:
+                waiter = asyncio.create_task(self.process.wait())
+                if self.process.returncode is None:
+                    try:
+                        self.process.terminate()
+                    except ProcessLookupError:
+                        pass  # Exit raced the signal; still verify the owned process below.
+                _done, pending = await asyncio.wait({waiter}, timeout=ACP_STOP_TIMEOUT_SECONDS)
+                if pending:
+                    if self.process.returncode is None:
+                        try:
+                            self.process.kill()
+                        except ProcessLookupError:
+                            pass
+                    _done, pending = await asyncio.wait({waiter}, timeout=ACP_STOP_TIMEOUT_SECONDS)
+                if pending or self.process.returncode is None:
+                    error = ACPShutdownError("process_exit")
+                else:
+                    waiter.result()
+        except Exception:
+            error = ACPShutdownError("process_exit")
+        finally:
+            if waiter is not None and not waiter.done():
+                waiter.cancel()
+                await asyncio.wait({waiter}, timeout=ACP_STOP_CANCEL_TIMEOUT_SECONDS)
+            readers = {task for task in (self._reader_task, self._stderr_task) if task is not None}
+            if readers:
+                done, pending = await asyncio.wait(readers, timeout=ACP_STOP_TIMEOUT_SECONDS)
+                if pending:
+                    error = error or ACPShutdownError("reader_shutdown")
+                    for reader in pending:
+                        reader.cancel()
+                    settled, _pending = await asyncio.wait(pending, timeout=ACP_STOP_CANCEL_TIMEOUT_SECONDS)
+                    done |= settled
+                for reader in done:
+                    if reader.cancelled():
+                        error = error or ACPShutdownError("reader_failed")
+                    elif reader.exception() is not None:
+                        error = error or ACPShutdownError("reader_failed")
+            for future in self._pending.values():
+                if not future.done():
+                    future.set_exception(RuntimeError("ACP client stopped"))
+            self._pending.clear()
+        if error is not None:
+            raise error
 
 
 def _agent_command(agent: str, model: str | None = None, reasoning: str | None = None) -> list[str]:
@@ -1662,9 +1720,11 @@ async def _turn_has_commit(state: TaskState, project: Path, env: dict[str, str],
 
 
 async def _stop_session_client(session_id: str) -> None:
-    client = session_clients.pop(session_id, None)
+    client = session_clients.get(session_id)
     if client is not None:
         await client.stop()
+        if session_clients.get(session_id) is client:
+            session_clients.pop(session_id)
 
 
 async def _finish_task(
@@ -1676,20 +1736,26 @@ async def _finish_task(
     outcome: str,
 ) -> None:
     if client is not None:
-        if session_clients.get(state.session_id) is client:
-            session_clients.pop(state.session_id)
         try:
             await client.stop()
         except Exception as exc:
+            # Keep a failed provider owner fenced from subsequent turns.
+            session_clients.setdefault(state.session_id, client)
             outcome = "failed"
             state.error = f"Runner cleanup failed: {type(exc).__name__}"
             state.event("failed", error=state.error)
-            if state.process is not None and state.process.returncode is None:
+            if (
+                not isinstance(exc, ACPShutdownError)
+                and state.process is not None and state.process.returncode is None
+            ):
                 try:
                     state.process.kill()
                     await asyncio.wait_for(state.process.wait(), timeout=10)
                 except (OSError, asyncio.TimeoutError) as stop_error:
                     LOGGER.error("provider cleanup failed (%s)", type(stop_error).__name__)
+        else:
+            if session_clients.get(state.session_id) is client:
+                session_clients.pop(state.session_id)
     if lock_acquired and state.agent == "codex":
         auth_path = worktree / ".codex" / "auth.json"
         try:
@@ -2199,19 +2265,30 @@ async def cancel_invocation(request: Request) -> Response:
         _persist_task(state)
     else:
         state.event("cancel_requested")
+    client = session_clients.get(state.session_id)
     if state.worker is not None:
         if first_cancel:
             state.worker.cancel()
         await asyncio.shield(asyncio.gather(state.worker, return_exceptions=True))
-    elif state.process and state.process.returncode is None:
+    elif (
+        state.process and state.process.returncode is None
+        and (client is None or client.state is not state)
+    ):
         state.process.terminate()
         await state.process.wait()
+    if state.status == "failed":
+        return JSONResponse({"error": "Runner cancellation cleanup failed"}, status_code=503)
     # Never dispose a later turn when cancelling an older invocation.
     client = session_clients.get(state.session_id)
     if client is not None and client.state is state:
-        await _stop_session_client(state.session_id)
-    if state.status == "failed":
-        return JSONResponse({"error": "Runner cancellation cleanup failed"}, status_code=503)
+        try:
+            await _stop_session_client(state.session_id)
+        except Exception as exc:
+            state.status = "failed"
+            state.error = f"Runner cleanup failed: {type(exc).__name__}"
+            state.finished_at = time.time()
+            _persist_task(state)
+            return JSONResponse({"error": "Runner cancellation cleanup failed"}, status_code=503)
     state.status = "cancelled"
     state.finished_at = time.time()
     _persist_task(state)

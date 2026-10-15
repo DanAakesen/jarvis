@@ -223,6 +223,45 @@ describe('Foundry Invocations chat agent', () => {
       agent_first_delta: 600000, agent_auth: expect.any(Number),
     });
   });
+  it('accepts bounded optional model maxima without requiring them from older agents', async () => {
+    const onAgentPhaseTimings = vi.fn();
+    const { agent } = createAgent(vi.fn(async () => streamedResponse([
+      'event: done\ndata: {"agentTimings":{"model_request":1000,"model_request_max":20000,"model_auth_max":7000,"private-content":99}}\n\n',
+    ])));
+    for await (const chunk of agent.stream({ ...input, onAgentPhaseTimings },
+      delegatedAuthorization, new AbortController().signal)) { void chunk; }
+    expect(onAgentPhaseTimings).toHaveBeenCalledExactlyOnceWith({
+      model_request: 1000, model_request_max: 20000, model_auth_max: 7000,
+      agent_auth: expect.any(Number),
+    });
+    expect(JSON.stringify(onAgentPhaseTimings.mock.calls)).not.toContain('private-content');
+  });
+
+  it.each([-1, 600001, '4', null, {}, true])('rejects invalid optional maxima %j', async (duration) => {
+    const onAgentPhaseTimings = vi.fn();
+    const { agent } = createAgent(vi.fn(async () => streamedResponse([
+      `event: done\ndata: ${JSON.stringify({ agentTimings: {
+        model_request: 2, model_auth_max: duration, model_request_max: duration,
+      } })}\n\n`,
+    ])));
+    for await (const chunk of agent.stream({ ...input, onAgentPhaseTimings },
+      delegatedAuthorization, new AbortController().signal)) { void chunk; }
+    expect(onAgentPhaseTimings).toHaveBeenCalledExactlyOnceWith({
+      model_request: 2, agent_auth: expect.any(Number),
+    });
+  });
+
+  it('rejects nonfinite maxima and accepts the duration bounds', async () => {
+    const onAgentPhaseTimings = vi.fn();
+    const { agent } = createAgent(vi.fn(async () => streamedResponse([
+      'event: done\ndata: {"agentTimings":{"model_request_max":1e999,"model_auth_max":600000,"model_request":0}}\n\n',
+    ])));
+    for await (const chunk of agent.stream({ ...input, onAgentPhaseTimings },
+      delegatedAuthorization, new AbortController().signal)) { void chunk; }
+    expect(onAgentPhaseTimings).toHaveBeenCalledExactlyOnceWith({
+      model_request: 0, model_auth_max: 600000, agent_auth: expect.any(Number),
+    });
+  });
   it('does not retry an invocation that had no session ID', async () => {
     const fetcher = vi.fn<typeof fetch>(async () => new Response('private provider details', { status: 400 }));
     const { agent } = createAgent(fetcher);

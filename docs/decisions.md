@@ -1,5 +1,96 @@
 # Decisions
 
+## One balanced stage, not quality tiers (15 October 2026; local)
+
+Dan approved the stage-performance review but rejected tiers and choices.
+Use one fixed rendering budget, bounded ambient/voice/mirror cadence and
+cheaper geometry/shader detail. Keep the room mounted across routes but
+hold its last frame behind work pages, preserving the agreed one-room feel.
+Remove adaptive resolution changes rather than tuning their oscillation.
+Coalesce real size changes before drawing and never clear the buffer after
+rendering a frame. Keep the actual mirror, cyan shell/open amber core,
+truthful audio/activity, reduced motion and context recovery.
+
+Dan said the changed stage still looks good. That accepts the local visual
+direction, not measured machine-power savings, physical-phone performance
+or absence of production flicker. This work is separate from the frozen
+header/cancellation release and the unresolved mobile composer report.
+
+## Retain model-round maxima without changing first samples (15 October 2026; source candidate)
+
+The diagnostic turn exposed a visibility gap: `model_request` retains the first
+Responses create observation, so a slower later tool round is not represented
+by that field. Add only optional content-free `model_auth_max` and
+`model_request_max` in the existing turn-local timing collector. Instrument
+the shared model-token provider and both providers' awaited stream setup;
+finalize on success, error and cancellation without changing propagation.
+Keep existing first-observation fields, bounded finite durations, model
+arguments, retries, deadlines, settings, permissions and resource lifecycle.
+
+Log the new diagnostics at the backend but do not widen the legacy browser
+reply's timing field set; mixed agent/backend deployments remain optional-field
+compatible. There are no timing-phase constants in baseline `6e2c1b95`'s
+contracts package, so no new public contract is introduced. Maxima can describe
+different attempts and token time overlaps setup. The underlying delay remains
+unknown; SDK retry, token refresh, throttling and provider queueing are not
+proved causes. This candidate does not fix latency or accept the release,
+Factory task cancellation, or the separately owned physical mobile composer.
+No new live/model/tool/job call belongs to this source/test handoff.
+
+## Bound owned ACP teardown without early terminal success (15 October 2026)
+
+The source has an unbounded post-kill process wait and an unbounded stdout
+reader join; stderr previously had no retained task owner. Deterministic
+owned-process/reader controls reproduce these lifetime risks separately from
+the parent's real artifact-delivered/automatic-finalisation-failed trial.
+Bound each shutdown phase, retain and join both readers, share stop work across
+callers and preserve cancellation after teardown. Report sanitized explicit
+failure if exit or reader cleanup cannot be verified; never silently treat a
+reader exception, timeout or attempted kill as successful cleanup.
+
+Remove only a successfully stopped matching client. Retain failed ownership
+to prevent another turn sharing an unverified provider, without removing a
+replacement client. Keep accepted terminal-after-teardown/event delivery,
+delivery verification and cancellation confirmation contracts unchanged.
+This is a local implementation choice pending independent review and exact
+head gates, not a proved diagnosis or retroactive repair of the live runtime.
+Task 17's later supported cancellation success does not change that distinction.
+No publication, extra live action, access workaround or resource change is
+authorised by this record; historical freezes remain immutable.
+
+## Exclude new Daily coaching, preserve core integration (15 October 2026)
+
+**Confirmed user decision, not a proposal or completed acceptance.** Dan:
+"Also i dont know what that coaching is, but you dont need to add that, you can take that out of scope."
+
+Withdraw NEW P12-08/#723 coaching/recovery/recomp automation from the planned
+scope and combined release. Retain the first and waist-corrected unmerged
+source freezes byte-exact as archived evidence, not accepted/merged work.
+This does not remove existing main Daily health, nutrition, workout/tracking,
+integration capabilities or retained readiness/recovery/measurement records.
+No original application, schema or data change is authorized.
+
+Core P12-09/#724 API/tools work excludes new coaching; a deliberately excluded
+optional feature and its missing maintenance/TDEE, completeness, expiry or
+readiness interpretation must not remain semantic completion prerequisites.
+Do not invent those rules or activate #724. Existing core validation remains.
+Keep one Daily page plus existing on-demand GenUI, no widget, extra
+Workouts/Nutrition pages or mandatory four native views. Parent owns native
+issue/dependency/board reconciliation after this source update. The coordinator
+verified that plan-status derives native dependency links from PLAN, so update
+only P12-09's dependency cell from `P12-08` to completed `P12-05, P12-07`
+(#720/#722), not an empty or bypassed dependency. All 381 row positions,
+309 task IDs, every Status cell and the other 380 rows remain byte-exact;
+retain #723's row. Conflicting older scope descriptions are historical.
+
+Protected backup/export, authoritative-original-source/parity,
+real-device/provider, final-delta, rollback and cutover evidence remain
+required for retained core scope. Original Daily stays canonical before
+cutover. The coordinator reports that original-repository identity matches
+GitHub main, but collector metadata is not proof of the earlier health-schema
+source or live parity; this docs-only lane performs no further source search.
+This scope decision alone is not code removal, a release or acceptance proof.
+
 ## Cancel attention after a failed pre-start without inventing ownership (15 October 2026)
 
 Complete review after published `0b4e79c2` passed ten CI jobs / SQL 176 tests

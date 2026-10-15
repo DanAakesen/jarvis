@@ -1,5 +1,18 @@
 # Product
 
+## One balanced 3D stage budget (15 October 2026; local)
+
+Keep one recognisable room, cyan shell, open amber core and mirror floor.
+Dan wants a single balanced implementation, without quality tiers, modes
+or settings choices. Retain the mounted room across navigation, holding
+its last frame behind work pages; animate on home/sign-in and during
+voice. Preserve truthful activity/audio, explicit microphone ownership,
+reduced motion, hidden-tab pause, context recovery and usable HTML fallback.
+Rendering must have bounded frame, pixel and reflection work, without
+frame-time-driven resolution oscillation or redundant drawing-buffer resets.
+Dan's local feedback is that the stage still looks good; this is not a
+measured CPU/GPU utilisation reduction or a production flicker verdict.
+
 ## Header tab overflow correction (15 October 2026; combined candidate)
 
 Window and background-job tabs must shrink as their number increases, then
@@ -862,6 +875,6 @@ P12-10's inactive Google services reuse existing owner/login/connections, enumer
 
 All migrated React/rich UI must match current Jarvis layout and styling fully, using current DESIGN.md, canonical styles.css tokens, shared components, themes/density/motion and native phone/workspace patterns. Preserve Daily capabilities/data semantics while recomposing its legacy visuals; no separate Daily skin/theme or replacement shell/voice/window manager. Generated views reuse safe trusted Jarvis theme context through the existing bridge without expanded permissions. Physical/browser mobile-first visual acceptance is required in #730/#731/#732/#726; persistence work does not start those blocked UI tasks.
 
-[Approved scope](docs/daily-migration.md) preserves mobile-first Daily/Workouts/Nutrition, Status/Recomp/Review/Ready in the single assistant conversation, health sync, nutrition/Frida/history/plans, coaching/recovery, scoped iPhone widget/Shortcut, existing Google feeds and football preferences. TickTick is excluded; recurring Daily notifications stay off. Reuse existing login/session/owner, shell and voice. P12-01 implements only gated integration metadata and reserved IDs; pages, data services and device credentials remain planned. Original Daily continues ordinary authorized food/health writes and stays running/canonical before cutover; migration tooling must not alter its application/source code/schema or rewrite records; pre-authorized cutover remains evidence-gated, with rollback protected and no original repository/data deletion.
+[Approved scope](docs/daily-migration.md), updated by Dan on 15 October 2026, preserves existing Daily health, nutrition, workout/tracking and integration capabilities through one mobile-first Daily page and existing on-demand GenUI in the single assistant conversation: no widget, separate Workouts/Nutrition pages or four mandatory Status/Recomp/Review/Ready views. New P12-08/#723 coaching/recovery/recomp automation is excluded from planned scope and the combined release, not accepted as complete; this does not remove existing capabilities, measurements or retained records. Health sync, nutrition/Frida/history/plans, the scoped optional iPhone Shortcut, existing Google feeds and football preferences retain their existing gates. TickTick stays excluded and recurring notifications stay off. Reuse existing login/session/owner, shell and voice. Core P12-09/#724 API/tools work excludes new coaching and must not require #723 completion; this scope decision does not activate it. Original Daily continues ordinary authorized writes and remains canonical until protected backup/export, authoritative-source/parity, real-device/provider, final-delta, rollback and cutover gates pass; no original source/schema/data deletion or rewrite.
 
 P12-07 adds inactive nutrition services and typed handlers using verified source action semantics. Explicit exact-label/favourite intake needs no redundant confirmation; photo/portion estimates need acceptance of the displayed proposal from trusted Jarvis metadata, never model `userConfirmed`. Exact quantities outrank estimates; nullable unknowns and legacy confidence/capture vocabulary remain intact. Meals persist until soft deletion, with full paged history and revisioned corrections by exact owner-bound idempotency key beyond seven days. Occurrence defaults to trusted request time/Copenhagen date only when absent. Favourites accept one retained source key or confirmed definition; normalized-name reuse updates its ID. Plans resolve owned favourites server-side for one breakfast/lunch/dinner plus optional snacks (3–50 slots), snapshot and sum values without trusting model totals or logging food. Suggestions use authoritative time/remaining budgets and persistent dislikes. Frida pins release 10 / 5.5 with DTU/DOI attribution, supplied public bootstrap/DTO shapes, per-100-g scaling and honest null/provenance/subtotals. Final CI/independent review, live parity and P12-09 integration remain gated; this code activates nothing.
