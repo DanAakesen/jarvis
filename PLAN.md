@@ -157,8 +157,12 @@ Phase 1 delivers the Software Factory. Requirements and page specifications are 
 
 ## Current focus
 
-- **Current main release (14 October):** Diagnostics #831 reached accepted main `51bda5cb` through full CI, CodeQL and normal Deploy `38622011802`; revision `0000315` has positive safe canary/capabilities/GitHub-read telemetry. Factory #842 then passed all ten actual CI jobs and three CodeQL analyses, merged as `36d72090`, and passed normal Deploy `38629181064`: Web, deployed deep link, backend health and actual smoke; unchanged backend/infrastructure/hosted-agent deployment was skipped. Inactive Daily #818 subsequently passed all ten CI `38631864211` jobs and three CodeQL `38631863844` analyses at `af5ac2e7`, merged as `5939fb54`, and passed normal Deploy `38633353086`: backend image, health and actual smoke at 20:43:27 UTC; unchanged web/infrastructure/hosted-agent deployment was skipped. This establishes the current healthy release, not activation, historical attribution or original performance/private/phone/voice acceptance. Issues #820, #813 and #720 remain open.
-- **Next delivery snapshot (14 October):** The six existing maintenance review deliveries are consolidated locally into existing #841 against accepted `5939fb54`, without restarting cloud coding workers. Their integrated head still needs full CI and four actual CodeQL analyses. Local combined reference-pin validation stopped before tests on a genuine TLS failure; the existing agent CI job now checks baseline and combined manifests in separate Python 3.13 environments when reference manifests change. That hosted check must pass; individual receipts do not prove the combination. Google freeze `F3BD79DA` failed targeted re-review on three residual faults; corrected immutable freeze `CEC84A7A` has been sent to the same independent reviewer, with publication held pending disposition. No activation, original Daily/data change, private provider turn, blind retry, speculative model change or new issue/PR is authorised.
+- **Required main gate failed (14-15 October):** Reference #830 normally squashed into `c0d0aeef`; its actual Deploy `38649690138` failed required smoke `116148437669` at 22:54 UTC despite the other five selected jobs succeeding. A genuine owner Status-page GET read the retained `capabilities_reply_incomplete` branch without a new probe: actual discovery succeeded and its Notes/Calendar/GitHub receipt was complete; the final reply did not satisfy all category predicates. The exact omitted category and historical #820 cause are not retained. The local candidate adds one shared tool-grounded summary rule for chat/voice/smoke, not fabricated output or weakened checks. Independent review, changed-head full CI/CodeQL and actual normal release remain required; ordinary merges and the approved live fixtures/job remain held.
+- **Current main release (14 October):** Diagnostics #831 reached accepted main `51bda5cb` through full CI, CodeQL and normal Deploy `38622011802`; revision `0000315` has positive safe canary/capabilities/GitHub-read telemetry. Factory #842 then passed all ten actual CI jobs and three CodeQL analyses, merged as `36d72090`, and passed normal Deploy `38629181064`: Web, deployed deep link, backend health and actual smoke; unchanged backend/infrastructure/hosted-agent deployment was skipped. Inactive Daily #818 subsequently passed all ten CI `38631864211` jobs and three CodeQL `38631863844` analyses at `af5ac2e7`, merged as `5939fb54`, and passed normal Deploy `38633353086`: backend image, health and actual smoke at 20:43:27 UTC; unchanged web/infrastructure/hosted-agent deployment was skipped. This establishes the current healthy release, not activation, historical attribution or original performance/private/phone/voice acceptance. Issues #820 and #813 remain open.
+- **Maintenance delivered (14 October):** Existing #841 reached accepted main `202ead5b` after all ten actual CI `38636782270` jobs and four CodeQL `38636782376` analyses. The hosted Python 3.13.16 reference baseline and combined manifests each verified 90 pins, clean pip check, 42 offline tests and HS256 readback; this does not relabel the earlier failed local installation. Normal Deploy `38638073176` passed all six selected components, with none skipped. Original #840/#826/#825/#827/#833/#835 completed after acceptance; superseded review PRs closed and token-backed Project sync passed.
+- **Inactive health code acceptance (14 October):** #720 closed for its original inactive code/synthetic criteria at 22:13 UTC. Original #808 and reviewed #818 already delivered the source. The coordinator verified 63 health/schema/auth/runtime inputs against the actually tested #841 head, accepted main `202ead5b` and subsequent main; the tested/accepted tree is `b05a2380`. Actual CI `38636782270` passed health-processing SQL 18, health-upload SQL 12, normalization 45, read-model 2, upload 15 and lint/build. The local acceptance worker found no scoped gap but could not rerun npm after proxy/TLS failures; no new code or dummy release was needed. Native #718/#719 links remain. HAE/phone/source parity, activation, private backup/import/cutover and deployed capacity remain separate unverified gates.
+- **Google corrected-head gate (14 October):** The same independent reviewer passed replacement `3AF653B5` / `139ca8f7` / `05c77007` for the two CEC residuals and coupled controls; earlier `3073B943`/`F3BD79DA`/`CEC84A7A` remain immutable FAIL. Actual pinned CI `38644147405` at published `f2afaca9` failed five backend fixtures; 75 frontend files passed before the root command repeated them. New `568666e1` passed narrow independent review without production/auth changes. The coordinator normally integrated/published existing #848 head `3e29a04e`; actual full pinned CI `38650651609` passed all ten jobs and CodeQL `38650651464` all four analyses. The backend passed 178 files / 3,170 tests, lint and strict build. Original failed freezes/runs stay immutable. The C0 required release failure now holds merge/release/live acceptance; a tightly coupled changed-head fix still requires its own review/full gates.
+- **Ten-hour delivery window (14-15 October):** Google and Factory lifecycle retain separate local owners; inactive #720 code acceptance is complete. The existing #830 cloud continuation finished and its reference compatibility head `cc5d7214` passed ten actual CI jobs, four CodeQL analyses and baseline/candidate 90-pin 42/43-test checks; coordinator containment and release remain. The coordinator handles reviews, releases and both boards through 07:34 UTC on 15 October. Dan approved, after review/CI/release, one synthetic Gmail draft (never sent), one `Jarvis acceptance test` calendar event without attendees/notifications, exact fixture readback/cleanup and one isolated existing-resource sandbox delivery job. He signed into the shared owner browser himself; use that MSAL/backend-verified UI without reading tokens or bypassing consent. Preserve unrelated pending actions. No personal-email access, new permissions/resources, fabricated approvals, extra jobs, original Daily/data activation or private migration.
 
 - **P12-10 (#725):** #746 merged as an inactive intermediate implementation; three feed-boundary corrections continue on `codex/p12-10-feed-boundary-corrections` / draft #754. Shared range validation precedes refresh/storage/provider/model work; numberless deliveries require matching nonempty delivery details; full validated SENT labels preserve alias direction before DTO truncation. Existing resumable scans, protected semantic adapter, exact Danish selectors/keys, owner-local persistence and source serialization safeguards remain intact. Synthetic/isolated SQL regressions and exact-head full CI precede independent correction review; #754 remains draft until explicit coordinator readiness release. CalendarList consent, deployed identity/model/provider parity, private backup/import/reconciliation and device gates remain open. No registration/OAuth/resource changes; #725 stays open/native dependencies intact.
 
@@ -867,6 +871,39 @@ deployment; #813 production cadence/performance acceptance, #798, the
 main-release gate and P12 holds remain unchanged.
 
 ### P11 — Jarvis-raised fixes
+
+Local consolidation of #837/#838/#839 uses the existing #848/task-14 delivery,
+with task-15 calendar evidence/approval hunks and task-12 direct-only access guards.
+Accepted main `36d72090` is integrated locally without replaying generated status
+cells or changing the accepted mobile sources and main diagnostics. Independent
+review rejected frozen `3073B943`, `F3BD79DA` and `CEC84A7A`.
+All artifacts remain unchanged. The original five findings are
+corrected locally: approval-scope isolation, observed-site computer guards,
+unrelated-status routing, independently requested same-turn computer actions,
+and decoded-empty-body provenance with separately labelled previews. Three residual
+findings are also corrected: actual appointment mail receipts/read topics cannot
+steal calendar scope, quoted/query-topic commands cannot authorise PC fallback,
+and native Gmail-named editor windows remain usable.
+Two newly reproduced faults are corrected: trusted current process/site observations
+replace optional Chrome title-suffix inference, and clear topic-bearing EN/DA
+mail requests retain separately requested computer operations without trusting
+quoted subjects or how-to topics. Original native/visual action bindings remain
+intact through separate observation stores; no C#/wire changes.
+Local checks pass 296 hosted chat/voice tests, 327 runnable backend tests, backend
+lint and changed Python Ruff; actual registry receipt checks and four actual-
+handler-receipt hosted chat/voice scope cases also pass.
+HTTP Google/parity/relay/bridge suites and full types/build remain locally
+package-blocked. Independent review passed frozen `3AF653B5`; the coordinator
+published its integrated runtime/test blobs in existing #848 as `f2afaca9`.
+Normal pinned CI `38644147405` reported five backend fixture failures in both
+Backend and Web jobs after all 75 frontend files passed. Local corrections
+explicitly opt the calendar test route into agent authentication and assert the
+paused sparse-tree PC's two read-only observations with zero control/model
+dispatch. Production auth/approval/pause policy stays unchanged. Next:
+coordinator-owned review and corrected-head normal pinned CI. Original
+Gmail/calendar acceptance remains open; this local correction does not authorise
+issue closure, new PR, push, hosted CI or deployment by this worker.
+
 A rolling intake phase. When Dan asks Jarvis to change its own code or a project's code, Jarvis drafts the issue, confirms it with Dan and creates it as `P11-NN` (P10-03). Rows are added here as the issues are created.
 | ID | Issue | Task | Acceptance criteria | Depends on | Status |
 | --- | --- | --- | --- | --- | --- |

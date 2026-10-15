@@ -1,5 +1,28 @@
 # Decisions
 
+## Require complete tool-grounded capability overviews (14 October 2026)
+
+The new C0 reference release failed its required capability reply check, not
+discovery: a genuine owner read of the retained 22:54 UTC report displayed
+"Capabilities reply incomplete". The deployed canary source requires successful
+discovery and a complete Notes/Calendar/GitHub receipt before that branch.
+The precise omitted category and exclusive cause are not retained.
+
+Use one generic category-summary instruction in the shared model builder for
+chat, voice and smoke. Smoke omits the broader backend capability block; a rule
+only there would miss the failing path. Name categories from successful discovery
+instead of hard-coding categories, synthesizing success text or loosening the
+canary. Preserve failure/refusal reporting, untrusted-data handling, existing
+tokens/tool limits and saved model settings.
+
+Synthetic actual-handler regressions verify instruction delivery across both
+model rounds and unchanged output even when the fake provider omits GitHub.
+The existing Windows Python 3.12.10 snapshot passed all 398 agent tests; the
+fifteen new cases fail on the asserted exact baseline model blob. They do not
+demonstrate real model compliance or resolve #820's earlier
+historical failure. The candidate remains subject to independent review, exact
+changed-head full CI/CodeQL and the normal required release smoke.
+
 ## Accept current recovery separately from historical attribution (14 October 2026)
 
 The reviewed diagnostic tree reached main through #831 as `51bda5cb`.
@@ -27,8 +50,43 @@ infrastructure and hosted-agent deployment were skipped. Accept that inactive
 correction release, not activation, original data access or cutover. Google's
 `F3BD79DA` also failed targeted re-review on three residual approval-scope,
 quoted-query intent and native-window faults. Both it and `3073B943` remain
-unapproved and immutable. Corrected freeze `CEC84A7A` is with the same
-independent reviewer; publication remains held pending disposition.
+unapproved and immutable. The same reviewer also rejected `CEC84A7A`,
+then passed replacement `3AF653B5` / `139ca8f7` / `05c77007` for the exact
+two residuals and coupled controls. The coordinator's normal `5064afe4`
+integration is conflict-free. Full pinned CI, normal release and actual
+Google acceptance remain pending; the bounded PASS is not those gates.
+
+Subsequent actual pinned CI `38644147405` at published #848 head `f2afaca9`
+failed four calendar receipt-flow HTTP fixtures and one paused-PC fixture.
+The frontend's 75 files passed before its root workspace command repeated
+the same backend failures; do not create a separate UI owner or retry this
+unchanged head. The same author produced six-path harness correction
+`568666e1` with explicit internal fixture-route opt-in, an unmarked-route
+403/zero-execution negative, exact two-read paused identity checks and zero
+capture/action/model dispatch. The same reviewer passed that bounded
+disposition at exact head `568666e1`: unchanged production/auth blobs and
+all original receipt/approval assertions were verified; the real synthetic
+connection reproduced the exact paused/resumed sequence. Its HTTP import
+was still blocked on a missing local package, not a passing HTTP test.
+Normal corrected-head full CI and release remain required.
+Previous immutable PASS/FAIL receipts remain unchanged.
+
+## Accept original inactive health code without private activation (14 October 2026)
+
+The independent #720 lane found no demonstrable code/synthetic gap. Original
+#808 and reviewed #818 already delivered its implementation. The coordinator
+hashed the no-change receipt and verified 63 source/schema/auth/runtime/lock
+inputs against actually tested #841 head `eea9a06f`, accepted `202ead5b`
+and later main. Tested and accepted trees both equal `b05a2380`; actual
+CI `38636782270` passed all ten jobs, including health-processing SQL 18,
+health-upload SQL 12, normalization 45, read-model 2, upload 15 and lint/build.
+Normal Deploy `38638073176` already accepted that tree.
+
+Close original #720 code acceptance without a dummy PR or repeated release;
+retain closed #718/#719 dependency links. The lane did not rerun npm locally
+because of proxy/TLS failures. This does not accept or authorise activation,
+private export/import, HAE/physical-phone/source parity, backup/cutover or
+deployed health capacity. Those downstream gates remain separate.
 
 ## Consolidate the existing maintenance review queue locally (14 October 2026)
 
@@ -54,6 +112,42 @@ analyses, with traced production C# extraction, before guarded normal release.
 Reconcile the six issues/cards only after confirmed delivery. This does not
 establish blanket dependency-advisory clearance or close the separate #830
 advisory/compatibility acceptance.
+
+Accepted outcome: #841 merged as `202ead5b` after ten actual CI
+`38636782270` jobs and four CodeQL `38636782376` analyses. Actual
+Python 3.13.16 baseline/combined environments each verified all 90 pins,
+clean pip check, 42 offline tests and HS256 readback. Normal Deploy
+`38638073176` passed all six selected jobs, including infrastructure and
+hosted agent; none was skipped. All six original issues completed and
+superseded review PRs closed after acceptance. This leaves separate
+advisory dispositions qualified, not blanket cleared.
+
+## Parallel overnight delivery and bounded live acceptance (14 October 2026)
+
+Dan directed a ten-hour local-first delivery push with sensible parallel
+subsessions and selective Copilot cloud work. Keep one owner per lane:
+Google implementation/review, Factory lifecycle and inactive Daily acceptance
+remain local; existing #830's reference compatibility is cloud-owned.
+The coordinator handles current-main integration, existing PRs, review,
+normal CI/releases and both boards. This supersedes the earlier blanket
+no-cloud direction, not publication, privacy, access or release protections.
+
+Dan explicitly approved one live acceptance run after review, normal CI
+and release: one synthetic Gmail draft, never sent; one calendar event
+named `Jarvis acceptance test` without attendees or notifications; readback
+and cleanup of only these newly created fixtures; and one isolated sandbox
+delivery job using existing resources and delivery PRs. Use genuine owner
+authentication, preserve unrelated pending actions, and report missing
+access rather than scraping tokens, bypassing consent or forging approval.
+No personal emails, original Daily/data migration or activation, new
+resources/permissions, extra jobs or private/device acceptance is implied.
+
+Dan subsequently completed Microsoft sign-in/MFA himself in the shared
+browser panel. Jarvis uses MSAL and backend `/me` verification; the SWA
+`/.auth/me` response is not its session authority. Use the existing verified
+UI/client, not token extraction, forged caller fields or a substitute
+service principal. Successful sign-in does not itself accept any live
+Google write, sandbox job, cleanup or physical platform-stop result.
 
 ## Coalesce automatic board updates behind scoped reads (#813, 14 October 2026)
 
@@ -2712,3 +2806,208 @@ Dan approved P12 on 12 October 2026 and explicitly released only P12-01 for this
   behind the generic pin-load message. Regression and rendered checks pending.
 - **Scope:** local correction; phone explicit show/hide and voice lifecycle
   remain unchanged. No backend change or broader draft release.
+
+## P11-03 / #838 (14 October 2026) — Recover actual calendar stages
+
+Private tool audit results omit confirmation codes, so later turns cannot rely on
+conversation history to confirm a staged action. Keep the existing ten-minute,
+one-shot process-local state and add a verified read-only
+`calendar_get_pending_change` tool to recover the actual original code and summary.
+Chat and voice must stage successfully before claiming preparation, then confirm
+on a later plain approval without restaging or asking again. Missing and expired
+stages return `none`. No persistence, migration or live calendar write is added.
+
+### P11-03 Gmail ownership and extraction
+
+Reuse the MIME reader and its regressions from #837 / task 12 at `bd052c0`,
+with the same file path and return fields, rather than add a competing decoder.
+#837 remains open and no task-12 PR was visible at this checkpoint. This task
+adds hidden-preheader/invisible-padding cleanup and nested hotel-booking
+regressions, plus extraction-limit guidance. Read both plain and alternate HTML
+text; absent details in extracted text do not prove the original email lacks them.
+Computer-use access enforcement stays owned by #837; this change uses only the
+Google API and static HTML parsing. No private email was read for these tests.
+
+Offline evidence for P11-03: 268 selected Google, instruction, registry,
+presentation, approval, authentication, app and module tests pass after the
+sandbox loopback/timing reruns; backend lint/build pass. The stage recovery audit
+remains redacted, and failed/unstaged/replayed actions cannot execute. Python
+instruction syntax is checked; hosted-model and real-account behavior are not
+verified. No calendar change or deployment was performed.
+
+## Consolidated Google delivery (14 October 2026; local preparation)
+
+The user directed local consolidation rather than more issues or cloud workers.
+Use existing #848/task-14 as the reviewable delivery for #837/#838/#839, preserving
+task-14 extraction/recovery, task-15 evidence-grounded hosted/realtime approval
+logic, and task-12 direct-only execution guards. This does not close the issues or
+authorise publication/deployment. Current main remains authoritative outside the
+Google surfaces; main smoke behaviour and accepted mobile blobs are unchanged.
+
+Keep `calendar_get_pending_change` as the one pending-state tool, adding verified
+reply classification rather than retaining task-15's competing name. Calendar
+confirmation retains its original summary, consumes before executing, and cannot
+be retried by a repeated yes after cancellation, expiry or provider failure.
+Parity fixtures register the actual Google module; known result-status tokens
+are not callable names, while unknown tool references still fail parity.
+
+Task-15's broad reservation/context heuristic could suppress Gmail-only booking
+lookups or an unrelated next request. Restrict reservation context to mutation
+requests and stop applying old calendar context to unrelated non-approval turns.
+Synthetic hosted-loop regressions cover both cases. Successfully decoded empty
+Gmail bodies are not reported as unavailable; missing/malformed or preview-only
+content still reports extraction limits. No private content or provider call
+was used to establish these local outcomes.
+
+Local evidence includes 267 hosted chat/voice tests, 251 runnable Node regressions,
+full backend zero-warning lint, changed Python Ruff, direct MIME assertions and
+actual registry receipt checks. Node uses verified 22.23.3 x64 with a non-pinned
+Vitest/Vite snapshot; Python is 3.12.10 rather than target 3.12.14. Three HTTP/
+parity/relay suites and full types/build remain blocked by unavailable dependencies.
+The shared prompt's original 15,000-code-point headroom check remains intact;
+compact equivalent PC/mail wording leaves room for explicit calendar evidence
+and ten-minute approval semantics. Exact-head pinned CI and original live Gmail/
+calendar/speech acceptance are unproven.
+
+## Google independent-review corrections (14 October 2026; local)
+
+Independent review rejected frozen patch `3073B943`; retain that original
+artifact, not a rewritten passing receipt. Repair the five findings within the
+same #848 delivery, without issue closure or a second publication stream.
+
+- Generic staged/klargjort prose cannot establish calendar context. Mail-only
+  history and actual mail confirmation stay separate from an older calendar
+  stage; both pending scopes may coexist.
+- Raw PC/browser operations check observed site/window metadata rather than
+  trust input keywords or pretend the native application is named Gmail.
+  Chrome's real process identity and opaque tab IDs must be guarded before
+  planner/vision export and before action/confirmed dispatch. Reuse that boundary
+  in the Codex executor; unknown site identity is a visible refusal.
+- Weather, mail and build status questions are not calendar status referents.
+  Reset unrelated realtime context before interception, retaining genuine
+  calendar status and later-approval semantics.
+- A mail tool does not forbid a separately requested unrelated computer action.
+  Match independent intent to the verified current Dan message and scope nested
+  execution to the same request/turn; observed Gmail and fallback remain refused.
+- Successfully decoded empty plain or static HTML bodies retain their original
+  body source even when a snippet exists. Return the snippet separately as a
+  bounded preview; warn about unavailable full text only for genuine fallback.
+
+Qualified local evidence: 290 Node tests in twelve runnable suites, 282 Python
+tests, backend zero-warning ESLint, changed Python Ruff and actual handler
+receipt proofs. Node/Vitest/Vite/Python qualifications and the original prompt
+headroom are unchanged. Four app-dependent suites and full types/build remain
+blocked by the same five missing packages; relay regressions are added, not
+claimed executed. No provider/private-account or hosted speech acceptance.
+
+The coordinator authorised normal owned local commits and one fresh-main
+integration. Main `51bda5cb` is integrated with its diagnostics, generated PLAN
+cells and protected mobile blobs preserved. The coordinator reports its normal
+Deploy `38622011802` accepted revision 315; this is not Google-delivery release
+evidence. Independent re-review, pinned exact-head CI and existing-PR publication
+remain coordinator-owned. No push, new PR, metadata change or deployment here.
+
+## Google residual targeted-review corrections (14 October 2026; local)
+
+Targeted re-review failed exact `F3BD79DA` / tree `eba45700`; preserve that freeze
+and original `3073B943`. The three reproduced findings are corrected in the same
+delivery, not a new issue/publication stream.
+
+- Appointment nouns inside mail subjects and receipt text are not calendar
+  intent. Recognise the actual mail reply receipt structure before inspecting
+  unquoted scope text, and let mail read topics reach the mail/model path.
+  Explicit calendar mutations, genuine status/completion and repeated approval
+  still recover real backend evidence without duplicate writes.
+- A conjunction or punctuation match inside a query/quoted subject cannot
+  authorise a computer action. Accept only complete unambiguous current-user
+  command shapes for the narrow independent-operation exemption. Ambiguous
+  topic text refuses; no model classification probe or blanket exemption.
+- Establish real Windows application identity before applying browser-title
+  checks. A Gmail-named source file in VS Code is not Gmail access. Keep Chrome
+  URL/title validation before planner/vision export and late action dispatch,
+  raw browser/confirmation guards and clipboard/Codex refusals. Native protocol
+  fields and snapshot binding are unchanged.
+
+Reproduction added eight failing hosted cases and four failing Node cases before
+the fixes. Qualified post-main evidence: 306 Node tests, 296 Python tests (including
+48 calendar fixtures), backend zero-warning ESLint, changed Ruff and four coupled
+actual-handler-receipt hosted chat/voice cases. Instruction maximum remains
+14978/15000. Full types still fail on only the same missing-package/consequent
+diagnostics; four app-dependent suites/full relay are unrun for this revision.
+No pinned CI/build or private/live/provider/device acceptance claim.
+
+Actual main `36d72090` is integrated once under the coordinator's local commit
+authority. All Factory/mobile/diagnostic blobs and task-table cells remain exact.
+The coordinator reports Deploy `38629181064` passed Web/deep-link, backend health
+and actual smoke, while backend/infra/hosted-agent deployment was skipped.
+This Google delivery remains local and awaits the same independent reviewer,
+coordinator-owned exact-head pinned CI and existing-PR publication.
+
+## Google current-identity and topic-command corrections (14 October 2026; local)
+
+The same reviewer passed all three exact F3 residual cases, then rejected
+`CEC84A7A` / tree `438eeb6c` for two new tightly coupled findings. Retain that
+failed freeze and all earlier artifacts.
+
+- Raw Windows titles have no application suffix guarantee and are truncated at
+  200 characters. Replace title-based browser inference with trusted current
+  process identity from existing structured observations and actual Chrome site
+  metadata. Missing or changed identity refuses, never defaults to native.
+  Check window/clipboard data before export and native actions before dispatch,
+  including confirmation and suffixless/truncated Chrome switches.
+- UIA and visual observations replace different native snapshot stores. Use the
+  other store for late identity checks so original action IDs/window/control
+  binding survive. Identity-only capture data remains transient and is discarded
+  without model/planner/audit export. No native-wire/C# change is needed.
+- Preserve exact-current-user independent operations after clear topic-bearing
+  mail requests. Split only explicit top-level separators outside balanced
+  quotes, retain exact requested-operation binding and same-turn scope, and
+  refuse ambiguous unquoted how-to topics. Do not globally reopen mail fallback.
+
+Before the fixes, production-boundary fixtures reproduced 14 failing cases.
+Qualified local evidence: 327 Node tests in twelve files, 296 Python tests
+including 48 calendar fixtures, four actual-handler-receipt hosted chat/voice
+cases, backend zero-warning ESLint and changed Ruff. Strict types still fail on
+the exact same twelve missing-package/consequent diagnostic lines. Prompt
+headroom remains 14978/15000; four app-dependent suites/full relay, pinned CI,
+full build and original live/provider acceptance remain unpassed.
+
+Use the already-integrated accepted base `36d72090` only; no further main fetch.
+All 32 scoped paths, protected mobile/Factory/smoke blobs and PLAN table cells
+remain preserved. A normal scoped local replacement commit is authorised;
+publication/readiness/CI/release and later-main reconciliation remain with the
+coordinator after independent PASS.
+
+## Google pinned-CI fixture corrections (14 October 2026; local)
+
+Independent review passed `3AF653B5`. The coordinator published its normally
+integrated runtime/test blobs as `f2afaca9` in existing #848. Pinned CI
+`38644147405` reported five backend failures in both Backend and Web jobs;
+the 75 frontend files passed, so no frontend or CI configuration change is
+indicated.
+
+Four calendar approval fixtures omitted the test route's explicit agent
+opt-in. Keep production authentication unchanged and add
+`config.jarvisAgent: true` only to `/fixture/calendar-reply` in the tests.
+Retain actual receipt/later-message/one-shot and failure-state assertions,
+with a denied unmarked-route control proving zero handler/provider execution.
+
+The paused sparse-tree PC fixture expected one observation despite enabling
+visual fallback. Current process verification requires a second read before
+capture, which the paused connection correctly refuses before RPC dispatch.
+Assert exactly two UIA reads, no capture/action/planner/vision dispatch, and
+the existing successful resumed action. Add an executable registry/connection
+regression through a synthetic local WebSocket peer, not a real device.
+
+Qualified correction checks pass 328 Node tests across twelve files and
+zero-warning lint on the three changed test files. The two changed HTTP suites
+still cannot collect locally because multipart is absent; strict types report
+the same twelve dependency/consequent errors, with no new fixture diagnostic.
+Earlier 296 Python/four coupled hosted proofs remain evidence for unchanged
+runtime blobs, not newly executed checks or a passing corrected-head CI wave.
+
+No production runtime, permissions, native wire, dependencies, check
+configuration, protected blobs or PLAN cells change. Local app-dependent
+execution remains package-blocked; the coordinator owns corrected-head
+normal pinned CI, publication and release. Original Google provider/live
+acceptance remains unproven.
