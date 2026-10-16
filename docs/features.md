@@ -31,8 +31,9 @@ Counts cover the 137 feature rows in the seven-column tables below; partial veri
 
 P11-06 / #860 locally suspends saved desktop placement during phone layout and
 uses the existing viewport dock for both chat halves. Drafts and desktop
-preferences are retained. Focused checks/release and physical-phone acceptance
-are pending at the source checkpoint; existing deployed feature rows below
+preferences are retained. Focused checks, web lint/types/build and controlled
+rendered phone/desktop cases pass. PM-owned full CI/CodeQL/release and
+physical-phone acceptance remain pending; existing deployed feature rows below
 are not upgraded by this note.
 
 ## Jarvis: conversation and voice

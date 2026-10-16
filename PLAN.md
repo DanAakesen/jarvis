@@ -9,11 +9,16 @@ fails against unchanged released code because it publishes a desktop anchor in
 phone mode. The local candidate suspends manual geometry and desktop-only
 Move/resize chrome on phones, preserving saved desktop placement.
 
-Current focus: complete focused regressions and rendered focus/keyboard-viewport,
-closed/minimised and desktop-restoration cases. Static/build checks, independent
-review and normal exact-head CI/CodeQL/release remain pending at this checkpoint.
-Native iPhone/Safari acceptance is not inferred. Header source is excluded and
-its App.test.tsx block is untouched; only this reserved task row is added.
+Local verification: 139 Workspace/viewport/layout/style tests and 10 selected
+actual-App/history draft/lifecycle/reader-following cases pass. Changed-file
+lint, full web typecheck and production web build pass. Controlled actual-App
+Chromium checks pass with default/saved layouts in dark/light, ordinary/reduced
+motion, repeated keyboard-rectangle changes, hide/close/restore and
+portrait/landscape/desktop transitions. Drafts and saved preferences survive.
+PM's independent source review of `5b3a5933` found no blocker; subsequent changes
+are tests/evidence/docs only. Current focus: PM-owned full exact-head CI/CodeQL,
+normal release and later native-phone acceptance. Header source and App.test.tsx
+are untouched; P11-06 remains In progress, not released or device-accepted.
 
 ## Combined release candidate (16 October 2026; source integration)
 

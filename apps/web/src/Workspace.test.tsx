@@ -889,8 +889,7 @@ describe('Workspace', () => {
     expect(screen.getByText('Arrangement cancelled.')).not.toBeNull();
   });
 
-  it.each([false, true])('resizes conversation height without first-drag jumps, including phone=%s and cancellation', phone => {
-    if (phone) phoneViewport();
+  it.each(['mouse', 'touch'])('resizes desktop conversation height without first-drag jumps using %s, including cancellation', pointerType => {
     render(<Workspace views={[{
       id: 'conversation', title: 'Conversation', presentation: 'conversation',
       content: { status: 'ready', content: <p>Conversation history</p> },
@@ -915,7 +914,7 @@ describe('Workspace', () => {
       hasPointerCapture: { value: () => true, configurable: true },
       releasePointerCapture: { value: vi.fn(), configurable: true },
     });
-    const start = { pointerId: 1, button: phone ? -1 : 0, pointerType: phone ? 'touch' : 'mouse', clientX: 400, clientY: 280 };
+    const start = { pointerId: 1, button: pointerType === 'touch' ? -1 : 0, pointerType, clientX: 400, clientY: 280 };
     fireEvent.pointerDown(handle, start);
     expect(height()).toBeCloseTo(320, 0);
     fireEvent.pointerMove(handle, { ...start, clientY: 279 });
@@ -1067,7 +1066,7 @@ describe('Workspace', () => {
     expect(JSON.parse(localStorage.getItem(conversationLayoutKey)!)).toMatchObject({ x: .15, y: .2, width: .6, height: .7 });
   });
 
-  it('moves desktop chat using its header, publishes the composer anchor and saves the result', () => {
+  it.each(['mouse', 'touch'])('moves desktop chat using its header with %s, publishes the composer anchor and saves the result', pointerType => {
     const anchor = vi.fn();
     const windowUpdates = vi.fn();
     render(<Workspace views={[{
@@ -1086,7 +1085,7 @@ describe('Workspace', () => {
     Object.defineProperties(move, {
       setPointerCapture: { value: vi.fn() }, hasPointerCapture: { value: () => true }, releasePointerCapture: { value: vi.fn() },
     });
-    const start = { pointerId: 1, button: 0, pointerType: 'mouse', clientX: 200, clientY: 360 };
+    const start = { pointerId: 1, button: pointerType === 'touch' ? -1 : 0, pointerType, clientX: 200, clientY: 360 };
     fireEvent.pointerDown(move, start);
     expect(conversation.style.getPropertyValue('--workspace-x')).toBe('13%');
     const updatesAfterPickup = windowUpdates.mock.calls.length;

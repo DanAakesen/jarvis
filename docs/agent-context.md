@@ -14,9 +14,31 @@ The actual-App Chromium fixture measures saved-layout composer top546 versus
 phone dock top766 at 390x844; this is controlled geometry evidence, not native
 keyboard proof. Original hidden-chat harness-readiness and unsupported runner
 `--cacheDir` errors are retained separately; neither ran a semantic check.
-Candidate regression/static checks and expanded rendered acceptance are pending
-at this source checkpoint. PM owns independent review, full exact-head CI/CodeQL
-and release; physical-phone acceptance remains open.
+Candidate checks pass: four complete `Workspace`, `phone-chat-viewport`,
+`conversation-layout` and `styles` suites, 139 tests; selected `App` and
+`ConversationHistory` lifecycle/draft/held-open-table/reader/resize cases, 10 tests.
+Use the pinned Vitest 5.0.3 with `--configLoader native --pool=threads
+--maxWorkers=1 --no-file-parallelism`. Per-package read-only junctions exclude
+shared dot caches; this checkout owns its cache and current contracts link.
+Changed-file ESLint 10.12.0, full web `tsc --noEmit -p tsconfig.json` and Vite
+8.3.2 production build pass. Node is the approved 22.23.3 x64; no dependencies,
+pins or source aliases changed. Ordinary jsdom canvas notices and existing
+production chunk-size warnings remain.
+
+The first candidate union had 137 passes and one obsolete phone-resize-control
+assertion. Desktop mouse/touch resize and drag coverage is retained explicitly;
+the new phone regression verifies the controls are absent. The final green
+union does not relabel that failure. Original rendered-harness growth/caret and
+default-desktop seam assumptions are likewise retained as failed receipts.
+The corrected actual-App Chromium 155 fixture checks four default/saved,
+dark/light combinations at 390x844, 844x390 touch landscape and 1440x900 desktop.
+It verifies immediate and settled viewport geometry, focus/typing,
+hide/close/restore, unchanged drafts/preferences and desktop restoration.
+Screenshots were inspected; light mode uses reduced motion. Synthetic auth,
+history and viewport rectangles are not real keyboard or physical Safari proof.
+The owned fixture/browser helpers are stopped; released5173/auth is untouched.
+PM owns full exact-head CI/CodeQL and release; physical-phone acceptance remains
+open. No production source changed after PM's review of `5b3a5933`.
 
 ## Combined-source qualification boundary (16 October 2026)
 

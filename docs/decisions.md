@@ -12,6 +12,10 @@ ownership conflict at its source and matches existing phone geometry-command
 semantics. Remove desktop-only Move/resize controls on phones as part of that
 boundary. Controlled released-source reproduction and a failing regression
 support the decision; native-device cause and acceptance remain unverified.
+PM's independent source review of `5b3a5933` found no blocker. The unchanged
+production source subsequently passes focused regressions, web lint/types/build
+and controlled rendered phone/desktop restoration checks; normal exact-head CI,
+release and physical-phone acceptance remain distinct gates.
 
 ## Release active work together after its gates (16 October 2026)
 
