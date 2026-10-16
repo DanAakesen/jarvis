@@ -1,5 +1,21 @@
 # Project plan
 
+## Gmail fallback before tool discovery (16 October 2026; local correction)
+
+Continuing #837 found a reproduced gap, not a second implementation of #848:
+when Google tools are absent, hosted HTTP requests carry a stored message ID
+but no message object, so the Gmail guard could dispatch Chrome without ever
+examining the actual Gmail request. The correction resolves the existing
+current Dan message before computer execution, refuses missing/stale/non-Dan
+sources, and retains the original independent-action and observed-site guards.
+Source-read failures and cancellation do not permit dispatch.
+
+New synthetic regressions run the real registry with no Google module; unchanged
+Google/PC integration suites remain intact. This is source/local evidence only,
+not pinned CI, full types/build, release or personal-account acceptance.
+Next: exact-source integration/CI and normal release before accepting #837.
+No duplicate Factory task, Google write, private mail or live probe was used.
+
 ## Factory lifecycle accepted (15 October 2026; production)
 
 PR #856 released exact source `6e702e7a` after independent review, fresh full

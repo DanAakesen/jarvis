@@ -1,5 +1,21 @@
 # Architecture
 
+## Gmail guard before any computer dispatch (16 October 2026; source candidate)
+
+An unavailable Google module must not bypass Gmail policy merely because no
+mail tool can start the turn ledger. Hosted HTTP computer calls resolve the
+existing stored current Dan message before dispatch when their verified source
+is not already on the request. Matching ID and Dan role are required; an
+unavailable/stale source refuses and a history failure remains an error.
+Cancellation is checked after that awaited read.
+
+The existing bounded identifier-only ledger also records a positively observed
+Gmail request before the first mail call. Existing intent matching preserves
+explicit unrelated operations, with nested execution scoped to that request
+and source keys. No broader computer exception, new persistence, Google call,
+permission or provider path is introduced. Raw site/process guards and static
+MIME extraction remain unchanged. This source correction is not yet released.
+
 ## Production lifecycle evidence (15 October 2026)
 
 The contract below is now released in `6e702e7a`; its held/source-only labels

@@ -1,5 +1,24 @@
 # Decisions
 
+## Resolve Gmail intent before discovery-dependent fallback (16 October 2026)
+
+The exact released guard allowed a synthetic hosted `pc_open` Chrome dispatch
+for a stored current Gmail request when no Google module existed: zero source
+lookups and one dispatch. The native request with its verified message refused.
+Retain that baseline failure; #848's post-mail tests did not cover this case.
+
+Reuse the existing current-Dan-message history boundary before hosted computer
+dispatch rather than rely on model instructions or wait for an unavailable
+mail tool to run. Refuse stale/missing/non-Dan sources, propagate read failures,
+and check cancellation after the read. Keep the existing independent-intent
+rules, request-scoped nested exception, bounded identifier-only ledger and raw
+observed-site guards. No new routing service, consent or permission is needed.
+
+This is a local source decision and synthetic regression proof, not full
+integration/build/CI, release or real private-account acceptance. Keep #837
+open until its actual remaining acceptance is met. Do not consume or simulate
+Dan's genuine later product-write approval to validate this correction.
+
 ## Accept the released clean Factory lifecycle (15 October 2026)
 
 Accept PR #856's exact reviewed source `6e702e7a` after fresh full CI,

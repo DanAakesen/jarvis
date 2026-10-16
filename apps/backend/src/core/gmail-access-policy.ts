@@ -4,10 +4,13 @@ import { ToolRefusal, type JarvisTool } from './tool-registry.js';
 
 export const GMAIL_DIRECT_ACCESS_REASON = 'Gmail access requires the direct mail integration. PC, Chrome and browser automation are unavailable for Gmail, including after failed or incomplete reads. Report the integration or permission failure, or the missing content.';
 
+function referencesGmail(value: unknown): boolean {
+  return typeof value === 'string' && /\b(?:gmail|googlemail)\b|mail\.google\.com/iu.test(value);
+}
+
 /** Check explicit targets and observed site/window identities, never obey their contents. */
 export function refuseGmailComputerAccess(...values: unknown[]): void {
-  if (values.some((value) => typeof value === 'string' &&
-      /\b(?:gmail|googlemail)\b|mail\.google\.com/iu.test(value))) {
+  if (values.some(referencesGmail)) {
     throw new ToolRefusal(GMAIL_DIRECT_ACCESS_REASON);
   }
 }
@@ -43,20 +46,18 @@ function topLevelCommands(text: string): { text: string; unquoted: string }[] | 
   return commands;
 }
 
-async function independentComputerRequest(tool: JarvisTool, input: unknown, request: FastifyRequest): Promise<boolean> {
+function independentComputerRequest(
+  tool: JarvisTool,
+  input: unknown,
+  message: FastifyRequest['jarvisConversationMessage'],
+): boolean {
   const args = input !== null && typeof input === 'object' ? input as Record<string, unknown> : {};
   const target = tool.name === 'pc_open' ? args.value : tool.name === 'pc_close' ? args.app
     : tool.name === 'codex_prompt' ? args.prompt
     : ['browser_do', 'browser_do_shared', 'pc_act'].includes(tool.name) ? args.goal : undefined;
   if (typeof target !== 'string' || !target.trim() ||
-      /\b(?:gmail|googlemail)\b|mail\.google\.com/iu.test(target) ||
+      referencesGmail(target) ||
       !['pc_open', 'pc_close'].includes(tool.name) && /\b(?:e-?mail|booking|reservation|dates?)\b/iu.test(target)) return false;
-  let message = request.jarvisConversationMessage;
-  if (!message && request.agentPrincipal && request.server?.conversationStore) {
-    const id = request.headers['x-jarvis-message-id'];
-    const page = await request.server.conversationStore.getHistory({ limit: 1 });
-    if (typeof id === 'string' && page.messages[0]?.id === id) message = page.messages[0];
-  }
   if (message?.role !== 'dan') return false;
   const escaped = target.trim().replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
   const intent = ['pc_open', 'pc_close'].includes(tool.name)
@@ -101,7 +102,21 @@ export function gmailAccessGuard(): (tool: JarvisTool) => JarvisTool['execute'] 
     const source = request.headers['x-jarvis-voice-item-id'];
     const keys = [typeof id === 'string' ? `message:${id}` : undefined,
       typeof source === 'string' ? `voice:${source}` : undefined].filter((key): key is string => key !== undefined);
-    if (mail) {
+    const active = independentOperation.getStore();
+    const nestedIndependent = active?.request === request && active.keys.length === keys.length &&
+      active.keys.every((key, index) => key === keys[index]);
+    let message = request.jarvisConversationMessage;
+    if (computer && !nestedIndependent && !message && request.agentPrincipal &&
+        request.server?.conversationStore && typeof id === 'string') {
+      const page = await request.server.conversationStore.getHistory({ limit: 1 });
+      signal.throwIfAborted();
+      const current = page.messages[0];
+      if (!current || current.id !== id || current.role !== 'dan') {
+        throw new ToolRefusal('The current Dan message could not be verified for computer use.');
+      }
+      message = current;
+    }
+    if (mail || computer && referencesGmail(message?.text)) {
       if (keys.length === 0) requests.add(request);
       for (const key of keys) {
         if (!turns.has(key) && turns.size >= 1000) {
@@ -113,16 +128,14 @@ export function gmailAccessGuard(): (tool: JarvisTool) => JarvisTool['execute'] 
     if (computer) {
       const guardedTurn = keys.length === 0 && requests.has(request) ||
         keys.some((key) => turns.has(key)) || saturatedUntil > now;
-      const active = independentOperation.getStore();
-      const independent = active?.request === request && active.keys.length === keys.length &&
-        active.keys.every((key, index) => key === keys[index]) ||
-        guardedTurn && await independentComputerRequest(tool, input, request);
+      const independent = nestedIndependent ||
+        guardedTurn && independentComputerRequest(tool, input, message);
       if (guardedTurn && !independent) {
         throw new ToolRefusal(GMAIL_DIRECT_ACCESS_REASON);
       }
       const args = input !== null && typeof input === 'object' ? input as Record<string, unknown> : {};
       refuseGmailComputerAccess(args.goal, args.url, args.value, args.tabTitle,
-        independent ? undefined : request.jarvisConversationMessage?.text);
+        independent ? undefined : message?.text);
       if (independent) return independentOperation.run({ request, keys }, () => tool.execute(input, request, signal));
     }
     return tool.execute(input, request, signal);

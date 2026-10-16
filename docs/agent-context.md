@@ -1,5 +1,27 @@
 # Agent context
 
+## Hosted Gmail source guard (16 October 2026; local, not released)
+
+#837's existing MIME reader and post-mail guards are already shipped via #848.
+A new exact-`6e702e7a` synthetic reproduction found pre-discovery fallback:
+without the Google module, a hosted request's current Dan message ID did not
+cause its Gmail text to be checked before `pc_open` dispatched Chrome.
+The native verified-message request correctly refused the same action.
+Do not close #837 from its related merge or reuse prior green CI for this fix.
+
+`gmail-access-policy.ts` now resolves the same existing one-message history
+boundary before computer dispatch when an authenticated hosted source ID needs
+hydration. Require the matching current Dan message; stale/missing/non-Dan
+sources refuse, source failures propagate and cancellation prevents dispatch.
+No private text enters the turn ledger or logs. Independently requested exact
+operations keep their scoped nested exception; actual Gmail sites/windows and
+generic fallback remain refused. Original Google/PC suites are unchanged.
+New focused registry regressions and unchanged catalogue-budget controls use
+existing isolated local tooling, not the pinned CI environment. Full original
+integration suites, types/build and normal exact-head gates remain required.
+No new worker, consent, provider/model/private/PC call or Google write is needed
+for this source correction. Genuine live product approvals remain separate.
+
 ## Released Factory lifecycle acceptance (15 October 2026; 23:51 UTC)
 
 PR #856 is released as `6e702e7a` / tree `628d7ca5`. Fresh attempt-one
