@@ -4580,7 +4580,7 @@ entry. Both invoke `DailyQueryService`; default-off and production composition
 remain unchanged. Root authentication and `resolveDailyOwner` still own
 user/hosted-agent authorisation. Source-specific public contracts reject caller
 owner selectors, incompatible cursors, invalid dates and unbounded pages.
-Queries reuse `DailyHealthReadModel` and `NutritionStore.history`, not raw inbox
+Queries reuse `DailyHealthReadModel` and `NutritionStore.history/favorites/plans`, not raw inbox
 reads, a second normalizer, a meal writer or a new dispatcher/persistence layer.
 Whitelisted DTOs retain canonical units, dates, lineage, nulls, nutrient
 provenance, revisions and tombstones without exposing owner/device columns.
@@ -4589,6 +4589,14 @@ never a silently truncated success.
 Fingerprint serialization uses the bounded read DTO, not nutrition's per-write
 node/depth budget; supported full pages and retained nested JSON stay readable.
 The response byte budget includes the final 64-byte revision before hashing.
+
+Favourites and meal plans add two source IDs to the existing version-1 contract.
+They have no calendar period and reuse the store's ID-keyset pages, limited to
+100 rows. DTOs decode retained aliases/plan items and preserve snapshots, unknown
+macros, revisions and tombstones without counting plans as intake. The same
+768 KiB bound, owner checks, sensitive audit, content fingerprint and unknown
+completeness/freshness semantics apply. No SQL schema or production registration
+changes.
 
 `createDailyData` shares one process-local change hub between the existing
 explicit health processor and owner-bound nutrition store. Optional handler
@@ -4602,6 +4610,9 @@ Heartbeat changes only sync evidence. The Daily
 plugin filters the configured owner and bridges to the unchanged
 `nowEventHub` refresh event; shutdown removes that subscription. No new event
 type, queue, poller, scheduler or production processor is installed.
+Favourite saves and plan saves/deletions publish their corresponding collection
+source only after acknowledged commit; retained plan replays do not publish.
+They use the same notification-failure boundary as intake.
 
 Results include source/period, units, retained-record provenance, separate
 processed and record-update timestamps, observed time, page coverage and a

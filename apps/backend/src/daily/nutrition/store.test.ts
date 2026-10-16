@@ -76,6 +76,43 @@ describe('nutrition failure/privacy boundaries', () => {
     await expect(persistence.log(input, authority, signal())).rejects.toThrow();
     expect(listener).not.toHaveBeenCalled();
   });
+  const sourceRow = { id: '01', idempotency_key: input.idempotencyKey, meal_name: input.mealName, meal_type: null,
+    energy_kcal: 100, protein_grams: null, carbohydrates_grams: null, fat_grams: null, fiber_grams: null,
+    components_json: '[]', nutrient_provenance_json: '{}', confidence: 'accurate', deleted_at: null };
+  const collectionMutations = [
+    { name: 'favourite', source: dailyQuerySources.favorites, records: [[sourceRow], [], []],
+      run: (persistence: NutritionStore) => persistence.favorite({ id: 'favorite', name: 'Synthetic favourite', aliases: [],
+        sourceIdempotencyKey: input.idempotencyKey }, { explicit: true, estimateAccepted: false }, signal()) },
+    { name: 'plan', source: dailyQuerySources.plans, records: [[], [{ ...sourceRow, id: 'favorite' }], [{ id: 'plan', revision: '1' }]],
+      run: (persistence: NutritionStore) => persistence.savePlan({ id: 'plan', name: 'Synthetic plan', description: null,
+        entries: (['breakfast', 'lunch', 'dinner'] as const).map(slot => ({ slot, favoriteId: 'favorite' })) }, 0n, signal()) },
+    { name: 'plan tombstone', source: dailyQuerySources.plans,
+      records: [[{ id: 'plan', revision: '1', deleted_at: null }], [{ id: 'plan', revision: '2', deleted_at: '2026-10-12T15:00:00Z' }]],
+      run: (persistence: NutritionStore) => persistence.removePlan('plan', 1n, signal()) },
+  ];
+  it.each(collectionMutations)('publishes the $name source only after acknowledged commit', async ({ source, records, run }) => {
+    const changes = createDailyChanges(); const listener = vi.fn(); changes.subscribe(listener);
+    const persistence = NutritionStore.forRequest({} as sql.ConnectionPool, request, () => '2026-10-12T15:00:00Z', changes);
+    for (const recordset of records) db.query.mockResolvedValueOnce({ recordset });
+    let commit!: () => void; let entered!: () => void;
+    const gate = new Promise<void>(resolve => { commit = resolve; });
+    const started = new Promise<void>(resolve => { entered = resolve; });
+    db.commit.mockImplementationOnce(() => { entered(); return gate; });
+    const pending = run(persistence);
+    await started; expect(listener).not.toHaveBeenCalled();
+    commit(); await pending;
+    expect(listener).toHaveBeenCalledExactlyOnceWith({ owner, sources: [source] });
+    expect(db.rollback).not.toHaveBeenCalled();
+  });
+  it('does not publish another collection change for an exact plan-deletion replay', async () => {
+    const publish = vi.fn();
+    const persistence = NutritionStore.forRequest({} as sql.ConnectionPool, request, () => '2026-10-12T15:00:00Z', { publish });
+    const deleted = { id: 'plan', revision: '2', deleted_at: '2026-10-12T15:00:00Z' };
+    db.query.mockResolvedValueOnce({ recordset: [deleted] });
+    expect(await persistence.removePlan('plan', 1n, signal())).toEqual(deleted);
+    expect(db.commit).toHaveBeenCalledTimes(1);
+    expect(publish).not.toHaveBeenCalled();
+  });
   const mutations = [
     { name: 'insert', existing: [], run: (persistence: NutritionStore) => persistence.log(input, authority, signal()) },
     { name: 'correct', existing: [{ id: input.id, revision: '1', deleted_at: null }],

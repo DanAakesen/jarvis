@@ -17,7 +17,11 @@ approval-lookup presentation race. The correction suppresses that internal
 lookup only, with approval/decline regressions. The synthetic HTTP route now
 sets JSON content type explicitly rather than reparsing the serialized result.
 The successor's 65-test selection includes both approval/decline regressions.
-It requires fresh exact-head CI; earlier green is not reused.
+Final `0672dfb8` passed all ten CI jobs (`38970010952`) and four actual CodeQL
+analyses (`38970011036`). Both review threads are resolved; test-route alert 24
+is fixed without dismissal. Normal #866 merge `4129f9bb` has the qualified tree
+and Deploy `38971353611` passed backend release/smoke on revision `0000328`.
+The PC bridge is the unchanged nonblocking warning; chat identity is ok.
 
 The initial local integration attempt executed no assertions because Vitest
 could not resolve from this checkout. The reused per-package junction graph
@@ -238,6 +242,19 @@ settings. No private/model/Google/PC action, commit, push, PR or deployment is
 part of this local handoff.
 
 ## Resumed inactive Daily read integration (16 October 2026)
+
+Current continuation: Dan ordered deployment first, then Daily. After #866's
+successful deployment, JarvisPM claimed partial #724 directly in the existing
+local UI session; the historical Daily child is not reassigned. Reuse the
+delivered read foundation for favourites/meal plans, ID-only cursors (maximum
+100), safe DTOs and collection-specific acknowledged-commit invalidation.
+No new writer/connector/authority, schema, provider access or activation.
+Run `node --test packages/contracts/src/daily.test.js` and scoped changed-file
+lint locally; existing query/store/HTTP integration and Database CI cover the
+actual application and SQL graph. The local reused graph still lacks
+Fastify/jose: no stub, reinstall or second graph to pretend that integration ran.
+Keep #724 open and #730's native blockers intact. The dated original receipt
+below is history, not a new worker assignment or release restriction.
 
 Dan selected the existing Daily session under coordinator ownership. This
 supersedes the general #724 engineering hold only for its nonprivate inactive

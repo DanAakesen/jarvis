@@ -211,6 +211,16 @@ requirement. No maintenance/TDEE, completeness, expiry or readiness rule is
 invented. Full #724, live/provider/device/source-parity and release acceptance
 cannot be inferred from synthetic checks.
 
+16 October continuation after #866 deployment: extend this existing read
+service to retained favourites and plans rather than inventing another API.
+Use their existing ID-keyset store pagination with exact `{id}` cursors, no
+calendar period and a 100-row bound. Keep plan snapshots/tombstones and raw
+display aliases; they are not intake. Publish the actual collection source
+after acknowledged favourite/plan commits through the existing safe event hub.
+The public contract remains additive version 1. Hosted connector authority,
+production activation and all private/live migration gates are not granted by
+this continuation.
+
 ## Bound chat format support and avoid double keyboard compensation (16 October 2026)
 
 Keep `react-markdown` and add standard `remark-gfm`, not another rich-text

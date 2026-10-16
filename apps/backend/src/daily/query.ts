@@ -16,15 +16,20 @@ import { createDailyChanges, type DailyChanges } from './revisions.js';
 
 export interface DailyReaders {
   health(request: FastifyRequest): Pick<DailyHealthReadModel, 'history' | 'workoutDetail' | 'heartRate' | 'sync'>;
-  nutrition(request: FastifyRequest): Pick<NutritionStore, 'history'>;
+  nutrition(request: FastifyRequest): Pick<NutritionStore, 'history' | 'favorites' | 'plans'>;
 }
 const mealFields = ['id', 'idempotency_key', 'meal_name', 'meal_type', 'occurred_at', 'meal_date',
   'energy_kcal', 'protein_grams', 'carbohydrates_grams', 'fat_grams', 'fiber_grams', 'confidence',
   'capture_method', 'source', 'revision', 'deleted_at', 'created_at', 'updated_at',
   'components_json', 'nutrient_provenance_json'] as const;
+const favoriteFields = ['id', 'favorite_name', 'normalized_name', 'aliases_json', 'meal_name', 'meal_type',
+  'components_json', 'energy_kcal', 'protein_grams', 'carbohydrates_grams', 'fat_grams', 'fiber_grams',
+  'confidence', 'nutrient_provenance_json', 'source_meal_id', 'source_idempotency_key', 'created_at', 'updated_at'] as const;
+const planFields = ['id', 'plan_name', 'normalized_name', 'description', 'items_json', 'energy_kcal',
+  'protein_grams', 'carbohydrates_grams', 'fat_grams', 'fiber_grams', 'revision', 'deleted_at', 'created_at', 'updated_at'] as const;
 const feedFields = ['feed_kind', 'accepted_evidence_at', 'processed_committed_at', 'metric_rows', 'sleep_rows', 'workout_rows', 'heart_rate_minutes'];
 const inboxFields = ['retained', 'pending', 'quarantined', 'last_accepted_at', 'last_processed_upload_at'];
-const jsonFields = new Set(['components_json', 'nutrient_provenance_json']);
+const jsonFields = new Set(['components_json', 'nutrient_provenance_json', 'aliases_json', 'items_json']);
 export const dailyResultByteLimit = 768 * 1024;
 
 function json(value: unknown): DailyJson {
@@ -58,7 +63,7 @@ export class DailyQueryService {
 
   async query(input: unknown, request: FastifyRequest, signal: AbortSignal): Promise<DailyQueryResult> {
     resolveDailyOwner(request);
-    if (!isDailyQuery(input)) throw new ToolRefusal('Invalid Daily query. Use one source, its required period or workout ID, and its exact returned cursor.');
+    if (!isDailyQuery(input)) throw new ToolRefusal('Invalid Daily query. Use one source with only its supported selectors and exact returned cursor.');
     signal = AbortSignal.any([signal, AbortSignal.timeout(30_000)]);
     signal.throwIfAborted();
     try { return await this.read(input, request, signal); }
@@ -82,6 +87,14 @@ export class DailyQueryService {
       items = page.rows.map(row => project(row, mealFields));
       next = page.next;
       units = { energy_kcal: 'kcal', '*_grams': 'g', meal_date: 'Europe/Copenhagen calendar date' };
+    } else if (input.source === sources.favorites || input.source === sources.plans) {
+      const nutrition = this.readers.nutrition(request);
+      const page = await nutrition[input.source === sources.favorites ? 'favorites' : 'plans']({
+        limit: input.limit ?? 50, ...(input.cursor ? { afterId: input.cursor.id } : {}),
+      }, signal);
+      items = page.rows.map(row => project(row, input.source === sources.favorites ? favoriteFields : planFields));
+      next = page.nextId === null ? null : { id: page.nextId };
+      units = { energy_kcal: 'kcal', '*_grams': 'g' };
     } else {
       const health = this.readers.health(request);
       if (input.source === sources.sync) {
