@@ -1,5 +1,23 @@
 # Agent context
 
+## Mobile composer focus hotfix (16 October 2026)
+
+P11-06 / #860 starts independently from released `3d3a12ab`; header #859 is not
+included. Use controlled auth/API fixtures on an owned listener, not the signed-in
+released localhost5173 preview. Saved desktop geometry is the important control:
+without it the existing phone dock works; with it released `Workspace` still
+publishes a separately scheduled inline fixed composer anchor.
+
+The new focused Workspace regression fails on unchanged production source with
+`{ left: 110, top: 558, width: 800 }` where phone mode requires no manual anchor.
+The actual-App Chromium fixture measures saved-layout composer top546 versus
+phone dock top766 at 390x844; this is controlled geometry evidence, not native
+keyboard proof. Original hidden-chat harness-readiness and unsupported runner
+`--cacheDir` errors are retained separately; neither ran a semantic check.
+Candidate regression/static checks and expanded rendered acceptance are pending
+at this source checkpoint. PM owns independent review, full exact-head CI/CodeQL
+and release; physical-phone acceptance remains open.
+
 ## Combined-source qualification boundary (16 October 2026)
 
 Use the final all-workstream base-`2823585` patch and manifest, not an earlier

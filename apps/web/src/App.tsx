@@ -490,7 +490,7 @@ function ShellLayout({ signedIn, config, session, camera, screenShare }: {
     setConversationOpen(ids.includes(conversationViewId));
   }, []);
   const conversationWindow = useMemo(() => ({
-    position: voiceActive ? null : conversationPosition,
+    position: voiceActive || phone ? null : conversationPosition,
     setComposerHeight: setConversationComposerHeight,
     element: conversationHost,
     setAvailable: setConversationAvailable,
@@ -500,7 +500,7 @@ function ShellLayout({ signedIn, config, session, camera, screenShare }: {
       operation: open ? 'restore' : 'minimise',
       viewId: conversationViewId,
     }) ?? false,
-  }), [conversationHost, conversationOpen, conversationPosition, voiceActive]);
+  }), [conversationHost, conversationOpen, conversationPosition, phone, voiceActive]);
   useEffect(() => { conversationWindowRef.current = conversationWindow; }, [conversationWindow]);
   // Phones (Dan, 8 October): moving to another page tucks the chat away so the new page is not covered.
   const lastPath = useRef(pathname);

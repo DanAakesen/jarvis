@@ -1,5 +1,16 @@
 # Product
 
+## Mobile composer focus hotfix (16 October 2026)
+
+P11-06 / #860 is the priority mobile focus-jump correction. Phone chat uses
+the existing joined visible-viewport dock, including when a desktop chat
+rectangle is saved on the device. Desktop manual placement must remain dormant,
+not be fitted into the phone keyboard viewport or written back as a new
+preference. Returning to desktop restores that saved placement. Preserve drafts,
+conversation visibility and existing reader/tail-following behaviour through
+focus, viewport pan/resize, keyboard dismissal and orientation changes.
+Native-phone acceptance remains separate from controlled browser evidence.
+
 ## Readable chat and attached phone typing (16 October 2026; local candidate)
 
 Booking/event summaries use labelled records separated by blank lines, with

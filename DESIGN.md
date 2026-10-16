@@ -1,5 +1,16 @@
 # Design
 
+## Mobile composer focus hotfix (16 October 2026)
+
+Reuse the current phone dock and glass chat, with both halves attached to the
+same visible viewport. A saved desktop rectangle must not add a second,
+independently measured fixed composer on phones. Move/resize chrome belongs to
+desktop; phone chat retains Show/Hide, Minimise and Close. Suspend, never delete
+or rewrite, desktop geometry while the phone layout is active. No new shell,
+keyboard-height estimate, focus-scroll workaround or keyboard-fit animation.
+This narrows the earlier manual-placement descriptions to desktop. Controlled
+Chromium layout evidence does not establish physical iPhone/Safari acceptance.
+
 ## Chat records and keyboard geometry (16 October 2026; local candidate)
 
 Keep the current glass chat, compact message type and readable composer.
