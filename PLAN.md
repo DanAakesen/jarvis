@@ -1,5 +1,14 @@
 # Project plan
 
+## CI workspace scoping (16 October 2026; P11-08 / #868)
+
+Web CI was running the root scripts across all three npm workspaces, repeating
+the dedicated Backend job. Scope its lint, tests and build to contracts plus web,
+in that order. Preserve every component, container, SQL and CodeQL check and the
+aggregate gate; no path skips, weaker assertions or dependency changes. Clean
+Daily CI `38975315146` observed Web at 8m19s and Backend at 6m01s; these are one
+run's durations, not a promised speedup. Qualify this correction normally.
+
 ## Voice summaries on screen (16 October 2026; P11-07 / #865)
 
 Delivered in #866 / `4129f9bb`: ordinary realtime tools now call the existing voice presentation
@@ -1453,6 +1462,7 @@ issue closure, new PR, push, hosted CI or deployment by this worker.
 A rolling intake phase. When Dan asks Jarvis to change its own code or a project's code, Jarvis drafts the issue, confirms it with Dan and creates it as `P11-NN` (P10-03). Rows are added here as the issues are created.
 | ID | Issue | Task | Acceptance criteria | Depends on | Status |
 | --- | --- | --- | --- | --- | --- |
+| P11-08 | [#868](https://github.com/DanAakesen/jarvis/issues/868) | Stop Web CI repeating backend checks | Web checks contracts and frontend; dedicated Backend and every other required component/analysis remain green; record actual selection without a speculative speedup claim | None | Not started |
 | P11-06 | [#860](https://github.com/DanAakesen/jarvis/issues/860) | Priority hotfix: stop the mobile composer jumping over chat on focus | One phone viewport dock with chat open, closed or minimised; preserve drafts, reader following and saved desktop geometry through focus, keyboard resize/pan/dismissal and orientation; focused regressions, independent review and normal release gates; native-phone acceptance explicit | None | Not started |
 | P11-05 | [#859](https://github.com/DanAakesen/jarvis/issues/859) | Make header background work understandable and dismissible | Remove dismissed rows immediately and across refresh/reload; distinguish background work from Factory tasks; preserve job records, real status, recovery, scoped visibility, accessible focus and desktop/phone states; cover storage/network failure without private mutations | — | Complete |
 | P9-42 | [#569](https://github.com/DanAakesen/jarvis/issues/569) | Safe, retryable tool argument refusals in voice/chat, content-free validation telemetry, and repo_search aliases plus incomplete/empty-result guidance; offline checks pass, live acceptance pending | Backend | P7-45, P9-36 | Complete |
@@ -1587,12 +1597,12 @@ Proposals only; an idea enters a phase only when Dan accepts it into scope.
 | Backend request rate limiting | Limits authenticated and unauthenticated request rates at the root authentication hook (CodeQL `js/missing-rate-limiting` on `apps/backend/src/auth/hook.ts`, raised during P4-01). | A new dependency (for example `@fastify/rate-limit`) and limits that must not throttle Dan or the Jarvis agent; one replica keeps in-memory counters sufficient. | Before the backend URL is public (P0-11), or when abuse or cost appears. |
 ## P12 — Daily migration to Jarvis
 
-16 October continuation after voice deployment: JarvisPM directly owns the next
-partial #724 slice in this existing local UI session. Extend the delivered shared
-read service with retained favourites and meal plans, exact bounded ID cursors,
-whitelisted saved snapshots and source-specific post-commit refresh. Do not
-rebuild the foundation or count definitions as intake. Qualify and release through
-the normal path; #724 stays open for hosted ChatGPT food writes and approved
+16 October continuation after voice deployment: partial #724 extension shipped
+in #867 / `10baebc6`, with ten actual CI jobs, four CodeQL analyses and normal
+Deploy `38976366790` successful. The shared read service includes retained
+favourites and meal plans, exact bounded ID cursors, whitelisted saved snapshots
+and source-specific post-commit refresh. Definitions do not count as intake.
+The foundation was not rebuilt; #724 stays open for hosted ChatGPT food writes and approved
 connector/intent/proposal authority. #730's native dependencies remain intact.
 Default-off, original Daily, protected export/parity/provider/device and cutover
 gates are unchanged. The earlier read-slice receipt below remains historical.
