@@ -1,5 +1,19 @@
 # Decisions
 
+## Scope Web checks without reducing CI coverage (16 October 2026; P11-08)
+
+The Web workflow invoked root npm scripts, which run contracts, frontend and
+backend sequentially. The separate Backend job already owns the same backend
+checks. Explicitly select contracts then web for Web's three commands; retain
+the existing backend, container, SQL, image, Python and CodeQL jobs and aggregate
+gate unchanged. Do not save time by omitting contracts, adding path skips or
+weakening tests. Root dependency installation stays unchanged.
+
+Clean Daily CI `38975315146` recorded Web at 8m19s and Backend at 6m01s.
+The workflow and root scripts establish duplicated execution; one run's timings
+do not establish a general speedup. Actual successor CI must demonstrate all
+remaining checks rather than borrow the earlier green result.
+
 ## Reuse presentation for ordinary realtime tools (16 October 2026; P11-07)
 
 Source tracing confirmed that ordinary realtime execution bypassed the existing

@@ -256,6 +256,12 @@ Fastify/jose: no stub, reinstall or second graph to pretend that integration ran
 Keep #724 open and #730's native blockers intact. The dated original receipt
 below is history, not a new worker assignment or release restriction.
 
+Delivered #867 / `10baebc6` has the exact qualified `e17ae341` tree.
+CI `38975315146` passed all ten jobs; CodeQL `38975315029` passed all four actual
+analyses. Normal Deploy `38976366790` passed backend/readiness/smoke, with
+infrastructure, web and agent correctly skipped. This does not activate Daily
+or establish hosted-client, provider, private-data or physical-phone acceptance.
+
 First collection candidate `c1332fb2` failed strict backend compilation:
 grouping both collection literals in one union member prevented negative source
 narrowing in the remaining health-history branch. The emulator suite's setup
@@ -1592,6 +1598,15 @@ live voice remain to check after deployment. No backend or dependency changes.
 
 
 Project-specific working context for agents. The generated `AGENTS.md` is not edited; additions belong here.
+
+## CI workspace ownership (16 October 2026; P11-08)
+
+Web's lint, test and build commands explicitly select `@jarvis/contracts` then
+`@jarvis/web`. The dedicated Backend workflow owns `@jarvis/backend`; unscoped
+root scripts in Web duplicate those checks. Keep contracts in the Web selection,
+root `npm ci`, every existing component/analysis and the aggregate gate. This is
+execution deduplication, not permission to skip checks or run another local
+test/build campaign. Normal exact-head CI verifies the actual command selection.
 
 ## Scope
 

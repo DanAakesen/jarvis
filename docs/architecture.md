@@ -1152,13 +1152,17 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   bounded JSON responses; no API key or migration is needed. Offline tests cover
   settings, geocoding, forecast normalization, jobs and workspace delivery;
   live provider and signed-in workspace acceptance remain unverified.
-- `ci.yml` (P0-10) is the aggregate CI on every PR, `main` push and
-  `workflow_dispatch`. It calls the reusable `web-ci.yml`, `backend-ci.yml`
+- `ci.yml` (P0-10) is the aggregate CI on ready, non-draft PRs and
+  `workflow_dispatch`, not `main` pushes. It calls the reusable `web-ci.yml`, `backend-ci.yml`
   (including the container smoke), `database-ci.yml` (isolated SQL Server migrations), `foundry-contract.yml`, `runner-ci.yml`
   (runner images) and `jarvis-agent-ci.yml` (agent image, non-root and fail-fast
   configuration checks, and a model-free voice turn over its WebSocket), runs Python lint, tests and byte-compilation for `runner`
   and `agents/jarvis` when they exist,
-  and ends in one `CI result` gate job. No job uses Azure credentials.
+  and ends in one `CI result` gate job. Web explicitly checks the contracts and
+  frontend npm workspaces; Backend checks the backend workspace. Root-wide
+  commands in Web would repeat Backend's lint, full tests and build. Contracts
+  remain checked before the frontend, and isolated jobs retain root `npm ci`.
+  No component gate is skipped and no job uses Azure credentials.
 
 ### Shell windows, chat dock, presence and memory in the web client
 
