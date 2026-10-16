@@ -1,5 +1,25 @@
 # Project plan
 
+## Mobile composer focus hotfix (16 October 2026)
+
+P11-06 / #860 takes priority over header #859 and Factory parity. Fresh base is
+released `3d3a12ab`. Actual-App controlled Chromium reproduces a saved desktop
+composer at top546 while the phone dock is top766; the new Workspace regression
+fails against unchanged released code because it publishes a desktop anchor in
+phone mode. The local candidate suspends manual geometry and desktop-only
+Move/resize chrome on phones, preserving saved desktop placement.
+
+Local verification: 139 Workspace/viewport/layout/style tests and 10 selected
+actual-App/history draft/lifecycle/reader-following cases pass. Changed-file
+lint, full web typecheck and production web build pass. Controlled actual-App
+Chromium checks pass with default/saved layouts in dark/light, ordinary/reduced
+motion, repeated keyboard-rectangle changes, hide/close/restore and
+portrait/landscape/desktop transitions. Drafts and saved preferences survive.
+PM's independent source review of `5b3a5933` found no blocker; subsequent changes
+are tests/evidence/docs only. Current focus: PM-owned full exact-head CI/CodeQL,
+normal release and later native-phone acceptance. Header source and App.test.tsx
+are untouched; P11-06 remains In progress, not released or device-accepted.
+
 ## Combined release candidate (16 October 2026; source integration)
 
 The existing Factory worktree combines the frozen Factory v2, common/header
@@ -1391,6 +1411,7 @@ issue closure, new PR, push, hosted CI or deployment by this worker.
 A rolling intake phase. When Dan asks Jarvis to change its own code or a project's code, Jarvis drafts the issue, confirms it with Dan and creates it as `P11-NN` (P10-03). Rows are added here as the issues are created.
 | ID | Issue | Task | Acceptance criteria | Depends on | Status |
 | --- | --- | --- | --- | --- | --- |
+| P11-06 | [#860](https://github.com/DanAakesen/jarvis/issues/860) | Priority hotfix: stop the mobile composer jumping over chat on focus | One phone viewport dock with chat open, closed or minimised; preserve drafts, reader following and saved desktop geometry through focus, keyboard resize/pan/dismissal and orientation; focused regressions, independent review and normal release gates; native-phone acceptance explicit | None | In progress |
 | P9-42 | [#569](https://github.com/DanAakesen/jarvis/issues/569) | Safe, retryable tool argument refusals in voice/chat, content-free validation telemetry, and repo_search aliases plus incomplete/empty-result guidance; offline checks pass, live acceptance pending | Backend | P7-45, P9-36 | Complete |
 | P9-40 | [#567](https://github.com/DanAakesen/jarvis/issues/567) | Jarvis can switch the page Dan is looking at | Backend + UI session | P8-15, P9-36 | Complete |
 

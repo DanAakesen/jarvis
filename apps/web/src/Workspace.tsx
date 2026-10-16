@@ -163,8 +163,6 @@ export const Workspace = forwardRef<WorkspaceController, {
   const [order, setOrder] = useState<string[]>([]);
   const [geometry, setGeometry] = useState<Record<string, Geometry>>({});
   const [conversationLayoutState, setConversationLayoutState] = useState(readConversationLayout);
-  const conversationLayout = conversationLayoutState.layout;
-  const conversationPositioned = Boolean(conversationLayout);
   const [minimizedViewIdsState, setMinimizedViewIds] = useState<ReadonlySet<string>>(new Set());
   const [closedViewIdsState, setClosedViewIds] = useState<ReadonlySet<string>>(new Set());
   const [maximizedViewId, setMaximizedViewId] = useState<string | null>(null);
@@ -172,6 +170,9 @@ export const Workspace = forwardRef<WorkspaceController, {
   const [phone, setPhone] = useState(() => (
     typeof window.matchMedia === 'function' && window.matchMedia(PHONE_LAYOUT_MEDIA_QUERY).matches
   ));
+  // Phone chat shares the viewport dock; retain manual geometry only as the desktop preference.
+  const conversationLayout = phone ? null : conversationLayoutState.layout;
+  const conversationPositioned = Boolean(conversationLayout);
   const [announcement, setAnnouncement] = useState('');
   const [actionErrors, setActionErrors] = useState<Record<string, string>>({});
   const [actionSuccess, setActionSuccess] = useState<Record<string, string>>({});
@@ -1585,7 +1586,7 @@ export const Workspace = forwardRef<WorkspaceController, {
                     title={pinned ? 'Unpin' : 'Pin'} onClick={() => requestPinChange(view.id, !pinned)}>
                     <WindowIcon name="pin" />
                   </button>}
-                  {docked && !maximized && <button className="workspace-icon-control workspace-move-handle" type="button"
+                  {docked && !maximized && !phone && <button className="workspace-icon-control workspace-move-handle" type="button"
                     aria-label="Move Conversation" title="Drag to move conversation"
                     aria-description="Drag or use arrow keys to move. Shift makes larger steps."
                     onPointerDown={(event) => beginConversationGesture(event, view.id, 'move')}
@@ -1642,7 +1643,7 @@ export const Workspace = forwardRef<WorkspaceController, {
                 {actionSuccess[view.id] && <p role="status">{actionSuccess[view.id]}</p>}
                 {actionErrors[view.id] && <p role="alert">{actionErrors[view.id]}</p>}
               </div>
-              {!maximized && docked && <ConversationResizeBorders
+              {!maximized && docked && !phone && <ConversationResizeBorders
                 onStart={(event, edge) => beginConversationGesture(event, view.id, 'resize', edge)}
                 onMove={updateGesture} onEnd={endGesture}
                 onKeyDown={(event, edge) => conversationKeyDown(event, view.id, 'resize', edge)} />}

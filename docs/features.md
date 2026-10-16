@@ -27,6 +27,15 @@ Status as of 14 October 2026.
 `Verified live` records the date of coordinator-confirmed production acceptance; blank means no live confirmation is recorded.
 Counts cover the 137 feature rows in the seven-column tables below; partial verification does not make the complete feature Live. Live: 11 · Built, not verified live: 122 · Offline only: 1 · Planned: 2 · In progress: 1
 
+## Mobile composer focus hotfix (16 October 2026)
+
+P11-06 / #860 locally suspends saved desktop placement during phone layout and
+uses the existing viewport dock for both chat halves. Drafts and desktop
+preferences are retained. Focused checks, web lint/types/build and controlled
+rendered phone/desktop cases pass. PM-owned full CI/CodeQL/release and
+physical-phone acceptance remain pending; existing deployed feature rows below
+are not upgraded by this note.
+
 ## Jarvis: conversation and voice
 
 | Feature | What Dan can do | Surface | Where | Status | Verified live | Tasks |

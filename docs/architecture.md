@@ -72,6 +72,16 @@ selection with Ruff8 clean. The 58-test qualified Node result covers the exact
 unchanged backend/fixture identities after the Danish-only correction. Older
 v1/v2/v3 packets remain historical, not combined pinned-CI acceptance.
 
+## Mobile composer focus hotfix (16 October 2026)
+
+`Workspace` retains the saved conversation layout in state but derives no manual
+layout, positioned attributes or fixed composer anchor while its existing phone
+media policy is active. `App` also withholds the anchor during that policy,
+including the desktop-to-phone transition. The unchanged viewport hook and
+canonical CSS own both phone halves; desktop resumes its existing fit/anchor
+path when the media policy changes back. Phone Move/resize controls are absent.
+No new geometry state, persistence format, API or voice behaviour is introduced.
+
 ## Chat rendering and explicit phone viewport (16 October 2026; local candidate)
 
 Agent JSON SSE payloads retain text newlines through `chat-agent.ts`,

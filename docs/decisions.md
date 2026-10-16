@@ -1,5 +1,22 @@
 # Decisions
 
+## Mobile composer focus hotfix (16 October 2026)
+
+Confirmed with JarvisPM for P11-06 / #860: suspend desktop manual conversation
+geometry under the existing phone layout policy, preserving its persisted value
+for desktop restoration. Do not patch focus scrolling, invent a keyboard inset
+or add a replacement layout. A CSS-only inline-position override would retain
+the competing measurement path; rescheduling that path would still fit desktop
+geometry into a phone dock. Deriving no phone manual layout removes that
+ownership conflict at its source and matches existing phone geometry-command
+semantics. Remove desktop-only Move/resize controls on phones as part of that
+boundary. Controlled released-source reproduction and a failing regression
+support the decision; native-device cause and acceptance remain unverified.
+PM's independent source review of `5b3a5933` found no blocker. The unchanged
+production source subsequently passes focused regressions, web lint/types/build
+and controlled rendered phone/desktop restoration checks; normal exact-head CI,
+release and physical-phone acceptance remain distinct gates.
+
 ## Release active work together after its gates (16 October 2026)
 
 Dan directed one combined deployment when all active work is ready, followed
