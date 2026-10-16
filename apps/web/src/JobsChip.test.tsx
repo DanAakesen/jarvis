@@ -30,8 +30,8 @@ function mount(onResult = vi.fn(() => true), accountId = 'fixture-owner') {
 }
 
 function openHistoryJob(name: RegExp) {
-  fireEvent.click(screen.getByRole('button', { name: /Show recent jobs/ }));
-  fireEvent.click(within(screen.getByRole('group', { name: 'Recent jobs' })).getByRole('button', { name }));
+  fireEvent.click(screen.getByRole('button', { name: /Show background work/ }));
+  fireEvent.click(within(screen.getByRole('group', { name: 'Background work' })).getByRole('button', { name }));
 }
 
 afterEach(() => {
@@ -42,6 +42,31 @@ afterEach(() => {
 });
 
 describe('job tabs', () => {
+  it('removes dismissed entries from the header list across refresh, reload and later events', async () => {
+    const failed = job({ status: 'failed', detail: 'The web search timed out.' });
+    const completed = job({
+      jobId: '22222222-2222-4222-8222-222222222222', kind: 'embedding',
+      title: 'Completed indexing', status: 'done',
+    });
+    const fetchMock = stubFetch('present', [failed, completed]);
+    const first = mount();
+    fireEvent.click(await screen.findByRole('button', { name: /Show background work/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Dismiss Research.*11111111.*from header/ }));
+    expect(screen.queryByRole('button', { name: /Research: Microsoft Foundry IQ Research · failed/ })).toBeNull();
+    expect(screen.getByRole('button', { name: /Completed indexing Indexing · done/ })).not.toBeNull();
+    expect(screen.getByRole('group', { name: 'Background work' })).toBe(document.activeElement);
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh work' }));
+    await waitFor(() => expect(fetchMock.mock.calls.filter(([url]) => String(url).endsWith('/jobs'))).toHaveLength(2));
+    expect(screen.queryByRole('button', { name: /Research: Microsoft Foundry IQ Research · failed/ })).toBeNull();
+    first.unmount();
+    resetJobsForTests(false);
+    mount();
+    fireEvent.click(await screen.findByRole('button', { name: /Show background work/ }));
+    act(() => publishJob({ ...failed, updatedAt: '2026-10-07T12:03:00.000Z' }));
+    expect(screen.queryByRole('button', { name: /Research: Microsoft Foundry IQ Research · failed/ })).toBeNull();
+    expect(fetchMock.mock.calls.every(([, init]) => init?.method !== 'POST')).toBe(true);
+  });
+
   it('shows running progress, peeks at the step and cancels', async () => {
     const fetchMock = stubFetch('present');
     mount();
@@ -93,9 +118,10 @@ describe('job tabs', () => {
     expect(screen.getByText('The web search timed out.')).not.toBeNull();
     expect(screen.getByRole('button', { name: 'Retry' })).toHaveProperty('disabled', true);
     fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
-    expect(screen.getByRole('button', { name: 'Show recent jobs' })).toBe(document.activeElement);
-    openHistoryJob(/Research: Microsoft Foundry IQ Research · failed.*hidden/);
-    expect(screen.getByText('The web search timed out.')).not.toBeNull();
+    expect(screen.getByRole('button', { name: 'Show background work' })).toBe(document.activeElement);
+    fireEvent.click(screen.getByRole('button', { name: 'Show background work' }));
+    expect(screen.queryByRole('button', { name: /Research: Microsoft Foundry IQ Research · failed/ })).toBeNull();
+    expect(screen.getByText('No background work to show.')).not.toBeNull();
   });
 
   it('consolidates 18 real interrupted indexing runs without dropping identities or dispatching fake retries', async () => {
@@ -106,10 +132,10 @@ describe('job tabs', () => {
     }));
     const fetchMock = stubFetch('present', failures);
     mount();
-    expect(await screen.findByRole('button', { name: 'Show recent jobs: 18 failed' })).not.toBeNull();
+    expect(await screen.findByRole('button', { name: 'Show background work: 18 failed' })).not.toBeNull();
     expect(screen.queryByRole('button', { name: /Show details/ })).toBeNull();
     expect(document.querySelectorAll('.job-tab')).toHaveLength(0);
-    fireEvent.click(screen.getByRole('button', { name: /Show recent jobs/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Show background work/ }));
     expect(screen.getAllByRole('button', { name: /Re-embed memory and vault Indexing · failed/ })).toHaveLength(18);
     fireEvent.click(screen.getAllByRole('button', { name: /Re-embed memory and vault Indexing · failed/ })[0]!);
     expect(screen.getByText('interrupted by restart')).not.toBeNull();
@@ -128,7 +154,7 @@ describe('job tabs', () => {
     hide.focus();
     await userEvent.keyboard('{Enter}');
     expect(screen.queryByRole('button', { name: /Research running/ })).toBeNull();
-    expect(screen.getByRole('button', { name: 'Show recent jobs' })).toBe(document.activeElement);
+    expect(screen.getByRole('button', { name: 'Show background work' })).toBe(document.activeElement);
     expect(hasRunningJob('research')).toBe(true);
     expect(fetchMock.mock.calls.every(([, init]) => init?.method !== 'POST')).toBe(true);
     first.unmount();
@@ -137,9 +163,10 @@ describe('job tabs', () => {
     await waitFor(() => expect(fetchMock.mock.calls.filter(([url]) => String(url).endsWith('/jobs'))).toHaveLength(2));
     act(() => publishJob(job({ step: 2, updatedAt: '2026-10-07T12:00:20.000Z' })));
     expect(screen.queryByRole('button', { name: /Research running/ })).toBeNull();
-    openHistoryJob(/Research: Microsoft Foundry IQ Research · running.*hidden/);
-    expect(screen.getByRole('button', { name: 'Cancel' })).not.toBeNull();
-    expect(screen.getByText(/step 2 of 3/)).not.toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Show background work' }));
+    expect(screen.queryByRole('button', { name: /Research: Microsoft Foundry IQ Research · running/ })).toBeNull();
+    expect(screen.getByText('No background work to show.')).not.toBeNull();
+    expect(hasRunningJob('research')).toBe(true);
     expect(JSON.parse(localStorage.getItem('jarvis.jobs.dismissed.v1:["https://api.example.com","fixture-owner"]')!)).toEqual([job().jobId]);
   });
 
@@ -150,6 +177,21 @@ describe('job tabs', () => {
     first.unmount();
     mount(vi.fn(() => true), 'different-owner');
     expect(await screen.findByRole('button', { name: /Research running/ })).not.toBeNull();
+  });
+
+  it('returns to the filtered list when another tab dismisses the open run', async () => {
+    stubFetch('present', [job({ status: 'failed' })]);
+    mount();
+    await screen.findByRole('button', { name: /Show background work/ });
+    openHistoryJob(/Research: Microsoft Foundry IQ Research · failed/);
+    const key = 'jarvis.jobs.dismissed.v1:["https://api.example.com","fixture-owner"]';
+    act(() => {
+      localStorage.setItem(key, JSON.stringify([job().jobId]));
+      window.dispatchEvent(new StorageEvent('storage', { key }));
+    });
+    expect(screen.queryByRole('group', { name: 'Research: Microsoft Foundry IQ details' })).toBeNull();
+    expect(screen.getByRole('group', { name: 'Background work' })).toBe(document.activeElement);
+    expect(screen.getByText('No background work to show.')).not.toBeNull();
   });
 
   it('does not share dismissals between backend projects', async () => {
@@ -165,7 +207,7 @@ describe('job tabs', () => {
     localStorage.setItem('jarvis.jobs.dismissed.v1:["https://api.example.com","fixture-owner"]', 'broken');
     stubFetch('present', [job()]);
     mount();
-    fireEvent.click(await screen.findByRole('button', { name: /Show recent jobs: history needs attention/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /Show background work: needs attention/ }));
     expect(screen.getByRole('alert').textContent).toContain('could not be restored');
     expect(screen.getByRole('button', { name: /Research: Microsoft Foundry IQ Research · running/ })).not.toBeNull();
   });
@@ -177,9 +219,10 @@ describe('job tabs', () => {
     vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('quota'); });
     fireEvent.click(hide);
     expect(screen.queryByRole('button', { name: /Research running/ })).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: /Show recent jobs/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Show background work/ }));
     expect(screen.getByRole('alert').textContent).toContain('could not be saved on this device');
-    expect(screen.getByRole('button', { name: /Research: Microsoft Foundry IQ Research · running.*hidden/ })).not.toBeNull();
+    expect(screen.queryByRole('button', { name: /Research: Microsoft Foundry IQ Research · running/ })).toBeNull();
+    expect(screen.queryByText('No background work to show.')).toBeNull();
   });
 
   it('shows history load failure and can refresh without losing newer live progress', async () => {
@@ -189,11 +232,11 @@ describe('job tabs', () => {
       ? Promise.resolve(json({}, 503))
       : respond(input, init));
     mount();
-    fireEvent.click(await screen.findByRole('button', { name: /Show recent jobs/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /Show background work/ }));
     expect(screen.getByRole('alert').textContent).toContain('could not be loaded');
     act(() => publishJob(job({ step: 2, updatedAt: '2026-10-07T12:00:20.000Z' })));
     fetchMock.mockImplementation(async (input) => new URL(String(input)).pathname === '/jobs' ? json({ jobs: [job()] }) : json({}));
-    fireEvent.click(screen.getByRole('button', { name: 'Refresh history' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh work' }));
     await waitFor(() => expect(screen.queryByRole('alert')).toBeNull());
     expect(screen.getByRole('button', { name: /Research running:.*2\/3/ })).not.toBeNull();
   });
@@ -202,18 +245,20 @@ describe('job tabs', () => {
     stubFetch('present', [job({ status: 'done', viewId: 'saved-result', step: 3 })]);
     const onResult = vi.fn(() => false);
     mount(onResult);
-    await screen.findByRole('button', { name: 'Show recent jobs' });
+    await screen.findByRole('button', { name: 'Show background work' });
     expect(onResult).not.toHaveBeenCalled();
     openHistoryJob(/Research: Microsoft Foundry IQ Research · done/);
     fireEvent.click(screen.getByRole('button', { name: 'Open' }));
     expect(onResult).toHaveBeenCalledWith('saved-result', 'open');
     expect(screen.getByRole('alert').textContent).toContain('not available in this workspace');
     expect(screen.getByRole('button', { name: 'Open' })).not.toBeNull();
-    expect(screen.getByRole('button', { name: 'Show recent jobs: history needs attention' })).not.toBeNull();
+    expect(screen.getByRole('button', { name: 'Show background work: needs attention' })).not.toBeNull();
     onResult.mockReturnValue(true);
     fireEvent.click(screen.getByRole('button', { name: 'Open' }));
-    expect(screen.getByRole('button', { name: 'Show recent jobs' })).not.toBeNull();
-    openHistoryJob(/Research: Microsoft Foundry IQ Research · done.*hidden/);
+    expect(screen.getByRole('button', { name: 'Show background work' })).not.toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Show background work' }));
+    expect(screen.queryByRole('button', { name: /Research: Microsoft Foundry IQ Research · done/ })).toBeNull();
+    expect(screen.getByText('No background work to show.')).not.toBeNull();
     expect(screen.queryByRole('alert')).toBeNull();
   });
 
@@ -250,10 +295,10 @@ describe('job tabs', () => {
     }));
     stubFetch('present', [...terminal, job()]);
     mount();
-    await screen.findByRole('button', { name: 'Show recent jobs: 100 failed' });
+    await screen.findByRole('button', { name: 'Show background work: 100 failed' });
     expect(hasRunningJob('research')).toBe(true);
     act(() => publishJob({ ...terminal[119]!, status: 'running', updatedAt: '2026-10-08T00:00:00.000Z' }));
-    fireEvent.click(screen.getByRole('button', { name: /Show recent jobs/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Show background work/ }));
     expect(screen.getAllByRole('button', { name: /Research: Microsoft Foundry IQ Research · failed/ })).toHaveLength(100);
     expect(screen.getAllByRole('button', { name: /Research: Microsoft Foundry IQ Research · running/ })).toHaveLength(1);
   });

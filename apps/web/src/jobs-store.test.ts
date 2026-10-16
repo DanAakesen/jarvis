@@ -1,7 +1,7 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { BackgroundJob } from '@jarvis/contracts';
-import { publishJob, resetJobsForTests, useJobs } from './jobs-store';
+import { hasRunningJob, publishJob, resetJobsForTests, useJobs } from './jobs-store';
 
 const getAccessToken = async () => 'fixture-token';
 const job: BackgroundJob = {
@@ -17,6 +17,30 @@ afterEach(() => {
 });
 
 describe('job hydration ownership', () => {
+  it('filters dismissed jobs without losing their records, lifecycle or saved visibility', async () => {
+    const running = { ...job, status: 'running' as const };
+    const fetchMock = vi.fn<typeof fetch>(async () => json([running]));
+    vi.stubGlobal('fetch', fetchMock);
+    const first = renderHook(() => useJobs('https://api.example.com', getAccessToken, 'fixture-owner'));
+    await waitFor(() => expect(first.result.current.jobs).toHaveLength(1));
+    act(() => first.result.current.dismiss(job.jobId));
+    expect(first.result.current.jobs).toEqual([]);
+    expect(first.result.current.history).toEqual([expect.objectContaining({ ...running, dismissed: true })]);
+    expect(hasRunningJob('embedding')).toBe(true);
+    act(() => publishJob({ ...job, updatedAt: '2026-10-16T08:06:00.000Z' }));
+    await act(async () => first.result.current.refresh());
+    expect(first.result.current.jobs).toEqual([]);
+    expect(first.result.current.history[0]?.status).toBe('failed');
+    expect(hasRunningJob('embedding')).toBe(false);
+    expect(fetchMock.mock.calls.every(([, init]) => init?.method === 'GET')).toBe(true);
+    first.unmount();
+    resetJobsForTests(false);
+    const restored = renderHook(() => useJobs('https://api.example.com', getAccessToken, 'fixture-owner'));
+    await waitFor(() => expect(restored.result.current.history).toHaveLength(1));
+    expect(restored.result.current.jobs).toEqual([]);
+    expect(restored.result.current.history[0]).toMatchObject({ jobId: job.jobId, dismissed: true });
+  });
+
   it('aborts the old authenticated read and ignores its late response after an account switch', async () => {
     let finishFirst!: (response: Response) => void;
     const first = new Promise<Response>((resolve) => { finishFirst = resolve; });

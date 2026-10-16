@@ -17,6 +17,38 @@ production source subsequently passes focused regressions, web lint/types/build
 and controlled rendered phone/desktop restoration checks; normal exact-head CI,
 release and physical-phone acceptance remain distinct gates.
 
+## Filter header background work instead of retaining hidden rows (16 October 2026)
+
+Dan reported that Recent jobs kept dismissed indexing/research entries visible
+and questioned its purpose. P11-05 / #859 chooses the smallest existing-surface
+repair: name it Background work, distinguish it from Factory tasks, and render
+only the store's already-filtered jobs. A new active/history split adds
+unrequested navigation; removing the control would lose existing progress,
+failure and result recovery. The stable trigger and empty state preserve focus
+after the last dismissal. Raw history and backend tools keep saved records;
+dismissal remains a scoped device preference, never cancellation or deletion.
+This supersedes the earlier header contract's visible hidden-history rows,
+not its persistence, truthful failure or unavailable-retry rules.
+
+Evidence: the released 18-case header baseline passed, while a new regression
+reproduced the exact retained-row/disappearing-cross failure. The candidate's
+22 focused tests, changed-file ESLint and declared web types passed. An
+intervening forks-worker startup timeout remains a failed run; the unchanged
+selection passed with isolated thread workers and unchanged assertions/timeouts.
+Real desktop Chromium inspected list removal, refresh/reload, empty/focus,
+Escape and storage/network errors using synthetic jobs and no job mutations.
+The first phone attempt stopped at a fixture CDP navigation race; it was not
+counted as acceptance. After yielding to the mobile-composer hotfix, one
+explicitly allocated phone-only run on unchanged reviewed source passed at
+390 by 844 in light appearance with reduced motion. It covered dismissal
+through refresh/reload, empty/focus, Escape and storage/network errors, with
+44px dismiss targets, contained scrolling and no horizontal overflow, runtime
+errors, external requests or job mutations. The fixture and owned browser
+were stopped immediately; the signed-in released preview stayed unchanged.
+Independent runtime/test source review found no blocking issue. Keep this
+candidate draft/not-ready for PM-controlled current-main integration and normal
+CI; local fixtures are not live, physical-device or deployment acceptance.
+
 ## Release active work together after its gates (16 October 2026)
 
 Dan directed one combined deployment when all active work is ready, followed

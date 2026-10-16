@@ -62,7 +62,9 @@ export function JobsChip({ backendUrl, getAccessToken, onResult, accountId = nul
   const { presence } = usePresence(backendUrl, getAccessToken);
   const [openId, setOpenId] = useState<string | null>(null);
   const [showHistory, setShowHistory] = useState(false);
-  const open = openId !== null;
+  const peek = jobs.find((job) => job.jobId === openId);
+  const open = Boolean(peek);
+  const showList = showHistory || openId !== null && !peek;
   const [now, setNow] = useState(() => Date.now());
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [waiting, setWaiting] = useState<ReadonlySet<string>>(new Set());
@@ -128,25 +130,24 @@ export function JobsChip({ backendUrl, getAccessToken, onResult, accountId = nul
   }, [jobs]);
 
   useEffect(() => {
-    if (!open && !showHistory) return;
+    if (!open && !showList) return;
     const tick = window.setInterval(() => setNow(Date.now()), 1000);
     const close = (event: PointerEvent) => {
       if (!root.current?.contains(event.target as Node)) { setOpenId(null); setShowHistory(false); }
     };
     document.addEventListener('pointerdown', close);
     return () => { window.clearInterval(tick); document.removeEventListener('pointerdown', close); };
-  }, [open, showHistory]);
+  }, [open, showList]);
 
   useEffect(() => {
-    if (open || showHistory) popover.current?.focus();
-  }, [openId, open, showHistory]);
+    if (open || showList) popover.current?.focus();
+  }, [openId, open, showList]);
 
   const visible = jobs.filter((job) => job.status === 'running' || job.status === 'done' && waiting.has(job.jobId));
   if (history.length === 0 && !error) return null;
-  const peek = history.find((job) => job.jobId === openId);
   const failures = jobs.filter((job) => job.status === 'failed').length;
   const needsAttention = Boolean(error) || jobs.some((job) => Boolean(errors[job.jobId]));
-  const historyLabel = needsAttention ? 'Jobs · needs attention' : failures > 0 ? `Jobs · ${failures} failed` : 'Jobs';
+  const historyLabel = needsAttention ? 'Background work · needs attention' : failures > 0 ? `Background work · ${failures} failed` : 'Background work';
 
   const closePopover = () => {
     setOpenId(null);
@@ -177,7 +178,7 @@ export function JobsChip({ backendUrl, getAccessToken, onResult, accountId = nul
 
   return (
     <div ref={root} className="job-tabs" onKeyDown={(event) => {
-      if (event.key !== 'Escape' || (!open && !showHistory)) return;
+      if (event.key !== 'Escape' || (!open && !showList)) return;
       event.preventDefault();
       event.stopPropagation();
       closePopover();
@@ -200,19 +201,19 @@ export function JobsChip({ backendUrl, getAccessToken, onResult, accountId = nul
                 <span>{label}</span>
               </button>
               <button type="button" className="workspace-tab-close" aria-label={`Hide ${jobLabel(job)} from header`}
-                title="Hide from header; work continues in Jobs" onClick={() => hide(job)}>
+                title="Hide from header without cancelling work" onClick={() => hide(job)}>
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" /></svg>
               </button>
             </span>
           );
         })}
       </div>
-      <span className="workspace-tab-item job-history-tab" data-selected={showHistory || open}>
-        <button ref={historyButton} type="button" className="workspace-tab" aria-label={`Show recent jobs${needsAttention ? ': history needs attention' : failures ? `: ${failures} failed` : ''}`}
-          aria-expanded={showHistory || open} aria-controls={popoverId} onClick={(event) => {
+      <span className="workspace-tab-item job-history-tab" data-selected={showList || open}>
+        <button ref={historyButton} type="button" className="workspace-tab" aria-label={`Show background work${needsAttention ? ': needs attention' : failures ? `: ${failures} failed` : ''}`}
+          aria-expanded={showList || open} aria-controls={popoverId} onClick={(event) => {
             returnFocus.current = event.currentTarget;
             setOpenId(null);
-            setShowHistory((current) => !current || open);
+            setShowHistory(!showList || open);
           }}>
           {(failures > 0 || needsAttention) && <StatusMark status="failed" />}
           <span>{historyLabel}</span>
@@ -221,35 +222,36 @@ export function JobsChip({ backendUrl, getAccessToken, onResult, accountId = nul
       <span className="visually-hidden" role="status" aria-live="polite">
         {history.some((job) => job.status === 'running') ? `${history.filter((job) => job.status === 'running').length} background jobs running` : ''}
       </span>
-      {(peek || showHistory) && (
-        <div ref={popover} tabIndex={-1} id={popoverId} className="jobs-popover" role="group" aria-label={peek ? `${peek.title} details` : 'Recent jobs'}>
+      {(peek || showList) && (
+        <div ref={popover} tabIndex={-1} id={popoverId} className="jobs-popover" role="group" aria-label={peek ? `${peek.title} details` : 'Background work'}>
           <div className="jobs-popover-heading">
-            {peek ? <button type="button" className="jobs-action" onClick={() => { setOpenId(null); setShowHistory(true); }}>All jobs</button> : <span>Recent jobs</span>}
+            {peek ? <button type="button" className="jobs-action" onClick={() => { setOpenId(null); setShowHistory(true); }}>Background work</button> : <span>Background work</span>}
             <button type="button" className="workspace-tab-close" aria-label="Close job details" onClick={closePopover}>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" /></svg>
             </button>
           </div>
           {error && <p className="jobs-item-error" role="alert">{error}</p>}
-          {showHistory && !peek && <>
-            <p className="jobs-history-note">Latest 100 finished jobs and all running work. Hiding a job only changes this header; it does not cancel work or erase history.</p>
+          {showList && !peek && <>
+            <p className="jobs-history-note">Research, images, apps and indexing, separate from Factory tasks. Dismiss hides an entry on this device, not the work or saved record.</p>
             <button type="button" className="jobs-action" disabled={refreshing} onClick={() => {
               setRefreshing(true);
               void refresh().finally(() => setRefreshing(false));
-            }}>{refreshing ? 'Refreshing…' : 'Refresh history'}</button>
+            }}>{refreshing ? 'Refreshing…' : 'Refresh work'}</button>
+            {jobs.length === 0 && !error && <p className="jobs-history-note" role="status">No background work to show.</p>}
             <ul className="jobs-list">
-              {history.map((job) => <li key={job.jobId} className="jobs-history-row">
+              {jobs.map((job) => <li key={job.jobId} className="jobs-history-row">
                 <button type="button" className="jobs-history-entry" title={`Run ${job.jobId}`} onClick={() => { setNow(Date.now()); setShowHistory(false); setOpenId(job.jobId); }}>
                   {job.status === 'running' ? <ProgressRing value={job.step / Math.max(1, job.steps)} /> : <StatusMark status={job.status} />}
                   <span><span className="jobs-item-title">{job.title}</span>{' '}
-                    <span className="jobs-item-meta">{kindLabel[job.kind]} · {job.status} · {job.jobId.slice(0, 8)}{job.dismissed ? ' · hidden' : ''}</span>{' '}
+                    <span className="jobs-item-meta">{kindLabel[job.kind]} · {job.status} · {job.jobId.slice(0, 8)}</span>{' '}
                     <time className="jobs-item-meta" dateTime={job.startedAt}>{new Date(job.startedAt).toLocaleString()}</time>
                     {errors[job.jobId] && <span className="jobs-item-error">{errors[job.jobId]}</span>}
                   </span>
                 </button>
-                {!job.dismissed && <button type="button" className="workspace-tab-close" aria-label={`Dismiss ${jobLabel(job)} from header`} onClick={() => {
+                <button type="button" className="workspace-tab-close" aria-label={`Dismiss ${jobLabel(job)} from header`} onClick={() => {
                   dismiss(job.jobId);
                   popover.current?.focus();
-                }}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" /></svg></button>}
+                }}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" /></svg></button>
               </li>)}
             </ul>
           </>}
