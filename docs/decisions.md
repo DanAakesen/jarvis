@@ -20,11 +20,17 @@ intervening forks-worker startup timeout remains a failed run; the unchanged
 selection passed with isolated thread workers and unchanged assertions/timeouts.
 Real desktop Chromium inspected list removal, refresh/reload, empty/focus,
 Escape and storage/network errors using synthetic jobs and no job mutations.
-Rendered phone inspection remains incomplete after a fixture CDP navigation
-race; the passing phone App integration test is not rendered-phone evidence.
-The heavy slot was yielded for Dan's higher-priority mobile-composer hotfix.
-Keep this candidate draft/not-ready and the signed-in released preview stable;
-no live acceptance or deployment is claimed.
+The first phone attempt stopped at a fixture CDP navigation race; it was not
+counted as acceptance. After yielding to the mobile-composer hotfix, one
+explicitly allocated phone-only run on unchanged reviewed source passed at
+390 by 844 in light appearance with reduced motion. It covered dismissal
+through refresh/reload, empty/focus, Escape and storage/network errors, with
+44px dismiss targets, contained scrolling and no horizontal overflow, runtime
+errors, external requests or job mutations. The fixture and owned browser
+were stopped immediately; the signed-in released preview stayed unchanged.
+Independent runtime/test source review found no blocking issue. Keep this
+candidate draft/not-ready for PM-controlled current-main integration and normal
+CI; local fixtures are not live, physical-device or deployment acceptance.
 
 ## Release active work together after its gates (16 October 2026)
 
