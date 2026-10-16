@@ -408,7 +408,9 @@ describe('Factory board', () => {
     vi.mocked(projectStore.list).mockResolvedValue([
       project, { ...project, id: '43', repo: 'DanAakesen/other' },
     ]);
+    await app.inject({ url: '/factory/board?project=42', headers });
     const cached = await app.inject({ url: '/factory/board?project=43', headers });
+    expect(reader).toHaveBeenCalledTimes(2);
     const updates: unknown[] = [];
     const unsubscribe = app.nowEventHub.subscribe((update) => updates.push(update));
     try {
@@ -416,10 +418,21 @@ describe('Factory board', () => {
         id: '1', taskId: task.id, type: 'state_changed', summary: 'Task paused',
         payload: { to: 'Paused' }, payloadTruncated: false, source: 'backend', at: timestamp,
       });
-      await vi.waitFor(() => expect(updates).toEqual([{ type: 'board', projectId: project.id, version: 1 }]));
+      await vi.waitFor(() => {
+        expect(updates).toHaveLength(2);
+        expect(updates).toEqual(expect.arrayContaining([
+          { type: 'board', projectId: project.id, version: 1 },
+          { type: 'refresh' },
+        ]));
+      });
       const retained = await app.inject({ url: '/factory/board?project=43', headers });
       expect(retained.json()).toEqual(cached.json());
-      expect(reader).toHaveBeenCalledOnce();
+      expect(reader).toHaveBeenCalledTimes(2);
+      const refreshed = await app.inject({ url: '/factory/board?project=42', headers });
+      expect(refreshed.statusCode).toBe(200);
+      expect(refreshed.json().projectId).toBe(project.id);
+      expect(refreshed.json().stale).toBe(false);
+      expect(reader).toHaveBeenCalledTimes(3);
     } finally {
       unsubscribe();
     }

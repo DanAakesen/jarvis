@@ -17,6 +17,17 @@ Historical private itinerary deletion hunks remain internal evidence, not
 publishable patch attachments. Ordinary production application approvals remain
 separate from approval to release code.
 
+## Reuse the authorised release identity for Foundry checks (16 October 2026)
+
+Dan explicitly selected keeping permissions unchanged and using the existing
+release workflow's Foundry checks after the local approved-tenant identity was
+denied agent-read access with HTTP 403. Stop local Foundry data-plane reads;
+do not grant roles, switch credentials or create an environment to work around
+the denial. The existing production deployment identity already has its
+required project/account roles and performs the normal hosted-agent checks
+only after release gates pass. Local current-agent metadata and routing were
+not verified; do not present management-plane project existence as that proof.
+
 ## One approval for an explicitly listed calendar proposal (16 October 2026)
 
 Dan selected **one approval for both explicitly listed events** through the

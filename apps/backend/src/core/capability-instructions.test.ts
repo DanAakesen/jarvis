@@ -28,6 +28,9 @@ describe('shared navigation capability instructions', () => {
     expect(instructions).toContain('calendar_create_events stages all');
     expect(instructions).toContain('one later approval of that exact list');
     expect(instructions).toContain('never replay completed/unverified items');
+    expect(instructions).toContain('Only actual ok reads establish a calendar check');
+    expect(instructions).toContain('completed confirmation establishes a write');
+    expect(instructions).toContain('Before approval: each subject/time/attendees');
     const voice = readFileSync(new URL('../../../../agents/jarvis/jarvis_tools.py', import.meta.url), 'utf8');
     expect(voice).toContain('after outcome ok and status awaiting_confirmation');
     expect(voice).toContain('calendar_get_pending_change');

@@ -1800,6 +1800,10 @@ describe('App shell', () => {
   it('resolves release activity links to the owning project release view', async () => {
     fetchMock.mockImplementation(async (input) => {
       const path = new URL(String(input)).pathname;
+      if (path === '/settings') {
+        return new Response(JSON.stringify({ settings: { appearance: { theme: 'dark' } } }));
+      }
+      if (path === '/jobs') return new Response(JSON.stringify({ jobs: [] }));
       if (path === '/factory/releases/7') return new Response(JSON.stringify({ projectId: '42' }));
       if (path === '/factory/projects/42/releases') {
         return new Response(JSON.stringify({

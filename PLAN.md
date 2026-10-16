@@ -10,18 +10,30 @@ PLAN table rows and their statuses remain unchanged. No unrelated #816 transport
 or withdrawn mail extraction is added. Only approved GFM manifest/lock changes
 extend dependencies; Daily remains off with no production registration.
 
-This is one source candidate, not combined acceptance. Factory retains its
-qualified 17 component passes; Calendar retains 444 Python passes/Ruff8 and
-58 qualified Node passes. Mobile v2 awaits exact-candidate Style qualification.
-Daily v3b collected 12 query cases: the first synthetic HTTP/module test timed
-out, with zero passes and eleven pending; store/lint did not run. Older greens
-do not qualify that source. Root buildApp/auth/publication/SQL and pinned CI
-gates remain explicit. Earlier lane sections describe their historical stages.
+The initial 71-path candidate was published as `2f9b59d3` in PR #858.
+Its first full pinned CI run passed the SQL, Python, Foundry, agent-image,
+runner, PC and backend-container groups, but five backend test failures also
+failed the root Web job. Narrow corrections restore Calendar read/write proof
+guidance and registered sanitized logging, and correct Factory integration
+fixtures/assertions without changing cache runtime behaviour. A four-line App
+fixture correction supplies valid settings/jobs responses; it is not proof of
+the earlier missing-heading failure's cause. These corrections require fresh
+exact-head CI before merge.
+
+Daily's original, uninstrumented current-v3 query suite subsequently passed
+12/12; unchanged actual-source nutrition passed 27/27 and four-file lint was
+clean. Both earlier timeouts remain historical failures with unknown cause.
+Combined frontend types and changed-web lint passed; its first regression run
+had 354 passes and three failures, including the known Windows locale
+assertion. A focused diagnostic passed four selected cases without resolving
+the earlier two additional failures' causes. Production build and guarded
+browser qualification remain outstanding. Earlier lane sections describe
+their historical stages, not substitutes for these gates.
 
 Dan authorised one combined normal PR/CI/release after active work is ready,
-followed by the handoff. The parent alone publishes/deploys. Next: freeze the
-complete patch/source manifest, qualify that exact tree in Style's own snapshot,
-and resolve outstanding gates through the parent before release. No live gain,
+followed by the handoff. The parent alone publishes/deploys. Next: run the
+correction union through full CI and finish exact-source frontend qualification
+in the existing Style snapshot before release. No live gain,
 historical-502 cause, physical-phone acceptance or issue completion is claimed.
 
 ## Calendar batch and reply recovery (16 October 2026; local candidate)
@@ -83,11 +95,17 @@ reused for the final Danish-only correction only after exact comparison of
 all eleven owned backend/contracts source and fixture identities. Existing
 15,000-code-point capability headroom checks pass after compacting only the
 calendar guidance. Both final runs retained unchanged before/after source hashes.
+Subsequent combined PR #858 CI `38892246588` found two Calendar regressions:
+the batch catch used an unregistered log, and compact guidance omitted explicit
+read/write evidence rules expected by voice. The narrow source-only correction
+uses the existing registered/sanitized failure contract and restores both rules
+within unchanged budgets, with additional privacy/policy assertions. Its checks
+are UNRUN pending allocation; V4's 444/58 receipts do not verify this delta.
 Historical 470-pass, 367-pass, 235-pass/12-fixture-failure, 365-pass/2-steering-fixture-failure
 and 56-pass/2-budget-failure receipts remain distinct and preserved. Fixtures now
 keep generator cleanup in one task and declare the synthetic steering trigger;
 production ContextVar ownership/reset and safety assertions were not weakened.
-Full pinned backend/root-app/auth/audit/voice/type/build gates remain unrun or
+Local full pinned backend/root-app/auth/audit/voice/type/build gates remain unrun or
 dependency-blocked. Combined PR #816 hosted-handler/disconnect coverage is still
 unowned and unverified.
 Exact offline backend restore is blocked by uncached `ip-address@10.7.4`;

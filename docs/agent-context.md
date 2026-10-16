@@ -133,6 +133,18 @@ Node run or dependency restore was required.
 This is not pinned backend, root `buildApp`, auth/audit/voice, full type/build
 or live-provider acceptance; those gates remain outstanding.
 
+Combined PR #858 CI `38892246588` subsequently exposed two Calendar-owned
+failures: an unregistered batch failure log and missing explicit read/write
+proof guidance in voice instructions. The source-only follow-up registers
+`google.calendar_batch_item_failed` with existing sanitized error fields and
+extends the existing logger privacy cases. Calendar wording restores both
+proof rules and shows each proposal item's fields, preserving staging, later
+exact-list approval, recovery and no-replay guidance. No instruction limit or
+existing assertion is weakened. The V4 444/58 receipts remain historical for
+these changed sources; new tests and actual budget gates are UNRUN pending an
+explicit allocation. No approval-origin, runtime/transport or provider behavior
+changes are included.
+
 No supported existing-session `/remote` control is exposed here; remote-enabled
 state remains unverified. Do not launch a duplicate CLI or change shared
 settings. No private/model/Google/PC action, commit, push, PR or deployment is
@@ -300,6 +312,17 @@ source, candidate/config identities and actual JSON/log receipts persist in
 this session's artifacts. No further heavy work without a parent allocation;
 no commit, push, PR, deployment, live/private read or historical-502 claim is
 authorised.
+
+Combined CI run `38892246588` on source `2f9b59d3` exposed three Factory
+test-contract defects, not evidence that runtime invalidation must change.
+Task publication still emits the existing present-mode Now-feed `refresh`
+alongside its scoped board event; their independent subscribers do not define
+an ordering contract. Webhook fixtures must cache by project ID, as the board
+route already did at base `2823585`, not by repository name. Corrected controls
+require target reload, unrelated-project retention, and no reinvalidation from
+duplicate signed deliveries. Runtime/cache code and the earlier 17 controls
+remain unchanged. These source-only test corrections need allocated execution
+and exact-head CI; no new passing result is claimed here.
 
 ## Steered source verification (16 October 2026; local successor)
 

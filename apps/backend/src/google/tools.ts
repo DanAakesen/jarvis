@@ -6,6 +6,7 @@ import { GoogleApiError, type GoogleApiClient } from './api-client.js';
 import { gmailMessageContent } from './message-content.js';
 import { PendingGoogleActions, type GoogleActionScope } from './pending-actions.js';
 import { classifyApprovalReply } from '../core/approval.js';
+import { safeErrorFields } from '../logging.js';
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -762,7 +763,7 @@ export function createGoogleModule(
                 item.detail = 'The event was created in Google Calendar.';
               } catch (error) {
                 if (!(error instanceof GoogleApiError) && !signal.aborted) {
-                  request.log.error({ item: index + 1 }, 'Calendar batch item has an unclassified execution failure');
+                  request.log.error(safeErrorFields(error), 'google.calendar_batch_item_failed');
                 }
                 const uncertain = signal.aborted || !(error instanceof GoogleApiError) ||
                   error.kind === 'uncertain' || error.kind === 'unavailable';
