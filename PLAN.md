@@ -1,5 +1,52 @@
 # Project plan
 
+## Preserve steered computer requests (16 October 2026; local successor)
+
+Direct caller tracing found that a steering turn persists its interrupted
+Jarvis partial after the current Dan message. The new source guard must resolve
+that exact same-session predecessor rather than reject valid steered computer
+use. Additional synthetic controls reproduce the regression and cover
+Gmail refusal, cross-session isolation, completed replies and cancellation.
+The correction permits one bounded predecessor read only for an explicitly
+interrupted Jarvis row; matching source ID and Dan role remain mandatory.
+Fresh exact-source gates and release are still required. No private or model
+probe, workflow retry or Web-test adaptation supplies acceptance.
+
+## Gmail fallback before tool discovery (16 October 2026; local correction)
+
+Continuing #837 found a reproduced gap, not a second implementation of #848:
+when Google tools are absent, hosted HTTP requests carry a stored message ID
+but no message object, so the Gmail guard could dispatch Chrome without ever
+examining the actual Gmail request. The correction resolves the existing
+current Dan message before computer execution, refuses missing/stale/non-Dan
+sources, and retains the original independent-action and observed-site guards.
+Source-read failures and cancellation do not permit dispatch.
+
+New synthetic regressions run the real registry with no Google module; unchanged
+Google/PC integration suites remain intact. This is source/local evidence only,
+not pinned CI, full types/build, release or personal-account acceptance.
+Next: exact-source integration/CI and normal release before accepting #837.
+No duplicate Factory task, Google write, private mail or live probe was used.
+
+## Factory lifecycle accepted (15 October 2026; production)
+
+PR #856 released exact source `6e702e7a` after independent review, fresh full
+CI/CodeQL and all 219 real-SQL cases passed. Normal backend deployment and
+all four runner variants succeeded. Fresh native Task 19 delivered the sole
+requested 53-byte artifact in `DanAakesen/jarvis-test-target#6`, with matching
+generation/session/invocation and commit-bound stopped-writer proof. It reached
+Done automatically at 23:49:53 UTC, about 122 seconds after PR creation, under
+the unchanged no-CI grace policy. A full reload retained Done; Status reported
+zero tracked sessions. No manual completion, cancellation, steering or PR merge.
+
+This accepts the fresh clean-completion and logical lifecycle path, not physical
+cloud deallocation, the cleanup-failure live branch or Task 18's historical
+cause. Earlier failed trials and V4e/V4f2 SQL batches remain failed evidence.
+The older held/source-only entries below describe their recorded stages.
+Next: assess #837 against the already released direct-Gmail correction before
+repeating implementation or starting a worker. Daily/new-coaching, device,
+private-data/product-confirmation and Foundry 403 boundaries remain unchanged.
+
 ## Fixed stage performance correction (15 October 2026; local)
 
 Implemented Dan's single balanced stage policy without tiers or settings

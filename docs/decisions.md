@@ -1,5 +1,57 @@
 # Decisions
 
+## Preserve the current source behind an interrupted reply (16 October 2026)
+
+Direct tracing of the existing chat loop exposed a compatibility defect in
+the new guard: steering persists an interrupted Jarvis partial after the Dan
+message that identifies the next round. Synthetic registry controls against
+the unchanged published guard reproduced four failures out of five new
+controls; the completed-reply refusal already passed. Keep that red evidence.
+
+Resolve one same-session predecessor only for an explicitly interrupted
+Jarvis row, then require the exact source ID and Dan role. Reject other
+sessions, stale/missing/non-Dan sources and completed-reply reuse. Retain
+cancellation after each lookup and surface read failures. Do not add a broad
+history scan, source-text cache or new persistence method. Fresh exact-source
+CI and release remain required; a green earlier batch would not prove this
+previously untested steering behavior. No Web source or test is changed.
+
+## Resolve Gmail intent before discovery-dependent fallback (16 October 2026)
+
+The exact released guard allowed a synthetic hosted `pc_open` Chrome dispatch
+for a stored current Gmail request when no Google module existed: zero source
+lookups and one dispatch. The native request with its verified message refused.
+Retain that baseline failure; #848's post-mail tests did not cover this case.
+
+Reuse the existing current-Dan-message history boundary before hosted computer
+dispatch rather than rely on model instructions or wait for an unavailable
+mail tool to run. Refuse stale/missing/non-Dan sources, propagate read failures,
+and check cancellation after the read. Keep the existing independent-intent
+rules, request-scoped nested exception, bounded identifier-only ledger and raw
+observed-site guards. No new routing service, consent or permission is needed.
+
+This is a local source decision and synthetic regression proof, not full
+integration/build/CI, release or real private-account acceptance. Keep #837
+open until its actual remaining acceptance is met. Do not consume or simulate
+Dan's genuine later product-write approval to validate this correction.
+
+## Accept the released clean Factory lifecycle (15 October 2026)
+
+Accept PR #856's exact reviewed source `6e702e7a` after fresh full CI,
+219 passing real-SQL cases, four CodeQL analyses and normal backend/four-runner
+release. Fresh native Task 19 then delivered a new exact artifact in
+`DanAakesen/jarvis-test-target#6`; current-generation commit-bound stopped-writer
+proof preceded automatic Done at 23:49:53 UTC. Full reload retained Done and
+Status reported zero tracked sessions. Existing no-CI grace and all policy
+checks remained; no manual completion, cancellation or merge supplied success.
+
+Keep artifact durability, owned-writer teardown, logical session accounting and
+physical cloud deallocation distinct. The last remains unverified under the
+existing Foundry 403 boundary. This clean run neither proves the cleanup-failed
+live branch nor explains Task 18's historical failure. Preserve those open
+qualifications and the earlier failed trials/SQL batches. The held entries
+below remain historical evidence, not the current clean-path release state.
+
 ## Fence recovery before provider start (15 October 2026; implemented locally, held)
 
 Independent V2 review reproduced policy Done and an approved merge using the

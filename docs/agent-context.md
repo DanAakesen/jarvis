@@ -1,5 +1,68 @@
 # Agent context
 
+## Steered source verification (16 October 2026; local successor)
+
+Chat steering saves an interrupted Jarvis partial after the new Dan message,
+then starts the next agent round using that Dan message ID. A latest-row-only
+lookup therefore rejects legitimate steered computer requests. Resolve at most
+one predecessor when the latest row is explicitly interrupted Jarvis; require
+the same session and exact current source ID with Dan role. Do not skip a
+completed reply or search arbitrary older history. Check cancellation after
+each awaited lookup and propagate read failures. Additional synthetic controls
+retain Gmail refusal and verify isolation/cancellation. Full fresh gates and
+normal release remain required; old batches are not semantic acceptance.
+
+## Hosted Gmail source guard (16 October 2026; local, not released)
+
+#837's existing MIME reader and post-mail guards are already shipped via #848.
+A new exact-`6e702e7a` synthetic reproduction found pre-discovery fallback:
+without the Google module, a hosted request's current Dan message ID did not
+cause its Gmail text to be checked before `pc_open` dispatched Chrome.
+The native verified-message request correctly refused the same action.
+Do not close #837 from its related merge or reuse prior green CI for this fix.
+
+`gmail-access-policy.ts` now resolves the same existing one-message history
+boundary before computer dispatch when an authenticated hosted source ID needs
+hydration. Require the matching current Dan message; stale/missing/non-Dan
+sources refuse, source failures propagate and cancellation prevents dispatch.
+No private text enters the turn ledger or logs. Independently requested exact
+operations keep their scoped nested exception; actual Gmail sites/windows and
+generic fallback remain refused. Original Google/PC suites are unchanged.
+New focused registry regressions and unchanged catalogue-budget controls use
+existing isolated local tooling, not the pinned CI environment. Full original
+integration suites, types/build and normal exact-head gates remain required.
+No new worker, consent, provider/model/private/PC call or Google write is needed
+for this source correction. Genuine live product approvals remain separate.
+
+## Released Factory lifecycle acceptance (15 October 2026; 23:51 UTC)
+
+PR #856 is released as `6e702e7a` / tree `628d7ca5`. Fresh attempt-one
+CI `38822420126` passed all ten jobs: backend lint/actual build and 3,344 tests,
+219/219 real-SQL cases with zero skips, and pinned Python 3.12.14 runner 374,
+agent 431 and scripts 73. CodeQL `38822420647` passed all four analyses.
+Keep the genuine earlier V4e and V4f2 SQL failures; do not relabel or rerun them.
+Normal Deploy `38823507753` readied backend revision 324 with image `8a8408d4`
+and passed required smoke; optional PC bridge stayed down. Unchanged infra,
+web and main-agent components were skipped, not newly released. Normal Runner
+deploy `38823507866` published all four variants, retaining their identities:
+base 1x2 version 26; base 2x4 and both dotnet tiers version 21.
+
+One new native Task 19 delivered the exact 53-byte synthetic artifact in
+`DanAakesen/jarvis-test-target#6`, head `549fe564`. Backend proof matched session
+18, generation 1, its invocation and that exact remote work commit. Automatic
+Done at 23:49:53 UTC survived a full reload; fresh Status at 23:51 UTC reported
+current source, SQL OK and zero tracked sessions, with no active runner probe.
+Both the 12-minute overall and three-minute after-artifact bounds passed.
+The no-check repository used its existing two-minute grace, not fabricated CI.
+No manual Done, cancellation, steering, second task or merge was needed.
+
+This is clean-completion/logical lifecycle acceptance only. Physical cloud
+deallocation and Task 18's original failure remain unproved; do not retry the
+denied Foundry read or infer either from accounting. The held records below are
+historical. Continue eligible board work without releasing Daily/new coaching,
+device/private or genuine product-confirmation holds. Remote-enabled state
+remains unverified; do not start a duplicate CLI or change shared settings.
+
 ## Reviewed recovery correction (15 October 2026; V4g local and held)
 
 Preserve the pinned V1/V2 snapshots, Codex HOLD evidence and source-reviewed V3

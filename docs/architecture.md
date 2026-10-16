@@ -1,5 +1,49 @@
 # Architecture
 
+## Source identity across chat steering (16 October 2026; local successor)
+
+The chat loop persists an interrupted Jarvis partial after the steering Dan
+row before invoking the next round. Gmail-policy hydration can read that
+single row's predecessor only when the latest row is explicitly interrupted
+Jarvis. The predecessor must share its session and match the requested Dan
+message ID. This is two bounded one-row reads at most, not an unbounded search
+or permission to reuse a completed reply. Both reads retain cancellation and
+error propagation. Gmail turn tracking, nested independent-action scope and
+raw site/process checks are unchanged. This is source-only, not live account
+or deployment acceptance.
+
+## Gmail guard before any computer dispatch (16 October 2026; source candidate)
+
+An unavailable Google module must not bypass Gmail policy merely because no
+mail tool can start the turn ledger. Hosted HTTP computer calls resolve the
+existing stored current Dan message before dispatch when their verified source
+is not already on the request. Matching ID and Dan role are required; an
+unavailable/stale source refuses and a history failure remains an error.
+Cancellation is checked after that awaited read.
+
+The existing bounded identifier-only ledger also records a positively observed
+Gmail request before the first mail call. Existing intent matching preserves
+explicit unrelated operations, with nested execution scoped to that request
+and source keys. No broader computer exception, new persistence, Google call,
+permission or provider path is introduced. Raw site/process guards and static
+MIME extraction remain unchanged. This source correction is not yet released.
+
+## Production lifecycle evidence (15 October 2026)
+
+The contract below is now released in `6e702e7a`; its held/source-only labels
+record the earlier freeze stages. Fresh Task 19 exercised the clean path:
+current generation/session/invocation proof carried work commit `549fe564`,
+the remote task branch and new PR matched that commit, and normal project
+policy reached Done after the existing no-CI grace. Durable reload retained
+Done and the backend reported zero tracked active sessions.
+
+The worker is disposable; its artifact survives in
+`DanAakesen/jarvis-test-target#6`. This observed backend proof establishes
+verified owned-writer teardown, not physical Foundry deallocation. The normal
+runner release enforces a 120-second idle timeout; no previously denied
+provider inspection was retried. This clean live run does not exercise the
+alternative cleanup-failed path or identify Task 18's original shutdown cause.
+
 ## Delivery after verified writer stop (15 October 2026; V4g fixture successor, not released)
 
 Runner invocation metadata separately records successful work and successful
