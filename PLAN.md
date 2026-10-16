@@ -1,5 +1,23 @@
 # Project plan
 
+## Header and Factory follow-up integration (16 October 2026)
+
+The priority mobile hotfix in #863 shipped first as `6192574e`, with normal
+Deploy `38953446877` passing web deployment and smoke. The public
+`main-BHyATt-B.js` matches that exact build and returns HTTP 200. Only the
+disconnected PC bridge is a nonblocking smoke warning; `chat_identity` is ok.
+The PM integration branch combines
+the independently reviewed header #862 and bounded Factory-status #861 fixes
+together for one subsequent normal qualification/release, without changing
+their runtime or test blobs. This avoids a redundant full CI/deploy cycle for
+two already-ready, non-overlapping corrections; it must not delay the hotfix.
+An ordinary merge records actual mobile main without changing the integrated
+tree. Require exact-head full CI, all four CodeQL analyses and normal serial
+deployment/smoke; record the actual results on the PR and linked issues.
+No individual green or skipped draft run qualifies
+the combination. #811's historical 502/performance acceptance and #860's
+native-phone acceptance remain open; Daily and existing sign-ins are unchanged.
+
 ## Mobile composer focus hotfix (16 October 2026)
 
 P11-06 / #860 takes priority over header #859 and Factory parity. Fresh base is
@@ -16,9 +34,15 @@ Chromium checks pass with default/saved layouts in dark/light, ordinary/reduced
 motion, repeated keyboard-rectangle changes, hide/close/restore and
 portrait/landscape/desktop transitions. Drafts and saved preferences survive.
 PM's independent source review of `5b3a5933` found no blocker; subsequent changes
-are tests/evidence/docs only. Current focus: PM-owned full exact-head CI/CodeQL,
-normal release and later native-phone acceptance. Header source and App.test.tsx
-are untouched; P11-06 remains In progress, not released or device-accepted.
+are tests/evidence/docs only. Exact final head `315c85b6` passed full normal CI
+`38952176445` and all four actual CodeQL analyses in `38951934641`. #863 merged
+as `6192574e`, tree `52bc3fe6`, and normal web Deploy `38953446877` passed.
+Header source and App.test.tsx were untouched by that release. #860 remains open
+with `needs-decision` for genuine physical-phone acceptance, not more
+implementation or a fictitious device pass. Native Project Jarvis reads
+Needs Dan. The workflow-owned task table currently reads Not started; that
+generated value is not an implementation/release receipt and is not manually
+rewritten here.
 
 ## Combined release candidate (16 October 2026; source integration)
 
@@ -656,6 +680,8 @@ Next: camera-only PR, coordinator merge on green CI, then loading recovery and
 Phase 1 delivers the Software Factory. Requirements and page specifications are in [PRODUCT.md](PRODUCT.md); the system and stack in [docs/architecture.md](docs/architecture.md); the data model in [docs/data-model.md](docs/data-model.md); decisions and learnings in [docs/decisions.md](docs/decisions.md).
 
 ## Current focus
+
+- **P11-05 / #859 (16 October; draft candidate):** Background work replaces the confusing Recent jobs label and renders only undismissed runs. Scoped storage and raw lifecycle/history remain unchanged; no job cancellation/deletion or new dashboard. The released baseline and failing retained-row regression establish the bug. Candidate 22 targeted tests, changed-file lint and web types pass; the intervening forks-worker startup failure is retained, not relabelled. Independent source review found no blocking issue. Real desktop Chromium and the later explicitly allocated 390-by-844 light/reduced-motion phone run cover dismissal/reload, empty/focus, Escape and storage/network errors. The initial phone harness navigation race was corrected, not counted as a pass. The unchanged-source final phone check confirms 44px dismiss targets and no horizontal overflow, runtime errors, external requests or job mutations. Both bounded helpers are stopped and the heavy slot released. Next: PM-controlled current-main/mobile-first integration and normal CI. Keep the PR draft/not-ready and signed-in localhost released preview stable; no preview switch, live/physical-device acceptance, merge or deployment is implied.
 
 - **Factory shutdown correction remains held (15 October):** V3 corrected stale recovery proof and primary-failure overwrite. V4c corrected V4b's question-only false-work marker, but review held its unbound local-commit proof. V4d binds both clean and cleanup-failed work to its actual commit and published PR head under the SQL policy lock. V4e preserves unverified completed lifecycle, but ready #856's first SQL batch failed collation/rollback fixtures. V4f2 corrected binary identity comparison and isolated guarded rollback controls; real SQL then passed those controls but remained 210 passed/9 failed. V4g changes only fixture clocks, legal recovery/cancellation ordering and failure-safe fixture registration/cleanup; production constraints, concurrency and timeouts remain unchanged. Older green PRs and legacy snapshots cannot authorise completion. Verified stopped writer and current commit/generation remain required. Fresh exact review, all real SQL/full build/pinned Linux gates, normal releases and a new live trial still precede acceptance. Then continue the next eligible board task as Dan authorised; specific Daily holds and Foundry 403 remain excluded.
 
@@ -1412,6 +1438,7 @@ A rolling intake phase. When Dan asks Jarvis to change its own code or a project
 | ID | Issue | Task | Acceptance criteria | Depends on | Status |
 | --- | --- | --- | --- | --- | --- |
 | P11-06 | [#860](https://github.com/DanAakesen/jarvis/issues/860) | Priority hotfix: stop the mobile composer jumping over chat on focus | One phone viewport dock with chat open, closed or minimised; preserve drafts, reader following and saved desktop geometry through focus, keyboard resize/pan/dismissal and orientation; focused regressions, independent review and normal release gates; native-phone acceptance explicit | None | Not started |
+| P11-05 | [#859](https://github.com/DanAakesen/jarvis/issues/859) | Make header background work understandable and dismissible | Remove dismissed rows immediately and across refresh/reload; distinguish background work from Factory tasks; preserve job records, real status, recovery, scoped visibility, accessible focus and desktop/phone states; cover storage/network failure without private mutations | — | |
 | P9-42 | [#569](https://github.com/DanAakesen/jarvis/issues/569) | Safe, retryable tool argument refusals in voice/chat, content-free validation telemetry, and repo_search aliases plus incomplete/empty-result guidance; offline checks pass, live acceptance pending | Backend | P7-45, P9-36 | Complete |
 | P9-40 | [#567](https://github.com/DanAakesen/jarvis/issues/567) | Jarvis can switch the page Dan is looking at | Backend + UI session | P8-15, P9-36 | Complete |
 
@@ -1602,3 +1629,18 @@ Dan approved P12 on 12 October 2026 and explicitly released only P12-01 for this
 | P12-17 | [#732](https://github.com/DanAakesen/jarvis/issues/732) | End-to-end, mobile & real-iPhone acceptance | Data manifest reconciled; real devices and existing Jarvis workflows pass; SQL availability and reverse-delta rollback verified. Dan reviews cutover evidence. | P12-06, P12-11, P12-12, P12-13, P12-14, P12-15, P12-16 | Not started |
 | P12-18 | [#733](https://github.com/DanAakesen/jarvis/issues/733) | Final delta, cutover & rollback window | Post-switch sync / food / UI pass; window agreed; new Azure writes can be recovered if rollback is needed. | P12-17 | Not started |
 | P12-19 | [#734](https://github.com/DanAakesen/jarvis/issues/734) | Retire legacy and migration-only tooling | Permanent Azure services and original source/data remain; full verified migration, rollback/retention gates met before legacy deprecation or temporary-tool cleanup; no hidden old canonical writer. | P12-18 | Not started |
+
+## Factory canonical-status parity (16 October 2026)
+
+Scoped partial correction for [#811](https://github.com/DanAakesen/jarvis/issues/811),
+from released `3d3a12ab`. PM observed #717 under In progress while canonical
+Project 2 reported Needs Dan; the other 26 open-card columns matched. The
+backend draft rule omitted the canonical script's `needs-decision` exception.
+Mirror that exception without changing worker/review precedence, task facts,
+PR linking, API/auth contracts or the separately owned web source.
+
+Shared fixtures and pure complete-board regressions cover parked drafts,
+claimed work, review-ready PRs, task states and other columns. Next: exact-head
+CI, independent PM review and normal gated integration, followed by PM-owned
+rendered acceptance. #811 remains open; this is not historical 502 attribution,
+sustained performance acceptance or permission to resume #717/#741.

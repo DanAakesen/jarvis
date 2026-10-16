@@ -808,8 +808,8 @@ export function desiredFactoryBoardStatus(
   const linked = linkedPullRequests.filter((pullRequest) => linkedIssueNumbers(pullRequest.body).has(issue.number));
   if (linked.some((pullRequest) => !pullRequest.draft)) return 'In review';
   const labels = new Set(issue.labels);
-  if (linked.length > 0 ||
-      issue.labels.some((label) => workerLabels.includes(label as typeof workerLabels[number]))) return 'In progress';
+  if (issue.labels.some((label) => workerLabels.includes(label as typeof workerLabels[number]))) return 'In progress';
+  if (linked.length > 0 && !labels.has(decisionLabel)) return 'In progress';
   if (labels.has(decisionLabel)) return 'Needs Dan';
   if (labels.has(deferredLabel) ||
       (typeof issue.blockedBy !== 'number' && issue.blockedBy.length > 0) ||

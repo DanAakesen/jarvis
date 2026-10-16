@@ -11,6 +11,18 @@ conversation visibility and existing reader/tail-following behaviour through
 focus, viewport pan/resize, keyboard dismissal and orientation changes.
 Native-phone acceptance remains separate from controlled browser evidence.
 
+## Header background work (16 October 2026; P11-05 local candidate)
+
+The header's **Background work** control covers research, images, apps and
+indexing, not Software Factory tasks or current service health. Show only
+undismissed entries, with their real status, failure details and available
+result/cancellation controls. Dismissing an entry removes it from this header
+immediately and after refresh/reload on the same account, backend and device.
+It does not cancel work, delete records or remove saved results. Keep the
+control and an explicit empty state available after the last entry is hidden
+so keyboard focus is not lost. Storage/load failures remain visible and must
+not be presented as a successfully empty list.
+
 ## Readable chat and attached phone typing (16 October 2026; local candidate)
 
 Booking/event summaries use labelled records separated by blank lines, with
@@ -579,6 +591,11 @@ Persistent-pin semantics are still part of the unfinished P8-42 implementation.
 | Compact release context for the selected project: repository/default branch, latest build/deployment status, short commit timeline | Open the full project release view |
 
 The board reads the canonical `GET /factory/board?project=<id>` snapshot for one active project, initially the first returned project. Placement comes from the backend, never from task state. It includes open issues and issues closed in the last 14 days. Filtering precedes the explicit 100-card display cap per column; counts include all matches and the cap explains how to find hidden matches. Paused, Needs attention and Cancelled remain task facts, not columns. Cards without tasks have no invented task actions or timings; full history and usage stay in task details. Snapshot time, cached GitHub data, live connection failures and retained data after failed refresh are visible. Refresh and retry preserve the current board and scroll; changing project hides the old snapshot and cancels obsolete reads. Committed board events and stream reconnection refresh placement.
+
+An unclaimed `needs-decision` issue stays in Needs Dan when its linked PR is
+still a parked draft. The draft and any supplied task state/activity remain
+visible as facts, not an implicit worker claim. An actual worker label still
+means In progress, and a review-ready linked PR still means In review.
 
 The local 16 October correction (not released) shares one server-owned board
 load per project. An update invalidates

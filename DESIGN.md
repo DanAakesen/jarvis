@@ -61,12 +61,17 @@ handling; do not animate geometry merely to make controls look busy.
 for future work. Header/job and mobile chat corrections have separate owners;
 this candidate does not imply their changes are integrated or released.
 
-The companion header requirement consolidates terminal/hidden jobs under recent
-history. Dismissing UUID jobs is local to the account/backend and hides header
-state only, never cancels work or deletes server history. Indexing Retry must be
-explicitly unavailable without a supported owned action. A historical
-interruption is not current system health. Preserve accessible focus and
-borderless tabs in that implementation; live acceptance remains separate.
+The header's **Background work** list contains only undismissed jobs and explains
+that research, images, apps and indexing are separate from Factory tasks.
+P11-05 supersedes the earlier Recent jobs view that kept hidden rows visible.
+Dismissing UUID jobs is local to the account/backend and removes the row, never
+cancels work or deletes server history. Keep a stable trigger and explicit empty
+state after the final dismissal; row dismissal focuses the list, while detail
+dismissal and Escape return to the trigger. Cross-tab dismissal of an open run
+returns to the filtered list. Indexing Retry remains explicitly unavailable
+without a supported owned action. A historical interruption is not current
+system health. Preserve borderless tabs and phone-sheet geometry; local fixture
+inspection and live acceptance are separate.
 
 ## Fixed balanced stage rendering (15 October 2026; local)
 

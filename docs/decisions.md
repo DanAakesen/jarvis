@@ -1,5 +1,19 @@
 # Decisions
 
+## Batch the ready follow-ups after the priority hotfix (16 October 2026)
+
+P11-06 / #863 shipped first as `6192574e`; normal Deploy `38953446877` passed
+web and smoke. Qualify the already-reviewed header #862 and Factory parity #861
+in one PM-owned follow-up PR rather than two successive full CI/deploy cycles.
+The source boundaries do not overlap; shared documentation retains both sets
+of requirements, evidence and task rows. Preserve published histories through
+ordinary merges, never force/rebase them. Bind all source blobs to their
+immutable reviewed heads and run complete normal CI/CodeQL on the integrated,
+current-main candidate. This is integration ownership, not permission to waive
+acceptance, close all of #811, resume protected export or claim native-phone
+proof. The actual qualification and release receipts belong on the integrated
+PR and linked issues; this source checkpoint does not claim a follow-up pass.
+
 ## Mobile composer focus hotfix (16 October 2026)
 
 Confirmed with JarvisPM for P11-06 / #860: suspend desktop manual conversation
@@ -14,8 +28,46 @@ boundary. Controlled released-source reproduction and a failing regression
 support the decision; native-device cause and acceptance remain unverified.
 PM's independent source review of `5b3a5933` found no blocker. The unchanged
 production source subsequently passes focused regressions, web lint/types/build
-and controlled rendered phone/desktop restoration checks; normal exact-head CI,
-release and physical-phone acceptance remain distinct gates.
+and controlled rendered phone/desktop restoration checks. Final head `315c85b6`
+passed full normal CI `38952176445` and all four actual CodeQL analyses in
+`38951934641`. #863 merged as `6192574e`, tree `52bc3fe6`; normal web Deploy
+`38953446877` and smoke passed. Public `main-BHyATt-B.js` matches that web build
+and returns HTTP 200. The disconnected PC bridge remains a nonblocking warning;
+`chat_identity` is ok in this run. Issue #860 stays open with `needs-decision`
+for native-phone acceptance. A deployed controlled-browser correction does not
+establish the cause or result on Dan's physical iPhone.
+
+## Filter header background work instead of retaining hidden rows (16 October 2026)
+
+Dan reported that Recent jobs kept dismissed indexing/research entries visible
+and questioned its purpose. P11-05 / #859 chooses the smallest existing-surface
+repair: name it Background work, distinguish it from Factory tasks, and render
+only the store's already-filtered jobs. A new active/history split adds
+unrequested navigation; removing the control would lose existing progress,
+failure and result recovery. The stable trigger and empty state preserve focus
+after the last dismissal. Raw history and backend tools keep saved records;
+dismissal remains a scoped device preference, never cancellation or deletion.
+This supersedes the earlier header contract's visible hidden-history rows,
+not its persistence, truthful failure or unavailable-retry rules.
+
+Evidence: the released 18-case header baseline passed, while a new regression
+reproduced the exact retained-row/disappearing-cross failure. The candidate's
+22 focused tests, changed-file ESLint and declared web types passed. An
+intervening forks-worker startup timeout remains a failed run; the unchanged
+selection passed with isolated thread workers and unchanged assertions/timeouts.
+Real desktop Chromium inspected list removal, refresh/reload, empty/focus,
+Escape and storage/network errors using synthetic jobs and no job mutations.
+The first phone attempt stopped at a fixture CDP navigation race; it was not
+counted as acceptance. After yielding to the mobile-composer hotfix, one
+explicitly allocated phone-only run on unchanged reviewed source passed at
+390 by 844 in light appearance with reduced motion. It covered dismissal
+through refresh/reload, empty/focus, Escape and storage/network errors, with
+44px dismiss targets, contained scrolling and no horizontal overflow, runtime
+errors, external requests or job mutations. The fixture and owned browser
+were stopped immediately; the signed-in released preview stayed unchanged.
+Independent runtime/test source review found no blocking issue. Keep this
+candidate draft/not-ready for PM-controlled current-main integration and normal
+CI; local fixtures are not live, physical-device or deployment acceptance.
 
 ## Release active work together after its gates (16 October 2026)
 
@@ -3778,3 +3830,24 @@ configuration, protected blobs or PLAN cells change. Local app-dependent
 execution remains package-blocked; the coordinator owns corrected-head
 normal pinned CI, publication and release. Original Google provider/live
 acceptance remains unproven.
+
+## Factory canonical-status parity (16 October 2026)
+
+For [#811](https://github.com/DanAakesen/jarvis/issues/811), mirror the existing
+Project sync precedence rather than changing canonical statuses or interpreting
+SQL task activity as ownership. `desiredFactoryBoardStatus` previously promoted
+any linked draft before `needs-decision`; Python's `desired_status` already
+kept an unclaimed decision issue with a parked draft in Needs Dan. The shared
+fixtures omitted that case even though Python had a separate regression.
+
+Keep review-ready PRs and actual worker labels ahead of Needs Dan. Preserve
+the existing closing-reference parser and every supplied PR/task overlay,
+including Running/Working facts; neither hiding facts nor forcing all decision
+issues into Needs Dan would preserve parity. Share the missing draft/decision
+controls across Python and TypeScript, with pure complete-board coverage for
+task overlays and unchanged columns. No frontend, auth, timeout, cache,
+provider or persisted-state change is needed.
+
+This is a local source correction from released `3d3a12ab`, not full #811
+acceptance. PM owns independent review, integration and rendered readback;
+historical 502 causation remains unestablished and #717/#741 stays parked.

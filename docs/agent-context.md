@@ -37,8 +37,28 @@ hide/close/restore, unchanged drafts/preferences and desktop restoration.
 Screenshots were inspected; light mode uses reduced motion. Synthetic auth,
 history and viewport rectangles are not real keyboard or physical Safari proof.
 The owned fixture/browser helpers are stopped; released5173/auth is untouched.
-PM owns full exact-head CI/CodeQL and release; physical-phone acceptance remains
-open. No production source changed after PM's review of `5b3a5933`.
+PM completed full normal CI `38952176445` and all four CodeQL analyses in
+`38951934641` at exact final head `315c85b6`. #863 merged as `6192574e`,
+tree `52bc3fe6`; normal Deploy `38953446877` passed web and smoke while
+backend, infra and agent were correctly skipped. Public `main-BHyATt-B.js`
+matches that build and returns HTTP 200. The only nonblocking smoke warning is
+`pc_bridge: down`; `chat_identity` is ok. Issue #860 is open with
+`needs-decision` for physical-phone acceptance. Local preview source switches
+require its existing owner and preserve origin/auth; a production release alone
+does not update that source. No production source changed after PM's review
+of `5b3a5933`.
+
+## Header dismissal follow-up (16 October 2026; P11-05)
+
+`JobsChip` must render `useJobs().jobs`, not the unfiltered `history`, in its
+Background work list and selected details. The previous implementation saved
+scoped dismissals correctly but retained hidden rows and removed only their
+crosses. Do not fix this by deleting records or filtering the store's raw
+history: App still needs real running lifecycle state and a stable phone
+summary. Keep failures, saved-result recovery, explicit cancellation and
+storage/load errors truthful. Verify desktop and phone interactions using an
+isolated fixture; preserve the signed-in released preview and never run real
+indexing/research to manufacture evidence.
 
 ## Combined-source qualification boundary (16 October 2026)
 
@@ -1577,8 +1597,9 @@ Dan follows the work on the [Project Jarvis board](https://github.com/users/DanA
 | Column | Meaning (open issues) |
 | --- | --- |
 | **Backlog** | Blocked: at least one issue it depends on is still open. |
+| **Needs Dan** | Unclaimed `needs-decision` issue, including a parked linked draft; a review-ready linked PR still takes precedence. |
 | **Ready** | Not blocked, no worker label, no open linked PR: any worker may claim it. |
-| **In progress** | Has a worker label, or an open draft PR with `Fixes #<issue>`. |
+| **In progress** | Has a worker label, or an open draft PR with `Fixes #<issue>` without `needs-decision`. Task state/activity alone does not claim the issue. |
 | **In review** | Has an open PR with `Fixes #<issue>` that is ready for review: waiting for checks and merge. |
 | **Done** | Issue closed (the project's built-in "Item closed" workflow). |
 

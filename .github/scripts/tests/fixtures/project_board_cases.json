@@ -42,6 +42,36 @@
     "status": "In progress"
   },
   {
+    "name": "parked draft on unclaimed needs decision issue waits for Dan",
+    "issue": { "number": 7, "labels": ["needs-decision"], "blockedBy": 0 },
+    "pulls": [{ "body": "Refs #7. Preparatory only; Fixes #7 requires later acceptance.", "draft": true }],
+    "status": "Needs Dan"
+  },
+  {
+    "name": "needs decision with multiple parked drafts wins over deferred and blocked",
+    "issue": { "number": 7, "labels": ["needs-decision", "deferred"], "blockedBy": 2 },
+    "pulls": [{ "body": "Closes #7", "draft": true }, { "body": "Resolves #7", "draft": true }],
+    "status": "Needs Dan"
+  },
+  {
+    "name": "worker claim on needs decision issue with draft is in progress",
+    "issue": { "number": 7, "labels": ["needs-decision", "Copilot"], "blockedBy": 1 },
+    "pulls": [{ "body": "Fixes #7", "draft": true }],
+    "status": "In progress"
+  },
+  {
+    "name": "review ready pull request on needs decision issue is in review",
+    "issue": { "number": 7, "labels": ["needs-decision"], "blockedBy": 1 },
+    "pulls": [{ "body": "Fixes #7", "draft": false }],
+    "status": "In review"
+  },
+  {
+    "name": "review ready pull request wins over a parked draft",
+    "issue": { "number": 7, "labels": ["needs-decision"], "blockedBy": 0 },
+    "pulls": [{ "body": "Fixes #7", "draft": true }, { "body": "Closes #7", "draft": false }],
+    "status": "In review"
+  },
+  {
     "name": "ready linked pull request is in review",
     "issue": { "number": 7, "labels": ["Codex"], "blockedBy": 0 },
     "pulls": [{ "body": "Closes #7", "draft": false }],
