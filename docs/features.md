@@ -29,12 +29,14 @@ Counts cover the 137 feature rows in the seven-column tables below; partial veri
 
 ## Mobile composer focus hotfix (16 October 2026)
 
-P11-06 / #860 locally suspends saved desktop placement during phone layout and
+P11-06 / #860 suspends saved desktop placement during phone layout and
 uses the existing viewport dock for both chat halves. Drafts and desktop
 preferences are retained. Focused checks, web lint/types/build and controlled
-rendered phone/desktop cases pass. PM-owned full CI/CodeQL/release and
-physical-phone acceptance remain pending; existing deployed feature rows below
-are not upgraded by this note.
+rendered phone/desktop cases pass. #863 passed exact-head full CI/CodeQL and
+shipped as `6192574e` through successful normal web Deploy `38953446877`.
+The public JavaScript entry matches that build. Physical-phone acceptance
+remains open on #860; existing complete-feature rows below are not upgraded by
+this bounded correction.
 
 ## Jarvis: conversation and voice
 

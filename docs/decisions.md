@@ -2,8 +2,8 @@
 
 ## Batch the ready follow-ups after the priority hotfix (16 October 2026)
 
-P11-06 / #863 remains the first release. Once its existing gates and normal
-smoke pass, qualify the already-reviewed header #862 and Factory parity #861
+P11-06 / #863 shipped first as `6192574e`; normal Deploy `38953446877` passed
+web and smoke. Qualify the already-reviewed header #862 and Factory parity #861
 in one PM-owned follow-up PR rather than two successive full CI/deploy cycles.
 The source boundaries do not overlap; shared documentation retains both sets
 of requirements, evidence and task rows. Preserve published histories through
@@ -11,8 +11,8 @@ ordinary merges, never force/rebase them. Bind all source blobs to their
 immutable reviewed heads and run complete normal CI/CodeQL on the integrated,
 current-main candidate. This is integration ownership, not permission to waive
 acceptance, close all of #811, resume protected export or claim native-phone
-proof. At this checkpoint the follow-up is staged locally, not published or
-deployed.
+proof. The actual qualification and release receipts belong on the integrated
+PR and linked issues; this source checkpoint does not claim a follow-up pass.
 
 ## Mobile composer focus hotfix (16 October 2026)
 
@@ -28,8 +28,14 @@ boundary. Controlled released-source reproduction and a failing regression
 support the decision; native-device cause and acceptance remain unverified.
 PM's independent source review of `5b3a5933` found no blocker. The unchanged
 production source subsequently passes focused regressions, web lint/types/build
-and controlled rendered phone/desktop restoration checks; normal exact-head CI,
-release and physical-phone acceptance remain distinct gates.
+and controlled rendered phone/desktop restoration checks. Final head `315c85b6`
+passed full normal CI `38952176445` and all four actual CodeQL analyses in
+`38951934641`. #863 merged as `6192574e`, tree `52bc3fe6`; normal web Deploy
+`38953446877` and smoke passed. Public `main-BHyATt-B.js` matches that web build
+and returns HTTP 200. The disconnected PC bridge remains a nonblocking warning;
+`chat_identity` is ok in this run. Issue #860 stays open with `needs-decision`
+for native-phone acceptance. A deployed controlled-browser correction does not
+establish the cause or result on Dan's physical iPhone.
 
 ## Filter header background work instead of retaining hidden rows (16 October 2026)
 

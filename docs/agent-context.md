@@ -37,8 +37,16 @@ hide/close/restore, unchanged drafts/preferences and desktop restoration.
 Screenshots were inspected; light mode uses reduced motion. Synthetic auth,
 history and viewport rectangles are not real keyboard or physical Safari proof.
 The owned fixture/browser helpers are stopped; released5173/auth is untouched.
-PM owns full exact-head CI/CodeQL and release; physical-phone acceptance remains
-open. No production source changed after PM's review of `5b3a5933`.
+PM completed full normal CI `38952176445` and all four CodeQL analyses in
+`38951934641` at exact final head `315c85b6`. #863 merged as `6192574e`,
+tree `52bc3fe6`; normal Deploy `38953446877` passed web and smoke while
+backend, infra and agent were correctly skipped. Public `main-BHyATt-B.js`
+matches that build and returns HTTP 200. The only nonblocking smoke warning is
+`pc_bridge: down`; `chat_identity` is ok. Issue #860 is open with
+`needs-decision` for physical-phone acceptance. Local preview source switches
+require its existing owner and preserve origin/auth; a production release alone
+does not update that source. No production source changed after PM's review
+of `5b3a5933`.
 
 ## Header dismissal follow-up (16 October 2026; P11-05)
 

@@ -2,14 +2,19 @@
 
 ## Header and Factory follow-up integration (16 October 2026)
 
-The priority mobile hotfix in #863 goes first. The PM integration branch stages
+The priority mobile hotfix in #863 shipped first as `6192574e`, with normal
+Deploy `38953446877` passing web deployment and smoke. The public
+`main-BHyATt-B.js` matches that exact build and returns HTTP 200. Only the
+disconnected PC bridge is a nonblocking smoke warning; `chat_identity` is ok.
+The PM integration branch combines
 the independently reviewed header #862 and bounded Factory-status #861 fixes
 together for one subsequent normal qualification/release, without changing
 their runtime or test blobs. This avoids a redundant full CI/deploy cycle for
 two already-ready, non-overlapping corrections; it must not delay the hotfix.
-The integration is local only until fresh main includes the qualified mobile
-release. Then require exact-head full CI, all four CodeQL analyses and normal
-serial deployment/smoke. No individual green or skipped draft run qualifies
+An ordinary merge records actual mobile main without changing the integrated
+tree. Require exact-head full CI, all four CodeQL analyses and normal serial
+deployment/smoke; record the actual results on the PR and linked issues.
+No individual green or skipped draft run qualifies
 the combination. #811's historical 502/performance acceptance and #860's
 native-phone acceptance remain open; Daily and existing sign-ins are unchanged.
 
@@ -29,9 +34,13 @@ Chromium checks pass with default/saved layouts in dark/light, ordinary/reduced
 motion, repeated keyboard-rectangle changes, hide/close/restore and
 portrait/landscape/desktop transitions. Drafts and saved preferences survive.
 PM's independent source review of `5b3a5933` found no blocker; subsequent changes
-are tests/evidence/docs only. Current focus: PM-owned full exact-head CI/CodeQL,
-normal release and later native-phone acceptance. Header source and App.test.tsx
-are untouched; P11-06 remains In progress, not released or device-accepted.
+are tests/evidence/docs only. Exact final head `315c85b6` passed full normal CI
+`38952176445` and all four actual CodeQL analyses in `38951934641`. #863 merged
+as `6192574e`, tree `52bc3fe6`, and normal web Deploy `38953446877` passed.
+Header source and App.test.tsx were untouched by that release. #860 remains open
+with `needs-decision` for genuine physical-phone acceptance, not more
+implementation or a fictitious device pass. Generated task statuses follow the
+board rather than manual edits to this note.
 
 ## Combined release candidate (16 October 2026; source integration)
 
