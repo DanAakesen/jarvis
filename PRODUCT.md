@@ -955,6 +955,14 @@ intent/proposal acceptance, the single Daily page/on-demand GenUI and protected
 export/source-parity/device/cutover gates remain separate. No coaching, widget,
 provider call, new meal writer or production composition is added by this slice.
 
+The next bounded #724 continuation adds retained favourites and meal plans to
+that same read path, not another service. These periodless collections use
+exact ID-only cursors and at most 100 records per page. Preserve display aliases,
+saved nutrient provenance, plan snapshots/revisions/tombstones and nullable
+values; definitions and plans are not consumed meals. Their acknowledged writes
+invalidate their own source through the same refresh hub. Daily stays off and
+the hosted ChatGPT food-write/connector requirement remains unfinished.
+
 P12-05 adds an inactive, explicitly invoked health processor over the existing SQL inbox: metrics/sleep/workouts/detail/minute HR, canonical physical units, Copenhagen dates, exact session/checksum replay and bounded retry/quarantine. Domain changes, ingestion lineage and processed-feed freshness commit together; phone heartbeat stays separate. Empty workout exports cannot erase history, missing values stay unknown, and native nutrition cannot feed back into canonical meals. Owner history/detail reads are bounded and unregistered. No scheduler, source import, live device changes or activation; protected/live parity remains gated.
 
 Heart-rate summaries and series must validate declared units consistently. Unsupported rate units quarantine without changing processed freshness; only established legacy summary fields imply BPM when their unit is absent. Missing samples and summaries remain unknown, not inferred.

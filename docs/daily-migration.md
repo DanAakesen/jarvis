@@ -142,6 +142,15 @@ core parity/backup/device/cutover gates.
 
 ### [P12-09: Daily API, tool registry & live revisions](https://github.com/DanAakesen/jarvis/issues/724)
 
+16 October continuation after #866's successful release: the current JarvisPM
+UI session extends the delivered read foundation with retained favourites and
+meal plans. Reuse existing owner-bound collection stores, ID-only pagination
+(100 maximum), whitelisted snapshots and the same post-commit refresh hub.
+Definitions/plans are not consumed meals. This is another partial inactive
+#724 slice, not the hosted authenticated ChatGPT food-write path or activation.
+Original Daily and all private/provider/device/reconciliation/cutover gates stay
+unchanged; no coaching, widget or duplicate worker.
+
 16 October bounded resumption: the existing Daily session owns an inactive
 shared read-contract/API/tool and post-commit refresh slice over #720/#722.
 Production composition and all existing data remain unchanged. This does not

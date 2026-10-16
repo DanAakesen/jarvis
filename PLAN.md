@@ -2,7 +2,7 @@
 
 ## Voice summaries on screen (16 October 2026; P11-07 / #865)
 
-In progress: ordinary realtime tools now call the existing voice presentation
+Delivered in #866 / `4129f9bb`: ordinary realtime tools now call the existing voice presentation
 service. Successful Calendar proposals display only their returned summary
 in the existing text view; simple "show me" guidance prefers matching views
 or text/list, without changing approval or provider writes. Four new executor
@@ -11,8 +11,9 @@ realtime/guidance selection passes 65 tests, including review's approval/decline
 race correction: the internal pending lookup cannot overwrite the final receipt.
 The original missing-dependency
 and first-candidate instruction-budget failures remain recorded separately.
-Next: normal exact-head CI for real-app integration, then the existing release
-path. No new renderer, frontend campaign, private action or native-device
+Final `0672dfb8` passed ten actual CI jobs and four actual CodeQL analyses;
+normal Deploy `38971353611` passed backend release and smoke, with only the
+known disconnected-PC warning. No new renderer, frontend campaign, private action or native-device
 acceptance claim. Existing #839/#860 human acceptance gates stay open.
 
 ## Header and Factory follow-up integration (16 October 2026)
@@ -1585,6 +1586,16 @@ Proposals only; an idea enters a phase only when Dan accepts it into scope.
 | Foundry resilient tasks | Platform-managed recovery of in-progress hosted-agent work after a crash (preview; disabled in the prototype). | Preview; may replace part of the branch-restart recovery. | Crash recovery (P2-10) proves too lossy or complex. |
 | Backend request rate limiting | Limits authenticated and unauthenticated request rates at the root authentication hook (CodeQL `js/missing-rate-limiting` on `apps/backend/src/auth/hook.ts`, raised during P4-01). | A new dependency (for example `@fastify/rate-limit`) and limits that must not throttle Dan or the Jarvis agent; one replica keeps in-memory counters sufficient. | Before the backend URL is public (P0-11), or when abuse or cost appears. |
 ## P12 — Daily migration to Jarvis
+
+16 October continuation after voice deployment: JarvisPM directly owns the next
+partial #724 slice in this existing local UI session. Extend the delivered shared
+read service with retained favourites and meal plans, exact bounded ID cursors,
+whitelisted saved snapshots and source-specific post-commit refresh. Do not
+rebuild the foundation or count definitions as intake. Qualify and release through
+the normal path; #724 stays open for hosted ChatGPT food writes and approved
+connector/intent/proposal authority. #730's native dependencies remain intact.
+Default-off, original Daily, protected export/parity/provider/device and cutover
+gates are unchanged. The earlier read-slice receipt below remains historical.
 
 16 October resumed implementation: Dan selected the existing Daily session
 under coordinator ownership, superseding the general engineering pause only

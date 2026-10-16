@@ -29,11 +29,19 @@ function fixture() {
   const meals = vi.fn().mockResolvedValue({ rows: [{ id: '01', meal_date: new Date('2026-10-16'), energy_kcal: 123, protein_grams: null,
     components_json: '[]', nutrient_provenance_json: '{"kind":"synthetic-label"}', revision: 2n, deleted_at: null,
     owner_object_id: owner, apple_health_claim_token_hash: 'must-not-escape' }], next: null });
+  const favorites = vi.fn().mockResolvedValue({ rows: [{ id: '001', favorite_name: 'Synthetic favourite',
+    aliases_json: '["Raw Alias"]', energy_kcal: 123, protein_grams: null, components_json: '[]',
+    nutrient_provenance_json: '{"kind":"synthetic-label"}', owner_object_id: owner,
+    updated_at: '2026-10-16T07:00:00Z', internal_metadata: 'must-not-escape' }], nextId: null });
+  const plans = vi.fn().mockResolvedValue({ rows: [{ id: 'plan-01', plan_name: 'Synthetic plan',
+    items_json: '[{"favoriteId":"001","nutrients":{"energyKcal":123,"proteinGrams":null}}]',
+    energy_kcal: 369, protein_grams: null, revision: 2n, deleted_at: '2026-10-16T07:20:00Z',
+    owner_object_id: owner, updated_at: '2026-10-16T07:20:00Z', internal_metadata: 'must-not-escape' }], nextId: null });
   const readers: DailyReaders = {
     health: vi.fn(() => ({ history, sync, workoutDetail, heartRate })),
-    nutrition: vi.fn(() => ({ history: meals })),
+    nutrition: vi.fn(() => ({ history: meals, favorites, plans })),
   };
-  return { service: new DailyQueryService(readers, () => clock), advance: () => { clock += 60000; }, readers, history, sync, workoutDetail, heartRate, meals };
+  return { service: new DailyQueryService(readers, () => clock), advance: () => { clock += 60000; }, readers, history, sync, workoutDetail, heartRate, meals, favorites, plans };
 }
 describe('one shared Daily read contract', () => {
   it('round-trips the real HTTP/module contract with a synthetic principal (not root-token acceptance)', async () => {
@@ -50,6 +58,14 @@ describe('one shared Daily read contract', () => {
       expect(response.statusCode).toBe(200);
       expect(response.headers['cache-control']).toBe('no-store');
       expect(response.json()).toEqual(await f.service.query(input, request(), signal()));
+      for (const source of [sources.favorites, sources.plans]) {
+        const query = { source, limit: 1, cursor: { id: '000' } };
+        const collection = await app.inject({ method: 'POST', url: '/daily/query', payload: query });
+        expect(collection.statusCode).toBe(200);
+        expect(collection.json()).toEqual(await f.service.query(query, request(), signal()));
+        expect((await app.inject({ method: 'POST', url: '/daily/query',
+          payload: { ...query, cursor: { id: '000', createdAt: '2026-10-15T00:00:00Z' } } })).statusCode).toBe(400);
+      }
       for (const payload of [{ ...input, owner }, { ...input, cursor: { date: '2026-10-15', key: 'weight', owner } }]) {
         expect((await app.inject({ method: 'POST', url: '/daily/query', payload })).statusCode).toBe(400);
       }
@@ -94,6 +110,36 @@ describe('one shared Daily read contract', () => {
     const deleted = await f.service.query({ ...input, source: sources.meals }, request(), signal());
     expect(deleted.items[0]).toMatchObject({ id: '01', revision: '3', deleted_at: '2026-10-16T07:20:00Z', energy_kcal: 123, protein_grams: null });
     expect(deleted.revision).not.toBe(result.revision);
+  });
+  it('pages retained favourites by exact ID while preserving aliases, unknowns and provenance', async () => {
+    const f = fixture();
+    const page = await f.favorites();
+    f.favorites.mockResolvedValue({ ...page, nextId: '001' });
+    const result = await f.service.query({ source: sources.favorites, limit: 1 }, request(), signal());
+    expect(result.items[0]).toMatchObject({ id: '001', aliases_json: ['Raw Alias'], components_json: [],
+      nutrient_provenance_json: { kind: 'synthetic-label' }, energy_kcal: 123, protein_grams: null });
+    expect(result).toMatchObject({ period: null, status: 'partial', units: { energy_kcal: 'kcal', '*_grams': 'g' },
+      freshness: { sourceProcessedCommittedAt: null, latestReturnedRecordUpdatedAt: '2026-10-16T07:00:00.000Z', staleness: 'unknown' },
+      coverage: { hasMore: true, next: { id: '001' }, sourceCompleteness: 'unknown' } });
+    expect(JSON.stringify(result)).not.toContain(owner);
+    expect(JSON.stringify(result)).not.toContain('must-not-escape');
+    await f.service.query({ source: sources.favorites, cursor: { id: '001' } }, request(), signal());
+    expect(f.favorites).toHaveBeenLastCalledWith({ limit: 50, afterId: '001' }, expect.any(AbortSignal));
+    expect(f.readers.health).not.toHaveBeenCalled();
+    expect(f.meals).not.toHaveBeenCalled();
+  });
+  it('reads retained plan snapshots and tombstones without treating plans as consumed meals', async () => {
+    const f = fixture();
+    const result = await f.service.query({ source: sources.plans }, request(), signal());
+    expect(result.items[0]).toMatchObject({ id: 'plan-01', revision: '2', energy_kcal: 369, protein_grams: null,
+      items_json: [{ favoriteId: '001', nutrients: { energyKcal: 123, proteinGrams: null } }],
+      deleted_at: '2026-10-16T07:20:00Z' });
+    expect(result).toMatchObject({ period: null, status: 'available', coverage: { hasMore: false, next: null, sourceCompleteness: 'unknown' } });
+    expect(JSON.stringify(result)).not.toContain(owner);
+    expect(JSON.stringify(result)).not.toContain('must-not-escape');
+    expect(f.plans).toHaveBeenCalledExactlyOnceWith({ limit: 50 }, expect.any(AbortSignal));
+    expect(f.readers.health).not.toHaveBeenCalled();
+    expect(f.meals).not.toHaveBeenCalled();
   });
   it('fingerprints the maximum 500-row/19-field workout page without importing nutrition write complexity limits', async () => {
     const f = fixture();

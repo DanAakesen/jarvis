@@ -9,15 +9,19 @@ export const dailyContractVersion: 1;
 export const dailyQuerySources: Readonly<{
   metrics: 'daily.health.metrics'; sleep: 'daily.health.sleep'; workouts: 'daily.health.workouts';
   workout: 'daily.health.workout'; heartRate: 'daily.health.heart-rate';
-  meals: 'daily.nutrition.meals'; sync: 'daily.sync';
+  meals: 'daily.nutrition.meals'; favorites: 'daily.nutrition.favorites';
+  plans: 'daily.nutrition.plans'; sync: 'daily.sync';
 }>;
 export type DailySourceId = typeof dailyQuerySources[keyof typeof dailyQuerySources];
-export type DailyCursor = { date: string; key: string } | { minute: string; metric: string } | { createdAt: string; id: string };
+export type DailyCursor = { date: string; key: string } | { minute: string; metric: string } | { createdAt: string; id: string } | { id: string };
 export type DailyQuery =
   | { source: 'daily.health.metrics' | 'daily.health.sleep' | 'daily.health.workouts'; startDate: string; endDate: string; limit?: number; cursor?: { date: string; key: string } }
   | { source: 'daily.health.heart-rate'; workoutId: string; limit?: number; cursor?: { minute: string; metric: string } }
   | { source: 'daily.health.workout'; workoutId: string }
   | { source: 'daily.nutrition.meals'; startDate: string; endDate: string; limit?: number; cursor?: { createdAt: string; id: string } }
+  // Separate discriminants preserve narrowing after collection sources are excluded.
+  | { source: 'daily.nutrition.favorites'; limit?: number; cursor?: { id: string } }
+  | { source: 'daily.nutrition.plans'; limit?: number; cursor?: { id: string } }
   | { source: 'daily.sync' };
 export type DailyJson = null | boolean | number | string | DailyJson[] | { [key: string]: DailyJson };
 export interface DailyQueryResult {
