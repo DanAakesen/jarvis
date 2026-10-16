@@ -76,9 +76,9 @@ function realtimeFixture(options: Parameters<typeof fixture>[0] = {}) {
       },
     ],
   }]);
-  f.app.post<{ Params: { tool: string } }>('/test/realtime/:tool', async (request) => {
+  f.app.post<{ Params: { tool: string } }>('/test/realtime/:tool', async (request, reply) => {
     request.jarvisMemorySourceMessageId = '101';
-    return JSON.parse(await executeRealtimeToolCall({
+    return reply.type('application/json').send(await executeRealtimeToolCall({
       type: 'response.function_call_arguments.done', name: request.params.tool,
       call_id: 'call-preview', arguments: JSON.stringify(request.body),
     }, tools, request, new AbortController().signal));
@@ -95,6 +95,7 @@ describe('realtime voice work presentation', () => {
     'shows the returned two-event proposal for %s without confirming it', async (tool) => {
       const { invoke, commands, events, confirm } = realtimeFixture();
       const response = await invoke(tool);
+      expect(response.headers['content-type']).toContain('application/json');
       expect(response.json()).toMatchObject({ outcome: 'ok', result: proposal });
       await settled();
       expect(commands[0]).toMatchObject({

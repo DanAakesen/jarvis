@@ -7,7 +7,9 @@ service. Successful Calendar proposals display only their returned summary
 in the existing text view; simple "show me" guidance prefers matching views
 or text/list, without changing approval or provider writes. Four new executor
 regressions reproduce the missing hook before the fix; the complete local
-realtime/guidance selection passes 63 tests. The original missing-dependency
+realtime/guidance selection passes 65 tests, including review's approval/decline
+race correction: the internal pending lookup cannot overwrite the final receipt.
+The original missing-dependency
 and first-candidate instruction-budget failures remain recorded separately.
 Next: normal exact-head CI for real-app integration, then the existing release
 path. No new renderer, frontend campaign, private action or native-device

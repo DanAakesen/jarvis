@@ -12,6 +12,8 @@ Existing settings, presence, cancellation, workspace acknowledgement and
 redaction behaviour stay owned by the presentation service. Calendar proposals
 use its existing schema-valid plain-text view and never invoke confirmation.
 Relay transport, approval state, providers, persistence and frontend are unchanged.
+The approval orchestrator suppresses its internal pending lookup's presentation,
+so an asynchronous stale proposal cannot overwrite the final approval/decline receipt.
 
 ## Calendar proposals and conversational grounding (16 October 2026; local candidate)
 

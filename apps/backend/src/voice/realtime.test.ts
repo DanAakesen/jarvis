@@ -492,6 +492,7 @@ describe('calendar approval orchestration', () => {
     const confirm = vi.fn(async () => {
       state.status = 'none';
       if (fail) throw new Error('Provider unavailable');
+      if (state.reply === 'decline') return { status: 'cancelled', summary: 'Reservation; no attendees.' };
       return { status: 'completed', detail: 'The event was created.', summary: 'Reservation; no attendees.' };
     });
     const tools: RegisteredTool[] = [
@@ -502,6 +503,20 @@ describe('calendar approval orchestration', () => {
     return { pending, confirm, request,
       tools: { list: () => tools, get: (name: string) => tools.find((item) => item.name === name) } };
   }
+
+  it.each(['approve', 'decline'])('presents only the final receipt for %s, never the internal pending lookup', async (reply) => {
+    const f = calendarRegistry({ status: 'awaiting_confirmation', reply,
+      confirmationCode: '12345678', summary: 'Reservation; no attendees.' });
+    const work = { finish: vi.fn() };
+    vi.mocked(startWorkPresentation).mockClear().mockReturnValueOnce(work);
+    const output = JSON.parse(await confirmPendingCalendarReply(f.tools, f.request, new AbortController().signal));
+    expect(f.pending).toHaveBeenCalledOnce();
+    expect(f.confirm).toHaveBeenCalledOnce();
+    expect(startWorkPresentation).toHaveBeenCalledOnce();
+    expect(vi.mocked(startWorkPresentation).mock.calls[0][0]).toBe('calendar_confirm_change');
+    expect(output).toMatchObject({ outcome: 'ok', result: { status: reply === 'approve' ? 'completed' : 'cancelled' } });
+    expect(work.finish).toHaveBeenCalledWith(output.result, true);
+  });
 
   it('confirms the actual pending code once on repeated approval turns', async () => {
     const f = calendarRegistry({ status: 'awaiting_confirmation', reply: 'approve',
