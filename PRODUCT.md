@@ -1,5 +1,16 @@
 # Product
 
+## Voice result previews (16 October 2026; P11-07)
+
+Voice tool results use the existing automatic workspace presentation path.
+A successful staged Calendar proposal displays its actual returned summary
+as readable text, without its confirmation code. Showing or focusing that
+summary never approves or writes Calendar changes. Simple summaries and dates
+use an existing matching view or text/list, not an unsolicited chart/timeline.
+Show-work preferences, on-the-move suppression and disconnected-screen
+behaviour remain unchanged. The original transcript does not prove staging,
+a write or the exact rejected payload; live voice acceptance remains separate.
+
 ## Mobile composer focus hotfix (16 October 2026)
 
 P11-06 / #860 is the priority mobile focus-jump correction. Phone chat uses
