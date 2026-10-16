@@ -1581,3 +1581,18 @@ Dan approved P12 on 12 October 2026 and explicitly released only P12-01 for this
 | P12-17 | [#732](https://github.com/DanAakesen/jarvis/issues/732) | End-to-end, mobile & real-iPhone acceptance | Data manifest reconciled; real devices and existing Jarvis workflows pass; SQL availability and reverse-delta rollback verified. Dan reviews cutover evidence. | P12-06, P12-11, P12-12, P12-13, P12-14, P12-15, P12-16 | Not started |
 | P12-18 | [#733](https://github.com/DanAakesen/jarvis/issues/733) | Final delta, cutover & rollback window | Post-switch sync / food / UI pass; window agreed; new Azure writes can be recovered if rollback is needed. | P12-17 | Not started |
 | P12-19 | [#734](https://github.com/DanAakesen/jarvis/issues/734) | Retire legacy and migration-only tooling | Permanent Azure services and original source/data remain; full verified migration, rollback/retention gates met before legacy deprecation or temporary-tool cleanup; no hidden old canonical writer. | P12-18 | Not started |
+
+## Factory canonical-status parity (16 October 2026)
+
+Scoped partial correction for [#811](https://github.com/DanAakesen/jarvis/issues/811),
+from released `3d3a12ab`. PM observed #717 under In progress while canonical
+Project 2 reported Needs Dan; the other 26 open-card columns matched. The
+backend draft rule omitted the canonical script's `needs-decision` exception.
+Mirror that exception without changing worker/review precedence, task facts,
+PR linking, API/auth contracts or the separately owned web source.
+
+Shared fixtures and pure complete-board regressions cover parked drafts,
+claimed work, review-ready PRs, task states and other columns. Next: exact-head
+CI, independent PM review and normal gated integration, followed by PM-owned
+rendered acceptance. #811 remains open; this is not historical 502 attribution,
+sustained performance acceptance or permission to resume #717/#741.

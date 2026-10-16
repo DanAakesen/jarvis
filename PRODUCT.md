@@ -569,6 +569,11 @@ Persistent-pin semantics are still part of the unfinished P8-42 implementation.
 
 The board reads the canonical `GET /factory/board?project=<id>` snapshot for one active project, initially the first returned project. Placement comes from the backend, never from task state. It includes open issues and issues closed in the last 14 days. Filtering precedes the explicit 100-card display cap per column; counts include all matches and the cap explains how to find hidden matches. Paused, Needs attention and Cancelled remain task facts, not columns. Cards without tasks have no invented task actions or timings; full history and usage stay in task details. Snapshot time, cached GitHub data, live connection failures and retained data after failed refresh are visible. Refresh and retry preserve the current board and scroll; changing project hides the old snapshot and cancels obsolete reads. Committed board events and stream reconnection refresh placement.
 
+An unclaimed `needs-decision` issue stays in Needs Dan when its linked PR is
+still a parked draft. The draft and any supplied task state/activity remain
+visible as facts, not an implicit worker claim. An actual worker label still
+means In progress, and a review-ready linked PR still means In review.
+
 The local 16 October correction (not released) shares one server-owned board
 load per project. An update invalidates
 only its project and can require one immediate complete follow-up. If that

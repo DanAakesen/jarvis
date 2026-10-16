@@ -1,4 +1,3 @@
-import { readFileSync } from 'node:fs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { isFactoryBoard, type FactoryBoard } from '@jarvis/contracts';
 import { buildApp } from '../app.js';
@@ -13,7 +12,6 @@ import {
   createFactoryBoard,
   createGitHubFactoryBoardReader,
   boardDurationFields,
-  desiredFactoryBoardStatus,
   type FactoryBoardIssue,
   type FactoryBoardSource,
 } from './board.js';
@@ -61,15 +59,6 @@ const task: TaskRecord = {
   pullRequest: { number: 70, url: 'https://github.com/DanAakesen/jarvis/pull/70', state: 'open' },
   checks: 'passed', latestSessionEndReason: null, createdAt: timestamp, startedAt: timestamp, finishedAt: null,
 };
-const cases = JSON.parse(readFileSync(
-  new URL('../../../../.github/scripts/tests/fixtures/project_board_cases.json', import.meta.url),
-  'utf8',
-)) as {
-  name: string;
-  issue: { number: number; labels: string[]; blockedBy: number };
-  pulls: { body: string; draft: boolean }[];
-  status: string;
-}[];
 const apps: ReturnType<typeof buildApp>[] = [];
 afterEach(async () => { await Promise.all(apps.splice(0).map((app) => app.close())); });
 
@@ -120,15 +109,6 @@ describe('Factory board', () => {
     expect((await app.inject({ url: '/factory/board?project=42', headers })).statusCode).toBe(403);
     expect(tokenIssuer.issueForRepositoryRead).not.toHaveBeenCalled();
     expect(reader).not.toHaveBeenCalled();
-  });
-
-  it('uses the same status fixtures as project_board.py', () => {
-    for (const testCase of cases) {
-      expect(
-        desiredFactoryBoardStatus(testCase.issue, testCase.pulls),
-        testCase.name,
-      ).toBe(testCase.status);
-    }
   });
 
   it('places recent closed issues in Done and returns linked PR and task details', () => {

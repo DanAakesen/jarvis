@@ -3761,3 +3761,24 @@ configuration, protected blobs or PLAN cells change. Local app-dependent
 execution remains package-blocked; the coordinator owns corrected-head
 normal pinned CI, publication and release. Original Google provider/live
 acceptance remains unproven.
+
+## Factory canonical-status parity (16 October 2026)
+
+For [#811](https://github.com/DanAakesen/jarvis/issues/811), mirror the existing
+Project sync precedence rather than changing canonical statuses or interpreting
+SQL task activity as ownership. `desiredFactoryBoardStatus` previously promoted
+any linked draft before `needs-decision`; Python's `desired_status` already
+kept an unclaimed decision issue with a parked draft in Needs Dan. The shared
+fixtures omitted that case even though Python had a separate regression.
+
+Keep review-ready PRs and actual worker labels ahead of Needs Dan. Preserve
+the existing closing-reference parser and every supplied PR/task overlay,
+including Running/Working facts; neither hiding facts nor forcing all decision
+issues into Needs Dan would preserve parity. Share the missing draft/decision
+controls across Python and TypeScript, with pure complete-board coverage for
+task overlays and unchanged columns. No frontend, auth, timeout, cache,
+provider or persisted-state change is needed.
+
+This is a local source correction from released `3d3a12ab`, not full #811
+acceptance. PM owns independent review, integration and rendered readback;
+historical 502 causation remains unestablished and #717/#741 stays parked.

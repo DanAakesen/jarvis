@@ -1252,6 +1252,14 @@ and monotonically increasing in-process version. No migration or GitHub
 Project write is needed; live GitHub reads require the App's issue read
 permission.
 
+For open issues, precedence is a review-ready linked PR, a worker label, a
+linked draft unless `needs-decision` is present, `needs-decision`, then
+deferred/blocked or Ready. A parked draft alone therefore cannot promote an
+unclaimed Needs Dan issue. PR details and linked SQL task state/activity remain
+unchanged overlays; they do not supply a second placement authority. The pure
+`factory/board-status.test.ts` suite consumes the same canonical fixtures as
+the Python Project sync and checks complete board contracts with task overlays.
+
 The local 16 October cache-ownership correction keeps one pending owner per
 project through invalidation. An invalidation expires that project's retained
 snapshot and marks its owner dirty, without replacing or cancelling shared

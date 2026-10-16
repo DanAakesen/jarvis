@@ -1537,8 +1537,9 @@ Dan follows the work on the [Project Jarvis board](https://github.com/users/DanA
 | Column | Meaning (open issues) |
 | --- | --- |
 | **Backlog** | Blocked: at least one issue it depends on is still open. |
+| **Needs Dan** | Unclaimed `needs-decision` issue, including a parked linked draft; a review-ready linked PR still takes precedence. |
 | **Ready** | Not blocked, no worker label, no open linked PR: any worker may claim it. |
-| **In progress** | Has a worker label, or an open draft PR with `Fixes #<issue>`. |
+| **In progress** | Has a worker label, or an open draft PR with `Fixes #<issue>` without `needs-decision`. Task state/activity alone does not claim the issue. |
 | **In review** | Has an open PR with `Fixes #<issue>` that is ready for review: waiting for checks and merge. |
 | **Done** | Issue closed (the project's built-in "Item closed" workflow). |
 
