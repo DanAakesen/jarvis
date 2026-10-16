@@ -430,8 +430,10 @@ describe('Factory board', () => {
       expect(reader).toHaveBeenCalledTimes(2);
       const refreshed = await app.inject({ url: '/factory/board?project=42', headers });
       expect(refreshed.statusCode).toBe(200);
-      expect(refreshed.json().projectId).toBe(project.id);
-      expect(refreshed.json().stale).toBe(false);
+      const refreshedBoard = refreshed.json<FactoryBoard>();
+      expect(isFactoryBoard(refreshedBoard)).toBe(true);
+      expect(refreshedBoard.project.id).toBe(project.id);
+      expect(refreshedBoard.stale).toBe(false);
       expect(reader).toHaveBeenCalledTimes(3);
     } finally {
       unsubscribe();
