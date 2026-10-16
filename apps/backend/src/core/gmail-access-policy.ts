@@ -110,7 +110,13 @@ export function gmailAccessGuard(): (tool: JarvisTool) => JarvisTool['execute'] 
         request.server?.conversationStore && typeof id === 'string') {
       const page = await request.server.conversationStore.getHistory({ limit: 1 });
       signal.throwIfAborted();
-      const current = page.messages[0];
+      let current = page.messages[0];
+      if (current?.role === 'jarvis' && current.interrupted) {
+        const previous = await request.server.conversationStore.getHistory({ limit: 1, before: current.id });
+        signal.throwIfAborted();
+        const sourceMessage = previous.messages[0];
+        current = sourceMessage?.sessionId === current.sessionId ? sourceMessage : undefined;
+      }
       if (!current || current.id !== id || current.role !== 'dan') {
         throw new ToolRefusal('The current Dan message could not be verified for computer use.');
       }

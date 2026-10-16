@@ -1,5 +1,21 @@
 # Decisions
 
+## Preserve the current source behind an interrupted reply (16 October 2026)
+
+Direct tracing of the existing chat loop exposed a compatibility defect in
+the new guard: steering persists an interrupted Jarvis partial after the Dan
+message that identifies the next round. Synthetic registry controls against
+the unchanged published guard reproduced four failures out of five new
+controls; the completed-reply refusal already passed. Keep that red evidence.
+
+Resolve one same-session predecessor only for an explicitly interrupted
+Jarvis row, then require the exact source ID and Dan role. Reject other
+sessions, stale/missing/non-Dan sources and completed-reply reuse. Retain
+cancellation after each lookup and surface read failures. Do not add a broad
+history scan, source-text cache or new persistence method. Fresh exact-source
+CI and release remain required; a green earlier batch would not prove this
+previously untested steering behavior. No Web source or test is changed.
+
 ## Resolve Gmail intent before discovery-dependent fallback (16 October 2026)
 
 The exact released guard allowed a synthetic hosted `pc_open` Chrome dispatch

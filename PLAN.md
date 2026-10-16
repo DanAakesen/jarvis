@@ -1,5 +1,17 @@
 # Project plan
 
+## Preserve steered computer requests (16 October 2026; local successor)
+
+Direct caller tracing found that a steering turn persists its interrupted
+Jarvis partial after the current Dan message. The new source guard must resolve
+that exact same-session predecessor rather than reject valid steered computer
+use. Additional synthetic controls reproduce the regression and cover
+Gmail refusal, cross-session isolation, completed replies and cancellation.
+The correction permits one bounded predecessor read only for an explicitly
+interrupted Jarvis row; matching source ID and Dan role remain mandatory.
+Fresh exact-source gates and release are still required. No private or model
+probe, workflow retry or Web-test adaptation supplies acceptance.
+
 ## Gmail fallback before tool discovery (16 October 2026; local correction)
 
 Continuing #837 found a reproduced gap, not a second implementation of #848:

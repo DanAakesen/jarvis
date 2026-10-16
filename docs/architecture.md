@@ -1,5 +1,17 @@
 # Architecture
 
+## Source identity across chat steering (16 October 2026; local successor)
+
+The chat loop persists an interrupted Jarvis partial after the steering Dan
+row before invoking the next round. Gmail-policy hydration can read that
+single row's predecessor only when the latest row is explicitly interrupted
+Jarvis. The predecessor must share its session and match the requested Dan
+message ID. This is two bounded one-row reads at most, not an unbounded search
+or permission to reuse a completed reply. Both reads retain cancellation and
+error propagation. Gmail turn tracking, nested independent-action scope and
+raw site/process checks are unchanged. This is source-only, not live account
+or deployment acceptance.
+
 ## Gmail guard before any computer dispatch (16 October 2026; source candidate)
 
 An unavailable Google module must not bypass Gmail policy merely because no

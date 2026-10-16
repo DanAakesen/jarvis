@@ -105,6 +105,94 @@ describe('Gmail source verification before computer dispatch', () => {
     expect(execute).not.toHaveBeenCalled();
   });
 
+  it('preserves computer use for the current steered Dan message behind its interrupted reply', async () => {
+    const execute = vi.fn(async () => ({ opened: true }));
+    const registry = createToolRegistry([{ id: 'computer', tools: [computer('pc_open', execute)] }]);
+    const { request, message, getHistory } = hostedRequest('Open Spotify.');
+    getHistory.mockResolvedValueOnce({
+      messages: [{ ...message, id: '43', role: 'jarvis', text: 'Interrupted partial.', interrupted: true }],
+      nextCursor: null,
+    });
+    await expect(registry.get('pc_open')!.execute({ target: 'app', value: 'Spotify' }, request, signal()))
+      .resolves.toEqual({ opened: true });
+    expect(getHistory.mock.calls).toEqual([[{ limit: 1 }], [{ limit: 1, before: '43' }]]);
+    expect(execute).toHaveBeenCalledOnce();
+  });
+
+  it('still refuses Gmail fallback after resolving the current steered message', async () => {
+    const execute = vi.fn();
+    const registry = createToolRegistry([{ id: 'computer', tools: [computer('pc_open', execute)] }]);
+    const { request, message, getHistory } = hostedRequest('Find my reservation in Gmail.');
+    getHistory.mockResolvedValueOnce({
+      messages: [{ ...message, id: '43', role: 'jarvis', text: 'Interrupted partial.', interrupted: true }],
+      nextCursor: null,
+    });
+    await expect(registry.get('pc_open')!.execute({ target: 'app', value: 'Chrome' }, request, signal()))
+      .rejects.toThrow(GMAIL_DIRECT_ACCESS_REASON);
+    expect(getHistory.mock.calls).toEqual([[{ limit: 1 }], [{ limit: 1, before: '43' }]]);
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it('does not accept a source from another session behind an interrupted reply', async () => {
+    const execute = vi.fn();
+    const registry = createToolRegistry([{ id: 'computer', tools: [computer('pc_open', execute)] }]);
+    const { request, message, getHistory } = hostedRequest('Open Spotify.');
+    getHistory.mockResolvedValueOnce({
+      messages: [{ ...message, id: '43', sessionId: '2', role: 'jarvis', interrupted: true }],
+      nextCursor: null,
+    });
+    await expect(registry.get('pc_open')!.execute({ target: 'app', value: 'Spotify' }, request, signal()))
+      .rejects.toThrow('The current Dan message could not be verified for computer use.');
+    expect(getHistory).toHaveBeenCalledTimes(2);
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it('does not skip a completed assistant reply to reuse an old source', async () => {
+    const execute = vi.fn();
+    const registry = createToolRegistry([{ id: 'computer', tools: [computer('pc_open', execute)] }]);
+    const { request, message, getHistory } = hostedRequest('Open Spotify.');
+    getHistory.mockResolvedValueOnce({
+      messages: [{ ...message, id: '43', role: 'jarvis', interrupted: false }],
+      nextCursor: null,
+    });
+    await expect(registry.get('pc_open')!.execute({ target: 'app', value: 'Spotify' }, request, signal()))
+      .rejects.toThrow('The current Dan message could not be verified for computer use.');
+    expect(getHistory).toHaveBeenCalledOnce();
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it('does not dispatch after cancellation during the interrupted-source lookup', async () => {
+    const abort = new AbortController();
+    const execute = vi.fn();
+    const registry = createToolRegistry([{ id: 'computer', tools: [computer('pc_open', execute)] }]);
+    const { request, message, getHistory } = hostedRequest('Open Spotify.');
+    getHistory.mockResolvedValueOnce({
+      messages: [{ ...message, id: '43', role: 'jarvis', interrupted: true }],
+      nextCursor: null,
+    }).mockImplementation(async () => {
+      abort.abort();
+      return { messages: [message], nextCursor: null };
+    });
+    await expect(registry.get('pc_open')!.execute({ target: 'app', value: 'Spotify' }, request, abort.signal))
+      .rejects.toMatchObject({ name: 'AbortError' });
+    expect(getHistory).toHaveBeenCalledTimes(2);
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it('propagates failure of the interrupted-source lookup without dispatch', async () => {
+    const failure = new Error('Synthetic predecessor-store failure');
+    const execute = vi.fn();
+    const registry = createToolRegistry([{ id: 'computer', tools: [computer('pc_open', execute)] }]);
+    const { request, message, getHistory } = hostedRequest('Open Spotify.');
+    getHistory.mockResolvedValueOnce({
+      messages: [{ ...message, id: '43', role: 'jarvis', interrupted: true }],
+      nextCursor: null,
+    }).mockRejectedValue(failure);
+    await expect(registry.get('pc_open')!.execute({ target: 'app', value: 'Spotify' }, request, signal())).rejects.toBe(failure);
+    expect(getHistory).toHaveBeenCalledTimes(2);
+    expect(execute).not.toHaveBeenCalled();
+  });
+
   it('keeps later non-mail hosted requests available after refusing an unconfigured Gmail request', async () => {
     const execute = vi.fn(async () => ({ opened: true }));
     const registry = createToolRegistry([{ id: 'computer', tools: [computer('pc_open', execute)] }]);

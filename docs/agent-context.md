@@ -1,5 +1,17 @@
 # Agent context
 
+## Steered source verification (16 October 2026; local successor)
+
+Chat steering saves an interrupted Jarvis partial after the new Dan message,
+then starts the next agent round using that Dan message ID. A latest-row-only
+lookup therefore rejects legitimate steered computer requests. Resolve at most
+one predecessor when the latest row is explicitly interrupted Jarvis; require
+the same session and exact current source ID with Dan role. Do not skip a
+completed reply or search arbitrary older history. Check cancellation after
+each awaited lookup and propagate read failures. Additional synthetic controls
+retain Gmail refusal and verify isolation/cancellation. Full fresh gates and
+normal release remain required; old batches are not semantic acceptance.
+
 ## Hosted Gmail source guard (16 October 2026; local, not released)
 
 #837's existing MIME reader and post-mail guards are already shipped via #848.
