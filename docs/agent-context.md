@@ -1,5 +1,17 @@
 # Agent context
 
+## Header dismissal follow-up (16 October 2026; P11-05)
+
+`JobsChip` must render `useJobs().jobs`, not the unfiltered `history`, in its
+Background work list and selected details. The previous implementation saved
+scoped dismissals correctly but retained hidden rows and removed only their
+crosses. Do not fix this by deleting records or filtering the store's raw
+history: App still needs real running lifecycle state and a stable phone
+summary. Keep failures, saved-result recovery, explicit cancellation and
+storage/load errors truthful. Verify desktop and phone interactions using an
+isolated fixture; preserve the signed-in released preview and never run real
+indexing/research to manufacture evidence.
+
 ## Combined-source qualification boundary (16 October 2026)
 
 Use the final all-workstream base-`2823585` patch and manifest, not an earlier

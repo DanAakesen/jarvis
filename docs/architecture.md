@@ -362,12 +362,17 @@ failed local action marks Jobs as needing attention and exposes the error
 in that run's history without changing its server status. Opening the result
 successfully clears the local error.
 
-Running jobs have separate accessible Hide controls; terminal and hidden
-jobs share one Jobs history control instead of creating repeated header
-tabs. UUID-only dismissal preferences are scoped to the authenticated
-MSAL account and backend URL on this device. Closing/hiding does not call
-Cancel, delete SQL records or erase results. Jobs history still exposes the
-original status, run identity, timestamp, failure reason and saved result.
+Running jobs have separate accessible Hide controls; undismissed jobs share
+one Background work list instead of creating repeated terminal header tabs.
+P11-05 renders the store's filtered `jobs`, not its raw `history`, for both
+the list and selected details. Raw history remains available to lifecycle and
+phone-summary consumers; saved records and the existing job tools are unchanged.
+UUID-only dismissal preferences are scoped to the authenticated MSAL account
+and backend URL on this device. Closing/hiding does not call Cancel, delete
+SQL records or erase results. Undismissed details still expose original status,
+run identity, timestamp, failure reason and saved result. A dismissed selection
+falls back to the list without effect-driven state copying. Empty and error
+states remain distinct, and a stable control preserves focus after the last row.
 The phone sheet counts one renderable Jobs summary independently of artifact
 windows and stays open for job controls. Artifact tabs are React portals, so
 a native capture listener on the actual tab strip closes the phone sheet

@@ -1,5 +1,17 @@
 # Product
 
+## Header background work (16 October 2026; P11-05 local candidate)
+
+The header's **Background work** control covers research, images, apps and
+indexing, not Software Factory tasks or current service health. Show only
+undismissed entries, with their real status, failure details and available
+result/cancellation controls. Dismissing an entry removes it from this header
+immediately and after refresh/reload on the same account, backend and device.
+It does not cancel work, delete records or remove saved results. Keep the
+control and an explicit empty state available after the last entry is hidden
+so keyboard focus is not lost. Storage/load failures remain visible and must
+not be presented as a successfully empty list.
+
 ## Readable chat and attached phone typing (16 October 2026; local candidate)
 
 Booking/event summaries use labelled records separated by blank lines, with

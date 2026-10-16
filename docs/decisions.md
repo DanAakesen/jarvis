@@ -1,5 +1,23 @@
 # Decisions
 
+## Filter header background work instead of retaining hidden rows (16 October 2026)
+
+Dan reported that Recent jobs kept dismissed indexing/research entries visible
+and questioned its purpose. P11-05 / #859 chooses the smallest existing-surface
+repair: name it Background work, distinguish it from Factory tasks, and render
+only the store's already-filtered jobs. A new active/history split adds
+unrequested navigation; removing the control would lose existing progress,
+failure and result recovery. The stable trigger and empty state preserve focus
+after the last dismissal. Raw history and backend tools keep saved records;
+dismissal remains a scoped device preference, never cancellation or deletion.
+This supersedes the earlier header contract's visible hidden-history rows,
+not its persistence, truthful failure or unavailable-retry rules.
+
+Evidence: the released 18-case header baseline passed, while a new regression
+reproduced the exact retained-row/disappearing-cross failure. Candidate checks
+and isolated desktop/phone inspection are pending; no live acceptance or
+deployment is claimed.
+
 ## Release active work together after its gates (16 October 2026)
 
 Dan directed one combined deployment when all active work is ready, followed

@@ -1392,15 +1392,16 @@ describe('App shell', () => {
     const user = userEvent.setup();
     const shell = document.querySelector('.app-shell')!;
     await user.click(screen.getByRole('button', { name: 'Open windows and jobs: 1' }));
-    await user.click(screen.getByRole('button', { name: 'Show recent jobs: 1 failed' }));
+    await user.click(screen.getByRole('button', { name: 'Show background work: 1 failed' }));
     expect(shell.getAttribute('data-windows-open')).toBe('true');
     await user.click(screen.getByRole('button', { name: /Re-embed memory and vault Indexing · failed/ }));
     expect(shell.getAttribute('data-windows-open')).toBe('true');
     await user.click(screen.getByRole('button', { name: 'Dismiss' }));
     expect(shell.getAttribute('data-windows-open')).toBe('true');
     expect(screen.getByRole('button', { name: 'Open windows and jobs: 1' })).not.toBeNull();
-    await user.click(screen.getByRole('button', { name: 'Show recent jobs' }));
-    expect(screen.getByRole('button', { name: /Re-embed memory and vault Indexing · failed.*hidden/ })).not.toBeNull();
+    await user.click(screen.getByRole('button', { name: 'Show background work' }));
+    expect(screen.queryByRole('button', { name: /Re-embed memory and vault Indexing · failed/ })).toBeNull();
+    expect(screen.getByText('No background work to show.')).not.toBeNull();
     await user.click(screen.getByRole('button', { name: 'Close job details' }));
     stream.ready();
     stream.publishCommand({
