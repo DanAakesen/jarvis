@@ -14,9 +14,17 @@ This supersedes the earlier header contract's visible hidden-history rows,
 not its persistence, truthful failure or unavailable-retry rules.
 
 Evidence: the released 18-case header baseline passed, while a new regression
-reproduced the exact retained-row/disappearing-cross failure. Candidate checks
-and isolated desktop/phone inspection are pending; no live acceptance or
-deployment is claimed.
+reproduced the exact retained-row/disappearing-cross failure. The candidate's
+22 focused tests, changed-file ESLint and declared web types passed. An
+intervening forks-worker startup timeout remains a failed run; the unchanged
+selection passed with isolated thread workers and unchanged assertions/timeouts.
+Real desktop Chromium inspected list removal, refresh/reload, empty/focus,
+Escape and storage/network errors using synthetic jobs and no job mutations.
+Rendered phone inspection remains incomplete after a fixture CDP navigation
+race; the passing phone App integration test is not rendered-phone evidence.
+The heavy slot was yielded for Dan's higher-priority mobile-composer hotfix.
+Keep this candidate draft/not-ready and the signed-in released preview stable;
+no live acceptance or deployment is claimed.
 
 ## Release active work together after its gates (16 October 2026)
 
