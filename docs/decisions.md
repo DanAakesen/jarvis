@@ -1,5 +1,19 @@
 # Decisions
 
+## Batch the ready follow-ups after the priority hotfix (16 October 2026)
+
+P11-06 / #863 remains the first release. Once its existing gates and normal
+smoke pass, qualify the already-reviewed header #862 and Factory parity #861
+in one PM-owned follow-up PR rather than two successive full CI/deploy cycles.
+The source boundaries do not overlap; shared documentation retains both sets
+of requirements, evidence and task rows. Preserve published histories through
+ordinary merges, never force/rebase them. Bind all source blobs to their
+immutable reviewed heads and run complete normal CI/CodeQL on the integrated,
+current-main candidate. This is integration ownership, not permission to waive
+acceptance, close all of #811, resume protected export or claim native-phone
+proof. At this checkpoint the follow-up is staged locally, not published or
+deployed.
+
 ## Mobile composer focus hotfix (16 October 2026)
 
 Confirmed with JarvisPM for P11-06 / #860: suspend desktop manual conversation
@@ -3810,3 +3824,24 @@ configuration, protected blobs or PLAN cells change. Local app-dependent
 execution remains package-blocked; the coordinator owns corrected-head
 normal pinned CI, publication and release. Original Google provider/live
 acceptance remains unproven.
+
+## Factory canonical-status parity (16 October 2026)
+
+For [#811](https://github.com/DanAakesen/jarvis/issues/811), mirror the existing
+Project sync precedence rather than changing canonical statuses or interpreting
+SQL task activity as ownership. `desiredFactoryBoardStatus` previously promoted
+any linked draft before `needs-decision`; Python's `desired_status` already
+kept an unclaimed decision issue with a parked draft in Needs Dan. The shared
+fixtures omitted that case even though Python had a separate regression.
+
+Keep review-ready PRs and actual worker labels ahead of Needs Dan. Preserve
+the existing closing-reference parser and every supplied PR/task overlay,
+including Running/Working facts; neither hiding facts nor forcing all decision
+issues into Needs Dan would preserve parity. Share the missing draft/decision
+controls across Python and TypeScript, with pure complete-board coverage for
+task overlays and unchanged columns. No frontend, auth, timeout, cache,
+provider or persisted-state change is needed.
+
+This is a local source correction from released `3d3a12ab`, not full #811
+acceptance. PM owns independent review, integration and rendered readback;
+historical 502 causation remains unestablished and #717/#741 stays parked.
