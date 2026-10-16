@@ -19,7 +19,9 @@ export type DailyQuery =
   | { source: 'daily.health.heart-rate'; workoutId: string; limit?: number; cursor?: { minute: string; metric: string } }
   | { source: 'daily.health.workout'; workoutId: string }
   | { source: 'daily.nutrition.meals'; startDate: string; endDate: string; limit?: number; cursor?: { createdAt: string; id: string } }
-  | { source: 'daily.nutrition.favorites' | 'daily.nutrition.plans'; limit?: number; cursor?: { id: string } }
+  // Separate discriminants preserve narrowing after collection sources are excluded.
+  | { source: 'daily.nutrition.favorites'; limit?: number; cursor?: { id: string } }
+  | { source: 'daily.nutrition.plans'; limit?: number; cursor?: { id: string } }
   | { source: 'daily.sync' };
 export type DailyJson = null | boolean | number | string | DailyJson[] | { [key: string]: DailyJson };
 export interface DailyQueryResult {

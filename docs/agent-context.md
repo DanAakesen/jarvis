@@ -256,6 +256,15 @@ Fastify/jose: no stub, reinstall or second graph to pretend that integration ran
 Keep #724 open and #730's native blockers intact. The dated original receipt
 below is history, not a new worker assignment or release restriction.
 
+First collection candidate `c1332fb2` failed strict backend compilation:
+grouping both collection literals in one union member prevented negative source
+narrowing in the remaining health-history branch. The emulator suite's setup
+also failed at that same compiler invocation, not an emulator/runtime defect.
+Split the two declaration discriminants; do not cast the health input, weaken
+compiler settings or skip the suite. A direct check against the actual contract
+reproduced the three diagnostics before correction and passed after the split.
+Fresh full CI is required.
+
 Dan selected the existing Daily session under coordinator ownership. This
 supersedes the general #724 engineering hold only for its nonprivate inactive
 read API/tool and committed-invalidation slice; no duplicate worker or broader
