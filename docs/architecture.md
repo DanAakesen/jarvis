@@ -1,5 +1,20 @@
 # Architecture
 
+## Realtime voice presentation (16 October 2026; P11-07)
+
+After normal argument validation and pre-execution guards,
+`executeRealtimeToolCall` starts the existing `startWorkPresentation` lifecycle
+with surface `voice`. It finishes successfully only after the actual result
+and final tool-output envelope pass their existing serialization/size bounds.
+The conversation message ID, memory source message ID or activity UUID scopes
+the ephemeral view; this presentation identifier grants no write authority.
+Existing settings, presence, cancellation, workspace acknowledgement and
+redaction behaviour stay owned by the presentation service. Calendar proposals
+use its existing schema-valid plain-text view and never invoke confirmation.
+Relay transport, approval state, providers, persistence and frontend are unchanged.
+The approval orchestrator suppresses its internal pending lookup's presentation,
+so an asynchronous stale proposal cannot overwrite the final approval/decline receipt.
+
 ## Calendar proposals and conversational grounding (16 October 2026; local candidate)
 
 `calendar_create_events` validates 2–10 complete event inputs before staging

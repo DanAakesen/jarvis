@@ -6,6 +6,7 @@ import { defaultAwayModeState } from '../core/away-mode.js';
 import { capabilityInstructions } from '../core/capability-instructions.js';
 import { defaultSettings } from '../core/settings.js';
 import { builtInModeInstructions } from '../core/presence-instructions.js';
+import { startWorkPresentation } from '../core/work-presentation.js';
 import {
   createEnglishSessionUpdate,
   createRealtimeSessionUpdate,
@@ -17,6 +18,10 @@ import {
   ENGLISH_REALTIME_VOICE,
   type RealtimeFunctionCall,
 } from './realtime.js';
+
+vi.mock('../core/work-presentation.js', () => ({
+  startWorkPresentation: vi.fn(() => ({ finish: vi.fn() })),
+}));
 
 const tool: RegisteredTool = {
   name: 'echo',
@@ -58,6 +63,66 @@ const call = (overrides: Partial<RealtimeFunctionCall> = {}): RealtimeFunctionCa
   call_id: 'call_1',
   arguments: '{"text":"hello"}',
   ...overrides,
+});
+
+describe('realtime voice result presentation', () => {
+  it.each(['calendar_create_events', 'calendar_get_pending_change'])(
+    'passes the actual %s receipt to voice presentation', async (name) => {
+      const receipt = {
+        status: 'awaiting_confirmation', confirmationCode: '12345678',
+        summary: 'Create 2 events: Hotel North, 12-13 February; Hotel South, 20-21 February.',
+      };
+      const execute = vi.fn(async () => receipt);
+      const selected: RegisteredTool = { ...tool, name, execute };
+      const tools: ToolRegistry = {
+        list: () => [selected],
+        get: (key) => key === name ? selected : undefined,
+      };
+      const request = {
+        validateInput: vi.fn(() => true), jarvisMemorySourceMessageId: '101',
+      } as unknown as FastifyRequest;
+      const work = { finish: vi.fn() };
+      vi.mocked(startWorkPresentation).mockClear().mockReturnValueOnce(work);
+      const signal = new AbortController().signal;
+      const output = JSON.parse(await executeRealtimeToolCall(call({ name }), tools, request, signal));
+      expect(output).toMatchObject({ outcome: 'ok', result: receipt });
+      expect(startWorkPresentation).toHaveBeenCalledWith(
+        name, { text: 'hello' }, request, expect.any(String), '101', signal, 'voice',
+      );
+      expect(work.finish).toHaveBeenCalledWith(receipt, true);
+      expect(execute).toHaveBeenCalledOnce();
+    },
+  );
+
+  it('does not present a refused tool result as successful', async () => {
+    const selected: RegisteredTool = {
+      ...tool, name: 'calendar_create_events',
+      execute: vi.fn(async () => { throw new ToolRefusal('Nothing was staged.'); }),
+    };
+    const tools: ToolRegistry = { list: () => [selected], get: () => selected };
+    const request = { validateInput: vi.fn(() => true) } as unknown as FastifyRequest;
+    const work = { finish: vi.fn() };
+    vi.mocked(startWorkPresentation).mockReturnValueOnce(work);
+    const output = JSON.parse(await executeRealtimeToolCall(
+      call({ name: selected.name }), tools, request, new AbortController().signal,
+    ));
+    expect(output.outcome).toBe('refused');
+    expect(work.finish).toHaveBeenCalledWith({ refused: 'Nothing was staged.' }, false);
+  });
+
+  it('finishes presentation as failed when the final tool output exceeds its bound', async () => {
+    const result = { content: 'x'.repeat(1_048_520) };
+    const selected: RegisteredTool = { ...tool, name: 'calendar_get_pending_change', execute: async () => result };
+    const tools: ToolRegistry = { list: () => [selected], get: () => selected };
+    const request = { validateInput: vi.fn(() => true) } as unknown as FastifyRequest;
+    const work = { finish: vi.fn() };
+    vi.mocked(startWorkPresentation).mockReturnValueOnce(work);
+    const output = JSON.parse(await executeRealtimeToolCall(
+      call({ name: selected.name }), tools, request, new AbortController().signal,
+    ));
+    expect(output.outcome).toBe('error');
+    expect(work.finish).toHaveBeenCalledWith(result, false);
+  });
 });
 
 describe('English realtime session', () => {
@@ -427,6 +492,7 @@ describe('calendar approval orchestration', () => {
     const confirm = vi.fn(async () => {
       state.status = 'none';
       if (fail) throw new Error('Provider unavailable');
+      if (state.reply === 'decline') return { status: 'cancelled', summary: 'Reservation; no attendees.' };
       return { status: 'completed', detail: 'The event was created.', summary: 'Reservation; no attendees.' };
     });
     const tools: RegisteredTool[] = [
@@ -437,6 +503,20 @@ describe('calendar approval orchestration', () => {
     return { pending, confirm, request,
       tools: { list: () => tools, get: (name: string) => tools.find((item) => item.name === name) } };
   }
+
+  it.each(['approve', 'decline'])('presents only the final receipt for %s, never the internal pending lookup', async (reply) => {
+    const f = calendarRegistry({ status: 'awaiting_confirmation', reply,
+      confirmationCode: '12345678', summary: 'Reservation; no attendees.' });
+    const work = { finish: vi.fn() };
+    vi.mocked(startWorkPresentation).mockClear().mockReturnValueOnce(work);
+    const output = JSON.parse(await confirmPendingCalendarReply(f.tools, f.request, new AbortController().signal));
+    expect(f.pending).toHaveBeenCalledOnce();
+    expect(f.confirm).toHaveBeenCalledOnce();
+    expect(startWorkPresentation).toHaveBeenCalledOnce();
+    expect(vi.mocked(startWorkPresentation).mock.calls[0][0]).toBe('calendar_confirm_change');
+    expect(output).toMatchObject({ outcome: 'ok', result: { status: reply === 'approve' ? 'completed' : 'cancelled' } });
+    expect(work.finish).toHaveBeenCalledWith(output.result, true);
+  });
 
   it('confirms the actual pending code once on repeated approval turns', async () => {
     const f = calendarRegistry({ status: 'awaiting_confirmation', reply: 'approve',

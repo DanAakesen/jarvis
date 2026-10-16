@@ -1,5 +1,13 @@
 # Design
 
+## Voice proposal summaries (16 October 2026; P11-07)
+
+Reuse the existing text/list window for readable dates and staged proposals.
+Focus an existing matching view rather than reconstructing it as a chart.
+The automatic voice preview uses the actual returned summary, not invented
+event details or confirmation codes. No new renderer, chrome, animation or
+approval control is introduced.
+
 ## Mobile composer focus hotfix (16 October 2026)
 
 Reuse the current phone dock and glass chat, with both halves attached to the

@@ -6,10 +6,11 @@ import { buildApp } from '../app.js';
 import { loadConfig } from '../config.js';
 import type { BackendModule } from '../modules.js';
 import { coreModule } from './index.js';
-import { ToolRefusal } from './tool-registry.js';
+import { createToolRegistry, ToolRefusal } from './tool-registry.js';
 import { redactWorkContent, startWorkPresentation } from './work-presentation.js';
 import { defaultSettings, type SettingsStore } from './settings.js';
 import { executeReflexAction } from './reflex.js';
+import { executeRealtimeToolCall } from '../voice/realtime.js';
 
 const config = { ...loadConfig({}), logLevel: 'silent' as const };
 const apps: ReturnType<typeof buildApp>[] = [];
@@ -21,6 +22,7 @@ afterEach(async () => {
 function fixture(options: { setting?: boolean; mode?: 'present' | 'on_the_move'; settingsStore?: SettingsStore } = {}) {
   const app = buildApp(config, undefined, {
     modules: [],
+    auth: async () => ({ objectId: config.auth.ownerObjectId, tenantId: config.auth.tenantId }),
     settingsStore: options.settingsStore ?? {
       read: async () => ({ 'presentation.show_work': options.setting ?? true }),
       write: async () => {},
@@ -52,6 +54,96 @@ async function settled() {
   // Flush settings, publication, and broker acknowledgements without a timer delay.
   for (let i = 0; i < 20; i += 1) await Promise.resolve();
 }
+
+const proposalSummary = 'Create 2 calendar events:\n\n1. Hotel North: 12-13 February 2027.\n\n2. Hotel South: 20-21 February 2027.';
+const proposal = { status: 'awaiting_confirmation', summary: proposalSummary, confirmationCode: '12345678' };
+
+function realtimeFixture(options: Parameters<typeof fixture>[0] = {}) {
+  const f = fixture(options);
+  const execute = vi.fn(async () => proposal);
+  const confirm = vi.fn(async () => ({ status: 'completed' }));
+  const tools = createToolRegistry([{
+    id: 'voice-preview-test',
+    tools: [
+      ...['calendar_create_events', 'calendar_get_pending_change'].map((name) => ({
+        name, description: 'Synthetic calendar receipt.', sensitive: true,
+        inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+        execute,
+      })),
+      {
+        name: 'calendar_confirm_change', description: 'Synthetic calendar write.', sensitive: true,
+        inputSchema: { type: 'object' }, execute: confirm,
+      },
+    ],
+  }]);
+  f.app.post<{ Params: { tool: string } }>('/test/realtime/:tool', async (request, reply) => {
+    request.jarvisMemorySourceMessageId = '101';
+    return reply.type('application/json').send(await executeRealtimeToolCall({
+      type: 'response.function_call_arguments.done', name: request.params.tool,
+      call_id: 'call-preview', arguments: JSON.stringify(request.body),
+    }, tools, request, new AbortController().signal));
+  });
+  const invoke = (tool = 'calendar_create_events', input: Record<string, unknown> = {}) => f.app.inject({
+    method: 'POST', url: `/test/realtime/${tool}`,
+    headers: { authorization: ['Bearer', 'header.agent.signature'].join(' ') }, payload: input,
+  });
+  return { ...f, execute, confirm, invoke };
+}
+
+describe('realtime voice work presentation', () => {
+  it.each(['calendar_create_events', 'calendar_get_pending_change'])(
+    'shows the returned two-event proposal for %s without confirming it', async (tool) => {
+      const { invoke, commands, events, confirm } = realtimeFixture();
+      const response = await invoke(tool);
+      expect(response.headers['content-type']).toContain('application/json');
+      expect(response.json()).toMatchObject({ outcome: 'ok', result: proposal });
+      await settled();
+      expect(commands[0]).toMatchObject({
+        operation: 'create', viewId: 'google-101',
+        view: { renderer: 'text', data: { format: 'plain', content: proposalSummary } },
+      });
+      expect(commands[1]).toMatchObject({ operation: 'focus', viewId: 'google-101' });
+      expect(commands[0] && 'view' in commands[0] && isGeneratedView(commands[0].view)).toBe(true);
+      expect(events.map((event) => event.type)).toEqual(['work-started', 'work-finished']);
+      expect(JSON.stringify(commands)).not.toContain(proposal.confirmationCode);
+      expect(confirm).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([{ setting: false }, { mode: 'on_the_move' as const }])(
+    'preserves automatic-presentation preferences for %j', async (options) => {
+      const { invoke, commands, events } = realtimeFixture(options);
+      expect((await invoke()).json().outcome).toBe('ok');
+      await settled();
+      expect(commands).toEqual([]);
+      expect(events).toEqual([]);
+    },
+  );
+
+  it('never displays a refused or invalid proposal and never confirms it', async () => {
+    const { invoke, execute, confirm, commands, events } = realtimeFixture();
+    execute.mockRejectedValueOnce(new ToolRefusal('Nothing was staged.'));
+    expect((await invoke()).json().outcome).toBe('refused');
+    await settled();
+    expect(commands).toEqual([]);
+    expect(events.map((event) => event.type)).toEqual(['work-started', 'work-finished']);
+    expect((await invoke('calendar_create_events', { unexpected: 'private-value' })).json().outcome).toBe('refused');
+    await settled();
+    expect(execute).toHaveBeenCalledOnce();
+    expect(commands).toEqual([]);
+    expect(confirm).not.toHaveBeenCalled();
+  });
+
+  it('does not fail the staged result when no screen is connected', async () => {
+    const { invoke, connection, commands, events, confirm } = realtimeFixture();
+    connection.close();
+    expect((await invoke()).json()).toMatchObject({ outcome: 'ok', result: proposal });
+    await settled();
+    expect(commands).toEqual([]);
+    expect(events).toEqual([]);
+    expect(confirm).not.toHaveBeenCalled();
+  });
+});
 
 describe('best-effort work presentation', () => {
   it('pairs safe activity details and ends them even on refusal', async () => {

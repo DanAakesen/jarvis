@@ -171,6 +171,10 @@ describe('workspace command delivery', () => {
   });
 
   it('describes ordered timeline events and dates or period labels to the model', () => {
+    expect(workspaceCommandTool.description).toContain('For readable summaries or dates, reuse the matching existing window');
+    expect(workspaceCommandTool.description).toContain('"renderer":"text"');
+    expect(workspaceCommandTool.description).toContain('"source":{"id":"now","status":"complete"}');
+    expect(workspaceCommandTool.description).toContain('"format":"plain","content":"Actual returned summary"');
     expect(workspaceCommandTool.description).toContain('chart or timeline requests');
     expect(workspaceCommandTool.description).toContain('chart data uses kind line, bar or area and 1–5 named series of x/y points, up to 1,000 points total');
     expect(workspaceCommandTool.description).toContain('data.events in the given order');

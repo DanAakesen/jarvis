@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import type { FastifyRequest } from 'fastify';
 import { projectAwarenessInstructions, type ProjectContextEntry } from '../factory/project-context.js';
 import { confirmToolCall, type ToolCallOutcome } from '../core/tool-calls.js';
@@ -9,6 +10,7 @@ import { builtInModeInstructions, modeContext } from '../core/presence-instructi
 import type { VoiceTuningSettings } from '@jarvis/contracts';
 import { toolArgumentRefusal, unexpectedToolArgument } from '../core/tool-arguments.js';
 import { classifyApprovalReply } from '../core/approval.js';
+import { startWorkPresentation } from '../core/work-presentation.js';
 
 export const ENGLISH_REALTIME_MODEL = defaultSettings.roles.voice.model;
 export const ENGLISH_REALTIME_VOICE = 'en-GB-Ryan:DragonHDLatestNeural';
@@ -226,7 +228,7 @@ export async function confirmPendingCalendarReply(
   const pendingOutput = await executeRealtimeToolCall({
     type: 'response.function_call_arguments.done', name: 'calendar_get_pending_change',
     call_id: 'calendar-pending', arguments: '{}',
-  }, tools, request, signal);
+  }, tools, request, signal, undefined, false);
   const pending = JSON.parse(pendingOutput) as {
     outcome: string;
     result?: { status?: string; confirmationCode?: string; summary?: string; reply?: string };
@@ -252,6 +254,7 @@ export async function executeRealtimeToolCall(
   request: FastifyRequest,
   signal: AbortSignal,
   beforeExecute?: (tool: NonNullable<ReturnType<ToolRegistry['get']>>, input: unknown, signal: AbortSignal) => Promise<void>,
+  presentResult = true,
 ): Promise<string> {
   if (typeof call.name !== 'string' || !/^[A-Za-z0-9_-]{1,64}$/u.test(call.name)) {
     return toolFailure('unknown_tool');
@@ -262,6 +265,7 @@ export async function executeRealtimeToolCall(
 
   let outcome: ToolCallOutcome = 'ok';
   let result: unknown;
+  let presentation: ReturnType<typeof startWorkPresentation> | undefined;
   try {
     let input: unknown;
     try {
@@ -278,6 +282,11 @@ export async function executeRealtimeToolCall(
       return toolOutput(call.name, 'refused', toolArgumentRefusal(tool, errors, request.log));
     }
     await beforeExecute?.(tool, input, signal);
+    if (presentResult) {
+      const activityId = randomUUID();
+      presentation = startWorkPresentation(tool.name, input, request, activityId,
+        request.jarvisConversationMessage?.id ?? request.jarvisMemorySourceMessageId ?? activityId, signal, 'voice');
+    }
     result = await tool.execute(input, request, signal);
     const serializedResult = JSON.stringify(result);
     if (serializedResult === undefined || Buffer.byteLength(serializedResult) > MAX_TOOL_RESULT_BYTES) {
@@ -298,8 +307,11 @@ export async function executeRealtimeToolCall(
 
   try {
     const serialized = toolOutput(call.name, outcome, result);
-    return Buffer.byteLength(serialized) <= MAX_TOOL_RESULT_BYTES ? serialized : toolFailure(call.name);
+    const bounded = Buffer.byteLength(serialized) <= MAX_TOOL_RESULT_BYTES;
+    presentation?.finish(result, outcome === 'ok' && bounded);
+    return bounded ? serialized : toolFailure(call.name);
   } catch {
+    presentation?.finish(result, false);
     return toolFailure(call.name);
   }
 }

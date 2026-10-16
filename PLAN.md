@@ -1,5 +1,20 @@
 # Project plan
 
+## Voice summaries on screen (16 October 2026; P11-07 / #865)
+
+In progress: ordinary realtime tools now call the existing voice presentation
+service. Successful Calendar proposals display only their returned summary
+in the existing text view; simple "show me" guidance prefers matching views
+or text/list, without changing approval or provider writes. Four new executor
+regressions reproduce the missing hook before the fix; the complete local
+realtime/guidance selection passes 65 tests, including review's approval/decline
+race correction: the internal pending lookup cannot overwrite the final receipt.
+The original missing-dependency
+and first-candidate instruction-budget failures remain recorded separately.
+Next: normal exact-head CI for real-app integration, then the existing release
+path. No new renderer, frontend campaign, private action or native-device
+acceptance claim. Existing #839/#860 human acceptance gates stay open.
+
 ## Header and Factory follow-up integration (16 October 2026)
 
 The priority mobile hotfix in #863 shipped first as `6192574e`, with normal

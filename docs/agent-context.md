@@ -1,5 +1,32 @@
 # Agent context
 
+## Voice preview correction checks (16 October 2026; P11-07)
+
+Use synthetic tool receipts, never private bookings or live Calendar writes.
+The four new realtime unit cases fail on unchanged execution and pass after
+the hook is connected. Both complete realtime/capability-instruction files
+pass locally: 65 tests with approved Node 22.23.3 and Vitest 5.0.3, native
+config loader, one thread and no file parallelism. The initial guidance
+candidate exceeded the existing 15,000-code-point mode budget in two cases;
+shortening the relevant guidance restores that budget without changing it.
+At `494cb945`, ESLint passed all seven changed backend files with zero warnings.
+Normal CI at `494cb945` passed all 187 backend test files, including the real
+36-case work-presentation and 105-case workspace-command suites; all four
+CodeQL analyses ran successfully. Review then identified an intermediate
+approval-lookup presentation race. The correction suppresses that internal
+lookup only, with approval/decline regressions. The synthetic HTTP route now
+sets JSON content type explicitly rather than reparsing the serialized result.
+The successor's 65-test selection includes both approval/decline regressions.
+It requires fresh exact-head CI; earlier green is not reused.
+
+The initial local integration attempt executed no assertions because Vitest
+could not resolve from this checkout. The reused per-package junction graph
+supports the unit selection but lacks Fastify and jose; full real-app
+work-presentation/workspace-command integration requires normal pinned CI.
+Do not disguise missing dependencies with source aliases or install a second
+graph. Preserve the existing localhost5173 preview, auth and remote runtime.
+Local unit evidence is not live voice/provider or physical-phone acceptance.
+
 ## Mobile composer focus hotfix (16 October 2026)
 
 P11-06 / #860 starts independently from released `3d3a12ab`; header #859 is not

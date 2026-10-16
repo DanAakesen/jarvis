@@ -1,5 +1,19 @@
 # Decisions
 
+## Reuse presentation for ordinary realtime tools (16 October 2026; P11-07)
+
+Source tracing confirmed that ordinary realtime execution bypassed the existing
+voice work-presentation hook. Connect that executor rather than add a display
+tool, renderer or relay-specific branch. Reuse successful returned summaries
+and prefer text/list for readable dates; reserve charts/timelines for requested
+representations. Calendar staging and later verified approval stay separate.
+This corrects a demonstrated missing path, not a claim that the unavailable
+original rejected payload or live provider session has been reproduced.
+Review identified that the internal pending lookup on an approval/decline turn
+could race the final receipt. Suppress that internal presentation; ordinary
+explicit pending reads still present normally. Do not add ordering state or
+change Calendar approval semantics to solve a presentation-only race.
+
 ## Batch the ready follow-ups after the priority hotfix (16 October 2026)
 
 P11-06 / #863 shipped first as `6192574e`; normal Deploy `38953446877` passed
