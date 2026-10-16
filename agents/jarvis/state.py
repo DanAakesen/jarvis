@@ -90,6 +90,7 @@ class ModelMessage:
     role: Literal["user", "assistant"]
     content: str
     images: tuple[ModelImage, ...] = field(default=(), repr=False)
+    source_message_id: str | None = field(default=None, repr=False, compare=False, kw_only=True)
 
 
 @dataclass(frozen=True, slots=True)

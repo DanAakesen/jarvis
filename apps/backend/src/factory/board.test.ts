@@ -184,6 +184,289 @@ describe('Factory board', () => {
     expect(isFactoryBoard(board)).toBe(true);
   });
 
+  it('shares an invalidated in-flight owner and publishes only its clean follow-up', async () => {
+    const initial = Promise.withResolvers<FactoryBoardSource>();
+    const updated = { ...source, issues: [{ ...sourceIssue, title: 'Updated board' }] };
+    const reader = vi.fn(async () => updated).mockImplementationOnce(() => initial.promise);
+    const { app } = fixture(reader);
+    const cacheRead = vi.spyOn(app.factoryBoardCache, 'get');
+    const first = app.inject({ url: '/factory/board?project=42', headers });
+    let second: ReturnType<typeof app.inject> | undefined;
+    try {
+      await vi.waitFor(() => expect(reader).toHaveBeenCalledOnce());
+      app.publishFactoryBoardChange(project.id, 'github_webhook');
+      second = app.inject({ url: '/factory/board?project=42', headers });
+      await vi.waitFor(() => expect(cacheRead).toHaveBeenCalledTimes(2));
+      expect(reader).toHaveBeenCalledOnce();
+
+      initial.resolve(source);
+      const responses = await Promise.all([first, second]);
+      for (const response of responses) {
+        expect(response.statusCode).toBe(200);
+        expect(response.json().stale).toBe(false);
+        expect(response.json().columns[4].cards[0].issue.title).toBe('Updated board');
+      }
+      expect(reader).toHaveBeenCalledTimes(2);
+      const cached = await app.inject({ url: '/factory/board?project=42', headers });
+      expect(cached.json()).toEqual(responses[0]!.json());
+      expect(reader).toHaveBeenCalledTimes(2);
+    } finally {
+      initial.resolve(source);
+      await Promise.allSettled([first, ...(second ? [second] : [])]);
+    }
+  });
+
+  it('does not replace another project in-flight owner when a project publishes an update', async () => {
+    const initial = Promise.withResolvers<FactoryBoardSource>();
+    const reader = vi.fn(async () => source).mockImplementationOnce(() => initial.promise);
+    const { app, projectStore } = fixture(reader);
+    vi.mocked(projectStore.list).mockResolvedValue([
+      project, { ...project, id: '43', repo: 'DanAakesen/other' },
+    ]);
+    const cacheRead = vi.spyOn(app.factoryBoardCache, 'get');
+    const first = app.inject({ url: '/factory/board?project=42', headers });
+    let second: ReturnType<typeof app.inject> | undefined;
+    try {
+      await vi.waitFor(() => expect(reader).toHaveBeenCalledOnce());
+      app.publishFactoryBoardChange('43', 'github_webhook');
+      second = app.inject({ url: '/factory/board?project=42', headers });
+      await vi.waitFor(() => expect(cacheRead).toHaveBeenCalledTimes(2));
+      expect(reader).toHaveBeenCalledOnce();
+
+      initial.resolve(source);
+      const responses = await Promise.all([first, second]);
+      expect(responses.map((response) => response.statusCode)).toEqual([200, 200]);
+      expect(responses[1]!.json()).toEqual(responses[0]!.json());
+      await app.inject({ url: '/factory/board?project=42', headers });
+      expect(reader).toHaveBeenCalledOnce();
+    } finally {
+      initial.resolve(source);
+      await Promise.allSettled([first, ...(second ? [second] : [])]);
+    }
+  });
+
+  it('keeps a validated stale snapshot and typed error when a dirty follow-up is invalid', async () => {
+    const initial = Promise.withResolvers<FactoryBoardSource>();
+    const updated = { ...source, issues: [{ ...sourceIssue, title: 'Updated board' }] };
+    const reader = vi.fn(async () => updated).mockImplementationOnce(() => initial.promise);
+    const { app, taskStore } = fixture(reader);
+    vi.mocked(taskStore.list).mockResolvedValueOnce([task])
+      .mockResolvedValueOnce([{ ...task, startedAt: 'invalid' }]);
+    const warn = vi.fn();
+    app.addHook('onRequest', async (request) => { request.log.warn = warn; });
+    const first = app.inject({ url: '/factory/board?project=42', headers });
+    try {
+      await vi.waitFor(() => expect(reader).toHaveBeenCalledOnce());
+      app.publishFactoryBoardChange(project.id, 'github_webhook');
+      initial.resolve(source);
+      const stale = await first;
+      expect(stale.statusCode).toBe(200);
+      expect(isFactoryBoard(stale.json())).toBe(true);
+      expect(stale.json().stale).toBe(true);
+      expect(stale.json().columns[4].cards[0].issue.title).toBe(sourceIssue.title);
+      expect(warn).toHaveBeenCalledWith(expect.objectContaining({
+        stage: 'response', reason: 'invalid_response', stale: true,
+      }), 'factory.board_read_failed');
+      expect(reader).toHaveBeenCalledTimes(2);
+      const fresh = await app.inject({ url: '/factory/board?project=42', headers });
+      expect(isFactoryBoard(fresh.json())).toBe(true);
+      expect(fresh.json().stale).toBe(false);
+      expect(fresh.json().columns[4].cards[0].issue.title).toBe('Updated board');
+      expect(reader).toHaveBeenCalledTimes(3);
+    } finally {
+      initial.resolve(source);
+      await first;
+    }
+  });
+
+  it.each([false, true])('keeps failed ownership until source settlement (fallback: %s)', async (cached) => {
+    const initial = Promise.withResolvers<FactoryBoardSource>();
+    const reader = vi.fn(async () => source);
+    const { app, taskStore } = fixture(reader);
+    const warn = vi.fn();
+    const info = vi.fn();
+    app.addHook('onRequest', async (request) => {
+      request.log.warn = warn;
+      request.log.info = info;
+    });
+    const previous = cached ? (await app.inject({ url: '/factory/board?project=42', headers })).json<FactoryBoard>() : undefined;
+    if (cached) app.factoryBoardCache.invalidate(project.id);
+    info.mockClear();
+    const initialCalls = reader.mock.calls.length;
+    reader.mockImplementationOnce(() => initial.promise);
+    const failure = new FactoryBoardReadError('task', 'request_failed', 503);
+    vi.mocked(taskStore.list).mockRejectedValueOnce(failure);
+    const cacheRead = vi.spyOn(app.factoryBoardCache, 'get');
+    const first = app.inject({ url: '/factory/board?project=42', headers });
+    let second: ReturnType<typeof app.inject> | undefined;
+    try {
+      await vi.waitFor(() => expect(reader).toHaveBeenCalledTimes(initialCalls + 1));
+      await vi.waitFor(() => expect(info).toHaveBeenCalledWith(
+        expect.objectContaining({ stage: 'task' }), 'factory.board_phase',
+      ));
+      app.publishFactoryBoardChange(project.id, 'github_webhook');
+      second = app.inject({ url: '/factory/board?project=42', headers });
+      await vi.waitFor(() => expect(cacheRead).toHaveBeenCalledTimes(2));
+      expect(reader).toHaveBeenCalledTimes(initialCalls + 1);
+      expect(warn).not.toHaveBeenCalled();
+      initial.resolve(source);
+      const failed = await Promise.all([first, second]);
+      expect(failed.map((response) => response.statusCode)).toEqual(cached ? [200, 200] : [502, 502]);
+      if (cached) {
+        for (const response of failed) {
+          expect(response.json().stale).toBe(true);
+          expect(response.json().columns).toEqual(previous?.columns);
+          expect(isFactoryBoard(response.json())).toBe(true);
+        }
+      }
+      expect(warn.mock.calls.filter(([, event]) => event === 'factory.board_read_failed')).toHaveLength(2);
+      expect(warn).toHaveBeenCalledWith(expect.objectContaining({
+        stage: 'task', reason: 'request_failed', status: 503, stale: cached,
+      }), 'factory.board_read_failed');
+      const shared = cacheRead.mock.results[0];
+      if (!shared || shared.type !== 'return') throw new Error('Cache request did not return a promise');
+      if (cached) expect((await shared.value).failure).toBe(failure);
+      else await expect(shared.value).rejects.toBe(failure);
+      expect((await app.inject({ url: '/factory/board?project=42', headers })).statusCode).toBe(200);
+      expect(reader).toHaveBeenCalledTimes(initialCalls + 2);
+    } finally {
+      initial.resolve(source);
+      await Promise.allSettled([first, ...(second ? [second] : [])]);
+    }
+  });
+
+  it('settles repeated follow-up invalidation as stale without inventing a source failure', async () => {
+    const initial = Promise.withResolvers<FactoryBoardSource>();
+    const followUp = Promise.withResolvers<FactoryBoardSource>();
+    const updated = { ...source, issues: [{ ...sourceIssue, title: 'Final board' }] };
+    const reader = vi.fn(async () => updated)
+      .mockImplementationOnce(() => initial.promise).mockImplementationOnce(() => followUp.promise);
+    const { app } = fixture(reader);
+    const warn = vi.fn();
+    const info = vi.fn();
+    const updates: unknown[] = [];
+    app.addHook('onRequest', async (request) => {
+      request.log.warn = warn;
+      request.log.info = info;
+    });
+    const unsubscribe = app.nowEventHub.subscribe((update) => updates.push(update));
+    const first = app.inject({ url: '/factory/board?project=42', headers });
+    try {
+      await vi.waitFor(() => expect(reader).toHaveBeenCalledOnce());
+      app.publishFactoryBoardChange(project.id, 'github_webhook');
+      initial.resolve(source);
+      await vi.waitFor(() => expect(reader).toHaveBeenCalledTimes(2));
+      app.publishFactoryBoardChange(project.id, 'github_webhook');
+      app.publishFactoryBoardChange(project.id, 'github_webhook');
+      followUp.resolve(source);
+      const stale = await first;
+      expect(isFactoryBoard(stale.json())).toBe(true);
+      expect(stale.json().stale).toBe(true);
+      expect(warn).not.toHaveBeenCalled();
+      expect(info).toHaveBeenCalledWith(expect.objectContaining({
+        outcome: 'success', statusCode: 200, stale: true, cachePath: 'source_load',
+      }), 'factory.board_read_timing');
+      expect(updates).toEqual([1, 2, 3].map((version) => ({ type: 'board', projectId: project.id, version })));
+      const fresh = await app.inject({ url: '/factory/board?project=42', headers });
+      expect(fresh.json().stale).toBe(false);
+      expect(fresh.json().columns[4].cards[0].issue.title).toBe('Final board');
+      expect(reader).toHaveBeenCalledTimes(3);
+    } finally {
+      initial.resolve(source);
+      followUp.resolve(source);
+      await first;
+      unsubscribe();
+    }
+  });
+
+  it('preserves cached projects when a task project lookup fails and reports its safe cause', async () => {
+    const reader = vi.fn(async () => source);
+    const { app, taskStore } = fixture(reader);
+    await app.inject({ url: '/factory/board?project=42', headers });
+    const warn = vi.spyOn(app.log, 'warn');
+    const info = vi.spyOn(app.log, 'info');
+    vi.mocked(taskStore.get).mockRejectedValueOnce({
+      kind: 'transport', statusCode: 503, message: 'private-lookup-failure',
+    });
+    app.eventHub.publish({
+      id: '1', taskId: task.id, type: 'state_changed', summary: 'Task paused',
+      payload: { to: 'Paused' }, payloadTruncated: false, source: 'backend', at: timestamp,
+    });
+    await vi.waitFor(() => expect(warn).toHaveBeenCalledWith(
+      { kind: 'transport', statusCode: 503 }, 'factory.board_task_event_failed',
+    ));
+    expect(info.mock.calls.some(([, event]) => event === 'factory.board_invalidated')).toBe(false);
+    expect(JSON.stringify(warn.mock.calls)).not.toContain('private-lookup-failure');
+    const cached = await app.inject({ url: '/factory/board?project=42', headers });
+    expect(cached.statusCode).toBe(200);
+    expect(reader).toHaveBeenCalledOnce();
+  });
+
+  it('invalidates only the resolved task project and preserves another project snapshot', async () => {
+    const reader = vi.fn(async () => ({ issues: [], pullRequests: [] }));
+    const { app, projectStore } = fixture(reader);
+    vi.mocked(projectStore.list).mockResolvedValue([
+      project, { ...project, id: '43', repo: 'DanAakesen/other' },
+    ]);
+    await app.inject({ url: '/factory/board?project=42', headers });
+    const cached = await app.inject({ url: '/factory/board?project=43', headers });
+    expect(reader).toHaveBeenCalledTimes(2);
+    const updates: unknown[] = [];
+    const unsubscribe = app.nowEventHub.subscribe((update) => updates.push(update));
+    try {
+      app.eventHub.publish({
+        id: '1', taskId: task.id, type: 'state_changed', summary: 'Task paused',
+        payload: { to: 'Paused' }, payloadTruncated: false, source: 'backend', at: timestamp,
+      });
+      await vi.waitFor(() => {
+        expect(updates).toHaveLength(2);
+        expect(updates).toEqual(expect.arrayContaining([
+          { type: 'board', projectId: project.id, version: 1 },
+          { type: 'refresh' },
+        ]));
+      });
+      const retained = await app.inject({ url: '/factory/board?project=43', headers });
+      expect(retained.json()).toEqual(cached.json());
+      expect(reader).toHaveBeenCalledTimes(2);
+      const refreshed = await app.inject({ url: '/factory/board?project=42', headers });
+      expect(refreshed.statusCode).toBe(200);
+      const refreshedBoard = refreshed.json<FactoryBoard>();
+      expect(isFactoryBoard(refreshedBoard)).toBe(true);
+      expect(refreshedBoard.project.id).toBe(project.id);
+      expect(refreshedBoard.stale).toBe(false);
+      expect(reader).toHaveBeenCalledTimes(3);
+    } finally {
+      unsubscribe();
+    }
+  });
+
+  it('refuses a failed active-project lookup without starting or invalidating a source owner', async () => {
+    const reader = vi.fn(async () => source);
+    const { app, projectStore } = fixture(reader);
+    const warn = vi.fn();
+    app.addHook('onRequest', async (request) => { request.log.warn = warn; });
+    const cached = await app.inject({ url: '/factory/board?project=42', headers });
+    vi.mocked(projectStore.list).mockRejectedValueOnce(new DOMException('private-project-failure', 'TimeoutError'));
+    const failed = await app.inject({ url: '/factory/board?project=42', headers });
+    expect(failed.statusCode).toBe(503);
+    expect(warn).toHaveBeenCalledWith(expect.objectContaining({
+      stage: 'project', reason: 'timeout', route: '/factory/board',
+    }), 'factory.board_project_lookup_failed');
+    expect(JSON.stringify(warn.mock.calls)).not.toContain('private-project-failure');
+    const recovered = await app.inject({ url: '/factory/board?project=42', headers });
+    expect(recovered.json()).toEqual(cached.json());
+    expect(reader).toHaveBeenCalledOnce();
+  });
+
+  it('does not let a cached board bypass current active-project scoping', async () => {
+    const reader = vi.fn(async () => source);
+    const { app, projectStore } = fixture(reader);
+    expect((await app.inject({ url: '/factory/board?project=42', headers })).statusCode).toBe(200);
+    vi.mocked(projectStore.list).mockResolvedValueOnce([]);
+    expect((await app.inject({ url: '/factory/board?project=42', headers })).statusCode).toBe(404);
+    expect(reader).toHaveBeenCalledOnce();
+  });
+
   it('serves cached board snapshots and invalidates them after committed task events', async () => {
     const reader = vi.fn(async () => source);
     const { app, tokenIssuer, taskStore, releaseViewStore } = fixture(reader);
@@ -208,11 +491,9 @@ describe('Factory board', () => {
     } satisfies TaskEventMessage);
     await vi.waitFor(() => expect(updates).toContainEqual({ type: 'board', projectId: project.id, version: 1 }));
     expect(info).toHaveBeenCalledWith(
-      { origin: 'task_event', scope: 'all_projects' }, 'factory.board_invalidated',
-    );
-    expect(info).toHaveBeenCalledWith(
       { origin: 'task_event', projectId: project.id, version: 1 }, 'factory.board_invalidated',
     );
+    expect(info.mock.calls.filter(([, event]) => event === 'factory.board_invalidated')).toHaveLength(1);
     expect((await app.inject({ url: '/factory/board?project=42', headers })).statusCode).toBe(200);
     expect(reader).toHaveBeenCalledTimes(2);
     unsubscribe();

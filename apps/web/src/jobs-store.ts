@@ -1,19 +1,45 @@
 import { useCallback, useEffect, useSyncExternalStore } from 'react';
 import { isBackgroundJob, type BackgroundJob } from '@jarvis/contracts';
-import { backendFetch } from './backend-request';
+import { awaitWithSignal, backendFetch } from './backend-request';
 
 /** Background jobs (P8-43) for the shell's jobs chip: live `job` events plus `GET /jobs` after a reload. */
-export type JobEntry = BackgroundJob & { dismissed?: boolean };
+export type JobEntry = BackgroundJob & { dismissed?: boolean; restored?: boolean };
 
 let jobs: ReadonlyMap<string, JobEntry> = new Map();
-let snapshot: readonly JobEntry[] = [];
+let snapshot: { jobs: readonly JobEntry[]; error: string } = { jobs: [], error: '' };
 const listeners = new Set<() => void>();
 let loaded = false;
+let loading: Promise<void> | null = null;
+let loadController: AbortController | null = null;
+let generation = 0;
+const dismissalPrefix = 'jarvis.jobs.dismissed.v1:';
+let scope: string | null = null;
+let dismissedIds: Set<string> | null = null;
+let storageError = '';
 
-function emit(next: Map<string, JobEntry>) {
+function readDismissals(): Set<string> {
+  if (!scope) return new Set();
+  try {
+    const value: unknown = JSON.parse(localStorage.getItem(`${dismissalPrefix}${scope}`) ?? '[]');
+    if (!Array.isArray(value) || value.length > 1000 ||
+        !value.every((id): id is string => typeof id === 'string' &&
+          /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/u.test(id))) {
+      throw new Error('Invalid saved job dismissals');
+    }
+    storageError = '';
+    return new Set(value);
+  } catch {
+    storageError = 'Job visibility could not be restored on this device. Saved job history is unchanged.';
+    return new Set();
+  }
+}
+
+function emit(next: Map<string, JobEntry>, error = snapshot.error) {
   jobs = next;
-  snapshot = [...next.values()].filter((job) => !job.dismissed)
-    .sort((left, right) => Date.parse(left.startedAt) - Date.parse(right.startedAt));
+  snapshot = {
+    jobs: [...next.values()].sort((left, right) => Date.parse(right.startedAt) - Date.parse(left.startedAt)),
+    error,
+  };
   for (const listener of listeners) listener();
 }
 
@@ -23,18 +49,23 @@ function subscribe(listener: () => void) {
 }
 
 /** Applies a job event; an older update never overwrites a newer one. */
-export function publishJob(value: unknown) {
+export function publishJob(value: unknown, source: 'live' | 'history' = 'live') {
   if (!isBackgroundJob(value)) return;
-  const current = jobs.get(value.jobId);
-  if (current && Date.parse(current.updatedAt) > Date.parse(value.updatedAt)) return;
+  dismissedIds ??= readDismissals();
+  const jobId = value.jobId.toLowerCase();
+  const current = jobs.get(jobId);
+  if (current && (Date.parse(current.updatedAt) > Date.parse(value.updatedAt) ||
+      (current.status !== 'running' && value.status === 'running'))) return;
   const next = new Map(jobs);
-  next.set(value.jobId, { ...value, ...(current?.dismissed ? { dismissed: true } : {}) });
-  // Keep the store small: at most 20 jobs, dropping the oldest finished ones first.
-  if (next.size > 20) {
-    const finished = [...next.values()].filter((job) => job.status !== 'running')
-      .sort((left, right) => Date.parse(left.updatedAt) - Date.parse(right.updatedAt));
-    for (const job of finished.slice(0, next.size - 20)) next.delete(job.jobId);
-  }
+  next.set(jobId, {
+    ...value, jobId,
+    ...(dismissedIds.has(jobId) ? { dismissed: true } : {}),
+    ...(current?.restored || (!current && source === 'history' && value.status !== 'running') ? { restored: true } : {}),
+  });
+  // Bound local history, never evict running work or delete durable server history.
+  const finished = [...next.values()].filter((job) => job.status !== 'running')
+    .sort((left, right) => Date.parse(right.startedAt) - Date.parse(left.startedAt));
+  for (const job of finished.slice(100)) next.delete(job.jobId);
   emit(next);
 }
 
@@ -46,45 +77,109 @@ export function hasRunningJob(kind: BackgroundJob['kind']) {
 export function dismissJob(jobId: string) {
   const current = jobs.get(jobId);
   if (!current || current.dismissed) return;
+  dismissedIds ??= readDismissals();
+  dismissedIds.add(jobId);
+  dismissedIds = new Set([...dismissedIds].slice(-1000));
+  try {
+    if (!scope) throw new Error('Authenticated job preference scope unavailable');
+    localStorage.setItem(`${dismissalPrefix}${scope}`, JSON.stringify([...dismissedIds]));
+    storageError = '';
+  } catch {
+    storageError = 'Job visibility could not be saved on this device. It may return after reload; job history is unchanged.';
+  }
   emit(new Map(jobs).set(jobId, { ...current, dismissed: true }));
 }
 
-export function resetJobsForTests() {
+export function resetJobsForTests(clearDismissals = true) {
+  generation += 1;
+  loadController?.abort();
+  loadController = null;
   jobs = new Map();
-  snapshot = [];
+  snapshot = { jobs: [], error: '' };
   loaded = false;
+  loading = null;
+  dismissedIds = null;
+  storageError = '';
+  if (clearDismissals) {
+    for (const key of Object.keys(localStorage)) {
+      if (key.startsWith(dismissalPrefix)) localStorage.removeItem(key);
+    }
+  }
+  scope = null;
 }
 
-function authorizedJobsRequest(backendUrl: string, path: string, token: string, method: 'GET' | 'POST') {
+function authorizedJobsRequest(backendUrl: string, path: string, token: string, method: 'GET' | 'POST', signal?: AbortSignal) {
   return backendFetch(`${backendUrl.replace(/\/+$/u, '')}${path}`, {
     method,
     headers: { Authorization: `${['Bear', 'er'].join('')} ${token}`, Accept: 'application/json' },
     cache: 'no-store',
+    ...(signal ? { signal } : {}),
   });
 }
 
-export function useJobs(backendUrl: string | null, getAccessToken: () => Promise<string>) {
+export function useJobs(backendUrl: string | null, getAccessToken: () => Promise<string>, accountId: string | null = null) {
   const current = useSyncExternalStore(subscribe, () => snapshot, () => snapshot);
+  const requestScope = backendUrl && accountId ? JSON.stringify([backendUrl.replace(/\/+$/u, ''), accountId]) : null;
 
-  useEffect(() => {
-    if (!backendUrl || loaded) return;
-    loaded = true;
-    void (async () => {
+  const refresh = useCallback((): Promise<void> => {
+    if (!backendUrl) return Promise.resolve();
+    if (loading) return loading;
+    const requestGeneration = generation;
+    const controller = new AbortController();
+    const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(120_000)]);
+    loadController = controller;
+    loading = (async () => {
       try {
-        const response = await authorizedJobsRequest(backendUrl, '/jobs', await getAccessToken(), 'GET');
-        if (!response.ok) return;
+        const token = await awaitWithSignal(getAccessToken, signal);
+        const response = await authorizedJobsRequest(backendUrl, '/jobs', token, 'GET', signal);
+        if (!response.ok) throw new Error('Job history request failed');
         const body: unknown = await response.json();
-        const list = typeof body === 'object' && body !== null && Array.isArray((body as { jobs?: unknown }).jobs)
-          ? (body as { jobs: unknown[] }).jobs : [];
-        // After a reload only work still running or failed matters; finished results were already delivered.
-        for (const job of list.slice(0, 20)) {
-          if (isBackgroundJob(job) && (job.status === 'running' || job.status === 'failed')) publishJob(job);
+        signal.throwIfAborted();
+        if (typeof body !== 'object' || body === null || !('jobs' in body) ||
+            !Array.isArray(body.jobs) || !body.jobs.every(isBackgroundJob)) {
+          throw new Error('Invalid job history response');
         }
+        if (requestGeneration !== generation || controller.signal.aborted) return;
+        for (const job of body.jobs) publishJob(job, 'history');
+        loaded = true;
+        emit(new Map(jobs), '');
       } catch {
-        loaded = false;
+        if (requestGeneration === generation && !controller.signal.aborted) {
+          loaded = false;
+          emit(new Map(jobs), 'Job history could not be loaded. Live updates may be incomplete.');
+        }
+      } finally {
+        if (requestGeneration === generation) { loading = null; loadController = null; }
       }
     })();
+    return loading;
   }, [backendUrl, getAccessToken]);
+
+  useEffect(() => {
+    if (scope !== requestScope) {
+      generation += 1;
+      loadController?.abort();
+      loadController = null;
+      scope = requestScope;
+      loaded = false;
+      loading = null;
+      dismissedIds = null;
+      storageError = '';
+      emit(new Map(), '');
+    }
+    if (!loaded) void refresh();
+  }, [refresh, requestScope]);
+
+  useEffect(() => {
+    const restore = (event: StorageEvent) => {
+      if (!scope || event.key !== `${dismissalPrefix}${scope}`) return;
+      dismissedIds = readDismissals();
+      const restored = dismissedIds;
+      emit(new Map([...jobs].map(([id, job]) => [id, { ...job, dismissed: restored.has(id) }])));
+    };
+    window.addEventListener('storage', restore);
+    return () => window.removeEventListener('storage', restore);
+  }, []);
 
   const cancel = useCallback(async (jobId: string): Promise<string> => {
     if (!backendUrl) return 'Jobs unavailable.';
@@ -98,5 +193,13 @@ export function useJobs(backendUrl: string | null, getAccessToken: () => Promise
     }
   }, [backendUrl, getAccessToken]);
 
-  return { jobs: current, cancel, dismiss: dismissJob };
+  const available = scope === requestScope;
+  return {
+    jobs: available ? current.jobs.filter((job) => !job.dismissed) : [],
+    history: available ? current.jobs : [],
+    error: available ? [current.error, storageError].filter(Boolean).join(' ') : '',
+    refresh,
+    cancel,
+    dismiss: dismissJob,
+  };
 }

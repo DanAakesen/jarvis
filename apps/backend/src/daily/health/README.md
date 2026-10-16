@@ -28,6 +28,19 @@ Nonsensitive `worker/health-normalize.js`, `health-targets.js` and selected pers
 
 ## Owner reads and truthful freshness
 
+The inactive P12-09 query adapter now reuses these methods through one
+owner-authorised HTTP/tool contract; production composition is unchanged.
+The optional fourth `SqlHealthProcessor` argument is the shared Daily change
+hub. New normalized lineage notifies its health sources only after the final
+transaction resolves; retained lineage replays do not announce new health data.
+Completing a pending replay, poison quarantine and retry exhaustion notify sync
+only after acknowledged commit; no-ops and failed/uncertain commits do not notify.
+Heartbeat also notifies sync only, never processed health freshness.
+Notification failures stay in the existing event-listener boundary rather than
+failing an acknowledged row or retrying SQL side effects.
+The factory `createDailyData` supplies that hub without starting a processor.
+Commit tests use synthetic transaction doubles, not real SQL acceptance.
+
 `DailyHealthReadModel.forRequest` reuses existing root human/hosted-agent authentication and server owner; device/export/coding-runner identities cannot become an owner. It adds no public endpoint.
 
 `sync` distinguishes latest committed upload evidence, actual processing time, inbox pending/quarantine counts and phone heartbeat. Acceptance and heartbeat cannot establish a processed feed timestamp. History uses keyset pages, a maximum 366-day span and 500 rows; list reads omit large JSON detail. Minute HR uses a separate bounded cursor. Exact workout detail is capped at 8 MiB and remains owner-bound. P12-09 supplies public contracts/routes/tools and activation later.

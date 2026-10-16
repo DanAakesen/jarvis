@@ -114,6 +114,24 @@ authorized post-deploy readback; no runtime-cause correction is claimed yet.
 
 ## Factory board source latency (#813)
 
+The local 16 October cache-ownership correction is not released or performance
+acceptance. Ordinary publication invalidates only its project and preserves its
+pending owner. A dirty owner can execute at most one immediate complete
+follow-up; invalidation during that follow-up returns an explicitly stale,
+expired snapshot, not a fresh cache entry or an endless loop. Both reads use
+the existing per-read source bounds and whole-board validation. A follow-up
+failure retains its original typed diagnostic and last validated fallback.
+Task project-lookup failure is reported without globally invalidating caches.
+Client cancellation does not own shared source cancellation. No live timings
+or historical #811 cause are established by these local source changes.
+An outer branch failure preserves its first typed cause but retains ownership
+until all started source/task/release branches settle. Error responses or stale
+fallback can therefore wait for existing cleanup; branch limits are unchanged.
+LRU eviction also expires any outstanding reference before removing the cache
+entry, so a waiter cannot settle fresh after losing invalidation reachability.
+This conservative stale result is not a fabricated source failure and does not
+dirty the owner or trigger an extra automatic source read.
+
 The 2026-10-13 baseline is 90 observed `/factory/board` requests on revision
 `--0000307` between 22:14 and 23:08 UTC. All returned HTTP 200; median latency
 was 10.065 s, p95 12.915 s, and maximum 19.211 s. The cohort includes cache
@@ -170,8 +188,9 @@ duration exceeded the 60-second reporting bound and was omitted, not clipped.
 `durationUnavailable` and `cacheElapsedUnavailable` mean a valid clock duration
 could not be produced; no numeric value is exported.
 Correlate webhook invalidations by their
-request ID and bounded origin/project/version fields; task-event prelookup
-invalidations are marked `all_projects` and have no project/version yet.
+request ID and bounded origin/project/version fields. Historical task-event
+prelookup invalidations were marked `all_projects`; the local correction emits
+one project-scoped invalidation only after successful task lookup.
 These diagnostics were not present in the failed production window and do not
 retrospectively attribute it.
 

@@ -37,20 +37,20 @@ describe('phone chat viewport', () => {
     input.focus();
     visible.height = 480;
     act(() => { visible.dispatchEvent(new Event('resize')); });
-    await waitFor(() => expect(shell.style.getPropertyValue('--phone-chat-bottom')).toBe('364px'));
+    await waitFor(() => expect(shell.style.getPropertyValue('--phone-chat-height')).toBe('480px'));
     visible.offsetTop = 60;
     act(() => { visible.dispatchEvent(new Event('scroll')); });
     await waitFor(() => expect(shell.style.getPropertyValue('--phone-chat-top')).toBe('60px'));
-    expect(shell.style.getPropertyValue('--phone-chat-bottom')).toBe('304px');
+    expect(shell.style.getPropertyValue('--phone-chat-height')).toBe('480px');
     visible.height = 844;
     visible.offsetTop = 0;
     act(() => { visible.dispatchEvent(new Event('resize')); });
-    await waitFor(() => expect(shell.style.getPropertyValue('--phone-chat-bottom')).toBe('0px'));
+    await waitFor(() => expect(shell.style.getPropertyValue('--phone-chat-height')).toBe('844px'));
     expect(document.activeElement).toBe(input);
     expect(input).toHaveProperty('value', 'Unsent fixture draft');
     visible.height = 400;
     act(() => { visible.dispatchEvent(new Event('resize')); });
-    await waitFor(() => expect(shell.style.getPropertyValue('--phone-chat-bottom')).toBe('444px'));
+    await waitFor(() => expect(shell.style.getPropertyValue('--phone-chat-height')).toBe('400px'));
   });
 
   it('dismisses touch taps outside only the composer, without swallowing the tap or blurring another editor', () => {
@@ -83,21 +83,21 @@ describe('phone chat viewport', () => {
     act(() => { visible.dispatchEvent(new Event('resize')); });
     visible.height = 500;
     act(() => { visible.dispatchEvent(new Event('scroll')); });
-    await waitFor(() => expect(shell.style.getPropertyValue('--phone-chat-bottom')).toBe('344px'));
+    await waitFor(() => expect(shell.style.getPropertyValue('--phone-chat-height')).toBe('500px'));
     visible.scale = 2;
     act(() => { visible.dispatchEvent(new Event('resize')); });
-    await waitFor(() => expect(shell.style.getPropertyValue('--phone-chat-bottom')).toBe('0px'));
+    await waitFor(() => expect(shell.style.getPropertyValue('--phone-chat-height')).toBe('100dvh'));
     view.rerender(<Chat enabled={false} />);
-    expect(shell.style.getPropertyValue('--phone-chat-bottom')).toBe('');
+    expect(shell.style.getPropertyValue('--phone-chat-height')).toBe('');
     expect(remove).toHaveBeenCalledWith('resize', expect.any(Function));
     expect(remove).toHaveBeenCalledWith('scroll', expect.any(Function));
     visible.scale = 1;
     view.rerender(<Chat />);
-    expect(shell.style.getPropertyValue('--phone-chat-bottom')).toBe('344px');
+    expect(shell.style.getPropertyValue('--phone-chat-height')).toBe('500px');
     act(() => { visible.dispatchEvent(new Event('resize')); });
     view.unmount();
     await act(async () => { await new Promise((resolve) => setTimeout(resolve, 30)); });
-    expect(shell.style.getPropertyValue('--phone-chat-bottom')).toBe('');
+    expect(shell.style.getPropertyValue('--phone-chat-height')).toBe('');
   });
 
   it('uses the normal dock without VisualViewport and ignores signed-out/desktop inputs', () => {
@@ -105,11 +105,26 @@ describe('phone chat viewport', () => {
     const view = render(<Chat />);
     const shell = screen.getByTestId('shell');
     expect(shell.style.getPropertyValue('--phone-chat-top')).toBe('0px');
-    expect(shell.style.getPropertyValue('--phone-chat-bottom')).toBe('0px');
+    expect(shell.style.getPropertyValue('--phone-chat-height')).toBe('100dvh');
     view.rerender(<Chat enabled={false} />);
     const input = screen.getByRole('textbox', { name: 'Message Jarvis' });
     input.focus();
     fireEvent.pointerDown(screen.getByTestId('outside'), { pointerType: 'touch' });
     expect(document.activeElement).toBe(input);
+  });
+
+  it('publishes the same visible rectangle when innerHeight changes independently of the fixed containing viewport', () => {
+    const visible = viewport();
+    render(<Chat />);
+    const shell = screen.getByTestId('shell');
+    visible.height = 400;
+    visible.offsetTop = 40;
+    act(() => { visible.dispatchEvent(new Event('resize')); });
+    expect(shell.style.getPropertyValue('--phone-chat-top')).toBe('40px');
+    expect(shell.style.getPropertyValue('--phone-chat-height')).toBe('400px');
+    vi.stubGlobal('innerHeight', 440);
+    act(() => { window.dispatchEvent(new Event('resize')); });
+    expect(shell.style.getPropertyValue('--phone-chat-top')).toBe('40px');
+    expect(shell.style.getPropertyValue('--phone-chat-height')).toBe('400px');
   });
 });

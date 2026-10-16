@@ -4,6 +4,8 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { resolveDailyOwner } from '../owner.js';
 import { ToolFailure, ToolRefusal } from '../../core/tool-registry.js';
 import { authorizeIntake, canonicalJson, date, instant, normalizeSearchText, nutrients, plan, suggest, text, writeDefinition, writeMeal, type BudgetContext, type FavoriteAuthority, type FavoriteInput, type IntakeAuthority, type MealInput, type PlanInput, type PlanRequest, type Suggestion } from './model.js';
+import { dailyQuerySources } from '@jarvis/contracts';
+import { createDailyChanges, type DailyChangeSink } from '../revisions.js';
 
 const fields = {
   id: ['id', sql.NVarChar(256)], idempotencyKey: ['idempotency_key', sql.NVarChar(256)],
@@ -42,9 +44,14 @@ export interface HistoryPage { rows: Record<string, unknown>[]; next: { createdA
 
 /** No production registration. Construct only after existing Jarvis authentication. */
 export class NutritionStore {
-  private constructor(private readonly pool: sql.ConnectionPool, private readonly owner: string, private readonly now: () => string) {}
-  static forRequest(pool: sql.ConnectionPool, request: FastifyRequest, now = () => new Date().toISOString()): NutritionStore {
-    return new NutritionStore(pool, resolveDailyOwner(request), now);
+  private readonly changes = createDailyChanges();
+  private constructor(private readonly pool: sql.ConnectionPool, private readonly owner: string, private readonly now: () => string,
+    changes?: DailyChangeSink) {
+    // Notification failure must not fail an acknowledged mutation or replay SQL.
+    if (changes) this.changes.subscribe(change => changes.publish(change));
+  }
+  static forRequest(pool: sql.ConnectionPool, request: FastifyRequest, now = () => new Date().toISOString(), changes?: DailyChangeSink): NutritionStore {
+    return new NutritionStore(pool, resolveDailyOwner(request), now, changes);
   }
   private request(parent: sql.Transaction | sql.ConnectionPool, signal: AbortSignal): sql.Request {
     signal.throwIfAborted();
@@ -63,16 +70,17 @@ export class NutritionStore {
       throw new ToolFailure('Nutrition read failed. No record content or provider diagnostics are exposed.');
     }
   }
-  private async transaction<T>(signal: AbortSignal, action: (transaction: sql.Transaction) => Promise<T>): Promise<T> {
+  private async transaction<T>(signal: AbortSignal, action: (transaction: sql.Transaction, changed: () => void) => Promise<T>): Promise<T> {
     for (let attempt = 0; ; attempt++) {
       signal.throwIfAborted();
       const transaction = new sql.Transaction(this.pool);
+      let changed = false;
+      let result: T;
       try {
         await transaction.begin();
-        const result = await action(transaction);
+        result = await action(transaction, () => { changed = true; });
         signal.throwIfAborted();
         await transaction.commit();
-        return result;
       } catch (error) {
         await transaction.rollback().catch(() => undefined);
         if (signal.aborted) throw signal.reason;
@@ -81,11 +89,13 @@ export class NutritionStore {
         if ([2601, 2627, 51001].includes((error as { number?: number }).number ?? 0)) throw new ToolRefusal('This nutrition key conflicts with an existing exact key.');
         throw new ToolFailure('Nutrition persistence failed. Retry with the same operation key; no successful write is claimed.');
       }
+      if (changed) this.changes.publish({ owner: this.owner, sources: [dailyQuerySources.meals] });
+      return result;
     }
   }
   async log(input: MealInput, authority: IntakeAuthority, signal: AbortSignal): Promise<Record<string, unknown>> {
     writeMeal(input, this.now()); input = structuredClone(input); authorizeIntake(input, authority);
-    return this.transaction(signal, async (transaction) => {
+    return this.transaction(signal, async (transaction, changed) => {
       const lookup = this.request(transaction, signal).input('key', sql.NVarChar(256), input.idempotencyKey);
       const existing = (await this.query(lookup, `SELECT ${select} FROM daily.nutrition_meals WITH (UPDLOCK,HOLDLOCK)
         WHERE owner_object_id=@owner AND idempotency_key=@key;`, signal)).recordset[0];
@@ -95,6 +105,7 @@ export class NutritionStore {
       }
       const now = this.now(); instant(now);
       const request = bind(this.request(transaction, signal), input).input('now', sql.NVarChar(64), now);
+      changed();
       return (await this.query(request, `INSERT daily.nutrition_meals(owner_object_id,${Object.values(fields).map(([c]) => `[${c}]`).join(',')},source,created_at,updated_at)
         OUTPUT ${select.split(', ').map((c) => `INSERTED.${c}`).join(', ')}
         VALUES(@owner,${Object.keys(fields).map((key) => `@${key}`).join(',')},N'jarvis',@now,@now);`, signal)).recordset[0]!;
@@ -102,7 +113,7 @@ export class NutritionStore {
   }
   async correct(input: MealInput, expectedRevision: bigint, signal: AbortSignal): Promise<Record<string, unknown>> {
     writeMeal(input, this.now()); input = structuredClone(input); if (typeof expectedRevision !== 'bigint' || expectedRevision < 1n || expectedRevision >= 9223372036854775807n) throw new TypeError('Invalid meal revision');
-    return this.transaction(signal, async (transaction) => {
+    return this.transaction(signal, async (transaction, changed) => {
       const lookup = this.request(transaction, signal).input('key', sql.NVarChar(256), input.idempotencyKey);
       const row = (await this.query(lookup, `SELECT ${select} FROM daily.nutrition_meals WITH (UPDLOCK,HOLDLOCK) WHERE owner_object_id=@owner AND ${equalKey('idempotency_key', 'key')};`, signal)).recordset[0];
       if (!row || row.deleted_at !== null || row.id !== input.id) throw new ToolRefusal('Intake not found or unavailable for correction.');
@@ -111,19 +122,21 @@ export class NutritionStore {
       const now = this.now(); instant(now);
       const request = bind(this.request(transaction, signal), input).input('now', sql.NVarChar(64), now);
       const assignments = Object.entries(fields).filter(([key]) => key !== 'id' && key !== 'idempotencyKey').map(([key, [column]]) => `[${column}]=@${key}`);
+      changed();
       return (await this.query(request, `UPDATE daily.nutrition_meals SET ${assignments.join(',')},revision=revision+1,updated_at=@now,${invalidateExport}
         OUTPUT ${select.split(', ').map((c) => `INSERTED.${c}`).join(', ')} WHERE owner_object_id=@owner AND ${equalKey('id', 'id')};`, signal)).recordset[0]!;
     });
   }
   async remove(idempotencyKey: string, expectedRevision: bigint, signal: AbortSignal): Promise<Record<string, unknown>> {
     text(idempotencyKey); if (typeof expectedRevision !== 'bigint' || expectedRevision < 1n || expectedRevision >= 9223372036854775807n) throw new TypeError('Invalid meal revision');
-    return this.transaction(signal, async (transaction) => {
+    return this.transaction(signal, async (transaction, changed) => {
       const lookup = this.request(transaction, signal).input('key', sql.NVarChar(256), idempotencyKey);
       const row = (await this.query(lookup, `SELECT ${select} FROM daily.nutrition_meals WITH (UPDLOCK,HOLDLOCK) WHERE owner_object_id=@owner AND ${equalKey('idempotency_key', 'key')};`, signal)).recordset[0];
       if (!row) throw new ToolRefusal('Intake not found.');
       if (row.deleted_at !== null && BigInt(row.revision as string) === expectedRevision + 1n) return row;
       if (row.deleted_at !== null || BigInt(row.revision as string) !== expectedRevision) throw new ToolRefusal('Intake changed. Read the latest revision before deleting it.');
       const now = this.now(); instant(now);
+      changed();
       return (await this.query(this.request(transaction, signal).input('key', sql.NVarChar(256), idempotencyKey).input('now', sql.NVarChar(64), now),
         `UPDATE daily.nutrition_meals SET deleted_at=@now,updated_at=@now,revision=revision+1,${invalidateExport} OUTPUT ${select.split(', ').map((c) => `INSERTED.${c}`).join(', ')} WHERE owner_object_id=@owner AND ${equalKey('idempotency_key', 'key')};`, signal)).recordset[0]!;
     });

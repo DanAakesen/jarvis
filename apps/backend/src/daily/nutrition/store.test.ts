@@ -3,6 +3,8 @@ import sql from 'mssql';
 import type { FastifyRequest } from 'fastify';
 import { NutritionStore } from './store.js';
 import type { MealInput } from './model.js';
+import { createDailyChanges } from '../revisions.js';
+import { dailyQuerySources } from '@jarvis/contracts';
 
 const db = vi.hoisted(() => ({ query: vi.fn(), begin: vi.fn(), commit: vi.fn(), rollback: vi.fn(), cancel: vi.fn(), inputs: [] as unknown[][] }));
 vi.mock('mssql', async (original) => {
@@ -30,6 +32,85 @@ const store = () => NutritionStore.forRequest({} as sql.ConnectionPool, request,
 const signal = () => new AbortController().signal;
 beforeEach(() => { vi.clearAllMocks(); db.inputs.length = 0; db.begin.mockResolvedValue(undefined); db.commit.mockResolvedValue(undefined); db.rollback.mockResolvedValue(undefined); db.query.mockReset(); });
 describe('nutrition failure/privacy boundaries', () => {
+  it('publishes intake invalidation only after acknowledged commit, not during persistence or on replay', async () => {
+    const changes = createDailyChanges(); const listener = vi.fn(); changes.subscribe(listener);
+    const persistence = NutritionStore.forRequest({} as sql.ConnectionPool, request, () => '2026-10-12T15:00:00Z', changes);
+    let commit!: () => void; let entered!: () => void;
+    const gate = new Promise<void>(resolve => { commit = resolve; });
+    const started = new Promise<void>(resolve => { entered = resolve; });
+    db.commit.mockImplementationOnce(() => { entered(); return gate; });
+    db.query.mockResolvedValueOnce({ recordset: [] }).mockResolvedValueOnce({ recordset: [{ id: '01' }] });
+    const pending = persistence.log(input, authority, signal());
+    await started; expect(listener).not.toHaveBeenCalled();
+    commit(); await pending;
+    expect(listener).toHaveBeenCalledExactlyOnceWith({ owner, sources: [dailyQuerySources.meals] });
+    const row = { id: input.id, idempotency_key: input.idempotencyKey, meal_name: input.mealName, meal_type: input.mealType,
+      occurred_at: input.occurredAt, meal_date: new Date(input.mealDate), expires_at: input.expiresAt,
+      energy_kcal: input.energyKcal, protein_grams: null, carbohydrates_grams: null, fat_grams: null, fiber_grams: null,
+      confidence: input.confidence, capture_method: input.captureMethod, components_json: '[]', nutrient_provenance_json: '{}',
+      revision: '1', deleted_at: null };
+    db.query.mockResolvedValueOnce({ recordset: [row] });
+    await persistence.log(input, authority, signal());
+    expect(listener).toHaveBeenCalledTimes(1);
+    db.query.mockResolvedValueOnce({ recordset: [row] }).mockResolvedValueOnce({ recordset: [{ ...row, revision: '2' }] });
+    await persistence.correct(input, 1n, signal());
+    expect(listener).toHaveBeenCalledTimes(2);
+    db.query.mockResolvedValueOnce({ recordset: [{ ...row, revision: '2' }] });
+    await persistence.correct(input, 1n, signal());
+    expect(listener).toHaveBeenCalledTimes(2);
+    db.query.mockResolvedValueOnce({ recordset: [{ ...row, revision: '2' }] }).mockResolvedValueOnce({ recordset: [{ ...row, revision: '3', deleted_at: '2026-10-12T15:00:00Z' }] });
+    await persistence.remove(input.idempotencyKey, 2n, signal());
+    expect(listener).toHaveBeenCalledTimes(3);
+    db.query.mockResolvedValueOnce({ recordset: [{ ...row, revision: '3', deleted_at: '2026-10-12T15:00:00Z' }] });
+    await persistence.remove(input.idempotencyKey, 2n, signal());
+    expect(listener).toHaveBeenCalledTimes(3);
+  });
+  it('does not publish a failed/uncertain commit or deadlock attempt as a new revision', async () => {
+    const changes = createDailyChanges(); const listener = vi.fn(); changes.subscribe(listener);
+    const persistence = NutritionStore.forRequest({} as sql.ConnectionPool, request, () => '2026-10-12T15:00:00Z', changes);
+    db.query.mockResolvedValueOnce({ recordset: [] }).mockResolvedValueOnce({ recordset: [{ id: '01' }] });
+    db.commit.mockRejectedValueOnce(new Error('synthetic commit uncertainty'));
+    await expect(persistence.log(input, authority, signal())).rejects.toThrow('no successful write');
+    expect(listener).not.toHaveBeenCalled();
+    db.query.mockRejectedValue(Object.assign(new Error('synthetic deadlock'), { number: 1205 }));
+    await expect(persistence.log(input, authority, signal())).rejects.toThrow();
+    expect(listener).not.toHaveBeenCalled();
+  });
+  const mutations = [
+    { name: 'insert', existing: [], run: (persistence: NutritionStore) => persistence.log(input, authority, signal()) },
+    { name: 'correct', existing: [{ id: input.id, revision: '1', deleted_at: null }],
+      run: (persistence: NutritionStore) => persistence.correct(input, 1n, signal()) },
+    { name: 'delete', existing: [{ id: input.id, revision: '1', deleted_at: null }],
+      run: (persistence: NutritionStore) => persistence.remove(input.idempotencyKey, 1n, signal()) },
+  ];
+  it.each(mutations)('contains a throwing sink after committed $name without rollback/retry or hiding the returned row', async ({ name, existing, run }) => {
+    const publish = vi.fn(() => { throw new TypeError('synthetic notification failure'); });
+    const persistence = NutritionStore.forRequest({} as sql.ConnectionPool, request, () => '2026-10-12T15:00:00Z', { publish });
+    const saved = { id: input.id, revision: name === 'insert' ? '1' : '2', deleted_at: name === 'delete' ? '2026-10-12T15:00:00Z' : null };
+    db.query.mockResolvedValueOnce({ recordset: existing }).mockResolvedValueOnce({ recordset: [saved] });
+    expect(await run(persistence)).toEqual(saved);
+    expect(db.begin).toHaveBeenCalledTimes(1); expect(db.commit).toHaveBeenCalledTimes(1);
+    expect(db.query).toHaveBeenCalledTimes(2); expect(db.rollback).not.toHaveBeenCalled();
+    expect(publish).toHaveBeenCalledExactlyOnceWith({ owner, sources: [dailyQuerySources.meals] });
+  });
+  it.each(mutations.flatMap(mutation => ['write', 'commit'].map(failure => ({ ...mutation, failure }))))(
+    'keeps failed $failure during $name unsuccessful and never invokes its throwing sink',
+    async ({ existing, run, failure }) => {
+      const publish = vi.fn(() => { throw new Error('synthetic notification failure'); });
+      const persistence = NutritionStore.forRequest({} as sql.ConnectionPool, request, () => '2026-10-12T15:00:00Z', { publish });
+      db.query.mockResolvedValueOnce({ recordset: existing });
+      if (failure === 'write') db.query.mockRejectedValueOnce(new Error('synthetic storage failure'));
+      else {
+        db.query.mockResolvedValueOnce({ recordset: [{ id: input.id, revision: '2' }] });
+        db.commit.mockRejectedValueOnce(new Error('synthetic commit uncertainty'));
+      }
+      await expect(run(persistence)).rejects.toThrow('no successful write');
+      expect(db.begin).toHaveBeenCalledTimes(1); expect(db.rollback).toHaveBeenCalledTimes(1);
+      expect(db.query).toHaveBeenCalledTimes(2);
+      expect(db.commit).toHaveBeenCalledTimes(failure === 'commit' ? 1 : 0);
+      expect(publish).not.toHaveBeenCalled();
+    },
+  );
   it.each([{ mealType: 'supper' }, { energyKcal: 10001 }, { proteinGrams: 1001 }, { mealDate: '2026-01-02' },
     { occurredAt: '2026-10-12T15:05:01Z', mealDate: '2026-10-12' }])('rejects log and correction writes before SQL %j', async (patch) => {
     await expect(store().log({ ...input, ...patch }, authority, signal())).rejects.toThrow();

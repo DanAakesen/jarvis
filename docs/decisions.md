@@ -1,5 +1,227 @@
 # Decisions
 
+## Release active work together after its gates (16 October 2026)
+
+Dan directed one combined deployment when all active work is ready, followed
+by the handoff, and approved the normal combined-release PR/CI/commit/push/merge
+pipeline after CI. The parent alone owns publication and deployment; source
+integration grants no child publication or extra worker. Preserve immutable
+producer inputs and qualify the exact combined source rather than assembling
+independent green receipts into a fictional combined pass.
+
+Include the inactive Daily read slice without activation, private migration,
+protected exports, device changes or new coaching. Keep failed Daily v3b and
+blocked root/pinned gates explicit. No split release, repeated restore, unrelated
+#816 transport or withdrawn mail extraction is authorised by this integration.
+Historical private itinerary deletion hunks remain internal evidence, not
+publishable patch attachments. Ordinary production application approvals remain
+separate from approval to release code.
+
+## Reuse the authorised release identity for Foundry checks (16 October 2026)
+
+Dan explicitly selected keeping permissions unchanged and using the existing
+release workflow's Foundry checks after the local approved-tenant identity was
+denied agent-read access with HTTP 403. Stop local Foundry data-plane reads;
+do not grant roles, switch credentials or create an environment to work around
+the denial. The existing production deployment identity already has its
+required project/account roles and performs the normal hosted-agent checks
+only after release gates pass. Local current-agent metadata and routing were
+not verified; do not present management-plane project existence as that proof.
+
+## One approval for an explicitly listed calendar proposal (16 October 2026)
+
+Dan selected **one approval for both explicitly listed events** through the
+coordinator. Add `calendar_create_events` for 2–10 creations rather than replace
+the existing single-event API, silently drop later bookings or reinterpret an
+already-issued single-event approval. Validate all inputs before staging and
+show every full subject/local-time/zone/attendee summary. A later approval
+authorises only that captured list; cancellation discards the entire pending
+proposal without writing.
+
+Reuse the existing process-local, ten-minute, single-use confirmation owner;
+do not introduce a durable queue or imply transactionality across Google
+writes. Execute sequentially, stop on failure/cancellation, preserve per-item
+success and distinguish a known rejection from an unknown write outcome.
+Never replay successes or unknown outcomes automatically. Retain only the
+current proposal's source-session-bound receipt until its original expiry;
+restart means unavailable evidence, not proof of no write.
+
+For explicit multi-create intent with the batch tool available, refuse an
+isolated single-create before backend staging rather than hide a partial
+proposal during continuation. All concurrent single-create arguments must
+reach whole-list validation together. Preserve older unrelated pending state,
+but do not approve/relabel it when the newer batch failed or stayed incomplete:
+the latest request's canonical server-verified message ID must equal the
+existing staged source ID in trusted backend pending/receipt evidence. Retain
+IDs as optional, backward-compatible, non-prompt `ModelMessage` metadata;
+never infer identity from prose/labels/counts or accept a model-supplied source
+argument. Preserve current-request/history/steering/caption identity and enforce
+the same origin guard for model-dispatched confirmation. Missing, truncated or
+mismatched origin fails closed; ordinary single-event callers remain compatible.
+The coordinator authorised only the necessary runtime metadata assignments,
+not PR #816 connection reuse. No cancellation, new persistence or retry machinery
+is added.
+
+Direct coordinator review authorised a narrow v2 correction: contextual
+"Add those two." uses recent calendar routing, with Notes/mail isolation, but
+approval still binds the actual latest verified creation/calendar mutation ID
+to trusted stage evidence. Do not skip that request or a newer other-workflow
+creation to find an older matching source. Keep bare cancellation as a reply.
+Add `put` to the same claim policy, not a second classifier. The final narrow
+correction recognises Danish demonstrative "de/disse to" without making English
+`to` a quantity. Final selected checks passed 444 Python cases, Ruff8 and 58
+qualified Node cases with unchanged Node identities. Preserve earlier patches
+and passing/failed receipts immutably; these are not full pinned CI or release.
+
+The released agent's topic-based final guard reproduces 22 failures among
+27 new synthetic controls. Restrict it to affirmative action/approval claims,
+including calendar requests without the recovery tool. Preserve ordinary
+conversation, explanations, incomplete requests and explicit tool errors.
+Normal chat uses labelled CommonMark records with blank lines rather than
+unsupported pipe tables; this does not give the model a live UI preview.
+The missing third-booking email is no longer a defect: Dan confirmed it was
+not in Gmail. No Gmail extraction, live account action or release is part of
+this local candidate.
+
+The coordinator also authorised a narrow correction to catalogue-wide chat
+buffering. Reuse the existing calendar scope/claim policy to release only
+completed ordinary sentences while retaining incomplete/action/calendar text
+for final grounding. Do not simply stream every non-calendar-request response:
+later chunks can still claim an unsupported calendar action. Refresh scope on
+steering, retain provider cleanup, and verify irreversible-yield ordering with
+Event-held synthetic providers. This does not establish historical latency
+causation or production savings, and does not duplicate PR #816's separate
+runtime connection reuse.
+
+## Resume only the inactive Daily read integration (16 October 2026)
+
+Dan selected the existing Daily session under coordinator ownership to continue
+the partly integrated project. The coordinator released the nonprivate #724
+API/read-tool/committed-invalidation slice on exact main `2823585`; the old
+general engineering pause no longer blocks that slice. It is not permission for
+#717/draft #741 exports, #727 devices, private migration/cutover, new coaching or
+production activation.
+
+Use one `DailyQueryService` over accepted #720 health and #722 meal-history
+interfaces for HTTP and the existing sensitive tool dispatcher. Preserve
+canonical values, nulls, dates, provenance and owner resolution. Reuse the
+existing refresh event instead of widening global SSE/chat contracts.
+Publish invalidation only after an acknowledged SQL commit; query-content
+fingerprints and refetch-on-reconnect/refocus recover missed local hints without
+claiming a durable replay log or atomic multi-query snapshot. Retained duplicate
+operations do not publish a new intake/domain change.
+Acknowledged inbox completion/quarantine/retry-exhaustion transitions notify
+sync only, including a pending retained-lineage replay; they cannot advance
+processed health freshness. Keep notification failure in the existing event
+boundary, not the SQL retry/result boundary.
+Nutrition uses the same listener-error boundary even for a directly supplied
+sink, so a failed hint cannot reject an acknowledged insert/correct/delete.
+Read fingerprints sort validated DTO keys independently of nutrition's unchanged
+write node/depth limits. Enforce the response byte limit, including the final
+64-byte fingerprint, before hashing; valid full pages and retained nested
+provenance must not fail because of an unrelated write budget.
+
+Keep hosted ChatGPT food writes explicitly unfinished until their scoped
+connector authorisation and trusted intent/proposal-acceptance contracts are
+approved and implemented. Internal Jarvis reads are not a substitute for that
+requirement. No maintenance/TDEE, completeness, expiry or readiness rule is
+invented. Full #724, live/provider/device/source-parity and release acceptance
+cannot be inferred from synthetic checks.
+
+## Bound chat format support and avoid double keyboard compensation (16 October 2026)
+
+Keep `react-markdown` and add standard `remark-gfm`, not another rich-text
+system. Enable it only for chat; shared Notes/Knowledge readers stay unchanged.
+Preserve raw-HTML refusal and safe links. Prefer labelled reservation
+records in normal-chat guidance (calendar/agent owner); historical well-formed
+tables receive semantic headers and contained keyboard scrolling. Do not infer
+records or date/timezone values from a flattened malformed table.
+
+Released-source actual-App Chromium reproduced the ugly pipe paragraph even
+with correct source newlines. A controlled stale `innerHeight=844` with a
+430px fixed viewport reproduced a composer at top -62px and a 2px transcript;
+ordinary resize/pan alone did not. Publish visual-viewport top/height directly
+instead of subtracting metrics from different viewport coordinate systems.
+This establishes a failure mode and correction target, not the exact metric
+sequence on Dan's iPhone. Physical Safari acceptance stays unverified.
+
+Actual-App held-open SSE exposed a separate partial-table following race in
+the first candidate. Follow content before paint rather than relying on
+completion/refocus or adding a delay. Final production-source readback
+measured tail gaps 0/0 across two held-open growths; an explicit history
+scroll stayed at 100 through two more growths (gaps 866/1182).
+The desktop browser also exposed the prose cap clipping table columns despite
+available space. Widen only table-bearing replies, retaining contained phone
+scrolling and ordinary prose measures. Newly authored tests use wholly
+synthetic hotel/stay/price records; supplied-itinerary receipts remain private
+evidence, not publication assets. These browser results do not relabel earlier
+unit/static/build receipts as final-source passes.
+
+## Reuse one existing control contract across Jarvis (16 October 2026)
+
+Dan rejected mixed action shapes and decorative coloured boxed/bevelled tab
+borders. The coordinator accepted CSS-only consolidation within Jarvis's
+existing visual direction. Reuse the current control radius, primary/quiet/
+selected surface roles and focus outline across routes. Reserve capsules for
+status and genuine semantic exceptions; preserve neutral structure, accessible
+state and touch targets. Prefer editing existing selectors to a new React
+control library, parallel token system or blanket reset. Durable guidance lives
+in this repository's agent context and product-ui skill, not global templates.
+
+Header/job behavior remains a separately owned companion correction: recent
+history consolidates terminal/hidden jobs; account/backend-scoped UUID
+dismissal only hides local header state. It neither cancels server work nor
+deletes history. Indexing Retry cannot be advertised as actionable without a
+supported operation, and past interruption is not present health. No live
+mutation or publication is authorised by these local UI changes.
+
+## Keep Factory cache ownership project-local through invalidation (16 October 2026; local)
+
+Dan authorised local fixes and regressions, not publication, deployment or
+live/private probes. Parent accepted one pending source owner per project;
+automatic updates mark it dirty without replacing it. Coalesce at most one
+immediate follow-up. A follow-up invalidated again settles explicitly stale and
+expired, allowing the next event/request to refresh without an unbounded drain.
+Preserve validated fallback and original typed errors; failure is not a retry
+signal. Check entry freshness at waiter settlement and keep cancellation with
+the shared owner, not an individual waiter.
+
+Ordinary task/webhook publication invalidates only its project. Resolve task
+ownership first and log a safe lookup failure rather than silently clearing all
+projects or replacing the original error. Keep intentional explicit global
+invalidation support, complete GitHub reads, auth, validation, per-read bounds,
+SSE versions and the existing client lifecycle unchanged.
+
+Reuse first-error-preserving `readTogether` for the outer source/task/release
+branches rather than releasing ownership on the first rejection while siblings
+remain active. Await all started branches without an individual waiter's signal
+or a new retry/deadline policy. This can delay error settlement until existing
+branch cleanup; it is not a lower-error-latency claim.
+
+The selected frozen-`2823585` direct-cache control actually failed at duplicate
+ownership: expected one source call, observed two (12 collected, 1 selected,
+11 skipped). A separate fresh-process v1 candidate run passed the complete
+12-case direct-cache suite and four real-Fastify route lifetime controls, with
+zero skips. Exact baseline board/app blobs, config/source identities and actual
+output remain in the owned session artifacts. This qualified snapshot uses
+Vitest 5.0.2/Vite 8.3.1 rather than current pins; Fastify 5.12.5 is exact.
+Original buildApp/publication/auth suites and pinned lint/types/build remain
+UNRUN/blocked by missing real dependencies; component checks do not replace
+them. #809/#812/#814/#831/#842 are already delivered. This local successor
+neither republishes their history nor establishes historical #811 cause,
+quantified live latency improvement or #813/#811 completion.
+
+Subsequent review found an LRU settlement edge: 32 other project completions
+can evict a just-loaded entry before its waiter resumes, making a later
+invalidation unable to mark that waiter-held object. Expire/mark evicted objects
+stale before removal, without dirtying owners or creating capacity-driven
+follow-ups. This deliberately treats evicted outstanding snapshots as stale
+even without another publication. The new fixed-clock/gated control actually
+failed at its freshness assertion on frozen v1 (13 collected, one selected,
+12 filtered). Current v2 passed all 17 component cases, with zero skips.
+Retain the exact v1 source and 16-pass receipt separately; only the new result
+covers the eviction correction. Full-app/pinned and live limitations remain.
+
 ## Preserve the current source behind an interrupted reply (16 October 2026)
 
 Direct tracing of the existing chat loop exposed a compatibility defect in
