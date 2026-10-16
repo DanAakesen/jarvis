@@ -32,6 +32,17 @@ const confirmationSchema = {
   required: ['confirmationCode'],
   additionalProperties: false,
 };
+const createEventSchema = {
+  type: 'object',
+  properties: {
+    subject: { type: 'string', minLength: 1, maxLength: 200 },
+    startDateTime: dateTimeSchema,
+    endDateTime: dateTimeSchema,
+    attendees: { type: 'array', maxItems: 10, items: { type: 'string', format: 'email', maxLength: 254 } },
+  },
+  required: ['subject', 'startDateTime', 'endDateTime'],
+  additionalProperties: false,
+};
 
 interface GoogleOptions {
   readonly timeZone: string;
@@ -69,6 +80,29 @@ function dateTime(value: unknown, name: string): Date {
 
 function dateTimeBody(value: Date) {
   return { dateTime: value.toISOString(), timeZone: 'UTC' };
+}
+
+function calendarLocalTime(value: Date, timeZone: string): string {
+  return new Intl.DateTimeFormat('en-GB', {
+    timeZone, day: '2-digit', month: 'long', year: 'numeric',
+    hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+  }).format(value);
+}
+
+function createEvent(raw: unknown, timeZone: string) {
+  const input = object(raw);
+  const subject = string(input?.subject, 'subject', 1, 200);
+  const start = dateTime(input?.startDateTime, 'startDateTime');
+  const end = dateTime(input?.endDateTime, 'endDateTime');
+  validateWindow(start, end, 14);
+  const attendees = [...calendarAttendees(input?.attendees ?? [])];
+  return {
+    summary: `Create "${subject}" from ${calendarLocalTime(start, timeZone)} to ${calendarLocalTime(end, timeZone)} (${timeZone} local time); attendees: ${attendees.length ? attendees.join(', ') : 'none'}.`,
+    body: {
+      summary: subject, start: dateTimeBody(start), end: dateTimeBody(end),
+      ...(attendees.length ? { attendees: attendees.map((email) => ({ email })) } : {}),
+    },
+  };
 }
 
 function localDateParts(date: Date, timeZone: string): { year: number; month: number; day: number } {
@@ -210,6 +244,8 @@ function eventSummary(event: Record<string, unknown>, timeZone: string) {
     subject: event.summary,
     start: start.toISOString(),
     end: end.toISOString(),
+    startLocal: calendarLocalTime(start, timeZone),
+    endLocal: calendarLocalTime(end, timeZone),
     ...(typeof event.location === 'string' && event.location ? { location: event.location } : {}),
   };
 }
@@ -225,7 +261,11 @@ function calendarTruncated(payload: Record<string, unknown>, eventCount: number)
 
 function googleFailure(error: unknown): never {
   if (!(error instanceof GoogleApiError)) throw error;
-  const reason = error.kind === 'throttled'
+  throw new ToolFailure(googleFailureReason(error));
+}
+
+function googleFailureReason(error: GoogleApiError): string {
+  return error.kind === 'throttled'
     ? 'Google is rate-limiting requests. Try again shortly.'
     : error.kind === 'forbidden'
       ? 'Google did not authorize this request. No change was made.'
@@ -238,7 +278,6 @@ function googleFailure(error: unknown): never {
           : error.kind === 'rejected'
             ? 'Google rejected the request. Check the requested details.'
             : 'Google is temporarily unavailable. Try again shortly.';
-  throw new ToolFailure(reason);
 }
 
 function gmailItems(payload: Record<string, unknown>): Record<string, unknown>[] {
@@ -646,6 +685,8 @@ export function createGoogleModule(
             slots: free.map(({ start: slotStart, end: slotEnd }) => ({
               start: slotStart.toISOString(),
               end: slotEnd.toISOString(),
+              startLocal: calendarLocalTime(slotStart, timeZone),
+              endLocal: calendarLocalTime(slotEnd, timeZone),
             })),
             truncated: calendarTruncated(payload, events.length),
           };
@@ -655,49 +696,90 @@ export function createGoogleModule(
     {
       name: 'calendar_create_event',
       description: 'Prepare a Google Calendar event. No change is made until Dan replies yes, approve, go ahead or do it in a later message within ten minutes.',
-      inputSchema: {
-        type: 'object',
-        properties: {
-          subject: { type: 'string', minLength: 1, maxLength: 200 },
-          startDateTime: dateTimeSchema,
-          endDateTime: dateTimeSchema,
-          attendees: { type: 'array', maxItems: 10, items: { type: 'string', format: 'email', maxLength: 254 } },
-        },
-        required: ['subject', 'startDateTime', 'endDateTime'],
-        additionalProperties: false,
-      },
+      inputSchema: createEventSchema,
       sensitive: true,
       execute: async (raw, request) => {
-        const input = object(raw);
-        const subject = string(input?.subject, 'subject', 1, 200);
-        const start = dateTime(input?.startDateTime, 'startDateTime');
-        const end = dateTime(input?.endDateTime, 'endDateTime');
-        validateWindow(start, end, 14);
-        const attendees = input?.attendees ?? [];
-        const validatedAttendees = calendarAttendees(attendees);
+        const event = createEvent(raw, timeZone);
         const source = await currentDanMessage(request);
         return pendingActions.stage({
           scope: 'calendar',
           sourceMessageId: source.id,
-          summary: `Create "${subject}" from ${start.toISOString()} to ${end.toISOString()} (${timeZone}); attendees: ${validatedAttendees.length ? validatedAttendees.join(', ') : 'none'}.`,
+          summary: event.summary,
           execute: async (signal) => {
             try {
               await google.request('calendar', '/calendars/primary/events', {
                 method: 'POST',
                 signal,
-                body: {
-                  summary: subject,
-                  start: dateTimeBody(start),
-                  end: dateTimeBody(end),
-                  ...(validatedAttendees.length ? {
-                    attendees: validatedAttendees.map((email) => ({
-                      email,
-                    })),
-                  } : {}),
-                },
+                body: event.body,
               });
               return { status: 'completed', detail: 'The event was created in Google Calendar.' };
             } catch (error) { googleFailure(error); }
+          },
+        });
+      },
+    },
+    {
+      name: 'calendar_create_events',
+      description: 'Prepare 2–10 Google Calendar events together. Use for both/all requested bookings, not repeated single-event stages which replace each other. Display every returned summary; one later plain approval authorizes exactly this list. Writes are sequential, not atomic; report each result and never replay completed or unverified items.',
+      inputSchema: {
+        type: 'object',
+        properties: { events: { type: 'array', minItems: 2, maxItems: 10, items: createEventSchema } },
+        required: ['events'],
+        additionalProperties: false,
+      },
+      sensitive: true,
+      execute: async (raw, request) => {
+        const input = object(raw);
+        if (!Array.isArray(input?.events) || input.events.length < 2 || input.events.length > 10) {
+          throw new ToolRefusal('Provide between 2 and 10 calendar events in one proposal.');
+        }
+        const events = input.events.map((item) => createEvent(item, timeZone));
+        const keys = events.map((event) => JSON.stringify(event.body));
+        if (new Set(keys).size !== keys.length) {
+          throw new ToolRefusal('The calendar proposal contains duplicate events. Nothing was staged.');
+        }
+        const source = await currentDanMessage(request);
+        if (!source.sessionId) throw new ToolRefusal('A verified conversation session is required.');
+        return pendingActions.stage({
+          scope: 'calendar', sourceMessageId: source.id, sourceSessionId: source.sessionId,
+          summary: `Create ${events.length} calendar events:\n\n${events.map((event, index) => `${index + 1}. ${event.summary}`).join('\n\n')}`,
+          items: events.map((event) => event.summary),
+          execute: async (signal) => {
+            const items = events.map((event) => ({
+              summary: event.summary, status: 'not_attempted', detail: 'Not attempted.',
+            }));
+            for (const [index, event] of events.entries()) {
+              const item = items[index]!;
+              if (signal.aborted) {
+                item.detail = 'Execution was cancelled before this event was attempted.';
+                break;
+              }
+              try {
+                await google.request('calendar', '/calendars/primary/events', {
+                  method: 'POST', signal, body: event.body,
+                });
+                item.status = 'completed';
+                item.detail = 'The event was created in Google Calendar.';
+              } catch (error) {
+                if (!(error instanceof GoogleApiError) && !signal.aborted) {
+                  request.log.error({ item: index + 1 }, 'Calendar batch item has an unclassified execution failure');
+                }
+                const uncertain = signal.aborted || !(error instanceof GoogleApiError) ||
+                  error.kind === 'uncertain' || error.kind === 'unavailable';
+                item.status = uncertain ? 'unverified' : 'failed';
+                item.detail = uncertain
+                  ? 'The result is unverified. Check the calendar before proposing a retry.'
+                  : 'Google did not create this event. Resolve the failure before proposing a new change.';
+                if (error instanceof GoogleApiError && !uncertain) item.detail = googleFailureReason(error);
+                break;
+              }
+            }
+            const completed = items.filter((item) => item.status === 'completed').length;
+            return {
+              status: completed === events.length ? 'completed' : 'partial',
+              detail: `${completed} of ${events.length} calendar events were created. ${completed === events.length ? 'The approved proposal is complete.' : 'The proposal stopped; no automatic retry will run. Verify unverified events before a new proposal.'}`,
+              items,
+            };
           },
         });
       },
@@ -754,7 +836,7 @@ export function createGoogleModule(
           const event = requiredEvent(await google.request('calendar', path, { signal }));
           const changes = [
             title === undefined ? undefined : `title to "${title}"`,
-            start && end ? `time to ${start.toISOString()}–${end.toISOString()}` : undefined,
+            start && end ? `time to ${calendarLocalTime(start, timeZone)}–${calendarLocalTime(end, timeZone)} (${timeZone} local time)` : undefined,
             location === undefined ? undefined : `location to "${location}"`,
             attendees === undefined ? undefined : `attendees to ${attendees.length ? attendees.join(', ') : 'none'}`,
             description === undefined ? undefined : `description to ${JSON.stringify(description)}`,
@@ -808,7 +890,7 @@ export function createGoogleModule(
           return pendingActions.stage({
             scope: 'calendar',
             sourceMessageId: source.id,
-            summary: `Move "${preview.subject}" to ${start.toISOString()}–${end.toISOString()}.`,
+            summary: `Move "${preview.subject}" to ${calendarLocalTime(start, timeZone)}–${calendarLocalTime(end, timeZone)} (${timeZone} local time).`,
             execute: async (confirmSignal) => {
               try {
                 await google.request('calendar', `/calendars/primary/events/${encodeURIComponent(eventId)}`, {
@@ -860,7 +942,7 @@ export function createGoogleModule(
       sensitive: true,
       execute: async (_input, request) => {
         const message = await currentDanMessage(request);
-        return { ...pendingActions.pendingCalendarChange(), reply: classifyApprovalReply(message.text) ?? null };
+        return { ...pendingActions.pendingCalendarChange(message), reply: classifyApprovalReply(message.text) ?? null };
       },
     },
     {

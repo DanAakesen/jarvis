@@ -27,10 +27,12 @@
 .conversation-toast p { flex: 1; min-width: 0; margin: 0; font-size: var(--type-small); line-height: 1.5; overflow-wrap: anywhere; }
 .conversation-toast button { display: grid; place-items: center; padding: 0; border: 0; border-radius: var(--radius-control); color: var(--text); background: transparent; font: inherit; cursor: pointer; }
 .conversation-toast .conversation-toast-dismiss { flex: 0 0 36px; width: 36px; height: 36px; }
-.conversation-toast .conversation-toast-action { flex: 0 0 auto; min-height: 36px; padding: 0 12px; background: var(--glass-selected); box-shadow: var(--glass-selected-glow); font-size: var(--type-small); font-weight: 650; }
+.conversation-toast .conversation-toast-action { flex: 0 0 auto; min-height: 36px; padding: 0 12px; background: var(--state-selected-bg); color: var(--state-selected-fg); font-size: var(--type-small); font-weight: 650; }
 .conversation-toast button:hover { background: var(--glass-hover); }
-.conversation-toast .conversation-toast-action:hover { background: color-mix(in srgb, var(--glass-edge-cool) 28%, var(--surface)); }
-.conversation-toast button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.conversation-toast .conversation-toast-action:hover { background: var(--state-selected-hover); }
+.conversation-toast button:active { background: var(--glass-pressed); }
+.conversation-toast .conversation-toast-action:active { background: var(--state-selected-pressed); }
+.conversation-toast button:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 .conversation-toast svg { width: 18px; height: 18px; }
 @keyframes conversation-toast-arrive { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 @media (pointer: coarse) {

@@ -288,7 +288,7 @@ export function ConversationHistory({
     return () => clearInterval(timer);
   }, []);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     // Follow new content only while Dan is reading the latest message; scrolling up keeps his place.
     // A newly mounted window (first history or reopened after Close) starts at the latest message.
     const element = transcript.current;
@@ -297,6 +297,16 @@ export function ConversationHistory({
     followLatest.current = true;
     element.scrollTop = element.scrollHeight;
   }, [lastMessageId, streamedText, sending, queue.length, failedTurns.length, voiceActive, loading, conversationWindow?.element]);
+
+  useLayoutEffect(() => {
+    const element = transcript.current;
+    if (!element || typeof ResizeObserver !== 'function') return;
+    const observer = new ResizeObserver(() => {
+      if (followLatest.current) element.scrollTop = element.scrollHeight;
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [conversationWindow?.element, voiceActive]);
 
   function updateFollow() {
     const element = transcript.current;
@@ -612,7 +622,7 @@ export function ConversationHistory({
       <div key={turn.id}>
         {turn.partialReply && <div className="interrupted-reply">
           <p>Partial reply, interrupted:</p>
-          <MarkdownContent source={turn.partialReply} />
+          <MarkdownContent source={turn.partialReply} gfm />
         </div>}
         <p className="chat-error" role="alert">{turn.error}</p>
       </div>
@@ -780,7 +790,7 @@ export function ConversationHistory({
                   <li className="conversation-message" data-speaker={message.role} data-latest={message.id === latestJarvisId && !sending || undefined} tabIndex={0}>
                     <strong className="message-author visually-hidden">{message.role === 'dan' ? 'Dan' : 'Jarvis'}</strong>
                     {message.role === 'jarvis' && message.channel === 'chat'
-                      ? <MarkdownContent source={message.text} />
+                      ? <MarkdownContent source={message.text} gfm />
                       : <p>{message.text}</p>}
                     {message.interrupted && <p className="interrupted-label">Interrupted</p>}
                     {message.role === 'dan' && message.visualResult &&
@@ -848,7 +858,7 @@ export function ConversationHistory({
             )}
             {streamedText && (
               <div className="streaming-reply" aria-label="Jarvis reply in progress">
-                <MarkdownContent source={streamedText} streaming />
+                <MarkdownContent source={streamedText} streaming gfm />
                 <span className="streaming-caret" aria-hidden="true" />
               </div>
             )}

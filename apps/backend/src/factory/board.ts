@@ -513,10 +513,10 @@ async function readPages(
 
 async function readTogether<T extends readonly unknown[]>(
   reads: { [K in keyof T]: (signal: AbortSignal) => Promise<T[K]> },
-  signal: AbortSignal,
+  signal?: AbortSignal,
 ): Promise<T> {
   const controller = new AbortController();
-  const combinedSignal = AbortSignal.any([signal, controller.signal]);
+  const combinedSignal = signal ? AbortSignal.any([signal, controller.signal]) : controller.signal;
   let failed = false;
   let firstError: unknown;
   const pending = reads.map((read) => Promise.resolve().then(() => read(combinedSignal)).catch((error: unknown) => {
@@ -668,10 +668,25 @@ export function createGitHubFactoryBoardReader(fetchImpl: typeof fetch = fetch):
   };
 }
 
+interface CachedFactoryBoard {
+  expiresAt: number;
+  invalidated: boolean;
+  board: FactoryBoard;
+}
+
+interface FactoryBoardCacheSnapshot {
+  entry: CachedFactoryBoard;
+  failure?: unknown;
+}
+
+interface PendingFactoryBoard {
+  dirty: boolean;
+  promise: Promise<FactoryBoardCacheSnapshot>;
+}
+
 export class FactoryBoardCache {
-  private readonly entries = new Map<string, { expiresAt: number; board: FactoryBoard }>();
-  private readonly pending = new Map<string, { generation: number; promise: Promise<FactoryBoard> }>();
-  private generation = 0;
+  private readonly entries = new Map<string, CachedFactoryBoard>();
+  private readonly pending = new Map<string, PendingFactoryBoard>();
 
   constructor(private readonly now: () => number = Date.now, private readonly ttlMs = 60_000) {}
 
@@ -684,44 +699,96 @@ export class FactoryBoardCache {
   }> {
     const key = projectId;
     const cached = this.entries.get(key);
-    if (cached && cached.expiresAt > this.now()) {
+    if (cached && !cached.invalidated && cached.expiresAt > this.now()) {
       onCachePath?.('cache_hit');
       this.entries.delete(key);
       this.entries.set(key, cached);
       return { board: cached.board, stale: false };
     }
     const pending = this.pending.get(key);
-    if (pending?.generation === this.generation) {
+    if (pending) {
       onCachePath?.('shared_wait');
-      return pending.promise.then((board) => ({ board, stale: false }), (error: unknown) => {
-        if (cached) return { board: cached.board, stale: true, failure: error };
-        throw error;
-      });
+      return this.result(await pending.promise);
     }
 
     onCachePath?.('source_load');
-    const generation = this.generation;
-    const promise = load().then((board) => {
-      if (generation === this.generation) {
-        this.entries.set(key, { expiresAt: this.now() + this.ttlMs, board });
-        if (this.entries.size > 32) this.entries.delete(this.entries.keys().next().value!);
-      }
-      return board;
-    }).finally(() => {
-      if (this.pending.get(key)?.promise === promise) this.pending.delete(key);
+    let resolve!: (snapshot: FactoryBoardCacheSnapshot) => void;
+    let reject!: (error: unknown) => void;
+    const promise = new Promise<FactoryBoardCacheSnapshot>((resolveSnapshot, rejectSnapshot) => {
+      resolve = resolveSnapshot;
+      reject = rejectSnapshot;
     });
-    this.pending.set(key, { generation, promise });
+    const owner = { dirty: false, promise };
+    this.pending.set(key, owner);
+    void this.loadOwned(key, owner, load, cached).then((snapshot) => {
+      if (this.pending.get(key) === owner) this.pending.delete(key);
+      resolve(snapshot);
+    }, (error: unknown) => {
+      if (this.pending.get(key) === owner) this.pending.delete(key);
+      reject(error);
+    });
+    return this.result(await promise);
+  }
+
+  private result({ entry, ...diagnostic }: FactoryBoardCacheSnapshot): {
+    board: FactoryBoard; stale: boolean; failure?: unknown;
+  } {
+    // Publication can invalidate an entry after loading but before a waiter settles.
+    return {
+      board: entry.board,
+      stale: entry.invalidated || entry.expiresAt <= this.now(),
+      ...diagnostic,
+    };
+  }
+
+  private remember(projectId: string, board: FactoryBoard, invalidated: boolean): CachedFactoryBoard {
+    const now = this.now();
+    const entry = { board, invalidated, expiresAt: invalidated ? now : now + this.ttlMs };
+    this.entries.delete(projectId);
+    this.entries.set(projectId, entry);
+    if (this.entries.size > 32) {
+      const [oldest, evicted] = this.entries.entries().next().value!;
+      // Outstanding snapshots must become stale before losing invalidation reachability.
+      evicted.invalidated = true;
+      evicted.expiresAt = Math.min(evicted.expiresAt, now);
+      this.entries.delete(oldest);
+    }
+    return entry;
+  }
+
+  private async loadOwned(
+    projectId: string,
+    owner: PendingFactoryBoard,
+    load: () => Promise<FactoryBoard>,
+    fallback?: CachedFactoryBoard,
+  ): Promise<FactoryBoardCacheSnapshot> {
     try {
-      return { board: await promise, stale: false };
+      fallback = this.remember(projectId, await load(), owner.dirty);
+      if (owner.dirty) {
+        owner.dirty = false;
+        // One follow-up, not an unbounded drain while live updates continue.
+        fallback = this.remember(projectId, await load(), owner.dirty);
+      }
+      return { entry: fallback };
     } catch (error) {
-      if (cached) return { board: cached.board, stale: true, failure: error };
+      if (fallback) return { entry: fallback, failure: error };
       throw error;
     }
   }
 
+  invalidate(projectId: string): void {
+    const cached = this.entries.get(projectId);
+    if (cached) {
+      cached.invalidated = true;
+      cached.expiresAt = Math.min(cached.expiresAt, this.now());
+    }
+    const pending = this.pending.get(projectId);
+    if (pending) pending.dirty = true;
+  }
+
   invalidateAll(): void {
-    this.entries.clear();
-    this.generation += 1;
+    for (const projectId of this.entries.keys()) this.invalidate(projectId);
+    for (const pending of this.pending.values()) pending.dirty = true;
   }
 }
 
@@ -891,14 +958,14 @@ export function registerFactoryBoardRoute(app: FastifyInstance): void {
             const closedSince = new Date(now - closedIssueWindowMs).toISOString();
             const token = await logBoardPhase(request, 'token', () =>
               readBoardStage('token', () => tokenIssuer.issueForRepositoryRead(project.repo)));
-            const [source, taskRecords, releaseRecords] = await Promise.all([
-              logBoardPhase(request, 'source', () =>
+            const [source, taskRecords, releaseRecords] = await readTogether([
+              () => logBoardPhase(request, 'source', () =>
                 readBoardStage('source', () => app.factoryBoardReader.read(project.repo, token, closedSince))),
-              logBoardPhase(request, 'task', () =>
+              () => logBoardPhase(request, 'task', () =>
                 readBoardStage('task', () => tasks.list({ projectId: project!.id, limit: 1000, offset: 0 }))),
-              logBoardPhase(request, 'release', () =>
+              () => logBoardPhase(request, 'release', () =>
                 readBoardStage('release', () => releases.read(project!.id))),
-            ]);
+            ] as const);
             return logBoardPhase(request, 'response', async () => {
               const board = createFactoryBoard(
                 project!.id,
@@ -917,7 +984,7 @@ export function registerFactoryBoardRoute(app: FastifyInstance): void {
         }
         const { board, stale: usedStale, failure } = cached;
         stale = usedStale;
-        if (stale) {
+        if (stale && 'failure' in cached) {
           const { stage, reason, status } = boardReadError('response', failure);
           request.log.warn({
             reqId: request.id, route: request.routeOptions.url, stage, reason, status, stale: true,

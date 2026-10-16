@@ -123,6 +123,8 @@ def test_chat_streams_text_and_sets_tool_source_message() -> None:
     )
     assert model.language == "da"
     assert model.message_id == "42"
+    assert model.messages[-1].source_message_id == "42"
+    assert model.messages[0].source_message_id is None
     assert model.captured_settings == model.settings
     assert model.closed
 
@@ -163,6 +165,7 @@ def test_system_smoke_invocation_skips_user_history_and_persistence() -> None:
     assert model.smoke
     assert model.chat_calls == 1
     assert model.messages == (ModelMessage("user", "what can you do?"),)
+    assert model.messages[-1].source_message_id is None
 
 
 def test_smoke_plain_yes_accepts_only_the_fixed_confirmation_transcript() -> None:
@@ -334,6 +337,7 @@ def test_steered_invocation_uses_saved_language_and_authorized_round_boundary(mo
     assert "Continued." in response.text
     assert model.language == "en"
     assert model.message_id == "44"
+    assert model.messages[-1].source_message_id == "44"
     assert getattr(model, "failure", None) is None
     assert model.steering == [("45", "Also be concise.", "en")]
     assert model.messages[-1] == ModelMessage(
@@ -899,6 +903,8 @@ def test_load_verified_history_checks_token_and_uses_stored_context(monkeypatch)
     )
 
     assert result == [ModelMessage("user", "Older"), ModelMessage("assistant", "Answer")]
+    assert result[0].source_message_id == "20"
+    assert result[1].source_message_id is None
     assert request_timeouts == [
         ("https://backend.example/me", 17),
         ("https://backend.example/conversation/history?limit=100", 17),

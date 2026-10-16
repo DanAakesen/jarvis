@@ -24,6 +24,13 @@ export interface ToolCallStore {
  */
 export function confirmToolCall(tool: string, outcome: ToolCallOutcome, result: unknown): string {
   if (outcome === 'ok') {
+    if (tool === 'calendar_confirm_change') {
+      const change = result as { status?: unknown; detail?: unknown } | null;
+      if (['completed', 'cancelled', 'partial', 'unverified'].includes(String(change?.status)) &&
+          typeof change?.detail === 'string' && change.detail.length <= 1_000) {
+        return change.detail;
+      }
+    }
     const confirmation = (result as { confirmation?: unknown } | null)?.confirmation;
     if (tool === 'image_generation' && typeof confirmation === 'string' &&
         confirmation.length > 0 && confirmation.length <= 300 &&

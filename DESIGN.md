@@ -1,5 +1,62 @@
 # Design
 
+## Chat records and keyboard geometry (16 October 2026; local candidate)
+
+Keep the current glass chat, compact message type and readable composer.
+Prefer one labelled list record per booking/event, blank lines between
+records, and explicit source-backed date/time meaning. The calendar/agent
+lane owns the matching normal-chat instruction; this frontend has no live
+agent visual readback. Existing well-formed GFM tables retain native table
+headers in a focusable horizontal scroll region, with neutral structural
+rules and the existing focus ring. Table-bearing replies can use the available
+transcript width; prose keeps its compact measure. Narrow tables scroll
+within the message rather than widening the page. No raw HTML or guessed repair of flattened
+pipe text is introduced.
+
+Both phone chat halves derive their top/height from the same visual viewport.
+Do not animate keyboard fitting, subtract a second keyboard gap from a
+shrinking fixed viewport, or use page-scroll/delay hacks. Existing manual
+placement, seam and no-keyboard safe-area spacing remain. Content following
+runs before paint so layout-generated scroll events cannot mistake streamed
+growth for reader intent. Latest-following survives transcript resizing;
+reading older history does not jump to bottom during further streamed growth.
+Browser emulation and synthetic viewport events are not physical Safari
+acceptance.
+
+## Shared control geometry (16 October 2026; local candidate)
+
+Dan's three supplied screenshots identify inconsistent Refresh/Create action
+shapes, boxed release icons and repeated bevelled job tabs. Preserve Jarvis's
+existing glass room, typography, palette and layout; this is an app-wide control
+correction, not a new theme or a Factory-only treatment. This contract supersedes
+older capsule-action and refracted-control-rim descriptions below.
+
+Actions, icon buttons, navigation tabs, filters, segmented choices and form
+fields use the existing control radius from `apps/web/src/styles.css`.
+Pills identify compact noninteractive status; genuine switch tracks, orb/media
+geometry and window/panel surfaces retain their semantic shapes. Primary actions
+keep the existing primary fill. Quiet actions use borderless surfaces with
+hover/pressed feedback. Selected choices retain their existing surface/text
+roles, stronger weight and accessible state. No decorative coloured boxes,
+bevels, inset-shadow borders or glowing control outlines, including on hover.
+Neutral field boundaries and real panel/list structure remain; keyboard focus
+uses the existing visible focus outline rather than a permanent accent rim.
+
+Keep compact desktop controls where useful and at least 44px touch targets.
+Segmented groups wrap at narrow widths; scrolling filter rows retain keyboard
+focus and readable labels. Reuse current motion timing and reduced-motion
+handling; do not animate geometry merely to make controls look busy.
+`docs/agent-context.md` and the project-local product-ui skill carry this rule
+for future work. Header/job and mobile chat corrections have separate owners;
+this candidate does not imply their changes are integrated or released.
+
+The companion header requirement consolidates terminal/hidden jobs under recent
+history. Dismissing UUID jobs is local to the account/backend and hides header
+state only, never cancels work or deletes server history. Indexing Retry must be
+explicitly unavailable without a supported owned action. A historical
+interruption is not current system health. Preserve accessible focus and
+borderless tabs in that implementation; live acceptance remains separate.
+
 ## Fixed balanced stage rendering (15 October 2026; local)
 
 Dan accepted a single middle ground and said the changed stage still looks

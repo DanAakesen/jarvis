@@ -7,6 +7,7 @@ from __future__ import annotations
 import asyncio
 import json
 from collections.abc import AsyncIterator
+from contextlib import aclosing
 from types import SimpleNamespace
 from typing import Any
 from uuid import UUID
@@ -34,6 +35,7 @@ from model_client import (
     anthropic_thinking_parameters,
     anthropic_tools,
     is_claude_model,
+    model_message_input,
     parse_max_output_tokens,
     personalize_instructions,
     responses_base_url,
@@ -107,6 +109,32 @@ class FakeAnthropic:
 
     async def close(self) -> None:
         self.closed = True
+
+
+async def collect_chat(
+    response,
+    chunks: list[str],
+    first: asyncio.Event | None = None,
+    close_after_first: bool = False,
+) -> None:
+    """Keep generator-owned ContextVar tokens and cleanup in the consuming task."""
+    async with aclosing(response):
+        async for chunk in response:
+            chunks.append(chunk)
+            if first is not None:
+                first.set()
+            if close_after_first:
+                return
+
+
+def test_verified_message_identity_is_backward_compatible_non_prompt_metadata() -> None:
+    original = ModelMessage("user", "Hello")
+    verified = ModelMessage("user", "Hello", source_message_id="7312345678901234")
+    assert original == verified
+    assert "7312345678901234" not in repr(verified)
+    payload = model_message_input(verified)
+    assert payload == {"role": "user", "content": "Hello"}
+    assert "7312345678901234" not in json.dumps(anthropic_messages([payload]))
 
 
 def test_chat_instructions_leave_capabilities_to_the_backend() -> None:
@@ -421,6 +449,257 @@ async def test_chat_uses_capability_instructions_from_agent_settings() -> None:
     )]
 
     assert "Shared backend capability block." in transport.responses.request["instructions"]
+
+
+@pytest.mark.parametrize("language", ["en", "da"])
+async def test_normal_chat_uses_supported_record_format_and_does_not_claim_a_visual_preview(
+    language: str,
+) -> None:
+    model, transport = client([completed()])
+    try:
+        _ = [chunk async for chunk in model.complete_chat(
+            [ModelMessage("user", "List the hotel bookings")], language,
+        )]
+        instructions = transport.responses.request["instructions"]
+        assert "Chat renders CommonMark" in instructions
+        assert "Do not emit pipe tables, HTML or layout-dependent columns" in instructions
+        assert "one labelled list item per record, separated by blank lines" in instructions
+        assert "24-hour times" in instructions
+        assert "Never guess a missing year or time zone or convert date-only values" in instructions
+        assert "do not claim to see the rendered chat" in instructions
+    finally:
+        await model.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("provider", ["openai", "anthropic"])
+@pytest.mark.parametrize("calendar_present", [False, True])
+@pytest.mark.parametrize("cancel_after_first", [False, True])
+async def test_safe_chat_sentence_yields_before_held_provider_completion(
+    provider: str, calendar_present: bool, cancel_after_first: bool,
+) -> None:
+    gate = asyncio.Event()
+    text = "Hello, Dan! "
+
+    class ResponsesStream(FakeStream):
+        def __aiter__(self) -> AsyncIterator[Any]:
+            async def iterate() -> AsyncIterator[Any]:
+                yield SimpleNamespace(type="response.output_text.delta", delta=text)
+                await gate.wait()
+                yield completed()
+            return iterate()
+
+    class AnthropicStream(FakeAnthropicStream):
+        async def get_final_message(self) -> Any:
+            await gate.wait()
+            return self._final
+
+    backend = FakeBackend(catalogue=[{
+        "name": "calendar_get_pending_change", "description": "Recover pending calendar change.",
+        "inputSchema": {"type": "object", "properties": {}},
+    }] if calendar_present else [], model_name=(
+        "claude-sonnet-5" if provider == "anthropic" else "deployment"
+    ))
+    model, transport = client([], backend=backend)
+    if provider == "anthropic":
+        stream = AnthropicStream([text], SimpleNamespace(content=[], usage=None))
+        model._anthropic_client = FakeAnthropic([
+            stream,
+        ])
+    else:
+        stream = ResponsesStream([])
+        transport.responses.streams = [stream]
+    response = model.complete_chat([ModelMessage("user", "Hey, how are you?")], "en")
+    first = asyncio.Event()
+    chunks: list[str] = []
+    consumer = asyncio.create_task(collect_chat(response, chunks, first, cancel_after_first))
+    try:
+        await asyncio.wait_for(first.wait(), 5)
+        assert chunks == [text]
+        assert not gate.is_set()
+        assert not any(request.url.path.startswith("/tools/") for request in backend.requests)
+        if cancel_after_first:
+            await asyncio.wait_for(asyncio.shield(consumer), 5)
+            assert stream.exited
+            return
+        gate.set()
+        await asyncio.wait_for(asyncio.shield(consumer), 5)
+        assert chunks == [text]
+    finally:
+        gate.set()
+        consumer.cancel()
+        await asyncio.gather(consumer, return_exceptions=True)
+        await model.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("provider", ["openai", "anthropic"])
+@pytest.mark.parametrize("tail", [
+    ["I have cre", "ated both events in your calendar."],
+    ["I have ad", "ded both bookings to your calendar."],
+    ["Your calendar events ", "are ready for approval."],
+    ["I have added both to your calendar. ", "Actually, I have not made any change."],
+    ["Pending calendar approval: ", "Unverified proposal."],
+    ["Afventer kalendergodkendelse: ", "Ubekræftet forslag."],
+])
+@pytest.mark.parametrize("terminal", ["answer", "stage", "steer"])
+async def test_early_safe_chat_does_not_leak_a_later_split_calendar_claim(
+    provider: str, tail: list[str], terminal: str,
+) -> None:
+    gate = asyncio.Event()
+    waiting = asyncio.Event()
+    chunks = ["Hello! ", *tail]
+
+    class ResponsesStream(FakeStream):
+        def __aiter__(self) -> AsyncIterator[Any]:
+            async def iterate() -> AsyncIterator[Any]:
+                for text in chunks:
+                    yield SimpleNamespace(type="response.output_text.delta", delta=text)
+                waiting.set()
+                await gate.wait()
+                yield final_event
+            return iterate()
+
+    class AnthropicStream(FakeAnthropicStream):
+        async def get_final_message(self) -> Any:
+            waiting.set()
+            await gate.wait()
+            return self._final
+
+    class Backend(FakeBackend):
+        def handle(self, request: httpx.Request) -> httpx.Response:
+            if request.url.path == "/tools/calendar_create_event":
+                self.requests.append(request)
+                return httpx.Response(200, json={"outcome": "ok", "result": {
+                    "status": "awaiting_confirmation", "confirmationCode": "12345678",
+                    "summary": "Create the synthetic event.",
+                }})
+            return super().handle(request)
+
+    backend = Backend(catalogue=[{
+        "name": "calendar_get_pending_change", "description": "Recover pending calendar change.",
+        "inputSchema": {"type": "object", "properties": {}},
+    }, {
+        "name": "calendar_create_event", "description": "Stage an event.",
+        "inputSchema": {"type": "object", "properties": {}},
+    }], model_name="claude-sonnet-5" if provider == "anthropic" else "deployment")
+    model, transport = client([], backend=backend)
+    calls = [FakeItem(type="function_call", call_id="synthetic", name="calendar_create_event",
+                      arguments="{}")] if terminal == "stage" else []
+    final_event = completed(*calls)
+    if provider == "anthropic":
+        content = [FakeItem(type="tool_use", id="synthetic", name="calendar_create_event",
+                            input={})] if terminal == "stage" else []
+        model._anthropic_client = FakeAnthropic([
+            AnthropicStream(chunks, SimpleNamespace(content=content, usage=None)),
+            FakeAnthropicStream(["Done."], SimpleNamespace(content=[], usage=None)),
+        ])
+    else:
+        transport.responses.streams = [
+            ResponsesStream([]),
+            FakeStream([SimpleNamespace(type="response.output_text.delta", delta="Done."),
+                        completed()]),
+        ]
+    steered = False
+
+    async def fetch_steering():
+        nonlocal steered
+        if terminal == "steer" and gate.is_set() and not steered:
+            steered = True
+            return [("43", "Add both bookings to my calendar", "en")]
+        return []
+
+    fetch_token = current_steering_fetcher.set(fetch_steering)
+    message_token = current_message_id.set("42")
+    response = model.complete_chat([ModelMessage("user", "Hey, how are you?")], "en")
+    first = asyncio.Event()
+    received: list[str] = []
+    consumer = asyncio.create_task(collect_chat(response, received, first))
+    try:
+        await asyncio.wait_for(first.wait(), 5)
+        assert received == ["Hello! "]
+        await asyncio.wait_for(waiting.wait(), 5)
+        assert received == ["Hello! "]
+        assert not consumer.done()
+        gate.set()
+        await asyncio.wait_for(asyncio.shield(consumer), 5)
+        remainder = "".join(received[1:])
+        if terminal == "stage":
+            assert "Pending calendar approval" in remainder
+            assert "Nothing has changed" in remainder
+            assert [request.url.path for request in backend.requests].count(
+                "/tools/calendar_create_event"
+            ) == 1
+        else:
+            assert "I have no verified calendar result" in remainder
+        assert steered == (terminal == "steer")
+        assert "created both events" not in remainder
+        assert "added both bookings" not in remainder
+        assert "ready for approval" not in remainder
+        assert "Unverified proposal" not in remainder
+        assert "Ubekræftet forslag" not in remainder
+    finally:
+        gate.set()
+        consumer.cancel()
+        await asyncio.gather(consumer, return_exceptions=True)
+        await model.close()
+        current_message_id.reset(message_token)
+        current_steering_fetcher.reset(fetch_token)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("provider", ["openai", "anthropic"])
+@pytest.mark.parametrize("claim", ["Both are in now.", "Done."])
+async def test_context_only_calendar_claim_stays_held_until_verified(
+    provider: str, claim: str,
+) -> None:
+    gate = asyncio.Event()
+    waiting = asyncio.Event()
+
+    class ResponsesStream(FakeStream):
+        def __aiter__(self) -> AsyncIterator[Any]:
+            async def iterate() -> AsyncIterator[Any]:
+                yield SimpleNamespace(type="response.output_text.delta", delta=claim)
+                waiting.set()
+                await gate.wait()
+                yield completed()
+            return iterate()
+
+    class AnthropicStream(FakeAnthropicStream):
+        async def get_final_message(self) -> Any:
+            waiting.set()
+            await gate.wait()
+            return self._final
+
+    backend = FakeBackend(catalogue=[{
+        "name": "calendar_get_pending_change", "description": "Recover pending calendar change.",
+        "inputSchema": {"type": "object", "properties": {}},
+    }], model_name="claude-sonnet-5" if provider == "anthropic" else "deployment")
+    model, transport = client([], backend=backend)
+    if provider == "anthropic":
+        model._anthropic_client = FakeAnthropic([
+            AnthropicStream([claim], SimpleNamespace(content=[], usage=None)),
+        ])
+    else:
+        transport.responses.streams = [ResponsesStream([])]
+    response = model.complete_chat([
+        ModelMessage("assistant", "Pending calendar approval: two hotels."),
+        ModelMessage("user", "Are you all right?"),
+    ], "en")
+    received: list[str] = []
+    consumer = asyncio.create_task(collect_chat(response, received))
+    try:
+        await asyncio.wait_for(waiting.wait(), 5)
+        assert received == []
+        assert not consumer.done()
+        gate.set()
+        await asyncio.wait_for(asyncio.shield(consumer), 5)
+        assert "I have no verified calendar result" in "".join(received)
+    finally:
+        gate.set()
+        consumer.cancel()
+        await asyncio.gather(consumer, return_exceptions=True)
+        await model.close()
 
 
 @pytest.mark.asyncio

@@ -1,5 +1,103 @@
 # Architecture
 
+## Calendar proposals and conversational grounding (16 October 2026; local candidate)
+
+`calendar_create_events` validates 2–10 complete event inputs before staging
+anything. The existing `PendingGoogleActions` owns one immutable calendar
+proposal, including every displayed local-time summary and the captured
+provider inputs. A batch additionally binds its source conversation session.
+The existing eight-digit code, ten-minute expiry, verified later Dan message
+and consume-before-execute boundary still apply; single-event input schemas
+and Gmail scope remain compatible.
+
+Confirmation runs the captured events sequentially and stops on the first
+failure or cancellation. Results distinguish `completed`, known `failed`,
+`unverified` and `not_attempted` items. No automatic retry or rollback is
+implied. The current proposal's actual terminal receipt remains process-local,
+source-session-bound and limited to the original expiry. A newer proposal
+invalidates that receipt; an older in-flight completion cannot overwrite it.
+`calendar_get_pending_change` can return this `lastChange` with `status: none`;
+absence of pending state is not proof that nothing was written. Restart loses
+both stage and receipt. No SQL migration, replica or permission change is added.
+
+The hosted adapter consolidates multiple proposed single-create calls before
+dispatch when the batch tool exists. For an explicit multiple-event request,
+it locally refuses an isolated single-create call before staging and bounds
+continuation to the complete batch. Failed/incomplete continuation therefore
+cannot leave a hidden first-event proposal. Approval recovery compares the latest
+request's canonical server-verified message ID with the existing staged
+`sourceMessageId`, exposed only by trusted pending/receipt results. Optional
+`ModelMessage.source_message_id` retains that identity through verified history,
+the current request, steering and caption fallback, but is not serialized into
+provider prompts. Assistant labels, copied/rephrased summaries, counts and
+claimed JSON cannot supply identity. Missing/truncated/unverified origin refuses
+batch approval; other callers and single-event semantics remain compatible.
+Model-dispatched confirmation also checks actual recovered state, rather than
+bypassing the guard after unusual routing. A round mixing separate calendar
+proposals/confirmation is refused before any mutation dispatch, so a valid first
+stage cannot remain hidden behind a later refusal under the same source ID.
+The existing all-single-create coalescing path still validates the whole list.
+Contextual quantities such as "Add those two.", "Tilføj de to." and "Tilføj
+disse to." can use the preceding calendar context for routing and response
+grounding. Danish demonstratives do not make English `to` a quantity.
+Explicit Notes/mail context blocks
+that inheritance. Batch origin checks examine the latest explicit user creation
+or scoped calendar mutation without skipping a newer shorthand/other-workflow
+creation for an older source; plain cancellation remains an approval reply.
+Context never substitutes for canonical staged/verified message-ID equality.
+Earlier state is not cancelled or mutated by
+that refusal. Older catalogues cannot silently overwrite
+one single stage with another. Final response grounding targets affirmative
+calendar action/approval claims, not benign calendar wording or unrelated
+tool errors. Calendar requests remain guarded if recovery is unavailable.
+Normal chat adds supported CommonMark record/date guidance; smoke and spoken
+format instructions are unchanged. Timed calendar reads retain ISO values and
+add human-local-time labels; date-only events are not converted.
+
+Calendar catalogue presence no longer requires holding every unrelated chat
+sentence until provider completion. Both provider adapters can release complete
+non-calendar/non-action sentences using the same scope/claim helpers as the
+final guard, including ordinary completed-action wording such as "I've put both
+in your calendar." Partial or ambiguous sentences remain held. Released text cannot
+be retracted; the remainder is still checked against actual tool evidence,
+and steering refreshes calendar scope before a continuation. This is a bounded
+partial-streaming policy, not semantic proof or a measured production speedup.
+The runtime change is limited to verified-message metadata assignments; transport,
+connection reuse and client lifecycle are unchanged. Combined PR #816 real-handler
+disconnect/each-invocation close-order coverage remains unowned and unverified.
+These are local synthetic contracts, not
+live provider/model, rendered UI or restart-durability acceptance.
+Final shorthand/claim controls passed in the 444-test calendar/model/runtime
+selection with Ruff8 clean. The 58-test qualified Node result covers the exact
+unchanged backend/fixture identities after the Danish-only correction. Older
+v1/v2/v3 packets remain historical, not combined pinned-CI acceptance.
+
+## Chat rendering and explicit phone viewport (16 October 2026; local candidate)
+
+Agent JSON SSE payloads retain text newlines through `chat-agent.ts`,
+`conversation.ts` delta concatenation, SQL `messages.text`, history projection
+and `ConversationHistory`. A well-formed table still rendered as inline pipe
+prose because `MarkdownContent` used CommonMark without table support.
+Chat opts into `remark-gfm` on the existing `react-markdown` parser; Notes and
+Knowledge keep their existing CommonMark rendering. Raw HTML stays
+disabled and URL transformation/link isolation remain unchanged. Tables use
+native headers and a bounded keyboard-focusable scroll wrapper. Only
+table-bearing messages can exceed the ordinary prose-width cap. Rendering
+does not rewrite persisted text or reconstruct flattened malformed records.
+
+`usePhoneChatViewport` publishes shell-scoped visual-viewport top and height,
+not `innerHeight - visualHeight` bottom compensation. Both fixed chat halves
+use that rectangle directly. This avoids mixing a stale layout-height reading
+with a shrinking CSS fixed viewport. Zoom retains ordinary native panning.
+`Workspace` keeps its existing scheduled manual anchor measurement and saved
+layout; viewport fitting never saves a new preference. `ConversationHistory`
+observes transcript resizing to retain bottom-follow only for a latest reader.
+Its existing content-follow effect runs in the layout phase: a passive effect
+could otherwise receive layout-generated scroll events first and incorrectly
+disable following while a table response was still open. Explicit reader
+scrolling still opts out through repeated content growth.
+No API, database, voice or navigation contract changes.
+
 ## Source identity across chat steering (16 October 2026; local successor)
 
 The chat loop persists an interrupted Jarvis partial after the steering Dan
@@ -244,6 +342,50 @@ existing dismissal/focus owner. No resize observer, tab-width state,
 backend contract or window lifecycle changes are introduced.
 `ShellLayout` no longer renders generic runtime activity in the header;
 the activity subscription still supplies phone and conversation feedback.
+
+### Job history and recovery correction (16 October 2026; local)
+
+The header represents `BackgroundJob.jobId` UUIDs, not workspace-window
+duplicates. Startup creates a new embedding run only when vectors need
+backfill; SQL reconciles an interrupted running job as failed with its
+existing step history and `interrupted by restart` reason. Opening job
+details does not start indexing. Those lifecycle contracts are unchanged.
+
+`jobs-store` merges authenticated `/jobs` hydration with activity events by
+UUID and update time, prevents terminal-to-running regression, retains all
+running work and the latest 100 terminal runs locally, and exposes load or
+device-storage failures. Historical completed results do not auto-open on
+reload; a hydrated running job can still deliver its subsequent live result.
+Pending result-window delivery survives unrelated progress updates and is
+disposed on unmount or when that job is hidden. A missing result window or
+failed local action marks Jobs as needing attention and exposes the error
+in that run's history without changing its server status. Opening the result
+successfully clears the local error.
+
+Running jobs have separate accessible Hide controls; terminal and hidden
+jobs share one Jobs history control instead of creating repeated header
+tabs. UUID-only dismissal preferences are scoped to the authenticated
+MSAL account and backend URL on this device. Closing/hiding does not call
+Cancel, delete SQL records or erase results. Jobs history still exposes the
+original status, run identity, timestamp, failure reason and saved result.
+The phone sheet counts one renderable Jobs summary independently of artifact
+windows and stays open for job controls. Artifact tabs are React portals, so
+a native capture listener on the actual tab strip closes the phone sheet
+without preventing the artifact's own selection/restore callback. The listener
+is replaced with its strip target or phone mode and removed on cleanup;
+Jobs/history controls remain exempt.
+
+Header Retry does not dispatch a chat prompt. Indexing has no supported
+owned retry action here, so Retry is disabled with an explanation separating
+that prior run from current indexing health. Research details direct the
+user to the existing job-ID/`get_job` retry-eligibility contract rather than
+assuming that a sensitive `retry_job` tool can be invoked from the header.
+No new backend action, permission, model call or index mutation is added.
+Header controls use existing borderless shared control surfaces and focus
+outlines, following the user's no-decorative-tab-border decision. Job history
+uses the existing opaque report surface in both appearances; narrow desktop
+popovers stay within viewport margins and phone details remain inside the sheet.
+Saved server history and the existing 30-day retention are unchanged.
 
 ## Mobile/Status review publication (14 October 2026)
 
@@ -1110,6 +1252,33 @@ and monotonically increasing in-process version. No migration or GitHub
 Project write is needed; live GitHub reads require the App's issue read
 permission.
 
+The local 16 October cache-ownership correction keeps one pending owner per
+project through invalidation. An invalidation expires that project's retained
+snapshot and marks its owner dirty, without replacing or cancelling shared
+work. Repeated updates coalesce into at most one immediate follow-up load.
+Every load passes the existing whole-board validation before retention.
+Invalidation during the follow-up leaves its result explicitly stale and
+expired; another request can start a new owner after settlement. A failed load
+does not retry automatically: all waiters receive the same original typed
+failure, with the last validated snapshot as stale fallback when available.
+Freshness is checked again at waiter settlement, including invalidation after
+load completion. The TTL starts at clean publication, and the 32-entry bound
+does not evict pending owners. Explicit `invalidateAll()` remains supported,
+but ordinary task/webhook publication is project-scoped. These are local source
+semantics, not a released latency or historical-502 claim.
+
+An entry removed by the 32-entry bound is itself marked stale and expired
+before removal. Otherwise a waiter-held snapshot could lose invalidation
+reachability and still settle fresh. Capacity eviction does not dirty a pending
+owner or create a follow-up; this conservatively makes an evicted outstanding
+snapshot stale even without a later publication.
+
+The outer source/task/release branches reuse the existing first-error-preserving
+`readTogether` helper. Ownership lasts until every started outer branch settles,
+including after a failure; a refresh cannot overlap an unfinished source branch.
+Error settlement may therefore wait for branch cleanup. No waiter signal, retry,
+new deadline, SQL cancellation contract or nested store lifetime is introduced.
+
 Board loads validate the complete shared contract before caching a snapshot.
 Failure diagnostics survive both concurrent cache rejection and stale fallback:
 `factory.board_read_failed` exports only allowlisted `stage`, `reason`, HTTP
@@ -1123,8 +1292,10 @@ summary records the handler's decision, not proof of HTTP completion or client
 receipt. `request.completed` is a separate server-side `onResponse` observation
 of reply status and response time; neither event proves that the client received
 the response. The cache elapsed value measures the awaited cache operation:
-lookup for a hit, wait for a shared caller, or the complete source load for its
-owner. Interpret it with `cachePath`; it is not a stage duration.
+lookup for a hit, wait for a shared caller, or the complete owned operation,
+including a dirty follow-up when required. One owner can execute a stage twice;
+the phase events still time each actual boundary, not an additional aggregate.
+Interpret cache elapsed with `cachePath`; it is not a stage duration.
 Durations are bounded to 60 seconds and server-only. Values beyond that limit
 omit the numeric duration and set the corresponding `durationCensored` or
 `cacheElapsedCensored` marker rather than reporting a clipped value. Invalid
@@ -1145,10 +1316,13 @@ repository URLs, or query strings.
 At the existing board publication boundary, `factory.board_invalidated` exports
 only a bounded origin (`task_event` or `github_webhook`), safe project ID and
 in-process version when available, and webhook request ID when present. The
-task-event prelookup invalidation is explicitly marked `all_projects`; its
-project and version are not yet known. Versions are process-local and are not a
-durable event sequence. No polling, endpoint, resource, or client behavior is
-added.
+local correction resolves the task's project before publishing a single scoped
+invalidation. Failed or missing lookups emit the existing
+`factory.board_task_event_failed` event with safe error kind/status, not raw
+exceptions or a global invalidation fallback. The historical `all_projects`
+field remains accepted by the log filter for compatibility, but ordinary task
+publication no longer emits it. Versions are process-local and are not a durable
+event sequence. No polling, endpoint, resource, or client behavior is added.
 
 The 25-second source deadline, ten-page/100-row pagination,
 one-minute/32-entry cache and 1-MiB byte limits are unchanged. Within a snapshot,
@@ -4359,6 +4533,53 @@ P8-30 scratch Chromium recorded 73 desktop CDP frames across empty, visible-wind
 P8-33 scratch Chromium checks cover the adaptive quality thresholds, compact phone/landscape layouts, menu bounds, reduced motion, hidden-tab pause/resume, route teardown/re-entry, resize, page-scale and simulated keyboard-height changes, forced WebGL loss/restore and unavailable WebGL. Dark/light, voice-ready, loss/fallback captures are in `docs/ui/screenshots/p8-33-*`; local voice fixture state remained ready across rendering loss, and HTML chat/voice/window actions stayed mounted. ANGLE SwiftShader at quality tier 2 (backing scale ≈0.70) measured 90 RAF intervals averaging 327ms (p50 333ms, p95 350ms) at 1440×900 and 151ms (p50 150ms, p95 167ms) at 390×844. These are software RAF intervals, not hardware GPU timings, and demonstrate poor cadence rather than acceptance; physical GPU/battery, phone/keyboard, Safari, live voice/provider and normal-rate motion remain unverified.
 The reference lockfile is standalone, outside root workspaces, and contains the prototype's dependencies only. Bundled Three.js/Phosphor notices are retained. Physical/hardware performance, live activity/voice behavior and normal-rate flicker acceptance remain unverified; P8-31 adds no production Three.js dependency.
 ## Daily integration boundary (P12-01)
+
+### Inactive shared reads and committed invalidation (16 October 2026)
+
+The resumed P12-09 source slice extends explicit `createDailyModules(true, data)`
+composition with `POST /daily/query` and one sensitive `daily_query` catalogue
+entry. Both invoke `DailyQueryService`; default-off and production composition
+remain unchanged. Root authentication and `resolveDailyOwner` still own
+user/hosted-agent authorisation. Source-specific public contracts reject caller
+owner selectors, incompatible cursors, invalid dates and unbounded pages.
+Queries reuse `DailyHealthReadModel` and `NutritionStore.history`, not raw inbox
+reads, a second normalizer, a meal writer or a new dispatcher/persistence layer.
+Whitelisted DTOs retain canonical units, dates, lineage, nulls, nutrient
+provenance, revisions and tombstones without exposing owner/device columns.
+Responses share a 768 KiB bound; oversized detail is explicitly unavailable,
+never a silently truncated success.
+Fingerprint serialization uses the bounded read DTO, not nutrition's per-write
+node/depth budget; supported full pages and retained nested JSON stay readable.
+The response byte budget includes the final 64-byte revision before hashing.
+
+`createDailyData` shares one process-local change hub between the existing
+explicit health processor and owner-bound nutrition store. Optional handler
+composition accepts the same hub. Only acknowledged domain/intake commits
+publish domain invalidation; exact retained replays do not announce new health
+data. A pending replay completion, poison quarantine or retry exhaustion
+notifies sync only after its acknowledged inbox-state commit. No-ops and
+failed/uncertain commits do not notify. Notification failures use the existing
+event-listener boundary, never an acknowledged-row failure or SQL replay.
+Heartbeat changes only sync evidence. The Daily
+plugin filters the configured owner and bridges to the unchanged
+`nowEventHub` refresh event; shutdown removes that subscription. No new event
+type, queue, poller, scheduler or production processor is installed.
+
+Results include source/period, units, retained-record provenance, separate
+processed and record-update timestamps, observed time, page coverage and a
+content SHA-256 revision. Unknown completeness/staleness are explicit. The
+revision fingerprints an exact query result, not a durable/global ordering
+token or an atomic snapshot across separate page/freshness reads. Future page
+and GenUI consumers refetch on existing `now` events, connect/reconnect and
+refocus, so missed process-local notifications are recovered from SQL.
+No frontend consumer is implemented by this backend slice.
+
+This does not complete #724's hosted authenticated ChatGPT food-client path:
+restricted connector OAuth/consumer policy and trusted nutrition
+intent/proposal-acceptance derivation remain unapproved boundaries, not
+client/model booleans. Original health-source identity/parity, protected
+export/import, physical device/provider and cutover acceptance remain gated.
+Older contract-only descriptions below describe the prior release.
 
 ### Confirmed core-only scope (15 October 2026)
 

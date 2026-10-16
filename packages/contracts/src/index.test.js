@@ -1,6 +1,30 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import Fastify from 'fastify';
+import { dailyQuerySources, dailyQuerySchema, isDailyQuery } from './daily.js';
+
+test('Daily queries enforce source-specific bounded periods and exact cursors', () => {
+  const base = { source: dailyQuerySources.metrics, startDate: '2026-10-01', endDate: '2026-10-16' };
+  assert.equal(isDailyQuery(base), true);
+  assert.equal(isDailyQuery({ ...base, cursor: { date: '2026-10-15', key: 'waist_circumference' } }), true);
+  for (const patch of [
+    { owner: 'foreign' }, { startDate: '2026-02-30' }, { endDate: '2026-09-01' },
+    { startDate: '2024-01-01' }, { limit: 501 }, { limit: 0 }, { limit: '5' }, { limit: undefined },
+    { cursor: { date: '2026-09-30', key: 'weight' } },
+    { cursor: { date: '2026-10-15', key: 'weight', owner: 'foreign' } },
+  ]) assert.equal(isDailyQuery({ ...base, ...patch }), false, JSON.stringify(patch));
+  assert.equal(isDailyQuery({ source: dailyQuerySources.meals, startDate: base.startDate, endDate: base.endDate, limit: 101 }), false);
+  assert.equal(isDailyQuery({ source: dailyQuerySources.meals, startDate: base.startDate, endDate: base.endDate,
+    cursor: { createdAt: '2026-10-15T23:30:00+02:00', id: '01' } }), true);
+  assert.equal(isDailyQuery({ source: dailyQuerySources.sync }), true);
+  assert.equal(isDailyQuery({ source: dailyQuerySources.sync, limit: 1 }), false);
+  assert.equal(isDailyQuery({ source: dailyQuerySources.workout, workoutId: '01' }), true);
+  assert.equal(isDailyQuery({ source: dailyQuerySources.heartRate, workoutId: '01',
+    cursor: { minute: '2026-10-15T23:30:00+02:00', metric: 'heart_rate' } }), true);
+  assert.equal(isDailyQuery({ source: dailyQuerySources.heartRate, workoutId: '01',
+    cursor: { minute: '2026-10-15T23:30:00', metric: 'heart_rate' } }), false);
+  assert.equal(dailyQuerySchema.additionalProperties, false);
+});
 import {
   generatedViewActionTypes,
   generatedViewRenderers,

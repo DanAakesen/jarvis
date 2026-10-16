@@ -1,5 +1,35 @@
 # Product
 
+## Readable chat and attached phone typing (16 October 2026; local candidate)
+
+Booking/event summaries use labelled records separated by blank lines, with
+explicit known dates, years, times and local-time/timezone qualifiers. Do not
+invent missing dates or zones, or claim the agent sees a live chat preview.
+Ordinary chat supports paragraphs, emphasis, lists, links and fenced code.
+Well-formed historical GFM tables also render safely in a bounded,
+keyboard-scrollable region; malformed one-line tables remain source text,
+not guessed records. New reservation summaries should prefer labelled lists.
+Table replies may use the transcript width without widening ordinary prose.
+
+Phone typing must use one explicit visible-viewport rectangle rather than
+subtracting a keyboard estimate from a different fixed viewport. Preserve
+the chat/composer seam, drafts and saved placement through keyboard resize,
+pan, dismissal and orientation. Latest-following must survive repeated partial
+table growth while a response remains open, not just catch up on completion.
+Reading older history opts out of following until explicitly resumed.
+Physical iPhone/Safari acceptance remains
+open; earlier synthetic passing checks do not contradict Dan's screenshots.
+
+## App-wide control consistency (16 October 2026; local candidate)
+
+Equivalent actions, tabs, filters and fields must use Jarvis's existing common
+control geometry across routes. Do not introduce arbitrary action capsules,
+decorative coloured boxes, bevels or inset-shadow control borders. Preserve
+semantic status chips, necessary neutral structure, accessible selected and
+disabled states, visible keyboard focus and usable touch targets. Reuse the
+existing visual direction; no replacement theme or control framework is needed.
+See `DESIGN.md` for the contract and `docs/agent-context.md` for consumed guidance.
+
 ## One balanced 3D stage budget (15 October 2026; local)
 
 Keep one recognisable room, cyan shell, open amber core and mirror floor.
@@ -216,6 +246,8 @@ flowchart TB
 - In chat and voice, Jarvis can list active projects and filtered tasks, inspect a task, create work, and steer, pause, resume, or cancel it. The backend applies the existing task validation and lifecycle rules to every action.
 - Gmail access uses direct mail tools only, never PC, browser or screen fallback after failed or incomplete reads. Raw computer tools verify trusted current process/site observations, including opaque Chrome tab IDs, before exporting controls, window/clipboard data or acting. Optional or truncated title suffixes cannot establish application identity; a Gmail-named source file in an actually observed native editor is not a Gmail browser window. Clear independently requested unrelated computer actions remain available in the same mail turn, including after topic-bearing EN/DA mail requests, but quoted subjects and how-to query text cannot authorise them. Ambiguous query text remains on the direct-mail path. Reads expose body source, truncation and extraction warnings, plus alternate HTML text when it contains different content. Successfully decoded empty bodies retain full-body provenance; any available snippet is a separately labelled preview, not evidence that the body is unavailable. Jarvis checks both bodies for reservation details and describes incomplete extraction without claiming the original email lacks them; booking dates must come from readable source text.
 - Calendar changes must return `ok` with `awaiting_confirmation`, an eight-digit code and the actual summary before Jarvis claims preparation or requests approval. Later plain approval uses the original pending code; if private history omits it, a verified read-only tool recovers the live stage without restaging or requesting repeated approval. Gmail and calendar approvals stay separate even when both have pending changes; generic staging prose or appointment/calendar words inside mail subjects, reply receipts or read topics do not establish calendar context. Explicit calendar workflows, including adding an email-derived appointment, remain available. Unrelated weather, mail or build questions reset calendar follow-up routing. Expired or absent stages are reported as no pending change, not proof that an event exists or does not exist. Calendar checks require actual reads; completed writes require actual confirmation results. Subject, timezone-aware dates, attendees and returned summary survive the approval flow.
+- For multiple requested calendar creations, stage 2–10 events as one immutable proposal displaying every subject, local date/time, zone and attendee list. One later approval covers exactly that list, never an undisclosed extra event or a replacement proposal under an old code. Google writes are sequential, not atomic: show each created, failed, unverified or not-attempted item and stop on failure/cancellation. Never automatically replay created or unverified events. Process-local receipts support short-lived follow-up recovery, not durable survival after a restart. Ordinary explanations, incomplete requests and general conversation must not be replaced by a calendar evidence disclaimer merely for mentioning the calendar.
+- Calendar batch approval must match the actual staged source to the latest server-verified request identity in the authenticated scope. Contextual requests such as "Add those two." or "Tilføj de to." may inherit recent calendar routing, but not another request's identity; explicit Notes/mail requests remain separate. Visible assistant prose is not origin proof. Missing or mismatched identity must refuse approval without writing or cancelling an unrelated proposal.
 - Google tools use the authenticated backend registry for agenda/free-slot reads, mail search and draft listing, calendar changes, draft updates/deletion, archiving, label changes, reply drafts and sending. The backend uses OAuth credentials held only in Key Vault for Dan's `danaakesen@gmail.com` account, redacts private tool inputs/results from persistence, and requires a one-time confirmation from a later verified Dan message before any write.
 - Page requirements list every data point and action, not the look. Dan creates the visual design from them with an image generator (see [DESIGN.md](DESIGN.md)).
 
@@ -536,6 +568,15 @@ Persistent-pin semantics are still part of the unfinished P8-42 implementation.
 | Compact release context for the selected project: repository/default branch, latest build/deployment status, short commit timeline | Open the full project release view |
 
 The board reads the canonical `GET /factory/board?project=<id>` snapshot for one active project, initially the first returned project. Placement comes from the backend, never from task state. It includes open issues and issues closed in the last 14 days. Filtering precedes the explicit 100-card display cap per column; counts include all matches and the cap explains how to find hidden matches. Paused, Needs attention and Cancelled remain task facts, not columns. Cards without tasks have no invented task actions or timings; full history and usage stay in task details. Snapshot time, cached GitHub data, live connection failures and retained data after failed refresh are visible. Refresh and retry preserve the current board and scroll; changing project hides the old snapshot and cancels obsolete reads. Committed board events and stream reconnection refresh placement.
+
+The local 16 October correction (not released) shares one server-owned board
+load per project. An update invalidates
+only its project and can require one immediate complete follow-up. If that
+follow-up is invalidated too, the snapshot is explicitly stale and remains
+expired until another read; continuous events cannot extend one operation into
+an unbounded refresh loop. Failed refreshes retain a validated snapshot and
+visible stale/failure feedback, never an invented empty board. Cancelling one
+client's wait must not cancel another client's shared source work.
 
 Jarvis can navigate to an issue by a positive whole `issueNumber` on the selected project's Factory board. An exact `#number` search clears other local filters and expands the issue's column, so the display cap cannot hide the requested card. A real linked task opens its existing window; a task-free issue stays on the board with its title link focused. Unknown, unavailable, cancelled or still-loading targets return a reason rather than acknowledging a route change as success. Navigation waits at most six seconds and stays within the command expiry; ordinary board loading may continue without a late focus or window action. Notes' unsaved-draft guard and task-ID navigation remain intact.
 
@@ -861,6 +902,19 @@ Dan approved these after a gap audit. They are planned, not built.
 
 Dan decided that GitHub issues are the single backlog. When Dan asks Jarvis to change code, Jarvis drafts an issue, confirms it with him and creates it; the Software Factory then picks it up with the Codex agent (worker label `Jarvis`), or Copilot when Dan chooses. Factory progress shows on the issue, its pull request uses `Fixes #N`, and the Factory board uses the same columns as the GitHub Project: Backlog, Needs Dan, Ready, In progress, In review, Done. ([#573](https://github.com/DanAakesen/jarvis/issues/573)–[#577](https://github.com/DanAakesen/jarvis/issues/577))
 ## Daily migration (approved P12)
+
+16 October implementation resumption: the next inactive P12-09 slice shares
+one owner-authorised bounded query path between HTTP and the existing sensitive
+tool registry for retained health/sleep/workouts/minute heart rate, meal history
+and sync evidence. It preserves canonical values, units, Copenhagen dates,
+lineage, nullable unknowns and tombstones; source completeness and staleness are
+not inferred. Acknowledged health/intake commits invalidate the existing refresh
+stream. Reconnect/refocus consumers must refetch; content revisions are not a
+durable global event cursor. This is local source work, not deployed integration
+or full #724 acceptance. Hosted authenticated ChatGPT food logging, trusted
+intent/proposal acceptance, the single Daily page/on-demand GenUI and protected
+export/source-parity/device/cutover gates remain separate. No coaching, widget,
+provider call, new meal writer or production composition is added by this slice.
 
 P12-05 adds an inactive, explicitly invoked health processor over the existing SQL inbox: metrics/sleep/workouts/detail/minute HR, canonical physical units, Copenhagen dates, exact session/checksum replay and bounded retry/quarantine. Domain changes, ingestion lineage and processed-feed freshness commit together; phone heartbeat stays separate. Empty workout exports cannot erase history, missing values stay unknown, and native nutrition cannot feed back into canonical meals. Owner history/detail reads are bounded and unregistered. No scheduler, source import, live device changes or activation; protected/live parity remains gated.
 

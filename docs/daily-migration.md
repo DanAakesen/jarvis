@@ -142,6 +142,15 @@ core parity/backup/device/cutover gates.
 
 ### [P12-09: Daily API, tool registry & live revisions](https://github.com/DanAakesen/jarvis/issues/724)
 
+16 October bounded resumption: the existing Daily session owns an inactive
+shared read-contract/API/tool and post-commit refresh slice over #720/#722.
+Production composition and all existing data remain unchanged. This does not
+complete #724 or implement its hosted authenticated ChatGPT food-write path.
+Connector authorisation and trusted proposal-acceptance contracts, the one-page
+UI/on-demand GenUI, source/parity, protected export/device and cutover gates
+remain explicit; coaching and widgets stay excluded. Historical task-table
+Status cells are workflow-owned and are not implementation evidence.
+
 **NEW DAILY CAPABILITY — permanent** · Backend & migration rehearsal
 
 Gated Daily BackendModule, source IDs, shared read-model contracts, sensitive outcome audit and UI invalidation.

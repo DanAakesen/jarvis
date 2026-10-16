@@ -1,5 +1,221 @@
 # Project plan
 
+## Combined release candidate (16 October 2026; source integration)
+
+The existing Factory worktree combines the frozen Factory v2, common/header
+frontend v1, final Mobile v2 delta, final Calendar v4 and current inactive
+Daily v3 on exact base `2823585`. Competing documentation prepends retain each
+owner's scoped sections; Mobile replaces only its own v1 text. All 381 generated
+PLAN table rows and their statuses remain unchanged. No unrelated #816 transport
+or withdrawn mail extraction is added. Only approved GFM manifest/lock changes
+extend dependencies; Daily remains off with no production registration.
+
+This is one source candidate, not combined acceptance. Factory retains its
+qualified 17 component passes; Calendar retains 444 Python passes/Ruff8 and
+58 qualified Node passes. Mobile v2 awaits exact-candidate Style qualification.
+Daily v3b collected 12 query cases: the first synthetic HTTP/module test timed
+out, with zero passes and eleven pending; store/lint did not run. Older greens
+do not qualify that source. Root buildApp/auth/publication/SQL and pinned CI
+gates remain explicit. Earlier lane sections describe their historical stages.
+
+Dan authorised one combined normal PR/CI/release after active work is ready,
+followed by the handoff. The parent alone publishes/deploys. Next: freeze the
+complete patch/source manifest, qualify that exact tree in Style's own snapshot,
+and resolve outstanding gates through the parent before release. No live gain,
+historical-502 cause, physical-phone acceptance or issue completion is claimed.
+
+## Calendar batch and reply recovery (16 October 2026; local candidate)
+
+Reconciled #839 / historical draft #849 against exact released `28235851`:
+#848 already consolidated task-15's original pending-state/approval work.
+Do not start a duplicate Factory task or reuse the old draft as fresh evidence.
+Synthetic execution of the unchanged released agent reproduces 22 failures in
+27 new guard controls: harmless explanations/incomplete requests and a health
+error are replaced, while unsupported claims escape without the recovery tool.
+
+Dan selected one later approval for both explicitly listed events. The local
+candidate adds a bounded `calendar_create_events` proposal, complete local-time
+summaries, one-shot/session-bound batch recovery and truthful per-item results.
+It keeps the single-event schema, expiry, later-message provenance and Google
+confirmation boundary. Hosted parallel single-create calls consolidate before
+staging. For explicit multiple-event requests, an isolated single-create call
+is refused before dispatch and gets a bounded round to supply the complete
+batch. Invalid/incomplete continuation cannot leave an invisible first stage.
+A batch-specific reply cannot approve an earlier unrelated proposal.
+Model-written approval labels are claims, not staging evidence; a refused or
+incomplete continuation must not append an older proposal's approval label.
+Review found that history dropped message IDs before the model loop, so visible
+summary equality could not prove a proposal's request origin. The coordinator
+authorised narrow metadata wiring: actual verified user IDs now remain
+non-prompt `ModelMessage` metadata, including steering and caption fallback.
+Approval compares the latest request's canonical ID with the existing
+backend-staged source ID; missing/mismatched origin refuses. Visible model
+prose is never authority. Direct model confirmation calls use the same guard.
+Conflicting proposals in one round are refused before any mutation dispatch,
+preventing a hidden first stage from sharing the failed request's valid ID.
+The frozen v1 focused verification includes this metadata and conflict policy.
+Direct boundary review then found that contextual "Add those two." was not
+recognised as the newer request, and "I've put both in your calendar." escaped
+the shared claim matcher. V2 carries recent calendar context into quantity
+routing and the existing response guard, while explicit Notes/mail context
+stays separate. Approval still requires the actual latest verified mutation's
+ID; it cannot skip the shorthand or a newer other-workflow creation to approve
+an older source. The same claim policy now covers `put`.
+Publication preparation adds fixture-only v3: the owned Python/Google test
+fixtures use synthetic hotel names, reference and June/December 2027 stays.
+Two-event summaries, Copenhagen summer/winter offsets and approval/partial
+assertions remain intact. No additional runtime/backend change. Final v4 adds
+only Danish demonstrative quantities ("Tilføj de to." / "Tilføj disse to."),
+without treating English `to` as a quantity. V1/v2 packets and the intermediate
+v3 411-pass receipt remain immutable.
+
+The reply guard now tests affirmative claims rather than the calendar topic;
+normal chat receives CommonMark-compatible labelled-record guidance, not table
+syntax. A later tightly coupled streaming correction releases only completed
+non-calendar/non-action sentences on unrelated chat, using the same claim
+policy. Incomplete or ambiguous text stays held; steering updates guard scope.
+Final local verification passed 444 tests in 19.11 seconds: both full
+calendar/model files and four runtime metadata cases, followed serially by clean
+Ruff over eight changed Python files. Qualified real-Google-module,
+pending-action and capability checks passed 58 tests across three suites in
+11.03 seconds with one isolated worker. That just-completed Node result is
+reused for the final Danish-only correction only after exact comparison of
+all eleven owned backend/contracts source and fixture identities. Existing
+15,000-code-point capability headroom checks pass after compacting only the
+calendar guidance. Both final runs retained unchanged before/after source hashes.
+Historical 470-pass, 367-pass, 235-pass/12-fixture-failure, 365-pass/2-steering-fixture-failure
+and 56-pass/2-budget-failure receipts remain distinct and preserved. Fixtures now
+keep generator cleanup in one task and declare the synthetic steering trigger;
+production ContextVar ownership/reset and safety assertions were not weakened.
+Full pinned backend/root-app/auth/audit/voice/type/build gates remain unrun or
+dependency-blocked. Combined PR #816 hosted-handler/disconnect coverage is still
+unowned and unverified.
+Exact offline backend restore is blocked by uncached `ip-address@10.7.4`;
+qualified tooling is not pinned acceptance. No private source, model probe, live write, commit,
+publication or deployment is authorised by this lane. The verified full-base
+packet is ready for the existing Factory integrator; the coordinator owns
+combined acceptance, genuine pinned gates and separately authorised publication.
+
+## Frontend integration (16 October 2026; source-only local candidate)
+
+The immutable common-control, header-recovery and mobile/Markdown v1
+checkpoints are combined in the existing isolated UI worktree on base
+`2823585`. Code applied without content conflicts; five competing
+documentation prepends are retained as additive scoped sections. Shared CSS
+and style tests retain all owners' changes, including memory/knowledge
+selection, job/front-tab/pin hover/press state, 3px focus and the explicit phone
+viewport invariant. Header App/store/component behavior, the bounded-header
+architecture note and nonshared mobile source retain their frozen identities.
+The three new tests retain their original CRLF byte identity.
+
+This is source integration only. Earlier passes and rendered evidence below
+qualify their separate frozen inputs, not this combined tree. No combined
+Node, test, build or browser check has run. Qualification requires the later
+explicit slot. Mobile v1 is not final acceptance; its separately owned browser
+inspection and any versioned source delta remain pending. The known mobile
+149-pass/one-failure locale result is not waived. Historical sections and
+generated plan rows/statuses remain unchanged. Only the frozen mobile GFM
+manifest/lock wiring is included; no restore or extra dependency is added.
+No real-index staging, HEAD/ref change or publication is part of this step.
+Frozen inputs and a source/conflict receipt are retained in UI session
+artifacts. The agent/calendar instruction change remains separately owned.
+
+## Chat readability and phone composer follow-up (16 October 2026; local)
+
+Dan's new screenshots supersede any suggestion that prior synthetic keyboard
+checks established phone acceptance. This isolated frontend lane owns safe
+table compatibility, list-first output-contract coordination and explicit
+visible-viewport geometry. The calendar sibling owns the agent instruction;
+Gmail/calendar functionality, header controls and global UI styling stay
+separately owned. This lane prepares source/evidence only; the coordinator
+owns the single combined normal-CI/release integration, not a child release.
+
+Released-source browser reproduction confirms unsupported well-formed tables
+and a stale-layout-height/fixed-viewport mismatch that can move the composer
+above the transcript. Local candidate preserves saved placement/drafts and
+adds latest-following on transcript resize. Actual-App inspection identified
+and corrected a further pre-paint streaming-follow race and unnecessary
+desktop table clipping. Held-open repeated growth, history-reader opt-out,
+phone keyboard/pan/safe-area/blur, draft/orientation, table keyboard access,
+desktop layout and basic More/navigation/synthetic-voice shell transitions
+have local browser receipts. Next: final-v2 exact-source gates, then the
+coordinator's combined integration.
+Physical iPhone/Safari keyboard acceptance remains open after local checks.
+
+Fresh isolated history/Workspace/layout/viewport tests: 149 passed, one
+unchanged Windows voice-unit locale assertion failed; the corrected new table
+regression passed. Initial 117-pass/two-failure evidence is retained, including
+the now-corrected nested-test placement. Scoped pinned lint and the full
+declared web typecheck pass on native ARM64 Node 22.23.3 for v1. Its pinned x64
+Vite build also passed. Those immutable receipts do not certify the new v2
+stream-follow/table-width regressions or synthetic fixture substitutions.
+Fresh final-v2 targeted/static/build qualification remains pending allocation.
+The browser helper is stopped. Do not claim a full green suite, live voice/
+provider acceptance, or physical phone acceptance.
+
+## App-wide control consistency (16 October 2026; local candidate)
+
+The shared CSS-only control contract is agreed with the coordinator and sent
+directly to the header and mobile owners. Existing action/tab/filter/field
+geometry replaces arbitrary capsules, bevelled outlines and inset control rims;
+status semantics, neutral structure, focus and touch targets remain.
+Owned changes cover shared secondary actions, Factory actions/release controls,
+Settings, Usage, Presence, Folio, Notes filters and attachment/toast actions.
+Header/job reserved blocks, App plumbing and mobile chat/composer remain separate
+streams; no claim of integrated header/mobile acceptance is made here.
+
+Project-local product-ui guidance, DESIGN, PRODUCT and the decision log record
+the confirmed contract. Pinned web dependencies were restored offline without
+manifest changes. Final full web typecheck and changed-test ESLint pass with
+native pinned Node 22.23.3 ARM64 and default heap. The final two style suites
+pass all 57 tests with pinned Node 22.23.3 x64, normal isolation, one worker
+and no file parallelism. Earlier regex failures, worker startup timeouts and
+the inadequate 512MB typecheck attempt remain historical evidence, not passes.
+
+Actual guarded App inspection covers desktop Factory/Usage/Notes in dark
+appearance and Settings in light appearance, plus 390px dark Factory/Notes
+and 320px light Usage. Inspected controls retain 10px radii, borderless action
+surfaces and 44px touch height without horizontal document overflow. Real Tab
+navigation shows 3px focus, selected hover/press uses distinct existing
+surfaces, interrupted 140ms transitions settle correctly, and reduced
+preferences remove control transitions. Refresh, filters and period selection
+work against synthetic responses. The actual toast component was inspected in
+phone App/composer context with labelled synthetic callbacks, not a live retry.
+
+The local control candidate is ready for integration review. A pre-existing
+Factory running-card shimmer was observed under reduced preference outside
+these modified controls; this is not a claim of whole-app motion compliance.
+Browser emulation is not physical iPhone or live acceptance. Header/job and
+mobile companion changes remain separately owned and unintegrated here.
+The inspection fixture is stopped; no release is claimed.
+Stop before commit, push, PR, merge, deployment or live/private actions.
+
+## Factory cache ownership (16 October 2026; local correction)
+
+Implemented a project-scoped pending owner and one bounded dirty follow-up,
+retaining truthful stale settlement, validated fallback, typed errors and
+explicit global invalidation support. Task publication resolves its project
+before invalidating; failed lookups report safe diagnostics instead of clearing
+every project. Existing source coverage, auth, SSE/client ownership and
+per-read limits remain unchanged. Failed owners wait for all started outer
+branches to settle while preserving the original typed cause.
+
+The selected exact-`2823585` direct-cache control failed at the intended
+duplicate-owner predicate (one expected source call, two observed); candidate
+direct-cache controls passed 12/12 and the four real-Fastify route lifetime
+controls passed 4/4, with zero skips, on the retained v1 source. Subsequent
+review found a waiter-held snapshot could remain fresh after LRU eviction made
+it unreachable by invalidation. Eviction now expires that object without
+dirtying its owner. The new fixed-clock/gated control failed at the intended
+freshness assertion on retained v1; current v2 passed all 17 cases (13 cache,
+four real-Fastify lifetime), with zero skips.
+These are qualified snapshot checks, not pinned full-app acceptance.
+Existing buildApp/publication/auth suites and
+lint/types/build remain UNRUN/blocked by missing real dependencies.
+Next: review the frozen integration patch/manifest and obtain genuine
+full-app/pinned gates when tooling is available. No install/registry chase, publication or
+live/private probe. This does not close #813/#811 or attribute historical502s.
+
 ## Preserve steered computer requests (16 October 2026; local successor)
 
 Direct caller tracing found that a steering turn persists its interrupted
@@ -1288,6 +1504,17 @@ Proposals only; an idea enters a phase only when Dan accepts it into scope.
 | Foundry resilient tasks | Platform-managed recovery of in-progress hosted-agent work after a crash (preview; disabled in the prototype). | Preview; may replace part of the branch-restart recovery. | Crash recovery (P2-10) proves too lossy or complex. |
 | Backend request rate limiting | Limits authenticated and unauthenticated request rates at the root authentication hook (CodeQL `js/missing-rate-limiting` on `apps/backend/src/auth/hook.ts`, raised during P4-01). | A new dependency (for example `@fastify/rate-limit`) and limits that must not throttle Dan or the Jarvis agent; one replica keeps in-memory counters sufficient. | Before the backend URL is public (P0-11), or when abuse or cost appears. |
 ## P12 — Daily migration to Jarvis
+
+16 October resumed implementation: Dan selected the existing Daily session
+under coordinator ownership, superseding the general engineering pause only
+for the nonprivate inactive #724 read-side API/tool/committed-invalidation slice.
+Exact base is `2823585184d67980c580127f9dbbce97109fa91b`. One shared query
+service reuses accepted #720/#722 interfaces; production composition, UI,
+hosted ChatGPT writes/OAuth, private export/import/device work and cutover stay
+gated. Existing refresh events suffice; no global chat/event contract is replaced.
+This is local reviewable work, not completed #724 or deployment evidence.
+All table rows, task IDs, dependencies and workflow-owned Status cells remain
+unchanged; dated current-scope notes supersede conflicting historical holds.
 
 Current released slice: **Core Daily integration; new P12-08/#723 coaching/recovery/recomp automation excluded by Dan on 15 October 2026.** Withdraw its unmerged source candidate from the combined release; retain both freezes only as archived evidence, not accepted work. Existing main health, nutrition, workout/tracking and integration capabilities and records remain. Keep one Daily page plus existing on-demand GenUI, no widget or mandatory four-view set. P12-09/#724 core API/tools work excludes new coaching and retains completed P12-05/#720 and P12-07/#722 prerequisites instead of excluded #723; this documentation does not activate it. Protected backup/export, authoritative-source/parity, real-device/provider, final-delta, rollback and cutover gates remain. Parent owns native issue/dependency/board changes; only P12-09's dependency cell changes, with every Status cell and task ID preserved.
 

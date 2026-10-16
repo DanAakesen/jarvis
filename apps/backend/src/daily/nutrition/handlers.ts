@@ -5,6 +5,7 @@ import { resolveDailyOwner } from '../owner.js';
 import { copenhagenDate, prepareMeal, type FavoriteInput, type MealInput, type PlanRequest } from './model.js';
 import { NutritionStore } from './store.js';
 import type { FridaLookupAdapter, LookupComponent } from './frida.js';
+import type { DailyChangeSink } from '../revisions.js';
 
 /** P12-09 derives this from existing trusted user-intent/confirmation/evidence metadata.
  * Never deserialize it from client/model tool arguments or legacy userConfirmed.
@@ -32,8 +33,8 @@ function rowInput(row: Record<string, unknown>): MealInput {
   } catch { throw new ToolFailure('Stored intake could not be read safely.'); }
 }
 /** Reusable typed handlers, not a tool catalogue, router or new dispatcher. */
-export function createNutritionHandlers(pool: sql.ConnectionPool, frida: FridaLookupAdapter) {
-  const store = (context: NutritionExecution) => NutritionStore.forRequest(pool, context.request, () => context.requestTime);
+export function createNutritionHandlers(pool: sql.ConnectionPool, frida: FridaLookupAdapter, changes?: DailyChangeSink) {
+  const store = (context: NutritionExecution) => NutritionStore.forRequest(pool, context.request, () => context.requestTime, changes);
   return {
     lookup: async (input: readonly LookupComponent[], context: NutritionExecution) => {
       resolveDailyOwner(context.request); if (context.intent !== 'lookup') throw new ToolRefusal('Lookup intent required.');

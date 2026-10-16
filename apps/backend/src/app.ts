@@ -271,7 +271,7 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
   ) => {
     const version = (factoryBoardVersions.get(projectId) ?? 0) + 1;
     factoryBoardVersions.set(projectId, version);
-    app.factoryBoardCache.invalidateAll();
+    app.factoryBoardCache.invalidate(projectId);
     app.nowEventHub.publish({ type: 'board', projectId, version });
     app.log.info({
       origin,
@@ -281,11 +281,11 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
     }, 'factory.board_invalidated');
   });
   const unsubscribeFactoryBoardEvents = app.eventHub.subscribe((event) => {
-    app.factoryBoardCache.invalidateAll();
-    app.log.info({ origin: 'task_event', scope: 'all_projects' }, 'factory.board_invalidated');
-    void app.taskStore?.get(event.taskId, 0, 0).then((task) => {
-      if (task) app.publishFactoryBoardChange(task.projectId, 'task_event');
-    }).catch(() => app.log.warn('factory.board_task_event_failed'));
+    void (async () => {
+      const task = await app.taskStore?.get(event.taskId, 0, 0);
+      if (!task) throw new Error('Task project unavailable');
+      app.publishFactoryBoardChange(task.projectId, 'task_event');
+    })().catch((error: unknown) => app.log.warn(safeErrorFields(error), 'factory.board_task_event_failed'));
   });
   app.addHook('onClose', async () => { unsubscribeFactoryBoardEvents(); });
   app.decorate('jarvisActivityHub', options.jarvisActivityHub ??

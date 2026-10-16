@@ -5,6 +5,7 @@ import { useState, type ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from './App';
 import { getSignInGreeting } from './sign-in-greeting';
+import { publishJob } from './jobs-store';
 import { factoryBoardColumnIds, type FactoryBoard, type GeneratedView, type WorkspaceCommand } from '@jarvis/contracts';
 
 const {
@@ -1368,6 +1369,62 @@ describe('App shell', () => {
     await screen.findByRole('heading', { level: 1, name: 'Kanban' });
     expect(context.textContent).toBe('Jarvis');
     expect(screen.queryByText('Open windows appear here.')).toBeNull();
+  });
+
+  it('keeps phone job-only history reachable and open, without changing artifact restore behaviour', async () => {
+    vi.stubGlobal('matchMedia', vi.fn((query: string) => ({
+      matches: query.includes('max-width: 700px'),
+      media: query, addEventListener: vi.fn(), removeEventListener: vi.fn(),
+    })));
+    const stream = streamWorkspaceCommands();
+    const respond = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation((input, init) => new URL(String(input)).pathname === '/jobs'
+      ? Promise.resolve(new Response(JSON.stringify({ jobs: [] })))
+      : respond(input, init));
+    await renderSignedIn();
+    await waitFor(() => expect(activityStream).not.toBeNull());
+    expect(screen.queryByRole('button', { name: /Open windows/ })).toBeNull();
+    act(() => publishJob({
+      jobId: '11111111-1111-4111-8111-111111111111', kind: 'embedding',
+      title: 'Re-embed memory and vault', status: 'failed', step: 1, steps: 2,
+      detail: 'interrupted by restart', startedAt: '2026-10-16T08:00:00.000Z', updatedAt: '2026-10-16T08:05:07.000Z',
+    }));
+    const user = userEvent.setup();
+    const shell = document.querySelector('.app-shell')!;
+    await user.click(screen.getByRole('button', { name: 'Open windows and jobs: 1' }));
+    await user.click(screen.getByRole('button', { name: 'Show recent jobs: 1 failed' }));
+    expect(shell.getAttribute('data-windows-open')).toBe('true');
+    await user.click(screen.getByRole('button', { name: /Re-embed memory and vault Indexing · failed/ }));
+    expect(shell.getAttribute('data-windows-open')).toBe('true');
+    await user.click(screen.getByRole('button', { name: 'Dismiss' }));
+    expect(shell.getAttribute('data-windows-open')).toBe('true');
+    expect(screen.getByRole('button', { name: 'Open windows and jobs: 1' })).not.toBeNull();
+    await user.click(screen.getByRole('button', { name: 'Show recent jobs' }));
+    expect(screen.getByRole('button', { name: /Re-embed memory and vault Indexing · failed.*hidden/ })).not.toBeNull();
+    await user.click(screen.getByRole('button', { name: 'Close job details' }));
+    stream.ready();
+    stream.publishCommand({
+      commandId: 'create-header-fixture', operation: 'create', viewId: 'header-report',
+      view: { version: 1, title: 'Header fixture report', renderer: 'text', source: { id: 'research', status: 'complete' },
+        data: { format: 'plain', content: 'Offline header fixture result' } },
+    });
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Open windows and jobs: 2' })).not.toBeNull());
+    expect(shell.getAttribute('data-windows-open')).toBe('true');
+    await user.click(screen.getByRole('button', { name: 'Show Header fixture report' }));
+    expect(shell.getAttribute('data-windows-open')).toBe('false');
+    stream.publishCommand({ commandId: 'minimise-header-fixture', operation: 'minimise', viewId: 'header-report' });
+    const restore = await screen.findByRole('button', { name: 'Restore Header fixture report' });
+    const report = document.querySelector('[data-view-id="header-report"].workspace-window')!;
+    expect(report.classList.contains('workspace-window-minimized')).toBe(true);
+    await user.click(screen.getByRole('button', { name: 'Open windows and jobs: 2' }));
+    restore.focus();
+    await user.keyboard('{Enter}');
+    expect(shell.getAttribute('data-windows-open')).toBe('false');
+    expect(report.classList.contains('workspace-window-minimized')).toBe(false);
+    await user.click(screen.getByRole('button', { name: 'Open windows and jobs: 2' }));
+    expect(shell.getAttribute('data-windows-open')).toBe('true');
+    await user.click(screen.getByRole('button', { name: 'Show Header fixture report' }).querySelector('svg')!);
+    expect(shell.getAttribute('data-windows-open')).toBe('false');
   });
 
   it('restores the accepted appearance across signed-in app routes', async () => {

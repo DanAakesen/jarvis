@@ -26,9 +26,13 @@ from calendar_flow import (
     CALENDAR_MUTATIONS,
     CALENDAR_READS,
     calendar_approval_candidate,
-    calendar_clarification,
+    calendar_batch_matches_request,
+    calendar_claim,
     calendar_context,
+    calendar_multiple_requested,
     calendar_reply,
+    calendar_response_scope,
+    calendar_safe_prefix,
     calendar_status_question,
     no_calendar_evidence,
     pending_calendar,
@@ -87,6 +91,16 @@ never "Jarvis is inspecting...".
 Reply in clear, natural English, using concise written language and markdown only when it helps.
 Use the tools and safety rules supplied by the backend.""",
 }
+
+CHAT_FORMAT_INSTRUCTIONS = (
+    "Chat renders CommonMark: paragraphs, bold/emphasis, labelled bullet or numbered lists, "
+    "links and fenced code. Do not emit pipe tables, HTML or layout-dependent columns. "
+    "For bookings/events, use one labelled list item per record, separated by blank lines. "
+    "Use explicit day, month and year, 24-hour times and the source time zone/local-time "
+    "qualifier when known. Never guess a missing year or time zone or convert date-only values. "
+    "State missing or unverified details. Transcript text is not a live visual preview; "
+    "do not claim to see the rendered chat from transcript text."
+)
 
 PERSONALITY_TONES = {
     "british_butler": (
@@ -540,7 +554,9 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
             except Exception as exc:
                 logger.warning("Rejected image hold was not released; error=%s", type(exc).__name__)
         caption_messages = tuple(
-            ModelMessage(message.role, message.content) for message in messages
+            ModelMessage(
+                message.role, message.content, source_message_id=message.source_message_id,
+            ) for message in messages
         )
         fallback = current_visual_fallback.get()
         if fallback is not None:
@@ -599,11 +615,20 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                 calendar_enabled = role != "smoke" and any(
                     tool.name == "calendar_get_pending_change" for tool in catalogue
                 )
+                calendar_messages = list(messages)
+                multiple_calendar_events = calendar_multiple_requested(calendar_messages)
+                calendar_guard = role != "smoke" and (
+                    calendar_enabled or calendar_context(calendar_messages)
+                    or multiple_calendar_events
+                )
                 calendar_turn = (
-                    calendar_enabled and bool(messages) and calendar_context(messages) and (
-                        calendar_context(messages[-1:])
-                        or calendar_status_question(messages[-1].content)
-                        or calendar_approval_candidate(messages[-1].content)
+                    calendar_enabled and bool(messages) and (
+                        multiple_calendar_events
+                        or calendar_context(messages) and (
+                            calendar_context(messages[-1:])
+                            or calendar_status_question(messages[-1].content)
+                            or calendar_approval_candidate(messages[-1].content)
+                        )
                     )
                 )
                 danish = role == "voice" or "naturligt dansk" in instructions
@@ -616,6 +641,32 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                     reply = payload.get("reply") if isinstance(payload, dict) else None
                     if reply in {"approve", "decline"}:
                         pending = pending_calendar(calendar_state)
+                        proposal = pending or (
+                            payload.get("lastChange") if isinstance(payload, dict) else None
+                        )
+                        if (
+                            (
+                                any(tool.name == "calendar_create_events" for tool in catalogue)
+                                or isinstance(proposal, dict) and (
+                                    "sourceMessageId" in proposal
+                                    or isinstance(proposal.get("items"), list)
+                                )
+                            )
+                            and not calendar_batch_matches_request(
+                                calendar_messages, proposal,
+                            )
+                        ):
+                            yield (
+                                "Jeg kan ikke bekræfte et matchende, faktisk klargjort "
+                                "kalenderforslag til denne anmodning. Dit svar godkender eller "
+                                "annullerer ikke et andet forslag eller et forslag uden "
+                                "bekræftet tilknytning."
+                                if danish else
+                                "I cannot verify a matching backend-staged calendar proposal "
+                                "for this request. Your reply does not approve or cancel "
+                                "another proposal or one with an unverified request origin."
+                            )
+                            return
                         if pending is None:
                             yield calendar_reply(
                                 "calendar_get_pending_change", calendar_state, danish
@@ -631,6 +682,7 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                     calendar_turn = bool(messages) and (
                         calendar_context(messages[-1:])
                         or calendar_status_question(messages[-1].content)
+                        or multiple_calendar_events
                     )
                 model_name = settings.model if settings is not None else self.model_name
                 use_anthropic = (
@@ -654,6 +706,8 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                 with latency_span("prompt_build") as prompt_span:
                     if role == "chat" and settings is not None and settings.capability_instructions:
                         instructions = f"{instructions}\n\n{settings.capability_instructions}"
+                    if role == "chat":
+                        instructions = f"{instructions}\n\n{CHAT_FORMAT_INSTRUCTIONS}"
                     instructions += (
                         "\n\nFor an overall capability overview, after get_system_health with "
                         "operation list_capabilities succeeds, briefly name every "
@@ -756,10 +810,19 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                 turn_id = current_chat_turn_id.get()
 
                 async def append_steering() -> bool:
+                    nonlocal calendar_guard, multiple_calendar_events
                     if steering_fetcher is None:
                         return False
                     steering_messages = await steering_fetcher()
                     for message_id, text, language in steering_messages:
+                        calendar_messages.append(ModelMessage(
+                            "user", text, source_message_id=message_id,
+                        ))
+                        multiple_calendar_events = calendar_multiple_requested(calendar_messages)
+                        calendar_guard = role != "smoke" and (
+                            calendar_enabled or calendar_context(calendar_messages)
+                            or multiple_calendar_events
+                        )
                         response_language = "English" if language == "en" else "Danish"
                         model_input.append({
                             "role": "user",
@@ -774,6 +837,7 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                 max_rounds = 2 if role == "smoke" else MAX_TOOL_ROUNDS
                 smoke_tool_call_count = 0
                 calendar_evidence = []
+                calendar_mutation = None
                 for round_number in range(1, max_rounds + 1):
                     first_model_started = current_model_started_at.get()
                     with latency_span("model_coordination"):
@@ -812,6 +876,12 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                             log_latency("agent_pre_model", chat_started)
                     first_text_ms: int | None = None
                     calendar_text: list[str] = []
+                    emitted_text = ""
+                    early_calendar_text = (
+                        calendar_guard and role == "chat"
+                        and not calendar_context(calendar_messages)
+                        and calendar_mutation is None and not calendar_evidence
+                    )
                     final = None
                     request: dict[str, Any] = {
                         "model": model_name,
@@ -870,8 +940,15 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                                                     log_latency(
                                                         "model_to_first_delta", first_model_started
                                                     )
-                                                if calendar_enabled:
+                                                if calendar_guard:
                                                     calendar_text.append(text)
+                                                    if early_calendar_text:
+                                                        safe = calendar_safe_prefix(
+                                                            "".join(calendar_text)
+                                                        )
+                                                        if len(safe) > len(emitted_text):
+                                                            yield safe[len(emitted_text):]
+                                                            emitted_text = safe
                                                 else:
                                                     yield text
                                         final = await stream.get_final_message()
@@ -927,8 +1004,15 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                                             log_latency(
                                                 "model_to_first_delta", first_model_started
                                             )
-                                        if calendar_enabled:
+                                        if calendar_guard:
                                             calendar_text.append(event.delta)
+                                            if early_calendar_text:
+                                                safe = calendar_safe_prefix(
+                                                    "".join(calendar_text)
+                                                )
+                                                if len(safe) > len(emitted_text):
+                                                    yield safe[len(emitted_text):]
+                                                    emitted_text = safe
                                         else:
                                             yield event.delta
                                     elif event.type == "response.completed":
@@ -1039,25 +1123,52 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
 
                     if not calls:
                         if await append_steering():
+                            if emitted_text:
+                                yield "\n\n"
                             continue
-                        if calendar_enabled:
+                        if calendar_guard:
                             text = "".join(calendar_text)
-                            if calendar_evidence:
+                            reply = text
+                            if calendar_mutation is not None:
+                                name, result = calendar_mutation
+                                explanation = text if not calendar_claim(text) else ""
+                                text = calendar_reply(name, result, danish)
+                                if (
+                                    multiple_calendar_events
+                                    and pending_calendar(result) is not None
+                                ):
+                                    text += (
+                                        "\n\nKun denne ændring er afventende; de øvrige ønskede "
+                                        "begivenheder er ikke med i godkendelsen."
+                                        if danish else
+                                        "\n\nOnly this change is pending; the other requested "
+                                        "events are not included in this approval."
+                                    )
+                                if explanation:
+                                    text += "\n\n" + explanation
+                                reply = text
+                            elif calendar_evidence and (not text or calendar_claim(text)):
                                 name, result = calendar_evidence[-1]
-                                yield calendar_reply(name, result, danish)
+                                reply = calendar_reply(name, result, danish)
                             elif (
-                                calendar_turn or calendar_context([ModelMessage("assistant", text)])
-                            ) and not calendar_clarification(text):
-                                yield (
+                                calendar_turn or calendar_response_scope(calendar_messages, text)
+                            ) and calendar_claim(text):
+                                reply = (
                                     calendar_reply(
                                         "calendar_get_pending_change", calendar_state, danish
                                     )
                                     if calendar_state is not None else no_calendar_evidence(danish)
                                 )
-                            elif text:
-                                yield text
+                            if emitted_text and reply.startswith(emitted_text):
+                                reply = reply[len(emitted_text):]
+                            elif emitted_text and reply:
+                                reply = "\n\n" + reply
+                            if reply:
+                                yield reply
                         return
 
+                    if emitted_text:
+                        yield "\n\n"
                     if use_anthropic:
                         model_input.append({
                             "role": "assistant",
@@ -1072,17 +1183,118 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                         await phase_setter("tools")
                     tool_results = []
                     calendar_results = []
+                    ambiguous_calendar_proposals = (
+                        "calendar_create_events" in definitions
+                        and (
+                            multiple_calendar_events
+                            or any(call.name == "calendar_create_events" for call in calls)
+                        )
+                        and sum(call.name in CALENDAR_MUTATIONS for call in calls) > 1
+                        and not all(call.name == "calendar_create_event" for call in calls)
+                    )
+                    combined_calendar = None
+                    if (
+                        calendar_guard and len(calls) > 1
+                        and all(call.name == "calendar_create_event" for call in calls)
+                        and "calendar_create_events" in definitions
+                    ):
+                        events = [
+                            call.input if use_anthropic else json.loads(call.arguments)
+                            for call in calls
+                        ]
+                        combined_calendar = await self._tools.call(
+                            "calendar_create_events", json.dumps({"events": events}),
+                            current_message_id.get(),
+                        )
+                    legacy_multiple = (
+                        calendar_guard and len(calls) > 1
+                        and all(call.name == "calendar_create_event" for call in calls)
+                        and "calendar_create_events" not in definitions
+                    )
                     for call in calls:
                         arguments = (
                             json.dumps(call.input, ensure_ascii=False, separators=(",", ":"))
                             if use_anthropic
                             else call.arguments
                         )
-                        result = await self._tools.call(
-                            call.name, arguments, current_message_id.get()
-                        )
+                        confirmation_refused = False
+                        if (
+                            call.name == "calendar_confirm_change"
+                            and not ambiguous_calendar_proposals
+                        ):
+                            if "calendar_get_pending_change" not in definitions:
+                                confirmation_refused = True
+                            else:
+                                calendar_state = await self._tools.call(
+                                    "calendar_get_pending_change", "{}", current_message_id.get(),
+                                )
+                                payload = calendar_state.get("result", {})
+                                proposal = pending_calendar(calendar_state) or (
+                                    payload.get("lastChange") if isinstance(payload, dict) else None
+                                )
+                                origin_required = (
+                                    "calendar_create_events" in definitions
+                                    or isinstance(proposal, dict) and (
+                                        "sourceMessageId" in proposal
+                                        or isinstance(proposal.get("items"), list)
+                                    )
+                                )
+                                confirmation_refused = calendar_state.get("outcome") != "ok" or (
+                                    origin_required and not calendar_batch_matches_request(
+                                        calendar_messages, proposal,
+                                    )
+                                )
+                        if ambiguous_calendar_proposals and call.name in CALENDAR_MUTATIONS:
+                            result = {
+                                "tool": call.name, "outcome": "refused",
+                                "result": {"refused": (
+                                    "No calendar proposal was staged. Supply one complete "
+                                    "calendar_create_events proposal; do not mix separate "
+                                    "proposals or confirmation in the same round."
+                                )},
+                            }
+                        elif confirmation_refused:
+                            result = {
+                                "tool": call.name, "outcome": "refused",
+                                "result": {"refused": (
+                                    "No matching backend-staged proposal origin is verified for "
+                                    "this request. No calendar confirmation was dispatched."
+                                )},
+                            }
+                        elif (
+                            multiple_calendar_events and call.name == "calendar_create_event"
+                            and combined_calendar is None
+                            and "calendar_create_events" in definitions
+                        ):
+                            result = {
+                                "tool": call.name, "outcome": "refused",
+                                "result": {"refused": (
+                                    "No single-event proposal was staged for this multiple-event "
+                                    "request. Use calendar_create_events with the complete list."
+                                )},
+                            }
+                        else:
+                            result = (
+                                combined_calendar if combined_calendar is not None else
+                                await self._tools.call(
+                                    call.name, arguments, current_message_id.get()
+                                )
+                            )
+                        if legacy_multiple:
+                            yield calendar_reply(call.name, result, danish)
+                            yield (
+                                "\n\nDenne backend kan ikke klargøre flere begivenheder samlet. "
+                                "De øvrige ønskede begivenheder er ikke med i godkendelsen."
+                                if danish else
+                                "\n\nThis backend cannot prepare multiple events together. "
+                                "The other requested events are not included in this approval."
+                            )
+                            return
                         if call.name in CALENDAR_MUTATIONS:
-                            calendar_results.append((call.name, result))
+                            calendar_results.append((
+                                "calendar_create_events" if combined_calendar is not None
+                                else call.name, result,
+                            ))
                         elif call.name in CALENDAR_READS:
                             calendar_evidence.append((call.name, result))
                         elif call.name == "calendar_get_pending_change":
@@ -1112,12 +1324,41 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                                     "output": json.dumps(result, ensure_ascii=False),
                                 }
                             )
-                    if calendar_enabled and calendar_results:
-                        for name, result in calendar_results:
-                            yield calendar_reply(name, result, danish)
-                        return
                     if use_anthropic and tool_results:
                         model_input.append({"role": "user", "content": tool_results})
+                    if calendar_guard and calendar_results:
+                        calendar_mutation = calendar_results[-1]
+                        name, result = calendar_mutation
+                        if (
+                            multiple_calendar_events and name == "calendar_create_event"
+                            and round_number < max_rounds
+                            and "calendar_create_events" in definitions
+                        ):
+                            model_input.append({
+                                "role": "user",
+                                "content": (
+                                    "The single-event call was refused because Dan requested "
+                                    "multiple events. No proposal was staged by that call. Use "
+                                    "calendar_create_events to stage ONE "
+                                    "complete proposal containing ALL requested events from "
+                                    "the verified source details. Do not invent missing details "
+                                    "or call confirmation. If details are missing, "
+                                    "explain which requested items are not included."
+                                ),
+                            })
+                        else:
+                            yield calendar_reply(name, result, danish)
+                            if (
+                                multiple_calendar_events and name == "calendar_create_event"
+                                and pending_calendar(result) is not None
+                            ):
+                                yield (
+                                    "\n\nDe øvrige ønskede begivenheder er ikke med i godkendelsen."
+                                    if danish else
+                                    "\n\nThe other requested events are not included "
+                                    "in this approval."
+                                )
+                            return
                     if round_number == 1 and any(message.images for message in messages):
                         model_input.append({
                             "role": "user",

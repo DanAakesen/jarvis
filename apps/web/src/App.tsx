@@ -444,13 +444,29 @@ function ShellLayout({ signedIn, config, session, camera, screenShare }: {
     controller?.dispatch({ commandId: `task-window-focus-${focusTaskWindow.seq}`, operation: 'focus', viewId });
   }, [focusTaskWindow]);
   const [tabsHost, setTabsHost] = useState<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const strip = tabsHost?.parentElement;
+    if (!phone || !strip) return;
+    // Window tabs are portals, so React bubbling does not follow this DOM strip.
+    const closeWindowSheet = (event: MouseEvent) => {
+      const target = event.target;
+      if (target instanceof Element && target.closest('button') && !target.closest('.job-tabs')) setWindowsSheetOpen(false);
+    };
+    strip.addEventListener('click', closeWindowSheet, true);
+    return () => strip.removeEventListener('click', closeWindowSheet, true);
+  }, [phone, tabsHost]);
   const knowledgeBackend = useMemo(() => ({ backendUrl: config.backendUrl, getAccessToken }), [config.backendUrl, getAccessToken]);
   const workspacePins = useMemo(() => signedIn && config.backendUrl
     ? createWorkspacePinsClient(config.backendUrl, getAccessToken)
     : undefined, [config.backendUrl, getAccessToken, signedIn]);
   // A finished background job brings its result window forward, or parks it as a tab while Dan is away.
   // While a research job shows as a tab, its progress window's own tab would be a duplicate.
-  const { jobs: backgroundJobs } = useJobs(config.backendUrl, getAccessToken);
+  const jobsAccountId = signedIn
+    ? (session.client.getActiveAccount() ?? session.client.getAllAccounts()[0])?.homeAccountId ?? null
+    : null;
+  const { history: backgroundJobs, error: jobsError } = useJobs(signedIn ? config.backendUrl : null, getAccessToken, jobsAccountId);
+  const hasJobsSummary = backgroundJobs.length > 0 || jobsError !== '';
+  const headerEntryCount = windowCount + (hasJobsSummary ? 1 : 0);
   const researchRunning = backgroundJobs.some((job) => job.kind === 'research' && job.status === 'running');
   // The conversation never needs a tab: the chat bar's orb and handle bring it back.
   const hideResearchProgressTab = useCallback((view: WorkspaceView) => view.presentation === 'conversation' || researchRunning && view.content.status === 'generated' &&
@@ -651,7 +667,7 @@ function ShellLayout({ signedIn, config, session, camera, screenShare }: {
       data-context-open={signedIn && contextPanel.isOpen} data-voice-active={voiceActive}
       data-voice-has-windows={voiceHasWindows} data-conversation-open={signedIn && conversationOpen}
       style={{ ...panelWidths, '--conversation-composer-height': `${conversationComposerHeight}px` } as CSSProperties}
-      data-home={home} data-chat={chatPlace} data-phone={signedIn && phone} data-windows-open={signedIn && phone && windowsSheetOpen && windowCount > 0}>
+      data-home={home} data-chat={chatPlace} data-phone={signedIn && phone} data-windows-open={signedIn && phone && windowsSheetOpen && headerEntryCount > 0}>
       <a className="skip-link" href="#content">Skip to content</a>
       {signedIn && (
         <nav className="area-rail" aria-label="Areas">
@@ -719,17 +735,17 @@ function ShellLayout({ signedIn, config, session, camera, screenShare }: {
           <Link className="brand" to="/" aria-label="Jarvis home" onClick={closePagePanels}>Jarvis</Link>
         </div>
         {/* Open windows live as tabs in the top bar, between the brand and the controls (no breadcrumb). */}
-        {signedIn && <div className="window-tabstrip" onClick={(event) => { if (phone && (event.target as HTMLElement).closest('button')) setWindowsSheetOpen(false); }}>
+        {signedIn && <div className="window-tabstrip">
         <div ref={setTabsHost} className="window-tabbar" />
-        <JobsChip backendUrl={config.backendUrl} getAccessToken={session.getAccessToken} onResult={openJobResult} />
+        <JobsChip key={jobsAccountId} accountId={jobsAccountId} backendUrl={config.backendUrl} getAccessToken={session.getAccessToken} onResult={openJobResult} />
         </div>}
 
         {signedIn && (
           <div className="topbar-actions">
-            {phone && windowCount > 0 && (
+            {phone && headerEntryCount > 0 && (
               <button className="topbar-icon-button mobile-windows-button" type="button" aria-expanded={windowsSheetOpen}
-                aria-label={`Open windows: ${windowCount}`} onClick={() => setWindowsSheetOpen((open) => !open)}>
-                <span className="mobile-windows-count" aria-hidden="true">{windowCount}</span>
+                aria-label={`${hasJobsSummary ? 'Open windows and jobs' : 'Open windows'}: ${headerEntryCount}`} onClick={() => setWindowsSheetOpen((open) => !open)}>
+                <span className="mobile-windows-count" aria-hidden="true">{headerEntryCount}</span>
               </button>
             )}
             <PresenceChip backendUrl={config.backendUrl} getAccessToken={session.getAccessToken} />

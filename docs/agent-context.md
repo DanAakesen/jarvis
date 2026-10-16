@@ -1,5 +1,306 @@
 # Agent context
 
+## Combined-source qualification boundary (16 October 2026)
+
+Use the final all-workstream base-`2823585` patch and manifest, not an earlier
+UI-only or Daily v1 snapshot. The existing Style owner qualifies its own clean
+artifact snapshot with final candidate contracts and one owned pinned React
+graph; do not borrow sibling source links. `@jarvis/contracts` exports runtime
+`src/index.js` and declarations `src/index.d.ts`, not `index.ts`.
+Factory/Calendar qualified component evidence and Mobile v1 results do not
+replace fresh combined or pinned gates. Daily v3b's first unchanged synthetic
+HTTP/module test timed out at 5 seconds; remaining query cases, store and lint
+did not execute. Keep its failed receipt and unchanged source identity.
+
+The parent alone owns the approved combined normal PR/CI/deployment pipeline.
+No new worker, dependency restore, private action or Daily activation follows
+from source integration. Internal patch artifacts may retain historical
+itinerary deletion hunks; do not publish those artifacts or old screenshots.
+Existing protected export/import/device/coaching and physical-phone gates stay
+in force. Earlier lane-specific publication holds describe those earlier stages.
+
+## Calendar batch/reply recovery checks (16 October 2026; local candidate)
+
+Initial reconciliation used exact released `28235851`; #848 already carries
+the original #839/task-15 implementation from historical draft #849. Keep that
+ownership/history; this correction does not start another Factory worker.
+Dan chose one later approval for the complete displayed two-event proposal.
+The additive 2–10-event tool preserves the existing process-local ten-minute
+confirmation model. Batch receipts are not durable across restart.
+
+Use synthetic backend/provider callbacks only. The new regression conversation
+covers the supplied incomplete request, two hotel records, later approval and
+ordinary follow-up questions without accessing personal mail/calendar.
+Released-source guard controls reproduce 22 failures/5 passes after explicitly
+loading immutable baseline modules; the candidate fixes those controls.
+
+The owned Windows Python environment uses 3.12.10, not pinned CI's 3.12.14.
+`uv` direct downloads fail TLS; the configured pip packagefeed can restore the
+original hash-pinned `agents/jarvis/requirements-dev.txt`. Its Linux lock omits
+pytest's Windows-only colorama, supplied in child artifacts as exact 0.4.6 with
+wheel SHA256 `4f1d9991f5acc0ca119f9d443620b77f9d6b33703e51011c16baf57afb285fc6`.
+No repository lock or shared packages are changed. `pip check` passes.
+Focused checks use `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1`,
+`-p pytest_asyncio.plugin` and the owned `.venv\Scripts\python.exe`; initial
+calendar/model checks passed 182 tests; the subsequent full existing agent
+suite passed 470 tests with changed-file Ruff clean. Those results precede the
+new partial-streaming correction and its Event-held regression additions.
+An earlier focused two-file run collected 247 tests: 235 passed and 12 new
+Event-held tests failed with cross-task ContextVar token resets. Its five-file
+Ruff check passed and before/after source hashes matched. Keep that failed
+receipt. Corrected fixtures now iterate and close each response in one owning
+consumer task. Production context ownership/reset was not changed or weakened.
+Do not reuse the historical 470-pass result for later edits.
+The coordinator subsequently authorised verified-message identity metadata:
+the final focused selection adds four existing runtime tests with explicit
+loader/current-request/steering/smoke ID assertions and Ruff over eight changed
+Python files. This does not cover PR #816 transport/disconnect integration.
+Batch approval refuses missing verified request IDs, including callers that do
+not supply them; do not infer IDs to restore that path or claim voice-batch
+acceptance. Normal single-event/legacy `ModelMessage` callers stay compatible.
+
+Frozen v1 local checks passed **367 tests** in 13.03 seconds, then clean
+Ruff over eight Python files. The selection is both complete
+`test_calendar_flow.py`/`test_model_client.py` plus runtime cases
+`test_chat_streams_text_and_sets_tool_source_message`,
+`test_system_smoke_invocation_skips_user_history_and_persistence`,
+`test_steered_invocation_uses_saved_language_and_authorized_round_boundary` and
+`test_load_verified_history_checks_token_and_uses_stored_context`.
+Actual tools: pytest 9.1.1, pytest-asyncio 1.4.0, Ruff 0.16.10; the interpreter
+is AMD64 Python on an ARM64 Windows host. Before/after source hashes match.
+The immediately preceding 365-pass/2-failure run exposed a missing synthetic
+health-tool catalogue declaration in the new steering fixture; keep that
+receipt rather than relabel it a pass.
+
+Direct boundary review produced a source-only v2 correction in
+`calendar_flow.py`, `model_client.py` and `test_calendar_flow.py`: contextual
+"Add those two." inherits recent calendar routing/guarding, never an identity;
+Notes/mail context stays separate and newer creations cannot fall back to older
+proposal origins. The same claim matcher now covers "I've put both in your
+calendar." Both-provider controls cover matching real stages, missing/mismatched/
+older origins, other-workflow requests and no-evidence claims. Questions,
+negatives and conditions remain distinct. Final v4 additionally recognises
+Danish demonstrative "de/disse to", not English preposition `to`.
+The final allocated run used the same full calendar/model plus four runtime
+selectors and eight-file Ruff: **444 passed in 19.11 seconds, Ruff clean**,
+with identical before/after Python source hashes. The preceding v3 run's
+411 passes and all older packets remain historical and immutable.
+
+Publication preparation adds fixture-only v3 in `test_calendar_flow.py`,
+`google\calendar-batch.test.ts` and `google\tools.test.ts`: synthetic hotel
+names/reference, June/December 2027 stays and matching local/UTC expectations.
+Copenhagen +02:00/+01:00, both full summaries and all approval/partial assertions
+are preserved. Targeted scanning of the eight owned changed test files found
+no original itinerary labels/reference/stay dates. Some literals already existed
+in released base282; removal does not purge Git history or deletion hunks.
+V1/v2 packets remain immutable. The final verified full-base patch goes to the
+existing Factory integrator and coordinator, not a new worker or publication
+by this lane. Original root Google tests remain unrun despite fixture cleanup.
+
+The child-owned exact backend offline cache restore fails `ENOTCACHED` for
+`ip-address@10.7.4`; previous proxy/direct attempts failed 404/TLS respectively.
+Do not repeat the network chase, weaken TLS or change pins. Existing read-only
+Node tooling is a qualified fallback only (Vitest 5.0.2/Vite 8.3.1 versus current
+pins); its old snapshot lacks several newer backend dependencies. Keep
+workspace aliases, compiler outputs and caches child-local and never install
+or write through a read-only package junction.
+The sole authorised offline addon restore also stopped at its first miss:
+the copied old addon cache cannot resolve current `@fastify/multipart@10.1.3`
+(`ETARGET`). That original addon directory has no lock. Only the child copy
+omitted its mandatory ARM64 rolldown dependency to match the actual
+Node 22.23.3 / win32 / x64 interpreter; the read-only base snapshot has an
+x64-binding package entry. The attempted install used
+`--offline --ignore-scripts`; no usable addon installation or exact-lock
+acceptance is claimed.
+
+The frozen v1 qualified fallback ran the real Google-module boundary test,
+pending-action tests and capability tests: **58 passed across three suites** in
+4.89 seconds, one fork, normal isolation, no file parallelism. Node is
+22.23.3/win32/x64; actual snapshot tools are Vitest 5.0.2, Vite 8.3.1,
+TypeScript 6.0.3, ESLint 10.11.0 and Node types 22.20.4. Per-package read-only
+junctions live under the child-owned modules directory; `@jarvis/contracts`
+resolves this worktree's actual source. `--configLoader native` and child-owned
+Vite/Node-compile/temp caches avoid writes through snapshot packages. No install
+was repeated. An initial 56-pass/2-budget-failure receipt is retained; compacting
+only the calendar instruction restored the unchanged 15,000-code-point
+headroom gates. Its source and contracts hashes match before/after.
+The fixture-safe v3 rerun passed **58 tests across the same three suites in
+11.03 seconds** with the same qualified tool versions and isolation settings.
+The subsequent Danish-only Python correction reused that just-completed Node
+result after all eleven owned backend/contracts source and fixture hashes
+were compared unchanged; both Node run snapshots are retained. No second
+Node run or dependency restore was required.
+This is not pinned backend, root `buildApp`, auth/audit/voice, full type/build
+or live-provider acceptance; those gates remain outstanding.
+
+No supported existing-session `/remote` control is exposed here; remote-enabled
+state remains unverified. Do not launch a duplicate CLI or change shared
+settings. No private/model/Google/PC action, commit, push, PR or deployment is
+part of this local handoff.
+
+## Resumed inactive Daily read integration (16 October 2026)
+
+Dan selected the existing Daily session under coordinator ownership. This
+supersedes the general #724 engineering hold only for its nonprivate inactive
+read API/tool and committed-invalidation slice; no duplicate worker or broader
+activation follows. Base: `2823585184d67980c580127f9dbbce97109fa91b`.
+`createDailyModules()` remains empty; explicit enabled composition with
+`createDailyData(existingPool, configuredOwner)` exposes `/daily/query` and one
+sensitive `daily_query` tool through the existing registry/authentication.
+The production entry point is unchanged.
+
+Target contracts plus `src/daily/query.test.ts`, `src/daily/routes/query.test.ts`,
+`src/daily/health/processor-commit.test.ts`, accepted health read/normalizer and
+nutrition store/handler tests, and existing Daily/module/auth regressions.
+Run backend strict build/lint and normal isolated SQL/exact-head release gates
+when their pinned dependencies are available. Transaction doubles and synthetic
+root-auth fixtures are not SQL, real OAuth, deployed-client or device proof.
+Existing read-only Node/dependency fixtures are qualified alternatives, not
+permission to stub missing modules, weaken checks or install into parent caches.
+
+No food-write route/tool, guessed intent/confirmation, hosted ChatGPT OAuth,
+provider/model call, UI, coaching, widget, private export/import, device
+credential or cutover is released here. #717/draft #741 remains separately
+parked. Source identity/parity and real iPhone/provider acceptance remain
+unverified; the original Daily remains canonical. Stop before commit,
+publication, merge or deployment; coordinator owns integrated review/release.
+
+## Chat format and phone viewport follow-up (16 October 2026; local candidate)
+
+Owned frontend work starts from released `28235851`; do not reuse the older
+mixed P9-101 checkout. Normal chat is list-first for bookings/events. The
+calendar sibling owns `CHAT_FORMAT_INSTRUCTIONS`; frontend GFM table support
+is compatibility for well-formed existing/model text, not repair of a supplied
+one-line malformed table. Keep HTML disabled and current URL security.
+
+Focused checks: web `MarkdownContent`, `ConversationHistory`,
+`conversation-history`, `phone-chat-viewport`, `Workspace`,
+`conversation-layout` and `styles` suites, web lint and web build. Use offline
+actual-App auth/API fixtures only; no real provider, calendar write or private
+account read. Browser receipts must distinguish native browser layout,
+synthetic VisualViewport/innerHeight/safe-area overrides and physical Safari.
+The existing session's `/remote` state is unverified; no duplicate CLI or
+shared setting was changed.
+
+Initial pinned five-file serial batch: 117 passed, 2 failed. Four suites
+(`MarkdownContent`, transport, viewport and styles) passed. The history suite
+exposed the documented Windows `2,5`/`2.5` voice-unit mismatch and a misplaced
+new nested test. After correcting placement, the fresh isolated history,
+Workspace, conversation-layout and viewport batch ran 150 tests: 149 passed,
+with only the unchanged Windows voice-unit assertion failing. The new table
+streaming/completion/reload regression and geometry guards passed. Runner:
+approved Node 22.23.3 x64, pinned Vitest 5.0.3, `--pool=threads --maxWorkers=1
+--no-file-parallelism`, normal isolation, no `NODE_OPTIONS`; duration 91.28s.
+Worker-start timeouts from an earlier overloaded-host attempt
+ran no tests and are not semantic results. Do not suppress the locale test
+or describe either batch as fully green. Lint, types/build and candidate
+rendered-browser inspection are separate gates. Scoped ESLint 10.12.0 for all
+eight changed TS/TSX files and full web TypeScript 6.0.3 both pass using the
+approved native ARM64 Node 22.23.3. Type command: `tsc --noEmit -p tsconfig.json`;
+the single declared project includes source, tests, config and Vite config.
+No heap override, tsconfig change or build-info emission was used. x64 Vite
+build passed for v1 using Vite 8.3.2 in 17.28s, retaining ordinary chunk-size
+warnings. The runner's default numeric locale is en-DK (`2.5` formats as
+`2,5`); the original locale assertion remains unchanged and unwaived.
+
+Actual-App Chromium 155 inspection then found a held-open stream-follow race
+and unnecessary desktop table clipping. V2 uses pre-paint content following
+and permits only table replies to exceed the prose measure. Actual held-open
+readback measured gaps 0/0 across repeated growth; a reader at scrollTop 100
+remained there through two more growths, with gaps 866/1182. Eight phone
+keyboard/accessory/pan/safe-area/show/hide/blur cases pass; orientation/draft,
+history opt-out, keyboard table focus/scroll and desktop columns were observed.
+Basic More/navigation and synthetic voice-shell entry/teardown used no real
+microphone/provider call; this is not real voice acceptance. List/flattened
+fixtures were inspected at 320px. Earlier exact supplied-itinerary screenshots
+are internal evidence, not publication assets. Harness-only selector/helper
+errors remain in the logs and are not product acceptance results.
+
+The v2 held-open real-component regression, table-width guard and wholly
+synthetic hotel/stay/price fixtures require fresh targeted/static/build gates;
+v1 results must not be relabelled. The owned fixture listener/page are stopped.
+No physical Safari, live formatting/provider or remote-enabled-session claim
+is established by these local receipts.
+
+For this Windows ARM host, existing authorised x64 Node 22.23.3 plus
+`npm ci --workspace @jarvis/web --include-workspace-root --cpu=x64 --os=win32
+--cache <owned-copy-of-authorised-cache> --offline --no-audit --no-fund`
+restores the pinned web toolchain, not an older tooling snapshot. Do not edit
+pins or disable TLS to resolve a package-feed failure.
+
+## Jarvis control styling (16 October 2026; project-local rule)
+
+For every control change, reuse `apps/web/src/styles.css` and the common
+contract in `DESIGN.md`; audit equivalent controls outside the current route.
+Use the existing `--radius-control` for action/icon buttons, tabs, filter and
+segmented choices, search and form fields. Keep `--radius-pill` for compact
+noninteractive status, with genuine switches, orb/media and panel/window
+geometry as semantic exceptions. Do not add arbitrary route-specific radii,
+another token inventory, a theme, a component framework or a blanket reset.
+
+Quiet actions are borderless with existing `--glass-hover`/`--glass-pressed`
+feedback; primary actions keep `--primary-action`. Selected choices use the
+existing `--state-selected-*` surfaces/text, weight and semantic ARIA state.
+Do not reintroduce decorative coloured outlines, boxed/bevelled tab chrome,
+inset-shadow control borders or `--glass-selected-glow` on controls, including
+hover/pressed states. Preserve neutral `--control-rule` field boundaries and
+`--rule` structure, semantic error/success text/icons and `--focus` keyboard
+outlines. These are not decorative borders to remove.
+
+Preserve existing compact desktop density and at least 44px touch targets.
+Check desktop and narrow phone layouts in both appearances, selected hover and
+press, keyboard focus, disabled/loading/recovery states and reduced motion.
+Use actual components with guarded synthetic responses, never live private
+data or fabricated metrics presented as real. Keep screenshots as inspection
+evidence, not product assets. The 16 October supplied images establish shape
+inconsistency and rejected bevelled tabs, not a replacement visual reference.
+Only repository-local guidance changes belong here; do not modify global
+instructions or `C:\Repo\templates`.
+
+This worktree starts from released/remote main `2823585184d67980c580127f9dbbce97109fa91b`.
+Pinned web dependencies can be restored from an owned copy of the authorised
+offline cache with `npm ci --workspace @jarvis/web --include-workspace-root
+--cpu=x64 --os=win32 --cache <owned-cache> --offline --no-audit --no-fund`.
+Use the authorised x64 Node 22 runtime for native web tools on this ARM host;
+do not alter manifests, pins or TLS security. Run web tests from `apps/web`
+because their source paths are relative to that workspace. CLI help support
+for `copilot --remote` is not proof that this existing session has `/remote`
+enabled; do not launch a duplicate CLI or change shared settings to claim it.
+
+## Factory cache ownership (16 October 2026; local, v2 component checks passed)
+
+The local successor to released `2823585` keeps one pending board owner per
+project through invalidation, coalesces one immediate dirty follow-up, and
+marks a follow-up invalidated again stale/expired. Ordinary task/webhook
+publication is project-local; task lookup failure preserves safe diagnostics
+without a global fallback. Existing explicit global invalidation remains.
+Each attempted snapshot still passes full route validation; typed failure,
+last validated fallback, TTL/LRU and waiter isolation retain their owners.
+Outer source/task/release failures preserve the first cause and await started
+branches before releasing ownership; error settlement can wait for cleanup.
+
+The selected frozen-`2823585` direct-cache control actually failed at the intended
+predicate: expected one source owner, observed two. In a separate fresh process,
+all 12 direct-cache cases and four real-Fastify route lifetime controls passed,
+with zero skips, on retained v1 source. Later review found eviction could remove
+a snapshot's invalidation reachability before its waiter settled. Eviction now
+marks that object stale/expired without dirtying its pending owner. A new
+fixed-clock/gated control actually failed at its freshness assertion on the
+retained v1. Current v2 passed all 17 component cases (13 cache, four route),
+with zero skips. Both versions and their raw receipts remain distinct.
+Node 22.23.3, Vitest 5.0.2/Vite 8.3.1 and Fastify 5.12.5 were
+verified; Vitest/Vite differ from current pins. These are component checks, not
+root authentication, publisher composition or full-app acceptance.
+
+The validation slot is released. Existing buildApp/publication/auth suites and
+pinned lint/types/build remain UNRUN/blocked. Do not repeat the known blocked
+offline backend restore (`ip-address@10.7.4`) or failed addon extraction
+(`@fastify/multipart@10.1.3`); do not chase the registry. Exact baseline board/app
+source, candidate/config identities and actual JSON/log receipts persist in
+this session's artifacts. No further heavy work without a parent allocation;
+no commit, push, PR, deployment, live/private read or historical-502 claim is
+authorised.
+
 ## Steered source verification (16 October 2026; local successor)
 
 Chat steering saves an interrupted Jarvis partial after the new Dan message,

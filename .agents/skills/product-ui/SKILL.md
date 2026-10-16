@@ -34,6 +34,12 @@ Use this as the single frontend workflow. The project entrypoint contains the ma
 
 ## Keep one coherent design system
 
+- For Jarvis, first read `docs/agent-context.md` under **Jarvis control styling**
+  and the **Shared control geometry** contract in `DESIGN.md`. Reuse the existing
+  control radius and surface states across routes; no arbitrary action capsules,
+  decorative coloured boxes, bevels or inset-shadow control borders. Preserve
+  semantic shapes, neutral field/structural borders and visible keyboard focus.
+  This is repository-local guidance, not permission to edit external templates.
 - Extend the existing CSS variables, theme, and shared components. Keep shared color, typography, spacing, radius, state, and motion values in one canonical code source.
 - Use existing semantic roles. Add tokens only for real reusable decisions; avoid duplicate aliases or a second token inventory in `DESIGN.md`. Name tokens by role, such as `--surface-default`, `--text-muted`, and `--focus-ring`. Local exceptions may use raw values.
 - Equivalent headings, buttons, navigation items, panels, rows, forms, and status messages should share anatomy and behavior across routes. Change them only for a workflow reason.

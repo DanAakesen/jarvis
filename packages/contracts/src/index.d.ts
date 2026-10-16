@@ -6,6 +6,40 @@ export type DailyViewKind = keyof typeof dailyViewIds;
 export type DailyViewId = typeof dailyViewIds[DailyViewKind];
 export const dailyModuleId: 'daily';
 export const dailyContractVersion: 1;
+export const dailyQuerySources: Readonly<{
+  metrics: 'daily.health.metrics'; sleep: 'daily.health.sleep'; workouts: 'daily.health.workouts';
+  workout: 'daily.health.workout'; heartRate: 'daily.health.heart-rate';
+  meals: 'daily.nutrition.meals'; sync: 'daily.sync';
+}>;
+export type DailySourceId = typeof dailyQuerySources[keyof typeof dailyQuerySources];
+export type DailyCursor = { date: string; key: string } | { minute: string; metric: string } | { createdAt: string; id: string };
+export type DailyQuery =
+  | { source: 'daily.health.metrics' | 'daily.health.sleep' | 'daily.health.workouts'; startDate: string; endDate: string; limit?: number; cursor?: { date: string; key: string } }
+  | { source: 'daily.health.heart-rate'; workoutId: string; limit?: number; cursor?: { minute: string; metric: string } }
+  | { source: 'daily.health.workout'; workoutId: string }
+  | { source: 'daily.nutrition.meals'; startDate: string; endDate: string; limit?: number; cursor?: { createdAt: string; id: string } }
+  | { source: 'daily.sync' };
+export type DailyJson = null | boolean | number | string | DailyJson[] | { [key: string]: DailyJson };
+export interface DailyQueryResult {
+  source: DailySourceId;
+  period: { startDate: string; endDate: string; timeZone: 'Europe/Copenhagen' } | null;
+  items: Record<string, DailyJson>[];
+  status: 'available' | 'empty' | 'partial';
+  units: Readonly<Record<string, string>>;
+  provenance: {
+    store: 'daily-sql'; detail: 'retained-record'; calculations: 'existing-read-model';
+    consistency: 'independent-committed-reads';
+  };
+  freshness: {
+    observedAt: string; sourceProcessedCommittedAt: string | null;
+    latestReturnedRecordUpdatedAt: string | null; staleness: 'unknown';
+  };
+  coverage: { returned: number; hasMore: boolean; next: DailyCursor | null; sourceCompleteness: 'unknown' };
+  /** Content fingerprint of this exact committed-read result, not a global ordering/replay token. */
+  revision: string;
+}
+export const dailyQuerySchema: Readonly<Record<string, unknown>>;
+export function isDailyQuery(value: unknown): value is DailyQuery;
 
 export const generatedViewVersion: 1;
 export const presenceModes: readonly ['present', 'away', 'on_the_move'];

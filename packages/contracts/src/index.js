@@ -1,4 +1,5 @@
 export { dailyViewIds, dailyModuleId, dailyContractVersion } from './daily.js';
+export { dailyQuerySources, dailyQuerySchema, isDailyQuery } from './daily.js';
 
 export const generatedViewVersion = 1;
 export const systemSmokeCheckIds = Object.freeze([

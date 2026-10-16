@@ -26,6 +26,19 @@ Protected #717 backup, source/import reconciliation, live provider and physical-
 
 ## Checks
 
+The inactive P12-09 shared query service reads bounded meal history only.
+No new intake/write route or tool is registered. An optional fourth
+`NutritionStore.forRequest` argument (third `createNutritionHandlers` argument)
+accepts the shared Daily change hub. Log/correction/deletion mark a domain
+change inside their existing transaction and publish only after acknowledged
+commit; exact operation/revision replays do not publish again. Failed attempts,
+uncertain commits and deadlock retries cannot advertise a committed revision.
+Supplied notification sinks use the existing event-listener error boundary;
+a sink failure cannot fail an acknowledged mutation or trigger SQL replay.
+Existing intent/proposal checks and Apple Health metadata behavior are unchanged.
+The new synthetic commit/publication controls supplement, not replace, real
+SQL and hosted-client/device acceptance.
+
 `npm test --workspace @jarvis/backend -- src/daily/nutrition/model.test.ts src/daily/nutrition/store.test.ts src/daily/nutrition/frida.test.ts src/daily/nutrition/handlers.test.ts src/daily/store/owner-store.test.ts src/daily/index.test.ts src/database/migrations.test.ts src/modules.test.ts`
 
 `npm run lint --workspace @jarvis/backend` and `npm run build --workspace @jarvis/backend`.

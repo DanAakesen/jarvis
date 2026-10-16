@@ -114,6 +114,12 @@
 .markdown-content pre { max-width: 100%; margin: var(--space-3) 0; padding: var(--space-3) var(--space-4); overflow-x: auto; border-radius: var(--radius-control); background: var(--code-surface); color: var(--text); font-size: .9em; line-height: 1.45; }
 .markdown-content pre code { font-family: var(--font-mono); font-size: inherit; white-space: pre; }
 .markdown-content a { text-decoration-thickness: .08em; text-underline-offset: .2em; }
+.conversation-message:has(.markdown-table-scroll), .streaming-message:has(.markdown-table-scroll) { max-width: 100%; }
+.markdown-table-scroll { max-width: 100%; margin: var(--space-3) 0; overflow-x: auto; overscroll-behavior-x: contain; }
+.markdown-table-scroll:focus-visible { outline: 3px solid var(--focus); outline-offset: -3px; }
+.markdown-table-scroll table { width: 100%; min-width: 30rem; border-collapse: collapse; font-size: inherit; }
+.markdown-table-scroll :is(th, td) { padding: var(--space-2); border: 1px solid var(--rule); text-align: left; vertical-align: top; }
+.markdown-table-scroll th { background: var(--surface-muted); font-weight: 650; }
 .message-tools { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 0; padding: 0; list-style: none; }
 .message-tools > li { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .message-artifact { flex-basis: 100%; min-width: 0; margin: 4px 0 0; }
@@ -661,9 +667,10 @@
 
 /* Both halves of phone chat use the visible viewport, including keyboard pan and dismissal. */
 .app-shell.app-shell[data-phone="true"][data-voice-active="false"]:not(.app-signed-out) .jarvis-page {
-  position: fixed; z-index: 40; top: auto;
+  position: fixed; z-index: 40;
+  top: calc(var(--phone-chat-top, 0px) + var(--phone-chat-height, 100dvh) - var(--phone-dock-bottom) - var(--conversation-composer-height, 52px));
   right: calc(env(safe-area-inset-right) + 8px);
-  bottom: calc(var(--phone-chat-bottom, 0px) + var(--phone-dock-bottom));
+  bottom: auto;
   left: calc(env(safe-area-inset-left) + 8px);
   width: auto; max-width: none; height: auto; min-height: 0; margin: 0; padding: 0; pointer-events: none;
 }
@@ -677,7 +684,8 @@
   position: fixed; z-index: 30;
   top: calc(var(--phone-chat-top, 0px) + env(safe-area-inset-top) + var(--rail-size) + 8px);
   right: calc(env(safe-area-inset-right) + 8px);
-  bottom: calc(var(--phone-chat-bottom, 0px) + var(--phone-dock-bottom) + var(--conversation-composer-height, 52px) - 2px);
+  bottom: auto;
+  height: max(0px, calc(var(--phone-chat-height, 100dvh) - env(safe-area-inset-top) - var(--rail-size) - 8px - var(--phone-dock-bottom) - var(--conversation-composer-height, 52px) + 2px));
   left: calc(env(safe-area-inset-left) + 8px);
   padding: 0; pointer-events: none;
 }

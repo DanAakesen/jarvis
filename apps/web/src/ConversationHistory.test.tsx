@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { useLayoutEffect } from 'react';
 import { MemoryRouter } from 'react-router-dom';
 import { ConversationHistory } from './ConversationHistory';
 import { ConversationIntentProvider } from './ConversationIntentProvider';
@@ -312,6 +313,115 @@ describe('ConversationHistory', () => {
     const dan = screen.getByText('**literal** <script>alert(1)</script>').closest('[data-speaker="dan"]');
     expect(dan?.querySelector(':scope > p strong, :scope > p script')).toBeNull();
     expect(screen.getByText('**voice transcript**').closest('[data-speaker="jarvis"]')?.querySelector('.markdown-content')).toBeNull();
+  });
+
+  it('renders the same booking table during streaming, completion and persisted-history reload', async () => {
+    const text = [
+      '**Two synthetic bookings** before 1 July 2031:',
+      '',
+      '| Hotel | Check-in | Check-out | Price |',
+      '|---|---|---|---|',
+      '| Fixture Hotel North | 14 May, 15:00 | 15 May, 11:00 | 1,200 DKK |',
+      '| Fixture Hotel South | 28 Jun, 16:00 | 29 Jun, 12:00 | 1,800 DKK |',
+      '',
+      'All times are local.',
+    ].join('\n');
+    let finish!: () => void;
+    sendChatTurn.mockImplementation(async (...args: unknown[]) => {
+      (args[4] as (value: typeof userMessage) => void)(userMessage);
+      const delta = args[5] as (value: string) => void;
+      for (const fragment of text.split(/(?<=\n)/u)) delta(fragment);
+      await new Promise<void>(resolve => { finish = resolve; });
+      return { ...assistantMessage, text };
+    });
+    const view = renderConversation();
+    fireEvent.change(screen.getByRole('textbox', { name: 'Message Jarvis' }), { target: { value: 'Show bookings' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(await screen.findByRole('table')).toBeTruthy();
+    expect(screen.getAllByRole('row')).toHaveLength(3);
+    await act(async () => { finish(); });
+    expect(screen.getAllByRole('table')).toHaveLength(1);
+    view.unmount();
+    loadConversationHistory.mockResolvedValue({ messages: [{ ...message, ...assistantMessage, channel: 'chat', text, toolCalls: [] }], nextCursor: null });
+    renderConversation();
+    expect(await screen.findByRole('table')).toBeTruthy();
+    expect(screen.getByRole('cell', { name: '15 May, 11:00' })).toBeTruthy();
+    expect(screen.getByText('All times are local.')).toBeTruthy();
+  });
+
+  it('keeps a held-open streamed table at latest across growth unless the reader scrolls into history', async () => {
+    let delta!: (text: string) => void;
+    let finish!: () => void;
+    let streamed = '';
+    let settled = false;
+    sendChatTurn.mockImplementation(async (_client, _config, _session, _text, onUser, onDelta) => {
+      onUser(userMessage);
+      delta = text => { streamed += text; onDelta(text); };
+      await new Promise<void>(resolve => { finish = resolve; });
+      settled = true;
+      return { ...assistantMessage, text: streamed };
+    });
+    const tailGaps: number[] = [];
+    function Readback({ version }: { version: number }) {
+      useLayoutEffect(() => {
+        if (version === 0) return;
+        const transcript = screen.getByLabelText('Conversation history');
+        tailGaps.push(transcript.scrollHeight - transcript.clientHeight - transcript.scrollTop);
+        transcript.dispatchEvent(new Event('scroll'));
+      }, [version]);
+      return (
+        <JarvisActivityProvider><MemoryRouter>
+          <VoiceWorkspaceContext.Provider value={{ onVoiceActiveChange: vi.fn() }}>
+            <ConversationHistory client={client} config={config} />
+          </VoiceWorkspaceContext.Provider>
+        </MemoryRouter></JarvisActivityProvider>
+      );
+    }
+    const view = render(<Readback version={0} />);
+    fireEvent.change(screen.getByRole('textbox', { name: 'Message Jarvis' }), { target: { value: 'Show bookings' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    await waitFor(() => expect(sendChatTurn).toHaveBeenCalledOnce());
+    const transcript = screen.getByLabelText('Conversation history');
+    let height = 600;
+    let top = 300;
+    Object.defineProperty(transcript, 'scrollHeight', { configurable: true, get: () => height });
+    Object.defineProperty(transcript, 'clientHeight', { configurable: true, value: 300 });
+    Object.defineProperty(transcript, 'scrollTop', {
+      configurable: true,
+      get: () => top,
+      set: (value: number) => { top = Math.max(0, Math.min(value, height - 300)); },
+    });
+    fireEvent.scroll(transcript);
+    height = 1000;
+    act(() => {
+      delta('| Hotel | Check-in |\n|---|---|\n| Fixture Hotel North | 14 May 2031 at 15:00 |');
+      view.rerender(<Readback version={1} />);
+    });
+    height = 1250;
+    act(() => {
+      delta('\n| Fixture Hotel South | 28 June 2031 at 16:00 |');
+      view.rerender(<Readback version={2} />);
+    });
+    expect(tailGaps).toEqual([0, 0]);
+    expect(screen.getAllByRole('row')).toHaveLength(3);
+    transcript.scrollTop = 100;
+    fireEvent.scroll(transcript);
+    height = 1600;
+    act(() => {
+      delta('\n| Fixture Hotel West | 30 June 2031 at 14:00 |');
+      view.rerender(<Readback version={3} />);
+    });
+    height = 1750;
+    act(() => {
+      delta('\n\nTimes are local in this synthetic fixture.');
+      view.rerender(<Readback version={4} />);
+    });
+    expect(tailGaps).toEqual([0, 0, 1200, 1350]);
+    expect(transcript.scrollTop).toBe(100);
+    expect(screen.getByRole('button', { name: 'Jump to latest' })).toBeTruthy();
+    expect(settled).toBe(false);
+    await act(async () => { finish(); });
+    expect(settled).toBe(true);
   });
 
   it('shows loading and empty states', async () => {
@@ -1212,27 +1322,27 @@ describe('ConversationHistory', () => {
   });
 
   it('reflows input height on width changes without a height-observer loop', async () => {
-    let resize: (() => void) | undefined;
+    const observers = new Map<Element, () => void>();
     const disconnect = vi.fn();
     vi.stubGlobal('ResizeObserver', class {
-      constructor(callback: () => void) { resize = callback; }
-      observe = vi.fn();
+      constructor(private callback: () => void) {}
+      observe = (element: Element) => { observers.set(element, this.callback); };
       disconnect = disconnect;
     });
     const view = renderConversation();
     const input = await screen.findByRole('textbox', { name: 'Message Jarvis' });
     const height = vi.spyOn(input, 'scrollHeight', 'get').mockReturnValue(96);
     const box = vi.spyOn(input, 'getBoundingClientRect').mockReturnValue({ width: 390 } as DOMRect);
-    act(() => resize?.());
+    act(() => observers.get(input)?.());
     expect(input.style.height).toBe('96px');
     height.mockReturnValue(144);
-    act(() => resize?.());
+    act(() => observers.get(input)?.());
     expect(input.style.height).toBe('96px');
     box.mockReturnValue({ width: 200 } as DOMRect);
-    act(() => resize?.());
+    act(() => observers.get(input)?.());
     expect(input.style.height).toBe('144px');
     view.unmount();
-    expect(disconnect).toHaveBeenCalledOnce();
+    expect(disconnect).toHaveBeenCalledTimes(2);
   });
 
   it('shows relative metadata with the exact time available and distinct speakers', async () => {
@@ -1272,6 +1382,35 @@ describe('ConversationHistory', () => {
     expect(transcript.scrollTop).toBe(1200);
     expect(document.activeElement).toBe(transcript);
     expect(screen.queryByRole('button', { name: 'Jump to latest' })).toBeNull();
+  });
+
+  it('keeps latest content visible through keyboard resizing without pulling a history reader to the bottom', async () => {
+    const observers = new Map<Element, () => void>();
+    const disconnect = vi.fn();
+    vi.stubGlobal('ResizeObserver', class {
+      constructor(private callback: () => void) {}
+      observe = (element: Element) => { observers.set(element, this.callback); };
+      disconnect = disconnect;
+    });
+    loadConversationHistory.mockResolvedValue({ messages: historyPair, nextCursor: null });
+    const view = renderConversation();
+    await screen.findByText('I am ready.');
+    const transcript = screen.getByLabelText('Conversation history');
+    Object.defineProperty(transcript, 'scrollHeight', { configurable: true, value: 1200 });
+    Object.defineProperty(transcript, 'clientHeight', { configurable: true, value: 300 });
+    act(() => observers.get(transcript)?.());
+    expect(transcript.scrollTop).toBe(1200);
+    transcript.scrollTop = 100;
+    fireEvent.scroll(transcript);
+    Object.defineProperty(transcript, 'clientHeight', { configurable: true, value: 150 });
+    act(() => observers.get(transcript)?.());
+    expect(transcript.scrollTop).toBe(100);
+    fireEvent.click(screen.getByRole('button', { name: 'Jump to latest' }));
+    Object.defineProperty(transcript, 'scrollHeight', { configurable: true, value: 1400 });
+    act(() => observers.get(transcript)?.());
+    expect(transcript.scrollTop).toBe(1400);
+    view.unmount();
+    expect(disconnect).toHaveBeenCalledTimes(2);
   });
 
   it('keeps author roles for assistive technology without visible avatars or name headings', async () => {
