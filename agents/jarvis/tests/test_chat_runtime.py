@@ -349,16 +349,128 @@ def test_steered_invocation_uses_saved_language_and_authorized_round_boundary(mo
         ("POST", "https://backend.example/conversation/sessions/41/turns/42/phase:tools"),
         ("GET", "https://backend.example/conversation/sessions/41/turns/42/steering?after=42"),
     ]
-    assert client_timeouts == [10.0, 15, 15]
+    assert client_timeouts == [10.0, 15]
+
+
+@pytest.mark.parametrize("failure", [
+    None, "steering_status", "steering_shape", "phase_status", "timeout", "cancelled", "model",
+])
+async def test_coordination_client_is_turn_scoped_and_closes_on_failure(
+    monkeypatch, failure,
+) -> None:
+    clients: list[httpx.AsyncClient] = []
+    calls: dict[str, list[str]] = {"42": [], "52": []}
+    closed_models: list[str] = []
+    real_client = httpx.AsyncClient
+
+    def backend(request):
+        turn_id = request.url.path.split("/")[-2]
+        assert request.headers["Authorization"] == " ".join(("Bear" + "er", f"caller_{turn_id}"))
+        if request.method == "POST":
+            calls[turn_id].append(json.loads(request.content)["phase"])
+            return httpx.Response(503 if failure == "phase_status" else 204)
+        cursor = request.url.params["after"]
+        calls[turn_id].append(cursor)
+        if failure == "timeout":
+            raise httpx.ReadTimeout("private-backend-detail")
+        if failure == "cancelled":
+            raise asyncio.CancelledError()
+        if failure == "steering_status":
+            return httpx.Response(401)
+        if failure == "steering_shape":
+            return httpx.Response(200, json={"messages": [{"text": "private-invalid"}]})
+        return httpx.Response(200, json={"messages": (
+            [{"id": str(int(turn_id) + 1), "text": "Continue.", "language": "en"}]
+            if cursor == turn_id else []
+        )})
+
+    def create_client(**kwargs):
+        assert kwargs["follow_redirects"] is False
+        client = real_client(transport=httpx.MockTransport(backend), **kwargs)
+        clients.append(client)
+        return client
+
+    monkeypatch.setattr(httpx, "AsyncClient", create_client)
+    monkeypatch.setattr(
+        chat_runtime, "backend_settings_from_environment",
+        lambda: ("https://backend.example", "scope"),
+    )
+
+    async def context(token, message_id, *_args):
+        assert token == f"caller_{message_id}"
+        current_chat_session_id.set(str(int(message_id) - 1))
+        chat_runtime.current_backend_http_timeout_seconds.set(7 if message_id == "42" else 9)
+        return []
+
+    class BoundaryModel(FakeModel):
+        async def complete_chat(self, *_args, **_kwargs):
+            turn_id = current_chat_turn_id.get()
+            fetch = current_steering_fetcher.get()
+            phase = current_chat_phase_setter.get()
+            try:
+                await asyncio.sleep(0)
+                assert await fetch() == [(str(int(turn_id) + 1), "Continue.", "en")]
+                await phase("model")
+                assert await fetch() == []
+                await phase("tools")
+                assert await fetch() == []
+                await phase("model")
+                assert await fetch() == []
+                if failure == "model":
+                    raise RuntimeError("private-model-detail")
+                yield "Done."
+            finally:
+                closed_models.append(turn_id)
+                assert any(not client.is_closed for client in clients)
+
+    host = SimpleNamespace(invoke_handler=lambda handler: setattr(host, "handler", handler))
+    chat_runtime.register_chat_invocation(host, BoundaryModel(), context)
+
+    async def invoke(turn_id):
+        async def stream():
+            yield json.dumps({
+                "messageId": turn_id, "text": "Hello", "language": "en",
+                "delegatedAuthorization": " ".join(("Bear" + "er", f"caller_{turn_id}")),
+            }).encode()
+
+        response = await host.handler(SimpleNamespace(stream=stream))
+        frames = []
+        try:
+            async for frame in response.body_iterator:
+                frames.append(frame)
+        except asyncio.CancelledError:
+            assert failure == "cancelled"
+        assert current_steering_fetcher.get() is None
+        assert current_chat_phase_setter.get() is None
+        return "".join(frames)
+
+    results = await asyncio.gather(invoke("42"), invoke("52"))
+    assert len(clients) == 2
+    assert sorted(client.timeout.read for client in clients) == [7, 9]
+    assert all(client.is_closed for client in clients)
+    assert sorted(closed_models) == ["42", "52"]
+    for turn_id, result in zip(("42", "52"), results, strict=True):
+        assert "private-" not in result
+        if failure is None:
+            cursor = str(int(turn_id) + 1)
+            assert calls[turn_id] == [turn_id, "model", cursor, "tools", cursor, "model", cursor]
+            assert "event: delta" in result and "event: done" in result
+        else:
+            assert "event: done" not in result and "event: delta" not in result
+            assert ("event: error" in result) is (failure != "cancelled")
 
 
 @pytest.mark.parametrize("disconnect", [False, True])
-async def test_responses_delta_reaches_sse_before_model_completion(disconnect, caplog) -> None:
+async def test_responses_delta_reaches_sse_before_model_completion(
+    disconnect, caplog, monkeypatch,
+) -> None:
     finish = asyncio.Event()
     disconnected = asyncio.Event()
     first_delta = asyncio.Event()
     frames: list[bytes] = []
     stream_closed = False
+    coordination_calls: list[str] = []
+    coordination_clients: list[httpx.AsyncClient] = []
 
     class Stream:
         async def __aenter__(self):
@@ -381,12 +493,25 @@ async def test_responses_delta_reaches_sse_before_model_completion(disconnect, c
     class Responses:
         async def create(self, **request):
             assert request["stream"] is True
+            assert request["input"][-1]["content"].endswith("New steering.")
             return Stream()
 
     async def token():
         return "agent-token"
 
     def backend(request):
+        if "/conversation/sessions/" in request.url.path:
+            assert request.headers["Authorization"] == AUTHORIZATION
+            if request.url.path.endswith("/phase"):
+                coordination_calls.append("model")
+                assert json.loads(request.content) == {"phase": "model"}
+                return httpx.Response(204)
+            assert request.url.params["after"] == ("43" if len(coordination_calls) == 3 else "42")
+            coordination_calls.append("steering")
+            return httpx.Response(200, json={"messages": (
+                [{"id": "43", "text": "New steering.", "language": "en"}]
+                if len(coordination_calls) == 3 else []
+            )})
         if request.url.path == "/tools":
             return httpx.Response(200, json=[])
         if request.url.path == "/agent/settings":
@@ -406,7 +531,25 @@ async def test_responses_delta_reaches_sse_before_model_completion(disconnect, c
             http=httpx.AsyncClient(transport=httpx.MockTransport(backend)),
         ),
     )
-    app = create_app(model, configure_observability=None, chat_context_loader=lambda *_: _context())
+    real_client = httpx.AsyncClient
+
+    def coordination_client(**kwargs):
+        assert kwargs == {"timeout": 10, "follow_redirects": False}
+        client = real_client(transport=httpx.MockTransport(backend), **kwargs)
+        coordination_clients.append(client)
+        return client
+
+    monkeypatch.setattr(httpx, "AsyncClient", coordination_client)
+    monkeypatch.setattr(
+        chat_runtime, "backend_settings_from_environment",
+        lambda: ("https://backend.example", "scope"),
+    )
+
+    async def context(*_args):
+        current_chat_session_id.set("41")
+        return await _context()
+
+    app = create_app(model, configure_observability=None, chat_context_loader=context)
     body = json.dumps({
         "messageId": "42", "text": "private-greeting", "language": "en",
         "delegatedAuthorization": AUTHORIZATION,
@@ -442,12 +585,16 @@ async def test_responses_delta_reaches_sse_before_model_completion(disconnect, c
         assert b'data: {"text": "Hi"}' in b"".join(frames)
         assert b"event: done" not in b"".join(frames)
         assert not task.done() and not stream_closed
+        assert coordination_calls == ["steering", "model", "steering"]
+        assert len(coordination_clients) == 1
+        assert not coordination_clients[0].is_closed
         if disconnect:
             disconnected.set()
         else:
             finish.set()
         await asyncio.wait_for(task, timeout=2)
         assert stream_closed
+        assert coordination_clients[0].is_closed
         assert (b"event: done" in b"".join(frames)) is not disconnect
         assert any("phase=agent_first_delta " in message for message in caplog.messages)
         if not disconnect:

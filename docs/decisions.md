@@ -1833,6 +1833,49 @@ no replay, both providers and tool-first turns. Coordinator acceptance remains:
 deploy, query at least ten turns, median first token below 5 s and warm turns
 below 3 s, with no `conversation.reply_failed`, tool-calling or canary regression.
 The product's ≤2.5 s target remains; no measured improvement is claimed here.
+
+### Follow-up after #802 live acceptance
+
+The coordinator's 13 October sample attributes the remaining delay as follows.
+These are reported production observations, not independently queried here.
+Medians from different cohorts must not be added. The coordinator's 14 October
+content-free correlation refresh identifies original baseline turn 1 as cold
+and turns 2–10 as warm, with affinity on 10/10 and no fallback. Ten unique
+sequential event/span associations and eight exact captured model timings
+support this evidence; classification is not inferred from elapsed time.
+
+| Observation | Duration | Interpretation |
+| --- | --- | --- |
+| First post-release turn, backend first text | 13.968 s | Session residual 6.289 s + agent preparation 0.492 s + model-to-first-text 7.128 s; remaining 0.059 s is outside those reported phases |
+| Ten sequential turns, backend first-text median | 3.646 s | Overall <5 s gate met in this sample; no reply failures reported |
+| First of those ten, backend first text / session residual | 10.978 s / 6.538 s | Correlated turn 1 is cold; residual alone is not proof |
+| Warm nine, backend / UI first-text median | 3.370 s / 3.467 s | Only 3/9 below 3 s: warm gate FAIL |
+| Subsequent nine, model-to-first-text median | 2.790 s | Dominant remaining measured interval; prompt processing versus reasoning is not separately exposed |
+| Warm nine, session residual range | 0.089–0.346 s | Turns 2–10 are warm by correlated telemetry, not duration |
+
+Code inspection finds a new `httpx.AsyncClient` for every steering GET and
+phase POST, including the two steering reads bracketing each model transition.
+Reuse one client **within a single verified invocation**, across model/tool
+rounds and the final steering check. Keep every request sequential: parallelizing
+or removing either guard would change steering race handling. Keep delegated
+authorization on each request, the configured timeout, disabled redirects,
+cursor validation and visible failures. An async exit stack closes the model
+generator before its coordination client on completion, failure or cancellation.
+No client, cookies, authorization or history is shared between invocations.
+
+Controlled offline measurements (30 alternating samples per variant, actual
+invocation handler, HTTP/1.1 loopback backend, three guard requests, no model or
+Azure calls) reduced TCP connections per turn from three to one and median
+connected-to-first-text from 53.48 ms to 16.77 ms. Separate default-client
+construction/close measurements were 34.25 ms for three versus 11.40 ms for one.
+These demonstrate a bounded local saving, not production TLS/network cost or a
+sub-three-second guarantee. Preserve model/reasoning, providers, auth, prompts
+and real first-text timing. No package, resource, scheduler or live canary change.
+Refs DanAakesen/jarvis#794: coordinator post-deploy acceptance and broader #801
+acceptance remain open. No resume or post-fix improvement is established. The
+release/UI temporary snapshot hold is settled, but release is distinct from the
+failed baseline warm-speed gate and pending real post-deploy acceptance.
+
 ## P12-04 reuses the existing backend and SQL (13 October 2026)
 
 Dan asked, "I want data to be in the same sql as we have on jarvis. I dont see why we need infra for this?" ([coordinator record on #719](https://github.com/DanAakesen/jarvis/issues/719)). In DailyMigrationMain he directly confirmed "Yes—use the existing backend and SQL" after being told that SQL outage returns 503 for the phone to retry. This supersedes the dedicated-host/Blob/Queue design and its outstanding resource, idle-recovery and budget questions. It is not approval for production activation, new grants or secret delivery.

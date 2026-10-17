@@ -3141,6 +3141,21 @@ rounds. Timings are bounded to 600,000 ms, contain no content, and retain the fi
 sample for each agent phase. No saved model/effort, instructions, tools or schemas
 change. Post-deploy latency and failure/canary acceptance remain unverified.
 
+The P9-99 follow-up gives each verified chat invocation one coordination
+`httpx.AsyncClient`, opened only for session-backed model streaming and closed
+after the model generator. Steering reads and model/tools phase writes reuse
+that connection pool across rounds. Their ordering, both reads around a model
+transition, final steering check, per-request delegated authorization, configured
+timeout, disabled redirects and failure semantics are unchanged. Neither clients
+nor caller-specific cookies, history or authorization cross invocation boundaries.
+The local loopback comparison and coordinator's reported post-#802 timings are
+recorded in `docs/decisions.md`. Coordinator content-free event/span correlation
+now classifies baseline turn 1 cold and turns 2–10 warm, with affinity 10/10 and
+no fallback. Warm-nine medians are 3.370 s backend and 3.467 s UI; only 3/9 are
+below 3 s, so the baseline warm gate fails. Classification is not inferred from
+elapsed time. No resume or post-fix improvement is established; this remains a
+partial overhead correction awaiting real post-deploy acceptance.
+
 The 15 October diagnostics-only source candidate based on `6e2c1b95` adds
 optional `model_auth_max` and `model_request_max` completion diagnostics.
 The former is the maximum elapsed managed-identity model-token provider call;

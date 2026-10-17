@@ -12,7 +12,7 @@ import logging
 import re
 import time
 from collections.abc import Awaitable, Callable, Sequence
-from contextlib import aclosing
+from contextlib import AsyncExitStack, aclosing
 from datetime import datetime, timezone
 from typing import Any
 
@@ -674,15 +674,12 @@ def register_chat_invocation(
                         nonlocal cursor
                         backend_url, _ = backend_settings_from_environment()
                         headers = {"Authorization": " ".join(("Bear" + "er", match.group(1)))}
-                        async with httpx.AsyncClient(
-                            timeout=backend_http_timeout, follow_redirects=False
-                        ) as client:
-                            response = await client.get(
-                                f"{backend_url}/conversation/sessions/{chat_session_id}/turns/"
-                                f"{turn_id}/steering",
-                                params={"after": cursor},
-                                headers=headers,
-                            )
+                        response = await coordination_client.get(
+                            f"{backend_url}/conversation/sessions/{chat_session_id}/turns/"
+                            f"{turn_id}/steering",
+                            params={"after": cursor},
+                            headers=headers,
+                        )
                         if response.status_code != 200 or len(response.content) > 262_144:
                             raise RuntimeError("Chat steering is unavailable")
                         page: Any = response.json()
@@ -711,15 +708,12 @@ def register_chat_invocation(
                             raise ValueError("Invalid chat phase")
                         backend_url, _ = backend_settings_from_environment()
                         headers = {"Authorization": " ".join(("Bear" + "er", match.group(1)))}
-                        async with httpx.AsyncClient(
-                            timeout=backend_http_timeout, follow_redirects=False
-                        ) as client:
-                            response = await client.post(
-                                f"{backend_url}/conversation/sessions/{chat_session_id}/turns/"
-                                f"{turn_id}/phase",
-                                json={"phase": phase},
-                                headers=headers,
-                            )
+                        response = await coordination_client.post(
+                            f"{backend_url}/conversation/sessions/{chat_session_id}/turns/"
+                            f"{turn_id}/phase",
+                            json={"phase": phase},
+                            headers=headers,
+                        )
                         if response.status_code != 204:
                             raise RuntimeError("Chat phase update is unavailable")
 
@@ -801,7 +795,14 @@ def register_chat_invocation(
                     **({"smoke": True} if smoke else {}),
                     **({"reflex_note": reflex_note} if reflex_note is not None else {}),
                 )
-                async with aclosing(chat):
+                async with AsyncExitStack() as resources:
+                    if chat_session_id is not None:
+                        coordination_client = await resources.enter_async_context(
+                            httpx.AsyncClient(
+                                timeout=backend_http_timeout, follow_redirects=False
+                            )
+                        )
+                    await resources.enter_async_context(aclosing(chat))
                     async for delta in chat:
                         if not delta:
                             continue
