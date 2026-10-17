@@ -15,9 +15,10 @@ interface PendingAction {
   readonly code: string;
   readonly scope: GoogleActionScope;
   readonly sourceMessageId: string;
+  /** Only a later Dan message in this same session can decide the action. Required, so no stage is ever unbound. */
+  readonly sourceSessionId: string;
   readonly createdAt: number;
   readonly summary: string;
-  readonly sourceSessionId?: string;
   readonly items?: readonly string[];
   readonly execute: (signal: AbortSignal) => Promise<unknown>;
 }
@@ -26,7 +27,7 @@ export class PendingGoogleActions {
   private readonly actions = new Map<string, PendingAction>();
   private calendarProposal: PendingAction | undefined;
   private calendarReceipt: {
-    readonly sourceSessionId?: string;
+    readonly sourceSessionId: string;
     readonly expiresAt: number;
     readonly result: Record<string, unknown>;
   } | undefined;
@@ -41,6 +42,9 @@ export class PendingGoogleActions {
     readonly items?: readonly { readonly summary: string }[];
   } {
     this.removeExpired();
+    if (typeof input.sourceSessionId !== 'string' || input.sourceSessionId.length === 0) {
+      throw new TypeError('A pending Google action must be bound to the session that staged it');
+    }
     if (this.actions.size >= MAX_PENDING_ACTIONS) {
       throw new Error('Too many pending Google actions');
     }
@@ -85,7 +89,7 @@ export class PendingGoogleActions {
         !/^[1-9]\d{0,18}$/u.test(action.sourceMessageId) ||
         message.id === action.sourceMessageId ||
         BigInt(message.id) <= BigInt(action.sourceMessageId) ||
-        (action.sourceSessionId !== undefined && message.sessionId !== action.sourceSessionId) ||
+        !message.sessionId || message.sessionId !== action.sourceSessionId ||
         !Number.isFinite(message.at.getTime()) || message.at.getTime() <= action.createdAt) {
       return undefined;
     }
@@ -131,7 +135,7 @@ export class PendingGoogleActions {
     const remember = (result: Record<string, unknown>) => {
       if (scope === 'calendar' && this.calendarProposal === action) {
         this.calendarReceipt = {
-          sourceSessionId: action.sourceSessionId ?? eligible.message.sessionId,
+          sourceSessionId: action.sourceSessionId,
           expiresAt: action.createdAt + ACTION_TTL_MS,
           result: structuredClone({
             ...result, ...(action.items ? { sourceMessageId: action.sourceMessageId } : {}),
@@ -161,8 +165,8 @@ export class PendingGoogleActions {
   /** Recover the real process-local stage after private tool results leave turn history. */
   pendingCalendarChange(message?: ConversationMessage) {
     this.removeExpired();
-    const visible = (sourceSessionId?: string) =>
-      sourceSessionId === undefined || (message?.role === 'dan' && message.sessionId === sourceSessionId);
+    const visible = (sourceSessionId: string) =>
+      message?.role === 'dan' && Boolean(message.sessionId) && message.sessionId === sourceSessionId;
     const action = [...this.actions.values()].find((candidate) =>
       candidate.scope === 'calendar' && visible(candidate.sourceSessionId));
     return action ? {

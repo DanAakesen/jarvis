@@ -86,7 +86,11 @@ function sha256(value: string): string {
 }
 
 export function buildApprovalPrompt(summary: string, reply: string, nonce = randomBytes(8).toString('hex')): ApprovalModelPrompt {
-  const strip = (text: string) => text.split(nonce).join('');
+  const strip = (text: string) => {
+    let result = text;
+    while (result.includes(nonce)) result = result.split(nonce).join('');
+    return result;
+  };
   return {
     system: approvalSystemPrompt,
     user: [
