@@ -2,11 +2,15 @@ import { createServer } from 'node:http';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   ChatAgentError,
+  ChatAgentInvocationError,
+  type ChatAgentInvocationReason,
+  type ConversationAgent,
   createFoundryAgentSessionId,
   createFoundryInvocationConversationAgent,
   createFoundryInvocationsEndpoint,
   FOUNDRY_AGENT_SCOPE,
 } from './chat-agent.js';
+import { chatAgentInvocationReasons } from '../system-status.js';
 
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 const projectEndpoint = 'https://resource.services.ai.azure.com/api/projects/jarvis';
@@ -630,5 +634,125 @@ describe('Foundry Invocations chat agent', () => {
       }
     }).rejects.toThrow('Foundry authentication unavailable');
     expect(fetch).not.toHaveBeenCalled();
+  });
+
+  describe('backend-side failure reasons', () => {
+    const drain = async (agent: ConversationAgent, signal: AbortSignal = new AbortController().signal) => {
+      try {
+        for await (const chunk of agent.stream(input, delegatedAuthorization, signal)) void chunk;
+      } catch (error) { return error; }
+      return undefined;
+    };
+    const expectInvocationFailure = (error: unknown, reason: ChatAgentInvocationReason, message: string) => {
+      expect(error).toBeInstanceOf(ChatAgentInvocationError);
+      expect(error).toMatchObject({ name: 'ChatAgentInvocationError', reason, message });
+      expect(chatAgentInvocationReasons.has(reason)).toBe(true);
+    };
+
+    it.each<[number, ChatAgentInvocationReason]>([
+      [400, 'agent_http_400'], [401, 'agent_http_401'], [403, 'agent_http_403'], [404, 'agent_http_404'],
+      [408, 'agent_http_408'], [409, 'agent_http_409'], [424, 'agent_http_424'], [429, 'agent_http_429'],
+      [500, 'agent_http_500'], [502, 'agent_http_502'], [503, 'agent_http_503'], [504, 'agent_http_504'],
+      [418, 'agent_http_other'], [599, 'agent_http_other'],
+    ])('labels HTTP %s as %s without copying the response', async (status, reason) => {
+      const fetcher = vi.fn<typeof fetch>(async () => new Response('private provider details', { status }));
+      const error = await drain(createAgent(fetcher).agent);
+      expectInvocationFailure(error, reason, `Chat agent unavailable (HTTP ${status})`);
+      expect(fetcher).toHaveBeenCalledTimes(1);
+      expect((error as Error).message).not.toContain('private');
+    });
+
+    it.each<[string, () => Response]>([
+      ['a non-stream content type', () => new Response('{}', {
+        status: 200, headers: { 'content-type': 'application/json' },
+      })],
+      ['a missing body', () => new Response(null, {
+        status: 200, headers: { 'content-type': 'text/event-stream' },
+      })],
+    ])('labels %s on a successful status as an invalid response', async (_name, respond) => {
+      const error = await drain(createAgent(vi.fn<typeof fetch>(async () => respond())).agent);
+      expectInvocationFailure(error, 'agent_response_invalid', 'Chat agent unavailable (HTTP 200)');
+    });
+
+    it.each<[string, () => Promise<string>]>([
+      ['a rejected token request', async () => { throw new Error('private token provider detail'); }],
+      ['an empty token', async () => ' '],
+      ['a token with a line break', async () => 'token\nInjected: header'],
+    ])('labels %s without calling the agent', async (_name, getToken) => {
+      const fetcher = vi.fn();
+      const agent = createFoundryInvocationConversationAgent(
+        projectEndpoint, 'jarvis', getToken, fetcher as typeof globalThis.fetch,
+      );
+      const error = await drain(agent);
+      expectInvocationFailure(error, 'agent_auth_unavailable', 'Foundry authentication unavailable');
+      expect((error as Error).message).not.toContain('private');
+      expect(fetcher).not.toHaveBeenCalled();
+    });
+
+    it('labels a failed request and keeps the original failure only as the in-process cause', async () => {
+      const cause = new TypeError('fetch failed');
+      const error = await drain(createAgent(vi.fn<typeof fetch>(async () => { throw cause; })).agent);
+      expectInvocationFailure(error, 'agent_request_failed', 'Chat agent request failed');
+      expect((error as Error).cause).toBe(cause);
+    });
+
+    it('labels a stream that fails while it is being read', async () => {
+      const response = new Response(new ReadableStream<Uint8Array>({
+        start(controller) { controller.error(new TypeError('terminated')); },
+      }), { headers: { 'content-type': 'text/event-stream' } });
+      const error = await drain(createAgent(vi.fn<typeof fetch>(async () => response)).agent);
+      expectInvocationFailure(error, 'agent_stream_failed', 'Chat agent stream failed');
+    });
+
+    it.each([
+      ['an unparsable delta', 'event: delta\ndata: not json\n\n'],
+      ['an empty delta', 'event: delta\ndata: {"text":""}\n\n'],
+    ])('labels %s as an invalid response', async (_name, frame) => {
+      const error = await drain(createAgent(vi.fn<typeof fetch>(async () => streamedResponse([frame]))).agent);
+      expectInvocationFailure(error, 'agent_response_invalid', 'Invalid chat response');
+    });
+
+    it('labels an oversized stream and a stream that ends without done', async () => {
+      const oversized = await drain(createAgent(vi.fn<typeof fetch>(async () =>
+        streamedResponse([`event: done\ndata: {}\n\n:${'x'.repeat(1024 * 1024)}`]))).agent);
+      expectInvocationFailure(oversized, 'agent_response_invalid', 'Chat response exceeded the size limit');
+      const ended = await drain(createAgent(vi.fn<typeof fetch>(async () =>
+        streamedResponse(['event: delta\ndata: {"text":"Partial"}\n\n']))).agent);
+      expectInvocationFailure(ended, 'agent_stream_ended', 'Chat agent response ended unexpectedly');
+    });
+
+    it('leaves cancellation and a hosted error event untouched rather than relabelling them', async () => {
+      const abort = new DOMException('Fixture cancelled', 'AbortError');
+      const caller = new AbortController();
+      const failure = new TypeError('private cancellation detail');
+      const cancelledDuringAuth = createFoundryInvocationConversationAgent(
+        projectEndpoint, 'jarvis',
+        async () => { caller.abort(abort); throw failure; },
+        vi.fn() as unknown as typeof globalThis.fetch,
+      );
+      expect(await drain(cancelledDuringAuth, caller.signal)).toBe(failure);
+      expect(await drain(createAgent(vi.fn<typeof fetch>(async () => { throw abort; })).agent)).toBe(abort);
+      const readAbort = new Response(new ReadableStream<Uint8Array>({
+        start(controller) { controller.error(abort); },
+      }), { headers: { 'content-type': 'text/event-stream' } });
+      expect(await drain(createAgent(vi.fn<typeof fetch>(async () => readAbort)).agent)).toBe(abort);
+      const hosted = await drain(createAgent(vi.fn<typeof fetch>(async () =>
+        streamedResponse(['event: error\ndata: {"code":"capability_instructions_too_large"}\n\n']))).agent);
+      expect(hosted).toBeInstanceOf(ChatAgentError);
+      expect(hosted).not.toBeInstanceOf(ChatAgentInvocationError);
+    });
+
+    it('keeps the report allowlist in step with every reason the client can throw', () => {
+      const thrown: Record<ChatAgentInvocationReason, true> = {
+        agent_auth_unavailable: true, agent_request_failed: true,
+        agent_http_400: true, agent_http_401: true, agent_http_403: true, agent_http_404: true,
+        agent_http_408: true, agent_http_409: true, agent_http_424: true, agent_http_429: true,
+        agent_http_500: true, agent_http_502: true, agent_http_503: true, agent_http_504: true,
+        agent_http_other: true, agent_response_invalid: true, agent_stream_failed: true, agent_stream_ended: true,
+      };
+      expect([...chatAgentInvocationReasons].sort()).toEqual(
+        [...Object.keys(thrown), 'agent_error_code_missing', 'agent_error_code_unlisted'].sort(),
+      );
+    });
   });
 });
