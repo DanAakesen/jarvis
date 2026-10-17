@@ -1,5 +1,29 @@
 # Decisions
 
+## Preserve fixed hosted error origins in existing acceptance evidence (17 October 2026; #820)
+
+Deploy39043117488 retained `chat_capabilities=agent_error`, accepted=false and
+successful exact qualification/readiness/component reuse. It does not establish
+a pipeline implementation defect or the underlying hosted-turn cause.
+Source tracing demonstrates that `ChatAgentError` preserves the hosted SSE code,
+then the canary collapses all codes except `catalogue_unavailable`.
+
+Preserve an explicit finite allowlist of existing hosted backend/settings and
+exception-class origin codes in the existing per-prompt `reason`. Reuse the
+status sanitizer and smoke/immutable release evidence rather than add fields,
+telemetry services, a workflow or raw-log collection. Code-shaped text alone is
+not trusted: unknown values and non-agent errors retain `agent_error`, and
+assertion reasons cannot masquerade as hosted origins. Keep Python/backend
+allowlists equal with a deterministic regression.
+
+This evidence-only choice preserves statuses, aggregate failure, prompts,
+receipts, deadlines, authentication and nonblocking exceptions. It changes no
+model, settings, retry or connection lifetime and does not absorb #816 or Daily.
+Synthetic fixtures cover fail-closed acceptance and original producer identity;
+normal exact-candidate CI/review and main-only release remain required.
+#820's original historical attribution and #880's failed release disposition
+are not satisfied by this source change or by a later unrelated successful turn.
+
 ## Isolate stale draft events from ready qualification (17 October 2026; #880)
 
 The first integrated #881 ready event admitted CI39041201026, then a delayed

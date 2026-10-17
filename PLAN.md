@@ -2,9 +2,11 @@
 
 Integration checkpoint: #883 merged on 17 October at
 `705af7c7c02c3154a646dda66d79790d71af8f54`, with its actual tree matching
-the qualified pipeline correction. This Daily candidate combines that main
-with the feed review corrections; earlier source checks are retained evidence,
-not qualification of this combined tree.
+the qualified pipeline correction. This release candidate combines the
+qualified Daily feed source `76eee47f` and fixed chat-origin evidence source
+`6d972cb6` on that main. Their source checks and independent reviews are
+retained evidence, not qualification of this combined tree. One combined
+qualification and normal release replace two consecutive deployments.
 
 The accepted #882 baseline remains backend341/agent109. The later normal
 Deploy39043117488 proved all four component identities could be reused without
@@ -12,6 +14,32 @@ rebuilding or reapplying them, but required chat-capabilities acceptance failed
 with `agent_error`. Its immutable receipt remains `accepted=false`; #820 owns
 the functional follow-through and #880 stays open. This integration does not
 claim to fix that historical failure or complete private Daily acceptance.
+
+## Chat acceptance origin provenance (#820, 17 October 2026)
+
+Retained Deploy39043117488 at705af7c7/treee79dbd60 failed required
+`chat_capabilities=agent_error`; aggregate canary failed, plain approval passed,
+and all four components reused accepted baselinef6530a59/backend341/agent109.
+Exact qualification/readiness/reuse succeeded. This does not demonstrate a
+pipeline defect or identify the historical failure cause.
+
+The bounded source candidate repairs demonstrated evidence loss: the hosted
+SSE client already retains origin codes, but the canary discarded every code
+except `catalogue_unavailable`. Preserve a finite fixed allowlist through the
+existing canary, status reader and acceptance/release artifacts. Unknown origins
+still become `agent_error`; no arbitrary exception/provider text is retained.
+Synthetic checks cover prompt isolation, the real SSE-to-report projection,
+backend/Python allowlist parity, redaction, failed acceptance and unchanged
+producer identities. No prompt, predicate, deadline, retry, model, workflow,
+connection lifecycle (#816), Daily or permission change.
+
+All122 script tests pass locally with synthetic `GITHUB_RUN_ATTEMPT=2`,
+plus scoped Ruff/whitespace checks. Backend tests could not collect locally
+because `vitest` is absent; no dependency graph was restored or substituted.
+Next: normal pinned exact-candidate CI and independent review, then the existing
+main-only release path. This is an evidence-only improvement, not a proven
+historical root fix. #820's original attribution and #880's accepted=false
+release blocker remain open; source qualification is not production acceptance.
 
 ## Pipeline event-order recovery (#880, 17 October 2026)
 

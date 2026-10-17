@@ -1,14 +1,54 @@
 import json
 from pathlib import Path
+import re
 import subprocess
 import sys
 import tempfile
 import unittest
 
-from smoke_reasons import MAX_REPORT_BYTES, failure_reasons
+from smoke_reasons import (
+    CHAT_AGENT_FAILURE_REASONS, CHECK_IDS, MAX_REPORT_BYTES, SAFE_REASONS,
+    failure_reasons, report_ok, safe_report,
+)
 
 
 class SmokeReasonsTests(unittest.TestCase):
+    def test_hosted_origin_allowlist_matches_the_backend_exactly(self):
+        source = (Path(__file__).resolve().parents[3]
+                  / "apps/backend/src/system-status.ts").read_text(encoding="utf-8")
+        block = source.split("export const chatAgentFailureReasons:", 1)[1].split("]);", 1)[0]
+        self.assertEqual(set(re.findall(r"'([a-z0-9_]+)'", block)), CHAT_AGENT_FAILURE_REASONS)
+
+    def test_fixed_hosted_origins_survive_artifact_sanitization_and_still_fail_acceptance(self):
+        for code in CHAT_AGENT_FAILURE_REASONS:
+            with self.subTest(code=code):
+                report = {"entries": [{"id": check, "status": "ok"} for check in sorted(CHECK_IDS)]}
+                entry = next(entry for entry in report["entries"] if entry["id"] == "chat_capabilities")
+                entry.update({"status": "down", "reason": code,
+                              "message": "never-retain", "details": {"token": "never-retain"}})
+                retained = safe_report(report)
+                self.assertIn({"id": "chat_capabilities", "status": "down", "reason": code},
+                              retained["entries"])
+                self.assertEqual(failure_reasons(retained), [f"smoke_reason chat_capabilities: {code}"])
+                self.assertFalse(report_ok(retained))
+                self.assertNotIn("never-retain", json.dumps(retained))
+                self.assertNotIn(code, SAFE_REASONS["chat_canary"])
+                for check in SAFE_REASONS.keys() - {"chat_canary"}:
+                    self.assertIn(code, SAFE_REASONS[check])
+
+    def test_unknown_code_shaped_origins_are_redacted_in_logs_and_artifacts(self):
+        for code in ("private_provider_detail", "settings_http_418", "error_privateexception",
+                     "settings_timeout\n::error::private"):
+            with self.subTest(code=code):
+                report = {"entries": [{"id": check, "status": "ok"} for check in sorted(CHECK_IDS)]}
+                next(entry for entry in report["entries"] if entry["id"] == "chat_capabilities").update(
+                    {"status": "down", "reason": code})
+                retained = safe_report(report)
+                self.assertEqual(failure_reasons(retained),
+                                 ["smoke_reason chat_capabilities: not_reported_or_redacted"])
+                self.assertFalse(report_ok(retained))
+                self.assertNotIn(code, json.dumps(retained))
+
     def test_prints_exact_allowlisted_failure_codes(self):
         self.assertEqual(failure_reasons({"entries": [
             {"id": "chat_canary", "status": "down", "reason": "acceptance_check_failed"},

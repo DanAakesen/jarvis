@@ -6,9 +6,47 @@ from pathlib import Path
 import sys
 
 MAX_REPORT_BYTES = 64 * 1024
-SHARED = frozenset({"agent_error", "timeout"})
+CHAT_AGENT_FAILURE_REASONS = frozenset({
+    "backend_unavailable",
+    "catalogue_unavailable",
+    "context_unavailable",
+    "usage_unavailable",
+    "capability_instructions_too_large",
+    "settings_not_json",
+    "settings_invalid",
+    "settings_timeout",
+    "settings_unreachable",
+    "settings_unavailable",
+    "settings_http_401",
+    "settings_http_403",
+    "settings_http_429",
+    "settings_http_500",
+    "settings_http_502",
+    "settings_http_503",
+    "settings_http_504",
+    "response_too_large",
+    "error_runtimeerror",
+    "error_valueerror",
+    "error_typeerror",
+    "error_timeouterror",
+    "error_httpstatuserror",
+    "error_connecterror",
+    "error_readtimeout",
+    "error_connecttimeout",
+    "error_pooltimeout",
+    "error_remoteprotocolerror",
+    "error_ratelimiterror",
+    "error_apistatuserror",
+    "error_apiconnectionerror",
+    "error_apitimeouterror",
+    "error_authenticationerror",
+    "error_permissiondeniederror",
+    "error_badrequesterror",
+    "error_internalservererror",
+})
+SHARED = frozenset({"agent_error", "timeout"}) | CHAT_AGENT_FAILURE_REASONS
 SAFE_REASONS = {
-    "chat_canary": SHARED | {"acceptance_check_failed"},
+    "chat_canary": {"agent_error", "timeout", "acceptance_check_failed"},
     "chat_identity": SHARED | {"catalogue_unavailable", "identity_reply"},
     "chat_capabilities": SHARED | {
         "catalogue_unavailable", "capabilities_discovery_missing",

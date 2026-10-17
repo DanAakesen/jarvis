@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { ConversationAgent } from './core/chat-agent.js';
+import { createFoundryInvocationConversationAgent, type ConversationAgent } from './core/chat-agent.js';
 import { createChatAcceptanceProbes } from './core/chat-canary.js';
-import { createSystemSmokeReader, createSystemStatusReader, summarizeSystemStatus, systemSmokeHttpResponse } from './system-status.js';
+import { chatAgentFailureReasons, createSystemSmokeReader, createSystemStatusReader, summarizeSystemStatus, systemSmokeHttpResponse } from './system-status.js';
 import { isSystemSmokeStatus, systemSmokeCheckIds } from '@jarvis/contracts';
 
 const smokeCheckedAt = '2026-10-14T01:03:29.169Z';
@@ -128,6 +128,39 @@ describe('system status reader', () => {
     });
     expect(JSON.stringify(report)).not.toMatch(/provider failure|private reply/u);
   });
+
+  it.each([...chatAgentFailureReasons, 'private_provider_detail', undefined])(
+    'projects hosted SSE origin %s through the real canary and retained/HTTP report without payloads',
+    async (code) => {
+      const agent = createFoundryInvocationConversationAgent(
+        'https://fixture.services.ai.azure.com/api/projects/fixture',
+        'jarvis',
+        async () => 'synthetic-token',
+        vi.fn(async () => new Response(
+          `event: error\ndata: ${JSON.stringify({ code, message: 'private provider detail', token: 'never-retain' })}\n\n`,
+          { headers: { 'Content-Type': 'text/event-stream' } },
+        )),
+      );
+      const reason = code !== undefined && chatAgentFailureReasons.has(code) ? code : 'agent_error';
+      const report = await runChatSmoke(agent);
+
+      expectSmokeFailures(report, {
+        chat_canary: ['down', 'acceptance_check_failed'],
+        chat_identity: ['degraded', reason],
+        chat_capabilities: ['down', reason],
+        chat_github_read: ['down', reason],
+        chat_jobs: ['down', reason],
+        chat_navigation: ['down', reason],
+        chat_no_timestamp: ['degraded', reason],
+        chat_plain_approval: ['down', reason],
+      });
+      const wire = systemSmokeHttpResponse(report);
+      expect(wire.entries.find(({ id }) => id === 'chat_capabilities')).toMatchObject({ status: 'down', reason });
+      expect(wire.entries.find(({ id }) => id === 'chat_identity')).not.toHaveProperty('reason');
+      expect(isSystemSmokeStatus(wire)).toBe(true);
+      expect(JSON.stringify({ report, wire })).not.toMatch(/private_provider_detail|private provider|never-retain|message|token/u);
+    },
+  );
 
   it('retains controlled prompt timeouts for each acceptance check and aborts the prompts', async () => {
     vi.useFakeTimers();

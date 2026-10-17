@@ -1,5 +1,36 @@
 # Agent context
 
+## Fixed hosted origins in acceptance evidence (#820, 17 October 2026)
+
+The canary now retains only explicitly enumerated `ChatAgentError.code` values
+already emitted by hosted chat. `settings_*` codes identify the settings
+boundary, `capability_instructions_too_large` identifies its existing budget
+validation, and `catalogue_unavailable`, `context_unavailable`,
+`usage_unavailable` and `response_too_large` name their existing boundaries.
+Fixed `error_*` entries retain only known exception-class categories; for
+example, `error_runtimeerror` locates a hosted runtime failure but does not prove
+its exclusive cause. Unknown codes, code-shaped private text and untyped
+exceptions remain `agent_error`, not invented diagnoses.
+
+The existing smoke formatter and immutable acceptance/release artifacts retain
+the same allowlist. No raw response, message, provider body, tool data or new
+field/store is added; existing source/tree/run/component identities remain.
+Required failures still fail. Read pipeline evidence for the exact qualified
+release; do not call smoke/model/provider endpoints to investigate an old run.
+Deploy39043117488's generic capabilities failure and earlier plain-approval/
+GitHub/navigation failures have no established shared cause.
+
+Targeted commands:
+`npm test --workspace @jarvis/backend -- src/core/chat-canary.test.ts src/system-status.test.ts`
+and
+`$env:PYTHONPATH='.github\scripts'; python -m unittest discover -s .github\scripts\tests -v`.
+The local backend command is blocked before collection because `vitest` is
+absent. Do not substitute another checkout's graph or start restore loops;
+normal pinned CI supplies backend lint/test/build qualification. Local Python
+uses3.11.15, not the pinned CI3.12 baseline. All122 script tests pass locally
+with `GITHUB_RUN_ATTEMPT=2`; scoped Ruff and whitespace checks pass. Preserve the app-managed runtime;
+no exposed `/remote` control is available and remote-enabled state is unverified.
+
 ## Ready/draft qualification race (#880, 17 October 2026)
 
 #882 merged with its exact qualified tree as `f6530a59`. Its automatic

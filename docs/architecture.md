@@ -2028,6 +2028,15 @@ checks; it never includes reply
 text, tool arguments/results, settings or provider error text. The endpoint
 never reads note contents. The latest report is kept in
 the backend's in-memory status snapshot; it is lost when the backend restarts.
+Hosted SSE `ChatAgentError.code` values survive into per-prompt reasons only
+when present in the explicit `chatAgentFailureReasons` allowlist in
+`system-status.ts`. This retains existing backend/settings origins and known
+exception-class categories without trusting arbitrary lowercase codes.
+Untyped or unlisted failures remain `agent_error`; the aggregate still returns
+`acceptance_check_failed`. The Python smoke formatter uses the same fixed set,
+with parity/redaction regressions, so existing acceptance/release artifacts keep
+the origin alongside unchanged qualification and component producer identities.
+This is failure provenance, not proof of an old failure's exclusive root cause.
 Both `GET /status/smoke` and the retained `smoke` in `GET /status` use a
 non-mutating HTTP projection that omits non-down reasons. This preserves the
 legacy validator in already-open clients during parallel web/backend deploys.
