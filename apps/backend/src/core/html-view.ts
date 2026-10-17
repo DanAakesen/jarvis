@@ -9,6 +9,7 @@ import {
 } from '../database/workspace-html-artifact-store.js';
 import type { FolioStore } from '../database/folio-store.js';
 import { validateHtmlApp } from './html-artifact-validation.js';
+import { isJarvisToolCall } from './tool-origin.js';
 import { ToolFailure, ToolRefusal } from './tool-registry.js';
 
 const maxHtmlCharacters = 512 * 1024;
@@ -113,7 +114,7 @@ function createHtmlViewTool(
     bodyLimit: maxToolBodyBytes,
     sensitive: true,
     async execute(input, request, signal) {
-      if (!request.agentPrincipal) throw new ToolRefusal('Only Jarvis can create HTML workspace apps.');
+      if (!isJarvisToolCall(request)) throw new ToolRefusal('Only Jarvis can create HTML workspace apps.');
       if (!isObject(input) || Object.keys(input).length !== 3 ||
           !validateHtmlApp(input.title, input.html, input.sources)) {
         throw new ToolRefusal('The HTML app must be a valid HTML document, at most 512 KB, with up to 50 HTTPS sources and no base element or script src.');
@@ -163,7 +164,7 @@ function readHtmlViewTool(artifacts: WorkspaceHtmlArtifactStore): BackendModule[
     inputSchema: readHtmlViewSchema,
     sensitive: true,
     async execute(input, request, signal) {
-      if (!request.agentPrincipal) throw new ToolRefusal('Only Jarvis can read HTML workspace apps.');
+      if (!isJarvisToolCall(request)) throw new ToolRefusal('Only Jarvis can read HTML workspace apps.');
       if (!isObject(input) || Object.keys(input).some((key) => !['artifactId', 'viewId', 'version'].includes(key)) ||
           (input.artifactId === undefined) === (input.viewId === undefined) ||
           input.version !== undefined && (!Number.isInteger(input.version) || (input.version as number) < 1 ||
@@ -197,7 +198,7 @@ function updateHtmlViewTool(artifacts: WorkspaceHtmlArtifactStore): BackendModul
     bodyLimit: maxToolBodyBytes,
     sensitive: true,
     async execute(input, request, signal) {
-      if (!request.agentPrincipal) throw new ToolRefusal('Only Jarvis can update HTML workspace apps.');
+      if (!isJarvisToolCall(request)) throw new ToolRefusal('Only Jarvis can update HTML workspace apps.');
       if (!isObject(input) || Object.keys(input).some((key) => !['artifactId', 'title', 'html', 'sources'].includes(key)) ||
           !validateHtmlApp(input.title === undefined ? 'HTML app' : input.title, input.html,
             input.sources === undefined ? [] : input.sources)) {

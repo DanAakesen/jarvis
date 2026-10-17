@@ -15,6 +15,29 @@ with `agent_error`. Its immutable receipt remains `accepted=false`; #820 owns
 the functional follow-through and #880 stays open. This integration does not
 claim to fix that historical failure or complete private Daily acceptance.
 
+## On-screen views authority (17 October 2026; P11-09 / #885)
+
+P0 from Dan's live test (find hotels in Gmail, show them, stage in the calendar,
+confirm): step 1 worked, but Jarvis could not put anything on screen in voice or
+chat, and a raw JSON dump appeared after the Gmail check. Three causes, shipped
+as small PRs:
+
+1. Authority and presentation. A realtime voice tool call runs on the owner's
+   authenticated socket and was refused as a browser caller, so the relay now
+   runs each model-issued call inside an in-process Jarvis-origin scope (owner
+   only; browser, HTTP owner token, reflex and other users unchanged). Voice
+   presentation of Google results shows a clean list or text, never raw JSON or
+   message bodies. Regressions cover voice create/update/arrange/close,
+   browser and non-owner refusal, the scope boundary and each presentation shape.
+2. Specific refusals and model guidance (next). Chat refusals come from
+   generated-view validation returning one generic message; name the field to
+   fix so the model corrects once, and never misdescribe the cause.
+3. Offline end-to-end (after). Fake Gmail/Calendar: find, show view, stage
+   (`awaiting_confirmation`), plain yes, confirm.
+
+No provider call, live probe or replay of Dan's mail. Dan's live re-test closes
+#885; merged source is not acceptance.
+
 ## Chat acceptance fix-forward (#820, 17 October 2026)
 
 Three consecutive main deploys failed different chat checks with the bare
@@ -1928,6 +1951,7 @@ issue closure, new PR, push, hosted CI or deployment by this worker.
 A rolling intake phase. When Dan asks Jarvis to change its own code or a project's code, Jarvis drafts the issue, confirms it with Dan and creates it as `P11-NN` (P10-03). Rows are added here as the issues are created.
 | ID | Issue | Task | Acceptance criteria | Depends on | Status |
 | --- | --- | --- | --- | --- | --- |
+| P11-09 | [#885](https://github.com/DanAakesen/jarvis/issues/885) | P0: Jarvis has full control of its own on-screen views in voice and chat | Create, update, arrange and close generated views in voice and chat for the authenticated owner without weakening owner-only authority or accepting model actor claims; no raw JSON on screen; specific machine-usable refusals; regressions for the refused shapes in both paths; offline find/show/stage/confirm test; Dan's live re-test closes it | None | In progress |
 | P11-08 | [#868](https://github.com/DanAakesen/jarvis/issues/868) | Stop Web CI repeating backend checks | Web checks contracts and frontend; dedicated Backend and every other required component/analysis remain green; record actual selection without a speculative speedup claim | None | Complete |
 | P11-06 | [#860](https://github.com/DanAakesen/jarvis/issues/860) | Priority hotfix: stop the mobile composer jumping over chat on focus | One phone viewport dock with chat open, closed or minimised; preserve drafts, reader following and saved desktop geometry through focus, keyboard resize/pan/dismissal and orientation; focused regressions, independent review and normal release gates; native-phone acceptance explicit | None | Not started |
 | P11-05 | [#859](https://github.com/DanAakesen/jarvis/issues/859) | Make header background work understandable and dismissible | Remove dismissed rows immediately and across refresh/reload; distinguish background work from Factory tasks; preserve job records, real status, recovery, scoped visibility, accessible focus and desktop/phone states; cover storage/network failure without private mutations | — | Complete |

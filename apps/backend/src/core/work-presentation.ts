@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { FastifyRequest } from 'fastify';
-import { isGeneratedView, type GeneratedView, type WorkspaceCommand, type WorkspaceSnapshot } from '@jarvis/contracts';
+import { isGeneratedView, type GeneratedView, type GeneratedViewListItem, type WorkspaceCommand, type WorkspaceSnapshot } from '@jarvis/contracts';
 import { knowledgeGraphView } from '../vault/index.js';
 import { readSettings } from './settings.js';
 import type { WorkspaceCommandBroker } from './workspace-commands.js';
@@ -77,6 +77,75 @@ function calendarAgenda(value: Record<string, unknown>): string | undefined {
     if (value.truncated === true) lines.push('', 'More events exist than are shown.');
     return lines.join('\n');
   } catch { return undefined; }
+}
+
+const mailDate = new Intl.DateTimeFormat('en-GB', { timeZone: 'UTC', day: 'numeric', month: 'short', year: 'numeric' });
+const outcomeLabels: Record<string, string> = {
+  completed: 'Done.',
+  cancelled: 'Cancelled. Nothing was changed.',
+  partial: 'Partly done. Check what was applied before retrying.',
+};
+
+function mailSender(value: unknown): string {
+  if (typeof value === 'string') return safeText(value, 200);
+  const from = object(value);
+  return safeText(from.name, 200) || safeText(from.address, 254);
+}
+
+function mailReceived(value: unknown): string {
+  const date = typeof value === 'string' ? new Date(value) : undefined;
+  return date !== undefined && !Number.isNaN(date.getTime()) ? mailDate.format(date) : '';
+}
+
+type GooglePresentation = { title: string; text: string } | { title: string; items: GeneratedViewListItem[] };
+
+/**
+ * A clean view of a Google tool result, or undefined when it has no readable shape. Raw tool JSON, message
+ * bodies and confirmation codes never go on screen; mail rows show only subject, sender and date.
+ */
+function googlePresentation(tool: string, value: Record<string, unknown>): GooglePresentation | undefined {
+  const title = tool.startsWith('mail_') ? 'Mail' : 'Calendar';
+  const status = value.status;
+  if (status === 'awaiting_confirmation') return typeof value.summary === 'string' ? { title, text: value.summary } : undefined;
+  if ((status === 'completed' || status === 'cancelled' || status === 'partial') && typeof value.summary === 'string') {
+    return { title, text: `${outcomeLabels[status]}\n\n${value.summary}` };
+  }
+  const agenda = calendarAgenda(value);
+  if (agenda !== undefined) return { title, text: agenda };
+  if (tool === 'calendar_next_event' && 'event' in value) {
+    const text = value.event === null
+      ? value.truncated === true ? 'No upcoming event found in the part of your calendar that was searched.'
+        : 'No upcoming event in the next 60 days.'
+      : calendarAgenda({ timeZone: value.timeZone, events: [value.event] });
+    return text === undefined ? undefined : { title, text };
+  }
+  if (tool === 'mail_search' && Array.isArray(value.messages)) {
+    const items = value.messages.slice(0, 50).map((raw): GeneratedViewListItem => {
+      const message = object(raw);
+      const description = [mailSender(message.from), mailReceived(message.receivedDateTime)].filter(Boolean).join(' · ');
+      return { title: safeText(message.subject, 200) || '(no subject)', ...(description ? { description } : {}) };
+    });
+    return items.length ? { title: 'Mail results', items } : { title: 'Mail results', text: 'No matching messages found.' };
+  }
+  if (tool === 'mail_list_drafts' && Array.isArray(value.drafts)) {
+    const items = value.drafts.slice(0, 50).map((raw): GeneratedViewListItem => {
+      const draft = object(raw);
+      const to = safeText(draft.to, 300);
+      return { title: safeText(draft.subject, 200) || '(no subject)', ...(to ? { description: `To ${to}` } : {}) };
+    });
+    return items.length ? { title: 'Mail drafts', items } : { title: 'Mail drafts', text: 'No drafts found.' };
+  }
+  if (tool === 'calendar_find_free_slots' && Array.isArray(value.slots)) {
+    const length = Number.isSafeInteger(value.durationMinutes) ? `${String(value.durationMinutes)}-minute ` : '';
+    const lines = value.slots.slice(0, 50).map((raw) => {
+      const slot = object(raw);
+      const from = safeText(slot.startLocal, 60);
+      const to = safeText(slot.endLocal, 60);
+      return from && to ? `${from} to ${to}` : '';
+    }).filter(Boolean);
+    return { title: 'Free time', text: lines.length ? [`Free ${length}slots:`, ...lines].join('\n') : `No free ${length}slots found in that period.` };
+  }
+  return undefined;
 }
 
 function codeView(tool: string, input: Record<string, unknown>, result: Record<string, unknown>): GeneratedView {
@@ -212,14 +281,17 @@ function beginWorkPresentation(tool: string, rawInput: unknown, request: Fastify
               void deliver({ commandId: randomUUID(), operation: 'navigate', page: 'factory', taskId });
             }
           } else if (google) {
-            const preview = value.status === 'awaiting_confirmation'
-              ? value.summary : calendarAgenda(value) ?? JSON.stringify(value, null, 2);
-            if (typeof preview === 'string') showView(`google-${turnId}`, {
-              version: 1, title: tool.startsWith('mail_') ? 'Mail' : 'Calendar', renderer: 'text',
-              source: { id: 'now', status: 'complete', updatedAt: new Date().toISOString() },
+            const shown = googlePresentation(tool, value);
+            const source = { id: 'now', status: 'complete', updatedAt: new Date().toISOString() } as const;
+            if (shown && 'items' in shown) {
+              showView(`google-${turnId}`, { version: 1, title: shown.title, renderer: 'list', source, data: { items: shown.items } });
+            } else if (shown) {
               // The text renderer escapes on output, so escaping here would show entities such as &quot;.
-              data: { format: 'plain', content: redactWorkContent(preview).slice(0, 10_000) },
-            });
+              showView(`google-${turnId}`, {
+                version: 1, title: shown.title, renderer: 'text', source,
+                data: { format: 'plain', content: redactWorkContent(shown.text).slice(0, 10_000) },
+              });
+            }
           }
         } catch { /* Never change the tool outcome for a presentation failure. */ }
         finally { publish({ type: 'work-finished', activityId }); }
