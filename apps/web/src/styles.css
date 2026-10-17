@@ -2315,10 +2315,12 @@ a.task-chip:hover { background: var(--glass-pressed); }
 .app-shell[data-home="false"] .workspace-canvas-tiled .workspace-window:not(.workspace-window-conversation, .workspace-window-maximized) { justify-self: center; width: min(1180px, 100%); }/* Over a busy page the conversation sheet needs the denser slab to stay readable. */
 .app-shell[data-home="false"] .workspace-window-conversation.luminous-glass { background: var(--stage-slab); }
 
-/* Presence modes in the app's two accents (Dan, 7 October): Present cyan, Away amber, On the move neutral. */
-:root, :root[data-theme="dark"] { --presence-present: #52dcfa; --presence-away: #ffb45c; --presence-move: #e6eef2; }
-:root[data-theme="light"] { --presence-present: #14768d; --presence-away: #a8670f; --presence-move: #5d6b72; }
-.presence-dot { width: 9px; height: 9px; flex: 0 0 auto; border-radius: 50%; background: var(--tone); box-shadow: 0 0 10px color-mix(in srgb, var(--tone) 70%, transparent); }
+/* Presence modes (Dan, 6 October; P9-102): Present green, Away yellow, On the move blue. Labels stay beside the dots; the phone chip shows the dot alone and names the mode in its accessible label. */
+:root, :root[data-theme="dark"] { --presence-present: #3ddc84; --presence-away: #ffd23f; --presence-move: #3b8bff; }
+:root[data-theme="light"] { --presence-present: #2db35d; --presence-away: #f2c200; --presence-move: #2f80ed; }
+/* On the light glass a yellow that clears 3:1 alone reads brown, so each light dot keeps its true hue and gains a darker ring of that hue; the ring holds 3:1. */
+.presence-dot { --presence-ring: transparent; width: 9px; height: 9px; flex: 0 0 auto; border-radius: 50%; background: var(--tone); box-shadow: 0 0 0 1.5px var(--presence-ring), 0 0 10px color-mix(in srgb, var(--tone) 70%, transparent); }
+:root[data-theme="light"] .presence-dot { --presence-ring: color-mix(in srgb, var(--tone) 55%, #000); }
 .presence-chip { position: relative; display: inline-flex; }
 .presence-chip-trigger { display: inline-flex; min-height: 34px; align-items: center; gap: 8px; padding: 0 12px; border: 0; border-radius: var(--radius-control);
   background: transparent; box-shadow: none;
@@ -2326,8 +2328,8 @@ a.task-chip:hover { background: var(--glass-pressed); }
 .presence-chip-trigger:hover { background: var(--glass-hover); color: var(--text); }
 .presence-chip-trigger:active { background: var(--glass-pressed); transform: scale(.96); }
 .presence-chip-trigger[aria-expanded="true"] { background: var(--state-selected-bg); color: var(--state-selected-fg); font-weight: 750; }
-.presence-chip-trigger .presence-dot { box-shadow: none; }
-.presence-chip-trigger[aria-expanded="true"] .presence-dot { background: var(--state-selected-indicator); scale: 1.2; }
+.presence-chip-trigger .presence-dot { box-shadow: 0 0 0 1.5px var(--presence-ring); }
+.presence-chip-trigger[aria-expanded="true"] .presence-dot { --presence-ring: transparent; background: var(--state-selected-indicator); scale: 1.2; }
 .presence-chip-trigger:focus-visible, .presence-option:focus-visible, .presence-mode-card:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 .presence-menu { position: absolute; z-index: 1200; top: calc(100% + 8px); right: 0; display: grid; gap: 2px; min-width: 190px; padding: 6px; border-radius: 16px; animation: tab-arrive var(--motion-state) var(--ease-enter); }
 .presence-option { display: flex; min-height: 38px; align-items: center; gap: 10px; padding: 0 12px; border: 0; border-radius: var(--radius-control); background: transparent; color: var(--text); font: inherit; font-size: 14px; text-align: left; cursor: pointer; }

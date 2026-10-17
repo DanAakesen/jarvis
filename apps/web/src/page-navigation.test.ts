@@ -20,7 +20,7 @@ describe('page navigation', () => {
     expect(resolveNavigation({ page: 'notes' })).toEqual({ ok: true, path: '/notes' });
     expect(resolveNavigation({ page: 'status' })).toEqual({ ok: true, path: '/status' });
     expect(resolveNavigation({ page: 'settings', section: 'routines' }))
-      .toEqual({ ok: true, path: '/settings', anchorId: 'task-recipes-heading' });
+      .toEqual({ ok: true, path: '/settings', anchorId: 'routines-heading' });
     expect(resolveNavigation({ page: 'factory', taskId: '42' })).toEqual({ ok: true, path: '/factory/kanban', taskId: '42' });
   });
 
