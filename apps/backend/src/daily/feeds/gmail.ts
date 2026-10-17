@@ -1,7 +1,7 @@
 import type { FastifyRequest } from 'fastify';
 import { createHash } from 'node:crypto';
 import { GoogleApiError, type GoogleApiClient } from '../../google/api-client.js';
-import { resolveDailyOwner } from '../owner.js';
+import { resolveDailyFeedOwner } from '../owner.js';
 import { instant, text } from '../nutrition/model.js';
 import { semanticStates, type Thread, type Order, mergeOrders } from './attention.js';
 
@@ -96,7 +96,7 @@ export class DailyGmailFeed {
   private readonly running = new Set<string>();
   constructor(private readonly api: GoogleApiClient, private readonly model?: MailSemanticModel) {}
   async read(request: FastifyRequest, now: string, signal: AbortSignal): Promise<GmailResult> {
-    const owner = resolveDailyOwner(request); instant(now); signal.throwIfAborted();
+    const owner = resolveDailyFeedOwner(request); instant(now); signal.throwIfAborted();
     if (this.running.has(owner)) return { status: 'error', capturedAt: now, threads: [], orders: [], error: 'incomplete' };
     this.running.add(owner);
     const deadline = AbortSignal.any([signal, AbortSignal.timeout(60_000)]);

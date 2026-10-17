@@ -748,7 +748,7 @@ class BackendToolClient:
                 return _error(name, "This phone session is invalid; nothing was done.")
             headers["X-Jarvis-Phone-Session-ID"] = phone_session_id
         try:
-            if name in {"daily_food_review", "daily_saved_food"}:
+            if name in {"daily_food_review", "daily_saved_food", "daily_feed"}:
                 read_timeout = FOOD_REVIEW_TIMEOUT_SECONDS
             elif name == "web_research":
                 read_timeout = self._settings.long_tool_timeout_seconds

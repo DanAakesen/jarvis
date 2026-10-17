@@ -14,3 +14,8 @@ export function resolveDailyOwner(request: FastifyRequest): string {
   if (user && user.objectId.toLowerCase() === owner.toLowerCase()) return owner;
   throw new AuthenticationDenied(403);
 }
+
+export function resolveDailyFeedOwner(request: FastifyRequest): string {
+  if (request.dailyConnectorPrincipal) throw new AuthenticationDenied(403);
+  return resolveDailyOwner(request);
+}

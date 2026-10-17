@@ -1,6 +1,6 @@
 import type { FastifyRequest } from 'fastify';
 import { GoogleApiError, type GoogleApiClient } from '../../google/api-client.js';
-import { resolveDailyOwner } from '../owner.js';
+import { resolveDailyFeedOwner } from '../owner.js';
 import { instant, text } from '../nutrition/model.js';
 
 export interface CalendarRange { from: string; to: string }
@@ -55,7 +55,7 @@ function failure(error: unknown): Failure {
   return 'invalid-response';
 }
 
-/** Inactive read boundary. Existing authenticated owner/client only; no routes/tools/consent. */
+/** Inactive read boundary. Existing authenticated owner/client only; no consent changes. */
 export class DailyCalendarFeed {
   private readonly cache = new Map<string, { snapshot: CalendarSnapshot; refreshedAt: number }>();
   private readonly running = new Set<string>();
@@ -63,7 +63,7 @@ export class DailyCalendarFeed {
   constructor(private readonly api: GoogleApiClient, private readonly now: () => number = Date.now) {}
 
   async refresh(request: FastifyRequest, range: CalendarRange, signal: AbortSignal): Promise<CalendarSnapshot> {
-    const owner = resolveDailyOwner(request); signal.throwIfAborted();
+    const owner = resolveDailyFeedOwner(request); signal.throwIfAborted();
     validateCalendarRange(range);
     const from = Date.parse(range.from); const to = Date.parse(range.to);
     const key = `${owner}:${new Date(from).toISOString()}:${new Date(to).toISOString()}`;

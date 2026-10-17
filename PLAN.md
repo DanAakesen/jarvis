@@ -1,5 +1,27 @@
 # Project plan
 
+## Inactive Daily feed tools (17 October 2026; P12-09 / #724)
+
+Bounded source continuation adds optional `DailyData.feeds` / `daily_feed` over
+the retained #725 services: attention/calendar/conflict reads, exact active
+suppression reads, reviewed manual refresh, dismiss, Received and restoration.
+Existing query versions, production default-off composition and nutrition MCP
+allowlist stay unchanged. No new page, schema, grant, schedule or dispatcher.
+
+Native browser approval binds frozen selectors and the actual stored target;
+owner transactions recheck fingerprints and publish the existing refresh only
+after acknowledged new commits. Replays/no-ops stay quiet. All direct feed
+entrypoints explicitly deny the nutrition-only principal.
+
+Synthetic schema/service/native-confirmation, real dispatcher/audit/module,
+relay/agent deadline and isolated SQL regressions are authored. Local npm test
+and build cannot start: this isolated worktree has no Vitest/TypeScript graph.
+Python Ruff passes; selected Python tests cannot collect without OpenTelemetry.
+No restore, substitute graph, SQL image, live provider or manual reproduction was
+used. Exact-head pinned CI and integrated-candidate qualification remain next.
+The coordinator owns integration/release; the implementation owner fixes source
+pipeline failures. Keep #724/#725 open and native/private acceptance gates intact.
+
 ## Release diagnosis (17 October 2026; safe CI reason codes)
 
 Continue autonomously without direct Azure or credentials. Both new owned

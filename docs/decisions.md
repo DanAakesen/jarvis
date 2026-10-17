@@ -1,5 +1,30 @@
 # Decisions
 
+## Reuse retained feed services through one inactive tool (17 October 2026; P12-09)
+
+Dan requires equivalent tools for retained Daily capabilities. Bind the existing
+snapshot/attention/suppression/manual-refresh services through optional
+`DailyData.feeds`, rather than duplicate Google dispatch, expand the nutrition
+connector or change the strict versioned query-source advertisement.
+Production remains default-off and existing callers retain their signatures.
+
+Prefer the existing browser-only Now approval for visibility changes and manual
+provider/model refresh over model-confirmation booleans or a new action queue.
+Reuse verified current chat/voice context; bind actual target/suppression hashes
+under the existing owner lock so later mail cannot be dismissed by an old
+proposal. Received is Daily visibility, not evidence of physical receipt.
+Return actual run/error/limit states and separate source times; the old store
+does not retain calendar range, so it remains explicitly unknown.
+
+Reuse the nutrition commit-notification pattern: publish only after acknowledged
+new commits, keep replay/no-op/failure quiet and isolate listener failure.
+The shared owner resolver intentionally permits nutrition connectors; all feed
+entrypoints therefore explicitly deny that narrower principal. Existing Google
+authentication/token handling is unchanged. No stored-grant guard was present
+at the assigned base; actual CalendarList grant/provider parity stays an OPEN
+#725 acceptance gap, not a claimed preserved implementation. Synthetic source
+qualification does not authorise consent, live data, activation or cutover.
+
 ## Expose safe smoke reason codes through existing CI (17 October 2026)
 
 Required chat acceptance failed twice on different actions after qualified878

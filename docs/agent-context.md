@@ -1,5 +1,32 @@
 # Agent context
 
+## Inactive Daily feed tool checks (17 October 2026; P12-09)
+
+Use synthetic fixtures and existing tooling only. `daily_feed` is installed only
+by explicit `DailyData.feeds`; optional fifth `createDailyData` feed dependencies
+reuse the current pool/change hub and existing Google/semantic adapters without
+calling them during construction. Missing Google configuration refuses refresh;
+missing semantic configuration retains its real independent error. Every feed
+entrypoint denies the nutrition-only connector. No production registration,
+consent/scope/setup, original-source/schema/data, provider, device or activation
+action is authorised.
+
+This fresh isolated worktree has no npm dependency tools. Targeted
+`npm test --workspace @jarvis/backend -- src/daily/feeds/attention.test.ts
+src/daily/feeds/calendars.test.ts src/daily/feeds/refresh.test.ts --maxWorkers=1
+--no-file-parallelism` and `npm run build --workspace @jarvis/backend` fail before
+execution because Vitest/TypeScript are absent. No restore, substitute graph or
+pass is claimed. Python Ruff passes both changed agent files; selected
+`test_jarvis_tools.py` timeout cases cannot collect without OpenTelemetry.
+Normal pinned CI must qualify actual new service/schema/module/audit/native
+confirmation, relay/agent deadlines and isolated feed SQL cases, followed by the
+coordinator's integrated candidate. The implementation owner fixes code failures.
+
+The app-managed runtime exposes no supported existing-session `/remote` control.
+Its state is unverified; no replacement CLI/profile or reconnection is claimed.
+#724/#725 stay open; stored-grant/CalendarList/live-model/provider, private
+reconciliation, physical-device and cutover acceptance remain separate.
+
 ## Safe release reason logging (17 October 2026)
 
 Deploy smoke status lines and the required gate remain unchanged. The standard
