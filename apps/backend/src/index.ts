@@ -51,6 +51,7 @@ import {
   createDanishVoiceConnector,
   createVoiceLiveConnector,
   createVoiceRelayModule,
+  normalizeFoundryProjectEndpoint,
 } from './voice/relay.js';
 import { createArmContainerAppScaler } from './operations/container-app-scale.js';
 import { createArmModelCatalogueReader, fallbackModelCatalogue } from './core/model-catalog.js';
@@ -58,7 +59,9 @@ import { createArmModelDeploymentClient, createModelDeploymentWorkflow } from '.
 import { createSleepModule } from './operations/sleep.js';
 import { createFoundryInvocationConversationAgent } from './core/chat-agent.js';
 import { createChatAcceptanceProbes } from './core/chat-canary.js';
-import { FoundryClient } from './foundry/client.js';
+import { FOUNDRY_SCOPE, FoundryClient } from './foundry/client.js';
+import { createApprovalInterpreter } from './core/approval-interpreter.js';
+import { chooseApprovalModel, createFoundryApprovalModel } from './core/approval-interpreter-foundry.js';
 import { createJevPcActPlanner } from './pc-bridge/pc-act.js';
 import { createJevRecipePlanner } from './core/task-recipes.js';
 import { createRecipeModule } from './core/recipe-management.js';
@@ -664,6 +667,36 @@ try {
       return description;
     }
     : undefined;
+  // Decides what Dan's verified reply means for a staged change (never whether he may approve). Without a configured
+  // chat model, or on any failure, only plain one-word replies approve and everything else gets one natural question.
+  const approvalEndpoint = (() => {
+    if (!config.foundryProjectEndpoint) return undefined;
+    try {
+      const url = new URL('/models/chat/completions', new URL(normalizeFoundryProjectEndpoint(config.foundryProjectEndpoint)).origin);
+      url.searchParams.set('api-version', '2024-05-01-preview');
+      return url;
+    } catch {
+      return undefined;
+    }
+  })();
+  const approvalInterpreter = approvalEndpoint && credential && settingsStore && usageStore?.recordFoundryUsage
+    ? createApprovalInterpreter({
+      model: createFoundryApprovalModel({
+        endpoint: approvalEndpoint,
+        scope: FOUNDRY_SCOPE,
+        getToken: async (scope, signal) => {
+          const token = await credential.getToken(scope, { abortSignal: signal });
+          if (!token) throw new Error('Foundry approval identity unavailable');
+          return token.token;
+        },
+        selectModel: async () => {
+          const catalogue = await modelCatalogue.read();
+          return chooseApprovalModel(catalogue, (await readSettings(settingsStore, catalogue)).roles.chat.model);
+        },
+        recordUsage: (usage) => usageStore.recordFoundryUsage!(usage),
+      }),
+    })
+    : undefined;
   const pcBridgeModule = createPcBridgeModule({
     ...(screenVisionModel ? { pcActVisionModel: screenVisionModel } : {}),
     ...(pcActPlanner ? {
@@ -1059,6 +1092,7 @@ try {
     systemSmokeProbes,
     modelCatalogue,
     ...(modelDeploymentWorkflow ? { modelDeploymentWorkflow } : {}),
+    ...(approvalInterpreter ? { approvalInterpreter } : {}),
     ...(decisionsAvailable ? { reflexClassifier } : {}),
     ...(browserAgent ? { browserAgent } : {}),
     ...(database ? { databaseStatus: () => database.isWaking() } : {}),

@@ -52,6 +52,8 @@ const DEFAULT_TIMEOUT_MS = 5_000;
 const DEFAULT_CALLS_PER_MINUTE = 20;
 const DEFAULT_CONCURRENCY = 4;
 const CACHE_TTL_MS = 10 * 60_000;
+// One message is judged by a status probe and again by the confirm call: an outage must not cost the timeout twice.
+const FAILURE_CACHE_TTL_MS = 30_000;
 const CACHE_MAX_ENTRIES = 200;
 const MAX_MODEL_OUTPUT_CHARS = 400;
 
@@ -136,7 +138,7 @@ export function createApprovalInterpreter(options: ApprovalInterpreterOptions = 
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const maxCalls = options.maxCallsPerMinute ?? DEFAULT_CALLS_PER_MINUTE;
   const maxConcurrent = options.maxConcurrent ?? DEFAULT_CONCURRENCY;
-  const cache = new Map<string, { readonly verdict: ApprovalVerdict; readonly expiresAt: number }>();
+  const cache = new Map<string, { readonly verdict: ApprovalVerdict | undefined; readonly expiresAt: number }>();
   const inflight = new Map<string, Promise<ApprovalInterpretation>>();
   const recentCalls: number[] = [];
   let active = 0;
@@ -149,10 +151,10 @@ export function createApprovalInterpreter(options: ApprovalInterpreterOptions = 
     return true;
   };
 
-  const remember = (key: string, verdict: ApprovalVerdict) => {
+  const remember = (key: string, verdict: ApprovalVerdict | undefined) => {
     const clock = now();
     for (const [existing, entry] of cache) if (entry.expiresAt <= clock) cache.delete(existing);
-    cache.set(key, { verdict, expiresAt: clock + CACHE_TTL_MS });
+    cache.set(key, { verdict, expiresAt: clock + (verdict === undefined ? FAILURE_CACHE_TTL_MS : CACHE_TTL_MS) });
     while (cache.size > CACHE_MAX_ENTRIES) {
       const oldest = cache.keys().next().value;
       if (oldest === undefined) break;
@@ -192,7 +194,7 @@ export function createApprovalInterpreter(options: ApprovalInterpreterOptions = 
       sha256(question.summary), sha256(reply),
     ]));
     const hit = cache.get(key);
-    if (hit && hit.expiresAt > now()) return { verdict: hit.verdict, path: 'model' };
+    if (hit && hit.expiresAt > now()) return hit.verdict === undefined ? failed : { verdict: hit.verdict, path: 'model' };
     const pending = inflight.get(key);
     if (pending) return abortable(pending, signal);
 
@@ -201,9 +203,8 @@ export function createApprovalInterpreter(options: ApprovalInterpreterOptions = 
       active++;
       try {
         const verdict = await callModel(buildApprovalPrompt(question.summary, reply));
-        if (verdict === undefined) return failed;
         remember(key, verdict);
-        return { verdict, path: 'model' };
+        return verdict === undefined ? failed : { verdict, path: 'model' };
       } catch {
         return failed;
       } finally {
