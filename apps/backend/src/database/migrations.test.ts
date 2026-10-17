@@ -13,6 +13,14 @@ async function directory() {
 afterEach(async () => { await Promise.all(directories.splice(0).map((path) => rm(path, { recursive: true }))); });
 
 describe('committed SQL manifest', () => {
+  it('adds durable owner-scoped push delivery tables and protects rollback evidence', async () => {
+    const migration = (await readMigrations()).find(({ name }) => name === '0053_proactive_push.sql');
+    expect(migration?.sql).toContain('CHECK (id = 1)');
+    expect(migration?.sql).toContain('UX_push_subscriptions_owner_endpoint_hash');
+    expect(migration?.sql).toContain("CHECK (kind = N'test')");
+    expect((await readDownMigration('0053_proactive_push.sql')).sql).toContain('cannot roll back while rows exist');
+  });
+
   it('retains durable task submission claims and refuses to erase retry protection on rollback', async () => {
     const migration = (await readMigrations()).find(({ name }) => name === '0052_factory_task_submissions.sql');
     expect(migration?.sql).toContain('submission_id uniqueidentifier NOT NULL PRIMARY KEY');
@@ -149,7 +157,7 @@ describe('committed SQL manifest', () => {
       '0049_daily_connector_audit.sql',
       '0050_daily_saved_food.sql',
       '0051_conversation_summaries.sql',
-      '0052_factory_task_submissions.sql',
+      '0052_factory_task_submissions.sql', '0053_proactive_push.sql',
     ]);
     for (const migration of migrations) await expect(readDownMigration(migration.name)).resolves.toMatchObject({ name: migration.name });
   });

@@ -3,10 +3,27 @@ import { loadConfig } from './config.js';
 import { loadAuthConfig } from './auth/config.js';
 
 describe('backend configuration', () => {
+  it.each([
+    [undefined, false],
+    ['false', false],
+    ['TRUE', false],
+    [' true', false],
+    ['true', true],
+  ])('enables push only for the exact true flag (%j)', (JARVIS_PUSH_ENABLED, expected) => {
+    const env = JARVIS_PUSH_ENABLED === undefined
+      ? {}
+      : {
+        JARVIS_PUSH_ENABLED,
+        ...(JARVIS_PUSH_ENABLED === 'true' ? { STATIC_WEB_APP_ORIGIN: 'https://fixture.azurestaticapps.net' } : {}),
+      };
+    expect(loadConfig(env).pushEnabled).toBe(expected);
+  });
+
   it('defaults to the infrastructure port and offline logs', () => {
     expect(loadConfig({})).toEqual({
       port: 3000, logLevel: 'info', codexToolModel: 'gpt-5.5',
       codexImageModel: 'gpt-5.5',
+      pushEnabled: false,
       auth: loadAuthConfig({}),
     });
   });
@@ -41,6 +58,7 @@ describe('backend configuration', () => {
       foundryRunnerAgentName: 'jarvis-runner-node-1x2',
       codexToolModel: 'gpt-5.5',
       codexImageModel: 'gpt-5.5',
+      pushEnabled: false,
     });
   });
   it('validates the configurable ChatGPT Codex tool model', () => {
