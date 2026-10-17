@@ -571,10 +571,6 @@ try {
       store: createProjectPolicyStore(database.pool),
       tasks: taskStore,
       tokenIssuer: githubAppTokenIssuer,
-      ...(teamsNotifications ? {
-        runConfirmed: (summary, action) => teamsNotifications.runConfirmed('merge', summary, action),
-      } : {}),
-      onConfirmationError: (error) => logger.warn(safeErrorFields(error), 'project_policy.confirmation_failed'),
       onError: (error) => logger.warn(safeErrorFields(error), 'project_policy.recheck_failed'),
     })
     : undefined;
@@ -1055,6 +1051,9 @@ try {
     ...(conversationAttachments ? { conversationAttachments } : {}),
     ...(attachmentVision ? { attachmentVision } : {}),
     modules,
+    ...(projectPolicyEvaluator ? {
+      projectPolicyChanged: (projectId: string) => projectPolicyEvaluator.recheckProject(projectId),
+    } : {}),
     systemStatusReader,
     systemSmokeProbes,
     modelCatalogue,
@@ -1135,8 +1134,11 @@ try {
   if (checksLoop || projectPolicyEvaluator) {
     app.addHook('onClose', async () => {
       await checksLoop?.stop();
-      projectPolicyEvaluator?.stop();
+      await projectPolicyEvaluator?.stop();
     });
+  }
+  if (projectPolicyEvaluator) {
+    app.addHook('onReady', async () => { projectPolicyEvaluator.start(); });
   }
   if (dispatcher) app.addHook('onClose', async () => { await dispatcher.stop(); });
   if (database) registerDatabase(app, database);

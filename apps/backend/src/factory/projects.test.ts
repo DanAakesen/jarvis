@@ -35,6 +35,7 @@ function fixture(store: ProjectStore | null = {
   settingsStore?: SettingsStore;
   auth?: TokenVerifier;
   toolCallStore?: ToolCallStore;
+  projectPolicyChanged?: (projectId: string) => Promise<void>;
 } = {}) {
   const catalog = options.catalog ?? {
     list: vi.fn(async () => ({ repositories: [repository], fetchedAt: '2026-10-04T09:00:00.000Z' })),
@@ -43,6 +44,7 @@ function fixture(store: ProjectStore | null = {
   const app = buildApp(config, undefined, {
     projectStore: store ?? undefined,
     githubRepositoryCatalog: catalog,
+    ...(options.projectPolicyChanged ? { projectPolicyChanged: options.projectPolicyChanged } : {}),
     settingsStore: options.settingsStore ?? { read: async () => ({}), write: async () => {} },
     ...(options.toolCallStore ? { toolCallStore: options.toolCallStore } : {}),
     auth: options.auth ?? (async () => ({ objectId: config.auth.ownerObjectId, tenantId: config.auth.tenantId })),
@@ -264,6 +266,19 @@ describe('projects API', () => {
     expect((await app.inject({
       method: 'PATCH', url: '/factory/projects/42', headers, payload: { description: 'x'.repeat(2001) },
     })).statusCode).toBe(400);
+  });
+
+  it('rechecks open PRs when a project policy is patched', async () => {
+    const projectPolicyChanged = vi.fn(async () => {});
+    const app = fixture(undefined, { projectPolicyChanged });
+
+    const response = await app.inject({
+      method: 'PATCH', url: '/factory/projects/42', headers,
+      payload: { policy: 'complete_without_deployment' },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(projectPolicyChanged).toHaveBeenCalledExactlyOnceWith('42');
   });
 
   it('returns conflict for a duplicate repository and handles missing projects', async () => {
