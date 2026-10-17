@@ -951,6 +951,17 @@ Dan approved these after a gap audit. They are planned, not built.
 ## GitHub backlog (8 October 2026, P10)
 
 Dan decided that GitHub issues are the single backlog. When Dan asks Jarvis to change code, Jarvis drafts an issue, confirms it with him and creates it; the Software Factory then picks it up with the Codex agent (worker label `Jarvis`), or Copilot when Dan chooses. Factory progress shows on the issue, its pull request uses `Fixes #N`, and the Factory board uses the same columns as the GitHub Project: Backlog, Needs Dan, Ready, In progress, In review, Done. ([#573](https://github.com/DanAakesen/jarvis/issues/573)–[#577](https://github.com/DanAakesen/jarvis/issues/577))
+
+## Proactive Web Push (17 October 2026; P13-01 / #917)
+
+Web Push is an opt-in visible alert for a durable, owner-protected item; it
+carries no private details, performs no silent work and never approves an
+action. The backend defaults off and registers no push routes unless
+`JARVIS_PUSH_ENABLED` is exactly `true`; this milestone does not enable it. The
+user-triggered test is not proactive delivery. Teams is not a delivery option.
+Real iPhone delivery remains unproven until separately observed on the installed
+Home Screen app.
+
 ## Daily migration (approved P12)
 
 Tool parity is an acceptance requirement for every retained Daily capability,

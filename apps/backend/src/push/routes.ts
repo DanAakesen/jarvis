@@ -1,7 +1,7 @@
 import type { IncomingMessage, Server, ServerResponse } from 'node:http';
 import type { FastifyBaseLogger, FastifyInstance, FastifyPluginAsync, FastifyTypeProviderDefault } from 'fastify';
 import type { PushStore, ProactiveItem, StoredPushSubscription } from '../database/push-store.js';
-import { generateVapidKeyPair, sendWebPush, type VapidKeyPair, type WebPushResult, type WebPushTransport } from './webpush.js';
+import { generateVapidKeyPair, sendWebPush, type PushSendOrigin, type VapidKeyPair, type WebPushResult, type WebPushTransport } from './webpush.js';
 import { validatePushEndpoint, validatePushSubscription } from './validation.js';
 
 const uuidPattern = /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/iu;
@@ -20,6 +20,7 @@ export interface PushRouteDependencies {
     payload: Buffer,
     keys: VapidKeyPair,
     publicOrigin: string,
+    origin: PushSendOrigin,
     transport: WebPushTransport,
   ) => Promise<WebPushResult>;
 }
@@ -110,7 +111,7 @@ function createRoutes<Logger extends FastifyBaseLogger>(
         itemId: item.id,
       }));
       const deliveries = await Promise.all(subscriptions.map(async (subscription) => {
-        const result = await send(subscription, payload, keys, dependencies.publicOrigin, transport);
+        const result = await send(subscription, payload, keys, dependencies.publicOrigin, 'user_test', transport);
         if (result.removed) await dependencies.store.removeSubscription(subscription.id);
         else await dependencies.store.recordSubscriptionResult(subscription.id, result.statusCode, result.accepted);
         return result;

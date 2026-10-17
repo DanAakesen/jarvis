@@ -28,6 +28,8 @@ export interface WebPushResult {
   readonly removed: boolean;
 }
 
+export type PushSendOrigin = 'user_test';
+
 export interface WebPushTransport {
   readonly fetch: typeof fetch;
   readonly now: () => number;
@@ -138,8 +140,10 @@ export async function sendWebPush(
   payload: Buffer,
   keys: VapidKeyPair,
   publicOrigin: string,
+  origin: PushSendOrigin,
   transport: WebPushTransport = { fetch, now: Date.now, sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)) },
 ): Promise<WebPushResult> {
+  void origin;
   const deadline = transport.now() + 20_000;
   let statusCode: number | null = null;
   let attempted = 0;

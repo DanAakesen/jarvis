@@ -1837,6 +1837,35 @@ operation expires and fails closed after five minutes if Dan does not approve.
 Teams/Bot Service and Speech F0 code is not live-verified because those
 integrations are not part of the personal-tenant deployment.
 
+## Proactive Web Push backend (P13-01, 17 October 2026)
+
+The backend registers the owner-authenticated push routes only when
+`JARVIS_PUSH_ENABLED` is exactly `true`; the default is off. Disabled composition
+does not construct the push store, read or write push tables, create signing keys,
+or send provider requests, and the routes return ordinary 404s. No deployment,
+workflow or infrastructure setting enables this flag.
+
+`push_vapid_keys`, `push_subscriptions` and `proactive_items` are separate SQL
+tables. The store uses the process-owned SQL pool and
+`databaseReadRequest` for retryable reads. Subscriptions are owner-scoped,
+deduplicated by SHA-256 endpoint hash and capped at ten. Test items are durable
+and owner-protected; the first successful item load sets `opened_at`, meaning
+loaded rather than read.
+
+`apps/backend/src/push/webpush.ts` implements P-256 VAPID, ES256 signing and
+RFC 8291 `aes128gcm` encryption with `node:crypto`; no dependency is added. The
+private VAPID key is generated on first use, stored only in SQL and never
+returned. Subscription endpoints are checked against the provider-host allowlist
+before any server-side request. Provider acceptance is recorded as acceptance,
+not display or reading; encrypted push content contains only the version, generic
+title/body and item UUID. Retries are limited to transient provider responses and
+bounded by per-request/overall timeouts.
+
+P13-01 sends only a direct user-requested test. It adds no scheduler or quiet-hour
+guard; every future system-started send must enforce 22:00–07:00
+Europe/Copenhagen with no emergency exception. There is no Teams delivery path.
+The feature remains dark, and actual iPhone delivery is not yet proven.
+
 ## Presence modes (P6-23; replaces P7-02 away mode)
 
 `createAwayModeStore` persists `{ mode, source, changedAt }` as JSON in the

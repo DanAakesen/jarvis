@@ -1,5 +1,25 @@
 # Decisions
 
+## Keep the first Web Push proof dark and user-triggered (17 October 2026; P13-01 / #917)
+
+Milestone 1 proves a visible Web Push notification can point to a durable,
+owner-protected item; a push never approves an action or carries private data.
+The feature is disabled unless `JARVIS_PUSH_ENABLED` is exactly `true`; these
+changes do not set it. Disabled startup does not register routes or access push
+storage, signing keys or providers.
+
+The backend generates and stores its VAPID key pair on first use, serving only
+the public key. Keep RFC 8030 delivery, RFC 8291 `aes128gcm` encryption and
+RFC 8292 VAPID in a small `node:crypto` module without a new dependency. Store
+subscriptions and durable items separately from Now/activity. Push text stays
+generic; provider acceptance is not delivery evidence, and `opened_at` means
+loaded, not read. There is no Teams delivery path.
+
+The test send is user-started, so quiet hours do not block it. Do not add the
+22:00–07:00 Europe/Copenhagen guard or an emergency exception now; all later
+system-started sends must pass that guard. Actual iPhone delivery remains an
+unverified physical-device acceptance step.
+
 ## Link every web-created Factory task to a GitHub issue (17 October 2026; P10-08 / #902)
 
 The Create task dialog and `POST /factory/tasks` reuse the chat path's
