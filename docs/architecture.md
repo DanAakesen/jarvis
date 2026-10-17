@@ -1837,6 +1837,28 @@ operation expires and fails closed after five minutes if Dan does not approve.
 Teams/Bot Service and Speech F0 code is not live-verified because those
 integrations are not part of the personal-tenant deployment.
 
+## Web push delivery (P13-02; default off)
+
+The web build exposes only the boolean result of `VITE_PUSH_ENABLED === "true"`
+through Vite's explicit `define`; its default is false. When enabled, the
+Notifications Settings section prefetches authenticated `GET /push/config` and
+registers the plain `public/sw.js` worker at `/` with worker updates uncached.
+Static Web Apps excludes `/sw.js` from its SPA fallback and sends
+`Cache-Control: no-cache`. The worker does not cache content or provide offline
+behavior; every push displays only the fixed generic Jarvis alert, retaining a
+validated UUID solely as notification data/tag.
+
+The web client calls authenticated `PUT /push/subscription`,
+`DELETE /push/subscription`, and `POST /push/test` through `backendFetch`.
+Notification permission is requested directly from the explicit opt-in action.
+The click handler builds `/proactive/:id` itself from a validated UUID and never
+uses a payload URL. That route calls authenticated `GET /proactive/items/:id`
+and remains inside `RequireSignIn`; the item response and notification reference
+grant no authorization. The sign-in path is stored as a validated same-origin
+session-storage value and consumed after MSAL returns to `/`. P13-02 changes no
+backend, deployment flag, identity or permission configuration; live phone
+permission, lock-screen delivery and tap-through remain unverified.
+
 ## Presence modes (P6-23; replaces P7-02 away mode)
 
 `createAwayModeStore` persists `{ mode, source, changedAt }` as JSON in the

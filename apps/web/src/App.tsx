@@ -55,6 +55,9 @@ import { PresenceChip, PresenceSettings } from './Presence';
 import { MemorySettings } from './MemorySettings';
 import { createWorkspacePinsClient } from './workspace-pins';
 import { usePhoneChatViewport } from './phone-chat-viewport';
+import { PushNotifications } from './PushNotifications';
+import { ProactiveItemPage } from './ProactiveItemPage';
+import { takeSignInReturnPath } from './auth';
 
 const SettingsActivityHostContext = createContext<((host: HTMLDivElement | null) => void) | null>(null);
 
@@ -828,9 +831,10 @@ function RequireSignIn({ session }: { session: SignInSession }) {
 }
 
 /** Settings with its live panels and a Back action to wherever Dan came from. */
-function SettingsRoute({ config, session, nutritionKey }: {
+function SettingsRoute({ config, session, nutritionKey, pushEnabled }: {
   config: PublicConfig;
   session: SignInSession;
+  pushEnabled: boolean;
   /** Account key for the Daily nutrition targets; null while Daily is off, which renders nothing and asks for nothing. */
   nutritionKey: string | null;
 }) {
@@ -843,6 +847,7 @@ function SettingsRoute({ config, session, nutritionKey }: {
   return (
     <SettingsPage backendUrl={config.backendUrl} getAccessToken={session.getAccessToken} onBack={back}
       presence={<PresenceSettings backendUrl={config.backendUrl} getAccessToken={session.getAccessToken} />}
+      {...(pushEnabled ? { notifications: <PushNotifications backendUrl={config.backendUrl} getAccessToken={session.getAccessToken} /> } : {})}
       projects={<ProjectsPage backendUrl={config.backendUrl} getAccessToken={session.getAccessToken} />}
       {...(nutritionKey ? { nutrition: <NutritionTargetsSettings key={nutritionKey} backendUrl={config.backendUrl} getAccessToken={session.getAccessToken} /> } : {})}
       memory={<MemorySettings backendUrl={config.backendUrl} getAccessToken={session.getAccessToken} />}
@@ -872,10 +877,16 @@ const defaultConfig: PublicConfig = __JARVIS_CONFIG__;
 // The deployed camera protocol accepts upload-only image handles in chat and voice.
 const cameraConversationDeployed = true;
 
-export function App({ config = defaultConfig, dailyEnabled = false }: { config?: PublicConfig; dailyEnabled?: boolean }) {
+export function App({ config = defaultConfig, dailyEnabled = false, pushEnabled = __JARVIS_PUSH_ENABLED__ }: {
+  config?: PublicConfig;
+  dailyEnabled?: boolean;
+  pushEnabled?: boolean;
+}) {
   const areas = appAreas(dailyEnabled);
   useGlassLight();
   const session = useSignIn(config);
+  const location = useLocation();
+  const navigate = useNavigate();
   const signedIn = session.state === 'signed-in' && session.profile !== null;
   const dailyAccountKey = dailyEnabled && signedIn
     ? (session.client.getActiveAccount() ?? session.client.getAllAccounts()[0])?.homeAccountId ?? 'owner'
@@ -884,6 +895,12 @@ export function App({ config = defaultConfig, dailyEnabled = false }: { config?:
   const stopCamera = camera.stop;
   const screenShare = useScreenShare(config, session.getAccessToken);
   const stopScreenShare = screenShare.stop;
+
+  useEffect(() => {
+    if (!signedIn || location.pathname !== '/') return;
+    const returnPath = takeSignInReturnPath();
+    if (returnPath && returnPath !== '/') navigate(returnPath, { replace: true });
+  }, [location.pathname, navigate, signedIn]);
 
   useEffect(() => {
     if (!signedIn) {
@@ -923,7 +940,12 @@ export function App({ config = defaultConfig, dailyEnabled = false }: { config?:
                   <Component key={id === 'daily' ? dailyAccountKey : id} backendUrl={config.backendUrl} getAccessToken={session.getAccessToken} />
                 } />
               ))}
-              <Route path="settings" element={<SettingsRoute config={config} session={session} nutritionKey={dailyEnabled ? dailyAccountKey : null} />} />
+              <Route path="settings" element={<SettingsRoute config={config} session={session}
+                nutritionKey={dailyEnabled ? dailyAccountKey : null} pushEnabled={pushEnabled} />} />
+              {pushEnabled && <Route path="proactive/:id" element={
+                <ProactiveItemPage backendUrl={config.backendUrl} getAccessToken={session.getAccessToken}
+                  signIn={session.signIn} />
+              } />}
               <Route path="knowledge/*" element={<Navigate to="/notes" replace />} />
             </Route>
             <Route path="*" element={<NotFoundPage />} />

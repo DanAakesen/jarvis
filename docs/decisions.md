@@ -1,5 +1,20 @@
 # Decisions
 
+## Keep web push default-off and notification taps owner-authenticated (17 October 2026; P13-02)
+
+Implement the web half of the delivery proof behind the exact-string
+`VITE_PUSH_ENABLED === "true"` gate; the build default remains off. The service
+worker shows fixed generic text even for malformed pushes and retains only a
+validated UUID for a same-origin item path. It never trusts a payload URL, and
+the item page remains behind the normal sign-in and owner-protected API.
+
+Permission is requested as the first awaited operation in the user's explicit
+opt-in action. The UI distinguishes unsupported, server-off, not-yet-asked,
+denied, on-device, changed-key/lost-subscription and recoverable failure states.
+No backend or deployment flag is changed here. Mocked browser checks are not
+evidence of iOS permission prompts, lock-screen delivery or physical tap-through;
+those require the separate enabling change and device test.
+
 ## Link every web-created Factory task to a GitHub issue (17 October 2026; P10-08 / #902)
 
 The Create task dialog and `POST /factory/tasks` reuse the chat path's

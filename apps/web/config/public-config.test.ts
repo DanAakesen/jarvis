@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createPublicConfig } from './public-config';
+import { createPublicConfig, isPushEnabled } from './public-config';
 
 const applicationId = '11111111-1111-4111-8111-111111111111';
 const bootstrap = {
@@ -11,6 +11,13 @@ const bootstrap = {
 };
 
 describe('public configuration boundary', () => {
+  it('enables web push only for the exact string true', () => {
+    expect(isPushEnabled('true')).toBe(true);
+    for (const value of [undefined, null, true, 'TRUE', '1', ' true']) {
+      expect(isPushEnabled(value)).toBe(false);
+    }
+  });
+
   it('includes only browser configuration and normalizes the backend origin', () => {
     expect(createPublicConfig(bootstrap, 'https://api.example.com/')).toEqual({
       tenantId: applicationId, webClientId: applicationId,

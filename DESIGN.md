@@ -124,6 +124,19 @@ handling; do not animate geometry merely to make controls look busy.
 for future work. Header/job and mobile chat corrections have separate owners;
 this candidate does not imply their changes are integrated or released.
 
+## Gated push notifications (17 October 2026; P13-02)
+
+The Notifications Settings section is its own collapsed-by-default section and
+appears only when the exact-string `VITE_PUSH_ENABLED` build gate is on. It
+reuses the existing section, type, surface, focus, motion and button treatments.
+The section presents unsupported/Home Screen guidance, server-off, permission
+not requested, denied, on-this-device, changed-key/lost-subscription and
+cleanup/error states as plain labelled text with only actions that can work.
+Buttons retain the shared 44px minimum touch target and wrap on narrow screens.
+The item route uses one page headline, readable item text and time, plus
+loading, unavailable, retry and sign-in states. The visual design does not
+imply that provider acceptance proves phone display.
+
 The header's **Background work** list contains only undismissed jobs and explains
 that research, images, apps and indexing are separate from Factory tasks.
 P11-05 supersedes the earlier Recent jobs view that kept hidden rows visible.
