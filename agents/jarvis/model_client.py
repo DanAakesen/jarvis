@@ -25,7 +25,6 @@ from opentelemetry.trace import SpanKind, Status, StatusCode
 from calendar_flow import (
     CALENDAR_MUTATIONS,
     CALENDAR_READS,
-    calendar_approval_candidate,
     calendar_batch_matches_request,
     calendar_claim,
     calendar_context,
@@ -34,6 +33,7 @@ from calendar_flow import (
     calendar_response_scope,
     calendar_safe_prefix,
     calendar_status_question,
+    calendar_unsettled_confirmation,
     no_calendar_evidence,
     pending_calendar,
 )
@@ -735,14 +735,11 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                     calendar_enabled or calendar_context(calendar_messages)
                     or multiple_calendar_events
                 )
+                # The reply's shape never decides routing: whenever a calendar conversation is
+                # open, the backend says whether a change is staged and what Dan's message means.
                 calendar_turn = (
                     calendar_enabled and bool(messages) and (
-                        multiple_calendar_events
-                        or calendar_context(messages) and (
-                            calendar_context(messages[-1:])
-                            or calendar_status_question(messages[-1].content)
-                            or calendar_approval_candidate(messages[-1].content)
-                        )
+                        multiple_calendar_events or calendar_context(messages)
                     )
                 )
                 danish = role == "voice" or "naturligt dansk" in instructions
@@ -1393,6 +1390,9 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
                                 await self._tools.call(
                                     call.name, arguments, current_message_id.get()
                                 )
+                            )
+                            result = calendar_unsettled_confirmation(
+                                call.name, result, calendar_state,
                             )
                         if legacy_multiple:
                             yield calendar_reply(call.name, result, danish)
