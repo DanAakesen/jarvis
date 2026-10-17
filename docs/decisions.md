@@ -1,5 +1,32 @@
 # Decisions
 
+## Reuse browser-only Now approval for internal food proposals (17 October 2026; P12-09)
+
+Continue Dan's authorised migration with the existing Now confirmation service
+rather than a new nutrition proposal queue or model-supplied acceptance. Add a
+trusted optional browser-only delivery selector; existing callers retain their
+current-channel routing. Food review always selects browser-only, so a race in
+presence cannot send sensitive meal summaries into Teams. Require present mode
+before review and again in its exact action callback.
+
+The optional internal review tool handles estimates, corrections and soft
+deletion against the existing owner/session/message and canonical SQL store.
+Freeze model proposals before display; show actual before/after values and
+dates, reject oversized reviews, serialize pending reviews per target and bound
+them to the existing five-minute approval/six-minute operation lifetimes.
+Native approval is owner-bound and consumed once before the action. Neither
+origin alone, spoken text nor caller confirmation flags are write authority.
+Exact-label and actual saved-favourite direct requests keep their one-step path.
+
+New nutrient/component proposals stay estimates and cannot retain a whole-meal
+verification claim. Preserve unchanged exact nutrient provenance and nulls.
+Existing SQL revision/range locks prevent stale correction/deletion, including
+historical records. Recover uncertain results only from matching actual
+source/proposal/revision receipts; a read tombstone is labelled already-deleted,
+not a new mutation. No Health export or new persistence is introduced.
+This is browser-reviewed internal source work, not full conversational/spoken,
+photo-evidence, client/device acceptance, production activation or cutover.
+
 ## Ground direct internal intake in the verified human request (17 October 2026; P12-09)
 
 Use one optional sensitive internal food tool, separate from MCP enablement,

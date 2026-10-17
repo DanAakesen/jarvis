@@ -1,5 +1,27 @@
 # Agent context
 
+## Internal Daily review checks (17 October 2026; P12-09)
+
+The current inactive continuation registers `daily_food_review` only with the
+explicit internal nutrition factory. Use synthetic owned meals and persisted
+chat/voice metadata. Exercise actual browser-only Now approval: no mutation
+before acceptance, no Teams send even with away routing, one-time consumption,
+rejection/cancellation, changed presence/revision, immutable proposals,
+matching uncertain-result recovery, exact/favourite one-step routing and
+old-history correction/deletion. No live food/Health write or activation.
+
+The new pure review/model/intent/record selection initially passed 95 assertions.
+Its serial changed-file lint failed on one unused mock delivery parameter,
+subsequently used for the browser-only contract assertion. That original failed
+receipt is retained. The final review/model selection passed 50 assertions,
+then final schema/review selection passed all 15 cases. Changed-file lint
+passes with zero warnings. These are not local tool/SQL acceptance.
+Local application/tool imports still lack `jose`; use the existing pinned CI
+for real service/registry/SQL qualification, not a restore, stub or alternate
+graph. Run approved Node22 x64 checks serially, one worker from apps/backend.
+Real SQL coverage appends to the existing nutrition fixture because earlier
+cases depend on their original meal/favourite counts.
+
 ## Internal Daily direct-intake checks (17 October 2026; P12-09)
 
 Use synthetic persisted Dan messages and owned favourite snapshots only.

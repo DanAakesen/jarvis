@@ -185,6 +185,44 @@ describe('Teams notification service', () => {
     expect(connector.send).not.toHaveBeenCalled();
   });
 
+  it('keeps explicitly browser-only sensitive review out of Teams even while away', async () => {
+    const away = vi.fn(async () => { throw new Error('Presence routing must not run'); });
+    const { service, connector, store } = harness(undefined, away);
+    const action = vi.fn(async () => 'committed');
+    const operation = service.runConfirmed('other', 'Review a synthetic meal.', action, undefined, 'browser');
+    await vi.waitFor(() => expect(service.pendingBrowserConfirmations()).toHaveLength(1));
+    const confirmation = service.pendingBrowserConfirmations()[0]!;
+    try {
+      expect(away).not.toHaveBeenCalled();
+      expect(connector.send).not.toHaveBeenCalled();
+      expect(store.getConversation).not.toHaveBeenCalled();
+      expect(action).not.toHaveBeenCalled();
+      expect(await service.receiveConfirmation(cardAction({
+        action: 'confirmation', confirmationId: confirmation.id, decision: 'approve',
+      }), reference)).toBe(false);
+      expect(action).not.toHaveBeenCalled();
+      expect(await service.resolveBrowserConfirmation(confirmation.id, 'approve')).toBe(true);
+      expect(await operation).toBe('committed');
+      expect(action).toHaveBeenCalledOnce();
+      expect(await service.resolveBrowserConfirmation(confirmation.id, 'approve')).toBe(false);
+    } finally {
+      await service.resolveBrowserConfirmation(confirmation.id, 'reject');
+      await Promise.allSettled([operation]);
+    }
+  });
+
+  it('does not execute a rejected browser-only action or fall back to Teams', async () => {
+    const { service, connector } = harness();
+    const action = vi.fn();
+    const operation = service.runConfirmed('delete', 'Remove a synthetic meal.', action, undefined, 'browser');
+    const rejected = expect(operation).rejects.toThrow('rejected');
+    await vi.waitFor(() => expect(service.pendingBrowserConfirmations()).toHaveLength(1));
+    expect(await service.resolveBrowserConfirmation(service.pendingBrowserConfirmations()[0]!.id, 'reject')).toBe(true);
+    await rejected;
+    expect(action).not.toHaveBeenCalled();
+    expect(connector.send).not.toHaveBeenCalled();
+  });
+
   it('links phone-session approvals to their originating call', async () => {
     const { service, store } = harness(undefined, async () => false);
     const operation = withPhoneConfirmationSession('42', () =>

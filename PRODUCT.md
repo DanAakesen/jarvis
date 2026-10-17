@@ -997,6 +997,21 @@ again, even if the favourite later changes. Edited source requests and deleted
 intakes cannot silently become another intake. Production remains off;
 this is not complete internal food workflow or #724 acceptance.
 
+The next inactive internal composition adds `daily_food_review` for portion
+estimates, revisioned corrections and soft deletion. It uses the existing
+owner-bound one-time approval in Now, not model confirmation flags or a new
+proposal dispatcher. Review shows the exact before/after food, units, unknown
+macros, occurrence/Copenhagen date and target revision. Model proposals remain
+estimates; approval does not make them independently verified. Direct supported
+exact labels and actual saved favourites are routed back to the one-step tool.
+This initial reviewed path requires a present chat/voice session and a browser
+approval; a spoken "yes" alone is not acceptance. Browser-only delivery prevents
+meal details being routed into Teams even if presence changes. Rejected,
+cancelled, expired or stale reviews cannot mutate intake. Existing canonical
+storage, exact operation/revision replay, tombstones and commit refresh remain
+shared. No Health write, production activation or physical-phone acceptance is
+included; broader conversational and actual client/device gates remain.
+
 P12-05 adds an inactive, explicitly invoked health processor over the existing SQL inbox: metrics/sleep/workouts/detail/minute HR, canonical physical units, Copenhagen dates, exact session/checksum replay and bounded retry/quarantine. Domain changes, ingestion lineage and processed-feed freshness commit together; phone heartbeat stays separate. Empty workout exports cannot erase history, missing values stay unknown, and native nutrition cannot feed back into canonical meals. Owner history/detail reads are bounded and unregistered. No scheduler, source import, live device changes or activation; protected/live parity remains gated.
 
 Heart-rate summaries and series must validate declared units consistently. Unsupported rate units quarantine without changing processed freshness; only established legacy summary fields imply BPM when their unit is absent. Missing samples and summaries remain unknown, not inferred.

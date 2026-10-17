@@ -1,5 +1,27 @@
 # Project plan
 
+## Internal Daily reviewed changes (17 October 2026; P12-09 / #724)
+
+The current source continuation adds `daily_food_review` for estimated intake,
+exact-key/revision corrections and soft deletion in the same independently
+opt-in internal composition. Reuse actual Now one-time confirmation, canonical
+nutrition storage, source identity, safe receipts and acknowledged refresh.
+Reviews are explicitly browser-only and present-mode; no Teams health-data
+fallback, model acceptance, new dispatcher or redundant exact/favourite review.
+Snapshots freeze before approval, target revisions are checked again before
+the existing SQL lock, and uncertain results need an actual matching receipt.
+No production composition, schema, package or original Daily changes.
+
+Pure checks initially passed 95 assertions. Changed-file lint then found one
+unused test parameter; it was corrected. Final review/model selection passed
+50 assertions, then the final schema/review selection passed all 15 cases.
+Changed-file lint passes with zero warnings. Source includes the real SQL
+confirmation-to-intake workflow, Fastify input-schema branch preservation,
+provenance and overlapping-receipt controls. Normal pinned tool/application/SQL
+CI, independent review and authorised release remain next.
+Broader conversation/spoken acceptance, actual hosted client/provider/device,
+private reconciliation and cutover remain open. #724 stays open/default-off.
+
 ## Internal Daily intake authority (17 October 2026; P12-09 / #724)
 
 The saved-food batch #872 is merged and deployed. The current source candidate
@@ -17,10 +39,16 @@ and all four actual CodeQL analyses. Independent review found one overlapping
 retry/favourite-edit receipt race. The correction re-reads and validates the
 actual operation receipt after a known conflict/uncertain write result, without
 retrying the write; deterministic unit and real SQL interleaving cover it.
-Final exact-head qualification/review and release remain next.
+Final head `b8cfe830` passed all ten CI job entries, four actual CodeQL
+analyses and final independent review. Preserve its first unchanged web failure
+and one failed-jobs-only diagnostic rerun; no intermittent UI fix is claimed.
+#873 merged as `53d0dfb1` with exact qualified tree `d83654b5`; normal
+Deploy `39000178688` succeeded, backend revision `0000334` ready and health200.
+Actual smoke was 13/15 ok, with retained nonblocking PC bridge and
+identity-response warnings. The release and #724 receipts were read back.
 This deliberately bounded syntax is not complete internal nutrition parity:
-new estimate review, corrections/deletions and broader conversational wording
-remain unfinished. Production composition stays off; #724 stays open and all
+the next reviewed source continuation is above; broader conversational wording
+remains unfinished. Production composition stays off; #724 stays open and all
 account, private migration, real-client/device and cutover gates remain.
 
 ## Retained Daily saved-food writes (17 October 2026; P12-09 / #724)

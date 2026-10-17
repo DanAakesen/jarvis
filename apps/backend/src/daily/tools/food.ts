@@ -8,9 +8,10 @@ import type { NutritionStore } from '../nutrition/store.js';
 import { resolveDailyOwner } from '../owner.js';
 import { favoriteFingerprint, projectNutritionRecord } from '../records.js';
 
-export type InternalNutrition = (request: FastifyRequest) => Pick<NutritionStore, 'intake' | 'lookupSaved' | 'log'>;
+type DirectNutrition = (request: FastifyRequest) => Pick<NutritionStore, 'intake' | 'lookupSaved' | 'log'>;
+export type InternalNutrition = (request: FastifyRequest) => Pick<NutritionStore, 'intake' | 'lookupSaved' | 'log' | 'correct' | 'remove'>;
 
-async function sourceMessage(request: FastifyRequest, signal: AbortSignal): Promise<ConversationMessage> {
+export async function foodSourceMessage(request: FastifyRequest, signal: AbortSignal): Promise<ConversationMessage> {
   const direct = request.jarvisConversationMessage;
   if (direct?.role === 'dan' && request.principal && !request.agentPrincipal) return direct;
   const id = request.headers['x-jarvis-message-id'];
@@ -25,7 +26,25 @@ async function sourceMessage(request: FastifyRequest, signal: AbortSignal): Prom
   return message;
 }
 
-function receipt(row: Record<string, unknown>, key: string, sourceFingerprint: string, operation: string) {
+export function foodMessageIdentity(owner: string, source: ConversationMessage) {
+  if (!/^[1-9]\d{0,18}$/u.test(source.id) || BigInt(source.id) > 9223372036854775807n ||
+      !source.sessionId || !(source.at instanceof Date) || !Number.isFinite(source.at.getTime())) {
+    throw new ToolRefusal('The persisted food-log source is invalid.');
+  }
+  const id = createHash('sha256').update(`${owner.toLowerCase()}:${source.sessionId}:${source.id}:daily-intake`).digest('hex');
+  return { id, key: `jarvis-message:${id}`,
+    sourceFingerprint: createHash('sha256').update(canonicalJson({ text: source.text, at: source.at.toISOString() })).digest('hex') };
+}
+
+export async function activeFoodSession(request: FastifyRequest, source: ConversationMessage, signal: AbortSignal, clock: number) {
+  if (source.at.getTime() > clock + 300_000 || clock - source.at.getTime() > 600_000) throw new ToolRefusal('The food-log request is no longer current. No intake was logged.');
+  const session = await request.server.conversationStore?.getSession(source.sessionId);
+  signal.throwIfAborted();
+  if (!session || session.id !== source.sessionId || session.channel === 'phone' || session.endedAt !== null) throw new ToolRefusal('An active verified chat or voice session is required for food logging.');
+  return session;
+}
+
+export function foodReceipt(row: Record<string, unknown>, key: string, sourceFingerprint: string, operation: string, proposalFingerprint?: string) {
   if (!row || typeof row.id !== 'string' || row.idempotency_key !== key || !/^[1-9]\d*$/u.test(String(row.revision ?? ''))) {
     throw new ToolFailure('The intake may have committed, but its receipt is unavailable. Retry this same message; do not create a new intake.');
   }
@@ -35,11 +54,12 @@ function receipt(row: Record<string, unknown>, key: string, sourceFingerprint: s
     ? (provenance as Record<string, unknown>).jarvisIntake : null;
   if (!origin || typeof origin !== 'object' || Array.isArray(origin) ||
       (origin as Record<string, unknown>).sourceFingerprint !== sourceFingerprint ||
-      (origin as Record<string, unknown>).operation !== operation) throw new ToolRefusal('This message has a different committed intake. Read it before correcting it; no new intake was logged.');
+      (origin as Record<string, unknown>).operation !== operation ||
+      proposalFingerprint !== undefined && (origin as Record<string, unknown>).proposalFingerprint !== proposalFingerprint) throw new ToolRefusal('This message has a different committed intake. Read it before correcting it; no new intake was logged.');
   return { status: 'committed', record: projectNutritionRecord(row, 'history') };
 }
 
-export function dailyFoodTool(nutrition: InternalNutrition, now: () => number = Date.now): JarvisTool {
+export function dailyFoodTool(nutrition: DirectNutrition, now: () => number = Date.now): JarvisTool {
   return {
     name: 'daily_food',
     description: 'Log intake only from the current verified Dan message. log_favorite derives the saved name/alias from an explicit "Log [my] [favourite] NAME" request; quantities come only from that owned favourite. log_exact derives all values from an explicit label such as "Log yoghurt: 200 kcal, protein 10 g, carbs 20 g". Supply only the operation: no food name, nutrients, IDs, dates or confirmation flags. No extra approval for these direct explicit requests. New photo/portion estimates, conditional/time-qualified requests and unsupported wording are refused. Repeating the same message cannot create another intake. No Health export.',
@@ -57,22 +77,14 @@ export function dailyFoodTool(nutrition: InternalNutrition, now: () => number = 
       const input = raw as Record<string, unknown>;
       if (Object.keys(input).some(key => key !== 'operation') ||
           typeof input.operation !== 'string' || !['log_exact', 'log_favorite'].includes(input.operation)) throw new ToolRefusal('Choose an exact label or saved favourite without extra authority or quantities.');
-      const source = await sourceMessage(request, signal);
-      if (!/^[1-9]\d{0,18}$/u.test(source.id) || BigInt(source.id) > 9223372036854775807n ||
-          !source.sessionId || !Number.isFinite(source.at.getTime())) throw new ToolRefusal('The persisted food-log source is invalid.');
+      const source = await foodSourceMessage(request, signal);
+      const { id: digest, key, sourceFingerprint } = foodMessageIdentity(owner, source);
       const name = input.operation === 'log_favorite' ? favoriteIntent(source.text) : null;
       const exact = input.operation === 'log_exact' ? exactLabelIntent(source.text) : null;
-      const digest = createHash('sha256').update(`${owner.toLowerCase()}:${source.sessionId}:${source.id}:daily-intake`).digest('hex');
-      const key = `jarvis-message:${digest}`;
-      const sourceFingerprint = createHash('sha256').update(canonicalJson({ text: source.text, at: source.at.toISOString() })).digest('hex');
       const store = nutrition(request);
       const existing = await store.intake(key, signal);
-      if (existing) return receipt(existing, key, sourceFingerprint, input.operation);
-      const clock = now();
-      if (source.at.getTime() > clock + 300_000 || clock - source.at.getTime() > 600_000) throw new ToolRefusal('The food-log request is no longer current. No intake was logged.');
-      const session = await request.server.conversationStore?.getSession(source.sessionId);
-      signal.throwIfAborted();
-      if (!session || session.id !== source.sessionId || session.channel === 'phone' || session.endedAt !== null) throw new ToolRefusal('An active verified chat or voice session is required for food logging.');
+      if (existing) return foodReceipt(existing, key, sourceFingerprint, input.operation);
+      const session = await activeFoodSession(request, source, signal, now());
       let definition: FoodDefinition;
       let favorite: { id: string; fingerprint: string } | undefined;
       if (exact) definition = exact;
@@ -106,7 +118,7 @@ export function dailyFoodTool(nutrition: InternalNutrition, now: () => number = 
         if (!recovered) throw error;
         committed = recovered;
       }
-      return receipt(committed, key, sourceFingerprint, input.operation);
+      return foodReceipt(committed, key, sourceFingerprint, input.operation);
     },
   };
 }

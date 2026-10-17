@@ -1,4 +1,4 @@
-import { ToolRefusal } from '../../core/tool-registry.js';
+import { ToolFailure, ToolRefusal } from '../../core/tool-registry.js';
 
 export interface Nutrients {
   energyKcal: number;
@@ -59,6 +59,25 @@ export interface MealInput extends Nutrients {
 export interface FoodDefinition extends Nutrients {
   mealName: string; mealType: string | null; components: readonly unknown[];
   confidence: MealInput['confidence']; provenance: Readonly<Record<string, unknown>>;
+}
+export function storedMeal(row: Record<string, unknown>): MealInput {
+  try {
+    const input: MealInput = {
+      id: row.id as string, idempotencyKey: row.idempotency_key as string,
+      mealName: row.meal_name as string, mealType: row.meal_type as string | null,
+      components: JSON.parse(row.components_json as string), provenance: JSON.parse(row.nutrient_provenance_json as string),
+      occurredAt: row.occurred_at as string,
+      mealDate: row.meal_date instanceof Date ? row.meal_date.toISOString().slice(0, 10) : row.meal_date as string,
+      expiresAt: row.expires_at as string, energyKcal: row.energy_kcal as number,
+      proteinGrams: row.protein_grams as number | null, carbohydratesGrams: row.carbohydrates_grams as number | null,
+      fatGrams: row.fat_grams as number | null, fiberGrams: row.fiber_grams as number | null,
+      confidence: row.confidence as MealInput['confidence'], captureMethod: row.capture_method as MealInput['captureMethod'],
+    };
+    meal(input);
+    return input;
+  } catch {
+    throw new ToolFailure('Stored intake could not be read safely.');
+  }
 }
 export function foodDefinition(input: FoodDefinition): void {
   text(input.mealName, 2000); if (input.mealType !== null) text(input.mealType);

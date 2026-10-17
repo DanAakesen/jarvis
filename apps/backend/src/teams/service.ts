@@ -66,12 +66,14 @@ export interface TeamsNotificationService {
     actionKind: ConfirmationActionKind,
     summary: string,
     signal?: AbortSignal,
+    delivery?: 'browser',
   ): Promise<void>;
   runConfirmed<T>(
     actionKind: ConfirmationActionKind,
     summary: string,
     action: () => Promise<T>,
     signal?: AbortSignal,
+    delivery?: 'browser',
   ): Promise<T>;
   rememberMessage(activity: unknown, reference: ConversationReference): Promise<void>;
   receiveConfirmation(activity: unknown, reference: ConversationReference): Promise<boolean>;
@@ -275,13 +277,14 @@ export function createTeamsNotificationService({
     actionKind: ConfirmationActionKind,
     summary: string,
     signal?: AbortSignal,
+    delivery?: 'browser',
   ): Promise<void> {
-    if (!supportedKinds.has(actionKind) || !validText(summary)) {
+    if (!supportedKinds.has(actionKind) || !validText(summary) || delivery !== undefined && delivery !== 'browser') {
       throw new ToolRefusal('A valid confirmation request is required.');
     }
     signal?.throwIfAborted();
     let away: boolean;
-    try { away = connector ? await isAway() : false; }
+    try { away = delivery === 'browser' ? false : connector ? await isAway() : false; }
     catch { throw new ToolRefusal('Confirmation routing is unavailable.'); }
     if (!away && browserConfirmations.size >= maxPendingBrowserConfirmations) {
       throw new ToolRefusal('There are too many pending browser confirmations.');
@@ -399,9 +402,9 @@ export function createTeamsNotificationService({
       await sendVoiceNote(reference, text).catch(() => undefined);
     },
     requestConfirmation,
-    async runConfirmed(actionKind, summary, action, signal) {
+    async runConfirmed(actionKind, summary, action, signal, delivery) {
       if (typeof action !== 'function') throw new ToolRefusal('A confirmed action is required.');
-      await requestConfirmation(actionKind, summary, signal);
+      await requestConfirmation(actionKind, summary, signal, delivery);
       signal?.throwIfAborted();
       return action();
     },
