@@ -88,8 +88,8 @@ export function createPushStore(pool: sql.ConnectionPool): PushStore {
               WHERE id = @subscriptionId;
           ;WITH ranked AS (
             SELECT id, ROW_NUMBER() OVER (
-              ORDER BY CASE WHEN last_accepted_at IS NULL THEN 0 ELSE 1 END,
-                last_accepted_at, created_at, id
+              ORDER BY CASE WHEN last_accepted_at IS NULL THEN 1 ELSE 0 END,
+                last_accepted_at DESC, created_at DESC, id DESC
             ) AS row_number
             FROM dbo.push_subscriptions WITH (UPDLOCK, HOLDLOCK)
             WHERE owner_object_id = @owner
