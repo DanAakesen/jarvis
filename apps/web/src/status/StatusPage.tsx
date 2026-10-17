@@ -147,7 +147,7 @@ export function StatusPage({ backendUrl, getAccessToken }: AreaProps) {
       <p>{error}</p>
       {data && <p>Refresh failed. The previous snapshot remains visible; it does not establish current health.</p>}
     </div>}
-    {!data && pending && <Loader variant="core" label="Loading system status" />}
+    {!data && pending && <Loader variant="text" label="Loading system status" />}
     {data && <>
       <p className="system-status-snapshot">
         {error ? 'Previous snapshot' : pending ? 'Refreshing the recorded snapshot' : 'Backend responded with a status snapshot'}.
