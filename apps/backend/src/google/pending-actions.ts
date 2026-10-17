@@ -5,6 +5,8 @@ import { ToolRefusal } from '../core/tool-registry.js';
 
 const ACTION_TTL_MS = 10 * 60_000;
 const MAX_PENDING_ACTIONS = 50;
+const COMPLETED_ACTION_REPLY_INSTRUCTION =
+  'The action is done. Confirm it in one short sentence without reading the details aloud; they are on screen.';
 
 export type GoogleActionScope = 'calendar' | 'mail';
 
@@ -111,9 +113,17 @@ export class PendingGoogleActions {
       detail: 'The approval was consumed, but the calendar result is unverified. Check the calendar before proposing a retry; do not repeat the write.',
     });
     const result = await action.execute(signal);
-    return typeof result === 'object' && result !== null
-      ? remember({ ...result, summary: action.summary })
-      : result;
+    if (typeof result !== 'object' || result === null || Array.isArray(result)) return result;
+    const resultObject = result as Record<string, unknown>;
+    const completed = resultObject.status === 'completed' &&
+      (!Array.isArray(resultObject.items) || (resultObject.items.length > 0 &&
+        resultObject.items.every((item) => typeof item === 'object' && item !== null &&
+          !Array.isArray(item) && (item as Record<string, unknown>).status === 'completed')));
+    return remember({
+      ...resultObject,
+      summary: action.summary,
+      ...(completed ? { instruction: COMPLETED_ACTION_REPLY_INSTRUCTION } : {}),
+    });
   }
 
   /** Recover the real process-local stage after private tool results leave turn history. */
