@@ -45,6 +45,16 @@ Dan approved P12 on 12 October 2026 and explicitly released only P12-01 for this
 
 P12-09 owns actual `/daily/…` data routes, shared services used by pages and tools, module composition activation, source-message idempotency and revision invalidation. Use the existing sensitive tool registry/dispatcher with content-redacted audit outcomes; no new dispatcher. Writes publish revisions only after committed persistence. P12-15 owns gated navigation/pages, P12-16 owns native assistant views and bounded generated datasets. Same-ID updates and reconnect/refocus refresh reuse existing workspace/artifact lifecycle and owner-authorized reads; do not widen CSP, bridge or generated-code network permissions.
 
+The inactive internal direct-intake continuation adds an optional sensitive
+`daily_food` catalogue entry, independently of external MCP writes. Current
+verified Dan messages supply names/label quantities and stable source-message
+identity; model arguments contain only the operation. Saved favourite snapshots
+are checked under SQL locks, receipts recover actual committed rows, and
+deleted/source-edited retries refuse. This first explicit-command subset is not
+full internal estimate/correction/deletion or conversational acceptance.
+No production activation, private migration, provider/device action or native
+dependency change follows from this source work; #724 remains open.
+
 P12-03 owns SQL owner mapping to the configured Jarvis owner, stable source IDs, revisions and tombstones. No client or device selects a source owner. Future device credentials bind server-side to that owner with narrow upload, widget-read or nutrition-export scopes; no arbitrary tools or unrelated data. Coding sandboxes receive neither those credentials nor private Daily records. No production schema or device auth is implemented in P12-01.
 
 Daily implementation stays under `apps/backend/src/daily/**`, future frontend `apps/web/src/daily/**`, and minimal additive `packages/contracts/src/**`. Coordinate shared contract/composition/navigation files with ongoing Jarvis work; preserve all unrelated shared-doc entries. P12-01 avoids GitHub App, presence, Google approval, shell, voice and dispatcher runtime areas touched by other PRs. Later PRs must recheck ownership and latest main.

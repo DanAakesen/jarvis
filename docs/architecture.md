@@ -4576,6 +4576,39 @@ P8-33 scratch Chromium checks cover the adaptive quality thresholds, compact pho
 The reference lockfile is standalone, outside root workspaces, and contains the prototype's dependencies only. Bundled Three.js/Phosphor notices are retained. Physical/hardware performance, live activity/voice behavior and normal-rate flicker acceptance remain unverified; P8-31 adds no production Three.js dependency.
 ## Daily integration boundary (P12-01)
 
+### Inactive internal direct intake (17 October 2026)
+
+An optional fourth `createDailyModules(true, data, undefined, data.nutrition)`
+argument adds one sensitive `daily_food` tool to the existing dispatcher.
+The explicit store factory is independent of the MCP write gate; ordinary
+read-only and production composition remain unchanged. Capabilities report
+`internal-nutrition-rehearsal`, not read-only, when this writer is present.
+No new HTTP mutation route, model, queue, migration or audit store is added.
+
+The tool accepts only `log_exact` or `log_favorite`. It verifies the existing
+owner/hosted-agent boundary and current persisted Dan message; agent headers
+alone are insufficient. Fresh writes also require an active chat/voice session
+and a message no older than ten minutes, with the existing five-minute clock
+grace. Connector, phone and service identities cannot use this internal path.
+A conservative complete-command parser derives the saved name or explicit
+label values from that message. The parser never accepts model nutrients,
+confirmation flags or a model-selected food name; unsupported/ambiguous
+wording refuses rather than authorising an estimate.
+
+Owner/session/message derive one intake operation key. A source-text/time
+fingerprint binds recovered receipts to the same request and operation.
+Existing committed rows are recovered before re-resolving a changed favourite;
+deleted or source-mismatched rows refuse rather than creating duplicates.
+Known conflicting/uncertain log results also trigger one receipt readback:
+an overlapping commit may already own the key. Only a matching actual receipt
+can recover success; no write is retried and absent evidence retains failure.
+New favourite intake rechecks the selected owned DTO fingerprint under the
+existing SQL locks. `prepareMeal`, write validation, canonical intake storage
+and acknowledged-commit refresh remain shared. The original message instant
+supplies occurrence and Copenhagen date; session metadata supplies text/voice
+capture. Unknown macros and saved confidence/provenance are preserved.
+New estimates, full internal correction/deletion UX and activation remain open.
+
 ### Inactive nutrition MCP adapter (17 October 2026)
 
 An optional third `createDailyModules(true, data, connector)` argument installs

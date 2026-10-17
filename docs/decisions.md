@@ -1,5 +1,28 @@
 # Decisions
 
+## Ground direct internal intake in the verified human request (17 October 2026; P12-09)
+
+Use one optional sensitive internal food tool, separate from MCP enablement,
+without changing production composition. Accept only an operation; derive the
+saved name or exact-label quantities from the verified current Dan message.
+Message origin alone, model classification, caller nutrients and confirmation
+booleans are not write authority. Start with complete explicit command shapes;
+refuse unsupported wording rather than silently narrowing or estimating it.
+This is a bounded first integration, not a replacement conversational policy
+or completion of retained nutrition parity.
+
+Explicit saved-favourite selection accepts that existing saved portion without
+another confirmation, preserving its confidence and unknowns. New estimates
+remain outside this direct path. Derive one owner/session/message operation
+key, retain a source fingerprint and recover actual committed rows before
+looking up mutable favourite data. Refuse source edits and deleted intake
+instead of duplicating it. Check the selected favourite snapshot under SQL
+locks before first commit. Reuse the existing store, refresh and sensitive
+message-backed audit; no new ledger, dispatcher or schema is needed.
+After independent review's overlapping favourite-edit race, also read back the
+same operation key on a known conflict/uncertain result and validate its source
+binding. Never retry the write or replace absent evidence with success.
+
 ## Bind saved-food review to committed source snapshots (17 October 2026; P12-09)
 
 Group retained favourite/alias, plan save/soft-delete and canonical preference

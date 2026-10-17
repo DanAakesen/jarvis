@@ -5,14 +5,17 @@ import type { DailyData } from './query.js';
 import { dailyQueryTool } from './tools/query.js';
 import { dailyQueryRoutes } from './routes/query.js';
 import { dailyMcpRoutes, type DailyMcpOptions } from './mcp/routes.js';
+import { dailyFoodTool, type InternalNutrition } from './tools/food.js';
 
 /** Trusted server composition flag. Not a request parameter or a production rollout. */
-export function createDailyModules(enabled = false, data?: DailyData, connector?: DailyMcpOptions): readonly BackendModule[] {
+export function createDailyModules(enabled = false, data?: DailyData, connector?: DailyMcpOptions, internalNutrition?: InternalNutrition): readonly BackendModule[] {
   if (enabled !== true) return [];
   if (connector && !data) throw new TypeError('Daily MCP requires the shared Daily query service');
+  if (internalNutrition && !data) throw new TypeError('Daily food writes require shared Daily data');
+  const tools = data ? [dailyQueryTool(data.query), ...(internalNutrition ? [dailyFoodTool(internalNutrition)] : [])] : [];
   return [{
     id: dailyModuleId,
-    tools: data ? [dailyQueryTool(data.query)] : [],
+    tools,
     registerRoutes: async (app) => {
       if (data) {
         await app.register(dailyQueryRoutes(data.query));
@@ -38,11 +41,11 @@ export function createDailyModules(enabled = false, data?: DailyData, connector?
         return {
           module: dailyModuleId,
           version: dailyContractVersion,
-          stage: connector ? 'connector-rehearsal' : data ? 'read-only' : 'contract-only',
+          stage: internalNutrition ? 'internal-nutrition-rehearsal' : connector ? 'connector-rehearsal' : data ? 'read-only' : 'contract-only',
           reservedViewIds: dailyViewIds,
           // Reserved view IDs do not advertise unfinished functionality as available.
           pages: [],
-          tools: data ? ['daily_query'] : [],
+          tools: tools.map(tool => tool.name),
           ...(connector ? { connector: { transport: 'streamable-http', path: '/daily/mcp', writes: connector.writesEnabled === true } } : {}),
           ...(data ? {
             sources: Object.values(dailyQuerySources),

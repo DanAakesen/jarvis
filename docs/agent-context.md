@@ -1,5 +1,32 @@
 # Agent context
 
+## Internal Daily direct-intake checks (17 October 2026; P12-09)
+
+Use synthetic persisted Dan messages and owned favourite snapshots only.
+`daily_food` is an explicit fourth-argument composition; do not enable Daily,
+reuse MCP write permission, access original Daily or run live food/Health writes.
+The new direct syntax is intentionally limited to explicit saved-favourite
+names and exact labels. It does not implement estimate staging/acceptance or
+general conversational parity.
+
+The first local four-file selection passed 79 pure tests but could not import
+the tool suite because `jose` is missing. After tightening source-only name
+derivation, the three pure intent/model/record files pass 77 tests. These are
+not local tool, application or SQL acceptance. Keep the existing dependency
+graph; actual owner/session/registry/SQL cases require normal pinned CI.
+Use the approved Node 22.23.3 x64 and one worker, and run selectors from
+`apps/backend`. No restore, stubs, source aliases or substitute graph.
+The final local pure selection passes 81 tests, including literal multiword
+label names and qualified-request refusals. Changed-file ESLint passes with
+zero warnings. Its first run reported two unused mock parameters, subsequently
+corrected; that failed receipt is retained, not reported as a pass.
+Initial `a618a802` CI passed 192 backend files / 3656 tests, including 21 actual
+tool and 41 intent cases; SQL passed 11 files / 228 tests. All four actual
+CodeQL analyses passed. Review found the overlapping favourite-edit retry race,
+not covered by the original same-snapshot concurrency case. The successor adds
+actual receipt recovery and a gate-controlled SQL interleaving; initial green
+results do not qualify that correction.
+
 ## Voice preview correction checks (16 October 2026; P11-07)
 
 Use synthetic tool receipts, never private bookings or live Calendar writes.

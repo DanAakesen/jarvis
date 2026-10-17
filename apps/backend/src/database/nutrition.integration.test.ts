@@ -7,6 +7,7 @@ import { applyMigrations, readMigrations, readDownMigration, revertMigration } f
 import { NutritionStore } from '../daily/nutrition/store.js';
 import { type FoodDefinition, type MealInput, type PlanRequest } from '../daily/nutrition/model.js';
 import { favoriteFingerprint } from '../daily/records.js';
+import { dailyFoodTool } from '../daily/tools/food.js';
 
 const config = loadDatabaseConfig();
 if (!config || process.env.NODE_ENV !== 'test' || config.server !== '127.0.0.1') throw new Error('Nutrition tests require isolated loopback SQL Server');
@@ -287,5 +288,98 @@ describe('inactive nutrition services on real SQL Server', () => {
     expect(await persistence.feedback(key, null, signal(), 0n, reviewed)).toEqual(cleared);
     await expect(persistence.feedback(key, 'like', signal(), 0n, reviewed)).rejects.toThrow('preference changed');
     expect(await persistence.preferences([key], signal())).toMatchObject([{ preference: null, revision: '1' }]);
+  });
+  it('binds internal intake to the owned favourite snapshot and keeps the source unchanged on refusal', async () => {
+    const input = { id: 'internal-source', name: 'Internal source', aliases: [], definition: {
+      mealName: 'Synthetic internal source', mealType: null, components: [], confidence: 'accurate' as const, provenance: {},
+      energyKcal: 55, proteinGrams: null, carbohydratesGrams: null, fatGrams: null, fiberGrams: null,
+    } };
+    const saved = await store().favorite(input, { explicit: true, estimateAccepted: false, expectedRevision: 0n }, signal());
+    const reviewed = { ...authority, favorite: { id: input.id, fingerprint: favoriteFingerprint(saved) } };
+    await store().favorite({ ...input, definition: { ...input.definition, energyKcal: 66 } },
+      { explicit: true, estimateAccepted: false, expectedRevision: 1n }, signal());
+    const meal = { ...fixture('internal-log'), energyKcal: 55 };
+    await expect(store().log(meal, reviewed, signal())).rejects.toThrow('favourite changed');
+    expect(await store().intake(meal.idempotencyKey, signal())).toBeNull();
+    const otherStore = NutritionStore.forRequest(pool, request(other), now);
+    await expect(otherStore.log(meal, reviewed, signal())).rejects.toThrow('favourite changed');
+    const latest = (await store().findFavorite(input.name, signal()))!;
+    const accepted = { ...authority, favorite: { id: input.id, fingerprint: favoriteFingerprint(latest) } };
+    expect(await store().log({ ...meal, energyKcal: 66 }, accepted, signal())).toMatchObject({ energy_kcal: 66, revision: '1' });
+    expect(await store().log({ ...meal, energyKcal: 66 }, accepted, signal())).toMatchObject({ revision: '1' });
+  });
+  it('runs the internal source-to-SQL workflow with concurrent retry, favourite changes and deleted receipts', async () => {
+    const notifications: string[] = [];
+    const at = new Date(now()); const sessionId = randomUUID();
+    const source = { id: '123456', sessionId, role: 'dan' as const, text: 'Log my favourite Internal source', model: null, at };
+    const req = { ...request(owner), headers: {}, jarvisConversationMessage: source,
+      server: { ownerObjectId: owner, conversationStore: { getSession: async () => ({
+        id: sessionId, channel: 'voice', language: 'en', startedAt: at, endedAt: null,
+      }) } } } as unknown as FastifyRequest;
+    const tool = dailyFoodTool(request => NutritionStore.forRequest(pool, request, now, {
+      publish: change => { notifications.push(...change.sources); },
+    }), () => at.getTime());
+    const results = await Promise.all(Array.from({ length: 6 }, () => tool.execute({ operation: 'log_favorite' }, req, signal())));
+    expect(results.every(result => JSON.stringify(result) === JSON.stringify(results[0]))).toBe(true);
+    const saved = results[0] as { status: string; record: { idempotency_key: string; revision: string } };
+    expect(saved).toMatchObject({ status: 'committed', record: { revision: '1', energy_kcal: 66, protein_grams: null,
+      capture_method: 'voice', occurred_at: at.toISOString(), meal_date: '2026-10-12' } });
+    expect(notifications).toEqual(['daily.nutrition.meals']);
+    const current = (await store().findFavorite('Internal source', signal()))!;
+    await store().favorite({ id: current.id as string, name: 'Internal source', aliases: [], definition: {
+      mealName: 'Changed synthetic source', mealType: null, components: [], provenance: {}, confidence: 'accurate',
+      energyKcal: 99, proteinGrams: null, carbohydratesGrams: null, fatGrams: null, fiberGrams: null,
+    } }, { explicit: true, estimateAccepted: false, expectedRevision: BigInt(current.revision as string) }, signal());
+    expect(await tool.execute({ operation: 'log_favorite' }, req, signal())).toEqual(saved);
+    expect(notifications).toEqual(['daily.nutrition.meals']);
+    await store().remove(saved.record.idempotency_key, 1n, signal());
+    await expect(tool.execute({ operation: 'log_favorite' }, req, signal())).rejects.toThrow('not recreated');
+    req.jarvisConversationMessage = { ...source, id: '123457', text: 'Log "Synthetic exact": 123.5 kcal, protein 10 g' };
+    expect(await tool.execute({ operation: 'log_exact' }, req, signal())).toMatchObject({
+      status: 'committed', record: { energy_kcal: 123.5, protein_grams: 10, fat_grams: null, capture_method: 'voice' },
+    });
+    req.jarvisConversationMessage = { ...source, id: '123458' };
+    let prepared!: () => void; let firstMayCommit!: () => void;
+    const firstPrepared = new Promise<void>(resolve => { prepared = resolve; });
+    const commitGate = new Promise<void>(resolve => { firstMayCommit = resolve; });
+    let read!: () => void; let secondMayContinue!: () => void;
+    const secondRead = new Promise<void>(resolve => { read = resolve; });
+    const readGate = new Promise<void>(resolve => { secondMayContinue = resolve; });
+    const first = dailyFoodTool(request => {
+      const persistence = NutritionStore.forRequest(pool, request, now);
+      return { intake: persistence.intake.bind(persistence), lookupSaved: persistence.lookupSaved.bind(persistence),
+        log: async (input, authority, signal) => { prepared(); await commitGate; return persistence.log(input, authority, signal); } };
+    }, () => at.getTime());
+    const second = dailyFoodTool(request => {
+      const persistence = NutritionStore.forRequest(pool, request, now);
+      let initial = true;
+      return { lookupSaved: persistence.lookupSaved.bind(persistence), log: persistence.log.bind(persistence),
+        intake: async (key, signal) => {
+          const result = await persistence.intake(key, signal);
+          if (initial) { initial = false; read(); await readGate; }
+          return result;
+        } };
+    }, () => at.getTime());
+    const firstWrite = first.execute({ operation: 'log_favorite' }, req, signal());
+    let secondWrite: Promise<unknown> | undefined;
+    try {
+      await firstPrepared;
+      secondWrite = second.execute({ operation: 'log_favorite' }, req, signal());
+      await secondRead;
+      firstMayCommit();
+      const committed = await firstWrite;
+      const latest = (await store().findFavorite('Internal source', signal()))!;
+      await store().favorite({ id: latest.id as string, name: 'Internal source', aliases: [], definition: {
+        mealName: 'Racing synthetic source', mealType: null, components: [], provenance: {}, confidence: 'accurate',
+        energyKcal: 111, proteinGrams: null, carbohydratesGrams: null, fatGrams: null, fiberGrams: null,
+      } }, { explicit: true, estimateAccepted: false, expectedRevision: BigInt(latest.revision as string) }, signal());
+      secondMayContinue();
+      expect(await secondWrite).toEqual(committed);
+      expect(committed).toMatchObject({ status: 'committed', record: { energy_kcal: 99, revision: '1' } });
+    } finally {
+      firstMayCommit(); secondMayContinue();
+      await Promise.allSettled([firstWrite, ...(secondWrite ? [secondWrite] : [])]);
+    }
+    expect((await pool.request().query('SELECT COUNT(*) AS count FROM daily.nutrition_queue')).recordset[0].count).toBe(0);
   });
 });

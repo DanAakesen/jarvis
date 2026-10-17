@@ -5,6 +5,7 @@ import { NutritionStore } from './store.js';
 import type { MealInput } from './model.js';
 import { createDailyChanges } from '../revisions.js';
 import { dailyQuerySources } from '@jarvis/contracts';
+import { favoriteFingerprint } from '../records.js';
 
 const db = vi.hoisted(() => ({ query: vi.fn(), begin: vi.fn(), commit: vi.fn(), rollback: vi.fn(), cancel: vi.fn(), inputs: [] as unknown[][] }));
 vi.mock('mssql', async (original) => {
@@ -32,6 +33,20 @@ const store = () => NutritionStore.forRequest({} as sql.ConnectionPool, request,
 const signal = () => new AbortController().signal;
 beforeEach(() => { vi.clearAllMocks(); db.inputs.length = 0; db.begin.mockResolvedValue(undefined); db.commit.mockResolvedValue(undefined); db.rollback.mockResolvedValue(undefined); db.query.mockReset(); });
 describe('nutrition failure/privacy boundaries', () => {
+  it('checks an internal favourite snapshot under lock before creating intake', async () => {
+    const favorite = { id: 'favorite', energy_kcal: 100, protein_grams: null, revision: '1' };
+    const reviewed = { ...authority, favorite: { id: 'favorite', fingerprint: favoriteFingerprint(favorite) } };
+    db.query.mockResolvedValueOnce({ recordset: [] }).mockResolvedValueOnce({ recordset: [{ ...favorite, revision: '2' }] });
+    await expect(store().log(input, reviewed, signal())).rejects.toThrow('favourite changed');
+    expect(db.query).toHaveBeenCalledTimes(2);
+    expect(db.query).toHaveBeenNthCalledWith(2, expect.stringContaining('WITH (UPDLOCK,HOLDLOCK)'));
+    expect(db.rollback).toHaveBeenCalledOnce();
+    db.query.mockResolvedValueOnce({ recordset: [] }).mockResolvedValueOnce({ recordset: [favorite] })
+      .mockResolvedValueOnce({ recordset: [{ id: input.id }] });
+    await store().log(input, reviewed, signal());
+    expect(db.query).toHaveBeenNthCalledWith(5, expect.stringContaining('INSERT daily.nutrition_meals'));
+    expect(db.commit).toHaveBeenCalledOnce();
+  });
   it('publishes intake invalidation only after acknowledged commit, not during persistence or on replay', async () => {
     const changes = createDailyChanges(); const listener = vi.fn(); changes.subscribe(listener);
     const persistence = NutritionStore.forRequest({} as sql.ConnectionPool, request, () => '2026-10-12T15:00:00Z', changes);
