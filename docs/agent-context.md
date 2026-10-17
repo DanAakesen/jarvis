@@ -54,6 +54,11 @@ reapplies infrastructure and downstream components; missing/invalid readback
 blocks. No value, hash, new secret, role or version marker is retained.
 Supersession uses the verified applied-source horizon, not a newer docs-only
 `main` commit that has no deployment.
+The plan's read-only GitHub permissions include pull requests, required by
+commit-to-merged-PR qualification lookup. A backend receipt retains immutable
+image `origin` separately from `revision_origin`: an agent-only identity update
+is an applied backend revision produced by that agent job's actual run/attempt,
+not a newly built backend image. Reuse requires both provenance records.
 
 For a failed release, hand the existing builder its linked qualification PR,
 source/tree, run/attempt, exact artifact identity and fixed failing check/reason
@@ -66,7 +71,7 @@ the preceding attempt's compatible receipt.
 
 Local checks use the standard library:
 `$env:PYTHONPATH='.github\scripts'; python -m unittest discover -s .github\scripts\tests -v`.
-The 33 pipeline, seven formatter and 11 planner cases pass locally, as does
+The 35 pipeline, seven formatter and 11 planner cases pass locally, as does
 scoped Ruff. Pinned actionlint 1.7.12 passes after excluding only its unsupported
 schema diagnostic for the already-present `concurrency.queue: max`; the queue
 protection remains unchanged. Initial full local discovery found a missing
@@ -76,6 +81,10 @@ Initial exact-head CI39038876598 passed all12 jobs and CodeQL39038876634
 passed all four analyses at43aa1af2. Its review identified the secret-derived
 fingerprint issue above; the correction requires successor normal qualification,
 not reuse of that earlier green receipt. No secret-bearing release ran from it.
+Successor ca9a CI39039891173 and all four CodeQL39039891273 analyses passed.
+Its exact-head review identified the missing plan read scope and agent-created
+backend revision attribution above; both corrections require new-source normal
+qualification, not a duplicate rerun of ca9a's green checks.
 Copilot-ready dispatch passes its existing PR number to CI; the result gate
 checks live ready-PR/head/base identity before emitting qualification evidence.
 Offline Bicep CI pins 0.44.1. Existing local

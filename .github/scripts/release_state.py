@@ -145,6 +145,7 @@ def component_selection(inputs: dict, previous: dict | None, compatible: bool) -
             and prior.get("fingerprint") == inputs[part]
             and valid_version(part, prior.get("version"))
             and valid_origin(prior.get("origin"))
+            and (part != "backend" or valid_origin(prior.get("revision_origin")))
         )
     # Reapplying Bicep can overwrite app configuration; agent activation can
     # mutate backend identity. Re-prove all downstream application state.
@@ -284,6 +285,8 @@ def record() -> int:
                 "origin": {"run": context["run"], "attempt": int(attempt) if applied else None,
                            "source": context["source"]},
             }
+            if part == "backend":
+                components[part]["revision_origin"] = components[part]["origin"].copy()
         else:
             components[part] = {**plan["previous"]["components"][part], "state": "reused"}
     if (plan and plan["selected"]["agent"]
@@ -292,11 +295,19 @@ def record() -> int:
         components["backend"]["state"] = "unknown"
     backend_revision = os.environ.get("AGENT_BACKEND_REVISION", "")
     if backend_revision and components["backend"].get("version"):
-        if not re.fullmatch(r"[A-Za-z0-9-]{1,256}", backend_revision):
+        agent_attempt = attempts.get("agent", "")
+        if (not re.fullmatch(r"[A-Za-z0-9-]{1,256}", backend_revision)
+                or not str(agent_attempt).isdigit()
+                or not 1 <= int(agent_attempt) <= context["attempt"]):
             raise ValueError("Invalid backend revision")
         components["backend"]["version"] = {
             **components["backend"]["version"], "revision": backend_revision,
         }
+        components["backend"]["revision_origin"] = {
+            "run": context["run"], "attempt": int(agent_attempt), "source": context["source"],
+        }
+        if results.get("agent", {}).get("result") == "success":
+            components["backend"]["state"] = "applied"
     expected = {"plan", *PARTS, "smoke", "acceptance"}
     superseded = bool(plan and plan["superseded"])
     accepted = (

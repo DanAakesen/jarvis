@@ -41,7 +41,8 @@ def previous():
     return {**CONTEXT, "kind": "deployment", "applied_head": CONTEXT["source"],
             "accepted": False, "components": {
         part: {"state": "applied", "fingerprint": INPUTS[part],
-               "version": copy.deepcopy(VERSIONS[part]), "origin": CONTEXT.copy()}
+               "version": copy.deepcopy(VERSIONS[part]), "origin": CONTEXT.copy(),
+               **({"revision_origin": CONTEXT.copy()} if part == "backend" else {})}
         for part in PARTS
     }}
 
@@ -270,6 +271,13 @@ class ReleaseStateTests(unittest.TestCase):
         # inputs, never the old queued run's source SHA or accepted flag.
         self.assertFalse(any(component_selection(INPUTS, prior, True).values()))
 
+    def test_backend_reuse_requires_separate_revision_provenance(self):
+        prior = previous()
+        del prior["components"]["backend"]["revision_origin"]
+        selected = component_selection(INPUTS, prior, True)
+        self.assertTrue(selected["backend"])
+        self.assertFalse(selected["web"])
+
     def test_infra_reapplication_invalidates_downstream_configuration(self):
         prior = previous()
         prior["components"]["infra"]["state"] = "unknown"
@@ -308,7 +316,8 @@ class ReleaseStateTests(unittest.TestCase):
             finally:
                 os.chdir(previous_cwd)
 
-    def record_fixture(self, selected, results, prior=None, evidence=None, attempts=None):
+    def record_fixture(self, selected, results, prior=None, evidence=None, attempts=None,
+                       backend_revision=""):
         with tempfile.TemporaryDirectory() as folder:
             previous_cwd = os.getcwd()
             os.chdir(folder)
@@ -322,6 +331,7 @@ class ReleaseStateTests(unittest.TestCase):
                 with (patch.dict(os.environ, ENV | {
                     "RESULTS": json.dumps(results), "VERSIONS": json.dumps(VERSIONS),
                     "APPLY_ATTEMPTS": json.dumps(attempts or dict.fromkeys(PARTS, "1")),
+                    "AGENT_BACKEND_REVISION": backend_revision,
                     "GITHUB_STEP_SUMMARY": "summary",
                 }), patch("release_state.identity", return_value=CONTEXT)):
                     code = record()
@@ -385,6 +395,28 @@ class ReleaseStateTests(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertEqual(receipt["attempt"], 2)
         self.assertEqual(receipt["components"]["backend"]["origin"]["attempt"], 1)
+
+    def test_agent_only_revision_keeps_image_origin_and_records_actual_revision_producer(self):
+        selected = dict.fromkeys(PARTS, False) | {"agent": True}
+        results = {key: {"result": "success" if selected.get(key, True) else "skipped"}
+                   for key in ("plan", *PARTS, "smoke", "acceptance")}
+        prior = previous()
+        image_origin = {"source": "e" * 40, "run": 30, "attempt": 1}
+        prior["components"]["backend"]["origin"] = image_origin
+        prior["components"]["backend"]["revision_origin"] = image_origin
+        with patch.dict(CONTEXT, {"attempt": 2}):
+            code, receipt = self.record_fixture(
+                selected, results, prior=prior, evidence=smoke(),
+                attempts={"agent": "1"}, backend_revision="backend--0002",
+            )
+        self.assertEqual(code, 0)
+        backend = receipt["components"]["backend"]
+        self.assertEqual(backend["state"], "applied")
+        self.assertEqual(backend["origin"], image_origin)
+        self.assertEqual(backend["version"]["image"], VERSIONS["backend"]["image"])
+        self.assertEqual(backend["version"]["revision"], "backend--0002")
+        self.assertEqual(backend["revision_origin"],
+                         {"source": CONTEXT["source"], "run": 42, "attempt": 1})
 
 
 class ArtifactTests(unittest.TestCase):
@@ -459,6 +491,8 @@ class SafeFailureTests(unittest.TestCase):
             "if: steps.inputs.outputs.infra == 'false' && steps.inputs.outputs.superseded != 'true'",
             deploy,
         )
+        plan_permissions = deploy[deploy.index("  plan:"):deploy.index("    outputs:")]
+        self.assertIn("pull-requests: read", plan_permissions)
 
     def test_cli_invalid_inputs_never_echo_payloads(self):
         with tempfile.TemporaryDirectory() as folder:

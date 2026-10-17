@@ -4544,6 +4544,10 @@ flowchart LR
   source cannot overwrite newer state; superseded receipts carry the newer
   applied-source horizon forward. Applied versions retain original source
   identity instead of claiming every component was rebuilt at the new release SHA.
+  Backend image `origin` remains separate from `revision_origin` when an
+  agent-only deployment updates backend identity: the new revision is applied
+  by the agent job's actual run/attempt, while its image keeps its original
+  producer. Both provenance records are required before backend reuse.
 - **Order:** one deploy at a time in the `jarvis-production-deploy` group, shared with Runner deploy, with `queue: max` and no cancellation, so quick merges deploy one after another.
 - **Infra:** [`deploy_bicep.sh`](../.github/scripts/deploy_bicep.sh) deploys `infra/main.bicep` as the fixed deployment `jarvis-infra`, keeping the running backend image. Later jobs and Runner deploy read its outputs.
 - **Backend:** builds `apps/backend/Dockerfile` in ACR, then updates the Container App to the image digest. On the first deploy the app does not exist yet, so Bicep creates it with that image. The job waits until the new revision is the latest ready revision; the previous revision serves until then.

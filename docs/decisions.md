@@ -31,6 +31,11 @@ identity. Mismatch invalidates downstream state; unavailable readback blocks.
 This avoids a low-entropy secret hash without adding a key, role or manual
 version-marker dependency. Supersession follows verified applied state, not
 an unrelated newer docs-only main commit.
+Grant the read-only plan job GitHub pull-request read permission for the
+commit-association endpoint. Keep backend image origin distinct from revision
+origin: an agent identity update produces/re-proves its backend revision under
+that agent job's original attempt, including an acceptance-only retry. It does
+not rebuild the image or transfer image provenance to the new source.
 
 Deterministic code/permission/contracts and runtime readiness remain distinct
 from live model conversation acceptance. All are still required where selected:
@@ -43,7 +48,9 @@ The old generic `agent_error` has no proven cause.
 
 Status: initial43aa CI39038876598 passed all12 jobs and all four CodeQL
 analyses; review found the secret-derived fingerprint issue, corrected with
-synthetic comparison/redaction fixtures. Successor exact-candidate CI/review
+synthetic comparison/redaction fixtures. ca9a CI39039891173 and its four
+analyses passed; exact-head review additionally identified the plan read scope
+and backend revision attribution corrections above. Successor exact-candidate CI/review
 and the integration owner's main-only release remain
 separate gates. Remote-enabled runtime state is not exposed here and is not
 claimed. Private Daily/provider/device/access boundaries remain unchanged.
