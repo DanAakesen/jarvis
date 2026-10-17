@@ -4638,3 +4638,13 @@ provider or persisted-state change is needed.
 This is a local source correction from released `3d3a12ab`, not full #811
 acceptance. PM owns independent review, integration and rendered readback;
 historical 502 causation remains unestablished and #717/#741 stays parked.
+
+## P9-121 — One Projects section (17 October 2026)
+
+Keep the managed-project list, Add project action, and new-project defaults
+inside the existing Projects section and `#projects` anchor. The seven defaults
+remain in the existing page-level Settings save/PATCH; the Projects disclosure
+shows unsaved, pending, confirmed, and failed states with an in-section retry,
+without changing the endpoint or project PATCH contract. Add project previews
+the saved defaults that the backend applies, and each registered project keeps
+its own editable settings.
