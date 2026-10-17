@@ -165,12 +165,13 @@ describe('shared glass tokens', () => {
     expect(ruleDeclaration(source, /\.job-tab-list\s*\{([^}]*)\}/, 'overflow-x')).toBe('auto');
     expect(ruleDeclaration(source, /\.job-tab-list\s*\{([^}]*)\}/, 'overflow-y')).toBe('hidden');
     expect(ruleDeclaration(source, /\.job-tab-list\s*\{([^}]*)\}/, 'scrollbar-width')).toBe('none');
-    expect(source).toContain(':is(.job-tabs, .job-tab-list) { width: 100%; flex-direction: column; overflow: visible; }');
+    expect(source).toContain('.app-shell[data-phone="true"] .job-tab-list { display: none; }');
+    expect(source).toContain('.app-shell[data-phone="true"] .job-tabs { flex: 0 0 auto; margin-left: auto; }');
   });
 
   it('keeps phone window rows at their natural touch height rather than the desktop tab basis', () => {
     const source = readFileSync('src/styles.css', 'utf8');
-    const phoneRow = /\.app-shell\[data-phone="true"\]\[data-windows-open="true"\] \.workspace-tab-item\s*\{([^}]*)\}/;
+    const phoneRow = /\.app-shell\[data-phone="true"\]\[data-windows-open="true"\] \.window-tabstrip \.workspace-tab-item\s*\{([^}]*)\}/;
     expect(ruleDeclaration(source, phoneRow, 'flex')).toBe('0 0 auto');
     expect(ruleDeclaration(source, phoneRow, 'width')).toBe('100%');
     expect(ruleDeclaration(source, phoneRow, 'max-width')).toBe('none');
@@ -249,7 +250,7 @@ describe('shared glass tokens', () => {
 
   it('keeps text, muted text, and icon contrast on glass surfaces in both appearances', () => {
     const source = readFileSync('src/styles.css', 'utf8');
-    const appSource = readFileSync('src/App.tsx', 'utf8');
+    const iconSource = readFileSync('src/ShellIcon.tsx', 'utf8');
     const appearances = [
       { selector: ':root' },
       { selector: ':root\\[data-theme="dark"\\]' },
@@ -273,7 +274,7 @@ describe('shared glass tokens', () => {
     expect(shellIconColor).toBe('var(--text-muted)');
     expect(sidebarTextColor).toBe('var(--text-muted)');
     expect(topbarTextColor).toBe('var(--text-muted)');
-    expect(appSource).toContain("stroke: 'currentColor'");
+    expect(iconSource).toContain("stroke: 'currentColor'");
 
     for (const { selector } of appearances) {
       const text = parseColor(tokenValue(source, selector, '--text'));

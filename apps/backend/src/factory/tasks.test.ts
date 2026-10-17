@@ -8,11 +8,15 @@ import type {
 } from './task-store.js';
 import type { GitHubAppTokenIssuer } from '../github-app.js';
 import type { ProjectStore } from './projects.js';
+import { GitHubIssueRequestError, type GitHubIssueClient } from '../github/issues.js';
+import { startIssueTask } from './issues.js';
 
 const config = { ...loadConfig({}), logLevel: 'silent' as const };
 const headers = { authorization: ['Bearer', ['e30', 'e30', 'sig'].join('.')].join(' ') };
 const runnerHeaders = { ...headers, 'x-jarvis-session-id': 'session-42' };
 const apps: ReturnType<typeof buildApp>[] = [];
+const submissionId = '00000000-0000-4000-8000-000000000001';
+const createInput = { submissionId, projectId: '7', title: 'Fix the bug', request: 'Find and fix it', agent: 'codex' };
 
 const task: TaskRecord = {
   id: '42',
@@ -76,8 +80,19 @@ function fixture(
   githubAppTokenIssuer?: GitHubAppTokenIssuer,
 ) {
   const eventHub = createEventHub<TaskEventMessage>();
+  const submissions = new Map<string, { fingerprint: string; statusCode: number | null; response: unknown }>();
   const store: TaskStore = {
-    create: vi.fn(async () => task),
+    claimCreation: vi.fn(async (id, fingerprint) => {
+      const existing = submissions.get(id);
+      if (existing) return { kind: 'existing' as const, ...existing };
+      submissions.set(id, { fingerprint, statusCode: null, response: null });
+      return { kind: 'claimed' as const };
+    }),
+    completeCreation: vi.fn(async (id, statusCode, response) => {
+      const existing = submissions.get(id)!;
+      submissions.set(id, { ...existing, statusCode, response });
+    }),
+    create: vi.fn(async (input) => ({ ...task, ...input })),
     list: vi.fn(async () => [task]),
     linkIssueNumberIfUnlinked: vi.fn(async () => null),
     get: vi.fn(async () => detail),
@@ -103,8 +118,16 @@ function fixture(
     } satisfies TaskEventMessage)),
     ...overrides,
   };
+  const github = {
+    createIssue: vi.fn(async () => ({ number: 8, url: 'https://github.com/example/project/issues/8' })),
+    addLabels: vi.fn(async () => {}),
+    readIssue: vi.fn(),
+    readComments: vi.fn(async () => []),
+    readAgentRules: vi.fn(async () => ''),
+  } as unknown as GitHubIssueClient;
   const app = buildApp(config, undefined, {
     taskStore: store,
+    githubIssueClient: github,
     projectStore: { list: vi.fn(async () => [{
       id: '7', name: 'Jarvis', repo: 'DanAakesen/jarvis', default_branch: 'main',
       default_agent: 'codex', policy: 'deliver_pr', merge_rules: null,
@@ -119,7 +142,7 @@ function fixture(
     auth,
   });
   apps.push(app);
-  return { app, store, eventHub };
+  return { app, store, github, eventHub };
 }
 
 afterEach(async () => {
@@ -194,24 +217,32 @@ describe('factory tasks API', () => {
   });
 
   it('creates a Ready board task for an active project', async () => {
-    const { app, store } = fixture();
+    const { app, store, github } = fixture();
     const response = await app.inject({
       method: 'POST',
       url: '/factory/tasks',
       headers,
-      payload: { projectId: '7', title: 'Fix the bug', request: 'Find and fix it', agent: 'codex' },
+      payload: { ...createInput, agent: 'copilot', modelOverride: 'model-a', reasoningOverride: 'high', priority: 2 },
     });
     expect(response.statusCode).toBe(201);
-    expect(response.json()).toMatchObject({ id: '42', source: 'board', state: 'Ready' });
-    expect(store.create).toHaveBeenCalledWith({
-      projectId: '7', title: 'Fix the bug', request: 'Find and fix it', agent: 'codex',
+    expect(response.json()).toMatchObject({
+      id: '42', source: 'board', state: 'Ready', issueNumber: 8,
+      issueUrl: 'https://github.com/example/project/issues/8',
     });
+    expect(github.createIssue).toHaveBeenCalledExactlyOnceWith('DanAakesen/jarvis', 'Fix the bug', 'Find and fix it');
+    expect(store.create).toHaveBeenCalledWith({
+      projectId: '7', title: 'Fix the bug', request: 'Find and fix it', agent: 'copilot',
+      issueNumber: 8, source: 'board', modelOverride: 'model-a', reasoningOverride: 'high', priority: 2,
+    });
+    expect(vi.mocked(github.createIssue).mock.invocationCallOrder[0])
+      .toBeLessThan(vi.mocked(store.create).mock.invocationCallOrder[0]!);
+    expect(github.addLabels).not.toHaveBeenCalled();
   });
 
   it('validates create input and reports a missing active project', async () => {
-    const missingProject = fixture({ create: vi.fn(async () => null) });
+    const missingProject = fixture();
     expect((await missingProject.app.inject({
-      method: 'POST', url: '/factory/tasks', headers, payload: { projectId: '7', title: 'Task', request: 'Work' },
+      method: 'POST', url: '/factory/tasks', headers, payload: { ...createInput, projectId: '9' },
     })).statusCode).toBe(404);
     expect((await missingProject.app.inject({
       method: 'POST', url: '/factory/tasks', headers, payload: { projectId: '7', title: '', request: 'Work' },
@@ -220,6 +251,103 @@ describe('factory tasks API', () => {
       method: 'POST', url: '/factory/tasks', headers,
       payload: { projectId: '9223372036854775808', title: 'Task', request: 'Work' },
     })).statusCode).toBe(400);
+  });
+
+  it('replays a repeated submission and rejects a changed payload without another issue', async () => {
+    const { app, store, github } = fixture();
+    const first = await app.inject({ method: 'POST', url: '/factory/tasks', headers, payload: createInput });
+    const repeated = await app.inject({ method: 'POST', url: '/factory/tasks', headers, payload: createInput });
+    expect(first.statusCode).toBe(201);
+    expect(repeated.json()).toEqual(first.json());
+    expect((await app.inject({
+      method: 'POST', url: '/factory/tasks', headers, payload: { ...createInput, title: 'Different' },
+    })).statusCode).toBe(409);
+    expect(github.createIssue).toHaveBeenCalledTimes(1);
+    expect(store.create).toHaveBeenCalledTimes(1);
+  });
+
+  it('claims overlapping submissions before sending any GitHub write', async () => {
+    const { app, store, github } = fixture();
+    const responses = await Promise.all([1, 2].map(() =>
+      app.inject({ method: 'POST', url: '/factory/tasks', headers, payload: createInput })));
+    expect(responses.every(({ statusCode }) => statusCode === 201 || statusCode === 409)).toBe(true);
+    expect(github.createIssue).toHaveBeenCalledTimes(1);
+    expect(store.create).toHaveBeenCalledTimes(1);
+  });
+
+  it('fails closed before GitHub when the durable claim cannot be stored', async () => {
+    const { app, github, store } = fixture({
+      claimCreation: vi.fn(async () => { throw new Error('storage failed'); }),
+    });
+    const response = await app.inject({ method: 'POST', url: '/factory/tasks', headers, payload: createInput });
+    expect(response.statusCode).toBe(503);
+    expect(response.json().error).toContain('No GitHub write was attempted');
+    expect(github.createIssue).not.toHaveBeenCalled();
+    expect(store.create).not.toHaveBeenCalled();
+  });
+
+  it('identifies the issue if recording the result fails and blocks another write', async () => {
+    const { app, github, store } = fixture({
+      completeCreation: vi.fn(async () => { throw new Error('storage failed'); }),
+    });
+    const response = await app.inject({ method: 'POST', url: '/factory/tasks', headers, payload: createInput });
+    expect(response.statusCode).toBe(503);
+    expect(response.json()).toMatchObject({ issueNumber: 8, issueUrl: 'https://github.com/example/project/issues/8' });
+    expect(response.json().error).toContain('issue #8 was created');
+    const repeated = await app.inject({ method: 'POST', url: '/factory/tasks', headers, payload: createInput });
+    expect(repeated.statusCode).toBe(409);
+    expect(repeated.json().error).toContain('outcome is uncertain');
+    expect(github.createIssue).toHaveBeenCalledTimes(1);
+    expect(store.create).toHaveBeenCalledTimes(1);
+  });
+
+  it('rejects unsafe public issue content before any write', async () => {
+    const { app, github, store } = fixture();
+    const response = await app.inject({
+      method: 'POST', url: '/factory/tasks', headers, payload: { ...createInput, request: 'Use the password' },
+    });
+    expect(response.statusCode).toBe(400);
+    expect(github.createIssue).not.toHaveBeenCalled();
+    expect(store.create).not.toHaveBeenCalled();
+  });
+
+  it.each([403, 429, 503])('reports issue creation failure %s without creating a task or retrying the write', async (status) => {
+    const { app, store, github } = fixture();
+    vi.mocked(github.createIssue).mockRejectedValue(new GitHubIssueRequestError(status));
+    for (const attempt of [1, 2]) {
+      const response = await app.inject({ method: 'POST', url: '/factory/tasks', headers, payload: createInput });
+      expect(response.statusCode, `attempt ${attempt}`).toBe(502);
+      expect(response.json().error).toContain('No task was created');
+    }
+    expect(store.create).not.toHaveBeenCalled();
+    expect(github.createIssue).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(['throw', 'null'])('returns the created issue when task persistence returns %s', async (outcome) => {
+    const { app, github } = fixture({
+      create: outcome === 'throw' ? vi.fn(async () => { throw new Error('storage failed'); }) : vi.fn(async () => null),
+    });
+    for (const attempt of [1, 2]) {
+      const response = await app.inject({ method: 'POST', url: '/factory/tasks', headers, payload: createInput });
+      expect(response.statusCode, `attempt ${attempt}`).toBe(502);
+      expect(response.json()).toMatchObject({ issueNumber: 8, issueUrl: 'https://github.com/example/project/issues/8' });
+      expect(response.json().error).toContain('issue #8 was created');
+    }
+    expect(github.createIssue).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not start a second task when the created issue later carries the Jarvis label', async () => {
+    const { app, store, github } = fixture();
+    await app.inject({ method: 'POST', url: '/factory/tasks', headers, payload: createInput });
+    store.findActiveByIssue = vi.fn(async () => ({ ...task, issueNumber: 8 }));
+    vi.mocked(github.readIssue).mockResolvedValue({
+      number: 8, title: 'Fix the bug', body: 'Find and fix it', labels: ['Jarvis'],
+      state: 'open', url: 'https://github.com/example/project/issues/8', isPullRequest: false,
+    });
+    expect((await startIssueTask({
+      tasks: store, projects: app.projectStore, github, project: '7', issue: 8,
+    })).kind).toBe('existing');
+    expect(store.create).toHaveBeenCalledTimes(1);
   });
 
   it('lists filtered and bounded task results', async () => {

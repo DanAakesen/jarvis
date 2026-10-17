@@ -18,6 +18,11 @@ describe('presence modes', () => {
     render(<PresenceChip backendUrl="https://api.example.com" getAccessToken={getAccessToken} />);
 
     const trigger = await screen.findByRole('button', { name: 'Presence: Present. Change mode' });
+    expect(trigger.textContent).toBe('');
+    expect(trigger.title).toBe('Presence: Present');
+    expect(trigger.querySelector('.presence-dot')).toBeNull();
+    expect(trigger.closest('.presence-chip')?.getAttribute('style')).toContain('--tone: var(--presence-present)');
+    const presentIcon = trigger.querySelector('svg')!.innerHTML;
     expect(trigger.getAttribute('aria-expanded')).toBe('false');
     fireEvent.click(trigger);
     expect(trigger.getAttribute('aria-expanded')).toBe('true');
@@ -30,11 +35,21 @@ describe('presence modes', () => {
     fireEvent.click(trigger);
     fireEvent.click(screen.getByRole('button', { name: 'On the move' }));
     expect(await screen.findByRole('button', { name: 'Presence: On the move. Change mode' })).not.toBeNull();
+    expect(trigger.textContent).toBe('');
+    expect(trigger.title).toBe('Presence: On the move');
+    expect(trigger.closest('.presence-chip')?.getAttribute('style')).toContain('--tone: var(--presence-move)');
+    const movingIcon = trigger.querySelector('svg')!.innerHTML;
+    expect(movingIcon).not.toBe(presentIcon);
     expect(trigger.getAttribute('aria-expanded')).toBe('false');
     expect(fetchMock).toHaveBeenCalledWith('https://api.example.com/presence', expect.objectContaining({ method: 'PUT', body: JSON.stringify({ mode: 'on_the_move' }) }));
 
     act(() => publishPresenceMode('away'));
     expect(screen.getByRole('button', { name: 'Presence: Away. Change mode' })).not.toBeNull();
+    expect(trigger.textContent).toBe('');
+    expect(trigger.title).toBe('Presence: Away');
+    expect(trigger.closest('.presence-chip')?.getAttribute('style')).toContain('--tone: var(--presence-away)');
+    const awayIcon = trigger.querySelector('svg')!.innerHTML;
+    expect(new Set([presentIcon, movingIcon, awayIcon]).size).toBe(3);
     act(() => publishPresenceMode('asleep'));
     expect(screen.getByRole('button', { name: 'Presence: Away. Change mode' })).not.toBeNull();
   });
