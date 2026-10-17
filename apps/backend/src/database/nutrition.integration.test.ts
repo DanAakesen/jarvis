@@ -1,11 +1,17 @@
 import { randomUUID } from 'node:crypto';
 import sql from 'mssql';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { FastifyRequest } from 'fastify';
 import { loadDatabaseConfig } from './config.js';
 import { applyMigrations, readMigrations, readDownMigration, revertMigration } from './migrations.js';
 import { NutritionStore } from '../daily/nutrition/store.js';
 import { type FoodDefinition, type MealInput, type PlanRequest } from '../daily/nutrition/model.js';
+import { favoriteFingerprint } from '../daily/records.js';
+import { dailyFoodTool } from '../daily/tools/food.js';
+import { dailyFoodReviewTool } from '../daily/tools/food-review.js';
+import { dailySavedFoodTool } from '../daily/tools/saved-food.js';
+import { createTeamsNotificationService } from '../teams/service.js';
+import { createTeamsNotificationStore } from './teams-notification-store.js';
 
 const config = loadDatabaseConfig();
 if (!config || process.env.NODE_ENV !== 'test' || config.server !== '127.0.0.1') throw new Error('Nutrition tests require isolated loopback SQL Server');
@@ -25,7 +31,7 @@ const fixture = (id: string): MealInput => ({ id, idempotencyKey: `synthetic-${i
   captureMethod: 'text', confidence: 'accurate', provenance: { energyKcal: { source: 'user-exact', unit: 'kcal' } } });
 beforeAll(async () => {
   await admin.connect(); await admin.request().batch(`CREATE DATABASE [${database}];`); await pool.connect();
-  await applyMigrations(pool, (await readMigrations()).filter(({ name }) => /^004[123]_daily/u.test(name)));
+  await applyMigrations(pool, await readMigrations());
 });
 afterAll(async () => {
   await pool.close();
@@ -143,7 +149,19 @@ describe('inactive nutrition services on real SQL Server', () => {
     expect(await store().findFavorite(input.name, signal())).toMatchObject({ source_meal_id: null, source_idempotency_key: null, energy_kcal: 55, protein_grams: null });
     expect((await store().history({ limit: 100 }, signal())).rows).toHaveLength(before);
     await expect(store().favorite({ ...input, sourceIdempotencyKey: 'synthetic-01' }, { explicit: true, estimateAccepted: false }, signal())).rejects.toThrow('exactly one');
-    await expect(revertMigration(pool, (await readMigrations()).filter(({ name }) => /^004[123]_daily/u.test(name)), await readDownMigration('0043_daily_favorite_definitions.sql'))).rejects.toThrow('cannot discard');
+    const isolated = `${database}_favorite_rollback`; const rollbackPool = new sql.ConnectionPool({ ...config!, database: isolated });
+    try {
+      await admin.request().batch(`CREATE DATABASE [${isolated}];`); await rollbackPool.connect();
+      const migrations = (await readMigrations()).filter(({ name }) => /^004[123]_daily/u.test(name));
+      await applyMigrations(rollbackPool, migrations);
+      await rollbackPool.request().input('owner', sql.UniqueIdentifier, owner).query(`INSERT daily.nutrition_favorites
+        (owner_object_id,id,favorite_name,normalized_name,meal_name,energy_kcal,confidence,source_meal_id,source_idempotency_key,nutrient_provenance_json,created_at,updated_at)
+        VALUES(@owner,N'synthetic',N'Synthetic',N'synthetic',N'Synthetic',55,N'accurate',NULL,NULL,N'{}',N'2026-01-01',N'2026-01-01');`);
+      await expect(revertMigration(rollbackPool, migrations, await readDownMigration('0043_daily_favorite_definitions.sql'))).rejects.toThrow('cannot discard');
+    } finally {
+      await rollbackPool.close();
+      await admin.request().batch(`IF DB_ID(N'${isolated}') IS NOT NULL BEGIN ALTER DATABASE [${isolated}] SET SINGLE_USER WITH ROLLBACK IMMEDIATE; DROP DATABASE [${isolated}]; END;`);
+    }
   });
   it('refuses unknown-plan rollback with the exact isolated applied manifest', async () => {
     const isolated = `${database}_rollback`; const rollbackPool = new sql.ConnectionPool({ ...config!, database: isolated });
@@ -206,5 +224,307 @@ describe('inactive nutrition services on real SQL Server', () => {
     expect(await store().intake(input.idempotencyKey, signal())).toBeNull();
     expect(await store().log(input, authority, signal())).toMatchObject({ protein_grams: null, occurred_at: input.occurredAt });
     expect(await store().correct({ ...input, mealType: 'other' }, 1n, signal())).toMatchObject({ revision: '2', protein_grams: null });
+  });
+  it('resolves retained full-length and non-key historical names without changing favourite-key rules', async () => {
+    const names = ['x'.repeat(257), 'x'.repeat(2000), '\u5bff\u53f8', '\ufb03'.repeat(100)];
+    for (const [index, mealName] of names.entries()) {
+      const input = { ...fixture(`lookup-history-${index}`), mealName };
+      await store().log(input, authority, signal());
+      expect(await store().lookupSaved(mealName, signal())).toMatchObject({
+        source: 'history', row: { id: input.id, meal_name: mealName, protein_grams: null },
+      });
+      expect(await NutritionStore.forRequest(pool, request(other), now).lookupSaved(mealName, signal())).toBeNull();
+    }
+  });
+  it('returns real favourite revisions, replays without notifications and rejects changed reviewed sources under SQL locks', async () => {
+    const notifications: string[] = [];
+    const persistence = NutritionStore.forRequest(pool, request(owner), now, { publish: change => { notifications.push(...change.sources); } });
+    const meal = fixture('saved-write-source');
+    await persistence.log(meal, authority, signal());
+    const favorite = { id: 'saved-write-favorite', name: 'Synthetic saved-write favourite', aliases: [], sourceIdempotencyKey: meal.idempotencyKey };
+    const approved = { explicit: true, estimateAccepted: true, expectedRevision: 0n, sourceRevision: 1n };
+    const saved = await persistence.favorite(favorite, approved, signal());
+    expect(saved).toMatchObject({ id: favorite.id, revision: '1', source_idempotency_key: meal.idempotencyKey, protein_grams: null });
+    expect(await persistence.favorite(favorite, approved, signal())).toEqual(saved);
+    expect(notifications.filter(source => source === 'daily.nutrition.favorites')).toHaveLength(1);
+    const reviewed = new Map([[favorite.id, favoriteFingerprint(saved)]]);
+    await persistence.correct({ ...meal, energyKcal: 200 }, 1n, signal());
+    await expect(persistence.favorite(favorite, { ...approved, expectedRevision: 1n }, signal())).rejects.toThrow('reviewed source intake changed');
+    expect((await persistence.favorite(favorite, { ...approved, expectedRevision: 1n, sourceRevision: 2n }, signal())).revision).toBe('2');
+    const plan: PlanRequest = { id: 'saved-write-plan', name: 'Synthetic saved-write plan', description: null,
+      entries: (['breakfast', 'lunch', 'dinner'] as const).map(slot => ({ slot, favoriteId: favorite.id })) };
+    await expect(persistence.savePlan(plan, 0n, signal(), reviewed)).rejects.toThrow('reviewed plan favourite changed');
+    const sources = await persistence.favoriteRecords([favorite.id, favorite.id], signal());
+    expect(sources).toHaveLength(1);
+    const current = new Map([[favorite.id, favoriteFingerprint(sources[0]!)]]);
+    const result = await persistence.savePlan(plan, 0n, signal(), current);
+    expect(result).toMatchObject({ revision: '1', energy_kcal: 600, protein_grams: null });
+    expect(await persistence.savePlan(plan, 0n, signal(), current)).toEqual(result);
+    expect(notifications.filter(source => source === 'daily.nutrition.plans')).toHaveLength(1);
+    const otherStore = NutritionStore.forRequest(pool, request(other), now);
+    await expect(otherStore.favoriteRecords([favorite.id], signal())).rejects.toThrow('owned favourite');
+    expect(await otherStore.planRecord(plan.id, signal())).toBeNull();
+    expect((await pool.request().query('SELECT COUNT(*) AS count FROM daily.nutrition_queue')).recordset[0].count).toBe(0);
+  });
+  it('retains versioned clears and refuses delayed preference replays after newer intent without losing owner isolation', async () => {
+    const key = 'saved-write-favorite'; const persistence = store();
+    const favorite = (await persistence.favoriteRecords([key], signal()))[0]!;
+    const reviewed = favoriteFingerprint(favorite);
+    expect(await persistence.preferences([key], signal())).toEqual([]);
+    expect((await persistence.feedback(key, 'like', signal(), 0n, reviewed))?.revision).toBe('1');
+    expect((await persistence.feedback(key, 'like', signal(), 0n, reviewed))?.revision).toBe('1');
+    expect(await persistence.feedback(key, null, signal(), 1n, reviewed)).toMatchObject({ preference: null, revision: '2' });
+    await expect(persistence.feedback(key, 'like', signal(), 0n, reviewed)).rejects.toThrow('preference changed');
+    expect((await persistence.feedback(key, null, signal(), 1n, reviewed))?.revision).toBe('2');
+    expect((await persistence.feedback(key, 'dislike', signal(), 2n, reviewed))?.revision).toBe('3');
+    await expect(persistence.feedback(key, null, signal(), 1n, reviewed)).rejects.toThrow('preference changed');
+    expect(await persistence.disliked([key], signal())).toEqual(new Set([key]));
+    expect(await NutritionStore.forRequest(pool, request(other), now).preferences([key], signal())).toEqual([]);
+    await expect(persistence.feedback(key, null, signal(), 3n, '0'.repeat(64))).rejects.toThrow('reviewed favourite changed');
+    expect(await persistence.preferences([key], signal())).toMatchObject([{ meal_key: key, preference: 'dislike', revision: '3' }]);
+  });
+  it('stores the first clear as revision 1 and rejects an older initial like', async () => {
+    const persistence = store(); const key = 'definition';
+    const reviewed = favoriteFingerprint((await persistence.favoriteRecords([key], signal()))[0]!);
+    expect(await persistence.preferences([key], signal())).toEqual([]);
+    const cleared = await persistence.feedback(key, null, signal(), 0n, reviewed);
+    expect(cleared).toMatchObject({ meal_key: key, preference: null, revision: '1' });
+    expect(await persistence.feedback(key, null, signal(), 0n, reviewed)).toEqual(cleared);
+    await expect(persistence.feedback(key, 'like', signal(), 0n, reviewed)).rejects.toThrow('preference changed');
+    expect(await persistence.preferences([key], signal())).toMatchObject([{ preference: null, revision: '1' }]);
+  });
+  it('binds internal intake to the owned favourite snapshot and keeps the source unchanged on refusal', async () => {
+    const input = { id: 'internal-source', name: 'Internal source', aliases: [], definition: {
+      mealName: 'Synthetic internal source', mealType: null, components: [], confidence: 'accurate' as const, provenance: {},
+      energyKcal: 55, proteinGrams: null, carbohydratesGrams: null, fatGrams: null, fiberGrams: null,
+    } };
+    const saved = await store().favorite(input, { explicit: true, estimateAccepted: false, expectedRevision: 0n }, signal());
+    const reviewed = { ...authority, favorite: { id: input.id, fingerprint: favoriteFingerprint(saved) } };
+    await store().favorite({ ...input, definition: { ...input.definition, energyKcal: 66 } },
+      { explicit: true, estimateAccepted: false, expectedRevision: 1n }, signal());
+    const meal = { ...fixture('internal-log'), energyKcal: 55 };
+    await expect(store().log(meal, reviewed, signal())).rejects.toThrow('favourite changed');
+    expect(await store().intake(meal.idempotencyKey, signal())).toBeNull();
+    const otherStore = NutritionStore.forRequest(pool, request(other), now);
+    await expect(otherStore.log(meal, reviewed, signal())).rejects.toThrow('favourite changed');
+    const latest = (await store().findFavorite(input.name, signal()))!;
+    const accepted = { ...authority, favorite: { id: input.id, fingerprint: favoriteFingerprint(latest) } };
+    expect(await store().log({ ...meal, energyKcal: 66 }, accepted, signal())).toMatchObject({ energy_kcal: 66, revision: '1' });
+    expect(await store().log({ ...meal, energyKcal: 66 }, accepted, signal())).toMatchObject({ revision: '1' });
+  });
+  it('runs the internal source-to-SQL workflow with concurrent retry, favourite changes and deleted receipts', async () => {
+    const notifications: string[] = [];
+    const at = new Date(now()); const sessionId = randomUUID();
+    const source = { id: '123456', sessionId, role: 'dan' as const, text: 'Log my favourite Internal source', model: null, at };
+    const req = { ...request(owner), headers: {}, jarvisConversationMessage: source,
+      server: { ownerObjectId: owner, conversationStore: { getSession: async () => ({
+        id: sessionId, channel: 'voice', language: 'en', startedAt: at, endedAt: null,
+      }) } } } as unknown as FastifyRequest;
+    const tool = dailyFoodTool(request => NutritionStore.forRequest(pool, request, now, {
+      publish: change => { notifications.push(...change.sources); },
+    }), () => at.getTime());
+    const results = await Promise.all(Array.from({ length: 6 }, () => tool.execute({ operation: 'log_favorite' }, req, signal())));
+    expect(results.every(result => JSON.stringify(result) === JSON.stringify(results[0]))).toBe(true);
+    const saved = results[0] as { status: string; record: { idempotency_key: string; revision: string } };
+    expect(saved).toMatchObject({ status: 'committed', record: { revision: '1', energy_kcal: 66, protein_grams: null,
+      capture_method: 'voice', occurred_at: at.toISOString(), meal_date: '2026-10-12' } });
+    expect(notifications).toEqual(['daily.nutrition.meals']);
+    const current = (await store().findFavorite('Internal source', signal()))!;
+    await store().favorite({ id: current.id as string, name: 'Internal source', aliases: [], definition: {
+      mealName: 'Changed synthetic source', mealType: null, components: [], provenance: {}, confidence: 'accurate',
+      energyKcal: 99, proteinGrams: null, carbohydratesGrams: null, fatGrams: null, fiberGrams: null,
+    } }, { explicit: true, estimateAccepted: false, expectedRevision: BigInt(current.revision as string) }, signal());
+    expect(await tool.execute({ operation: 'log_favorite' }, req, signal())).toEqual(saved);
+    expect(notifications).toEqual(['daily.nutrition.meals']);
+    await store().remove(saved.record.idempotency_key, 1n, signal());
+    await expect(tool.execute({ operation: 'log_favorite' }, req, signal())).rejects.toThrow('not recreated');
+    req.jarvisConversationMessage = { ...source, id: '123457', text: 'Log "Synthetic exact": 123.5 kcal, protein 10 g' };
+    expect(await tool.execute({ operation: 'log_exact' }, req, signal())).toMatchObject({
+      status: 'committed', record: { energy_kcal: 123.5, protein_grams: 10, fat_grams: null, capture_method: 'voice' },
+    });
+    req.jarvisConversationMessage = { ...source, id: '123458' };
+    let prepared!: () => void; let firstMayCommit!: () => void;
+    const firstPrepared = new Promise<void>(resolve => { prepared = resolve; });
+    const commitGate = new Promise<void>(resolve => { firstMayCommit = resolve; });
+    let read!: () => void; let secondMayContinue!: () => void;
+    const secondRead = new Promise<void>(resolve => { read = resolve; });
+    const readGate = new Promise<void>(resolve => { secondMayContinue = resolve; });
+    const first = dailyFoodTool(request => {
+      const persistence = NutritionStore.forRequest(pool, request, now);
+      return { intake: persistence.intake.bind(persistence), lookupSaved: persistence.lookupSaved.bind(persistence),
+        log: async (input, authority, signal) => { prepared(); await commitGate; return persistence.log(input, authority, signal); } };
+    }, () => at.getTime());
+    const second = dailyFoodTool(request => {
+      const persistence = NutritionStore.forRequest(pool, request, now);
+      let initial = true;
+      return { lookupSaved: persistence.lookupSaved.bind(persistence), log: persistence.log.bind(persistence),
+        intake: async (key, signal) => {
+          const result = await persistence.intake(key, signal);
+          if (initial) { initial = false; read(); await readGate; }
+          return result;
+        } };
+    }, () => at.getTime());
+    const firstWrite = first.execute({ operation: 'log_favorite' }, req, signal());
+    let secondWrite: Promise<unknown> | undefined;
+    try {
+      await firstPrepared;
+      secondWrite = second.execute({ operation: 'log_favorite' }, req, signal());
+      await secondRead;
+      firstMayCommit();
+      const committed = await firstWrite;
+      const latest = (await store().findFavorite('Internal source', signal()))!;
+      await store().favorite({ id: latest.id as string, name: 'Internal source', aliases: [], definition: {
+        mealName: 'Racing synthetic source', mealType: null, components: [], provenance: {}, confidence: 'accurate',
+        energyKcal: 111, proteinGrams: null, carbohydratesGrams: null, fatGrams: null, fiberGrams: null,
+      } }, { explicit: true, estimateAccepted: false, expectedRevision: BigInt(latest.revision as string) }, signal());
+      secondMayContinue();
+      expect(await secondWrite).toEqual(committed);
+      expect(committed).toMatchObject({ status: 'committed', record: { energy_kcal: 99, revision: '1' } });
+    } finally {
+      firstMayCommit(); secondMayContinue();
+      await Promise.allSettled([firstWrite, ...(secondWrite ? [secondWrite] : [])]);
+    }
+    expect((await pool.request().query('SELECT COUNT(*) AS count FROM daily.nutrition_queue')).recordset[0].count).toBe(0);
+  });
+  it('requires actual one-time browser approvals for internal estimate/correction/deletion on real SQL', async () => {
+    const at = new Date(now()); const sessionId = randomUUID();
+    const controller = new AbortController();
+    const notifications: string[] = [];
+    const send = vi.fn(async () => { throw new Error('Synthetic health proposal must never be sent to Teams'); });
+    const confirmations = createTeamsNotificationService({
+      ownerObjectId: owner, tenantId: other, store: createTeamsNotificationStore(pool),
+      connector: { send }, isAway: async () => true, onWebNotification: async () => {},
+    });
+    const source = { id: '223001', sessionId, role: 'dan' as const, text: 'I ate a synthetic portion; review the estimate.', model: null, at };
+    const req = { ...request(owner), headers: {}, jarvisConversationMessage: source,
+      server: { ownerObjectId: owner, teamsNotifications: confirmations, awayModeStore: { read: async () => ({ mode: 'present' }) },
+        conversationStore: { getSession: async () => ({ id: sessionId, channel: 'voice', language: 'en', startedAt: at, endedAt: null }) } } } as unknown as FastifyRequest;
+    const tool = dailyFoodReviewTool(request => NutritionStore.forRequest(pool, request, now, {
+      publish: change => { notifications.push(...change.sources); },
+    }), () => at.getTime());
+    let active: Promise<unknown> | undefined;
+    const review = async (input: unknown, decision: 'approve' | 'reject' = 'approve') => {
+      active = tool.execute(input, req, controller.signal);
+      const outcome = active.then(value => ({ ok: true as const, value }), error => ({ ok: false as const, error }));
+      await vi.waitFor(() => expect(confirmations.pendingBrowserConfirmations()).toHaveLength(1), { timeout: 10000 });
+      const confirmation = confirmations.pendingBrowserConfirmations()[0]!;
+      const remaining = Date.parse(confirmation.expiresAt) - Date.now();
+      expect(remaining).toBeGreaterThan(0);
+      expect(remaining).toBeLessThanOrEqual(120_000);
+      expect(confirmation.summary).toContain('Nothing has changed');
+      expect(send).not.toHaveBeenCalled();
+      expect(await confirmations.resolveBrowserConfirmation(confirmation.id, decision)).toBe(true);
+      const result = await outcome;
+      expect(await confirmations.resolveBrowserConfirmation(confirmation.id, 'approve')).toBe(false);
+      if (!result.ok) throw result.error;
+      return result.value;
+    };
+    try {
+      const input = { change: { operation: 'log_estimate', food: { mealName: 'Synthetic reviewed portion', energyKcal: 200 } } };
+      const logged = await review(input) as { record: { idempotency_key: string } };
+      expect(logged).toMatchObject({ status: 'committed', record: { energy_kcal: 200, protein_grams: null, confidence: 'estimate', capture_method: 'voice', revision: '1' } });
+      expect(await tool.execute(input, req, controller.signal)).toEqual(logged);
+      expect(notifications).toEqual(['daily.nutrition.meals']);
+      const key = logged.record.idempotency_key;
+      req.jarvisConversationMessage = { ...source, id: '223002', text: 'Correct this synthetic portion.' };
+      const correction = { change: { operation: 'correct', idempotencyKey: key, expectedRevision: '1',
+        changes: { energyKcal: 222, occurredAt: '2026-01-01T23:30:00Z' } } };
+      const corrected = await review(correction);
+      expect(corrected).toMatchObject({ status: 'committed', record: { energy_kcal: 222, meal_date: '2026-01-02', revision: '2' } });
+      expect(await tool.execute(correction, req, controller.signal)).toEqual(corrected);
+      expect(notifications).toHaveLength(2);
+      req.jarvisConversationMessage = { ...source, id: '223003', text: 'Delete this synthetic portion.' };
+      const deletion = { change: { operation: 'delete', idempotencyKey: key, expectedRevision: '2' } };
+      await expect(review(deletion, 'reject')).rejects.toThrow('rejected');
+      expect(await store().intake(key, signal())).toMatchObject({ deleted_at: null, revision: '2' });
+      expect(notifications).toHaveLength(2);
+      req.jarvisConversationMessage = { ...source, id: '223004', text: 'Now approve deletion of this synthetic portion.' };
+      expect(await review(deletion)).toMatchObject({ status: 'committed', record: { energy_kcal: 222, revision: '3', deleted_at: expect.any(String) } });
+      expect(await tool.execute(deletion, req, controller.signal)).toMatchObject({ status: 'already-deleted', record: { revision: '3' } });
+      expect(notifications).toHaveLength(3);
+      expect(confirmations.pendingBrowserConfirmations()).toEqual([]);
+      expect(send).not.toHaveBeenCalled();
+      expect((await pool.request().query('SELECT COUNT(*) AS count FROM daily.nutrition_queue')).recordset[0].count).toBe(0);
+    } finally {
+      controller.abort();
+      if (active) await Promise.allSettled([active]);
+    }
+  });
+  it('commits internal saved-food reviews once through real native approval, refreshes preferences and never logs intake', async () => {
+    const at = new Date(now()); const sessionId = randomUUID(); const controller = new AbortController();
+    const notifications: string[] = [];
+    const mealsBefore = (await pool.request().query('SELECT COUNT(*) AS count FROM daily.nutrition_meals')).recordset[0].count;
+    const send = vi.fn(async () => { throw new Error('Saved health data must never be sent to Teams'); });
+    const confirmations = createTeamsNotificationService({
+      ownerObjectId: owner, tenantId: other, store: createTeamsNotificationStore(pool),
+      connector: { send }, isAway: async () => true, onWebNotification: async () => {},
+    });
+    const source = { id: '224001', sessionId, role: 'dan' as const, text: 'Review this synthetic saved-food change.', model: null, at };
+    const req = { ...request(owner), headers: {}, jarvisConversationMessage: source,
+      server: { ownerObjectId: owner, teamsNotifications: confirmations, awayModeStore: { read: async () => ({ mode: 'present' }) },
+        conversationStore: { getSession: async () => ({ id: sessionId, channel: 'voice', language: 'en', startedAt: at, endedAt: null }) } } } as unknown as FastifyRequest;
+    const tool = dailySavedFoodTool(request => NutritionStore.forRequest(pool, request, now, {
+      publish: change => { notifications.push(...change.sources); },
+    }), () => at.getTime());
+    let active: Promise<unknown> | undefined;
+    const review = async (input: unknown, decision: 'approve' | 'reject' = 'approve') => {
+      active = tool.execute(input, req, controller.signal);
+      const outcome = active.then(value => ({ ok: true as const, value }), error => ({ ok: false as const, error }));
+      await vi.waitFor(() => expect(confirmations.pendingBrowserConfirmations()).toHaveLength(1), { timeout: 10000 });
+      const confirmation = confirmations.pendingBrowserConfirmations()[0]!;
+      expect(confirmation.summary).toContain('Nothing has changed');
+      expect(confirmation.summary.length).toBeLessThanOrEqual(4000);
+      expect(Date.parse(confirmation.expiresAt) - Date.now()).toBeGreaterThan(0);
+      expect(Date.parse(confirmation.expiresAt) - Date.now()).toBeLessThanOrEqual(120000);
+      expect(await confirmations.resolveBrowserConfirmation(confirmation.id, decision)).toBe(true);
+      const result = await outcome;
+      expect(await confirmations.resolveBrowserConfirmation(confirmation.id, 'approve')).toBe(false);
+      if (!result.ok) throw result.error;
+      return result.value;
+    };
+    try {
+      const favoriteInput = { operation: 'save_favorite', name: 'Internal native saved favourite', aliases: ['Internal native alias'],
+        expectedRevision: '0', definition: { mealName: 'Synthetic saved portion', energyKcal: 200, proteinGrams: null, fatGrams: 0 } };
+      const saved = await review(favoriteInput) as { record: { id: string } };
+      expect(saved).toMatchObject({ status: 'committed', record: { revision: '1', energy_kcal: 200, protein_grams: null, confidence: 'estimate' } });
+      expect(await tool.execute(favoriteInput, req, controller.signal)).toMatchObject({ status: 'already-applied' });
+      const favoriteId = saved.record.id;
+      expect(await tool.execute({ operation: 'lookup_saved', name: 'Internal native alias' }, req, controller.signal)).toMatchObject({
+        source: 'favorite', intakeLogged: false, record: { id: favoriteId },
+      });
+      expect(notifications).toEqual(['daily.nutrition.favorites']);
+      req.jarvisConversationMessage = { ...source, id: '224002' };
+      const planInput = { operation: 'save_plan', name: 'Internal native saved plan', expectedRevision: '0', description: null,
+        entries: ['breakfast', 'lunch', 'dinner'].map(slot => ({ slot, favoriteId })) };
+      const savedPlan = await review(planInput) as { record: { id: string } };
+      expect(savedPlan).toMatchObject({ status: 'committed', record: { revision: '1', energy_kcal: 600, protein_grams: null, fat_grams: 0 } });
+      expect(await tool.execute(planInput, req, controller.signal)).toMatchObject({ status: 'already-applied' });
+      req.jarvisConversationMessage = { ...source, id: '224003' };
+      const like = { operation: 'set_feedback', favoriteId, expectedRevision: '0', preference: 'like' };
+      expect(await review(like)).toMatchObject({ record: { preference: 'like', revision: '1' } });
+      expect(await tool.execute(like, req, controller.signal)).toMatchObject({ status: 'already-applied' });
+      req.jarvisConversationMessage = { ...source, id: '224004' };
+      expect(await review({ ...like, expectedRevision: '1', preference: null })).toMatchObject({ record: { preference: null, revision: '2' } });
+      expect(await tool.execute({ operation: 'read_preferences', favoriteIds: [favoriteId] }, req, controller.signal)).toMatchObject({
+        records: [{ favoriteId, preference: null, revision: '2', status: 'cleared' }],
+      });
+      await expect(tool.execute(like, req, controller.signal)).rejects.toThrow('changed');
+      expect(notifications).toEqual(['daily.nutrition.favorites', 'daily.nutrition.plans', 'daily.nutrition.favorites', 'daily.nutrition.favorites']);
+      req.jarvisConversationMessage = { ...source, id: '224005' };
+      const deletion = { operation: 'delete_plan', id: savedPlan.record.id, expectedRevision: '1' };
+      await expect(review(deletion, 'reject')).rejects.toThrow('rejected');
+      expect((await store().planRecord(savedPlan.record.id, signal()))?.deleted_at).toBeNull();
+      expect(await review(deletion)).toMatchObject({ status: 'committed', record: { revision: '2', deleted_at: expect.any(String) } });
+      expect(await tool.execute(deletion, req, controller.signal)).toMatchObject({ status: 'already-deleted' });
+      expect(notifications).toHaveLength(5);
+      expect(notifications[4]).toBe('daily.nutrition.plans');
+      expect((await pool.request().query('SELECT COUNT(*) AS count FROM daily.nutrition_meals')).recordset[0].count).toBe(mealsBefore);
+      expect((await pool.request().query('SELECT COUNT(*) AS count FROM daily.nutrition_queue')).recordset[0].count).toBe(0);
+      expect(confirmations.pendingBrowserConfirmations()).toEqual([]);
+      expect(send).not.toHaveBeenCalled();
+    } finally {
+      controller.abort();
+      if (active) await Promise.allSettled([active]);
+    }
   });
 });

@@ -3,6 +3,9 @@ import sql from 'mssql';
 import type { FastifyRequest } from 'fastify';
 import { NutritionStore } from './store.js';
 import type { MealInput } from './model.js';
+import { createDailyChanges } from '../revisions.js';
+import { dailyQuerySources } from '@jarvis/contracts';
+import { favoriteFingerprint } from '../records.js';
 
 const db = vi.hoisted(() => ({ query: vi.fn(), begin: vi.fn(), commit: vi.fn(), rollback: vi.fn(), cancel: vi.fn(), inputs: [] as unknown[][] }));
 vi.mock('mssql', async (original) => {
@@ -30,6 +33,174 @@ const store = () => NutritionStore.forRequest({} as sql.ConnectionPool, request,
 const signal = () => new AbortController().signal;
 beforeEach(() => { vi.clearAllMocks(); db.inputs.length = 0; db.begin.mockResolvedValue(undefined); db.commit.mockResolvedValue(undefined); db.rollback.mockResolvedValue(undefined); db.query.mockReset(); });
 describe('nutrition failure/privacy boundaries', () => {
+  it('checks an internal favourite snapshot under lock before creating intake', async () => {
+    const favorite = { id: 'favorite', energy_kcal: 100, protein_grams: null, revision: '1' };
+    const reviewed = { ...authority, favorite: { id: 'favorite', fingerprint: favoriteFingerprint(favorite) } };
+    db.query.mockResolvedValueOnce({ recordset: [] }).mockResolvedValueOnce({ recordset: [{ ...favorite, revision: '2' }] });
+    await expect(store().log(input, reviewed, signal())).rejects.toThrow('favourite changed');
+    expect(db.query).toHaveBeenCalledTimes(2);
+    expect(db.query).toHaveBeenNthCalledWith(2, expect.stringContaining('WITH (UPDLOCK,HOLDLOCK)'));
+    expect(db.rollback).toHaveBeenCalledOnce();
+    db.query.mockResolvedValueOnce({ recordset: [] }).mockResolvedValueOnce({ recordset: [favorite] })
+      .mockResolvedValueOnce({ recordset: [{ id: input.id }] });
+    await store().log(input, reviewed, signal());
+    expect(db.query).toHaveBeenNthCalledWith(5, expect.stringContaining('INSERT daily.nutrition_meals'));
+    expect(db.commit).toHaveBeenCalledOnce();
+  });
+  it('publishes intake invalidation only after acknowledged commit, not during persistence or on replay', async () => {
+    const changes = createDailyChanges(); const listener = vi.fn(); changes.subscribe(listener);
+    const persistence = NutritionStore.forRequest({} as sql.ConnectionPool, request, () => '2026-10-12T15:00:00Z', changes);
+    let commit!: () => void; let entered!: () => void;
+    const gate = new Promise<void>(resolve => { commit = resolve; });
+    const started = new Promise<void>(resolve => { entered = resolve; });
+    db.commit.mockImplementationOnce(() => { entered(); return gate; });
+    db.query.mockResolvedValueOnce({ recordset: [] }).mockResolvedValueOnce({ recordset: [{ id: '01' }] });
+    const pending = persistence.log(input, authority, signal());
+    await started; expect(listener).not.toHaveBeenCalled();
+    commit(); await pending;
+    expect(listener).toHaveBeenCalledExactlyOnceWith({ owner, sources: [dailyQuerySources.meals] });
+    const row = { id: input.id, idempotency_key: input.idempotencyKey, meal_name: input.mealName, meal_type: input.mealType,
+      occurred_at: input.occurredAt, meal_date: new Date(input.mealDate), expires_at: input.expiresAt,
+      energy_kcal: input.energyKcal, protein_grams: null, carbohydrates_grams: null, fat_grams: null, fiber_grams: null,
+      confidence: input.confidence, capture_method: input.captureMethod, components_json: '[]', nutrient_provenance_json: '{}',
+      revision: '1', deleted_at: null };
+    db.query.mockResolvedValueOnce({ recordset: [row] });
+    await persistence.log(input, authority, signal());
+    expect(listener).toHaveBeenCalledTimes(1);
+    db.query.mockResolvedValueOnce({ recordset: [row] }).mockResolvedValueOnce({ recordset: [{ ...row, revision: '2' }] });
+    await persistence.correct(input, 1n, signal());
+    expect(listener).toHaveBeenCalledTimes(2);
+    db.query.mockResolvedValueOnce({ recordset: [{ ...row, revision: '2' }] });
+    await persistence.correct(input, 1n, signal());
+    expect(listener).toHaveBeenCalledTimes(2);
+    db.query.mockResolvedValueOnce({ recordset: [{ ...row, revision: '2' }] }).mockResolvedValueOnce({ recordset: [{ ...row, revision: '3', deleted_at: '2026-10-12T15:00:00Z' }] });
+    await persistence.remove(input.idempotencyKey, 2n, signal());
+    expect(listener).toHaveBeenCalledTimes(3);
+    db.query.mockResolvedValueOnce({ recordset: [{ ...row, revision: '3', deleted_at: '2026-10-12T15:00:00Z' }] });
+    await persistence.remove(input.idempotencyKey, 2n, signal());
+    expect(listener).toHaveBeenCalledTimes(3);
+  });
+  it('does not publish a failed/uncertain commit or deadlock attempt as a new revision', async () => {
+    const changes = createDailyChanges(); const listener = vi.fn(); changes.subscribe(listener);
+    const persistence = NutritionStore.forRequest({} as sql.ConnectionPool, request, () => '2026-10-12T15:00:00Z', changes);
+    db.query.mockResolvedValueOnce({ recordset: [] }).mockResolvedValueOnce({ recordset: [{ id: '01' }] });
+    db.commit.mockRejectedValueOnce(new Error('synthetic commit uncertainty'));
+    await expect(persistence.log(input, authority, signal())).rejects.toThrow('no successful write');
+    expect(listener).not.toHaveBeenCalled();
+    db.query.mockRejectedValue(Object.assign(new Error('synthetic deadlock'), { number: 1205 }));
+    await expect(persistence.log(input, authority, signal())).rejects.toThrow();
+    expect(listener).not.toHaveBeenCalled();
+  });
+  const sourceRow = { id: '01', idempotency_key: input.idempotencyKey, meal_name: input.mealName, meal_type: null,
+    energy_kcal: 100, protein_grams: null, carbohydrates_grams: null, fat_grams: null, fiber_grams: null,
+    components_json: '[]', nutrient_provenance_json: '{}', confidence: 'accurate', deleted_at: null };
+  it('refuses a changed source revision while holding the intake lock, before any favourite mutation', async () => {
+    db.query.mockResolvedValueOnce({ recordset: [{ ...sourceRow, revision: '2' }] });
+    await expect(store().favorite({ id: 'favorite', name: 'Synthetic favourite', aliases: [], sourceIdempotencyKey: input.idempotencyKey },
+      { explicit: true, estimateAccepted: true, expectedRevision: 0n, sourceRevision: 1n }, signal())).rejects.toThrow('reviewed source intake changed');
+    expect(db.query).toHaveBeenCalledOnce();
+    expect(db.query).toHaveBeenCalledWith(expect.stringContaining('WITH (UPDLOCK,HOLDLOCK)'));
+    expect(db.rollback).toHaveBeenCalledOnce();
+  });
+  it('returns the real committed favourite on exact replay without another update or invalidation', async () => {
+    const saved = { ...sourceRow, id: 'favorite', favorite_name: 'Synthetic favourite', normalized_name: 'synthetic favourite',
+      aliases_json: '[]', source_meal_id: '01', source_idempotency_key: input.idempotencyKey, revision: '1' };
+    const publish = vi.fn();
+    const persistence = NutritionStore.forRequest({} as sql.ConnectionPool, request, () => '2026-10-12T15:00:00Z', { publish });
+    db.query.mockResolvedValueOnce({ recordset: [{ ...sourceRow, revision: '1' }] }).mockResolvedValueOnce({ recordset: [saved] });
+    expect(await persistence.favorite({ id: 'favorite', name: 'Synthetic favourite', aliases: [], sourceIdempotencyKey: input.idempotencyKey },
+      { explicit: true, estimateAccepted: true, expectedRevision: 0n, sourceRevision: 1n }, signal())).toEqual(saved);
+    expect(db.query).toHaveBeenCalledTimes(2);
+    expect(db.commit).toHaveBeenCalledOnce();
+    expect(publish).not.toHaveBeenCalled();
+  });
+  it('does not replay an old like over a newer clear and retains the clear revision on an exact retry', async () => {
+    const cleared = { meal_key: 'favorite', preference: null, revision: '2' };
+    db.query.mockResolvedValueOnce({ recordset: [cleared] });
+    await expect(store().feedback('favorite', 'like', signal(), 0n)).rejects.toThrow('preference changed');
+    expect(db.query).toHaveBeenCalledOnce();
+    db.query.mockResolvedValueOnce({ recordset: [cleared] });
+    expect(await store().feedback('favorite', null, signal(), 1n)).toEqual(cleared);
+    expect(db.query).toHaveBeenCalledTimes(2);
+  });
+  it('persists an initial clear tombstone so a delayed revision-0 like cannot overwrite it', async () => {
+    const cleared = { meal_key: 'favorite', preference: null, revision: '1' };
+    db.query.mockResolvedValueOnce({ recordset: [] }).mockResolvedValueOnce({ recordset: [cleared] });
+    expect(await store().feedback('favorite', null, signal(), 0n)).toEqual(cleared);
+    expect(db.query).toHaveBeenNthCalledWith(2, expect.stringContaining('INSERT daily.nutrition_recommendation_feedback'));
+    db.query.mockResolvedValueOnce({ recordset: [cleared] });
+    await expect(store().feedback('favorite', 'like', signal(), 0n)).rejects.toThrow('preference changed');
+    expect(db.query).toHaveBeenCalledTimes(3);
+  });
+  const collectionMutations = [
+    { name: 'favourite', source: dailyQuerySources.favorites, records: [[sourceRow], [], []],
+      run: (persistence: NutritionStore) => persistence.favorite({ id: 'favorite', name: 'Synthetic favourite', aliases: [],
+        sourceIdempotencyKey: input.idempotencyKey }, { explicit: true, estimateAccepted: false }, signal()) },
+    { name: 'plan', source: dailyQuerySources.plans, records: [[], [{ ...sourceRow, id: 'favorite' }], [{ id: 'plan', revision: '1' }]],
+      run: (persistence: NutritionStore) => persistence.savePlan({ id: 'plan', name: 'Synthetic plan', description: null,
+        entries: (['breakfast', 'lunch', 'dinner'] as const).map(slot => ({ slot, favoriteId: 'favorite' })) }, 0n, signal()) },
+    { name: 'plan tombstone', source: dailyQuerySources.plans,
+      records: [[{ id: 'plan', revision: '1', deleted_at: null }], [{ id: 'plan', revision: '2', deleted_at: '2026-10-12T15:00:00Z' }]],
+      run: (persistence: NutritionStore) => persistence.removePlan('plan', 1n, signal()) },
+  ];
+  it.each(collectionMutations)('publishes the $name source only after acknowledged commit', async ({ source, records, run }) => {
+    const changes = createDailyChanges(); const listener = vi.fn(); changes.subscribe(listener);
+    const persistence = NutritionStore.forRequest({} as sql.ConnectionPool, request, () => '2026-10-12T15:00:00Z', changes);
+    for (const recordset of records) db.query.mockResolvedValueOnce({ recordset });
+    let commit!: () => void; let entered!: () => void;
+    const gate = new Promise<void>(resolve => { commit = resolve; });
+    const started = new Promise<void>(resolve => { entered = resolve; });
+    db.commit.mockImplementationOnce(() => { entered(); return gate; });
+    const pending = run(persistence);
+    await started; expect(listener).not.toHaveBeenCalled();
+    commit(); await pending;
+    expect(listener).toHaveBeenCalledExactlyOnceWith({ owner, sources: [source] });
+    expect(db.rollback).not.toHaveBeenCalled();
+  });
+  it('does not publish another collection change for an exact plan-deletion replay', async () => {
+    const publish = vi.fn();
+    const persistence = NutritionStore.forRequest({} as sql.ConnectionPool, request, () => '2026-10-12T15:00:00Z', { publish });
+    const deleted = { id: 'plan', revision: '2', deleted_at: '2026-10-12T15:00:00Z' };
+    db.query.mockResolvedValueOnce({ recordset: [deleted] });
+    expect(await persistence.removePlan('plan', 1n, signal())).toEqual(deleted);
+    expect(db.commit).toHaveBeenCalledTimes(1);
+    expect(publish).not.toHaveBeenCalled();
+  });
+  const mutations = [
+    { name: 'insert', existing: [], run: (persistence: NutritionStore) => persistence.log(input, authority, signal()) },
+    { name: 'correct', existing: [{ id: input.id, revision: '1', deleted_at: null }],
+      run: (persistence: NutritionStore) => persistence.correct(input, 1n, signal()) },
+    { name: 'delete', existing: [{ id: input.id, revision: '1', deleted_at: null }],
+      run: (persistence: NutritionStore) => persistence.remove(input.idempotencyKey, 1n, signal()) },
+  ];
+  it.each(mutations)('contains a throwing sink after committed $name without rollback/retry or hiding the returned row', async ({ name, existing, run }) => {
+    const publish = vi.fn(() => { throw new TypeError('synthetic notification failure'); });
+    const persistence = NutritionStore.forRequest({} as sql.ConnectionPool, request, () => '2026-10-12T15:00:00Z', { publish });
+    const saved = { id: input.id, revision: name === 'insert' ? '1' : '2', deleted_at: name === 'delete' ? '2026-10-12T15:00:00Z' : null };
+    db.query.mockResolvedValueOnce({ recordset: existing }).mockResolvedValueOnce({ recordset: [saved] });
+    expect(await run(persistence)).toEqual(saved);
+    expect(db.begin).toHaveBeenCalledTimes(1); expect(db.commit).toHaveBeenCalledTimes(1);
+    expect(db.query).toHaveBeenCalledTimes(2); expect(db.rollback).not.toHaveBeenCalled();
+    expect(publish).toHaveBeenCalledExactlyOnceWith({ owner, sources: [dailyQuerySources.meals] });
+  });
+  it.each(mutations.flatMap(mutation => ['write', 'commit'].map(failure => ({ ...mutation, failure }))))(
+    'keeps failed $failure during $name unsuccessful and never invokes its throwing sink',
+    async ({ existing, run, failure }) => {
+      const publish = vi.fn(() => { throw new Error('synthetic notification failure'); });
+      const persistence = NutritionStore.forRequest({} as sql.ConnectionPool, request, () => '2026-10-12T15:00:00Z', { publish });
+      db.query.mockResolvedValueOnce({ recordset: existing });
+      if (failure === 'write') db.query.mockRejectedValueOnce(new Error('synthetic storage failure'));
+      else {
+        db.query.mockResolvedValueOnce({ recordset: [{ id: input.id, revision: '2' }] });
+        db.commit.mockRejectedValueOnce(new Error('synthetic commit uncertainty'));
+      }
+      await expect(run(persistence)).rejects.toThrow('no successful write');
+      expect(db.begin).toHaveBeenCalledTimes(1); expect(db.rollback).toHaveBeenCalledTimes(1);
+      expect(db.query).toHaveBeenCalledTimes(2);
+      expect(db.commit).toHaveBeenCalledTimes(failure === 'commit' ? 1 : 0);
+      expect(publish).not.toHaveBeenCalled();
+    },
+  );
   it.each([{ mealType: 'supper' }, { energyKcal: 10001 }, { proteinGrams: 1001 }, { mealDate: '2026-01-02' },
     { occurredAt: '2026-10-12T15:05:01Z', mealDate: '2026-10-12' }])('rejects log and correction writes before SQL %j', async (patch) => {
     await expect(store().log({ ...input, ...patch }, authority, signal())).rejects.toThrow();
@@ -43,6 +214,19 @@ describe('nutrition failure/privacy boundaries', () => {
   it('fails closed on incomplete favourite namespaces', async () => {
     db.query.mockResolvedValue({ recordset: Array(1001).fill({}) });
     await expect(store().findFavorite('name', signal())).rejects.toThrow('safe lookup limits');
+  });
+  it('looks up full-length and non-key historical names exactly without entering the favourite namespace', async () => {
+    for (const name of ['x'.repeat(257), 'x'.repeat(2000), '\u5bff\u53f8', '\ufb03'.repeat(100)]) {
+      db.query.mockClear();
+      const row = { id: 'synthetic-history', meal_name: name };
+      db.query.mockResolvedValue({ recordset: [row] });
+      expect(await store().lookupSaved(name, signal())).toEqual({ source: 'history', row });
+      expect(db.query).toHaveBeenCalledExactlyOnceWith(expect.stringContaining('meal_name COLLATE Latin1_General_100_BIN2=@name'));
+      expect(db.inputs).toContainEqual(['name', sql.NVarChar(sql.MAX), name]);
+    }
+    db.query.mockClear();
+    await expect(store().lookupSaved('x'.repeat(2001), signal())).rejects.toThrow('Invalid nutrition text');
+    expect(db.query).not.toHaveBeenCalled();
   });
   it('denies callers selecting another owner or a coding runner before SQL', () => {
     expect(() => NutritionStore.forRequest({} as sql.ConnectionPool, { ...request, principal: { objectId: 'other' } } as unknown as FastifyRequest)).toThrow();

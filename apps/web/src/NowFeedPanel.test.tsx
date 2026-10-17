@@ -62,6 +62,36 @@ afterEach(() => {
 });
 
 describe('live Now panel', () => {
+  it('reuses its connection for data-refresh callback changes and ignores late notifications after cleanup', async () => {
+    loadNowFeed.mockResolvedValue(feed);
+    let callbacks!: import('./now-feed').NowFeedStreamOptions;
+    streamNowFeed.mockImplementation(async options => {
+      callbacks = options;
+      await new Promise<void>(resolve => options.signal.addEventListener('abort', () => resolve(), { once: true }));
+    });
+    const first = vi.fn();
+    const second = vi.fn();
+    const panel = (onDataRefresh: () => void) => <MemoryRouter>
+      <NowFeedPanel client={client} config={config} getAccessToken={getAccessToken}
+        applyWorkspaceCommand={() => false} onDataRefresh={onDataRefresh} />
+    </MemoryRouter>;
+    const view = render(panel(first));
+    await waitFor(() => expect(callbacks).toBeDefined());
+    act(() => callbacks.onWorkspaceReady?.('12345678-1234-4234-8234-123456789abc'));
+    expect(first).toHaveBeenCalledOnce();
+    view.rerender(panel(second));
+    act(() => callbacks.onUpdate());
+    expect(first).toHaveBeenCalledOnce();
+    expect(second).toHaveBeenCalledOnce();
+    expect(streamNowFeed).toHaveBeenCalledOnce();
+    view.unmount();
+    act(() => {
+      callbacks.onUpdate();
+      callbacks.onWorkspaceReady?.('22345678-1234-4234-8234-123456789abc');
+    });
+    expect(second).toHaveBeenCalledOnce();
+  });
+
   it('bridges board events, connection status and cleanup through the existing Now stream', async () => {
     loadNowFeed.mockResolvedValue(feed);
     let callbacks: import('./now-feed').NowFeedStreamOptions | undefined;

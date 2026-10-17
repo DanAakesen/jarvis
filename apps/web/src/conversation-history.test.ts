@@ -79,6 +79,29 @@ describe('loadConversationHistory', () => {
   });
 
   describe('chat turn API', () => {
+      it('preserves Markdown row and paragraph boundaries across byte-fragmented SSE, done and history reload', async () => {
+        const text = 'Two synthetic bookings:\n\n| Hotel | Check-in |\n|---|---|\n| Fixture Hotel North | 14 May, 15:00 |\n\nAll times are local.';
+        const user = { id: '51', sessionId: '41', role: 'dan', text: 'Show bookings', model: null, at: '2026-10-16T06:30:00Z' };
+        const assistant = { ...user, id: '52', role: 'jarvis', text };
+        const frame = (event: string, data: unknown) => `event: ${event}\r\ndata: ${JSON.stringify(data)}\r\n\r\n`;
+        const wire = frame('user', user) + [...text].map(character => frame('delta', { text: character })).join('') + frame('done', assistant);
+        const bytes = new TextEncoder().encode(wire);
+        vi.stubGlobal('fetch', vi.fn(async (url: RequestInfo | URL) => String(url).includes('/turns')
+          ? new Response(new ReadableStream({
+            start(controller) {
+              for (let index = 0; index < bytes.length; index += 7) controller.enqueue(bytes.slice(index, index + 7));
+              controller.close();
+            },
+          }))
+          : new Response(JSON.stringify({ messages: [{ ...assistant, channel: 'chat', language: 'en', toolCalls: [] }], nextCursor: null }))));
+        const deltas: string[] = [];
+        const result = await sendChatTurn(createClient() as never, config, { id: '41', language: 'en' }, 'Show bookings', vi.fn(), delta => deltas.push(delta));
+        expect(deltas.join('')).toBe(text);
+        expect(result.text).toBe(text);
+        const page = await loadConversationHistory(createClient() as never, config);
+        expect(page.messages[0]?.text).toBe(text);
+      });
+
       it.each(['image', 'caption', undefined] as const)('reads %s delivery from done, not from an uploaded handle', async visualPath => {
         const base = { id: '51', sessionId: '41', role: 'dan', text: 'Count.', model: null, at: '2026-10-11T20:06:00Z' };
         vi.stubGlobal('fetch', vi.fn(async () => new Response(

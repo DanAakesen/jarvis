@@ -1078,3 +1078,24 @@ describe('Jev browser agent', () => {
     expect(fetcher.mock.calls[0]?.[1]).toMatchObject({ redirect: 'error' });
   });
 });
+
+
+describe('Gmail browser access refusal', () => {
+  it('refuses a focused Gmail tab before reading its page or invoking a planner', async () => {
+    const planner = fixedPlanner({ operation: 'done' });
+    const env = fixture(planner, undefined, [{ id: 'tab_1', title: 'Inbox - Gmail', url: 'https://mail.google.com/mail/u/0', focused: true }]);
+    await expect(env.agent.runTask({ goal: 'Find the reservation dates' }, env.request, new AbortController().signal)).rejects.toThrow('Gmail access requires the direct mail integration');
+    expect(env.getSnapshot).not.toHaveBeenCalled();
+    expect(planner.decide).not.toHaveBeenCalled();
+    expect(env.act).not.toHaveBeenCalled();
+  });
+
+  it('stops if the selected tab navigates to Gmail before the next observation', async () => {
+    const planner = fixedPlanner({ operation: 'done' });
+    const env = fixture(planner);
+    env.snapshots.push({ ...snapshot, title: 'Inbox - Gmail', url: 'https://mail.google.com/mail/u/0' });
+    await expect(env.agent.runTask({ goal: 'Find the dates' }, env.request, new AbortController().signal)).rejects.toThrow('Gmail access requires the direct mail integration');
+    expect(planner.decide).not.toHaveBeenCalled();
+    expect(env.act).not.toHaveBeenCalled();
+  });
+});

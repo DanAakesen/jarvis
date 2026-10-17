@@ -1,3 +1,4 @@
+import { refuseGmailComputerAccess } from './gmail-access-policy.js';
 import { randomUUID } from 'node:crypto';
 import type { FastifyRequest } from 'fastify';
 import type { BackendModule } from '../modules.js';
@@ -1058,14 +1059,17 @@ export function createBrowserAgent(
     runtime?: { step: number; previousActions: readonly string[]; tab?: BrowserTab; recipe: RunRecipe },
   ): Promise<BrowserClauseResult> {
     validateClause(input);
+    refuseGmailComputerAccess(input.goal, input.url);
     if (!authorizedDan(request)) throw new ToolRefusal('A verified Dan session is required for browser actions.');
     if (!request.server.workspaceCommands) throw new ToolRefusal('The live workspace is unavailable to show browser progress.');
     const executor = browserExecutor(request);
     const tab = runtime?.tab ?? await chooseTab(executor, input, signal);
+    refuseGmailComputerAccess(tab.url, tab.title);
     const step = runtime?.step ?? input.step ?? 1;
     if (!runtime) await reportClause(request, tab.id, step, 'observe', undefined, 'Reading the current page.', signal);
     try {
       const snapshot = await executor.snapshot(tab.id, signal);
+      refuseGmailComputerAccess(snapshot.url, snapshot.title);
       const recipe = runtime?.recipe;
       const key = recipeSiteKey(snapshot.url);
       if (recipe && !recipe.initialized) {
@@ -1248,6 +1252,7 @@ export function createBrowserAgent(
     vision: BrowserVisionSettings = defaultSettings.roles.vision,
   ): Promise<BrowserTaskResult> {
     validateClause(input);
+    refuseGmailComputerAccess(input.goal, input.url);
     const runStartedAt = performance.now();
     const deadline = AbortSignal.any([signal, AbortSignal.timeout(runLimitMs)]);
     const viewId = `browserTask_${randomUUID().replaceAll('-', '')}`;
@@ -1401,6 +1406,7 @@ export function createBrowserAgentModule(agent: BrowserAgent): BackendModule {
               (input.tabId !== undefined && typeof input.tabId !== 'string')) {
             throw new ToolRefusal('Provide a browser goal and, optionally, one URL or tab.');
           }
+          refuseGmailComputerAccess(input.goal, input.url, input.tabTitle);
           const vision = await visionSettings(request);
           if (request.requireSharedScreenContext) {
             return agent.runSharedTask({
@@ -1439,6 +1445,7 @@ export function createBrowserAgentModule(agent: BrowserAgent): BackendModule {
           if (!request.requireSharedScreenContext || !request.sharedScreenContext) {
             throw new ToolRefusal('I need a current shared-screen frame before acting here. Please share a Chrome tab and try again.');
           }
+          refuseGmailComputerAccess(input.goal, input.url, input.tabTitle);
           const vision = await visionSettings(request);
           return agent.runSharedTask({
             goal: input.goal,

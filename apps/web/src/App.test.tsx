@@ -5,7 +5,9 @@ import { useState, type ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from './App';
 import { getSignInGreeting } from './sign-in-greeting';
-import { factoryBoardColumnIds, type FactoryBoard, type GeneratedView, type WorkspaceCommand } from '@jarvis/contracts';
+import { publishJob } from './jobs-store';
+import { dailyQuerySources, factoryBoardColumnIds, isDailyQuery, type DailyQuery, type FactoryBoard, type GeneratedView, type WorkspaceCommand } from '@jarvis/contracts';
+import { dailyFixture, jsonResponse } from './daily/test-support';
 
 const {
   createAuthClient,
@@ -37,6 +39,7 @@ const {
       options: {
         onStatus: (status: string, message: string) => void;
         onSessionEnded?: () => void;
+        onMicrophoneState?: (state: 'live') => void;
       };
     }>,
   };
@@ -49,13 +52,15 @@ vi.mock('./conversation-history', () => ({
   waitForChatSetup: <T,>(operation: () => Promise<T>) => operation(),
 }));
 vi.mock('./JarvisStage', () => ({
-  JarvisStage: ({ children }: { children?: ReactNode }) => <div data-testid="jarvis-stage">{children}</div>,
+  JarvisStage: ({ children, active }: { children?: ReactNode; active: boolean }) =>
+    <div data-testid="jarvis-stage" data-active={active}>{children}</div>,
 }));
 vi.mock('./voice-client', () => ({
   BrowserVoiceClient: class {
     constructor(private readonly options: {
       onStatus: (status: string, message: string) => void;
       onSessionEnded?: () => void;
+      onMicrophoneState?: (state: 'live') => void;
     }) {
       voiceSessions.push({ options, setCameraState: this.setCameraState });
     }
@@ -350,10 +355,11 @@ describe('Jarvis routes', () => {
 });
 
 describe('App shell', () => {
-  async function renderSignedIn(path = '/') {
+  async function renderSignedIn(path = '/', dailyEnabled = false) {
     restoreProfile.mockResolvedValue({ name: 'Dan Aakesen' });
-    render(<MemoryRouter initialEntries={[path]}><App config={config} /></MemoryRouter>);
+    const rendered = render(<MemoryRouter initialEntries={[path]}><App config={config} dailyEnabled={dailyEnabled} /></MemoryRouter>);
     await screen.findByRole('navigation', { name: 'Areas' });
+    return rendered;
   }
 
   it('keeps the workspace command stream connected when navigating away from conversation', async () => {
@@ -374,13 +380,21 @@ describe('App shell', () => {
     await renderSignedIn();
 
     const stage = screen.getByTestId('jarvis-stage');
+    expect(stage.dataset.active).toBe('true');
     await user.click(screen.getByRole('link', { name: 'Software Factory' }));
     await screen.findByRole('heading', { level: 1, name: 'Kanban' });
     expect(screen.getByTestId('jarvis-stage')).toBe(stage);
+    expect(stage.dataset.active).toBe('false');
 
     await user.click(screen.getByRole('link', { name: 'Settings' }));
     await screen.findByRole('heading', { name: 'Settings' });
     expect(screen.getByTestId('jarvis-stage')).toBe(stage);
+    expect(stage.dataset.active).toBe('false');
+
+    await user.click(screen.getByRole('link', { name: 'Jarvis home' }));
+    await screen.findByRole('textbox', { name: 'Message Jarvis' });
+    expect(screen.getByTestId('jarvis-stage')).toBe(stage);
+    expect(stage.dataset.active).toBe('true');
   });
 
   it('renders backend-reported waking in the shared signed-in shell', async () => {
@@ -506,6 +520,94 @@ describe('App shell', () => {
       },
     };
   }
+
+  it.each([false, true])('leaves Daily routes, navigation and requests disabled by default (phone=%s)', async (phone) => {
+    if (phone) vi.stubGlobal('matchMedia', vi.fn((query: string) => ({
+      matches: query.includes('max-width: 700px'),
+      media: query, addEventListener: vi.fn(), removeEventListener: vi.fn(),
+    })));
+    const workspace = streamWorkspaceCommands();
+    await renderSignedIn('/daily');
+    await waitFor(() => expect(activityStream).not.toBeNull());
+    if (phone) fireEvent.click(screen.getByRole('button', { name: 'Menu' }));
+    expect(screen.queryByRole('link', { name: 'Daily' })).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'Daily' })).toBeNull();
+    workspace.ready();
+    workspace.publishCommand({ commandId: 'daily-disabled', operation: 'navigate', page: 'daily' });
+    await waitFor(() => expect(workspace.ack('daily-disabled')).toBeTruthy());
+    expect(JSON.parse(String(workspace.ack('daily-disabled')![1]!.body))).toMatchObject({ applied: false });
+    expect(fetchMock.mock.calls.some(([url]) => new URL(String(url)).pathname.startsWith('/daily/'))).toBe(false);
+  });
+
+  it.each([false, true])('uses the same gated Daily page and existing refresh stream (phone=%s)', async (phone) => {
+    if (phone) vi.stubGlobal('matchMedia', vi.fn((query: string) => ({
+      matches: query.includes('max-width: 700px'),
+      media: query, addEventListener: vi.fn(), removeEventListener: vi.fn(),
+    })));
+    const workspace = streamWorkspaceCommands();
+    const respond = fetchMock.getMockImplementation()!;
+    const queries: DailyQuery[] = [];
+    fetchMock.mockImplementation(async (input, init) => {
+      const path = new URL(String(input)).pathname;
+      if (path === '/daily/capabilities') return jsonResponse({ module: 'daily', version: 2, sources: Object.values(dailyQuerySources) });
+      if (path === '/daily/query') {
+        const query: unknown = JSON.parse(String(init?.body));
+        if (!isDailyQuery(query)) throw new Error('Invalid synthetic Daily query');
+        queries.push(query);
+        return jsonResponse(dailyFixture(query, [{ metric_name: 'synthetic_shell_measurement', value: 0, unit: 'kg' }]));
+      }
+      return respond(input, init);
+    });
+    await renderSignedIn('/', true);
+    if (phone) fireEvent.click(screen.getByRole('button', { name: 'Menu' }));
+    const navigation = phone ? screen.getByRole('navigation', { name: 'Pages' }) : screen.getByRole('navigation', { name: 'Areas' });
+    fireEvent.click(within(navigation).getByRole('link', { name: 'Daily' }));
+    await screen.findByText('Synthetic shell measurement');
+    expect(screen.getByRole('heading', { name: 'Daily' })).toBeTruthy();
+    await waitFor(() => expect(activityStream).not.toBeNull());
+    const count = queries.length;
+    workspace.ready();
+    workspace.publishCommand({ commandId: 'daily-current', operation: 'navigate', page: 'daily' });
+    await waitFor(() => expect(workspace.ack('daily-current')).toBeTruthy());
+    expect(JSON.parse(String(workspace.ack('daily-current')![1]!.body))).toMatchObject({ applied: true });
+    await waitFor(() => expect(queries.length).toBeGreaterThan(count));
+    expect(fetchMock.mock.calls.filter(([url]) => new URL(String(url)).pathname === '/now/events')).toHaveLength(1);
+  });
+
+  it('discards cached Daily rows when the rendered signed-in account changes', async () => {
+    restoreProfile.mockResolvedValue({ name: 'Dan Aakesen' });
+    const client = makeAuthClient();
+    createAuthClient.mockReturnValue(client);
+    streamWorkspaceCommands();
+    const respond = fetchMock.getMockImplementation()!;
+    let owner = 'first';
+    fetchMock.mockImplementation(async (input, init) => {
+      const path = new URL(String(input)).pathname;
+      if (path === '/daily/capabilities') return owner === 'first'
+        ? jsonResponse({ module: 'daily', version: 2, sources: Object.values(dailyQuerySources) })
+        : jsonResponse({ error: 'forbidden' }, 403);
+      if (path === '/daily/query') {
+        const query: unknown = JSON.parse(String(init?.body));
+        if (!isDailyQuery(query)) throw new Error('Invalid synthetic Daily query');
+        return jsonResponse(dailyFixture(query, [{ metric_name: 'synthetic_first_owner', value: 1, unit: 'kg' }]));
+      }
+      return respond(input, init);
+    });
+    function AccountHarness() {
+      const [, refresh] = useState(0);
+      return <><button type="button" onClick={() => refresh(value => value + 1)}>Refresh synthetic owner</button>
+        <App config={config} dailyEnabled /></>;
+    }
+    render(<MemoryRouter initialEntries={['/daily']}><AccountHarness /></MemoryRouter>);
+    await screen.findByText('Synthetic first owner');
+    owner = 'second';
+    client.getActiveAccount.mockReturnValue({ homeAccountId: 'second' });
+    client.getAllAccounts.mockReturnValue([{ homeAccountId: 'second' }]);
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh synthetic owner' }));
+    expect(screen.queryByText('Synthetic first owner')).toBeNull();
+    await screen.findByText(/Daily access could not be verified/u);
+    expect(screen.queryByText('Synthetic first owner')).toBeNull();
+  });
 
   it.each([200, 503])('acknowledges a broker pin only after storage replies with status %s', async (status) => {
     let finish!: (response: Response) => void;
@@ -816,7 +918,7 @@ describe('App shell', () => {
     expect(screen.queryByRole('menuitem', { name: 'Share screen' })).toBeNull();
     expect(screen.getByRole('menuitem', { name: 'Turn camera on' })).not.toBeNull();
   });
-  it('shows chat work only after a runtime event and clears it on the reported terminal event', async () => {
+  it('keeps chat progress and tool feedback in the conversation, never in the header', async () => {
     const user = userEvent.setup();
     let finish: (() => void) | undefined;
     fetchMock.mockImplementation(async (input) => {
@@ -845,6 +947,7 @@ describe('App shell', () => {
       });
     });
     await renderSignedIn();
+    const header = document.querySelector('.app-topbar') as HTMLElement;
 
     await user.type(screen.getByRole('textbox', { name: 'Message Jarvis' }), 'Start the task.');
     await user.click(screen.getByRole('button', { name: 'Send' }));
@@ -854,20 +957,41 @@ describe('App shell', () => {
       activityStream?.enqueue(new TextEncoder().encode(`event: jarvis-activity\ndata: ${JSON.stringify(event)}\n\n`));
     };
     publish({ type: 'thinking', activityId: '22222222-2222-4222-8222-222222222222', source: 'chat' });
-    expect(await screen.findByRole('status', { name: 'Jarvis is thinking' })).not.toBeNull();
+    expect(await screen.findByText('Jarvis is thinking…')).not.toBeNull();
+    expect(within(header).queryByText(/thinking|working/i)).toBeNull();
     const tool = (type: string, outcome?: string) => activityStream?.enqueue(new TextEncoder().encode(`event: jarvis-activity\ndata: ${JSON.stringify({
       type, activityId: '33333333-3333-4333-8333-333333333333', source: 'chat', toolName: 'web_search', ...(outcome ? { outcome } : {}),
     })}\n\n`));
     tool('tool-call-started');
     const trail = await screen.findByRole('list', { name: 'Tools Jarvis is using' });
     expect(within(trail).getByTitle('web_search · running')).not.toBeNull();
+    expect(within(header).queryByText(/web_search|working/i)).toBeNull();
     tool('tool-call-finished', 'ok');
     expect(await within(trail).findByTitle('web_search · done')).not.toBeNull();
     expect(within(trail).getAllByRole('listitem')).toHaveLength(1);
 
     finish?.();
     publish({ type: 'ended', activityId: '22222222-2222-4222-8222-222222222222', source: 'chat' });
-    expect(await screen.findByRole('status', { name: 'Jarvis activity ended' })).not.toBeNull();
+    await waitFor(() => expect(screen.queryByText('Jarvis is thinking…')).toBeNull());
+    expect(within(header).queryByText(/Jarvis activity ended|web_search|thinking|working/i)).toBeNull();
+    expect(header.querySelector('.topbar-working')).toBeNull();
+  });
+
+  it('keeps voice progress beneath the orb rather than duplicating it in the header', async () => {
+    const user = userEvent.setup();
+    await renderSignedIn();
+    await user.click(screen.getByRole('button', { name: 'Start voice' }));
+    const header = document.querySelector('.app-topbar') as HTMLElement;
+    act(() => {
+      voiceSessions[0]!.options.onMicrophoneState!('live');
+      voiceSessions[0]!.options.onStatus('thinking', 'Jarvis is thinking.');
+    });
+    const voiceStatus = document.querySelector('.voice-status') as HTMLElement;
+    expect(within(voiceStatus).getByText('Thinking')).not.toBeNull();
+    expect(within(header).queryByText(/thinking|working/i)).toBeNull();
+    act(() => voiceSessions[0]!.options.onStatus('speaking', 'Jarvis is speaking.'));
+    expect(within(voiceStatus).getByText('Speaking')).not.toBeNull();
+    expect(within(header).queryByText(/speaking/i)).toBeNull();
   });
 
   it('hides navigation and area pages until Dan is signed in', async () => {
@@ -954,6 +1078,227 @@ describe('App shell', () => {
     })).toBe(true));
     expect(fetchMock.mock.calls.filter(([url]) => String(url).endsWith('/now/events'))).toHaveLength(1);
   });
+
+  it.each([
+    { path: '/', phone: false }, { path: '/settings', phone: false }, { path: '/status', phone: false },
+    { path: '/', phone: true }, { path: '/settings', phone: true }, { path: '/status', phone: true },
+  ])('commits the actual Status page before its first acknowledgement, even with a held read (%j)', async ({ path, phone }) => {
+    if (phone) vi.stubGlobal('matchMedia', vi.fn((query: string) => ({
+      matches: query.includes('max-width: 700px'),
+      media: query, addEventListener: vi.fn(), removeEventListener: vi.fn(),
+    })));
+    const workspace = streamWorkspaceCommands();
+    const original = fetchMock.getMockImplementation()!;
+    let finish!: (response: Response) => void;
+    const heldStatus = new Promise<Response>((resolve) => { finish = resolve; });
+    const atAcknowledgement: unknown[] = [];
+    fetchMock.mockImplementation(async (input, init) => {
+      const pathname = new URL(String(input)).pathname;
+      if (pathname === '/status') return heldStatus;
+      if (pathname.endsWith('/commands/status-first/ack')) {
+        const composer = document.getElementById('message');
+        atAcknowledgement.push({
+          body: JSON.parse(String(init?.body)),
+          heading: screen.queryByRole('heading', { level: 1, name: 'Status' })?.textContent,
+          current: screen.queryByRole('link', { name: 'Status' })?.getAttribute('aria-current'),
+          home: document.querySelector('.app-shell')?.getAttribute('data-home'),
+          draft: composer instanceof HTMLTextAreaElement ? composer.value : null,
+        });
+      }
+      return original(input, init);
+    });
+    await renderSignedIn(path);
+    await waitFor(() => expect(activityStream).not.toBeNull());
+    const input = screen.getByRole('textbox', { name: 'Message Jarvis' });
+    fireEvent.change(input, { target: { value: 'Unsent navigation fixture' } });
+    workspace.ready();
+    workspace.publishCommand({ commandId: 'status-first', operation: 'navigate', page: 'status' });
+    await waitFor(() => expect(workspace.ack('status-first')).toBeTruthy());
+    expect(atAcknowledgement).toEqual([{
+      body: { sessionId: '12345678-1234-4234-8234-123456789abc', applied: true },
+      heading: 'Status', current: 'page', home: 'false', draft: 'Unsent navigation fixture',
+    }]);
+    expect(screen.getByRole('textbox', { name: 'Message Jarvis' })).toBe(input);
+    expect(input).toHaveProperty('value', 'Unsent navigation fixture');
+    expect(screen.queryByRole('listitem', { name: 'SQL database' })).toBeNull();
+    workspace.publishCommand({ commandId: 'status-follow-up', operation: 'navigate', page: 'status' });
+    await waitFor(() => expect(workspace.ack('status-follow-up')).toBeTruthy());
+    expect(JSON.parse(String(workspace.ack('status-follow-up')?.[1]?.body))).toMatchObject({ applied: true });
+    expect(fetchMock.mock.calls.filter(([url]) => new URL(String(url)).pathname === '/now/events')).toHaveLength(1);
+    expect(fetchMock.mock.calls.filter(([url]) => new URL(String(url)).pathname === '/status')).toHaveLength(1);
+    await act(async () => { finish(new Response(null, { status: 503 })); });
+    expect(screen.getByRole('heading', { level: 1, name: 'Status' }).closest('[hidden], [aria-hidden="true"], [inert]')).toBeNull();
+    expect(fetchMock.mock.calls.some(([url]) => new URL(String(url)).pathname === '/status/smoke')).toBe(false);
+  });
+
+  it.each(['cancel', 'deadline', 'supersede', 'unmount'] as const)(
+    'bounds a held Status route commit and disposes its acknowledgement owner (%s)', async (outcome) => {
+      const workspace = streamWorkspaceCommands();
+      let finish!: () => void;
+      let started = false;
+      const heldCommit = new Promise<null>((resolve) => { finish = () => resolve(null); });
+      const router = createMemoryRouter([{
+        path: '*',
+        element: <App config={config} />,
+        loader: ({ request }) => {
+          if (new URL(request.url).pathname !== '/status') return null;
+          started = true;
+          return heldCommit;
+        },
+      }], { initialEntries: ['/settings'] });
+      restoreProfile.mockResolvedValue({ name: 'Dan Aakesen' });
+      const view = render(<RouterProvider router={router} />);
+      await screen.findByRole('navigation', { name: 'Areas' });
+      await waitFor(() => expect(activityStream).not.toBeNull());
+      workspace.ready();
+      act(() => activityStream!.enqueue(new TextEncoder().encode(
+        `event: workspace-command\ndata: ${JSON.stringify({
+          command: { commandId: 'held-status', operation: 'navigate', page: 'status' },
+          expiresAt: Date.now() + (outcome === 'deadline' ? 650 : 5000),
+        })}\n\n`,
+      )));
+      await waitFor(() => expect(started).toBe(true));
+      expect(workspace.ack('held-status')).toBeUndefined();
+      expect(screen.queryByRole('heading', { level: 1, name: 'Status' })).toBeNull();
+      if (outcome === 'cancel') act(() => activityStream!.enqueue(new TextEncoder().encode(
+        'event: workspace-cancel\ndata: {"commandId":"held-status"}\n\n',
+      )));
+      if (outcome === 'supersede' || outcome === 'unmount') {
+        if (outcome === 'unmount') view.unmount();
+        else await act(async () => { await router.navigate('/usage'); });
+      }
+      if (outcome !== 'unmount') {
+        await waitFor(() => expect(workspace.ack('held-status')).toBeTruthy());
+        expect(JSON.parse(String(workspace.ack('held-status')?.[1]?.body))).toMatchObject({
+          applied: false, outcome: 'refused',
+          reason: outcome === 'deadline' ? 'The requested page did not finish opening before the command deadline.' :
+            outcome === 'cancel' ? 'Page navigation was cancelled before completion.' :
+              'Page navigation was superseded before completion.',
+        });
+        if (outcome !== 'supersede') await act(async () => { await router.navigate('/usage'); });
+      } else router.dispose();
+      await act(async () => { finish(); });
+      if (outcome === 'unmount') expect(workspace.ack('held-status')).toBeUndefined();
+      else {
+        expect(screen.queryByRole('heading', { level: 1, name: 'Status' })).toBeNull();
+        expect(fetchMock.mock.calls.filter(([url]) => String(url).endsWith('/commands/held-status/ack'))).toHaveLength(1);
+        expect(screen.getByRole('link', { name: 'Usage' }).getAttribute('aria-current')).toBe('page');
+      }
+      expect(fetchMock.mock.calls.filter(([url]) => new URL(String(url)).pathname === '/status')).toHaveLength(0);
+      expect(fetchMock.mock.calls.filter(([url]) => new URL(String(url)).pathname === '/now/events')).toHaveLength(1);
+    },
+  );
+
+  it.each([4749, 4750, 4751, 5001])(
+    'checks the completion clock before acknowledging a held Status route, without firing its timer (%s ms)', async (elapsed) => {
+      const workspace = streamWorkspaceCommands();
+      const original = fetchMock.getMockImplementation()!;
+      const atAcknowledgement: unknown[] = [];
+      fetchMock.mockImplementation(async (input, init) => {
+        if (String(input).endsWith('/commands/commit-clock/ack')) {
+          atAcknowledgement.push({
+            body: JSON.parse(String(init?.body)),
+            heading: screen.queryByRole('heading', { level: 1, name: 'Status' })?.textContent,
+            current: screen.queryByRole('link', { name: 'Status' })?.getAttribute('aria-current'),
+            at: Date.now(),
+          });
+        }
+        return original(input, init);
+      });
+      let finish!: () => void;
+      let started = false;
+      const heldCommit = new Promise<null>((resolve) => { finish = () => resolve(null); });
+      const router = createMemoryRouter([{
+        path: '*', element: <App config={config} />,
+        loader: ({ request }) => {
+          if (new URL(request.url).pathname !== '/status') return null;
+          started = true;
+          return heldCommit;
+        },
+      }], { initialEntries: ['/settings'] });
+      restoreProfile.mockResolvedValue({ name: 'Dan Aakesen' });
+      const view = render(<RouterProvider router={router} />);
+      await screen.findByRole('navigation', { name: 'Areas' });
+      await waitFor(() => expect(activityStream).not.toBeNull());
+      await act(async () => { workspace.ready(); });
+      const startedAt = Date.now();
+      const clock = vi.spyOn(Date, 'now').mockReturnValue(startedAt);
+      const schedule = window.setTimeout;
+      const timers = vi.spyOn(window, 'setTimeout');
+      let expire!: () => void;
+      let timeoutFired = false;
+      timers.mockImplementation((callback, delay, ...args) => {
+        if (delay !== 4750) return schedule.call(window, callback, delay, ...args);
+        if (typeof callback !== 'function') throw new TypeError('Expected the page deadline callback.');
+        expire = () => { timeoutFired = true; callback(...args); };
+        return schedule.call(window, () => {}, delay);
+      });
+      try {
+        await act(async () => {
+          workspace.publishCommand({ commandId: 'commit-clock', operation: 'navigate', page: 'status' });
+        });
+        expect(started).toBe(true);
+        expect(timers.mock.calls.some(([, delay]) => delay === 4750)).toBe(true);
+        expect(workspace.ack('commit-clock')).toBeUndefined();
+        expect(screen.queryByRole('heading', { level: 1, name: 'Status' })).toBeNull();
+        clock.mockReturnValue(startedAt + elapsed);
+        await act(async () => { finish(); });
+        expect(router.state.location.pathname).toBe('/status');
+        expect(timeoutFired).toBe(false);
+        expect(atAcknowledgement).toEqual([{
+          body: {
+            sessionId: '12345678-1234-4234-8234-123456789abc',
+            ...(elapsed < 4750 ? { applied: true } : {
+              applied: false, outcome: 'refused',
+              reason: 'The requested page did not finish opening before the command deadline.',
+            }),
+          },
+          heading: 'Status', current: 'page', at: startedAt + elapsed,
+        }]);
+        await act(async () => { expire(); });
+        expect(fetchMock.mock.calls.filter(([url]) => String(url).endsWith('/commands/commit-clock/ack'))).toHaveLength(1);
+      } finally {
+        view.unmount();
+        router.dispose();
+        timers.mockRestore();
+      }
+    },
+  );
+
+  it.each([4749, 4750])(
+    'checks the completion clock after synchronous same-page Status application (%s ms)', async (elapsed) => {
+      const workspace = streamWorkspaceCommands();
+      await renderSignedIn('/status');
+      await waitFor(() => expect(activityStream).not.toBeNull());
+      await act(async () => { workspace.ready(); });
+      fireEvent.click(screen.getByRole('button', { name: 'Folio' }));
+      const content = document.getElementById('content')!;
+      act(() => { screen.getByRole('button', { name: 'Close the Folio' }).focus(); });
+      expect(document.activeElement?.closest('#folio-pane')).not.toBeNull();
+      const startedAt = Date.now();
+      const clock = vi.spyOn(Date, 'now').mockReturnValue(startedAt);
+      const advanceClock = () => { clock.mockReturnValue(startedAt + elapsed); };
+      content.addEventListener('focus', advanceClock, { once: true });
+      try {
+        await act(async () => {
+          workspace.publishCommand({ commandId: 'same-page-clock', operation: 'navigate', page: 'status' });
+        });
+        expect(document.activeElement).toBe(content);
+        expect(Date.now()).toBe(startedAt + elapsed);
+        expect(JSON.parse(String(workspace.ack('same-page-clock')?.[1]?.body))).toMatchObject(
+          elapsed < 4750 ? { applied: true } : {
+            applied: false, outcome: 'refused',
+            reason: 'The requested page did not finish opening before the command deadline.',
+          },
+        );
+        expect(screen.getByRole('heading', { level: 1, name: 'Status' })).not.toBeNull();
+        expect(document.querySelector('.app-shell')?.getAttribute('data-folio-open')).toBe('false');
+        expect(fetchMock.mock.calls.filter(([url]) => String(url).endsWith('/commands/same-page-clock/ack'))).toHaveLength(1);
+      } finally {
+        content.removeEventListener('focus', advanceClock);
+      }
+    },
+  );
 
   function issueBoard() : FactoryBoard {
     return {
@@ -1114,6 +1459,63 @@ describe('App shell', () => {
     await screen.findByRole('heading', { level: 1, name: 'Kanban' });
     expect(context.textContent).toBe('Jarvis');
     expect(screen.queryByText('Open windows appear here.')).toBeNull();
+  });
+
+  it('keeps phone job-only history reachable and open, without changing artifact restore behaviour', async () => {
+    vi.stubGlobal('matchMedia', vi.fn((query: string) => ({
+      matches: query.includes('max-width: 700px'),
+      media: query, addEventListener: vi.fn(), removeEventListener: vi.fn(),
+    })));
+    const stream = streamWorkspaceCommands();
+    const respond = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation((input, init) => new URL(String(input)).pathname === '/jobs'
+      ? Promise.resolve(new Response(JSON.stringify({ jobs: [] })))
+      : respond(input, init));
+    await renderSignedIn();
+    await waitFor(() => expect(activityStream).not.toBeNull());
+    expect(screen.queryByRole('button', { name: /Open windows/ })).toBeNull();
+    act(() => publishJob({
+      jobId: '11111111-1111-4111-8111-111111111111', kind: 'embedding',
+      title: 'Re-embed memory and vault', status: 'failed', step: 1, steps: 2,
+      detail: 'interrupted by restart', startedAt: '2026-10-16T08:00:00.000Z', updatedAt: '2026-10-16T08:05:07.000Z',
+    }));
+    const user = userEvent.setup();
+    const shell = document.querySelector('.app-shell')!;
+    await user.click(screen.getByRole('button', { name: 'Open windows and jobs: 1' }));
+    await user.click(screen.getByRole('button', { name: 'Show background work: 1 failed' }));
+    expect(shell.getAttribute('data-windows-open')).toBe('true');
+    await user.click(screen.getByRole('button', { name: /Re-embed memory and vault Indexing · failed/ }));
+    expect(shell.getAttribute('data-windows-open')).toBe('true');
+    await user.click(screen.getByRole('button', { name: 'Dismiss' }));
+    expect(shell.getAttribute('data-windows-open')).toBe('true');
+    expect(screen.getByRole('button', { name: 'Open windows and jobs: 1' })).not.toBeNull();
+    await user.click(screen.getByRole('button', { name: 'Show background work' }));
+    expect(screen.queryByRole('button', { name: /Re-embed memory and vault Indexing · failed/ })).toBeNull();
+    expect(screen.getByText('No background work to show.')).not.toBeNull();
+    await user.click(screen.getByRole('button', { name: 'Close job details' }));
+    stream.ready();
+    stream.publishCommand({
+      commandId: 'create-header-fixture', operation: 'create', viewId: 'header-report',
+      view: { version: 1, title: 'Header fixture report', renderer: 'text', source: { id: 'research', status: 'complete' },
+        data: { format: 'plain', content: 'Offline header fixture result' } },
+    });
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Open windows and jobs: 2' })).not.toBeNull());
+    expect(shell.getAttribute('data-windows-open')).toBe('true');
+    await user.click(screen.getByRole('button', { name: 'Show Header fixture report' }));
+    expect(shell.getAttribute('data-windows-open')).toBe('false');
+    stream.publishCommand({ commandId: 'minimise-header-fixture', operation: 'minimise', viewId: 'header-report' });
+    const restore = await screen.findByRole('button', { name: 'Restore Header fixture report' });
+    const report = document.querySelector('[data-view-id="header-report"].workspace-window')!;
+    expect(report.classList.contains('workspace-window-minimized')).toBe(true);
+    await user.click(screen.getByRole('button', { name: 'Open windows and jobs: 2' }));
+    restore.focus();
+    await user.keyboard('{Enter}');
+    expect(shell.getAttribute('data-windows-open')).toBe('false');
+    expect(report.classList.contains('workspace-window-minimized')).toBe(false);
+    await user.click(screen.getByRole('button', { name: 'Open windows and jobs: 2' }));
+    expect(shell.getAttribute('data-windows-open')).toBe('true');
+    await user.click(screen.getByRole('button', { name: 'Show Header fixture report' }).querySelector('svg')!);
+    expect(shell.getAttribute('data-windows-open')).toBe('false');
   });
 
   it('restores the accepted appearance across signed-in app routes', async () => {
@@ -1489,6 +1891,10 @@ describe('App shell', () => {
   it('resolves release activity links to the owning project release view', async () => {
     fetchMock.mockImplementation(async (input) => {
       const path = new URL(String(input)).pathname;
+      if (path === '/settings') {
+        return new Response(JSON.stringify({ settings: { appearance: { theme: 'dark' } } }));
+      }
+      if (path === '/jobs') return new Response(JSON.stringify({ jobs: [] }));
       if (path === '/factory/releases/7') return new Response(JSON.stringify({ projectId: '42' }));
       if (path === '/factory/projects/42/releases') {
         return new Response(JSON.stringify({

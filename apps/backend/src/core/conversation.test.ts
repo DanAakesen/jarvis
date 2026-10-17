@@ -175,7 +175,9 @@ describe('conversation routes', () => {
     const seenSessionIds: Array<string | undefined> = [];
     const agent = { stream: vi.fn(async function* (input: import('./chat-agent.js').ConversationAgentInput) {
       seenSessionIds.push(input.agentSessionId);
-      input.onAgentPhaseTimings?.({ chat_context: 12.5 });
+      input.onAgentPhaseTimings?.({
+        chat_context: 12.5, model_request: 1000, model_auth_max: 7000, model_request_max: 20000,
+      });
       input.onAgentSessionTelemetry?.({
         sessionIdUsed: true, sessionStartType: 'warm', platformMs: 18, agentMs: 4,
       });
@@ -195,7 +197,7 @@ describe('conversation routes', () => {
     expect(seenSessionIds).toEqual([expectedSessionId]);
     const done = JSON.parse(response.body.split('event: done\ndata: ')[1]!.split('\n')[0]!) as
       Record<string, unknown>;
-    expect(done.agentTimings).toEqual({ chat_context: 12.5 });
+    expect(done.agentTimings).toEqual({ chat_context: 12.5, model_request: 1000 });
     const events = records.map((record) => JSON.parse(record) as Record<string, unknown>);
     expect(events).toContainEqual(expect.objectContaining({
       msg: 'chat.agent_session', sessionIdUsed: true, sessionStartType: 'warm',
@@ -203,6 +205,12 @@ describe('conversation routes', () => {
     }));
     expect(events).toContainEqual(expect.objectContaining({
       msg: 'chat.latency', phase: 'chat_context', durationMs: 12.5,
+    }));
+    expect(events).toContainEqual(expect.objectContaining({
+      msg: 'chat.latency', phase: 'model_auth_max', durationMs: 7000,
+    }));
+    expect(events).toContainEqual(expect.objectContaining({
+      msg: 'chat.latency', phase: 'model_request_max', durationMs: 20000,
     }));
     expect(JSON.stringify(events)).not.toContain('private-prompt');
     expect(JSON.stringify(events)).not.toContain(expectedSessionId);

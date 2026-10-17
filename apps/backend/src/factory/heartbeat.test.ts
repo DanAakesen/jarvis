@@ -11,9 +11,17 @@ const runtimeEndpoint = 'https://example.cognitiveservices.azure.com/api/project
 const adminEndpoint = 'https://example.services.ai.azure.com/api/projects/jarvis';
 const sandbox = {
   sandboxSessionId: '7',
+  executionGeneration: '1',
   foundrySessionId: 'capture-session',
   agentName: 'jarvis-runner-base-1x2',
   invocationId: 'capture-task',
+};
+const currentCompletedRecord = {
+  ...recording.records['status_completed']!,
+  body: {
+    ...(recording.records['status_completed']!.body as Record<string, unknown>),
+    work_completed: true, provider_stopped: true, work_commit_sha: 'a'.repeat(40),
+  },
 };
 
 function setup(records: { status_code: number; body: unknown }[]) {
@@ -151,7 +159,7 @@ describe('sandbox heartbeat', () => {
 
   it('ends an expired session without a crash after its invocation completed', async () => {
     vi.useFakeTimers();
-    const completed = recording.records['status_completed']!;
+    const completed = currentCompletedRecord;
     const missing = recording.records['status_not_found']!;
     const { heartbeat, store } = setup([completed, missing, missing]);
     const onCompleted = vi.fn(async () => false);
@@ -195,6 +203,112 @@ describe('sandbox heartbeat', () => {
     await vi.advanceTimersByTimeAsync(0);
 
     expect(store.markNeedsAttention).toHaveBeenCalledWith('7', question, sandbox.invocationId, false);
+    await heartbeat.stop();
+  });
+
+  it.each([false, true])('treats explicit runner failure as authoritative with prior completion %s', async (completed) => {
+    vi.useFakeTimers();
+    const running = recording.records['status_running']!;
+    const body = { ...(running.body as Record<string, unknown>), status: 'failed', error: 'ACPShutdownError' };
+    const { heartbeat, store } = setup([{ status_code: 200, body }]);
+    vi.mocked(store.listRunning).mockResolvedValue([{ ...sandbox, invocationCompleted: completed }]);
+
+    await heartbeat.start();
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(store.markNeedsAttention).toHaveBeenCalledWith('7', undefined, sandbox.invocationId, false, true);
+    expect(store.recordHeartbeat).not.toHaveBeenCalled();
+    expect(heartbeat.hasTrackedSessions()).toBe(false);
+    await heartbeat.stop();
+  });
+
+  it('routes legacy completion to explicit verification recovery without calling it a runner failure', async () => {
+    vi.useFakeTimers();
+    const { heartbeat, store, onDecision } = setup([recording.records['status_completed']!]);
+    const onCompleted = vi.fn(async () => true);
+    heartbeat.setCompletionHandler(onCompleted);
+    await heartbeat.start();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(onCompleted).toHaveBeenCalledWith(sandbox);
+    expect(store.recordHeartbeat).toHaveBeenCalledWith('7', sandbox.invocationId, false);
+    expect(store.markNeedsAttention).not.toHaveBeenCalled();
+    expect(onDecision).toHaveBeenLastCalledWith(expect.objectContaining({ decision: 'completion_unverified' }));
+    expect(heartbeat.hasTrackedSessions()).toBe(false);
+    await heartbeat.stop();
+  });
+
+  it('offers stopped-writer proof to policy without hiding the cleanup failure', async () => {
+    vi.useFakeTimers();
+    const body = {
+      ...(recording.records['status_completed']!.body as Record<string, unknown>),
+      status: 'failed', error: 'Runner finalization timed out: event_delivery',
+      work_completed: true, provider_stopped: true,
+      work_commit_sha: 'a'.repeat(40),
+      cleanup_failures: [{ phase: 'event_delivery', error: 'PRIVATE diagnostic' }],
+    };
+    const { heartbeat, store, fetch, onDecision } = setup([{ status_code: 200, body }]);
+    const onCompleted = vi.fn(async () => true);
+    heartbeat.setCompletionHandler(onCompleted);
+    await heartbeat.start();
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(onCompleted).toHaveBeenCalledWith(sandbox, {
+      kind: 'work_completed_writer_stopped', workCommitSha: 'a'.repeat(40), cleanupPhases: ['event_delivery'],
+    });
+    expect(store.recordHeartbeat).toHaveBeenCalledWith('7', sandbox.invocationId, true);
+    expect(store.markNeedsAttention).not.toHaveBeenCalled();
+    expect(onDecision).toHaveBeenLastCalledWith({
+      sandboxSessionId: '7', invocationId: sandbox.invocationId, httpStatus: 200,
+      decision: 'completed_with_cleanup_failure', cleanupPhases: ['event_delivery'],
+    });
+    expect(JSON.stringify(onDecision.mock.calls)).not.toContain('PRIVATE');
+    await vi.advanceTimersByTimeAsync(120_000);
+    expect(fetch).toHaveBeenCalledOnce();
+    expect(heartbeat.hasTrackedSessions()).toBe(false);
+    await heartbeat.stop();
+  });
+
+  it.each([
+    { work_completed: false }, { provider_stopped: false },
+    { work_commit_sha: null },
+    { cleanup_failures: [{ phase: 'reader_shutdown' }] },
+    { events: [{ at: 2, kind: 'session_question', data: {} }] },
+  ])('does not convert a failed invocation into completion from partial proof %j', async (invalid) => {
+    vi.useFakeTimers();
+    const body = {
+      ...(recording.records['status_completed']!.body as Record<string, unknown>),
+      status: 'failed', error: 'Runner finalization timed out: provider_shutdown',
+      work_completed: true, provider_stopped: true,
+      work_commit_sha: 'a'.repeat(40),
+      cleanup_failures: [{ phase: 'event_delivery' }], ...invalid,
+    };
+    const { heartbeat, store } = setup([{ status_code: 200, body }]);
+    const onCompleted = vi.fn(async () => true);
+    heartbeat.setCompletionHandler(onCompleted);
+    await heartbeat.start();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(onCompleted).not.toHaveBeenCalled();
+    expect(store.markNeedsAttention).toHaveBeenCalledWith('7', undefined, sandbox.invocationId, false, true);
+    expect(store.recordHeartbeat).not.toHaveBeenCalled();
+    await heartbeat.stop();
+  });
+
+  it.each([
+    ['Runner cleanup failed: ACPShutdownError: process_exit', 'process_exit'],
+    ['Runner finalization timed out: publisher_close', 'publisher_close'],
+    ['PRIVATE arbitrary provider diagnostic', undefined],
+  ])('logs only an allowlisted cleanup phase for %s', async (error, cleanupPhase) => {
+    vi.useFakeTimers();
+    const running = recording.records['status_running']!;
+    const body = { ...(running.body as Record<string, unknown>), status: 'failed', error };
+    const { heartbeat, onDecision } = setup([{ status_code: 200, body }]);
+    await heartbeat.start();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(onDecision).toHaveBeenLastCalledWith({
+      sandboxSessionId: '7', invocationId: sandbox.invocationId, httpStatus: 200, decision: 'crashed',
+      ...(cleanupPhase ? { cleanupPhase } : {}),
+    });
+    expect(JSON.stringify(onDecision.mock.calls)).not.toContain('PRIVATE');
     await heartbeat.stop();
   });
 

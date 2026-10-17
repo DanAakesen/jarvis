@@ -13,8 +13,16 @@ export interface CodexToolUsageCount {
   readonly count: string;
 }
 
+export interface DailyMcpAuditRecord {
+  readonly requestId: string;
+  readonly tool: 'read_nutrition' | 'lookup_food' | 'log_food' | 'correct_food' | 'delete_food' | 'read_food_preferences' | 'manage_saved_food';
+  readonly phase: 'awaiting_confirmation' | ToolCallOutcome;
+  readonly outcome: ToolCallOutcome;
+}
+
 export interface ToolCallStore {
   record(call: ToolCallRecord): Promise<void>;
+  recordDailyMcp?(call: DailyMcpAuditRecord): Promise<void>;
   listCodexToolCalls?(from: Date, to: Date): Promise<CodexToolUsageCount[]>;
 }
 
@@ -24,6 +32,13 @@ export interface ToolCallStore {
  */
 export function confirmToolCall(tool: string, outcome: ToolCallOutcome, result: unknown): string {
   if (outcome === 'ok') {
+    if (tool === 'calendar_confirm_change') {
+      const change = result as { status?: unknown; detail?: unknown } | null;
+      if (['completed', 'cancelled', 'partial', 'unverified'].includes(String(change?.status)) &&
+          typeof change?.detail === 'string' && change.detail.length <= 1_000) {
+        return change.detail;
+      }
+    }
     const confirmation = (result as { confirmation?: unknown } | null)?.confirmation;
     if (tool === 'image_generation' && typeof confirmation === 'string' &&
         confirmation.length > 0 && confirmation.length <= 300 &&
@@ -33,7 +48,7 @@ export function confirmToolCall(tool: string, outcome: ToolCallOutcome, result: 
         })) {
       return confirmation;
     }
-    if ((tool.startsWith('memory_') || tool.startsWith('vault_') || tool === 'renew_credential') && typeof confirmation === 'string' &&
+    if ((tool.startsWith('memory_') || tool.startsWith('vault_') || tool === 'renew_credential' || tool === 'daily_feed') && typeof confirmation === 'string' &&
         confirmation.length > 0 && confirmation.length <= 300 &&
         !Array.from(confirmation).some((character) => {
           const code = character.charCodeAt(0);

@@ -1,5 +1,133 @@
 # Product
 
+## Voice result previews (16 October 2026; P11-07)
+
+Voice tool results use the existing automatic workspace presentation path.
+A successful staged Calendar proposal displays its actual returned summary
+as readable text, without its confirmation code. Showing or focusing that
+summary never approves or writes Calendar changes. Simple summaries and dates
+use an existing matching view or text/list, not an unsolicited chart/timeline.
+Show-work preferences, on-the-move suppression and disconnected-screen
+behaviour remain unchanged. The original transcript does not prove staging,
+a write or the exact rejected payload; live voice acceptance remains separate.
+
+## Mobile composer focus hotfix (16 October 2026)
+
+P11-06 / #860 is the priority mobile focus-jump correction. Phone chat uses
+the existing joined visible-viewport dock, including when a desktop chat
+rectangle is saved on the device. Desktop manual placement must remain dormant,
+not be fitted into the phone keyboard viewport or written back as a new
+preference. Returning to desktop restores that saved placement. Preserve drafts,
+conversation visibility and existing reader/tail-following behaviour through
+focus, viewport pan/resize, keyboard dismissal and orientation changes.
+Native-phone acceptance remains separate from controlled browser evidence.
+
+## Header background work (16 October 2026; P11-05 local candidate)
+
+The header's **Background work** control covers research, images, apps and
+indexing, not Software Factory tasks or current service health. Show only
+undismissed entries, with their real status, failure details and available
+result/cancellation controls. Dismissing an entry removes it from this header
+immediately and after refresh/reload on the same account, backend and device.
+It does not cancel work, delete records or remove saved results. Keep the
+control and an explicit empty state available after the last entry is hidden
+so keyboard focus is not lost. Storage/load failures remain visible and must
+not be presented as a successfully empty list.
+
+## Readable chat and attached phone typing (16 October 2026; local candidate)
+
+Booking/event summaries use labelled records separated by blank lines, with
+explicit known dates, years, times and local-time/timezone qualifiers. Do not
+invent missing dates or zones, or claim the agent sees a live chat preview.
+Ordinary chat supports paragraphs, emphasis, lists, links and fenced code.
+Well-formed historical GFM tables also render safely in a bounded,
+keyboard-scrollable region; malformed one-line tables remain source text,
+not guessed records. New reservation summaries should prefer labelled lists.
+Table replies may use the transcript width without widening ordinary prose.
+
+Phone typing must use one explicit visible-viewport rectangle rather than
+subtracting a keyboard estimate from a different fixed viewport. Preserve
+the chat/composer seam, drafts and saved placement through keyboard resize,
+pan, dismissal and orientation. Latest-following must survive repeated partial
+table growth while a response remains open, not just catch up on completion.
+Reading older history opts out of following until explicitly resumed.
+Physical iPhone/Safari acceptance remains
+open; earlier synthetic passing checks do not contradict Dan's screenshots.
+
+## App-wide control consistency (16 October 2026; local candidate)
+
+Equivalent actions, tabs, filters and fields must use Jarvis's existing common
+control geometry across routes. Do not introduce arbitrary action capsules,
+decorative coloured boxes, bevels or inset-shadow control borders. Preserve
+semantic status chips, necessary neutral structure, accessible selected and
+disabled states, visible keyboard focus and usable touch targets. Reuse the
+existing visual direction; no replacement theme or control framework is needed.
+See `DESIGN.md` for the contract and `docs/agent-context.md` for consumed guidance.
+
+## One balanced 3D stage budget (15 October 2026; local)
+
+Keep one recognisable room, cyan shell, open amber core and mirror floor.
+Dan wants a single balanced implementation, without quality tiers, modes
+or settings choices. Retain the mounted room across navigation, holding
+its last frame behind work pages; animate on home/sign-in and during
+voice. Preserve truthful activity/audio, explicit microphone ownership,
+reduced motion, hidden-tab pause, context recovery and usable HTML fallback.
+Rendering must have bounded frame, pixel and reflection work, without
+frame-time-driven resolution oscillation or redundant drawing-buffer resets.
+Dan's local feedback is that the stage still looks good; this is not a
+measured CPU/GPU utilisation reduction or a production flicker verdict.
+
+## Header tab overflow correction (15 October 2026; combined candidate)
+
+Window and background-job tabs must shrink as their number increases, then
+scroll horizontally within the available header space. Presence and Settings
+retain their own space. Keep full titles accessible and preserve Show/Restore,
+Pin, Close and job details. The phone window sheet stays a vertical list.
+Generic thinking, speaking and tool activity belongs in the conversation and
+beneath the voice orb, not in the header. Backend-waking feedback remains.
+Dan requested this correction in the next deploy; his physical mobile-composer
+report remains unresolved, with no device-fix or live acceptance claim.
+
+## Hosted chat terminal response (15 October 2026)
+
+The hosted chat application's `done` SSE event ends that response. Process its
+bounded completion metadata once, stop consuming later frames and await disposal
+of the owned response reader; do not require the server to close its HTTP socket
+first. Preserve partial-text streaming, pre-completion errors, cancellation,
+authentication and existing response-size and request deadlines. This is not a
+Factory task-completion or physical cloud-deallocation signal.
+
+## Mobile/Status review publication (14 October 2026)
+
+Dan approved commit, push and a separate review PR for the accepted phone
+composer and page-acknowledgement correction. The requirements below are
+unchanged; approval supersedes earlier local-only publication holds, not
+merge, deployment or live/device acceptance gates. No backend or Factory
+change belongs to this publication.
+
+## Page navigation acknowledgement correction (14 October 2026; local)
+
+A page-navigation command may acknowledge success only after the requested
+route has committed in the shell, not merely after requesting the switch.
+Status can acknowledge its mounted loading/error page without waiting for
+health data. Cancellation, supersession, disposal and the existing command
+deadline must settle truthfully; preserve drafts and the shared stream.
+Successful completion must recheck the captured deadline, including an
+already-current page or pane; a delayed timeout callback is not an expiry
+check. A late route may still appear, but it must not acknowledge success.
+Local evidence of an acknowledgement race does not establish the cause of
+Dan's reported first-turn failure or release acceptance.
+
+## Phone typing keyboard correction (14 October 2026; local)
+
+The chat frame and composer must stay joined when the phone keyboard opens,
+the visible viewport pans, or iOS Hide Keyboard restores space without
+blurring the input. An outside touch dismisses Message Jarvis without
+swallowing the tapped action; composer/menu controls and other editors keep
+their own focus behaviour. Preserve unsent text and saved chat geometry.
+This correction changes neither voice nor backend behaviour and is not a
+production or physical-iPhone acceptance claim.
+
 ## Remaining UI release (13 October 2026)
 
 Dan authorised "Deploy everything. so i can test live." This releases the
@@ -80,6 +208,7 @@ Keep implementation phases and progress in [PLAN.md](PLAN.md), feature summaries
 - **Purpose:** one Azure platform for building software projects, and later for banking, health and fitness, calendar, and further areas, all controlled through one shared UI and voice.
 - **Language:** Dan speaks Danish and English. UI copy and documentation are English.
 - Jarvis can develop its own repository through the same task flow.
+- For overall capability overviews, chat and voice briefly name every successfully discovered category. They must not invent unavailable categories or describe failed/refused discovery as successful.
 - Prefer Microsoft services, so Dan learns the stack and new Foundry features, unless Dan confirms a different provider for a capability.
 
 ### Roadmap
@@ -102,7 +231,7 @@ Only phase 1 is in scope now, extended by P7 (Jarvis everywhere: web and voice c
 | **Jarvis** | Jarvis is the app and its main page. Dan talks to Jarvis in one continuous conversation (chat and voice), with saved messages and streamed chat replies. Chat turns save the source message before invoking the hosted agent; only a completed reply is saved, and tool calls link to that source message. Dan can discuss Jarvis's code and features through read-only repository tools; files and issues are untrusted data, and Jarvis proposes tracked code changes conversationally, creating a task only after Dan confirms. |
 | **Notifications and approvals** | Notifications appear in the authenticated Now feed; gated actions await Dan's single-use approval in the browser. When an English browser voice session is active, Jarvis speaks concise task-status and pending-approval notices. Teams and Microsoft 365 integrations are not used in Dan's personal tenant. |
 | **Board** | Kanban-style task view: add, start, steer, pause, resume, cancel, and follow tasks. |
-| **Updates** | Events update state and progress live, without manual refresh. |
+| **Updates** | Events update state and progress live, without manual refresh. Automatic board updates preserve an in-flight read in the same scope and coalesce into one follow-up; project, backend, identity and unmount changes still cancel obsolete reads. |
 | **Assignment** | One active coding agent per task. |
 | **Plan tracking** | The repository's `PLAN.md` is the shared task-status view, with each task linked to its GitHub issue. An open issue with a worker label (`Codex`, `Copilot`, `Dan`, or `Jarvis`) or an open linked PR sets In progress (assignees are ignored), completed tasks set Complete, and all other tasks, including issues closed without completion, reset to Not started unless Blocked is set by hand. New task rows get a labelled issue with dependency links. |
 | **Parallel work** | Dan controls concurrency across projects; capacity depends on provider limits and compute. |
@@ -114,14 +243,14 @@ Only phase 1 is in scope now, extended by P7 (Jarvis everywhere: web and voice c
 | **Presence modes** | Dan can choose Present, Away, or On the move by saying or typing it. A phone or desktop may set its device mode, but a manual change takes precedence for two hours. No Graph or Teams presence is read. Active use of the authenticated Jarvis browser app returns him to Present; background feed refreshes do not. The persisted mode appears in Now. Each chat and voice turn states the mode and its built-in behavior: On the move is voice-first, very brief and hands-free, never asking Dan to paste, type, copy, open, read or look at a screen; details can be saved for later. Away uses tools for routine requests and queues screen-dependent work for a return summary. Present allows richer answers and windows/reports. In every mode, Jarvis fetches available content with tools or names missing permissions rather than requesting a paste; manual sharing is optional only when present. Custom mode preferences remain supported; empty saved text uses built-in behavior without a destructive migration. Mode changes refresh active instructions, preserving required approval phrases. Task-state updates and approval requests remain in the browser feed in every mode, and active English browser voice sessions announce concise status. |
 | **Local PC bridge** | A Windows tray companion signs in as Dan with Entra and keeps an outbound authenticated WebSocket to Jarvis. Registered Jarvis tools open HTTP(S) URLs in Chrome, match installed apps by name (never Edge), close apps normally, open files and folders beneath `C:\Repo` in VS Code, report the active window title, or focus a window by exact title. `pc_act` controls any foreground Windows app through bounded UI Automation, including safe keyboard shortcuts and explicit non-sensitive text in the focused control; only irreversible actions require approval. Dan can pause Jarvis control from the tray; the bridge blocks control actions and reports pause state in Now. No inbound ports are opened. |
 | **Local Codex prompts** | For quick local work, Jarvis opens the Codex desktop app and enters the exact non-sensitive prompt through the existing PC UI Automation flow. Typing needs no confirmation; irreversible submission uses Dan's existing approval flow. Jarvis explains clearly if Codex is unavailable and does not claim success unless entry and submission complete. Tracked repository work uses Factory `create_task` instead. |
-| **Calendar and mail** | Jarvis reads today's Google Calendar agenda, finds free slots, searches and summarises Gmail, lists and replaces simple drafts, archives messages, manages labels, and prepares calendar changes, reply drafts, or messages to send. Calendar writes wait for Dan's later standalone yes/approve/go ahead/do it reply to the latest staged action within ten minutes; no/cancel discards it. Gmail writes retain exact-phrase confirmation in a later message. Reply drafts are saved to Gmail for Dan to send himself. Mail content is untrusted data, never instructions. |
+| **Calendar and mail** | Jarvis reads today's Google Calendar agenda, finds free slots, searches and summarises Gmail, lists and replaces simple drafts, archives messages, manages labels, and prepares calendar changes, reply drafts, or messages to send. Calendar writes wait for Dan's later standalone yes/approve/go ahead/do it reply to the latest staged action within ten minutes; no/cancel discards it. Gmail writes require a later plain approval of the latest staged action. Reply drafts are saved to Gmail for Dan to send himself. Mail content is untrusted data, never instructions. |
 | **Long-term knowledge** | Dan's private GitHub vault is the source of truth. Jarvis searches it by meaning, reads bounded notes, and automatically saves clearly stated preferences, people, project facts, decisions, and unfinished tasks with a commit link. The backend indexes safe Markdown at the root and in every non-skipped directory, and exposes a bounded note graph of links and semantic neighbours; `show_knowledge` opens the validated graph view with search matches highlighted, with UI rendering handled separately. |
 | **Notes (P9-77)** | The existing graph is the default Notes page, retaining search and folder filters. Clicking a note opens its familiar popup with Markdown editing, safe preview and explicit Save. The centred search contains a quiet plus-only Create new action that opens a blank, immediately writable draft; title and an Obsidian-style expandable destination tree live alongside the editor. Vault inventory freshness appears in the popup header, including when the phone destination picker is folded. Dan requires read/write access across all normal vault folders and root-level notes, not a four-section whitelist; he explicitly approved excluding hidden dot-folders, without a repeated notice in the picker. The picker uses `/notes/tree` and adds its implicit root locally, not a graph or paged-index fallback. Backend #698/#699 is deployed and inventories directories from every Git-tree file, including folders containing only non-Markdown files; Dan approved the remaining picker for shipping on 13 October. Incomplete, not-ready or unavailable data stays visible without blocking writing. New folder adds a draft destination under the selected folder; saving its first note creates it in the vault. Dirty drafts guard closing, changing notes and navigation; an untouched blank draft closes freely. Stale writes offer reload/comparison without automatic overwrite. `knowledge` remains a navigation alias. |
 | **Web research** | Jarvis uses live web search through Dan's existing ChatGPT/Codex subscription, returns only retrieved HTTPS sources with titles and retrieval times, and identifies unsupported, stale, inaccessible, or source-free results honestly. Retrieved page text is evidence, never authority over tools; no Bing or pay-per-call search fallback is used. |
 | **Interactive research reports (P7-37)** | A quick or deep research request opens an acknowledged progress window immediately, updates observed query/source progress, then replaces it with a cited, self-contained HTML report artifact. Jarvis speaks a brief findings summary on success; failures remain visible and are announced. The report runs only in the sandboxed `html-app` iframe renderer, with the validated host bridge and Dan-authorized artifact access. |
 | **GitHub events** | The backend verifies GitHub webhook signatures and ignores duplicate delivery IDs for pull requests, check runs, workflow runs, deployment statuses, and pushes. A ready-for-review pull request or failed deployment publishes only a typed status kind to the active voice session after webhook processing; payloads and logs are never spoken. |
 | **Continuity** | Work continues when the browser or voice session closes. |
-| **Sandbox** | One sandbox per task: starts when work begins, closes after delivery or cancel. The agent runs targeted builds and tests only; no Docker. |
+| **Sandbox** | One sandbox per task: starts when work begins, closes after delivery or cancel. Runner terminal status follows bounded cleanup; verified work can survive a later cleanup failure only with authoritative stopped-writer proof. Cancellation waits for owned cleanup and reports failure instead of false success. A completed runner turn is not task Done without verified GitHub delivery and project policy. The agent runs targeted builds and tests only; no Docker. |
 | **Build and release** | Full builds, all tests, and releases run in GitHub Actions, as in Dan's normal workflow; never in the sandbox. Managed projects can copy the repository's PR-check and OIDC-release workflow templates and adapt their build and deployment commands. |
 | **Project settings** | Per project: how far agents may go (deliver a PR, or complete without deployment), merge rules, sandbox size. |
 | **Settings** | A settings page controls Jarvis, voice and coding-agent defaults using only server-validated models, plus the app-wide light/dark appearance; updates affect new sessions and tasks, not running work. Dan can also list and delete saved PC/browser task recipes. |
@@ -149,6 +278,10 @@ flowchart TB
 
 - Each area owns its pages and registers its tools with Jarvis. The backend exposes every registered tool's input schema and executes calls, recording each result so new modules become available without agent changes. Jarvis's reply about an action comes from that recorded result: a refused or failed call is reported as refused or failed, never as done. The Jarvis agent uses only these backend tools.
 - In chat and voice, Jarvis can list active projects and filtered tasks, inspect a task, create work, and steer, pause, resume, or cancel it. The backend applies the existing task validation and lifecycle rules to every action.
+- Gmail access uses direct mail tools only, never PC, browser or screen fallback after failed or incomplete reads. Raw computer tools verify trusted current process/site observations, including opaque Chrome tab IDs, before exporting controls, window/clipboard data or acting. Optional or truncated title suffixes cannot establish application identity; a Gmail-named source file in an actually observed native editor is not a Gmail browser window. Clear independently requested unrelated computer actions remain available in the same mail turn, including after topic-bearing EN/DA mail requests, but quoted subjects and how-to query text cannot authorise them. Ambiguous query text remains on the direct-mail path. Reads expose body source, truncation and extraction warnings, plus alternate HTML text when it contains different content. Successfully decoded empty bodies retain full-body provenance; any available snippet is a separately labelled preview, not evidence that the body is unavailable. Jarvis checks both bodies for reservation details and describes incomplete extraction without claiming the original email lacks them; booking dates must come from readable source text.
+- Calendar changes must return `ok` with `awaiting_confirmation`, an eight-digit code and the actual summary before Jarvis claims preparation or requests approval. Later plain approval uses the original pending code; if private history omits it, a verified read-only tool recovers the live stage without restaging or requesting repeated approval. Gmail and calendar approvals stay separate even when both have pending changes; generic staging prose or appointment/calendar words inside mail subjects, reply receipts or read topics do not establish calendar context. Explicit calendar workflows, including adding an email-derived appointment, remain available. Unrelated weather, mail or build questions reset calendar follow-up routing. Expired or absent stages are reported as no pending change, not proof that an event exists or does not exist. Calendar checks require actual reads; completed writes require actual confirmation results. Subject, timezone-aware dates, attendees and returned summary survive the approval flow.
+- For multiple requested calendar creations, stage 2–10 events as one immutable proposal displaying every subject, local date/time, zone and attendee list. One later approval covers exactly that list, never an undisclosed extra event or a replacement proposal under an old code. Google writes are sequential, not atomic: show each created, failed, unverified or not-attempted item and stop on failure/cancellation. Never automatically replay created or unverified events. Process-local receipts support short-lived follow-up recovery, not durable survival after a restart. Ordinary explanations, incomplete requests and general conversation must not be replaced by a calendar evidence disclaimer merely for mentioning the calendar.
+- Calendar batch approval must match the actual staged source to the latest server-verified request identity in the authenticated scope. Contextual requests such as "Add those two." or "Tilføj de to." may inherit recent calendar routing, but not another request's identity; explicit Notes/mail requests remain separate. Visible assistant prose is not origin proof. Missing or mismatched identity must refuse approval without writing or cancelling an unrelated proposal.
 - Google tools use the authenticated backend registry for agenda/free-slot reads, mail search and draft listing, calendar changes, draft updates/deletion, archiving, label changes, reply drafts and sending. The backend uses OAuth credentials held only in Key Vault for Dan's `danaakesen@gmail.com` account, redacts private tool inputs/results from persistence, and requires a one-time confirmation from a later verified Dan message before any write.
 - Page requirements list every data point and action, not the look. Dan creates the visual design from them with an image generator (see [DESIGN.md](DESIGN.md)).
 
@@ -170,10 +303,12 @@ stateDiagram-v2
     Ready --> Cancelled: Cancel
     Running --> Cancelled: Cancel
     Paused --> Cancelled: Cancel
+    NeedsAttention --> Cancelled: Cancel
 ```
 
 - **Steer** submits a bounded text correction to the current turn, or starts a new session on the task branch when the completed turn's session has expired. **Pause** requests a safe stop and remains `PauseRequested` until the backend confirms the turn has stopped; the heartbeat resolves an unsuccessful pause to `Running` or `NeedsAttention`. **Resume** continues the same Foundry session after a clean pause; **cancel** ends the task and requests deletion of its Foundry session.
 - Task controls are offered only for valid task states, with pending and failure feedback beside the action. The backend enforces every transition; a browser cannot set task state directly.
+- Needs attention, including an agent question, offers the same confirmed Cancel action. Cancellation stops only the task's current owned invocation, awaits session-end recording and owned-session deletion, and reports cleanup failures rather than success. Unknown runtime ownership blocks cancellation. Crash Recover and expired-session Continue remain separate actions; cancellation never answers the question or starts another turn.
 - Chat-created tasks retain their originating message. When a task becomes Done, Needs attention, or Cancelled, or opens a pull request, Jarvis posts one task-ID/outcome update with the PR link when available to that conversation. An active voice session speaks the update; away mode uses the existing Teams notification path.
 - If writable disk falls below the configured threshold, the runner reports `disk_low`, stops the current turn, and the backend moves the task to Needs attention with reason `disk_low`.
 - If Codex rejects a turn because the Jarvis login's usage limit is reached, the runner reports the failure as `Codex usage limit reached` (reason `codex_usage_limit`) instead of a generic runner error. The task moves to Needs attention, and other tasks keep running.
@@ -198,7 +333,12 @@ stateDiagram-v2
 | **Complete without deployment** | Also squash-merge with the GitHub App when checks are green or none are configured after a two-minute grace period, the PR is not a draft, its branch is up to date, and GitHub reports it mergeable. Mark Done after the signed merge webhook is persisted. |
 
 - Merge rules and Done are Dan's choices per project.
-- The backend applies policy only from task-linked P3-04 GitHub records and current GitHub API state; an agent report never marks a task Done. `NeedsAttention` can become Done only after that verification.
+- The backend applies policy only from task-linked P3-04 GitHub records, current GitHub API state, and backend-verified completion proof for the current sandbox session and invocation. Proof is either a clean final completed snapshot, or final failed status with independently recorded successful work and verified owned-provider stop, where only credential/event/publisher cleanup failed. A runner's early `completed` event, idle expiry, or passing PR checks alone never authorises Done or a policy merge. `NeedsAttention` can become Done only after that verification.
+- An explicit failed runner snapshot overrides earlier completion or question events. Failed work or uncertain writer teardown requires attention. Post-stop credential/event/publisher failure remains visible as runner failure even when verified delivery satisfies task policy. Logical session expiry and stopped-writer proof do not prove cloud compute deallocation.
+- Recovery invalidates the previous execution's completion proof before starting its replacement. Done and an approved merge require the same current task/session/proof generation and no pending start lease, including after deferred approval; a failed replacement start never restores old proof.
+- Proof must match opaque Foundry session and invocation identifiers exactly, including case, regardless of the database-default collation.
+- Durable delivery, project-policy completion and runtime release are separate facts. Persisted runner-owned `work_completed`, `provider_stopped` and `work_commit_sha` facts bind completed work to its verified commit. Both clean and cleanup-failed completion require that exact published task-branch/PR head; the locked policy gate compares the proof commit with its candidate head, including after approval. A local unpushed commit or an older green PR cannot substitute. Successful-work proof never comes from a generic completed or question-only turn. Legacy unbound snapshots remain readable but cannot authorise new completion. Missing or malformed proof, question snapshots, cancelled/nonterminal status, or process/reader/provider shutdown failure cannot use it. Physical release and fresh live acceptance remain separately verified outcomes.
+- A clean completed invocation without delivery proof retains its observed completed lifecycle and leaves the task in verification attention. Missing proof is neither a runner crash nor permission to deliver, mark Done or merge.
 - The GitHub merge endpoint enforces repository branch protection and required checks. A refusal is recorded on the task and leaves it unfinished.
 
 ### New projects
@@ -393,7 +533,7 @@ unavailable, including after backend restart.
 
 ### Web notifications and confirmations (P6-22)
 
-Jarvis writes bounded text notifications to the Now activity feed. Gated actions appear as browser approval requests with Approve and Reject controls and expire after five minutes. Unknown, replayed, rejected, cancelled, expired, or unverified responses never run the action. A pending approval is announced to an active browser voice session; the authenticated Now feed remains the approval channel.
+Jarvis writes bounded text notifications to the Now activity feed. Gated actions appear as browser approval requests with Approve and Reject controls and normally expire after five minutes. Internal food-review cards explicitly expire after two minutes to keep the whole operation inside the hosting request limit; the visible expiry matches persistence and cancellation. Unknown, replayed, rejected, cancelled, expired, or unverified responses never run the action. A pending approval is announced to an active browser voice session; the authenticated Now feed remains the approval channel.
 
 These actions always require Dan's confirmation: merge, delete, send mail, calendar changes, repository creation, destructive or externally consequential computer use outside the browser, and anything that spends money. The backend fails closed if Jarvis approval is unavailable or expires; it never proceeds without Dan's authenticated approval. Provider credentials remain server-side; notification content, audio, tokens, and images are not written to logs, task events, or errors.
 
@@ -463,7 +603,27 @@ Persistent-pin semantics are still part of the unfinished P8-42 implementation.
 
 The board reads the canonical `GET /factory/board?project=<id>` snapshot for one active project, initially the first returned project. Placement comes from the backend, never from task state. It includes open issues and issues closed in the last 14 days. Filtering precedes the explicit 100-card display cap per column; counts include all matches and the cap explains how to find hidden matches. Paused, Needs attention and Cancelled remain task facts, not columns. Cards without tasks have no invented task actions or timings; full history and usage stay in task details. Snapshot time, cached GitHub data, live connection failures and retained data after failed refresh are visible. Refresh and retry preserve the current board and scroll; changing project hides the old snapshot and cancels obsolete reads. Committed board events and stream reconnection refresh placement.
 
+An unclaimed `needs-decision` issue stays in Needs Dan when its linked PR is
+still a parked draft. The draft and any supplied task state/activity remain
+visible as facts, not an implicit worker claim. An actual worker label still
+means In progress, and a review-ready linked PR still means In review.
+
+The local 16 October correction (not released) shares one server-owned board
+load per project. An update invalidates
+only its project and can require one immediate complete follow-up. If that
+follow-up is invalidated too, the snapshot is explicitly stale and remains
+expired until another read; continuous events cannot extend one operation into
+an unbounded refresh loop. Failed refreshes retain a validated snapshot and
+visible stale/failure feedback, never an invented empty board. Cancelling one
+client's wait must not cancel another client's shared source work.
+
 Jarvis can navigate to an issue by a positive whole `issueNumber` on the selected project's Factory board. An exact `#number` search clears other local filters and expands the issue's column, so the display cap cannot hide the requested card. A real linked task opens its existing window; a task-free issue stays on the board with its title link focused. Unknown, unavailable, cancelled or still-loading targets return a reason rather than acknowledging a route change as success. Navigation waits at most six seconds and stays within the command expiry; ordinary board loading may continue without a late focus or window action. Notes' unsaved-draft guard and task-ID navigation remain intact.
+
+An older snapshot cannot definitively exclude an issue or its requested task
+link while the selected scope has a pending read or known automatic follow-up,
+including the idle debounce. Navigation waits within its existing budget,
+without starting a speculative read; a failed follow-up returns the visible
+read error rather than a definitive task-link miss.
 
 GitHub issues are the single backlog and source of truth; the Software Factory and Copilot execute them, with Codex as the default for Jarvis-raised work. Dan can start an existing issue with the `Jarvis` label, the `start_issue` tool, or the authenticated Factory API. Duplicate starts reuse the active task, and task progress links back to the issue without copying code or issue content into comments.
 
@@ -602,6 +762,14 @@ The separate daily web-research count includes successful, refused, and failed c
 
 ## Success criteria
 
+- For this repository, a responsive intake/integration coordinator dispatches at
+  most two builders and maintains the canonical GitHub backlog. Builders own
+  development, automated regression tests and failure fixes; pipeline results
+  provide bounded, content-free routing evidence.
+- Qualified integrated changes flow continuously through the existing main-only
+  production path without routine per-release human sign-off. Required failures
+  still block acceptance. Applied components, deterministic readiness and live
+  conversation acceptance are separate facts; real-world reports feed the backlog.
 - Dan can ask Jarvis, by voice or chat, to start a task on a project; a coding agent delivers a pull request; GitHub Actions checks it; Jarvis merges and releases it according to the project policy.
 - Dan sees every task and release update live, can steer, pause, resume, cancel, and recover tasks, and sees what each task used and cost.
 - Each phase in [PLAN.md](PLAN.md) meets its acceptance criteria. Prototype results are evidence for feasibility; production behavior needs its own verification.
@@ -782,9 +950,139 @@ Dan approved these after a gap audit. They are planned, not built.
 Dan decided that GitHub issues are the single backlog. When Dan asks Jarvis to change code, Jarvis drafts an issue, confirms it with him and creates it; the Software Factory then picks it up with the Codex agent (worker label `Jarvis`), or Copilot when Dan chooses. Factory progress shows on the issue, its pull request uses `Fixes #N`, and the Factory board uses the same columns as the GitHub Project: Backlog, Needs Dan, Ready, In progress, In review, Done. ([#573](https://github.com/DanAakesen/jarvis/issues/573)–[#577](https://github.com/DanAakesen/jarvis/issues/577))
 ## Daily migration (approved P12)
 
+Tool parity is an acceptance requirement for every retained Daily capability,
+not a later convenience. The page and Jarvis chat/voice must use the same
+owner-authorised services, source data, calculations and confirmation rules.
+Browsing periods/history/details, showing requested data and visuals, and
+permitted changes need equivalent tool workflows; UI controls alone do not
+complete a capability. Reuse existing general tools where they provide the
+equivalent action rather than creating one tool per button. Missing tool
+coverage remains unfinished. This does not restore excluded features or waive
+private-data, provider, credential, device, approval or activation gates.
+
+An independently opt-in `daily_feed` workflow shares the retained Gmail/calendar
+snapshot, attention, suppression and manual-refresh services. Reads preserve
+Missing/Stale/Current, successful capture versus latest attempt, exact source
+IDs/consumer keys and unknown retained calendar range. Refresh, dismiss, Received
+and restoration require the current verified chat/browser-voice context and
+the existing two-minute browser Now approval. Only Daily visibility changes:
+no mail/calendar/order-provider mutation, original workflow dispatch or schedule.
+Changed targets are refused under the owner transaction; acknowledged changes
+refresh existing consumers. Missing Google/model configuration and failed,
+limited or incomplete refreshes cannot establish fresh coverage. The separate
+nutrition-only connector has no feed access. Daily remains off; stored grants,
+CalendarList/live-model parity and #725 acceptance remain unverified.
+Active suppressions are limited to1,000 per type under the owner lock. Updating
+an existing suppression and native-reviewed exact-key restoration remain usable
+at capacity; known-key recovery cannot depend on listing the whole collection.
+
+Retained brief history belongs in that same page and chat/voice query workflow.
+Read existing historical metadata and exact body detail without generating,
+delivering or scheduling a new brief. Stored timestamps and historical delivery
+states are not current health/freshness evidence; do not infer a missing timezone.
+Preserve the original data and leave recurring Daily notifications off.
+
+16 October implementation resumption: the next inactive P12-09 slice shares
+one owner-authorised bounded query path between HTTP and the existing sensitive
+tool registry for retained health/sleep/workouts/minute heart rate, meal history
+and sync evidence. It preserves canonical values, units, Copenhagen dates,
+lineage, nullable unknowns and tombstones; source completeness and staleness are
+not inferred. Acknowledged health/intake commits invalidate the existing refresh
+stream. Reconnect/refocus consumers must refetch; content revisions are not a
+durable global event cursor. This is local source work, not deployed integration
+or full #724 acceptance. Hosted authenticated ChatGPT food logging, trusted
+intent/proposal acceptance, the single Daily page/on-demand GenUI and protected
+export/source-parity/device/cutover gates remain separate. No coaching, widget,
+provider call, new meal writer or production composition is added by this slice.
+
+The next bounded #724 continuation adds retained favourites and meal plans to
+that same read path, not another service. These periodless collections use
+exact ID-only cursors and at most 100 records per page. Preserve display aliases,
+saved nutrient provenance, plan snapshots/revisions/tombstones and nullable
+values; definitions and plans are not consumed meals. Their acknowledged writes
+invalidate their own source through the same refresh hub. Daily stays off and
+the hosted ChatGPT food-write/connector requirement remains unfinished.
+
+The next inactive hosted nutrition adapter exposes only nutrition reads,
+Frida lookup and explicitly reviewed intake logging/correction/soft deletion.
+A separate delegated OAuth client must not acquire general Jarvis authority.
+External model input cannot select an owner or declare its own confirmation,
+provenance verification or rollout state. Native confirmation binds the exact
+proposal and stable operation keys; receipts claim commitment only after the
+existing handler returns. Unknown nutrients stay null. For this unactivated
+external boundary, every mutation requires native review, including exact-label
+logging; internal exact/favourite logging keeps its no-redundant-confirmation
+requirement. This conservative external limitation is not full retained-workflow
+parity. Unsupported clients refuse writes; actual ChatGPT compatibility,
+account linking, scopes/grants and mobile acceptance are not established by
+synthetic protocol tests. Production Daily stays off.
+
+The inactive saved-food continuation supports native-reviewed favourite/alias
+saves, server-resolved plan saves/soft deletion and persistent canonical
+favourite likes/dislikes/clears. Reviews show actual source snapshots and plan
+totals; SQL rechecks sources under lock before commit. Real favourite/feedback
+revisions protect retries, including cleared preferences. These operations
+never create intake or Health exports and do not activate the connector.
+
+An independently opt-in internal `daily_food` tool supports direct requests
+such as `Log my favourite NAME` and `Log yoghurt: 200 kcal, protein 10 g`.
+Only its operation is model input: names and exact quantities come from the
+verified current Dan message, with saved portions resolved server-side.
+Absent macros remain null and saved confidence/provenance remain intact.
+These explicit requests do not require a second confirmation. Conditional,
+negated, time-qualified or unsupported wording is refused, not guessed;
+this narrow direct path does not implement new photo/portion-estimate review.
+Repeating one message recovers its actual committed intake without logging
+again, even if the favourite later changes. Edited source requests and deleted
+intakes cannot silently become another intake. Production remains off;
+this is not complete internal food workflow or #724 acceptance.
+
+The inactive internal composition includes `daily_food_review` for portion
+estimates, revisioned corrections and soft deletion. It uses the existing
+owner-bound one-time approval in Now, not model confirmation flags or a new
+proposal dispatcher. Review shows the exact before/after food, units, unknown
+macros, occurrence/Copenhagen date and target revision. Model proposals remain
+estimates; approval does not make them independently verified. Direct supported
+exact labels and actual saved favourites are routed back to the one-step tool.
+This initial reviewed path requires a present chat/voice session and a browser
+approval within its displayed two-minute window; a spoken "yes" alone is not acceptance. Browser-only delivery prevents
+meal details being routed into Teams even if presence changes. Rejected,
+cancelled, expired or stale reviews cannot mutate intake. Existing canonical
+storage, exact operation/revision replay, tombstones and commit refresh remain
+shared. No Health write, production activation or physical-phone acceptance is
+included; broader conversational and actual client/device gates remain.
+Both internal food tools refuse phone calls before generic approval; an approval
+cannot make their unsupported phone context valid.
+
+An additional independently opt-in internal `daily_saved_food` tool provides
+owned saved-name/alias lookup and versioned preference reads without mutation.
+Favourite/alias saves from an owned intake or proposed definition, server-built
+plans, plan soft deletion and canonical like/dislike/clear require the exact
+browser Now approval. Show actual before/after snapshots and bind source
+revisions/fingerprints under canonical SQL locks. New definitions stay estimates;
+plans and preferences never become eaten food or Health writes. Keep missing
+preferences distinct from persisted null clears. Replays return real saved
+records without another write or refresh. Current verified present chat/browser
+voice supplies write context; phone is unsupported. The two reviewed food tools
+share the bounded 180-second browser relay and 210-second hosted-agent read
+budgets; other tool deadlines remain unchanged. No production activation or
+full client/provider/device acceptance is implied.
+
+When an existing Frida adapter is explicitly supplied, owner-authenticated
+`daily_food_lookup` exposes only its public-reference component lookup.
+Keep generic food names, requested grams or explicit unknowns, preparation,
+DTU/version/DOI attribution, retrieved times, incomplete totals and provenance
+intact. Reference results are not verified consumed food or approval for a
+later mutation. No owned history, credentials or raw conversation is sent to a
+provider. Missing provider capability contributes no tool; failures stay
+unavailable rather than falling back to invented nutrition. This read neither
+logs intake nor enables Daily, and does not establish live-provider acceptance.
+
 P12-05 adds an inactive, explicitly invoked health processor over the existing SQL inbox: metrics/sleep/workouts/detail/minute HR, canonical physical units, Copenhagen dates, exact session/checksum replay and bounded retry/quarantine. Domain changes, ingestion lineage and processed-feed freshness commit together; phone heartbeat stays separate. Empty workout exports cannot erase history, missing values stay unknown, and native nutrition cannot feed back into canonical meals. Owner history/detail reads are bounded and unregistered. No scheduler, source import, live device changes or activation; protected/live parity remains gated.
 
 Heart-rate summaries and series must validate declared units consistently. Unsupported rate units quarantine without changing processed freshness; only established legacy summary fields imply BPM when their unit is absent. Missing samples and summaries remain unknown, not inferred.
+
+Body-fat percentage accepts string `%`/`percent` or `fraction`/`1` and normalizes to percent. Unsupported strings and non-string unit declarations quarantine even when another unit could override them. Absent/null/blank units remain missing; without a supported inherited unit they stay unknown without inferred conversion. Preserve zero, missing values and raw evidence.
 
 P12-04 reuses the existing backend and SQL for an inactive Health Auto Export upload/heartbeat boundary. Owner-bound hashed, scoped, revocable device credentials remain separate from human login. An 8-MiB upload is accepted only after the SQL raw inbox transaction commits; SQL outage/capacity returns 503 for the phone to retry. Exact sessions/checksums deduplicate and changed bytes conflict. The bounded inbox retains raw evidence without automatic deletion; processing/approved compaction belong downstream. No separate Blob/Queue/host or new resources are needed. Accepted and processed freshness stay distinct. Source/device settings and production enablement remain unchanged; protected/live/phone acceptance remains gated.
 
@@ -798,6 +1096,6 @@ P12-10's inactive Google services reuse existing owner/login/connections, enumer
 
 All migrated React/rich UI must match current Jarvis layout and styling fully, using current DESIGN.md, canonical styles.css tokens, shared components, themes/density/motion and native phone/workspace patterns. Preserve Daily capabilities/data semantics while recomposing its legacy visuals; no separate Daily skin/theme or replacement shell/voice/window manager. Generated views reuse safe trusted Jarvis theme context through the existing bridge without expanded permissions. Physical/browser mobile-first visual acceptance is required in #730/#731/#732/#726; persistence work does not start those blocked UI tasks.
 
-[Approved scope](docs/daily-migration.md) preserves mobile-first Daily/Workouts/Nutrition, Status/Recomp/Review/Ready in the single assistant conversation, health sync, nutrition/Frida/history/plans, coaching/recovery, scoped iPhone widget/Shortcut, existing Google feeds and football preferences. TickTick is excluded; recurring Daily notifications stay off. Reuse existing login/session/owner, shell and voice. P12-01 implements only gated integration metadata and reserved IDs; pages, data services and device credentials remain planned. Original Daily continues ordinary authorized food/health writes and stays running/canonical before cutover; migration tooling must not alter its application/source code/schema or rewrite records; pre-authorized cutover remains evidence-gated, with rollback protected and no original repository/data deletion.
+[Approved scope](docs/daily-migration.md), updated by Dan on 15 October 2026, preserves existing Daily health, nutrition, workout/tracking and integration capabilities through one mobile-first Daily page and existing on-demand GenUI in the single assistant conversation: no widget, separate Workouts/Nutrition pages or four mandatory Status/Recomp/Review/Ready views. New P12-08/#723 coaching/recovery/recomp automation is excluded from planned scope and the combined release, not accepted as complete; this does not remove existing capabilities, measurements or retained records. Health sync, nutrition/Frida/history/plans, the scoped optional iPhone Shortcut, existing Google feeds and football preferences retain their existing gates. TickTick stays excluded and recurring notifications stay off. Reuse existing login/session/owner, shell and voice. Core P12-09/#724 API/tools work excludes new coaching and must not require #723 completion; this scope decision does not activate it. Original Daily continues ordinary authorized writes and remains canonical until protected backup/export, authoritative-source/parity, real-device/provider, final-delta, rollback and cutover gates pass; no original source/schema/data deletion or rewrite.
 
 P12-07 adds inactive nutrition services and typed handlers using verified source action semantics. Explicit exact-label/favourite intake needs no redundant confirmation; photo/portion estimates need acceptance of the displayed proposal from trusted Jarvis metadata, never model `userConfirmed`. Exact quantities outrank estimates; nullable unknowns and legacy confidence/capture vocabulary remain intact. Meals persist until soft deletion, with full paged history and revisioned corrections by exact owner-bound idempotency key beyond seven days. Occurrence defaults to trusted request time/Copenhagen date only when absent. Favourites accept one retained source key or confirmed definition; normalized-name reuse updates its ID. Plans resolve owned favourites server-side for one breakfast/lunch/dinner plus optional snacks (3–50 slots), snapshot and sum values without trusting model totals or logging food. Suggestions use authoritative time/remaining budgets and persistent dislikes. Frida pins release 10 / 5.5 with DTU/DOI attribution, supplied public bootstrap/DTO shapes, per-100-g scaling and honest null/provenance/subtotals. Final CI/independent review, live parity and P12-09 integration remain gated; this code activates nothing.

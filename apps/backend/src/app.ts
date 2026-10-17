@@ -49,6 +49,7 @@ import { recordIssueTaskProgress } from './factory/issues.js';
 import { WorkspaceCommandBroker } from './core/workspace-commands.js';
 import type { WorkspaceHtmlArtifactStore } from './database/workspace-html-artifact-store.js';
 import type { ConversationAttachmentStore } from './database/conversation-attachment-store.js';
+import { startConversationAttachmentCleanupJob } from './core/conversation-attachment-cleanup.js';
 import { createTaskStatusNotificationHandler } from './factory/task-status-notifications.js';
 import type { ModelDeploymentWorkflow } from './core/model-deployments.js';
 import {
@@ -122,7 +123,7 @@ declare module 'fastify' {
     githubIssueClient: GitHubIssueClient | null;
     factoryBoardReader: FactoryBoardReader;
     factoryBoardCache: FactoryBoardCache;
-    publishFactoryBoardChange(projectId: string): void;
+    publishFactoryBoardChange(projectId: string, origin: 'task_event' | 'github_webhook', reqId?: string): void;
     githubRepositoryCatalog: GitHubRepositoryCatalog | null;
     taskController: TaskController | null;
     eventHub: TaskEventHub;
@@ -193,7 +194,10 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
   });
 
   app.addHook('onRequest', async (request, reply) => {
-    request.log.info({ method: request.method }, 'request.started');
+    request.log.info({
+      method: request.method,
+      ...(request.routeOptions.url === undefined ? {} : { route: request.routeOptions.url }),
+    }, 'request.started');
     const origin = request.headers.origin;
     if (origin !== undefined && !origins.has(origin)) {
       request.log.warn('request.origin_denied');
@@ -260,17 +264,28 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
   app.decorate('nowFeedStore', options.nowFeedStore ?? null);
   app.decorate('nowEventHub', options.nowEventHub ?? createEventHub<NowFeedUpdate>());
   const factoryBoardVersions = new Map<string, number>();
-  app.decorate('publishFactoryBoardChange', (projectId: string) => {
+  app.decorate('publishFactoryBoardChange', (
+    projectId: string,
+    origin: 'task_event' | 'github_webhook',
+    reqId?: string,
+  ) => {
     const version = (factoryBoardVersions.get(projectId) ?? 0) + 1;
     factoryBoardVersions.set(projectId, version);
-    app.factoryBoardCache.invalidateAll();
+    app.factoryBoardCache.invalidate(projectId);
     app.nowEventHub.publish({ type: 'board', projectId, version });
+    app.log.info({
+      origin,
+      ...(/^[1-9]\d{0,18}$/u.test(projectId) ? { projectId } : {}),
+      ...(Number.isSafeInteger(version) && version <= 1_000_000_000 ? { version } : {}),
+      ...(reqId === undefined ? {} : { reqId }),
+    }, 'factory.board_invalidated');
   });
   const unsubscribeFactoryBoardEvents = app.eventHub.subscribe((event) => {
-    app.factoryBoardCache.invalidateAll();
-    void app.taskStore?.get(event.taskId, 0, 0).then((task) => {
-      if (task) app.publishFactoryBoardChange(task.projectId);
-    }).catch(() => app.log.warn('factory.board_task_event_failed'));
+    void (async () => {
+      const task = await app.taskStore?.get(event.taskId, 0, 0);
+      if (!task) throw new Error('Task project unavailable');
+      app.publishFactoryBoardChange(task.projectId, 'task_event');
+    })().catch((error: unknown) => app.log.warn(safeErrorFields(error), 'factory.board_task_event_failed'));
   });
   app.addHook('onClose', async () => { unsubscribeFactoryBoardEvents(); });
   app.decorate('jarvisActivityHub', options.jarvisActivityHub ??
@@ -292,6 +307,17 @@ export function buildApp(config: BackendConfig, logger: Logger = createLogger(co
   app.decorate('usageStore', options.usageStore ?? null);
   app.decorate('conversationStore', options.conversationStore ?? null);
   app.decorate('conversationAttachments', options.conversationAttachments ?? null);
+  if (options.conversationAttachments) {
+    const store = options.conversationAttachments;
+    let stopAttachmentCleanup: (() => void) | undefined;
+    app.addHook('onClose', async () => { stopAttachmentCleanup?.(); });
+    app.addHook('onReady', async () => {
+      stopAttachmentCleanup = startConversationAttachmentCleanupJob(
+        store,
+        () => app.log.warn('conversation_attachments.cleanup_failed'),
+      );
+    });
+  }
   app.decorate('attachmentVision', options.attachmentVision ?? null);
   app.decorate('sandboxHeartbeat', options.sandboxHeartbeat ?? null);
   if (options.sandboxHeartbeat) {

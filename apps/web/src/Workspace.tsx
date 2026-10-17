@@ -163,8 +163,6 @@ export const Workspace = forwardRef<WorkspaceController, {
   const [order, setOrder] = useState<string[]>([]);
   const [geometry, setGeometry] = useState<Record<string, Geometry>>({});
   const [conversationLayoutState, setConversationLayoutState] = useState(readConversationLayout);
-  const conversationLayout = conversationLayoutState.layout;
-  const conversationPositioned = Boolean(conversationLayout);
   const [minimizedViewIdsState, setMinimizedViewIds] = useState<ReadonlySet<string>>(new Set());
   const [closedViewIdsState, setClosedViewIds] = useState<ReadonlySet<string>>(new Set());
   const [maximizedViewId, setMaximizedViewId] = useState<string | null>(null);
@@ -172,6 +170,9 @@ export const Workspace = forwardRef<WorkspaceController, {
   const [phone, setPhone] = useState(() => (
     typeof window.matchMedia === 'function' && window.matchMedia(PHONE_LAYOUT_MEDIA_QUERY).matches
   ));
+  // Phone chat shares the viewport dock; retain manual geometry only as the desktop preference.
+  const conversationLayout = phone ? null : conversationLayoutState.layout;
+  const conversationPositioned = Boolean(conversationLayout);
   const [announcement, setAnnouncement] = useState('');
   const [actionErrors, setActionErrors] = useState<Record<string, string>>({});
   const [actionSuccess, setActionSuccess] = useState<Record<string, string>>({});
@@ -386,18 +387,43 @@ export const Workspace = forwardRef<WorkspaceController, {
     : {}, [canvasSize, layoutIds, layoutKind, layoutPreference, managed, placements]);
 
   useLayoutEffect(() => {
-    const bounds = canvas.current?.getBoundingClientRect();
-    if (!conversationLayout || !bounds?.width || !bounds.height) {
-      onConversationPositionChange?.(null);
-      return;
-    }
-    const rect = activeMaximizedViewId === 'conversation' ? { x: 0, y: 0, width: 1, height: 1 }
-      : fitConversationLayout(conversationLayout, { width: bounds.width, height: bounds.height }, conversationLayoutState.size);
-    onConversationPositionChange?.({
-      left: bounds.left + rect.x * bounds.width,
-      top: bounds.top + (rect.y + rect.height) * bounds.height - 2,
-      width: rect.width * bounds.width,
-    });
+    let frame = 0;
+    let previous: ConversationPosition | null = null;
+    const measure = () => {
+      frame = 0;
+      const bounds = canvas.current?.getBoundingClientRect();
+      if (!conversationLayout || !bounds?.width || !bounds.height) {
+        onConversationPositionChange?.(null);
+        return;
+      }
+      const rect = activeMaximizedViewId === 'conversation' ? { x: 0, y: 0, width: 1, height: 1 }
+        : fitConversationLayout(conversationLayout, { width: bounds.width, height: bounds.height }, conversationLayoutState.size);
+      const position = {
+        left: bounds.left + rect.x * bounds.width,
+        top: bounds.top + (rect.y + rect.height) * bounds.height - 2,
+        width: rect.width * bounds.width,
+      };
+      if (previous && previous.left === position.left && previous.top === position.top && previous.width === position.width) return;
+      previous = position;
+      onConversationPositionChange?.(position);
+    };
+    const schedule = () => {
+      if (!frame) frame = requestAnimationFrame(measure);
+    };
+    measure();
+    if (!conversationLayout || !onConversationPositionChange) return;
+    const viewport = window.visualViewport;
+    viewport?.addEventListener('resize', schedule);
+    viewport?.addEventListener('scroll', schedule);
+    window.addEventListener('resize', schedule);
+    window.addEventListener('scroll', schedule, true);
+    return () => {
+      cancelAnimationFrame(frame);
+      viewport?.removeEventListener('resize', schedule);
+      viewport?.removeEventListener('scroll', schedule);
+      window.removeEventListener('resize', schedule);
+      window.removeEventListener('scroll', schedule, true);
+    };
   }, [activeMaximizedViewId, canvasSize, conversationComposerHeight, conversationLayout, conversationLayoutState.size, onConversationPositionChange]);
 
   const frontId = (phone ? foreground?.id : activeMaximizedViewId ?? visibleViews.at(-1)?.id) ?? null;
@@ -1560,7 +1586,7 @@ export const Workspace = forwardRef<WorkspaceController, {
                     title={pinned ? 'Unpin' : 'Pin'} onClick={() => requestPinChange(view.id, !pinned)}>
                     <WindowIcon name="pin" />
                   </button>}
-                  {docked && !maximized && <button className="workspace-icon-control workspace-move-handle" type="button"
+                  {docked && !maximized && !phone && <button className="workspace-icon-control workspace-move-handle" type="button"
                     aria-label="Move Conversation" title="Drag to move conversation"
                     aria-description="Drag or use arrow keys to move. Shift makes larger steps."
                     onPointerDown={(event) => beginConversationGesture(event, view.id, 'move')}
@@ -1617,7 +1643,7 @@ export const Workspace = forwardRef<WorkspaceController, {
                 {actionSuccess[view.id] && <p role="status">{actionSuccess[view.id]}</p>}
                 {actionErrors[view.id] && <p role="alert">{actionErrors[view.id]}</p>}
               </div>
-              {!maximized && docked && <ConversationResizeBorders
+              {!maximized && docked && !phone && <ConversationResizeBorders
                 onStart={(event, edge) => beginConversationGesture(event, view.id, 'resize', edge)}
                 onMove={updateGesture} onEnd={endGesture}
                 onKeyDown={(event, edge) => conversationKeyDown(event, view.id, 'resize', edge)} />}

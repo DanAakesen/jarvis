@@ -1,3 +1,5 @@
+import { Writable } from 'node:stream';
+import type { Contracts } from 'applicationinsights';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { buildApp } from '../app.js';
 import { loadConfig } from '../config.js';
@@ -6,7 +8,8 @@ import type { NowFeedSnapshot, NowFeedStore } from './now.js';
 import { coreModule } from './index.js';
 import { summarizeNowFeed } from './status.js';
 import { createSystemStatusReader } from '../system-status.js';
-import { systemSmokeCheckIds } from '@jarvis/contracts';
+import { isSystemSmokeStatus, systemSmokeCheckIds } from '@jarvis/contracts';
+import { createLogger } from '../logging.js';
 
 const config = { ...loadConfig({}), logLevel: 'silent' as const };
 const headers = {
@@ -181,6 +184,65 @@ describe('get_status_summary', () => {
 
     expect(unauthenticated.statusCode).toBe(401);
     expect(unauthenticated.json()).toEqual({ error: 'Unauthorized' });
+  });
+
+  it('keeps both HTTP responses legacy-compatible while exporting safe internal reasons once', async () => {
+    const records: string[] = [];
+    const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });
+    const sink = {
+      trackTrace: vi.fn<(trace: Contracts.TraceTelemetry) => void>(),
+      flush: vi.fn(async () => {}), shutdown: vi.fn(async () => {}),
+    };
+    const reader = createSystemStatusReader({}, undefined);
+    const capabilities = vi.fn(async () => ({
+      status: 'down' as const, reason: 'capabilities_discovery_missing',
+    }));
+    const app = buildApp(config, createLogger({ logLevel: 'info' }, sink, output), {
+      modules: [coreModule],
+      auth: async () => ({ objectId: config.auth.ownerObjectId, tenantId: config.auth.tenantId }),
+      systemStatusReader: reader,
+      systemSmokeProbes: {
+        chat_identity: async () => ({ status: 'degraded', reason: 'identity_reply' }),
+        chat_no_timestamp: async () => ({ status: 'degraded', reason: 'capture_time_invented' }),
+        chat_capabilities: capabilities,
+        chat_github_read: async () => ({ status: 'down', reason: 'private provider response' }),
+      },
+    });
+    apps.push(app);
+    const smoke = await app.inject({ url: '/status/smoke', headers });
+    const retained = structuredClone(reader.peek()?.smoke);
+    const status = await app.inject({ url: '/status', headers });
+    const repeatedRead = await app.inject({ url: '/status', headers });
+    const report = smoke.json();
+
+    expect(smoke.statusCode).toBe(200);
+    expect(status.statusCode).toBe(200);
+    expect(status.json().smoke).toEqual(report);
+    expect(repeatedRead.json()).toEqual(status.json());
+    expect(isSystemSmokeStatus(report)).toBe(true);
+    expect(report.entries.every((entry: { reason?: string; status: string }) =>
+      entry.reason === undefined || entry.status === 'down')).toBe(true);
+    expect(report.entries.find((entry: { id: string }) => entry.id === 'chat_capabilities'))
+      .toMatchObject({ status: 'down', reason: 'capabilities_discovery_missing' });
+    expect(retained?.entries.find((entry) => entry.id === 'chat_identity'))
+      .toMatchObject({ status: 'degraded', reason: 'identity_reply' });
+    expect(reader.peek()?.smoke).toEqual(retained);
+    expect(capabilities).toHaveBeenCalledOnce();
+    const traces = sink.trackTrace.mock.calls.map(([trace]) => trace)
+      .filter((trace) => trace.message === 'system.smoke_check');
+    expect(traces).toHaveLength(systemSmokeCheckIds.length);
+    expect(traces).toEqual(expect.arrayContaining([
+      expect.objectContaining({ properties: {
+        service: 'jarvis-backend', checkId: 'chat_identity', status: 'degraded', reason: 'identity_reply',
+      } }),
+      expect.objectContaining({ properties: {
+        service: 'jarvis-backend', checkId: 'chat_no_timestamp', status: 'degraded', reason: 'capture_time_invented',
+      } }),
+      expect.objectContaining({ properties: {
+        service: 'jarvis-backend', checkId: 'chat_capabilities', status: 'down', reason: 'capabilities_discovery_missing',
+      } }),
+    ]));
+    expect(smoke.body + status.body + records.join('') + JSON.stringify(traces)).not.toContain('private provider');
   });
 
   it('limits smoke tool calls to safe checks and gates the no-op action on approval', async () => {

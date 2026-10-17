@@ -2,6 +2,8 @@ import { Writable } from 'node:stream';
 import pino from 'pino';
 import type { Contracts } from 'applicationinsights';
 import type { BackendConfig } from './config.js';
+import { systemSmokeCheckIds } from '@jarvis/contracts';
+import { safeSmokeReason } from './system-status.js';
 
 // This is the external export boundary, replaced by an offline sink in tests.
 export interface TelemetrySink {
@@ -20,11 +22,13 @@ export async function createTelemetry(connectionString?: string): Promise<Teleme
 }
 
 const failureEvents = new Set([
+  'daily.mcp_operation_failed', 'daily.mcp_audit_failed',
   'sandbox_heartbeat.poll_failed', 'sandbox_heartbeat.configuration_missing',
   'budget_alert.check_failed', 'task_event_archive.failed', 'project_policy.confirmation_failed',
   'project_policy.recheck_failed',
   'dispatcher.operation_failed', 'github.checks_loop_recovery_failed', 'pc_bridge.status_update_failed',
   'google.refresh_token_expired_alert_unavailable', 'google.refresh_token_expired_alert_persistence_failed',
+  'google.calendar_batch_item_failed',
   'telemetry.close_failed', 'server.shutdown_failed', 'request.failed', 'connection.upgrade_failed',
   'attachment.extraction_failed', 'away_mode.task_notification_failed', 'away_mode.task_route_failed',
   'codex.image_cancel_failed', 'codex.image_session_cleanup_failed', 'conversation_attachments.cleanup_failed',
@@ -82,6 +86,8 @@ const events = new Set([
   'credentials.codex_renewal', 'dispatcher.start_failed',
   'tool.invalid_arguments', 'decision.provider_unavailable',
   'factory.issue_create_outcome_uncertain',
+  'factory.board_phase', 'factory.board_read_timing', 'factory.board_invalidated',
+  'system.smoke_check',
   'phone.call_callback_processed', 'phone.incoming_call_rejected', 'phone.session_started',
 ]);
 
@@ -118,6 +124,7 @@ const chatLatencyPhases = new Set([
   'chat_history_verification', 'chat_context', 'tool_catalogue', 'settings',
   'turn_context', 'prompt_build', 'model_coordination', 'model_request', 'model_first_delta',
   'model_to_first_delta', 'agent_pre_model', 'agent_first_delta', 'agent_auth', 'session_start',
+  'model_auth_max', 'model_request_max',
 ]);
 const reflexReasons = new Set([
   'executed', 'unavailable', 'cancelled', 'not_addressed', 'not_action', 'incomplete_command',
@@ -139,15 +146,81 @@ const boardReadReasons = new Set([
   'response_too_large', 'result_limit', 'incomplete_response', 'invalid_token_lifetime',
   'invalid_token_permissions', 'unexpected',
 ]);
+const boardReadOutcomes = new Set(['success', 'failure', 'not_found', 'unavailable']);
+const boardCachePaths = new Set(['not_started', 'cache_hit', 'shared_wait', 'source_load']);
+const boardInvalidationOrigins = new Set(['task_event', 'github_webhook']);
+
+function safeRequestId(value: unknown): value is string {
+  return typeof value === 'string' && /^[\da-f-]{36}$/iu.test(value);
+}
+
+function safeBoardRoute(value: unknown): value is string {
+  return typeof value === 'string' && /^\/[\w/:-]{0,100}$/u.test(value);
+}
+
+function safeBoardDuration(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 60_000;
+}
 
 function safeFields(input: Record<string, unknown>): Record<string, unknown> {
+  if (input.msg === 'system.smoke_check') {
+    const checkId = systemSmokeCheckIds.find((id) => id === input.checkId);
+    if (!checkId) return {};
+    const fields: Record<string, unknown> = { checkId };
+    if (input.status === 'ok' || input.status === 'degraded' ||
+        input.status === 'down' || input.status === 'unknown') fields.status = input.status;
+    if (input.status === 'down' || input.status === 'degraded') {
+      const reason = safeSmokeReason(checkId, input.reason);
+      if (reason) fields.reason = reason;
+    }
+    return fields;
+  }
   if (input.msg === 'factory.board_read_failed' || input.msg === 'factory.board_project_lookup_failed') {
     const fields: Record<string, unknown> = {};
+    if (safeRequestId(input.reqId)) fields.reqId = input.reqId;
+    if (safeBoardRoute(input.route)) fields.route = input.route;
     if (typeof input.stage === 'string' && boardReadStages.has(input.stage)) fields.stage = input.stage;
     if (typeof input.reason === 'string' && boardReadReasons.has(input.reason)) fields.reason = input.reason;
     if (typeof input.status === 'number' && Number.isInteger(input.status) &&
         input.status >= 100 && input.status <= 599) fields.status = input.status;
     if (typeof input.stale === 'boolean') fields.stale = input.stale;
+    return fields;
+  }
+  if (input.msg === 'factory.board_phase') {
+    const fields: Record<string, unknown> = {};
+    if (safeRequestId(input.reqId)) fields.reqId = input.reqId;
+    if (safeBoardRoute(input.route)) fields.route = input.route;
+    if (typeof input.stage === 'string' && boardReadStages.has(input.stage)) fields.stage = input.stage;
+    if (input.part === 'assemble' || input.part === 'serialize') fields.part = input.part;
+    if (input.durationUnavailable === true) fields.durationUnavailable = true;
+    else if (input.durationCensored === true) fields.durationCensored = true;
+    else if (safeBoardDuration(input.durationMs)) fields.durationMs = input.durationMs;
+    return fields;
+  }
+  if (input.msg === 'factory.board_read_timing') {
+    const fields: Record<string, unknown> = {};
+    if (safeRequestId(input.reqId)) fields.reqId = input.reqId;
+    if (safeBoardRoute(input.route)) fields.route = input.route;
+    if (typeof input.outcome === 'string' && boardReadOutcomes.has(input.outcome)) fields.outcome = input.outcome;
+    if (typeof input.cachePath === 'string' && boardCachePaths.has(input.cachePath)) fields.cachePath = input.cachePath;
+    if (typeof input.stale === 'boolean') fields.stale = input.stale;
+    if (input.cacheElapsedUnavailable === true) fields.cacheElapsedUnavailable = true;
+    else if (input.cacheElapsedCensored === true) fields.cacheElapsedCensored = true;
+    else if (safeBoardDuration(input.cacheElapsedMs)) fields.cacheElapsedMs = input.cacheElapsedMs;
+    if (Number.isInteger(input.statusCode) && Number(input.statusCode) >= 100 &&
+        Number(input.statusCode) <= 599) fields.statusCode = input.statusCode;
+    return fields;
+  }
+  if (input.msg === 'factory.board_invalidated') {
+    const fields: Record<string, unknown> = {};
+    if (typeof input.origin === 'string' && boardInvalidationOrigins.has(input.origin)) fields.origin = input.origin;
+    if (typeof input.projectId === 'string' && /^[1-9]\d{0,18}$/u.test(input.projectId)) {
+      fields.projectId = input.projectId;
+    }
+    if (Number.isSafeInteger(input.version) && Number(input.version) >= 1 &&
+        Number(input.version) <= 1_000_000_000) fields.version = input.version;
+    if (input.scope === 'all_projects') fields.scope = input.scope;
+    if (safeRequestId(input.reqId)) fields.reqId = input.reqId;
     return fields;
   }
   if (input.msg === 'visual.path') {

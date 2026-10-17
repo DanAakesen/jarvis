@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { ConversationAgent, ConversationAgentInput, ConversationAgentToolCall } from './chat-agent.js';
+import { ChatAgentError, type ConversationAgent, type ConversationAgentInput, type ConversationAgentToolCall } from './chat-agent.js';
 import { createChatAcceptanceProbes } from './chat-canary.js';
+import { chatAgentFailureReasons } from '../system-status.js';
 
 const prompts = [
   'who are you and what can you do?',
@@ -98,6 +99,35 @@ describe('post-deploy chat acceptance suite', () => {
     await expect(suite.chat_canary!()).resolves.toMatchObject({
       status: 'down', reason: 'acceptance_check_failed',
     });
+  });
+
+  it.each([...chatAgentFailureReasons])('retains the fixed hosted origin %s for only the failed prompt', async (code) => {
+    const suite = probes(passingAgent((input) => {
+      if (input.text === prompts[1]) throw new ChatAgentError(code);
+      return undefined;
+    }));
+
+    await expect(suite.chat_capabilities!()).resolves.toEqual({ status: 'down', reason: code });
+    await expect(suite.chat_canary!()).resolves.toEqual({ status: 'down', reason: 'acceptance_check_failed' });
+    await expect(suite.chat_plain_approval!()).resolves.toEqual({ status: 'ok' });
+  });
+
+  it.each([
+    new ChatAgentError(undefined),
+    new ChatAgentError('private_provider_detail'),
+    new ChatAgentError('settings_http_418'),
+    new ChatAgentError('capabilities_discovery_missing'),
+    new ChatAgentError('settings_timeout\n::error::private'),
+    new Error('settings_timeout'),
+    Object.assign(new Error('private provider detail'), { code: 'settings_timeout' }),
+  ])('does not trust unknown codes, assertion codes or ordinary exception text: %s', async (error) => {
+    const suite = probes(passingAgent((input) => {
+      if (input.text === prompts[1]) throw error;
+      return undefined;
+    }));
+
+    await expect(suite.chat_capabilities!()).resolves.toEqual({ status: 'down', reason: 'agent_error' });
+    await expect(suite.chat_canary!()).resolves.toEqual({ status: 'down', reason: 'acceptance_check_failed' });
   });
 
   it.each([
@@ -221,8 +251,10 @@ describe('post-deploy chat acceptance suite', () => {
         ? { text: 'The image was captured at 12:34.' }
         : undefined));
 
-    await expect(suite.chat_identity!()).resolves.toMatchObject({ status: 'degraded' });
-    await expect(suite.chat_no_timestamp!()).resolves.toMatchObject({ status: 'degraded' });
+    await expect(suite.chat_identity!()).resolves.toEqual({ status: 'degraded', reason: 'identity_reply' });
+    await expect(suite.chat_no_timestamp!()).resolves.toEqual({
+      status: 'degraded', reason: 'capture_time_invented',
+    });
     await expect(suite.chat_canary!()).resolves.toMatchObject({ status: 'ok' });
   });
 

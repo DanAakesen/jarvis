@@ -8,10 +8,12 @@ import './JarvisStage.css';
 
 export function JarvisStage({
   theme,
+  active = true,
   appearance,
   children,
 }: {
   theme: ThemeMode;
+  active?: boolean;
   appearance?: AppearancePreferences;
   children?: ReactNode;
 }) {
@@ -25,6 +27,7 @@ export function JarvisStage({
   const orbState = voiceOrbState ?? chatOrbState;
   const options = useRef<JarvisStageOptions>({
     theme,
+    active,
     reducedMotion: false,
     voiceActive: false,
     hasWindows: false,
@@ -122,8 +125,13 @@ export function JarvisStage({
     themeMotion.current = appearance?.motion;
     const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
     options.current = { ...options.current, theme, reducedMotion: reducedMotion || themeMotion.current === 'reduced' };
-    scene.current?.update(options.current);
+    scene.current?.update(options.current, true);
   }, [appearance, theme]);
+
+  useEffect(() => {
+    options.current = { ...options.current, active };
+    scene.current?.update(options.current);
+  }, [active]);
 
   return (
     <VoiceStageContext.Provider value={voiceLink}>

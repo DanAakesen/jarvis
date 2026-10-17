@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import type { FastifyRequest } from 'fastify';
 import { projectAwarenessInstructions, type ProjectContextEntry } from '../factory/project-context.js';
 import { confirmToolCall, type ToolCallOutcome } from '../core/tool-calls.js';
@@ -8,6 +9,8 @@ import { defaultAwayModeState, type AwayModeState } from '../core/away-mode.js';
 import { builtInModeInstructions, modeContext } from '../core/presence-instructions.js';
 import type { VoiceTuningSettings } from '@jarvis/contracts';
 import { toolArgumentRefusal, unexpectedToolArgument } from '../core/tool-arguments.js';
+import { classifyApprovalReply } from '../core/approval.js';
+import { startWorkPresentation } from '../core/work-presentation.js';
 
 export const ENGLISH_REALTIME_MODEL = defaultSettings.roles.voice.model;
 export const ENGLISH_REALTIME_VOICE = 'en-GB-Ryan:DragonHDLatestNeural';
@@ -198,12 +201,60 @@ function toolFailure(name: string): string {
   return toolOutput(name, 'error', { error: 'Tool execution failed' });
 }
 
+export function calendarStatusQuestion(text: string): boolean {
+  if (/\b(?:gmail|googlemail|(?:e-?)?mails?|draft|kladde\w*)\b/iu.test(text)) return false;
+  return /\b(?:calendar|kalender\w*|appointments?|begivenhed\w*)\b/iu.test(text) &&
+    /^(?:is|did|have|has|status|er|har|blev|tjekkede)\b/iu.test(text.trim()) ||
+    /^(?:(?:is|was|has) (?:it|that|the event|the appointment) (?:already )?(?:created|staged|added|scheduled|completed|cancelled)|(?:did|have) you (?:already )?(?:create|stage|add|schedule|complete|cancel|check) (?:it|that|the event|the appointment)|(?:er|blev) (?:den|det) (?:oprettet|klargjort|tilføjet|udført)|har du (?:oprettet|klargjort|tilføjet|tjekket) (?:den|det))\b/iu.test(text.trim());
+}
+
+export function calendarTurnContext(previous: boolean, text: string) {
+  const followup = previous && (classifyApprovalReply(text) !== undefined || calendarStatusQuestion(text));
+  const scope = text.replace(/"[^"]*"|(?<!\w)'[^']*'(?!\w)|“[^”]*”|‘[^’]*’/gu, '').trim();
+  const reference = /\b(?:calendar|kalender\w*|begivenhed\w*)\b/iu.test(scope);
+  const mail = /\b(?:gmail|googlemail|(?:e-?)?mails?|draft|kladde\w*)\b/iu.test(scope);
+  const explicit = mail
+    ? reference && /^(?:(?:please|can you|could you|vil du|kan du)\s+)?(?:add|create|schedule|move|update|delete|cancel|tilføj|opret|læg|flyt|slet|aflys)\b/iu.test(scope)
+    : reference || /\b(?:add|create|schedule|tilføj|opret|læg)\b.{0,80}\b(?:reservation\w*|appointments?|events?)\b/iu.test(scope);
+  return { context: followup || explicit, followup };
+}
+
+/** Resolve calendar approval from backend state, never a model-supplied or cached code. */
+export async function confirmPendingCalendarReply(
+  tools: ToolRegistry,
+  request: FastifyRequest,
+  signal: AbortSignal,
+): Promise<string> {
+  const pendingOutput = await executeRealtimeToolCall({
+    type: 'response.function_call_arguments.done', name: 'calendar_get_pending_change',
+    call_id: 'calendar-pending', arguments: '{}',
+  }, tools, request, signal, undefined, false);
+  const pending = JSON.parse(pendingOutput) as {
+    outcome: string;
+    result?: { status?: string; confirmationCode?: string; summary?: string; reply?: string };
+  };
+  const action = pending.result;
+  if (pending.outcome !== 'ok' || action?.status !== 'awaiting_confirmation') return pendingOutput;
+  if (typeof action.confirmationCode !== 'string' || !/^[0-9]{8}$/u.test(action.confirmationCode) ||
+      typeof action.summary !== 'string' || !action.summary.trim()) {
+    return toolOutput('calendar_get_pending_change', 'error', {
+      failure: 'No valid pending calendar receipt is available. No change was confirmed.',
+    });
+  }
+  if (action.reply !== 'approve' && action.reply !== 'decline') return pendingOutput;
+  return executeRealtimeToolCall({
+    type: 'response.function_call_arguments.done', name: 'calendar_confirm_change',
+    call_id: 'calendar-confirm', arguments: JSON.stringify({ confirmationCode: action.confirmationCode }),
+  }, tools, request, signal);
+}
+
 export async function executeRealtimeToolCall(
   call: RealtimeFunctionCall,
   tools: ToolRegistry,
   request: FastifyRequest,
   signal: AbortSignal,
   beforeExecute?: (tool: NonNullable<ReturnType<ToolRegistry['get']>>, input: unknown, signal: AbortSignal) => Promise<void>,
+  presentResult = true,
 ): Promise<string> {
   if (typeof call.name !== 'string' || !/^[A-Za-z0-9_-]{1,64}$/u.test(call.name)) {
     return toolFailure('unknown_tool');
@@ -214,6 +265,7 @@ export async function executeRealtimeToolCall(
 
   let outcome: ToolCallOutcome = 'ok';
   let result: unknown;
+  let presentation: ReturnType<typeof startWorkPresentation> | undefined;
   try {
     let input: unknown;
     try {
@@ -230,6 +282,11 @@ export async function executeRealtimeToolCall(
       return toolOutput(call.name, 'refused', toolArgumentRefusal(tool, errors, request.log));
     }
     await beforeExecute?.(tool, input, signal);
+    if (presentResult) {
+      const activityId = randomUUID();
+      presentation = startWorkPresentation(tool.name, input, request, activityId,
+        request.jarvisConversationMessage?.id ?? request.jarvisMemorySourceMessageId ?? activityId, signal, 'voice');
+    }
     result = await tool.execute(input, request, signal);
     const serializedResult = JSON.stringify(result);
     if (serializedResult === undefined || Buffer.byteLength(serializedResult) > MAX_TOOL_RESULT_BYTES) {
@@ -250,8 +307,11 @@ export async function executeRealtimeToolCall(
 
   try {
     const serialized = toolOutput(call.name, outcome, result);
-    return Buffer.byteLength(serialized) <= MAX_TOOL_RESULT_BYTES ? serialized : toolFailure(call.name);
+    const bounded = Buffer.byteLength(serialized) <= MAX_TOOL_RESULT_BYTES;
+    presentation?.finish(result, outcome === 'ok' && bounded);
+    return bounded ? serialized : toolFailure(call.name);
   } catch {
+    presentation?.finish(result, false);
     return toolFailure(call.name);
   }
 }

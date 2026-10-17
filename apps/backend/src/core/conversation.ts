@@ -13,6 +13,7 @@ import type {
 import { InvalidConversationAttachmentsError } from './conversation-store.js';
 import { ToolRefusal, type JarvisTool } from './tool-registry.js';
 import {
+  CHAT_AGENT_DIAGNOSTIC_PHASES,
   CHAT_AGENT_PHASES,
   createFoundryAgentSessionId,
   type AgentPhaseTimings,
@@ -734,8 +735,13 @@ return {
                 language: turnLanguage,
                 turnId: activeTurn.rootMessageId,
                 onAgentPhaseTimings: (timings) => {
-                  agentPhaseTimings = timings;
+                  const replyTimings: AgentPhaseTimings = {};
                   for (const phase of CHAT_AGENT_PHASES) {
+                    const durationMs = timings[phase];
+                    if (durationMs !== undefined) replyTimings[phase] = durationMs;
+                  }
+                  agentPhaseTimings = Object.keys(replyTimings).length > 0 ? replyTimings : undefined;
+                  for (const phase of [...CHAT_AGENT_PHASES, ...CHAT_AGENT_DIAGNOSTIC_PHASES]) {
                     const durationMs = timings[phase];
                     if (durationMs !== undefined) {
                       request.log.info({ msg: 'chat.latency', phase, durationMs }, 'chat.latency');

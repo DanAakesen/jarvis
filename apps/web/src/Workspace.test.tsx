@@ -889,8 +889,7 @@ describe('Workspace', () => {
     expect(screen.getByText('Arrangement cancelled.')).not.toBeNull();
   });
 
-  it.each([false, true])('resizes conversation height without first-drag jumps, including phone=%s and cancellation', phone => {
-    if (phone) phoneViewport();
+  it.each(['mouse', 'touch'])('resizes desktop conversation height without first-drag jumps using %s, including cancellation', pointerType => {
     render(<Workspace views={[{
       id: 'conversation', title: 'Conversation', presentation: 'conversation',
       content: { status: 'ready', content: <p>Conversation history</p> },
@@ -915,7 +914,7 @@ describe('Workspace', () => {
       hasPointerCapture: { value: () => true, configurable: true },
       releasePointerCapture: { value: vi.fn(), configurable: true },
     });
-    const start = { pointerId: 1, button: phone ? -1 : 0, pointerType: phone ? 'touch' : 'mouse', clientX: 400, clientY: 280 };
+    const start = { pointerId: 1, button: pointerType === 'touch' ? -1 : 0, pointerType, clientX: 400, clientY: 280 };
     fireEvent.pointerDown(handle, start);
     expect(height()).toBeCloseTo(320, 0);
     fireEvent.pointerMove(handle, { ...start, clientY: 279 });
@@ -1067,8 +1066,7 @@ describe('Workspace', () => {
     expect(JSON.parse(localStorage.getItem(conversationLayoutKey)!)).toMatchObject({ x: .15, y: .2, width: .6, height: .7 });
   });
 
-  it.each([false, true])('moves chat using its header, publishes the composer anchor and saves the result, phone=%s', phone => {
-    if (phone) phoneViewport();
+  it.each(['mouse', 'touch'])('moves desktop chat using its header with %s, publishes the composer anchor and saves the result', pointerType => {
     const anchor = vi.fn();
     const windowUpdates = vi.fn();
     render(<Workspace views={[{
@@ -1076,18 +1074,18 @@ describe('Workspace', () => {
       content: { status: 'ready', content: <p>History</p> },
     }, ...views]} onConversationPositionChange={anchor} onOpenWindowsChange={windowUpdates} defaultArrangement="layered" arrangeMenu={false} />);
     const canvas = screen.getByRole('region', { name: 'Temporary workspace views' });
-    const conversation = screen.getByRole('article', { name: 'Conversation', hidden: phone });
+    const conversation = screen.getByRole('article', { name: 'Conversation' });
     vi.spyOn(canvas, 'getBoundingClientRect').mockReturnValue({
       x: 20, y: 80, left: 20, top: 80, right: 1020, bottom: 680, width: 1000, height: 600, toJSON: () => ({}),
     });
     vi.spyOn(conversation, 'getBoundingClientRect').mockReturnValue({
       x: 150, y: 360, left: 150, top: 360, right: 890, bottom: 680, width: 740, height: 320, toJSON: () => ({}),
     });
-    const move = within(conversation).getByRole('button', { name: 'Move Conversation', hidden: phone });
+    const move = within(conversation).getByRole('button', { name: 'Move Conversation' });
     Object.defineProperties(move, {
       setPointerCapture: { value: vi.fn() }, hasPointerCapture: { value: () => true }, releasePointerCapture: { value: vi.fn() },
     });
-    const start = { pointerId: 1, button: phone ? -1 : 0, pointerType: phone ? 'touch' : 'mouse', clientX: 200, clientY: 360 };
+    const start = { pointerId: 1, button: pointerType === 'touch' ? -1 : 0, pointerType, clientX: 200, clientY: 360 };
     fireEvent.pointerDown(move, start);
     expect(conversation.style.getPropertyValue('--workspace-x')).toBe('13%');
     const updatesAfterPickup = windowUpdates.mock.calls.length;
@@ -1101,8 +1099,102 @@ describe('Workspace', () => {
     expect(conversation.querySelectorAll('.conversation-resize-corner')).toHaveLength(4);
     expect(conversation.querySelectorAll('.conversation-resize-border')).toHaveLength(8);
     expect(conversation.querySelector('.conversation-resize-border svg')).toBeNull();
-    fireEvent.click(within(conversation).getByRole('button', { name: 'Minimise Conversation', hidden: phone }));
+    fireEvent.click(within(conversation).getByRole('button', { name: 'Minimise Conversation' }));
     expect(anchor).toHaveBeenLastCalledWith(expect.objectContaining({ left: 200, top: 578, width: 740 }));
+  });
+
+  it('keeps desktop geometry dormant throughout phone focus, viewport pan and window lifecycle, then restores it on desktop', async () => {
+    const media = Object.assign(new EventTarget(), { matches: true });
+    vi.stubGlobal('matchMedia', vi.fn((query: string) => query === PHONE_LAYOUT_MEDIA_QUERY ? media : {
+      matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn(),
+    }));
+    localStorage.setItem(conversationLayoutKey, JSON.stringify({
+      x: .1, y: .2, width: .8, height: .6, size: { width: 1000, height: 600 },
+    }));
+    const saved = localStorage.getItem(conversationLayoutKey);
+    const viewport = Object.assign(new EventTarget(), { height: 844, offsetTop: 0, scale: 1 });
+    vi.stubGlobal('visualViewport', viewport);
+    const anchor = vi.fn();
+    const controller = createRef<WorkspaceController>();
+    render(<Workspace ref={controller} views={[{
+      id: 'conversation', title: 'Conversation', presentation: 'conversation',
+      content: { status: 'ready', content: <textarea aria-label="Fixture message" defaultValue="Unsent draft" /> },
+    }]} onConversationPositionChange={anchor} defaultArrangement="layered" arrangeMenu={false} />);
+    const canvas = screen.getByRole('region', { name: 'Temporary workspace views' });
+    vi.spyOn(canvas, 'getBoundingClientRect').mockReturnValue({
+      x: 10, y: 80, left: 10, top: 80, right: 1010, bottom: 680, width: 1000, height: 600, toJSON: () => ({}),
+    });
+    const conversation = screen.getByRole('article', { name: 'Conversation' });
+    const input = screen.getByRole('textbox', { name: 'Fixture message' });
+    input.focus();
+    for (const [height, offsetTop] of [[420, 0], [420, 60], [380, 120], [844, 0]]) {
+      await act(async () => {
+        Object.assign(viewport, { height, offsetTop });
+        viewport.dispatchEvent(new Event('resize'));
+        viewport.dispatchEvent(new Event('scroll'));
+        await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+      });
+      expect(anchor).toHaveBeenLastCalledWith(null);
+      expect(conversation.hasAttribute('data-conversation-positioned')).toBe(false);
+      expect(conversation.style.getPropertyValue('--conversation-height')).toBe('');
+      expect(input).toHaveProperty('value', 'Unsent draft');
+      expect(localStorage.getItem(conversationLayoutKey)).toBe(saved);
+    }
+    expect(within(conversation).queryByRole('button', { name: 'Move Conversation' })).toBeNull();
+    expect(conversation.querySelector('.conversation-resize-border')).toBeNull();
+    for (const operation of ['minimise', 'restore', 'close', 'restore'] as const) {
+      act(() => { controller.current?.dispatch({ commandId: `phone-${operation}`, operation, viewId: 'conversation' }); });
+      expect(anchor).toHaveBeenLastCalledWith(null);
+      expect(localStorage.getItem(conversationLayoutKey)).toBe(saved);
+    }
+    act(() => { media.matches = false; media.dispatchEvent(new Event('change')); });
+    await waitFor(() => expect(anchor).toHaveBeenLastCalledWith({ left: 110, top: 558, width: 800 }));
+    expect(screen.getByRole('article', { name: 'Conversation' }).hasAttribute('data-conversation-positioned')).toBe(true);
+    expect(localStorage.getItem(conversationLayoutKey)).toBe(saved);
+    act(() => { media.matches = true; media.dispatchEvent(new Event('change')); });
+    expect(anchor).toHaveBeenLastCalledWith(null);
+    expect(localStorage.getItem(conversationLayoutKey)).toBe(saved);
+  });
+
+  it('keeps the saved desktop chat and composer joined when the visual viewport pans without resizing the canvas', async () => {
+    localStorage.setItem(conversationLayoutKey, JSON.stringify({ x: .1, y: .2, width: .8, height: .6 }));
+    const saved = localStorage.getItem(conversationLayoutKey);
+    const viewport = new EventTarget();
+    vi.stubGlobal('visualViewport', viewport);
+    const anchor = vi.fn();
+    const view = render(<Workspace views={[{
+      id: 'conversation', title: 'Conversation', presentation: 'conversation',
+      content: { status: 'ready', content: <p>History</p> },
+    }]} onConversationPositionChange={anchor} defaultArrangement="layered" arrangeMenu={false} />);
+    const canvas = screen.getByRole('region', { name: 'Temporary workspace views' });
+    let top = 80;
+    vi.spyOn(canvas, 'getBoundingClientRect').mockImplementation(() => ({
+      x: 10, y: top, left: 10, top, right: 400, bottom: top + 500, width: 390, height: 500, toJSON: () => ({}),
+    }));
+    viewport.dispatchEvent(new Event('resize'));
+    await waitFor(() => expect(anchor).toHaveBeenLastCalledWith({ left: 49, top: 478, width: 320 }));
+    top = -20;
+    viewport.dispatchEvent(new Event('scroll'));
+    await waitFor(() => expect(anchor).toHaveBeenLastCalledWith({ left: 49, top: 378, width: 320 }));
+    top = 80;
+    viewport.dispatchEvent(new Event('resize'));
+    await waitFor(() => expect(anchor).toHaveBeenLastCalledWith({ left: 49, top: 478, width: 320 }));
+    expect(localStorage.getItem(conversationLayoutKey)).toBe(saved);
+    const calls = anchor.mock.calls.length;
+    await act(async () => {
+      window.dispatchEvent(new Event('scroll'));
+      viewport.dispatchEvent(new Event('scroll'));
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    });
+    expect(anchor).toHaveBeenCalledTimes(calls);
+    top = 600;
+    viewport.dispatchEvent(new Event('scroll'));
+    view.unmount();
+    await act(async () => {
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    });
+    expect(anchor).toHaveBeenCalledTimes(calls);
+    expect(localStorage.getItem(conversationLayoutKey)).toBe(saved);
   });
 
   it('bounds Arrange to its window and keeps mobile lifecycle actions in one row with 44px targets', () => {

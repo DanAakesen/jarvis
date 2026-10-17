@@ -1,4 +1,5 @@
 import ReactMarkdown, { type Components } from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 const allowedProtocols = new Set(['http:', 'https:', 'mailto:']);
 
@@ -56,15 +57,22 @@ const components: Components = {
     ? <a href={href} target="_blank" rel="noopener noreferrer">{children}</a>
     : <>{children}</>,
   img: ({ alt }) => alt ? <span>{alt}</span> : null,
+  table: ({ children }) => (
+    <div className="markdown-table-scroll" role="region" aria-label="Scrollable table" tabIndex={0}>
+      <table>{children}</table>
+    </div>
+  ),
+  th: ({ children, style }) => <th scope="col" style={style}>{children}</th>,
 };
 
-export function MarkdownContent({ source, streaming = false }: { source: string; streaming?: boolean }) {
+export function MarkdownContent({ source, streaming = false, gfm = false }: { source: string; streaming?: boolean; gfm?: boolean }) {
   return (
     <div className="markdown-content">
       <ReactMarkdown
         skipHtml
         urlTransform={safeUrl}
         components={components}
+        remarkPlugins={gfm ? [[remarkGfm, { singleTilde: false }]] : []}
       >
         {streaming ? completeStreamingBold(source) : source}
       </ReactMarkdown>

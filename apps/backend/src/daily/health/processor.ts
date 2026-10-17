@@ -4,6 +4,8 @@ import { healthSqlQuery, healthSqlTransaction } from '../health-upload/sql-trans
 import { normalizeHealth } from './normalize.js';
 import { validateNormalized, writeNormalized } from './persistence.js';
 import { HealthPayloadError, key, object } from './value.js';
+import { dailyQuerySources as sources, type DailySourceId } from '@jarvis/contracts';
+import { createDailyChanges, type DailyChangeSink } from '../revisions.js';
 
 type Inbox = { id: string; checksum: string; bytes: Buffer; kind: string; automation: string; session: string; acceptedAt: Date; attempt: number };
 export type ProcessingResult = { state: 'idle' | 'processed' | 'quarantined' | 'retry'; acceptanceId?: string; reason?: string };
@@ -12,22 +14,33 @@ export const processingRetryDelays = [120000, 300000, 900000] as const;
 /** Explicit one-item operator/rehearsal operation. No production composition, timer, or new pool. */
 export class SqlHealthProcessor {
   readonly owner: string;
-  constructor(private readonly pool: sql.ConnectionPool, configuredOwner: string, private readonly now: () => number = Date.now) { this.owner = ownerId(configuredOwner); }
+  private readonly changes = createDailyChanges();
+  constructor(private readonly pool: sql.ConnectionPool, configuredOwner: string, private readonly now: () => number = Date.now,
+    changes?: DailyChangeSink) {
+    this.owner = ownerId(configuredOwner);
+    // Keep notification failures in the existing listener boundary, never SQL replay.
+    if (changes) this.changes.subscribe(change => changes.publish(change));
+  }
 
   async processNext(signal: AbortSignal): Promise<ProcessingResult> {
     signal = AbortSignal.any([signal, AbortSignal.timeout(45000)]);
     signal.throwIfAborted();
     const claimed = await this.claim(signal);
     if (!claimed) return { state: 'idle' };
-    if ('state' in claimed) return claimed;
+    if ('state' in claimed) {
+      if (claimed.state === 'quarantined') this.changes.publish({ owner: this.owner, sources: [sources.sync] });
+      return claimed;
+    }
     const row = claimed;
+    let result: ProcessingResult;
+    let changed: DailySourceId[] = [];
     try {
       if (sha256(row.bytes) !== row.checksum) throw new HealthPayloadError('invalid_payload');
       const payload = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(row.bytes)) as unknown;
       const normalized = row.kind === 'upload' ? normalizeHealth(payload) : null;
       if (normalized) { key(row.automation); key(row.session); validateNormalized(normalized); }
       else this.heartbeat(payload);
-      return await healthSqlTransaction<ProcessingResult>(this.pool, this.owner, signal, async (tx, bounded) => {
+      result = await healthSqlTransaction<ProcessingResult>(this.pool, this.owner, signal, async (tx, bounded) => {
         const current = await this.current(tx, row, bounded);
         if (!current) return { state: 'retry', acceptanceId: row.id };
         if (current.processing_status === 'processed') return { state: 'processed', acceptanceId: row.id };
@@ -41,7 +54,9 @@ export class SqlHealthProcessor {
           if (!prior) {
             await writeNormalized(tx, this.owner, row.id, row.acceptedAt, normalized, bounded);
             await this.recordSuccess(tx, row, normalized.counts, normalized.feedKinds, completedAt, bounded);
-          }
+            changed = [sources.sync, ...normalized.feedKinds.flatMap(feed => feed === 'metrics'
+              ? [sources.metrics, sources.sleep] : [sources.workouts, sources.workout, sources.heartRate])];
+          } else changed = [sources.sync];
         } else {
           const heartbeat = this.heartbeat(payload);
           await healthSqlQuery(new sql.Request(tx).input('owner', sql.UniqueIdentifier, this.owner).input('received', sql.NVarChar(64), row.acceptedAt.toISOString())
@@ -50,6 +65,7 @@ export class SqlHealthProcessor {
              WHERE owner_object_id=@owner AND id=1 AND TRY_CONVERT(datetimeoffset,last_received_at)<=TRY_CONVERT(datetimeoffset,@received);
            IF NOT EXISTS(SELECT 1 FROM daily.health_phone_sync_state WHERE owner_object_id=@owner AND id=1)
              INSERT daily.health_phone_sync_state(owner_object_id,id,last_received_at,shortcut_name,checked_feeds_json,updated_at) VALUES(@owner,1,@received,@shortcut,@feeds,@received);`, bounded);
+          changed = [sources.sync];
         }
         await healthSqlQuery(this.request(tx, row).input('completed', sql.DateTime2(3), completedAt),
           "UPDATE daily.health_upload_inbox SET processing_status='processed',processed_at=@completed,processing_next_attempt_at=NULL,processing_error_code=NULL WHERE owner_object_id=@owner AND acceptance_id=@id AND processing_attempts=@attempt;", bounded);
@@ -58,11 +74,17 @@ export class SqlHealthProcessor {
     } catch (error) {
       if (signal.aborted) throw new HealthUnavailable();
       const code = error instanceof HealthPayloadError ? error.code : error instanceof SyntaxError || error instanceof TypeError ? 'invalid_payload' : null;
-      if (code) return this.quarantine(row, code, signal);
+      if (code) {
+        const quarantined = await this.quarantine(row, code, signal);
+        if (quarantined.state === 'quarantined') this.changes.publish({ owner: this.owner, sources: [sources.sync] });
+        return quarantined;
+      }
       if (error instanceof HealthUnavailable) return { state: 'retry', acceptanceId: row.id, reason: 'storage_unavailable' };
       // Unexpected errors remain failures, with no payload/provider detail crossing the boundary.
       throw new HealthUnavailable();
     }
+    if (result.state === 'processed' && changed.length) this.changes.publish({ owner: this.owner, sources: changed });
+    return result;
   }
   private heartbeat(payload: unknown): { shortcutName: string; checkedFeeds: string[] } {
     const value = object(payload); const shortcutName = key(value.shortcutName);

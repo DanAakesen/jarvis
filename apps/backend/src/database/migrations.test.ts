@@ -13,6 +13,37 @@ async function directory() {
 afterEach(async () => { await Promise.all(directories.splice(0).map((path) => rm(path, { recursive: true }))); });
 
 describe('committed SQL manifest', () => {
+  it('adds saved-food concurrency metadata without rewriting deployed 0049 and protects rollback evidence', async () => {
+    const migration = (await readMigrations()).find(({ name }) => name === '0050_daily_saved_food.sql');
+    expect(migration?.sql).toContain('nutrition_favorites ADD revision bigint NOT NULL');
+    expect(migration?.sql).toContain("EXEC(N'ALTER TABLE daily.nutrition_favorites");
+    expect(migration?.sql).toContain("EXEC(N'ALTER TABLE daily.nutrition_recommendation_feedback");
+    expect(migration?.sql).toContain('nutrition_recommendation_feedback ALTER COLUMN preference nvarchar(256) NULL');
+    expect(migration?.sql).toContain("N'daily_mcp_manage_saved_food'");
+    const down = await readDownMigration('0050_daily_saved_food.sql');
+    expect(down.sql).toContain('TABLOCKX,HOLDLOCK');
+    expect(down.sql).toContain('cannot discard revisions or cleared preferences');
+  });
+  it('keeps ordinary audit message identity and adds constrained connector UUID correlation without erasing rollback evidence', async () => {
+    const migration = (await readMigrations()).find(({ name }) => name === '0049_daily_connector_audit.sql');
+    expect(migration?.sql).toContain('connector_request_id uniqueidentifier NULL');
+    expect(migration?.sql).toContain('message_id IS NOT NULL AND connector_request_id IS NULL');
+    expect(migration?.sql).toContain("EXEC(N'ALTER TABLE dbo.tool_calls");
+    const down = await readDownMigration('0049_daily_connector_audit.sql');
+    expect(down.sql).toContain('TABLOCKX,HOLDLOCK');
+    expect(down.sql).toContain('audit evidence must be retained');
+    expect(down.sql).toContain('DROP INDEX IX_tool_calls_message_id ON dbo.tool_calls');
+    expect(down.sql).toContain('CREATE INDEX IX_tool_calls_message_id ON dbo.tool_calls (message_id)');
+  });
+  it('adds durable Factory generations without backfilling completion proof and protects rollback', async () => {
+    const migration = (await readMigrations()).find(({ name }) => name === '0048_factory_execution_generation.sql');
+    expect(migration?.sql).toContain('ALTER TABLE dbo.tasks ADD execution_generation bigint NOT NULL');
+    expect(migration?.sql).toContain('ALTER TABLE dbo.sandbox_sessions ADD execution_generation bigint NOT NULL');
+    expect(migration?.sql).not.toContain('UPDATE dbo.task_events');
+    const down = await readDownMigration('0048_factory_execution_generation.sql');
+    expect(down.sql).toContain('WHERE execution_generation <> 0');
+    expect(down.sql).toContain('THROW 51000');
+  });
   it('bounds inactive health attempts and protects processing evidence on rollback', async () => {
     const migration = (await readMigrations()).find(({ name }) => name === '0047_daily_health_processing.sql');
     expect(migration?.sql).toContain('processing_attempts BETWEEN 0 AND 3');
@@ -93,6 +124,9 @@ describe('committed SQL manifest', () => {
       '0045_smoke_usage_role.sql',
       '0046_daily_health_upload_inbox.sql',
       '0047_daily_health_processing.sql',
+      '0048_factory_execution_generation.sql',
+      '0049_daily_connector_audit.sql',
+      '0050_daily_saved_food.sql',
     ]);
     for (const migration of migrations) await expect(readDownMigration(migration.name)).resolves.toMatchObject({ name: migration.name });
   });

@@ -1,5 +1,1604 @@
 # Decisions
 
+## Preserve fixed hosted error origins in existing acceptance evidence (17 October 2026; #820)
+
+Deploy39043117488 retained `chat_capabilities=agent_error`, accepted=false and
+successful exact qualification/readiness/component reuse. It does not establish
+a pipeline implementation defect or the underlying hosted-turn cause.
+Source tracing demonstrates that `ChatAgentError` preserves the hosted SSE code,
+then the canary collapses all codes except `catalogue_unavailable`.
+
+Preserve an explicit finite allowlist of existing hosted backend/settings and
+exception-class origin codes in the existing per-prompt `reason`. Reuse the
+status sanitizer and smoke/immutable release evidence rather than add fields,
+telemetry services, a workflow or raw-log collection. Code-shaped text alone is
+not trusted: unknown values and non-agent errors retain `agent_error`, and
+assertion reasons cannot masquerade as hosted origins. Keep Python/backend
+allowlists equal with a deterministic regression.
+
+This evidence-only choice preserves statuses, aggregate failure, prompts,
+receipts, deadlines, authentication and nonblocking exceptions. It changes no
+model, settings, retry or connection lifetime and does not absorb #816 or Daily.
+Synthetic fixtures cover fail-closed acceptance and original producer identity;
+normal exact-candidate CI/review and main-only release remain required.
+#820's original historical attribution and #880's failed release disposition
+are not satisfied by this source change or by a later unrelated successful turn.
+
+## Isolate stale draft events from ready qualification (17 October 2026; #880)
+
+The first integrated #881 ready event admitted CI39041201026, then a delayed
+synchronize event carrying draft=true admitted39041201353 in the same concurrency
+group, cancelled qualification and skipped itself. Preserve both outcomes.
+Recover once by rerunning the cancelled non-draft event at exact520c9ba8;
+do not rerun green CodeQL/review, bypass impact selection or claim a Daily fix.
+
+Separate draft snapshots with a concurrency suffix. Ready candidates retain
+their existing supersession group and fail-closed result gate. A skipped draft
+aggregate also needs a distinct unqualified check name, because GitHub can
+treat a skipped required-name context as satisfying branch protection.
+The first recovery exposed an attempt-sensitive test fixture: explicitly pin
+the first-attempt case and cover the previous-attempt API shape separately.
+Keep the failed attempt2 evidence; do not relabel it a Daily failure.
+This surgical
+workflow change needs no scheduler, access, dependency or new worker. Synthetic
+admission-order/key coverage and normal exact-candidate qualification apply.
+The full118-case script suite passes locally with GITHUB_RUN_ATTEMPT=2.
+Separately, #882's normal main-only Deploy39041096612 completed successfully:
+its verified immutable receipt records all four parts applied, accepted=true,
+backend341 and agent109. First-baseline acceptance is not proof of a historical
+agent_error cause or a later compatible-reuse/readback path.
+
+## Use continuous pipeline-led delivery (17 October 2026; #880)
+
+Dan selected operating model 2: the responsive coordinator owns intake, GitHub
+backlog/dispatch and mechanical integration conflicts, not development, tests,
+log investigation or reproductions. At most two builders own code, regression
+tests and pipeline failure repairs. Pipeline evidence routes to the existing
+builder; completion events replace the old timer. This supersedes earlier
+coordinator removal, one combined batch and routine human release-sign-off rules.
+
+Extend existing workflows rather than introduce a delivery service or image
+promotion platform. Ready PRs select affected components and actual contract/data
+dependencies; shared/unknown inputs keep full qualification. The aggregate gate
+fails closed and retains exact tested-tree/source/run/attempt/PR evidence.
+Main-only Deploy consumes that successful immutable receipt before Azure access.
+Build/apply remain on the existing authorised identities; no new registry,
+credentials, grants or external worker is needed.
+
+Retain verified applied-component identities independently of acceptance.
+Reuse requires exact source-input/recipe/configuration fingerprints, valid
+digest/version identities, trusted main-run provenance, compatible ancestry and
+an immutable artifact checksum. Never search past newer missing/failed partial
+state for an older green receipt. Bicep invalidates downstream configuration.
+Manual dispatch honours supersession. Reused artifacts keep original producer
+source/run/attempt; the new release SHA is not falsely stamped onto them.
+The budget-contact secret is never hashed into public/downloadable fingerprints.
+For candidate infrastructure reuse, compare the existing action-group recipients
+in memory after exact qualification using the existing main-only deployment
+identity. Mismatch invalidates downstream state; unavailable readback blocks.
+This avoids a low-entropy secret hash without adding a key, role or manual
+version-marker dependency. Supersession follows verified applied state, not
+an unrelated newer docs-only main commit.
+Grant the read-only plan job GitHub pull-request read permission for the
+commit-association endpoint. Keep backend image origin distinct from revision
+origin: an agent identity update produces/re-proves its backend revision under
+that agent job's original attempt, including an acceptance-only retry. It does
+not rebuild the image or transfer image provenance to the new source.
+
+Deterministic code/permission/contracts and runtime readiness remain distinct
+from live model conversation acceptance. All are still required where selected:
+probabilistic does not mean optional. A failed conversation check leaves the
+run failed and applied components reusable; unknown/missing required checks
+cannot become green. Only the pre-existing PC-bridge/identity/timestamp exceptions
+remain nonblocking. Fixed check/status/reason codes are retained, not raw logs,
+reports or provider/tool/user content. Historical failures are not reclassified.
+The old generic `agent_error` has no proven cause.
+
+Status: initial43aa CI39038876598 passed all12 jobs and all four CodeQL
+analyses; review found the secret-derived fingerprint issue, corrected with
+synthetic comparison/redaction fixtures. ca9a CI39039891173 and its four
+analyses passed; exact-head review additionally identified the plan read scope
+and backend revision attribution corrections above. Successor exact-candidate CI/review
+and the integration owner's main-only release remain
+separate gates. Remote-enabled runtime state is not exposed here and is not
+claimed. Private Daily/provider/device/access boundaries remain unchanged.
+
+## Reuse retained feed services through one inactive tool (17 October 2026; P12-09)
+
+Dan requires equivalent tools for retained Daily capabilities. Bind the existing
+snapshot/attention/suppression/manual-refresh services through optional
+`DailyData.feeds`, rather than duplicate Google dispatch, expand the nutrition
+connector or change the strict versioned query-source advertisement.
+Production remains default-off and existing callers retain their signatures.
+
+Prefer the existing browser-only Now approval for visibility changes and manual
+provider/model refresh over model-confirmation booleans or a new action queue.
+Reuse verified current chat/voice context; bind actual target/suppression hashes
+under the existing owner lock so later mail cannot be dismissed by an old
+proposal. Received is Daily visibility, not evidence of physical receipt.
+Return actual run/error/limit states and separate source times; the old store
+does not retain calendar range, so it remains explicitly unknown.
+
+Review5558345536 identified that read bounds alone let suppression1001 poison
+attention/listing and reviewed restoration. Enforce the existing1,000-per-type
+active limit under the owner transaction before additions; keep updates allowed.
+Restore through exact-key lookup/recheck rather than reading the whole set,
+including recovery from already oversized imported evidence. No migration,
+automatic deletion or widened read limit is needed.
+
+Reuse the nutrition commit-notification pattern: publish only after acknowledged
+new commits, keep replay/no-op/failure quiet and isolate listener failure.
+The shared owner resolver intentionally permits nutrition connectors; all feed
+entrypoints therefore explicitly deny that narrower principal. Existing Google
+authentication/token handling is unchanged. No stored-grant guard was present
+at the assigned base; actual CalendarList grant/provider parity stays an OPEN
+#725 acceptance gap, not a claimed preserved implementation. Synthetic source
+qualification does not authorise consent, live data, activation or cutover.
+
+## Expose safe smoke reason codes through existing CI (17 October 2026)
+
+Required chat acceptance failed twice on different actions after qualified878
+components were applied. Status-only CI logs cannot distinguish a timeout,
+agent error or failed receipt predicate. Passive owned browser attempts were
+signed out; do not log in, borrow credentials, weaken checks or bypass the
+project's prohibition on direct agent Azure access.
+
+Prefer a small fixed-code formatter in the existing Deploy workflow over a new
+diagnostic account/service/workflow. Preserve every status/deadline/gate and
+print no raw report or user/model/provider/tool content. Unknown reasons get an
+explicit redacted marker. This diagnoses failure; it does not claim its cause
+or repair the underlying canary. The workflow edit follows the unchanged full
+deployment policy; no resource/identity/IaC changes are included.
+
+## Extend the shared Daily query for retained briefs (17 October 2026; P12-14)
+
+Historical brief data already has an owned canonical table but no read/tool/page
+path. Extend the current query sources rather than add a parallel API/tool
+protocol; a separate history screen conflicts with the confirmed one-page scope.
+Separate small metadata pages from bounded exact body reads, omit provider and
+delivery snapshots, and reuse the existing pool/query cancellation rather than
+the health processor's exclusive transaction lock.
+
+Legacy timestamp columns are stored text. Preserve them verbatim and describe
+the actual stored-text/ID ordering instead of inventing a timezone, current
+freshness or a new delivery. Unknown import completeness remains unknown. The
+nutrition connector has narrower authority than the human/hosted agent: reject
+it explicitly for briefs at both service and reader, without broadening MCP.
+No notification or schedule implementation is required to read history. This
+decision authorises no private import, provider access, activation or cutover.
+
+Review identified that even inactive source must preserve the existing strict
+v1 capability consumers. Negotiate capability v2 explicitly through standard
+Accept with plain-JSON fallback; retain the exact v1 source set for old clients.
+Do not merely filter unknown sources after breaking the old advertisement.
+The updated client accepts older v1 servers; no new CORS header or URL selector
+is needed. The query/native-view version stays unchanged.
+
+## Prepare the single Daily page without activating migration (17 October 2026)
+
+Continue the confirmed one-page scope under Dan's standing autonomous migration
+mandate while he is unavailable. This is reversible source preparation, not an
+affirmative private-data/provider/activation waiver. Use a trusted default-false
+App composition prop rather than an externally switchable URL/public flag.
+Production bootstrap remains unchanged; both client and backend guard navigation.
+Keep #730 and its native #724/#725 dependencies open.
+
+Reuse the delivered owner-authorised query service, existing Now connection,
+shared controls and ChartView. Preserve every returned observation, unknowns,
+units, provenance and partial coverage; a page of rows is not imported-source
+acceptance. Chat/voice query and general workspace/GenUI tools are the equivalent
+workflow, not a new tool per button. Navigation opens Daily but does not set local
+filters; requested filtered results are shown in an acknowledged shared view.
+Native reviewed writes and all private/export/device/cutover gates are unchanged.
+Local synthetic UI checks do not qualify actual providers or a physical iPhone.
+
+## Bind public Frida lookup as an optional read capability (17 October 2026; P12-09)
+
+Retained Frida lookup exists in the canonical adapter and external MCP boundary
+but was absent from the internal tool composition. Add an optional data
+capability bound to the configured owner, not a sixth module argument, another
+provider implementation or automatic network call. Existing data and module
+callers remain source-compatible. Shared component validation keeps external
+MCP behaviour and explicit unknown quantities unchanged.
+
+Use the adapter's20second budget inside the existing ordinary30second caller
+path; no approval wait or long-running exception is appropriate for this read.
+Keep attribution, cached retrieval timestamps, unknowns and partial totals.
+No conversation/history/credentials or caller-selected endpoint enter the
+provider interface. No reference result authorises intake. Live-provider
+acceptance remains unverified, and personal suggestions must not invent an
+authoritative remaining budget. This is inactive source integration only.
+Qualified a8 passed its first normal CI, four actual CodeQL analyses and
+automatic source review without findings. #876 merged9334d3ed with the same
+6da17b0c tree; Deploy39012842333 released backend0000337 only. Actual routine
+smoke13/15ok retains PC bridge down and recurring chat identity degraded,
+without attributing either to this source. No live provider proof is implied.
+
+## Group internal saved-food integration without changing released callers (17 October 2026; P12-09)
+
+Continue the retained migration with one `daily_saved_food` tool for owned
+lookup/preferences and native-reviewed favourites/aliases, plans and canonical
+preferences. An additive fifth factory keeps the released fourth-argument
+composition source-compatible and avoids enabling new capabilities implicitly.
+Reuse the canonical store and shared external schema instead of a second writer
+or provider. Internal new IDs derive from the verified human source; proposed
+definitions stay estimates. Freeze actual before/after and source evidence,
+bind revisions/fingerprints under existing SQL locks and recover only matching
+real receipts without retrying writes. Preference changes use the existing
+favourites invalidation after commit, with no replay notification.
+
+Full pre-publication tracing found another transport deadline: the browser
+voice relay aborted ordinary calls after30seconds before the tool's own bound.
+Give only the two native-reviewed food tools180seconds at that wrapper; preserve
+session cancellation and other tools. Hosted-agent reads remain210seconds and
+cards120seconds. No extra runtime setting, transport, background mutation queue,
+schema, dependency or production activation is needed. Actual caller/SQL/relay
+qualification passed first normal CI; #875 merged as195bc89c with the qualified
+c12eca94 tree and Deploy39010283459 released backend0000336/agent107. Actual
+routine smoke14/15ok retains only the existing PC bridge warning. This does not
+complete activation, source/private reconciliation or client/device acceptance.
+
+## Reuse browser-only Now approval for internal food proposals (17 October 2026; P12-09)
+
+Continue Dan's authorised migration with the existing Now confirmation service
+rather than a new nutrition proposal queue or model-supplied acceptance. Add a
+trusted optional browser-only delivery selector; existing callers retain their
+current-channel routing. Food review always selects browser-only, so a race in
+presence cannot send sensitive meal summaries into Teams. Require present mode
+before review and again in its exact action callback.
+
+The optional internal review tool handles estimates, corrections and soft
+deletion against the existing owner/session/message and canonical SQL store.
+Freeze model proposals before display; show actual before/after values and
+dates, reject oversized reviews and serialize pending reviews per target.
+Food cards have an explicit two-minute expiry shared by SQL, the visible card
+and timer, with the whole operation bounded to three minutes from entry.
+Existing callers retain the default five-minute confirmation lifetime.
+Native approval is owner-bound and consumed once before the action. Neither
+origin alone, spoken text nor caller confirmation flags are write authority.
+Exact-label and actual saved-favourite direct requests keep their one-step path.
+
+Initial real HTTP-schema qualification found Ajv converting unknown nutrient
+nulls to zero through a numeric-first union. Generate a single nullable numeric
+type while retaining canonical bounds and strict domain validation. Independent
+review also found that the hosted agent's ordinary 30-second read timeout would
+cancel a pending food approval. The first 390-second read correction passed
+CI, but a further review identified the actual externally ingressed backend's
+[240-second HTTP ceiling](https://learn.microsoft.com/en-us/azure/container-apps/ingress-overview#http),
+verified against current first-party documentation on 17 October.
+Use an explicit shorter food-card profile and a tool-specific 210-second read
+budget instead of pretending that a longer client deadline bypasses ingress.
+This keeps existing approval lifetimes and unrelated tool deadlines unchanged,
+makes the real food expiry visible, and avoids a new background mutation queue
+or writes that survive cancellation. No infrastructure or paid-resource change.
+
+Further review found the generic phone approval ran before food's own context
+refusal, allowing an impossible five-minute approval to consume the HTTP budget.
+Use an explicit tool capability, `denyOnPhone`, checked by the existing dispatcher
+after active-session validation and before any approval or execution. Set it on
+both internal food tools; do not special-case names or change other phone tools.
+The existing Now UI already displays the actual returned `expiresAt`; no new
+frontend control or hardcoded review duration is needed.
+
+New nutrient/component proposals stay estimates and cannot retain a whole-meal
+verification claim. Preserve unchanged exact nutrient provenance and nulls.
+Existing SQL revision/range locks prevent stale correction/deletion, including
+historical records. Recover uncertain results only from matching actual
+source/proposal/revision receipts; a read tombstone is labelled already-deleted,
+not a new mutation. No Health export or new persistence is introduced.
+This is browser-reviewed internal source work, not full conversational/spoken,
+photo-evidence, client/device acceptance, production activation or cutover.
+
+Final source `d17fe622` was independently qualified and reviewed without
+findings, then released through #874 / `f1d410b1` with the same `c0f112bf` tree.
+Deploy39006050135 selected backend and agent, not infrastructure/web; revision
+0000335 and Foundry version106 passed routine readiness/smoke. Keep this release
+separate from activation or actual private/client/device acceptance.
+
+## Ground direct internal intake in the verified human request (17 October 2026; P12-09)
+
+Use one optional sensitive internal food tool, separate from MCP enablement,
+without changing production composition. Accept only an operation; derive the
+saved name or exact-label quantities from the verified current Dan message.
+Message origin alone, model classification, caller nutrients and confirmation
+booleans are not write authority. Start with complete explicit command shapes;
+refuse unsupported wording rather than silently narrowing or estimating it.
+This is a bounded first integration, not a replacement conversational policy
+or completion of retained nutrition parity.
+
+Explicit saved-favourite selection accepts that existing saved portion without
+another confirmation, preserving its confidence and unknowns. New estimates
+remain outside this direct path. Derive one owner/session/message operation
+key, retain a source fingerprint and recover actual committed rows before
+looking up mutable favourite data. Refuse source edits and deleted intake
+instead of duplicating it. Check the selected favourite snapshot under SQL
+locks before first commit. Reuse the existing store, refresh and sensitive
+message-backed audit; no new ledger, dispatcher or schema is needed.
+After independent review's overlapping favourite-edit race, also read back the
+same operation key on a known conflict/uncertain result and validate its source
+binding. Never retry the write or replace absent evidence with success.
+
+## Bind saved-food review to committed source snapshots (17 October 2026; P12-09)
+
+Group retained favourite/alias, plan save/soft-delete and canonical preference
+writes in one native-reviewed connector tool, with a separate read-only
+preference tool. Reuse existing owner-bound handlers and transactions.
+Use one pure plan builder for display and persistence, plus source revision
+or shared DTO fingerprint checks under SQL locks. Never review IDs alone
+and then silently resolve different quantities at commit.
+
+Add target-only favourite/feedback revision counters in new 0050, keeping
+deployed 0049 immutable. Preference clears retain null/version evidence;
+old retries must not resurrect a superseded preference. This includes initial
+clears: persist revision 1 rather than leaving revision 0 available to an old like.
+Return actual rows,
+preserve normalized-name ID reuse and omit repeat updates/notifications.
+The migration also extends the constrained existing audit allowlist; guarded
+rollback refuses used revisions/clears/new audit rather than erasing them.
+Production composition, original Daily and account/device/cutover gates stay
+unchanged. This does not supply internal trusted-message authority.
+
+## Reuse saved-food lookup without expanding connector authority (17 October 2026; P12-09)
+
+Extend the existing `lookup_food` with an exclusive `savedName` alternative;
+preserve its original Frida component input and five-tool audit allowlist.
+Use the existing owner-bound favourite/alias-before-history resolver and shared
+query DTO projection, not a second search algorithm or raw SQL-row response.
+Missing/ambiguous/oversized records stay explicit; never fall back to a provider
+or write intake. No migration, permission or confirmation change is required.
+Keep historical names valid through 2000 characters even when they cannot form
+a 256-character favourite key; skip only that impossible favourite match.
+Favourite-key validation and its existing normalization stay unchanged.
+
+## Isolate the inactive hosted nutrition connector (17 October 2026; P12-09)
+
+Continue Dan's authorised Daily source work after the completed releases,
+without treating missing account/device acceptance as a reason to rebuild or
+park eligible inactive implementation. Use maintained split MCP v2 packages
+inside existing Fastify composition and reuse the existing query service,
+typed nutrition handlers, SQL idempotency/revisions and commit refresh hub.
+No second persistence system, host, model or consent/credential creation is needed.
+
+One separately configured delegated Entra client receives only nutrition
+scopes and a distinct principal restricted by the root hook to the exact MCP
+route. Do not promote it into ordinary `access_as_user` authority or trust
+client/model confirmation booleans. Native form acceptance must match
+SDK-signed, expiring owner/client/purpose/payload state. All external writes
+require native review until an actual trusted exact-intent integration is
+accepted; internal exact logging retains its existing one-step contract.
+
+Modern 2026-07-28 only and process-local confirmation keys are deliberately
+inactive constraints, not demonstrated ChatGPT/fleet compatibility. Unsupported
+clients fail closed; restart/replica changes require new review. Account
+linking, OAuth scopes/grants, fleet policy and real client/phone acceptance need
+their actual gates. No alternate screen, broad OAuth fallback or activation
+follows from this source decision. Initial dependency restore failures remain
+failed evidence: one package-download timeout, then stale cached client
+metadata reporting ETARGET; fresh registry metadata reports client 2.3.1.
+Neither result is a compiler/test failure or a successful installation.
+
+Independent review identified that a UUID HTTP request ID cannot be inserted
+as the existing required conversation-message FK. Extend the existing
+tool-call store/table with a separate constrained UUID connector correlation
+(0049), preserving normal audit identity and refusing rollback over retained
+connector rows. Do not invent a conversation or introduce a second audit
+store. Restore the existing message index around the down script's nullability
+change; SQL Server will not tighten nullability under that index. Register fixed
+failure events; raw food/provider diagnostics stay out.
+Also remove the route's misleading browser-origin allowance: this adapter is
+server-to-server and rejects every Origin rather than broadening shared root
+CORS. Synthetic clients must explicitly negotiate modern protocol; the SDK's
+default legacy connection is deliberately rejected.
+The native form wire grammar cannot express `additionalProperties`; use its
+supported object schema for the question, then strictly validate the returned
+content before accepting `confirm: true`. Do not weaken approval validation or
+fall back to a model-supplied confirmation.
+
+## Scope Web checks without reducing CI coverage (16 October 2026; P11-08)
+
+The Web workflow invoked root npm scripts, which run contracts, frontend and
+backend sequentially. The separate Backend job already owns the same backend
+checks. Explicitly select contracts then web for Web's three commands; retain
+the existing backend, container, SQL, image, Python and CodeQL jobs and aggregate
+gate unchanged. Do not save time by omitting contracts, adding path skips or
+weakening tests. Root dependency installation stays unchanged.
+
+Clean Daily CI `38975315146` recorded Web at 8m19s and Backend at 6m01s.
+The workflow and root scripts establish duplicated execution; one run's timings
+do not establish a general speedup. Actual successor CI must demonstrate all
+remaining checks rather than borrow the earlier green result.
+
+## Reuse presentation for ordinary realtime tools (16 October 2026; P11-07)
+
+Source tracing confirmed that ordinary realtime execution bypassed the existing
+voice work-presentation hook. Connect that executor rather than add a display
+tool, renderer or relay-specific branch. Reuse successful returned summaries
+and prefer text/list for readable dates; reserve charts/timelines for requested
+representations. Calendar staging and later verified approval stay separate.
+This corrects a demonstrated missing path, not a claim that the unavailable
+original rejected payload or live provider session has been reproduced.
+Review identified that the internal pending lookup on an approval/decline turn
+could race the final receipt. Suppress that internal presentation; ordinary
+explicit pending reads still present normally. Do not add ordering state or
+change Calendar approval semantics to solve a presentation-only race.
+
+## Batch the ready follow-ups after the priority hotfix (16 October 2026)
+
+P11-06 / #863 shipped first as `6192574e`; normal Deploy `38953446877` passed
+web and smoke. Qualify the already-reviewed header #862 and Factory parity #861
+in one PM-owned follow-up PR rather than two successive full CI/deploy cycles.
+The source boundaries do not overlap; shared documentation retains both sets
+of requirements, evidence and task rows. Preserve published histories through
+ordinary merges, never force/rebase them. Bind all source blobs to their
+immutable reviewed heads and run complete normal CI/CodeQL on the integrated,
+current-main candidate. This is integration ownership, not permission to waive
+acceptance, close all of #811, resume protected export or claim native-phone
+proof. The actual qualification and release receipts belong on the integrated
+PR and linked issues; this source checkpoint does not claim a follow-up pass.
+
+## Mobile composer focus hotfix (16 October 2026)
+
+Confirmed with JarvisPM for P11-06 / #860: suspend desktop manual conversation
+geometry under the existing phone layout policy, preserving its persisted value
+for desktop restoration. Do not patch focus scrolling, invent a keyboard inset
+or add a replacement layout. A CSS-only inline-position override would retain
+the competing measurement path; rescheduling that path would still fit desktop
+geometry into a phone dock. Deriving no phone manual layout removes that
+ownership conflict at its source and matches existing phone geometry-command
+semantics. Remove desktop-only Move/resize controls on phones as part of that
+boundary. Controlled released-source reproduction and a failing regression
+support the decision; native-device cause and acceptance remain unverified.
+PM's independent source review of `5b3a5933` found no blocker. The unchanged
+production source subsequently passes focused regressions, web lint/types/build
+and controlled rendered phone/desktop restoration checks. Final head `315c85b6`
+passed full normal CI `38952176445` and all four actual CodeQL analyses in
+`38951934641`. #863 merged as `6192574e`, tree `52bc3fe6`; normal web Deploy
+`38953446877` and smoke passed. Public `main-BHyATt-B.js` matches that web build
+and returns HTTP 200. The disconnected PC bridge remains a nonblocking warning;
+`chat_identity` is ok in this run. Issue #860 stays open with `needs-decision`
+for native-phone acceptance. A deployed controlled-browser correction does not
+establish the cause or result on Dan's physical iPhone.
+
+## Filter header background work instead of retaining hidden rows (16 October 2026)
+
+Dan reported that Recent jobs kept dismissed indexing/research entries visible
+and questioned its purpose. P11-05 / #859 chooses the smallest existing-surface
+repair: name it Background work, distinguish it from Factory tasks, and render
+only the store's already-filtered jobs. A new active/history split adds
+unrequested navigation; removing the control would lose existing progress,
+failure and result recovery. The stable trigger and empty state preserve focus
+after the last dismissal. Raw history and backend tools keep saved records;
+dismissal remains a scoped device preference, never cancellation or deletion.
+This supersedes the earlier header contract's visible hidden-history rows,
+not its persistence, truthful failure or unavailable-retry rules.
+
+Evidence: the released 18-case header baseline passed, while a new regression
+reproduced the exact retained-row/disappearing-cross failure. The candidate's
+22 focused tests, changed-file ESLint and declared web types passed. An
+intervening forks-worker startup timeout remains a failed run; the unchanged
+selection passed with isolated thread workers and unchanged assertions/timeouts.
+Real desktop Chromium inspected list removal, refresh/reload, empty/focus,
+Escape and storage/network errors using synthetic jobs and no job mutations.
+The first phone attempt stopped at a fixture CDP navigation race; it was not
+counted as acceptance. After yielding to the mobile-composer hotfix, one
+explicitly allocated phone-only run on unchanged reviewed source passed at
+390 by 844 in light appearance with reduced motion. It covered dismissal
+through refresh/reload, empty/focus, Escape and storage/network errors, with
+44px dismiss targets, contained scrolling and no horizontal overflow, runtime
+errors, external requests or job mutations. The fixture and owned browser
+were stopped immediately; the signed-in released preview stayed unchanged.
+Independent runtime/test source review found no blocking issue. Keep this
+candidate draft/not-ready for PM-controlled current-main integration and normal
+CI; local fixtures are not live, physical-device or deployment acceptance.
+
+## Release active work together after its gates (16 October 2026)
+
+Dan directed one combined deployment when all active work is ready, followed
+by the handoff, and approved the normal combined-release PR/CI/commit/push/merge
+pipeline after CI. The parent alone owns publication and deployment; source
+integration grants no child publication or extra worker. Preserve immutable
+producer inputs and qualify the exact combined source rather than assembling
+independent green receipts into a fictional combined pass.
+
+Include the inactive Daily read slice without activation, private migration,
+protected exports, device changes or new coaching. Keep failed Daily v3b and
+blocked root/pinned gates explicit. No split release, repeated restore, unrelated
+#816 transport or withdrawn mail extraction is authorised by this integration.
+Historical private itinerary deletion hunks remain internal evidence, not
+publishable patch attachments. Ordinary production application approvals remain
+separate from approval to release code.
+
+## Reuse the authorised release identity for Foundry checks (16 October 2026)
+
+Dan explicitly selected keeping permissions unchanged and using the existing
+release workflow's Foundry checks after the local approved-tenant identity was
+denied agent-read access with HTTP 403. Stop local Foundry data-plane reads;
+do not grant roles, switch credentials or create an environment to work around
+the denial. The existing production deployment identity already has its
+required project/account roles and performs the normal hosted-agent checks
+only after release gates pass. Local current-agent metadata and routing were
+not verified; do not present management-plane project existence as that proof.
+
+## One approval for an explicitly listed calendar proposal (16 October 2026)
+
+Dan selected **one approval for both explicitly listed events** through the
+coordinator. Add `calendar_create_events` for 2–10 creations rather than replace
+the existing single-event API, silently drop later bookings or reinterpret an
+already-issued single-event approval. Validate all inputs before staging and
+show every full subject/local-time/zone/attendee summary. A later approval
+authorises only that captured list; cancellation discards the entire pending
+proposal without writing.
+
+Reuse the existing process-local, ten-minute, single-use confirmation owner;
+do not introduce a durable queue or imply transactionality across Google
+writes. Execute sequentially, stop on failure/cancellation, preserve per-item
+success and distinguish a known rejection from an unknown write outcome.
+Never replay successes or unknown outcomes automatically. Retain only the
+current proposal's source-session-bound receipt until its original expiry;
+restart means unavailable evidence, not proof of no write.
+
+For explicit multi-create intent with the batch tool available, refuse an
+isolated single-create before backend staging rather than hide a partial
+proposal during continuation. All concurrent single-create arguments must
+reach whole-list validation together. Preserve older unrelated pending state,
+but do not approve/relabel it when the newer batch failed or stayed incomplete:
+the latest request's canonical server-verified message ID must equal the
+existing staged source ID in trusted backend pending/receipt evidence. Retain
+IDs as optional, backward-compatible, non-prompt `ModelMessage` metadata;
+never infer identity from prose/labels/counts or accept a model-supplied source
+argument. Preserve current-request/history/steering/caption identity and enforce
+the same origin guard for model-dispatched confirmation. Missing, truncated or
+mismatched origin fails closed; ordinary single-event callers remain compatible.
+The coordinator authorised only the necessary runtime metadata assignments,
+not PR #816 connection reuse. No cancellation, new persistence or retry machinery
+is added.
+
+Direct coordinator review authorised a narrow v2 correction: contextual
+"Add those two." uses recent calendar routing, with Notes/mail isolation, but
+approval still binds the actual latest verified creation/calendar mutation ID
+to trusted stage evidence. Do not skip that request or a newer other-workflow
+creation to find an older matching source. Keep bare cancellation as a reply.
+Add `put` to the same claim policy, not a second classifier. The final narrow
+correction recognises Danish demonstrative "de/disse to" without making English
+`to` a quantity. Final selected checks passed 444 Python cases, Ruff8 and 58
+qualified Node cases with unchanged Node identities. Preserve earlier patches
+and passing/failed receipts immutably; these are not full pinned CI or release.
+
+The released agent's topic-based final guard reproduces 22 failures among
+27 new synthetic controls. Restrict it to affirmative action/approval claims,
+including calendar requests without the recovery tool. Preserve ordinary
+conversation, explanations, incomplete requests and explicit tool errors.
+Normal chat uses labelled CommonMark records with blank lines rather than
+unsupported pipe tables; this does not give the model a live UI preview.
+The missing third-booking email is no longer a defect: Dan confirmed it was
+not in Gmail. No Gmail extraction, live account action or release is part of
+this local candidate.
+
+The coordinator also authorised a narrow correction to catalogue-wide chat
+buffering. Reuse the existing calendar scope/claim policy to release only
+completed ordinary sentences while retaining incomplete/action/calendar text
+for final grounding. Do not simply stream every non-calendar-request response:
+later chunks can still claim an unsupported calendar action. Refresh scope on
+steering, retain provider cleanup, and verify irreversible-yield ordering with
+Event-held synthetic providers. This does not establish historical latency
+causation or production savings, and does not duplicate PR #816's separate
+runtime connection reuse.
+
+## Resume only the inactive Daily read integration (16 October 2026)
+
+Dan selected the existing Daily session under coordinator ownership to continue
+the partly integrated project. The coordinator released the nonprivate #724
+API/read-tool/committed-invalidation slice on exact main `2823585`; the old
+general engineering pause no longer blocks that slice. It is not permission for
+#717/draft #741 exports, #727 devices, private migration/cutover, new coaching or
+production activation.
+
+Use one `DailyQueryService` over accepted #720 health and #722 meal-history
+interfaces for HTTP and the existing sensitive tool dispatcher. Preserve
+canonical values, nulls, dates, provenance and owner resolution. Reuse the
+existing refresh event instead of widening global SSE/chat contracts.
+Publish invalidation only after an acknowledged SQL commit; query-content
+fingerprints and refetch-on-reconnect/refocus recover missed local hints without
+claiming a durable replay log or atomic multi-query snapshot. Retained duplicate
+operations do not publish a new intake/domain change.
+Acknowledged inbox completion/quarantine/retry-exhaustion transitions notify
+sync only, including a pending retained-lineage replay; they cannot advance
+processed health freshness. Keep notification failure in the existing event
+boundary, not the SQL retry/result boundary.
+Nutrition uses the same listener-error boundary even for a directly supplied
+sink, so a failed hint cannot reject an acknowledged insert/correct/delete.
+Read fingerprints sort validated DTO keys independently of nutrition's unchanged
+write node/depth limits. Enforce the response byte limit, including the final
+64-byte fingerprint, before hashing; valid full pages and retained nested
+provenance must not fail because of an unrelated write budget.
+
+Keep hosted ChatGPT food writes explicitly unfinished until their scoped
+connector authorisation and trusted intent/proposal-acceptance contracts are
+approved and implemented. Internal Jarvis reads are not a substitute for that
+requirement. No maintenance/TDEE, completeness, expiry or readiness rule is
+invented. Full #724, live/provider/device/source-parity and release acceptance
+cannot be inferred from synthetic checks.
+
+16 October continuation after #866 deployment: extend this existing read
+service to retained favourites and plans rather than inventing another API.
+Use their existing ID-keyset store pagination with exact `{id}` cursors, no
+calendar period and a 100-row bound. Keep plan snapshots/tombstones and raw
+display aliases; they are not intake. Publish the actual collection source
+after acknowledged favourite/plan commits through the existing safe event hub.
+The public contract remains additive version 1. Hosted connector authority,
+production activation and all private/live migration gates are not granted by
+this continuation.
+
+## Bound chat format support and avoid double keyboard compensation (16 October 2026)
+
+Keep `react-markdown` and add standard `remark-gfm`, not another rich-text
+system. Enable it only for chat; shared Notes/Knowledge readers stay unchanged.
+Preserve raw-HTML refusal and safe links. Prefer labelled reservation
+records in normal-chat guidance (calendar/agent owner); historical well-formed
+tables receive semantic headers and contained keyboard scrolling. Do not infer
+records or date/timezone values from a flattened malformed table.
+
+Released-source actual-App Chromium reproduced the ugly pipe paragraph even
+with correct source newlines. A controlled stale `innerHeight=844` with a
+430px fixed viewport reproduced a composer at top -62px and a 2px transcript;
+ordinary resize/pan alone did not. Publish visual-viewport top/height directly
+instead of subtracting metrics from different viewport coordinate systems.
+This establishes a failure mode and correction target, not the exact metric
+sequence on Dan's iPhone. Physical Safari acceptance stays unverified.
+
+Actual-App held-open SSE exposed a separate partial-table following race in
+the first candidate. Follow content before paint rather than relying on
+completion/refocus or adding a delay. Final production-source readback
+measured tail gaps 0/0 across two held-open growths; an explicit history
+scroll stayed at 100 through two more growths (gaps 866/1182).
+The desktop browser also exposed the prose cap clipping table columns despite
+available space. Widen only table-bearing replies, retaining contained phone
+scrolling and ordinary prose measures. Newly authored tests use wholly
+synthetic hotel/stay/price records; supplied-itinerary receipts remain private
+evidence, not publication assets. These browser results do not relabel earlier
+unit/static/build receipts as final-source passes.
+
+## Reuse one existing control contract across Jarvis (16 October 2026)
+
+Dan rejected mixed action shapes and decorative coloured boxed/bevelled tab
+borders. The coordinator accepted CSS-only consolidation within Jarvis's
+existing visual direction. Reuse the current control radius, primary/quiet/
+selected surface roles and focus outline across routes. Reserve capsules for
+status and genuine semantic exceptions; preserve neutral structure, accessible
+state and touch targets. Prefer editing existing selectors to a new React
+control library, parallel token system or blanket reset. Durable guidance lives
+in this repository's agent context and product-ui skill, not global templates.
+
+Header/job behavior remains a separately owned companion correction: recent
+history consolidates terminal/hidden jobs; account/backend-scoped UUID
+dismissal only hides local header state. It neither cancels server work nor
+deletes history. Indexing Retry cannot be advertised as actionable without a
+supported operation, and past interruption is not present health. No live
+mutation or publication is authorised by these local UI changes.
+
+## Keep Factory cache ownership project-local through invalidation (16 October 2026; local)
+
+Dan authorised local fixes and regressions, not publication, deployment or
+live/private probes. Parent accepted one pending source owner per project;
+automatic updates mark it dirty without replacing it. Coalesce at most one
+immediate follow-up. A follow-up invalidated again settles explicitly stale and
+expired, allowing the next event/request to refresh without an unbounded drain.
+Preserve validated fallback and original typed errors; failure is not a retry
+signal. Check entry freshness at waiter settlement and keep cancellation with
+the shared owner, not an individual waiter.
+
+Ordinary task/webhook publication invalidates only its project. Resolve task
+ownership first and log a safe lookup failure rather than silently clearing all
+projects or replacing the original error. Keep intentional explicit global
+invalidation support, complete GitHub reads, auth, validation, per-read bounds,
+SSE versions and the existing client lifecycle unchanged.
+
+Reuse first-error-preserving `readTogether` for the outer source/task/release
+branches rather than releasing ownership on the first rejection while siblings
+remain active. Await all started branches without an individual waiter's signal
+or a new retry/deadline policy. This can delay error settlement until existing
+branch cleanup; it is not a lower-error-latency claim.
+
+The selected frozen-`2823585` direct-cache control actually failed at duplicate
+ownership: expected one source call, observed two (12 collected, 1 selected,
+11 skipped). A separate fresh-process v1 candidate run passed the complete
+12-case direct-cache suite and four real-Fastify route lifetime controls, with
+zero skips. Exact baseline board/app blobs, config/source identities and actual
+output remain in the owned session artifacts. This qualified snapshot uses
+Vitest 5.0.2/Vite 8.3.1 rather than current pins; Fastify 5.12.5 is exact.
+Original buildApp/publication/auth suites and pinned lint/types/build remain
+UNRUN/blocked by missing real dependencies; component checks do not replace
+them. #809/#812/#814/#831/#842 are already delivered. This local successor
+neither republishes their history nor establishes historical #811 cause,
+quantified live latency improvement or #813/#811 completion.
+
+Subsequent review found an LRU settlement edge: 32 other project completions
+can evict a just-loaded entry before its waiter resumes, making a later
+invalidation unable to mark that waiter-held object. Expire/mark evicted objects
+stale before removal, without dirtying owners or creating capacity-driven
+follow-ups. This deliberately treats evicted outstanding snapshots as stale
+even without another publication. The new fixed-clock/gated control actually
+failed at its freshness assertion on frozen v1 (13 collected, one selected,
+12 filtered). Current v2 passed all 17 component cases, with zero skips.
+Retain the exact v1 source and 16-pass receipt separately; only the new result
+covers the eviction correction. Full-app/pinned and live limitations remain.
+
+## Preserve the current source behind an interrupted reply (16 October 2026)
+
+Direct tracing of the existing chat loop exposed a compatibility defect in
+the new guard: steering persists an interrupted Jarvis partial after the Dan
+message that identifies the next round. Synthetic registry controls against
+the unchanged published guard reproduced four failures out of five new
+controls; the completed-reply refusal already passed. Keep that red evidence.
+
+Resolve one same-session predecessor only for an explicitly interrupted
+Jarvis row, then require the exact source ID and Dan role. Reject other
+sessions, stale/missing/non-Dan sources and completed-reply reuse. Retain
+cancellation after each lookup and surface read failures. Do not add a broad
+history scan, source-text cache or new persistence method. Fresh exact-source
+CI and release remain required; a green earlier batch would not prove this
+previously untested steering behavior. No Web source or test is changed.
+
+## Resolve Gmail intent before discovery-dependent fallback (16 October 2026)
+
+The exact released guard allowed a synthetic hosted `pc_open` Chrome dispatch
+for a stored current Gmail request when no Google module existed: zero source
+lookups and one dispatch. The native request with its verified message refused.
+Retain that baseline failure; #848's post-mail tests did not cover this case.
+
+Reuse the existing current-Dan-message history boundary before hosted computer
+dispatch rather than rely on model instructions or wait for an unavailable
+mail tool to run. Refuse stale/missing/non-Dan sources, propagate read failures,
+and check cancellation after the read. Keep the existing independent-intent
+rules, request-scoped nested exception, bounded identifier-only ledger and raw
+observed-site guards. No new routing service, consent or permission is needed.
+
+This is a local source decision and synthetic regression proof, not full
+integration/build/CI, release or real private-account acceptance. Keep #837
+open until its actual remaining acceptance is met. Do not consume or simulate
+Dan's genuine later product-write approval to validate this correction.
+
+## Accept the released clean Factory lifecycle (15 October 2026)
+
+Accept PR #856's exact reviewed source `6e702e7a` after fresh full CI,
+219 passing real-SQL cases, four CodeQL analyses and normal backend/four-runner
+release. Fresh native Task 19 then delivered a new exact artifact in
+`DanAakesen/jarvis-test-target#6`; current-generation commit-bound stopped-writer
+proof preceded automatic Done at 23:49:53 UTC. Full reload retained Done and
+Status reported zero tracked sessions. Existing no-CI grace and all policy
+checks remained; no manual completion, cancellation or merge supplied success.
+
+Keep artifact durability, owned-writer teardown, logical session accounting and
+physical cloud deallocation distinct. The last remains unverified under the
+existing Foundry 403 boundary. This clean run neither proves the cleanup-failed
+live branch nor explains Task 18's historical failure. Preserve those open
+qualifications and the earlier failed trials/SQL batches. The held entries
+below remain historical evidence, not the current clean-path release state.
+
+## Fence recovery before provider start (15 October 2026; implemented locally, held)
+
+Independent V2 review reproduced policy Done and an approved merge using the
+previous invocation's proof after recovery was claimed but before its
+replacement session was persisted. Use a task/session execution generation,
+advanced atomically when claiming work, with the existing policy lock and a
+no-start-lease condition. Match the generation on backend proof as well as the
+latest session and invocation. A failed start does not restore the old value.
+
+Use dedicated additive columns rather than the retry counter (which can reset)
+or event timestamps/IDs (task events can be archived while a task is active).
+Normal dispatch and recovery both advance the generation; late start/failure
+callbacks also carry it. Zero preserves the existing task/session association
+for fresh verification only; do not backfill historical completion proofs.
+Normal migration/SQL/build/Linux gates and independent pinned review remain
+required. These changes do not identify Task 18's original cleanup failure.
+
+Dan authorised workers, normal delivery and bounded live testing overnight, then
+continuation with the next eligible board task after shutdown acceptance. This
+does not release the specifically held Daily scope or bypass the Foundry 403.
+
+Durable delivery, policy completion and runtime release remain separate facts.
+The desired artifact-plus-authoritative-stop/fence completion path must not
+discard a valid delivered PR merely because graceful finalization failed.
+V3 received an independent source-only PASS at tree `7303f6e5`; real SQL,
+Linux/build/release and the alternative completion path remained held.
+Preserve that snapshot. V4 adds independently recorded successful-work and
+successful-owned-provider-stop facts, not a timeout or absent-owner inference.
+Only final failed snapshots with both facts and exclusively post-provider
+credential/event/publisher cleanup failures can enter normal delivery policy.
+Keep runner failure and sanitized diagnostics visible; require the same
+generation/session/invocation and GitHub/policy gates. No external deletion or
+cloud deallocation is inferred. This resolves the source contract, not its
+unexecuted SQL/Linux/live acceptance.
+
+Independent V4b review then found that a no-commit question turn also used the
+generic completed outcome. Failed question delivery could therefore mint work
+proof and reuse an existing PR. Preserve the held V4b pin. V4c derives successful
+work only from the verified delivery-work branch and additionally rejects a
+question-bearing snapshot. Actual worker controls must cover delayed question
+delivery failure, not just direct-finalizer synthetic outcomes.
+
+Independent V4c review confirmed that correction but held the candidate because
+a new local commit did not prove it was pushed. Preserve V4c and its qualified
+142-pass/11-POSIX-skip offline results. V4d binds runner work to its actual
+verified commit SHA and requires the remote branch and delivered PR to match
+it. Require the same binding for clean completion, not only the alternative
+cleanup-failed path; otherwise clean teardown could still accept an old PR.
+Unbound legacy snapshots remain readable but require fresh current-runtime
+verification before Done or merge. Do not backfill or infer a commit identity.
+The locked SQL policy gate compares proof commit with the expected candidate
+head, including after deferred approval. A mismatched or unpublished commit
+must not complete the task or obtain an approved merge. An unbound completed
+snapshot produces verification attention without inventing a runner failure.
+Exact-source review, real SQL/Linux/build gates and fresh live acceptance remain
+outstanding; this does not establish the original shutdown cause.
+
+Independent V4d review confirmed commit binding but found that verification
+attention reused crash cleanup. With a running saved turn and no early result
+event, a clean completed snapshot without commit binding became Crashed/failed.
+Preserve V4d. V4e retains the observed completed invocation in both direct
+cleanup and the state-change subscriber, since either can run first.
+Use the existing invocation-completed SQL argument; do not infer work proof,
+backfill events, invoke delivery or mark the task Done. Genuine failure keeps
+its existing classification. Offline controls reproduced both incorrect
+cleanup flags; added SQL controls must verify Ended/done/completed lifecycle
+alongside task attention and denied policy. SQL/Linux/release/live remain held.
+
+V4e received source-only PASS and normal ready PR #856, but its first genuine
+automatic SQL run failed with collation error 468. Preserve that failure rather
+than rerunning it unchanged: JSON proof text inherits the database default,
+while Foundry session IDs use explicit binary collation. V4f applies explicit
+`Latin1_General_100_BIN2` to proof-identity comparisons. Do not alter database
+collation, rewrite stored IDs or relax the identity gate. Case-only changes to
+opaque session/invocation IDs must be refused; add real-SQL controls alongside
+the matching positives. V4e's full backend build and Python component step
+passed, but neither those component passes nor its CodeQL success accepts
+changed V4f source. Exact new-head review/SQL/CI/release/live gates remain.
+That failed SQL batch also blocked three existing rollback controls because
+their shared fixture now held used execution generations. Keep 0048's refusal:
+give rollback controls disposable fresh databases, and explicitly test that
+unused rollback succeeds while a used generation, its columns and ledger remain
+intact after refusal. Never clear generation history or weaken the production
+down migration merely to pass a fixture.
+
+V4f2's first genuine SQL batch passed those identity and rollback controls, but
+still failed nine tests. Keep that failure. V4g corrects the observed fixture
+boundaries without changing runtime: advance the existing reconciliation
+observation clock rather than persist a heartbeat older than its session;
+derive session start/heartbeat/end from one SQL timestamp; and exercise the
+saved absent-runtime cancellation snapshot after a legitimate recovery rather
+than deadlock by requesting recovery inside the cancellation policy lock.
+Retain actual dispatcher cancellation of the recovered runtime. Register
+synthetic tasks before fallible fixture setup and cancel them in `finally`;
+the previous helper could strand a Running task when an insert failed, consuming
+global capacity. Do not relax constraints, raise concurrency, remove cases or
+increase timeouts. Fresh real SQL must establish that all remaining failures
+clear before normal release or live acceptance.
+
+## Fail closed on explicit runner failure and finalization deadlines (15 October 2026; implemented locally)
+
+Independent read-only source reproductions showed that early result events
+could misclassify a later failed runner as idle expiry, refresh its heartbeat
+and leave the last reconciliation scan too early. Give the explicit current
+runner failure precedence; do not treat a prior completion/question event as
+finalization proof.
+
+For the reproduced freshness gap, admit already-ended eligible sessions
+immediately rather than introducing another five-minute eligibility timer.
+Keep the active-session freshness guard, latest-generation fences and five-row
+batch bound. Additional source controls reproduced three failures in the first
+candidate: coalesced expiries beyond five rows, starvation behind five failed
+rows, and an earlier task expiring during an in-flight scan.
+
+Advance a stable task-ID keyset through bounded batches, scheduling another
+yielding pass when a batch is full even without tracked sessions. Keep pending
+expiry wakes until the sweep completes, then rescan from its beginning. Do not
+refresh an ended session's heartbeat merely to manipulate ordering or use an
+offset that skips rows as state changes. SQL scan and row-operation failures are
+visible and retry at the existing interval; successful idle sweeps stop. Add stop and outage
+controls alongside the three before/after reproductions. This revision remains
+unreleased pending independent exact-patch review and normal Linux/SQL gates.
+
+Use one 60-second finalization work budget, ten-second IO caps and one-second
+cancellation joins. Timeout is an unknown/failed outcome, not successful
+cleanup. Retain unsettled asynchronous owners and refuse unsafe retries,
+including a queued turn that acquired its lock after an earlier timeout.
+Do not begin another credential write after the shared deadline expires.
+Process-local fencing does not survive process restart and does not establish
+cloud deallocation. No new access grant, provider workaround or Daily scope
+is authorised by this correction.
+
+Local actual-source controls cover blocked IO, cancellation resistance and
+ownership races. They do not establish the historical Task 17/18 cleanup phase,
+real SQL correctness, Linux process behaviour, release success or live shutdown.
+Freeze the source and obtain independent read-only review before publication.
+
+## Require current runtime proof before GitHub policy completion (15 October 2026; implemented locally)
+
+Normal source `5c5be688` recovered backend revision 323 and passed required
+release smoke; advisory chat identity remains degraded. The one subsequent
+Factory trial, Task 18, delivered the exact new 47-byte artifact in
+[DanAakesen/jarvis-test-target#5](https://github.com/DanAakesen/jarvis-test-target/pull/5),
+but emitted `ACPShutdownError` and never automatically reached Done. Supported
+cancellation later reached Cancelled. Neither that nor idle expiry proves
+physical deallocation. Its cleanup phase and GitHub refusal's HTTP status were
+not exported.
+
+Offline source reproduction demonstrates that descendants can retain pipes
+after their ACP leader exits. Isolate and stop the owned POSIX group rather
+than extending deadlines or killing unrelated processes. Check live Linux
+members, not unreaped zombie presence, and retain explicit process/reader
+failure. New group ownership and phase diagnostics remain unaccepted until
+normal gates and a fresh released trial.
+
+Source and permission-faithful offline controls also demonstrate that the
+policy evaluator's write token lacks its checks/statuses read capabilities,
+and its merge method was POST rather than PUT. Reuse existing scoped helpers;
+do not add installation permissions or mint write credentials before approval.
+
+Repairing reads must not enable a green PR to bypass runner cleanup. Record a
+backend-only, current-session/invocation proof from the dispatcher's verified
+terminal snapshot, using existing event storage and coordination locks. Require
+it for Done and merge, including after deferred approval. Early runner events,
+expired sessions, absent runtimes and historical evidence are not substituted
+for this proof. Do not backfill completion or weaken no-check grace, branch
+protection, cancellation fencing or Daily holds. Existing nonterminal tasks
+without proof remain fail-closed pending fresh runtime verification.
+
+## Register attachment cleanup before Fastify listens (15 October 2026; source correction)
+
+Own the existing conversation-attachment cleanup job in `buildApp`, with its
+hooks registered once during construction. Start it in `onReady` and stop
+its interval in `onClose`, independently of embedding configuration or
+re-embedding requests. Preserve the existing hourly interval, immediate bounded
+100-item cleanup, retention policy and content-free failure event.
+
+Exact `e17cbb0` source incorrectly registers these hooks inside
+`onEmbeddingModelChanged`, which startup can invoke after `app.listen`.
+Real Fastify 5.12.5 rejects late hook registration with
+`FST_ERR_INSTANCE_ALREADY_LISTENING`; the same callback is also reachable on a
+later embedding-model change. Remove that registration from the callback rather
+than extending readiness timeouts, suppressing startup failures or changing
+production configuration.
+
+Backend revision 322 repeatedly exited after `database.ready` and two generic
+events; revision 321 remained healthy. The fatal catch discarded the exception,
+so the reproduced source defect is not proof of the precise historical live
+exception. Offline regression, normal reviewed release, new backend readiness
+and required smoke remain separate evidence. No new Factory shutdown trial,
+Daily activation, private-record query or manual Azure change belongs to this
+correction.
+
+## One balanced stage, not quality tiers (15 October 2026; local)
+
+Dan approved the stage-performance review but rejected tiers and choices.
+Use one fixed rendering budget, bounded ambient/voice/mirror cadence and
+cheaper geometry/shader detail. Keep the room mounted across routes but
+hold its last frame behind work pages, preserving the agreed one-room feel.
+Remove adaptive resolution changes rather than tuning their oscillation.
+Coalesce real size changes before drawing and never clear the buffer after
+rendering a frame. Keep the actual mirror, cyan shell/open amber core,
+truthful audio/activity, reduced motion and context recovery.
+
+Dan said the changed stage still looks good. That accepts the local visual
+direction, not measured machine-power savings, physical-phone performance
+or absence of production flicker. This work is separate from the frozen
+header/cancellation release and the unresolved mobile composer report.
+
+## Retain model-round maxima without changing first samples (15 October 2026; source candidate)
+
+The diagnostic turn exposed a visibility gap: `model_request` retains the first
+Responses create observation, so a slower later tool round is not represented
+by that field. Add only optional content-free `model_auth_max` and
+`model_request_max` in the existing turn-local timing collector. Instrument
+the shared model-token provider and both providers' awaited stream setup;
+finalize on success, error and cancellation without changing propagation.
+Keep existing first-observation fields, bounded finite durations, model
+arguments, retries, deadlines, settings, permissions and resource lifecycle.
+
+Log the new diagnostics at the backend but do not widen the legacy browser
+reply's timing field set; mixed agent/backend deployments remain optional-field
+compatible. There are no timing-phase constants in baseline `6e2c1b95`'s
+contracts package, so no new public contract is introduced. Maxima can describe
+different attempts and token time overlaps setup. The underlying delay remains
+unknown; SDK retry, token refresh, throttling and provider queueing are not
+proved causes. This candidate does not fix latency or accept the release,
+Factory task cancellation, or the separately owned physical mobile composer.
+No new live/model/tool/job call belongs to this source/test handoff.
+
+## Bound owned ACP teardown without early terminal success (15 October 2026)
+
+The source has an unbounded post-kill process wait and an unbounded stdout
+reader join; stderr previously had no retained task owner. Deterministic
+owned-process/reader controls reproduce these lifetime risks separately from
+the parent's real artifact-delivered/automatic-finalisation-failed trial.
+Bound each shutdown phase, retain and join both readers, share stop work across
+callers and preserve cancellation after teardown. Report sanitized explicit
+failure if exit or reader cleanup cannot be verified; never silently treat a
+reader exception, timeout or attempted kill as successful cleanup.
+
+Remove only a successfully stopped matching client. Retain failed ownership
+to prevent another turn sharing an unverified provider, without removing a
+replacement client. Keep accepted terminal-after-teardown/event delivery,
+delivery verification and cancellation confirmation contracts unchanged.
+This is a local implementation choice pending independent review and exact
+head gates, not a proved diagnosis or retroactive repair of the live runtime.
+Task 17's later supported cancellation success does not change that distinction.
+No publication, extra live action, access workaround or resource change is
+authorised by this record; historical freezes remain immutable.
+
+## Exclude new Daily coaching, preserve core integration (15 October 2026)
+
+**Confirmed user decision, not a proposal or completed acceptance.** Dan:
+"Also i dont know what that coaching is, but you dont need to add that, you can take that out of scope."
+
+Withdraw NEW P12-08/#723 coaching/recovery/recomp automation from the planned
+scope and combined release. Retain the first and waist-corrected unmerged
+source freezes byte-exact as archived evidence, not accepted/merged work.
+This does not remove existing main Daily health, nutrition, workout/tracking,
+integration capabilities or retained readiness/recovery/measurement records.
+No original application, schema or data change is authorized.
+
+Core P12-09/#724 API/tools work excludes new coaching; a deliberately excluded
+optional feature and its missing maintenance/TDEE, completeness, expiry or
+readiness interpretation must not remain semantic completion prerequisites.
+Do not invent those rules or activate #724. Existing core validation remains.
+Keep one Daily page plus existing on-demand GenUI, no widget, extra
+Workouts/Nutrition pages or mandatory four native views. Parent owns native
+issue/dependency/board reconciliation after this source update. The coordinator
+verified that plan-status derives native dependency links from PLAN, so update
+only P12-09's dependency cell from `P12-08` to completed `P12-05, P12-07`
+(#720/#722), not an empty or bypassed dependency. All 381 row positions,
+309 task IDs, every Status cell and the other 380 rows remain byte-exact;
+retain #723's row. Conflicting older scope descriptions are historical.
+
+Protected backup/export, authoritative-original-source/parity,
+real-device/provider, final-delta, rollback and cutover evidence remain
+required for retained core scope. Original Daily stays canonical before
+cutover. The coordinator reports that original-repository identity matches
+GitHub main, but collector metadata is not proof of the earlier health-schema
+source or live parity; this docs-only lane performs no further source search.
+This scope decision alone is not code removal, a release or acceptance proof.
+
+## Cancel attention after a failed pre-start without inventing ownership (15 October 2026)
+
+Complete review after published `0b4e79c2` passed ten CI jobs / SQL 176 tests
+and four CodeQL analyses found that a valid pre-start failure has no session
+end reason. Refusing all such tasks prevents supported owner cancellation.
+Permit only the trusted getter's existing-task/all-four-null runtime generation,
+preserving unknown/partial/mismatched refusal and provider-free absent handling.
+Keep the atomic expected-state and expected-generation terminal guard: a first
+runtime appearing after capture must roll back without cancellation events or
+replacement cleanup. Add controller/actual-transition and real-SQL positive/race
+controls; this new finding blocks release until exact-diff review and fresh
+complete CI/SQL/CodeQL. Prior freezes/green evidence remain historical, and
+neither this correction nor standing delivery authority grants another live job.
+Implementation/tests were published as `e6a41696`; final gate and deployment
+evidence is tracked in PR #853.
+
+## Standing authority for guarded delivery (15 October 2026)
+
+Dan explicitly approved V5 continuation, then stated that committing,
+pushing, merging and deploying authorised Jarvis work need no repeated
+permission question. Record standing delivery authority rather than
+reinstating candidate-specific consent gates from historical sections.
+Independent source review, exact current-main/ownership checks, complete
+fresh CI/CodeQL and serial guarded merge/deploy/smoke acceptance still apply.
+Normal publication must preserve the user's checkout and owned history.
+This does not authorise extra jobs/provider turns, private/device/access/model
+scope, resource creation, shared settings changes or bypassing authentic
+product-action confirmation. Release ownership remains with the coordinator.
+
+## Shrink header tabs before native scrolling (15 October 2026; combined candidate)
+
+Dan requested Chrome-like shrinking followed by horizontal scrolling,
+without covering Presence or Settings, and inclusion in the next deploy.
+Use the reviewed bounded flex containers and 140px minimum tab widths rather
+than measured-width JavaScript. Keep window/job groups separate and job details
+outside their scrolling child. Hide scrollbar tracks to preserve the compact
+header. The phone sheet resets the desktop flex basis and keeps 44px rows.
+Remove only duplicated runtime header feedback; chat, voice and backend-waking
+feedback retain their owners. Preserve V5 runtime/fixture source exactly.
+Fresh combined review, SQL/CI/CodeQL and release remain pending. The physical
+mobile-composer report is separate and unresolved.
+
+## Allow safe cancellation of attention tasks (15 October 2026; local candidate)
+
+The coordinator observed a genuine-owner cancellation of the existing isolated
+task 9 return HTTP 409 at 03:37:35 UTC while it was NeedsAttention with a null
+latest session end reason. Its earlier authorised recovery produced a real
+provider turn but a `session_question`, not verified Done. Existing public
+artifact content is not evidence of a newly produced delivery. Earlier release
+and rejection receipts remain historical and immutable; this work grants no
+new live job or cleanup action.
+
+Extend the existing cancellation lifecycle and shared confirmed Cancel control,
+not recovery, automatic question answering or completion classification. Keep
+the policy lock and merge guard, require an authentic owned-invocation cancel
+acknowledgement, and reject replaced targets after the request. Add an optional
+expected-state and expected-runtime check to the existing terminal transaction.
+Runtime identity includes the latest session across all statuses and its latest
+turn, even if the control target is absent or the turn already completed. Keep
+the task update lock and session/turn range locks through terminal persistence.
+A replacement must cause rollback before task mutation, event publication or
+cleanup. Await existing session accounting and
+deletion; preserve explicit failure and unknown-runtime outcomes. No new
+service, state, migration, dependency or permission is needed.
+
+Independent review rejected V2's state-only guard: recovery can return a new
+runtime to NeedsAttention before the cancellation row check. Eleven deterministic
+actual-dispatcher/actual-transition controls reproduce that defect against V2
+and pass with the revised guard. V2 and its receipts stay immutable, not PASS.
+The added real-SQL generation/recovery cases remain unexecuted locally.
+
+V4 was published as `428555d5`; its two new actual-SQL fixture setup failures
+did not reach replacement assertions. V5 corrects completed-invocation fixture
+accounting without changing production guards and has independent source-only
+PASS. The combined header candidate still requires exact-tree review and fresh
+SQL/CI/CodeQL/release gates. No live cancellation or deallocation is claimed.
+
+## Compose reviewed runner delivery after genuine recovery acceptance (15 October 2026)
+
+Exact reviewed #852 normally reached main `5765d882` / tree `c5831563`.
+Its automatic Deploy `38666983966` actually passed all six jobs and required
+smoke `116203572330`; ready backend320 and the owner's retained fifteen OK
+smoke entries corroborate current health. This clears the ordinary main release
+hold, not original Google acceptance, historical attribution or physical capacity
+proof. Preserve both C0's incomplete reply and BCE's whole-suite timeout.
+
+Normally integrate that accepted source into the existing #850 branch, retaining
+the V2 runner/test blobs and every main entry outside its eight reviewed paths,
+including all PLAN table lines. Earlier `467cb5d` passed actual ten/four gates
+and pinned runner204/agent398; require fresh gates for the composed head,
+then normal Deploy plus actual exact-released-SHA Runner deploy. No new PR,
+task, worker, permission or live fixture/job is authorised by composition.
+
+Earlier decisions below remain historical; their then-pending release statements
+do not supersede this actual acceptance or waive the remaining delivery gates.
+
+## Integrate tested recovery source without prematurely accepting its release (15 October 2026)
+
+Existing #848's independently reviewed `0519d12d` passed all ten actual CI
+`38656025688` jobs/four CodeQL `38656025581` analyses and normally squashed
+into main `bce6e02a`, exactly tree `6c0c9aa7`. Its normal Deploy `38658184723`
+is still running. Keep ordinary main merges and approved live acceptance held
+until the required smoke passes; a source merge alone does not clear C0's failure.
+
+Published-ready Factory `99fdb727` independently passed its normal documented
+full dispatch `38656814220` and four CodeQL `38656417765` analyses, including
+actual pinned Linux runner204/agent335 with neither component skipped.
+The earlier ready event executed zero steps and does not count. Normally compose
+tested BCE source in the owned Factory surface while release runs, preserving
+the exact V2 runtime/tests and every outside-eight-path main entry/task row.
+The composed head requires its own full gate; normal Deploy and exact-SHA Runner
+deploy remain necessary before the one eligible authentic owner job.
+
+## Reuse the empty initial-plan draft for reviewed runner delivery (14 October 2026)
+
+PR #850's head `4d57c6ba` adds no source bytes to its `51bda5cb` parent.
+Its original direct-Gmail implementation is consolidated separately through
+existing #848, while #837's real acceptance remains open. Reuse this otherwise
+empty draft for the independently reviewed V2 runner lifecycle correction;
+remove native closing references instead of accidentally closing #837.
+No new PR, issue, worker or live job is created by this publication decision.
+
+Normal current-main integration first produced exactly `c0d0aeef`'s tree.
+Preserve all source outside the eight reviewed runner/context paths and every
+main PLAN task-table line. The parent V2 PASS is bounded source/synthetic proof,
+not full Linux CI, release, actual provider delivery or physical deallocation.
+Main's newer required capability smoke is broken; ordinary runner merge stays
+held until that separate demonstrated correction clears the gate.
+
+## Factory runner terminal publication follows teardown (14-15 October 2026; local)
+
+The frozen `202ead5b41af3247b51c893c59964fef716f5442` runner publishes and
+persists `completed` before provider shutdown and awaited final event delivery.
+Nine initial bounded synthetic cases reproduce an observable premature
+`completed` poll or cancellation response while teardown is still pending,
+including event delivery that later fails. This establishes an ordering defect,
+not the historical cause of an existing production task.
+
+Retain the existing lifecycle owner and public statuses. Stage the turn outcome,
+shield owned finalization from cancellation, drain the current event-chain tail
+before closing its publisher, and retain the session lock until cleanup settles.
+Late stop requests affect the final status without appending to a closing
+publisher. A failed cleanup remains failed, including on cancellation; a
+sanitized 503 reaches the existing Foundry-client/control failure path. No
+scheduler, task-state bypass, artifact shortcut or new dependency is introduced.
+
+Independent parent review rejected the first local correction: disconnecting an
+actual cancel request propagated a second cancellation into an unshielded
+cleanup wait, and a late stop deadline appended `stop_timeout_forced` during
+publisher close. Both parent tests reproduced locally. Shield the handler's
+worker join and every cleanup wait, keeping the lock until the owned finalizer
+settles even under repeated cancellation. Guard all control-event paths,
+including a delayed ACP-cancel acknowledgement; deadline-driven termination of
+the owned process remains effective without appending during finalization.
+
+Thirty-nine lifecycle/control cases and 22 existing token/helper/deployment
+contracts pass locally, as do the two unchanged parent tests. The original 18
+regressions remain red against the exact baseline; 17 of 21 additional control
+cases fail against the first local correction, with four timeout-contract cases
+already passing. Tools are Python 3.12.10, pytest 9.1.1 and Ruff 0.16.10. The lifecycle
+fixture uses real local Git commit/ancestry checks and child processes, but
+in-memory metadata and synthetic provider/event delivery. Existing task/workspace
+tests hit Windows' missing POSIX `os.fchmod`; no permission shim was added.
+The full pinned Linux suite, image checks and live delivery remain separate.
+The coordinator owns review, exact-head CI and both Deploy and Runner deploy,
+followed by the single authorised authentic owner-facing acceptance job.
+## End the backend chat response at application done (15 October 2026)
+
+The existing Invocations consumer marked application SSE `done` as completion,
+but continued awaiting HTTP EOF. Exact-baseline actual-module tests reproduce
+the stalled lifetime with ordinary and smoke completion, a split frame and a
+real loopback HTTP server that deliberately never ends its response. A separate
+control exposes duplicate metadata and trailing-frame consumption after `done`.
+
+Treat `done` as the terminal application frame: consume its existing bounded
+metadata once, stop reading later frames and await disposal of the owned reader.
+Do not extend deadlines, synthesize replies, relax canary receipts or change
+the separately owned hosted runtime. Retain partial deltas, pre-terminal errors,
+caller abort, missing-completion failures and legacy EOF parsing.
+The original five defect cases fail on exact BCE source; five preservation
+controls already pass. Corrected transport and unchanged canary checks pass
+71 cases on existing Windows snapshot tools, not pinned Linux CI.
+
+This fixes an independently reproduced transport contract defect, not proven
+exclusive production causation. BCE's normal release failed with a whole-suite
+timeout after five successful deployment jobs. Its unchanged global catch
+replaces individual results, so the retained report cannot establish which
+prompt stalled or shared-rule failure. Preserve C0's distinct incomplete-reply
+evidence and #820's unresolved original attribution. Independent review, fresh
+exact-head full CI/CodeQL and normal required release remain delivery gates;
+Factory merge and approved live fixtures/job remain held.
+
+## Require complete tool-grounded capability overviews (14 October 2026)
+
+The new C0 reference release failed its required capability reply check, not
+discovery: a genuine owner read of the retained 22:54 UTC report displayed
+"Capabilities reply incomplete". The deployed canary source requires successful
+discovery and a complete Notes/Calendar/GitHub receipt before that branch.
+The precise omitted category and exclusive cause are not retained.
+
+Use one generic category-summary instruction in the shared model builder for
+chat, voice and smoke. Smoke omits the broader backend capability block; a rule
+only there would miss the failing path. Name categories from successful discovery
+instead of hard-coding categories, synthesizing success text or loosening the
+canary. Preserve failure/refusal reporting, untrusted-data handling, existing
+tokens/tool limits and saved model settings.
+
+Synthetic actual-handler regressions verify instruction delivery across both
+model rounds and unchanged output even when the fake provider omits GitHub.
+The existing Windows Python 3.12.10 snapshot passed all 398 agent tests; the
+fifteen new cases fail on the asserted exact baseline model blob. They do not
+demonstrate real model compliance or resolve #820's earlier
+historical failure. The candidate remains subject to independent review, exact
+changed-head full CI/CodeQL and the normal required release smoke.
+
+## Accept current recovery separately from historical attribution (14 October 2026)
+
+The reviewed diagnostic tree reached main through #831 as `51bda5cb`.
+Its exact-head full CI passed all ten actual jobs and CodeQL all three
+analyses. Normal Deploy `38622011802` passed backend/web and actual smoke;
+the ready revision's bounded enum-only telemetry positively reports
+chat canary, capabilities and GitHub read `ok`. This clears the current
+release blocker for the already-approved non-Daily queue.
+
+Do not infer the previous capability failure's cause from this green run,
+close #820 automatically, or substitute it for original phone/voice/Google
+acceptance. Factory #842 preserved its accepted runtime blobs and all
+309 main task rows, passed its integrated head's ten CI jobs and three
+CodeQL analyses, and merged as `36d72090`. Normal Deploy `38629181064`
+passed Web/deep-link and backend health/smoke. Accept that release without
+claiming the original production trigger, performance or human navigation
+acceptance; issue #813 remains open.
+
+Inactive Daily #818 preserved every reviewed health blob and main task cell
+after current-main integration. Its `af5ac2e7` head passed all ten actual
+CI `38631864211` jobs and three CodeQL `38631863844` analyses, then merged
+normally as `5939fb54`. Normal Deploy `38633353086` passed backend image
+deployment, health and actual smoke at 20:43:27 UTC; unchanged web,
+infrastructure and hosted-agent deployment were skipped. Accept that inactive
+correction release, not activation, original data access or cutover. Google's
+`F3BD79DA` also failed targeted re-review on three residual approval-scope,
+quoted-query intent and native-window faults. Both it and `3073B943` remain
+unapproved and immutable. The same reviewer also rejected `CEC84A7A`,
+then passed replacement `3AF653B5` / `139ca8f7` / `05c77007` for the exact
+two residuals and coupled controls. The coordinator's normal `5064afe4`
+integration is conflict-free. Full pinned CI, normal release and actual
+Google acceptance remain pending; the bounded PASS is not those gates.
+
+Subsequent actual pinned CI `38644147405` at published #848 head `f2afaca9`
+failed four calendar receipt-flow HTTP fixtures and one paused-PC fixture.
+The frontend's 75 files passed before its root workspace command repeated
+the same backend failures; do not create a separate UI owner or retry this
+unchanged head. The same author produced six-path harness correction
+`568666e1` with explicit internal fixture-route opt-in, an unmarked-route
+403/zero-execution negative, exact two-read paused identity checks and zero
+capture/action/model dispatch. The same reviewer passed that bounded
+disposition at exact head `568666e1`: unchanged production/auth blobs and
+all original receipt/approval assertions were verified; the real synthetic
+connection reproduced the exact paused/resumed sequence. Its HTTP import
+was still blocked on a missing local package, not a passing HTTP test.
+Normal corrected-head full CI and release remain required.
+Previous immutable PASS/FAIL receipts remain unchanged.
+
+## Accept original inactive health code without private activation (14 October 2026)
+
+The independent #720 lane found no demonstrable code/synthetic gap. Original
+#808 and reviewed #818 already delivered its implementation. The coordinator
+hashed the no-change receipt and verified 63 source/schema/auth/runtime/lock
+inputs against actually tested #841 head `eea9a06f`, accepted `202ead5b`
+and later main. Tested and accepted trees both equal `b05a2380`; actual
+CI `38636782270` passed all ten jobs, including health-processing SQL 18,
+health-upload SQL 12, normalization 45, read-model 2, upload 15 and lint/build.
+Normal Deploy `38638073176` already accepted that tree.
+
+Close original #720 code acceptance without a dummy PR or repeated release;
+retain closed #718/#719 dependency links. The lane did not rerun npm locally
+because of proxy/TLS failures. This does not accept or authorise activation,
+private export/import, HAE/physical-phone/source parity, backup/cutover or
+deployed health capacity. Those downstream gates remain separate.
+
+## Consolidate the existing maintenance review queue locally (14 October 2026)
+
+Dan directed local implementation and coordinator ownership of both boards,
+including GitHub publication and release. Consolidate the six already-reviewed
+deliveries into existing #841: reference-only urllib3/multidict/PyJWT pins,
+fake-CDP teardown tests, live PR-title validation and production C# CodeQL.
+Preserve the reviewed source and unrelated current-main blobs; do not create
+another PR, restart cloud coding workers or alter main task-table cells.
+
+Individual Python 3.13.16 compatibility receipts remain individual evidence.
+The combined three-pin manifest needs its separate baseline/candidate receipt.
+Local Python 3.13.15 installation failed before tests on a genuine TLS failure,
+also reproduced with default system TLS; do not disable verification or claim
+combined compatibility. Add conditional reference validation to the existing
+agent CI job, not another coding worker or workflow: separate baseline/candidate
+environments, all pinned distributions checked, pip check, offline fixture tests
+and synthetic HS256 readback. Use the reference's existing Python 3.13 major and
+record the actual patch version; production Python pins and model-free agent
+image checks are unchanged.
+Require one normal integrated-head full CI wave and four actual CodeQL
+analyses, with traced production C# extraction, before guarded normal release.
+Reconcile the six issues/cards only after confirmed delivery. This does not
+establish blanket dependency-advisory clearance or close the separate #830
+advisory/compatibility acceptance.
+
+Accepted outcome: #841 merged as `202ead5b` after ten actual CI
+`38636782270` jobs and four CodeQL `38636782376` analyses. Actual
+Python 3.13.16 baseline/combined environments each verified all 90 pins,
+clean pip check, 42 offline tests and HS256 readback. Normal Deploy
+`38638073176` passed all six selected jobs, including infrastructure and
+hosted agent; none was skipped. All six original issues completed and
+superseded review PRs closed after acceptance. This leaves separate
+advisory dispositions qualified, not blanket cleared.
+
+## Parallel overnight delivery and bounded live acceptance (14 October 2026)
+
+Dan directed a ten-hour local-first delivery push with sensible parallel
+subsessions and selective Copilot cloud work. Keep one owner per lane:
+Google implementation/review, Factory lifecycle and inactive Daily acceptance
+remain local; existing #830's reference compatibility is cloud-owned.
+The coordinator handles current-main integration, existing PRs, review,
+normal CI/releases and both boards. This supersedes the earlier blanket
+no-cloud direction, not publication, privacy, access or release protections.
+
+Dan explicitly approved one live acceptance run after review, normal CI
+and release: one synthetic Gmail draft, never sent; one calendar event
+named `Jarvis acceptance test` without attendees or notifications; readback
+and cleanup of only these newly created fixtures; and one isolated sandbox
+delivery job using existing resources and delivery PRs. Use genuine owner
+authentication, preserve unrelated pending actions, and report missing
+access rather than scraping tokens, bypassing consent or forging approval.
+No personal emails, original Daily/data migration or activation, new
+resources/permissions, extra jobs or private/device acceptance is implied.
+
+Dan subsequently completed Microsoft sign-in/MFA himself in the shared
+browser panel. Jarvis uses MSAL and backend `/me` verification; the SWA
+`/.auth/me` response is not its session authority. Use the existing verified
+UI/client, not token extraction, forged caller fields or a substitute
+service principal. Successful sign-in does not itself accept any live
+Google write, sandbox job, cleanup or physical platform-stop result.
+
+## Coalesce automatic board updates behind scoped reads (#813, 14 October 2026)
+
+Preserve an in-flight same-scope board read and queue at most one automatic
+follow-up instead of repeatedly aborting it. Keep the 150-ms idle debounce,
+full contract validation, explicit Refresh/Retry, retained snapshots and
+visible failures. An update during the follow-up can queue the next read.
+The request effect owns its timer/queue, so project/backend/token-callback
+replacement, explicit reload and unmount cancel obsolete work together.
+No unconditional retries, longer TTL, lost-update shortcut or separate
+stream/cache is introduced.
+
+The issue resolver reads that same owner's pending/queued/timer state before
+definitively refusing a missing issue or requested task link. Actual-context
+fixtures reproduced both refusals in the 150-ms settlement gap and ordinary
+idle debounce. Wait for the known read within the existing navigation budget;
+do not fetch speculatively or act after the bounded wait expires. Failed reads
+return the visible error rather than an unconfirmed task-link miss.
+
+Actual-component fixtures demonstrated cancellation under repeated updates
+with valid deferred 10-second reads. That controlled proof justifies this
+local correction; it does not identify the original production trigger.
+No production acceptance, release or backend change is implied. The separate
+Status snapshot/limits below remain historical evidence; #798 stays held.
+
+## Keep consolidated recovery diagnostics compatible with live Status clients (14 October 2026; local)
+
+Combine current main `81580919` and the existing #831/#832 diagnostics locally;
+no new micro-ticket or independent publication. PR #832 retains allowlisted
+degraded reasons internally, but already-open web clients accept HTTP reasons
+only for down checks. Keep both HTTP routes legacy-compatible with a
+non-mutating projection. Retain safe degraded reasons in the cached report and
+export `system.smoke_check` through the existing event/field allowlists only
+when an authorised smoke run actually executes. Reject unknown/cross-check
+reasons and provider, prompt, tool or personal payloads at both log outputs.
+No validator weakening, extra probes or release-gate/budget/approval change.
+
+The 17:32–17:34 UTC existing-workspace query selected only exact-format numeric
+model-round metadata and returned no matches. Prior smoke logs record only
+IDs/statuses. Source tracing confirms that `get_system_health/list_capabilities`
+returns the three required categories and that receipt extraction preserves
+them; normal-chat capability instructions are not supplied to the smoke role.
+That absence is a candidate, not a verified failing predicate or root cause.
+Do not change smoke/model instructions or claim recovery without that evidence.
+Local regression checks and the coordinator's normal release remain distinct
+from historical attribution and accepted green production.
+
+The independent review passed the frozen diagnostic code. Qualified local
+validation passes 169 tests in four backend suites, 42 contracts tests and
+affected-file/contracts lint plus contracts build. Five app suites and the
+full backend build remain blocked by absent snapshot dependencies; no missing
+declarations are stubbed and no gates or pins are changed. Local tooling differs
+from the manifest's pinned CI versions. Keep those blocked checks and the
+unknown live failing predicate explicit; neither review nor this local evidence
+clears publication/release or establishes recovered main.
+
+## Reviewed non-Daily release clearance (14 October 2026)
+
+Dan's direct "yes you may" clears the merge and normal-deployment hold for
+independently reviewed, green non-Daily changes, including #846, #845, #842
+and #847. Use the existing serial production pipeline and verify the actual
+deployment; a published PR, successful coding run or green CI is not a release.
+Daily/P12, protected-data, extra live/model/device tests and downstream
+acceptance remain separate. Earlier publication-only holds below are historical,
+not a request for the same approval again.
+
+Factory recovery #846 reached production on `f545976` through Deploy
+`38575246180` at 13:58:22 UTC. Backend and smoke jobs passed; infrastructure,
+web and hosted-agent deployment were correctly skipped. Revision `0000313`
+is ready. Content-free lifecycle evidence at 14:02:53 UTC shows task 12/#837
+in NeedsAttention and task 14/#838 running with an active sandbox. This proves
+the stale Running slot was reconciled and ordinary queued work resumed, not
+that the original Gmail issue was fixed. No manual task-state/capacity override,
+restart, replay or new coordinator-created model turn was used.
+
+## Mobile/Status review publication (14 October 2026)
+
+Dan's "Approved", relayed by the coordinator, authorises commit, push and
+a separate review PR for the accepted fourteen-file mobile/Status patch.
+This supersedes its earlier local-only publication restriction, not any
+merge, deployment, live/device or downstream-work hold.
+
+Keep the eight accepted code/test/CSS files byte-exact. Rebase only additive
+documentation onto actual main and retain every original document byte and
+generated PLAN cell. Use a separately scoped app publisher rather than the
+mixed UI branch. Reuse the qualified clean-main runtime and lint receipts;
+publication preparation is not a new implementation or validation loop.
+Factory #842 remains separate. Neither publication nor these local fixtures
+identify Dan's original production trigger or establish phone/voice acceptance.
+
+## Check the deadline when page application completes (14 October 2026; local)
+
+Review found that route commit and the synchronous page/pane fast return
+could acknowledge success after the captured deadline but before the
+timeout callback ran. Six final actual-App probes replayed against the
+reviewed `759B8BDA` source confirm four late false-success cases; the two
+pre-deadline controls pass. Hold only the expiry callback and advance the
+clock independently: expiry is tested at the boundary, inside the 250-ms
+reserve and after command expiry, without a longer product timeout.
+
+Recheck the captured deadline only when settling success. Reuse the
+deadline refusal, preserve cancellation/supersession/disposal and keep
+the original deadline and reserve. The router may still commit the late
+page; no rollback is promised. This is a locally reproduced completion
+edge, not attribution of Dan's original production turn or live acceptance.
+
+## Acknowledge page commands after shell route commit (14 October 2026; local)
+
+Four offline actual-App cases from home/Settings, on desktop and phone,
+posted `applied: true` before Status's heading and selected rail entry
+existed; two already-on-Status cases passed. Wait for the existing shell's
+route commit rather than treating `navigate` dispatch as completion.
+Keep the six-second ceiling, command expiry and 250-ms reserve; cancellation,
+supersession and unmount dispose the waiter. No extra read, retry, health
+probe, timeout expansion or draft/stream replacement is introduced.
+
+Ten new actual-context cases cover first-ack state and held-route lifecycle.
+This proves and locally corrects a UI edge, not the cause of Dan's original
+turn. The origin/session/target/model decision and acknowledgement sequence
+were not captured. Coordinator-reported active-session routing and stale
+Status capability wording remain separate backend possibilities, not
+attribution or permission to edit another owner's source.
+
+## Keep phone chat joined to the visible viewport (14 October 2026; local)
+
+Use one shell-scoped VisualViewport inset owner for both phone typing
+surfaces, not a keyboard-open flag derived from focus. Actual Workspace
+regression evidence showed that viewport pan alone did not update the fixed
+composer anchor. Insets update before its coalesced measurement, and unchanged
+coordinates do not republish shell state. Keep existing normalized geometry,
+draft ownership, voice layout and two-pixel seam; never save viewport fitting.
+Outside touch dismisses only Message Jarvis without preventing the action.
+Controlled browser geometry is not physical-iPhone/iOS acceptance.
+
+## Status first-turn report supersedes the absent-human-turn gate (14 October 2026)
+
+Dan reports that the ordinary Open Status turn claimed completion without
+visible navigation, then "I dont see it" recovered. The human turn happened;
+first-turn visible acceptance did not pass. This is evidence of the symptom,
+not its cause. Trace application/acknowledgement locally in controlled actual
+contexts after the mobile handoff; do not substitute another live/model turn.
+Earlier unavailable-user notes below remain historical. #798/#797/#792 and
+merge/deployment remain held. Frozen Factory publication is coordinator-owned
+and isolated; its approval does not authorise mixed mobile/Status publication.
+## P9-116 completed-expiry reconciliation (14 October 2026)
+
+Use the existing bounded Factory reconciler for completed `idle_expired`
+sessions. It selects the task's actual latest session and latest turn, rechecks
+the session/invocation before processing late provider results, and wakes once
+from the committed backend expiry event when heartbeat no longer tracks a
+session. No recurring idle SQL scan, new service, restart, or replay is added.
+
+Expiry after a confirmed completed turn remains a sandbox lifecycle outcome,
+not a crash or task success. Reconciliation reuses GitHub delivery and project
+policy: refusal or missing verification keeps the existing reasoned
+NeedsAttention path; an awaiting-policy task remains Running and consumes
+capacity until the existing policy outcome changes its state. Only that
+verified policy path can mark Done. Deterministic dispatcher regressions and
+isolated loopback SQL regressions are added; run the SQL suite only with the
+disposable loopback service. The original missed-delivery cause and any live
+recovery of #837 remain unconfirmed and are not claimed.
+
+Full CI exposed `current` as a reserved SQL Server alias in the new identity
+fence. Quote it as `[current]`, retaining the typed result and predicate.
+The corrected revision must pass the real isolated SQL suite and full CI;
+mocked dispatcher tests did not exercise that SQL parser.
+## Repository C# CodeQL uses a traced production build (14 October 2026)
+
+Add C# to the existing advanced CodeQL matrix in manual build mode. Initialize
+CodeQL before the SHA-pinned setup action selecting .NET 10.x and Release build of the production
+`Jarvis.PcBridge` application; its project reference brings
+`Jarvis.PcBridge.Core` into the same traced build. This preserves the existing
+CodeQL policy and avoids relying on test-only builds or an untraced prior build.
+Only source compiled by the traced production build is in scope; generated
+source is covered only when surfaced to that compiler invocation. Local
+validation should report both production assemblies. Verify a remote extraction
+from the C# database's nonempty relations/source archive and its extracted-file
+and code-metric diagnostics, then confirm a successful `/language:csharp` upload.
+Associate each result with its PR source head and analyzed merge SHA; neither an
+upload nor zero alerts proves complete generated-code coverage or no defects.
+## 2026-10-14: P9-113 live PR-title validation
+
+- Validate current same-PR title/body from the API, bound to the event's PR
+  number/repository/head, instead of replaying immutable event text. Reuse the
+  existing normalizer and first same-repository linked-issue lookup.
+- Fail closed on API/schema errors and changes observed by a final metadata
+  read. Keep token permissions unchanged and trigger validation on head pushes.
+- Do not automatically write normalized titles: GitHub title edits do not
+  provide an atomic title/head compare-and-set guard. Fail with the canonical
+  suggestion so a stale job cannot overwrite a concurrent edit. This deliberately
+  replaces automatic correction, not normalization rules or missing-ID failures.
+  The final read cannot atomically fence subsequent GitHub check publication;
+  later edits/pushes require their own gate evidence.
+- Evidence: the offline test executes the workflow's actual gate entry with an
+  old unusable event and a canonical same-head API fixture. It fails against the
+  old workflow and passes with live reads. Fixtures also cover invalid current
+  metadata, API failures, identity/head mismatch and observable races without
+  allowing any title-write request. Live exact-head CI/CodeQL evidence is tracked
+  in the PR, separately from local proof.
+
 ## #813 bound Factory board source reads (13 October 2026)
 
 Use one eight-request limiter for every GitHub source request in a board snapshot,
@@ -24,6 +1623,52 @@ successful requests (median 10.065 s, p95 12.915 s, maximum 19.211 s) included
 cache hits and is not a cold-only cohort. This is not a diagnosis of #811's
 separate historical 502s.
 
+## #813 Factory board diagnostic follow-up (14 October 2026)
+
+The released latency acceptance for backend `75a3cbe` / Deploy `38507005838`
+failed: two completed board reads took 9.661 s and 10.365 s, with no accepted
+improvement against the prior mixed-cache median of 10.065 s. One actual rail
+entry had 14 client fetch starts, two HTTP 200 completions, and twelve aggregate
+abort errors. API/header/rendered placement and the 100-card Done cap reconciled
+separately; those checks do not establish a latency improvement.
+
+Add diagnostics only; do not change caching, generations, source concurrency,
+retry, client behavior, or the 502 contract. Log bounded monotonic durations at
+the existing project, token, source, task, release, and response work
+boundaries, correlated by request ID. Concurrent source/task/release durations
+are independent wall times and overlap. The summary cache elapsed measurement
+covers the actual awaited cache operation: lookup for a hit, wait for a shared
+caller, and the complete load for its owner; interpret it with `cachePath`, not
+as a separate phase. Phase events indicate that their instrumented boundary
+executed; an absent event cannot establish skipped work because telemetry may
+be missing, sampled, cropped, or outside the observed window. The summary's
+outcome and reply status describe the handler/source-computation decision, not
+HTTP completion or client receipt; correlate the separate `request.completed`
+server-side `onResponse` observation, which also does not prove client receipt.
+Durations over 60 seconds omit the value and set a censored marker instead of
+clipping; invalid clock values are marked unavailable. An observed cache path
+plus stale state distinguish cache hit, shared wait, source load, and stale
+fallback. Keep phase/event fields explicitly
+allowlisted and omit content, credentials, URLs, query strings, and arbitrary
+errors. At the existing publication boundary, log only bounded
+invalidation origin, project/version when known, and webhook request ID when
+available; task-event prelookup invalidation has only its `all_projects` scope.
+
+The bounded production window (03:49:30–03:51:10 UTC, healthy revision 312) after
+#814 had 546 allowlisted rows, two board HTTP 200 completions at 9.661 s /
+10.365 s, 49 webhook HTTP 202, 40 Now HTTP 200, and 62 database-status HTTP 200
+responses. Thirteen GET starts were route-unclassified with no completion in
+the window; they do not prove receipt of every client fetch start. No selected
+request/Factory failure event appeared, which does not establish that client
+aborts did not occur. No captured SSE versions, matching invalidation reasons,
+or per-attempt abort times were available. The separate app-scoped query
+returned zero matching rows. A validated-update/debounce/reload/abort path and
+overlapping backend cache generations remain possible mechanisms, not
+established historical causes. Browser/backend clock domains are not assumed
+synchronized. The diagnostics have not yet been deployed or observed in
+production; this follow-up is not evidence that performance is fixed and does
+not diagnose #811's historical 502.
+
 ## Status reads recorded evidence without running canaries (14 October 2026)
 
 P9-101/#799 uses the existing owner-only `/status` contract and shell
@@ -42,6 +1687,39 @@ check with its timestamp, not a claim that the latest release passed.
 No backend, contract or dependency change. Local synthetic browser
 checks are not authenticated production or physical-phone acceptance.
 
+The coordinator accepted the bounded signed-in read-only snapshot on
+`1590a1c3`, normal Deploy 38497362534: real Settings-to-Status rail navigation,
+HTTP 200 initial read and ordinary Refresh, accepted HTTP 204 `status`/
+`page-status` metadata/readback and one persistent session/stream. All 26 rows
+rendered; retained smoke was 15/15 OK at 2026-10-14T01:55:08.275Z with stale
+labels, not a new probe or a deployment association. Missing PC versions
+remained "Not reported"; original Note/native Chrome/drafts/settings were
+untouched. [Exact evidence and limits](agent-context.md#read-only-status-page-14-october-2026).
+Dan subsequently performed the ordinary Status turn: it claimed success
+without visibly navigating, then "I dont see it" recovered correctly.
+First-turn live navigation acceptance failed; no cause is established.
+This is no longer an absent-human-turn gate. Recovery does not establish
+acceptance, and an agent-created turn must not substitute for Dan's evidence.
+Broker/voice and physical-phone acceptance remain unproven; #799 remains open
+and #798 held, followed separately by #797 and #792.
+The original failed smoke turn's cause remains unconfirmed under #820;
+diagnostic-only #821 and the subsequent green run are not proof of a repair.
+
+## P9-107 smoke reason retention follow-up (14 October 2026)
+
+The prior Status-page decision above records its original UI-only scope. This
+follow-up preserves fixed per-check smoke reasons for down/degraded results.
+The allowlist includes shared `agent_error` and `timeout` outcomes for each
+chat acceptance check, while rejecting arbitrary provider text and reasons
+belonging only to another check.
+
+Local proof on this branch: exact-reader tests cover real missing-agent,
+controlled stream failure and timeout results, ordered complete report shape,
+contract validation, privacy, and timeout aborts. Backend and contracts checks
+are run for the current head; full exact-head CI and CodeQL status must be
+confirmed on the corrected commit. The original deployed failure cause remains
+unknown, and no production recovery is claimed.
+
 The coordinator authorised the smallest coupled release-gate correction in
 #815 after the title bot truncated P9-101 to P9-10. Normalization, linked-issue
 extraction and PLAN row/issue/dependency parsing preserve full task numbers
@@ -49,8 +1727,8 @@ with at least two digits and an ID boundary. Retain two-digit formatting,
 WIP/bracket/fix-main/docs behavior and all existing status/ownership policies;
 the separate reopened-issue policy is addressed by #817. Existing
 Python CI discovers the title and PLAN regressions; no other workflow change
-or new tooling. Restore the correct title only after pushing the fix and
-rerun exact-head gates.
+or new tooling. The correct title was restored after pushing the fix and
+exact-head gates passed before #815 merged.
 Cap each dependency-range expansion at 1000 tasks and fail with an actionable
 ValueError before iteration. This replaces the old incidental two-digit
 resource bound without capping valid ID width; no established script bound
@@ -68,6 +1746,12 @@ acceptance gates, so open acceptance issues remain open and their status cells
 stay workflow-owned.
 
 ## P12-05 inactive SQL health processing (13 October 2026)
+
+**14 October release authority:** in DailyMigrationMain, Dan approved releasing inactive PR #818 after updating to latest main and passing required checks and review. He also directed that routine CI/CD should flow without repeated release approvals. Already-authorized inactive P12 scopes and corrections may therefore proceed through independent review/merge and normal main-only deployment without a fresh human clearance per PR. Keep exact-head checks, latest-main containment, branch protections, no own merge and issue/dependency truthfulness. Both cloud workers remain idle; this grants no new worker/scope, activation, source/private-data/credential access, paid resource or device change. Existing protected-backup, parity, final-delta and rollback/cutover gates are unchanged.
+
+14 October follow-up to [automatic review finding 4265321733](https://github.com/DanAakesen/jarvis/pull/808#discussion_r4265321733): #808 merged with a reproduced body-fat unit fallthrough. Move its existing `%`/`percent`/`fraction`/`1` representations into the shared strict known-dimension mapping, preserving absent-unit unknowns, zero/missing values and generic unknown dimensions. Add synthetic normalization and SQL canonical-readback/quarantine regressions; no schema, composition, source/data/device or activation changes. This is a separate #720 follow-up from fresh main, not a rewrite of merged #808; exact-head CI and independent review remain required.
+
+[PR #818 review 4271913189](https://github.com/DanAakesen/jarvis/pull/818#discussion_r4271913189) found non-string declarations disappearing through text fallback. Validate raw body-fat group/sample/workout `units` and `unit` before sanitization or alias selection, including empty groups and shadowed units. Numeric `1` is malformed, not the string unit `1`; null/undefined/blank remain missing. Synthetic normalization and atomic SQL quarantine regressions cover the correction; fresh exact-head CI/review still gate release. Other metric dimensions and runtime/activation boundaries are unchanged.
 
 The [local coordinator release for #720](https://github.com/DanAakesen/jarvis/issues/720#issuecomment-6154043444) follows #805's independently reviewed, CI-tested and deployed inactive SQL acceptance. Reuse that inbox/pool/owner lock. A committed claim generation bounds retries; normalization occurs outside the transaction, then domain rows, ingestion lineage, applicable feed freshness and processed receipt commit together. Heartbeat is a separate signal. Retain raw evidence and quarantine rather than deleting poison inputs or retrying forever. No timer, dispatcher, production registration or credential change.
 
@@ -2416,3 +4100,229 @@ Dan approved P12 on 12 October 2026 and explicitly released only P12-01 for this
   behind the generic pin-load message. Regression and rendered checks pending.
 - **Scope:** local correction; phone explicit show/hide and voice lifecycle
   remain unchanged. No backend change or broader draft release.
+
+## P11-03 / #838 (14 October 2026) — Recover actual calendar stages
+
+Private tool audit results omit confirmation codes, so later turns cannot rely on
+conversation history to confirm a staged action. Keep the existing ten-minute,
+one-shot process-local state and add a verified read-only
+`calendar_get_pending_change` tool to recover the actual original code and summary.
+Chat and voice must stage successfully before claiming preparation, then confirm
+on a later plain approval without restaging or asking again. Missing and expired
+stages return `none`. No persistence, migration or live calendar write is added.
+
+### P11-03 Gmail ownership and extraction
+
+Reuse the MIME reader and its regressions from #837 / task 12 at `bd052c0`,
+with the same file path and return fields, rather than add a competing decoder.
+#837 remains open and no task-12 PR was visible at this checkpoint. This task
+adds hidden-preheader/invisible-padding cleanup and nested hotel-booking
+regressions, plus extraction-limit guidance. Read both plain and alternate HTML
+text; absent details in extracted text do not prove the original email lacks them.
+Computer-use access enforcement stays owned by #837; this change uses only the
+Google API and static HTML parsing. No private email was read for these tests.
+
+Offline evidence for P11-03: 268 selected Google, instruction, registry,
+presentation, approval, authentication, app and module tests pass after the
+sandbox loopback/timing reruns; backend lint/build pass. The stage recovery audit
+remains redacted, and failed/unstaged/replayed actions cannot execute. Python
+instruction syntax is checked; hosted-model and real-account behavior are not
+verified. No calendar change or deployment was performed.
+
+## Consolidated Google delivery (14 October 2026; local preparation)
+
+The user directed local consolidation rather than more issues or cloud workers.
+Use existing #848/task-14 as the reviewable delivery for #837/#838/#839, preserving
+task-14 extraction/recovery, task-15 evidence-grounded hosted/realtime approval
+logic, and task-12 direct-only execution guards. This does not close the issues or
+authorise publication/deployment. Current main remains authoritative outside the
+Google surfaces; main smoke behaviour and accepted mobile blobs are unchanged.
+
+Keep `calendar_get_pending_change` as the one pending-state tool, adding verified
+reply classification rather than retaining task-15's competing name. Calendar
+confirmation retains its original summary, consumes before executing, and cannot
+be retried by a repeated yes after cancellation, expiry or provider failure.
+Parity fixtures register the actual Google module; known result-status tokens
+are not callable names, while unknown tool references still fail parity.
+
+Task-15's broad reservation/context heuristic could suppress Gmail-only booking
+lookups or an unrelated next request. Restrict reservation context to mutation
+requests and stop applying old calendar context to unrelated non-approval turns.
+Synthetic hosted-loop regressions cover both cases. Successfully decoded empty
+Gmail bodies are not reported as unavailable; missing/malformed or preview-only
+content still reports extraction limits. No private content or provider call
+was used to establish these local outcomes.
+
+Local evidence includes 267 hosted chat/voice tests, 251 runnable Node regressions,
+full backend zero-warning lint, changed Python Ruff, direct MIME assertions and
+actual registry receipt checks. Node uses verified 22.23.3 x64 with a non-pinned
+Vitest/Vite snapshot; Python is 3.12.10 rather than target 3.12.14. Three HTTP/
+parity/relay suites and full types/build remain blocked by unavailable dependencies.
+The shared prompt's original 15,000-code-point headroom check remains intact;
+compact equivalent PC/mail wording leaves room for explicit calendar evidence
+and ten-minute approval semantics. Exact-head pinned CI and original live Gmail/
+calendar/speech acceptance are unproven.
+
+## Google independent-review corrections (14 October 2026; local)
+
+Independent review rejected frozen patch `3073B943`; retain that original
+artifact, not a rewritten passing receipt. Repair the five findings within the
+same #848 delivery, without issue closure or a second publication stream.
+
+- Generic staged/klargjort prose cannot establish calendar context. Mail-only
+  history and actual mail confirmation stay separate from an older calendar
+  stage; both pending scopes may coexist.
+- Raw PC/browser operations check observed site/window metadata rather than
+  trust input keywords or pretend the native application is named Gmail.
+  Chrome's real process identity and opaque tab IDs must be guarded before
+  planner/vision export and before action/confirmed dispatch. Reuse that boundary
+  in the Codex executor; unknown site identity is a visible refusal.
+- Weather, mail and build status questions are not calendar status referents.
+  Reset unrelated realtime context before interception, retaining genuine
+  calendar status and later-approval semantics.
+- A mail tool does not forbid a separately requested unrelated computer action.
+  Match independent intent to the verified current Dan message and scope nested
+  execution to the same request/turn; observed Gmail and fallback remain refused.
+- Successfully decoded empty plain or static HTML bodies retain their original
+  body source even when a snippet exists. Return the snippet separately as a
+  bounded preview; warn about unavailable full text only for genuine fallback.
+
+Qualified local evidence: 290 Node tests in twelve runnable suites, 282 Python
+tests, backend zero-warning ESLint, changed Python Ruff and actual handler
+receipt proofs. Node/Vitest/Vite/Python qualifications and the original prompt
+headroom are unchanged. Four app-dependent suites and full types/build remain
+blocked by the same five missing packages; relay regressions are added, not
+claimed executed. No provider/private-account or hosted speech acceptance.
+
+The coordinator authorised normal owned local commits and one fresh-main
+integration. Main `51bda5cb` is integrated with its diagnostics, generated PLAN
+cells and protected mobile blobs preserved. The coordinator reports its normal
+Deploy `38622011802` accepted revision 315; this is not Google-delivery release
+evidence. Independent re-review, pinned exact-head CI and existing-PR publication
+remain coordinator-owned. No push, new PR, metadata change or deployment here.
+
+## Google residual targeted-review corrections (14 October 2026; local)
+
+Targeted re-review failed exact `F3BD79DA` / tree `eba45700`; preserve that freeze
+and original `3073B943`. The three reproduced findings are corrected in the same
+delivery, not a new issue/publication stream.
+
+- Appointment nouns inside mail subjects and receipt text are not calendar
+  intent. Recognise the actual mail reply receipt structure before inspecting
+  unquoted scope text, and let mail read topics reach the mail/model path.
+  Explicit calendar mutations, genuine status/completion and repeated approval
+  still recover real backend evidence without duplicate writes.
+- A conjunction or punctuation match inside a query/quoted subject cannot
+  authorise a computer action. Accept only complete unambiguous current-user
+  command shapes for the narrow independent-operation exemption. Ambiguous
+  topic text refuses; no model classification probe or blanket exemption.
+- Establish real Windows application identity before applying browser-title
+  checks. A Gmail-named source file in VS Code is not Gmail access. Keep Chrome
+  URL/title validation before planner/vision export and late action dispatch,
+  raw browser/confirmation guards and clipboard/Codex refusals. Native protocol
+  fields and snapshot binding are unchanged.
+
+Reproduction added eight failing hosted cases and four failing Node cases before
+the fixes. Qualified post-main evidence: 306 Node tests, 296 Python tests (including
+48 calendar fixtures), backend zero-warning ESLint, changed Ruff and four coupled
+actual-handler-receipt hosted chat/voice cases. Instruction maximum remains
+14978/15000. Full types still fail on only the same missing-package/consequent
+diagnostics; four app-dependent suites/full relay are unrun for this revision.
+No pinned CI/build or private/live/provider/device acceptance claim.
+
+Actual main `36d72090` is integrated once under the coordinator's local commit
+authority. All Factory/mobile/diagnostic blobs and task-table cells remain exact.
+The coordinator reports Deploy `38629181064` passed Web/deep-link, backend health
+and actual smoke, while backend/infra/hosted-agent deployment was skipped.
+This Google delivery remains local and awaits the same independent reviewer,
+coordinator-owned exact-head pinned CI and existing-PR publication.
+
+## Google current-identity and topic-command corrections (14 October 2026; local)
+
+The same reviewer passed all three exact F3 residual cases, then rejected
+`CEC84A7A` / tree `438eeb6c` for two new tightly coupled findings. Retain that
+failed freeze and all earlier artifacts.
+
+- Raw Windows titles have no application suffix guarantee and are truncated at
+  200 characters. Replace title-based browser inference with trusted current
+  process identity from existing structured observations and actual Chrome site
+  metadata. Missing or changed identity refuses, never defaults to native.
+  Check window/clipboard data before export and native actions before dispatch,
+  including confirmation and suffixless/truncated Chrome switches.
+- UIA and visual observations replace different native snapshot stores. Use the
+  other store for late identity checks so original action IDs/window/control
+  binding survive. Identity-only capture data remains transient and is discarded
+  without model/planner/audit export. No native-wire/C# change is needed.
+- Preserve exact-current-user independent operations after clear topic-bearing
+  mail requests. Split only explicit top-level separators outside balanced
+  quotes, retain exact requested-operation binding and same-turn scope, and
+  refuse ambiguous unquoted how-to topics. Do not globally reopen mail fallback.
+
+Before the fixes, production-boundary fixtures reproduced 14 failing cases.
+Qualified local evidence: 327 Node tests in twelve files, 296 Python tests
+including 48 calendar fixtures, four actual-handler-receipt hosted chat/voice
+cases, backend zero-warning ESLint and changed Ruff. Strict types still fail on
+the exact same twelve missing-package/consequent diagnostic lines. Prompt
+headroom remains 14978/15000; four app-dependent suites/full relay, pinned CI,
+full build and original live/provider acceptance remain unpassed.
+
+Use the already-integrated accepted base `36d72090` only; no further main fetch.
+All 32 scoped paths, protected mobile/Factory/smoke blobs and PLAN table cells
+remain preserved. A normal scoped local replacement commit is authorised;
+publication/readiness/CI/release and later-main reconciliation remain with the
+coordinator after independent PASS.
+
+## Google pinned-CI fixture corrections (14 October 2026; local)
+
+Independent review passed `3AF653B5`. The coordinator published its normally
+integrated runtime/test blobs as `f2afaca9` in existing #848. Pinned CI
+`38644147405` reported five backend failures in both Backend and Web jobs;
+the 75 frontend files passed, so no frontend or CI configuration change is
+indicated.
+
+Four calendar approval fixtures omitted the test route's explicit agent
+opt-in. Keep production authentication unchanged and add
+`config.jarvisAgent: true` only to `/fixture/calendar-reply` in the tests.
+Retain actual receipt/later-message/one-shot and failure-state assertions,
+with a denied unmarked-route control proving zero handler/provider execution.
+
+The paused sparse-tree PC fixture expected one observation despite enabling
+visual fallback. Current process verification requires a second read before
+capture, which the paused connection correctly refuses before RPC dispatch.
+Assert exactly two UIA reads, no capture/action/planner/vision dispatch, and
+the existing successful resumed action. Add an executable registry/connection
+regression through a synthetic local WebSocket peer, not a real device.
+
+Qualified correction checks pass 328 Node tests across twelve files and
+zero-warning lint on the three changed test files. The two changed HTTP suites
+still cannot collect locally because multipart is absent; strict types report
+the same twelve dependency/consequent errors, with no new fixture diagnostic.
+Earlier 296 Python/four coupled hosted proofs remain evidence for unchanged
+runtime blobs, not newly executed checks or a passing corrected-head CI wave.
+
+No production runtime, permissions, native wire, dependencies, check
+configuration, protected blobs or PLAN cells change. Local app-dependent
+execution remains package-blocked; the coordinator owns corrected-head
+normal pinned CI, publication and release. Original Google provider/live
+acceptance remains unproven.
+
+## Factory canonical-status parity (16 October 2026)
+
+For [#811](https://github.com/DanAakesen/jarvis/issues/811), mirror the existing
+Project sync precedence rather than changing canonical statuses or interpreting
+SQL task activity as ownership. `desiredFactoryBoardStatus` previously promoted
+any linked draft before `needs-decision`; Python's `desired_status` already
+kept an unclaimed decision issue with a parked draft in Needs Dan. The shared
+fixtures omitted that case even though Python had a separate regression.
+
+Keep review-ready PRs and actual worker labels ahead of Needs Dan. Preserve
+the existing closing-reference parser and every supplied PR/task overlay,
+including Running/Working facts; neither hiding facts nor forcing all decision
+issues into Needs Dan would preserve parity. Share the missing draft/decision
+controls across Python and TypeScript, with pure complete-board coverage for
+task overlays and unchanged columns. No frontend, auth, timeout, cache,
+provider or persisted-state change is needed.
+
+This is a local source correction from released `3d3a12ab`, not full #811
+acceptance. PM owns independent review, integration and rendered readback;
+historical 502 causation remains unestablished and #717/#741 stays parked.

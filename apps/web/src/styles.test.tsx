@@ -3,6 +3,86 @@ import { describe, expect, it } from 'vitest';
 
 type Color = [number, number, number];
 
+describe('app-wide control contract', () => {
+  const source = readFileSync('src/styles.css', 'utf8');
+
+  it.each([
+    'primary-button', 'secondary-button', 'settings-back', 'signin-button',
+    'kanban-card-action', 'presence-chip-trigger', 'presence-option', 'presence-mode-card',
+    'memory-item', 'modal-close', 'knowledge-reset', 'folio-search', 'folio-kind',
+    'folio-action', 'mobile-menu-link', 'kanban-filter-toggle', 'kanban-column-toggle',
+    'collapsible-toggle', 'usage-segmented', 'advanced-segmented',
+  ])('uses the existing action geometry for .%s', (name) => {
+    expect(ruleDeclaration(source, new RegExp(`(?:^|\\n)\\.${name}\\s*\\{([^}]*)\\}`), 'border-radius'))
+      .toBe('var(--radius-control)');
+  });
+
+  it('keeps navigation options and form fields on the same geometry, not capsules', () => {
+    for (const selector of [
+      /\.usage-segmented button\s*\{([^}]*)\}/,
+      /\.advanced-segmented button\s*\{([^}]*)\}/,
+      /\.settings-field select, \.settings-field input, \.settings-field textarea\s*\{([^}]*)\}/,
+      /\.timeline-toolbar select\s*\{([^}]*)\}/,
+      /\.usage-field select\s*\{([^}]*)\}/,
+      /\.release-trail-button, \.release-trail-open\s*\{([^}]*)\}/,
+    ]) {
+      expect(ruleDeclaration(source, selector, 'border-radius')).toBe('var(--radius-control)');
+    }
+    for (const file of ['ChatAttachments.css', 'notes/NotesArea.css']) {
+      const css = readFileSync(`src/${file}`, 'utf8');
+      const selector = file === 'ChatAttachments.css'
+        ? /\.attachment-remove\s*\{([^}]*)\}/
+        : /\.notes-page \.knowledge-search \.notes-create-button\s*\{([^}]*)\}/;
+      expect(ruleDeclaration(css, selector, 'border-radius')).toBe('var(--radius-control)');
+    }
+  });
+
+  it('removes decorative control rims without removing neutral field structure or focus', () => {
+    for (const selector of [
+      /(?:^|\n)\.secondary-button\s*\{([^}]*)\}/,
+      /\.kanban-card-action\s*\{([^}]*)\}/,
+      /\.release-trail-button, \.release-trail-open\s*\{([^}]*)\}/,
+    ]) expect(ruleDeclaration(source, selector, 'border')).toBe('0');
+    const controlRule = /([^{}]+)\{([^{}]*)\}/g;
+    for (const [, selectors, declarations] of source.matchAll(controlRule)) {
+      if (!/(?:settings-back|signin-button|kanban-card-action|release-trail-button|release-trail-open|presence-mode-card|memory-item|knowledge-reset|knowledge-legend|usage-segmented|advanced-segmented)/.test(selectors!)) continue;
+      expect(declarations, selectors).not.toMatch(/box-shadow:[^;]*(?:inset|glass-selected-glow)/);
+    }
+    expect(ruleDeclaration(source, /\.knowledge-search\.luminous-glass\s*\{([^}]*)\}/, 'border-color')).toBe('var(--control-rule)');
+    expect(ruleDeclaration(source, /\.signin-button\.luminous-glass::before\s*\{([^}]*)\}/, 'content')).toBe('none');
+    expect(source).toContain('.secondary-button:focus-visible { outline: 3px solid var(--focus);');
+    expect(source).toContain('.knowledge-search:has(input:focus-visible) { outline: 3px solid var(--focus);');
+    expect(source).toContain('.folio-search:has(input:focus-visible) { outline: 3px solid var(--focus);');
+  });
+
+  it('reserves pills for labelled status and genuine switch tracks', () => {
+    expect(ruleDeclaration(source, /\.task-chip, \.task-state-chip\s*\{([^}]*)\}/, 'border-radius')).toBe('var(--radius-pill)');
+    expect(ruleDeclaration(source, /\.kanban-pulse li\s*\{([^}]*)\}/, 'border-radius')).toBe('var(--radius-pill)');
+    expect(ruleDeclaration(source, /\.advanced-toggle input\[role="switch"\]\s*\{([^}]*)\}/, 'border-radius')).toBe('999px');
+    expect(ruleDeclaration(source, /\.advanced-toggle input\[role="switch"\]:checked::after\s*\{([^}]*)\}/, 'translate')).toBe('18px 0');
+  });
+
+  it('retains selected surface roles and makes compact route controls touch-sized', () => {
+    const toastSource = readFileSync('src/ConversationToast.css', 'utf8');
+    expect(ruleDeclaration(toastSource, /\.conversation-toast \.conversation-toast-action:active\s*\{([^}]*)\}/, 'background'))
+      .toBe('var(--state-selected-pressed)');
+    for (const selector of [
+      /\.memory-item\[aria-pressed="true"\]\s*\{([^}]*)\}/,
+      /\.knowledge-results button\[aria-pressed="true"\]\s*\{([^}]*)\}/,
+      /\.usage-segmented button\[aria-pressed="true"\]\s*\{([^}]*)\}/,
+      /\.advanced-segmented button\[aria-pressed="true"\]\s*\{([^}]*)\}/,
+    ]) {
+      expect(ruleDeclaration(source, selector, 'background')).toBe('var(--state-selected-bg)');
+      expect(ruleDeclaration(source, selector, 'font-weight')).toBe('750');
+    }
+    expect(source).toContain('.folio-kind, .memory-item, .knowledge-results button,');
+    expect(source).toContain('@media (pointer: coarse) {\n  :is(.usage-segmented button, .advanced-segmented button, .folio-kind, .presence-option,');
+    expect(source).toContain('.folio-action { width: 44px; height: 44px; }');
+    expect(source).toContain('.release-trail-button { width: 44px; min-height: 44px; }');
+    expect(source).toContain('.app-shell[data-phone="true"] .knowledge-legend button { min-height: 44px;');
+  });
+});
+
 function tokenValue(source: string, selector: string, name: string): string {
   const rule = source.match(new RegExp(`${selector}\\s*\\{([^}]*)\\}`))?.[1];
   const value = rule?.match(new RegExp(`${name}:\\s*([^;]+);`))?.[1];
@@ -56,6 +136,60 @@ function contrast(first: Color, second: Color): number {
 }
 
 describe('shared glass tokens', () => {
+  it('avoids nested window blur and pauses ambient CSS motion behind work pages', () => {
+    const source = readFileSync('src/styles.css', 'utf8');
+    expect(ruleDeclaration(source, /\.workspace-window \.panel\s*\{([^}]*)\}/, 'backdrop-filter')).toBe('none');
+    expect(ruleDeclaration(source,
+      /\.app-shell\[data-home="false"\]\[data-voice-active="false"\]::before,\s*\.app-shell[^{}]+\{([^}]*)\}/,
+      'animation-play-state')).toBe('paused');
+  });
+
+  it('shrinks header tabs before scrolling without borrowing the fixed controls space', () => {
+    const source = readFileSync('src/styles.css', 'utf8');
+    expect(ruleDeclaration(source, /\.topbar-context\s*\{([^}]*)\}/, 'flex')).toBe('0 0 auto');
+    expect(ruleDeclaration(source, /\.topbar-actions\s*\{([^}]*)\}/, 'flex')).toBe('0 0 auto');
+    expect(ruleDeclaration(source, /\.app-topbar \.window-tabstrip \.window-tabbar\s*\{([^}]*)\}/, 'min-width')).toBe('0');
+    expect(ruleDeclaration(source, /\.app-topbar \.window-tabstrip \.workspace-tabs\s*\{([^}]*)\}/, 'width')).toBe('100%');
+    expect(ruleDeclaration(source, /\.app-topbar \.window-tabstrip \.workspace-tabs\s*\{([^}]*)\}/, 'overflow-x')).toBe('auto');
+    expect(ruleDeclaration(source, /\.window-tabstrip \.workspace-tab-item\s*\{([^}]*)\}/, 'flex')).toBe('0 1 240px');
+    expect(ruleDeclaration(source, /\.window-tabstrip \.workspace-tab-item\s*\{([^}]*)\}/, 'min-width')).toBe('140px');
+    expect(ruleDeclaration(source, /\.job-tab-list\s*\{([^}]*)\}/, 'overflow-x')).toBe('auto');
+    expect(ruleDeclaration(source, /\.job-tab-list\s*\{([^}]*)\}/, 'overflow-y')).toBe('hidden');
+    expect(ruleDeclaration(source, /\.job-tab-list\s*\{([^}]*)\}/, 'scrollbar-width')).toBe('none');
+    expect(source).toContain(':is(.job-tabs, .job-tab-list) { width: 100%; flex-direction: column; overflow: visible; }');
+  });
+
+  it('keeps phone window rows at their natural touch height rather than the desktop tab basis', () => {
+    const source = readFileSync('src/styles.css', 'utf8');
+    const phoneRow = /\.app-shell\[data-phone="true"\]\[data-windows-open="true"\] \.workspace-tab-item\s*\{([^}]*)\}/;
+    expect(ruleDeclaration(source, phoneRow, 'flex')).toBe('0 0 auto');
+    expect(ruleDeclaration(source, phoneRow, 'width')).toBe('100%');
+    expect(ruleDeclaration(source, phoneRow, 'max-width')).toBe('none');
+    expect(ruleDeclaration(source, phoneRow, 'height')).toBe('44px');
+    expect(ruleDeclaration(source, phoneRow, 'padding')).toBe('0');
+  });
+
+  it('anchors both phone chat surfaces to the same visual viewport and measured composer height', () => {
+    const history = readFileSync('src/ConversationHistory.css', 'utf8');
+    const phoneChat = history.slice(history.indexOf('/* Both halves of phone chat'));
+    expect(phoneChat).toContain('top: calc(var(--phone-chat-top, 0px) + env(safe-area-inset-top) + var(--rail-size) + 8px)');
+    expect(phoneChat).toContain('top: calc(var(--phone-chat-top, 0px) + var(--phone-chat-height, 100dvh) - var(--phone-dock-bottom) - var(--conversation-composer-height, 52px))');
+    expect(phoneChat).toContain('height: max(0px, calc(var(--phone-chat-height, 100dvh) - env(safe-area-inset-top) - var(--rail-size) - 8px - var(--phone-dock-bottom) - var(--conversation-composer-height, 52px) + 2px))');
+    expect(phoneChat).not.toContain('--phone-chat-bottom');
+    expect(phoneChat).toContain('[data-phone="true"][data-voice-active="false"]');
+    expect(phoneChat).not.toContain('transform:');
+    expect(history).toContain('.app-shell[data-phone="false"][data-voice-active="false"][data-home="false"]:has(.workspace[data-conversation-positioned])');
+  });
+
+  it('lets table replies use the transcript width without widening ordinary prose', () => {
+    const history = readFileSync('src/ConversationHistory.css', 'utf8');
+    expect(ruleDeclaration(history,
+      /\.conversation-message:has\(\.markdown-table-scroll\), \.streaming-message:has\(\.markdown-table-scroll\)\s*\{([^}]*)\}/,
+      'max-width')).toBe('100%');
+    expect(history).toContain('.conversation-message { max-width: min(80%, 58ch);');
+    expect(ruleDeclaration(history, /\.markdown-table-scroll\s*\{([^}]*)\}/, 'overflow-x')).toBe('auto');
+  });
+
   it('enables edge-to-edge phone viewports and a standalone Home Screen app using the existing icon', () => {
     const html = readFileSync('index.html', 'utf8');
     const manifest = JSON.parse(readFileSync('public/manifest.webmanifest', 'utf8'));
@@ -216,7 +350,7 @@ describe('shared glass tokens', () => {
     const source = readFileSync('src/styles.css', 'utf8');
     expect(source).not.toMatch(/\.workspace-window-actions[^{]*\{[^}]*grid-template-columns/);
     expect(source).toContain('.workspace-window-actions { display: flex; width: auto; flex: 0 0 auto; flex-wrap: nowrap; gap: 4px; }');
-    expect(ruleDeclaration(source, /\.workspace-tab-item\s*\{([^}]*)\}/, 'border-radius')).toBe('8px');
+    expect(ruleDeclaration(source, /\.workspace-tab-item\s*\{([^}]*)\}/, 'border-radius')).toBe('var(--radius-control)');
     expect(ruleDeclaration(source, /\.workspace-tab-close, \.workspace-tab-pin\s*\{([^}]*)\}/, 'width')).toBe('32px');
     expect(source).toContain('.workspace-tab-pin[aria-pressed="true"] svg { transform: none; }');
     expect(source).toContain('.workspace-tab-close, .workspace-tab-pin { width: 44px; height: 44px; }');

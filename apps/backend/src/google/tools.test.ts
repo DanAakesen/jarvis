@@ -7,6 +7,8 @@ import { coreModule } from '../core/index.js';
 import type { ToolCallRecord } from '../core/tool-calls.js';
 import { GoogleApiError, type GoogleApi, type GoogleApiClient, type GoogleApiRequest } from './api-client.js';
 import { createGoogleModule } from './tools.js';
+import { PendingGoogleActions } from './pending-actions.js';
+import { confirmPendingCalendarReply } from '../voice/realtime.js';
 
 const config = { ...loadConfig({}), logLevel: 'silent' as const };
 const headers = { authorization: ['Bea', 'rer a.b.c'].join('') };
@@ -16,12 +18,25 @@ const agent: AgentPrincipal = {
   tenantId: config.auth.tenantId,
 };
 const apps: ReturnType<typeof buildApp>[] = [];
+const hotelEvents = [
+  {
+    subject: 'Hotel stay: Synthetic Hotel Alpha', startDateTime: '2027-06-14T15:00:00+02:00',
+    endDateTime: '2027-06-15T11:00:00+02:00', attendees: [],
+  },
+  {
+    subject: 'Hotel stay: Synthetic Hotel Beta', startDateTime: '2027-12-09T16:00:00+01:00',
+    endDateTime: '2027-12-10T12:00:00+01:00', attendees: [],
+  },
+];
 
 function conversationMessage(id: string, text: string, at = new Date()): ConversationMessage {
   return { id, sessionId: '1', role: 'dan', text, model: null, at };
 }
 
-function appFor(request: GoogleApiClient['request'], options: { readonly now?: () => Date } = {}) {
+function appFor(request: GoogleApiClient['request'], options: {
+  readonly now?: () => Date;
+  readonly pendingActions?: PendingGoogleActions;
+} = {}) {
   let latest = conversationMessage('42', 'Create an event.');
   const store: ConversationStore = {
     createSession: async () => ({
@@ -38,6 +53,7 @@ function appFor(request: GoogleApiClient['request'], options: { readonly now?: (
     modules: [coreModule, createGoogleModule(api, {
       timeZone: 'Europe/Copenhagen',
       ...(options.now ? { now: options.now } : {}),
+      ...(options.pendingActions ? { pendingActions: options.pendingActions } : {}),
     })],
     auth: async () => agent,
     conversationStore: store,
@@ -68,6 +84,103 @@ function decodedMimeBody(raw: string): string {
 afterEach(async () => { await Promise.all(apps.splice(0).map((app) => app.close())); });
 
 describe('Google Calendar and Gmail tools', () => {
+  it('keeps an unmarked fixture route closed to agent identities before handler or provider execution', async () => {
+    const request = vi.fn<GoogleApiClient['request']>(async () => ({ items: [] }));
+    const { app } = appFor(request);
+    const handler = vi.fn(async () => ({}));
+    app.post('/fixture/calendar-agent-denied', handler);
+    const response = await app.inject({
+      method: 'POST', url: '/fixture/calendar-agent-denied', headers: confirmHeaders('42'), payload: {},
+    });
+    expect(response.statusCode).toBe(403);
+    expect(response.json()).toEqual({ error: 'Forbidden' });
+    expect(handler).not.toHaveBeenCalled();
+    expect(request).not.toHaveBeenCalled();
+  });
+
+  it('grounds a real read/stage/later-approval/repeated-yes flow in actual tool receipts', async () => {
+    const request = vi.fn<GoogleApiClient['request']>(async (_api, _path, options) =>
+      options.method === 'POST' ? { id: 'fixture-created-event' } : { items: [] });
+    const { app, records, setLatest } = appFor(request);
+    app.post('/fixture/calendar-reply', { config: { jarvisAgent: true } }, async (req) => JSON.parse(await confirmPendingCalendarReply(
+      app.jarvisTools, req, new AbortController().signal,
+    )));
+    const reply = (id: string) => app.inject({
+      method: 'POST', url: '/fixture/calendar-reply', headers: confirmHeaders(id), payload: {},
+    });
+    const read = await app.inject({
+      method: 'POST', url: '/tools/calendar_list_events', headers: confirmHeaders('42'),
+      payload: { start: '2027-12-09', end: '2027-12-10' },
+    });
+    expect(read.json()).toMatchObject({ outcome: 'ok', result: { events: [], timeZone: 'Europe/Copenhagen' } });
+    const staged = (await app.inject({
+      method: 'POST', url: '/tools/calendar_create_event', headers: confirmHeaders('42'),
+      payload: {
+        subject: 'Synthetic hotel reservation',
+        startDateTime: '2027-12-09T16:00:00+01:00', endDateTime: '2027-12-10T12:00:00+01:00',
+        attendees: ['guest@example.test'],
+      },
+    })).json();
+    expect(staged).toMatchObject({ outcome: 'ok', result: {
+      status: 'awaiting_confirmation', confirmationCode: expect.stringMatching(/^[0-9]{8}$/u),
+      summary: 'Create "Synthetic hotel reservation" from 09 December 2027 at 16:00 to 10 December 2027 at 12:00 (Europe/Copenhagen local time); attendees: guest@example.test.',
+    } });
+    expect(request).toHaveBeenCalledOnce();
+    expect(records[1]?.result).toEqual({ redacted: true });
+    setLatest(conversationMessage('42', 'yes', new Date(Date.now() + 10_000)));
+    expect((await reply('42')).json()).toMatchObject({ outcome: 'refused' });
+    setLatest(conversationMessage('43', 'Is it created?', new Date(Date.now() + 11_000)));
+    expect((await reply('43')).json()).toMatchObject({ result: {
+      status: 'awaiting_confirmation', summary: staged.result.summary, reply: null,
+    } });
+    expect(request).toHaveBeenCalledOnce();
+    setLatest(conversationMessage('44', 'go ahead', new Date(Date.now() + 12_000)));
+    expect((await reply('44')).json()).toMatchObject({ outcome: 'ok', result: {
+      status: 'completed', summary: staged.result.summary,
+    } });
+    expect(request).toHaveBeenLastCalledWith('calendar', '/calendars/primary/events', expect.objectContaining({
+      method: 'POST', body: {
+        summary: 'Synthetic hotel reservation',
+        start: { dateTime: '2027-12-09T15:00:00.000Z', timeZone: 'UTC' },
+        end: { dateTime: '2027-12-10T11:00:00.000Z', timeZone: 'UTC' },
+        attendees: [{ email: 'guest@example.test' }],
+      },
+    }));
+    setLatest(conversationMessage('45', 'yes', new Date(Date.now() + 13_000)));
+    expect((await reply('45')).json()).toMatchObject({ outcome: 'ok', result: { status: 'none' } });
+    expect(request).toHaveBeenCalledTimes(2);
+  });
+
+  it.each(['expired', 'cancelled', 'provider-failed'] as const)(
+    'does not repeat a write after an actual %s stage', async (state) => {
+      let now = Date.now();
+      const request = vi.fn<GoogleApiClient['request']>(async () => { throw new GoogleApiError('uncertain'); });
+      const { app, setLatest } = appFor(request, { pendingActions: new PendingGoogleActions(() => now) });
+      app.post('/fixture/calendar-reply', { config: { jarvisAgent: true } }, async (req) => JSON.parse(await confirmPendingCalendarReply(
+        app.jarvisTools, req, new AbortController().signal,
+      )));
+      const stage = await app.inject({
+        method: 'POST', url: '/tools/calendar_create_event', headers: confirmHeaders('42'),
+        payload: { subject: 'Fixture', startDateTime: '2027-12-09T16:00:00+01:00', endDateTime: '2027-12-10T12:00:00+01:00' },
+      });
+      expect(stage.json().result.status).toBe('awaiting_confirmation');
+      if (state === 'expired') now += 600_000;
+      setLatest(conversationMessage('43', state === 'cancelled' ? 'no' : 'yes', new Date(now + 1)));
+      const first = await app.inject({
+        method: 'POST', url: '/fixture/calendar-reply', headers: confirmHeaders('43'), payload: {},
+      });
+      expect(first.json()).toMatchObject(state === 'provider-failed'
+        ? { outcome: 'error' }
+        : { outcome: 'ok', result: { status: state === 'expired' ? 'none' : 'cancelled' } });
+      setLatest(conversationMessage('44', 'yes', new Date(now + 2)));
+      const repeated = await app.inject({
+        method: 'POST', url: '/fixture/calendar-reply', headers: confirmHeaders('44'), payload: {},
+      });
+      expect(repeated.json()).toMatchObject({ result: { status: 'none' } });
+      expect(request).toHaveBeenCalledTimes(state === 'provider-failed' ? 1 : 0);
+    },
+  );
+
   it('makes read-only calendar tools reflex-safe and keeps their audit data sensitive', () => {
     const module = createGoogleModule(
       { request: vi.fn(async () => ({ items: [] })) },
@@ -307,8 +420,14 @@ describe('Google Calendar and Gmail tools', () => {
       },
     });
     expect(response.json().result.slots).toEqual([
-      { start: '2026-10-05T09:00:00.000Z', end: '2026-10-05T10:00:00.000Z' },
-      { start: '2026-10-05T11:00:00.000Z', end: '2026-10-05T12:00:00.000Z' },
+      {
+        start: '2026-10-05T09:00:00.000Z', end: '2026-10-05T10:00:00.000Z',
+        startLocal: '05 October 2026 at 11:00', endLocal: '05 October 2026 at 12:00',
+      },
+      {
+        start: '2026-10-05T11:00:00.000Z', end: '2026-10-05T12:00:00.000Z',
+        startLocal: '05 October 2026 at 13:00', endLocal: '05 October 2026 at 14:00',
+      },
     ]);
   });
 
@@ -356,6 +475,203 @@ describe('Google Calendar and Gmail tools', () => {
     });
   });
 
+  describe('bounded multi-event proposals', () => {
+    it('accepts the ten-event upper bound without executing anything before approval', async () => {
+      const request = vi.fn<GoogleApiClient['request']>(async () => ({ id: 'synthetic-event' }));
+      const { app, setLatest } = appFor(request);
+      const events = Array.from({ length: 10 }, (_, index) => ({
+        ...hotelEvents[0], subject: `Synthetic booking ${index + 1}`,
+      }));
+      const staged = (await app.inject({
+        method: 'POST', url: '/tools/calendar_create_events', headers: confirmHeaders('42'),
+        payload: { events },
+      })).json();
+      expect(staged.outcome).toBe('ok');
+      expect(staged.result.items).toHaveLength(10);
+      for (const event of events) expect(staged.result.summary).toContain(event.subject);
+      expect(request).not.toHaveBeenCalled();
+      confirmMessage(setLatest);
+      const confirmed = (await app.inject({
+        method: 'POST', url: '/tools/calendar_confirm_change', headers: confirmHeaders('43'),
+        payload: { confirmationCode: staged.result.confirmationCode },
+      })).json();
+      expect(confirmed.result.status).toBe('completed');
+      expect(confirmed.result.items).toHaveLength(10);
+      expect(request).toHaveBeenCalledTimes(10);
+    });
+
+    it('stages both hotels immutably and creates exactly both after one later approval', async () => {
+      const request = vi.fn<GoogleApiClient['request']>(async () => ({ id: 'synthetic-event' }));
+      const { app, records, setLatest } = appFor(request);
+      const staged = (await app.inject({
+        method: 'POST', url: '/tools/calendar_create_events', headers: confirmHeaders('42'),
+        payload: { events: hotelEvents },
+      })).json();
+      expect(staged).toMatchObject({ outcome: 'ok', result: {
+        status: 'awaiting_confirmation', items: [
+          { summary: expect.stringContaining('Synthetic Hotel Alpha') },
+          { summary: expect.stringContaining('Synthetic Hotel Beta') },
+        ],
+      } });
+      expect(staged.result.summary).toContain('14 June 2027 at 15:00');
+      expect(staged.result.summary).toContain('09 December 2027 at 16:00');
+      expect(staged.result.summary).toContain('Europe/Copenhagen local time');
+      expect(staged.result.summary).toContain('attendees: none');
+      expect(request).not.toHaveBeenCalled();
+      setLatest(conversationMessage('42', 'approved', new Date(Date.now() + 10_000)));
+      const confirm = (id: string) => app.inject({
+        method: 'POST', url: '/tools/calendar_confirm_change', headers: confirmHeaders(id),
+        payload: { confirmationCode: staged.result.confirmationCode },
+      });
+      expect((await confirm('42')).json().outcome).toBe('refused');
+      expect(request).not.toHaveBeenCalled();
+      confirmMessage(setLatest);
+      const confirmed = (await confirm('43')).json();
+      expect(confirmed).toMatchObject({ outcome: 'ok', result: {
+        status: 'completed', summary: staged.result.summary,
+        items: [{ status: 'completed' }, { status: 'completed' }],
+      } });
+      expect(request.mock.calls.map((call) => call[2].body)).toEqual([
+        {
+          summary: hotelEvents[0]!.subject,
+          start: { dateTime: '2027-06-14T13:00:00.000Z', timeZone: 'UTC' },
+          end: { dateTime: '2027-06-15T09:00:00.000Z', timeZone: 'UTC' },
+        },
+        {
+          summary: hotelEvents[1]!.subject,
+          start: { dateTime: '2027-12-09T15:00:00.000Z', timeZone: 'UTC' },
+          end: { dateTime: '2027-12-10T11:00:00.000Z', timeZone: 'UTC' },
+        },
+      ]);
+      expect((await confirm('43')).json().outcome).toBe('refused');
+      setLatest(conversationMessage('44', 'yes', new Date(Date.now() + 11_000)));
+      expect((await confirm('44')).json().outcome).toBe('refused');
+      const recovered = (await app.inject({
+        method: 'POST', url: '/tools/calendar_get_pending_change', headers: confirmHeaders('44'),
+        payload: {},
+      })).json();
+      expect(recovered.result).toMatchObject({
+        status: 'none', lastChange: { status: 'completed', summary: staged.result.summary },
+      });
+      expect(request).toHaveBeenCalledTimes(2);
+      expect(records.every((record) => JSON.stringify(record.result) === '{"redacted":true}')).toBe(true);
+    });
+
+    it.each([
+      [], [hotelEvents[0]], Array.from({ length: 11 }, () => hotelEvents[0]),
+      [hotelEvents[0], { ...hotelEvents[1], endDateTime: '2026-11-01T00:00:00Z' }],
+      [hotelEvents[0], { ...hotelEvents[1], attendees: ['not-an-email'] }],
+      [hotelEvents[0], hotelEvents[0]],
+    ])('validates every batch item before replacing any pending stage: %j', async (...events) => {
+      const request = vi.fn<GoogleApiClient['request']>(async () => ({}));
+      const { app } = appFor(request);
+      const original = (await app.inject({
+        method: 'POST', url: '/tools/calendar_create_event', headers: confirmHeaders('42'),
+        payload: hotelEvents[0],
+      })).json();
+      const invalid = (await app.inject({
+        method: 'POST', url: '/tools/calendar_create_events', headers: confirmHeaders('42'),
+        payload: { events },
+      })).json();
+      expect(invalid.outcome).toBe('refused');
+      const pending = (await app.inject({
+        method: 'POST', url: '/tools/calendar_get_pending_change', headers: confirmHeaders('42'),
+        payload: {},
+      })).json();
+      expect(pending.result.confirmationCode).toBe(original.result.confirmationCode);
+      expect(request).not.toHaveBeenCalled();
+    });
+
+    it.each(['no', 'yes and move the second', 'Is it created?', 'expired', 'other-session'])(
+      'does not execute a batch for %s', async (reply) => {
+        let now = Date.now();
+        const request = vi.fn<GoogleApiClient['request']>(async () => ({}));
+        const { app, setLatest } = appFor(request, {
+          pendingActions: new PendingGoogleActions(() => now),
+        });
+        const stage = (await app.inject({
+          method: 'POST', url: '/tools/calendar_create_events', headers: confirmHeaders('42'),
+          payload: { events: hotelEvents },
+        })).json();
+        if (reply === 'expired') now += 600_000;
+        setLatest({
+          ...conversationMessage('43', ['expired', 'other-session'].includes(reply) ? 'yes' : reply,
+            new Date(now + 10_000)),
+          sessionId: reply === 'other-session' ? '2' : '1',
+        });
+        const confirm = (await app.inject({
+          method: 'POST', url: '/tools/calendar_confirm_change', headers: confirmHeaders('43'),
+          payload: { confirmationCode: stage.result.confirmationCode },
+        })).json();
+        expect(confirm.outcome).toBe(reply === 'no' ? 'ok' : 'refused');
+        if (reply === 'no') expect(confirm.result.items).toMatchObject([
+          { status: 'cancelled' }, { status: 'cancelled' },
+        ]);
+        expect(request).not.toHaveBeenCalled();
+      },
+    );
+
+    it.each(['forbidden', 'uncertain', 'unexpected'] as const)(
+      'keeps the first success and reports %s second result without replaying either', async (kind) => {
+        const request = vi.fn<GoogleApiClient['request']>()
+          .mockResolvedValueOnce({ id: 'created-first' })
+          .mockRejectedValueOnce(kind === 'unexpected' ? new Error('Synthetic failure') : new GoogleApiError(kind));
+        const { app, setLatest } = appFor(request);
+        const staged = (await app.inject({
+          method: 'POST', url: '/tools/calendar_create_events', headers: confirmHeaders('42'),
+          payload: { events: [...hotelEvents, {
+            ...hotelEvents[1], subject: 'Another distinct synthetic event',
+          }] },
+        })).json();
+        confirmMessage(setLatest);
+        const confirm = () => app.inject({
+          method: 'POST', url: '/tools/calendar_confirm_change', headers: confirmHeaders('43'),
+          payload: { confirmationCode: staged.result.confirmationCode },
+        });
+        const response = (await confirm()).json();
+        expect(response).toMatchObject({ outcome: 'ok', result: {
+          status: 'partial', items: [
+            { status: 'completed' },
+            { status: kind === 'forbidden' ? 'failed' : 'unverified' },
+            { status: 'not_attempted' },
+          ],
+        } });
+        expect(response.confirmation).not.toContain('Done:');
+        expect(response.result.detail).toContain('1 of 3');
+        expect((await confirm()).json().outcome).toBe('refused');
+        expect(request).toHaveBeenCalledTimes(2);
+      },
+    );
+
+    it('stops before the next batch item when execution is cancelled', async () => {
+      const abort = new AbortController();
+      const request = vi.fn<GoogleApiClient['request']>(async () => {
+        abort.abort();
+        return { id: 'first-created' };
+      });
+      const { app, setLatest } = appFor(request);
+      app.post('/fixture/calendar-interruption', { config: { jarvisAgent: true } }, async (req) =>
+        JSON.parse(await confirmPendingCalendarReply(app.jarvisTools, req, abort.signal)));
+      await app.inject({
+        method: 'POST', url: '/tools/calendar_create_events', headers: confirmHeaders('42'),
+        payload: { events: hotelEvents },
+      });
+      confirmMessage(setLatest);
+      await app.inject({
+        method: 'POST', url: '/fixture/calendar-interruption', headers: confirmHeaders('43'), payload: {},
+      });
+      const recovered = (await app.inject({
+        method: 'POST', url: '/tools/calendar_get_pending_change', headers: confirmHeaders('43'),
+        payload: {},
+      })).json();
+      expect(recovered.result).toMatchObject({ status: 'none', lastChange: {
+        status: 'partial', items: [{ status: 'completed' }, { status: 'not_attempted' }],
+      } });
+      expect(request).toHaveBeenCalledOnce();
+    });
+
+  });
+
   it.each(['yes', 'no', 'yes and move it later'])('returns a tool refusal for %s without a pending calendar action', async (reply) => {
     const request = vi.fn<GoogleApiClient['request']>();
     const { app, setLatest } = appFor(request);
@@ -384,6 +700,62 @@ describe('Google Calendar and Gmail tools', () => {
     });
     expect(response.statusCode).toBe(200);
     expect(response.json()).toMatchObject({ outcome: 'ok', result: { status: 'cancelled' } });
+    expect(request).not.toHaveBeenCalled();
+  });
+
+  it('recovers the original staged code on a later approval after private history is redacted', async () => {
+    const request = vi.fn(async () => ({}));
+    const { app, records, setLatest } = appFor(request);
+    const stage = await app.inject({
+      method: 'POST', url: '/tools/calendar_create_event', headers: confirmHeaders('42'),
+      payload: { subject: 'Synthetic Hotel Beta stay', startDateTime: '2027-06-14T15:00:00+02:00', endDateTime: '2027-06-17T11:00:00+02:00' },
+    });
+    expect(stage.json()).toMatchObject({ outcome: 'ok', result: { status: 'awaiting_confirmation' } });
+    expect(records[0]?.result).toEqual({ redacted: true });
+    expect(request).not.toHaveBeenCalled();
+    setLatest(conversationMessage('43', 'go ahead', new Date(Date.now() + 10_000)));
+    const recovered = await app.inject({
+      method: 'POST', url: '/tools/calendar_get_pending_change', headers: confirmHeaders('43'), payload: {},
+    });
+    expect(recovered.json()).toMatchObject({ outcome: 'ok', result: {
+      status: 'awaiting_confirmation', confirmationCode: stage.json().result.confirmationCode,
+      summary: expect.stringContaining('Synthetic Hotel Beta stay'),
+    } });
+    expect(records[1]?.result).toEqual({ redacted: true });
+    expect(request).not.toHaveBeenCalled();
+    const confirmed = await app.inject({
+      method: 'POST', url: '/tools/calendar_confirm_change', headers: confirmHeaders('43'),
+      payload: { confirmationCode: recovered.json().result.confirmationCode },
+    });
+    expect(confirmed.json()).toMatchObject({ outcome: 'ok', result: { status: 'completed' } });
+    const replay = await app.inject({
+      method: 'POST', url: '/tools/calendar_confirm_change', headers: confirmHeaders('43'),
+      payload: { confirmationCode: recovered.json().result.confirmationCode },
+    });
+    expect(replay.json().outcome).toBe('refused');
+    expect(request).toHaveBeenCalledOnce();
+    const consumed = await app.inject({
+      method: 'POST', url: '/tools/calendar_get_pending_change', headers: confirmHeaders('43'), payload: {},
+    });
+    expect(consumed.json()).toMatchObject({ outcome: 'ok', result: { status: 'none' } });
+  });
+
+  it('cannot recover an unstaged, failed or unverified calendar change', async () => {
+    const request = vi.fn(async () => ({}));
+    const { app } = appFor(request);
+    const invalid = await app.inject({
+      method: 'POST', url: '/tools/calendar_create_event', headers: confirmHeaders('42'),
+      payload: { subject: 'Stay', startDateTime: '2027-06-17T15:00:00Z', endDateTime: '2027-06-14T11:00:00Z' },
+    });
+    expect(invalid.json().outcome).toBe('refused');
+    const recovered = await app.inject({
+      method: 'POST', url: '/tools/calendar_get_pending_change', headers: confirmHeaders('42'), payload: {},
+    });
+    expect(recovered.json()).toMatchObject({ outcome: 'ok', result: { status: 'none' } });
+    const unverified = await app.inject({
+      method: 'POST', url: '/tools/calendar_get_pending_change', headers: confirmHeaders('43'), payload: {},
+    });
+    expect(unverified.json().outcome).toBe('refused');
     expect(request).not.toHaveBeenCalled();
   });
 
@@ -662,6 +1034,38 @@ describe('Google Calendar and Gmail tools', () => {
     expect(JSON.stringify(records)).not.toContain('PRIVATE GMAIL BODY');
   });
 
+  it('returns booking dates from HTML alternatives with explicit extraction status and a redacted audit', async () => {
+    const request = vi.fn<GoogleApiClient['request']>(async (_api, path) => path.includes('?q=')
+      ? { messages: [{ id: 'reservation' }] }
+      : { id: 'reservation', snippet: 'Booking confirmed', payload: {
+        mimeType: 'multipart/alternative', parts: [
+          { mimeType: 'text/plain', body: { data: Buffer.from('Thank you for booking.').toString('base64url') } },
+          { mimeType: 'text/html', body: { data: Buffer.from('<p>Synthetic Hotel Beta</p><p>Check-in 14 June 2027</p><p>Check-out 17 June 2027</p>').toString('base64url') } },
+        ],
+      } });
+    const { app, records } = appFor(request);
+    const result = await app.inject({ method: 'POST', url: '/tools/mail_search', headers: confirmHeaders('42'), payload: { query: 'Synthetic Hotel Beta' } });
+    expect(result.json()).toMatchObject({ outcome: 'ok', result: { messages: [{
+      body: 'Thank you for booking.', bodySource: 'plain-text', bodyTruncated: false,
+      alternateBody: 'Synthetic Hotel Beta Check-in 14 June 2027 Check-out 17 June 2027',
+      alternateBodyTruncated: false, contentWarnings: [],
+    }] } });
+    expect(records[0]).toMatchObject({ arguments: { redacted: true }, result: { redacted: true } });
+    expect(request).toHaveBeenCalledTimes(2);
+  });
+
+  it('reports snippet-only booking extraction as incomplete', async () => {
+    const request = vi.fn<GoogleApiClient['request']>(async (_api, path) => path.includes('?q=')
+      ? { messages: [{ id: 'reservation' }] } : { snippet: 'Booking confirmed', payload: { mimeType: 'text/html', body: {} } });
+    const { app } = appFor(request);
+    const result = await app.inject({ method: 'POST', url: '/tools/mail_search', headers: confirmHeaders('42'), payload: { query: 'Synthetic Hotel Beta' } });
+    expect(result.json()).toMatchObject({ outcome: 'ok', result: { messages: [{
+      body: 'Booking confirmed', bodySource: 'snippet', contentWarnings: expect.arrayContaining([
+        'Full message text is unavailable; a preview cannot establish missing reservation details.',
+      ]),
+    }] } });
+  });
+
   it('lists bounded Gmail drafts with plain-text content', async () => {
     const body = 'PRIVATE DRAFT BODY';
     const request = vi.fn(async (...args: [GoogleApi, string, GoogleApiRequest]) =>
@@ -694,6 +1098,9 @@ describe('Google Calendar and Gmail tools', () => {
         to: 'dan@example.com',
         subject: 'Private draft',
         body,
+        bodySource: 'plain-text',
+        bodyTruncated: false,
+        contentWarnings: [],
       }],
       truncated: false,
     });
@@ -931,4 +1338,20 @@ describe('Google Calendar and Gmail tools', () => {
     expect(draftBody.message.threadId).toBe('thread-1');
     expect(decodedMimeBody(draftBody.message.raw)).toContain('Hello, I can attend.');
   });
+});
+
+describe('Gmail incomplete list responses', () => {
+  it.each([{ messages: 'invalid' }, { messages: [{}] }, { nextPageToken: 'missing-page' }, { resultSizeEstimate: 1 }])(
+    'reports malformed message lists as failures: %j', async (listing) => {
+      const request = vi.fn(async () => listing);
+      const { app } = appFor(request);
+      const response = await app.inject({
+        method: 'POST', url: '/tools/mail_search', headers: confirmHeaders('42'), payload: { query: 'reservation' },
+      });
+      expect(response.json()).toMatchObject({ outcome: 'error', result: {
+        error: 'Gmail returned an invalid message list. Direct mail access is incomplete.',
+      } });
+      expect(request).toHaveBeenCalledOnce();
+    },
+  );
 });

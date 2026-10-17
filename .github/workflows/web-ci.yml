@@ -21,6 +21,6 @@ jobs:
       - name: Pin npm
         run: npm install --global npm@10.9.9
       - run: npm ci
-      - run: npm run lint
-      - run: npm test
-      - run: npm run build
+      - run: npm run lint --workspace @jarvis/contracts --workspace @jarvis/web
+      - run: npm test --workspace @jarvis/contracts --workspace @jarvis/web
+      - run: npm run build --workspace @jarvis/contracts --workspace @jarvis/web

@@ -44,6 +44,8 @@ jobs:
             build-mode: none
           - language: actions
             build-mode: none
+          - language: csharp
+            build-mode: manual
 
     steps:
       - name: Checkout repository
@@ -55,6 +57,16 @@ jobs:
           languages: ${{ matrix.language }}
           queries: security-extended
           build-mode: ${{ matrix.build-mode }}
+
+      - name: Setup .NET for C# CodeQL build
+        if: matrix.language == 'csharp'
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Build production PC bridge for CodeQL
+        if: matrix.language == 'csharp'
+        run: dotnet build pc-bridge/Jarvis.PcBridge/Jarvis.PcBridge.csproj --configuration Release
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@24c54180a607b1449ed407dd24f251e4e9147c8d # v4.38.3

@@ -19,9 +19,24 @@ function fixture(scope: 'calendar' | 'mail' = 'calendar') {
 }
 
 describe('pending Google actions', () => {
+  it('recovers only a real calendar stage with its original code until expiry', async () => {
+    const f = fixture();
+    expect(f.actions.pendingCalendarChange()).toMatchObject({
+      status: 'awaiting_confirmation', confirmationCode: f.pending.confirmationCode,
+      summary: 'Change.', expiresAt: new Date(601000).toISOString(),
+    });
+    await f.confirm('yes');
+    expect(f.actions.pendingCalendarChange()).toMatchObject({ status: 'none' });
+    expect(f.actions.pendingCalendarChange().detail).not.toContain('Nothing has changed');
+    f.stage();
+    f.setNow(601000);
+    expect(f.actions.pendingCalendarChange()).toMatchObject({ status: 'none' });
+    expect(fixture('mail').actions.pendingCalendarChange()).toMatchObject({ status: 'none' });
+  });
+
   it.each(['yes', 'approve', 'go ahead', 'do it', ' YES! ', 'Approve.'])('approves calendar with %s only once', async (reply) => {
     const f = fixture();
-    await expect(f.confirm(reply)).resolves.toEqual({ status: 'completed' });
+    await expect(f.confirm(reply)).resolves.toEqual({ status: 'completed', summary: 'Change.' });
     await expect(f.confirm(reply)).rejects.toMatchObject({ name: 'ToolRefusal' });
     expect(f.execute).toHaveBeenCalledOnce();
   });
@@ -61,6 +76,15 @@ describe('pending Google actions', () => {
     expect(f.execute).not.toHaveBeenCalled();
   });
 
+  it('consumes a real stage before a failed provider call and never retries on another yes', async () => {
+    const f = fixture();
+    f.execute.mockRejectedValueOnce(new Error('Provider unavailable'));
+    await expect(f.confirm('yes')).rejects.toThrow('Provider unavailable');
+    expect(f.actions.pendingCalendarChange()).toMatchObject({ status: 'none' });
+    await expect(f.confirm('yes', message('12', 'yes', 1002))).rejects.toMatchObject({ name: 'ToolRefusal' });
+    expect(f.execute).toHaveBeenCalledOnce();
+  });
+
   it('supersedes older calendar actions without restoring them after cancellation', async () => {
     const f = fixture();
     const latest = f.stage();
@@ -86,5 +110,102 @@ describe('pending Google actions', () => {
     const newer = older.actions.stage({ scope: 'mail', sourceMessageId: '10', summary: 'Newer mail.', execute: vi.fn() });
     await expect(older.confirm('confirmed')).rejects.toMatchObject({ name: 'ToolRefusal' });
     await expect(older.confirm('confirmed', undefined, newer.confirmationCode)).resolves.toBeUndefined();
+  });
+
+  it('binds batch receipts to their exact source session and clears them for a new proposal', async () => {
+    let now = 1_000;
+    const actions = new PendingGoogleActions(() => now);
+    const items = ['First hotel.', 'Second hotel.'];
+    const execute = vi.fn(async () => ({
+      status: 'partial', detail: 'One event created.',
+      items: [{ summary: items[0], status: 'completed' },
+        { summary: items[1], status: 'unverified' }],
+    }));
+    const staged = actions.stage({
+      scope: 'calendar', sourceMessageId: '10', sourceSessionId: '1',
+      summary: 'Both hotels.', items, execute,
+    });
+    items[0] = 'Changed outside the proposal.';
+    expect(actions.pendingCalendarChange(message('11', 'yes', 1_001)).items)
+      .toEqual([{ summary: 'First hotel.' }, { summary: 'Second hotel.' }]);
+    expect(actions.pendingCalendarChange(message('11', 'yes', 1_001)))
+      .toHaveProperty('sourceMessageId', '10');
+    const foreign = { ...message('11', 'yes', 1_001), sessionId: '2' };
+    expect(actions.pendingCalendarChange(foreign)).toMatchObject({ status: 'none' });
+    await expect(actions.confirm('calendar', staged.confirmationCode, foreign,
+      new AbortController().signal)).rejects.toMatchObject({ name: 'ToolRefusal' });
+    expect(execute).not.toHaveBeenCalled();
+    await actions.confirm('calendar', staged.confirmationCode, message('11', 'yes', 1_001),
+      new AbortController().signal);
+    const receipt = actions.pendingCalendarChange(message('12', 'yes', 1_002));
+    expect(receipt).toMatchObject({ status: 'none', lastChange: {
+      summary: 'Both hotels.', status: 'partial', sourceMessageId: '10',
+    } });
+    expect(actions.pendingCalendarChange(foreign)).not.toHaveProperty('lastChange');
+    expect(new PendingGoogleActions().pendingCalendarChange()).not.toHaveProperty('lastChange');
+    now = 601_000;
+    expect(actions.pendingCalendarChange(message('12', 'yes', now))).not.toHaveProperty('lastChange');
+    actions.stage({ scope: 'calendar', sourceMessageId: '12', summary: 'Different change.', execute });
+    expect(actions.pendingCalendarChange()).not.toHaveProperty('lastChange');
+  });
+
+  it('does not widen an existing single-event approval to a replacement batch', async () => {
+    const f = fixture();
+    const batch = vi.fn(async () => ({ status: 'completed' }));
+    const staged = f.actions.stage({
+      scope: 'calendar', sourceMessageId: '10', sourceSessionId: '1',
+      summary: 'Two events.', items: ['First.', 'Second.'], execute: batch,
+    });
+    await expect(f.confirm('yes')).rejects.toMatchObject({ name: 'ToolRefusal' });
+    expect(batch).not.toHaveBeenCalled();
+    await f.confirm('yes', message('11', 'yes', 1_001), staged.confirmationCode);
+    expect(batch).toHaveBeenCalledOnce();
+    expect(f.execute).not.toHaveBeenCalled();
+  });
+
+  it('retains the actual batch source identity when execution yields no receipt details', async () => {
+    const actions = new PendingGoogleActions(() => 1_000);
+    const execute = vi.fn(async () => { throw new Error('Synthetic interrupted result'); });
+    const staged = actions.stage({
+      scope: 'calendar', sourceMessageId: '10', sourceSessionId: '1',
+      summary: 'Both hotels.', items: ['First.', 'Second.'], execute,
+    });
+    await expect(actions.confirm('calendar', staged.confirmationCode,
+      message('11', 'yes', 1_001), new AbortController().signal))
+      .rejects.toThrow('Synthetic interrupted result');
+    expect(actions.pendingCalendarChange(message('12', 'yes', 1_002))).toMatchObject({
+      status: 'none', lastChange: { sourceMessageId: '10', status: 'unverified' },
+    });
+    await expect(actions.confirm('calendar', staged.confirmationCode,
+      message('12', 'yes', 1_002), new AbortController().signal))
+      .rejects.toMatchObject({ name: 'ToolRefusal' });
+    expect(execute).toHaveBeenCalledOnce();
+  });
+
+  it('does not restore an older in-flight receipt over a newer proposal', async () => {
+    const actions = new PendingGoogleActions(() => 1_000);
+    let finish: ((result: { status: string }) => void) | undefined;
+    const staged = actions.stage({
+      scope: 'calendar', sourceMessageId: '10', sourceSessionId: '1',
+      summary: 'Older proposal.', items: ['First.', 'Second.'],
+      execute: () => new Promise<{ status: string }>((resolve) => { finish = resolve; }),
+    });
+    const older = actions.confirm('calendar', staged.confirmationCode,
+      message('11', 'yes', 1_001), new AbortController().signal);
+    const newer = actions.stage({
+      scope: 'calendar', sourceMessageId: '12', sourceSessionId: '1',
+      summary: 'Newer proposal.', items: ['Third.', 'Fourth.'],
+      execute: async () => ({ status: 'completed' }),
+    });
+    finish!({ status: 'completed' });
+    await older;
+    expect(actions.pendingCalendarChange(message('13', 'yes', 1_002))).toMatchObject({
+      summary: 'Newer proposal.', confirmationCode: newer.confirmationCode,
+    });
+    await actions.confirm('calendar', newer.confirmationCode,
+      message('13', 'no', 1_003), new AbortController().signal);
+    expect(actions.pendingCalendarChange(message('14', 'yes', 1_004))).toMatchObject({
+      lastChange: { summary: 'Newer proposal.', status: 'cancelled' },
+    });
   });
 });

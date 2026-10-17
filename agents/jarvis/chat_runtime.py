@@ -269,6 +269,7 @@ async def load_verified_history(
                     ModelMessage(
                         "user" if message["role"] == "dan" else "assistant",
                         content,
+                        source_message_id=message["id"] if message["role"] == "dan" else None,
                     ),
                 )
             )
@@ -784,7 +785,8 @@ def register_chat_invocation(
                     messages = (*messages, ModelMessage("user", fallback_text))
                 messages = (
                     *messages, ModelMessage(
-                        "user", current_text, (current_image,) if current_image else ()
+                        "user", current_text, (current_image,) if current_image else (),
+                        source_message_id=None if smoke else message_id,
                     )
                 )
                 chat = model_client.complete_chat(

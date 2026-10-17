@@ -1,9 +1,7 @@
-# Production deploy for main (P0-11). Deploys only the parts changed since the
-# last successful Deploy run: infra/ -> Bicep; apps/backend/ or db/ -> backend
-# image to ACR and Container Apps; apps/web/ -> Static Web Apps; agents/jarvis/
-# -> ACR and a Foundry hosted-agent version. Shared files
-# (root package files, workflows, deploy scripts) and manual runs deploy
-# everything; documentation-only pushes do not start a run. The concurrency
+# Production deploy for main. Exact-tree CI precedes Azure access. Immutable
+# receipts retain compatible applied components even when acceptance failed.
+# Readiness and live conversation acceptance remain separate required results.
+# The concurrency
 # group is shared with Runner deploy: one deploy at a time, queued in order,
 # never cancelled. Azure access uses the bootstrap OIDC identity (main only).
 name: Deploy
@@ -11,9 +9,11 @@ name: Deploy
 on:
   push:
     branches: [main]
-    paths-ignore:
-      - '**.md'
-      - 'docs/**'
+    paths:
+      - '**'
+      - '!**.md'
+      - '!docs/**'
+      - 'docs/features.md'
   workflow_dispatch:
 
 permissions:
@@ -42,11 +42,15 @@ jobs:
     permissions:
       contents: read
       actions: read
+      pull-requests: read
+      id-token: write
     outputs:
       infra: ${{ steps.plan.outputs.infra }}
       backend: ${{ steps.plan.outputs.backend }}
       web: ${{ steps.plan.outputs.web }}
       agent: ${{ steps.plan.outputs.agent }}
+      superseded: ${{ steps.plan.outputs.superseded }}
+      attempt: ${{ github.run_attempt }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -54,18 +58,30 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version-file: .python-version
-      - name: Find the last successful deploy
-        id: base
+      - name: Require exact qualification and select compatible applied inputs
+        id: inputs
         env:
           GH_TOKEN: ${{ github.token }}
-        run: |
-          sha=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow deploy.yml --branch main --status success --limit 1 --json headSha --jq '.[0].headSha // ""')
-          echo "sha=$sha" >>"$GITHUB_OUTPUT"
-      - name: Select the parts to deploy
+          RELEASE_CONFIGURATION: ${{ toJSON(vars) }}
+        run: python .github/scripts/release_state.py plan
+      - name: Authenticate only after exact qualification for sensitive input readback
+        if: steps.inputs.outputs.infra == 'false' && steps.inputs.outputs.superseded != 'true'
+        uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      - name: Verify sensitive inputs in memory before reusing infrastructure
         id: plan
         env:
-          BASE: ${{ steps.base.outputs.sha }}
-        run: python .github/scripts/deploy_plan.py --event "$GITHUB_EVENT_NAME" --base "$BASE" --head "$GITHUB_SHA"
+          JARVIS_BUDGET_CONTACT_EMAILS: ${{ secrets.JARVIS_BUDGET_CONTACT_EMAILS }}
+        run: python .github/scripts/release_state.py select
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-plan-${{ github.run_attempt }}
+          path: release-plan.json
+          if-no-files-found: error
+          retention-days: 30
 
   infra:
     name: Infrastructure (Bicep)
@@ -73,6 +89,8 @@ jobs:
     if: needs.plan.outputs.infra == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 90
+    outputs:
+      attempt: ${{ github.run_attempt }}
     env:
       JARVIS_BUDGET_CONTACT_EMAILS: ${{ secrets.JARVIS_BUDGET_CONTACT_EMAILS }}
     permissions:
@@ -94,6 +112,10 @@ jobs:
     if: ${{ !cancelled() && needs.plan.result == 'success' && needs.plan.outputs.backend == 'true' && needs.infra.result != 'failure' }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    outputs:
+      attempt: ${{ github.run_attempt }}
+      image: ${{ steps.apply.outputs.image }}
+      revision: ${{ steps.apply.outputs.revision }}
     permissions:
       contents: read
       id-token: write
@@ -122,6 +144,7 @@ jobs:
           [[ "$digest" == sha256:* ]] || { echo "::error::ACR image has no manifest digest"; exit 1; }
           echo "IMAGE=$REGISTRY_HOST/jarvis-backend@$digest" >>"$GITHUB_ENV"
       - name: Deploy the image to Container Apps
+        id: apply
         run: |
           if [[ -n "$BACKEND_APP" ]]; then
             az containerapp update --name "$BACKEND_APP" --resource-group "$RESOURCE_GROUP" --subscription "$SUBSCRIPTION_ID" --image "$IMAGE" --output none --only-show-errors
@@ -137,6 +160,8 @@ jobs:
             ready=$(jq -r '.properties.latestReadyRevisionName // ""' "$RUNNER_TEMP/backend-app.json")
             image=$(jq -r '.properties.template.containers[0].image // ""' "$RUNNER_TEMP/backend-app.json")
             if [[ "$image" == "$IMAGE" && -n "$latest" && "$latest" == "$ready" ]]; then
+              echo "image=$IMAGE" >>"$GITHUB_OUTPUT"
+              echo "revision=$latest" >>"$GITHUB_OUTPUT"
               echo "Revision $latest is ready with the new image."
               exit 0
             fi
@@ -152,6 +177,11 @@ jobs:
     if: ${{ !cancelled() && needs.plan.result == 'success' && needs.plan.outputs.agent == 'true' && needs.infra.result != 'failure' && needs.backend.result != 'failure' }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    outputs:
+      attempt: ${{ github.run_attempt }}
+      image: ${{ steps.hosted-agent.outputs.image }}
+      version: ${{ steps.hosted-agent.outputs.version }}
+      backend-revision: ${{ steps.identity.outputs.revision }}
     permissions:
       contents: read
       id-token: write
@@ -263,9 +293,11 @@ jobs:
           echo "AGENT_PRINCIPAL=$principal" >>"$GITHUB_ENV"
           {
             echo "version=$version"
+            echo "image=$AGENT_IMAGE"
             echo "principal=$principal"
           } >>"$GITHUB_OUTPUT"
       - name: Allow this identity in the backend
+        id: identity
         run: |
           az containerapp update --name "$BACKEND_APP" --resource-group "$RESOURCE_GROUP" --subscription "$SUBSCRIPTION_ID" --set-env-vars "ENTRA_JARVIS_AGENT_OBJECT_ID=$AGENT_PRINCIPAL" "JARVIS_CHAT_AGENT_NAME=jarvis" --output none --only-show-errors
           for attempt in $(seq 1 30); do
@@ -273,6 +305,7 @@ jobs:
             latest=$(jq -r '.properties.latestRevisionName // ""' "$RUNNER_TEMP/backend-app.json")
             ready=$(jq -r '.properties.latestReadyRevisionName // ""' "$RUNNER_TEMP/backend-app.json")
             if [[ -n "$latest" && "$latest" == "$ready" ]] && curl --fail --silent --show-error --max-time 20 "$BACKEND_URL/health"; then
+              echo "revision=$latest" >>"$GITHUB_OUTPUT"
               echo
               echo "Backend revision $latest is healthy with the hosted-agent identity configured."
               exit 0
@@ -307,6 +340,9 @@ jobs:
     if: ${{ !cancelled() && needs.plan.result == 'success' && needs.plan.outputs.web == 'true' && needs.infra.result != 'failure' && needs.backend.result != 'failure' }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    outputs:
+      attempt: ${{ github.run_attempt }}
+      bundle: ${{ steps.bundle.outputs.digest }}
     permissions:
       contents: read
       id-token: write
@@ -336,6 +372,11 @@ jobs:
           } >>"$GITHUB_ENV"
       - name: Build the web app against the production backend
         run: npm run build --workspace @jarvis/web
+      - name: Identify the exact production bundle
+        id: bundle
+        run: |
+          digest=$(find apps/web/dist -type f -print0 | sort -z | xargs -0 sha256sum | sha256sum | cut -d' ' -f1)
+          echo "digest=$digest" >>"$GITHUB_OUTPUT"
       - name: Get the Static Web Apps deployment token
         id: swa
         run: |
@@ -365,9 +406,9 @@ jobs:
           done
 
   smoke:
-    name: Smoke checks
+    name: Deterministic runtime readiness
     needs: [plan, infra, backend, web, agent]
-    if: ${{ !cancelled() && needs.plan.result == 'success' && (needs.plan.outputs.infra == 'true' || needs.plan.outputs.backend == 'true' || needs.plan.outputs.web == 'true' || needs.plan.outputs.agent == 'true') && needs.infra.result != 'failure' && needs.backend.result != 'failure' && needs.web.result != 'failure' && needs.agent.result != 'failure' }}
+    if: ${{ !cancelled() && needs.plan.result == 'success' && needs.plan.outputs.superseded != 'true' && (needs.infra.result == 'success' || needs.infra.result == 'skipped') && (needs.backend.result == 'success' || needs.backend.result == 'skipped') && (needs.web.result == 'success' || needs.web.result == 'skipped') && (needs.agent.result == 'success' || needs.agent.result == 'skipped') }}
     runs-on: ubuntu-latest
     timeout-minutes: 75
     permissions:
@@ -404,6 +445,36 @@ jobs:
       - name: Foundry administration and runtime hosts answer for the project
         if: needs.plan.outputs.infra == 'true'
         run: python .github/scripts/deploy_smoke.py --subscription "$SUBSCRIPTION_ID" --resource-group "$RESOURCE_GROUP" --outputs "$RUNNER_TEMP/infra-outputs.json" --principal "$(jq -er .deploy.servicePrincipalId infra/bootstrap.output.json)"
+      - name: Check retained or newly applied web readiness
+        run: |
+          for path in / /settings; do
+            curl --fail --silent --show-error --max-time 20 "https://$STATIC_WEB_APP_HOST$path" | grep -q '<div id="root">'
+          done
+
+  acceptance:
+    name: Live conversation acceptance
+    needs: [plan, smoke]
+    if: ${{ !cancelled() && needs.plan.outputs.superseded != 'true' && needs.smoke.result == 'success' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version-file: .python-version
+      - uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      - name: Load backend endpoint
+        run: |
+          fqdn=$(az deployment group show --name "$INFRA_DEPLOYMENT" --resource-group "$RESOURCE_GROUP" --subscription "$SUBSCRIPTION_ID" --query properties.outputs.backendFqdn.value --output tsv --only-show-errors)
+          [[ -n "$fqdn" ]]
+          echo "BACKEND_FQDN=$fqdn" >>"$GITHUB_ENV"
       - name: Run backend smoke checks
         run: |
           set -euo pipefail
@@ -431,27 +502,69 @@ jobs:
             echo "::error::The backend returned an invalid smoke report."
             exit 1
           fi
+          # Validate the complete fixed check set before logging any identifiers.
+          python .github/scripts/smoke_reasons.py "$response" --evidence acceptance-evidence.json
           {
             echo "### Backend smoke checks"
             echo
-            jq -r '.entries[] | "- `\(.id)`: **\(.status)**"' "$response"
+            jq -r '.entries[] | "- `\(.id)`: **\(.status)**"' acceptance-evidence.json
             echo
             echo "A disconnected PC bridge is recorded but does not block deployment acceptance."
           } >>"$GITHUB_STEP_SUMMARY"
-          # Ids and statuses only (no details), so a failed gate is diagnosable from the log.
-          jq -r '.entries[] | "smoke \(.id): \(.status)"' "$response"
-          if ! jq -e '[.entries[] | select(.id != "pc_bridge" and .id != "chat_identity" and .id != "chat_no_timestamp" and (.status == "down" or .status == "degraded"))] | length == 0' "$response" >/dev/null; then
-            echo "::error::A required backend smoke check is degraded or down."
+          if ! jq -e '[.entries[] | select(.id != "pc_bridge" and .id != "chat_identity" and .id != "chat_no_timestamp" and .status != "ok")] | length == 0' acceptance-evidence.json >/dev/null; then
+            echo "::error::A required backend smoke check is not ok."
             exit 1
           fi
-      - name: Summary
+      - name: Retain bounded acceptance evidence
         if: always()
-        run: |
-          {
-            echo "### Production"
-            echo
-            echo "- Jarvis: https://$STATIC_WEB_APP_HOST"
-            echo "- Backend: https://$BACKEND_FQDN"
-            echo
-            echo "Once, after the first deploy: run \`./infra/bootstrap.ps1 -WebRedirectUris 'https://$STATIC_WEB_APP_HOST/redirect.html'\` so sign-in works there, set \`backendUrl\` in \`apps/web/config.json\` to the backend URL for \`npm run dev\`, and set the Actions variable \`JARVIS_INFRA_DEPLOYMENT_NAME\` to \`$INFRA_DEPLOYMENT\` for Runner deploy."
-          } >>"$GITHUB_STEP_SUMMARY"
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: acceptance-evidence-${{ github.run_attempt }}
+          path: acceptance-evidence.json
+          if-no-files-found: warn
+          retention-days: 30
+
+  result:
+    name: Release result and failure evidence
+    if: always() && github.ref == 'refs/heads/main'
+    needs: [plan, infra, backend, web, agent, smoke, acceptance]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version-file: .python-version
+      - name: Read the immutable plan
+        if: needs.plan.result == 'success'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: release-plan-${{ needs.plan.outputs.attempt }}
+      - name: Read sanitized conversation evidence
+        if: needs.acceptance.result == 'success' || needs.acceptance.result == 'failure'
+        continue-on-error: true
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: acceptance-evidence-${{ github.run_attempt }}
+      - name: Record applied versions separately from acceptance
+        if: always()
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+          VERSIONS: >-
+            {"infra":{"deployment":"jarvis-infra"},
+            "backend":{"image":"${{ needs.backend.outputs.image }}","revision":"${{ needs.agent.outputs.backend-revision || needs.backend.outputs.revision }}"},
+            "agent":{"image":"${{ needs.agent.outputs.image }}","version":"${{ needs.agent.outputs.version }}"},
+            "web":{"source":"${{ github.sha }}","bundle":"${{ needs.web.outputs.bundle }}"}}
+          APPLY_ATTEMPTS: >-
+            {"infra":"${{ needs.infra.outputs.attempt }}","backend":"${{ needs.backend.outputs.attempt }}",
+            "web":"${{ needs.web.outputs.attempt }}","agent":"${{ needs.agent.outputs.attempt }}"}
+          AGENT_BACKEND_REVISION: ${{ needs.agent.outputs.backend-revision }}
+        run: python .github/scripts/release_state.py record
+      - name: Retain immutable release and failure evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-evidence-${{ github.run_attempt }}
+          path: release-evidence.json
+          if-no-files-found: error
+          retention-days: 30

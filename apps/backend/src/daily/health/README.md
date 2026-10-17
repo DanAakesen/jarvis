@@ -19,6 +19,7 @@ Ingress already conflicts on changed owner/kind/automation/session bytes or devi
 Nonsensitive `worker/health-normalize.js`, `health-targets.js` and selected persistence code were read at original Site SHA `9e193554c9c8c7c23a788ed3d2b0582580b76c0f`. No real records, source fixtures, credentials, schema or source files were changed. This establishes code-shaped compatibility only; protected live coverage/parity is still required.
 
 - Metrics retain daily aggregation strategy and explicit unknowns. Known physical units convert to kcal/kg/m; sleep converts to hours. Missing units stay unknown (legacy sleep's absent unit is hours). Unsupported known-dimension units, mixed unknown/known units and ambiguous `cal` fail closed instead of guessing.
+- Body-fat percentage accepts only string `%`/`percent` and `fraction`/`1`, converting the latter to percent. Validate both raw `units`/`unit` aliases on every group, sample and workout quantity before sanitization or fallback selection, including empty groups and shadowed declarations. Non-string declarations (including numeric `1`) and unsupported strings quarantine before domain/freshness writes; absent/null/blank units remain missing and inherit a valid group unit or stay unknown without scaling. Zero and missing values, unknown dimensions and original raw evidence are preserved.
 - Explicit-offset instants normalize to UTC and group by Europe/Copenhagen, including DST. Date-only values stay dates; sleep follows the export's wake-date semantics. Invalid/offset-free timestamps and rolled-over dates are rejected. Latest-value metrics use timestamp order, not array position. Source values/conversion factors remain explicit in metadata.
 - Every distinct workout ID remains separate, including same-day sessions and workout type/identifier/detail. Numeric series and UTC-minute heart rate preserve min/mean/max, sample counts and source metadata. Identical duplicate IDs collapse; conflicting same-export IDs quarantine. Summaries do not fabricate missing heart rate or sleep stages.
 - Known heart-rate dimensions share the same strict `bpm`/`count/min`/`beats/min` mapping in daily metrics, workout summary quantities and sample series. Other declared units (including `Hz`) quarantine without domain writes or processed freshness. Only the original workout summary slots retain implicit BPM when no unit is supplied: flat `avgHeartRate.qty`/`maxHeartRate.qty`, then nested `heartRate.avg.qty`/`max.qty`, then `Avg`/`Max` and numeric `avg`/`max`. Nested quantities inherit an explicitly declared `heartRate` unit. Validate all declared fallback units; missing numbers stay null and zero stays zero. Missing series units remain unknown, mixed known/unknown samples are refused, and heart-rate variability is not a rate. Derived numeric fields are canonical; retained raw bytes and source detail keep their original unit evidence.
@@ -26,6 +27,19 @@ Nonsensitive `worker/health-normalize.js`, `health-targets.js` and selected pers
 - Input walk: at most 100,000 nodes and 20 nested levels. Derived output: at most 10,000 rows and 8 MiB. Mapped identifiers retain exact values within 256 UTF-16 units; overlength values quarantine, never truncate/hash-replace. No automatic source-key widening.
 
 ## Owner reads and truthful freshness
+
+The inactive P12-09 query adapter now reuses these methods through one
+owner-authorised HTTP/tool contract; production composition is unchanged.
+The optional fourth `SqlHealthProcessor` argument is the shared Daily change
+hub. New normalized lineage notifies its health sources only after the final
+transaction resolves; retained lineage replays do not announce new health data.
+Completing a pending replay, poison quarantine and retry exhaustion notify sync
+only after acknowledged commit; no-ops and failed/uncertain commits do not notify.
+Heartbeat also notifies sync only, never processed health freshness.
+Notification failures stay in the existing event-listener boundary rather than
+failing an acknowledged row or retrying SQL side effects.
+The factory `createDailyData` supplies that hub without starting a processor.
+Commit tests use synthetic transaction doubles, not real SQL acceptance.
 
 `DailyHealthReadModel.forRequest` reuses existing root human/hosted-agent authentication and server owner; device/export/coding-runner identities cannot become an owner. It adds no public endpoint.
 

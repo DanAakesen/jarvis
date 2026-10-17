@@ -1,5 +1,470 @@
 # Architecture
 
+## Realtime voice presentation (16 October 2026; P11-07)
+
+After normal argument validation and pre-execution guards,
+`executeRealtimeToolCall` starts the existing `startWorkPresentation` lifecycle
+with surface `voice`. It finishes successfully only after the actual result
+and final tool-output envelope pass their existing serialization/size bounds.
+The conversation message ID, memory source message ID or activity UUID scopes
+the ephemeral view; this presentation identifier grants no write authority.
+Existing settings, presence, cancellation, workspace acknowledgement and
+redaction behaviour stay owned by the presentation service. Calendar proposals
+use its existing schema-valid plain-text view and never invoke confirmation.
+Relay transport, approval state, providers, persistence and frontend are unchanged.
+The approval orchestrator suppresses its internal pending lookup's presentation,
+so an asynchronous stale proposal cannot overwrite the final approval/decline receipt.
+
+## Calendar proposals and conversational grounding (16 October 2026; local candidate)
+
+`calendar_create_events` validates 2–10 complete event inputs before staging
+anything. The existing `PendingGoogleActions` owns one immutable calendar
+proposal, including every displayed local-time summary and the captured
+provider inputs. A batch additionally binds its source conversation session.
+The existing eight-digit code, ten-minute expiry, verified later Dan message
+and consume-before-execute boundary still apply; single-event input schemas
+and Gmail scope remain compatible.
+
+Confirmation runs the captured events sequentially and stops on the first
+failure or cancellation. Results distinguish `completed`, known `failed`,
+`unverified` and `not_attempted` items. No automatic retry or rollback is
+implied. The current proposal's actual terminal receipt remains process-local,
+source-session-bound and limited to the original expiry. A newer proposal
+invalidates that receipt; an older in-flight completion cannot overwrite it.
+`calendar_get_pending_change` can return this `lastChange` with `status: none`;
+absence of pending state is not proof that nothing was written. Restart loses
+both stage and receipt. No SQL migration, replica or permission change is added.
+
+The hosted adapter consolidates multiple proposed single-create calls before
+dispatch when the batch tool exists. For an explicit multiple-event request,
+it locally refuses an isolated single-create call before staging and bounds
+continuation to the complete batch. Failed/incomplete continuation therefore
+cannot leave a hidden first-event proposal. Approval recovery compares the latest
+request's canonical server-verified message ID with the existing staged
+`sourceMessageId`, exposed only by trusted pending/receipt results. Optional
+`ModelMessage.source_message_id` retains that identity through verified history,
+the current request, steering and caption fallback, but is not serialized into
+provider prompts. Assistant labels, copied/rephrased summaries, counts and
+claimed JSON cannot supply identity. Missing/truncated/unverified origin refuses
+batch approval; other callers and single-event semantics remain compatible.
+Model-dispatched confirmation also checks actual recovered state, rather than
+bypassing the guard after unusual routing. A round mixing separate calendar
+proposals/confirmation is refused before any mutation dispatch, so a valid first
+stage cannot remain hidden behind a later refusal under the same source ID.
+The existing all-single-create coalescing path still validates the whole list.
+Contextual quantities such as "Add those two.", "Tilføj de to." and "Tilføj
+disse to." can use the preceding calendar context for routing and response
+grounding. Danish demonstratives do not make English `to` a quantity.
+Explicit Notes/mail context blocks
+that inheritance. Batch origin checks examine the latest explicit user creation
+or scoped calendar mutation without skipping a newer shorthand/other-workflow
+creation for an older source; plain cancellation remains an approval reply.
+Context never substitutes for canonical staged/verified message-ID equality.
+Earlier state is not cancelled or mutated by
+that refusal. Older catalogues cannot silently overwrite
+one single stage with another. Final response grounding targets affirmative
+calendar action/approval claims, not benign calendar wording or unrelated
+tool errors. Calendar requests remain guarded if recovery is unavailable.
+Normal chat adds supported CommonMark record/date guidance; smoke and spoken
+format instructions are unchanged. Timed calendar reads retain ISO values and
+add human-local-time labels; date-only events are not converted.
+
+Calendar catalogue presence no longer requires holding every unrelated chat
+sentence until provider completion. Both provider adapters can release complete
+non-calendar/non-action sentences using the same scope/claim helpers as the
+final guard, including ordinary completed-action wording such as "I've put both
+in your calendar." Partial or ambiguous sentences remain held. Released text cannot
+be retracted; the remainder is still checked against actual tool evidence,
+and steering refreshes calendar scope before a continuation. This is a bounded
+partial-streaming policy, not semantic proof or a measured production speedup.
+The runtime change is limited to verified-message metadata assignments; transport,
+connection reuse and client lifecycle are unchanged. Combined PR #816 real-handler
+disconnect/each-invocation close-order coverage remains unowned and unverified.
+These are local synthetic contracts, not
+live provider/model, rendered UI or restart-durability acceptance.
+Final shorthand/claim controls passed in the 444-test calendar/model/runtime
+selection with Ruff8 clean. The 58-test qualified Node result covers the exact
+unchanged backend/fixture identities after the Danish-only correction. Older
+v1/v2/v3 packets remain historical, not combined pinned-CI acceptance.
+
+## Mobile composer focus hotfix (16 October 2026)
+
+`Workspace` retains the saved conversation layout in state but derives no manual
+layout, positioned attributes or fixed composer anchor while its existing phone
+media policy is active. `App` also withholds the anchor during that policy,
+including the desktop-to-phone transition. The unchanged viewport hook and
+canonical CSS own both phone halves; desktop resumes its existing fit/anchor
+path when the media policy changes back. Phone Move/resize controls are absent.
+No new geometry state, persistence format, API or voice behaviour is introduced.
+
+## Chat rendering and explicit phone viewport (16 October 2026; local candidate)
+
+Agent JSON SSE payloads retain text newlines through `chat-agent.ts`,
+`conversation.ts` delta concatenation, SQL `messages.text`, history projection
+and `ConversationHistory`. A well-formed table still rendered as inline pipe
+prose because `MarkdownContent` used CommonMark without table support.
+Chat opts into `remark-gfm` on the existing `react-markdown` parser; Notes and
+Knowledge keep their existing CommonMark rendering. Raw HTML stays
+disabled and URL transformation/link isolation remain unchanged. Tables use
+native headers and a bounded keyboard-focusable scroll wrapper. Only
+table-bearing messages can exceed the ordinary prose-width cap. Rendering
+does not rewrite persisted text or reconstruct flattened malformed records.
+
+`usePhoneChatViewport` publishes shell-scoped visual-viewport top and height,
+not `innerHeight - visualHeight` bottom compensation. Both fixed chat halves
+use that rectangle directly. This avoids mixing a stale layout-height reading
+with a shrinking CSS fixed viewport. Zoom retains ordinary native panning.
+`Workspace` keeps its existing scheduled manual anchor measurement and saved
+layout; viewport fitting never saves a new preference. `ConversationHistory`
+observes transcript resizing to retain bottom-follow only for a latest reader.
+Its existing content-follow effect runs in the layout phase: a passive effect
+could otherwise receive layout-generated scroll events first and incorrectly
+disable following while a table response was still open. Explicit reader
+scrolling still opts out through repeated content growth.
+No API, database, voice or navigation contract changes.
+
+## Source identity across chat steering (16 October 2026; local successor)
+
+The chat loop persists an interrupted Jarvis partial after the steering Dan
+row before invoking the next round. Gmail-policy hydration can read that
+single row's predecessor only when the latest row is explicitly interrupted
+Jarvis. The predecessor must share its session and match the requested Dan
+message ID. This is two bounded one-row reads at most, not an unbounded search
+or permission to reuse a completed reply. Both reads retain cancellation and
+error propagation. Gmail turn tracking, nested independent-action scope and
+raw site/process checks are unchanged. This is source-only, not live account
+or deployment acceptance.
+
+## Gmail guard before any computer dispatch (16 October 2026; source candidate)
+
+An unavailable Google module must not bypass Gmail policy merely because no
+mail tool can start the turn ledger. Hosted HTTP computer calls resolve the
+existing stored current Dan message before dispatch when their verified source
+is not already on the request. Matching ID and Dan role are required; an
+unavailable/stale source refuses and a history failure remains an error.
+Cancellation is checked after that awaited read.
+
+The existing bounded identifier-only ledger also records a positively observed
+Gmail request before the first mail call. Existing intent matching preserves
+explicit unrelated operations, with nested execution scoped to that request
+and source keys. No broader computer exception, new persistence, Google call,
+permission or provider path is introduced. Raw site/process guards and static
+MIME extraction remain unchanged. This source correction is not yet released.
+
+## Production lifecycle evidence (15 October 2026)
+
+The contract below is now released in `6e702e7a`; its held/source-only labels
+record the earlier freeze stages. Fresh Task 19 exercised the clean path:
+current generation/session/invocation proof carried work commit `549fe564`,
+the remote task branch and new PR matched that commit, and normal project
+policy reached Done after the existing no-CI grace. Durable reload retained
+Done and the backend reported zero tracked active sessions.
+
+The worker is disposable; its artifact survives in
+`DanAakesen/jarvis-test-target#6`. This observed backend proof establishes
+verified owned-writer teardown, not physical Foundry deallocation. The normal
+runner release enforces a 120-second idle timeout; no previously denied
+provider inspection was retried. This clean live run does not exercise the
+alternative cleanup-failed path or identify Task 18's original shutdown cause.
+
+## Delivery after verified writer stop (15 October 2026; V4g fixture successor, not released)
+
+Runner invocation metadata separately records successful work and successful
+owned-provider teardown as exact booleans, with the full verified local work
+commit in `work_commit_sha`. Local advancement alone is not published delivery.
+The backend requires that exact commit at the remote task branch and on every
+created, reused or reconciled PR before recording delivery. Legacy or malformed metadata supplies
+neither fact; no missing client, early result event or expiry supplies stop proof.
+Successful-work indication originates only in the actual verified delivery-work
+branch. A generic completed turn can instead be a no-commit question and does
+not establish work proof, even if question publication fails. The backend also
+rejects alternative proof containing a current-invocation question event.
+Provider stop still requires the owned process-group and reader checks.
+Credential, event-delivery or publisher failure can therefore leave the runner
+failed while its completed work and stopped writer remain independently known.
+
+The Foundry decoder validates optional lifecycle booleans and bounded allowlisted
+cleanup phases, discarding secondary diagnostic text. One shared completion-proof
+classifier serves heartbeat and stale reconciliation. Only final failed status,
+both positive facts and exclusively post-provider cleanup phases qualify for the
+alternative path. Cancelled/nonterminal states, failed work, failed or unknown
+provider stop, and missing phases remain ineligible. Both clean and cleanup-failed
+completion require positive work/stop facts and a valid commit identity.
+Legacy unbound snapshots remain readable but cannot authorise new completion.
+An unbound completed invocation reaches explicit verification attention rather
+than being labelled runner failure or polled indefinitely.
+Both direct attention cleanup and its state-change subscriber retain the
+observed completed turn and end its session normally. That invocation-level
+completion is not task Done, successful delivery or backend completion proof.
+Missing proof still prevents GitHub delivery and policy eligibility; genuine
+runner-failure attention retains crash classification.
+
+Both paths still require the same current generation/session/invocation,
+no-start-lease policy gate and ordinary GitHub delivery/policy verification.
+The backend completion event retains the work commit. The SQL policy gate
+compares that commit with the policy candidate's expected PR head while holding
+the task lock, including after deferred approval. A different green PR cannot
+substitute for unpublished current work.
+Proof identity expressions use explicit `Latin1_General_100_BIN2` comparison.
+JSON inherits the payload column's database-default collation, which can
+differ from the binary Foundry-session column and otherwise fail the gate with
+SQL error 468. Explicit comparison also keeps opaque session/invocation IDs
+case-sensitive without changing persisted schema or the database collation.
+Backend proof events and heartbeat decisions distinguish cleanup-failed delivery
+from clean completion and preserve sanitized secondary phases. Runner failure
+is not rewritten as success. Untracking ends keep-alive polling; Foundry's
+configured idle timeout still owns automatic compute release. Stopped-writer
+proof is not a claim of physical cloud deallocation. Real SQL, Linux process,
+normal release and a fresh bounded live trial remain acceptance gates.
+
+## Recovery-generation fencing (15 October 2026; local correction, not released)
+
+Migration 0048 adds a persisted bigint execution generation to tasks and sandbox
+sessions, initially zero for existing rows. Each dispatch or recovery claim
+advances the task generation before contacting Foundry. A persisted session
+copies the claimed generation; start persistence, start failure and deferred
+claims reject an obsolete generation even if the dispatcher owner is reused.
+The generation is separate from the retry counter and is never reset by a
+failed start or removed by event archival.
+
+Recovery takes the same per-task policy application lock before its existing
+sleep/dispatcher locks and commits its generation with the start lease.
+Completion proof carries the tracked session's generation, not a newly inferred
+task value. The locked policy gate requires an absent start lease and equality
+between task, session and proof generations, as well as the existing latest
+session/turn identifiers. This gate is shared by Done and approved merge,
+including the callback after deferred approval. Clearing a failed start's lease
+cannot restore the previous proof. No transaction is held across Foundry start.
+
+Existing completion events are not backfilled. Existing session generation zero
+can receive fresh runtime verification, but old proof without a generation is
+ineligible. Apply the additive migration before this backend; do not revert the
+generation columns after use. An application rollback must pause dispatch and
+retain generation evidence, rather than silently reverting to an unfenced writer.
+Real-SQL pending/failed-start, deferred-approval and replacement-completion
+controls are added; local execution remains blocked without loopback SQL.
+
+## Explicit failure and bounded finalization (15 October 2026; local candidate)
+
+Heartbeat handling processes a valid explicit failed snapshot before recording
+a heartbeat. A trusted internal failure flag overrides earlier completion and
+question hints, crashes the current session and fails its current turn, then
+records `NeedsAttention`/`foundry_failed`. Current-invocation fencing remains;
+late raw completion events cannot turn a failed turn back into completed.
+
+The reconciliation selector admits eligible Ended sessions without waiting for
+the active-session five-minute freshness cutoff. Active sessions retain that
+cutoff. The existing persisted expiry event can therefore wake a scan even
+after the last tracked session disappears. Five-row batches advance by a stable
+task-ID keyset, not mutable heartbeat timestamps or an offset. A full batch
+schedules another zero-delay, yielding pass even without tracked sessions;
+awaiting-policy or failed earlier rows cannot occupy every later page. An
+expiry received during a sweep retains a rescan request until the sweep ends,
+so a newly eligible lower-ID task is not skipped. A failed SQL scan or row
+operation logs the failure and retries at the existing reconciliation interval,
+not in a hot loop; row failures do not stop later pages. Stopping cancels
+follow-up scheduling; a successful exhausted sweep does not keep polling idle
+SQL. Real SQL and independent exact-patch review remain required.
+
+Runner finalization shares a 60-second monotonic work deadline across provider
+shutdown, credential persistence, event drain and publisher close. IO phases
+also have ten-second caps; cancellation joins have one-second caps. This is not
+an exact wall-clock bound on synchronous filesystem operations. An exhausted
+budget does not start a new credential write.
+
+Cancellation-resistant timed-out Futures remain owned until they settle.
+They fence reuse of the same session; unsettled credential persistence also
+fences new Codex turns across sessions. The guard runs before startup and again
+after acquiring the session lock. Normal in-progress cleanup is not registered
+as a residual failure. These Futures are process-local, not persisted recovery
+records, and failure is not proof of resource release.
+
+Heartbeat decisions expose only an allowlisted cleanup phase parsed from the
+sanitized error. Existing bootstrap logging passes the complete decision object;
+provider output and credentials are not added to logs. Normal exact-head gates,
+independent review and fresh live acceptance remain outstanding.
+
+The first actual failure retains terminal-error precedence, including a work
+failure that preceded cleanup. Ordered `cleanup_failures` separately retain
+allowlisted phases and sanitized classifications. Safe metadata persists these
+diagnostics and the invocation endpoint exposes validated values after reload;
+arbitrary work-error text is not persisted and rehydrates generically. A later
+credential, delivery or publisher timeout cannot replace an original
+`reader_shutdown` error. This does not extend any deadline or establish the
+historical failure phase.
+
+## Process-group exit and policy completion proof (15 October 2026; local candidate)
+
+The POSIX ACP provider starts in an isolated process group. TERM and bounded
+KILL escalation target that captured group, including when the leader has
+already exited. Shutdown joins the leader and readers and checks that no live
+group member remains. Linux procfs excludes exited zombies, which may await
+PID 1 reaping without executing or retaining pipes; inaccessible or malformed
+membership information fails closed. Existing phase deadlines and shielded
+ownership remain. Automatic failure events add an allowlisted cleanup phase.
+Group exit is not proof of cloud session deletion or physical deallocation.
+
+GitHub policy reads use the existing repository-read token, including checks
+and statuses permissions. Only an approved, still-eligible merge mints the
+existing write token; the merge endpoint uses PUT with the reviewed head SHA.
+No installation grants, identity roles or OAuth scopes change.
+
+The dispatcher records `runner_completion_verified` only after a clean final
+completed runtime snapshot or the separately verified V4 stopped-writer proof,
+while its task-policy lock rechecks the current session/invocation and Running
+state. The wire decoder still rejects completed snapshots without a finish time
+or with an error; cleanup-failed delivery retains failed runner status. The existing event store
+retains only backend provenance and sandbox/session/invocation identifiers,
+and safe alternative-path cleanup phases, not result text. Policy's locked SQL gate requires that proof for the latest
+session and latest completed turn before Done or merge, and rechecks after
+merge approval. A raw runner `completed`/question event or idle-expired turn
+does not supply this proof. A rejected task transition is not reported as
+successful no-check completion.
+
+Migration 0048 adds execution-generation fencing without proof backfill. Existing nonterminal tasks
+without this proof require fresh runtime verification; a missing runtime
+cannot be declared complete from an old event. Existing Done/Cancelled tasks
+remain unchanged. These source changes require normal exact-head gates and
+fresh acceptance; they do not retroactively prove Task 18 cleanup.
+
+## Owned ACP shutdown boundary (15 October 2026)
+
+`ACPClient` owns its process and both pipe-reader tasks. Concurrent stop callers
+share one shielded shutdown, preserving cancellation until bounded teardown
+settles. The existing ten-second terminate phase is followed by at most ten
+seconds for post-kill exit and ten seconds for reader completion; cancellation
+joins are separately capped at one second each. Reader errors are no longer
+silently accepted. Pending protocol requests fail when shutdown ends.
+Unverified exit or reader cleanup raises a sanitized `ACPShutdownError`.
+
+The finalizer keeps its existing terminal-after-cleanup/event-flush ordering.
+Only successful stop removes the matching session client; failed cleanup keeps
+that owner fenced, including normal session-stop and cancellation paths.
+An older finalizer never removes a replacement client. A failed invocation is
+not successful delivery or cancellation, and retaining a local owner is not
+proof of physical cloud cleanup. No API, schema, model, capacity or Done-policy
+change is introduced. A new runner image cannot patch an already-running image.
+
+## Trusted pre-start runtime absence (15 October 2026)
+
+The existing runtime getter distinguishes no task (null result) from an existing
+task with no recorded session (all four projected fields null via OUTER APPLY).
+Only the latter can bypass missing-session-end evidence for attention
+cancellation; reject partially known identity and incoherent/live targets.
+Pass that exact absent generation to the unchanged terminal transaction.
+Its task/session/turn locks and full-field comparison reject a concurrently
+inserted first runtime before mutation/events/cleanup. The absent path uses
+existing session accounting but never invokes a provider without an owned
+target. No new store, schema, API or recovery/classification policy is added.
+
+## Bounded header tab groups (15 October 2026; combined candidate)
+
+CSS bounds the existing Workspace portal host and tab navigation between
+the brand and fixed shell actions. Tabs shrink to their minimum; overflow
+belongs to the window navigation and a new inner `JobsChip` list, not the
+header. The job popover remains a sibling of that list, retaining its
+existing dismissal/focus owner. No resize observer, tab-width state,
+backend contract or window lifecycle changes are introduced.
+`ShellLayout` no longer renders generic runtime activity in the header;
+the activity subscription still supplies phone and conversation feedback.
+
+### Job history and recovery correction (16 October 2026; local)
+
+The header represents `BackgroundJob.jobId` UUIDs, not workspace-window
+duplicates. Startup creates a new embedding run only when vectors need
+backfill; SQL reconciles an interrupted running job as failed with its
+existing step history and `interrupted by restart` reason. Opening job
+details does not start indexing. Those lifecycle contracts are unchanged.
+
+`jobs-store` merges authenticated `/jobs` hydration with activity events by
+UUID and update time, prevents terminal-to-running regression, retains all
+running work and the latest 100 terminal runs locally, and exposes load or
+device-storage failures. Historical completed results do not auto-open on
+reload; a hydrated running job can still deliver its subsequent live result.
+Pending result-window delivery survives unrelated progress updates and is
+disposed on unmount or when that job is hidden. A missing result window or
+failed local action marks Jobs as needing attention and exposes the error
+in that run's history without changing its server status. Opening the result
+successfully clears the local error.
+
+Running jobs have separate accessible Hide controls; undismissed jobs share
+one Background work list instead of creating repeated terminal header tabs.
+P11-05 renders the store's filtered `jobs`, not its raw `history`, for both
+the list and selected details. Raw history remains available to lifecycle and
+phone-summary consumers; saved records and the existing job tools are unchanged.
+UUID-only dismissal preferences are scoped to the authenticated MSAL account
+and backend URL on this device. Closing/hiding does not call Cancel, delete
+SQL records or erase results. Undismissed details still expose original status,
+run identity, timestamp, failure reason and saved result. A dismissed selection
+falls back to the list without effect-driven state copying. Empty and error
+states remain distinct, and a stable control preserves focus after the last row.
+The phone sheet counts one renderable Jobs summary independently of artifact
+windows and stays open for job controls. Artifact tabs are React portals, so
+a native capture listener on the actual tab strip closes the phone sheet
+without preventing the artifact's own selection/restore callback. The listener
+is replaced with its strip target or phone mode and removed on cleanup;
+Jobs/history controls remain exempt.
+
+Header Retry does not dispatch a chat prompt. Indexing has no supported
+owned retry action here, so Retry is disabled with an explanation separating
+that prior run from current indexing health. Research details direct the
+user to the existing job-ID/`get_job` retry-eligibility contract rather than
+assuming that a sensitive `retry_job` tool can be invoked from the header.
+No new backend action, permission, model call or index mutation is added.
+Header controls use existing borderless shared control surfaces and focus
+outlines, following the user's no-decorative-tab-border decision. Job history
+uses the existing opaque report surface in both appearances; narrow desktop
+popovers stay within viewport margins and phone details remain inside the sheet.
+Saved server history and the existing 30-day retention are unchanged.
+
+## Mobile/Status review publication (14 October 2026)
+
+The publication candidate retains all eight accepted code/test/CSS paths
+byte-exact, including the two already LF-normalised hook files. Only additive
+documentation is adapted to current main; page completion ownership,
+deadline/cancellation behaviour and phone viewport ownership below are
+unchanged. No Factory, backend, contract, dependency or runtime boundary
+is added. Publication approval does not authorise merge or deployment.
+
+## Page command completion ownership (14 October 2026; local)
+
+`ShellLayout` retains synchronous direct workspace dispatch, but its broker
+page-command applier owns a bounded pending-route completion. The pathname
+layout effect settles success only on destination commit, or refuses a
+superseding route. Abort, unmount and the command deadline remove the waiter
+and its timer/listener. The maximum wait retains the existing six-second
+navigation ceiling and 250-ms acknowledgement reserve; it starts no fetch.
+Both a successful waiter settlement and the post-dispatch page/pane fast
+return check the same captured deadline against the completion-time clock.
+Late success becomes the existing deadline refusal even if its timeout has
+not run; cancellation and other refusals keep their reason. This observes
+completion only and does not roll back a requested router transition.
+
+Actual-App fixtures observed applied acknowledgements before the Status
+heading/selected rail entry existed. The surrounding `flushSync` and the
+navigation function's return alone did not guarantee route commit. The new
+owner observes the shell commit rather than polling DOM or awaiting health
+reads. Existing Factory issue resolution, Notes draft guard, Folio pane,
+session/pin handlers and persistent Now session remain separate.
+
+## Phone typing viewport ownership (14 October 2026; local)
+
+`ShellLayout` enables `usePhoneChatViewport` only for signed-in phone typing.
+The hook publishes shell-scoped top/bottom visual-viewport insets synchronously
+on resize, pan, page restore and focus changes; unchanged values are not
+rewritten. This precedes the workspace's scheduled anchor measurement,
+including pan-only events where canvas dimensions do not change. Pinch zoom
+and browsers without VisualViewport retain ordinary dock behaviour.
+
+`Workspace` remeasures an existing manual composer anchor through one
+animation-frame callback on viewport/window resize and captured scrolling,
+deduplicates unchanged coordinates, and removes listeners/pending work on
+disposal. Both phone chat halves use the same insets and measured composer
+height. No viewport event writes persisted layout or remounts the draft owner.
+The hook dismisses only an active in-shell Message Jarvis textarea on outside
+touch, excluding composer/menu controls and preserving the native tap.
+Voice, authentication, APIs, model requests and dependencies are unchanged.
+
 ## Remaining UI release (13 October 2026)
 
 `Workspace` owns conversation gestures and device-local normalized geometry
@@ -687,13 +1152,17 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   bounded JSON responses; no API key or migration is needed. Offline tests cover
   settings, geocoding, forecast normalization, jobs and workspace delivery;
   live provider and signed-in workspace acceptance remain unverified.
-- `ci.yml` (P0-10) is the aggregate CI on every PR, `main` push and
-  `workflow_dispatch`. It calls the reusable `web-ci.yml`, `backend-ci.yml`
+- `ci.yml` (P0-10) is the aggregate CI on ready, non-draft PRs and
+  `workflow_dispatch`, not `main` pushes. It calls the reusable `web-ci.yml`, `backend-ci.yml`
   (including the container smoke), `database-ci.yml` (isolated SQL Server migrations), `foundry-contract.yml`, `runner-ci.yml`
   (runner images) and `jarvis-agent-ci.yml` (agent image, non-root and fail-fast
   configuration checks, and a model-free voice turn over its WebSocket), runs Python lint, tests and byte-compilation for `runner`
   and `agents/jarvis` when they exist,
-  and ends in one `CI result` gate job. No job uses Azure credentials.
+  and ends in one `CI result` gate job. Web explicitly checks the contracts and
+  frontend npm workspaces; Backend checks the backend workspace. Root-wide
+  commands in Web would repeat Backend's lint, full tests and build. Contracts
+  remain checked before the frontend, and isolated jobs retain root `npm ci`.
+  No component gate is skipped and no job uses Azure credentials.
 
 ### Shell windows, chat dock, presence and memory in the web client
 
@@ -709,6 +1178,12 @@ The backend factory is separate from the process entrypoint. `/health` returns
 200 with `{"status":"ok"}`; it does not claim SQL or Azure readiness. The process
 binds to `0.0.0.0:3000` by default, validates configuration before listening and
 handles SIGTERM/SIGINT with a five-second close and telemetry flush deadline.
+When conversation attachments are configured, the app factory registers their
+existing cleanup hooks before readiness: `onReady` starts one immediate
+100-item pass and the hourly interval, while `onClose` stops further scheduling.
+This lifecycle is independent of re-embedding and does not register Fastify
+hooks after listen. The existing retention policy and sanitized
+`conversation_attachments.cleanup_failed` warning remain unchanged.
 Browser requests allow only the exact configured `STATIC_WEB_APP_ORIGIN` and
 `http://localhost:5173`; other Origin values receive 403. A root `onRequest`
 authentication hook runs before CORS and protects current and future nested routes.
@@ -811,19 +1286,93 @@ and monotonically increasing in-process version. No migration or GitHub
 Project write is needed; live GitHub reads require the App's issue read
 permission.
 
+For open issues, precedence is a review-ready linked PR, a worker label, a
+linked draft unless `needs-decision` is present, `needs-decision`, then
+deferred/blocked or Ready. A parked draft alone therefore cannot promote an
+unclaimed Needs Dan issue. PR details and linked SQL task state/activity remain
+unchanged overlays; they do not supply a second placement authority. The pure
+`factory/board-status.test.ts` suite consumes the same canonical fixtures as
+the Python Project sync and checks complete board contracts with task overlays.
+
+The local 16 October cache-ownership correction keeps one pending owner per
+project through invalidation. An invalidation expires that project's retained
+snapshot and marks its owner dirty, without replacing or cancelling shared
+work. Repeated updates coalesce into at most one immediate follow-up load.
+Every load passes the existing whole-board validation before retention.
+Invalidation during the follow-up leaves its result explicitly stale and
+expired; another request can start a new owner after settlement. A failed load
+does not retry automatically: all waiters receive the same original typed
+failure, with the last validated snapshot as stale fallback when available.
+Freshness is checked again at waiter settlement, including invalidation after
+load completion. The TTL starts at clean publication, and the 32-entry bound
+does not evict pending owners. Explicit `invalidateAll()` remains supported,
+but ordinary task/webhook publication is project-scoped. These are local source
+semantics, not a released latency or historical-502 claim.
+
+An entry removed by the 32-entry bound is itself marked stale and expired
+before removal. Otherwise a waiter-held snapshot could lose invalidation
+reachability and still settle fresh. Capacity eviction does not dirty a pending
+owner or create a follow-up; this conservatively makes an evicted outstanding
+snapshot stale even without a later publication.
+
+The outer source/task/release branches reuse the existing first-error-preserving
+`readTogether` helper. Ownership lasts until every started outer branch settles,
+including after a failure; a refresh cannot overlap an unfinished source branch.
+Error settlement may therefore wait for branch cleanup. No waiter signal, retry,
+new deadline, SQL cancellation contract or nested store lifetime is introduced.
+
 Board loads validate the complete shared contract before caching a snapshot.
 Failure diagnostics survive both concurrent cache rejection and stale fallback:
 `factory.board_read_failed` exports only allowlisted `stage`, `reason`, HTTP
-`status` (100–599) and boolean `stale`. Project lookup has its own event with
-the same diagnostic allowlist. Token, source, task, release and response
-boundaries never export exception messages or provider content. The 25-second
-source deadline, ten-page/100-row pagination, one-minute/32-entry cache and
-1-MiB byte limits are unchanged. Within a snapshot, one request limiter caps all
-GitHub reads at eight concurrent requests. Offset pages are fetched concurrently
-only when provider metadata supplies a consistent last page; cursor pages,
-including links with both an incrementing page and opaque `after` token, remain
-sequential. Validate `prev` links with their `before` cursor but never follow
-them. Results retain provider page order, and
+`status` (100–599), boolean `stale`, request ID, and matched route template.
+Project lookup has its own event with that safe correlation. The board also
+emits allowlisted `factory.board_phase` timings for each executed project,
+token, source, task, release, and response boundary, plus one
+`factory.board_read_timing` summary with handler/source-computation outcome,
+reply status, cache path, stale state, and monotonic `cacheElapsedMs`. The
+summary records the handler's decision, not proof of HTTP completion or client
+receipt. `request.completed` is a separate server-side `onResponse` observation
+of reply status and response time; neither event proves that the client received
+the response. The cache elapsed value measures the awaited cache operation:
+lookup for a hit, wait for a shared caller, or the complete owned operation,
+including a dirty follow-up when required. One owner can execute a stage twice;
+the phase events still time each actual boundary, not an additional aggregate.
+Interpret cache elapsed with `cachePath`; it is not a stage duration.
+Durations are bounded to 60 seconds and server-only. Values beyond that limit
+omit the numeric duration and set the corresponding `durationCensored` or
+`cacheElapsedCensored` marker rather than reporting a clipped value. Invalid
+or unavailable clock values omit the numeric duration and set
+`durationUnavailable` or `cacheElapsedUnavailable`. Each phase event is emitted
+when its instrumented work boundary executes; absence of an event cannot prove
+that work was skipped, since telemetry may be missing, sampled, cropped, or
+outside the observed window. When present, `cachePath` explicitly classifies the
+cache operation as `not_started`, `cache_hit`, `shared_wait`, or `source_load`.
+Response assembly and serialization have separate response entries (`part`).
+Source, task, and release durations
+are individual wall-clock measurements of concurrent work; they overlap and
+must not be summed as if sequential. Cache paths distinguish `cache_hit`,
+`shared_wait`, and `source_load`; `stale` marks either stale fallback path. No
+phase exports exception messages, provider content, headers, tokens, SQL,
+repository URLs, or query strings.
+
+At the existing board publication boundary, `factory.board_invalidated` exports
+only a bounded origin (`task_event` or `github_webhook`), safe project ID and
+in-process version when available, and webhook request ID when present. The
+local correction resolves the task's project before publishing a single scoped
+invalidation. Failed or missing lookups emit the existing
+`factory.board_task_event_failed` event with safe error kind/status, not raw
+exceptions or a global invalidation fallback. The historical `all_projects`
+field remains accepted by the log filter for compatibility, but ordinary task
+publication no longer emits it. Versions are process-local and are not a durable
+event sequence. No polling, endpoint, resource, or client behavior is added.
+
+The 25-second source deadline, ten-page/100-row pagination,
+one-minute/32-entry cache and 1-MiB byte limits are unchanged. Within a snapshot,
+one request limiter caps all GitHub reads at eight concurrent requests. Offset
+pages are fetched concurrently only when provider metadata supplies a consistent
+last page; cursor pages, including links with both an incrementing page and
+opaque `after` token, remain sequential. Validate `prev` links with their
+`before` cursor but never follow them. Results retain provider page order, and
 dependency reads share the same limiter. Link metadata is validated against the
 selected repository endpoint, including GitHub's numeric `/repositories/{id}`
 form, but its URL is never followed: requests are constructed locally against
@@ -843,6 +1392,23 @@ POST route; task details/windows and controls reuse their existing boundaries.
 publishes them and connection state to `factory-board-store.ts`. The board
 debounces matching invalidations and refreshes after connection recovery,
 without opening per-card task streams or duplicating GitHub placement logic.
+The #813 consumer correction keeps an active same-scope read rather than
+aborting it for automatic updates. Its request effect owns a pending flag,
+one queued follow-up and the existing 150-ms idle timer. Settlement schedules
+that follow-up after either success or failure, without allowing later
+notifications to postpone its deadline. Newer notifications during the
+follow-up can queue the next read. Effect cleanup cancels the request,
+timer and queued work on project/backend/token-callback replacement, explicit
+reload or unmount. Full validation and retained-snapshot error handling stay
+unchanged. This fixes a deterministically reproduced client lifecycle; the
+original released trigger and production performance remain unproven.
+The same request owner exposes its pending read, queued follow-up and timer
+to the issue resolver. Missing issues and absent/replaced requested task
+links stay loading across settlement and the idle debounce instead of being
+rejected from an older snapshot. Positive matches still resolve immediately;
+after a failed follow-up, an unresolved task link returns the visible read
+error. Navigation neither starts another read nor extends its existing
+six-second/command-expiry budget. Disposal removes the obsolete owner.
 Task details retain their own task stream. Equal invalidations are deduplicated,
 but a lower version after restart is accepted. Cached/failed-refresh snapshots
 retain the board DOM and show their source timestamp and stale feedback.
@@ -1367,6 +1933,18 @@ web page cannot present it as certification of a particular release.
 Status also participates in page metadata and bounded/redacted window
 readback. No new backend routes, storage or permission changes.
 
+Released-path evidence on `1590a1c3` / normal Deploy 38497362534 establishes
+actual rail navigation, initial/ordinary Refresh HTTP 200 and accepted HTTP
+204 `status`/`page-status` state/readback, with the same workspace session
+and no new Now stream requests. The retained report at
+2026-10-14T01:55:08.275Z was 15/15 OK and correctly stale; release success
+comes from the normal Deploy result, not an association in this contract.
+Dan's subsequent ordinary Status turn claimed success without visible
+navigation; "I dont see it" recovered. First-turn live navigation acceptance
+failed, with no established cause. Recovery does not establish broker/voice
+or physical-phone acceptance; #799 remains open and #798 held.
+[Exact evidence and limits](agent-context.md#read-only-status-page-14-october-2026).
+
 P9-62 adds always-registered `get_system_health`, returning the shared
 `SystemHealth` contract: 26 fixed-order components with status, safe detail,
 nullable evidence timestamp and available recovery tool descriptions.
@@ -1432,15 +2010,42 @@ a connected browser. The confirmation test is an in-memory no-op: the backend
 refuses it until the next smoke invocation contains the exact plain `yes` and
 the fixed preceding transcript.
 
+The model instruction builder adds the same capability-summary rule for ordinary
+chat, voice and smoke, before personality/mode personalization. After successful
+`get_system_health` / `list_capabilities` discovery, overall capability overviews
+should briefly name every returned category, treat labels as data and report
+refusals/failures plainly. Smoke intentionally omits the broader backend capability block, so
+putting this rule there alone would not reach the failing path. This does not
+insert category text into model output, change token limits or relax the actual
+receipt/reply checks. Actual model behavior remains a deployment acceptance gate.
+
 Each scripted check has its own smoke-report entry. Deterministic tool and
 response checks report `down`; the identity and missing-image timestamp wording
 checks report `degraded`, which the Deploy gate excludes from failure decisions.
-The suite summary fails only for deterministic checks. The report contains IDs,
-statuses, timestamps and fixed failure reasons only; it never includes reply
+The suite summary fails only for deterministic checks. The internal report contains IDs,
+statuses, timestamps and per-check allowlisted failure reasons for down/degraded
+checks; it never includes reply
 text, tool arguments/results, settings or provider error text. The endpoint
 never reads note contents. The latest report is kept in
-the backend's in-memory status snapshot and is returned as `smoke` by `GET /status`
-for the status page; it is lost when the backend restarts. The embedding vector is
+the backend's in-memory status snapshot; it is lost when the backend restarts.
+Hosted SSE `ChatAgentError.code` values survive into per-prompt reasons only
+when present in the explicit `chatAgentFailureReasons` allowlist in
+`system-status.ts`. This retains existing backend/settings origins and known
+exception-class categories without trusting arbitrary lowercase codes.
+Untyped or unlisted failures remain `agent_error`; the aggregate still returns
+`acceptance_check_failed`. The Python smoke formatter uses the same fixed set,
+with parity/redaction regressions, so existing acceptance/release artifacts keep
+the origin alongside unchanged qualification and component producer identities.
+This is failure provenance, not proof of an old failure's exclusive root cause.
+Both `GET /status/smoke` and the retained `smoke` in `GET /status` use a
+non-mutating HTTP projection that omits non-down reasons. This preserves the
+legacy validator in already-open clients during parallel web/backend deploys.
+An authorised smoke run emits one `system.smoke_check` event per check through
+the existing stdout/Application Insights export boundary, containing only its
+allowlisted ID, status and check-specific safe failure reason. Retained Status
+reads neither invoke probes nor repeat these events. Degraded diagnostics remain
+internal/telemetry-only; no new endpoint, storage or permission is added.
+The embedding vector is
 discarded, and the temporary research invocation is cleaned up without writing
 research output or other user data. Dan may call the endpoint with his normal
 token; the configured deployment service principal may call only this exact GET
@@ -2336,6 +2941,17 @@ in pages of 50 (maximum 100), ordered oldest-to-newest within each page and
 continued with a message-ID cursor. Each entry includes its session's chat/voice
 channel and language. It returns tool-call names, outcomes and task IDs, not the
 stored arguments or results.
+
+The Foundry Invocations consumer treats the application's `done` SSE frame as
+terminal, rather than waiting for HTTP EOF. It processes that frame's bounded
+tool/visual/timing metadata once, stops later-frame consumption and awaits
+cancellation of its owned response reader. A finite stream without `done` still
+fails; pre-terminal provider errors, partial-delta streaming, authentication,
+response-size limits and request/caller cancellation retain their contracts.
+Legacy completion frames without a final separator remain accepted at genuine
+EOF. This changes only the backend response consumer, not the separately owned
+hosted chat runtime, Factory finalization or cloud-resource expiry.
+
 P9-24 adds owner-authenticated `GET /conversation/search?q&from&to&source&limit`
 and the `conversation_search` tool through the shared registry. Search dates are
 inclusive UTC calendar days; `source` filters the stored session channel. Results
@@ -2540,6 +3156,27 @@ below 3 s, so the baseline warm gate fails. Classification is not inferred from
 elapsed time. No resume or post-fix improvement is established; this remains a
 partial overhead correction awaiting real post-deploy acceptance.
 
+The 15 October diagnostics-only source candidate based on `6e2c1b95` adds
+optional `model_auth_max` and `model_request_max` completion diagnostics.
+The former is the maximum elapsed managed-identity model-token provider call;
+it is absent when that provider is not called, including the OpenAI API-key path.
+The latter is the maximum awaited OpenAI Responses creation or Anthropic stream
+entry time across model rounds, excluding subsequent stream consumption.
+Both finalize on success, error or cancellation, reject nonfinite/negative
+samples and cap retained milliseconds at 600,000 in the existing turn ContextVar.
+Existing phase fields still retain their first observation. Agent logs/spans
+measure each attempt; the completion envelope carries the retained maxima.
+The backend validates and logs the optional maxima but strips them from its
+browser-facing `done.agentTimings`, preserving the legacy reply field set.
+Older agents may omit them and older backends ignore them.
+
+Token acquisition overlaps request setup; the two maxima can come from different
+attempts and must not be summed or subtracted to assign the remaining delay.
+This is additional observability, not a latency fix or evidence of SDK retry,
+token refresh, throttling or provider queueing. Model arguments, reasoning,
+tokens, retries, deadlines, settings, permissions and stream lifecycle are unchanged.
+Source-only checks do not establish deployed or Factory acceptance.
+
 The reported 5–10 s model-to-first-delta interval is not currently attributable
 between prompt processing and reasoning: the provider exposes one elapsed
 first-delta duration, not separate prompt-ingestion and reasoning durations.
@@ -2678,14 +3315,49 @@ These boxes are responsibilities; they do not each need a separate service.
 | Retries | `attempt_count` and `next_attempt_at` on the task row. Safe pre-start failures retry after 15 and 30 seconds, up to three attempts; ambiguous Foundry starts and exhausted attempts move to Needs attention. Expired startup leases move to Needs attention rather than being replayed, avoiding duplicate remote sessions. |
 | Sandbox heartbeat | At startup, the backend loads active sessions with their current invocation status once; the dispatcher registers new turns. Each registered invocation is checked immediately and about once a minute, and `last_heartbeat_at` is updated after a valid response. The poller holds active sessions in memory and makes no recurring SQL reads while idle. A runner `needs_attention` status ends monitoring and transactionally moves the task to NeedsAttention with the bounded question. A `session_question` event marks the turn completed and moves the task to NeedsAttention but keeps its session monitored so later expiry can be classified. |
 | Crash detection | Two consecutive HTTP 424/404/5xx responses, with a confirming poll after 30 s, mark an active invocation's sandbox Crashed and move its task to NeedsAttention. If the correlated turn already completed, the sandbox instead ends as `Ended`/`idle_expired`, and task state is unchanged. Both outcomes persist in one transaction and publish the committed task event through the in-process hub. Event gaps alone never trigger a crash (L22). |
-| Stale task reconciliation | At dispatcher startup, scan at most five Running tasks whose latest sandbox heartbeat is at least five minutes old. While a sandbox is tracked, repeat at five-minute intervals. Query the recorded Foundry invocation with a 15-second timeout. A live invocation refreshes its heartbeat; a completed invocation uses the normal GitHub delivery and project-policy path, persisting a discovered PR through the P3-04 mapping first. Failed, unavailable, mismatched, or otherwise unverifiable states move to NeedsAttention with a user-visible reason; Done requires the existing verified completion path. Each outcome logs an allowlisted `task_reconciliation.decision` with task/session/invocation IDs and bounded status/decision fields only. This bounded scan is the recovery path for lost completion/webhook events, not a substitute for webhook delivery. |
+| Stale task reconciliation | At dispatcher startup, scan at most five Running tasks whose latest sandbox heartbeat is at least five minutes old. Select the actual latest session and its latest turn before applying eligibility: Active sessions, Ended/done sessions, and Ended/idle_expired sessions only when the latest turn completed. A stale older session or turn cannot stand in for a newer invocation. While a sandbox is tracked, repeat at five-minute intervals; a committed backend `sandbox_idle_expired` event requests one bounded scan even without a tracked session. Query the recorded Foundry invocation with a 15-second timeout and recheck the task/session/invocation under the existing project-policy lock before delivery or state mutation. A live invocation refreshes its heartbeat; a completed invocation uses the normal GitHub delivery and project-policy path, persisting a discovered PR through the P3-04 mapping first. A legitimate awaiting-policy task stays Running (and consumes capacity) until the existing policy outcome arrives; missing, refused, failed, unavailable, mismatched, or otherwise unverifiable delivery follows its existing visible NeedsAttention outcome. Expiry alone is not a crash, and Done still requires the existing verified completion path. Each outcome logs an allowlisted `task_reconciliation.decision` with task/session/invocation IDs and bounded status/decision fields only. This bounded scan is the recovery path for lost completion/webhook events, not a substitute for webhook delivery. |
 | Recovery and completion | Recover atomically claims a NeedsAttention task after an actual crash; Continue after `idle_expired` uses the same branch-recovery path. Both start a fresh Foundry session from the existing task branch with the original request, bounded steering history, and event summary. A completed invocation is correlated to its active task session; the backend accepts Done only after a repository-scoped GitHub App check confirms both the branch and a pull request. Missing evidence returns the task to NeedsAttention; API failures do not produce false success. Migration `0010_idle_expired_sessions.sql` extends the session end-reason vocabulary. Offline fake tests cover both heartbeat outcomes and continuation; SQL Server CI, live runner, Foundry, and GitHub behavior remain unverified. |
 | Live progress | The runner posts task-scoped events to `POST /factory/sandbox-events` with its managed identity; the backend records each through P1-05's transaction and publishes only after commit. The dispatcher sends `task_id` in every start and resume invocation; a runner deployed with `JARVIS_BACKEND_URL` rejects task invocations without one (L59). Browser streaming is P1-06. |
 | Build and release status | GitHub App webhooks: `pull_request`, `check_run`, `workflow_run`, `deployment_status`, and `push`. No polling. Signed `issues`, `pull_request`, `check_run` and `workflow_run` events also invalidate Factory board snapshots for tracked repositories; issue payloads are not persisted. |
 | Board updates | `GET /factory/tasks/:id/events` authenticates the bearer token, replays typed `task_events` after `Last-Event-ID`, then streams committed hub events and a 25-second heartbeat. Shared contracts define the task frame; one typed backend helper serializes it. The fetch client reconnects with its last delivered ID and ignores repeats. |
 | Factory task view | P1-08 loads up to 100 tasks from the filtered task API, opens task-scoped SSE streams for nonterminal cards, and refreshes the snapshot after updates. P2-14 exposes the latest session end reason so an expired completed invocation offers Continue rather than Recover. P6-21 supplies recorded PR/check/usage summaries and a Dan-only retry API for failed starts without sandbox history; UI rendering and retry controls are owned separately. |
-| Idle | The dispatcher subscribes to committed task events and schedules the next retry deadline. It performs one startup stale-task scan, then schedules five-minute scans only while a sandbox is tracked. The event-archive timer also skips SQL until active sandbox work exists. |
+| Idle | The dispatcher subscribes to committed task events and schedules the next retry deadline. It performs one startup stale-task scan, then schedules five-minute scans only while a sandbox is tracked. A committed `sandbox_idle_expired` event requests one immediate bounded reconciliation, including when no heartbeat session is tracked; an overlapping scan coalesces the signal into one follow-up scan. It returns to no recurring SQL scans while idle. The event-archive timer also skips SQL until active sandbox work exists. |
 | Always on | The backend normally runs with a minimum of 1 replica, so timers remain alive. The main-page sleep switch sets the minimum to 0 (it wakes on the next request) and is refused while a task is Ready, Running, or PauseRequested. SQL can pause between genuine accesses; the daily Codex renewal lease check and request-driven endpoints remain deliberate exceptions. |
+
+### Needs-attention cancellation (15 October 2026; local candidate)
+
+The existing owner-only controls route and dispatcher now permit cancellation
+from NeedsAttention as well as Ready, Running and Paused. The dispatcher reloads
+the task and its control target inside the existing task-policy lock and retains
+the pending-policy-merge guard. An active invocation requires a matching
+`cancelled` acknowledgement; its task/session/invocation are checked again after
+the await, before terminal mutation. The dispatcher also captures the latest
+session (including Ended/Crashed) and latest turn identity and verifies that
+the control target agrees before runtime side effects. The existing task-store
+transition checks both expected state and that runtime version in the terminal
+transaction, under the task update lock and session/turn range locks. Replacement
+sessions, newer completed turns and replacement work that already ended cause
+rollback before terminal mutation or cleanup. A missing control target therefore
+does not erase the ended session's identity. Recovery behaviour is unchanged.
+An absent target with a Starting, Active or Idle latest session is refused,
+not mistaken for completed cleanup.
+
+Independent review rejected V2: its expected-state check alone accepted
+NeedsAttention -> Running -> NeedsAttention and could end an uncancelled
+replacement session. The revised candidate adds the atomic runtime check;
+another out-of-transaction re-read would not close that race.
+
+Completed attention turns have no active invocation to cancel, but their owned
+session is still deleted. A recorded session end permits task cancellation
+without another runtime call; absent both a target and end reason, an attention
+task is unavailable even if it has an open PR. Session-end accounting and owned
+Foundry-session deletion are awaited through existing helpers; failures return
+the existing explicit failure result, including after terminal state was saved.
+No recovery claim, capacity calculation, runner classification, verified-Done
+path, confirmation gate or authentication rule is changed.
+
+This candidate has local synthetic controller, lifecycle and fake-SQL evidence,
+not deployed SQL/Foundry cleanup acceptance.
 
 ### Credential health and repair (P6-18, #457)
 
@@ -2826,6 +3498,21 @@ Issue #28 ports the adapter to `runner/` with task, steer, pause, resume, cancel
 credential probe, and Codex renewal handlers. Prototype crash-test mode is removed.
 Local Python tests exercise ACP subprocess fixtures; production Azure acceptance
 remains pending #11 and the main-branch runner workflow.
+
+Task turns keep their public and checkpoint status nonterminal until the owned
+provider shutdown, Codex-auth cleanup and ordered event drain/publisher close
+finish. `_finish_task` is shielded from cancellation while the session lock
+remains held, including across repeated worker cancellation. The cancel handler
+shields its worker join so request loss cannot cancel owned teardown.
+Late pause/steer/cancel requests select the final outcome without
+queuing events against a closing publisher. Cancellation waits for that owner,
+and cleanup failures return a sanitized 503 rather than a cancelled success.
+The stop deadline still terminates only the owned process; timeout and delayed
+ACP-cancel acknowledgement events are not queued during finalization.
+Provider-stop failure attempts a bounded kill of only that invocation's process.
+GitHub verification, project policy, authenticated routes, task-state ownership
+and Foundry idle-expiry/checkpoint semantics are unchanged. This local ordering
+correction is not evidence of live cloud sandbox shutdown or artifact delivery.
 
 P6-07 reports writable-filesystem disk snapshots through the P2-03 runner event
 route, checks for low headroom during each active task turn, and stops work before
@@ -3329,19 +4016,23 @@ Jarvis has its own Codex session, so it never signs Dan out of the ChatGPT app o
 | Where | Does |
 | --- | --- |
 | Sandbox | The agent edits, runs targeted builds and tests, commits, pushes, and opens or updates the PR. |
-| GitHub Actions | Full build and all tests on every PR push; release on merge to `main`; deployments to Azure with OpenID Connect (no stored secrets). |
-| Backend | Receives webhooks, updates task and release records, pushes events to the board, and steers the agent with failed-check logs. |
+| GitHub Actions | Affected-component qualification on ready PRs, full coverage for shared/unknown inputs; exact-tree release on merge to `main`; Azure deployments use existing OpenID Connect. |
+| Coordinator / builder | Coordinator owns intake/backlog, dispatch and integration/conflicts. At most two builders own code, regression tests and their pipeline failure fixes. |
+| Backend | Existing managed-project webhooks and task/release records remain; this repository's pipeline retains content-free failure artifacts linked to its PR/run. |
 
 ```mermaid
 flowchart LR
-    S["Sandbox: agent edits + targeted tests"] -->|push + PR| A["GitHub Actions: full build + all tests"]
+    S["Builder: code + targeted regression tests"] -->|push + PR| A["GitHub Actions: impact + dependency qualification"]
     A -->|webhook: passed| B["Backend: deliver or merge per project policy"]
-    A -->|webhook: failed + log| B2["Backend"] -->|steer with log| S
-    B -->|merge| R["GitHub Actions: release + deploy"]
+    A -->|failed check IDs + exact receipt| S
+    B -->|qualified integration| R["Main: exact-tree qualification + compatible component apply"]
     R -->|webhooks| V["Board: release view"]
 ```
 
 - One release per merge to `main`; no tags.
+- Continuous qualified delivery has no routine human acceptance or batch cutoff.
+  Required failures still block. The coordinator routes bounded pipeline evidence
+  to the existing builder rather than investigating logs or reproducing bugs.
 - Commits are not stored; the release view fetches them from GitHub on demand.
 - Authenticated `GET /factory/projects/:id/releases` returns the active project's bounded persisted release, PR, workflow-run, and deployment records together with an on-demand graph. Refresh fetches the graph again; a GitHub graph failure leaves the persisted records available with `graph: null`. `GET /factory/releases/:id` resolves an existing release activity link to its project.
 - The shared `/tools` registry exposes `list_releases` and `get_release` over those same persisted records, scoped to active managed projects. `get_deployment_status` reads the latest run on the project's default branch whose workflow file is `deploy*.yml` or `deploy*.yaml`; it uses a repository-scoped installation token with `actions:read`, not the webhook cache. The Actions response is limited to 100 runs/1 MiB with a 10-second request deadline. No matching run returns `null`; provider failures are sanitized and the token is never returned.
@@ -3741,7 +4432,13 @@ call linkage remain the post-merge P4-09 acceptance check.
 - Dan signs in with Entra ID through `jarvis-web`. `jarvis-api` requires user assignment, and only Dan is assigned; the backend also checks Dan's object ID. The hosted Jarvis agent is assigned the application role `Jarvis.Tools` and may call only the tool routes.
 - Google Calendar and Gmail tools are registered only in the backend and use the official Google APIs over HTTPS. The backend reads `google-oauth-client-id`, `google-oauth-client-secret`, and `google-refresh-token` only from Key Vault, exchanges the refresh token for a short-lived access token, and caches only that access token in memory. The single OAuth grant is for `danaakesen@gmail.com` and uses `gmail.readonly`, `gmail.compose`, `gmail.send`, `gmail.modify`, `calendar.events`, and `calendar.calendarlist.readonly` (read-only calendar list for the Daily all-calendars feed; Daily reuses this single grant); `gmail.modify` is the least-privilege scope for Gmail message labels and draft update/deletion. No Google credential or token is a deployment variable or client-bundle value. An `invalid_grant` records a deduplicated `credential_expiry` activity alert; tool calls return a visible reconnect message. Dan must add `gmail.modify` to Google Auth Platform's Data Access scopes and rerun `infra/setup-google.ps1` to re-consent and replace the Key Vault refresh token before using the new mail tools.
 - Calendar range reads interpret date-only `start`/`end` in `JARVIS_GOOGLE_TIME_ZONE` (inclusive dates and an exclusive next-midnight API boundary); timezone-aware date-times are queried as instants. `calendar_list_events` pages up to 100 events across no more than 62 days and maps optional `query` to Google's `q`; `calendar_next_event` searches up to 60 days and skips events where Dan's attendee response is declined. All-day start/end values remain date-only, including multi-day events, while timed events remain instants. Calendar agenda, range, and next-event reads are reflex-safe and sensitive results remain redacted from the durable tool-call audit.
-- Calendar creation, movement, updates to title/time/location/attendees/description, deletion, Gmail draft creation/replacement/deletion, message archive/label changes, and sending are staged in process memory for ten minutes. Calendar executes only after a different, later persisted Dan message contains solely yes, approve, go ahead or do it (case-insensitive, optional final period/exclamation mark); no/cancel discards it. A new calendar stage invalidates the previous calendar action, and the confirmation tool must identify the latest action with its returned code. Gmail retains the exact `confirm <8-digit-code>` phrase. Pending actions are one-shot and lost on restart; the Container App remains at one replica. Sensitive Google tool inputs/results are redacted from persistent tool-call records, and external Google error bodies are not returned or logged. Calendar updates PATCH only the supplied fields; empty location, description, and attendee values can clear those fields. Draft replacement requires recipients, subject, and plain-text body; it preserves reply threading and refuses drafts with attachments or CC/BCC recipients. Gmail draft listing is bounded to ten drafts and returns plain-text bodies; archiving removes `INBOX`, and label changes resolve exact Gmail label names or IDs. Confirmed replies create a Gmail draft; Dan sends it from Gmail.
+- Gmail search and draft listing share the bounded MIME reader introduced on #837 / task 12. It reads nested plain/HTML alternatives and API-externalized text parts, returning `bodySource`, `bodyTruncated`, `contentWarnings` and differing `alternateBody`/`alternateBodyTruncated`. Static parse5 extraction skips scripts, styles, hidden attributes and inline hidden styles, strips invisible email padding before the 6000-character text limit, and never executes HTML or fetches remote resources. File attachments, unsupported charsets, missing bodies and traversal limits remain explicit; snippets cannot establish absent reservation details.
+- `calendar_get_pending_change` reads the latest process-local calendar stage (original confirmation code, summary and expiry) and classifies the verified current Dan message. It performs no Google request and returns `none` after expiry, cancellation, consumption or restart. Its audit arguments/results remain redacted. The hosted model loop uses this actual receipt to resolve later approvals before model generation and renders staging/read/confirmation replies from tool results; provisional text is buffered while Calendar is available, trading first-text latency for evidence grounding. Email-only reservation reads and unrelated follow-up requests do not become calendar approval turns. EN/DA realtime approval/status turns use the same tools and relay the actual result with tools disabled; this is not proof of live model speech. Confirmation preserves the original summary and retains the later-message, scope, expiry and one-shot checks, consuming the action before provider execution even on failure.
+- Direct-only Gmail guards are shared by HTTP, voice, reflex and nested registry execution. A bounded process-local turn ledger prevents generic PC/browser fallback once a direct mail tool starts, including failure and incomplete extraction. Independently requested unrelated operations are matched to the verified current Dan message, with nested execution scoped by AsyncLocalStorage to that request and turn; this is not a general fallback exemption. Explicit Gmail targets and observed Gmail tabs/windows are refused before planner/vision export or acting. Raw browser snapshots/actions resolve opaque target IDs through bounded tab metadata; confirmed dispatch rechecks identity without refreshing or invalidating the action snapshot. PC and Codex executors share window/site checks, including before capture and control dispatch; unverifiable non-Chrome website controls are refused. The ledger stores identifiers and expiry only, never email content. The MIME reader preserves successfully decoded empty plain/HTML provenance and returns any snippet separately as bounded `preview`/`previewTruncated`; genuine unavailable-body snippet fallback retains its warning. Read and write provider failures remain explicit.
+- Hosted calendar routing excludes generic staged/draft prose and mail-only context; real mail and calendar stages can coexist without approving the wrong scope. Appointment nouns alone are not calendar intent: quoted topics and actual `Reply to ... from ... with this exact text` mail receipts remain mail-scoped. Explicit calendar mutations involving email-derived appointments and genuine calendar completion/status referents remain recognised. Hosted and EN/DA realtime follow-ups recognise calendar approval/status referents rather than arbitrary question prefixes. Realtime clears unrelated context before interception, so later yes after a weather/mail/build turn is not stolen by an older calendar stage. These routing decisions do not replace backend receipt validation or later-message, ownership, expiry and one-shot authorisation.
+- Independent computer exemptions accept complete current-user commands, including topic-bearing EN/DA mail requests followed by an explicit separate command. A quote-aware split ignores command separators inside subjects; unquoted how-to topic text remains ambiguous and cannot exempt a turn. Bind the exact requested operation to the verified current Dan message and same-turn AsyncLocalStorage scope; no model intent probe is used.
+- Windows guards obtain trusted current process identity from the existing structured UIA/capture responses, never from user goals, filenames or optional/truncated title suffixes. Chrome requires actual focused-site metadata; missing identity visibly refuses before export or dispatch. Window/clipboard exports check structured observations before and after reading. Native UIA actions recheck through the independent capture store, discard the transient image without planner/model/audit export, and keep their original UIA snapshot IDs. Visual capture and point actions recheck through the independent UIA store, preserving the original visual snapshot. Native window/control binding, confirmation rechecks and C#/wire fields remain unchanged.
+- Calendar creation, movement, updates to title/time/location/attendees/description, deletion, Gmail draft creation/replacement/deletion, message archive/label changes, and sending are staged in process memory for ten minutes. Calendar executes only after a different, later persisted Dan message is a plain approval accepted by the shared approval classifier (for example yes, approved, confirmed, go ahead or ja); no/cancel discards it. A new calendar stage invalidates the previous calendar action, and the confirmation tool must identify the latest action with its returned code. Gmail also uses later plain approval; the returned eight-digit code identifies the pending action for its confirmation tool. Pending actions are one-shot and lost on restart; the Container App remains at one replica. Sensitive Google tool inputs/results are redacted from persistent tool-call records, and external Google error bodies are not returned or logged. Calendar updates PATCH only the supplied fields; empty location, description, and attendee values can clear those fields. Draft replacement requires recipients, subject, and plain-text body; it preserves reply threading and refuses drafts with attachments or CC/BCC recipients. Gmail draft listing is bounded to ten drafts and returns plain-text bodies; archiving removes `INBOX`, and label changes resolve exact Gmail label names or IDs. Confirmed replies create a Gmail draft; Dan sends it from Gmail.
 - [`infra/bootstrap.ps1`](../infra/bootstrap.ps1) creates what the deploy workflows can't create for themselves: the deploy identity (GitHub OIDC, main branch only, trusting both the name-based and the ID-based subject (L50); Contributor and Role Based Access Control Administrator on `rg-jarvis`), the sign-in apps, `id-jarvis-backend`, and `jarvis-sql-admins`. Its IDs are in `infra/bootstrap.output.json` and in the repository's Actions variables.
 - Managed identities between Azure services; GitHub Actions deploys with OpenID Connect.
 - The backend identity has `Foundry User` on the Foundry project for the Danish voice relay, `Cognitive Services User` on the Foundry AIServices account for parallel Azure Speech partial recognition, and account-scoped `Cognitive Services Contributor` for model deployment management. It also retains `Cognitive Services Speech User` on the separate F0 Speech resource used for Teams voice notes.
@@ -3810,8 +4507,10 @@ The deploy script explicitly uses ARM **Incremental** mode. In that mode, resour
 - One production environment in `rg-jarvis`; no dev environment.
 - Local development: `npm run dev` in the repository root serves the web app on `http://localhost:5173` against the production backend. Backend changes are tested in CI and take effect after deploy.
 - Migrations run in the backend at startup; GitHub runners never connect to Azure SQL.
-- Development of Jarvis itself is remote only: Copilot cloud agent and Codex cloud deliver PRs, `pr-title.yml` keeps PR titles in the `<task ID>: <summary>` format, `worker-label.yml` labels the tasks Copilot takes, `project-board.yml` keeps the Project Jarvis board's columns in step with the issues, `copilot-ready.yml` takes finished Copilot PRs out of draft, Dan or an explicitly authorized agent merges them when checks pass against the latest `main`, and the deploy workflows release them. Rules: [development workflow](agent-context.md#development-workflow).
+- Dan's 14 October overnight direction keeps important implementation/review local and permits bounded independent Copilot cloud work. Google, Factory lifecycle and Daily acceptance have separate local owners; existing #830 reference compatibility is cloud-owned, not a duplicate implementation lane. The coordinator owns existing GitHub PRs, exact-head CI, normal releases and both boards. `pr-title.yml` validates canonical titles, `worker-label.yml` maintains cloud-worker ownership metadata, and `project-board.yml` synchronizes native issues. Local coordinator claims do not assign the Copilot cloud bot. Worker-complete badges are not reviewed, merged or deployed acceptance. Normal authorised merges require latest-main reconciliation and passing checks; deploy workflows remain the production delivery path. Rules: [development workflow](agent-context.md#development-workflow).
 - PR-title normalization, linked-issue extraction and PLAN row/issue/dependency parsing preserve full task numbers with two or more digits, including P9-101; boundaries prevent prefix-only IDs, and ranges can cross the two-to-three-digit transition. Each range expands at most 1000 tasks; a larger count raises an actionable ValueError before iteration without capping ID width. Existing two-digit formatting and status/ownership policies are unchanged. Their regression tests run in the existing workflow-script unittest discovery.
+- The PR-title gate reads current same-PR metadata and verifies the event head, then rereads title/body/head/update timestamp before success. API failures and observable races fail closed. The existing normalizer supplies canonical-title suggestions, including linked-issue fallback, but the gate does not write titles because GitHub has no atomic title/head compare-and-set. Save a suggested title to trigger fresh validation; head pushes also trigger the gate. Token permissions and PLAN/status policies are unchanged.
+- Changed reference Python manifests additionally run baseline/candidate compatibility in the existing agent image CI job, after its production image checks. Each isolated Python 3.13 environment resolves the full reference runtime/dev pins, checks every installed version and dependency consistency, runs the offline reference fixtures and performs a synthetic HS256 round trip. This does not alter production Python pins, register the prototype or call a model/provider. Record the selected 3.13 patch version and exact-head job evidence; individual prior pin checks are not combined-manifest evidence.
 - `worker-label.yml` maintains the Copilot worker label; Codex, Dan, and Jarvis set their own labels. `plan-status.yml` reconciles every task's Issue link and Status in `PLAN.md` from GitHub issues, worker labels, and pull requests on issue/PR events, Worker label workflow completion, and manual dispatch. A push changing `PLAN.md` also creates missing task issues and ensures their "Blocked by" links. It commits only Issue- and Status-cell changes to `main`, skips no-op commits, and rebases/retries once after a rejected push. It uses `GITHUB_TOKEN`; compatibility with protected `main` remains unverified.
 - Everything except the bootstrap items is created by Bicep and deployed by GitHub Actions on merge to `main`; no portal changes.
 
@@ -3821,23 +4520,81 @@ The deploy script explicitly uses ARM **Incremental** mode. In that mode, resour
 
 ```mermaid
 flowchart LR
-    P["Plan: diff since last successful Deploy run"] --> I["Infra: Bicep deployment jarvis-infra"]
+    Q["Successful exact-tree CI receipt"] --> P["Plan: exact inputs + latest trusted applied receipt"]
+    P --> I["Infra: Bicep deployment jarvis-infra"]
     P --> B["Backend: az acr build, image by digest, Container Apps revision"]
     I --> B --> W["Web: Vite build with backend URL, Static Web Apps upload"]
     B --> A["Agent: ACR image by digest, Foundry hosted-agent version"]
     I --> A
-    B --> S["Smoke: /health, Foundry admin and runtime hosts"]
+    B --> S["Deterministic readiness: health, web, Foundry hosts"]
     A --> S
     I --> S
+    S --> C["Required live conversation acceptance"]
+    C --> E["Immutable applied/accepted/failure evidence"]
 ```
 
-- **Plan:** [`deploy_plan.py`](../.github/scripts/deploy_plan.py) compares the commit with the head of the last successful Deploy run, so a failed or cancelled deploy is retried by the next one. `infra/` → Bicep; `apps/backend/`, `db/` or `.dockerignore` → backend; `apps/web/` (and `infra/bootstrap.output.json`) → web; `agents/jarvis/` → hosted agent. Root `package.json`, the lockfile, `tsconfig.base.json`, `.nvmrc`, any workflow and the `deploy_*` scripts deploy everything; so does a manual run or a missing base. Documentation (`*.md`, `docs/`) never deploys, and a docs-only push does not start a run. A run whose commit is already contained in the last successful deploy is superseded and deploys nothing.
+- **Qualification:** `pipeline_impact.py` selects CI checks and their data/contract
+  consumers. Workflow/shared/unknown changes and unusable bases retain conservative
+  qualification. The always-required script suite and `CI result` reject missing,
+  failed, cancelled or unexpectedly skipped selected checks. `ci-evidence-<attempt>`
+  binds the actual tested merge tree to PR/head, issues and run/attempt. Deploy's
+  read-only plan requires a successful exact-tree receipt from the merged PR
+  before any Azure job; a green badge for a different tree is insufficient.
+  Draft event snapshots use a separate concurrency suffix, so a delayed
+  synchronize event with stale draft=true cannot cancel a ready candidate and
+  then skip its own checks. Current ready-head updates still cancel obsolete
+  ready qualifications. Draft aggregates have a distinct unqualified check name,
+  never the branch's required `CI result` context. The #881 ready/synchronize race is retained as failed
+  pipeline evidence, not a Daily source failure.
+- **Plan:** `release_state.py` fingerprints tracked blob paths/modes/content,
+  each component's own deploy-job recipe, shared workflow configuration and
+  non-sensitive release variables. It never hashes the budget-contact secret.
+  After exact qualification, a candidate infrastructure reuse performs an
+  in-memory comparison of the existing `jarvis-alerts` email receivers using
+  the same main-only deployment identity. No contact value, salt or derived hash
+  is persisted; mismatch reapplies infrastructure/downstream state, and an
+  unavailable/invalid readback fails closed. No new role or configuration marker
+  is required. Backend
+  inputs include contracts, migrations, web's package manifest, feature index
+  and agent presence instructions. Web shares contracts/Node configuration;
+  agent retains its own Python/image inputs. Infrastructure changes invalidate
+  all downstream configuration. Known check-only workflows/scripts do not
+  rebuild applications; unknown runtime inputs fall back to all parts.
+  Ordinary Markdown/docs do not deploy, except the actual backend image input
+  `docs/features.md`. `deploy_plan.py` remains a conservative diff-preview helper,
+  not the production applied-state authority.
+- **Reuse and retries:** the latest completed trusted main-run receipt controls
+  applied state even if its acceptance failed. Immutable artifact ID/checksum,
+  schema, source/run/attempt, ancestry, exact component fingerprints and
+  digest/version shape are verified. Missing/expired/malformed/newer partial
+  evidence cannot be bypassed using an older green receipt. Successful applied
+  components are not rebuilt/redeployed merely because final conversation
+  acceptance failed. A same-run retry keeps original producer attempts; a
+  whole-run retry can use its preceding attempt. Superseded manual or queued
+  source cannot overwrite newer state; superseded receipts carry the newer
+  applied-source horizon forward. Applied versions retain original source
+  identity instead of claiming every component was rebuilt at the new release SHA.
+  Backend image `origin` remains separate from `revision_origin` when an
+  agent-only deployment updates backend identity: the new revision is applied
+  by the agent job's actual run/attempt, while its image keeps its original
+  producer. Both provenance records are required before backend reuse.
 - **Order:** one deploy at a time in the `jarvis-production-deploy` group, shared with Runner deploy, with `queue: max` and no cancellation, so quick merges deploy one after another.
 - **Infra:** [`deploy_bicep.sh`](../.github/scripts/deploy_bicep.sh) deploys `infra/main.bicep` as the fixed deployment `jarvis-infra`, keeping the running backend image. Later jobs and Runner deploy read its outputs.
 - **Backend:** builds `apps/backend/Dockerfile` in ACR, then updates the Container App to the image digest. On the first deploy the app does not exist yet, so Bicep creates it with that image. The job waits until the new revision is the latest ready revision; the previous revision serves until then.
 - **Agent:** builds `agents/jarvis` in ACR and creates a Foundry hosted-agent version from the image digest with `JARVIS_BACKEND_URL` and the `gpt-5.6-luna` deployment. It routes traffic to the active version, updates the backend's `ENTRA_JARVIS_AGENT_OBJECT_ID` to its instance identity, and waits for backend health. The deploy identity receives Foundry project roles; Dan runs bootstrap once with the reported principal ID to grant `Jarvis.Tools` and persist it for future Bicep deployments.
 - **Web:** builds with `VITE_BACKEND_URL` from the `backendFqdn` output and uploads `apps/web/dist` with the Static Web Apps deployment token (masked, read with the deploy identity). `staticwebapp.config.json` rewrites client routes to `index.html`. The job checks `/` and a deep link.
 - **Smoke:** `/health` must return 200; the backend listens only after its managed-identity SQL connection and migrations succeed. After an infra deploy, [`deploy_smoke.py`](../.github/scripts/deploy_smoke.py) grants the deploy identity Foundry User on the project, requires the administration host's `connections` to include `container-registry` and `application-insights`, and requires the runtime host to stop answering "Project not found" (sessions list of a placeholder agent; creates nothing).
+- **Acceptance/evidence:** deterministic runtime readiness also checks web root
+  and settings. A separate required live-conversation job consumes the existing
+  authenticated smoke endpoint once, without a speculative probe/retry loop.
+  Every fixed smoke ID must appear exactly once; missing/unknown/degraded/down
+  required checks fail closed. Existing PC-bridge, identity and timestamp
+  exceptions remain explicit. `release-evidence-<attempt>` retains applied
+  component versions and readiness/acceptance outcomes separately; raw reports,
+  provider bodies, prompts, tool arguments and logs are not uploaded. Fixed
+  check/reason codes plus qualification PR/issues and exact artifact/run identities
+  let the coordinator route repairs to the existing builder. Missing evidence is
+  visibly unavailable. Historical failed runs stay failed.
 - **Before the first successful deploy:** Dan re-runs `infra/bootstrap.ps1` so the deploy identity trusts the immutable-ID subject (P0-16).
 - **Once after the first deploy:** run `infra/bootstrap.ps1 -WebRedirectUris <Static Web App URL>`, record the backend URL in `apps/web/config.json`, and set `JARVIS_INFRA_DEPLOYMENT_NAME=jarvis-infra` (P0-16). The run summary prints both URLs.
 
@@ -3851,6 +4608,31 @@ flowchart LR
 - Background: [open-source research](open-source.md) (selective reuse; no foundation chosen); prototype code and reports in [reference/](reference/).
 
 ## Jarvis 3D presentation boundary (P8-28–P8-33)
+
+**Current local policy (15 October 2026):** one shell-owned scene persists
+behind every route and sign-in. `ShellLayout` supplies `active` for home,
+sign-in or voice; other pages retain a still frame. State/theme/size changes
+can request one coalesced redraw, and returning home resumes the same scene.
+This supersedes the historical route-only and adaptive-tier descriptions below.
+
+`jarvis-stage-quality.ts` now applies one fixed budget: DPR at most 1,
+2,073,600 backing pixels, hardware texture limits and a 384px mirror target.
+There are no frame-time-driven levels or user quality settings. The scene
+caps ambient draws at 30fps and voice at 60fps; the real Reflector updates at
+up to 15fps, retaining its texture/matrix between updates and invalidating on
+meaningful changes. Three.js retains ownership of reflection renderer-state
+restoration. Resize sources coalesce; only changed dimensions/density call
+`setDrawingBufferSize`, before drawing. Layout/camera calculations and palette
+reads no longer repeat on every frame or unrelated option update.
+
+Static opaque chamber geometry is merged by material; separately scalable
+phone walls remain separate. The orb uses a lighter shell/core and one
+single-pass additive mesh for its nine ribbons, with derivative-filtered
+fine bands. Ambient particles are fixed at 128. The renderer requests
+low-power hardware, and nested window panels omit duplicate backdrop blur.
+Hidden/lost contexts stop all scheduled draws; reduced motion and inactive
+pages redraw only when invalidated. Recovery renders before clearing the
+visible fallback. There is no API, backend, dependency or audio/device change.
 
 P8-31 (#376) applies the selected smoky glass through shared light/dark tokens and sans headings to the existing shell, conversation, temporary workspace, contextual panel, Factory and Settings. It changes no API, persistence, deployment or dependency version. Its existing contrast tests cover text, muted text, icons and focus on glass against black and white backdrops.
 The accepted [stage reference](reference/ui-stage-prototype/README.md) uses Three.js, shaders, a planar floor reflector and HTML controls. P8-28 (#375) ports the scene into the web app with managed allocation/disposal and off-route/hidden-tab lifecycle. The scene is mounted only on Jarvis. Its geometry/viewpoint persist across typing/voice and dark/light; light appearance re-lights the same room.
@@ -3880,9 +4662,359 @@ P8-33 scratch Chromium checks cover the adaptive quality thresholds, compact pho
 The reference lockfile is standalone, outside root workspaces, and contains the prototype's dependencies only. Bundled Three.js/Phosphor notices are retained. Physical/hardware performance, live activity/voice behavior and normal-rate flicker acceptance remain unverified; P8-31 adds no production Three.js dependency.
 ## Daily integration boundary (P12-01)
 
+### Inactive shared feed workflow (17 October 2026; P12-09)
+
+The optional fifth `createDailyData(pool, owner, now, frida, feeds)` argument
+constructs `DailyFeedService` with the existing pool, Google client and explicitly
+supplied protected mail semantic adapter. Construction performs no reads. Passing
+`{}` permits retained SQL reads but reports refresh unconfigured; absent feed
+options add no service/tool. Existing four-argument callers remain unchanged.
+Supply the existing `createFoundryMailSemanticModel` with the established
+endpoint/token/settings/catalogue/usage dependencies, never a replacement
+credential or success-shaped unavailable adapter. Missing semantic capability
+retains the existing independent `semantic-unavailable` result.
+
+`DailyData.feeds` contributes one sensitive `daily_feed` tool to the current
+module/dispatcher. It does not expand `daily_query` sources/capability versions
+or the external nutrition MCP allowlist. Feed service, store and both provider
+readers reject the nutrition-only connector before SQL/provider work. The
+composed store also compares the configured data owner. Current read DTOs expose
+selected attention/orders/events, fixed source metadata and bounded timed
+conflict ID pairs, not raw Gmail snapshots or SQL owner fields. The retained
+calendar request range is unavailable, never inferred from event dates.
+
+Mutations share the existing verified-message/session/presence helpers and
+one-time browser-only Now confirmation, with120seconds for review and210seconds
+for the operation. The browser relay allows210seconds and hosted-agent read225,
+below the existing240second ingress. This leaves30seconds of setup/persistence
+headroom beyond the full120second review and60second provider window; food
+review and unrelated tool deadlines are unchanged.
+Frozen target/suppression hashes are rechecked under existing owner SQL locks.
+The same lock enforces1,000 active suppressions per type before additions,
+without blocking updates/no-ops. A parameterised exact-key lookup supplies the
+restore proposal and commit recheck independently of bounded collection reads,
+so an already oversized imported set remains recoverable by known exact key.
+Manual refresh uses a server-derived message/operation key and the existing
+bounded refresh/cooldown lifecycle. A completed run is an acknowledged attempt,
+not proof of healthy sources; replay and running/limited states say so.
+
+Snapshot/suppression commits use the existing change hub with `daily.feed`
+invalidation, bridged to the unchanged Now refresh stream. Only acknowledged new
+commits notify; replay/no-op/failure do not. Listener failure cannot turn a commit
+into an error. No schema, route, timer, provider write, production composition,
+consent or new resource is installed. #725's stored-grant/CalendarList and live
+model/provider acceptance remain open.
+
+Release diagnostics consume the existing authenticated smoke response inside
+the main-only deployment job. In addition to unchanged status lines, a bounded
+standard-library formatter emits exact fixed chat-reason codes; untrusted text
+and unknown codes are redacted. It cannot relax the existing gate or trigger a
+probe itself. This keeps diagnosis on the established CI identity without local
+Azure access, credential extraction or an additional diagnostics service.
+
+### Historical brief reads (17 October 2026; inactive source)
+
+The existing `daily.briefing_runs` table feeds two shared query sources:
+periodless bounded metadata history and exact owned body detail. A parameterised
+read model uses the existing pool/cancellation helper without acquiring unrelated
+health-ingestion locks. Metadata excludes unbounded bodies and provider/delivery
+snapshots. Detail bounds SQL body retrieval and the existing768KiB response
+budget; provider snapshots, delivery evidence and owner fields are not projected.
+
+Both the shared query service and reader explicitly reject the nutrition-only
+connector. Existing module arguments, root auth, nutrition MCP allowlist and
+production default-off composition remain unchanged. History is ordered by
+stored start text and exact ID descending, with opaque matching cursors. Source
+timestamps are not converted or used to claim freshness; observation time remains
+the actual read time. The same query/tool DTO drives the single page and on-demand
+GenUI. No generation, delivery, recurrence, source import or new permission occurs.
+
+Capabilities negotiate separately from the unchanged query DTO/native-view v1
+contract. Unversioned/ordinary Accept requests retain the original nine-source
+v1 advertisement. Updated clients request
+`application/json;version=2, application/json`; upgraded servers return capability
+v2 with brief sources, `Content-Type` version2, no-store and `Vary: Accept`.
+Updated clients also accept a genuine nine-source v1 response from older backends.
+This preserves cached old web bundles during backend-first deployment and new
+bundles during rollback without widening CORS or adding caller query selectors.
+
+### Default-off single-page composition (17 October 2026)
+
+`App({ dailyEnabled: false })` retains the released production route/rail/mobile
+destinations. Only trusted explicit composition adds the Daily area; neither a
+URL parameter nor public bootstrap configuration enables it. The reserved shared
+`daily` navigation/readback value grants no access: the backend checks real Daily
+tool composition before delivery and the client refuses when its gate is off.
+
+The enabled page authenticates through the existing token supplier, discovers
+`/daily/capabilities` and reads `/daily/query` using the same source/period/cursor/
+detail DTOs as `daily_query`. Responses are size-bounded and validated against
+the requested source/period, units, provenance and coverage. No new writer,
+calculation service, provider call or login is introduced. Rendered account-key
+changes remount private page state; denied access clears cached rows. Transient
+errors retain explicitly labelled old evidence and its original observation time.
+
+The existing Now stream notifies Daily on data update and workspace readiness;
+callback changes do not reconnect it and disposed streams cannot refresh Daily.
+The page coalesces refocus/visibility/invalidation signals and serializes reads,
+queues at most one follow-up, aborts changed sources and ignores late responses.
+Charts reuse `ChartView` with returned numeric observations and retained units.
+General workspace/GenUI commands present queried results for chat/voice; page
+navigation does not claim to alter local filters. Production remains default-off.
+
+### Inactive internal direct intake (17 October 2026)
+
+An optional fourth `createDailyModules(true, data, undefined, data.nutrition)`
+argument adds sensitive `daily_food` and `daily_food_review` tools to the existing dispatcher.
+The explicit store factory is independent of the MCP write gate; ordinary
+read-only and production composition remain unchanged. Capabilities report
+`internal-nutrition-rehearsal`, not read-only, when this writer is present.
+No new HTTP mutation route, model, queue, migration or audit store is added.
+
+The direct tool accepts only `log_exact` or `log_favorite`. It verifies the existing
+owner/hosted-agent boundary and current persisted Dan message; agent headers
+alone are insufficient. Fresh writes also require an active chat/voice session
+and a message no older than ten minutes, with the existing five-minute clock
+grace. Connector, phone and service identities cannot use this internal path.
+A conservative complete-command parser derives the saved name or explicit
+label values from that message. The parser never accepts model nutrients,
+confirmation flags or a model-selected food name; unsupported/ambiguous
+wording refuses rather than authorising an estimate.
+
+Owner/session/message derive one intake operation key. A source-text/time
+fingerprint binds recovered receipts to the same request and operation.
+Existing committed rows are recovered before re-resolving a changed favourite;
+deleted or source-mismatched rows refuse rather than creating duplicates.
+Known conflicting/uncertain log results also trigger one receipt readback:
+an overlapping commit may already own the key. Only a matching actual receipt
+can recover success; no write is retried and absent evidence retains failure.
+New favourite intake rechecks the selected owned DTO fingerprint under the
+existing SQL locks. `prepareMeal`, write validation, canonical intake storage
+and acknowledged-commit refresh remain shared. The original message instant
+supplies occurrence and Copenhagen date; session metadata supplies text/voice
+capture. Unknown macros and saved confidence/provenance are preserved.
+The same optional internal factory additionally registers `daily_food_review`.
+Its strict estimate/correction/delete schema cannot accept owner, confirmation,
+capture, confidence or provenance authority. Current authenticated Dan
+source/session metadata binds the operation; new estimates share the direct
+tool's one-intake-per-message namespace and retain a proposal fingerprint.
+Corrections capture actual owned before-state/revision, retain stable identity
+and recompute Copenhagen dates from occurrence. Changed nutrients/components
+become unverified estimates; unchanged exact provenance and nulls survive.
+
+Review uses actual `TeamsNotificationService.runConfirmed` with a trusted
+browser-only selector. Default current-channel behaviour is unchanged for
+other callers; browser-only never looks up or sends a Teams conversation or
+voice note, even after presence changes. Food requires present mode before
+staging and in the action callback. Existing Now owner-authenticated approval,
+persisted one-time consumption supplies authority. Food cards have an explicit
+120-second lifetime shared by SQL, visible expiry and the service timer;
+default confirmations for all other callers remain five minutes.
+Per-tool pending target keys prevent duplicate concurrent cards; cancellation
+bounds the entire food operation to 180 seconds from execution entry.
+No global proposal manager, detached writer or new table is added.
+The hosted agent gives only this tool a 210-second response-read deadline,
+below the externally ingressed Container App's 240-second HTTP limit.
+Configured research/ordinary deadlines and connection/write/pool limits remain
+unchanged. Generated input uses one number/null nutrient type, not a coercible
+numeric-first union; strict domain validation still follows HTTP validation.
+Frozen before/after summaries are bounded to 4000 characters and include units,
+unknowns, dates and revision. Existing store revision/range locks recheck writes
+and only acknowledged commits refresh Daily. Exact source-bound replays and
+matching uncertain results return real whitelisted receipts; deleted retries
+report actual tombstones, never recreate intake. No Health write is queued.
+Direct supported exact labels and actual saved favourites refuse this review
+path in favour of the one-step tool. Production stays off; generic spoken
+approval, photo evidence, complete conversational/client/device parity and
+activation/cutover remain open.
+
+Both internal food tools declare `denyOnPhone`. The existing phone dispatcher
+checks this after active-session validation and before generic confirmation or
+execution; denial wins over the public-phone flag. Other tools retain their
+existing public/approval behaviour. Food's own session checks remain in place.
+
+An additive fifth `createDailyModules` argument independently composes sensitive
+`daily_saved_food` from the same canonical nutrition factory. Existing fourth
+argument and production/read-only/MCP compositions remain unchanged. Its two
+read operations reuse owned lookup and preference rows; its four write
+operations reuse canonical favourite/plan/feedback transactions and native
+browser confirmation. Shared `saved-schema.ts` preserves the external MCP
+contract, while the internal flat HTTP shape survives Ajv branch removal and
+uses non-coercing nullable types, including clear/description fields.
+The verified human source derives new operation IDs; internal definitions cannot
+claim confidence/provenance. Reviews freeze actual source/target snapshots,
+use existing revisions and favourite fingerprints under SQL locks, and recover
+uncertain outcomes by one matching readback rather than another write.
+Bounded canonical plan-name lookup mirrors the store's namespace semantics.
+Preference changes publish the existing favourites refresh only after commit;
+unchanged/replayed rows do not publish. No new schema, queue or provider exists.
+Both `daily_food_review` and `daily_saved_food` use 180-second signals at the
+browser voice relay, not its ordinary 30-second deadline; existing session/end
+cancellation remains composed. Their hosted-agent read is 210 seconds. The new
+tool denies phone before generic approval and uses the same 120-second browser
+card profile. No activation, provider/device or private-data acceptance follows.
+
+Optional `DailyData.foodLookup` composes `daily_food_lookup` in the same owner
+dispatcher without another module flag or positional module argument.
+`createDailyData` takes an optional existing Frida adapter and binds it behind
+the configured data-owner check; construction makes no provider or SQL request.
+Without the capability, existing read-only and default-off compositions are
+unchanged. Shared component schemas preserve the external MCP contract and
+non-coercing nullable grams/preparation through HTTP validation.
+The tool forwards only bounded generic components to the existing adapter,
+composes a20second abort signal within the ordinary30second voice/default agent
+budgets, and applies the shared response-byte limit without truncation.
+Return the canonical public DTO unchanged, including source attribution,
+cached retrieval times, partial/unknown values and separate matched subtotals;
+`intakeLogged:false` is not write authority. No history, context snapshot, caller
+URL or credential enters the provider contract. Sensitive audit and deny-before-
+approval phone policy remain. No new provider implementation, persistence,
+resource or production composition is introduced.
+
+### Inactive nutrition MCP adapter (17 October 2026)
+
+An optional third `createDailyModules(true, data, connector)` argument installs
+only `/daily/mcp` and its exact protected-resource metadata path. Ordinary
+production composition and configuration loaders remain unchanged.
+`DailyMcpOptions` explicitly supplies the canonical HTTPS resource, existing
+auth identity, typed nutrition handlers and a separate default-false write
+gate. The maintained split MCP v2 SDK adapts stateless HTTP into the existing
+Fastify server; there is no second host, dispatcher, database or model.
+
+Root JWT verification recognises one separately configured delegated Entra
+client with only `Daily.Nutrition.Read`/`Daily.Nutrition.Write`. This is a
+distinct principal, not an ordinary owner: the root hook restricts it to the
+exact opt-in MCP route and methods. Foreign owners, mixed broad scopes,
+application identities and other clients' nutrition scopes fail closed.
+Anonymous discovery is limited to the exact metadata route and returns trusted
+configuration; challenge URLs never derive from caller Host. MCP requests
+also enforce the configured Host, reject every browser Origin and query
+selector, and retain a 96 KiB body limit. This server-to-server boundary
+does not widen the application's existing browser/CORS permissions.
+
+The adapter reuses `DailyQueryService` for bounded nutrition-only reads and
+the existing Frida lookup/typed handlers for log/correct/soft-delete.
+`lookup_food.savedName` also reuses the existing owner-bound saved-food resolver:
+favourites/aliases precede exact historical names. Its DTO projection is shared
+with bounded Daily queries. Empty, ambiguous or oversized results never trigger
+a provider fallback or write. Original Frida component requests are unchanged.
+Server owner resolution, canonical SQL transactions/replay/revisions and acknowledged
+commit notifications remain authoritative. Model-supplied confirmations,
+record IDs, owner selectors and verified provenance are not accepted.
+External writes require native form review bound to SDK-signed, ten-minute
+request state containing only owner/client/purpose/payload digest/trusted time.
+Stable per-client operation keys and stored occurrence retain retry identity
+across confirmation rounds and Copenhagen midnight. Whitelisted committed
+receipts stringify SQL revisions and omit owner/device/internal columns.
+The existing SQL tool-call store adds `recordDailyMcp` for redacted
+operation/outcome with UUID correlation, not a `dbo.messages` FK. Additive
+0049 keeps normal message-backed audit unchanged and permits a null message
+only for allowlisted connector tools with a non-null connector UUID. Its down
+script refuses retained connector evidence; there is no second audit table or
+fabricated conversation. Missing connector audit refuses execution and
+post-write failure explicitly reports an uncertain commit.
+
+This candidate accepts only modern MCP 2026-07-28; legacy requests are rejected.
+Native review on actual ChatGPT is unverified, not an implemented fallback UI.
+Process-local signing keys deliberately invalidate pending proposals after
+restart or replica change; fleet key/lifetime policy requires review before
+activation. All external mutations currently require confirmation, stricter
+than internal exact logging. `manage_saved_food` adds retained favourite/alias,
+plan save/soft-delete and canonical preference writes; `read_food_preferences`
+is read-only. Shared pure record projection and plan preparation supply both
+native review and persistence. Transactions check the reviewed source intake
+revision or favourite fingerprints under existing locks, so changed sources
+cannot commit undisplayed plan values. Favourite/feedback counters and nullable
+clear tombstones in additive 0050 preserve retries without a new ledger table.
+The same migration expands the constrained audit allowlist and protects
+new evidence on rollback; deployed 0049 stays unchanged.
+Internal trusted-message authority, complete tool/UX,
+OAuth/provider, phone and migration acceptance remain open. See
+[adapter setup, recovery and checks](../apps/backend/src/daily/mcp/README.md).
+
+### Inactive shared reads and committed invalidation (16 October 2026)
+
+The resumed P12-09 source slice extends explicit `createDailyModules(true, data)`
+composition with `POST /daily/query` and one sensitive `daily_query` catalogue
+entry. Both invoke `DailyQueryService`; default-off and production composition
+remain unchanged. Root authentication and `resolveDailyOwner` still own
+user/hosted-agent authorisation. Source-specific public contracts reject caller
+owner selectors, incompatible cursors, invalid dates and unbounded pages.
+Queries reuse `DailyHealthReadModel` and `NutritionStore.history/favorites/plans`, not raw inbox
+reads, a second normalizer, a meal writer or a new dispatcher/persistence layer.
+Whitelisted DTOs retain canonical units, dates, lineage, nulls, nutrient
+provenance, revisions and tombstones without exposing owner/device columns.
+Responses share a 768 KiB bound; oversized detail is explicitly unavailable,
+never a silently truncated success.
+Fingerprint serialization uses the bounded read DTO, not nutrition's per-write
+node/depth budget; supported full pages and retained nested JSON stay readable.
+The response byte budget includes the final 64-byte revision before hashing.
+
+Favourites and meal plans add two source IDs to the existing version-1 contract.
+They have no calendar period and reuse the store's ID-keyset pages, limited to
+100 rows. DTOs decode retained aliases/plan items and preserve snapshots, unknown
+macros, revisions and tombstones without counting plans as intake. The same
+768 KiB bound, owner checks, sensitive audit, content fingerprint and unknown
+completeness/freshness semantics apply. No SQL schema or production registration
+changes.
+
+`createDailyData` shares one process-local change hub between the existing
+explicit health processor and owner-bound nutrition store. Optional handler
+composition accepts the same hub. Only acknowledged domain/intake commits
+publish domain invalidation; exact retained replays do not announce new health
+data. A pending replay completion, poison quarantine or retry exhaustion
+notifies sync only after its acknowledged inbox-state commit. No-ops and
+failed/uncertain commits do not notify. Notification failures use the existing
+event-listener boundary, never an acknowledged-row failure or SQL replay.
+Heartbeat changes only sync evidence. The Daily
+plugin filters the configured owner and bridges to the unchanged
+`nowEventHub` refresh event; shutdown removes that subscription. No new event
+type, queue, poller, scheduler or production processor is installed.
+Favourite saves and plan saves/deletions publish their corresponding collection
+source only after acknowledged commit; retained plan replays do not publish.
+They use the same notification-failure boundary as intake.
+
+Results include source/period, units, retained-record provenance, separate
+processed and record-update timestamps, observed time, page coverage and a
+content SHA-256 revision. Unknown completeness/staleness are explicit. The
+revision fingerprints an exact query result, not a durable/global ordering
+token or an atomic snapshot across separate page/freshness reads. Future page
+and GenUI consumers refetch on existing `now` events, connect/reconnect and
+refocus, so missed process-local notifications are recovered from SQL.
+No frontend consumer is implemented by this backend slice.
+
+This does not complete #724's hosted authenticated ChatGPT food-client path:
+restricted connector OAuth/consumer policy and trusted nutrition
+intent/proposal-acceptance derivation remain unapproved boundaries, not
+client/model booleans. Original health-source identity/parity, protected
+export/import, physical device/provider and cutover acceptance remain gated.
+Older contract-only descriptions below describe the prior release.
+
+### Confirmed core-only scope (15 October 2026)
+
+Dan excluded NEW P12-08/#723 coaching/recovery/recomp automation from planned
+scope and the combined release. The unmerged candidate and its corrected
+freeze are archived evidence, not an accepted production boundary. Preserve
+existing main health/nutrition/workout tracking, owner/auth, persistence and
+integration seams; exclusion authorizes no record/schema/source removal.
+
+Core P12-09/#724 data API/tools and committed-revision integration must exclude
+new coaching and must not depend on #723 completion. This docs-only decision
+registers or activates nothing. Retain one Daily page with existing on-demand
+GenUI in the one conversation, no widget or required four native views.
+Reserved IDs and older scope descriptions below are historical, not a mandate
+to implement withdrawn views. No new service, API, table, dispatcher or model.
+Missing coaching-specific maintenance/TDEE, completeness, expiry or readiness
+interpretation is not a core completion gate and must not be guessed.
+Existing core validation, processed freshness and protected export/backup,
+authoritative-source/parity, device/provider, final-delta, rollback and cutover
+gates remain unchanged; original Daily stays canonical before cutover.
+
 P12-05's unregistered `daily/health` library consumes the existing SQL inbox through an explicit one-row invocation and shared owner transaction lock. Additive 0047 records claim generations/deadlines and bounded retry/quarantine; no new queue, pool or scheduler. Pure normalization precedes one atomic domain/lineage/feed/receipt commit. Heartbeat writes only phone-sync state; accepted evidence and processing time remain distinct. Parameterized binary-identity upserts preserve newer accepted snapshots and never delete absent workout history. Existing root owner resolution protects bounded history/minute-HR/detail reads. [Source contract, recovery, limits and gates](../apps/backend/src/daily/health/README.md); no production composition or private source read.
 
 Summary extraction and known heart-rate series share strict BPM unit validation before SQL finalization; incompatible declared units quarantine the entire upload. Legacy summary-only implicit BPM does not assign units to unknown series or reinterpret heart-rate variability.
+
+Body-fat percentage also uses the shared strict known-dimension mapping: string `%`/`percent` stay percent and `fraction`/`1` scale by 100. Raw group/sample/workout declarations are checked before sanitization and alias/fallback selection; unsupported strings and non-string values quarantine atomically even when shadowed. Absent/null/blank units retain existing missing-unit semantics. No new persistence or runtime boundary is introduced.
 
 P12-04's inactive `daily/health-upload` uses the existing backend/pool/SQL. `createSqlHealthUpload` returns disabled dependencies; explicit `buildApp.healthUpload` rehearsal composition installs only the two upload/heartbeat POST paths. Root auth delegates only those opt-in paths to early rate guards and a hashed owner/scope/expiry/revocation verifier; ordinary Jarvis authentication is unchanged. Production `index.ts` has no option/flag/credential registration. [Contract and gates](daily-health-ingestion/README.md); #720 owns processing.
 
@@ -3894,7 +5026,7 @@ Both scoped POST routes retain `@fastify/rate-limit` before credential/SQL work,
 
 P12-12 adds inactive `daily/nutrition-export` owner/device services and an explicitly callable route factory, never production composition. A root-auth optional verifier contract is scoped to the two POST claim/complete routes; absent/revoked/expired/wrong-owner capability denies access and ordinary routes retain existing JWT handling. No verifier/provisioning is installed by `index.ts`. Additive 0044 supplies request/claim/receipt/reconciliation evidence over existing temporary queue snapshots, not another meal store. Canonical nutrition writers invalidate only export status metadata; export transactions recheck all source revisions/tombstones. Owner-local app locks, conditional selection, bounded requests/outputs/deadlock retry/cancellation and no-instruction claim replay protect SQL state. Native Health effects remain outside SQL transactions; [protocol/gates](../apps/backend/src/daily/nutrition-export/README.md).
 
-P12-10's inactive `daily/feeds` services inject the existing Google client and resolve server owner per request. Gmail scans stage bounded work against connected account/history/model generations; cancellation/change/incomplete coverage cannot publish success. The Foundry semantic factory reuses configured endpoint validation, existing managed-identity callback, canonical chat settings/catalogue and usage accounting; json_object transport has strict local output/source-date validation, no tools or runner relay. Independent source item/UTF-8 preflight prevents an oversized calendar from blocking healthy Gmail. Exact selectors/keys and mapped 0041 transactions use per-owner app locks, parameterized SQL and retained-success freshness. Manual execution reports running/completed/limited and independent errors. No new schema/credentials/model/resource/composition/tools; calendar consent and deployed-model/live parity remain open. [Boundary and limitations](../apps/backend/src/daily/feeds/README.md).
+P12-10's inactive `daily/feeds` services inject the existing Google client and resolve server owner per request. Gmail scans stage bounded work against connected account/history/model generations; cancellation/change/incomplete coverage cannot publish success. The Foundry semantic factory reuses configured endpoint validation, existing managed-identity callback, canonical chat settings/catalogue and usage accounting; json_object transport has strict local output/source-date validation, no tools or runner relay. Independent source item/UTF-8 preflight prevents an oversized calendar from blocking healthy Gmail. Exact selectors/keys and mapped 0041 transactions use per-owner app locks, parameterized SQL and retained-success freshness. Manual execution reports running/completed/limited and independent errors. P12-09's explicit shared feed composition above adds the internal tool without production registration. No new schema/credentials/model/resource; calendar consent and deployed-model/live parity remain open. [Boundary and limitations](../apps/backend/src/daily/feeds/README.md).
 
 P12-07's inactive `daily/nutrition` services/typed handlers use existing server-owner resolution and mapped SQL tables. Transactions/range locks protect operation-key idempotency and revisions, retry only deadlock 1205 (three attempts), and sanitize errors. Reads/feedback are bounded. P12-09 supplies trusted existing text/voice/attachment/frame evidence and intent/proposal metadata; clients/models cannot supply authority. Plans snapshot owned favourites/server-sum totals separately from intake/queues. The public Frida adapter pins release 10 / 5.5 and coordinator-verified empty bootstrap/header/cookie, synonym arrays and numeric nutrient DTOs; missing/null provenance is unavailable. Attribution, per-100-g units, bounded validation/cache/deadline and incomplete-total separation remain explicit. Cloud CONNECT is denied with HTTP 403. No production composition import, new auth/media model/dispatcher/infrastructure. [Boundary and checks](../apps/backend/src/daily/nutrition/README.md).
 

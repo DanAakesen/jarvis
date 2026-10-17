@@ -1,6 +1,8 @@
 import { readFileSync } from "node:fs";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { FoundryClient, FoundryClientError, FOUNDRY_SCOPE } from "./client.js";
+import {
+  FoundryClient, FoundryClientError, FOUNDRY_SCOPE, runnerCompletionProof, type InvocationSnapshot,
+} from "./client.js";
 
 const recording = JSON.parse(readFileSync(new URL("./fixtures/runner-responses.json", import.meta.url), "utf8")) as { records: Record<string, { status_code: number; body: unknown; request?: Record<string, unknown> }> };
 const fixtures = Object.fromEntries(Object.entries(recording.records).map(([name, record]) => [name, record.body]));
@@ -297,6 +299,94 @@ describe("Foundry runner wire contract", () => {
     expect(second).toEqual(first);
     expect(second.status).toBe("running");
     expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it("retains failed runner status while decoding stopped-writer proof and safe secondary phases", async () => {
+    const { client } = setup({
+      ...(fixtures["status_completed"] as object), status: "failed",
+      error: "Runner finalization timed out: event_delivery",
+      work_completed: true, provider_stopped: true,
+      work_commit_sha: "A".repeat(40),
+      cleanup_failures: [
+        { phase: "event_delivery", error: "PRIVATE secondary diagnostic" },
+        { phase: "publisher_close", error: "PRIVATE secondary diagnostic" },
+      ],
+    });
+    const snapshot = await client.status("capture-task");
+    expect(snapshot.status).toBe("failed");
+    expect(snapshot.error).toBe("Runner finalization timed out: event_delivery");
+    expect(snapshot.cleanupPhases).toEqual(["event_delivery", "publisher_close"]);
+    expect(JSON.stringify(snapshot)).not.toContain("PRIVATE");
+    expect(runnerCompletionProof(snapshot)).toEqual({
+      kind: "work_completed_writer_stopped", workCommitSha: "a".repeat(40),
+      cleanupPhases: ["event_delivery", "publisher_close"],
+    });
+  });
+
+  it.each([
+    { work_completed: "true" }, { provider_stopped: 1 }, { work_completed: null },
+    { work_commit_sha: "" }, { work_commit_sha: "a".repeat(39) }, { work_commit_sha: 1 },
+    { work_commit_sha: "g".repeat(40) }, { work_commit_sha: "a".repeat(40) + "\n" },
+    { cleanup_failures: "event_delivery" }, { cleanup_failures: [{ phase: "PRIVATE" }] },
+    { cleanup_failures: Array.from({ length: 33 }, () => ({ phase: "event_delivery" })) },
+  ])("rejects malformed lifecycle evidence: %j", async (invalid) => {
+    const { client } = setup({ ...(fixtures["status_completed"] as object), ...invalid });
+    await expect(client.status("capture-task")).rejects.toMatchObject({ kind: "protocol", operation: "status" });
+  });
+
+  it.each([
+    { workCompleted: false }, { providerStopped: false }, { workCommitSha: "" },
+    { finishedAt: null }, { finishedAt: 0 }, { error: null },
+    { status: "running" }, { status: "cancelled" }, { status: "needs_attention" },
+    { events: [{ at: 2, kind: "session_question", data: {} }] },
+    { cleanupPhases: [] }, { cleanupPhases: ["reader_shutdown"] },
+    { cleanupPhases: ["event_delivery", "process_exit"] },
+  ] satisfies Partial<InvocationSnapshot>[])("refuses incomplete, failed-writer or nonterminal completion proof: %j", (invalid) => {
+    const snapshot: InvocationSnapshot = {
+      invocationId: "invocation", sessionId: "session", agent: "codex", status: "failed",
+      startedAt: 1, finishedAt: 2, result: null, events: [],
+      error: "Runner finalization timed out: event_delivery", workCompleted: true, providerStopped: true,
+      workCommitSha: "a".repeat(40),
+      cleanupPhases: ["event_delivery"], ...invalid,
+    };
+    expect(runnerCompletionProof(snapshot)).toBeUndefined();
+  });
+
+  it.each(["workCompleted", "providerStopped", "workCommitSha", "cleanupPhases"] as const)(
+    "does not infer missing lifecycle proof: %s", (missing) => {
+      const snapshot: InvocationSnapshot = {
+        invocationId: "invocation", sessionId: "session", agent: "codex", status: "failed",
+        startedAt: 1, finishedAt: 2, result: null, events: [],
+        error: "Runner finalization timed out: event_delivery", workCompleted: true, providerStopped: true,
+        workCommitSha: "a".repeat(40),
+        cleanupPhases: ["event_delivery"],
+      };
+      delete snapshot[missing];
+      expect(runnerCompletionProof(snapshot)).toBeUndefined();
+    },
+  );
+
+  it("keeps legacy snapshots readable but requires current commit-bound work for clean completion", async () => {
+    const { client } = setup(fixtures["status_completed"]);
+    const legacy = await client.status("capture-task");
+    expect(legacy.status).toBe("completed");
+    expect(runnerCompletionProof(legacy)).toBeUndefined();
+    const bound = {
+      ...legacy, workCompleted: true, providerStopped: true, workCommitSha: "b".repeat(40),
+    };
+    expect(runnerCompletionProof(bound)).toEqual({ kind: "runner_completed", workCommitSha: "b".repeat(40) });
+    expect(runnerCompletionProof({ ...bound, workCompleted: false })).toBeUndefined();
+    expect(runnerCompletionProof({
+      ...bound, events: [{ at: 2, kind: "session_question", data: {} }],
+    })).toBeUndefined();
+  });
+
+  it.each([
+    { finished_at: null },
+    { error: "PRIVATE synthetic cleanup failure" },
+  ])("rejects completion without a clean final runner snapshot: %j", async (invalid) => {
+    const { client } = setup({ ...(fixtures["status_completed"] as object), ...invalid });
+    await expect(client.status("capture-task")).rejects.toMatchObject({ kind: "protocol", operation: "status" });
   });
 
   it.each(["status_completed", "status_cancelled"])("decodes the recorded %s result and timeline", async (fixture) => {

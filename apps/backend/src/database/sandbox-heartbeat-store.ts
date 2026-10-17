@@ -21,6 +21,7 @@ export function createSandboxHeartbeatStore(
     async listRunning() {
       const { recordset } = await databaseReadRequest(pool).query<RunningSandboxRow>(`SELECT
         CAST(s.id AS varchar(19)) AS sandboxSessionId, s.foundry_session_id AS foundrySessionId,
+        CAST(s.execution_generation AS varchar(19)) AS executionGeneration,
         s.agent_name AS agentName, activeTurn.invocation_id AS invocationId,
         CAST(CASE WHEN activeTurn.status = N'completed' THEN 1 ELSE 0 END AS bit) AS invocationCompleted
         FROM dbo.sandbox_sessions AS s
@@ -106,7 +107,7 @@ export function createSandboxHeartbeatStore(
       }
     },
 
-    async markNeedsAttention(sandboxSessionId, question, invocationId, invocationCompleted = false) {
+    async markNeedsAttention(sandboxSessionId, question, invocationId, invocationCompleted = false, runnerFailed = false) {
       const transaction = new sql.Transaction(pool);
       await transaction.begin();
       try {
@@ -138,8 +139,8 @@ export function createSandboxHeartbeatStore(
           return false;
         }
 
-        const attentionQuestion = typeof question === 'string' ? question.trim().slice(0, 500) : '';
-        if (invocationCompleted || latestTurn?.status === 'completed') {
+        const attentionQuestion = !runnerFailed && typeof question === 'string' ? question.trim().slice(0, 500) : '';
+        if (!runnerFailed && (invocationCompleted || latestTurn?.status === 'completed')) {
           const ended = await new sql.Request(transaction)
             .input('sandboxSessionId', sql.BigInt, BigInt(sandboxSessionId))
             .input('invocationId', sql.NVarChar(255), latestTurn?.invocationId ?? null)
@@ -182,7 +183,7 @@ export function createSandboxHeartbeatStore(
           .input('taskId', sql.BigInt, BigInt(taskId))
           .query<{ state: string }>('SELECT state FROM dbo.tasks WITH (UPDLOCK, ROWLOCK) WHERE id = @taskId;');
         const state = task.recordset[0]?.state;
-        if (state !== 'Running' && state !== 'PauseRequested') {
+        if (state !== 'Running' && state !== 'PauseRequested' && !(runnerFailed && state === 'NeedsAttention')) {
           await transaction.rollback();
           return false;
         }
@@ -191,15 +192,21 @@ export function createSandboxHeartbeatStore(
           .input('sandboxSessionId', sql.BigInt, BigInt(sandboxSessionId))
           .input('status', sql.NVarChar(16), attentionQuestion ? 'Ended' : 'Crashed')
           .input('endReason', sql.NVarChar(16), attentionQuestion ? 'done' : 'crashed')
+          .input('invocationId', sql.NVarChar(255), latestTurn?.invocationId ?? null)
+          .input('runnerFailed', sql.Bit, runnerFailed)
           .query(`UPDATE dbo.sandbox_sessions SET status = @status, ended_at = SYSUTCDATETIME(),
-            end_reason = @endReason WHERE id = @sandboxSessionId;`);
+            end_reason = @endReason WHERE id = @sandboxSessionId;
+            IF @runnerFailed = 1
+              UPDATE dbo.sandbox_turns SET status = N'failed', ended_at = SYSUTCDATETIME()
+              WHERE sandbox_session_id = @sandboxSessionId AND invocation_id = @invocationId
+                AND status IN (N'running', N'completed');`);
         const summary = attentionQuestion
           ? `Question for Dan: ${attentionQuestion}`
-          : 'Sandbox heartbeat detected a crash';
+          : runnerFailed ? 'The current task runner reported failure' : 'Sandbox heartbeat detected a crash';
         const payload = {
           from: state,
           to: 'NeedsAttention',
-          reason: attentionQuestion ? 'agent_question' : 'sandbox_crashed',
+          reason: attentionQuestion ? 'agent_question' : runnerFailed ? 'foundry_failed' : 'sandbox_crashed',
           ...(attentionQuestion ? { question: attentionQuestion } : {}),
         };
         const event = await new sql.Request(transaction)

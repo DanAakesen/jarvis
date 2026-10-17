@@ -1,4 +1,4 @@
-.notes-page .knowledge-search .notes-create-button { display: grid; place-items: center; flex: 0 0 44px; width: 44px; min-height: 44px; margin: 0; padding: 0; border: 0; border-radius: var(--radius-pill); background: transparent; color: var(--text); cursor: pointer; }
+.notes-page .knowledge-search .notes-create-button { display: grid; place-items: center; flex: 0 0 44px; width: 44px; min-height: 44px; margin: 0; padding: 0; border: 0; border-radius: var(--radius-control); background: transparent; color: var(--text); cursor: pointer; }
 .notes-create-button svg { width: 18px; height: 18px; }
 .notes-create-button:hover:not(:disabled), .notes-location button:hover:not(:disabled) { background: var(--glass-hover); }
 .notes-create-button:active:not(:disabled), .notes-location button:active:not(:disabled) { background: var(--glass-pressed); }

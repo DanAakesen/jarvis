@@ -78,6 +78,100 @@ waits for delivery before reporting completion. Payloads are bounded to 256 KiB;
 a delivery failure marks the invocation failed. The backend's runner-only app
 role is assigned after Runner deploy using the principal IDs in its evidence
 artifact. Browser streaming remains P1-06.
+Task status and its checkpoint remain nonterminal while owned finalization runs.
+Success requires provider, private Codex auth file and event/publisher cleanup.
+A shared 60-second monotonic work deadline bounds asynchronous finalization;
+credential persistence, event delivery and publisher close also have ten-second
+caps. Cancellation joins add at most one second per timed-out wait. Synchronous
+filesystem operations are not covered by an exact wall-clock guarantee.
+Losing a control request does not cancel the worker it is joining. A stop deadline still forces
+only the owned process group on POSIX (the owned process on Windows), but neither its timeout nor a delayed ACP cancellation
+acknowledgement appends events after finalization starts.
+A late pause or cancellation retains its requested terminal outcome; it does
+not append events to a closing publisher. Cleanup failure stays failed and
+returns a sanitized 503 from an in-flight cancellation, not false success.
+Timed-out cancellation-resistant work remains owned until it settles, even
+after the invocation becomes failed. It fences the same session; unsettled
+credential persistence also fences new Codex turns across sessions. Queued
+turns recheck ownership after acquiring their lock. An exhausted budget does
+not start a new credential write. These fences are process-local and do not
+prove cloud resource release.
+`tests/test_task_finalization.py` exercises this ordering with synthetic delivery
+and metadata boundaries, actual temporary Git commits and owned child processes;
+it is not authenticated Foundry/GitHub acceptance.
+ACP shutdown retains both stdout/stderr readers and shares one teardown across
+concurrent callers. Terminate, post-kill exit and reader completion each have a
+ten-second bound; cancellation joins have a one-second bound. A timeout or
+reader exception fails explicitly rather than reporting successful cleanup.
+Failed cleanup retains the session client to refuse another provider turn;
+only successful stop removes the matching owner. These are local process/pipe
+guarantees, not cloud deallocation evidence or a repair of an old runner image.
+`tests/test_acp_shutdown.py` covers these boundaries with synthetic readers and
+owned child processes. POSIX starts the provider in its own session/process group
+and signals that captured group even after its leader exits. Shutdown verifies
+the leader, live group members and both readers; an inherited pipe cannot be
+left open by an unsignalled group member. Linux procfs distinguishes live members
+from exited zombies awaiting PID 1 reaping. An unreadable membership check fails
+cleanup rather than assuming exit. This does not reap PID 1's children, supervise
+processes that deliberately leave the group, or prove cloud deallocation.
+Automatic cleanup failure events include only an allowlisted `cleanup_phase`
+(`process_exit`, `reader_shutdown`, `reader_failed`, or `provider_shutdown`),
+never provider output. Sanitized finalization timeout errors also identify
+`credential_persist`, `event_delivery`, or `publisher_close`; heartbeat logging
+accepts only these named phases.
+The first failure stays in the terminal `error`; cleanup does not overwrite an
+earlier work failure. A needs-attention question is not a work failure.
+`cleanup_failures` records the first sanitized error for each failed cleanup
+phase, in observation order, including failures that follow the primary error.
+Event-delivery errors are recorded when observed, even before provider shutdown.
+Delivery and publisher failures stay separate; no phase suffix is appended to
+the primary error, preserving the heartbeat parser's anchored format.
+Polling and persisted invocation metadata include these bounded, allowlisted
+diagnostics. Metadata excludes raw exception text, provider output, credentials
+and arbitrary extra fields. Built-in exception classifications and the fixed
+ACP/timeout errors survive recreation; other work-error messages remain intact
+in memory but rehydrate as `Runner task failed` when cleanup diagnostics exist.
+General prompts, events and task results still do not persist. These diagnostic
+changes do not extend the work deadline, IO caps or cancellation joins.
+Polling and persisted invocation metadata also expose independent boolean
+`work_completed` and `provider_stopped` lifecycle proof. Both default to false
+for fresh turns and legacy metadata; only literal JSON booleans are accepted,
+never strings or numbers. `work_completed` additionally requires a trusted local
+delivery-work indication from `_run_task`'s verified new-commit completion branch,
+with a completed task outcome and no preceding error, cancellation or intentional
+stop at finalization entry. `_finish_task` defaults this indication to false
+and additionally requires the validated work commit.
+A no-commit `session_question` never qualifies, even if its turn outcome is
+completed and its publication fails only after provider stop or never reaches
+the backend. End-turn/result text, an existing PR and absence of a question
+event are not delivery-work evidence.
+`work_commit_sha` binds successful work to the exact new local commit whose
+branch and ancestry the runner verified. The commit check returns that captured
+object ID directly; finalization does not reread a potentially changed `HEAD`.
+Polling and persisted metadata expose its normalized lowercase, full 40-hex
+SHA, or `null` when absent or malformed. Strings containing whitespace,
+abbreviated hashes, nonhex values and nonstring types are not accepted; full
+uppercase hex is normalized. Fresh turns, questions and unsuccessful work have
+no work commit. Legacy metadata remains readable without inventing one from
+booleans, results, model text or an existing PR.
+Local branch/commit ancestry checks do not prove a push. An unpublished new
+local commit B can coexist with an older green remote commit A; the runner
+reports B, not A, and does not push on the agent's behalf. Backend completion
+and merge authorization must require this binding for both clean completion
+and the cleanup-failed alternative, verify the remote task branch and PR have
+exactly that head on create/reuse/reconciliation, and apply project policy to
+the same expected commit. Missing binding cannot authorize new Done or merge.
+`provider_stopped` becomes true only after the matching owned client's bounded
+ACP stop returns successfully, including its process-group and reader checks.
+An absent client/process, an exited leader alone, a failed or timed-out stop,
+or a late cancellation-resistant stop completion is not proof.
+Later credential, event-delivery or publisher failure still produces a failed
+runner status with the original diagnostics; it does not erase established
+work/stop proof or become runner success. These fields are not PR evidence or
+physical cloud deallocation. Only the backend may consider a final failed
+snapshot with both flags true and a valid commit binding, after current-generation/invocation, GitHub
+delivery verification and project policy checks. Nonterminal or cancelled
+snapshots, failed work and missing stop proof are not eligible through this path.
 Every agent prompt, including resumed and recovered turns, is prefixed with
 instructions to commit and push small work-in-progress changes to the existing
 task branch after each meaningful step. Agents must not force-push or push to

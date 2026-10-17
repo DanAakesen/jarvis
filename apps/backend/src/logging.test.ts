@@ -12,6 +12,70 @@ vi.mock('applicationinsights', () => ({
 }));
 
 describe('structured log export', () => {
+  it.each([
+    ['chat_identity', 'degraded', 'identity_reply'],
+    ['chat_no_timestamp', 'degraded', 'capture_time_invented'],
+    ['chat_capabilities', 'down', 'capabilities_discovery_missing'],
+    ['chat_capabilities', 'down', 'capabilities_discovery_wrong'],
+    ['chat_capabilities', 'down', 'capabilities_discovery_failed'],
+    ['chat_capabilities', 'down', 'capabilities_receipt_incomplete'],
+    ['chat_capabilities', 'down', 'capabilities_reply_incomplete'],
+    ['chat_canary', 'down', 'acceptance_check_failed'],
+    ['chat_jobs', 'down', 'jobs_unavailable'],
+    ['chat_navigation', 'down', 'navigation_refusal_missing'],
+    ['chat_plain_approval', 'down', 'plain_approval_failed'],
+    ['agent_contract', 'down', 'Agent settings have an invalid shape.'],
+  ])('exports only the safe %s smoke reason %s/%s to stdout and telemetry', (checkId, status, reason) => {
+    const records: string[] = [];
+    const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });
+    const sink = { ...sdk, trackTrace: vi.fn() };
+    const logger = createLogger({ logLevel: 'info' }, sink, output).child({
+      token: 'private-token', reply: 'private-reply', err: new Error('private-error'),
+    });
+    const fields = { checkId, status, reason };
+    logger.info({
+      ...fields, prompt: 'private-prompt', arguments: { private: 'input' }, result: 'private-result',
+    }, 'system.smoke_check');
+    expect(JSON.parse(records[0]!)).toEqual({
+      level: 30, time: expect.any(Number), service: 'jarvis-backend', msg: 'system.smoke_check', ...fields,
+    });
+    expect(sink.trackTrace).toHaveBeenLastCalledWith(expect.objectContaining({
+      message: 'system.smoke_check', properties: { service: 'jarvis-backend', ...fields },
+    }));
+    expect(records.join('') + JSON.stringify(sink.trackTrace.mock.calls)).not.toContain('private');
+  });
+
+  it('drops unknown, cross-check and non-failure smoke reasons at both export boundaries', () => {
+    const records: string[] = [];
+    const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });
+    const sink = { ...sdk, trackTrace: vi.fn() };
+    const logger = createLogger({ logLevel: 'info' }, sink, output);
+    const cases = [
+      [{ checkId: 'private-check', status: 'down', reason: 'identity_reply' }, {}],
+      [{ checkId: 'chat_identity', status: 'private-status', reason: 'identity_reply' }, { checkId: 'chat_identity' }],
+      [{ checkId: 'chat_identity', status: 'degraded', reason: 'capabilities_discovery_missing' },
+        { checkId: 'chat_identity', status: 'degraded' }],
+      [{ checkId: 'chat_capabilities', status: 'down', reason: 'private-provider-text' },
+        { checkId: 'chat_capabilities', status: 'down' }],
+      [{ checkId: 'chat_identity', status: 'ok', reason: 'identity_reply' }, { checkId: 'chat_identity', status: 'ok' }],
+      [{ checkId: 'chat_identity', status: 'unknown', reason: 'identity_reply' }, { checkId: 'chat_identity', status: 'unknown' }],
+      [{ checkId: 'chat_identity', status: 'degraded', reason: { toString: () => 'identity_reply' } },
+        { checkId: 'chat_identity', status: 'degraded' }],
+      [{ checkId: 'chat_identity', status: 'degraded', reason: 'identity_reply\nprivate' },
+        { checkId: 'chat_identity', status: 'degraded' }],
+    ];
+    for (const [input, expected] of cases) {
+      logger.info({ ...input, body: 'private-body', toolCalls: 'private-calls' }, 'system.smoke_check');
+      expect(JSON.parse(records.at(-1)!)).toEqual({
+        level: 30, time: expect.any(Number), service: 'jarvis-backend', msg: 'system.smoke_check', ...expected,
+      });
+      expect(sink.trackTrace).toHaveBeenLastCalledWith(expect.objectContaining({
+        message: 'system.smoke_check', properties: { service: 'jarvis-backend', ...expected },
+      }));
+    }
+    expect(records.join('') + JSON.stringify(sink.trackTrace.mock.calls)).not.toContain('private');
+  });
+
   it.each(['factory.board_read_failed', 'factory.board_project_lookup_failed'])(
     'exports only allowlisted board diagnostics for %s to stdout and telemetry', (event) => {
       const records: string[] = [];
@@ -47,6 +111,103 @@ describe('structured log export', () => {
       expect(records.join('') + JSON.stringify(sink.trackTrace.mock.calls)).not.toContain('private');
     },
   );
+
+  it.each(['factory.board_phase', 'factory.board_read_timing', 'factory.board_invalidated'])(
+    'exports only allowlisted fields for %s', (event) => {
+      const records: string[] = [];
+      const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });
+      const sink = { ...sdk, trackTrace: vi.fn() };
+      const logger = createLogger({ logLevel: 'info' }, sink, output);
+      const reqId = '00000000-0000-0000-0000-000000000000';
+      const fields = event === 'factory.board_phase'
+          ? { reqId, route: '/factory/board', stage: 'response', part: 'assemble', durationCensored: true }
+        : event === 'factory.board_read_timing'
+            ? { reqId, route: '/factory/board', outcome: 'success', cachePath: 'shared_wait',
+              stale: false, cacheElapsedMs: 42, statusCode: 200 }
+          : { reqId, origin: 'task_event', projectId: '42', version: 3, scope: 'all_projects' };
+      logger.info(fields, event);
+      expect(JSON.parse(records[0]!)).toEqual({
+        level: 30, time: expect.any(Number), service: 'jarvis-backend', ...fields, msg: event,
+      });
+      logger.info({
+        ...fields,
+        route: 'https://private.example/path?token=secret',
+        stage: 'private-stage',
+        durationMs: 60_001,
+        cacheElapsedMs: 60_001,
+        cacheElapsedCensored: true,
+        outcome: 'private-outcome',
+        cachePath: 'private-path',
+        stale: 'private-stale',
+        statusCode: 600,
+        origin: 'private-origin',
+        projectId: 'private-project',
+        version: Number.MAX_SAFE_INTEGER,
+        scope: 'private-scope',
+        repo: 'private-repo',
+        body: 'private-body',
+        headers: { authorization: 'private-token' },
+      }, event);
+      expect(JSON.parse(records[1]!)).toEqual({
+        level: 30, time: expect.any(Number), service: 'jarvis-backend', reqId,
+        ...(event === 'factory.board_phase'
+          ? { part: 'assemble', durationCensored: true }
+          : event === 'factory.board_read_timing' ? { cacheElapsedCensored: true } : {}),
+        msg: event,
+      });
+      expect(sink.trackTrace).toHaveBeenCalledTimes(2);
+      expect(sink.trackTrace).toHaveBeenLastCalledWith(expect.objectContaining({
+        message: event,
+        properties: {
+          service: 'jarvis-backend', reqId,
+          ...(event === 'factory.board_phase'
+            ? { part: 'assemble', durationCensored: true }
+            : event === 'factory.board_read_timing' ? { cacheElapsedCensored: true } : {}),
+        },
+      }));
+      expect(records.join('') + JSON.stringify(sink.trackTrace.mock.calls)).not.toContain('private');
+    },
+  );
+
+  it('exports unavailable board duration markers without numeric values', () => {
+    const records: string[] = [];
+    const output = new Writable({ write(chunk: Buffer, _encoding, done) { records.push(chunk.toString()); done(); } });
+    const sink = { ...sdk, trackTrace: vi.fn() };
+    const logger = createLogger({ logLevel: 'info' }, sink, output);
+    logger.info({
+      reqId: '00000000-0000-0000-0000-000000000000',
+      stage: 'source',
+      durationMs: Number.NaN,
+      durationUnavailable: true,
+    }, 'factory.board_phase');
+    logger.info({
+      reqId: '00000000-0000-0000-0000-000000000000',
+      cacheElapsedMs: Number.NaN,
+      cacheElapsedUnavailable: true,
+    }, 'factory.board_read_timing');
+
+    expect(JSON.parse(records[0]!)).toEqual({
+      level: 30, time: expect.any(Number), service: 'jarvis-backend',
+      reqId: '00000000-0000-0000-0000-000000000000',
+      stage: 'source',
+      durationUnavailable: true,
+      msg: 'factory.board_phase',
+    });
+    expect(JSON.parse(records[1]!)).toEqual({
+      level: 30, time: expect.any(Number), service: 'jarvis-backend',
+      reqId: '00000000-0000-0000-0000-000000000000',
+      cacheElapsedUnavailable: true,
+      msg: 'factory.board_read_timing',
+    });
+    expect(sink.trackTrace).toHaveBeenNthCalledWith(1, expect.objectContaining({
+      message: 'factory.board_phase',
+      properties: expect.objectContaining({ durationUnavailable: true }),
+    }));
+    expect(sink.trackTrace).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      message: 'factory.board_read_timing',
+      properties: expect.objectContaining({ cacheElapsedUnavailable: true }),
+    }));
+  });
 
   it('names the WebSocket plugin warning without exporting framework error details', () => {
     const records: string[] = [];
@@ -163,6 +324,7 @@ describe('structured log export', () => {
     'budget_alert.check_failed', 'task_event_archive.failed', 'project_policy.confirmation_failed',
     'dispatcher.operation_failed', 'github.checks_loop_recovery_failed', 'pc_bridge.status_update_failed',
     'google.refresh_token_expired_alert_unavailable', 'google.refresh_token_expired_alert_persistence_failed',
+    'google.calendar_batch_item_failed',
     'telemetry.close_failed',
   ])('exports %s with only bounded failure diagnostics', (event) => {
     const records: string[] = [];
@@ -476,7 +638,7 @@ describe('structured log export', () => {
       'turn_first_token', 'turn_complete', 'chat_history_verification', 'chat_context',
       'tool_catalogue', 'settings', 'turn_context', 'prompt_build', 'model_first_delta',
       'model_coordination', 'model_request', 'model_to_first_delta', 'agent_pre_model',
-      'agent_first_delta', 'agent_auth', 'session_start',
+      'agent_first_delta', 'agent_auth', 'session_start', 'model_auth_max', 'model_request_max',
     ]) {
       logger.info({ phase, durationMs: 234.5, text: 'prompt-secret' }, 'chat.latency');
     }
@@ -491,12 +653,31 @@ describe('structured log export', () => {
       'turn_first_token', 'turn_complete', 'chat_history_verification', 'chat_context',
       'tool_catalogue', 'settings', 'turn_context', 'prompt_build', 'model_first_delta',
       'model_coordination', 'model_request', 'model_to_first_delta', 'agent_pre_model',
-      'agent_first_delta', 'agent_auth', 'session_start',
+      'agent_first_delta', 'agent_auth', 'session_start', 'model_auth_max', 'model_request_max',
     ]);
     expect(records.slice(2).map((record) => JSON.parse(record).durationMs))
-      .toEqual(Array(16).fill(234.5));
+      .toEqual(Array(18).fill(234.5));
     expect(records.join('')).not.toContain('secret');
     expect(JSON.stringify(sdk.trackTrace.mock.calls)).not.toContain('secret');
+  });
+  it.each(['model_auth_max', 'model_request_max'])('rejects invalid %s log durations', (phase) => {
+    const records: string[] = [];
+    const output = new Writable({ write(chunk: Buffer, _encoding, done) {
+      records.push(chunk.toString());
+      done();
+    } });
+    const logger = createLogger({ logLevel: 'info' }, sdk, output);
+    for (const durationMs of [-1, 600001, Infinity, -Infinity, NaN, '4', null]) {
+      logger.info({ phase, durationMs, text: 'private-content' }, 'chat.latency');
+    }
+    for (const record of records) {
+      expect(JSON.parse(record)).toMatchObject({ phase, msg: 'chat.latency' });
+      expect(JSON.parse(record)).not.toHaveProperty('durationMs');
+    }
+    expect(records.join('')).not.toContain('private-content');
+    expect(JSON.stringify(sdk.trackTrace.mock.calls)).not.toContain('private-content');
+    expect(sdk.trackTrace.mock.calls.every(([event]) =>
+      event.message !== 'chat.latency' || !Object.hasOwn(event.properties!, 'durationMs'))).toBe(true);
   });
   it('exports only allowlisted hosted-agent session diagnostics', () => {
     const records: string[] = [];

@@ -34,6 +34,7 @@ describe('JarvisStage', () => {
     await waitFor(() => expect(createScene).toHaveBeenCalledTimes(1));
     expect(createScene.mock.calls[0]?.[2]).toEqual({
       theme: 'dark',
+      active: true,
       reducedMotion: false,
       voiceActive: false,
       hasWindows: false,
@@ -47,6 +48,7 @@ describe('JarvisStage', () => {
     });
     await waitFor(() => expect(update).toHaveBeenLastCalledWith({
       theme: 'dark',
+      active: true,
       reducedMotion: false,
       voiceActive: true,
       hasWindows: true,
@@ -60,14 +62,28 @@ describe('JarvisStage', () => {
     );
     await waitFor(() => expect(update).toHaveBeenLastCalledWith({
       theme: 'light',
+      active: true,
       reducedMotion: false,
       voiceActive: true,
       hasWindows: true,
       orbState: 'idle',
-    }));
+    }, true));
 
     unmount();
     expect(dispose).toHaveBeenCalledTimes(1);
+  });
+
+  it('holds the same room on inactive pages and resumes without recreating it', async () => {
+    const { container, rerender } = render(<JarvisStage theme="dark" active />);
+    await waitFor(() => expect(createScene).toHaveBeenCalledOnce());
+    const stage = container.querySelector('.jarvis-stage');
+    rerender(<JarvisStage theme="dark" active={false} />);
+    expect(update).toHaveBeenLastCalledWith(expect.objectContaining({ active: false }));
+    rerender(<JarvisStage theme="dark" active />);
+    expect(update).toHaveBeenLastCalledWith(expect.objectContaining({ active: true }));
+    expect(container.querySelector('.jarvis-stage')).toBe(stage);
+    expect(createScene).toHaveBeenCalledOnce();
+    expect(dispose).not.toHaveBeenCalled();
   });
 
   it('keeps the Jarvis interface usable when WebGL scene creation fails', async () => {
@@ -149,6 +165,7 @@ describe('JarvisStage', () => {
 
     await waitFor(() => expect(update).toHaveBeenLastCalledWith({
       theme: 'dark',
+      active: true,
       reducedMotion: true,
       voiceActive: false,
       hasWindows: false,

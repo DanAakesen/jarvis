@@ -1,19 +1,17 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { Reflector } from 'three/addons/objects/Reflector.js';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { ThemeMode } from './theme-preference-context';
 import { createJarvisStageOrb } from './JarvisStageOrb';
 import { createOrbMotion } from './jarvis-orb-motion';
 import type { JarvisOrbState } from './voice-presentation';
 import type { VoiceSignals } from './voice-stage-context';
-import {
-  initialJarvisStageQualityLevel,
-  nextJarvisStageQualityLevel,
-  resolveJarvisStageQuality,
-} from './jarvis-stage-quality';
+import { resolveJarvisStageQuality } from './jarvis-stage-quality';
 
 export type JarvisStageOptions = {
   theme: ThemeMode;
+  active: boolean;
   reducedMotion: boolean;
   voiceActive: boolean;
   hasWindows: boolean;
@@ -88,6 +86,7 @@ export function createJarvisStageScene(
   onContextLost: () => void,
   initialOptions: JarvisStageOptions = {
     theme: 'dark',
+    active: true,
     reducedMotion: false,
     voiceActive: false,
     hasWindows: false,
@@ -98,7 +97,7 @@ export function createJarvisStageScene(
   const renderer = new THREE.WebGLRenderer({
     alpha: true,
     antialias: true,
-    powerPreference: 'high-performance',
+    powerPreference: 'low-power',
   });
   const lifecycle = { removeListeners: () => {} };
   try {
@@ -113,6 +112,8 @@ export function createJarvisStageScene(
 }
 
 const ambientFrameInterval = 1000 / 30;
+const voiceFrameInterval = 1000 / 60;
+const reflectionFrameInterval = 1 / 15;
 
 function createJarvisStageSceneWithRenderer(
   host: HTMLElement,
@@ -136,22 +137,24 @@ function createJarvisStageSceneWithRenderer(
   let disposed = false;
   let contextLost = false;
   let animationFrame = 0;
+  let redrawFrame = 0;
   let animating = false;
   let elapsed = 0;
   let previous = performance.now();
+  let lastDrawAt = previous;
   let current = initialOptions;
-  const compactViewport = window.innerWidth <= 700 ||
-    (window.innerHeight <= 500 && (window.matchMedia?.('(pointer: coarse)').matches ?? false));
-  let qualityLevel = initialJarvisStageQualityLevel(renderer.capabilities.maxTextureSize, compactViewport);
-  let qualityFrameCount = 0;
-  let qualityFrameTime = 0;
-  let qualityWindowStarted = performance.now();
-  let smoothQualityWindows = 0;
+  let resizePending = true;
+  let layoutDirty = true;
+  let reflectionDirty = true;
+  let reflectedAt = -Infinity;
+  const viewport = { width: 0, height: 0, pixelRatio: 0, mobile: false };
   let signals: VoiceSignals | null = null;
   const motion = createOrbMotion();
   const orbGeometry = { x: '', y: '', radius: '' };
 
   let palette = readStagePalette();
+  const fog = new THREE.FogExp2(palette.background, current.theme === 'dark' ? 0.015 : 0.012);
+  scene.fog = fog;
   const themeMaterials: { material: THREE.MeshStandardMaterial; role: ThemeColor }[] = [];
   const standard = (
     role: ThemeColor,
@@ -195,11 +198,22 @@ function createJarvisStageSceneWithRenderer(
   scene.add(floor);
   const reflection = new Reflector(new THREE.PlaneGeometry(90, 90), {
     color: palette.reflector,
-    textureWidth: 768,
-    textureHeight: 768,
+    textureWidth: 384,
+    textureHeight: 384,
     multisample: 0,
   });
   const reflectionMaterial = reflection.material as THREE.ShaderMaterial;
+  reflectionMaterial.polygonOffset = true;
+  reflectionMaterial.polygonOffsetFactor = -1;
+  reflectionMaterial.polygonOffsetUnits = -1;
+  const renderReflection = reflection.onBeforeRender;
+  reflection.onBeforeRender = function (...args) {
+    if (!reflectionDirty && elapsed - reflectedAt < reflectionFrameInterval - 0.0001) return;
+    // Reflector retains its texture/matrix between updates and owns renderer-state restoration.
+    renderReflection.apply(this, args);
+    reflectionDirty = false;
+    reflectedAt = elapsed;
+  };
   reflection.rotation.x = -Math.PI / 2;
   reflection.position.y = -0.299;
   scene.add(reflection);
@@ -210,7 +224,7 @@ function createJarvisStageSceneWithRenderer(
   deck.position.y = -0.14;
   platform.add(deck);
   function horizontalRing(parent: THREE.Object3D, radius: number, tube: number, material: THREE.Material, y = 0) {
-    const mesh = new THREE.Mesh(new THREE.TorusGeometry(radius, tube, 10, 128), material);
+    const mesh = new THREE.Mesh(new THREE.TorusGeometry(radius, tube, 8, 96), material);
     mesh.rotation.x = -Math.PI / 2;
     mesh.position.y = y;
     parent.add(mesh);
@@ -248,6 +262,8 @@ function createJarvisStageSceneWithRenderer(
   anchor.add(architecture);
   const chamber = new THREE.Group();
   anchor.add(chamber);
+  const chamberWalls = new THREE.Group();
+  chamber.add(chamberWalls);
   const panelCount = 12;
   const chamberPanels: THREE.Mesh[] = [];
   const start = Math.PI * 0.38;
@@ -260,7 +276,7 @@ function createJarvisStageSceneWithRenderer(
       index % 3 === 1 ? inset : darkMetal,
     );
     panel.position.y = 7.7;
-    chamber.add(panel);
+    chamberWalls.add(panel);
     chamberPanels.push(panel);
     const edge = angle + width;
     const rib = new THREE.Mesh(new RoundedBoxGeometry(0.1, 15.6, 0.18, 2, 0.025), metal);
@@ -305,10 +321,30 @@ function createJarvisStageSceneWithRenderer(
       chamber.add(amberSlit);
     }
   }
-  const farRail = new THREE.Mesh(new THREE.TorusGeometry(6.6, 0.013, 6, 200), metal);
+  const farRail = new THREE.Mesh(new THREE.TorusGeometry(6.6, 0.013, 6, 128), metal);
   farRail.rotation.x = -Math.PI / 2;
   farRail.position.y = -0.25;
   chamber.add(farRail);
+
+  const staticBatches = new Map<THREE.Material, THREE.BufferGeometry[]>();
+  for (const child of [...chamber.children]) {
+    if (!(child instanceof THREE.Mesh) || Array.isArray(child.material) || child.material.transparent) continue;
+    child.updateMatrix();
+    const geometry = child.geometry.index ? child.geometry.toNonIndexed() : child.geometry.clone();
+    geometry.applyMatrix4(child.matrix);
+    const batch = staticBatches.get(child.material) ?? [];
+    batch.push(geometry);
+    staticBatches.set(child.material, batch);
+    chamber.remove(child);
+    child.geometry.dispose();
+  }
+  for (const [material, geometries] of staticBatches) {
+    // These generators share position/normal/uv attributes; walls remain separate for phone scaling.
+    const geometry = mergeGeometries(geometries);
+    if (!geometry) throw new Error('Unable to batch Jarvis room geometry.');
+    chamber.add(new THREE.Mesh(geometry, material));
+    geometries.forEach((part) => part.dispose());
+  }
 
   const mechanisms: { moving: THREE.Group; speed: number; phase: number }[] = [];
   const ringData = [{ radius: 3.6, depth: 0, speed: 0.14 }, { radius: 5.2, depth: -0.45, speed: -0.095 }, { radius: 6.8, depth: -0.9, speed: 0.058 }];
@@ -317,22 +353,22 @@ function createJarvisStageSceneWithRenderer(
     const pivot = new THREE.Group();
     pivot.position.z = depth;
     architecture.add(pivot);
-    const rail = new THREE.Mesh(new THREE.TorusGeometry(radius, 0.055, 10, 192), metal);
+    const rail = new THREE.Mesh(new THREE.TorusGeometry(radius, 0.055, 8, 128), metal);
     pivot.add(rail);
     const moving = new THREE.Group();
     pivot.add(moving);
     for (let section = 0; section < 4; section += 1) {
       const tube = 0.115 + index * 0.022;
-      const arc = new THREE.Mesh(new THREE.TorusGeometry(radius, tube, 12, 44, Math.PI * 0.34), metal);
+      const arc = new THREE.Mesh(new THREE.TorusGeometry(radius, tube, 8, 32, Math.PI * 0.34), metal);
       arc.rotation.z = section * Math.PI / 2 + 0.12;
       moving.add(arc);
       // The accent section carries a fine, crisp amber inlay on its face instead of a thick orange band (Dan, 7 October).
       if (section === index || section === (index + 2) % 4) {
-        const inlay = new THREE.Mesh(new THREE.TorusGeometry(radius, 0.014, 6, 88, Math.PI * 0.34), warmInlay);
+        const inlay = new THREE.Mesh(new THREE.TorusGeometry(radius, 0.014, 6, 56, Math.PI * 0.34), warmInlay);
         inlay.position.z = tube + 0.004;
         arc.add(inlay);
       }
-      const tracer = new THREE.Mesh(new THREE.TorusGeometry(radius - 0.16, 0.011, 6, 44, Math.PI * 0.3), glow);
+      const tracer = new THREE.Mesh(new THREE.TorusGeometry(radius - 0.16, 0.011, 6, 32, Math.PI * 0.3), glow);
       tracer.rotation.z = section * Math.PI / 2 + 0.16;
       tracer.position.z = 0.1;
       moving.add(tracer);
@@ -363,7 +399,7 @@ function createJarvisStageSceneWithRenderer(
     floorBand.add(arc);
   }
 
-  const particleCount = 260;
+  const particleCount = 128;
   const positions = new Float32Array(particleCount * 3);
   const seeds = new Float32Array(particleCount);
   let randomSeed = 29;
@@ -420,10 +456,14 @@ function createJarvisStageSceneWithRenderer(
   scene.add(wallLight, wallLight.target);
 
   const cameraRay = new THREE.Vector3();
+  const rearWorld = new THREE.Vector3();
+  const cameraSpaceOrb = new THREE.Vector3();
   const orbWorld = new THREE.Vector3();
   const themeColors = { current: new THREE.Color(), orb: new THREE.Color() };
   const pointer = { targetX: 0, targetY: 0, x: 0, y: 0 };
   const parallaxRotation = new THREE.Quaternion();
+  const parallaxEuler = new THREE.Euler();
+  const placement = { screenY: 0.46, pixelRadius: 1, scale: 1 };
   const orientation = { baseX: null as number | null, baseY: null as number | null };
 
   const onPointerMove = (event: PointerEvent) => {
@@ -445,7 +485,8 @@ function createJarvisStageSceneWithRenderer(
 
   function setTheme() {
     palette = readStagePalette();
-    scene.fog = new THREE.FogExp2(palette.background, current.theme === 'dark' ? 0.015 : 0.012);
+    fog.color.set(palette.background);
+    fog.density = current.theme === 'dark' ? 0.015 : 0.012;
     renderer.toneMappingExposure = palette.exposure;
     hemisphere.color.set(palette.hemisphere);
     hemisphere.groundColor.set(palette.ground);
@@ -462,85 +503,84 @@ function createJarvisStageSceneWithRenderer(
     warmInlay.color.set(palette.warm);
     amberLight.color.set(palette.warm);
     orbVisual.uniforms.uWarm.value.set(palette.warm);
+    reflectionDirty = true;
   }
 
-  function resize(redraw = true) {
+  function applyResize() {
+    if (!resizePending) return;
+    resizePending = false;
     const bounds = host.getBoundingClientRect();
     const width = Math.max(1, Math.round(bounds.width || window.innerWidth));
     const height = Math.max(1, Math.round(bounds.height || window.innerHeight));
-    camera.aspect = width / height;
-    camera.position.set(0, 4.5, 19);
-    camera.lookAt(0, 3, 0);
-    camera.updateProjectionMatrix();
-    camera.updateMatrixWorld(true);
     const quality = resolveJarvisStageQuality(
       width,
       height,
       window.devicePixelRatio || 1,
       renderer.capabilities.maxTextureSize,
-      qualityLevel,
     );
-    renderer.setPixelRatio(quality.pixelRatio);
-    renderer.setSize(width, height, false);
-    particleGeometry.setDrawRange(0, Math.floor(particleCount * quality.particleScale));
+    if (width !== viewport.width || height !== viewport.height || quality.pixelRatio !== viewport.pixelRatio) {
+      Object.assign(viewport, { width, height, pixelRatio: quality.pixelRatio,
+        mobile: width <= 700 || (height <= 500 && (window.matchMedia?.('(pointer: coarse)').matches ?? false)) });
+      // Atomic and before drawing: setPixelRatio followed by setSize clears the buffer twice.
+      renderer.setDrawingBufferSize(width, height, quality.pixelRatio);
+      camera.aspect = width / height;
+      camera.updateProjectionMatrix();
+      camera.updateMatrixWorld(true);
+      layoutDirty = true;
+      reflectionDirty = true;
+    }
     const target = reflection.getRenderTarget();
     if (target.width !== quality.reflectionSize || target.height !== quality.reflectionSize) {
       target.setSize(quality.reflectionSize, quality.reflectionSize);
     }
-    if (redraw && !disposed && !contextLost && !document.hidden) draw(0);
   }
 
   function draw(delta: number) {
-    if (contextLost) return;
-    const bounds = host.getBoundingClientRect();
-    const width = Math.max(1, Math.round(bounds.width || window.innerWidth));
-    const height = Math.max(1, Math.round(bounds.height || window.innerHeight));
-    const mobile = width <= 700 ||
-      (height <= 500 && (window.matchMedia?.('(pointer: coarse)').matches ?? false));
-    camera.aspect = width / height;
-    camera.position.set(0, 4.5, 19);
-    camera.lookAt(0, 3, 0);
-    camera.updateProjectionMatrix();
-    camera.updateMatrixWorld(true);
-    anchor.scale.setScalar(mobile ? 0.7 : 1);
-    // Extend the phone walls above the viewport instead of exposing a curved ambient-background band.
-    for (const panel of chamberPanels) {
-      panel.scale.y = mobile ? 2 : 1;
-      panel.position.y = mobile ? 15.7 : 7.7;
+    if (disposed || contextLost || document.hidden) return;
+    applyResize();
+    const { width, height, mobile } = viewport;
+    if (layoutDirty) {
+      layoutDirty = false;
+      anchor.scale.setScalar(mobile ? 0.7 : 1);
+      // Extend phone walls above the viewport without changing their room-space curvature.
+      for (const panel of chamberPanels) {
+        panel.scale.y = mobile ? 2 : 1;
+        panel.position.y = mobile ? 15.7 : 7.7;
+      }
+      anchor.updateMatrixWorld(true);
+      cameraRay.set(0, 1 - 0.46 * 2, 0.5).unproject(camera).sub(camera.position).normalize();
+      rearWorld.copy(camera.position).addScaledVector(cameraRay, (-5 - camera.position.z) / cameraRay.z);
+      architecture.position.copy(anchor.worldToLocal(rearWorld));
+      const dock = mobile && current.voiceActive ? getComputedStyle(host.closest('.app-shell') ?? host) : null;
+      const dockRadius = Number.parseFloat(dock?.getPropertyValue('--jarvis-orb-dock-radius') ?? '') || 0;
+      const dockBottom = Number.parseFloat(dock?.getPropertyValue('--jarvis-orb-dock-bottom') ?? '') || 0;
+      placement.screenY = dockRadius > 0 ? (height - dockBottom - dockRadius) / height : 0.46;
+      placement.pixelRadius = dockRadius > 0 ? dockRadius : mobile
+        ? Math.min(width * 0.28, height * 0.16)
+        : Math.min(width * 0.18, height * 0.18);
+      cameraRay.set(0, 1 - placement.screenY * 2, 0.5).unproject(camera).sub(camera.position).normalize();
+      orbWorld.copy(camera.position).addScaledVector(cameraRay, -camera.position.z / cameraRay.z);
+      orbRig.position.copy(orbWorld);
+      const cameraDepth = cameraSpaceOrb.copy(orbWorld).applyMatrix4(camera.matrixWorldInverse).z;
+      placement.scale = placement.pixelRadius * (-cameraDepth) * 2 *
+        Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) / height / 1.12;
+      publishOrbGeometry(width * 0.5, placement.screenY * height, placement.pixelRadius);
     }
-    anchor.updateMatrixWorld(true);
-    cameraRay.set(0, 1 - 0.46 * 2, 0.5).unproject(camera).sub(camera.position).normalize();
-    const rearWorld = camera.position.clone().addScaledVector(cameraRay, (-5 - camera.position.z) / cameraRay.z);
-    architecture.position.copy(anchor.worldToLocal(rearWorld));
     architecture.quaternion.copy(camera.quaternion);
     pointer.x += (pointer.targetX - pointer.x) * (1 - Math.exp(-delta * 2.2));
     pointer.y += (pointer.targetY - pointer.y) * (1 - Math.exp(-delta * 2.2));
-    parallaxRotation.setFromEuler(new THREE.Euler(pointer.y * 0.025, pointer.x * 0.035, 0));
+    parallaxRotation.setFromEuler(parallaxEuler.set(pointer.y * 0.025, pointer.x * 0.035, 0));
     architecture.quaternion.multiply(parallaxRotation);
 
-    const dock = mobile && current.voiceActive ? getComputedStyle(host.closest('.app-shell') ?? host) : null;
-    const dockRadius = Number.parseFloat(dock?.getPropertyValue('--jarvis-orb-dock-radius') ?? '') || 0;
-    const dockBottom = Number.parseFloat(dock?.getPropertyValue('--jarvis-orb-dock-bottom') ?? '') || 0;
-    const screenX = 0.5;
-    const screenY = dockRadius > 0 ? (height - dockBottom - dockRadius) / height : 0.46;
-    const pixelRadius = dockRadius > 0 ? dockRadius : mobile
-      ? Math.min(width * 0.28, height * 0.16)
-      : Math.min(width * 0.18, height * 0.18);
-    cameraRay.set(screenX * 2 - 1, 1 - screenY * 2, 0.5).unproject(camera).sub(camera.position).normalize();
-    orbWorld.copy(camera.position).addScaledVector(cameraRay, -camera.position.z / cameraRay.z);
-    orbRig.position.copy(orbWorld);
-    publishOrbGeometry(screenX * width, screenY * height, pixelRadius);
-
     const awakeTarget = current.voiceActive ? 1 : current.orbState !== 'idle' ? 0.72 : 0;
-    const readLevel = (read: (() => number) | undefined) => {
-      const level = read ? read() : 0;
+    const readLevel = (level = 0) => {
       return Number.isFinite(level) ? THREE.MathUtils.clamp(level, 0, 1) : 0;
     };
     const live = motion.step(delta, {
       awake: awakeTarget,
       state: current.orbState,
-      playback: readLevel(signals ? () => signals!.playbackLevel() : undefined),
-      input: readLevel(signals ? () => signals!.inputLevel() : undefined),
+      playback: readLevel(signals?.playbackLevel()),
+      input: readLevel(signals?.inputLevel()),
       reducedMotion: current.reducedMotion,
     });
     const time = current.reducedMotion ? 0 : elapsed;
@@ -552,14 +592,11 @@ function createJarvisStageSceneWithRenderer(
       ? Math.pow(Math.max(0, Math.sin(time * 0.72 + Math.sin(time * 0.13) * 0.58)), 12)
       : 0;
     const speechLight = live.speak * live.speech;
-    const cameraDepth = orbWorld.clone().applyMatrix4(camera.matrixWorldInverse).z;
-    const scale = pixelRadius * (-cameraDepth) * 2 * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) /
-      height / 1.12;
     // The surge expands then settles; listening breathes and speech swells the shell slightly.
     const pulse = 1 + (idle ? (breath - 0.5) * 0.05 : (1 - live.awake) * (breath - 0.5) * 0.012) +
       idlePulse * 0.018 + live.surge * 0.085 + live.listen * (breath - 0.5) * 0.022 + speechLight * 0.04 -
       live.think * 0.012;
-    orbRig.scale.setScalar(scale * pulse);
+    orbRig.scale.setScalar(placement.scale * pulse);
     orbLight.position.copy(orbWorld);
     amberLight.position.copy(orbWorld);
     wallLight.position.copy(orbWorld);
@@ -609,13 +646,25 @@ function createJarvisStageSceneWithRenderer(
   }
 
   function startAnimation() {
-    if (disposed || contextLost || animating || current.reducedMotion || document.hidden) return;
+    if (disposed || contextLost || animating || !current.active || current.reducedMotion || document.hidden) return;
+    cancelRedraw();
     animating = true;
     previous = performance.now();
-    qualityWindowStarted = previous;
-    qualityFrameCount = 0;
-    qualityFrameTime = 0;
+    lastDrawAt = previous;
     animationFrame = window.requestAnimationFrame(frame);
+  }
+
+  function cancelRedraw() {
+    window.cancelAnimationFrame(redrawFrame);
+    redrawFrame = 0;
+  }
+
+  function requestDraw() {
+    if (disposed || contextLost || document.hidden || animating || redrawFrame) return;
+    redrawFrame = window.requestAnimationFrame(() => {
+      redrawFrame = 0;
+      draw(0);
+    });
   }
 
   function stopAnimation() {
@@ -627,56 +676,39 @@ function createJarvisStageSceneWithRenderer(
 
   function frame(now: number) {
     if (disposed || !animating) return;
-    if (document.hidden || current.reducedMotion || contextLost) {
+    if (document.hidden || !current.active || current.reducedMotion || contextLost) {
       stopAnimation();
-      if (!contextLost && !document.hidden) draw(0);
       return;
     }
     const frameInterval = Math.max(0, now - previous);
-    // The room is ambient: 30 fps keeps it smooth at half the cost. Voice gets the full display rate.
-    const targetInterval = current.voiceActive ? 0 : ambientFrameInterval;
-    if (frameInterval < targetInterval - 4) {
+    const targetInterval = current.voiceActive ? voiceFrameInterval : ambientFrameInterval;
+    if (frameInterval + 0.1 < targetInterval) {
       animationFrame = window.requestAnimationFrame(frame);
       return;
     }
-    const delta = Math.max(0, Math.min(frameInterval / 1000, 0.12));
-    previous = now;
+    const delta = Math.max(0, Math.min((now - lastDrawAt) / 1000, 0.12));
+    lastDrawAt = now;
+    previous += Math.max(1, Math.floor((frameInterval + 0.1) / targetInterval)) * targetInterval;
     elapsed += delta;
     draw(delta);
-    qualityFrameCount += 1;
-    // Quality adapts to lateness against the frame budget, so the deliberate 30 fps cap never lowers quality.
-    qualityFrameTime += Math.min(Math.max(0, frameInterval - Math.max(0, targetInterval - 1000 / 60)), 1000);
-    if (now - qualityWindowStarted >= 1000 && qualityFrameCount > 0) {
-      const nextQuality = nextJarvisStageQualityLevel(qualityLevel, qualityFrameTime / qualityFrameCount);
-      if (nextQuality > qualityLevel) {
-        qualityLevel = nextQuality;
-        smoothQualityWindows = 0;
-        resize(false);
-      } else if (nextQuality < qualityLevel) {
-        smoothQualityWindows += 1;
-        if (smoothQualityWindows >= 3) {
-          qualityLevel = nextQuality;
-          smoothQualityWindows = 0;
-          resize(false);
-        }
-      } else if (qualityFrameTime / qualityFrameCount >= 17) {
-        smoothQualityWindows = 0;
-      }
-      qualityFrameCount = 0;
-      qualityFrameTime = 0;
-      qualityWindowStarted = now;
-    }
     animationFrame = window.requestAnimationFrame(frame);
   }
 
-  const onResize = () => resize();
+  const onResize = () => {
+    resizePending = true;
+    layoutDirty = true;
+    requestDraw();
+  };
   const resizeObserver = typeof ResizeObserver === 'function' ? new ResizeObserver(onResize) : null;
   const onVisibilityChange = () => {
     if (document.hidden) {
       stopAnimation();
+      cancelRedraw();
     } else {
+      resizePending = true;
+      reflectionDirty = true;
       startAnimation();
-      if (!animating) draw(0);
+      requestDraw();
     }
   };
   const onWebGlContextLost = (event: Event) => {
@@ -684,19 +716,21 @@ function createJarvisStageSceneWithRenderer(
     if (contextLost || disposed) return;
     contextLost = true;
     stopAnimation();
+    cancelRedraw();
     onContextLost();
   };
   const onWebGlContextRestored = () => {
     if (!contextLost || disposed) return;
     contextLost = false;
     setTheme();
-    resize(false);
+    resizePending = true;
+    reflectionDirty = true;
     if (document.hidden) {
       onContextRestored();
       return;
     }
-    if (current.reducedMotion) draw(0);
-    else startAnimation();
+    draw(0);
+    startAnimation();
     onContextRestored();
   };
   lifecycle.removeListeners = () => {
@@ -730,6 +764,7 @@ function createJarvisStageSceneWithRenderer(
     disposedOnce = true;
     disposed = true;
     stopAnimation();
+    cancelRedraw();
     lifecycle.removeListeners();
     scene.traverse((object: THREE.Object3D) => {
       if (object instanceof THREE.Mesh || object instanceof THREE.Points) {
@@ -747,20 +782,25 @@ function createJarvisStageSceneWithRenderer(
 
   host.appendChild(renderer.domElement);
   setTheme();
-  resize();
+  draw(0);
   startAnimation();
 
   return {
-    update(options: JarvisStageOptions) {
+    update(options: JarvisStageOptions, refreshAppearance = false) {
       if (disposed) return;
+      const themeChanged = current.theme !== options.theme;
+      const changed = Object.keys(options).some((key) =>
+        options[key as keyof JarvisStageOptions] !== current[key as keyof JarvisStageOptions]);
       current = options;
-      setTheme();
-      if (options.reducedMotion) {
+      if (refreshAppearance || themeChanged) setTheme();
+      layoutDirty = true;
+      if (changed || !animating) reflectionDirty = true;
+      if (options.reducedMotion || !options.active) {
         stopAnimation();
-        if (!document.hidden) draw(0);
       } else {
         startAnimation();
       }
+      requestDraw();
     },
     /** Live audio levels are pulled once per frame; null resets the speech and input envelopes. */
     setSignals(next: VoiceSignals | null) {

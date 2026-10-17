@@ -243,11 +243,18 @@ describe('GitHub webhook receiver', () => {
 
   it.each(['issues', 'pull_request'])('invalidates cached Factory boards for signed %s events', async (event) => {
     const { app } = fixture();
+    const info = vi.spyOn(app.log, 'info');
     const board = {
       projectId: '42', repository: repository.full_name, fetchedAt: timestamp, columns: [],
     };
-    const load = vi.fn(async () => board);
-    await app.factoryBoardCache.get(repository.full_name, load);
+    const updated = { ...board, fetchedAt: '2026-10-04T12:01:00.000Z' };
+    const load = vi.fn(async () => updated).mockResolvedValueOnce(board);
+    await expect(app.factoryBoardCache.get(board.projectId, load)).resolves.toEqual({
+      board, stale: false,
+    });
+    const otherBoard = { ...board, projectId: '43', repository: 'DanAakesen/other' };
+    const otherLoad = vi.fn(async () => otherBoard);
+    const otherSnapshot = await app.factoryBoardCache.get(otherBoard.projectId, otherLoad);
     const body = event === 'issues'
       ? Buffer.from(JSON.stringify({ repository, action: 'opened', issue: { number: 7 } }))
       : Buffer.from(JSON.stringify(payloadFor(event)));
@@ -255,8 +262,27 @@ describe('GitHub webhook receiver', () => {
     const response = await deliver(app, `board-${event}`, event, body);
 
     expect(response.statusCode).toBe(202);
-    await app.factoryBoardCache.get(repository.full_name, load);
+    expect(info).toHaveBeenCalledWith(expect.objectContaining({
+      origin: 'github_webhook', projectId: '42', version: 1,
+      reqId: expect.stringMatching(/^[\da-f-]{36}$/u),
+    }), 'factory.board_invalidated');
+    await expect(app.factoryBoardCache.get(board.projectId, load)).resolves.toEqual({
+      board: updated, stale: false,
+    });
     expect(load).toHaveBeenCalledTimes(2);
+    await expect(app.factoryBoardCache.get(otherBoard.projectId, otherLoad)).resolves.toEqual(otherSnapshot);
+    expect(otherLoad).toHaveBeenCalledOnce();
+
+    const duplicate = await deliver(app, `board-${event}`, event, body);
+    expect(duplicate.statusCode).toBe(202);
+    expect(duplicate.json()).toEqual({ status: 'duplicate' });
+    await expect(app.factoryBoardCache.get(board.projectId, load)).resolves.toEqual({
+      board: updated, stale: false,
+    });
+    await expect(app.factoryBoardCache.get(otherBoard.projectId, otherLoad)).resolves.toEqual(otherSnapshot);
+    expect(load).toHaveBeenCalledTimes(2);
+    expect(otherLoad).toHaveBeenCalledOnce();
+    expect(info.mock.calls.filter(([, message]) => message === 'factory.board_invalidated')).toHaveLength(1);
   });
 
   it('publishes a short status event only when a pull request is marked ready for review', async () => {

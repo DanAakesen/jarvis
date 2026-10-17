@@ -1,4 +1,5 @@
 export { dailyViewIds, dailyModuleId, dailyContractVersion } from './daily.js';
+export { dailyQuerySources, dailyQuerySourcesV1, dailyCapabilitiesVersion, dailyCapabilitiesAccept, dailyQuerySchema, isDailyQuery } from './daily.js';
 
 export const generatedViewVersion = 1;
 export const systemSmokeCheckIds = Object.freeze([
@@ -454,7 +455,7 @@ export const workspaceViewIdSchema = {
   pattern: '^[A-Za-z][A-Za-z0-9_-]{0,63}$',
 };
 export const workspaceNavigationPages = Object.freeze([
-  'home', 'factory', 'settings', 'usage', 'notes', 'knowledge', 'folio', 'status',
+  'home', 'factory', 'settings', 'usage', 'notes', 'knowledge', 'folio', 'status', 'daily',
 ]);
 export const workspaceSettingsSections = Object.freeze([
   'appearance', 'jarvis', 'personality', 'voice', 'presence', 'memory',
@@ -588,7 +589,8 @@ export function isSystemSmokeStatus(value) {
     entry.id === systemSmokeCheckIds[index] &&
     ['ok', 'degraded', 'down', 'unknown'].includes(entry.status) &&
     (entry.reason === undefined ||
-      (entry.status === 'down' && boundedString(entry.reason, 120, 1) && !hasControlCharacters(entry.reason))) &&
+      (['degraded', 'down'].includes(entry.status) &&
+        boundedString(entry.reason, 120, 1) && !hasControlCharacters(entry.reason))) &&
     validTime(entry.checkedAt));
 }
 

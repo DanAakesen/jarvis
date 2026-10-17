@@ -1,6 +1,6 @@
 # Inactive nutrition services (P12-07)
 
-Construct `NutritionStore.forRequest` only after existing Jarvis authentication. It resolves the existing server owner; no input selects an email/owner. This module has no routes, registered tools, composition flag, provider credentials or production writes. P12-09 owns integration with the existing sensitive-tool dispatcher and trusted confirmation/evidence context. That integration must never deserialize `IntakeAuthority` from model/client arguments.
+Construct `NutritionStore.forRequest` only after existing Jarvis authentication. It resolves the existing server owner; no input selects an email/owner. This library does not register routes/tools, supply provider credentials or activate production writes. P12-09's optional compositions integrate the existing sensitive-tool dispatcher and trusted confirmation/evidence context. They must never deserialize `IntakeAuthority` from model/client arguments.
 
 `handlers.ts` supplies typed functions for existing P12-09 composition, not registered tools/routes. Its trusted execution context derives user intent/proposal acceptance from existing Jarvis metadata, never legacy/model `userConfirmed`. Text/voice inputs and photo/portion proposals reuse existing Jarvis transcription/attachment/frame evidence; no new vision model or upload pipeline. Explicit exact-label/favourite logging needs no second confirmation. Photo/portion estimates require acceptance of the displayed proposal even if model arguments claim accurate confidence. Lookup, recommendations and plans cannot log food. `resolveNutrients` gives exact user quantities priority over estimates; unknown macros stay null. Existing `accurate`/`approximate`/`estimate` and `voice`/`photo`/`text`/`mixed` vocabulary is preserved.
 
@@ -10,7 +10,141 @@ SQL uses owner-bound parameterized transactions/range locks and at most three at
 
 Plans accept exactly one breakfast/lunch/dinner plus optional snacks (3–50 slots), each referencing an owned favourite. The server resolves and snapshots names/components/nutrients/provenance and sums totals; model totals are rejected. Normalized plan-name reuse preserves its ID and uses optimistic revisions. Unknown macros keep their totals null. Plans never create meals/queue rows. Additive migration 0042 permits null plan macros; 0043 permits confirmed standalone favourite definitions without fabricated source/intake IDs and retains favourite provenance. Writer-locked down scripts refuse to discard unknowns, definitions or provenance, rather than inventing zeros or source references.
 
+The hosted saved-food continuation reuses these handlers for favourites/aliases,
+plan save/soft-delete and canonical like/dislike/clear. Native review displays
+actual source snapshots; trusted revision/fingerprint context is rechecked
+under SQL locks. Shared `preparePlan` generates both review and persisted items
+and totals. Migration 0050 adds target-only favourite/feedback revisions and
+retains null-clear tombstones. Exact repeats return actual rows without another
+update; older conflicting retries refuse. An absent preference's revision 0 is
+only an initial-version sentinel, not a persisted record. The existing optional
+internal feedback call remains available; it does not confer native authority.
+
+## Inactive internal direct intake
+
+Explicit fourth-argument composition
+`createDailyModules(true, data, undefined, data.nutrition)` registers
+sensitive `daily_food` and `daily_food_review` tools in the existing dispatcher. It is independent of
+MCP enablement and stays absent in production and ordinary read-only
+composition. The direct `daily_food` input contains only `operation: log_favorite | log_exact`.
+
+The persisted current Dan message supplies the complete saved name/alias or
+exact label. Supported examples are `Log my favourite Dinner` and
+`Log yoghurt: 200 kcal, protein 10 g`; quote multiword label names, for example
+`Log "Cottage cheese": 123 kcal`. Decimal points have at most two places;
+ambiguous comma/thousands quantities and unknown syntax refuse. Conditional,
+negated or time-qualified requests do not write. This is an explicit-command
+subset, not general conversational or new-estimate review parity.
+
+Owner, message and active chat/voice session are verified; agent-supplied IDs
+are checked against actual latest history. New writes require a current message
+within ten minutes and use its instant/Copenhagen date, plus actual session
+capture channel. Models cannot select a different food, quantity, date or key.
+Explicit favourite selection accepts the existing saved portion without another
+confirmation, preserving stored confidence and nulls. Its DTO fingerprint is
+rechecked under SQL locks before commit.
+
+One owner/session/message operation key prevents retry duplication. The stored
+source-text/time fingerprint and operation bind real receipt recovery before
+mutable favourite lookup. Edited sources, changed operation and deleted intake
+refuse rather than silently recreating food. Exact committed replays do not
+publish refresh again. Ordinary sensitive message-backed audit, canonical
+meals and acknowledged-commit change publication stay shared. No new ledger,
+migration, estimate approval system or Health export is added.
+
+## Inactive internal reviewed changes
+
+`daily_food_review` accepts a strict `change` object with one operation:
+`log_estimate` and a proposed `food`, `correct` and an exact owned
+`idempotencyKey`/`expectedRevision` plus `changes`, or `delete` and that exact
+key/revision. Models cannot supply confirmation, owner, capture, confidence or
+provenance fields. For example:
+
+```json
+{"change":{"operation":"log_estimate","food":{"mealName":"Proposed portion","energyKcal":200,"proteinGrams":null}}}
+```
+
+The current verified Dan message and active chat/voice session supply source
+identity and capture. New logging defaults occurrence to the message instant;
+a proposed explicit occurrence is displayed and validated, with Copenhagen
+date derived server-side. Every new reviewed write requires present-mode
+browser approval in Now; a plain spoken "yes" is not that approval.
+The existing owner-bound one-time persisted confirmation is consumed before
+its exact callback; explicit browser-only routing prevents Teams delivery even
+if presence flips. Rejection, expiry, cancellation and changed presence refuse.
+No new proposal dispatcher, generic approval callback or model authority.
+
+The summary freezes exact before/after values, units, unknowns, dates and
+revision within 4000 characters. Concurrent pending reviews for a target
+refuse. Food cards expire after two minutes in SQL, the visible card and its
+timer; the whole operation is bounded to three minutes from execution entry.
+The hosted agent allows 210 seconds for this tool's response only, below the
+240-second ingress ceiling. Existing approvals retain their default five
+minutes; ordinary tool and connection deadlines are unchanged. No detached
+write continues after cancellation. Nullable nutrient input uses a
+single number/null JSON-schema type so HTTP coercion cannot invent zero values.
+Store revision/range locks still own correctness after approval. Proposed
+nutrient/component changes remain estimates and clear any whole-meal verified
+claim; unchanged exact field provenance remains. Historical corrections and
+soft deletion have no seven-day restriction and never queue Health writes.
+
+Source/proposal fingerprints and existing SQL operation/revision identity
+protect replay and actual receipt recovery. Deleted repeats return a real
+`already-deleted` tombstone without pretending another delete occurred.
+Direct supported exact labels and actual saved favourites use `daily_food`,
+not redundant review. This source integration does not establish general
+conversational/spoken/photo evidence, physical-phone or hosted-client
+acceptance. Production remains off and original Daily canonical.
+
+## Inactive internal saved food
+
+An independent additive fifth factory composes `daily_saved_food`:
+`createDailyModules(true, data, undefined, data.nutrition, data.nutrition)`.
+The existing fourth argument and default/read-only/MCP compositions are intact.
+`lookup_saved` takes an exact owned name/alias; `read_preferences` takes at most
+50 canonical favourite IDs. Reads need no review, do not contact a provider and
+distinguish missing revision0 from a persisted null clear.
+
+`save_favorite` takes a name, aliases, expectedRevision and exactly one owned
+sourceIdempotencyKey or proposed definition. `save_plan` takes a name,
+description and owned favourite slot entries; `delete_plan` takes an exact ID
+and expected revision. `set_feedback` takes the exact favouriteId, preference
+(`like`, `dislike` or null) and expected revision. New records use revision0.
+Internal operation IDs derive server-side from the verified current human
+message; owner, operationId, confidence, provenance and confirmation arguments
+are not accepted. New definitions are estimates, not independently verified.
+
+Every mutation uses the existing present/browser-only native approval profile:
+120-second SQL/card/timer expiry,180-second operation/voice-relay bound and
+210-second hosted-agent read. Phone refuses before generic approval. Actual
+source/target snapshots freeze before review; source revisions and favourite
+fingerprints are checked again under canonical SQL locks. Replays return actual
+rows/tombstones, and uncertain failures permit one matching readback, never a
+write retry. Summaries over4000characters refuse without truncation.
+Preference commits refresh favourites only after acknowledgement; unchanged
+and replayed rows do not notify. None of these operations logs eaten food,
+exports Health, activates Daily or proves real client/account/device acceptance.
+
 ## Pinned provider contract and evidence limits
+
+An explicit optional Frida argument to `createDailyData(pool, owner, now, frida)`
+adds owner-bound `foodLookup`; `createDailyModules(true, data)` then registers
+read-only `daily_food_lookup` in the existing dispatcher. No adapter means no
+new tool or network request. Existing module/write/MCP arguments stay unchanged.
+Input contains only1-25 generic components with name, positive grams or null,
+and preparationMethod or null. Shared schemas preserve the external MCP form;
+the HTTP shape cannot coerce unknown grams into zero. Caller endpoints,
+credentials, owners and confirmation fields are not accepted.
+
+The tool and existing adapter use20second cancellation within ordinary caller
+budgets; voice retains30seconds, not the reviewed-food exception. Preserve the
+returned DTU5.5/release10/DOI attribution, retrieval time, incomplete totals,
+matched subtotals and unknowns. Reference quantities are not verified eaten food,
+and `confirmationRequired` never supplies native write authority. The shared
+response-byte limit refuses oversized evidence rather than truncating it.
+No SQL request/intake/Health write or refresh results from reference lookup.
+Sensitive audit and unsupported-phone denial remain; this source binding does
+not activate Daily, provision an account or verify a live provider/device.
 
 Coordinator supplied read-only source action contracts at original HEAD `9e193554c9c8c7c23a788ed3d2b0582580b76c0f` and independently verified public Frida DTOs/session/endpoints. The migration deliberately pins release 10 / Frida 5.5 (November 2025), DOI https://doi.org/10.11583/DTU.29500682, dataset version 8 published 19 January 2026. DTU XLSX/ODS data are CC BY 4.0; PDF documentation retains DTU copyright. We use the documented public API, not downloaded dataset bytes, so no binary checksum/export claim is made. Every lookup carries DTU/version/release/DOI attribution and per-100-g edible-food basis.
 
@@ -26,7 +160,33 @@ Protected #717 backup, source/import reconciliation, live provider and physical-
 
 ## Checks
 
-`npm test --workspace @jarvis/backend -- src/daily/nutrition/model.test.ts src/daily/nutrition/store.test.ts src/daily/nutrition/frida.test.ts src/daily/nutrition/handlers.test.ts src/daily/store/owner-store.test.ts src/daily/index.test.ts src/database/migrations.test.ts src/modules.test.ts`
+The optional [hosted nutrition MCP adapter](../mcp/README.md) now provides
+an inactive external composition of these same typed handlers. It has a
+separate least-privilege delegated identity and native proposal review; it
+does not deserialize the trusted execution context from model input.
+Its all-write review requirement is an explicit external limitation, not a
+change to internal exact-label logging. Production composition stays off.
+
+The inactive P12-09 shared query service reads bounded meal history, favourites
+and meal plans. Collection sources use exact ID-only cursors (at most 100 rows),
+not invented date periods or intake totals. Whitelisted DTOs preserve raw display
+aliases, saved nutrient provenance and plan snapshots/revisions/tombstones.
+That read-only composition registers no intake/write route or tool. The separate
+internal composition above is explicit. An optional fourth
+`NutritionStore.forRequest` argument (third `createNutritionHandlers` argument)
+accepts the shared Daily change hub. Log/correction/deletion mark a domain
+change inside their existing transaction and publish only after acknowledged
+commit; exact operation/revision replays do not publish again. Failed attempts,
+uncertain commits and deadlock retries cannot advertise a committed revision.
+Supplied notification sinks use the existing event-listener error boundary;
+a sink failure cannot fail an acknowledged mutation or trigger SQL replay.
+Existing intent/proposal checks and Apple Health metadata behavior are unchanged.
+The new synthetic commit/publication controls supplement, not replace, real
+SQL and hosted-client/device acceptance.
+Favourite saves and plan saves/deletions use the same safe hub with their
+actual collection source; retained plan replays do not announce another change.
+
+`npm test --workspace @jarvis/backend -- src/daily/nutrition/model.test.ts src/daily/nutrition/review.test.ts src/daily/nutrition/store.test.ts src/daily/nutrition/frida.test.ts src/daily/nutrition/handlers.test.ts src/daily/tools/food.test.ts src/daily/tools/food-review.test.ts src/teams/service.test.ts src/daily/store/owner-store.test.ts src/daily/index.test.ts src/database/migrations.test.ts src/modules.test.ts`
 
 `npm run lint --workspace @jarvis/backend` and `npm run build --workspace @jarvis/backend`.
 

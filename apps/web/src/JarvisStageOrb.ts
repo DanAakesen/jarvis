@@ -27,19 +27,20 @@ export function createJarvisStageOrb() {
   const vertex = `varying vec3 vNormal;varying vec3 vPosition;varying vec3 vWorld;
     void main(){vNormal=normalize(mat3(modelMatrix)*normal);vPosition=position;
     vec4 world=modelMatrix*vec4(position,1.);vWorld=world.xyz;gl_Position=projectionMatrix*viewMatrix*world;}`;
-  const shell = new THREE.Mesh(new THREE.SphereGeometry(1.12, 112, 80), new THREE.ShaderMaterial({
+  const shell = new THREE.Mesh(new THREE.SphereGeometry(1.12, 64, 48), new THREE.ShaderMaterial({
     uniforms, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
     vertexShader: vertex,
     fragmentShader: `uniform float uTime;uniform float uEnergy;uniform float uAwake;uniform vec3 uColor;uniform vec3 uWarm;${stateUniforms}
       varying vec3 vNormal;varying vec3 vPosition;varying vec3 vWorld;
+      float band(float phase){return mix(pow(abs(sin(phase)),40.),.125,
+        smoothstep(.3,1.2,fwidth(phase)));}
       void main(){vec3 p=normalize(vPosition);vec3 eye=normalize(cameraPosition-vWorld);
         float rim=pow(1.-abs(dot(normalize(vNormal),eye)),2.7);
         float a=atan(p.z,p.x),lat=asin(clamp(p.y,-1.,1.));
-        float veil=pow(abs(sin(a*17.+lat*23.+sin(lat*7.-uTime*.22)*3.+uTime*.12)),40.);
-        float micro=pow(abs(sin(a*37.-lat*48.+sin(a*4.+uTime*.18)*2.)),54.);
-        float fine=pow(abs(sin(a*26.+lat*39.+sin(lat*9.-uTime*.25)*4.)),40.);
+        float veil=band(a*17.+lat*23.+sin(lat*7.-uTime*.22)*3.+uTime*.12);
+        float fine=band(a*26.+lat*39.+sin(lat*9.-uTime*.25)*4.);
         float thread=fine*smoothstep(.08,.42,rim)*mix(.065,.11,uAwake);
-        float detail=(veil*.15+micro*.035)*(.12+rim*.88)*(1.+uEnergy*.45);
+        float detail=veil*.18*(.12+rim*.88)*(1.+uEnergy*.45);
         float speech=uSpeak*uEnergy;
         float breath=.5+.5*sin(uTime*1.7);
         float strength=mix(.62,1.15,uAwake)*(1.+(1.-uAwake)*(.055*sin(uTime*1.1)))*(1.+uSurge*.9+speech*1.1+uListen*breath*.18);
@@ -72,7 +73,8 @@ export function createJarvisStageOrb() {
   const ribbons = new THREE.Group();
   orb.add(ribbons);
   const ribbonMaterial = new THREE.ShaderMaterial({
-    uniforms, transparent: true, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending,
+    uniforms, transparent: true, depthWrite: false, side: THREE.DoubleSide, forceSinglePass: true,
+    blending: THREE.AdditiveBlending,
     vertexShader: `uniform float uTime;varying vec2 vUv;varying float vRim;
       void main(){vUv=uv;vec3 p=position;float d=sin(p.y*6.+p.z*3.+uTime*.28)*.014;
       p+=normalize(p)*d;vec4 view=modelViewMatrix*vec4(p,1.);
@@ -82,15 +84,17 @@ export function createJarvisStageOrb() {
       varying vec2 vUv;varying float vRim;
       void main(){float envelope=smoothstep(0.,.08,vUv.y)*smoothstep(0.,.08,1.-vUv.y);
         float flow=pow(.5+.5*sin(vUv.x*12.-uTime*(.24+uTool*2.6+uThink*.5)),2.);
-        float veins=pow(.5+.5*sin(vUv.y*90.+sin(vUv.x*28.+uTime*.22)*5.),22.);
+        float phase=vUv.y*90.+sin(vUv.x*28.+uTime*.22)*5.;
+        float veins=mix(pow(.5+.5*sin(phase),22.),.12,smoothstep(.3,1.2,fwidth(phase)));
         float highlight=pow(max(0.,1.-abs(vUv.y-.14)*45.),2.)*flow;
         float light=(.46+.54*uAwake)*(1.+(1.-uAwake)*.08*sin(uTime*1.1+vUv.x*6.))*(1.+uSurge*.8+uSpeak*uEnergy*.9+uTool*.35);
         float opacity=(.055+veins*.12)*envelope*(.35+.65*vRim)+highlight*.27;
         vec3 color=uColor*(1.2+veins*.65)+vec3(.52,.8,1.)*highlight*1.8;
         gl_FragColor=vec4(color,opacity*light);}`,
   });
+  const ribbonGeometries: THREE.BufferGeometry[] = [];
   for (let band = 0; band < 9; band += 1) {
-    const steps = 220;
+    const steps = 128;
     const positions: number[] = [];
     const uvs: number[] = [];
     const indices: number[] = [];
@@ -120,11 +124,16 @@ export function createJarvisStageOrb() {
     geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
     geometry.setIndex(indices);
     geometry.computeVertexNormals();
-    const mesh = new THREE.Mesh(geometry, ribbonMaterial);
-    mesh.rotation.set(tilt, phase * 0.26, band * 0.49);
-    mesh.renderOrder = 4;
-    ribbons.add(mesh);
+    geometry.applyMatrix4(new THREE.Matrix4().makeRotationFromEuler(new THREE.Euler(tilt, phase * 0.26, band * 0.49)));
+    ribbonGeometries.push(geometry);
   }
+  // Additive ribbons do not need per-band sorting or separate back/front passes.
+  const ribbonGeometry = mergeGeometries(ribbonGeometries);
+  if (!ribbonGeometry) throw new Error('Unable to batch Jarvis orb ribbons.');
+  const ribbonMesh = new THREE.Mesh(ribbonGeometry, ribbonMaterial);
+  ribbonMesh.renderOrder = 4;
+  ribbons.add(ribbonMesh);
+  ribbonGeometries.forEach((geometry) => geometry.dispose());
 
   let seed = 71;
   const random = () => {
@@ -165,7 +174,7 @@ export function createJarvisStageOrb() {
       origin.clone().lerp(destination, 0.7).add(bend),
       destination,
     ]);
-    curves.push(new THREE.TubeGeometry(curve, 20, 0.0018 + random() * 0.0012, 3, false));
+    curves.push(new THREE.TubeGeometry(curve, 12, 0.0018 + random() * 0.0012, 3, false));
   }
   for (let index = 0; index < 10; index += 1) {
     const points: THREE.Vector3[] = [];
@@ -175,7 +184,7 @@ export function createJarvisStageOrb() {
       points.push(new THREE.Vector3(Math.cos(angle) * radius, Math.sin(angle) * radius * 0.8,
         Math.sin(angle * 2 + index) * 0.16));
     }
-    curves.push(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(points), 80, 0.0014, 3, false));
+    curves.push(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(points), 48, 0.0014, 3, false));
   }
   const coreMaterial = new THREE.ShaderMaterial({
     uniforms: coreUniforms, transparent: true, depthWrite: false, blending: THREE.NormalBlending,

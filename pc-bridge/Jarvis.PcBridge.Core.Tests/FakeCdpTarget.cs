@@ -11,6 +11,8 @@ internal sealed class FakeCdpTarget : IAsyncDisposable
     private readonly HttpListener _listener = new();
     private readonly CancellationTokenSource _stopping = new();
     private readonly Task _accepting;
+    private readonly List<Task> _handlers = [];
+    private Task<HttpListenerContext>? _pendingAccept;
     private readonly int _port;
 
     private FakeCdpTarget(string role, string name, string type, bool sensitive)
@@ -38,6 +40,8 @@ internal sealed class FakeCdpTarget : IAsyncDisposable
     public List<string> Methods { get; } = [];
     public List<JsonElement> Calls { get; } = [];
     public Uri TargetsUri => new($"http://127.0.0.1:{_port}/json/list");
+    public Func<bool, CancellationToken, Task>? BeforeHandler { get; set; }
+    public bool IsListening => _listener.IsListening;
 
     public static Task<FakeCdpTarget> StartAsync(
         string role = "button",
@@ -51,18 +55,34 @@ internal sealed class FakeCdpTarget : IAsyncDisposable
         while (!_stopping.IsCancellationRequested)
         {
             HttpListenerContext context;
-            try { context = await _listener.GetContextAsync().WaitAsync(_stopping.Token); }
-            catch (OperationCanceledException) { return; }
-            catch (HttpListenerException) when (_stopping.IsCancellationRequested) { return; }
+            _pendingAccept = _listener.GetContextAsync();
+            try { context = await _pendingAccept.WaitAsync(_stopping.Token); }
+            catch (OperationCanceledException) when (_stopping.IsCancellationRequested) { return; }
+            _pendingAccept = null;
 
+            _handlers.Add(HandleContextAsync(context));
+        }
+    }
+
+    private async Task HandleContextAsync(HttpListenerContext context)
+    {
+        try
+        {
             if (context.Request.IsWebSocketRequest)
             {
-                _ = HandleWebSocketAsync(context);
+                await HandleWebSocketAsync(context);
             }
             else
             {
                 await WriteTargetsAsync(context);
             }
+        }
+        catch (OperationCanceledException error) when (
+            _stopping.IsCancellationRequested && error.CancellationToken == _stopping.Token) { }
+        finally
+        {
+            if (!context.Request.IsWebSocketRequest)
+                context.Response.Abort();
         }
     }
 
@@ -81,6 +101,8 @@ internal sealed class FakeCdpTarget : IAsyncDisposable
             },
         });
         context.Response.ContentLength64 = json.Length;
+        if (BeforeHandler is { } beforeHandler)
+            await beforeHandler(false, _stopping.Token);
         await context.Response.OutputStream.WriteAsync(json, _stopping.Token);
         context.Response.Close();
     }
@@ -88,6 +110,8 @@ internal sealed class FakeCdpTarget : IAsyncDisposable
     private async Task HandleWebSocketAsync(HttpListenerContext context)
     {
         using var socket = (await context.AcceptWebSocketAsync(null)).WebSocket;
+        if (BeforeHandler is { } beforeHandler)
+            await beforeHandler(true, _stopping.Token);
         var buffer = new byte[8192];
         using var message = new MemoryStream();
         while (!_stopping.IsCancellationRequested && socket.State == WebSocketState.Open)
@@ -96,8 +120,16 @@ internal sealed class FakeCdpTarget : IAsyncDisposable
             WebSocketReceiveResult received;
             do
             {
-                received = await socket.ReceiveAsync(buffer, _stopping.Token);
-                if (received.MessageType == WebSocketMessageType.Close) return;
+                try { received = await socket.ReceiveAsync(buffer, _stopping.Token); }
+                catch (OperationCanceledException) when (_stopping.IsCancellationRequested) { return; }
+                catch (WebSocketException error) when (
+                    error.WebSocketErrorCode == WebSocketError.ConnectionClosedPrematurely) { return; }
+                if (received.MessageType == WebSocketMessageType.Close)
+                {
+                    await socket.CloseOutputAsync(
+                        WebSocketCloseStatus.NormalClosure, "", _stopping.Token);
+                    return;
+                }
                 message.Write(buffer, 0, received.Count);
             } while (!received.EndOfMessage);
 
@@ -195,9 +227,30 @@ internal sealed class FakeCdpTarget : IAsyncDisposable
     public async ValueTask DisposeAsync()
     {
         _stopping.Cancel();
-        _listener.Stop();
-        try { await _accepting; } catch (HttpListenerException) { }
-        _listener.Close();
-        _stopping.Dispose();
+        try
+        {
+            try { await _accepting; }
+            finally { await Task.WhenAll(_handlers); }
+        }
+        finally
+        {
+            try
+            {
+                // Abort remaining connections without flushing responses on already-closed peer streams.
+                _listener.Abort();
+                if (_pendingAccept is { } pendingAccept)
+                {
+                    try { (await pendingAccept).Response.Abort(); }
+                    catch (HttpListenerException) when (_stopping.IsCancellationRequested) { }
+                    catch (ObjectDisposedException error) when (
+                        error.ObjectName == typeof(HttpListener).FullName) { }
+                }
+            }
+            finally
+            {
+                try { _listener.Close(); }
+                finally { _stopping.Dispose(); }
+            }
+        }
     }
 }

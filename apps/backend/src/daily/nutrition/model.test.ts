@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { authorizeIntake, canonicalJson, meal, normalizeSearchText, plan, prepareMeal, resolveNutrients, suggest, writeDefinition, writeMeal, type MealInput, type Suggestion } from './model.js';
+import { authorizeIntake, canonicalJson, favoriteSearchKey, meal, normalizeSearchText, plan, prepareMeal, resolveNutrients, suggest, writeDefinition, writeMeal, type MealInput, type Suggestion } from './model.js';
 
 export const syntheticMeal: MealInput = {
   id: 'synthetic-01', idempotencyKey: 'synthetic-message-01', mealName: 'Synthetic meal', mealType: null,
@@ -11,6 +11,14 @@ describe('nutrition evidence and budgets', () => {
   it('matches legacy accent/punctuation search normalization without altering display text', () => {
     expect(normalizeSearchText('  Crème-BRÛLÉE / Dinner! ')).toBe('creme brulee dinner');
     expect(normalizeSearchText('MÝ Raw.Alias')).toBe('my raw alias');
+  });
+  it('distinguishes valid history names from favourite keys without weakening favourite validation', () => {
+    expect(favoriteSearchKey('x'.repeat(256))).toBe('x'.repeat(256));
+    for (const name of ['x'.repeat(257), 'x'.repeat(2000), '\u5bff\u53f8', '\ufb03'.repeat(100)]) {
+      expect(favoriteSearchKey(name)).toBeNull();
+      expect(() => normalizeSearchText(name)).toThrow('Invalid nutrition text');
+    }
+    expect(() => favoriteSearchKey('x'.repeat(2001))).toThrow('Invalid nutrition text');
   });
   it.each([
     { mealType: 'supper' }, { energyKcal: -1 }, { energyKcal: 10001 }, { proteinGrams: 1001 },

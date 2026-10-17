@@ -3126,10 +3126,20 @@ describe('backend-relayed Voice Live WebSocket', () => {
     });
     expect(String(update.session?.instructions)).toContain('modern Danish');
   });
-  it.each(['ok', 'refused', 'error'] as const)(
-    'publishes the recorded %s realtime tool outcome without exposing tool data',
-    async (outcome) => {
-      const execute = vi.fn(async (input: unknown) => {
+  it.each([
+    { outcome: 'ok', name: 'greet', timeout: 30_000 },
+    { outcome: 'refused', name: 'greet', timeout: 30_000 },
+    { outcome: 'error', name: 'greet', timeout: 30_000 },
+    { outcome: 'ok', name: 'daily_food_review', timeout: 180_000 },
+    { outcome: 'ok', name: 'daily_saved_food', timeout: 180_000 },
+    { outcome: 'ok', name: 'daily_feed', timeout: 210_000 },
+    { outcome: 'ok', name: 'daily_food_lookup', timeout: 30_000 },
+  ] as const)(
+    'publishes the recorded $outcome realtime $name outcome with its exact budget and no private tool data',
+    async ({ outcome, name, timeout }) => {
+      const signals: AbortSignal[] = [];
+      const execute = vi.fn(async (input: unknown, ...context: [FastifyRequest, AbortSignal]) => {
+        signals.push(context[1]);
         if (outcome === 'refused') throw new ToolRefusal('Private refusal reason.');
         if (outcome === 'error') throw new Error('Private tool error.');
         return { message: `Very good, ${(input as { name: string }).name}.` };
@@ -3137,7 +3147,7 @@ describe('backend-relayed Voice Live WebSocket', () => {
       const toolModule: BackendModule = {
         id: 'test-tools',
         tools: [{
-          name: 'greet',
+          name,
           description: 'Greet a person.',
           inputSchema: {
             type: 'object',
@@ -3171,7 +3181,7 @@ describe('backend-relayed Voice Live WebSocket', () => {
               event_id: 'tool-call-event',
               response_id: 'response-1',
               call_id: 'call_1',
-              name: 'greet',
+              name,
               arguments: '{"name":"Dan"}',
             }));
             socket.send(JSON.stringify({ type: 'response.done', event_id: 'response-done', response: {} }));
@@ -3209,28 +3219,35 @@ describe('backend-relayed Voice Live WebSocket', () => {
       expect(session).not.toHaveProperty('type');
 
       expect(session.tools).toEqual(expect.arrayContaining([
-        expect.objectContaining({ type: 'function', name: 'greet' }),
+        expect.objectContaining({ type: 'function', name }),
         ...factoryModule.tools.map(({ name }) => expect.objectContaining({ type: 'function', name })),
       ]));
       expect(session.instructions).toContain('British English');
-      browser.send(JSON.stringify({ type: 'input_audio_buffer.append', audio: 'AQID' }));
-
-      const [toolOutput] = await Promise.all([toolOutputSent, responseRequested]);
+      const timeoutSpy = vi.spyOn(AbortSignal, 'timeout');
+      let toolOutput: Record<string, unknown>;
+      try {
+        browser.send(JSON.stringify({ type: 'input_audio_buffer.append', audio: 'AQID' }));
+        [toolOutput] = await Promise.all([toolOutputSent, responseRequested]);
+        expect(timeoutSpy).toHaveBeenCalledWith(timeout);
+      } finally { timeoutSpy.mockRestore(); }
       expect(execute).toHaveBeenCalledOnce();
       expect(execute).toHaveBeenCalledWith({ name: 'Dan' }, expect.anything(), expect.any(AbortSignal));
       expect(toolOutput).toMatchObject({ type: 'function_call_output', call_id: 'call_1' });
       const recordedTool = JSON.parse(toolOutput.output as string) as Record<string, unknown>;
-      expect(recordedTool).toMatchObject({ tool: 'greet', outcome });
+      expect(recordedTool).toMatchObject({ tool: name, outcome });
       expect(browserEvents.some((event) => event.type === 'response.function_call_arguments.done')).toBe(false);
       expect(browserEvents).toContainEqual({ type: 'response.done', event_id: 'response-done', response: {} });
       expect(activityEvents).toMatchObject([
         { type: 'listening', source: 'voice' },
         { type: 'thinking', source: 'voice' },
         { type: 'speaking', source: 'voice' },
-        { type: 'tool-call-started', source: 'voice', toolName: 'greet' },
-        { type: 'tool-call-finished', source: 'voice', toolName: 'greet', outcome },
+        { type: 'tool-call-started', source: 'voice', toolName: name },
+        { type: 'tool-call-finished', source: 'voice', toolName: name, outcome },
       ]);
       expect(JSON.stringify(activityEvents)).not.toMatch(/Dan|arguments|Very good|private/iu);
+      const closed = once(browser, 'close');
+      browser.close(); await closed;
+      await vi.waitFor(() => expect(signals[0]?.aborted).toBe(true));
     },
   );
 
@@ -3349,4 +3366,131 @@ describe('backend-relayed Voice Live WebSocket', () => {
     expect(received.filter((event) => event.type === 'session.update')).toHaveLength(1);
     expect(received.some((event) => event.type === 'conversation.item.create')).toBe(false);
   });
+});
+
+describe('calendar confirmation turns', () => {
+  it.each(['/voice', '/voice/da'])('executes once and supplies actual evidence on repeated yes in %s', async (path) => {
+    let pending = true;
+    const summary = 'Create "Reservation" from 2026-11-05T15:00:00Z to 2026-11-06T11:00:00Z (Europe/Copenhagen); attendees: none.';
+    const confirm = vi.fn(async () => {
+      pending = false;
+      return { status: 'completed', detail: 'The event was created.', summary };
+    });
+    const state = vi.fn(async (_input, request: FastifyRequest) => ({
+      ...(pending ? { status: 'awaiting_confirmation', confirmationCode: '12345678', summary }
+        : { status: 'none' }),
+      reply: request.jarvisConversationMessage?.text === 'yes' ? 'approve' : null,
+    }));
+    const module: BackendModule = {
+      id: 'calendar-confirmation-test', registerRoutes: async () => {}, tools: [
+        { name: 'calendar_get_pending_change', description: 'Read pending.',
+          inputSchema: { type: 'object' }, execute: state },
+        { name: 'calendar_confirm_change', description: 'Confirm pending.',
+          inputSchema: { type: 'object' }, execute: confirm },
+      ],
+    };
+    let upstream!: WebSocket;
+    const received: Record<string, unknown>[] = [];
+    const upstreamUrl = await echoServer((socket) => {
+      upstream = socket;
+      socket.on('message', (data) => {
+        const event = JSON.parse(data.toString()) as Record<string, unknown>;
+        received.push(event);
+        if (event.type === 'session.update') socket.send(JSON.stringify({ type: 'session.updated' }));
+      });
+    });
+    const connect = (token: string, signal: AbortSignal) => new WebSocket(upstreamUrl, {
+      headers: { Authorization: ['Bearer', token].join(' ') }, signal,
+    });
+    const { app } = appFor(connect, undefined, [], [module], connect);
+    await app.listen({ host: '127.0.0.1', port: 0 });
+    const address = app.server.address() as AddressInfo;
+    await openBrowser(`ws://127.0.0.1:${address.port}${path}`);
+    await vi.waitFor(() => expect(upstream).toBeDefined());
+    // Establish calendar context without inventing staging or calling a provider.
+    upstream.send(JSON.stringify({ type: 'conversation.item.input_audio_transcription.completed',
+      item_id: 'calendar-request', transcript: 'Add my calendar reservation.' }));
+    await vi.waitFor(() => expect(app.conversationStore!.addMessage).toHaveBeenCalled());
+    // Wait for end-of-turn processing before the later approval.
+    await vi.waitFor(() => expect(received.some((event) => event.type === 'response.create')).toBe(true));
+    for (const itemId of ['approval-1', 'approval-2']) {
+      upstream.send(JSON.stringify({ type: 'response.done' }));
+      upstream.send(JSON.stringify({ type: 'conversation.item.input_audio_transcription.completed',
+        item_id: itemId, transcript: 'yes' }));
+      await vi.waitFor(() => expect(state).toHaveBeenCalledTimes(itemId === 'approval-1' ? 1 : 2));
+    }
+    await vi.waitFor(() => expect(received.filter((event) => event.type === 'response.create' &&
+      (event.response as Record<string, unknown> | undefined)?.tool_choice === 'none')).toHaveLength(2));
+    expect(confirm).toHaveBeenCalledOnce();
+    expect(confirm).toHaveBeenCalledWith({ confirmationCode: '12345678' }, expect.anything(), expect.anything());
+    const evidence = received.filter((event) => event.type === 'conversation.item.create' &&
+      JSON.stringify(event).includes('Actual calendar approval result'));
+    expect(evidence).toHaveLength(2);
+    expect(JSON.stringify(evidence[0])).toContain('completed');
+    expect(JSON.stringify(evidence[0])).toContain('Europe/Copenhagen');
+    expect(JSON.stringify(evidence[1])).toContain('none');
+  });
+
+  it.each(['/voice', '/voice/da'].flatMap((path) =>
+    ['pending', 'completed'].flatMap((phase) =>
+      ['Is it raining tomorrow?', 'Did you find my reservation email?',
+        'Have you checked the build status?', 'Is Gmail working now?'].map((question) =>
+        ({ path, phase, question })))))(
+    'does not hijack $question after a $phase calendar turn in $path', async ({ path, phase, question }) => {
+      let pending = true;
+      const state = vi.fn(async () => pending ? {
+        status: 'awaiting_confirmation', confirmationCode: '12345678', summary: 'Synthetic calendar stage.',
+        reply: 'approve',
+      } : { status: 'none', reply: 'approve' });
+      const confirm = vi.fn(async () => {
+        pending = false;
+        return { status: 'completed', summary: 'Synthetic calendar stage.', detail: 'Fixture completed.' };
+      });
+      const module: BackendModule = { id: 'calendar-status-isolation', registerRoutes: async () => {}, tools: [
+        { name: 'calendar_get_pending_change', description: 'Pending fixture.',
+          inputSchema: { type: 'object' }, execute: state },
+        { name: 'calendar_confirm_change', description: 'Confirmation fixture.',
+          inputSchema: { type: 'object' }, execute: confirm },
+      ] };
+      let upstream!: WebSocket;
+      const received: Record<string, unknown>[] = [];
+      const upstreamUrl = await echoServer((socket) => {
+        upstream = socket;
+        socket.on('message', (data) => {
+          const event = JSON.parse(data.toString()) as Record<string, unknown>;
+          received.push(event);
+          if (event.type === 'session.update') socket.send(JSON.stringify({ type: 'session.updated' }));
+        });
+      });
+      const connect = (token: string, signal: AbortSignal) => new WebSocket(upstreamUrl, {
+        headers: { Authorization: ['Bearer', token].join(' ') }, signal,
+      });
+      const { app } = appFor(connect, undefined, [], [module], connect);
+      await app.listen({ host: '127.0.0.1', port: 0 });
+      const address = app.server.address() as AddressInfo;
+      await openBrowser(`ws://127.0.0.1:${address.port}${path}`);
+      await vi.waitFor(() => expect(upstream).toBeDefined());
+      const sendTurn = async (id: string, transcript: string) => {
+        const count = received.filter(({ type }) => type === 'response.create').length;
+        upstream.send(JSON.stringify({ type: 'response.done' }));
+        upstream.send(JSON.stringify({ type: 'conversation.item.input_audio_transcription.completed',
+          item_id: id, transcript }));
+        await vi.waitFor(() => expect(received.filter(({ type }) => type === 'response.create')).toHaveLength(count + 1));
+      };
+      await sendTurn('calendar-context', 'Add my calendar reservation.');
+      if (phase === 'completed') {
+        await sendTurn('calendar-approval', 'yes');
+        expect(confirm).toHaveBeenCalledOnce();
+      }
+      const previousReads = state.mock.calls.length;
+      const resultOnly = () => received.filter((event) => event.type === 'response.create' &&
+        (event.response as Record<string, unknown> | undefined)?.tool_choice === 'none').length;
+      const previousResultOnly = resultOnly();
+      await sendTurn('unrelated-question', question);
+      await sendTurn('unrelated-yes', 'yes');
+      expect(state).toHaveBeenCalledTimes(previousReads);
+      expect(confirm).toHaveBeenCalledTimes(phase === 'completed' ? 1 : 0);
+      expect(resultOnly()).toBe(previousResultOnly);
+    },
+  );
 });

@@ -1,5 +1,143 @@
 # Design
 
+## Voice proposal summaries (16 October 2026; P11-07)
+
+Reuse the existing text/list window for readable dates and staged proposals.
+Focus an existing matching view rather than reconstructing it as a chart.
+The automatic voice preview uses the actual returned summary, not invented
+event details or confirmation codes. No new renderer, chrome, animation or
+approval control is introduced.
+
+## Mobile composer focus hotfix (16 October 2026)
+
+Reuse the current phone dock and glass chat, with both halves attached to the
+same visible viewport. A saved desktop rectangle must not add a second,
+independently measured fixed composer on phones. Move/resize chrome belongs to
+desktop; phone chat retains Show/Hide, Minimise and Close. Suspend, never delete
+or rewrite, desktop geometry while the phone layout is active. No new shell,
+keyboard-height estimate, focus-scroll workaround or keyboard-fit animation.
+This narrows the earlier manual-placement descriptions to desktop. Controlled
+Chromium layout evidence does not establish physical iPhone/Safari acceptance.
+
+## Chat records and keyboard geometry (16 October 2026; local candidate)
+
+Keep the current glass chat, compact message type and readable composer.
+Prefer one labelled list record per booking/event, blank lines between
+records, and explicit source-backed date/time meaning. The calendar/agent
+lane owns the matching normal-chat instruction; this frontend has no live
+agent visual readback. Existing well-formed GFM tables retain native table
+headers in a focusable horizontal scroll region, with neutral structural
+rules and the existing focus ring. Table-bearing replies can use the available
+transcript width; prose keeps its compact measure. Narrow tables scroll
+within the message rather than widening the page. No raw HTML or guessed repair of flattened
+pipe text is introduced.
+
+Both phone chat halves derive their top/height from the same visual viewport.
+Do not animate keyboard fitting, subtract a second keyboard gap from a
+shrinking fixed viewport, or use page-scroll/delay hacks. Existing manual
+placement, seam and no-keyboard safe-area spacing remain. Content following
+runs before paint so layout-generated scroll events cannot mistake streamed
+growth for reader intent. Latest-following survives transcript resizing;
+reading older history does not jump to bottom during further streamed growth.
+Browser emulation and synthetic viewport events are not physical Safari
+acceptance.
+
+## Shared control geometry (16 October 2026; local candidate)
+
+Dan's three supplied screenshots identify inconsistent Refresh/Create action
+shapes, boxed release icons and repeated bevelled job tabs. Preserve Jarvis's
+existing glass room, typography, palette and layout; this is an app-wide control
+correction, not a new theme or a Factory-only treatment. This contract supersedes
+older capsule-action and refracted-control-rim descriptions below.
+
+Actions, icon buttons, navigation tabs, filters, segmented choices and form
+fields use the existing control radius from `apps/web/src/styles.css`.
+Pills identify compact noninteractive status; genuine switch tracks, orb/media
+geometry and window/panel surfaces retain their semantic shapes. Primary actions
+keep the existing primary fill. Quiet actions use borderless surfaces with
+hover/pressed feedback. Selected choices retain their existing surface/text
+roles, stronger weight and accessible state. No decorative coloured boxes,
+bevels, inset-shadow borders or glowing control outlines, including on hover.
+Neutral field boundaries and real panel/list structure remain; keyboard focus
+uses the existing visible focus outline rather than a permanent accent rim.
+
+Keep compact desktop controls where useful and at least 44px touch targets.
+Segmented groups wrap at narrow widths; scrolling filter rows retain keyboard
+focus and readable labels. Reuse current motion timing and reduced-motion
+handling; do not animate geometry merely to make controls look busy.
+`docs/agent-context.md` and the project-local product-ui skill carry this rule
+for future work. Header/job and mobile chat corrections have separate owners;
+this candidate does not imply their changes are integrated or released.
+
+The header's **Background work** list contains only undismissed jobs and explains
+that research, images, apps and indexing are separate from Factory tasks.
+P11-05 supersedes the earlier Recent jobs view that kept hidden rows visible.
+Dismissing UUID jobs is local to the account/backend and removes the row, never
+cancels work or deletes server history. Keep a stable trigger and explicit empty
+state after the final dismissal; row dismissal focuses the list, while detail
+dismissal and Escape return to the trigger. Cross-tab dismissal of an open run
+returns to the filtered list. Indexing Retry remains explicitly unavailable
+without a supported owned action. A historical interruption is not current
+system health. Preserve borderless tabs and phone-sheet geometry; local fixture
+inspection and live acceptance are separate.
+
+## Fixed balanced stage rendering (15 October 2026; local)
+
+Dan accepted a single middle ground and said the changed stage still looks
+good. Keep the existing room/orb/mirror composition, with no quality selector
+or automatic tiers. The persistent room animates on home/sign-in and during
+voice, and holds its last frame on other pages. Meaningful state, theme and
+size changes can redraw that still frame without rebuilding the scene.
+
+Use bounded ambient/voice rendering and a separately refreshed, cached mirror.
+Reduce mesh detail and combine compatible static geometry; preserve nine
+orb ribbons as one additive single-pass mesh. Filter fine shader bands rather
+than letting subpixel detail shimmer. Resize the drawing buffer only when
+dimensions/density actually change, before the next draw, not after it.
+The window remains the glass boundary; nested panels keep their surfaces
+without another backdrop blur. Pause the ambient CSS field behind work pages.
+This supersedes the older adaptive-tier and route-only descriptions below;
+historical measurements are not results for this revision.
+
+## Header tab overflow correction (15 October 2026; combined candidate)
+
+Keep the existing glass header, fixed brand and fixed action group. Tabs
+shrink from 240px to a readable 140px minimum before their bounded groups
+scroll horizontally; retain title ellipsis, tooltips and focus reveal.
+Use native scrolling without a scrollbar track consuming the compact
+header height. Job details sit outside the scrolling job list.
+Phone window/job rows stay full-width and 44px tall in the existing sheet.
+Remove duplicated runtime activity from the header, preserving the chat
+and voice-orb feedback and distinct backend-availability status.
+
+## Mobile/Status review publication (14 October 2026)
+
+Publish the already accepted phone chat geometry, focus behaviour and
+route-commit acknowledgement without another UI iteration. The local
+sections below retain the reviewed design and controlled-fixture evidence.
+Publication approval is not physical-iPhone/Safari or voice acceptance,
+and does not authorise merge, deployment or another live turn.
+
+## Page navigation acknowledgement correction (14 October 2026; local)
+
+Keep the existing Status page and navigation appearance. Broker success now
+corresponds to the committed destination, including its normal loading/error
+states. No new animation, toast, health probe or replacement composer is
+introduced. Offline actual-App checks cover desktop/phone route commits;
+they are not production, physical-phone or voice acceptance.
+
+## Phone typing keyboard correction (14 October 2026; local)
+
+Keep the existing glass frame and composer as one joined chat surface.
+Home and off-home typing share visual-viewport insets, safe-area spacing and
+the measured composer height. Manually positioned chat keeps its existing
+two-pixel seam and device-local preferred geometry; viewport fitting never
+saves a replacement layout. Keyboard space follows viewport events rather
+than focus alone, since iOS can hide its keyboard while leaving focus intact.
+Outside touch blurs only Message Jarvis, without cancelling the tap.
+Do not animate keyboard fitting or treat pinch zoom as keyboard space.
+Controlled actual-component Chromium checks are not physical Safari proof.
+
 ## Fixed Danish voice in Settings (13 October 2026)
 
 The Voice section shows **Jeppe (Danish)** in a labelled read-only field,
@@ -453,9 +591,20 @@ filter. Controls display pending, success, and error feedback beside the action;
 unavailable PR/artifact links have adjacent explanations rather than implying an
 action is ready.
 
-Needs attention presents a Recover action with a short explanation that recovery
-starts a new sandbox from the task branch and saved history. The action keeps its
-identity while pending and reports success or failure beside the control.
+Needs attention offers **Cancel task** using the shared two-step confirmation,
+**Keep task**, pending label and adjacent error feedback. It does not offer
+Steer, Pause or Resume. Crash Recover and expired-session Continue remain beside
+Cancel when their existing end-reason conditions apply; all actions are disabled
+while one request is pending. Recovery starts a new sandbox from the task branch
+and saved history; cancellation does not start work.
+
+The local cancellation candidate was inspected with the actual component and
+existing styles in an offline browser fixture at 1280 px and in a 390 px iframe.
+Question cancellation, Recover/Continue coexistence, confirmation, synthetic
+pending/failure and terminal refresh were exercised without a live service.
+No horizontal overflow was observed; mobile buttons were approximately 44 px.
+This is isolated component evidence, not deployed task-page or live cleanup
+acceptance. No layout, token or animation change was introduced.
 
 At narrow widths the metadata and controls stack into one column and timeline
 payloads scroll within the page. Existing 44 px controls and focus styles are
@@ -895,6 +1044,7 @@ Dan supplied a reference image and iterated live. Canonical values live in `styl
 - **Dropdowns:** where Chrome supports styleable selects (`appearance: base-select`), every dropdown opens a glass list with lit hover and selected choices, a cyan checkmark and a rotating chevron. Other browsers keep native lists.
 - **Kanban (`/factory/kanban`, first and default in Software Factory; P10-07, 13 October):** reuse the approved glass Task Lens composition with canonical GitHub columns: Backlog, Needs Dan, Ready, In progress, In review, Done. Summary pills count matching issues in In progress, Needs Dan and Done, rather than conflating task and issue state. One actual project is always selected; other filters are local and search waits for a pause in typing. Cards link to the issue and linked PR/checks, show blockers, and add worker/task-state chips plus observed activity, start time, attempts and branch only when supplied. Valid task controls, View details and Open task remain. Snapshot/repository, cached or failed-refresh data and live connection status are written facts; Refresh board gives pending feedback without replacing the board. No task duration is inferred from an overlay lacking finish time. Columns retain their named dots, counts, collapse behavior and existing tint; In progress uses the existing cool tone and In review the existing review/warning tone. Actual Running tasks retain their sheen. Both reduced-motion modes stop the new column pulse. Filtering precedes each explicit 100-card cap.
 - **Release trail (Kanban only):** the project and branch, Build/Deploy/release states as named dots, and up to five recent commits as linked dots on a lit line from oldest to newest. The newest commit glows and pulses. Refresh and Open release are compact pills. Without a selected project a dotted placeholder asks for one. The Tasks page keeps its original bar.
+- **Automatic board refresh (#813, 14 October):** finish an in-flight same-scope read before handling automatic invalidations or reconnection. Coalesce them into one follow-up, retaining updates that arrive during that follow-up. Keep the existing short idle debounce, pending controls, mounted cards/scroll/focus and visible failure/recovery states. Missing-issue and requested-task-link navigation stays loading while that scoped work is pending, including the debounce gap; it uses the existing bounded wait, not an extra read or longer acknowledgement budget. Explicit Refresh/Retry and actual scope changes keep their cancellation semantics. This local correction is supported by controlled fixtures, not an attribution of the original released cancellation storm or production acceptance.
 - **Issue-number navigation (P10-07 follow-up):** retain the selected project, clear interfering local filters, apply an exact `#number` search and unfold the target column. Reuse the existing scroll/glow and reduced-motion behavior, not a new banner or motion system. A task-free issue focuses its real GitHub title link; a linked task retains its foreground task-window focus. Settings' Now panel stays in its existing location while the shell-owned stream remains mounted across page changes.
 - **Current issue context:** keyboard focus inside a visible Factory card identifies that issue in the workspace snapshot. Other focus, a hidden/removed card or another page clears the current selector; a previously foreground task window must not override actual card focus.
 - **Settings:** a centred column of glass section cards with a Back button (to the previous page, or Jarvis when opened directly). The Now and Backend panels sit at the top. Inputs are glass and the save bar floats as a compact pill at the bottom right.
@@ -1014,5 +1164,43 @@ that the repository is public. Text, not colour alone, conveys every state; no
 new animation is introduced.
 
 ## Daily migration visual requirement (12 October 2026)
+
+17 October brief-history source continuation reuses the existing collection
+selector, exact paging and in-page detail/back interaction. Historical timestamps
+remain verbatim with explicit stored-order/timezone limitations; no calendar
+filter implies a fabricated timezone. Plain stored body text is escaped, not
+executed HTML; structured bodies stay inspectable as JSON. Keep historical status
+and delivery labelled as historical. No additional page, notification settings
+or generation/send controls are introduced.
+
+### Current Daily scope (15 October 2026)
+
+Dan excluded new P12-08/#723 coaching/recovery/recomp automation. Preserve one
+Daily page plus existing on-demand GenUI in the single assistant conversation:
+no widget, separate Workouts/Nutrition pages or four mandatory native command
+views. Existing health/nutrition/workout tracking and retained records are not
+removed. Do not add coaching controls or generated coaching views under #724.
+Earlier issue/view descriptions are historical where they conflict with this
+confirmed scope; exclusion is not completed acceptance or UI implementation.
+Existing Jarvis styling, accessibility, mobile/browser and protected migration
+gates remain unchanged.
+
+17 October inactive page source: use one shared-shell record browser, not a
+dashboard of invented summaries. A labelled collection selector and applied
+Copenhagen period precede the returned records. Exact opaque cursors, record
+details, source/read-time/coverage labels and separate receipt/processing/phone
+contact evidence make partial data inspectable. Tables retain zero and unknown
+as different states. Optional existing `ChartView` bars represent individual
+numeric observations on the current page, with units and distinct same-date
+points; no client averaging or interpolation. The table remains available.
+
+Reuse the existing glass page surface, secondary actions, field/control radius,
+selected states and focus tokens. Real browser inspection found native grey
+actions and insufficient contrast over the room; shared controls and the
+existing translucent page surface replace them. Retain the phone chat dock and
+shared navigation. Wide record tables scroll within a labelled, keyboard-focusable
+region rather than crushing dates and unknown values into single-character
+columns at320px. This source is default-off and synthetic-browser inspection
+does not establish live records, import completeness or physical-phone acceptance.
 
 Confirmed by Dan for #730/#731/#732/#726: all migrated React/rich UI fully follows the current Jarvis layout and styling. Current DESIGN.md direction, `apps/web/src/styles.css` tokens, shared components, theme/density/motion settings and native phone/workspace patterns are the source of truth. Preserve capabilities and data semantics while restyling/recomposing legacy Daily content; do not carry its navy/plum/card skin, create a second theme or replace the shared shell, voice or window manager. Generated/ad-hoc views receive only safe trusted Jarvis theme context through the existing bridge, without widened permissions. UI issues require full mobile-first real-browser visual acceptance. P12-03 remains backend/schema-only; this records the standing direction, not completed visual work.

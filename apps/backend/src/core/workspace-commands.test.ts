@@ -7,6 +7,8 @@ import { isWorkspaceReflexOperation, WorkspaceCommandBroker, workspaceCommandToo
 import { workspaceNavigationPages, type WorkspaceCommand } from '@jarvis/contracts';
 import { executeReflexAction, reflexTargets, registerChatReflex, undoPartialReflexAction } from './reflex.js';
 import { toModelToolSchema } from '../voice/realtime.js';
+import { createDailyModules } from '../daily/index.js';
+import { createDailyChanges } from '../daily/revisions.js';
 
 const config = { ...loadConfig({}), logLevel: 'silent' as const };
 const ownerId = config.auth.ownerObjectId;
@@ -26,11 +28,11 @@ afterEach(async () => {
   await Promise.all(apps.splice(0).map((app) => app.close()));
 });
 
-function fixture() {
+function fixture(dailyEnabled = false) {
   const broker = new WorkspaceCommandBroker();
   const records: unknown[] = [];
   const app = buildApp(config, undefined, {
-    modules: [coreModule],
+    modules: [coreModule, ...createDailyModules(dailyEnabled, { query: { query: vi.fn() }, changes: createDailyChanges() })],
     auth: async (token) => token === 'header.user.signature'
       ? { objectId: ownerId, tenantId: config.auth.tenantId, displayName: 'Dan' }
       : { kind: 'jarvis-agent', objectId: 'b331004a-777a-4e53-b7b0-40bf9ab3b9ef', tenantId: config.auth.tenantId },
@@ -171,6 +173,10 @@ describe('workspace command delivery', () => {
   });
 
   it('describes ordered timeline events and dates or period labels to the model', () => {
+    expect(workspaceCommandTool.description).toContain('For readable summaries or dates, reuse the matching existing window');
+    expect(workspaceCommandTool.description).toContain('"renderer":"text"');
+    expect(workspaceCommandTool.description).toContain('"source":{"id":"now","status":"complete"}');
+    expect(workspaceCommandTool.description).toContain('"format":"plain","content":"Actual returned summary"');
     expect(workspaceCommandTool.description).toContain('chart or timeline requests');
     expect(workspaceCommandTool.description).toContain('chart data uses kind line, bar or area and 1–5 named series of x/y points, up to 1,000 points total');
     expect(workspaceCommandTool.description).toContain('data.events in the given order');
@@ -277,7 +283,7 @@ describe('workspace command delivery', () => {
   });
 
   it.each(workspaceNavigationPages)('delivers navigation to %s through the shared tool', async (page) => {
-    const { app, broker } = fixture();
+    const { app, broker } = fixture(page === 'daily');
     const command = { commandId: `navigate-${page}`, operation: 'navigate', page };
     const delivered: WorkspaceCommand[] = [];
     const connection = broker.connect(ownerId, (event, data) => {
@@ -293,6 +299,17 @@ describe('workspace command delivery', () => {
     expect(response.json()).toMatchObject({ outcome: 'ok', result: { applied: true, ...command } });
     expect(delivered).toEqual([command]);
     connection.close();
+  });
+  it('refuses Daily navigation before delivery when its data module is absent', async () => {
+    const { app, broker } = fixture();
+    const send = vi.fn(() => true);
+    const connection = broker.connect(ownerId, send);
+    try {
+      const response = await app.inject({ method: 'POST', url: '/tools/workspace_command', headers: agentHeaders,
+        payload: { commandId: 'disabled-daily', operation: 'navigate', page: 'daily' } });
+      expect(response.json()).toMatchObject({ outcome: 'refused', result: { refused: expect.stringContaining('not enabled') } });
+      expect(send).not.toHaveBeenCalled();
+    } finally { connection.close(); }
   });
 
   it.each([

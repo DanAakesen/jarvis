@@ -12,6 +12,7 @@ import { factoryModule } from './factory/index.js';
 import { createVaultModule } from './vault/index.js';
 import type { BackendModule } from './modules.js';
 import { createRealtimeSessionUpdate } from './voice/realtime.js';
+import { createGoogleModule } from './google/tools.js';
 
 const config = { ...loadConfig({}), logLevel: 'silent' as const };
 const headers = { authorization: ['Bearer', 'a.b.c'].join(' ') };
@@ -32,6 +33,9 @@ const additionalTools: BackendModule = {
     ...createBrowserAgentModule(browserAgent).tools,
     ...createVaultModule({} as never).tools,
     ...createHtmlResearchModule(() => ({} as never), 'gpt-5.5', {} as never).tools,
+    ...createGoogleModule({
+      request: async () => { throw new Error('Parity fixtures must not call Google'); },
+    }, { timeZone: 'Europe/Copenhagen' }).tools,
   ],
   registerRoutes: async () => {},
 };
@@ -50,6 +54,23 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
     Object.getPrototypeOf(value) === Object.prototype;
 }
 
+function missingInstructionTools(
+  instructions: string,
+  catalogue: readonly { name: string; inputSchema: unknown }[],
+): string[] {
+  const toolNames = new Set(catalogue.map(({ name }) => name));
+  const mentionedNames = new Set(
+    instructions.match(/\b[a-z][a-z0-9]*(?:_[a-z0-9]+)+\b/g) ?? [],
+  );
+  // These are a presence mode and a result status, not callable tool identifiers.
+  for (const value of ['on_the_move', 'awaiting_confirmation']) mentionedNames.delete(value);
+  for (const tool of catalogue.filter(({ name }) => name === 'github_read' || name === 'github_write')) {
+    const operations = (tool.inputSchema as { properties: { operation: { enum: string[] } } }).properties.operation.enum;
+    for (const operation of operations) mentionedNames.delete(operation);
+  }
+  return [...mentionedNames].filter((name) => !toolNames.has(name)).sort();
+}
+
 describe('voice and chat tool parity', () => {
   it('matches the voice tool names to /tools and checks shared instruction references', async () => {
     const app = fixture();
@@ -60,17 +81,17 @@ describe('voice and chat tool parity', () => {
 
     expect(voice.tools.map(({ name }) => name)).toEqual(catalogue.map(({ name }) => name));
 
-    const toolNames = new Set(catalogue.map(({ name }) => name));
-    const mentionedNames = new Set(
-      capabilityInstructions(defaultSettings.memory).match(/\b[a-z][a-z0-9]*(?:_[a-z0-9]+)+\b/g) ?? [],
-    );
-    mentionedNames.delete('on_the_move');
-    // github_read and github_write take an operation enum; the instructions name those operations.
-    for (const tool of catalogue.filter(({ name }) => name === 'github_read' || name === 'github_write')) {
-      const operations = (tool.inputSchema as { properties: { operation: { enum: string[] } } }).properties.operation.enum;
-      for (const operation of operations) mentionedNames.delete(operation);
-    }
-    expect([...mentionedNames].filter((name) => !toolNames.has(name)).sort()).toEqual([]);
+    expect(catalogue.map(({ name }) => name)).toEqual(expect.arrayContaining([
+      'mail_search', 'calendar_create_event', 'calendar_create_events',
+      'calendar_get_pending_change', 'calendar_confirm_change',
+    ]));
+    expect(missingInstructionTools(capabilityInstructions(defaultSettings.memory), catalogue)).toEqual([]);
+  });
+
+  it('still rejects unregistered tools without mistaking result statuses for tools', () => {
+    expect(missingInstructionTools(
+      'calendar_missing_tool returned awaiting_confirmation in on_the_move mode.', [],
+    )).toEqual(['calendar_missing_tool']);
   });
 
   it('keeps every registered model-facing schema rooted at a plain object', async () => {

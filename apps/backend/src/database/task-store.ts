@@ -12,6 +12,7 @@ import type {
   TaskModelConfig,
   TaskModelUpdateResult,
   TaskRecord,
+  TaskRuntimeVersion,
   TaskStore,
   TaskTransitionResult,
   TaskUsageRecord,
@@ -400,6 +401,26 @@ async function acquireSleepSwitchLock(transaction: sql.Transaction, mode: 'Share
         @Resource = @resource, @LockMode = @mode, @LockOwner = N'Transaction', @LockTimeout = 10000;
       SELECT @result AS result;`);
   if ((recordset[0]?.result ?? -1) < 0) throw new Error('Task coordination lock unavailable');
+}
+
+export async function readTaskRuntimeVersion(request: sql.Request, taskId: string): Promise<TaskRuntimeVersion | null> {
+  const { recordset } = await request
+    .input('taskId', sql.BigInt, BigInt(taskId))
+    .query<TaskRuntimeVersion>(`SELECT CAST(session.id AS varchar(19)) AS sandboxSessionId,
+      session.foundry_session_id AS foundrySessionId, session.status AS sessionStatus,
+      CAST(turn.id AS varchar(19)) AS latestTurnId
+      FROM dbo.tasks AS task WITH (UPDLOCK, HOLDLOCK)
+      OUTER APPLY (
+        SELECT TOP (1) id, foundry_session_id, status
+        FROM dbo.sandbox_sessions WITH (UPDLOCK, HOLDLOCK)
+        WHERE task_id = task.id ORDER BY started_at DESC, id DESC
+      ) AS session
+      OUTER APPLY (
+        SELECT TOP (1) id FROM dbo.sandbox_turns WITH (UPDLOCK, HOLDLOCK)
+        WHERE sandbox_session_id = session.id ORDER BY started_at DESC, id DESC
+      ) AS turn
+      WHERE task.id = @taskId;`);
+  return recordset[0] ?? null;
 }
 
 export function createTaskStore(
@@ -826,6 +847,8 @@ export function createTaskStore(
       completionVerified = false,
       eventReason?: string,
       eventSummary?: string,
+      expectedState?: TaskState,
+      expectedRuntime?: TaskRuntimeVersion,
     ): Promise<TaskTransitionResult> {
       const transaction = new sql.Transaction(pool);
       await transaction.begin();
@@ -858,9 +881,20 @@ export function createTaskStore(
           await transaction.rollback();
           return { kind: 'not-found' };
         }
-        if (!canTransitionTask(current, state, completionVerified)) {
+        if ((expectedState !== undefined && current !== expectedState) ||
+            !canTransitionTask(current, state, completionVerified)) {
           await transaction.rollback();
           return { kind: 'invalid-transition' };
+        }
+        if (expectedRuntime !== undefined) {
+          const runtime = await readTaskRuntimeVersion(new sql.Request(transaction), id);
+          if (!runtime || runtime.sandboxSessionId !== expectedRuntime.sandboxSessionId ||
+              runtime.foundrySessionId !== expectedRuntime.foundrySessionId ||
+              runtime.sessionStatus !== expectedRuntime.sessionStatus ||
+              runtime.latestTurnId !== expectedRuntime.latestTurnId) {
+            await transaction.rollback();
+            return { kind: 'invalid-transition' };
+          }
         }
         const releasesLease = ['Paused', 'NeedsAttention', 'Done', 'Cancelled'].includes(state);
         const updated = await new sql.Request(transaction)

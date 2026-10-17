@@ -27,6 +27,17 @@ Status as of 14 October 2026.
 `Verified live` records the date of coordinator-confirmed production acceptance; blank means no live confirmation is recorded.
 Counts cover the 137 feature rows in the seven-column tables below; partial verification does not make the complete feature Live. Live: 11 · Built, not verified live: 122 · Offline only: 1 · Planned: 2 · In progress: 1
 
+## Mobile composer focus hotfix (16 October 2026)
+
+P11-06 / #860 suspends saved desktop placement during phone layout and
+uses the existing viewport dock for both chat halves. Drafts and desktop
+preferences are retained. Focused checks, web lint/types/build and controlled
+rendered phone/desktop cases pass. #863 passed exact-head full CI/CodeQL and
+shipped as `6192574e` through successful normal web Deploy `38953446877`.
+The public JavaScript entry matches that build. Physical-phone acceptance
+remains open on #860; existing complete-feature rows below are not upgraded by
+this bounded correction.
+
 ## Jarvis: conversation and voice
 
 | Feature | What Dan can do | Surface | Where | Status | Verified live | Tasks |
@@ -54,7 +65,7 @@ Counts cover the 137 feature rows in the seven-column tables below; partial veri
 | Voice transcripts | Read what was said in each voice sitting, with voice minutes | Screen | Main page | Built |  | P5-06 |
 | Phone calling | No production number is verified or available in backend configuration today. When Teams Phone is provisioned, call the number assigned to Jarvis's Teams resource account from Dan's Teams identity; `/phone/status` surfaces module configuration and recent call outcomes. | Phone | Backend `/phone/status` | Offline only; production lacks the ACS, Teams resource-account and Key Vault configuration required by `apps/backend/src/config.ts:168-200` |  | P7-01, P9-22 |
 | Task context | Jarvis knows running tasks and recent events without asking | Background | — | Built |  | P4-04 |
-| Background jobs | See research and other slow work in the workspace; inspect persisted status, bounded step history, failure reason and result window; retry failed research from its saved topic/depth; interrupted work is marked failed at startup; history and retry inputs last 30 days | Both | `/jobs`, `event: job`, `list_jobs`, `get_job`, `cancel_job`, `retry_job` | Built offline; SQL Server/live multi-replica behavior unverified |  | P9-14, P9-30 |
+| Background jobs | See research and other slow work in the workspace; the Background work header lists undismissed runs separately from Factory tasks, with scoped persistent dismissal and distinct empty/error states; inspect saved status, bounded step history, failure reason and result window; retry failed research through existing tools from its saved topic/depth; interrupted work is marked failed at startup; history and retry inputs last 30 days | Both | Header, `/jobs`, `event: job`, `list_jobs`, `get_job`, `cancel_job`, `retry_job` | P11-05 header correction is a local candidate; SQL Server/live multi-replica behavior unverified |  | P9-14, P9-30, P11-05 |
 | Honest confirmations | Jarvis reports refused or failed actions as such, never as done | Voice/chat | — | Built |  | P4-05 |
 | Routines | Remember successful PC/browser operation sequences without entered values; Jev selects and verifies fresh targets, falling back to planning on drift. List, rename and delete saved routines. | Backend API and voice/chat tools | `/routines`, `task_routines`; legacy recipe aliases for one release | Backend built offline; UI label work remains separate; live replay timing pending |  | P7-35, P9-35, P7-34, P5-14 |
 | Folio | Search and reopen research, HTML apps, generated images and knowledge-graph views; Jarvis can rename, pin/unpin or remove one entry by id or unique query. Removal requires item-naming Now approval while present and retains the source artifact | Both | `/folio`, `folio_search`, `folio_open`, `folio_manage`; Folio rail/pane | Built, not verified live; Folio API was verified live, but management and UI acceptance remain pending | 2026-10-10 | P9-25, P9-56 |
@@ -305,4 +316,4 @@ P12-03 adds only the empty owner-bound persistence schema and inactive exact-key
 
 [Approved scope and existing issue URLs](daily-migration.md). No TickTick integration or original Daily repository/data deletion.
 
-P12-10 has inactive source-contract-based resumable Gmail/calendar services, exact waiting/order selectors, owner-local snapshots/suppressions and bounded manual refresh with independent denied/partial/stale/oversized-source states. Semantic extraction uses the existing protected chat model/identity/settings with tool-free JSON transport and strict local validation; absent/failed capability is unavailable. Source and model-interface contracts are supplied; deployed-model/consent/live/private/phone parity remain open. No registered feeds, broadened OAuth or live-provider success is claimed.
+P12-10 has inactive source-contract-based resumable Gmail/calendar services, exact waiting/order selectors, owner-local snapshots/suppressions and bounded manual refresh with independent denied/partial/stale/oversized-source states. Semantic extraction uses the existing protected chat model/identity/settings with tool-free JSON transport and strict local validation; absent/failed capability is unavailable. The P12-09 continuation adds opt-in sensitive `daily_feed` reads and native-reviewed refresh/visibility operations through those shared services, with exact under-lock targets and acknowledged-commit invalidation. Production remains unregistered/default-off and nutrition-only MCP cannot access feeds. Source and model-interface contracts are supplied; stored-grant/CalendarList/deployed-model/consent/live/private/phone parity remain open. No broadened OAuth or live-provider success is claimed.

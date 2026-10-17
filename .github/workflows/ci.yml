@@ -1,5 +1,6 @@
-# Aggregate CI for the monorepo (P0-10). Runs every component check on each
-# ready (non-draft) PR and on workflow_dispatch. Draft PRs and pushes to main are
+# Aggregate CI for the monorepo. Selects affected checks and dependencies on each
+# ready (non-draft) PR; shared/unknown inputs and dispatch retain full coverage.
+# Draft PRs and pushes to main are
 # skipped to save Actions minutes (L83): a PR merges only when it is up to date
 # with main and green, so the merged tree was already tested. Copilot PR ready
 # dispatches this workflow after marking a PR ready.
@@ -11,48 +12,101 @@ on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
   workflow_dispatch:
+    inputs:
+      pr:
+        description: Existing ready PR (required for Copilot-ready qualification)
+        required: false
+        type: string
 
 permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.event.pull_request.number || github.ref }}
+  # A delayed synchronize event can still carry draft=true after ready_for_review.
+  # Its skipped run must never cancel the ready candidate's qualification.
+  group: ci-${{ github.event.pull_request.number || github.ref }}${{ github.event_name == 'pull_request' && github.event.pull_request.draft && '-draft' || '' }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  plan:
+    name: Qualification impact
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      selection: ${{ steps.impact.outputs.selection }}
+      web: ${{ steps.impact.outputs.web }}
+      backend: ${{ steps.impact.outputs.backend }}
+      database: ${{ steps.impact.outputs.database }}
+      foundry: ${{ steps.impact.outputs.foundry }}
+      runner: ${{ steps.impact.outputs.runner }}
+      jarvis-agent: ${{ steps.impact.outputs.jarvis-agent }}
+      infra: ${{ steps.impact.outputs.infra }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version-file: .python-version
+      - id: impact
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: python .github/scripts/pipeline_impact.py --base "$BASE"
+
   web:
     name: Web
-    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
+    needs: plan
+    if: needs.plan.outputs.web == 'true'
     uses: ./.github/workflows/web-ci.yml
 
   backend:
     name: Backend
-    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
+    needs: plan
+    if: needs.plan.outputs.backend == 'true'
     uses: ./.github/workflows/backend-ci.yml
 
   database:
     name: Database
-    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
+    needs: plan
+    if: needs.plan.outputs.database == 'true'
     uses: ./.github/workflows/database-ci.yml
 
   foundry:
     name: Foundry
-    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
+    needs: plan
+    if: needs.plan.outputs.foundry == 'true'
     uses: ./.github/workflows/foundry-contract.yml
 
   runner:
     name: Runner
-    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
+    needs: plan
+    if: needs.plan.outputs.runner == 'true'
     uses: ./.github/workflows/runner-ci.yml
 
   jarvis-agent:
     name: Jarvis agent
-    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
+    needs: plan
+    if: needs.plan.outputs.jarvis-agent == 'true'
     uses: ./.github/workflows/jarvis-agent-ci.yml
+
+  infra:
+    name: Infrastructure offline build and lint
+    needs: plan
+    if: needs.plan.outputs.infra == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: |
+          az bicep install --version v0.44.1
+          az bicep build --file infra/main.bicep --stdout >/dev/null
+          az bicep lint --file infra/main.bicep
 
   python:
     name: Python lint, test and build
-    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
+    needs: plan
+    if: needs.plan.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -61,22 +115,46 @@ jobs:
         with:
           python-version-file: .python-version
       - name: Check present Python components
-        run: bash .github/scripts/python-ci.sh
+        env:
+          RUNNER: ${{ needs.plan.outputs.runner }}
+          AGENT: ${{ needs.plan.outputs.jarvis-agent }}
+        run: |
+          components=()
+          if [[ "$RUNNER" == true ]]; then components+=(runner); fi
+          if [[ "$AGENT" == true ]]; then components+=(agents/jarvis); fi
+          if ((${#components[@]})); then bash .github/scripts/python-ci.sh "${components[@]}"; fi
       - name: Plan-status script tests
         env:
           PYTHONPATH: .github/scripts
         run: python -m unittest discover -s .github/scripts/tests -v
 
   result:
-    name: CI result
+    name: ${{ github.event_name == 'pull_request' && github.event.pull_request.draft && 'Draft CI not qualified' || 'CI result' }}
     if: always() && (github.event_name != 'pull_request' || !github.event.pull_request.draft)
-    needs: [web, backend, database, foundry, runner, jarvis-agent, python]
+    needs: [plan, web, backend, database, foundry, runner, jarvis-agent, infra, python]
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
     steps:
-      - name: Require every component check to pass
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version-file: .python-version
+      - name: Require selected checks and record exact tested tree
         env:
           RESULTS: ${{ toJSON(needs) }}
-        run: |
-          echo "$RESULTS" | jq -r 'to_entries[] | "\(.key): \(.value.result)"'
-          echo "$RESULTS" | jq -e 'all(.[]; .result == "success")' >/dev/null
+          SELECTION: ${{ needs.plan.outputs.selection }}
+          CANDIDATE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          PULL_REQUEST: ${{ inputs.pr }}
+          GH_TOKEN: ${{ github.token }}
+        run: python .github/scripts/pipeline_evidence.py
+      - name: Retain content-free qualification and failure evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ci-evidence-${{ github.run_attempt }}
+          path: ci-evidence.json
+          if-no-files-found: error
+          retention-days: 30

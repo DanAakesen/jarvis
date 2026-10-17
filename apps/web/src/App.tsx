@@ -5,7 +5,8 @@ import type { HtmlArtifactFrame, JarvisActivityEvent, WorkspaceCommand, Workspac
 import type { PublicConfig } from '../config/public-config';
 import { useJarvisActivity } from './activity-context';
 import { JarvisActivityProvider } from './activity-provider';
-import { areas } from './areas';
+import { appAreas } from './areas';
+import { DailyRefreshContext } from './daily/refresh';
 import { ContextPanel, ContextPanelProvider } from './ContextPanel';
 import { ConversationIntentProvider } from './ConversationIntentProvider';
 import type { CameraController, ScreenShareController } from './screen-sharing';
@@ -51,6 +52,7 @@ import { KnowledgeBackendContext } from './knowledge/knowledge-context';
 import { PresenceChip, PresenceSettings } from './Presence';
 import { MemorySettings } from './MemorySettings';
 import { createWorkspacePinsClient } from './workspace-pins';
+import { usePhoneChatViewport } from './phone-chat-viewport';
 
 const SettingsActivityHostContext = createContext<((host: HTMLDivElement | null) => void) | null>(null);
 
@@ -61,7 +63,7 @@ const researchInProgress = (status: string) => status === 'running' || status ==
 const sidebarLimits = { min: 160, max: 420 };
 const contextLimits = { min: 220, max: 560 };
 
-type ShellIconName = 'home' | 'factory' | 'knowledge' | 'usage' | 'status' | 'navigation' | 'screen' | 'camera' | 'context' | 'settings' | 'close' | 'folio';
+type ShellIconName = 'home' | 'factory' | 'knowledge' | 'usage' | 'status' | 'navigation' | 'screen' | 'camera' | 'context' | 'settings' | 'close' | 'folio' | 'daily';
 
 function activityLabel(event: JarvisActivityEvent | null): string {
   if (!event) return 'Jarvis is working';
@@ -96,6 +98,8 @@ function ShellIcon({ name }: { name: ShellIconName }) {
       return <svg {...common}><path d="M4 20V11m5 9V5m5 15v-7m5 7V8" /><path d="M2 21h20" /></svg>;
     case 'status':
       return <svg {...common}><path d="M2 12h4l3-8 5 16 3-8h5" /></svg>;
+    case 'daily':
+      return <svg {...common}><path d="m6.5 6.5 11 11M3 7l4-4m-2 6 4-4m6 14 4-4m-2 6 4-4" /></svg>;
     case 'navigation':
       return <svg {...common}><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M9 4v16m-3-11h1m-1 4h1" /></svg>;
     case 'screen':
@@ -113,34 +117,48 @@ function ShellIcon({ name }: { name: ShellIconName }) {
   }
 }
 
-function Shell({ signedIn, config, session, camera, screenShare }: {
+function Shell({ signedIn, config, session, camera, screenShare, dailyEnabled }: {
   signedIn: boolean;
   config: PublicConfig;
   session: SignInSession;
   camera: CameraController;
   screenShare: ScreenShareController;
+  dailyEnabled: boolean;
 }) {
   return (
     <ConversationIntentProvider>
       <ContextPanelProvider>
-        <ShellLayout signedIn={signedIn} config={config} session={session} camera={camera} screenShare={screenShare} />
+        <ShellLayout signedIn={signedIn} config={config} session={session} camera={camera} screenShare={screenShare} dailyEnabled={dailyEnabled} />
       </ContextPanelProvider>
     </ConversationIntentProvider>
   );
 }
 
-function ShellLayout({ signedIn, config, session, camera, screenShare }: {
+function ShellLayout({ signedIn, config, session, camera, screenShare, dailyEnabled }: {
   signedIn: boolean;
   config: PublicConfig;
   session: SignInSession;
   camera: CameraController;
   screenShare: ScreenShareController;
+  dailyEnabled: boolean;
 }) {
+  const areas = appAreas(dailyEnabled);
+  const [dailyRefresh, setDailyRefresh] = useState(0);
+  const onDailyRefresh = useCallback(() => { if (dailyEnabled) setDailyRefresh(value => value + 1); }, [dailyEnabled]);
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const home = pathname === '/';
   const pathnameRef = useRef(pathname);
-  useLayoutEffect(() => { pathnameRef.current = pathname; }, [pathname]);
+  const pendingPageNavigation = useRef<{ path: string; finish: (result: SessionCommandResult) => void } | null>(null);
+  useLayoutEffect(() => {
+    pathnameRef.current = pathname;
+    const pending = pendingPageNavigation.current;
+    pending?.finish(pathname === pending.path ? { applied: true } :
+      { applied: false, reason: 'Page navigation was superseded before completion.' });
+  }, [pathname]);
+  useEffect(() => () => pendingPageNavigation.current?.finish({
+    applied: false, reason: 'Page navigation was cancelled before completion.',
+  }), []);
   const getAccessToken = session.getAccessToken;
   const { working, latestActivity, workText } = useJarvisActivity();
   const activityText = activityLabel(latestActivity);
@@ -177,11 +195,13 @@ function ShellLayout({ signedIn, config, session, camera, screenShare }: {
   }, [signedIn, pathname]);
   const [voiceHasWindows, setVoiceHasWindows] = useState(false);
   const [phone, setPhone] = useState(() => window.matchMedia?.(PHONE_LAYOUT_MEDIA_QUERY).matches ?? false);
+  const shellElement = useRef<HTMLDivElement>(null);
+  usePhoneChatViewport(shellElement, signedIn && phone && !voiceActive);
   // Phone shell: the open windows list and the page menu are sheets opened from the top bar.
   const [windowsSheetOpen, setWindowsSheetOpen] = useState(false);
   const windowCount = openWindows.filter((window) => window.viewId !== conversationViewId).length;
   const [menuOpen, setMenuOpen] = useState(false);
-  const closeMenu = useCallback(() => setMenuOpen(false), []);
+  const closeMenu = useCallback(() => setMenuOpen(false), [setMenuOpen]);
   // Jarvis switching the page Dan is looking at (P9-40): the route changes with the usual page transition, then the
   // named Settings section or task card is scrolled into view and glows once its data has loaded.
   // The Folio pane (P9-25) shares the left sidebar slot with area navigation; only one is open at a time.
@@ -198,7 +218,7 @@ function ShellLayout({ signedIn, config, session, camera, screenShare }: {
     }
     setFolioOpen(false);
     setNavigationOpen(false);
-  }, []);
+  }, [setFolioOpen, setNavigationOpen]);
   const openTaskRef = useRef<(taskId: string) => void>(() => {});
   const conversationWindowRef = useRef<{ open: boolean; setOpen: (open: boolean) => boolean } | null>(null);
   const cancelReveal = useRef<() => void>(() => {});
@@ -206,7 +226,7 @@ function ShellLayout({ signedIn, config, session, camera, screenShare }: {
   const factoryIssueNavigator = useRef<FactoryIssueNavigator | null>(null);
   const issueNavigationAbort = useRef<AbortController | null>(null);
   const navigateTo = useCallback((request: NavigateRequest) => {
-    const target = resolveNavigation(request);
+    const target = resolveNavigation(request, dailyEnabled);
     if (!target.ok) return false;
     if (target.issueNumber !== undefined) return false;
     if (target.pane === 'folio') { setFolioOpen(true); return true; }
@@ -220,7 +240,7 @@ function ShellLayout({ signedIn, config, session, camera, screenShare }: {
     cancelReveal.current();
     cancelReveal.current = revealId ? revealWhenReady(() => document.getElementById(revealId), reduced) : () => {};
     return true;
-  }, [closePagePanels, navigate]);
+  }, [closePagePanels, dailyEnabled, navigate, setFolioOpen]);
   useEffect(() => () => cancelReveal.current(), []);
   useEffect(() => {
     if (pathname !== '/factory/kanban') issueNavigationAbort.current?.abort();
@@ -228,7 +248,7 @@ function ShellLayout({ signedIn, config, session, camera, screenShare }: {
   useEffect(() => () => issueNavigationAbort.current?.abort(), []);
   // What Dan is looking at (P9-43), sent with the snapshot so Jarvis can say "this page" or "that task" correctly.
   const [frontViewId, setFrontViewId] = useState<string | null>(null);
-  const viewPage = pageForPath(pathname);
+  const viewPage = pageForPath(pathname, dailyEnabled);
   const viewSection = useVisibleSettingsSection(signedIn && viewPage === 'settings');
   const viewIssueNumber = useFocusedFactoryIssue(signedIn && viewPage === 'factory');
   const viewTaskId = frontViewId?.startsWith('task-') ? frontViewId.slice(5) : undefined;
@@ -294,7 +314,7 @@ function ShellLayout({ signedIn, config, session, camera, screenShare }: {
   const applyWorkspaceCommand = useCallback((command: WorkspaceCommand, trustedBlobHost?: string, expiresAt?: number, cancelSignal?: AbortSignal): boolean | Promise<SessionCommandResult> => {
     if (command.operation === 'navigate' && command.page === 'factory' && command.issueNumber !== undefined) {
       const { issueNumber, taskId } = command;
-      const target = resolveNavigation(command);
+      const target = resolveNavigation(command, dailyEnabled);
       if (!target.ok) return Promise.resolve({ applied: false, reason: target.reason });
       if (cancelSignal?.aborted || (expiresAt !== undefined && expiresAt <= Date.now() + 250)) {
         return Promise.resolve({ applied: false, reason: 'The issue navigation command expired or was cancelled.' });
@@ -322,6 +342,42 @@ function ShellLayout({ signedIn, config, session, camera, screenShare }: {
         return { applied: true };
       });
     }
+    const navigation = readNavigateCommand(command);
+    if (navigation) {
+      const target = resolveNavigation(navigation, dailyEnabled);
+      if (!target.ok) return false;
+      const deadline = Math.min(expiresAt ?? Date.now() + 6000, Date.now() + 6000) - 250;
+      if (cancelSignal?.aborted || deadline <= Date.now()) {
+        return Promise.resolve({ applied: false, reason: 'Page navigation expired or was cancelled before application.' });
+      }
+      const deadlineResult: SessionCommandResult = {
+        applied: false, reason: 'The requested page did not finish opening before the command deadline.',
+      };
+      let applied = false;
+      flushSync(() => { applied = navigateTo(navigation); });
+      const path = target.path;
+      if (!applied || path === undefined || pathnameRef.current === path) {
+        return applied && deadline <= Date.now() ? Promise.resolve(deadlineResult) : applied;
+      }
+      // The data router can commit the page after the dispatch's flushSync returns.
+      return new Promise<SessionCommandResult>((resolve) => {
+        let settled = false;
+        const finish = (result: SessionCommandResult) => {
+          if (settled) return;
+          settled = true;
+          window.clearTimeout(timer);
+          cancelSignal?.removeEventListener('abort', cancel);
+          if (pendingPageNavigation.current?.finish === finish) pendingPageNavigation.current = null;
+          resolve(result.applied && deadline <= Date.now() ? deadlineResult : result);
+        };
+        const cancel = () => finish({ applied: false, reason: 'Page navigation was cancelled before completion.' });
+        const timer = window.setTimeout(() => finish(deadlineResult), Math.max(0, deadline - Date.now()));
+        pendingPageNavigation.current?.finish({ applied: false, reason: 'Page navigation was superseded before completion.' });
+        pendingPageNavigation.current = { path, finish };
+        cancelSignal?.addEventListener('abort', cancel, { once: true });
+        if (cancelSignal?.aborted) cancel();
+      });
+    }
     if (command.operation === 'session') return workspaceCommands.applySession(command);
     if (command.operation === 'pin' || command.operation === 'unpin') return workspaceCommands.applyPin(command);
     if ((command.operation === 'show' || command.operation === 'restore' || command.operation === 'focus') &&
@@ -331,7 +387,7 @@ function ShellLayout({ signedIn, config, session, camera, screenShare }: {
     let applied = false;
     flushSync(() => { applied = workspaceCommands.dispatch(command, trustedBlobHost); });
     return applied;
-  }, [navigateTo, workspaceCommands]);
+  }, [dailyEnabled, navigateTo, workspaceCommands]);
   const onVoiceActiveChange = useCallback((active: boolean) => {
     if (active && readVoiceWorkspacePreference().voice.minimizeWindowsOnVoiceStart) {
       workspaceController.current?.minimiseAll();
@@ -396,13 +452,29 @@ function ShellLayout({ signedIn, config, session, camera, screenShare }: {
     controller?.dispatch({ commandId: `task-window-focus-${focusTaskWindow.seq}`, operation: 'focus', viewId });
   }, [focusTaskWindow]);
   const [tabsHost, setTabsHost] = useState<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const strip = tabsHost?.parentElement;
+    if (!phone || !strip) return;
+    // Window tabs are portals, so React bubbling does not follow this DOM strip.
+    const closeWindowSheet = (event: MouseEvent) => {
+      const target = event.target;
+      if (target instanceof Element && target.closest('button') && !target.closest('.job-tabs')) setWindowsSheetOpen(false);
+    };
+    strip.addEventListener('click', closeWindowSheet, true);
+    return () => strip.removeEventListener('click', closeWindowSheet, true);
+  }, [phone, tabsHost]);
   const knowledgeBackend = useMemo(() => ({ backendUrl: config.backendUrl, getAccessToken }), [config.backendUrl, getAccessToken]);
   const workspacePins = useMemo(() => signedIn && config.backendUrl
     ? createWorkspacePinsClient(config.backendUrl, getAccessToken)
     : undefined, [config.backendUrl, getAccessToken, signedIn]);
   // A finished background job brings its result window forward, or parks it as a tab while Dan is away.
   // While a research job shows as a tab, its progress window's own tab would be a duplicate.
-  const { jobs: backgroundJobs } = useJobs(config.backendUrl, getAccessToken);
+  const jobsAccountId = signedIn
+    ? (session.client.getActiveAccount() ?? session.client.getAllAccounts()[0])?.homeAccountId ?? null
+    : null;
+  const { history: backgroundJobs, error: jobsError } = useJobs(signedIn ? config.backendUrl : null, getAccessToken, jobsAccountId);
+  const hasJobsSummary = backgroundJobs.length > 0 || jobsError !== '';
+  const headerEntryCount = windowCount + (hasJobsSummary ? 1 : 0);
   const researchRunning = backgroundJobs.some((job) => job.kind === 'research' && job.status === 'running');
   // The conversation never needs a tab: the chat bar's orb and handle bring it back.
   const hideResearchProgressTab = useCallback((view: WorkspaceView) => view.presentation === 'conversation' || researchRunning && view.content.status === 'generated' &&
@@ -426,7 +498,7 @@ function ShellLayout({ signedIn, config, session, camera, screenShare }: {
     setConversationOpen(ids.includes(conversationViewId));
   }, []);
   const conversationWindow = useMemo(() => ({
-    position: voiceActive ? null : conversationPosition,
+    position: voiceActive || phone ? null : conversationPosition,
     setComposerHeight: setConversationComposerHeight,
     element: conversationHost,
     setAvailable: setConversationAvailable,
@@ -436,7 +508,7 @@ function ShellLayout({ signedIn, config, session, camera, screenShare }: {
       operation: open ? 'restore' : 'minimise',
       viewId: conversationViewId,
     }) ?? false,
-  }), [conversationHost, conversationOpen, conversationPosition, voiceActive]);
+  }), [conversationHost, conversationOpen, conversationPosition, phone, voiceActive]);
   useEffect(() => { conversationWindowRef.current = conversationWindow; }, [conversationWindow]);
   // Phones (Dan, 8 October): moving to another page tucks the chat away so the new page is not covered.
   const lastPath = useRef(pathname);
@@ -599,11 +671,11 @@ function ShellLayout({ signedIn, config, session, camera, screenShare }: {
 
   return (
     <TaskWindowsContext.Provider value={signedIn ? taskWindowsApi : null}>
-    <div className={`app app-shell${signedIn ? '' : ' app-signed-out'}`} data-navigation-open={signedIn && (navigationShown || folioOpen)} data-folio-open={signedIn && folioOpen}
+    <div ref={shellElement} className={`app app-shell${signedIn ? '' : ' app-signed-out'}`} data-navigation-open={signedIn && (navigationShown || folioOpen)} data-folio-open={signedIn && folioOpen}
       data-context-open={signedIn && contextPanel.isOpen} data-voice-active={voiceActive}
       data-voice-has-windows={voiceHasWindows} data-conversation-open={signedIn && conversationOpen}
       style={{ ...panelWidths, '--conversation-composer-height': `${conversationComposerHeight}px` } as CSSProperties}
-      data-home={home} data-chat={chatPlace} data-phone={signedIn && phone} data-windows-open={signedIn && phone && windowsSheetOpen && windowCount > 0}>
+      data-home={home} data-chat={chatPlace} data-phone={signedIn && phone} data-windows-open={signedIn && phone && windowsSheetOpen && headerEntryCount > 0}>
       <a className="skip-link" href="#content">Skip to content</a>
       {signedIn && (
         <nav className="area-rail" aria-label="Areas">
@@ -625,7 +697,7 @@ function ShellLayout({ signedIn, config, session, camera, screenShare }: {
           </NavLink>
           {areas.map((area) => (
             <NavLink key={area.id} className="rail-link" to={`/${area.path}`} aria-label={area.label} onClick={() => { setFolioOpen(false); setNavigationOpen(area.navigation.length > 1); }}>
-              <ShellIcon name={area.id === 'factory' ? 'factory' : area.id === 'notes' ? 'knowledge' : area.id === 'status' ? 'status' : 'usage'} /><span className="visually-hidden">{area.label}</span>
+              <ShellIcon name={area.id === 'daily' ? 'daily' : area.id === 'factory' ? 'factory' : area.id === 'notes' ? 'knowledge' : area.id === 'status' ? 'status' : 'usage'} /><span className="visually-hidden">{area.label}</span>
             </NavLink>
           ))}
           <button className={`rail-link rail-folio${folioOpen ? ' active' : ''}`} type="button" aria-label="Folio" aria-pressed={folioOpen}
@@ -671,29 +743,22 @@ function ShellLayout({ signedIn, config, session, camera, screenShare }: {
           <Link className="brand" to="/" aria-label="Jarvis home" onClick={closePagePanels}>Jarvis</Link>
         </div>
         {/* Open windows live as tabs in the top bar, between the brand and the controls (no breadcrumb). */}
-        {signedIn && <div className="window-tabstrip" onClick={(event) => { if (phone && (event.target as HTMLElement).closest('button')) setWindowsSheetOpen(false); }}>
+        {signedIn && <div className="window-tabstrip">
         <div ref={setTabsHost} className="window-tabbar" />
-        <JobsChip backendUrl={config.backendUrl} getAccessToken={session.getAccessToken} onResult={openJobResult} />
+        <JobsChip key={jobsAccountId} accountId={jobsAccountId} backendUrl={config.backendUrl} getAccessToken={session.getAccessToken} onResult={openJobResult} />
         </div>}
 
         {signedIn && (
           <div className="topbar-actions">
-            {phone && windowCount > 0 && (
+            {phone && headerEntryCount > 0 && (
               <button className="topbar-icon-button mobile-windows-button" type="button" aria-expanded={windowsSheetOpen}
-                aria-label={`Open windows: ${windowCount}`} onClick={() => setWindowsSheetOpen((open) => !open)}>
-                <span className="mobile-windows-count" aria-hidden="true">{windowCount}</span>
+                aria-label={`${hasJobsSummary ? 'Open windows and jobs' : 'Open windows'}: ${headerEntryCount}`} onClick={() => setWindowsSheetOpen((open) => !open)}>
+                <span className="mobile-windows-count" aria-hidden="true">{headerEntryCount}</span>
               </button>
             )}
             <PresenceChip backendUrl={config.backendUrl} getAccessToken={session.getAccessToken} />
             {config.backendUrl && (
               <DatabaseWakeStatus backendUrl={config.backendUrl} getAccessToken={session.getAccessToken} />
-            )}
-            {(working || latestActivity) && (
-              <span className={`topbar-working${working ? '' : ' topbar-activity-terminal'}`} role="status" aria-label={activityText} aria-live="polite">
-                <span className="topbar-working-mark" aria-hidden="true" />
-                <span className="topbar-working-wide" aria-hidden="true">{activityText}</span>
-                <span className="topbar-working-compact" aria-hidden="true">{working ? 'Working' : activityText}</span>
-              </span>
             )}
             <button
               id="context-panel-toggle"
@@ -721,7 +786,8 @@ function ShellLayout({ signedIn, config, session, camera, screenShare }: {
       <main id="content" className="shell-main" tabIndex={-1}>
         {presenceError && <p className="browser-presence-error" role="alert">{presenceError}</p>}
         {/* One room behind every page (and sign-in), so navigation never swaps or reloads the scene. */}
-        <JarvisStage theme={themePreference.resolvedTheme} appearance={themePreference.appearance}>
+        <JarvisStage theme={themePreference.resolvedTheme} appearance={themePreference.appearance}
+          active={!signedIn || home || voiceActive}>
         <KnowledgeBackendContext.Provider value={knowledgeBackend}>
         <WorkspaceCommandContext.Provider value={workspaceCommands}>
           <SessionCommandRegistryContext.Provider value={sessionCommands}>
@@ -730,7 +796,7 @@ function ShellLayout({ signedIn, config, session, camera, screenShare }: {
               <NavigationGuardContext.Provider value={navigationGuard}>
                 <FactoryIssueNavigationContext.Provider value={factoryIssueNavigator}>
                   <SettingsActivityHostContext.Provider value={setSettingsActivityHost}>
-                    <Outlet />
+                    <DailyRefreshContext.Provider value={dailyRefresh}><Outlet /></DailyRefreshContext.Provider>
                   </SettingsActivityHostContext.Provider>
                 </FactoryIssueNavigationContext.Provider>
               </NavigationGuardContext.Provider>
@@ -764,6 +830,7 @@ function ShellLayout({ signedIn, config, session, camera, screenShare }: {
                   getAccessToken={getAccessToken}
                   applyWorkspaceCommand={applyWorkspaceCommand}
                   portalHost={settingsActivityHost}
+                  {...(dailyEnabled ? { onDataRefresh: onDailyRefresh } : {})}
                 />
               </div>
             )}
@@ -776,7 +843,7 @@ function ShellLayout({ signedIn, config, session, camera, screenShare }: {
       {signedIn && phone && (
         <>
           <MobileCaption text={workText ?? (working ? activityText : null)} />
-          <MobileMenu open={menuOpen} onClose={closeMenu} onNavigate={closePagePanels} onFolio={() => setFolioOpen(true)} onContext={contextPanel.toggle} />
+          <MobileMenu open={menuOpen} onClose={closeMenu} onNavigate={closePagePanels} onFolio={() => setFolioOpen(true)} onContext={contextPanel.toggle} dailyEnabled={dailyEnabled} />
         </>
       )}
       {signedIn && <ContextPanel closeIcon={<ShellIcon name="close" />} resizeHandle={phone ? undefined : (
@@ -832,10 +899,14 @@ const defaultConfig: PublicConfig = __JARVIS_CONFIG__;
 // The deployed camera protocol accepts upload-only image handles in chat and voice.
 const cameraConversationDeployed = true;
 
-export function App({ config = defaultConfig }: { config?: PublicConfig }) {
+export function App({ config = defaultConfig, dailyEnabled = false }: { config?: PublicConfig; dailyEnabled?: boolean }) {
+  const areas = appAreas(dailyEnabled);
   useGlassLight();
   const session = useSignIn(config);
   const signedIn = session.state === 'signed-in' && session.profile !== null;
+  const dailyAccountKey = dailyEnabled && signedIn
+    ? (session.client.getActiveAccount() ?? session.client.getAllAccounts()[0])?.homeAccountId ?? 'owner'
+    : 'disabled';
   const camera = useCamera(config, session.getAccessToken, cameraConversationDeployed);
   const stopCamera = camera.stop;
   const screenShare = useScreenShare(config, session.getAccessToken);
@@ -871,12 +942,12 @@ export function App({ config = defaultConfig }: { config?: PublicConfig }) {
       <ThemePreferenceProvider key={signedIn ? 'signed-in' : 'signed-out'}
         enabled={signedIn} backendUrl={config.backendUrl} getAccessToken={session.getAccessToken}>
         <Routes>
-          <Route element={<Shell signedIn={signedIn} config={config} session={session} camera={camera} screenShare={screenShare} />}>
+          <Route element={<Shell signedIn={signedIn} config={config} session={session} camera={camera} screenShare={screenShare} dailyEnabled={dailyEnabled} />}>
             <Route element={<RequireSignIn session={session} />}>
               <Route index element={<h1 className="visually-hidden">Welcome, {session.profile?.name ?? ''}</h1>} />
               {areas.map(({ id, path, Component }) => (
                 <Route key={id} path={`${path}/*`} element={
-                  <Component backendUrl={config.backendUrl} getAccessToken={session.getAccessToken} />
+                  <Component key={id === 'daily' ? dailyAccountKey : id} backendUrl={config.backendUrl} getAccessToken={session.getAccessToken} />
                 } />
               ))}
               <Route path="settings" element={<SettingsRoute config={config} session={session} />} />

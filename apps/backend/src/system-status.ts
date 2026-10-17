@@ -51,6 +51,91 @@ const subsystems: readonly SystemStatusSubsystem[] = [
 ];
 
 const cacheTtlMs = 60_000;
+export const chatAgentFailureReasons: ReadonlySet<string> = new Set([
+  'backend_unavailable',
+  'catalogue_unavailable',
+  'context_unavailable',
+  'usage_unavailable',
+  'capability_instructions_too_large',
+  'settings_not_json',
+  'settings_invalid',
+  'settings_timeout',
+  'settings_unreachable',
+  'settings_unavailable',
+  'settings_http_401',
+  'settings_http_403',
+  'settings_http_429',
+  'settings_http_500',
+  'settings_http_502',
+  'settings_http_503',
+  'settings_http_504',
+  'response_too_large',
+  'error_runtimeerror',
+  'error_valueerror',
+  'error_typeerror',
+  'error_timeouterror',
+  'error_httpstatuserror',
+  'error_connecterror',
+  'error_readtimeout',
+  'error_connecttimeout',
+  'error_pooltimeout',
+  'error_remoteprotocolerror',
+  'error_ratelimiterror',
+  'error_apistatuserror',
+  'error_apiconnectionerror',
+  'error_apitimeouterror',
+  'error_authenticationerror',
+  'error_permissiondeniederror',
+  'error_badrequesterror',
+  'error_internalservererror',
+]);
+const sharedChatFailureReasons = ['agent_error', 'timeout', ...chatAgentFailureReasons] as const;
+const safeSmokeReasons: Partial<Record<SystemSmokeCheckId, ReadonlySet<string>>> = {
+  agent_contract: new Set([
+    'Tool count exceeds the agent limit.',
+    'A tool name is invalid.',
+    'Tool names must be unique.',
+    'A tool description is empty.',
+    'A tool description exceeds the agent limit.',
+    'A tool schema is not an object.',
+    'Tool catalogue exceeds the agent size limit.',
+    'Tool catalogue cannot be serialized.',
+    'Agent settings have an invalid shape.',
+    'Agent settings could not be built.',
+    'Agent contract could not be checked.',
+  ]),
+  chat_canary: new Set(['acceptance_check_failed', 'agent_error', 'timeout']),
+  chat_identity: new Set(['catalogue_unavailable', 'identity_reply', ...sharedChatFailureReasons]),
+  chat_capabilities: new Set([
+    'catalogue_unavailable',
+    'capabilities_discovery_missing',
+    'capabilities_discovery_wrong',
+    'capabilities_discovery_failed',
+    'capabilities_receipt_incomplete',
+    'capabilities_reply_incomplete',
+    ...sharedChatFailureReasons,
+  ]),
+  chat_github_read: new Set(['catalogue_unavailable', 'github_issue_unavailable', ...sharedChatFailureReasons]),
+  chat_jobs: new Set(['catalogue_unavailable', 'jobs_unavailable', ...sharedChatFailureReasons]),
+  chat_navigation: new Set(['catalogue_unavailable', 'navigation_refusal_missing', ...sharedChatFailureReasons]),
+  chat_no_timestamp: new Set(['catalogue_unavailable', 'capture_time_invented', ...sharedChatFailureReasons]),
+  chat_plain_approval: new Set(['catalogue_unavailable', 'plain_approval_failed', ...sharedChatFailureReasons]),
+};
+
+export function safeSmokeReason(id: SystemSmokeCheckId, reason: unknown): string | undefined {
+  return typeof reason === 'string' && reason.length <= 120 && safeSmokeReasons[id]?.has(reason)
+    ? reason : undefined;
+}
+
+export function systemSmokeHttpResponse(report: SystemSmokeStatus): SystemSmokeStatus {
+  return {
+    ...report,
+    entries: report.entries.map(({ reason, ...entry }) => ({
+      ...entry,
+      ...(entry.status === 'down' && reason !== undefined ? { reason } : {}),
+    })),
+  };
+}
 
 export const systemStatusResponseSchema = {
   type: 'object',
@@ -262,11 +347,14 @@ export function createSystemSmokeReader(
         const active = activeChecks.get(id);
         const source = sourceFor[id] ? sourceEntries.get(sourceFor[id]!) : undefined;
         if (active) {
+          const reason = active.status === 'down' || active.status === 'degraded'
+            ? safeSmokeReason(id, active.reason)
+            : undefined;
           return {
             id,
             status: isStatus(active.status) ? active.status : 'unknown',
             checkedAt: researchCheckedAt,
-            ...(active.status === 'down' && active.reason ? { reason: active.reason } : {}),
+            ...(reason ? { reason } : {}),
           };
         }
         return {

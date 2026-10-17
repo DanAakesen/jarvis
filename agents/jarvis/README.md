@@ -40,6 +40,13 @@ loaded, the turn fails before the model is asked.
 If the context snapshot cannot be loaded, the turn also fails before the model
 call rather than answering with missing or stale task status.
 
+`daily_food_review` and `daily_saved_food` have a 210-second response-read
+deadline. Their Now cards explicitly expire after two minutes and each complete backend operation is
+bounded to three minutes, below Container Apps' 240-second ingress limit.
+The SQL expiry, browser expiry and cancellation timer agree. Existing approvals
+retain their default five minutes. Connect, write and pool timeouts stay
+unchanged; other tools retain their configured normal or research timeout.
+
 The chat handler is registered with Foundry's `invocations` protocol, not as a
 custom `/chat` route. It accepts an application payload containing the delegated
 user authorization, stored source-message ID, text and language. Before starting
@@ -72,6 +79,17 @@ Setup phases overlap; do not sum parallel fetch times or compare unmatched
 cohort medians. All fields use the existing bounded completion/log allowlists.
 Chat affinity uses a bounded owner/conversation map of random 32-hex IDs; generic
 invocation failures are not replayed. Live latency improvement is unverified.
+
+The 15 October source candidate additionally retains optional `model_auth_max`
+(maximum model-token provider duration) and `model_request_max` (maximum awaited
+Responses creation / Anthropic stream entry) across rounds. Existing fields
+remain first observations. These content-free maxima include failed/cancelled
+attempts, reject invalid samples and cap at 600,000 ms. Agent per-attempt
+logs/spans remain available even when no completion is sent. The backend logs
+the completion maxima without adding them to browser-facing replies.
+Token time overlaps setup, and maxima may come from different attempts; do not
+sum or subtract them or treat them as proof of latency causation or improvement.
+There are no new configuration knobs or changes to model/network behavior.
 
 ## Commands
 

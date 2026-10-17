@@ -1,5 +1,36 @@
 # Approved Daily migration to Jarvis
 
+## Current approved scope (15 October 2026)
+
+Dan explicitly excluded NEW P12-08/#723 coaching/recovery/recomp automation
+from planned scope and the combined release. This is a confirmed exclusion,
+not a proposal, completed acceptance or permission to remove existing main
+Daily health, nutrition, workout/tracking, integration capabilities or records.
+The first and corrected unmerged coaching freezes remain byte-exact archived
+evidence only; they are not release inputs.
+
+Keep one mobile-first Daily page plus existing on-demand GenUI in the single
+assistant conversation: no widget, separate Workouts/Nutrition pages or four
+mandatory Status/Recomp/Review/Ready views. Conflicting widget/fixed-view and
+coaching descriptions in the historical issue inventory below are superseded.
+Core #724 API/tools work excludes new coaching and does not require #723
+completion; replace only PLAN P12-09's dependency cell with retained completed
+P12-05/#720 and P12-07/#722 so plan-status cannot recreate the removed blocker.
+All Status cells, task IDs and the other 380 table rows remain byte-exact;
+parent owns native dependency/issue reconciliation after the source update.
+Neither this scope decision nor retained reserved IDs activates Daily or
+releases #724.
+
+Do not invent maintenance/TDEE, nutrition-completeness, elapsed freshness
+expiry or readiness-scale semantics for an excluded feature. Missing new
+coaching contracts are not completion gates for retained core work. Existing
+core validation, truthful unknowns/freshness and protected backup/export,
+authoritative-original-source/parity, real-device/provider, final-delta,
+rollback and cutover gates remain unchanged. Scope the acceptance campaign to
+retained capabilities, not removed coaching/widget/fixed-view deliverables.
+Original Daily continues normal authorized use and remains canonical before
+cutover; original source/schema/data and retained records are not changed.
+
 Dan approved P12 on 12 October 2026 and explicitly released only P12-01 for this worker. The later [execution authorization](https://github.com/DanAakesen/jarvis/issues/716#issuecomment-6124634183) supersedes the original backlog-only and extra cutover-approval wording: eventual production cutover is pre-authorized only after dependency, parity, reconciliation, backup and rollback gates pass. Original Daily continues ordinary authorized food/health writes and remains running/canonical before cutover. Migration tooling must not alter its application/source code/schema or rewrite its records; final-delta reconciliation accounts for ongoing normal use. Read-only export belongs in the protected migration workflow. Legacy operation may be deprecated only after all in-scope data, features and sync are migrated and verified and rollback is protected; never delete the original repository or data. New secrets/access and unapproved paid resources retain their explicit-confirmation boundaries. This issue performs no cutover or production writes.
 
 ## Integration contract implemented by P12-01
@@ -12,7 +43,62 @@ Dan approved P12 on 12 October 2026 and explicitly released only P12-01 for this
 
 ## Downstream interfaces and ownership
 
+Dan's tool-parity reminder applies to all retained Daily workflows: page and
+chat/voice share services, data, calculations, owner checks and write authority.
+Periods, history/details, requested visuals and permitted changes need a working
+tool equivalent. Use existing query/workspace/GenUI tools where appropriate;
+do not add a tool per UI button or declare UI-only functionality complete.
+Protected or unavailable operations stay explicitly gated, not bypassed through
+a model flag. Excluded coaching/widgets and private activation are not restored.
+
 P12-09 owns actual `/daily/…` data routes, shared services used by pages and tools, module composition activation, source-message idempotency and revision invalidation. Use the existing sensitive tool registry/dispatcher with content-redacted audit outcomes; no new dispatcher. Writes publish revisions only after committed persistence. P12-15 owns gated navigation/pages, P12-16 owns native assistant views and bounded generated datasets. Same-ID updates and reconnect/refocus refresh reuse existing workspace/artifact lifecycle and owner-authorized reads; do not widen CSP, bridge or generated-code network permissions.
+
+The inactive internal direct-intake continuation adds an optional sensitive
+`daily_food` catalogue entry, independently of external MCP writes. Current
+verified Dan messages supply names/label quantities and stable source-message
+identity; model arguments contain only the operation. Saved favourite snapshots
+are checked under SQL locks, receipts recover actual committed rows, and
+deleted/source-edited retries refuse. This first explicit-command subset is not
+full internal estimate/correction/deletion or conversational acceptance.
+Released inactive #874 adds `daily_food_review` using real
+browser-only Now one-time approval for estimates, revisioned corrections and
+soft deletion, preserving the one-step direct tool. Reviews bind frozen
+before/after values and dates to source/operation identity, require present mode,
+and cannot route health summaries into Teams. Rejected/cancelled/stale reviews
+do not write; canonical locks/replay/tombstones/commit refresh stay shared.
+Food cards use an explicit two-minute expiry with matching SQL/card/timer
+lifetimes, a three-minute whole-operation bound and a 210-second agent read
+deadline, within the actual hosting request ceiling. Other approvals retain
+their five-minute default; no detached mutation queue or infrastructure change.
+Browser approval is not verified spoken/photo/device or general conversation
+acceptance; no complete #724 claim follows.
+Qualified `d17fe622` and actual merge `f1d410b1` share tree `c0f112bf`.
+Normal Deploy39006050135 passed backend/agent/Smoke with infrastructure/web
+skipped, ready backend0000335 and active hosted-agent106. Routine smoke14/15ok
+retains the PC bridge warning; chat identity was ok without a causal-fix claim.
+The #724 opening retains remaining internal saved-food/plan/preference/lookup,
+conversational, actual client and private migration acceptance.
+Released inactive #875 groups those internal saved-food operations in
+an independently opt-in fifth factory. `daily_saved_food` reads owned matches
+and preferences, and native-reviews favourite/alias saves, server-snapshotted
+plans/soft deletion and canonical like/dislike/clear. Canonical writers,
+source/revision/fingerprint checks and real receipts stay shared; no intake or
+Health write follows. Browser voice and agent wrapper deadlines are explicitly
+aligned with the existing two-minute food approval. Qualified14e and actual
+merge195bc89c share treec12eca94; normal Deploy39010283459 released ready
+backend0000336/active agent107 with14/15smokeok, only existing PC bridge down.
+This does not complete conversational or client acceptance.
+Released inactive #876 binds the existing Frida adapter through
+an optional owner-bound data capability, preserving default compositions and
+external component validation. It returns public reference/unknown/partial
+evidence only, never intake authority; no live-provider call or proof follows.
+Qualifieda8 and actualmerge9334d3ed share tree6da17b0c; Deploy39012842333 selected
+backend only, ready0000337/health200. Actual13/15smokeok retains PC bridge down
+and recurring identity degraded, without source attribution. Native UI links
+remain open; any early inactive UI preparation needs an explicit source-work
+decision, not a claim that actual grant/private/client/device acceptance passed.
+No production activation, private migration, provider/device action or native
+dependency change follows from this source work; #724 remains open.
 
 P12-03 owns SQL owner mapping to the configured Jarvis owner, stable source IDs, revisions and tombstones. No client or device selects a source owner. Future device credentials bind server-side to that owner with narrow upload, widget-read or nutrition-export scopes; no arbitrary tools or unrelated data. Coding sandboxes receive neither those credentials nor private Daily records. No production schema or device auth is implemented in P12-01.
 
@@ -94,19 +180,91 @@ Text/voice/photo lookup and current Frida data; exact-once confirmed food loggin
 
 ### [P12-08: Coaching, recovery & recomp services](https://github.com/DanAakesen/jarvis/issues/723)
 
-**NEW DAILY CAPABILITY — permanent** · Backend & migration rehearsal
+**WITHDRAWN NEW FEATURE - confirmed 15 October 2026.** Retain this native issue
+link as historical scope context, not an active implementation or acceptance
+requirement.
 
-Profile, targets, consistency, four body metrics, review / experiments, readiness and sick-day treatment.
+The earlier proposal covered automated coaching/targets, deficit comparisons,
+recomp trends, consistency, readiness/recovery guidance and experiment
+commitments. Dan has excluded that new automation; neither missing semantic
+contracts nor its candidate tests are remaining core-delivery prerequisites.
+The two frozen candidates are archived, not accepted/merged release inputs.
 
-Preserve tough-but-fair concise coaching with natural profanity, evidence-based praise and contextual orders. Status: deficit-target kcal remaining, protein remaining first, active separate from resting, 8,000 steps, 7 hours sleep, protein max(180 g, 2 g/kg), 14-day body trends and 7-day eligible consistency. Deficits >=15% count; keep maintenance and deficit budgets distinct. Four scan metrics are weight, fat mass, fat percentage and actual lean mass, not invented muscle-only values. Readiness accepts rating plus context and asks only when missing; no extra steps/workout after the target/session is met. Keep sick-day measurements but exclude those dates from eligible aggregates/misses; no imputation or blaming missing/stale data. Weekly review preserves the one-experiment commitment flow.
+Preserve existing main tracking capabilities, measurements and retained
+readiness/recovery records. Exclusion does not authorize original-source,
+schema or data changes, deletion, invented budgets/classifications or weaker
+core parity/backup/device/cutover gates.
 
 ### [P12-09: Daily API, tool registry & live revisions](https://github.com/DanAakesen/jarvis/issues/724)
+
+17 October bounded feed continuation adds opt-in `daily_feed` over the retained
+#725 snapshot, attention, manual-refresh and suppression services. Reads expose
+independent source freshness and exact restore keys; mutations use actual
+browser Now approval and under-lock target checks. Shared sensitive audit and
+post-commit refresh remain authoritative. The nutrition-only MCP principal is
+denied by every feed entrypoint. Missing Google/model configuration remains
+explicit; no fake adapter, new dispatcher, query-version expansion or provider
+write is introduced. Daily stays off; real grant/provider/private/device
+acceptance remains distinct under #725. #724 and native dependencies stay open.
+
+The next retained lookup slice exposes the existing saved favourite/alias and
+exact history resolver through `lookup_food.savedName`, sharing query DTOs.
+It adds no tool name, write authority, migration or activation.
+
+The following cohesive saved-food continuation adds retained favourite/alias
+saves, owned-favourite plan snapshots/save/soft-delete and persistent canonical
+likes/dislikes/clears. It uses native review, shared snapshot preparation,
+under-lock source rechecks and real versioned receipts. Additive 0050 protects
+favourite/feedback revisions, clears and new constrained audit names without
+rewriting 0049. No intake, activation or internal message authority follows.
+Exact-head source qualification is required; account/device/private/cutover
+acceptance and #724 remain open.
+
+17 October source continuation: the existing JarvisPM session adds an optional
+[nutrition-only hosted MCP adapter](../apps/backend/src/daily/mcp/README.md).
+It reuses delivered reads and existing typed writers, a separate delegated
+Entra principal, exact route isolation and native signed proposal review.
+Existing audit storage gets constrained UUID correlation rather than fake
+conversation IDs; no new audit table. Browser Origin requests are unsupported
+and rejected, without broadening shared CORS.
+Production composition/configuration and the write gate remain off. Source
+delivery does not establish a linked, accepted ChatGPT account.
+Modern-protocol/native-review compatibility and complete retained tool parity
+remain explicit acceptance gaps, alongside real scopes/grants, source/provider,
+phone, protected export/reconciliation and cutover. No access/consent or private
+operation is performed; #724 stays open and #730 retains its dependencies.
+
+16 October continuation after #866's successful release: the current JarvisPM
+UI session extends the delivered read foundation with retained favourites and
+meal plans. Reuse existing owner-bound collection stores, ID-only pagination
+(100 maximum), whitelisted snapshots and the same post-commit refresh hub.
+Definitions/plans are not consumed meals. This is another partial inactive
+#724 slice, not the hosted authenticated ChatGPT food-write path or activation.
+Original Daily and all private/provider/device/reconciliation/cutover gates stay
+unchanged; no coaching, widget or duplicate worker.
+
+16 October bounded resumption: the existing Daily session owns an inactive
+shared read-contract/API/tool and post-commit refresh slice over #720/#722.
+Production composition and all existing data remain unchanged. This does not
+complete #724 or implement its hosted authenticated ChatGPT food-write path.
+Connector authorisation and trusted proposal-acceptance contracts, the one-page
+UI/on-demand GenUI, source/parity, protected export/device and cutover gates
+remain explicit; coaching and widgets stay excluded. Historical task-table
+Status cells are workflow-owned and are not implementation evidence.
 
 **NEW DAILY CAPABILITY — permanent** · Backend & migration rehearsal
 
 Gated Daily BackendModule, source IDs, shared read-model contracts, sensitive outcome audit and UI invalidation.
 
 Register Daily through BackendModule, with shared services for UI and tools, owner validation for user and hosted-agent calls, source-message idempotency and sensitive audit metadata only. Refresh stable views after committed revisions/reconnect/refocus. Gated-off Daily contributes no accidental routes/tools/navigation or production writes; no new dispatcher or alternate user authentication.
+
+Current core scope explicitly excludes NEW P12-08/#723 coaching/recovery/recomp
+automation and its routes/tools/views. #723 completion and missing
+coaching-specific semantics are not prerequisites for this retained
+integration. Its PLAN dependency cell instead retains completed P12-05/#720
+and P12-07/#722 prerequisites, not bypassed checks. Parent reconciles native
+dependencies separately after this source update; no #724 implementation or
+activation is released by this documentation change.
 
 ### [P12-10: Google feed, all calendars & attention](https://github.com/DanAakesen/jarvis/issues/725)
 
@@ -148,6 +306,14 @@ Men's football only; Chelsea priority 1, classic top six priority 2. Use credibl
 
 ### [P12-14: Brief history & disabled notification support](https://github.com/DanAakesen/jarvis/issues/729)
 
+17 October inactive source continuation adds the missing shared query/tool and
+single-page history/detail path over existing `briefing_runs`, not an import or
+notification job. Preserve exact IDs, raw timestamp text, historical delivery and
+nullable body data. Bound metadata/body reads; do not expose provider snapshots
+or delivery evidence, infer timezone/freshness, or grant nutrition-connector
+access. Original history and native dependencies remain unchanged. Qualification
+is in progress; #729 is not complete and no recurring schedule is created.
+
 **REUSE EXISTING JARVIS — permanent** · Personal integrations & phone surfaces
 
 Import brief history; reuse Jarvis notification infrastructure. Recurring notifications stay disabled; any future schedule is a separate decision.
@@ -157,6 +323,34 @@ Preserve historical briefs and notification capability, but recurring Daily noti
 ### [P12-15: Daily, Workouts & Nutrition pages](https://github.com/DanAakesen/jarvis/issues/730)
 
 **NEW DAILY CAPABILITY — permanent** · Native UI & one assistant experience
+
+17 October source preparation follows the later confirmed one-page scope, not
+the historical separate pages/card-deck requirement below. The default-off page
+uses delivered shared queries for measurements, sleep, workouts/detail/heart rate,
+food history, favourites, plans and sync evidence. It provides applied periods,
+opaque cursor paging, inspectable records and direct-observation charts in the
+existing Jarvis shell. Production bootstrap is unchanged; #730 is not complete
+and its native open #724/#725 dependencies are not removed.
+
+Tool parity uses `daily_query` for the same source/period/cursor/detail reads and
+existing acknowledged workspace/GenUI commands for requested display. Opening
+Daily does not claim to set its local filters; present the queried subset in a
+shared view instead. Existing direct/reviewed food and saved-food tools retain
+their authority/confirmation rules. Provider/grant completeness, briefs/history,
+authoritative budget-backed advice, source reconciliation and physical-device/
+activation/cutover acceptance remain separate unfinished gates, not implicit
+features of this record-browser source slice.
+
+The current tool ledger is partial, not full migration acceptance. Shared
+record/detail/sync and brief reads use `daily_query` plus acknowledged workspace
+GenUI; direct/reviewed intake, saved foods/plans/preferences and reference lookup
+have explicit inactive tools. Personalised suggestions still require an
+authoritative budget/candidate adapter for the existing `suggest` calculation;
+reference lookup is not that adapter. Daily Google-feed/attention/manual-refresh/
+suppression equivalence and stored all-calendar grants remain unestablished,
+not completed by the record browser. Device/export provisioning and real-phone/
+provider acceptance retain their separate approval gates. No UI-only capability
+or generic lookup may be reported as full retained-tool parity.
 
 Gated Jarvis navigation / source contracts; current card deck and complete health / food / workout details. Keep existing shell and voice workflow.
 
@@ -214,4 +408,3 @@ Use normal main-only release workflows; cloud coding agents have no direct Azure
 Independent review found that CI run 38253105188 on `dfe04b2a51cb636abb0991618f1bad9880e49192` failed backend image startup: the contracts entrypoint imported `daily.js`, but the Docker context and runtime copy both selected only `index.js`. The backend Dockerfile is also used by main-only deployment. Web consumes contracts through Vite bundling; runner and hosted-agent images do not package this npm workspace. No other selective contracts runtime copy was found.
 
 The Docker context now admits runtime contracts JavaScript while excluding contract tests. The runtime stage copies the admitted source directory and executes `import('@jarvis/contracts')` during the image build, so a missing transitive runtime module fails the build itself. Existing container smoke checks remain unchanged. PR #738's separate presence-instruction packaging additions are preserved by avoiding those lines. Exact new-SHA container/CI outcomes are recorded in PR #740; the failed earlier run is not a passing release result.
-
