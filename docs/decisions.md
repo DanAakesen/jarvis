@@ -1,5 +1,60 @@
 # Decisions
 
+## Use continuous pipeline-led delivery (17 October 2026; #880)
+
+Dan selected operating model 2: the responsive coordinator owns intake, GitHub
+backlog/dispatch and mechanical integration conflicts, not development, tests,
+log investigation or reproductions. At most two builders own code, regression
+tests and pipeline failure repairs. Pipeline evidence routes to the existing
+builder; completion events replace the old timer. This supersedes earlier
+coordinator removal, one combined batch and routine human release-sign-off rules.
+
+Extend existing workflows rather than introduce a delivery service or image
+promotion platform. Ready PRs select affected components and actual contract/data
+dependencies; shared/unknown inputs keep full qualification. The aggregate gate
+fails closed and retains exact tested-tree/source/run/attempt/PR evidence.
+Main-only Deploy consumes that successful immutable receipt before Azure access.
+Build/apply remain on the existing authorised identities; no new registry,
+credentials, grants or external worker is needed.
+
+Retain verified applied-component identities independently of acceptance.
+Reuse requires exact source-input/recipe/configuration fingerprints, valid
+digest/version identities, trusted main-run provenance, compatible ancestry and
+an immutable artifact checksum. Never search past newer missing/failed partial
+state for an older green receipt. Bicep invalidates downstream configuration.
+Manual dispatch honours supersession. Reused artifacts keep original producer
+source/run/attempt; the new release SHA is not falsely stamped onto them.
+The budget-contact secret is never hashed into public/downloadable fingerprints.
+For candidate infrastructure reuse, compare the existing action-group recipients
+in memory after exact qualification using the existing main-only deployment
+identity. Mismatch invalidates downstream state; unavailable readback blocks.
+This avoids a low-entropy secret hash without adding a key, role or manual
+version-marker dependency. Supersession follows verified applied state, not
+an unrelated newer docs-only main commit.
+Grant the read-only plan job GitHub pull-request read permission for the
+commit-association endpoint. Keep backend image origin distinct from revision
+origin: an agent identity update produces/re-proves its backend revision under
+that agent job's original attempt, including an acceptance-only retry. It does
+not rebuild the image or transfer image provenance to the new source.
+
+Deterministic code/permission/contracts and runtime readiness remain distinct
+from live model conversation acceptance. All are still required where selected:
+probabilistic does not mean optional. A failed conversation check leaves the
+run failed and applied components reusable; unknown/missing required checks
+cannot become green. Only the pre-existing PC-bridge/identity/timestamp exceptions
+remain nonblocking. Fixed check/status/reason codes are retained, not raw logs,
+reports or provider/tool/user content. Historical failures are not reclassified.
+The old generic `agent_error` has no proven cause.
+
+Status: initial43aa CI39038876598 passed all12 jobs and all four CodeQL
+analyses; review found the secret-derived fingerprint issue, corrected with
+synthetic comparison/redaction fixtures. ca9a CI39039891173 and its four
+analyses passed; exact-head review additionally identified the plan read scope
+and backend revision attribution corrections above. Successor exact-candidate CI/review
+and the integration owner's main-only release remain
+separate gates. Remote-enabled runtime state is not exposed here and is not
+claimed. Private Daily/provider/device/access boundaries remain unchanged.
+
 ## Expose safe smoke reason codes through existing CI (17 October 2026)
 
 Required chat acceptance failed twice on different actions after qualified878

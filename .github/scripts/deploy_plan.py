@@ -1,73 +1,34 @@
-"""Decide which production parts the Deploy workflow updates (P0-11).
-
-The diff base is the head commit of the last successful Deploy run, not the
-push's "before" commit, so a failed or cancelled deploy is retried by the next
-run. A run whose commit is already contained in the last successful deploy is
-superseded and deploys nothing, so an older run can never overwrite newer code.
-"""
+"""Conservative diff preview; Deploy uses release_state.py's verified receipts."""
 
 import argparse
-import fnmatch
 import os
 import subprocess
 
-PARTS = ("infra", "backend", "web", "agent")
-
-# Inputs shared by every part: a change deploys everything.
-SHARED = (
-    "package.json",
-    "package-lock.json",
-    "tsconfig.base.json",
-    ".nvmrc",
-    ".github/workflows/*",
-    ".github/scripts/deploy_*",
-)
-
-PART_PATHS = (
-    ("infra/*", {"infra"}),
-    ("apps/backend/*", {"backend"}),
-    ("db/*", {"backend"}),
-    (".dockerignore", {"backend"}),
-    ("apps/web/*", {"web"}),
-    ("agents/jarvis/*", {"agent"}),
-)
-
-
-def _matches(path: str, pattern: str) -> bool:
-    return fnmatch.fnmatchcase(path, pattern)
-
-
-def is_documentation(path: str) -> bool:
-    return path.endswith(".md") or path.startswith("docs/")
+from pipeline_impact import PARTS, deploy_parts
 
 
 def parts_for(path: str) -> set[str]:
-    if is_documentation(path):
-        return set()
-    if any(_matches(path, pattern) for pattern in SHARED):
+    parts = deploy_parts(path)
+    # Bicep outputs are runtime inputs for every application.
+    if "infra" in parts:
         return set(PARTS)
-    parts: set[str] = set()
-    for pattern, targets in PART_PATHS:
-        if _matches(path, pattern):
-            parts |= targets
-    # The web build reads the public bootstrap IDs.
-    if path == "infra/bootstrap.output.json":
-        parts.add("web")
+    if path == ".github/workflows/deploy.yml":
+        return set(PARTS)
     return parts
 
 
 def plan(event: str, changed: list[str] | None, superseded: bool = False) -> dict:
-    """Return {"infra", "backend", "web": bool, "reason": str}.
+    """Return component booleans and a bounded preview reason.
 
     ``changed`` is None when no usable diff base exists (first deploy or
     rewritten history); everything is then deployed.
     """
-    if event == "workflow_dispatch":
-        selected, reason = set(PARTS), "manual run: redeploy everything"
-    elif superseded:
+    if superseded:
         selected, reason = set(), "superseded: a newer commit is already deployed"
+    elif event == "workflow_dispatch":
+        selected, reason = set(PARTS), "manual diff preview: no verified receipts"
     elif changed is None:
-        selected, reason = set(PARTS), "no earlier successful deploy to compare with: deploy everything"
+        selected, reason = set(PARTS), "no usable diff base: deploy everything"
     else:
         selected = set()
         for path in changed:
