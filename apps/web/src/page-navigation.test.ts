@@ -96,8 +96,12 @@ describe('page navigation', () => {
   });
 
   it('names the page Dan is looking at and builds a valid snapshot view', () => {
-    expect(['/', '/factory/kanban', '/factory/tasks/42', '/settings', '/usage', '/status', '/notes', '/knowledge', '/nowhere'].map(pageForPath))
+    expect(['/', '/factory/kanban', '/factory/tasks/42', '/settings', '/usage', '/status', '/notes', '/knowledge', '/nowhere'].map(path => pageForPath(path)))
       .toEqual(['home', 'factory', 'factory', 'settings', 'usage', 'status', 'notes', 'knowledge', 'home']);
+    expect(pageForPath('/daily')).toBe('home');
+    expect(pageForPath('/daily', true)).toBe('daily');
+    expect(resolveNavigation({ page: 'daily' }).ok).toBe(false);
+    expect(resolveNavigation({ page: 'daily' }, true)).toEqual({ ok: true, path: '/daily' });
     expect(isWorkspaceSnapshot({
       windows: [], contextPanelOpen: false, view: { page: 'factory', issueNumber: 793 },
     })).toBe(true);

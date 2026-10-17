@@ -942,6 +942,16 @@ Dan approved these after a gap audit. They are planned, not built.
 Dan decided that GitHub issues are the single backlog. When Dan asks Jarvis to change code, Jarvis drafts an issue, confirms it with him and creates it; the Software Factory then picks it up with the Codex agent (worker label `Jarvis`), or Copilot when Dan chooses. Factory progress shows on the issue, its pull request uses `Fixes #N`, and the Factory board uses the same columns as the GitHub Project: Backlog, Needs Dan, Ready, In progress, In review, Done. ([#573](https://github.com/DanAakesen/jarvis/issues/573)–[#577](https://github.com/DanAakesen/jarvis/issues/577))
 ## Daily migration (approved P12)
 
+Tool parity is an acceptance requirement for every retained Daily capability,
+not a later convenience. The page and Jarvis chat/voice must use the same
+owner-authorised services, source data, calculations and confirmation rules.
+Browsing periods/history/details, showing requested data and visuals, and
+permitted changes need equivalent tool workflows; UI controls alone do not
+complete a capability. Reuse existing general tools where they provide the
+equivalent action rather than creating one tool per button. Missing tool
+coverage remains unfinished. This does not restore excluded features or waive
+private-data, provider, credential, device, approval or activation gates.
+
 16 October implementation resumption: the next inactive P12-09 slice shares
 one owner-authorised bounded query path between HTTP and the existing sensitive
 tool registry for retained health/sleep/workouts/minute heart rate, meal history

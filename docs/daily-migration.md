@@ -43,6 +43,14 @@ Dan approved P12 on 12 October 2026 and explicitly released only P12-01 for this
 
 ## Downstream interfaces and ownership
 
+Dan's tool-parity reminder applies to all retained Daily workflows: page and
+chat/voice share services, data, calculations, owner checks and write authority.
+Periods, history/details, requested visuals and permitted changes need a working
+tool equivalent. Use existing query/workspace/GenUI tools where appropriate;
+do not add a tool per UI button or declare UI-only functionality complete.
+Protected or unavailable operations stay explicitly gated, not bypassed through
+a model flag. Excluded coaching/widgets and private activation are not restored.
+
 P12-09 owns actual `/daily/…` data routes, shared services used by pages and tools, module composition activation, source-message idempotency and revision invalidation. Use the existing sensitive tool registry/dispatcher with content-redacted audit outcomes; no new dispatcher. Writes publish revisions only after committed persistence. P12-15 owns gated navigation/pages, P12-16 owns native assistant views and bounded generated datasets. Same-ID updates and reconnect/refocus refresh reuse existing workspace/artifact lifecycle and owner-authorized reads; do not widen CSP, bridge or generated-code network permissions.
 
 The inactive internal direct-intake continuation adds an optional sensitive
@@ -80,10 +88,15 @@ aligned with the existing two-minute food approval. Qualified14e and actual
 merge195bc89c share treec12eca94; normal Deploy39010283459 released ready
 backend0000336/active agent107 with14/15smokeok, only existing PC bridge down.
 This does not complete conversational or client acceptance.
-The next local read-only continuation binds the existing Frida adapter through
+Released inactive #876 binds the existing Frida adapter through
 an optional owner-bound data capability, preserving default compositions and
 external component validation. It returns public reference/unknown/partial
 evidence only, never intake authority; no live-provider call or proof follows.
+Qualifieda8 and actualmerge9334d3ed share tree6da17b0c; Deploy39012842333 selected
+backend only, ready0000337/health200. Actual13/15smokeok retains PC bridge down
+and recurring identity degraded, without source attribution. Native UI links
+remain open; any early inactive UI preparation needs an explicit source-work
+decision, not a claim that actual grant/private/client/device acceptance passed.
 No production activation, private migration, provider/device action or native
 dependency change follows from this source work; #724 remains open.
 
@@ -292,6 +305,23 @@ Preserve historical briefs and notification capability, but recurring Daily noti
 ### [P12-15: Daily, Workouts & Nutrition pages](https://github.com/DanAakesen/jarvis/issues/730)
 
 **NEW DAILY CAPABILITY — permanent** · Native UI & one assistant experience
+
+17 October source preparation follows the later confirmed one-page scope, not
+the historical separate pages/card-deck requirement below. The default-off page
+uses delivered shared queries for measurements, sleep, workouts/detail/heart rate,
+food history, favourites, plans and sync evidence. It provides applied periods,
+opaque cursor paging, inspectable records and direct-observation charts in the
+existing Jarvis shell. Production bootstrap is unchanged; #730 is not complete
+and its native open #724/#725 dependencies are not removed.
+
+Tool parity uses `daily_query` for the same source/period/cursor/detail reads and
+existing acknowledged workspace/GenUI commands for requested display. Opening
+Daily does not claim to set its local filters; present the queried subset in a
+shared view instead. Existing direct/reviewed food and saved-food tools retain
+their authority/confirmation rules. Provider/grant completeness, briefs/history,
+authoritative budget-backed advice, source reconciliation and physical-device/
+activation/cutover acceptance remain separate unfinished gates, not implicit
+features of this record-browser source slice.
 
 Gated Jarvis navigation / source contracts; current card deck and complete health / food / workout details. Keep existing shell and voice workflow.
 

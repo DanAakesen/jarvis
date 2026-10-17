@@ -1,16 +1,68 @@
 # Project plan
 
+## Inactive single Daily page (17 October 2026; source qualification)
+
+Dan explicitly reiterated that Jarvis needs tools for everything around Daily.
+Treat retained workflow parity across the page, chat and voice as completion
+criteria, including read/filter/detail/presentation actions, not just writes.
+Existing inactive tools cover the shared queries, direct/reviewed intake,
+saved-food/plans/preferences and Frida reference lookup. Check the remaining
+presentation/control and retained integration workflows before claiming the
+page or migration complete; do not substitute UI-only behavior for a tool.
+
+Backend source wiring below is delivered inactive. Under the standing migration
+mandate and delegated autonomy while Dan is unavailable, prepare one reversible,
+default-off page; this is not affirmative approval of private operations or
+activation. The owned source now browses measurements, sleep, workouts/detail/
+heart rate, food history, favourites, plans and sync evidence through the same
+bounded query DTOs as `daily_query`, with periods, exact cursor paging, raw
+record inspection and direct-observation charts. It reuses the current shell,
+conversation, shared controls and existing Now invalidation connection.
+
+`App` defaults `dailyEnabled` to false; production bootstrap/public configuration
+are unchanged. Client and backend both refuse unavailable Daily navigation.
+Existing query plus workspace/GenUI tools provide equivalent requested data and
+visuals, not remote mutation of this page's local filters. Tool guidance makes
+that distinction explicit; writes retain the delivered native approval rules.
+The source is under qualification, not deployed or accepted as all of #730.
+Native dependencies #724/#725 and private/grant/provider/client/device/export/
+reconciliation/activation/cutover gates stay open. Original Daily remains
+canonical; no repeated Google consent, private export or fabricated budget.
+
+Focused local web checks passed144 across six files, including default-off and
+explicit desktop/phone composition, navigation acknowledgements, account-key
+cache disposal, query interruption and serialized/coalesced refresh. A test-only
+React compiler lint correction retained the owner assertions and its rerun
+passed; source lint, web types, shared instruction15 checks and JS syntax pass.
+Full local contract collection remains blocked by missing Fastify, with zero
+assertions from that attempt; final normal pinned CI must cover it.
+Actual App inspection used only synthetic auth/records at1440px and390/320px
+touch viewports, both appearances, native period application, paging/charts,
+workout/heart-rate/sync and empty/error/recovery/denial states. Wide tables now
+scroll within their keyboard-focusable region rather than breaking values into
+tiny columns. Default-off made no Daily API requests. No real account, provider,
+device or imported-source acceptance is claimed.
+
 ## Internal Frida reference lookup (17 October 2026; P12-09 / #724)
 
-The next local batch binds the existing pinned Frida adapter to owner-authorised
+Delivered in #876 / actual `9334d3ed`, matching qualified `a8d920e2` tree
+`6da17b0c`. First normal CI passed all ten jobs (3746backend/230SQL/732agentPython),
+all four actual CodeQL analyses and exact-head automatic review without findings.
+Normal Deploy39012842333 selected backend only: ready backend0000337/health200.
+Actual smoke13/15ok retains PC bridge down and recurring chat identity degraded;
+identity was ok in #875, with no source attribution or extra canary. Receipt
+6231173591 and #724 opening were read back. One cancelled board-only metadata
+job was recovered; source CI/review were not rerun.
+
+This inactive batch binds the existing pinned Frida adapter to owner-authorised
 `daily_food_lookup`, only when a provider is explicitly supplied to Daily data.
 Existing module arguments and production/read-only compositions without that
 capability remain unchanged. Shared component validation preserves null amounts;
 public reference results retain attribution, incomplete totals and retrieval
 times without logging intake or claiming acceptance. The adapter/read operation
 is bounded to20seconds within unchanged ordinary agent/voice budgets.
-Pure schema checks pass9 and changed TypeScript lint passes. Real HTTP/tool/data
-owner/composition/relay and existing external-protocol cases await pinned CI;
+Pure schema checks passed9 and changed TypeScript lint passed. Real HTTP/tool/data
+owner/composition/relay and existing external-protocol cases passed pinned CI;
 no live provider, private data, new account or activation action is included.
 Recommendations still need authoritative remaining-budget data, not model guesses.
 
