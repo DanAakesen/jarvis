@@ -1,5 +1,49 @@
 # Decisions
 
+## Isolate the inactive hosted nutrition connector (17 October 2026; P12-09)
+
+Continue Dan's authorised Daily source work after the completed releases,
+without treating missing account/device acceptance as a reason to rebuild or
+park eligible inactive implementation. Use maintained split MCP v2 packages
+inside existing Fastify composition and reuse the existing query service,
+typed nutrition handlers, SQL idempotency/revisions and commit refresh hub.
+No second persistence system, host, model or consent/credential creation is needed.
+
+One separately configured delegated Entra client receives only nutrition
+scopes and a distinct principal restricted by the root hook to the exact MCP
+route. Do not promote it into ordinary `access_as_user` authority or trust
+client/model confirmation booleans. Native form acceptance must match
+SDK-signed, expiring owner/client/purpose/payload state. All external writes
+require native review until an actual trusted exact-intent integration is
+accepted; internal exact logging retains its existing one-step contract.
+
+Modern 2026-07-28 only and process-local confirmation keys are deliberately
+inactive constraints, not demonstrated ChatGPT/fleet compatibility. Unsupported
+clients fail closed; restart/replica changes require new review. Account
+linking, OAuth scopes/grants, fleet policy and real client/phone acceptance need
+their actual gates. No alternate screen, broad OAuth fallback or activation
+follows from this source decision. Initial dependency restore failures remain
+failed evidence: one package-download timeout, then stale cached client
+metadata reporting ETARGET; fresh registry metadata reports client 2.3.1.
+Neither result is a compiler/test failure or a successful installation.
+
+Independent review identified that a UUID HTTP request ID cannot be inserted
+as the existing required conversation-message FK. Extend the existing
+tool-call store/table with a separate constrained UUID connector correlation
+(0049), preserving normal audit identity and refusing rollback over retained
+connector rows. Do not invent a conversation or introduce a second audit
+store. Restore the existing message index around the down script's nullability
+change; SQL Server will not tighten nullability under that index. Register fixed
+failure events; raw food/provider diagnostics stay out.
+Also remove the route's misleading browser-origin allowance: this adapter is
+server-to-server and rejects every Origin rather than broadening shared root
+CORS. Synthetic clients must explicitly negotiate modern protocol; the SDK's
+default legacy connection is deliberately rejected.
+The native form wire grammar cannot express `additionalProperties`; use its
+supported object schema for the question, then strictly validate the returned
+content before accepting `confirm: true`. Do not weaken approval validation or
+fall back to a model-supplied confirmation.
+
 ## Scope Web checks without reducing CI coverage (16 October 2026; P11-08)
 
 The Web workflow invoked root npm scripts, which run contracts, frontend and

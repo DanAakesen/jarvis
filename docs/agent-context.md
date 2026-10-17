@@ -243,7 +243,31 @@ part of this local handoff.
 
 ## Resumed inactive Daily read integration (16 October 2026)
 
-Current continuation: Dan ordered deployment first, then Daily. After #866's
+Current continuation (17 October): after the delivered voice, collection-read
+and CI corrections, JarvisPM is implementing an optional inactive hosted
+nutrition MCP adapter in this same worktree. This supersedes the earlier
+read-only implementation hold below, not private/access/device/cutover gates.
+Use the existing dependency graph and maintained split SDK; manifest changes
+authorise its normal restore, not stubs or a second graph. Initial restore
+failed on a package-download timeout; an offline-preferred retry then used
+stale client metadata (ETARGET). Fresh online registry metadata confirms client
+2.3.1. Do not conflate either failed install with source/test results.
+
+See `apps/backend/src/daily/mcp/README.md` for exact inactive composition,
+protocol/confirmation/replay limits and scoped checks. Qualification requires
+actual build, lint and synthetic protocol/root-auth checks; record exact-head
+results in the PR receipt. Production startup/configuration is unchanged; no account linking,
+OAuth scope/client/grant, credential provisioning, provider/private operation
+or production Daily enablement is implied. Preserve the other owner's released
+5173 preview and Dan's existing runtime/remote settings.
+
+Connector audit requires the existing SQL store's `recordDailyMcp` method and
+0049's UUID correlation; a generic message-backed sink is insufficient.
+Normal message FKs remain required and rollback refuses retained connector
+audit. Server-to-server only: reject browser Origin, retain shared root CORS,
+and explicitly negotiate modern protocol in synthetic SDK clients.
+
+Historical read continuation: Dan ordered deployment first, then Daily. After #866's
 successful deployment, JarvisPM claimed partial #724 directly in the existing
 local UI session; the historical Daily child is not reassigned. Reuse the
 delivered read foundation for favourites/meal plans, ID-only cursors (maximum

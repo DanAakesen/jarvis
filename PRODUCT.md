@@ -963,6 +963,20 @@ values; definitions and plans are not consumed meals. Their acknowledged writes
 invalidate their own source through the same refresh hub. Daily stays off and
 the hosted ChatGPT food-write/connector requirement remains unfinished.
 
+The next inactive hosted nutrition adapter exposes only nutrition reads,
+Frida lookup and explicitly reviewed intake logging/correction/soft deletion.
+A separate delegated OAuth client must not acquire general Jarvis authority.
+External model input cannot select an owner or declare its own confirmation,
+provenance verification or rollout state. Native confirmation binds the exact
+proposal and stable operation keys; receipts claim commitment only after the
+existing handler returns. Unknown nutrients stay null. For this unactivated
+external boundary, every mutation requires native review, including exact-label
+logging; internal exact/favourite logging keeps its no-redundant-confirmation
+requirement. This conservative external limitation is not full retained-workflow
+parity. Unsupported clients refuse writes; actual ChatGPT compatibility,
+account linking, scopes/grants and mobile acceptance are not established by
+synthetic protocol tests. Production Daily stays off.
+
 P12-05 adds an inactive, explicitly invoked health processor over the existing SQL inbox: metrics/sleep/workouts/detail/minute HR, canonical physical units, Copenhagen dates, exact session/checksum replay and bounded retry/quarantine. Domain changes, ingestion lineage and processed-feed freshness commit together; phone heartbeat stays separate. Empty workout exports cannot erase history, missing values stay unknown, and native nutrition cannot feed back into canonical meals. Owner history/detail reads are bounded and unregistered. No scheduler, source import, live device changes or activation; protected/live parity remains gated.
 
 Heart-rate summaries and series must validate declared units consistently. Unsupported rate units quarantine without changing processed freshness; only established legacy summary fields imply BPM when their unit is absent. Missing samples and summaries remain unknown, not inferred.

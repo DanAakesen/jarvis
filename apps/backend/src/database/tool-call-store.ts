@@ -11,6 +11,26 @@ function serialize(value: unknown): string {
 
 export function createToolCallStore(pool: sql.ConnectionPool): ToolCallStore {
   return {
+    async recordDailyMcp(call) {
+      if (!/^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/iu.test(call.requestId) ||
+          !['read_nutrition', 'lookup_food', 'log_food', 'correct_food', 'delete_food'].includes(call.tool) ||
+          !['awaiting_confirmation', 'ok', 'refused', 'error'].includes(call.phase) ||
+          !['ok', 'refused', 'error'].includes(call.outcome)) throw new TypeError('Invalid Daily connector audit metadata');
+      const request = pool.request()
+        .input('requestId', sql.UniqueIdentifier, call.requestId)
+        .input('tool', sql.NVarChar(64), `daily_mcp_${call.tool}`)
+        .input('arguments', sql.NVarChar(sql.MAX), '{"redacted":true}')
+        .input('result', sql.NVarChar(sql.MAX), JSON.stringify({ redacted: true, phase: call.phase }))
+        .input('outcome', sql.NVarChar(16), call.outcome);
+      const signal = AbortSignal.timeout(5000);
+      const cancel = () => request.cancel();
+      signal.addEventListener('abort', cancel, { once: true });
+      try {
+        signal.throwIfAborted();
+        await request.query(`INSERT INTO dbo.tool_calls (message_id, connector_request_id, tool, [arguments], result, outcome, at)
+          VALUES (NULL, @requestId, @tool, @arguments, @result, @outcome, SYSUTCDATETIME());`);
+      } finally { signal.removeEventListener('abort', cancel); }
+    },
     async record(call) {
       const argumentsJson = serialize(call.arguments);
       const resultJson = serialize(call.result);

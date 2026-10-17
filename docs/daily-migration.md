@@ -142,6 +142,20 @@ core parity/backup/device/cutover gates.
 
 ### [P12-09: Daily API, tool registry & live revisions](https://github.com/DanAakesen/jarvis/issues/724)
 
+17 October source continuation: the existing JarvisPM session adds an optional
+[nutrition-only hosted MCP adapter](../apps/backend/src/daily/mcp/README.md).
+It reuses delivered reads and existing typed writers, a separate delegated
+Entra principal, exact route isolation and native signed proposal review.
+Existing audit storage gets constrained UUID correlation rather than fake
+conversation IDs; no new audit table. Browser Origin requests are unsupported
+and rejected, without broadening shared CORS.
+Production composition/configuration and the write gate remain off. Source
+delivery does not establish a linked, accepted ChatGPT account.
+Modern-protocol/native-review compatibility and complete retained tool parity
+remain explicit acceptance gaps, alongside real scopes/grants, source/provider,
+phone, protected export/reconciliation and cutover. No access/consent or private
+operation is performed; #724 stays open and #730 retains its dependencies.
+
 16 October continuation after #866's successful release: the current JarvisPM
 UI session extends the delivered read foundation with retained favourites and
 meal plans. Reuse existing owner-bound collection stores, ID-only pagination

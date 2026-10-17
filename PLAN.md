@@ -1597,6 +1597,19 @@ Proposals only; an idea enters a phase only when Dan accepts it into scope.
 | Backend request rate limiting | Limits authenticated and unauthenticated request rates at the root authentication hook (CodeQL `js/missing-rate-limiting` on `apps/backend/src/auth/hook.ts`, raised during P4-01). | A new dependency (for example `@fastify/rate-limit`) and limits that must not throttle Dan or the Jarvis agent; one replica keeps in-memory counters sufficient. | Before the backend URL is public (P0-11), or when abuse or cost appears. |
 ## P12 — Daily migration to Jarvis
 
+17 October continuation: JarvisPM is implementing an inactive, nutrition-only
+hosted MCP adapter over the delivered query service and typed nutrition
+handlers. Explicit composition and write gates default off; production startup
+does not load connector configuration. A distinct delegated Entra client gets
+only nutrition scopes, never ordinary owner/Factory/tool access. Native review
+uses signed, expiring request state, not model confirmation booleans.
+Meal logging, correction and soft deletion reuse existing operation keys,
+revisions and post-commit invalidation. This source boundary does not establish
+accepted #724, linked ChatGPT, OAuth consent or activation.
+Legacy/native-client compatibility, complete retained tool parity and the
+existing private/provider/device/cutover gates remain open. No #730 dependency
+or workflow-owned status cell is removed.
+
 16 October continuation after voice deployment: partial #724 extension shipped
 in #867 / `10baebc6`, with ten actual CI jobs, four CodeQL analyses and normal
 Deploy `38976366790` successful. The shared read service includes retained

@@ -18,6 +18,7 @@ import { createMemoryStore, createVaultIndexStore } from './memory-store.js';
 import { createTaskStatusNotificationStore } from './task-status-notification-store.js';
 import { createBackgroundJobStore } from './background-job-store.js';
 import { createUsageStore } from './usage-store.js';
+import { createToolCallStore } from './tool-call-store.js';
 import { WorkspaceHtmlArtifactNotFound, WorkspaceHtmlArtifactStore, workspaceHtmlSizeLimit } from './workspace-html-artifact-store.js';
 import { FolioStore } from './folio-store.js';
 import {
@@ -1889,7 +1890,50 @@ describe('committed domain schema (groups 1-8)', () => {
     await pool.request().query(`DELETE dbo.tool_calls WHERE id = ${String(call)}`);
   });
 
+  it('persists UUID-correlated connector audit without messages and refuses to erase that evidence on rollback', () => withRollbackDatabase(async (rollbackPool, committed) => {
+    const down = await readDownMigration('0049_daily_connector_audit.sql');
+    expect(await revertMigration(rollbackPool, committed, down)).toBe(down.name);
+    expect((await rollbackPool.request().query<{ count: number }>(`SELECT COUNT(*) AS count FROM sys.indexes
+      WHERE object_id = OBJECT_ID(N'dbo.tool_calls') AND name = N'IX_tool_calls_message_id';`)).recordset[0]?.count).toBe(1);
+    expect(await applyMigrations(rollbackPool, committed)).toEqual([down.name]);
+    const record = createToolCallStore(rollbackPool).recordDailyMcp;
+    if (!record) throw new Error('Connector audit method missing');
+    const sessionId = await scalar("INSERT dbo.jarvis_sessions (channel, language) VALUES (N'chat', N'en')", rollbackPool);
+    const messageId = await scalar(`INSERT dbo.messages (jarvis_session_id, role, text)
+      VALUES (${String(sessionId)}, N'dan', N'Synthetic audit fixture')`, rollbackPool);
+    await createToolCallStore(rollbackPool).record({
+      messageId: String(messageId), tool: 'workspace_command', arguments: { redacted: true }, result: { redacted: true }, outcome: 'ok',
+    });
+    const requestId = randomUUID();
+    await record({ requestId, tool: 'log_food', phase: 'awaiting_confirmation', outcome: 'ok' });
+    const { recordset } = await rollbackPool.request().query<{ message_id: null; connector_request_id: string; tool: string; arguments: string; result: string; outcome: string }>(
+      `SELECT message_id, connector_request_id, tool, arguments, result, outcome
+      FROM dbo.tool_calls WHERE connector_request_id IS NOT NULL;`);
+    expect(recordset).toHaveLength(1);
+    expect(recordset[0]).toMatchObject({
+      message_id: null, tool: 'daily_mcp_log_food', arguments: '{"redacted":true}',
+      result: '{"redacted":true,"phase":"awaiting_confirmation"}', outcome: 'ok',
+    });
+    expect(String(recordset[0]?.connector_request_id).toLowerCase()).toBe(requestId.toLowerCase());
+    await expect(rollbackPool.request().query(`INSERT dbo.tool_calls (connector_request_id, tool, arguments, outcome)
+      VALUES (NEWID(), N'factory_create_task', N'{}', N'ok');`)).rejects.toThrow('CK_tool_calls_identity');
+    await expect(rollbackPool.request().query(`INSERT dbo.tool_calls (tool, arguments, outcome)
+      VALUES (N'daily_mcp_log_food', N'{}', N'ok');`)).rejects.toThrow('CK_tool_calls_identity');
+    await expect(rollbackPool.request().input('messageId', sql.BigInt, messageId).query(
+      `INSERT dbo.tool_calls (message_id, connector_request_id, tool, arguments, outcome)
+      VALUES (@messageId, NEWID(), N'daily_mcp_log_food', N'{}', N'ok');`)).rejects.toThrow('CK_tool_calls_identity');
+    await expect(rollbackPool.request().query(`INSERT dbo.tool_calls (message_id, tool, arguments, outcome)
+      VALUES (-1, N'workspace_command', N'{}', N'ok');`)).rejects.toThrow('FOREIGN KEY');
+    await expect(revertMigration(rollbackPool, committed, down)).rejects.toThrow('audit evidence must be retained');
+    expect(await ledger(rollbackPool)).toEqual(committed.map(migration => migration.name));
+    expect((await rollbackPool.request().query<{ count: number }>('SELECT COUNT(*) AS count FROM dbo.tool_calls')).recordset[0]?.count).toBe(2);
+  }));
+
   it('preserves used execution generations and only reverts unused migration 0048', () => withRollbackDatabase(async (rollbackPool, committed) => {
+    for (const migration of committed.filter(migration => migration.name > '0048_factory_execution_generation.sql').reverse()) {
+      await revertMigration(rollbackPool, committed, await readDownMigration(migration.name));
+    }
+    const applicable = committed.filter(migration => migration.name <= '0048_factory_execution_generation.sql');
     const projectId = await scalar(`INSERT dbo.projects
       (name, repo, default_branch, default_agent, policy, sandbox_size, tech)
       VALUES (N'Rollback', N'DanAakesen/rollback', N'main', N'copilot', N'deliver_pr', N'1x2', N'node')`, rollbackPool);
@@ -1898,12 +1942,12 @@ describe('committed domain schema (groups 1-8)', () => {
     const down = await readDownMigration('0048_factory_execution_generation.sql');
 
     expect(await revertMigration(rollbackPool, committed, down)).toBe(down.name);
-    expect(await applyMigrations(rollbackPool, committed)).toEqual([down.name]);
+    expect(await applyMigrations(rollbackPool, applicable)).toEqual([down.name]);
     await rollbackPool.request().input('taskId', sql.BigInt, taskId)
       .query('UPDATE dbo.tasks SET execution_generation = execution_generation + 1 WHERE id = @taskId;');
     await expect(revertMigration(rollbackPool, committed, down))
       .rejects.toThrow('Factory execution generations must be retained');
-    expect(await ledger(rollbackPool)).toEqual(committed.map((migration) => migration.name));
+    expect(await ledger(rollbackPool)).toEqual(applicable.map((migration) => migration.name));
     const retained = await rollbackPool.request().input('taskId', sql.BigInt, taskId)
       .query<{ generation: string }>(`SELECT CONVERT(varchar(19), execution_generation) AS generation
         FROM dbo.tasks WHERE id = @taskId;`);

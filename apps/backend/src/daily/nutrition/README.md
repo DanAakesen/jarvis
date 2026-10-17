@@ -26,6 +26,13 @@ Protected #717 backup, source/import reconciliation, live provider and physical-
 
 ## Checks
 
+The optional [hosted nutrition MCP adapter](../mcp/README.md) now provides
+an inactive external composition of these same typed handlers. It has a
+separate least-privilege delegated identity and native proposal review; it
+does not deserialize the trusted execution context from model input.
+Its all-write review requirement is an explicit external limitation, not a
+change to internal exact-label logging. Production composition stays off.
+
 The inactive P12-09 shared query service reads bounded meal history, favourites
 and meal plans. Collection sources use exact ID-only cursors (at most 100 rows),
 not invented date periods or intake totals. Whitelisted DTOs preserve raw display

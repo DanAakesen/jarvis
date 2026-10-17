@@ -3,6 +3,26 @@ import { describe, expect, it, vi } from 'vitest';
 import { createToolCallStore } from './tool-call-store.js';
 
 describe('SQL tool-call store', () => {
+  it('persists connector UUID correlation without a fabricated conversation FK or private arguments', async () => {
+    const query = vi.fn(async () => ({ recordset: [] }));
+    const input = vi.fn();
+    const request = { input, query, cancel: vi.fn() };
+    input.mockReturnValue(request);
+    const pool = { request: vi.fn(() => request) } as unknown as sql.ConnectionPool;
+    const record = createToolCallStore(pool).recordDailyMcp;
+    if (!record) throw new Error('Connector audit method missing');
+    await record({
+      requestId: '11111111-1111-4111-8111-111111111111', tool: 'log_food', phase: 'awaiting_confirmation', outcome: 'ok',
+    });
+    expect(input).toHaveBeenNthCalledWith(1, 'requestId', sql.UniqueIdentifier, '11111111-1111-4111-8111-111111111111');
+    expect(input).toHaveBeenCalledWith('tool', sql.NVarChar(64), 'daily_mcp_log_food');
+    expect(input).toHaveBeenCalledWith('arguments', sql.NVarChar(sql.MAX), '{"redacted":true}');
+    expect(input).toHaveBeenCalledWith('result', sql.NVarChar(sql.MAX), '{"redacted":true,"phase":"awaiting_confirmation"}');
+    expect(query).toHaveBeenCalledWith(expect.stringContaining('VALUES (NULL, @requestId'));
+    await expect(record({ requestId: 'not-a-uuid', tool: 'log_food', phase: 'ok', outcome: 'ok' })).rejects.toThrow('audit metadata');
+    expect(query).toHaveBeenCalledOnce();
+  });
+
   it('binds the tool call fields and writes the completion time in UTC', async () => {
     const query = vi.fn(async () => ({ recordset: [] }));
     const input = vi.fn();

@@ -13,8 +13,16 @@ export interface CodexToolUsageCount {
   readonly count: string;
 }
 
+export interface DailyMcpAuditRecord {
+  readonly requestId: string;
+  readonly tool: 'read_nutrition' | 'lookup_food' | 'log_food' | 'correct_food' | 'delete_food';
+  readonly phase: 'awaiting_confirmation' | ToolCallOutcome;
+  readonly outcome: ToolCallOutcome;
+}
+
 export interface ToolCallStore {
   record(call: ToolCallRecord): Promise<void>;
+  recordDailyMcp?(call: DailyMcpAuditRecord): Promise<void>;
   listCodexToolCalls?(from: Date, to: Date): Promise<CodexToolUsageCount[]>;
 }
 

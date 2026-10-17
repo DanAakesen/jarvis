@@ -3,9 +3,11 @@ import type { FastifyBaseLogger, FastifyInstance, FastifyRequest } from 'fastify
 import { localWebOrigin, type BackendConfig } from '../config.js';
 import { exportDevicePaths, validateExportDevice, verifyExportCredential, type NutritionExportCredentialVerifier } from '../daily/nutrition-export/auth.js';
 import { healthUploadRoutes } from '../daily/health-upload/server.js';
+import { dailyMcpMetadataPath, dailyMcpPath } from '../daily/mcp/paths.js';
 import {
   AuthenticationDenied, createTokenVerifier, isAgentPrincipal, isRunnerPrincipal,
   isPcBridgePrincipal, isPhoneEventGridPrincipal, isDeployPrincipal,
+  isDailyConnectorPrincipal, type DailyConnectorPrincipal,
   type AgentPrincipal, type DeployPrincipal, type PcBridgePrincipal, type PhoneEventGridPrincipal, type RunnerPrincipal,
   type TokenVerifier, type UserPrincipal,
 } from './verify.js';
@@ -18,6 +20,7 @@ declare module 'fastify' {
     pcBridgePrincipal: PcBridgePrincipal | null;
     phoneEventGridPrincipal: PhoneEventGridPrincipal | null;
     deployPrincipal: DeployPrincipal | null;
+    dailyConnectorPrincipal: DailyConnectorPrincipal | null;
   }
   // Service identities may call only the routes that explicitly opt in.
   interface FastifyContextConfig {
@@ -31,6 +34,9 @@ declare module 'fastify' {
     jarvisPhoneMedia?: boolean;
     jarvisPhoneCallback?: boolean;
     jarvisDeploySmoke?: boolean;
+    jarvisDailyMcp?: boolean;
+    jarvisDailyMcpMetadata?: boolean;
+    jarvisDailyMcpMetadataUrl?: string;
   }
 }
 
@@ -60,9 +66,12 @@ export function installAuthentication<Logger extends FastifyBaseLogger>(app: Fas
   app.decorateRequest('pcBridgePrincipal', null);
   app.decorateRequest('phoneEventGridPrincipal', null);
   app.decorateRequest('deployPrincipal', null);
+  app.decorateRequest('dailyConnectorPrincipal', null);
   app.decorateRequest('nutritionExportPrincipal', null);
   app.addHook('onRequest', async (request, reply) => {
     if (request.routeOptions.url === '/health' && ['GET', 'HEAD'].includes(request.method)) return;
+    if (request.routeOptions.config?.jarvisDailyMcpMetadata === true &&
+        request.routeOptions.url === dailyMcpMetadataPath && ['GET', 'HEAD'].includes(request.method)) return;
     if (request.routeOptions.config?.githubWebhook === true) return;
     if (request.routeOptions.config?.teamsBot === true || request.routeOptions.config?.teamsAudio === true) return;
     if (request.method === 'GET' && request.routeOptions.url === '/phone/media' &&
@@ -99,7 +108,11 @@ export function installAuthentication<Logger extends FastifyBaseLogger>(app: Fas
       if (duplicate || !token) throw new AuthenticationDenied(401);
       const principal = await verify(token);
       reason = 'principal_not_allowed_on_route';
-      if (isAgentPrincipal(principal)) {
+      if (isDailyConnectorPrincipal(principal)) {
+        if (request.routeOptions.config?.jarvisDailyMcp !== true || request.routeOptions.url !== dailyMcpPath ||
+            !['POST', 'GET', 'DELETE'].includes(request.method)) throw new AuthenticationDenied(403);
+        request.dailyConnectorPrincipal = principal;
+      } else if (isAgentPrincipal(principal)) {
         if (request.routeOptions.config?.jarvisAgent !== true) throw new AuthenticationDenied(403);
         request.agentPrincipal = principal;
       } else if (isRunnerPrincipal(principal)) {
@@ -134,7 +147,11 @@ export function installAuthentication<Logger extends FastifyBaseLogger>(app: Fas
       if (origin === localWebOrigin || (config.staticWebAppOrigin !== undefined && origin === config.staticWebAppOrigin)) {
         reply.header('Access-Control-Allow-Origin', origin).header('Vary', 'Origin');
       }
-      if (statusCode === 401) reply.header('WWW-Authenticate', 'Bearer');
+      if (statusCode === 401) {
+        const metadata = request.routeOptions.config?.jarvisDailyMcp === true && request.routeOptions.url === dailyMcpPath
+          ? request.routeOptions.config.jarvisDailyMcpMetadataUrl : undefined;
+        reply.header('WWW-Authenticate', metadata ? `Bearer resource_metadata="${metadata}"` : 'Bearer');
+      }
       return reply.code(statusCode).send({ error: statusCode === 401 ? 'Unauthorized' : 'Forbidden' });
     }
   });
