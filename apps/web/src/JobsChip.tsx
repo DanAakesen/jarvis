@@ -79,7 +79,7 @@ export function JobsChip({ backendUrl, getAccessToken, onResult, accountId = nul
   onResult: ResultWindowAction;
   accountId?: string | null;
 }) {
-  const { jobs, history, hasDismissedJobs, error, refresh, cancel, dismiss, dismissMany, dismissing, syncingDismissals, headerHiddenJobIds } = useJobs(backendUrl, getAccessToken, accountId);
+  const { jobs, history, hasJobHistory, error, refresh, cancel, dismiss, dismissMany, dismissing, syncingDismissals, headerHiddenJobIds } = useJobs(backendUrl, getAccessToken, accountId);
   const { presence } = usePresence(backendUrl, getAccessToken);
   const [openId, setOpenId] = useState<string | null>(null);
   const [showHistory, setShowHistory] = useState(false);
@@ -170,7 +170,7 @@ export function JobsChip({ backendUrl, getAccessToken, onResult, accountId = nul
     (job.status === 'running' || job.status === 'done' && waiting.has(job.jobId)));
   const groups = groupJobs(jobs);
   const peekGroup = peek ? groups.find((group) => group.some((job) => job.jobId === peek.jobId)) ?? [peek] : [];
-  if (history.length === 0 && !hasDismissedJobs && !error && !syncingDismissals) return null;
+  if (!hasJobHistory && !error && !syncingDismissals) return null;
   const failures = jobs.filter((job) => job.status === 'failed' && !interrupted(job)).length;
   const needsAttention = Boolean(error) || jobs.some((job) => Boolean(errors[job.jobId]));
   const historyLabel = needsAttention ? 'Background work · needs attention' : failures > 0 ? `Background work · ${failures} failed` : 'Background work';

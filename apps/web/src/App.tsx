@@ -472,8 +472,8 @@ function ShellLayout({ signedIn, config, session, camera, screenShare, dailyEnab
   const jobsAccountId = signedIn
     ? (session.client.getActiveAccount() ?? session.client.getAllAccounts()[0])?.homeAccountId ?? null
     : null;
-  const { history: backgroundJobs, error: jobsError } = useJobs(signedIn ? config.backendUrl : null, getAccessToken, jobsAccountId);
-  const hasJobsSummary = backgroundJobs.length > 0 || jobsError !== '';
+  const { history: backgroundJobs, hasJobHistory, syncingDismissals, error: jobsError } = useJobs(signedIn ? config.backendUrl : null, getAccessToken, jobsAccountId);
+  const hasJobsSummary = hasJobHistory || syncingDismissals || jobsError !== '';
   const headerEntryCount = windowCount + (hasJobsSummary ? 1 : 0);
   const researchRunning = backgroundJobs.some((job) => job.kind === 'research' && job.status === 'running');
   // The conversation never needs a tab: the chat bar's orb and handle bring it back.

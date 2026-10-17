@@ -257,6 +257,105 @@ describe('job hydration ownership', () => {
     expect(result.current.error).toContain('could not be confirmed');
   });
 
+  it('authoritatively refreshes a successful bulk dismissal whose bounded response omits cached finished IDs', async () => {
+    const other = { ...job, jobId: '22222222-2222-4222-8222-222222222222' };
+    const returnedId = '33333333-3333-4333-8333-333333333333';
+    let dismissed = false;
+    const fetchMock = vi.fn<typeof fetch>(async (_input, init) => {
+      if (init?.method === 'POST') {
+        dismissed = true;
+        return new Response(JSON.stringify({ dismissedJobIds: [returnedId] }));
+      }
+      return new Response(JSON.stringify({ jobs: dismissed ? [] : [job, other], dismissedJobIds: dismissed ? [returnedId] : [] }));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const { result } = renderHook(() => useJobs('https://api.example.com', getAccessToken, 'fixture-owner'));
+    await waitFor(() => expect(result.current.jobs).toHaveLength(2));
+    await act(async () => { expect(await result.current.dismissMany()).toBe(''); });
+    expect(result.current.jobs).toEqual([]);
+    expect(result.current.history).toEqual([]);
+    expect(result.current.error).toBe('');
+    expect(fetchMock.mock.calls.filter(([, init]) => init?.method === 'GET')).toHaveLength(2);
+    act(() => publishJob({ ...job, updatedAt: '2026-10-16T08:06:00.000Z' }));
+    expect(result.current.jobs).toEqual([]);
+    await waitFor(() => expect(fetchMock.mock.calls.filter(([, init]) => init?.method === 'GET')).toHaveLength(3));
+    expect(result.current.jobs).toEqual([]);
+  });
+
+  it('reconciles a missed completion outside bounded tombstones without resurrecting running or terminal replays', async () => {
+    const running = { ...job, status: 'running' as const };
+    let remoteDismissed = false;
+    const fetchMock = vi.fn<typeof fetch>(async () => new Response(JSON.stringify({
+      jobs: remoteDismissed ? [] : [running], dismissedJobIds: [],
+    })));
+    vi.stubGlobal('fetch', fetchMock);
+    const { result } = renderHook(() => useJobs('https://api.example.com', getAccessToken, 'fixture-owner'));
+    await waitFor(() => expect(hasRunningJob('embedding')).toBe(true));
+    remoteDismissed = true;
+    await act(async () => result.current.refresh());
+    expect(result.current.history).toEqual([]);
+    expect(hasRunningJob('embedding')).toBe(false);
+    act(() => publishJob({ ...running, updatedAt: '2026-10-16T08:06:00.000Z' }));
+    expect(result.current.history).toEqual([]);
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+    act(() => publishJob({ ...job, updatedAt: '2026-10-16T08:07:00.000Z' }));
+    expect(result.current.jobs).toEqual([]);
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(4));
+    expect(result.current.history).toEqual([]);
+    expect(hasRunningJob('embedding')).toBe(false);
+  });
+
+  it('verifies an unknown live completion against server visibility without misclassifying it as restored history', async () => {
+    let serverJobs: BackgroundJob[] = [];
+    vi.stubGlobal('fetch', vi.fn<typeof fetch>(async () => json(serverJobs)));
+    const { result } = renderHook(() => useJobs('https://api.example.com', getAccessToken, 'fixture-owner'));
+    await act(async () => result.current.refresh());
+    const completion = { ...job, status: 'done' as const };
+    serverJobs = [completion];
+    act(() => publishJob(completion));
+    expect(result.current.jobs).toEqual([]);
+    await waitFor(() => expect(result.current.jobs).toHaveLength(1));
+    expect(result.current.jobs[0]?.restored).not.toBe(true);
+  });
+
+  it('does not resurrect an unknown dismissed terminal replay on a fresh device outside the tombstone cap', async () => {
+    const recentDismissals = Array.from({ length: 1000 }, (_, index) =>
+      `${String(index).padStart(8, '0')}-2222-4222-8222-222222222222`);
+    const fetchMock = vi.fn<typeof fetch>(async () => new Response(JSON.stringify({
+      jobs: [], dismissedJobIds: recentDismissals,
+    })));
+    vi.stubGlobal('fetch', fetchMock);
+    const { result } = renderHook(() => useJobs('https://api.example.com', getAccessToken, 'fixture-owner'));
+    await waitFor(() => expect(result.current.hasDismissedJobs).toBe(true));
+    expect(recentDismissals).not.toContain(job.jobId);
+    expect(localStorage.length).toBe(0);
+    act(() => publishJob({ ...job, status: 'done', updatedAt: '2026-10-16T08:07:00.000Z' }));
+    expect(result.current.history).toEqual([]);
+    expect(result.current.jobs).toEqual([]);
+    await act(async () => { await result.current.refresh(); });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(result.current.history).toEqual([]);
+    expect(result.current.jobs).toEqual([]);
+    expect(result.current.error).toBe('');
+  });
+
+  it('preserves newer live progress while an older authoritative refresh is in flight', async () => {
+    const running = { ...job, status: 'running' as const };
+    let finish!: (response: Response) => void;
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValueOnce(json([running]))
+      .mockImplementationOnce(() => new Promise<Response>((resolve) => { finish = resolve; }));
+    vi.stubGlobal('fetch', fetchMock);
+    const { result } = renderHook(() => useJobs('https://api.example.com', getAccessToken, 'fixture-owner'));
+    await waitFor(() => expect(result.current.jobs).toHaveLength(1));
+    let refresh!: Promise<void>;
+    act(() => { refresh = result.current.refresh(); });
+    await waitFor(() => expect(finish).toBeTypeOf('function'));
+    act(() => publishJob({ ...running, step: 2, updatedAt: '2026-10-16T08:06:00.000Z' }));
+    await act(async () => { finish(json([])); await refresh; });
+    expect(result.current.jobs).toEqual([expect.objectContaining({ jobId: job.jobId, status: 'running', step: 2 })]);
+    expect(hasRunningJob('embedding')).toBe(true);
+  });
+
   it('serializes concurrent dismissals without losing a second completed job', async () => {
     const other = { ...job, jobId: '22222222-2222-4222-8222-222222222222' };
     const fetchMock = vi.fn<typeof fetch>(async (input, init) => init?.method === 'POST'
@@ -320,8 +419,8 @@ describe('job hydration ownership', () => {
     });
     await waitFor(() => expect(fetchMock).toHaveBeenCalledOnce());
     const firstSignal = fetchMock.mock.calls[0]![1]!.signal!;
-    act(() => publishJob(job));
-    expect(result.current.history[0]?.title).toBe('First account job');
+    act(() => publishJob({ ...job, status: 'running' }));
+    expect(result.current.history).toEqual([]);
     rerender({ account: 'second-owner' });
     await waitFor(() => expect(result.current.history[0]?.title).toBe('Second account job'));
     expect(firstSignal.aborted).toBe(true);

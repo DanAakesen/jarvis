@@ -22,7 +22,23 @@ let legacyStorageDirty = false;
 let dismissalError = '';
 let mutation: Promise<string> | null = null;
 let mutationController: AbortController | null = null;
+let liveRevision = 0;
+let liveRevisions = new Map<string, number>();
+let visibleIds = new Set<string>();
+let deferredJobs = new Map<string, BackgroundJob>();
+let refreshCurrent: (() => Promise<void>) | null = null;
+let refreshQueued = false;
+let seenJobs = false;
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/u;
+
+function scheduleRefresh() {
+  if (refreshQueued) return;
+  refreshQueued = true;
+  queueMicrotask(() => {
+    refreshQueued = false;
+    void refreshCurrent?.();
+  });
+}
 
 function readDismissals(): Set<string> {
   if (!scope) return new Set();
@@ -43,6 +59,7 @@ function readDismissals(): Set<string> {
 
 function emit(next: Map<string, JobEntry>, error = snapshot.error) {
   jobs = next;
+  if (next.size) seenJobs = true;
   snapshot = {
     jobs: [...next.values()].sort((left, right) => Date.parse(right.startedAt) - Date.parse(left.startedAt)),
     error,
@@ -64,6 +81,16 @@ export function publishJob(value: unknown, source: 'live' | 'history' = 'live') 
   const current = jobs.get(jobId);
   if (current && (Date.parse(current.updatedAt) > Date.parse(value.updatedAt) ||
       (current.status !== 'running' && value.status === 'running'))) return;
+  if (source === 'live') liveRevisions.set(jobId, ++liveRevision);
+  // Bounded tombstones cannot authorize an unknown replay. Verify it against visible server history.
+  if (source === 'live' && !current && !visibleIds.has(jobId) && !dismissedIds.has(jobId)) {
+    const pending = deferredJobs.get(jobId);
+    if (!pending || Date.parse(pending.updatedAt) <= Date.parse(value.updatedAt)) deferredJobs.set(jobId, value);
+    const oldest = [...deferredJobs.values()].sort((left, right) => Date.parse(right.startedAt) - Date.parse(left.startedAt));
+    for (const job of oldest.slice(100)) deferredJobs.delete(job.jobId);
+    scheduleRefresh();
+    return;
+  }
   const next = new Map(jobs);
   next.set(jobId, {
     ...value, jobId,
@@ -84,6 +111,7 @@ export function hasRunningJob(kind: BackgroundJob['kind']) {
 
 function applyDismissals(ids: readonly string[]) {
   dismissedIds ??= new Set();
+  if (ids.length) seenJobs = true;
   const previousLegacyCount = legacyIds.size;
   for (const id of ids) {
     dismissedIds.add(id);
@@ -137,6 +165,13 @@ export function resetJobsForTests(clearDismissals = true) {
   legacyStorageDirty = false;
   dismissalError = '';
   mutation = null;
+  liveRevision = 0;
+  liveRevisions = new Map();
+  visibleIds = new Set();
+  deferredJobs = new Map();
+  refreshCurrent = null;
+  refreshQueued = false;
+  seenJobs = false;
   if (clearDismissals) {
     for (const key of Object.keys(localStorage)) {
       if (key.startsWith(dismissalPrefix)) localStorage.removeItem(key);
@@ -163,6 +198,7 @@ export function useJobs(backendUrl: string | null, getAccessToken: () => Promise
     if (!backendUrl) return Promise.resolve();
     if (loading) return loading;
     const requestGeneration = generation;
+    const requestRevision = liveRevision;
     const controller = new AbortController();
     const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(120_000)]);
     loadController = controller;
@@ -181,7 +217,20 @@ export function useJobs(backendUrl: string | null, getAccessToken: () => Promise
         if (legacyStorageDirty) saveLegacyRemainder();
         if ('dismissedJobIds' in body) applyDismissals(dismissalIds(body));
         if (!legacyIds.size) dismissalError = '';
-        for (const job of body.jobs) publishJob(job, 'history');
+        visibleIds = new Set(body.jobs.map(({ jobId }) => jobId.toLowerCase()));
+        // Absence from this authoritative window supersedes old cache entries, not newer live progress.
+        emit(new Map([...jobs].filter(([id, job]) => visibleIds.has(id) || (liveRevisions.get(id) ?? 0) > requestRevision ||
+          job.status !== 'running' && dismissedIds?.has(id))));
+        for (const job of body.jobs) {
+          const id = job.jobId.toLowerCase();
+          const deferred = deferredJobs.get(id);
+          if (deferred) { deferredJobs.delete(id); publishJob(deferred); }
+          publishJob(job, 'history');
+        }
+        for (const [id] of deferredJobs) {
+          if ((liveRevisions.get(id) ?? 0) <= requestRevision) deferredJobs.delete(id);
+        }
+        liveRevisions = new Map([...liveRevisions].filter(([id]) => jobs.has(id) || deferredJobs.has(id)));
         loaded = true;
         emit(new Map(jobs), '');
         if (legacyIds.size) {
@@ -218,7 +267,12 @@ export function useJobs(backendUrl: string | null, getAccessToken: () => Promise
           emit(new Map(jobs), 'Job history could not be loaded. Live updates may be incomplete.');
         }
       } finally {
-        if (requestGeneration === generation) { loading = null; loadController = null; emit(new Map(jobs)); }
+        if (requestGeneration === generation) {
+          loading = null;
+          loadController = null;
+          emit(new Map(jobs));
+          if ([...deferredJobs.keys()].some((id) => (liveRevisions.get(id) ?? 0) > requestRevision)) scheduleRefresh();
+        }
       }
     })();
     return loading;
@@ -241,8 +295,14 @@ export function useJobs(backendUrl: string | null, getAccessToken: () => Promise
       legacyStorageDirty = false;
       dismissalError = '';
       mutation = null;
+      liveRevision = 0;
+      liveRevisions = new Map();
+      visibleIds = new Set();
+      deferredJobs = new Map();
+      seenJobs = false;
       emit(new Map(), '');
     }
+    refreshCurrent = refresh;
     if (!loaded) void refresh();
   }, [refresh, requestScope]);
 
@@ -280,7 +340,14 @@ export function useJobs(backendUrl: string | null, getAccessToken: () => Promise
         signal.throwIfAborted();
         if (requestGeneration !== generation) return '';
         applyDismissals(ids);
-        if (expectedIds.some((id) => !ids.includes(id))) throw new Error('Dismissal not confirmed');
+        if (jobIds && expectedIds.some((id) => !ids.includes(id))) throw new Error('Dismissal not confirmed');
+        if (!jobIds) {
+          const pendingLoad = loading;
+          if (pendingLoad) await awaitWithSignal(() => pendingLoad, signal);
+          await awaitWithSignal(refresh, signal);
+          if (requestGeneration !== generation) return '';
+          if (snapshot.error || expectedIds.some((id) => jobs.has(id) && !jobs.get(id)?.dismissed)) throw new Error('Bulk dismissal not confirmed');
+        }
         dismissalError = '';
         emit(new Map(jobs));
         return '';
@@ -295,7 +362,7 @@ export function useJobs(backendUrl: string | null, getAccessToken: () => Promise
     })();
     emit(new Map(jobs));
     return mutation;
-  }, [backendUrl, getAccessToken, requestScope]);
+  }, [backendUrl, getAccessToken, refresh, requestScope]);
 
   const dismiss = useCallback((jobId: string) => dismissMany([jobId]), [dismissMany]);
 
@@ -316,6 +383,7 @@ export function useJobs(backendUrl: string | null, getAccessToken: () => Promise
     jobs: available ? current.jobs.filter((job) => !job.dismissed) : [],
     history: available ? current.jobs : [],
     hasDismissedJobs: available && (dismissedIds?.size ?? 0) > 0,
+    hasJobHistory: available && seenJobs,
     error: available ? [current.error, storageError, dismissalError].filter(Boolean).join(' ') : '',
     refresh,
     cancel,

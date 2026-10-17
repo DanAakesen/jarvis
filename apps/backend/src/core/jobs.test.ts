@@ -117,8 +117,28 @@ describe('background jobs', () => {
       });
       expect(jobs).toEqual(snapshot);
       expect(store.update).not.toHaveBeenCalled();
-      const tool = await listJobsTool.execute({}, { server: restarted } as unknown as FastifyRequest, new AbortController().signal);
-      expect(tool).toMatchObject({ finished: expect.arrayContaining([expect.objectContaining({ resultWindow: 'research-result' })]) });
+    });
+
+    it('excludes owner dismissals from list_jobs and smoke counts while preserving raw get_job and audit reads', async () => {
+      const { jobs, store } = dismissalFixture();
+      const app = fixture(undefined, store);
+      for (const job of jobs.slice(1, 3)) {
+        expect((await app.inject({ method: 'POST', url: `/jobs/${job.jobId}/dismiss`, headers })).statusCode).toBe(200);
+      }
+      const request = { server: app } as unknown as FastifyRequest;
+      const signal = new AbortController().signal;
+      await expect(listJobsTool.execute({}, request, signal)).resolves.toMatchObject({
+        running: [{ jobId: jobs[0]!.jobId, status: 'running' }],
+        finished: [{ jobId: jobs[3]!.jobId, status: 'cancelled' }],
+      });
+      await expect(listJobsTool.execute({}, {
+        server: app, headers: { 'x-jarvis-smoke': 'true' },
+      } as unknown as FastifyRequest, signal)).resolves.toEqual({ runningCount: 1, finishedCount: 1 });
+      await expect(getJobTool.execute({ jobId: jobs[1]!.jobId }, request, signal))
+        .resolves.toMatchObject({ job: { status: 'done', viewId: 'research-result' } });
+      await expect(getJobTool.execute({ jobId: jobs[2]!.jobId }, request, signal))
+        .resolves.toMatchObject({ job: { status: 'failed', detail: 'interrupted by restart' } });
+      expect(await app.backgroundJobs.list()).toEqual(jobs);
     });
 
     it('refuses running and missing individual jobs, then dismisses all terminal states idempotently', async () => {

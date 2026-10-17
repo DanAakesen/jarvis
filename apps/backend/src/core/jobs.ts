@@ -195,6 +195,10 @@ export class BackgroundJobRegistry {
     return { jobs: visible.slice(0, 1_000), dismissedJobIds: dismissedJobIds.slice(0, 1_000) };
   }
 
+  async listVisible(ownerObjectId: string): Promise<BackgroundJob[]> {
+    return (await this.visibleSnapshot(ownerObjectId)).jobs;
+  }
+
   async dismiss(ownerObjectId: string, jobIds?: readonly string[], skipRunning = false): Promise<BackgroundJobDismissalResult> {
     if (!this.store?.dismiss || !this.store.listDismissed) {
       throw new Error('Background job dismissal persistence is unavailable');
@@ -322,7 +326,9 @@ export function registerJobRoutes(app: FastifyInstance): void {
     if (!isOwner(request.principal?.objectId)) return reply.code(403).send({ error: 'Forbidden' });
     reply.header('Cache-Control', 'no-store');
     try {
-      const result = await dismiss([...new Set(request.body.jobIds.map((id) => id.toLowerCase()))], true);
+      const requestedIds = [...new Set(request.body.jobIds.map((id) => id.toLowerCase()))];
+      const result = await dismiss(requestedIds, true);
+      // Success processes the whole legacy snapshot, including skipped absent, expired and running IDs.
       return { dismissedJobIds: result.dismissedJobIds.slice(0, 1_000) };
     } catch {
       request.log.error('Background job dismissal import failed');
@@ -366,7 +372,7 @@ export const listJobsTool: JarvisTool = {
   reflexSafe: true,
   execute: async (_input, request) => {
     const now = Date.now();
-    const jobs = await request.server.backgroundJobs.list();
+    const jobs = await request.server.backgroundJobs.listVisible(request.server.ownerObjectId);
     if (request.headers?.['x-jarvis-smoke'] === 'true') {
       return {
         runningCount: jobs.filter((job) => job.status === 'running').length,

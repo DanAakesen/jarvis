@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { BackgroundJob } from '@jarvis/contracts';
 import { JobsChip } from './JobsChip';
-import { hasRunningJob, publishJob, resetJobsForTests } from './jobs-store';
+import { hasRunningJob, publishJob as publishStoreJob, resetJobsForTests } from './jobs-store';
 import { resetPresenceForTests } from './presence-store';
 
 const getAccessToken = vi.fn(async () => 'token');
@@ -12,13 +12,20 @@ const job = (patch: Partial<BackgroundJob> = {}): BackgroundJob => ({
   jobId: '11111111-1111-4111-8111-111111111111', kind: 'research', title: 'Research: Microsoft Foundry IQ', status: 'running', step: 1, steps: 3,
   detail: 'Searching: Key findings', startedAt: '2026-10-07T12:00:00.000Z', updatedAt: '2026-10-07T12:00:10.000Z', ...patch,
 });
+let serverJobs = new Map<string, BackgroundJob>();
+
+function publishJob(job: BackgroundJob) {
+  serverJobs.set(job.jobId, job);
+  publishStoreJob(job);
+}
 
 function stubFetch(mode: 'present' | 'away', jobs: BackgroundJob[] = []) {
+  serverJobs = new Map(jobs.map((job) => [job.jobId, job]));
   const dismissed = new Set<string>();
   const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const path = new URL(String(input)).pathname;
     if (path === '/presence') return json({ mode, source: 'manual', changedAt: null });
-    if (path === '/jobs') return json({ jobs: jobs.filter((job) => !dismissed.has(job.jobId)), dismissedJobIds: [...dismissed] });
+    if (path === '/jobs') return json({ jobs: [...serverJobs.values()].filter((job) => !dismissed.has(job.jobId)), dismissedJobIds: [...dismissed] });
     if (path.endsWith('/dismiss') && init?.method === 'POST') {
       const id = path.split('/')[2]!;
       dismissed.add(id);
@@ -30,7 +37,7 @@ function stubFetch(mode: 'present' | 'away', jobs: BackgroundJob[] = []) {
       return json({ dismissedJobIds: jobIds });
     }
     if (path === '/jobs/dismiss-finished' && init?.method === 'POST') {
-      const ids = jobs.filter((job) => job.status !== 'running').map(({ jobId }) => jobId);
+      const ids = [...serverJobs.values()].filter((job) => job.status !== 'running').map(({ jobId }) => jobId);
       ids.forEach((id) => dismissed.add(id));
       return json({ dismissedJobIds: ids });
     }
@@ -101,7 +108,7 @@ describe('job tabs', () => {
     expect(screen.queryByRole('button', { name: /Show details/ })).toBeNull();
 
     act(() => publishJob(job()));
-    const chip = screen.getByRole('button', { name: /Research running: Research: Microsoft Foundry IQ · 11111111 · 1\/3/ });
+    const chip = await screen.findByRole('button', { name: /Research running: Research: Microsoft Foundry IQ · 11111111 · 1\/3/ });
     expect(chip.closest('.job-tab-list')).not.toBeNull();
     fireEvent.click(chip);
     const details = screen.getByRole('group', { name: 'Research: Microsoft Foundry IQ details' });
@@ -111,7 +118,7 @@ describe('job tabs', () => {
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith('https://api.example.com/jobs/11111111-1111-4111-8111-111111111111/cancel', expect.objectContaining({ method: 'POST' })));
 
     act(() => publishJob(job({ jobId: '22222222-2222-4222-8222-222222222222', title: 'Research: Work IQ', startedAt: '2026-10-07T12:00:05.000Z' })));
-    expect(screen.getAllByRole('button', { name: /Research running/ })).toHaveLength(2);
+    await waitFor(() => expect(screen.getAllByRole('button', { name: /Research running/ })).toHaveLength(2));
   });
 
   it('opens a finished result while present and parks it in the chip while away', async () => {
@@ -141,6 +148,7 @@ describe('job tabs', () => {
     stubFetch('present');
     mount();
     act(() => publishJob(job({ status: 'failed', detail: 'The web search timed out.', updatedAt: '2026-10-07T12:02:00.000Z' })));
+    await screen.findByRole('button', { name: 'Show background work: 1 failed' });
     expect(screen.queryByRole('button', { name: /Research failed/ })).toBeNull();
     openHistoryJob(/Research: Microsoft Foundry IQ Research · failed/);
     expect(screen.getByText('The web search timed out.')).not.toBeNull();

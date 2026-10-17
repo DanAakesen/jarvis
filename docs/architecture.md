@@ -451,8 +451,18 @@ Authenticated dismiss-one, dismiss-finished and bounded UUID-import endpoints
 filter the header's `/jobs` response and `list_jobs` counts without changing raw
 registry, job-detail or health reads, job rows, steps, events or lifecycle.
 Running work cannot be dismissed.
+Visible snapshots and dismissal metadata each return at most 1,000 IDs/rows,
+with running jobs first. SQL filters visibility against the complete owner
+dismissal table, not just that bounded metadata. Bulk writes persist every
+retained terminal dismissal even when the response is bounded. Import success
+means the submitted legacy snapshot was processed; absent, expired and running
+IDs are ignored, not recorded as dismissals. Nonempty dismissal state prevents
+rolling back migration 0052.
 Legacy scoped browser IDs remain hidden locally until the import is confirmed,
-then the local copy is removed. Refresh reconciles server visibility.
+then the local copy is removed. Refresh reconciles the authoritative visible
+window while preserving concurrent live updates. Unknown replayed jobs wait
+for server visibility confirmation, so bounded tombstones cannot resurrect
+older dismissals. Bulk dismissal refreshes that window before reporting success.
 Closing/hiding does not call Cancel, delete SQL records or erase results.
 Undismissed details still expose original status,
 run identity, timestamp, failure reason and saved result. A dismissed selection
