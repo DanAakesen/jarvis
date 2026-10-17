@@ -15,6 +15,15 @@ with `agent_error`. Its immutable receipt remains `accepted=false`; #820 owns
 the functional follow-through and #880 stays open. This integration does not
 claim to fix that historical failure or complete private Daily acceptance.
 
+## Proactive assistance (17 October 2026; P13-01 / #917)
+
+The first delivery-proof milestone is approved. P13-01 builds the owner-bound
+backend, SQL records and encrypted Web Push path behind the exact-true,
+default-off `JARVIS_PUSH_ENABLED` gate. The parallel web work is P13-02. No
+deployment setting is changed; provider acceptance and local tests do not prove
+that an iPhone displayed the notification. Physical-device delivery remains
+unverified.
+
 ## Owner nutrition targets (17 October 2026; P12-09 / #724)
 
 Dan ruled that the suggestion budget reads owner-entered Settings, not a default,
@@ -24,17 +33,41 @@ targets (resting energy burn, daily deficit, protein): `GET`/`PATCH
 `daily_nutrition_targets` tool, whose changes need the exact browser Now
 approval. They are Daily-owned `dbo.settings` rows, so there is no migration and
 no core Settings change. All of it stays behind the default-off Daily gate (Daily
-off = Jarvis unchanged) with no production caller yet. Dan enters his own values;
-none is stored in code, tests or documents.
+off = Jarvis unchanged); the default-off composition below is its only caller. Dan
+enters his own values; none is stored in code, tests or documents.
 
 Slices, in order. Second (#899): the budget/candidate adapter and the read-only
 `daily_nutrition_suggest` tool (allowance = resting burn + active energy so far
 today - deficit; unknowns flagged, never zero; only meals logged in Jarvis
-count; saved favourites are the only candidates). Third (this slice): the web
+count; saved favourites are the only candidates). Third (#901): the web
 Settings section, shown only while Daily is on, saving on its own with no
-defaults, placeholders or example figures. Last: the default-off composition. No
-provider, private or device access, live probe, Daily activation or acceptance
-is claimed.
+defaults, placeholders or example figures. Last: the default-off composition,
+next section. No provider, private or device access, live probe, Daily
+activation or acceptance is claimed.
+
+## Default-off Daily composition (17 October 2026; P12-09 / #724)
+
+Dan gave the go for Daily. This is the last invisible slice: one composition
+module, `daily/composition.ts`, behind `JARVIS_DAILY_ENABLED`. Absent or `false`
+is off, exactly `true` is on, and anything else stops startup with a
+configuration error that never echoes the value. No workflow, Bicep,
+infrastructure, environment or deploy file sets it, so Daily is off in every
+environment and a scan test fails if one ever does. Turning it on is a separate
+reviewed change.
+
+Off composes nothing: the route table, tool catalogue, capability instructions,
+voice session tools, health response, startup, jobs and timers stay those of
+Jarvis without Daily, which tests compare against a Daily-free application. On
+composes one owner-bound module over the existing nutrition data: the
+capabilities, query and nutrition-targets routes and six tools (116 of the
+128-tool limit). It adds no MCP connector, Frida lookup, Google or Gmail feed,
+health upload, job or timer. SQL and a UUID owner are required or startup fails;
+a signed-in user who is not that owner, a runner or a connector is refused before
+any SQL, and an agent reaches the targets only through the approved tool. No
+migration, account, consent, grant, secret, RBAC, resource or import is added, and
+no provider, device or private data is read or written.
+
+Next: the visible Daily page (P12-15 / #730).
 
 ## On-screen views authority (17 October 2026; P11-09 / #885)
 
@@ -1908,6 +1941,7 @@ Goal: GitHub issues are the single backlog. The Software Factory (worker label `
 | P10-06 | [#603](https://github.com/DanAakesen/jarvis/issues/603) | Factory issue tasks carry trusted issue metadata and delivery reuses PRs cleanly | Prompt includes repository/issue and tells the agent to push its branch without opening a PR; reused drafts gain `Fixes #N` and become ready; policy-evaluation errors are sanitized and do not refuse recorded delivery | P10-02 | Complete |
 | P10-07 | [#793](https://github.com/DanAakesen/jarvis/issues/793) | UI session consumes the canonical GitHub Factory board, replacing the legacy task-state columns | Six ordered Project columns, issue/PR links and real task overlays, local filters, bounded display, Now-stream invalidations/reconnect, stale/error recovery, focused checks and desktop/320px inspection; spot-check live Project placement | P10-04 | Complete |
 | P10-08 | [#902](https://github.com/DanAakesen/jarvis/issues/902) | Web task creation creates and links one GitHub issue | Issue-first creation preserves dialog fields; durable submission claims prevent duplicate issues/tasks; failures identify partial creation; confirmation links to the issue; board overlays work before a PR and delivery includes `Fixes #N`. Offline backend/web checks pass; live GitHub acceptance remains unverified | P10-02 | Complete |
+| P10-09 | [#908](https://github.com/DanAakesen/jarvis/issues/908) | Complete without deployment merges eligible PRs without confirmation and recovers open work after restart | Project-policy selection is approval; App squash merge retains existing safety guards, `deliver_pr` never merges, no-check grace survives restart, startup/minute and policy-change sweeps are idempotent, transient GitHub retries are bounded, refusals remain task events, and Done follows the signed merge webhook | P3-06 | Complete |
 
 P10-07's board shipped in #806. The subsequently requested issue-number
 navigation follow-up shipped in #810 at `b4915164`; Deploy 38479582927 passed.
@@ -1986,6 +2020,7 @@ A rolling intake phase. When Dan asks Jarvis to change its own code or a project
 | --- | --- | --- | --- | --- | --- |
 | P11-11 | [#895](https://github.com/DanAakesen/jarvis/issues/895) | Never read back details of completed actions in voice or chat | Successful writes get one short confirmation with at most a count; retain details in the written/on-screen record and allow them when requested; report failed, partial and unverified outcomes with the affected item and next step; preserve staging summaries; English/Danish voice rules and focused contracts; live model verification after deployment | None | Complete |
 | P11-09 | [#885](https://github.com/DanAakesen/jarvis/issues/885) | P0: Jarvis has full control of its own on-screen views in voice and chat | Create, update, arrange and close generated views in voice and chat for the authenticated owner without weakening owner-only authority or accepting model actor claims; no raw JSON on screen; specific machine-usable refusals; regressions for the refused shapes in both paths; offline find/show/stage/confirm test; Dan's live re-test closes it | None | In progress |
+| P11-12 | [#905](https://github.com/DanAakesen/jarvis/issues/905) | Durable account-owned Background work dismissal with plain explanations | Server dismissal/import and bulk finished dismissal; neutral restart history, grouped repeats, preserved raw jobs and rollout-compatible fields; merged P9-119 icon/count header and additive migration 0053; focused backend/web checks and desktop/phone light/dark browser inspection; stored-row cluster evidence unavailable locally; cross-device human acceptance pending | None | Complete |
 | P11-08 | [#868](https://github.com/DanAakesen/jarvis/issues/868) | Stop Web CI repeating backend checks | Web checks contracts and frontend; dedicated Backend and every other required component/analysis remain green; record actual selection without a speculative speedup claim | None | Complete |
 | P11-06 | [#860](https://github.com/DanAakesen/jarvis/issues/860) | Priority hotfix: stop the mobile composer jumping over chat on focus | One phone viewport dock with chat open, closed or minimised; preserve drafts, reader following and saved desktop geometry through focus, keyboard resize/pan/dismissal and orientation; focused regressions, independent review and normal release gates; native-phone acceptance explicit | None | Complete |
 | P11-05 | [#859](https://github.com/DanAakesen/jarvis/issues/859) | Make header background work understandable and dismissible | Remove dismissed rows immediately and across refresh/reload; distinguish background work from Factory tasks; preserve job records, real status, recovery, scoped visibility, accessible focus and desktop/phone states; cover storage/network failure without private mutations | — | Complete |
@@ -2271,6 +2306,18 @@ Dan approved P12 on 12 October 2026 and explicitly released only P12-01 for this
 | P12-17 | [#732](https://github.com/DanAakesen/jarvis/issues/732) | End-to-end, mobile & real-iPhone acceptance | Data manifest reconciled; real devices and existing Jarvis workflows pass; SQL availability and reverse-delta rollback verified. Dan reviews cutover evidence. | P12-06, P12-11, P12-12, P12-13, P12-14, P12-15, P12-16 | Not started |
 | P12-18 | [#733](https://github.com/DanAakesen/jarvis/issues/733) | Final delta, cutover & rollback window | Post-switch sync / food / UI pass; window agreed; new Azure writes can be recovered if rollback is needed. | P12-17 | Not started |
 | P12-19 | [#734](https://github.com/DanAakesen/jarvis/issues/734) | Retire legacy and migration-only tooling | Permanent Azure services and original source/data remain; full verified migration, rollback/retention gates met before legacy deprecation or temporary-tool cleanup; no hidden old canonical writer. | P12-18 | Not started |
+
+## P13 — Proactive assistance
+
+The first milestone is a direct, user-triggered Web Push test linking to a
+durable owner-protected item. P13 is built dark: enabling the backend flag is a
+separate change, the user test is not proactive delivery, and real iPhone
+delivery remains unproven. Teams is not a delivery path.
+
+| ID | Issue | Task | Acceptance criteria | Depends on | Status |
+| --- | --- | --- | --- | --- | --- |
+| P13-01 | [#917](https://github.com/DanAakesen/jarvis/issues/917) | Push delivery proof, backend | Exact-true default-off gate; authenticated owner-scoped subscriptions/items; server-only VAPID key and encrypted generic payload; bounded retry and rate limits; durable item open is owner-only; no Teams, scheduler or activation. Unit, lint and type checks pass; SQL integration runs in CI. Real iPhone delivery remains unproven. | — | Complete |
+| P13-02 | [#919](https://github.com/DanAakesen/jarvis/issues/919) | Push delivery proof: web worker, opt-in and durable item page | Exact-string push gate defaults off; worker always displays generic alerts and opens only validated same-origin item paths; authenticated opt-in/test/off states and owner-protected item page work; deep links return after sign-in. Physical iOS delivery remains a separate acceptance gate. | — | Complete |
 
 ## Factory canonical-status parity (16 October 2026)
 

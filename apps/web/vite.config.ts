@@ -4,25 +4,26 @@ import react from '@vitejs/plugin-react';
 import { loadEnv } from 'vite';
 import { defineConfig } from 'vitest/config';
 import { parseDailyEnabled } from './config/daily-switch.ts';
-import { createPublicConfig } from './config/public-config.ts';
+import { createPublicConfig, isPushEnabled } from './config/public-config.ts';
 
 const repositoryRoot = fileURLToPath(new URL('../../', import.meta.url));
 
 export default defineConfig(({ mode }) => {
   const bootstrap: unknown = JSON.parse(readFileSync(new URL('../../infra/bootstrap.output.json', import.meta.url), 'utf8'));
   const settings: { backendUrl: unknown } = JSON.parse(readFileSync(new URL('./config.json', import.meta.url), 'utf8'));
-  const env = loadEnv(mode, repositoryRoot, ['VITE_BACKEND_URL', 'VITE_DAILY_ENABLED']);
+  const env = loadEnv(mode, repositoryRoot, ['VITE_BACKEND_URL', 'VITE_DAILY_ENABLED', 'VITE_PUSH_ENABLED']);
   const publicConfig = createPublicConfig(bootstrap, env.VITE_BACKEND_URL ?? settings.backendUrl);
   const dailyEnabled = parseDailyEnabled(env.VITE_DAILY_ENABLED);
 
   return {
     plugins: [react()],
-    // Load only the explicit public URL override and the Daily switch, not arbitrary root environment variables.
+    // Load only the explicit public URL override and the named feature switches, not arbitrary root environment variables.
     envDir: repositoryRoot,
     envPrefix: [],
     define: {
       __JARVIS_CONFIG__: JSON.stringify(publicConfig),
       __JARVIS_DAILY_ENABLED__: JSON.stringify(dailyEnabled),
+      __JARVIS_PUSH_ENABLED__: JSON.stringify(isPushEnabled(env.VITE_PUSH_ENABLED)),
     },
     server: { host: '0.0.0.0', port: 5173, strictPort: true },
     build: {

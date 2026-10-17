@@ -11,6 +11,7 @@ import {
 } from '@jarvis/contracts';
 
 const retentionDays = 30;
+const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
 
 interface BackgroundJobRow {
   job_id: string;
@@ -46,6 +47,9 @@ export interface StoredBackgroundJobDetails {
 }
 
 export interface BackgroundJobStore {
+  listVisible?(ownerObjectId: string): Promise<BackgroundJob[]>;
+  listDismissed?(ownerObjectId: string): Promise<string[]>;
+  dismiss?(ownerObjectId: string, jobIds?: readonly string[], skipRunning?: boolean): Promise<BackgroundJobDismissalResult>;
   recentFailures?(from: Date, to: Date, signal: AbortSignal): Promise<{ count: number; retryable: boolean }>;
   create(job: BackgroundJob, retryInput?: ResearchJobRetryInput, retryOf?: string): Promise<boolean>;
   update(job: BackgroundJob): Promise<BackgroundJob | null>;
@@ -53,6 +57,11 @@ export interface BackgroundJobStore {
   get(jobId: string): Promise<StoredBackgroundJobDetails | null>;
   reconcileInterrupted(): Promise<BackgroundJob[]>;
   prune(): Promise<void>;
+}
+
+export interface BackgroundJobDismissalResult {
+  dismissedJobIds: string[];
+  runningJobIds: string[];
 }
 
 function mapJob(row: BackgroundJobRow): BackgroundJob {
@@ -133,6 +142,87 @@ async function pruneJobs(pool: sql.ConnectionPool): Promise<void> {
 
 export function createBackgroundJobStore(pool: sql.ConnectionPool): BackgroundJobStore {
   return {
+    async listVisible(ownerObjectId) {
+      if (!uuidPattern.test(ownerObjectId)) throw new TypeError('Invalid background job owner');
+      await pruneJobs(pool);
+      const { recordset } = await pool.request()
+        .input('ownerObjectId', sql.UniqueIdentifier, ownerObjectId)
+        .query<BackgroundJobRow>(`SELECT TOP (1000) job.job_id, job.kind, job.title, job.status, job.step, job.steps,
+          job.detail, job.view_id, job.started_at, job.updated_at
+          FROM dbo.background_jobs AS job
+          WHERE job.started_at >= DATEADD(day, -${retentionDays}, SYSUTCDATETIME())
+            AND NOT EXISTS (SELECT 1 FROM dbo.background_job_dismissals AS dismissal
+              WHERE dismissal.owner_object_id = @ownerObjectId AND dismissal.job_id = job.job_id)
+          ORDER BY CASE WHEN job.status = N'running' THEN 0 ELSE 1 END, job.started_at DESC, job.job_id;`);
+      return recordset.map(mapJob);
+    },
+    async listDismissed(ownerObjectId) {
+      if (!uuidPattern.test(ownerObjectId)) throw new TypeError('Invalid background job owner');
+      const { recordset } = await pool.request()
+        .input('ownerObjectId', sql.UniqueIdentifier, ownerObjectId)
+        .query<{ job_id: string }>(`SELECT TOP (1000) dismissal.job_id
+          FROM dbo.background_job_dismissals AS dismissal
+          INNER JOIN dbo.background_jobs AS job ON job.job_id = dismissal.job_id
+          WHERE dismissal.owner_object_id = @ownerObjectId
+            AND job.started_at >= DATEADD(day, -${retentionDays}, SYSUTCDATETIME())
+          ORDER BY dismissal.dismissed_at DESC, job.updated_at DESC, job.job_id;`);
+      return recordset.map((row) => row.job_id.toLowerCase());
+    },
+    async dismiss(ownerObjectId, jobIds, skipRunning = false) {
+      if (!uuidPattern.test(ownerObjectId) || (jobIds !== undefined &&
+          (jobIds.length > 1_000 || jobIds.some((id) => !uuidPattern.test(id))))) {
+        throw new TypeError('Invalid background job dismissal');
+      }
+      const normalizedIds = jobIds === undefined ? undefined : [...new Set(jobIds.map((id) => id.toLowerCase()))];
+      const transaction = new sql.Transaction(pool);
+      await transaction.begin(sql.ISOLATION_LEVEL.SERIALIZABLE);
+      try {
+        if (normalizedIds === undefined) {
+          const { recordset } = await new sql.Request(transaction)
+            .input('ownerObjectId', sql.UniqueIdentifier, ownerObjectId)
+            .query<{ job_id: string }>(`INSERT dbo.background_job_dismissals (owner_object_id, job_id)
+              SELECT @ownerObjectId, job.job_id FROM dbo.background_jobs AS job WITH (UPDLOCK, HOLDLOCK)
+              WHERE job.started_at >= DATEADD(day, -${retentionDays}, SYSUTCDATETIME())
+                AND job.status <> N'running'
+                AND NOT EXISTS (SELECT 1 FROM dbo.background_job_dismissals WITH (UPDLOCK, HOLDLOCK)
+                  WHERE owner_object_id = @ownerObjectId AND job_id = job.job_id);
+              SELECT TOP (1000) dismissal.job_id FROM dbo.background_job_dismissals AS dismissal
+              INNER JOIN dbo.background_jobs AS job ON job.job_id = dismissal.job_id
+              WHERE dismissal.owner_object_id = @ownerObjectId
+                AND job.started_at >= DATEADD(day, -${retentionDays}, SYSUTCDATETIME())
+                AND job.status <> N'running'
+              ORDER BY dismissal.dismissed_at DESC, job.updated_at DESC, job.job_id;`);
+          await transaction.commit();
+          return { dismissedJobIds: recordset.map((row) => row.job_id.toLowerCase()), runningJobIds: [] };
+        }
+        const { recordset } = await new sql.Request(transaction)
+          .input('jobIds', sql.NVarChar(sql.MAX), JSON.stringify(normalizedIds))
+          .query<{ job_id: string; status: BackgroundJob['status'] }>(`SELECT job_id, status
+            FROM dbo.background_jobs WITH (UPDLOCK, HOLDLOCK)
+            WHERE started_at >= DATEADD(day, -${retentionDays}, SYSUTCDATETIME())
+              AND job_id IN (SELECT [value] FROM OPENJSON(@jobIds));`);
+        const runningJobIds = recordset.filter((row) => row.status === 'running').map((row) => row.job_id.toLowerCase());
+        if (runningJobIds.length > 0 && !skipRunning) {
+          await transaction.rollback();
+          return { dismissedJobIds: [], runningJobIds };
+        }
+        const dismissedJobIds = recordset.filter((row) => row.status !== 'running').map((row) => row.job_id.toLowerCase());
+        if (dismissedJobIds.length > 0) {
+          await new sql.Request(transaction)
+            .input('ownerObjectId', sql.UniqueIdentifier, ownerObjectId)
+            .input('jobIds', sql.NVarChar(sql.MAX), JSON.stringify(dismissedJobIds))
+            .query(`INSERT dbo.background_job_dismissals (owner_object_id, job_id)
+              SELECT @ownerObjectId, requested.[value] FROM OPENJSON(@jobIds) AS requested
+              WHERE NOT EXISTS (SELECT 1 FROM dbo.background_job_dismissals WITH (UPDLOCK, HOLDLOCK)
+                WHERE owner_object_id = @ownerObjectId AND job_id = requested.[value]);`);
+        }
+        await transaction.commit();
+        return { dismissedJobIds, runningJobIds };
+      } catch (error) {
+        await transaction.rollback();
+        throw error;
+      }
+    },
     async create(job, retryInput, retryOf) {
       if (!isBackgroundJob(job)) throw new TypeError('Invalid background job');
       if (retryOf && (!retryInput || job.kind !== 'research')) {

@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyPluginAsync } from 'fastify';
 import { readSettings } from '../core/settings.js';
 import type { GitHubRepositoryCatalog, GitHubRepositoryListing } from '../github-app.js';
+import { safeErrorFields } from '../logging.js';
 
 export interface Project {
   readonly id: string;
@@ -205,6 +206,11 @@ export const projectRoutes: FastifyPluginAsync = async (app) => {
     try {
       const project = await store.update(request.params.id, request.body);
       if (!project) return reply.code(404).send({ error: 'Not found' });
+      if (request.body.policy !== undefined) {
+        void app.projectPolicyChanged(project.id).catch((error: unknown) => {
+          request.log.warn(safeErrorFields(error), 'project_policy.recheck_failed');
+        });
+      }
       return project;
     } catch (error) {
       if (error instanceof ProjectConflictError) return reply.code(409).send({ error: 'Project repository already exists' });

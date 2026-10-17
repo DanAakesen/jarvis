@@ -1136,6 +1136,14 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
 .settings-section { padding: 26px 0; border-bottom: 1px solid var(--rule); }
 .settings-section:first-child { padding-top: 0; }
 .settings-section h2 { margin-bottom: 18px; }
+.proactive-item { width: min(100%, 680px); min-width: 0; margin: 0 auto; padding: var(--space-5); border: 1px solid var(--rule); border-radius: var(--radius-panel); background: var(--surface-translucent); color: var(--text); }
+.proactive-item h1 { margin: 0 0 var(--space-4); font-size: var(--type-subheading); }
+.proactive-item h2 { overflow-wrap: anywhere; }
+.proactive-item p { overflow-wrap: anywhere; }
+.proactive-item-body { white-space: pre-wrap; }
+.proactive-item-time { color: var(--text-muted); font-size: var(--type-small); }
+.proactive-item-feedback { display: grid; justify-items: start; gap: var(--space-3); }
+.proactive-item .primary-button, .proactive-item .secondary-button { min-height: 44px; margin: 0; }
 .theme-choice-group { display: flex; min-width: 0; flex-wrap: wrap; gap: 4px 20px; margin-top: 16px; }
 .theme-choice-group .choice { margin: 0; color: var(--text); }
 .theme-choice-group input { width: 18px; height: 18px; margin: 0; }
@@ -2535,6 +2543,7 @@ a.task-chip:hover { background: var(--glass-pressed); }
 .jobs-popover:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
 .jobs-popover-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-weight: 650; }
 .jobs-history-note { margin: 10px 0; color: var(--text-muted); font-size: var(--type-caption); overflow-wrap: anywhere; }
+.jobs-popover .jobs-history-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .jobs-history-row { display: flex; min-width: 0; align-items: center; gap: 4px; }
 .jobs-history-entry { display: flex; flex: 1; min-width: 0; min-height: 44px; gap: 10px; align-items: start; padding: 10px 6px; border: 0; border-radius: var(--radius-control); background: transparent; color: var(--text); font: inherit; text-align: left; cursor: pointer; }
 .jobs-history-entry > span { display: grid; min-width: 0; gap: 3px; }
@@ -3105,6 +3114,7 @@ a.task-chip:hover { background: var(--glass-pressed); }
 .collapsible-section.collapsible-section { padding: 4px 12px; }
 .collapsible-section h2.collapsible-heading { margin: 0; font-size: inherit; }
 .settings-page form { gap: 10px; margin-top: 10px; }
+.settings-page .collapsible-section { min-width: 0; }
 .settings-page > .collapsible-section { margin-top: 10px; }
 .settings-activity { gap: 10px; margin: 16px 0 0; }
 .settings-page > .settings-activity + .collapsible-section { margin-top: 10px; }
