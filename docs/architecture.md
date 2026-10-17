@@ -5040,7 +5040,8 @@ resting energy burn (kcal), daily deficit (kcal) and protein target (g). A sixth
 optional `createDailyModules` argument, `nutritionTargets`, is a request-bound
 accessor. It is independent of the earlier factories, needs shared Daily data
 (otherwise construction throws) and composes only when Daily is on, so Daily off
-and every existing composition are unchanged. No production caller exists yet.
+and every existing composition are unchanged. Only the default-off Daily
+composition below calls it.
 Its presence moves the capabilities stage to `internal-nutrition-rehearsal`.
 
 Each target is one `dbo.settings` row at scope `global` with a Daily-owned,
@@ -5065,7 +5066,7 @@ This reverses the earlier no-maintenance-maths rule for one formula only (see
 the decision log): allowance = resting burn + active energy so far today -
 deficit. It adds no BMR/TDEE estimate from weight, height or age and no
 coaching. The suggestion adapter below is the second slice and the web Settings
-section after it the third; the default-off composition is a separate slice.
+section after it the third; the default-off composition is the last.
 The values are personal
 health data in a public repository: none appears in code, fixtures, documents,
 logs or audit.
@@ -5076,7 +5077,8 @@ A seventh optional `createDailyModules` argument, `nutritionSuggestions`
 (`{nutrition, health, now?}`), adds the read-only `daily_nutrition_suggest` tool.
 It needs shared Daily data and the sixth `nutritionTargets` accessor (otherwise
 construction throws) and composes only when Daily is on, so Daily off and every
-existing composition are unchanged. No production caller exists yet. It adds no
+existing composition are unchanged. Only the default-off Daily composition below
+calls it. It adds no
 route, migration, write, provider call, job or timer.
 
 One call fixes a single trusted clock reading (the Copenhagen date and time) and
@@ -5134,6 +5136,42 @@ sends `null`, and HTTP failures map to static copy (404 means "not available
 here"), so server text is never shown. A save renders the committed readback the
 route returns rather than the typed draft. Nothing is logged, and the browser
 keeps only the section's open/closed flag.
+
+### Default-off Daily composition (17 October 2026)
+
+`apps/backend/src/daily/composition.ts` is the only production entry to Daily.
+`index.ts` calls `composeDaily({ enabled, pool, ownerObjectId })` once, and
+`createProductionModules` places the result between the voice relay and the Teams
+bot; `app.ts` is untouched. `enabled` is `config.dailyEnabled === true`, which
+`loadConfig` sets only when `JARVIS_DAILY_ENABLED` is exactly `true`. Absent and
+`false` are off; any other value is a `ConfigurationError` that never echoes it.
+With the switch off the function returns `undefined` before it validates anything
+or reads the pool, so the module list, route table, tool catalogue, capability
+instructions, voice session tools, startup, background jobs and timers are those
+of Jarvis without Daily.
+
+With the switch on it needs the shared SQL pool and a UUID owner (otherwise
+startup fails), builds `createDailyData(pool, owner)` and returns the module of
+`createDailyModules` for the nutrition rehearsal: `GET /daily/capabilities`,
+`POST /daily/query`, `GET`/`PATCH /daily/nutrition-targets` and six tools
+(`daily_query`, `daily_food`, `daily_food_review`, `daily_saved_food`,
+`daily_nutrition_targets`, `daily_nutrition_suggest`), which takes the catalogue
+to 116 of its 128-tool limit. The connector, Frida lookup, feeds and health-upload
+arguments are left out, so the module has no MCP route, provider call, Google or
+Gmail read, job or timer. The targets and health accessors also compare the
+resolved owner with the composed owner and refuse a mismatch, on top of the check
+inside the data accessors. Root authentication is unchanged: a connector or
+runner principal is refused on every Daily route, and an agent is refused on the
+targets route because it reaches targets only through the approved tool.
+
+No workflow, Bicep, infrastructure, environment or deploy file sets
+`JARVIS_DAILY_ENABLED`, or the web switch `VITE_DAILY_ENABLED` reserved for the
+Daily page, so every environment keeps Daily off; `daily/default-off.test.ts`
+scans those files for both names. `daily/composition.test.ts` builds real
+applications: it compares a Daily-off one with one built without Daily, shows the
+module adds exactly its three routes and six tools, and checks that
+unauthenticated, other-user, runner, connector and mismatched-owner callers are
+refused before any SQL.
 
 ### Inactive nutrition MCP adapter (17 October 2026)
 

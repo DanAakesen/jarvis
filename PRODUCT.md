@@ -1109,7 +1109,9 @@ estimate and no coaching, recovery or recomposition automation. The values are
 private health data and stay out of source, fixtures, documents and logs. The
 stored targets, their approved tool and the read-only `daily_nutrition_suggest`
 tool exist only behind the default-off Daily gate (Daily off leaves Jarvis
-unchanged). The suggest tool reports energy and protein left and the saved
+unchanged). The gate is one server switch that is off by default and set in no
+environment; turning it on is a separate, reviewed change. The suggest tool
+reports energy and protein left and the saved
 favourites that fit, using the stored active energy and only the meals logged in
 Jarvis, so food eaten but never logged is not counted. The Settings section
 appears only while Daily is on. It shows the three targets as whole-number fields

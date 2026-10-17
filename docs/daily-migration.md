@@ -40,7 +40,7 @@ Dan approved P12 on 12 October 2026 and explicitly released only P12-01 for this
 ## Integration contract implemented by P12-01
 
 - Existing Jarvis authentication, session and server-resolved user/owner across pages, meals, chat/voice and artifacts. No second login, copied human password, client-provided owner or replacement shell/dispatcher/voice stack.
-- `apps/backend/src/daily/index.ts` exports `createDailyModules(enabled = false)`. This trusted server composition flag accepts only boolean true; disabled composition is an empty array. Production composition does not import or enable Daily yet. No environment variable, navigation or write activation is added by P12-01.
+- `apps/backend/src/daily/index.ts` exports `createDailyModules(enabled = false)`. This trusted server composition flag accepts only boolean true; disabled composition is an empty array. Production composition does not import or enable Daily yet. No environment variable, navigation or write activation is added by P12-01. (P12-09 later adds the default-off `JARVIS_DAILY_ENABLED` composition described below.)
 - Explicitly enabled contract composition provides only authenticated `GET /daily/capabilities` metadata with no-store caching. It reports contract-only stage, reserved view IDs, and empty implemented page/tool lists. It accepts no query fields or owner parameters and exposes no identity or health record. This is not a Daily data API.
 - `resolveDailyOwner(request)` consumes only existing root-authenticated request principals and `request.server.ownerObjectId`. A matching delegated user or verified hosted Jarvis agent resolves to the same configured owner; the agent's service object ID is never used as a data owner. Coding runners, bridge/event/deploy identities and other users are denied. Device authentication/scopes remain P12-04/P12-11/P12-12, not implemented here.
 - Shared contracts reserve `daily-status`, `daily-recomp`, `daily-review`, `daily-ready` under source/module `daily`, version 1. These are reserved identifiers only, not generated renderer registrations or functioning views; Dan's 15 October scope does not require native views for them, and P12-16 is on-demand GenUI instead.
@@ -364,12 +364,22 @@ Personalised suggestions have an inactive source slice: the read-only
 `daily_nutrition_suggest` tool is the budget/candidate adapter for the existing
 `suggest` calculation. It reads those targets, today's stored active energy and
 the meals logged in Jarvis, and offers saved favourites only. It has no
-production caller, no live-export check of the `active_energy` metric name and
+live-export check of the `active_energy` metric name and
 no acceptance; reference lookup is not that adapter. Daily Google-feed/attention/manual-refresh/
 suppression equivalence and stored all-calendar grants remain unestablished,
 not completed by the record browser. Device/export provisioning and real-phone/
 provider acceptance retain their separate approval gates. No UI-only capability
 or generic lookup may be reported as full retained-tool parity.
+
+The default-off composition (`apps/backend/src/daily/composition.ts`) is the only
+production entry to these sources. The backend switch `JARVIS_DAILY_ENABLED` is
+off unless exactly `true`, no workflow, infrastructure or environment file sets
+it (a scan test enforces that), and switching it on is a separate reviewed
+change. With it off, Jarvis's routes, tools, instructions and startup are
+unchanged. With it on, one owner-bound module adds only the capabilities, query
+and nutrition-targets routes and six tools (116 of 128), fail-closed on the
+owner, with no connector, Google or Gmail feed, provider call, upload, job or
+timer. No activation, parity or acceptance is claimed.
 
 One gated Daily destination in the existing Jarvis app (side rail and mobile navigation) for Dan to browse retained health, food, workout and scan history himself, from the same owner-authorised sources as P12-16. Keep existing shell and voice workflow.
 
