@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from 'node:crypto';
+import { createECDH, createHash, randomUUID } from 'node:crypto';
 import sql from 'mssql';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { loadDatabaseConfig } from './config.js';
@@ -29,6 +29,8 @@ import { ProjectConflictError } from '../factory/projects.js';
 import { createEventHub } from '../core/event-hub.js';
 import type { TaskEventMessage } from '../factory/task-store.js';
 import { mapGithubWebhook } from '../github/webhook-mapping.js';
+import { createPushStore } from './push-store.js';
+import { generateVapidKeyPair } from '../push/webpush.js';
 
 const configuration = loadDatabaseConfig();
 if (!configuration || process.env.NODE_ENV !== 'test' || configuration.server !== '127.0.0.1') {
@@ -42,8 +44,8 @@ const core = '0001_core_tables.sql';
 const tablesInSchema = [
   'activity', 'artifacts', 'background_job_dismissals', 'background_job_steps', 'background_jobs', 'conversation_attachments',
   'conversation_summaries', 'credential_status', 'deployment_failure_receipts', 'deployments', 'factory_task_submissions', 'folio_items', 'jarvis_sessions',
-  'memories', 'memory_deletions', 'memory_history', 'messages', 'phone_sessions', 'projects',
-  'pull_requests', 'releases',
+  'memories', 'memory_deletions', 'memory_history', 'messages', 'phone_sessions', 'proactive_items', 'projects',
+  'pull_requests', 'push_subscriptions', 'push_vapid_keys', 'releases',
   'sandbox_sessions', 'sandbox_turns', 'settings', 'task_event_archives', 'task_events', 'task_status_notifications',
   'tasks', 'teams_confirmations', 'teams_conversations', 'tool_calls', 'usage', 'vault_chunks', 'vault_links',
   'webhook_deliveries', 'workflow_runs', 'workspace_artifacts',
@@ -170,6 +172,70 @@ describe('committed domain schema (groups 1-8)', () => {
       'IX_task_events_task_id_at', 'IX_tasks_state_next_attempt_at', 'IX_workflow_runs_project_head_sha',
       'UX_activity_alert_key',
     ]);
+  });
+
+  it('stores owner-scoped push subscriptions idempotently, caps them, and opens durable items once', async () => {
+    const store = createPushStore(pool);
+    const owner = randomUUID();
+    const otherOwner = randomUUID();
+    const makeSubscription = (endpoint: string) => {
+      const ecdh = createECDH('prime256v1');
+      ecdh.generateKeys();
+      return {
+        endpoint: `https://web.push.apple.com/device/${endpoint}`,
+        p256dh: ecdh.getPublicKey(undefined, 'uncompressed').toString('base64url'),
+        auth: Buffer.alloc(16, 7).toString('base64url'),
+      };
+    };
+    const first = makeSubscription('first');
+    await store.upsertSubscription(owner, first);
+    const firstRow = await store.listSubscriptions(owner);
+    await store.upsertSubscription(owner, { ...first, p256dh: makeSubscription('replacement').p256dh });
+    expect(await store.listSubscriptions(owner)).toMatchObject([{ id: firstRow[0]!.id, endpoint: first.endpoint }]);
+    await Promise.all(['parallel-1', 'parallel-2'].map((endpoint) =>
+      store.upsertSubscription(owner, makeSubscription(endpoint))));
+    expect(await store.listSubscriptions(owner)).toHaveLength(3);
+    await store.recordSubscriptionResult(firstRow[0]!.id, true);
+    for (let index = 1; index <= 10; index++) {
+      await store.upsertSubscription(owner, makeSubscription(`subscription-${index}`));
+    }
+    const capped = await store.listSubscriptions(owner);
+    expect(capped).toHaveLength(10);
+    expect(capped.map(({ endpoint }) => endpoint)).toContain(first.endpoint);
+    expect(capped.map(({ endpoint }) => endpoint)).not.toContain(makeSubscription('subscription-1').endpoint);
+    await store.upsertSubscription(otherOwner, first);
+    expect(await store.listSubscriptions(otherOwner)).toHaveLength(1);
+    await store.deleteSubscription(owner, first.endpoint);
+    await store.deleteSubscription(owner, first.endpoint);
+    expect((await store.listSubscriptions(owner)).some(({ endpoint }) => endpoint === first.endpoint)).toBe(false);
+
+    const keys = [generateVapidKeyPair(), generateVapidKeyPair()];
+    await Promise.allSettled(keys.map((candidate) => store.insertVapidKey(candidate)));
+    const persistedKeys = await store.readVapidKey();
+    expect(keys).toContainEqual(persistedKeys);
+    expect((await pool.request().query<{ count: number }>(
+      'SELECT COUNT(*) AS count FROM dbo.push_vapid_keys')).recordset[0]?.count).toBe(1);
+
+    const item = await store.createTestItem(owner);
+    await store.updateItemDelivery(item.id, 'accepted', 201);
+    const delivery = await pool.request()
+      .input('id', sql.UniqueIdentifier, item.id)
+      .query<{ delivery_state: string; delivery_status_code: number | null; delivered_at: Date | null }>(
+        'SELECT delivery_state, delivery_status_code, delivered_at FROM dbo.proactive_items WHERE id = @id;');
+    expect(delivery.recordset[0]).toEqual({ delivery_state: 'accepted', delivery_status_code: 201, delivered_at: null });
+    expect(await store.readItem(otherOwner, item.id)).toBeUndefined();
+    const firstRead = await store.readItem(owner, item.id);
+    const opened = await pool.request()
+      .input('id', sql.UniqueIdentifier, item.id)
+      .query<{ opened_at: Date }>('SELECT opened_at FROM dbo.proactive_items WHERE id = @id;');
+    const firstOpenedAt = opened.recordset[0]?.opened_at;
+    expect(firstRead).toMatchObject({ id: item.id, kind: 'test', title: 'Jarvis', body: 'New item' });
+    expect(firstOpenedAt).toBeInstanceOf(Date);
+    await store.readItem(owner, item.id);
+    const openedAgain = await pool.request()
+      .input('id', sql.UniqueIdentifier, item.id)
+      .query<{ opened_at: Date }>('SELECT opened_at FROM dbo.proactive_items WHERE id = @id;');
+    expect(openedAgain.recordset[0]?.opened_at).toEqual(firstOpenedAt);
   });
 
   it('revises HTML artifacts atomically, retains every version and leaves Folio/pins intact', async () => {

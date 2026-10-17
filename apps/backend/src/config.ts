@@ -25,6 +25,7 @@ export interface BackendConfig {
   githubAppId?: string;
   googleTimeZone?: string;
   monthlyBudgetResourceId?: string;
+  pushEnabled: boolean;
   teams?: {
     botAppId: string;
     tenantId: string;
@@ -60,8 +61,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BackendConfig 
       valid = url.protocol === 'https:' && url.origin === origin;
     } catch { /* Report only the setting name, never its value. */ }
     if (!valid) throw new ConfigurationError('STATIC_WEB_APP_ORIGIN must be an HTTPS origin without a path');
-  } else if (env.NODE_ENV === 'production') {
-    throw new ConfigurationError('STATIC_WEB_APP_ORIGIN is required in production');
+  } else if (env.NODE_ENV === 'production' || env.JARVIS_PUSH_ENABLED === 'true') {
+    throw new ConfigurationError(env.NODE_ENV === 'production'
+      ? 'STATIC_WEB_APP_ORIGIN is required in production'
+      : 'STATIC_WEB_APP_ORIGIN is required when JARVIS_PUSH_ENABLED is true');
   }
 
   const foundryAdminEndpoint = env.FOUNDRY_ADMIN_ENDPOINT;
@@ -271,6 +274,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BackendConfig 
     ...(githubAppId === undefined ? {} : { githubAppId }),
     ...(googleTimeZone === undefined ? {} : { googleTimeZone }),
     ...(monthlyBudgetResourceId === undefined ? {} : { monthlyBudgetResourceId }),
+    pushEnabled: env.JARVIS_PUSH_ENABLED === 'true',
     ...(teams ? { teams } : {}),
     ...(phone ? { phone } : {}),
     ...(dailySetting === 'true' ? { dailyEnabled: true as const } : {}),
