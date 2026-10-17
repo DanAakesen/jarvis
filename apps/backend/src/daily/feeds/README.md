@@ -56,6 +56,13 @@ existing change hub/Now refresh; reads, replay, no-op and failed transactions do
 not. Listener failures are isolated after commit. No route, scheduler, migration,
 production composition, grant or live acceptance is added.
 
+New active suppressions are refused at1,000 per type inside the owner transaction;
+existing updates/no-ops remain allowed. Restoration reads and rechecks only its
+exact owned type/key, not the entire bounded list. This preserves reviewed
+known-key recovery even if an imported set already exceeds the limit. Restoring
+one entry frees capacity; failed additions cannot poison subsequent reads or
+publish a committed change.
+
 ## Blocked acceptance
 
 Post-merge #725 continuation on `codex/p12-10-feed-boundary-corrections`: the shared calendar-range validator rejects malformed, missing, reversed or over-62-day input before either feed, model, cooldown or storage work. Numberless deliveries require nonempty matching normalized delivery details to merge; genuine nonempty raw numbers retain their existing grouping and source/suppression keys. Gmail uses validated full provider `SENT` labels before the 30-label DTO truncation, with primary-profile address fallback, preserving sent aliases and incoming-only revival. Synthetic tests and isolated SQL regressions cover these boundaries. The follow-up stays draft pending exact-head CI and explicit coordinator readiness release; merged #746 does not complete live acceptance.

@@ -4660,6 +4660,10 @@ below the existing240second ingress. This leaves30seconds of setup/persistence
 headroom beyond the full120second review and60second provider window; food
 review and unrelated tool deadlines are unchanged.
 Frozen target/suppression hashes are rechecked under existing owner SQL locks.
+The same lock enforces1,000 active suppressions per type before additions,
+without blocking updates/no-ops. A parameterised exact-key lookup supplies the
+restore proposal and commit recheck independently of bounded collection reads,
+so an already oversized imported set remains recoverable by known exact key.
 Manual refresh uses a server-derived message/operation key and the existing
 bounded refresh/cooldown lifecycle. A completed run is an acknowledged attempt,
 not proof of healthy sources; replay and running/limited states say so.

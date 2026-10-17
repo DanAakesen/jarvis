@@ -55,7 +55,9 @@ function fixture(configured = true, now = () => at.getTime()) {
   const store = {
     attention: vi.fn(async () => ({ sources, waiting: [{ thread, bucket: 'waiting_for_you' as const, label: '50h' }], orders: [] })),
     sources: vi.fn(async () => sources), completed: vi.fn(async () => false),
-    suppressions: vi.fn(async () => [suppression]), suppressionTarget: vi.fn(async () => structuredClone(target)),
+    suppressions: vi.fn(async () => [suppression]),
+    suppression: vi.fn(async (type: 'thread' | 'order', key: string) => type === suppression.type && key === suppression.key ? suppression : null),
+    suppressionTarget: vi.fn(async () => structuredClone(target)),
     suppress: vi.fn(async (_type: 'thread' | 'order', _id: string, intent: boolean, operationSignal: AbortSignal, revision?: string) => {
       operationSignal.throwIfAborted(); expect(intent).toBe(true);
       if (revision !== feedRevision(target)) throw new ToolRefusal('The reviewed attention item changed.');
@@ -137,6 +139,17 @@ describe('inactive shared Daily feed workflow', () => {
     await (await f.begin({ operation: 'receive_order', id: order.id })).resolve();
     expect(f.store.suppress).toHaveBeenCalledWith('order', order.id, true, expect.any(AbortSignal), feedRevision(order));
     await (await f.begin({ operation: 'clear_suppression', type: 'order', key: suppression.key })).resolve();
+    expect(f.store.suppression).toHaveBeenCalledWith('order', suppression.key, expect.any(AbortSignal));
+    expect(f.store.suppressions).not.toHaveBeenCalled();
+    expect(f.store.clear).toHaveBeenCalledWith('order', suppression.key, true, expect.any(AbortSignal), feedRevision(suppression));
+  });
+  it('restores a known exact suppression through native review even when the bounded listing is unavailable', async () => {
+    const f = fixture();
+    f.store.suppressions.mockRejectedValue(new ToolFailure('Suppression range exceeds limits.'));
+    const pending = await f.begin({ operation: 'clear_suppression', type: 'order', key: suppression.key });
+    expect(f.store.clear).not.toHaveBeenCalled();
+    expect(await pending.resolve()).toMatchObject({ status: 'committed' });
+    expect(f.store.suppressions).not.toHaveBeenCalled();
     expect(f.store.clear).toHaveBeenCalledWith('order', suppression.key, true, expect.any(AbortSignal), feedRevision(suppression));
   });
   it.each(['reject', 'cancel', 'away', 'closed', 'changed', 'failure'] as const)('never claims a change for %s', async mode => {

@@ -71,6 +71,13 @@ proposal. Received is Daily visibility, not evidence of physical receipt.
 Return actual run/error/limit states and separate source times; the old store
 does not retain calendar range, so it remains explicitly unknown.
 
+Review5558345536 identified that read bounds alone let suppression1001 poison
+attention/listing and reviewed restoration. Enforce the existing1,000-per-type
+active limit under the owner transaction before additions; keep updates allowed.
+Restore through exact-key lookup/recheck rather than reading the whole set,
+including recovery from already oversized imported evidence. No migration,
+automatic deletion or widened read limit is needed.
+
 Reuse the nutrition commit-notification pattern: publish only after acknowledged
 new commits, keep replay/no-op/failure quiet and isolate listener failure.
 The shared owner resolver intentionally permits nutrition connectors; all feed

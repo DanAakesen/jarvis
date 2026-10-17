@@ -211,4 +211,44 @@ describe('Daily feed snapshots and suppressions on real isolated SQL Server', ()
     await expect(store().suppress('order', order.id, true, signal())).rejects.toThrow('active');
     expect(await store().suppressions(signal())).toEqual([]);
   });
+  it.each(['thread', 'order'] as const)('bounds %s suppression additions at1000 without blocking exact restoration or updates', async type => {
+    const seed = async (ids: string[]) => {
+      const table = type === 'thread' ? 'gmail_suppressions' : 'order_suppressions';
+      const columns = type === 'thread' ? 'thread_id,suppressed_message_id,suppressed_incoming_at' : 'order_key,suppressed_order_updated_at';
+      const values = type === 'thread' ? 'id,N\'old-message\',@now' : 'id,@now';
+      await pool.request().input('owner', sql.UniqueIdentifier, owner).input('now', sql.NVarChar(64), now)
+        .input('ids', sql.NVarChar(sql.MAX), JSON.stringify(ids))
+        .query(`INSERT daily.${table}(owner_object_id,${columns},suppressed_at,updated_at)
+          SELECT @owner,${values},@now,@now FROM OPENJSON(@ids) WITH (id nvarchar(256) '$');`);
+    };
+    const existingId = type === 'thread' ? thread.id : 'synthetic shop:12345';
+    await seed([existingId, ...Array.from({ length: 999 }, (_, index) => `synthetic-capacity-${index}`)]);
+    const newcomer = type === 'thread' ? { ...thread, id: 'new-thread', threadId: 'new-thread' }
+      : { ...order, id: 'new-order', orderNumber: 'another' };
+    await store().ingest(run('capacity', [item(thread), item(order), item(newcomer)]), signal());
+    const changes = createDailyChanges(); const notify = vi.fn();
+    changes.subscribe(notify);
+    const current = DailyFeedStore.forRequest(pool, request(), () => now, changes);
+    const selected = await current.suppressionTarget(type, newcomer.id, signal());
+    await expect(current.suppress(type, newcomer.id, true, signal(), feedRevision(selected))).rejects.toThrow('capacity');
+    expect(notify).not.toHaveBeenCalled();
+    expect(await current.suppressions(signal())).toHaveLength(1000);
+    expect((await current.attention(signal()))[type === 'thread' ? 'waiting' : 'orders']).toHaveLength(1);
+    const existingProducerId = type === 'thread' ? thread.id : order.id;
+    expect(await current.suppress(type, existingProducerId, true, signal())).toBe(type === 'thread');
+    const saved = await current.suppression(type, existingId, signal());
+    expect(saved?.key).toBe(existingId);
+    expect(await store(other).suppression(type, existingId, signal())).toBeNull();
+    expect(await current.clear(type, existingId, true, signal(), feedRevision(saved!))).toBe(true);
+    expect(await current.suppress(type, newcomer.id, true, signal(), feedRevision(selected))).toBe(true);
+    expect(await current.suppressions(signal())).toHaveLength(1000);
+
+    // A previously imported oversized set must not trap its known-key recovery path.
+    await seed(['synthetic-overflow']);
+    await expect(current.suppressions(signal())).rejects.toThrow('limits');
+    const overflow = await current.suppression(type, 'synthetic-overflow', signal());
+    expect(overflow).not.toBeNull();
+    expect(await current.clear(type, 'synthetic-overflow', true, signal(), feedRevision(overflow!))).toBe(true);
+    expect(await current.suppressions(signal())).toHaveLength(1000);
+  });
 });

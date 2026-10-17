@@ -81,6 +81,16 @@ providers and10second persistence. The corrected head needs qualification; the
 pipeline owner separately owns520c's Python release-state fixture failure and
 the delayed draft-event cancellation race.
 
+Successor801e normal CI39041917082 and all four analyses passed, including the
+near-expiry lifecycle test. Exact-head review5558345536 then identified missing
+write-side suppression capacity:1001st entries poisoned bounded reads/reviewed
+restore. The correction rejects new active entries at1,000 per type under lock,
+retains updates/no-ops and uses exact-key restoration independent of listing.
+Real SQL cases cover both types at1000/1001, unchanged failure notifications,
+owner isolation, restoration/replacement and already oversized known-key recovery.
+The shared service also proves native restore survives listing unavailability.
+The corrected head requires qualification;801e greens are retained history.
+
 ## Release diagnosis (17 October 2026; safe CI reason codes)
 
 Continue autonomously without direct Azure or credentials. Both new owned

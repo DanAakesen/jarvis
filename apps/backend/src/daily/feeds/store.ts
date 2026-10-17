@@ -18,6 +18,12 @@ export interface FeedSuppression {
   messageId: string | null; incomingAt: string | null; orderUpdatedAt: string | null;
 }
 export const feedRevision = (value: FeedItem | FeedSuppression): string => createHash('sha256').update(canonicalJson(value)).digest('hex');
+function suppressionRecord(type: 'thread' | 'order', row: Record<string, unknown>): FeedSuppression {
+  return { type, key: row[type === 'thread' ? 'thread_id' : 'order_key'] as string, suppressedAt: row.suppressed_at as string,
+    messageId: type === 'thread' ? row.suppressed_message_id as string : null,
+    incomingAt: type === 'thread' ? row.suppressed_incoming_at as string | null : null,
+    orderUpdatedAt: type === 'order' ? row.suppressed_order_updated_at as string | null : null };
+}
 const key = (column: string, parameter: string) => `${column}=@${parameter} AND DATALENGTH(${column})=DATALENGTH(@${parameter})`;
 const sources: FeedSource[] = ['Gmail','GoogleCalendar'];
 export const MAX_SOURCE_ITEMS = 1000;
@@ -204,11 +210,28 @@ export class DailyFeedStore {
       'SELECT TOP (1001) order_key,suppressed_order_updated_at,suppressed_at FROM daily.order_suppressions WHERE owner_object_id=@owner ORDER BY order_key;', signal)).recordset;
     if (threads.length > 1000 || orders.length > 1000) throw new ToolFailure('Suppression range exceeds limits.');
     return [
-      ...threads.map(row => ({ type: 'thread' as const, key: row.thread_id as string, suppressedAt: row.suppressed_at as string,
-        messageId: row.suppressed_message_id as string, incomingAt: row.suppressed_incoming_at as string | null, orderUpdatedAt: null })),
-      ...orders.map(row => ({ type: 'order' as const, key: row.order_key as string, suppressedAt: row.suppressed_at as string,
-        messageId: null, incomingAt: null, orderUpdatedAt: row.suppressed_order_updated_at as string | null })),
+      ...threads.map(row => suppressionRecord('thread', row)),
+      ...orders.map(row => suppressionRecord('order', row)),
     ];
+  }
+  private async readSuppression(transaction: sql.Transaction, type: 'thread' | 'order', exactKey: string, signal: AbortSignal): Promise<FeedSuppression | null> {
+    const table = type === 'thread' ? 'gmail_suppressions' : 'order_suppressions';
+    const column = type === 'thread' ? 'thread_id' : 'order_key';
+    const fields = type === 'thread' ? 'thread_id,suppressed_message_id,suppressed_incoming_at,suppressed_at' : 'order_key,suppressed_order_updated_at,suppressed_at';
+    const row = (await this.query(this.request(transaction).input('id',sql.NVarChar(256),exactKey),
+      `SELECT ${fields} FROM daily.${table} WHERE owner_object_id=@owner AND ${key(column,'id')} ${type === 'thread' ? 'AND revived_at IS NULL' : ''};`, signal)).recordset[0];
+    return row ? suppressionRecord(type, row) : null;
+  }
+  async suppression(type: 'thread' | 'order', exactKey: string, signal: AbortSignal): Promise<FeedSuppression | null> {
+    text(exactKey);
+    if (!['thread','order'].includes(type)) throw new TypeError('Invalid suppression type');
+    return this.transaction(signal, transaction => this.readSuppression(transaction, type, exactKey, signal));
+  }
+  private async requireSuppressionCapacity(transaction: sql.Transaction, type: 'thread' | 'order', signal: AbortSignal): Promise<void> {
+    const table = type === 'thread' ? 'gmail_suppressions' : 'order_suppressions';
+    const row = (await this.query(this.request(transaction),
+      `SELECT COUNT_BIG(*) AS count FROM daily.${table} WHERE owner_object_id=@owner ${type === 'thread' ? 'AND revived_at IS NULL' : ''};`, signal)).recordset[0];
+    if (BigInt(String(row?.count)) >= 1000n) throw new ToolRefusal('Daily suppression capacity is full for this type. Restore an existing exact suppression before adding another.');
   }
   async suppressions(signal: AbortSignal): Promise<FeedSuppression[]> {
     return this.transaction(signal, transaction => this.readSuppressions(transaction, signal));
@@ -220,8 +243,8 @@ export class DailyFeedStore {
       const item = this.target(await this.latest('Gmail',transaction,signal), type, id);
       if (expectedRevision !== undefined && feedRevision(item) !== expectedRevision) throw new ToolRefusal('The reviewed attention item changed. Read and review it again; nothing was changed by this call.');
       const now = this.now(); instant(now);
-      const prior = (await this.readSuppressions(transaction, signal)).find(row => row.type === type &&
-        row.key === (type === 'thread' ? id : orderIdentityKey(item.content as Order)));
+      const prior = await this.readSuppression(transaction, type, type === 'thread' ? id : orderIdentityKey(item.content as Order), signal);
+      if (!prior) await this.requireSuppressionCapacity(transaction, type, signal);
       if (type === 'thread') {
         const thread = item.content as Thread;
         if (prior?.messageId === thread.latestMessageId && prior.incomingAt === thread.latestIncomingAt) return false;
@@ -248,7 +271,7 @@ export class DailyFeedStore {
     const table = type === 'thread' ? 'gmail_suppressions' : 'order_suppressions'; const column = type === 'thread' ? 'thread_id' : 'order_key';
     return this.transaction(signal, async (transaction, changed) => {
       if (expectedRevision !== undefined) {
-        const prior = (await this.readSuppressions(transaction, signal)).find(row => row.type === type && row.key === exactKey);
+        const prior = await this.readSuppression(transaction, type, exactKey, signal);
         if (!prior || feedRevision(prior) !== expectedRevision) throw new ToolRefusal('The reviewed suppression changed. Read and review it again; nothing was changed by this call.');
       }
       const result = await this.query(this.request(transaction).input('id',sql.NVarChar(256),exactKey),`DELETE daily.${table} WHERE owner_object_id=@owner AND ${key(column,'id')};`,signal);

@@ -142,6 +142,15 @@ then asserts the actual completed attempt at188seconds without cancellation.
 The synthetic test maps AbortSignal deadlines to its controlled clock; production
 timers are unchanged apart from the exact feed budget.
 
+801e CI39041917082 passed all selected checks and CodeQL39041917062 all four
+analyses, but independent review5558345536 found suppression1001 could poison
+bounded reads and restoration. Additions now enforce1,000 active entries per
+type under the existing owner lock; updates/no-ops stay valid. Exact-key
+restoration no longer depends on full listing. Synthetic real-SQL coverage
+tests both exact capacity boundaries and recovery from a seeded oversized set;
+service native review also proves restoration when listing is unavailable.
+No limit increase, schema change, automatic deletion or acceptance waiver.
+
 ## Safe release reason logging (17 October 2026)
 
 Deploy smoke status lines and the required gate remain unchanged. The standard

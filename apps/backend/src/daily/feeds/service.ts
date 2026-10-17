@@ -15,7 +15,7 @@ import { DailyFeedRefresh } from './refresh.js';
 import { dailyFeedInput } from './schema.js';
 import { DailyFeedStore, feedRevision, type FeedItem, type SourceView } from './store.js';
 
-type FeedStore = Pick<DailyFeedStore, 'attention' | 'sources' | 'completed' | 'suppressions' | 'suppressionTarget' | 'suppress' | 'clear'>;
+type FeedStore = Pick<DailyFeedStore, 'attention' | 'sources' | 'completed' | 'suppression' | 'suppressions' | 'suppressionTarget' | 'suppress' | 'clear'>;
 export interface DailyFeedProviders {
   google?: GoogleApiClient;
   semantic?: MailSemanticModel;
@@ -112,7 +112,7 @@ export class DailyFeedService {
       const type = input.operation === 'dismiss_thread' ? 'thread' : input.operation === 'receive_order' ? 'order' : null;
       const target = type && 'id' in input ? await store.suppressionTarget(type, input.id, signal) : null;
       const suppression = input.operation === 'clear_suppression'
-        ? (await store.suppressions(signal)).find(row => row.type === input.type && row.key === input.key) : null;
+        ? await store.suppression(input.type, input.key, signal) : null;
       if (input.operation === 'clear_suppression' && !suppression) throw new ToolRefusal('The exact active owned suppression was not found. Nothing was changed.');
       const expected = target ? feedRevision(target) : suppression ? feedRevision(suppression) : undefined;
       const summary = input.operation === 'refresh'

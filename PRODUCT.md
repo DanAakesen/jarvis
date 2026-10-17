@@ -972,6 +972,9 @@ refresh existing consumers. Missing Google/model configuration and failed,
 limited or incomplete refreshes cannot establish fresh coverage. The separate
 nutrition-only connector has no feed access. Daily remains off; stored grants,
 CalendarList/live-model parity and #725 acceptance remain unverified.
+Active suppressions are limited to1,000 per type under the owner lock. Updating
+an existing suppression and native-reviewed exact-key restoration remain usable
+at capacity; known-key recovery cannot depend on listing the whole collection.
 
 Retained brief history belongs in that same page and chat/voice query workflow.
 Read existing historical metadata and exact body detail without generating,
