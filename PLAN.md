@@ -22,6 +22,13 @@ used. Exact-head pinned CI and integrated-candidate qualification remain next.
 The coordinator owns integration/release; the implementation owner fixes source
 pipeline failures. Keep #724/#725 open and native/private acceptance gates intact.
 
+Initial pinned CI39038540472 passed all other component jobs and3794backend
+tests; one new dispatcher assertion incorrectly expected root403 for another
+verified human. Add feed-owner validation at the tool boundary and assert the
+existing200/error resource-denial envelope, redacted audit and no service call.
+Keep runner/connector root403 checks. The corrected source needs qualification;
+prior green jobs do not qualify its changed head.
+
 ## Release diagnosis (17 October 2026; safe CI reason codes)
 
 Continue autonomously without direct Azure or credentials. Both new owned

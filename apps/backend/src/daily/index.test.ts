@@ -164,7 +164,13 @@ describe('Daily integration contract', () => {
     expect(JSON.stringify(calls)).not.toContain('synthetic private mail');
     expect((await app.inject({ method: 'POST', url: '/tools/daily_feed',
       headers: { ...headers(), 'x-jarvis-message-id': '42' }, payload: { operation: 'read_attention', confirmed: true } })).json().outcome).toBe('refused');
-    for (const kind of ['other', 'runner', 'connector']) {
+    const deniedOwner = await app.inject({ method: 'POST', url: '/tools/daily_feed',
+      headers: { ...headers('other'), 'x-jarvis-message-id': '42' }, payload: { operation: 'read_attention' } });
+    // Root auth admits verified human identities; the tool owns resource authorisation.
+    expect(deniedOwner.statusCode).toBe(200);
+    expect(deniedOwner.json()).toMatchObject({ outcome: 'error', result: { error: 'Tool execution failed' } });
+    expect(calls.at(-1)).toMatchObject({ tool: 'daily_feed', outcome: 'error', arguments: { redacted: true }, result: { redacted: true } });
+    for (const kind of ['runner', 'connector']) {
       expect((await app.inject({ method: 'POST', url: '/tools/daily_feed',
         headers: { ...headers(kind), 'x-jarvis-message-id': '42' }, payload: { operation: 'read_attention' } })).statusCode).toBe(403);
     }

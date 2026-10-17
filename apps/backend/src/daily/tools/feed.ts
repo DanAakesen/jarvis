@@ -1,6 +1,7 @@
 import type { JarvisTool } from '../../core/tool-registry.js';
 import { dailyFeedInputSchema } from '../feeds/schema.js';
 import type { DailyFeedService } from '../feeds/service.js';
+import { resolveDailyFeedOwner } from '../owner.js';
 
 export function dailyFeedTool(service: Pick<DailyFeedService, 'execute'>): JarvisTool {
   return {
@@ -9,6 +10,9 @@ export function dailyFeedTool(service: Pick<DailyFeedService, 'execute'>): Jarvi
     inputSchema: dailyFeedInputSchema,
     sensitive: true,
     denyOnPhone: true,
-    execute: (input, request, signal) => service.execute(input, request, signal),
+    execute: async (input, request, signal) => {
+      resolveDailyFeedOwner(request);
+      return service.execute(input, request, signal);
+    },
   };
 }

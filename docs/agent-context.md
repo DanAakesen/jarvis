@@ -27,6 +27,16 @@ Its state is unverified; no replacement CLI/profile or reconnection is claimed.
 #724/#725 stay open; stored-grant/CalendarList/live-model/provider, private
 reconciliation, physical-device and cutover acceptance remain separate.
 
+Initial pinned CI39038540472 at085ab460 passed all other component jobs and
+3794backend cases, including all22new service/native-confirmation and17schema
+cases, but the new dispatcher test failed its non-owner HTTP403 assertion.
+Root auth intentionally admits verified human identities; resource authorisation
+belongs to the tool/service, and the dispatcher returns the normal200/error
+envelope. Add the same feed-owner guard to the tool boundary so even an injected
+service cannot bypass it. Assert error metadata/redaction and zero service calls
+for non-owners, retaining root403 checks for runner/nutrition-connector roles.
+The original failure remains recorded; the corrected head requires qualification.
+
 ## Safe release reason logging (17 October 2026)
 
 Deploy smoke status lines and the required gate remain unchanged. The standard
