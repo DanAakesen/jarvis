@@ -1,5 +1,100 @@
 # Agent context
 
+## Continuous delivery ownership (#880, 17 October 2026)
+
+Dan selected operating model 2. This supersedes the older coordinator-removal,
+combined-batch, coordinator-test and routine human release-acceptance instructions
+below for this repository's delivery work.
+
+- The coordinator handles intake, canonical GitHub backlog/board state, dispatch,
+  integration and mechanical merge conflicts only. Keep it responsive; it does
+  not develop features, run tests, investigate logs or reproduce reported bugs.
+- At most two implementation builders are active. A builder owns its code,
+  automated regression tests, exact-candidate CI failures and failure fixes.
+  Route pipeline evidence to that existing builder, not a new diagnostic worker.
+  Use completion events; do not recreate the old recurring timer or change
+  host/session autopilot settings.
+- Every feature, bug and real-world test report becomes an issue or a clearly
+  linked update to existing backlog work. GitHub Project 2 is canonical:
+  Ready means queued; worker label/draft PR means In progress; ready linked PR
+  means In review; unresolved dependencies/deferred work stay Backlog;
+  genuine authority decisions use Needs Dan. Done follows actual issue closure,
+  not a worker's claim. Applied/accepted release facts remain in pipeline receipts.
+- Qualified current-main-compatible source flows through the existing main-only
+  release path without a batch cutoff or routine Dan sign-off. Required failures
+  still block release acceptance. Historical failures remain failures; a new
+  successful run does not rewrite them. Real-world reports do not authorise
+  coordinator reproduction campaigns.
+- Builders publish a reviewable PR and return exact PR/head/run/artifact evidence.
+  The integration owner merges only after all required checks/review pass and
+  latest-main reconciliation. A builder never merges its own PR.
+
+`ci.yml` selects affected checks and dependencies with `pipeline_impact.py`.
+The lightweight workflow-script tests always run; shared/unknown changes and
+unusable bases keep full coverage. `CI result` rejects failed, cancelled,
+missing or unexpectedly skipped selected checks and publishes immutable
+`ci-evidence-<attempt>` with the tested Git tree, PR/head/run and owning issue IDs.
+Deployment requires a successful exact-tree receipt before any Azure job.
+Do not substitute another revision's green badge or manually dispatch CI just
+to obtain a duplicate green result.
+
+Deploy records `release-evidence-<attempt>` even when final acceptance fails.
+It separates component input fingerprints, image digests/web bundle hash,
+original producer source/run/attempt, deterministic readiness, and live
+conversation acceptance. The latest trusted main receipt, not the latest
+wholly green release, controls reuse. Missing/expired/invalid state is not a
+cache hit; a newer unknown/partial state cannot be bypassed with an older green
+receipt. Bicep/configuration changes invalidate downstream application state.
+Superseded source cannot deploy, including manual dispatch.
+Sensitive budget-contact configuration is not hashed into either receipt.
+Only after exact qualification, a candidate infrastructure reuse reads the
+existing `jarvis-alerts` recipients through the same main-only deploy identity
+and compares them in memory with the protected configuration. A mismatch
+reapplies infrastructure and downstream components; missing/invalid readback
+blocks. No value, hash, new secret, role or version marker is retained.
+Supersession uses the verified applied-source horizon, not a newer docs-only
+`main` commit that has no deployment.
+The plan's read-only GitHub permissions include pull requests, required by
+commit-to-merged-PR qualification lookup. A backend receipt retains immutable
+image `origin` separately from `revision_origin`: an agent-only identity update
+is an applied backend revision produced by that agent job's actual run/attempt,
+not a newly built backend image. Reuse requires both provenance records.
+
+For a failed release, hand the existing builder its linked qualification PR,
+source/tree, run/attempt, exact artifact identity and fixed failing check/reason
+codes. The raw smoke response is never uploaded. Missing diagnostic evidence is
+explicitly unavailable, not inferred from a generic `agent_error`. No unchanged
+diagnostic release, speculative retry or new live conversation probe is justified
+by this agreement. GitHub's failed-jobs retry can retain successful components
+and their original producer attempts; a deliberate whole-run retry can reuse
+the preceding attempt's compatible receipt.
+
+Local checks use the standard library:
+`$env:PYTHONPATH='.github\scripts'; python -m unittest discover -s .github\scripts\tests -v`.
+The 35 pipeline, seven formatter and 11 planner cases pass locally, as does
+scoped Ruff. Pinned actionlint 1.7.12 passes after excluding only its unsupported
+schema diagnostic for the already-present `concurrency.queue: max`; the queue
+protection remains unchanged. Initial full local discovery found a missing
+`run_attempt` in one new synthetic fixture; its correction passes the narrow
+suite. Normal CI is the full-runtime authority, not that partial local run.
+Initial exact-head CI39038876598 passed all12 jobs and CodeQL39038876634
+passed all four analyses at43aa1af2. Its review identified the secret-derived
+fingerprint issue above; the correction requires successor normal qualification,
+not reuse of that earlier green receipt. No secret-bearing release ran from it.
+Successor ca9a CI39039891173 and all four CodeQL39039891273 analyses passed.
+Its exact-head review identified the missing plan read scope and agent-created
+backend revision attribution above; both corrections require new-source normal
+qualification, not a duplicate rerun of ca9a's green checks.
+Copilot-ready dispatch passes its existing PR number to CI; the result gate
+checks live ready-PR/head/base identity before emitting qualification evidence.
+Offline Bicep CI pins 0.44.1. Existing local
+missing-Fastify/jose constraints do not justify restores, stubs or another
+worktree's dependency graph. This app-managed isolated runtime has no exposed
+session `/remote` control; `/remote` and `copilot --remote` state remain
+unverified. Preserve host configuration and do not launch a replacement CLI.
+No new Azure access, credentials, roles, resources, private provider traffic,
+Daily activation/import/device changes or interference with Dan's tabs/5173.
+
 ## Safe release reason logging (17 October 2026)
 
 Deploy smoke status lines and the required gate remain unchanged. The standard
@@ -10,9 +105,9 @@ CLI reads at most64KiB and fails explicitly on invalid/unreadable reports.
 Seven new formatter/wiring/redaction/CLI cases plus five existing smoke cases
 passed locally; Ruff passes. No dependency or runtime identity change.
 
-Changing Deploy YAML intentionally selects all existing deployment parts under
-current policy. No planner exception, skip, threshold/deadline weakening or new
-Azure identity is introduced. Unchanged Bicep0.44.1 passes offline build/lint;
+Historical #879 used the previous all-workflow deploy policy. #880 replaces
+that policy with exact component inputs and job-specific recipes; it does not
+waive any required failure or introduce an Azure identity. Bicep0.44.1 passed offline build/lint;
 do not upgrade the tool or use local Azure APIs. Normal exact-head CI/review and
 the established main-only workflow are the release boundary.
 
@@ -1931,7 +2026,9 @@ Every coding agent on this repository follows these rules. Normally this project
 - Every task in [PLAN.md](../PLAN.md) has a [GitHub issue](https://github.com/DanAakesen/jarvis/issues) in `DanAakesen/jarvis`. The title starts with the task ID (for example `P1-04: Tasks API`), the label is the phase (`P0`–`P6`), and the body copies the task, acceptance criteria, and dependencies. Find one with `gh issue list --repo DanAakesen/jarvis --state all --search "P1-04 in:title"`.
 - **Dependencies:** the Depends on column is mirrored as GitHub issue dependencies ("Blocked by"). An issue shows **Blocked** until every issue it depends on is closed. A task is **ready** when its issue is open, not blocked, and has no worker label; list ready tasks with `gh issue list --repo DanAakesen/jarvis --search "is:open -is:blocked -label:Codex -label:Copilot -label:Dan -label:Jarvis"`. Ready tasks can run in parallel.
 - Dependencies order tasks; they don't stop two ready tasks from changing the same files. That is what step 5 of [Start a task](#start-a-task) and the up-to-date rule in [Merge](#merge) are for.
-- `PLAN.md` is the source of truth for what a task is. The issue is where a task is started and discussed, and where its PR is linked. If the two differ, `PLAN.md` wins.
+- GitHub issues and Project 2 are the canonical backlog and live status. `PLAN.md`
+  records implementation progress and context; reconcile stale plan text to
+  the issue rather than overriding a newer user report or board state.
 - When a PR adds a task to `PLAN.md` or changes one, its issue must match: create or update it, including its "Blocked by" dependencies. If you can't edit issues from your environment, list the needed issue changes in the PR body. P0-13 automates this.
 - When a task row is added to `PLAN.md` on `main`, the plan-status workflow creates its issue in the standard format, with the phase label and "Blocked by" dependencies. If an existing task's description or acceptance criteria change, update the issue body too; the workflow reconciles dependencies but does not rewrite existing issue content.
 - Status values: **Not started**, **In progress**, **Blocked**, **Complete**. The Issue and Status columns in `PLAN.md` on `main` are the shared issue and status view of the project.
@@ -2000,13 +2097,15 @@ Every task issue ends with the same "Before you start" and "Definition of done" 
 
 ### Merge
 
-- **Coordinator removed.** Dan or an explicitly authorized agent squash-merges a PR when it is ready (not a draft; see Copilot drafts below), no agent is still working on it, its title starts with a task ID, `fix-main:`, or `docs:` (documentation changes outside a task), all checks pass, and it contains the latest `main`. If the branch is behind, the authorized worker updates it and waits for the checks again, so every merge is tested against the current `main`.
+- The integration coordinator or Dan squash-merges a PR when it is ready (not a draft; see Copilot drafts below), no agent is still working on it, its title starts with a task ID, `fix-main:`, or `docs:`, all required checks/review pass, and it contains the latest `main`. The coordinator owns mechanical integration conflicts; substantive corrections return to the existing builder. Requalify a changed candidate, never assemble unrelated green receipts.
 - **Actions minutes cost money.** The account's free Actions minutes are limited; CI skips draft PRs, and agents push in few, meaningful commits. Never add scheduled or per-event workflows without checking their minute cost (L83).
 - **Never start from a broken `main`.** After every merge, deploy runs on `main` (CI already passed on the up-to-date PR, so it is not repeated on `main`, L83); deploy skips documentation-only changes and deploys only the parts that changed ([P0-11](../PLAN.md#p0--foundations)). If either fails, merge only `fix-main:` PRs until `main` is green again. Only a **failed** run blocks: a queued, pending or in-progress Deploy is not a broken `main`, so start or continue your task (L75).
 - **Copilot drafts:** Copilot cloud agent never marks its own PR ready; it finishes by removing `[WIP]` from the title and requesting review. The [Copilot PR ready](../.github/workflows/copilot-ready.yml) workflow then marks the PR ready, also after follow-up rounds and while the PR has merge conflicts (L Follow-up rounds (after an `@copilot` comment) can't edit the title, so on Copilot's closing comment the workflow also drops a leftover `[WIP]` prefix.
 - Agents never merge their own PRs, push to `main`, or weaken or skip checks.
 - Parallel PRs edit the same documents. When your branch is updated, keep other agents' entries, take the next free numbers (task IDs, L#), and recheck that your updates still hold.
-- The Jarvis coordinator for #12 is removed at Dan's request. It no longer assigns issues, merges PRs or requests conflict repairs. The separate Project board sync and its `project-board` environment remain. Dan merges green PRs or explicitly instructs an agent to merge them. Deployment integration remains #11.
+- The old #12 coordinator-removal instruction is superseded by operating model 2
+  above. Existing Project board sync and its `project-board` environment remain;
+  no new scheduler, coordinator service or permission grant is introduced.
 ## Azure
 
 | Item | Value |
@@ -2023,7 +2122,10 @@ Every task issue ends with the same "Before you start" and "Definition of done" 
 - The Bicep deployment must supply `backendIdentityResourceId`, `sqlAdminGroupObjectId` and `foundryNameTimestamp`; `backendImage` is optional (empty skips the backend app, used only before the first backend image exists). The timestamp is fixed at `20261003200000` in `infra/main.parameters.json`, so every deploy updates the existing Foundry account and project in place. Change it only to recover from a deleted account, and then to a fresh value (L2).
 - Bicep sets `BACKEND_CONTAINER_APP_RESOURCE_ID` and grants `id-jarvis-backend` a custom role limited to Container App read/write on that app. The sleep API uses this fixed target and the existing `SQL_MANAGED_IDENTITY_CLIENT_ID` for ARM authentication. Local tests inject the scaler; a local app without an Azure managed identity cannot perform live scaling, and the Bicep build/lint checks do not verify the deployed role.
 - `sqlAdminGroupName` defaults to `jarvis-sql-admins`; the budget defaults to 300 in the subscription billing currency. Deploy requires the `JARVIS_BUDGET_CONTACT_EMAILS` GitHub secret, a comma-separated list including Dan's email. It passes the values through a mode-0600 temporary parameters file to the required Bicep `budgetContactEmails` parameter, then deletes the file. Do not commit email addresses. The first Azure deployment and real resource behavior are verified by Deploy, not by local Bicep build/lint.
-- The [Deploy workflow](../.github/workflows/deploy.yml) is the only routine path to Azure: push to `main` deploys the parts changed since the last successful Deploy run; Dan's `workflow_dispatch` on `main` redeploys everything. Its Bicep deployment is always named `jarvis-infra`. Details: [production deploy](architecture.md#production-deploy-p0-11).
+- The [Deploy workflow](../.github/workflows/deploy.yml) is the only routine path
+  to Azure: qualified `main` pushes and manual dispatch apply incompatible or
+  unproven components, retaining exact compatible applied versions. A manual
+  dispatch cannot overwrite newer applied source. Bicep remains `jarvis-infra`.
 - GitHub Actions OIDC: GitHub signs this repository's tokens with the immutable-ID subject `repo:DanAakesen@68902534/jarvis@1403065900:ref:refs/heads/main`, not `repo:DanAakesen/jarvis:ref:refs/heads/main`. `infra/bootstrap.ps1` reads the IDs with `gh api repos/DanAakesen/jarvis` and registers the federated credential `github-main-ids`. An `AADSTS700213` sign-in failure means the credential is missing: Dan re-runs bootstrap; the subject is printed under "Federated token details" in the `azure/login` step (L49).
 - Dan's Azure CLI defaults to the Microsoft tenant: pass `--subscription` in every command and script (L7). For Microsoft Graph, get the token with `az account get-access-token --subscription <id> --resource-type ms-graph`; `--tenant` picks the wrong account.
 - **Google Calendar and Gmail setup (Dan only):** Create a Google Cloud project and select it in the project picker. Open **APIs & Services → Library**, search for **Gmail API**, open it and click **Enable**; repeat for **Google Calendar API**. Open **Google Auth Platform → Branding** and configure the app name and support contact; under **Audience**, choose **External** for Dan's personal account. Under **Data Access**, add `https://www.googleapis.com/auth/gmail.readonly`, `https://www.googleapis.com/auth/gmail.compose`, `https://www.googleapis.com/auth/gmail.send`, `https://www.googleapis.com/auth/gmail.modify`, and `https://www.googleapis.com/auth/calendar.events`, and `https://www.googleapis.com/auth/calendar.calendarlist.readonly` (read-only list of calendars, for the Daily all-calendars feed). Return to **Audience** and click **Publish app** so the publishing status is **In production**, not **Testing**; Testing-mode refresh tokens expire after seven days. Google may show an unverified-app warning or require OAuth verification for restricted Gmail scopes.
@@ -3656,7 +3758,11 @@ chat/realtime model image delivery has been verified.
 ## Release procedure
 
 - Pin external workflow actions to a full commit SHA. Resolve `refs/tags/<release>` through GitHub's Git refs API; if it returns a tag object, dereference that object through the Git tags API until the target is a commit. Use the commit SHA in `uses:` and keep the release tag as a trailing comment. Dependabot updates GitHub Actions pins weekly.
-- Every change reaches `main` through a PR merged by Dan or an explicitly authorized agent (see [Merge](#merge)). A merge runs the Deploy workflow, which deploys only the changed parts among infrastructure, backend, web, and the Jarvis agent; the backend applies migrations at startup. Redeploy everything with **Actions → Deploy → Run workflow** on `main` (`gh workflow run deploy.yml --ref main`).
+- Every change reaches `main` through a qualified PR merged by the integration
+  owner (see [Merge](#merge)). Deploy verifies the exact tested tree and applies
+  only incompatible/unproven components; backend migrations still run at startup.
+  A manual **Deploy** on `main` uses the same qualification, reuse and supersession
+  gates; it is not a force-rebuild escape hatch.
 - After the first successful deploy only (P0-16): run `./infra/bootstrap.ps1 -WebRedirectUris 'https://<Static Web App host>/redirect.html'` so sign-in works there (the redirect URI is MSAL's redirect bridge page, L63) (existing URIs are kept), set `backendUrl` in `apps/web/config.json` to the backend URL so `npm run dev` signs in, and set the Actions variable `JARVIS_INFRA_DEPLOYMENT_NAME` to `jarvis-infra` (`gh variable set JARVIS_INFRA_DEPLOYMENT_NAME --body jarvis-infra`). The Deploy run summary lists both URLs.
 - No manual infrastructure portal changes.
 - **P6-22 coordinator check after merge:** wait for Deploy to finish; verify Teams settings are absent from the backend and Bicep does not provision Teams Bot or separate Speech F0 resources. In the signed-in Now panel, verify an away task update and a browser approval appear while away, Approve runs only the confirmed test action, Reject does not, and an unanswered approval expires after five minutes. If an English browser voice session is active, verify it announces the pending approval and task status. Any leftover Azure resources from prior deployments require separate cleanup authorization.

@@ -81,8 +81,8 @@ class SmokeReasonsTests(unittest.TestCase):
     def test_workflow_prints_safe_reasons_before_the_unchanged_required_gate(self):
         workflow = Path(__file__).resolve().parents[2] / "workflows" / "deploy.yml"
         source = workflow.read_text(encoding="utf-8")
-        diagnostic = 'python .github/scripts/smoke_reasons.py "$response"'
-        gate = """select(.id != "pc_bridge" and .id != "chat_identity" and .id != "chat_no_timestamp" and (.status == "down" or .status == "degraded"))"""
+        diagnostic = 'python .github/scripts/smoke_reasons.py "$response" --evidence'
+        gate = """select(.id != "pc_bridge" and .id != "chat_identity" and .id != "chat_no_timestamp" and .status != "ok")"""
         self.assertIn(diagnostic, source)
         self.assertIn(gate, source)
         self.assertLess(source.index(diagnostic), source.index(gate))

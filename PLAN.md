@@ -1,5 +1,41 @@
 # Project plan
 
+## Continuous pipeline delivery (#880, 17 October 2026; implementation candidate)
+
+Operating model 2 is the current focus: the coordinator owns responsive intake,
+the canonical GitHub backlog, dispatch and integration/conflicts, not feature
+development, tests or diagnostic reproductions. At most two builders own source,
+regressions and their pipeline failures. No old timer or autopilot change.
+
+The candidate extends existing CI/Deploy rather than adding a platform. It selects
+affected checks and dependencies conservatively, requires exact-tree CI receipts
+before Azure access, retains compatible applied component versions independently
+of final acceptance, and publishes bounded content-free failure evidence.
+Readiness and probabilistic live conversation acceptance are separate required
+results. Missing/unknown required smoke checks fail closed; existing explicit
+nonblocking checks remain so. There is no routine Dan acceptance/batch cutoff.
+
+Local 35 pipeline, seven smoke formatter and 11 planner cases pass, with scoped
+Ruff and Actions validation. The validator's sole ignored schema diagnostic is
+the unchanged production `concurrency.queue: max` feature; it is not removed.
+The first full local script run exposed a missing `run_attempt` in a synthetic
+fixture; that fixture was corrected and the narrow cases reran successfully.
+Initial43aa CI39038876598 passed all12 jobs and all four CodeQL analyses.
+Review found a secret-derived fingerprint; the correction compares sensitive
+budget configuration only in memory through the existing authorised main-only
+identity, never persists a value/hash, and requires successor qualification.
+Verified applied state, not a newer docs-only main commit, controls supersession.
+ca9a CI39039891173 and all four analyses passed. Its exact-head review found
+missing read-only plan PR permission and agent-created backend revision
+attribution. The correction adds that read scope and distinct revision provenance
+while retaining the original immutable image producer; new source needs normal CI.
+Normal exact-candidate PR CI supplies the full runtime qualification; its
+actual run/artifact result is retained on #880/PR rather than generating a
+documentation-only CI rerun. #880 stays open through review. Main merge and
+actual release belong to the integration owner, not this builder. No live provider
+reproduction or causal-fix claim for Deploy39032686994 is part of this work;
+its `chat_plain_approval` / generic `agent_error` cause remains unproven.
+
 ## Release diagnosis (17 October 2026; safe CI reason codes)
 
 Continue autonomously without direct Azure or credentials. Both new owned
@@ -14,8 +50,8 @@ required acceptance predicate unchanged; no green retry or no-op fake success.
 Local12 targeted script tests and Ruff pass. Existing Bicep0.44.1 offline
 build/lint pass without Azure access or upgrade.
 
-The workflow edit selects all existing parts under the unchanged deploy planner;
-this is explicit, not an app-only assumption. No IaC, identity, scope, resource,
+Historical #879 selected all parts under the then-current deploy planner;
+#880 supersedes that selection policy without an acceptance waiver. No IaC, identity, scope, resource,
 secret or environment configuration changes. Normal exact-head qualification
 and existing main-only deployment must precede any new diagnostic result.
 

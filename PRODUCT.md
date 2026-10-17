@@ -762,6 +762,14 @@ The separate daily web-research count includes successful, refused, and failed c
 
 ## Success criteria
 
+- For this repository, a responsive intake/integration coordinator dispatches at
+  most two builders and maintains the canonical GitHub backlog. Builders own
+  development, automated regression tests and failure fixes; pipeline results
+  provide bounded, content-free routing evidence.
+- Qualified integrated changes flow continuously through the existing main-only
+  production path without routine per-release human sign-off. Required failures
+  still block acceptance. Applied components, deterministic readiness and live
+  conversation acceptance are separate facts; real-world reports feed the backlog.
 - Dan can ask Jarvis, by voice or chat, to start a task on a project; a coding agent delivers a pull request; GitHub Actions checks it; Jarvis merges and releases it according to the project policy.
 - Dan sees every task and release update live, can steer, pause, resume, cancel, and recover tasks, and sees what each task used and cost.
 - Each phase in [PLAN.md](PLAN.md) meets its acceptance criteria. Prototype results are evidence for feasibility; production behavior needs its own verification.
