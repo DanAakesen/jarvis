@@ -4,7 +4,8 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vites
 import type { FastifyRequest } from 'fastify';
 import { loadDatabaseConfig } from './config.js';
 import { applyMigrations, readMigrations } from './migrations.js';
-import { DailyFeedStore,MAX_SOURCE_BYTES,canonicalFeedRun,type RefreshRun,type FeedItem } from '../daily/feeds/store.js';
+import { DailyFeedStore,MAX_SOURCE_BYTES,canonicalFeedRun,feedRevision,type RefreshRun,type FeedItem } from '../daily/feeds/store.js';
+import { createDailyChanges } from '../daily/revisions.js';
 import { canonicalJson } from '../daily/nutrition/model.js';
 import type { Thread, Order } from '../daily/feeds/attention.js';
 import { DailyFeedRefresh } from '../daily/feeds/refresh.js';
@@ -168,5 +169,46 @@ describe('Daily feed snapshots and suppressions on real isolated SQL Server', ()
     expect(() => DailyFeedStore.forRequest(pool,{ ...request(),principal: { objectId: other } } as FastifyRequest)).toThrow();
     expect(() => DailyFeedStore.forRequest(pool,{ ...request(),runnerPrincipal: { kind: 'jarvis-runner' } } as unknown as FastifyRequest)).toThrow();
     expect((await pool.request().query('SELECT COUNT(*) AS count FROM daily.attention_runs')).recordset[0].count).toBe(0);
+  });
+  it('publishes only acknowledged new feed commits, isolating replay, no-op, failure and listener failure', async () => {
+    const changes = createDailyChanges(); const events: unknown[] = [];
+    changes.subscribe(change => { events.push(change); });
+    changes.subscribe(() => { throw new Error('Synthetic disconnected listener'); });
+    const current = DailyFeedStore.forRequest(pool, request(), () => now, changes);
+    await current.ingest(run('notify'), signal()); await current.ingest(run('notify'), signal());
+    expect(events).toEqual([{ owner, sources: ['daily.feed'] }]);
+    await expect(current.ingest(run('notify', []), signal())).rejects.toThrow('conflicts');
+    expect(await current.suppress('thread', thread.id, true, signal())).toBe(true);
+    expect(await current.suppress('thread', thread.id, true, signal())).toBe(false);
+    expect(await current.clear('thread', 'missing', true, signal())).toBe(false);
+    expect(await current.clear('thread', thread.id, true, signal())).toBe(true);
+    expect(events).toHaveLength(3);
+    expect((await current.attention(signal())).waiting).toHaveLength(1);
+  });
+  it('rechecks native-reviewed targets and exact suppression revisions inside owner transactions', async () => {
+    await store().ingest(run('review-initial', [item(thread), item(order)]), signal());
+    const selected = await store().suppressionTarget('thread', thread.id, signal());
+    const updated = { ...thread, latestMessageId: 'new-message', latestMessageAt: '2026-10-10T10:00:00Z', latestIncomingAt: '2026-10-10T10:00:00Z' };
+    await store().ingest(run('review-new', [item(updated), item(order)], '2026-10-12T12:01:00Z'), signal());
+    await expect(store().suppress('thread', thread.id, true, signal(), feedRevision(selected))).rejects.toThrow('changed');
+    expect(await store().suppressions(signal())).toEqual([]);
+    const reviewedOrder = await store().suppressionTarget('order', order.id, signal());
+    expect(await store().suppress('order', order.id, true, signal(), feedRevision(reviewedOrder))).toBe(true);
+    const saved = (await store().suppressions(signal()))[0]!;
+    expect(saved).toMatchObject({ type: 'order', key: 'synthetic shop:12345', messageId: null });
+    expect(await store(other).suppressions(signal())).toEqual([]);
+    expect(await store().clear('order', order.id, true, signal())).toBe(false);
+    await expect(store().clear('order', saved.key, true, signal(), '0'.repeat(64))).rejects.toThrow('changed');
+    expect(await store().clear('order', saved.key, true, signal(), feedRevision(saved))).toBe(true);
+    await expect(store().clear('order', saved.key, true, signal(), feedRevision(saved))).rejects.toThrow('changed');
+    expect(await store().suppressions(signal())).toEqual([]);
+  });
+  it('does not suppress an old active order update after its merged order became terminal', async () => {
+    const terminal = { ...order, id: 'terminal-update', status: 'delivered', updatedAt: '2026-10-10T10:00:00Z' };
+    await store().ingest(run('terminal-review', [item(order), item(terminal)]), signal());
+    expect((await store().attention(signal())).orders).toEqual([]);
+    await expect(store().suppressionTarget('order', order.id, signal())).rejects.toThrow('active');
+    await expect(store().suppress('order', order.id, true, signal())).rejects.toThrow('active');
+    expect(await store().suppressions(signal())).toEqual([]);
   });
 });

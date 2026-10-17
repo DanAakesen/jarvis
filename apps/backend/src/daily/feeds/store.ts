@@ -1,17 +1,23 @@
 import sql from 'mssql';
 import { createHash } from 'node:crypto';
 import type { FastifyRequest } from 'fastify';
-import { resolveDailyOwner } from '../owner.js';
+import { resolveDailyFeedOwner } from '../owner.js';
 import { canonicalJson, instant, text } from '../nutrition/model.js';
 import { ToolFailure, ToolRefusal } from '../../core/tool-registry.js';
 import { classifyGmailThread, mergeOrders, orderIdentityKey, threadRevives, type Thread, type Order } from './attention.js';
 import { weekCalendar, weekEvent } from './calendars.js';
+import { createDailyChanges, type DailyChangeSink } from '../revisions.js';
 
 export type FeedSource = 'Gmail' | 'GoogleCalendar';
 export interface FeedItem { type: 'thread' | 'order_update' | 'event'; id: string; title: string; content: Thread | Order | Record<string, unknown> }
 export interface SourceAttempt { source: FeedSource; status: 'ok' | 'error'; items: FeedItem[]; errorCode: string | null }
 export interface RefreshRun { runId: string; capturedAt: string; sources: SourceAttempt[] }
 export interface SourceView { source: FeedSource; status: 'Missing' | 'Stale' | 'Current'; capturedAt: string | null; attemptedAt: string | null; error: string | null; items: FeedItem[] }
+export interface FeedSuppression {
+  type: 'thread' | 'order'; key: string; suppressedAt: string;
+  messageId: string | null; incomingAt: string | null; orderUpdatedAt: string | null;
+}
+export const feedRevision = (value: FeedItem | FeedSuppression): string => createHash('sha256').update(canonicalJson(value)).digest('hex');
 const key = (column: string, parameter: string) => `${column}=@${parameter} AND DATALENGTH(${column})=DATALENGTH(@${parameter})`;
 const sources: FeedSource[] = ['Gmail','GoogleCalendar'];
 export const MAX_SOURCE_ITEMS = 1000;
@@ -73,32 +79,42 @@ function validate(run: RefreshRun): void {
   }
   if (Buffer.byteLength(canonicalFeedRun(run), 'utf8') > 1024 * 1024) throw new TypeError('Feed run exceeds limits');
 }
-/** No registered routes/tools; only existing server owner, mapped tables and synthetic tests. */
+/** Existing owner-local snapshots and suppressions; no provider writes. */
 export class DailyFeedStore {
-  private constructor(private readonly pool: sql.ConnectionPool, private readonly owner: string, private readonly now: () => string) {}
-  static forRequest(pool: sql.ConnectionPool, request: FastifyRequest, now = () => new Date().toISOString()): DailyFeedStore { return new DailyFeedStore(pool, resolveDailyOwner(request), now); }
+  private readonly changes = createDailyChanges();
+  private constructor(private readonly pool: sql.ConnectionPool, private readonly owner: string, private readonly now: () => string, changes?: DailyChangeSink) {
+    if (changes) this.changes.subscribe(change => changes.publish(change));
+  }
+  static forRequest(pool: sql.ConnectionPool, request: FastifyRequest, now = () => new Date().toISOString(), changes?: DailyChangeSink): DailyFeedStore {
+    return new DailyFeedStore(pool, resolveDailyFeedOwner(request), now, changes);
+  }
   private request(parent: sql.ConnectionPool | sql.Transaction): sql.Request { return (parent instanceof sql.Transaction ? new sql.Request(parent) : new sql.Request(parent)).input('owner', sql.UniqueIdentifier, this.owner); }
   private async query(request: sql.Request, query: string, signal: AbortSignal) {
     const cancel = () => request.cancel(); signal.addEventListener('abort', cancel, { once: true });
     try { signal.throwIfAborted(); return await request.query<Record<string, unknown>>(query); } finally { signal.removeEventListener('abort', cancel); }
   }
-  private async transaction<T>(signal: AbortSignal, action: (transaction: sql.Transaction) => Promise<T>): Promise<T> {
+  private async transaction<T>(signal: AbortSignal, action: (transaction: sql.Transaction, changed: () => void) => Promise<T>): Promise<T> {
     const transaction = new sql.Transaction(this.pool);
+    let changed = false;
+    let result: T;
     try {
       signal.throwIfAborted(); await transaction.begin();
       const resource = `daily-feeds:${this.owner.toLowerCase()}`;
       await this.query(new sql.Request(transaction).input('resource',sql.NVarChar(255),resource), "DECLARE @result int; EXEC @result=sys.sp_getapplock @Resource=@resource,@LockMode='Exclusive',@LockOwner='Transaction',@LockTimeout=5000; IF @result<0 THROW 51001,'Feed owner lock unavailable',1;",signal);
-      const result = await action(transaction); signal.throwIfAborted(); await transaction.commit(); return result;
+      result = await action(transaction, () => { changed = true; }); signal.throwIfAborted(); await transaction.commit();
     }
     catch (error) { await transaction.rollback().catch(() => undefined); if (signal.aborted) throw signal.reason; if (error instanceof ToolRefusal) throw error; throw new ToolFailure('Feed persistence failed; retry the same operation key. No record/provider diagnostics are exposed.'); }
+    if (changed) this.changes.publish({ owner: this.owner, sources: ['daily.feed'] });
+    return result;
   }
   async ingest(input: RefreshRun, signal: AbortSignal): Promise<void> {
     validate(input); input = structuredClone(input);
     const checksum = createHash('sha256').update(canonicalFeedRun(input)).digest('hex'); const now = this.now(); instant(now);
-    await this.transaction(signal, async (transaction) => {
+    await this.transaction(signal, async (transaction, changed) => {
       const existing = (await this.query(this.request(transaction).input('id', sql.NVarChar(256), input.runId),
         'SELECT id,checksum FROM daily.attention_runs WITH (UPDLOCK,HOLDLOCK) WHERE owner_object_id=@owner AND idempotency_key=@id;', signal)).recordset[0];
       if (existing) { if (existing.id !== input.runId || existing.checksum !== checksum) throw new ToolRefusal('Refresh operation key conflicts with prior content.'); return; }
+      changed();
       await this.query(this.request(transaction).input('id', sql.NVarChar(256), input.runId).input('captured', sql.NVarChar(64), input.capturedAt).input('now', sql.NVarChar(64), now)
         .input('checksum', sql.NVarChar(256), checksum).input('statuses', sql.NVarChar(sql.MAX), canonicalJson(Object.fromEntries(input.sources.map((source) => [source.source,source.status])))),
         `INSERT daily.attention_runs(owner_object_id,id,idempotency_key,mode,captured_at,received_at,checksum,status,source_status_json,completed_at)
@@ -154,7 +170,7 @@ export class DailyFeedStore {
     try { return (await this.query(this.request(this.pool).input('id',sql.NVarChar(256),runId),`SELECT id FROM daily.attention_runs WHERE owner_object_id=@owner AND ${key('id','id')};`,signal)).recordset.length > 0; }
     catch { if (signal.aborted) throw signal.reason; throw new ToolFailure('Refresh state unavailable.'); }
   }
-  async attention(signal: AbortSignal): Promise<{ sources: SourceView[]; waiting: ReturnType<typeof classifyGmailThread>[]; orders: Order[] }> {
+  async attention(signal: AbortSignal): Promise<{ sources: SourceView[]; waiting: NonNullable<ReturnType<typeof classifyGmailThread>>[]; orders: Order[] }> {
     return this.transaction(signal,async (transaction) => {
     const views: SourceView[] = []; for (const source of sources) views.push(await this.latest(source,transaction,signal)); const items = views[0]!.items;
     views[1]!.items = views[1]!.items.filter((item) => { const event = item.content as Record<string,unknown>; return event.status !== 'cancelled' && !weekCalendar(String(event.calendarName || '')) && !weekEvent(item.title); });
@@ -166,15 +182,49 @@ export class DailyFeedStore {
       orders: mergeOrders(items.filter((item) => item.type === 'order_update').map((item) => item.content as Order),orderKeys) };
     });
   }
-  async suppress(type: 'thread' | 'order', id: string, explicitIntent: boolean, signal: AbortSignal): Promise<void> {
+  private target(view: SourceView, type: 'thread' | 'order', id: string): FeedItem {
+    if (type === 'thread') {
+      const item = view.items.find(item => item.type === 'thread' && item.id === id);
+      if (item && classifyGmailThread(item.content as Thread, this.now())) return item;
+    } else {
+      const order = mergeOrders(view.items.filter(item => item.type === 'order_update').map(item => item.content as Order)).find(order => order.id === id);
+      if (order && orderIdentityKey(order)) return { type: 'order_update', id: order.id, title: `${order.company} order ${order.orderNumber}`, content: order };
+    }
+    throw new ToolRefusal('Only an active owned attention item with an exact suppression identity can be suppressed.');
+  }
+  async suppressionTarget(type: 'thread' | 'order', id: string, signal: AbortSignal): Promise<FeedItem> {
+    text(id);
+    if (!['thread','order'].includes(type)) throw new TypeError('Invalid suppression type');
+    return this.transaction(signal, async transaction => this.target(await this.latest('Gmail', transaction, signal), type, id));
+  }
+  private async readSuppressions(transaction: sql.Transaction, signal: AbortSignal): Promise<FeedSuppression[]> {
+    const threads = (await this.query(this.request(transaction),
+      'SELECT TOP (1001) thread_id,suppressed_message_id,suppressed_incoming_at,suppressed_at FROM daily.gmail_suppressions WHERE owner_object_id=@owner AND revived_at IS NULL ORDER BY thread_id;', signal)).recordset;
+    const orders = (await this.query(this.request(transaction),
+      'SELECT TOP (1001) order_key,suppressed_order_updated_at,suppressed_at FROM daily.order_suppressions WHERE owner_object_id=@owner ORDER BY order_key;', signal)).recordset;
+    if (threads.length > 1000 || orders.length > 1000) throw new ToolFailure('Suppression range exceeds limits.');
+    return [
+      ...threads.map(row => ({ type: 'thread' as const, key: row.thread_id as string, suppressedAt: row.suppressed_at as string,
+        messageId: row.suppressed_message_id as string, incomingAt: row.suppressed_incoming_at as string | null, orderUpdatedAt: null })),
+      ...orders.map(row => ({ type: 'order' as const, key: row.order_key as string, suppressedAt: row.suppressed_at as string,
+        messageId: null, incomingAt: null, orderUpdatedAt: row.suppressed_order_updated_at as string | null })),
+    ];
+  }
+  async suppressions(signal: AbortSignal): Promise<FeedSuppression[]> {
+    return this.transaction(signal, transaction => this.readSuppressions(transaction, signal));
+  }
+  async suppress(type: 'thread' | 'order', id: string, explicitIntent: boolean, signal: AbortSignal, expectedRevision?: string): Promise<boolean> {
     text(id); if (explicitIntent !== true) throw new ToolRefusal('Explicit trusted dismiss/received intent is required.');
     if (!['thread','order'].includes(type)) throw new TypeError('Invalid suppression type');
-    await this.transaction(signal, async (transaction) => {
-      const view = await this.latest('Gmail',transaction,signal); const item = view.items.find((item) => item.id === id && item.type === (type === 'thread' ? 'thread' : 'order_update'));
-      if (!item || type === 'thread' && !classifyGmailThread(item.content as Thread,this.now()) || type === 'order' && !mergeOrders([item.content as Order]).length) throw new ToolRefusal('Only an active owned attention item can be suppressed.');
+    return this.transaction(signal, async (transaction, changed) => {
+      const item = this.target(await this.latest('Gmail',transaction,signal), type, id);
+      if (expectedRevision !== undefined && feedRevision(item) !== expectedRevision) throw new ToolRefusal('The reviewed attention item changed. Read and review it again; nothing was changed by this call.');
       const now = this.now(); instant(now);
+      const prior = (await this.readSuppressions(transaction, signal)).find(row => row.type === type &&
+        row.key === (type === 'thread' ? id : orderIdentityKey(item.content as Order)));
       if (type === 'thread') {
         const thread = item.content as Thread;
+        if (prior?.messageId === thread.latestMessageId && prior.incomingAt === thread.latestIncomingAt) return false;
         await this.query(this.request(transaction).input('id',sql.NVarChar(256),id).input('message',sql.NVarChar(256),thread.latestMessageId).input('incoming',sql.NVarChar(64),thread.latestIncomingAt).input('now',sql.NVarChar(64),now),
           `IF EXISTS(SELECT 1 FROM daily.gmail_suppressions WITH (UPDLOCK,HOLDLOCK) WHERE owner_object_id=@owner AND thread_id=@id AND DATALENGTH(thread_id)<>DATALENGTH(@id)) THROW 51001,'Exact key conflict',1;
            IF EXISTS(SELECT 1 FROM daily.gmail_suppressions WITH (UPDLOCK,HOLDLOCK) WHERE owner_object_id=@owner AND ${key('thread_id','id')})
@@ -182,17 +232,29 @@ export class DailyFeedStore {
            ELSE INSERT daily.gmail_suppressions(owner_object_id,thread_id,suppressed_message_id,suppressed_incoming_at,suppressed_at,updated_at) VALUES(@owner,@id,@message,@incoming,@now,@now);`,signal);
       } else {
         const order = item.content as Order; const identity = orderIdentityKey(order); text(identity);
+        if (prior) return false;
         await this.query(this.request(transaction).input('id',sql.NVarChar(256),identity).input('updated',sql.NVarChar(64),order.updatedAt).input('now',sql.NVarChar(64),now),
           `IF EXISTS(SELECT 1 FROM daily.order_suppressions WITH (UPDLOCK,HOLDLOCK) WHERE owner_object_id=@owner AND order_key=@id AND DATALENGTH(order_key)<>DATALENGTH(@id)) THROW 51001,'Exact key conflict',1;
            IF NOT EXISTS(SELECT 1 FROM daily.order_suppressions WITH (UPDLOCK,HOLDLOCK) WHERE owner_object_id=@owner AND ${key('order_key','id')})
            INSERT daily.order_suppressions(owner_object_id,order_key,suppressed_order_updated_at,suppressed_at,updated_at) VALUES(@owner,@id,@updated,@now,@now);`,signal);
       }
+      changed();
+      return true;
     });
   }
-  async clear(type: 'thread' | 'order', exactKey: string, explicitIntent: boolean, signal: AbortSignal): Promise<void> {
+  async clear(type: 'thread' | 'order', exactKey: string, explicitIntent: boolean, signal: AbortSignal, expectedRevision?: string): Promise<boolean> {
     text(exactKey); if (explicitIntent !== true) throw new ToolRefusal('Explicit trusted clear intent is required.');
     if (!['thread','order'].includes(type)) throw new TypeError('Invalid suppression type');
     const table = type === 'thread' ? 'gmail_suppressions' : 'order_suppressions'; const column = type === 'thread' ? 'thread_id' : 'order_key';
-    await this.transaction(signal, async (transaction) => { await this.query(this.request(transaction).input('id',sql.NVarChar(256),exactKey),`DELETE daily.${table} WHERE owner_object_id=@owner AND ${key(column,'id')};`,signal); });
+    return this.transaction(signal, async (transaction, changed) => {
+      if (expectedRevision !== undefined) {
+        const prior = (await this.readSuppressions(transaction, signal)).find(row => row.type === type && row.key === exactKey);
+        if (!prior || feedRevision(prior) !== expectedRevision) throw new ToolRefusal('The reviewed suppression changed. Read and review it again; nothing was changed by this call.');
+      }
+      const result = await this.query(this.request(transaction).input('id',sql.NVarChar(256),exactKey),`DELETE daily.${table} WHERE owner_object_id=@owner AND ${key(column,'id')};`,signal);
+      const removed = result.rowsAffected.some(count => count > 0);
+      if (removed) changed();
+      return removed;
+    });
   }
 }

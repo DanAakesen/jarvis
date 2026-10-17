@@ -9,6 +9,7 @@ import { dailyFoodTool, type InternalNutrition } from './tools/food.js';
 import { dailyFoodReviewTool } from './tools/food-review.js';
 import { dailySavedFoodTool, type InternalSavedNutrition } from './tools/saved-food.js';
 import { dailyFoodLookupTool } from './tools/food-lookup.js';
+import { dailyFeedTool } from './tools/feed.js';
 
 /** Trusted server composition flag. Not a request parameter or a production rollout. */
 export function createDailyModules(enabled = false, data?: DailyData, connector?: DailyMcpOptions, internalNutrition?: InternalNutrition, savedNutrition?: InternalSavedNutrition): readonly BackendModule[] {
@@ -18,6 +19,7 @@ export function createDailyModules(enabled = false, data?: DailyData, connector?
   if (savedNutrition && !data) throw new TypeError('Daily saved food requires shared Daily data');
   const tools = data ? [dailyQueryTool(data.query),
     ...(data.foodLookup ? [dailyFoodLookupTool(data.foodLookup)] : []),
+    ...(data.feeds ? [dailyFeedTool(data.feeds)] : []),
     ...(internalNutrition ? [dailyFoodTool(internalNutrition), dailyFoodReviewTool(internalNutrition)] : []),
     ...(savedNutrition ? [dailySavedFoodTool(savedNutrition)] : []),
   ] : [];
@@ -56,7 +58,7 @@ export function createDailyModules(enabled = false, data?: DailyData, connector?
         return {
           module: dailyModuleId,
           version: modern ? dailyCapabilitiesVersion : dailyContractVersion,
-          stage: internalNutrition || savedNutrition ? 'internal-nutrition-rehearsal' : connector ? 'connector-rehearsal' : data ? 'read-only' : 'contract-only',
+          stage: internalNutrition || savedNutrition ? 'internal-nutrition-rehearsal' : data?.feeds ? 'feed-rehearsal' : connector ? 'connector-rehearsal' : data ? 'read-only' : 'contract-only',
           reservedViewIds: dailyViewIds,
           // Reserved view IDs do not advertise unfinished functionality as available.
           pages: [],

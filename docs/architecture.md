@@ -4632,6 +4632,43 @@ P8-33 scratch Chromium checks cover the adaptive quality thresholds, compact pho
 The reference lockfile is standalone, outside root workspaces, and contains the prototype's dependencies only. Bundled Three.js/Phosphor notices are retained. Physical/hardware performance, live activity/voice behavior and normal-rate flicker acceptance remain unverified; P8-31 adds no production Three.js dependency.
 ## Daily integration boundary (P12-01)
 
+### Inactive shared feed workflow (17 October 2026; P12-09)
+
+The optional fifth `createDailyData(pool, owner, now, frida, feeds)` argument
+constructs `DailyFeedService` with the existing pool, Google client and explicitly
+supplied protected mail semantic adapter. Construction performs no reads. Passing
+`{}` permits retained SQL reads but reports refresh unconfigured; absent feed
+options add no service/tool. Existing four-argument callers remain unchanged.
+Supply the existing `createFoundryMailSemanticModel` with the established
+endpoint/token/settings/catalogue/usage dependencies, never a replacement
+credential or success-shaped unavailable adapter. Missing semantic capability
+retains the existing independent `semantic-unavailable` result.
+
+`DailyData.feeds` contributes one sensitive `daily_feed` tool to the current
+module/dispatcher. It does not expand `daily_query` sources/capability versions
+or the external nutrition MCP allowlist. Feed service, store and both provider
+readers reject the nutrition-only connector before SQL/provider work. The
+composed store also compares the configured data owner. Current read DTOs expose
+selected attention/orders/events, fixed source metadata and bounded timed
+conflict ID pairs, not raw Gmail snapshots or SQL owner fields. The retained
+calendar request range is unavailable, never inferred from event dates.
+
+Mutations share the existing verified-message/session/presence helpers and
+one-time browser-only Now confirmation, with120seconds for review and180seconds
+for the operation. The browser relay allows180seconds and hosted-agent read210,
+below the existing240second ingress; unrelated tool deadlines are unchanged.
+Frozen target/suppression hashes are rechecked under existing owner SQL locks.
+Manual refresh uses a server-derived message/operation key and the existing
+bounded refresh/cooldown lifecycle. A completed run is an acknowledged attempt,
+not proof of healthy sources; replay and running/limited states say so.
+
+Snapshot/suppression commits use the existing change hub with `daily.feed`
+invalidation, bridged to the unchanged Now refresh stream. Only acknowledged new
+commits notify; replay/no-op/failure do not. Listener failure cannot turn a commit
+into an error. No schema, route, timer, provider write, production composition,
+consent or new resource is installed. #725's stored-grant/CalendarList and live
+model/provider acceptance remain open.
+
 Release diagnostics consume the existing authenticated smoke response inside
 the main-only deployment job. In addition to unchanged status lines, a bounded
 standard-library formatter emits exact fixed chat-reason codes; untrusted text
@@ -4953,7 +4990,7 @@ Both scoped POST routes retain `@fastify/rate-limit` before credential/SQL work,
 
 P12-12 adds inactive `daily/nutrition-export` owner/device services and an explicitly callable route factory, never production composition. A root-auth optional verifier contract is scoped to the two POST claim/complete routes; absent/revoked/expired/wrong-owner capability denies access and ordinary routes retain existing JWT handling. No verifier/provisioning is installed by `index.ts`. Additive 0044 supplies request/claim/receipt/reconciliation evidence over existing temporary queue snapshots, not another meal store. Canonical nutrition writers invalidate only export status metadata; export transactions recheck all source revisions/tombstones. Owner-local app locks, conditional selection, bounded requests/outputs/deadlock retry/cancellation and no-instruction claim replay protect SQL state. Native Health effects remain outside SQL transactions; [protocol/gates](../apps/backend/src/daily/nutrition-export/README.md).
 
-P12-10's inactive `daily/feeds` services inject the existing Google client and resolve server owner per request. Gmail scans stage bounded work against connected account/history/model generations; cancellation/change/incomplete coverage cannot publish success. The Foundry semantic factory reuses configured endpoint validation, existing managed-identity callback, canonical chat settings/catalogue and usage accounting; json_object transport has strict local output/source-date validation, no tools or runner relay. Independent source item/UTF-8 preflight prevents an oversized calendar from blocking healthy Gmail. Exact selectors/keys and mapped 0041 transactions use per-owner app locks, parameterized SQL and retained-success freshness. Manual execution reports running/completed/limited and independent errors. No new schema/credentials/model/resource/composition/tools; calendar consent and deployed-model/live parity remain open. [Boundary and limitations](../apps/backend/src/daily/feeds/README.md).
+P12-10's inactive `daily/feeds` services inject the existing Google client and resolve server owner per request. Gmail scans stage bounded work against connected account/history/model generations; cancellation/change/incomplete coverage cannot publish success. The Foundry semantic factory reuses configured endpoint validation, existing managed-identity callback, canonical chat settings/catalogue and usage accounting; json_object transport has strict local output/source-date validation, no tools or runner relay. Independent source item/UTF-8 preflight prevents an oversized calendar from blocking healthy Gmail. Exact selectors/keys and mapped 0041 transactions use per-owner app locks, parameterized SQL and retained-success freshness. Manual execution reports running/completed/limited and independent errors. P12-09's explicit shared feed composition above adds the internal tool without production registration. No new schema/credentials/model/resource; calendar consent and deployed-model/live parity remain open. [Boundary and limitations](../apps/backend/src/daily/feeds/README.md).
 
 P12-07's inactive `daily/nutrition` services/typed handlers use existing server-owner resolution and mapped SQL tables. Transactions/range locks protect operation-key idempotency and revisions, retry only deadlock 1205 (three attempts), and sanitize errors. Reads/feedback are bounded. P12-09 supplies trusted existing text/voice/attachment/frame evidence and intent/proposal metadata; clients/models cannot supply authority. Plans snapshot owned favourites/server-sum totals separately from intake/queues. The public Frida adapter pins release 10 / 5.5 and coordinator-verified empty bootstrap/header/cookie, synonym arrays and numeric nutrient DTOs; missing/null provenance is unavailable. Attribution, per-100-g units, bounded validation/cache/deadline and incomplete-total separation remain explicit. Cloud CONNECT is denied with HTTP 403. No production composition import, new auth/media model/dispatcher/infrastructure. [Boundary and checks](../apps/backend/src/daily/nutrition/README.md).
 

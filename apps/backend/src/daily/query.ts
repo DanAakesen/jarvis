@@ -16,6 +16,7 @@ import type { FridaLookup, FridaLookupAdapter, LookupComponent } from './nutriti
 import { createDailyChanges, type DailyChanges } from './revisions.js';
 import { dailyJson as json, projectDailyRecord as project, projectNutritionRecord, dailyResultByteLimit } from './records.js';
 import { DailyBriefReadModel, briefDetailFields, briefMetadataFields } from './briefs/read-model.js';
+import { createDailyFeeds, type DailyFeedProviders, type DailyFeedService } from './feeds/service.js';
 export { projectNutritionRecord, dailyResultByteLimit } from './records.js';
 
 export interface DailyReaders {
@@ -150,7 +151,7 @@ export class DailyQueryService {
 export type DailyFoodLookup = (input: readonly LookupComponent[], request: FastifyRequest, signal: AbortSignal) => Promise<FridaLookup>;
 
 /** Explicit inactive composition: no timer, automatic provider request, route or production registration. */
-export function createDailyData(pool: sql.ConnectionPool, owner: string, now: () => number = Date.now, frida?: Pick<FridaLookupAdapter, 'lookup'>) {
+export function createDailyData(pool: sql.ConnectionPool, owner: string, now: () => number = Date.now, frida?: Pick<FridaLookupAdapter, 'lookup'>, feeds?: DailyFeedProviders) {
   const changes = createDailyChanges();
   const checkOwner = (request: FastifyRequest) => {
     if (resolveDailyOwner(request).toLowerCase() !== owner.toLowerCase()) throw new AuthenticationDenied(403);
@@ -172,10 +173,12 @@ export function createDailyData(pool: sql.ConnectionPool, owner: string, now: ()
     processor: new SqlHealthProcessor(pool, owner, now, changes),
     nutrition,
     ...(foodLookup ? { foodLookup } : {}),
+    ...(feeds ? { feeds: createDailyFeeds(pool, owner, changes, feeds, now) } : {}),
   };
 }
 export interface DailyData {
   query: Pick<DailyQueryService, 'query'>;
   changes: DailyChanges;
   foodLookup?: DailyFoodLookup;
+  feeds?: Pick<DailyFeedService, 'execute'>;
 }

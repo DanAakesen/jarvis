@@ -960,6 +960,19 @@ equivalent action rather than creating one tool per button. Missing tool
 coverage remains unfinished. This does not restore excluded features or waive
 private-data, provider, credential, device, approval or activation gates.
 
+An independently opt-in `daily_feed` workflow shares the retained Gmail/calendar
+snapshot, attention, suppression and manual-refresh services. Reads preserve
+Missing/Stale/Current, successful capture versus latest attempt, exact source
+IDs/consumer keys and unknown retained calendar range. Refresh, dismiss, Received
+and restoration require the current verified chat/browser-voice context and
+the existing two-minute browser Now approval. Only Daily visibility changes:
+no mail/calendar/order-provider mutation, original workflow dispatch or schedule.
+Changed targets are refused under the owner transaction; acknowledged changes
+refresh existing consumers. Missing Google/model configuration and failed,
+limited or incomplete refreshes cannot establish fresh coverage. The separate
+nutrition-only connector has no feed access. Daily remains off; stored grants,
+CalendarList/live-model parity and #725 acceptance remain unverified.
+
 Retained brief history belongs in that same page and chat/voice query workflow.
 Read existing historical metadata and exact body detail without generating,
 delivering or scheduling a new brief. Stored timestamps and historical delivery

@@ -7,24 +7,11 @@ import { canonicalJson, prepareMeal, type FoodDefinition } from '../nutrition/mo
 import type { NutritionStore } from '../nutrition/store.js';
 import { resolveDailyOwner } from '../owner.js';
 import { favoriteFingerprint, projectNutritionRecord } from '../records.js';
+import { activeDailySession as activeFoodSession, currentDailyMessage as foodSourceMessage } from './context.js';
+export { activeDailySession as activeFoodSession, currentDailyMessage as foodSourceMessage, requireDailyReviewPresence as requireFoodReviewPresence } from './context.js';
 
 type DirectNutrition = (request: FastifyRequest) => Pick<NutritionStore, 'intake' | 'lookupSaved' | 'log'>;
 export type InternalNutrition = (request: FastifyRequest) => Pick<NutritionStore, 'intake' | 'lookupSaved' | 'log' | 'correct' | 'remove'>;
-
-export async function foodSourceMessage(request: FastifyRequest, signal: AbortSignal): Promise<ConversationMessage> {
-  const direct = request.jarvisConversationMessage;
-  if (direct?.role === 'dan' && request.principal && !request.agentPrincipal) return direct;
-  const id = request.headers['x-jarvis-message-id'];
-  if (!request.agentPrincipal || typeof id !== 'string' || !/^[1-9]\d{0,18}$/u.test(id) ||
-      BigInt(id) > 9223372036854775807n || !request.server.conversationStore) {
-    throw new ToolRefusal('A verified current Dan message is required for food logging.');
-  }
-  const page = await request.server.conversationStore.getHistory({ limit: 1 });
-  signal.throwIfAborted();
-  const message = page.messages[0];
-  if (!message || message.id !== id || message.role !== 'dan') throw new ToolRefusal('The current food-log message could not be verified.');
-  return message;
-}
 
 export function foodMessageIdentity(owner: string, source: ConversationMessage) {
   if (!/^[1-9]\d{0,18}$/u.test(source.id) || BigInt(source.id) > 9223372036854775807n ||
@@ -34,27 +21,6 @@ export function foodMessageIdentity(owner: string, source: ConversationMessage) 
   const id = createHash('sha256').update(`${owner.toLowerCase()}:${source.sessionId}:${source.id}:daily-intake`).digest('hex');
   return { id, key: `jarvis-message:${id}`,
     sourceFingerprint: createHash('sha256').update(canonicalJson({ text: source.text, at: source.at.toISOString() })).digest('hex') };
-}
-
-export async function activeFoodSession(request: FastifyRequest, source: ConversationMessage, signal: AbortSignal, clock: number) {
-  if (source.at.getTime() > clock + 300_000 || clock - source.at.getTime() > 600_000) throw new ToolRefusal('The food-log request is no longer current. No intake was logged.');
-  const session = await request.server.conversationStore?.getSession(source.sessionId);
-  signal.throwIfAborted();
-  if (!session || session.id !== source.sessionId || session.channel === 'phone' || session.endedAt !== null) throw new ToolRefusal('An active verified chat or voice session is required for food logging.');
-  return session;
-}
-
-export async function requireFoodReviewPresence(request: FastifyRequest, signal: AbortSignal) {
-  try {
-    if (!request.server.awayModeStore || (await request.server.awayModeStore.read()).mode !== 'present') {
-      throw new ToolRefusal('Food review requires Dan to be present and approve the exact proposal in Now.');
-    }
-    signal.throwIfAborted();
-  } catch (error) {
-    if (signal.aborted) throw error;
-    if (error instanceof ToolRefusal) throw error;
-    throw new ToolRefusal('Presence is unavailable. No food change was authorised.');
-  }
 }
 
 export function foodReceipt(row: Record<string, unknown>, key: string, sourceFingerprint: string, operation: string, proposalFingerprint?: string) {

@@ -10,6 +10,7 @@ import { createDailyChanges } from './revisions.js';
 import type { DailyData, DailyFoodLookup } from './query.js';
 import type { InternalSavedNutrition } from './tools/saved-food.js';
 import { dailyCapabilitiesAccept, dailyQuerySources, dailyQuerySourcesV1 } from '@jarvis/contracts';
+import type { ToolCallRecord } from '../core/tool-calls.js';
 
 const config = { ...loadConfig({}), logLevel: 'silent' as const };
 const owner = config.auth.ownerObjectId;
@@ -21,6 +22,8 @@ const auth: TokenVerifier = async (token) => {
   const kind = token.split('.')[0];
   if (kind === 'agent') return { kind: 'jarvis-agent', objectId: agent, tenantId: config.auth.tenantId };
   if (kind === 'runner') return { kind: 'jarvis-runner', objectId: other, tenantId: config.auth.tenantId };
+  if (kind === 'connector') return { kind: 'jarvis-daily-connector', objectId: owner, tenantId: config.auth.tenantId,
+    clientId: other, scopes: ['Daily.Nutrition.Read'] };
   return { objectId: kind === 'other' ? other : owner.toUpperCase(), tenantId: config.auth.tenantId, displayName: 'Synthetic user' };
 };
 function fixture(enabled?: boolean) {
@@ -133,5 +136,48 @@ describe('Daily integration contract', () => {
       stage: 'read-only', tools: ['daily_query', 'daily_food_lookup'], pages: [],
     });
     expect(foodLookup).not.toHaveBeenCalled();
+  });
+  it('adds only the explicit feed capability, uses the existing dispatcher/audit and bridges owner commits until shutdown', async () => {
+    const execute = vi.fn(async () => ({ operation: 'read_attention', sources: [], waiting: [{ private: 'synthetic private mail' }] }));
+    const changes = createDailyChanges();
+    const data: DailyData = { query: { query: vi.fn() }, changes, feeds: { execute } };
+    expect(createDailyModules(false, data)).toEqual([]);
+    expect(createDailyModules(true, { query: data.query, changes })[0]!.tools.map(tool => tool.name)).toEqual(['daily_query']);
+    const calls: ToolCallRecord[] = [];
+    const app = buildApp(config, undefined, { auth, modules: [coreModule, ...createDailyModules(true, data)],
+      toolCallStore: { record: async call => { calls.push(call); } } });
+    apps.push(app);
+    expect((await app.inject({ url: '/daily/capabilities', headers: headers() })).json()).toMatchObject({
+      stage: 'feed-rehearsal', tools: ['daily_query', 'daily_feed'], pages: [], sources: dailyQuerySourcesV1,
+    });
+    expect(execute).not.toHaveBeenCalled();
+    const publish = vi.spyOn(app.nowEventHub, 'publish');
+    for (const kind of ['owner', 'agent']) {
+      const response = await app.inject({ method: 'POST', url: '/tools/daily_feed',
+        headers: { ...headers(kind), 'x-jarvis-message-id': '42' }, payload: { operation: 'read_attention' } });
+      expect(response.statusCode).toBe(200); expect(response.json()).toMatchObject({ outcome: 'ok', result: { operation: 'read_attention' } });
+    }
+    expect(calls).toHaveLength(2);
+    expect(calls).toEqual(expect.arrayContaining([expect.objectContaining({
+      tool: 'daily_feed', outcome: 'ok', arguments: { redacted: true }, result: { redacted: true },
+    })]));
+    expect(JSON.stringify(calls)).not.toContain('synthetic private mail');
+    expect((await app.inject({ method: 'POST', url: '/tools/daily_feed',
+      headers: { ...headers(), 'x-jarvis-message-id': '42' }, payload: { operation: 'read_attention', confirmed: true } })).json().outcome).toBe('refused');
+    const deniedOwner = await app.inject({ method: 'POST', url: '/tools/daily_feed',
+      headers: { ...headers('other'), 'x-jarvis-message-id': '42' }, payload: { operation: 'read_attention' } });
+    // Root auth admits verified human identities; the tool owns resource authorisation.
+    expect(deniedOwner.statusCode).toBe(200);
+    expect(deniedOwner.json()).toMatchObject({ outcome: 'error', result: { error: 'Tool execution failed' } });
+    expect(calls.at(-1)).toMatchObject({ tool: 'daily_feed', outcome: 'error', arguments: { redacted: true }, result: { redacted: true } });
+    for (const kind of ['runner', 'connector']) {
+      expect((await app.inject({ method: 'POST', url: '/tools/daily_feed',
+        headers: { ...headers(kind), 'x-jarvis-message-id': '42' }, payload: { operation: 'read_attention' } })).statusCode).toBe(403);
+    }
+    expect(execute).toHaveBeenCalledTimes(2);
+    changes.publish({ owner: other, sources: ['daily.feed'] }); expect(publish).not.toHaveBeenCalled();
+    changes.publish({ owner, sources: ['daily.feed'] }); expect(publish).toHaveBeenCalledWith({ type: 'refresh' });
+    await app.close(); publish.mockClear();
+    changes.publish({ owner, sources: ['daily.feed'] }); expect(publish).not.toHaveBeenCalled();
   });
 });

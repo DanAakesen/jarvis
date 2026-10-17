@@ -1,5 +1,12 @@
 # Project plan
 
+Integration checkpoint: #882 merged on 17 October at
+`f6530a5921ce6f60635ab692261cbffcdf7a1e20`; its actual tree matches the
+qualified pipeline candidate. The Daily feed candidate below is being
+reconciled with that main. Its prior green checks and independent review are
+retained evidence, not qualification of this combined tree. Production
+application and acceptance remain separate until the normal pipeline reports them.
+
 ## Continuous pipeline delivery (#880, 17 October 2026; implementation candidate)
 
 Operating model 2 is the current focus: the coordinator owns responsive intake,
@@ -35,6 +42,35 @@ documentation-only CI rerun. #880 stays open through review. Main merge and
 actual release belong to the integration owner, not this builder. No live provider
 reproduction or causal-fix claim for Deploy39032686994 is part of this work;
 its `chat_plain_approval` / generic `agent_error` cause remains unproven.
+
+## Inactive Daily feed tools (17 October 2026; P12-09 / #724)
+
+Bounded source continuation adds optional `DailyData.feeds` / `daily_feed` over
+the retained #725 services: attention/calendar/conflict reads, exact active
+suppression reads, reviewed manual refresh, dismiss, Received and restoration.
+Existing query versions, production default-off composition and nutrition MCP
+allowlist stay unchanged. No new page, schema, grant, schedule or dispatcher.
+
+Native browser approval binds frozen selectors and the actual stored target;
+owner transactions recheck fingerprints and publish the existing refresh only
+after acknowledged new commits. Replays/no-ops stay quiet. All direct feed
+entrypoints explicitly deny the nutrition-only principal.
+
+Synthetic schema/service/native-confirmation, real dispatcher/audit/module,
+relay/agent deadline and isolated SQL regressions are authored. Local npm test
+and build cannot start: this isolated worktree has no Vitest/TypeScript graph.
+Python Ruff passes; selected Python tests cannot collect without OpenTelemetry.
+No restore, substitute graph, SQL image, live provider or manual reproduction was
+used. Exact-head pinned CI and integrated-candidate qualification remain next.
+The coordinator owns integration/release; the implementation owner fixes source
+pipeline failures. Keep #724/#725 open and native/private acceptance gates intact.
+
+Initial pinned CI39038540472 passed all other component jobs and3794backend
+tests; one new dispatcher assertion incorrectly expected root403 for another
+verified human. Add feed-owner validation at the tool boundary and assert the
+existing200/error resource-denial envelope, redacted audit and no service call.
+Keep runner/connector root403 checks. The corrected source needs qualification;
+prior green jobs do not qualify its changed head.
 
 ## Release diagnosis (17 October 2026; safe CI reason codes)
 

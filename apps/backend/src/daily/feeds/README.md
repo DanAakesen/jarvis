@@ -1,6 +1,6 @@
 # Inactive Daily Google feed checkpoint (#725)
 
-`DailyCalendarFeed` is a reusable read boundary, not registered routes/tools or production composition. Construct it with the existing server-owned `GoogleApiClient`; every refresh resolves the authenticated Jarvis owner, denies runners/other identities and accepts no caller-selected account/owner. Provider operations are GET only. Existing Gmail/Calendar writes, approvals, OAuth setup, tool catalogue and its limits are unchanged.
+`DailyCalendarFeed` is a reusable read boundary, not production composition. Construct it with the existing server-owned `GoogleApiClient`; every refresh resolves the authenticated Jarvis owner, denies runners/other identities and the nutrition-only connector, and accepts no caller-selected account/owner. Provider operations are GET only. Existing Gmail/Calendar writes, OAuth setup and tool catalogue limits are unchanged.
 
 Calendar-list pages include hidden visible calendars; each listed calendar gets separately paged event reads. Snapshot IDs preserve the producer's calendarId:eventId format, with original date-only/offset/time-zone metadata alongside normalized source fields. Cancelled/deleted and source week-number calendars/titles are excluded; only timed overlaps are conflicts (bounded output reports truncation). No guessed primary-only fallback. Bounds: 62-day range, 10 pages per enumeration/read, 32 calendars, 2000 events, four concurrent requests/cache ranges, 30-second manual-refresh cooldown and 20-second combined cancellation/deadline. Duplicate/repeated-page or invalid responses fail truthfully. Coverage limits and individual denied calendars report partial coverage. Only complete snapshots enter the in-memory owner/range cache; failed refresh can return the last complete snapshot explicitly stale, with its original capture timestamp. Cancellation never claims success.
 
@@ -15,6 +15,44 @@ Full threads allow 100 messages with bounded MIME/headers. Plain text precedes H
 `DailyFeedStore` uses the existing owner-bound 0041 tables, parameterized SQL and transaction-owned per-owner locks for run/checksum idempotency, source snapshots, suppressions and consistent reads. Latest attempt and success are selected independently by capture/receipt time; Missing/Stale/Current and the strict >18-hour age rule retain successful items after failed/incomplete attempts. Explicit trusted intent is required for dismiss/Received/clear; automatic refresh can only mark the defined newer-incoming thread revival, retaining history. Order suppressions never auto-revive. Exact imported keys/IDs are not rewritten; TickTick/task/habit/countdown sources/types are refused. No new migration or production data is added.
 
 `DailyFeedRefresh` executes bounded manual refresh with running/completed/limited states and independent source errors. Before the combined transaction, each source is limited to 1000 items, 480 KiB serialized UTF-8 and 32000 UTF-8 bytes per content object. Transport may return 2000 calendar events, but an oversized source becomes an explicit coverage-limit error with no partial items; healthy Gmail still commits and prior calendar success remains available. Two reserved source budgets fit the unchanged 1 MiB run ceiling; persistence enforces the same byte limits. It never dispatches the original workflow, claims queued work was processed, or promotes stale/partial cache to a new success. Durable ingestion is duplicate-safe; in-flight provider work is coalesced within the service instance. Repeated provider/model reads across backend instances are not claimed exactly once. P12-09 owns runtime registration and derives intent from trusted Jarvis metadata, never model/client confirmation booleans.
+
+## Inactive P12-09 tool binding
+
+Optional `createDailyData(pool, owner, now, frida, { google, semantic })` shares
+the existing pool/change hub and builds the actual calendar/Gmail/refresh
+services without provider work during construction. `semantic` is the existing
+protected `createFoundryMailSemanticModel` adapter with the established token,
+settings, catalogue and usage dependencies. No provider key/scope/model is
+accepted from tool input. `{}` enables retained reads with refresh explicitly
+unconfigured; absent semantic capability reports `semantic-unavailable`, never
+a fabricated empty success.
+
+`createDailyModules(true, data)` adds sensitive `daily_feed` only when
+`data.feeds` is supplied. Its six grouped operations are `read_attention`,
+`read_suppressions`, `refresh`, `dismiss_thread`, `receive_order` and
+`clear_suppression`. The same shared service retains the existing selectors,
+source metadata, exact IDs/consumer keys and bounded timed conflicts. Read DTOs
+have the shared768KiB ceiling; raw Gmail snapshots are not duplicated. The
+retained calendar request range is unknown. Query/capability source versions
+and the external nutrition MCP allowlist do not change.
+
+The four mutating operations require a current verified Dan chat/browser-voice
+session, present mode and one-time browser-only Now approval. Review lasts
+120seconds inside180second operation/relay and210second agent-read budgets.
+Exact frozen target/suppression hashes are rechecked under owner SQL locks;
+merged terminal order updates cannot be suppressed through an older active ID.
+Only Daily visibility changes, never Google or the physical order. Manual
+refresh derives its operation key from server-verified message/context and
+selectors, preserves independent source failures and recovers stored runs.
+Completed is an attempt receipt, not proof of fresh/complete providers.
+Cancellation, rejection, changed context/targets and missing configuration do
+not claim commitment. Every feed entrypoint explicitly denies nutrition-only
+principals, including direct store/provider-service calls.
+
+New acknowledged snapshot/suppression commits publish `daily.feed` through the
+existing change hub/Now refresh; reads, replay, no-op and failed transactions do
+not. Listener failures are isolated after commit. No route, scheduler, migration,
+production composition, grant or live acceptance is added.
 
 ## Blocked acceptance
 
