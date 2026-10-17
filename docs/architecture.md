@@ -498,6 +498,13 @@ Cancelled gestures restore the previous layout, and storage failures surface
 as alerts. Shell state carries the composer anchor and measured height;
 `ConversationHistory` keeps its existing mounted input owner.
 
+P9-117 adds a phone-only heading grip using the same pointer-capture,
+cancel/lost-capture, keyboard and clamping paths. Its validated preference uses
+`jarvis.conversation-layout.phone.v1` through the same storage helpers. Only
+height is applied to the existing bottom-docked phone window; desktop geometry
+and the composer-anchor measurement remain dormant on phones. Viewport fitting
+never writes either preference.
+
 `NoteFolderPicker` uses the existing authenticated `/notes/tree` endpoint,
 with cancellation, bounded response validation and explicit retry/incomplete
 states. It owns transient destination folders; explicit note Save remains the
@@ -3043,7 +3050,8 @@ the chat handler with the Invocations protocol and returns the application-defin
 text SSE stream. The agent verifies the caller through the backend's `/me` route
 and confirms the exact source message in stored history. The backend history page
 contains the newest 100 messages across sessions in ascending ID order; the agent
-uses at most 20 earlier messages / 32,000 characters, including prior messages
+uses at most 20 earlier messages / 32,000 characters (40 messages after a stored
+conversation summary, see below), including prior messages
 across a language/session switch. Prior Jarvis messages carry a bounded summary
 of audited tool names and outcomes only, never arguments or results. Per-turn
 context telemetry records message count, oldest/newest included IDs, whether the
@@ -3054,6 +3062,31 @@ message. The existing Responses tool loop records calls against Dan's message ID
 using the agent identity. The backend persists only a completed assistant
 response; an interrupted turn leaves Dan's message visible and the UI warns that
 an action may have completed. The browser never receives agent credentials.
+
+**Conversation summary (P9-105).** Older chat messages are folded into an
+append-only, owner-bound summary so decisions survive the window.
+`dbo.conversation_summaries` (migration 0051) holds one row per version with the
+covered message IDs, message count, model and creation time; the backend keeps the
+newest 200 versions and never rewrites messages. `GET/POST /conversation/summary`
+are owner-only user routes on Dan's delegated token (the agent identity gets 403).
+The POST takes a strict seven-key body of at most 64 KiB, redacts it again with
+`redactWorkContent`, answers 409 to a stale `baseVersion`, and answers 429 once the
+24-hour version count reaches `global.conversationSummaryDailyLimit` (default 24,
+0 to 48, 0 turns the feature off). The hosted agent reads the summary in the same
+parallel batch as `/me` and history, capped at 5 seconds. With one stored, the
+prompt carries it as labelled untrusted background followed by up to 40 raw messages
+after its covered range; without one the window stays at 20 messages. After a
+finished chat turn (never a smoke or errored one), a single-flight background task
+in `agents/jarvis/conversation_memory.py` folds the uncovered older messages (at most
+40,000 characters per call, the carried summary included; 1,500 per message; newest 20
+always raw) into the previous summary with one tool-free model call once 30 are
+uncovered, and refuses a prompt still over the cap as `prompt_too_large` before the
+model is called. The call uses the chat
+model, or `JARVIS_SUMMARY_MODEL`, and reports usage as role `chat`. The task holds
+Dan's token in memory for about 90 seconds, never logs it, and scrubs secrets from
+input and output. A first summary pages back at most 400 messages and logs
+`chat.memory_summary_gap`. Any failure keeps the plain window, logs a content-free
+`chat.memory_summary_*` event and pauses refresh for 10 minutes.
 
 P7-23 starts consuming the hosted-agent stream before scheduling the chat reflex.
 Reflex target discovery and Jev classification run concurrently with the reply;

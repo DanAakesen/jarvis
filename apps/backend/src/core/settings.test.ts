@@ -188,7 +188,13 @@ describe('settings API', () => {
         },
         codex: { model: 'default' },
         copilot: { model: 'default' },
-        global: { maxParallelTasks: 1, maxCheckAttempts: 3, screenShareDailyFrameCap: 300, visionDailyBudgetUsd: 1 },
+        global: {
+          maxParallelTasks: 1,
+          maxCheckAttempts: 3,
+          screenShareDailyFrameCap: 300,
+          visionDailyBudgetUsd: 1,
+          conversationSummaryDailyLimit: 24,
+        },
         newProjects: {
           owner: 'DanAakesen',
           visibility: 'private',
@@ -606,6 +612,46 @@ describe('settings API', () => {
     },
   );
 
+  it.each([0, 1, 24, 48])('persists and reloads the daily conversation summary limit of %s', async (limit) => {
+    const { store, values } = createStore();
+    const app = fixture(store);
+    expect(defaultSettings.global.conversationSummaryDailyLimit).toBe(24);
+    expect((await readSettings(store)).global.conversationSummaryDailyLimit).toBe(24);
+    expect(validateSettingsPatch({ global: { conversationSummaryDailyLimit: limit } }))
+      .toEqual({ global: { conversationSummaryDailyLimit: limit } });
+    const response = await app.inject({
+      method: 'PATCH', url: '/settings', headers: authorization,
+      payload: { settings: { global: { conversationSummaryDailyLimit: limit } } },
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json().settings.global.conversationSummaryDailyLimit).toBe(limit);
+    expect(values['global.conversation_summary_daily_limit']).toBe(JSON.stringify(limit));
+    expect(settingsStoreKeys).toContain('global.conversation_summary_daily_limit');
+    expect((await readSettings(store)).global.conversationSummaryDailyLimit).toBe(limit);
+  });
+
+  it.each([-1, 49, 1.5, 'x', null, true])(
+    'rejects the invalid daily conversation summary limit %j without persisting it', async (limit) => {
+      const { store, values } = createStore();
+      const app = fixture(store);
+      expect(validateSettingsPatch({ global: { conversationSummaryDailyLimit: limit } })).toBeNull();
+      const response = await app.inject({
+        method: 'PATCH', url: '/settings', headers: authorization,
+        payload: { settings: { global: { conversationSummaryDailyLimit: limit } } },
+      });
+      expect(response.statusCode).toBe(400);
+      expect(values).toEqual({});
+    },
+  );
+
+  it.each(['-1', '49', '1.5', '"x"', '"5"', 'null', 'true'])(
+    'falls back to the default for invalid persisted conversation summary limits: %s', async (value) => {
+      const { store, values } = createStore();
+      values['global.conversation_summary_daily_limit'] = value;
+      expect((await readSettings(store)).global.conversationSummaryDailyLimit).toBe(24);
+    },
+  );
+
   it('persists and reloads a validated home location without a migration', async () => {
     const { store, values } = createStore();
     const app = fixture(store);
@@ -983,6 +1029,11 @@ describe('settings API', () => {
     { settings: { global: { visionDailyBudgetUsd: 100.01 } } },
     { settings: { global: { visionDailyBudgetUsd: '1' } } },
     { settings: { global: { visionDailyBudgetUsd: null } } },
+    { settings: { global: { conversationSummaryDailyLimit: -1 } } },
+    { settings: { global: { conversationSummaryDailyLimit: 49 } } },
+    { settings: { global: { conversationSummaryDailyLimit: 1.5 } } },
+    { settings: { global: { conversationSummaryDailyLimit: 'x' } } },
+    { settings: { global: { conversationSummaryDailyLimit: null } } },
     { settings: { voice: { unknown: 'value' } } },
     { settings: { newProjects: { owner: '-invalid' } } },
     { settings: { newProjects: { visibility: 'internal' } } },

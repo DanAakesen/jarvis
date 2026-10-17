@@ -56,7 +56,7 @@ from jarvis_tools import (
     current_steering_fetcher,
     model_tools,
 )
-from model_contract import StreamingModelClient
+from model_contract import StreamingModelClient, SummaryCompletion
 from state import ModelMessage, ModelSettings
 from visual_context import (
     ImageInputRejected,
@@ -70,6 +70,9 @@ DEFAULT_SYSTEM_PROMPT = INSTRUCTIONS
 DEFAULT_MAX_OUTPUT_TOKENS = 512
 MAX_OUTPUT_TOKENS = 4096
 MAX_TOOL_ROUNDS = 5
+# Headroom for a summary call: the answer is capped at ~9k characters by the parser, and a
+# model that reasons by default needs room before its first visible word.
+SUMMARY_MAX_OUTPUT_TOKENS = 6_000
 ANTHROPIC_THINKING_BUDGETS = {
     "minimal": 1_024,
     "low": 2_048,
@@ -123,6 +126,26 @@ IMAGE_REQUEST_MAX_TEXT_BYTES = 400_000
 
 _tracer = trace.get_tracer("VoiceHostedAgent.Model")
 logger = logging.getLogger("model_client")
+
+
+class SummaryUnavailable(RuntimeError):
+    """A summary call that ended without a usable answer; `code` is content-free."""
+
+    def __init__(self, code: str) -> None:
+        super().__init__(f"Conversation summary unavailable: {code}")
+        self.code = code
+
+
+def summary_reply_text(reply: Any, *, claude: bool) -> str:
+    """The visible text of a finished (non-streaming) Responses or Claude reply."""
+    if claude:
+        return "".join(
+            block.text
+            for block in getattr(reply, "content", ()) or ()
+            if getattr(block, "type", None) == "text" and isinstance(block.text, str)
+        )
+    text = getattr(reply, "output_text", None)
+    return text if isinstance(text, str) else ""
 
 
 def project_awareness(settings: ModelSettings) -> str:
@@ -460,6 +483,97 @@ class AzureOpenAIResponsesClient(StreamingModelClient):
     async def session_settings(self) -> ModelSettings:
         """Load the effective settings that this hosted session will retain."""
         return await self._tools.model_settings()
+
+    async def summarize_conversation(self, instructions: str, prompt: str) -> SummaryCompletion:
+        """Write the rolling conversation summary with one bounded, tool-free call (P9-105).
+
+        It runs after a finished reply, never during one. Usage is reported under the chat
+        role like the reply itself, even when the answer is unusable, and a failed report never
+        fails the summary. A provider error or a truncated answer raises, and the caller falls
+        back to the plain message window. JARVIS_SUMMARY_MODEL optionally picks a smaller model.
+        """
+        settings = await self.session_settings()
+        model_name = os.getenv("JARVIS_SUMMARY_MODEL", "").strip() or settings.model
+        claude = is_claude_model(model_name)
+        if claude and self._anthropic_client is None:
+            raise SummaryUnavailable("no_claude_client")
+        with _tracer.start_as_current_span(
+            "conversation_summary",
+            kind=SpanKind.CLIENT,
+            record_exception=False,
+            set_status_on_exception=False,
+            attributes={
+                "gen_ai.operation.name": "chat",
+                "gen_ai.provider.name": "Anthropic" if claude else "Azure OpenAI",
+                "gen_ai.request.model": model_name,
+                "server.address": self.server_address,
+                "jarvis.purpose": "conversation_summary",
+            },
+        ) as span:
+            try:
+                if claude:
+                    reply = await self._anthropic_client.messages.create(
+                        model=model_name,
+                        system=instructions,
+                        messages=[{"role": "user", "content": prompt}],
+                        max_tokens=SUMMARY_MAX_OUTPUT_TOKENS,
+                    )
+                    truncated = getattr(reply, "stop_reason", None) == "max_tokens"
+                else:
+                    reply = await self._client.responses.create(
+                        model=model_name,
+                        instructions=instructions,
+                        input=[{"role": "user", "content": prompt}],
+                        max_output_tokens=SUMMARY_MAX_OUTPUT_TOKENS,
+                        store=False,
+                    )
+                    truncated = getattr(reply, "status", None) == "incomplete"
+                usage = getattr(reply, "usage", None)
+                input_tokens = getattr(usage, "input_tokens", None)
+                output_tokens = getattr(usage, "output_tokens", None)
+                await self._record_summary_usage(model_name, input_tokens, output_tokens)
+                if truncated:
+                    raise SummaryUnavailable("truncated")
+                text = summary_reply_text(reply, claude=claude)
+                if not text.strip():
+                    raise SummaryUnavailable("empty")
+                return SummaryCompletion(
+                    text,
+                    model_name,
+                    input_tokens if type(input_tokens) is int else None,
+                    output_tokens if type(output_tokens) is int else None,
+                )
+            except BaseException as exc:
+                span.set_status(Status(StatusCode.ERROR))
+                span.set_attribute(
+                    "error.type", f"{type(exc).__module__}.{type(exc).__qualname__}"
+                )
+                raise
+
+    async def _record_summary_usage(
+        self, model_name: str, input_tokens: Any, output_tokens: Any
+    ) -> None:
+        reporter = getattr(self._tools, "record_model_usage", None)
+        if not (
+            callable(reporter)
+            and type(input_tokens) is int and 0 <= input_tokens <= 10_000_000
+            and type(output_tokens) is int and 0 <= output_tokens <= 10_000_000
+        ):
+            return
+        try:
+            await reporter(
+                role="chat",
+                model=model_name,
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                event_id=str(uuid4()),
+            )
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            logger.warning(
+                "Foundry model usage was not recorded; error=%s", type(exc).__name__
+            )
 
     async def complete(
         self, messages: Sequence[ModelMessage], *, settings: ModelSettings | None = None

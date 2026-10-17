@@ -5,9 +5,28 @@
 from __future__ import annotations
 
 from collections.abc import AsyncIterator, Sequence
+from dataclasses import dataclass
 from typing import Protocol
 
 from state import ModelMessage, ModelSettings
+
+
+@dataclass(frozen=True, slots=True)
+class SummaryCompletion:
+    """One finished (non-streaming) summary reply and the model that wrote it."""
+
+    text: str
+    model: str
+    input_tokens: int | None = None
+    output_tokens: int | None = None
+
+
+class ConversationSummarizer(Protocol):
+    """Optional capability: write the rolling conversation summary (P9-105)."""
+
+    async def summarize_conversation(self, instructions: str, prompt: str) -> SummaryCompletion:
+        """Return the summary text; raise on any failure, including a truncated answer."""
+        ...
 
 
 class StreamingModelClient(Protocol):
