@@ -205,7 +205,7 @@ describe('inactive shared Daily feed workflow', () => {
   });
   it.each(['stale', 'phone', 'missing-review', 'away'] as const)('refuses %s context before creating native approval', async context => {
     const f = fixture();
-    if (context === 'stale') f.request.jarvisConversationMessage!.at = new Date(at.getTime() - 600_001);
+    if (context === 'stale') f.request.jarvisConversationMessage = { ...f.request.jarvisConversationMessage!, at: new Date(at.getTime() - 600_001) };
     if (context === 'phone') f.session.channel = 'phone';
     if (context === 'away') f.mode.mode = 'away';
     const request = context === 'missing-review'
