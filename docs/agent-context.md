@@ -1,5 +1,35 @@
 # Agent context
 
+## Internal Daily saved-food checks (17 October 2026; P12-09)
+
+The current source batch groups owned lookup/preferences and four native-reviewed
+saved-food mutations in `daily_saved_food`. Use only synthetic owned records.
+The additive fifth factory preserves existing four-argument callers and every
+default-off/read-only/external gate. Check frozen source/plan snapshots, native
+one-time approval, revision/fingerprint guards, real replay/uncertain readback,
+unknowns versus zero and persisted preference clears. No new intake/Health row
+may result. Preference commits refresh favourites, not meals; replays stay quiet.
+Real loopback SQL coverage appends after earlier count-dependent fixtures.
+
+Pure `saved-schema.test.ts` passes 10 cases locally with approved Node22 x64
+and pinned Vitest5, native config, one thread/no parallel files. Actual
+Fastify/Ajv, tool/relay/application, SQL and Python semantic qualification still
+requires the existing pinned CI graph; local Fastify/jose/OpenTelemetry are
+unavailable. Do not restore, stub or alias those imports. Initial changed-source
+TypeScript lint passed; Ruff caught two new test lines over 100 characters.
+Both lists were formatted without suppressing the rule; successor Ruff and the
+last saved-tool lint pass. Preserve that initial lint failure.
+Both final voice relay source/test files also pass the same existing ESLint
+with zero warnings; no local live browser or actual relay semantics are claimed.
+
+Trace every wrapper before publication: the browser relay separately imposed
+30 seconds before native food execution. The source correction gives only
+`daily_food_review`/`daily_saved_food` 180 seconds there. Real WebSocket fixtures
+check the exact budget, recorded outcome, privacy and session-end cancellation;
+all other tools retain their default. The hosted agent gives both tools210
+seconds below ingress240. Native approval remains120 with shared SQL/card/timer
+expiry; no detached writer or live-account/device acceptance is introduced.
+
 ## Internal Daily review checks (17 October 2026; P12-09)
 
 The current inactive continuation registers `daily_food_review` only with the
@@ -49,6 +79,17 @@ unavailable; do not represent preceding green CI as successor qualification.
 Seven changed TypeScript files pass the existing root ESLint with zero warnings.
 The first launcher incorrectly looked for ESLint inside the backend workspace
 and failed before linting; no graph change or restore was needed.
+Final `d17fe622` CI39005389697 passed all ten job entries: backend194files/3700
+tests, SQL11files/229tests including19nutrition, hosted-agent730 and runner374
+Python tests. All four CodeQL39005389669 analyses ran successfully. Exact-head
+independent review completed without findings; all three earlier threads were
+proved and resolved. Normal #874 merge `f1d410b1` has the qualified `c0f112bf`
+tree. Deploy39006050135 passed backend/agent/Smoke, with infra/web correctly
+skipped: ready/healthy backend revision0000335, active Foundry version106 and
+routine health200. Actual smoke14/15ok; existing PC bridge down, chat identity
+ok this run without source attribution. Release receipt6230241795 and the #724
+opening were independently read back. No extra live, rendered-browser, private
+food, client/account/provider/device or activation acceptance follows.
 
 ## Internal Daily direct-intake checks (17 October 2026; P12-09)
 

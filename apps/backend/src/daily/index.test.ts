@@ -7,6 +7,7 @@ import { createDailyModules } from './index.js';
 import { resolveDailyOwner } from './owner.js';
 import { createDailyChanges } from './revisions.js';
 import type { DailyData } from './query.js';
+import type { InternalSavedNutrition } from './tools/saved-food.js';
 
 const config = { ...loadConfig({}), logLevel: 'silent' as const };
 const owner = config.auth.ownerObjectId;
@@ -85,5 +86,16 @@ describe('Daily integration contract', () => {
     const catalogue = (await app.inject({ url: '/tools', headers: headers() })).json();
     expect(JSON.stringify(catalogue)).toContain('daily_food');
     expect(JSON.stringify(catalogue)).toContain('daily_food_review');
+  });
+  it('adds saved-food workflows only with the separate additive factory, preserving existing compositions', async () => {
+    const data: DailyData = { query: { query: vi.fn() }, changes: createDailyChanges() };
+    const saved = vi.fn<InternalSavedNutrition>();
+    expect(createDailyModules(false, data, undefined, undefined, saved)).toEqual([]);
+    expect(() => createDailyModules(true, undefined, undefined, undefined, saved)).toThrow('shared Daily data');
+    const app = buildApp(config, undefined, { auth, modules: [coreModule, ...createDailyModules(true, data, undefined, undefined, saved)] });
+    apps.push(app);
+    const response = await app.inject({ url: '/daily/capabilities', headers: headers() });
+    expect(response.json()).toMatchObject({ stage: 'internal-nutrition-rehearsal', tools: ['daily_query', 'daily_saved_food'], pages: [] });
+    expect(saved).not.toHaveBeenCalled();
   });
 });

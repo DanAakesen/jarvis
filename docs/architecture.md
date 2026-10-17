@@ -4647,6 +4647,27 @@ checks this after active-session validation and before generic confirmation or
 execution; denial wins over the public-phone flag. Other tools retain their
 existing public/approval behaviour. Food's own session checks remain in place.
 
+An additive fifth `createDailyModules` argument independently composes sensitive
+`daily_saved_food` from the same canonical nutrition factory. Existing fourth
+argument and production/read-only/MCP compositions remain unchanged. Its two
+read operations reuse owned lookup and preference rows; its four write
+operations reuse canonical favourite/plan/feedback transactions and native
+browser confirmation. Shared `saved-schema.ts` preserves the external MCP
+contract, while the internal flat HTTP shape survives Ajv branch removal and
+uses non-coercing nullable types, including clear/description fields.
+The verified human source derives new operation IDs; internal definitions cannot
+claim confidence/provenance. Reviews freeze actual source/target snapshots,
+use existing revisions and favourite fingerprints under SQL locks, and recover
+uncertain outcomes by one matching readback rather than another write.
+Bounded canonical plan-name lookup mirrors the store's namespace semantics.
+Preference changes publish the existing favourites refresh only after commit;
+unchanged/replayed rows do not publish. No new schema, queue or provider exists.
+Both `daily_food_review` and `daily_saved_food` use 180-second signals at the
+browser voice relay, not its ordinary 30-second deadline; existing session/end
+cancellation remains composed. Their hosted-agent read is 210 seconds. The new
+tool denies phone before generic approval and uses the same 120-second browser
+card profile. No activation, provider/device or private-data acceptance follows.
+
 ### Inactive nutrition MCP adapter (17 October 2026)
 
 An optional third `createDailyModules(true, data, connector)` argument installs

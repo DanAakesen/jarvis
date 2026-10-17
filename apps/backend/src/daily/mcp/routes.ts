@@ -17,6 +17,7 @@ import { resolveDailyOwner } from '../owner.js';
 import { dailyResultByteLimit, projectNutritionRecord, type DailyQueryService } from '../query.js';
 import { dailyMcpMetadataPath, dailyMcpPath } from './paths.js';
 import { favoriteFingerprint, projectDailyRecord } from '../records.js';
+import { savedChangeSchema } from '../nutrition/saved-schema.js';
 
 export interface DailyMcpOptions {
   auth: Pick<AuthConfig, 'tenantId' | 'apiClientId' | 'dailyConnectorClientId'>;
@@ -75,32 +76,6 @@ const lookupSchema = z.object({
   }).strict()).min(1).max(25).optional(),
   savedName: exactText(2000).optional(),
 }).strict().refine(input => (input.components !== undefined) !== (input.savedName !== undefined));
-const newRevision = z.union([z.literal('0'), revision]);
-const savedChangeSchema = z.object({
-  change: z.discriminatedUnion('operation', [
-    z.object({
-      operation: z.literal('save_favorite'), operationId: exactText(120), expectedRevision: newRevision,
-      name: exactText(), aliases: z.array(exactText()).max(30).default([]),
-      sourceIdempotencyKey: exactText().optional(),
-      definition: z.object({
-        mealName: exactText(2000), mealType: logSchema.shape.mealType,
-        components: logSchema.shape.components, confidence: logSchema.shape.confidence, ...nutrients,
-      }).strict().optional(),
-    }).strict().refine(value => (value.sourceIdempotencyKey !== undefined) !== (value.definition !== undefined)),
-    z.object({
-      operation: z.literal('save_plan'), operationId: exactText(120), expectedRevision: newRevision,
-      name: exactText(), description: exactText(4000).nullable().default(null),
-      entries: z.array(z.object({
-        slot: z.enum(['breakfast', 'lunch', 'dinner', 'snack']), favoriteId: exactText(),
-      }).strict()).min(3).max(50),
-    }).strict(),
-    z.object({ operation: z.literal('delete_plan'), id: exactText(), expectedRevision: revision }).strict(),
-    z.object({
-      operation: z.literal('set_feedback'), favoriteId: exactText(), expectedRevision: newRevision,
-      preference: z.enum(['like', 'dislike']).nullable(),
-    }).strict(),
-  ]),
-}).strict();
 // MCP form schemas exclude additionalProperties; validate returned content strictly.
 const confirmSchema = z.object({ confirm: z.boolean() });
 const pendingSchema = z.object({

@@ -1,28 +1,14 @@
-import type { FastifyRequest } from 'fastify';
 import { ToolFailure, ToolRefusal, type JarvisTool } from '../../core/tool-registry.js';
 import { prepareMeal, storedMeal, type MealInput } from '../nutrition/model.js';
 import { exactLabelIntent, favoriteIntent } from '../nutrition/intent.js';
 import { foodRecordRevision, foodReviewFingerprint, foodReviewInputSchema, foodReviewSchema, foodReviewSummary, hasFoodReview, reviewedCorrection } from '../nutrition/review.js';
 import { resolveDailyOwner } from '../owner.js';
 import { projectNutritionRecord } from '../records.js';
-import { activeFoodSession, foodMessageIdentity, foodReceipt, foodSourceMessage, type InternalNutrition } from './food.js';
+import { activeFoodSession, foodMessageIdentity, foodReceipt, foodSourceMessage, requireFoodReviewPresence, type InternalNutrition } from './food.js';
 
 function optionalIntent<T>(parse: (text: string) => T, text: string): T | null {
   try { return parse(text); }
   catch (error) { if (error instanceof ToolRefusal) return null; throw error; }
-}
-
-async function requirePresent(request: FastifyRequest, signal: AbortSignal) {
-  try {
-    if (!request.server.awayModeStore || (await request.server.awayModeStore.read()).mode !== 'present') {
-      throw new ToolRefusal('Food review requires Dan to be present and approve the exact proposal in Now.');
-    }
-    signal.throwIfAborted();
-  } catch (error) {
-    if (signal.aborted) throw error;
-    if (error instanceof ToolRefusal) throw error;
-    throw new ToolRefusal('Presence is unavailable. No food change was authorised.');
-  }
 }
 
 export function dailyFoodReviewTool(nutrition: InternalNutrition, now: () => number = Date.now): JarvisTool {
@@ -79,7 +65,7 @@ export function dailyFoodReviewTool(nutrition: InternalNutrition, now: () => num
           throw new ToolRefusal('Use daily_food log_favorite for this explicit saved favourite; no extra approval is needed.');
         }
       }
-      await requirePresent(request, signal);
+      await requireFoodReviewPresence(request, signal);
       const service = request.server.teamsNotifications;
       if (!service) throw new ToolRefusal('Dan’s Now approval service is unavailable. No food was changed.');
       const lock = `${owner.toLowerCase()}:${key}`;
@@ -98,7 +84,7 @@ export function dailyFoodReviewTool(nutrition: InternalNutrition, now: () => num
       pending.add(lock);
       try {
         return await service.runConfirmed(change.operation === 'delete' ? 'delete' : 'other', summary, async () => {
-          await requirePresent(request, operationSignal);
+          await requireFoodReviewPresence(request, operationSignal);
           operationSignal.throwIfAborted();
           const current = await store.intake(key, operationSignal);
           const replay = replayedChange(current);

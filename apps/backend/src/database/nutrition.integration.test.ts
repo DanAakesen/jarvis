@@ -9,6 +9,7 @@ import { type FoodDefinition, type MealInput, type PlanRequest } from '../daily/
 import { favoriteFingerprint } from '../daily/records.js';
 import { dailyFoodTool } from '../daily/tools/food.js';
 import { dailyFoodReviewTool } from '../daily/tools/food-review.js';
+import { dailySavedFoodTool } from '../daily/tools/saved-food.js';
 import { createTeamsNotificationService } from '../teams/service.js';
 import { createTeamsNotificationStore } from './teams-notification-store.js';
 
@@ -444,6 +445,83 @@ describe('inactive nutrition services on real SQL Server', () => {
       expect(confirmations.pendingBrowserConfirmations()).toEqual([]);
       expect(send).not.toHaveBeenCalled();
       expect((await pool.request().query('SELECT COUNT(*) AS count FROM daily.nutrition_queue')).recordset[0].count).toBe(0);
+    } finally {
+      controller.abort();
+      if (active) await Promise.allSettled([active]);
+    }
+  });
+  it('commits internal saved-food reviews once through real native approval, refreshes preferences and never logs intake', async () => {
+    const at = new Date(now()); const sessionId = randomUUID(); const controller = new AbortController();
+    const notifications: string[] = [];
+    const mealsBefore = (await pool.request().query('SELECT COUNT(*) AS count FROM daily.nutrition_meals')).recordset[0].count;
+    const send = vi.fn(async () => { throw new Error('Saved health data must never be sent to Teams'); });
+    const confirmations = createTeamsNotificationService({
+      ownerObjectId: owner, tenantId: other, store: createTeamsNotificationStore(pool),
+      connector: { send }, isAway: async () => true, onWebNotification: async () => {},
+    });
+    const source = { id: '224001', sessionId, role: 'dan' as const, text: 'Review this synthetic saved-food change.', model: null, at };
+    const req = { ...request(owner), headers: {}, jarvisConversationMessage: source,
+      server: { ownerObjectId: owner, teamsNotifications: confirmations, awayModeStore: { read: async () => ({ mode: 'present' }) },
+        conversationStore: { getSession: async () => ({ id: sessionId, channel: 'voice', language: 'en', startedAt: at, endedAt: null }) } } } as unknown as FastifyRequest;
+    const tool = dailySavedFoodTool(request => NutritionStore.forRequest(pool, request, now, {
+      publish: change => { notifications.push(...change.sources); },
+    }), () => at.getTime());
+    let active: Promise<unknown> | undefined;
+    const review = async (input: unknown, decision: 'approve' | 'reject' = 'approve') => {
+      active = tool.execute(input, req, controller.signal);
+      const outcome = active.then(value => ({ ok: true as const, value }), error => ({ ok: false as const, error }));
+      await vi.waitFor(() => expect(confirmations.pendingBrowserConfirmations()).toHaveLength(1), { timeout: 10000 });
+      const confirmation = confirmations.pendingBrowserConfirmations()[0]!;
+      expect(confirmation.summary).toContain('Nothing has changed');
+      expect(confirmation.summary.length).toBeLessThanOrEqual(4000);
+      expect(Date.parse(confirmation.expiresAt) - Date.now()).toBeGreaterThan(0);
+      expect(Date.parse(confirmation.expiresAt) - Date.now()).toBeLessThanOrEqual(120000);
+      expect(await confirmations.resolveBrowserConfirmation(confirmation.id, decision)).toBe(true);
+      const result = await outcome;
+      expect(await confirmations.resolveBrowserConfirmation(confirmation.id, 'approve')).toBe(false);
+      if (!result.ok) throw result.error;
+      return result.value;
+    };
+    try {
+      const favoriteInput = { operation: 'save_favorite', name: 'Internal native saved favourite', aliases: ['Internal native alias'],
+        expectedRevision: '0', definition: { mealName: 'Synthetic saved portion', energyKcal: 200, proteinGrams: null, fatGrams: 0 } };
+      const saved = await review(favoriteInput) as { record: { id: string } };
+      expect(saved).toMatchObject({ status: 'committed', record: { revision: '1', energy_kcal: 200, protein_grams: null, confidence: 'estimate' } });
+      expect(await tool.execute(favoriteInput, req, controller.signal)).toMatchObject({ status: 'already-applied' });
+      const favoriteId = saved.record.id;
+      expect(await tool.execute({ operation: 'lookup_saved', name: 'Internal native alias' }, req, controller.signal)).toMatchObject({
+        source: 'favorite', intakeLogged: false, record: { id: favoriteId },
+      });
+      expect(notifications).toEqual(['daily.nutrition.favorites']);
+      req.jarvisConversationMessage = { ...source, id: '224002' };
+      const planInput = { operation: 'save_plan', name: 'Internal native saved plan', expectedRevision: '0', description: null,
+        entries: ['breakfast', 'lunch', 'dinner'].map(slot => ({ slot, favoriteId })) };
+      const savedPlan = await review(planInput) as { record: { id: string } };
+      expect(savedPlan).toMatchObject({ status: 'committed', record: { revision: '1', energy_kcal: 600, protein_grams: null, fat_grams: 0 } });
+      expect(await tool.execute(planInput, req, controller.signal)).toMatchObject({ status: 'already-applied' });
+      req.jarvisConversationMessage = { ...source, id: '224003' };
+      const like = { operation: 'set_feedback', favoriteId, expectedRevision: '0', preference: 'like' };
+      expect(await review(like)).toMatchObject({ record: { preference: 'like', revision: '1' } });
+      expect(await tool.execute(like, req, controller.signal)).toMatchObject({ status: 'already-applied' });
+      req.jarvisConversationMessage = { ...source, id: '224004' };
+      expect(await review({ ...like, expectedRevision: '1', preference: null })).toMatchObject({ record: { preference: null, revision: '2' } });
+      expect(await tool.execute({ operation: 'read_preferences', favoriteIds: [favoriteId] }, req, controller.signal)).toMatchObject({
+        records: [{ favoriteId, preference: null, revision: '2', status: 'cleared' }],
+      });
+      await expect(tool.execute(like, req, controller.signal)).rejects.toThrow('changed');
+      expect(notifications).toEqual(['daily.nutrition.favorites', 'daily.nutrition.plans', 'daily.nutrition.favorites', 'daily.nutrition.favorites']);
+      req.jarvisConversationMessage = { ...source, id: '224005' };
+      const deletion = { operation: 'delete_plan', id: savedPlan.record.id, expectedRevision: '1' };
+      await expect(review(deletion, 'reject')).rejects.toThrow('rejected');
+      expect((await store().planRecord(savedPlan.record.id, signal()))?.deleted_at).toBeNull();
+      expect(await review(deletion)).toMatchObject({ status: 'committed', record: { revision: '2', deleted_at: expect.any(String) } });
+      expect(await tool.execute(deletion, req, controller.signal)).toMatchObject({ status: 'already-deleted' });
+      expect(notifications).toHaveLength(5);
+      expect(notifications[4]).toBe('daily.nutrition.plans');
+      expect((await pool.request().query('SELECT COUNT(*) AS count FROM daily.nutrition_meals')).recordset[0].count).toBe(mealsBefore);
+      expect((await pool.request().query('SELECT COUNT(*) AS count FROM daily.nutrition_queue')).recordset[0].count).toBe(0);
+      expect(confirmations.pendingBrowserConfirmations()).toEqual([]);
+      expect(send).not.toHaveBeenCalled();
     } finally {
       controller.abort();
       if (active) await Promise.allSettled([active]);

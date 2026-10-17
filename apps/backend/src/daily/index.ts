@@ -7,13 +7,18 @@ import { dailyQueryRoutes } from './routes/query.js';
 import { dailyMcpRoutes, type DailyMcpOptions } from './mcp/routes.js';
 import { dailyFoodTool, type InternalNutrition } from './tools/food.js';
 import { dailyFoodReviewTool } from './tools/food-review.js';
+import { dailySavedFoodTool, type InternalSavedNutrition } from './tools/saved-food.js';
 
 /** Trusted server composition flag. Not a request parameter or a production rollout. */
-export function createDailyModules(enabled = false, data?: DailyData, connector?: DailyMcpOptions, internalNutrition?: InternalNutrition): readonly BackendModule[] {
+export function createDailyModules(enabled = false, data?: DailyData, connector?: DailyMcpOptions, internalNutrition?: InternalNutrition, savedNutrition?: InternalSavedNutrition): readonly BackendModule[] {
   if (enabled !== true) return [];
   if (connector && !data) throw new TypeError('Daily MCP requires the shared Daily query service');
   if (internalNutrition && !data) throw new TypeError('Daily food writes require shared Daily data');
-  const tools = data ? [dailyQueryTool(data.query), ...(internalNutrition ? [dailyFoodTool(internalNutrition), dailyFoodReviewTool(internalNutrition)] : [])] : [];
+  if (savedNutrition && !data) throw new TypeError('Daily saved food requires shared Daily data');
+  const tools = data ? [dailyQueryTool(data.query),
+    ...(internalNutrition ? [dailyFoodTool(internalNutrition), dailyFoodReviewTool(internalNutrition)] : []),
+    ...(savedNutrition ? [dailySavedFoodTool(savedNutrition)] : []),
+  ] : [];
   return [{
     id: dailyModuleId,
     tools,
@@ -42,7 +47,7 @@ export function createDailyModules(enabled = false, data?: DailyData, connector?
         return {
           module: dailyModuleId,
           version: dailyContractVersion,
-          stage: internalNutrition ? 'internal-nutrition-rehearsal' : connector ? 'connector-rehearsal' : data ? 'read-only' : 'contract-only',
+          stage: internalNutrition || savedNutrition ? 'internal-nutrition-rehearsal' : connector ? 'connector-rehearsal' : data ? 'read-only' : 'contract-only',
           reservedViewIds: dailyViewIds,
           // Reserved view IDs do not advertise unfinished functionality as available.
           pages: [],

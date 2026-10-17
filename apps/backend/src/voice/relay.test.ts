@@ -3126,10 +3126,18 @@ describe('backend-relayed Voice Live WebSocket', () => {
     });
     expect(String(update.session?.instructions)).toContain('modern Danish');
   });
-  it.each(['ok', 'refused', 'error'] as const)(
-    'publishes the recorded %s realtime tool outcome without exposing tool data',
-    async (outcome) => {
-      const execute = vi.fn(async (input: unknown) => {
+  it.each([
+    { outcome: 'ok', name: 'greet', timeout: 30_000 },
+    { outcome: 'refused', name: 'greet', timeout: 30_000 },
+    { outcome: 'error', name: 'greet', timeout: 30_000 },
+    { outcome: 'ok', name: 'daily_food_review', timeout: 180_000 },
+    { outcome: 'ok', name: 'daily_saved_food', timeout: 180_000 },
+  ] as const)(
+    'publishes the recorded $outcome realtime $name outcome with its exact budget and no private tool data',
+    async ({ outcome, name, timeout }) => {
+      const signals: AbortSignal[] = [];
+      const execute = vi.fn(async (input: unknown, ...context: [FastifyRequest, AbortSignal]) => {
+        signals.push(context[1]);
         if (outcome === 'refused') throw new ToolRefusal('Private refusal reason.');
         if (outcome === 'error') throw new Error('Private tool error.');
         return { message: `Very good, ${(input as { name: string }).name}.` };
@@ -3137,7 +3145,7 @@ describe('backend-relayed Voice Live WebSocket', () => {
       const toolModule: BackendModule = {
         id: 'test-tools',
         tools: [{
-          name: 'greet',
+          name,
           description: 'Greet a person.',
           inputSchema: {
             type: 'object',
@@ -3171,7 +3179,7 @@ describe('backend-relayed Voice Live WebSocket', () => {
               event_id: 'tool-call-event',
               response_id: 'response-1',
               call_id: 'call_1',
-              name: 'greet',
+              name,
               arguments: '{"name":"Dan"}',
             }));
             socket.send(JSON.stringify({ type: 'response.done', event_id: 'response-done', response: {} }));
@@ -3209,28 +3217,35 @@ describe('backend-relayed Voice Live WebSocket', () => {
       expect(session).not.toHaveProperty('type');
 
       expect(session.tools).toEqual(expect.arrayContaining([
-        expect.objectContaining({ type: 'function', name: 'greet' }),
+        expect.objectContaining({ type: 'function', name }),
         ...factoryModule.tools.map(({ name }) => expect.objectContaining({ type: 'function', name })),
       ]));
       expect(session.instructions).toContain('British English');
-      browser.send(JSON.stringify({ type: 'input_audio_buffer.append', audio: 'AQID' }));
-
-      const [toolOutput] = await Promise.all([toolOutputSent, responseRequested]);
+      const timeoutSpy = vi.spyOn(AbortSignal, 'timeout');
+      let toolOutput: Record<string, unknown>;
+      try {
+        browser.send(JSON.stringify({ type: 'input_audio_buffer.append', audio: 'AQID' }));
+        [toolOutput] = await Promise.all([toolOutputSent, responseRequested]);
+        expect(timeoutSpy).toHaveBeenCalledWith(timeout);
+      } finally { timeoutSpy.mockRestore(); }
       expect(execute).toHaveBeenCalledOnce();
       expect(execute).toHaveBeenCalledWith({ name: 'Dan' }, expect.anything(), expect.any(AbortSignal));
       expect(toolOutput).toMatchObject({ type: 'function_call_output', call_id: 'call_1' });
       const recordedTool = JSON.parse(toolOutput.output as string) as Record<string, unknown>;
-      expect(recordedTool).toMatchObject({ tool: 'greet', outcome });
+      expect(recordedTool).toMatchObject({ tool: name, outcome });
       expect(browserEvents.some((event) => event.type === 'response.function_call_arguments.done')).toBe(false);
       expect(browserEvents).toContainEqual({ type: 'response.done', event_id: 'response-done', response: {} });
       expect(activityEvents).toMatchObject([
         { type: 'listening', source: 'voice' },
         { type: 'thinking', source: 'voice' },
         { type: 'speaking', source: 'voice' },
-        { type: 'tool-call-started', source: 'voice', toolName: 'greet' },
-        { type: 'tool-call-finished', source: 'voice', toolName: 'greet', outcome },
+        { type: 'tool-call-started', source: 'voice', toolName: name },
+        { type: 'tool-call-finished', source: 'voice', toolName: name, outcome },
       ]);
       expect(JSON.stringify(activityEvents)).not.toMatch(/Dan|arguments|Very good|private/iu);
+      const closed = once(browser, 'close');
+      browser.close(); await closed;
+      await vi.waitFor(() => expect(signals[0]?.aborted).toBe(true));
     },
   );
 
