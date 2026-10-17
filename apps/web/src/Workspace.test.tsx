@@ -6,7 +6,7 @@ import { PHONE_LAYOUT_MEDIA_QUERY, Workspace, type WorkspaceController, type Wor
 import { useWorkspaceCommands, WorkspaceCommandContext } from './workspace-command-state';
 import { readFileSync } from 'node:fs';
 import type { WorkspacePinsClient } from './workspace-pins';
-import { conversationLayoutKey } from './conversation-layout';
+import { conversationLayoutKey, phoneConversationLayoutKey } from './conversation-layout';
 import type { GeneratedView, WorkspacePin } from '@jarvis/contracts';
 import type { SessionCommandResult } from './session-commands';
 
@@ -19,6 +19,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
   localStorage.removeItem(conversationLayoutKey);
+  localStorage.removeItem(phoneConversationLayoutKey);
 });
 
 function phoneViewport() {
@@ -945,6 +946,148 @@ describe('Workspace', () => {
     fireEvent.lostPointerCapture(handle, { pointerId: 1 });
     expect(height()).toBeCloseTo(160, 0);
     expect(conversation.classList.contains('workspace-window-dragging')).toBe(false);
+  });
+
+  it.each([[390, 844], [320, 700]])('resizes phone chat by touch at %ix%i without changing desktop geometry', (width, height) => {
+    phoneViewport();
+    const canvasWidth = width - 16;
+    const canvasHeight = height - 160;
+    vi.stubGlobal('ResizeObserver', class implements ResizeObserver {
+      constructor(private callback: ResizeObserverCallback) {}
+      observe(target: Element) {
+        this.callback([{ target, contentRect: new DOMRect(0, 0, canvasWidth, canvasHeight),
+          borderBoxSize: [], contentBoxSize: [], devicePixelContentBoxSize: [] }], this);
+      }
+      unobserve() {}
+      disconnect() {}
+    });
+    const desktop = JSON.stringify({ x: .1, y: .2, width: .8, height: .6, size: { width: 1000, height: 600 } });
+    localStorage.setItem(conversationLayoutKey, desktop);
+    const fixture: WorkspaceView[] = [{
+      id: 'conversation', title: 'Conversation', presentation: 'conversation',
+      content: { status: 'ready', content: <p>Conversation history</p> },
+    }];
+    const anchor = vi.fn();
+    const rendered = render(<Workspace views={fixture} onConversationPositionChange={anchor} defaultArrangement="layered" arrangeMenu={false} />);
+    const canvas = screen.getByRole('region', { name: 'Temporary workspace views' });
+    vi.spyOn(canvas, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, canvasWidth, canvasHeight));
+    const conversation = screen.getByRole('article', { name: 'Conversation' });
+    const chatHeight = () => parseFloat(conversation.style.getPropertyValue('--conversation-height')) || 300;
+    vi.spyOn(conversation, 'getBoundingClientRect').mockImplementation(() =>
+      new DOMRect(0, canvasHeight - chatHeight(), canvasWidth, chatHeight()));
+    const handle = within(conversation).getByRole('button', { name: 'Resize Conversation height' });
+    expect(handle.className).toBe('conversation-resize-handle');
+    expect(conversation.querySelector('.conversation-resize-border')).toBeNull();
+    const capture = vi.fn();
+    const release = vi.fn();
+    Object.defineProperties(handle, {
+      setPointerCapture: { value: capture, configurable: true },
+      hasPointerCapture: { value: () => true, configurable: true },
+      releasePointerCapture: { value: release, configurable: true },
+    });
+    const start = { pointerId: 1, button: -1, pointerType: 'touch', clientX: width / 2, clientY: canvasHeight - 300 };
+    fireEvent.pointerDown(handle, start);
+    expect(capture).toHaveBeenCalledWith(1);
+    expect(chatHeight()).toBeCloseTo(300);
+    fireEvent.pointerMove(handle, { ...start, clientY: start.clientY - 80 });
+    expect(chatHeight()).toBeCloseTo(380);
+    fireEvent.pointerMove(handle, { ...start, pointerId: 2, clientY: -2000 });
+    expect(chatHeight()).toBeCloseTo(380);
+    fireEvent.pointerCancel(handle, start);
+    expect(chatHeight()).toBe(300);
+    expect(localStorage.getItem(phoneConversationLayoutKey)).toBeNull();
+    expect(conversation.classList.contains('workspace-window-dragging')).toBe(false);
+
+    fireEvent.pointerDown(handle, start);
+    fireEvent.pointerMove(handle, { ...start, clientY: -2000 });
+    expect(chatHeight()).toBeCloseTo(canvasHeight);
+    fireEvent.pointerUp(handle, start);
+    expect(release).toHaveBeenCalledWith(1);
+    const saved = localStorage.getItem(phoneConversationLayoutKey);
+    expect(saved).not.toBeNull();
+    fireEvent.pointerDown(handle, start);
+    fireEvent.pointerMove(handle, { ...start, clientY: 2000 });
+    expect(chatHeight()).toBeCloseTo(160);
+    fireEvent.lostPointerCapture(handle, start);
+    expect(chatHeight()).toBeCloseTo(canvasHeight);
+    expect(localStorage.getItem(phoneConversationLayoutKey)).toBe(saved);
+
+    handle.focus();
+    fireEvent.keyDown(handle, { key: 'Home' });
+    expect(chatHeight()).toBeCloseTo(160);
+    fireEvent.keyDown(handle, { key: 'ArrowUp' });
+    expect(chatHeight()).toBeCloseTo(192);
+    fireEvent.keyDown(handle, { key: 'ArrowUp', shiftKey: true });
+    expect(chatHeight()).toBeCloseTo(256);
+    fireEvent.keyDown(handle, { key: 'ArrowDown' });
+    expect(chatHeight()).toBeCloseTo(224);
+    fireEvent.keyDown(handle, { key: 'ArrowLeft' });
+    expect(chatHeight()).toBeCloseTo(224);
+    fireEvent.keyDown(handle, { key: 'End' });
+    expect(chatHeight()).toBeCloseTo(canvasHeight);
+    fireEvent.keyDown(handle, { key: 'Home' });
+    fireEvent.keyDown(handle, { key: 'ArrowUp', shiftKey: true });
+    expect(chatHeight()).toBeCloseTo(224);
+    expect(document.activeElement).toBe(handle);
+    expect(conversation.hasAttribute('data-conversation-positioned')).toBe(false);
+    expect(anchor).toHaveBeenLastCalledWith(null);
+    expect(localStorage.getItem(conversationLayoutKey)).toBe(desktop);
+
+    rendered.unmount();
+    render(<Workspace views={fixture} defaultArrangement="layered" arrangeMenu={false} />);
+    const restored = screen.getByRole('article', { name: 'Conversation' });
+    expect(parseFloat(restored.style.getPropertyValue('--conversation-height'))).toBeCloseTo(224);
+  });
+
+  it('reports phone resize storage failure without changing the desktop preference', () => {
+    phoneViewport();
+    render(<Workspace views={[{
+      id: 'conversation', title: 'Conversation', presentation: 'conversation',
+      content: { status: 'ready', content: <p>Conversation history</p> },
+    }]} />);
+    const canvas = screen.getByRole('region', { name: 'Temporary workspace views' });
+    const conversation = screen.getByRole('article', { name: 'Conversation' });
+    vi.spyOn(canvas, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, 374, 600));
+    vi.spyOn(conversation, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 300, 374, 300));
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new DOMException('Full', 'QuotaExceededError'); });
+    fireEvent.keyDown(within(conversation).getByRole('button', { name: 'Resize Conversation height' }), { key: 'ArrowUp' });
+    expect(screen.getByRole('alert').textContent).toContain('Chat layout could not be saved');
+    expect(localStorage.getItem(conversationLayoutKey)).toBeNull();
+  });
+
+  it.each([
+    ['top', 10, 20, 60, 380 / 6],
+    ['right', 10, 100 / 6, 62, 400 / 6],
+    ['bottom', 10, 100 / 6, 60, 70],
+    ['left', 12, 100 / 6, 58, 400 / 6],
+    ['top-left', 12, 20, 58, 380 / 6],
+    ['top-right', 10, 20, 62, 380 / 6],
+    ['bottom-left', 12, 100 / 6, 58, 70],
+    ['bottom-right', 10, 100 / 6, 62, 70],
+  ])('keeps desktop %s border pointer resizing available', (edge, x, y, width, height) => {
+    render(<Workspace views={[{
+      id: 'conversation', title: 'Conversation', presentation: 'conversation',
+      content: { status: 'ready', content: <p>Conversation history</p> },
+    }]} defaultArrangement="layered" arrangeMenu={false} />);
+    const canvas = screen.getByRole('region', { name: 'Temporary workspace views' });
+    const conversation = screen.getByRole('article', { name: 'Conversation' });
+    vi.spyOn(canvas, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, 1000, 600));
+    vi.spyOn(conversation, 'getBoundingClientRect').mockReturnValue(new DOMRect(100, 100, 600, 400));
+    expect(conversation.querySelectorAll('.conversation-resize-border')).toHaveLength(8);
+    expect(conversation.querySelector('.conversation-resize-handle')).toBeNull();
+    const border = conversation.querySelector(`.conversation-resize-border-${edge}`)!;
+    Object.defineProperties(border, {
+      setPointerCapture: { value: vi.fn(), configurable: true },
+      hasPointerCapture: { value: () => true, configurable: true },
+      releasePointerCapture: { value: vi.fn(), configurable: true },
+    });
+    fireEvent.pointerDown(border, { pointerId: 1, button: 0, pointerType: 'mouse', clientX: 100, clientY: 100 });
+    fireEvent.pointerMove(border, { pointerId: 1, clientX: 120, clientY: 120 });
+    fireEvent.pointerUp(border, { pointerId: 1 });
+    for (const [property, expected] of Object.entries({ x, y, width, height })) {
+      expect(parseFloat(conversation.style.getPropertyValue(`--workspace-${property}`))).toBeCloseTo(Number(expected), 1);
+    }
+    expect(localStorage.getItem(conversationLayoutKey)).not.toBeNull();
   });
 
   it('resizes conversation with keys and saves it through maximise, minimise and remount', () => {

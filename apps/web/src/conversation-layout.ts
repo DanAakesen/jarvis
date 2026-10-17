@@ -1,13 +1,14 @@
 import type { WindowRect } from './window-layout';
 
 export const conversationLayoutKey = 'jarvis.conversation-layout.v1';
+export const phoneConversationLayoutKey = 'jarvis.conversation-layout.phone.v1';
 export type ConversationPosition = { left: number; top: number; width: number };
 export type ConversationCanvasSize = { width: number; height: number };
 export type ConversationResizeEdge = 'top' | 'right' | 'bottom' | 'left' | 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
 
-export function readConversationLayout(): { layout: WindowRect | null; size?: ConversationCanvasSize; error: string } {
+export function readConversationLayout(key = conversationLayoutKey): { layout: WindowRect | null; size?: ConversationCanvasSize; error: string } {
   try {
-    const value = localStorage.getItem(conversationLayoutKey);
+    const value = localStorage.getItem(key);
     if (value === null) return { layout: null, error: '' };
     const layout: unknown = JSON.parse(value);
     if (typeof layout !== 'object' || layout === null ||
@@ -35,9 +36,9 @@ export function readConversationLayout(): { layout: WindowRect | null; size?: Co
   }
 }
 
-export function saveConversationLayout(layout: WindowRect, size?: ConversationCanvasSize): string {
+export function saveConversationLayout(layout: WindowRect, size?: ConversationCanvasSize, key = conversationLayoutKey): string {
   try {
-    localStorage.setItem(conversationLayoutKey, JSON.stringify({ ...layout, ...(size ? { size } : {}) }));
+    localStorage.setItem(key, JSON.stringify({ ...layout, ...(size ? { size } : {}) }));
     return '';
   } catch {
     return 'Chat layout could not be saved on this device. Your changes will last until you refresh.';
