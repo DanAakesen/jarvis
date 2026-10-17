@@ -2309,7 +2309,7 @@ Dan approved P12 on 12 October 2026 and explicitly released only P12-01 for this
 
 | ID | Issue | Task | Acceptance criteria | Depends on | Status |
 | --- | --- | --- | --- | --- | --- |
-| P13-02 | [#919](https://github.com/DanAakesen/jarvis/issues/919) | Push delivery proof: web worker, opt-in and durable item page | Exact-string push gate defaults off; worker always displays generic alerts and opens only validated same-origin item paths; authenticated opt-in/test/off states and owner-protected item page work; deep links return after sign-in. Physical iOS delivery remains a separate acceptance gate. | — | In progress |
+| P13-02 | [#919](https://github.com/DanAakesen/jarvis/issues/919) | Push delivery proof: web worker, opt-in and durable item page | Exact-string push gate defaults off; worker always displays generic alerts and opens only validated same-origin item paths; authenticated opt-in/test/off states and owner-protected item page work; deep links return after sign-in. Physical iOS delivery remains a separate acceptance gate. | — | Complete |
 
 ## Factory canonical-status parity (16 October 2026)
 
