@@ -581,6 +581,15 @@ PR and linked issues; this source checkpoint does not claim a follow-up pass.
 
 ## Mobile composer focus hotfix (16 October 2026)
 
+P9-117 (17 October 2026) retains this desktop/phone ownership boundary: add an
+in-window phone height grip, sharing the existing resize limits and gesture
+handling but saving its preference under `jarvis.conversation-layout.phone.v1`.
+The eight desktop borders were explicitly excluded on phones, not broken
+pointer-event handlers; their outside-edge targets are also unsuitable for
+a full-width dock. Apply only phone height, without enabling desktop placement
+or its composer-anchor path. Physical iPhone and Safari acceptance remains
+Dan's; Chromium touch emulation is not native-device proof.
+
 Confirmed with JarvisPM for P11-06 / #860: suspend desktop manual conversation
 geometry under the existing phone layout policy, preserving its persisted value
 for desktop restoration. Do not patch focus scrolling, invent a keyboard inset

@@ -498,6 +498,13 @@ Cancelled gestures restore the previous layout, and storage failures surface
 as alerts. Shell state carries the composer anchor and measured height;
 `ConversationHistory` keeps its existing mounted input owner.
 
+P9-117 adds a phone-only heading grip using the same pointer-capture,
+cancel/lost-capture, keyboard and clamping paths. Its validated preference uses
+`jarvis.conversation-layout.phone.v1` through the same storage helpers. Only
+height is applied to the existing bottom-docked phone window; desktop geometry
+and the composer-anchor measurement remain dormant on phones. Viewport fitting
+never writes either preference.
+
 `NoteFolderPicker` uses the existing authenticated `/notes/tree` endpoint,
 with cancellation, bounded response validation and explicit retry/incomplete
 states. It owns transient destination folders; explicit note Save remains the
