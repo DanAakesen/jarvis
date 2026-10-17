@@ -192,6 +192,7 @@ describe('pending Google actions', () => {
     });
     const older = actions.confirm('calendar', staged.confirmationCode,
       message('11', 'yes', 1_001), new AbortController().signal);
+    await vi.waitFor(() => expect(finish).toBeDefined());
     const newer = actions.stage({
       scope: 'calendar', sourceMessageId: '12', sourceSessionId: '1',
       summary: 'Newer proposal.', items: ['Third.', 'Fourth.'],

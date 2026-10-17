@@ -1,7 +1,8 @@
 import { randomInt } from 'node:crypto';
 import { issueAttachmentFields, type IssueAttachmentInput } from '@jarvis/contracts';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
-import { approvalInstruction, classifyApprovalReply } from '../core/approval.js';
+import { approvalInstruction, approvalNotPending, approvalUnclear } from '../core/approval.js';
+import { approvalDeciderFor, safeDecision } from '../core/approval-interpreter.js';
 import type { JarvisTool } from '../core/tool-registry.js';
 import { ToolFailure, ToolRefusal } from '../core/tool-registry.js';
 import type { ConversationMessage } from '../core/conversation-store.js';
@@ -53,6 +54,7 @@ interface PendingProjectArchive {
   name: string;
   repo: string;
   sourceMessageId: string;
+  sourceSessionId: string;
   createdAt: number;
 }
 interface PendingIssueCreation {
@@ -65,6 +67,7 @@ interface PendingIssueCreation {
   executor: IssueExecutor;
   taskCode?: string;
   sourceMessageId: string;
+  sourceSessionId: string;
   createdAt: number;
 }
 const pendingProjectArchives = new WeakMap<FastifyInstance, Map<string, PendingProjectArchive>>();
@@ -184,6 +187,23 @@ function cleanPendingArchives(actions: Map<string, PendingProjectArchive>, now =
   }
 }
 
+/** Provenance only: a verified Dan message that came after the proposal, in the same session. Meaning is decided separately. */
+function isLaterDanReply(
+  message: ConversationMessage,
+  action: { readonly sourceMessageId: string; readonly sourceSessionId: string; readonly createdAt: number },
+): boolean {
+  return message.role === 'dan' && /^[1-9]\d{0,18}$/u.test(message.id) && BigInt(message.id) <= maxSqlBigInt &&
+    BigInt(message.id) > BigInt(action.sourceMessageId) && message.sessionId === action.sourceSessionId &&
+    Number.isFinite(message.at.getTime()) && message.at.getTime() > action.createdAt;
+}
+
+function issueApprovalSummary(action: PendingIssueCreation): string {
+  const target = action.issueNumber === undefined
+    ? `Create a GitHub issue in ${action.repository} titled "${action.title}".`
+    : `Add a comment to issue #${action.issueNumber} in ${action.repository}.`;
+  return action.publicAttachment ? `${target} It also publishes the image ${action.publicAttachment.name} publicly.` : target;
+}
+
 function stageProjectArchive(
   server: FastifyInstance,
   project: Project,
@@ -209,6 +229,7 @@ function stageProjectArchive(
     name: project.name,
     repo: project.repo,
     sourceMessageId: source.id,
+    sourceSessionId: source.sessionId,
     createdAt: Date.now(),
   });
   return {
@@ -230,16 +251,18 @@ async function confirmProjectArchive(
   const actions = pendingProjectArchives.get(request.server);
   if (actions) cleanPendingArchives(actions);
   const action = actions?.get(confirmationCode);
-  const reply = classifyApprovalReply(message.text);
-  if (!actions || !action || message.role !== 'dan' ||
-      !/^[1-9]\d{0,18}$/u.test(message.id) || BigInt(message.id) > maxSqlBigInt ||
-      BigInt(message.id) <= BigInt(action.sourceMessageId) ||
-      !Number.isFinite(message.at.getTime()) || message.at.getTime() <= action.createdAt ||
-      reply === undefined) {
-    throw new ToolRefusal('No project was archived. Dan must reply yes, approved, confirmed or go ahead (or no/cancel) in a later message.');
-  }
+  if (!actions || !action || !isLaterDanReply(message, action)) throw new ToolRefusal(approvalNotPending);
+  const verdict = await safeDecision(approvalDeciderFor(request), {
+    reply: message.text,
+    summary: `Archive the Software Factory project "${action.name}" (${action.repo}).`,
+    family: 'factory', messageId: message.id, sessionId: message.sessionId, actionKey: confirmationCode,
+  }, signal);
+  // Nothing below awaits before the action is consumed, so a concurrent confirm or a newer proposal cannot slip through.
+  cleanPendingArchives(actions);
+  if (signal.aborted || actions.get(confirmationCode) !== action) throw new ToolRefusal(approvalNotPending);
+  if (verdict === 'neither') throw new ToolRefusal(approvalUnclear);
   actions.delete(confirmationCode);
-  if (reply === 'decline') throw new ToolRefusal('Cancelled; the project was not archived.');
+  if (verdict === 'decline') throw new ToolRefusal('Cancelled; the project was not archived.');
   signal.throwIfAborted();
   const store = requireStore(request.server.projectStore, 'Project service');
   if (!await store.archive(action.projectId)) throw new ToolRefusal('The active project was not found; nothing was archived.');
@@ -304,6 +327,7 @@ async function stageIssueCreation(
     executor,
     ...(preview.taskCode ? { taskCode: preview.taskCode } : {}),
     sourceMessageId: source.id,
+    sourceSessionId: source.sessionId,
     createdAt: now,
   });
   return {
@@ -347,27 +371,31 @@ async function confirmIssueCreation(
 ) {
   const message = await currentDanMessage(request, 'issue creation');
   const actions = pendingIssueCreations.get(request.server);
-  const now = Date.now();
-  if (actions) {
-    for (const [code, action] of actions) {
-      if (action.createdAt <= now - issueCreationTtlMs) actions.delete(code);
-    }
-  }
+  const cleanExpired = () => {
+    if (!actions) return;
+    const cutoff = Date.now() - issueCreationTtlMs;
+    for (const [code, pending] of actions) if (pending.createdAt <= cutoff) actions.delete(code);
+  };
+  cleanExpired();
   const action = actions?.get(confirmationCode);
-  const reply = classifyApprovalReply(message.text);
-  if (action && /^[1-9]\d{0,18}$/u.test(message.id) &&
-      BigInt(message.id) > BigInt(action.sourceMessageId) && reply === 'decline') {
-    actions?.delete(confirmationCode);
+  if (!actions || !action || !isLaterDanReply(message, action)) throw new ToolRefusal(approvalNotPending);
+  const verdict = await safeDecision(approvalDeciderFor(request), {
+    reply: message.text, summary: issueApprovalSummary(action),
+    family: 'factory', messageId: message.id, sessionId: message.sessionId, actionKey: confirmationCode,
+  }, signal);
+  const stillPending = () => {
+    cleanExpired();
+    return !signal.aborted && actions.get(confirmationCode) === action;
+  };
+  if (!stillPending()) throw new ToolRefusal(approvalNotPending);
+  if (verdict === 'neither') throw new ToolRefusal(approvalUnclear);
+  if (verdict === 'decline') {
+    actions.delete(confirmationCode);
     throw new ToolRefusal('Cancelled; nothing was written.');
   }
-  if (!actions || !action || message.role !== 'dan' ||
-      !/^[1-9]\d{0,18}$/u.test(message.id) || BigInt(message.id) > maxSqlBigInt ||
-      BigInt(message.id) <= BigInt(action.sourceMessageId) ||
-      !Number.isFinite(message.at.getTime()) || message.at.getTime() <= action.createdAt ||
-      reply !== 'approve') {
-    throw new ToolRefusal('No issue was created. Dan must reply yes, approved, confirmed or go ahead (or no/cancel) in a later message.');
-  }
   await requireIssueWritePermission(request, action.repository, action.publicAttachment !== undefined);
+  // Re-check after the permission lookup: only one confirm may consume the staged issue.
+  if (!stillPending()) throw new ToolRefusal(approvalNotPending);
   actions.delete(confirmationCode);
   signal.throwIfAborted();
   try {
@@ -608,7 +636,7 @@ export const factoryTools: readonly JarvisTool[] = [
   },
   {
     name: 'confirm_create_issue',
-    description: 'Confirm a staged issue or comment after a later Dan message that is a plain approval (yes, approved, confirmed, go ahead); no or cancel discards it.',
+    description: 'Confirm a staged issue or comment using its returned code. The server reads Dan’s own later message to decide whether it approves or declines; nothing you pass can approve it. If it is unclear the server refuses; then ask him one short natural question.',
     inputSchema: {
       type: 'object',
       properties: { confirmationCode: { type: 'string', pattern: '^[0-9]{8}$' } },
@@ -695,7 +723,7 @@ export const factoryTools: readonly JarvisTool[] = [
   },
   {
     name: 'archive_project',
-    description: 'Prepare to archive an active Software Factory project. Nothing changes until Dan approves in a later message with a plain yes, approved, confirmed or go ahead.',
+    description: 'Prepare to archive an active Software Factory project. Nothing changes until Dan clearly agrees in a later message.',
     inputSchema: {
       type: 'object',
       properties: { projectId: idSchema },
@@ -711,7 +739,7 @@ export const factoryTools: readonly JarvisTool[] = [
   },
   {
     name: 'confirm_project_archive',
-    description: 'Archive a project only after the latest Dan message is a plain approval (yes, approved, confirmed, go ahead).',
+    description: 'Archive a project using its returned code. The server reads Dan’s own later message to decide whether it approves or declines; nothing you pass can approve it. If it is unclear the server refuses; then ask him one short natural question.',
     inputSchema: {
       type: 'object',
       properties: { confirmationCode: { type: 'string', pattern: '^[0-9]{8}$' } },

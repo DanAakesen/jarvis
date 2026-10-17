@@ -1,7 +1,8 @@
 import { createHash } from 'node:crypto';
 import type { FastifyRequest } from 'fastify';
 import type { ConversationMessage } from '../core/conversation-store.js';
-import { isSimpleApproval } from '../core/approval.js';
+import { approvalInstruction, approvalNotPending, approvalUnclear } from '../core/approval.js';
+import { approvalDeciderFor, safeDecision } from '../core/approval-interpreter.js';
 import { ToolFailure, ToolRefusal, type JarvisTool } from '../core/tool-registry.js';
 import { GitHubAppRequestError, type GitHubAppTokenIssuer } from '../github-app.js';
 import { containsLikelySecret } from './issues.js';
@@ -52,6 +53,7 @@ interface OperationDefinition {
 
 interface PendingApproval {
   readonly sourceMessageId: string;
+  readonly sourceSessionId?: string;
   readonly createdAt: number;
   readonly warning?: string;
   readonly explicitProceed?: boolean;
@@ -388,8 +390,23 @@ async function danMessage(request: FastifyRequest): Promise<ConversationMessage>
   return latest;
 }
 
+/** A short, bounded description of the staged write for the approval interpreter. Large fields are reported by size. */
+function approvalSummary(tool: string, repository: string, input: Input, warningText?: string): string {
+  const details = Object.keys(input).sort().flatMap((key) => {
+    if (key === 'repository' || key === 'project' || key === 'operation') return [];
+    const value = input[key];
+    if (typeof value === 'string') {
+      return [`${key}: ${key === 'content' || key === 'body' ? `${Buffer.byteLength(value)} bytes` : truncateUtf8(value, 160)}`];
+    }
+    if (typeof value === 'number' || typeof value === 'boolean') return [`${key}: ${value}`];
+    return Array.isArray(value) ? [`${key}: ${value.length} items`] : [];
+  });
+  return [`GitHub ${tool} in ${repository}`, ...details, ...(warningText ? [warningText] : [])].join('\n');
+}
+
 async function approval(
   request: FastifyRequest,
+  signal: AbortSignal,
   tool: string,
   repository: string,
   input: Input,
@@ -398,23 +415,42 @@ async function approval(
   const message = await danMessage(request);
   const key = approvalKey(tool, repository, input);
   const now = Date.now();
-  let actions = pendingApprovals.get(request.server);
-  if (!actions) {
-    actions = new Map();
-    pendingApprovals.set(request.server, actions);
-  }
-  for (const [id, action] of actions) if (action.createdAt + approvalTtlMs <= now) actions.delete(id);
+  const actions = pendingApprovals.get(request.server) ?? new Map<string, PendingApproval>();
+  pendingApprovals.set(request.server, actions);
+  const expire = () => {
+    const clock = Date.now();
+    for (const [id, action] of actions) if (action.createdAt + approvalTtlMs <= clock) actions.delete(id);
+  };
+  expire();
   const pending = actions.get(key);
+  // Provenance first: a verified later message in the same session. Only then is its meaning interpreted.
   if (pending && BigInt(message.id) > BigInt(pending.sourceMessageId) &&
-      Number.isFinite(message.at.getTime()) && message.at.getTime() > pending.createdAt &&
-      isSimpleApproval(message.text)) {
-    actions.delete(key);
-    return;
+      (pending.sourceSessionId === undefined || message.sessionId === pending.sourceSessionId) &&
+      Number.isFinite(message.at.getTime()) && message.at.getTime() > pending.createdAt) {
+    const verdict = await safeDecision(approvalDeciderFor(request), {
+      reply: message.text, summary: approvalSummary(tool, repository, input, pending.warning ?? warningText),
+      family: 'github', messageId: message.id,
+      ...(typeof message.sessionId === 'string' ? { sessionId: message.sessionId } : {}), actionKey: key,
+    }, signal);
+    // Nothing below awaits before the approval is consumed, so only one concurrent call can use it.
+    expire();
+    if (signal.aborted || actions.get(key) !== pending) throw new ToolRefusal(approvalNotPending);
+    if (verdict === 'approve') {
+      actions.delete(key);
+      return;
+    }
+    const warning = warningText ?? pending.warning;
+    if (verdict === 'decline') {
+      actions.delete(key);
+      throw new ToolRefusal('Dan declined, so I made no change.');
+    }
+    throw new ToolRefusal(`${approvalUnclear}${warning ? ` ${warning}` : ''}`);
   }
   if (!pending) {
     if (actions.size >= maxPendingApprovals) throw new ToolFailure('I have too many pending GitHub approvals; try again shortly.');
     actions.set(key, {
       sourceMessageId: message.id,
+      ...(typeof message.sessionId === 'string' ? { sourceSessionId: message.sessionId } : {}),
       createdAt: now,
       ...(warningText ? { warning: warningText } : {}),
       ...(tool === 'pr_merge' && input.proceedDespiteFailingChecks === true &&
@@ -422,7 +458,7 @@ async function approval(
     });
   }
   const warning = warningText ?? pending?.warning;
-  throw new ToolRefusal(`I haven’t made this change. Reply later with yes, approved, confirmed or go ahead to approve it.${warning ? ` ${warning}` : ''}`);
+  throw new ToolRefusal(`I haven’t made this change yet. ${approvalInstruction}${warning ? ` ${warning}` : ''}`);
 }
 
 function rootSchema(properties: Record<string, unknown>, required: string[] = []) {
@@ -835,9 +871,9 @@ function arrayInput(input: Input, name: string): string[] | undefined {
 }
 
 async function requireApproval(
-  request: FastifyRequest, name: string, repository: string, input: Input, warningText?: string,
+  request: FastifyRequest, signal: AbortSignal, name: string, repository: string, input: Input, warningText?: string,
 ) {
-  await approval(request, name, repository, input, warningText);
+  await approval(request, signal, name, repository, input, warningText);
 }
 
 async function writeHandler(
@@ -870,7 +906,7 @@ async function writeHandler(
     if (input.state !== undefined) {
       if (!['open', 'closed'].includes(String(input.state))) throw new ToolRefusal('I need issue state open or closed.');
       if (input.state === 'closed') {
-        await requireApproval(request, name, repository, input);
+        await requireApproval(request, signal, name, repository, input);
       }
       patch.state = input.state;
     }
@@ -932,7 +968,7 @@ async function writeHandler(
         if (key === 'state' && !['open', 'closed'].includes(value)) throw new ToolRefusal('I need pull request state open or closed.');
         if (key === 'base' && !branchPattern.test(value)) throw new ToolRefusal('I need a valid base branch.');
         if (key === 'state' && value === 'closed') {
-          await requireApproval(request, name, repository, input);
+          await requireApproval(request, signal, name, repository, input);
         }
         patch[key] = value;
       }
@@ -987,7 +1023,7 @@ async function writeHandler(
         throw new ToolRefusal('I can’t merge while checks are failing. Dan must explicitly say to proceed despite the failures.');
       }
     }
-    await requireApproval(request, name, repository, input,
+    await requireApproval(request, signal, name, repository, input,
       failing ? 'Some checks are failing. I will proceed only because Dan explicitly asked me to continue.' : undefined);
     const merged = object(await githubJson(`${base}/pulls/${number}/merge`, token, signal, 'PUT', {
       merge_method: method, sha: expected.toLowerCase(),
@@ -1051,7 +1087,7 @@ async function writeHandler(
     const isDefaultBranch = metadata?.default_branch === branch;
     const isPublic = metadata?.private === false;
     if (isDefaultBranch || isPublic) {
-      await requireApproval(request, name, repository, input,
+      await requireApproval(request, signal, name, repository, input,
         isPublic ? 'This writes content to a public repository where anyone can read it.' : undefined);
     }
     const result = object(await githubJson(`${base}/contents/${path.split('/').map(encodeURIComponent).join('/')}`, token, signal, 'PUT', {

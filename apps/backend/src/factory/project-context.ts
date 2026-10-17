@@ -77,6 +77,6 @@ ${list}
   already added, use the existing project and do not add it again. If Dan asks about a repository that
   is not added, ask him to confirm before adding it, and add it only after he says yes.
 - Use update_project to change the requested name, description or project defaults without changing
-  other settings. Archive only with archive_project followed by confirm_project_archive after Dan approves
-  with a plain yes, approved, confirmed or go ahead in a later message.`;
+  other settings. Archive only with archive_project followed by confirm_project_archive after Dan clearly
+  agrees in a later message.`;
 }

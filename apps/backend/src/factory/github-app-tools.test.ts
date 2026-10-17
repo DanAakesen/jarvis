@@ -285,7 +285,7 @@ describe('GitHub App capability tools', () => {
     });
   });
 
-  it('does not close an issue without a later simple approval from a verified Dan message', async () => {
+  it('does not close an issue without a later approving reply from a verified Dan message', async () => {
     const fetchImpl = vi.fn<typeof fetch>();
     const { app } = fixture(fetchImpl, { issues: 'write' });
     const response = await callTool(app, 'issue_update', { number: 700, state: 'closed' });
@@ -294,7 +294,7 @@ describe('GitHub App capability tools', () => {
     expect(fetchImpl).not.toHaveBeenCalled();
   });
 
-  it('asks for the plain approval word before merging and never calls the merge endpoint', async () => {
+  it('asks for approval in natural words before merging and never calls the merge endpoint', async () => {
     const fetchImpl = vi.fn<typeof fetch>(async (request) => {
       const url = new URL(String(request));
       if (url.pathname.endsWith('/pulls/700')) return Response.json({ head: { sha: 'a'.repeat(40) } });
@@ -305,12 +305,13 @@ describe('GitHub App capability tools', () => {
     const response = await callTool(app, 'pr_merge', { number: 700, expectedHeadSha: 'a'.repeat(40) });
 
     expect(response.json()).toMatchObject({
-      outcome: 'refused', result: { refused: expect.stringContaining('yes, approved, confirmed or go ahead') },
+      outcome: 'refused', result: { refused: expect.stringContaining('in your own words') },
     });
+    expect(JSON.stringify(response.json())).not.toMatch(/yes, approved|go ahead/iu);
     expect(fetchImpl.mock.calls.some(([, init]) => init?.method === 'PUT')).toBe(false);
   });
 
-  it('asks for the plain approval word before writing a file to the default branch or a public repository', async () => {
+  it('asks for approval in natural words before writing a file to the default branch or a public repository', async () => {
     const fetchImpl = vi.fn<typeof fetch>(async () => Response.json({ default_branch: 'main', private: false }));
     const { app } = fixture(fetchImpl, { contents: 'write' }, true);
     const response = await callTool(app, 'file_write', {
@@ -319,8 +320,9 @@ describe('GitHub App capability tools', () => {
 
     expect(response.json()).toMatchObject({
       outcome: 'refused',
-      result: { refused: expect.stringMatching(/yes, approved, confirmed or go ahead.*public repository/u) },
+      result: { refused: expect.stringMatching(/in your own words.*public repository/u) },
     });
+    expect(JSON.stringify(response.json())).not.toMatch(/yes, approved|go ahead/iu);
     expect(fetchImpl.mock.calls.some(([, init]) => init?.method === 'PUT')).toBe(false);
   });
 

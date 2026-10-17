@@ -208,23 +208,34 @@ export function calendarStatusQuestion(text: string): boolean {
     /^(?:(?:is|was|has) (?:it|that|the event|the appointment) (?:already )?(?:created|staged|added|scheduled|completed|cancelled)|(?:did|have) you (?:already )?(?:create|stage|add|schedule|complete|cancel|check) (?:it|that|the event|the appointment)|(?:er|blev) (?:den|det) (?:oprettet|klargjort|tilføjet|udført)|har du (?:oprettet|klargjort|tilføjet|tjekket) (?:den|det))\b/iu.test(text.trim());
 }
 
+/** Any turn in an open calendar conversation may answer a staged change; the backend decides what Dan's words mean. */
 export function calendarTurnContext(previous: boolean, text: string) {
-  const followup = previous && (classifyApprovalReply(text) !== undefined || calendarStatusQuestion(text));
   const scope = text.replace(/"[^"]*"|(?<!\w)'[^']*'(?!\w)|“[^”]*”|‘[^’]*’/gu, '').trim();
   const reference = /\b(?:calendar|kalender\w*|begivenhed\w*)\b/iu.test(scope);
   const mail = /\b(?:gmail|googlemail|(?:e-?)?mails?|draft|kladde\w*)\b/iu.test(scope);
   const explicit = mail
     ? reference && /^(?:(?:please|can you|could you|vil du|kan du)\s+)?(?:add|create|schedule|move|update|delete|cancel|tilføj|opret|læg|flyt|slet|aflys)\b/iu.test(scope)
     : reference || /\b(?:add|create|schedule|tilføj|opret|læg)\b.{0,80}\b(?:reservation\w*|appointments?|events?)\b/iu.test(scope);
-  return { context: followup || explicit, followup };
+  return { explicit, followup: previous };
 }
 
-/** Resolve calendar approval from backend state, never a model-supplied or cached code. */
-export async function confirmPendingCalendarReply(
+export interface CalendarReplyResolution {
+  /** The actual backend result to relay: set when the turn approved, declined or asked about a staged change. */
+  readonly output?: string;
+  /** A calendar change is still staged, so a later turn may answer it. */
+  readonly pending: boolean;
+}
+
+/**
+ * Resolve a turn in a calendar conversation from backend state, never a model-supplied or cached code.
+ * A reply that neither approves nor declines the staged change is left to the model to continue naturally.
+ */
+export async function resolveCalendarReply(
   tools: ToolRegistry,
   request: FastifyRequest,
   signal: AbortSignal,
-): Promise<string> {
+  text: string,
+): Promise<CalendarReplyResolution> {
   const pendingOutput = await executeRealtimeToolCall({
     type: 'response.function_call_arguments.done', name: 'calendar_get_pending_change',
     call_id: 'calendar-pending', arguments: '{}',
@@ -234,18 +245,30 @@ export async function confirmPendingCalendarReply(
     result?: { status?: string; confirmationCode?: string; summary?: string; reply?: string };
   };
   const action = pending.result;
-  if (pending.outcome !== 'ok' || action?.status !== 'awaiting_confirmation') return pendingOutput;
+  const decided = action?.reply === 'approve' || action?.reply === 'decline';
+  const statusQuestion = calendarStatusQuestion(text);
+  // Plain approval words and status questions always get the actual state, even when nothing is staged.
+  const direct = decided || statusQuestion || classifyApprovalReply(text) !== undefined;
+  if (pending.outcome !== 'ok' || action?.status !== 'awaiting_confirmation') {
+    return { ...(direct ? { output: pendingOutput } : {}), pending: false };
+  }
   if (typeof action.confirmationCode !== 'string' || !/^[0-9]{8}$/u.test(action.confirmationCode) ||
       typeof action.summary !== 'string' || !action.summary.trim()) {
-    return toolOutput('calendar_get_pending_change', 'error', {
-      failure: 'No valid pending calendar receipt is available. No change was confirmed.',
-    });
+    return {
+      ...(direct ? { output: toolOutput('calendar_get_pending_change', 'error', {
+        failure: 'No valid pending calendar receipt is available. No change was confirmed.',
+      }) } : {}),
+      pending: false,
+    };
   }
-  if (action.reply !== 'approve' && action.reply !== 'decline') return pendingOutput;
-  return executeRealtimeToolCall({
-    type: 'response.function_call_arguments.done', name: 'calendar_confirm_change',
-    call_id: 'calendar-confirm', arguments: JSON.stringify({ confirmationCode: action.confirmationCode }),
-  }, tools, request, signal);
+  if (!decided) return { ...(statusQuestion ? { output: pendingOutput } : {}), pending: true };
+  return {
+    output: await executeRealtimeToolCall({
+      type: 'response.function_call_arguments.done', name: 'calendar_confirm_change',
+      call_id: 'calendar-confirm', arguments: JSON.stringify({ confirmationCode: action.confirmationCode }),
+    }, tools, request, signal),
+    pending: false,
+  };
 }
 
 export async function executeRealtimeToolCall(
