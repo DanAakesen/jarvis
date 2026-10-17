@@ -72,7 +72,7 @@ signed JWTs and the real maintained SDK client/server transport through
 Fastify inject require no identity/provider/private network calls. Existing
 normal Database CI owns real isolated SQL replay/revision evidence.
 
-This candidate has not yet qualified. Synthetic protocol acceptance is not
+Exact-head CI qualifies source delivery. Synthetic protocol acceptance is not
 actual ChatGPT compatibility, account linking, deployed OAuth or phone proof.
 Review supported client protocol/native confirmation and fleet key policy
 before any activation. Complete retained nutrition tool/UX parity, protected

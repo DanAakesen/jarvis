@@ -237,9 +237,9 @@ export function dailyMcpRoutes(query: Pick<DailyQueryService, 'query'>, options:
               const owner = authorize(request, true);
               const state = pendingSchema.safeParse(ctx.mcpReq.requestState());
               const requestTime = state.success ? state.data.requestTime : now();
-              const idempotencyKey = `mcp:${clientId}:${input.operationId}`;
+              const { operationId, ...definition } = input;
+              const idempotencyKey = `mcp:${clientId}:${operationId}`;
               const saved = await options.nutrition.intake(idempotencyKey, context(requestTime, 'lookup', ctx.mcpReq.signal));
-              const { operationId: _operationId, ...definition } = input;
               const payload = prepareMeal({
                 ...definition,
                 ...(definition.occurredAt === undefined && typeof saved?.occurred_at === 'string' ? { occurredAt: saved.occurred_at } : {}),
@@ -297,5 +297,6 @@ export function dailyMcpRoutes(query: Pick<DailyQueryService, 'query'>, options:
 
 function payloadWithoutExpiry(payload: ReturnType<typeof prepareMeal>) {
   const { expiresAt: _expiresAt, ...input } = payload;
+  void _expiresAt;
   return input;
 }

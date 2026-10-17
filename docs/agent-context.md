@@ -254,9 +254,9 @@ stale client metadata (ETARGET). Fresh online registry metadata confirms client
 2.3.1. Do not conflate either failed install with source/test results.
 
 See `apps/backend/src/daily/mcp/README.md` for exact inactive composition,
-protocol/confirmation/replay limits and scoped checks. Connector code is an
-unqualified candidate until actual build, lint and synthetic protocol/root-auth
-checks pass. Production startup/configuration is unchanged; no account linking,
+protocol/confirmation/replay limits and scoped checks. Qualification requires
+actual build, lint and synthetic protocol/root-auth checks; record exact-head
+results in the PR receipt. Production startup/configuration is unchanged; no account linking,
 OAuth scope/client/grant, credential provisioning, provider/private operation
 or production Daily enablement is implied. Preserve the other owner's released
 5173 preview and Dan's existing runtime/remote settings.

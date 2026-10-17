@@ -146,8 +146,8 @@ core parity/backup/device/cutover gates.
 [nutrition-only hosted MCP adapter](../apps/backend/src/daily/mcp/README.md).
 It reuses delivered reads and existing typed writers, a separate delegated
 Entra principal, exact route isolation and native signed proposal review.
-Production composition/configuration and the write gate remain off. This is
-not qualified/released source or a linked, accepted ChatGPT account.
+Production composition/configuration and the write gate remain off. Source
+delivery does not establish a linked, accepted ChatGPT account.
 Modern-protocol/native-review compatibility and complete retained tool parity
 remain explicit acceptance gaps, alongside real scopes/grants, source/provider,
 phone, protected export/reconciliation and cutover. No access/consent or private

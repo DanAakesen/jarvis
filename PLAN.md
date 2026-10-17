@@ -1604,8 +1604,8 @@ does not load connector configuration. A distinct delegated Entra client gets
 only nutrition scopes, never ordinary owner/Factory/tool access. Native review
 uses signed, expiring request state, not model confirmation booleans.
 Meal logging, correction and soft deletion reuse existing operation keys,
-revisions and post-commit invalidation. This is an unqualified source candidate,
-not deployed or accepted #724, linked ChatGPT, OAuth consent or activation.
+revisions and post-commit invalidation. This source boundary does not establish
+accepted #724, linked ChatGPT, OAuth consent or activation.
 Legacy/native-client compatibility, complete retained tool parity and the
 existing private/provider/device/cutover gates remain open. No #730 dependency
 or workflow-owned status cell is removed.
