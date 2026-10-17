@@ -1,5 +1,6 @@
 import { createRemoteJWKSet, jwtVerify, type JWTVerifyGetKey } from 'jose';
 import type { AuthConfig } from './config.js';
+import { ConfigurationError } from '../configuration-error.js';
 
 export interface UserPrincipal { objectId: string; tenantId: string; displayName: string }
 export interface AgentPrincipal { kind: 'jarvis-agent'; objectId: string; tenantId: string }
@@ -7,41 +8,57 @@ export interface RunnerPrincipal { kind: 'jarvis-runner'; objectId: string; tena
 export interface PcBridgePrincipal { kind: 'jarvis-pc-bridge'; objectId: string; tenantId: string }
 export interface PhoneEventGridPrincipal { kind: 'jarvis-phone-event-grid'; objectId: string; tenantId: string }
 export interface DeployPrincipal { kind: 'jarvis-deploy'; objectId: string; tenantId: string }
+export const dailyNutritionScopes = { read: 'Daily.Nutrition.Read', write: 'Daily.Nutrition.Write' } as const;
+export interface DailyConnectorPrincipal {
+  kind: 'jarvis-daily-connector'; objectId: string; tenantId: string; clientId: string;
+  scopes: readonly (typeof dailyNutritionScopes[keyof typeof dailyNutritionScopes])[];
+}
+type Principal = UserPrincipal | AgentPrincipal | RunnerPrincipal | PcBridgePrincipal |
+  PhoneEventGridPrincipal | DeployPrincipal | DailyConnectorPrincipal;
 export type TokenVerifier = (token: string) =>
-  Promise<UserPrincipal | AgentPrincipal | RunnerPrincipal | PcBridgePrincipal | PhoneEventGridPrincipal | DeployPrincipal>;
+  Promise<Principal>;
 export const agentToolsRole = 'Jarvis.Tools';
 export const runnerEventsRole = 'Jarvis.Runner.Events';
 const azureManagementAudience = 'https://management.azure.com/';
 export function isAgentPrincipal(
-  principal: UserPrincipal | AgentPrincipal | RunnerPrincipal | PcBridgePrincipal | PhoneEventGridPrincipal | DeployPrincipal,
+  principal: Principal,
 ): principal is AgentPrincipal {
   return 'kind' in principal && principal.kind === 'jarvis-agent';
 }
 export function isRunnerPrincipal(
-  principal: UserPrincipal | AgentPrincipal | RunnerPrincipal | PcBridgePrincipal | PhoneEventGridPrincipal | DeployPrincipal,
+  principal: Principal,
 ): principal is RunnerPrincipal {
   return 'kind' in principal && principal.kind === 'jarvis-runner';
 }
 export function isPcBridgePrincipal(
-  principal: UserPrincipal | AgentPrincipal | RunnerPrincipal | PcBridgePrincipal | PhoneEventGridPrincipal | DeployPrincipal,
+  principal: Principal,
 ): principal is PcBridgePrincipal {
   return 'kind' in principal && principal.kind === 'jarvis-pc-bridge';
 }
 export function isPhoneEventGridPrincipal(
-  principal: UserPrincipal | AgentPrincipal | RunnerPrincipal | PcBridgePrincipal | PhoneEventGridPrincipal | DeployPrincipal,
+  principal: Principal,
 ): principal is PhoneEventGridPrincipal {
   return 'kind' in principal && principal.kind === 'jarvis-phone-event-grid';
 }
 export function isDeployPrincipal(
-  principal: UserPrincipal | AgentPrincipal | RunnerPrincipal | PcBridgePrincipal | PhoneEventGridPrincipal | DeployPrincipal,
+  principal: Principal,
 ): principal is DeployPrincipal {
   return 'kind' in principal && principal.kind === 'jarvis-deploy';
 }
 export class AuthenticationDenied extends Error {
   constructor(public readonly statusCode: 401 | 403) { super('Authentication denied'); }
 }
+export function isDailyConnectorPrincipal(principal: Principal): principal is DailyConnectorPrincipal {
+  return 'kind' in principal && principal.kind === 'jarvis-daily-connector';
+}
 
 export function createTokenVerifier(config: AuthConfig, keys?: JWTVerifyGetKey): TokenVerifier {
+  const connectorClientId = config.dailyConnectorClientId?.toLowerCase();
+  if (config.dailyConnectorClientId !== undefined &&
+      (!/^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/iu.test(config.dailyConnectorClientId) ||
+       [config.apiClientId, config.pcBridgeClientId].some(id => id?.toLowerCase() === config.dailyConnectorClientId?.toLowerCase()))) {
+    throw new ConfigurationError('The Daily connector must identify a separate approved OAuth client');
+  }
   const issuer = `https://login.microsoftonline.com/${config.tenantId}/v2.0`;
   const v1Issuer = `https://sts.windows.net/${config.tenantId}/`;
   const jwks = keys ?? createRemoteJWKSet(new URL(`https://login.microsoftonline.com/${config.tenantId}/discovery/v2.0/keys`), {
@@ -76,6 +93,21 @@ export function createTokenVerifier(config: AuthConfig, keys?: JWTVerifyGetKey):
     }
     if (payload.aud !== config.apiClientId || payload.iss !== issuer || payload.ver !== '2.0') {
       throw new AuthenticationDenied(401);
+    }
+    const scopes = typeof payload.scp === 'string' ? payload.scp.split(' ') : [];
+    if (connectorClientId !== undefined && typeof payload.azp === 'string' && payload.azp.toLowerCase() === connectorClientId) {
+      if (objectId !== config.ownerObjectId || !scopes.length || payload.roles !== undefined ||
+          (payload.idtyp !== undefined && payload.idtyp !== 'user') ||
+          scopes.some(scope => scope !== dailyNutritionScopes.read && scope !== dailyNutritionScopes.write)) {
+        throw new AuthenticationDenied(403);
+      }
+      return {
+        kind: 'jarvis-daily-connector', objectId, tenantId: config.tenantId, clientId: connectorClientId,
+        scopes: scopes.filter(scope => scope === dailyNutritionScopes.read || scope === dailyNutritionScopes.write),
+      };
+    }
+    if (scopes.includes(dailyNutritionScopes.read) || scopes.includes(dailyNutritionScopes.write)) {
+      throw new AuthenticationDenied(403);
     }
     if (config.pcBridgeClientId !== undefined && payload.azp === config.pcBridgeClientId) {
       if (objectId !== config.ownerObjectId || typeof payload.scp !== 'string' ||

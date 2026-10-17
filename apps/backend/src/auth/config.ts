@@ -9,6 +9,8 @@ export interface AuthConfig {
   agentObjectId?: string;
   pcBridgeClientId?: string;
   phoneEventGridObjectId?: string;
+  /** Explicit inactive connector composition only; no environment activation. */
+  dailyConnectorClientId?: string;
 }
 
 // Nonsecret IDs from infra/bootstrap.output.json. Deployment can override them.

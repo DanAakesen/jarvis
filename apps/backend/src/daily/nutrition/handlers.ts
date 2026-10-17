@@ -41,6 +41,7 @@ export function createNutritionHandlers(pool: sql.ConnectionPool, frida: FridaLo
       return frida.lookup(input, context.signal);
     },
     lookupSaved: async (name: string, context: NutritionExecution) => store(context).lookupSaved(name, context.signal),
+    intake: async (key: string, context: NutritionExecution) => store(context).intake(key, context.signal),
     log: async (input: LogInput, context: NutritionExecution) => {
       requireIntent(context, 'log-intake');
       return store(context).log(prepareMeal(input, context.requestTime), { intent: 'log-intake', explicit: context.explicit,

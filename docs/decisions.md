@@ -1,5 +1,32 @@
 # Decisions
 
+## Isolate the inactive hosted nutrition connector (17 October 2026; P12-09)
+
+Continue Dan's authorised Daily source work after the completed releases,
+without treating missing account/device acceptance as a reason to rebuild or
+park eligible inactive implementation. Use maintained split MCP v2 packages
+inside existing Fastify composition and reuse the existing query service,
+typed nutrition handlers, SQL idempotency/revisions and commit refresh hub.
+No additional persistence, host, model or consent/credential creation is needed.
+
+One separately configured delegated Entra client receives only nutrition
+scopes and a distinct principal restricted by the root hook to the exact MCP
+route. Do not promote it into ordinary `access_as_user` authority or trust
+client/model confirmation booleans. Native form acceptance must match
+SDK-signed, expiring owner/client/purpose/payload state. All external writes
+require native review until an actual trusted exact-intent integration is
+accepted; internal exact logging retains its existing one-step contract.
+
+Modern 2026-07-28 only and process-local confirmation keys are deliberately
+inactive constraints, not demonstrated ChatGPT/fleet compatibility. Unsupported
+clients fail closed; restart/replica changes require new review. Account
+linking, OAuth scopes/grants, fleet policy and real client/phone acceptance need
+their actual gates. No alternate screen, broad OAuth fallback or activation
+follows from this source decision. Initial dependency restore failures remain
+failed evidence: one package-download timeout, then stale cached client
+metadata reporting ETARGET; fresh registry metadata reports client 2.3.1.
+Neither result is a compiler/test failure or a successful installation.
+
 ## Scope Web checks without reducing CI coverage (16 October 2026; P11-08)
 
 The Web workflow invoked root npm scripts, which run contracts, frontend and

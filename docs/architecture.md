@@ -4576,6 +4576,48 @@ P8-33 scratch Chromium checks cover the adaptive quality thresholds, compact pho
 The reference lockfile is standalone, outside root workspaces, and contains the prototype's dependencies only. Bundled Three.js/Phosphor notices are retained. Physical/hardware performance, live activity/voice behavior and normal-rate flicker acceptance remain unverified; P8-31 adds no production Three.js dependency.
 ## Daily integration boundary (P12-01)
 
+### Inactive nutrition MCP adapter (17 October 2026; source candidate)
+
+An optional third `createDailyModules(true, data, connector)` argument installs
+only `/daily/mcp` and its exact protected-resource metadata path. Ordinary
+production composition and configuration loaders remain unchanged.
+`DailyMcpOptions` explicitly supplies the canonical HTTPS resource, existing
+auth identity, typed nutrition handlers and a separate default-false write
+gate. The maintained split MCP v2 SDK adapts stateless HTTP into the existing
+Fastify server; there is no second host, dispatcher, database or model.
+
+Root JWT verification recognises one separately configured delegated Entra
+client with only `Daily.Nutrition.Read`/`Daily.Nutrition.Write`. This is a
+distinct principal, not an ordinary owner: the root hook restricts it to the
+exact opt-in MCP route and methods. Foreign owners, mixed broad scopes,
+application identities and other clients' nutrition scopes fail closed.
+Anonymous discovery is limited to the exact metadata route and returns trusted
+configuration; challenge URLs never derive from caller Host. MCP requests
+also enforce the configured Host/allowed Origin, no query selectors and a
+96 KiB body limit.
+
+The adapter reuses `DailyQueryService` for bounded nutrition-only reads and
+the existing Frida lookup/typed handlers for log/correct/soft-delete. Server
+owner resolution, canonical SQL transactions/replay/revisions and acknowledged
+commit notifications remain authoritative. Model-supplied confirmations,
+record IDs, owner selectors and verified provenance are not accepted.
+External writes require native form review bound to SDK-signed, ten-minute
+request state containing only owner/client/purpose/payload digest/trusted time.
+Stable per-client operation keys and stored occurrence retain retry identity
+across confirmation rounds and Copenhagen midnight. Whitelisted committed
+receipts stringify SQL revisions and omit owner/device/internal columns.
+Audit storage records only redacted operation/outcome; its absence refuses
+execution and post-write failure explicitly reports an uncertain commit.
+
+This candidate accepts only modern MCP 2026-07-28; legacy requests are rejected.
+Native review on actual ChatGPT is unverified, not an implemented fallback UI.
+Process-local signing keys deliberately invalidate pending proposals after
+restart or replica change; fleet key/lifetime policy requires review before
+activation. All external mutations currently require confirmation, stricter
+than internal exact logging. Favourites/plans are read-only here; complete tool,
+OAuth/provider, phone and migration acceptance remain open. See
+[adapter setup, recovery and checks](../apps/backend/src/daily/mcp/README.md).
+
 ### Inactive shared reads and committed invalidation (16 October 2026)
 
 The resumed P12-09 source slice extends explicit `createDailyModules(true, data)`
