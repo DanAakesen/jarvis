@@ -178,7 +178,7 @@ export class NutritionStore {
     expectedRevision?: bigint, reviewedFavorite?: string): Promise<Record<string, unknown>> {
     text(mealKey); if (preference !== null && preference !== 'like' && preference !== 'dislike') throw new TypeError('Invalid meal preference');
     if (expectedRevision !== undefined && (typeof expectedRevision !== 'bigint' || expectedRevision < 0n || expectedRevision >= 9223372036854775807n)) throw new TypeError('Invalid feedback revision');
-    return this.transaction(signal, async (transaction) => {
+    return this.transaction(signal, async (transaction, changed) => {
       if (reviewedFavorite !== undefined) {
         const favorite = (await this.query(this.request(transaction, signal).input('id', sql.NVarChar(256), mealKey),
           `SELECT * FROM daily.nutrition_favorites WITH (UPDLOCK,HOLDLOCK) WHERE owner_object_id=@owner AND ${equalKey('id', 'id')};`, signal)).recordset[0];
@@ -195,10 +195,12 @@ export class NutritionStore {
       if (current && current.preference === preference) return current;
       const now = this.now(); instant(now);
       const request = this.request(transaction, signal).input('key', sql.NVarChar(256), mealKey).input('preference', sql.NVarChar(256), preference).input('now', sql.NVarChar(64), now);
-      return (await this.query(request, current
+      const saved = (await this.query(request, current
         ? `UPDATE daily.nutrition_recommendation_feedback SET preference=@preference,revision=revision+1,updated_at=@now OUTPUT INSERTED.* WHERE owner_object_id=@owner AND ${equalKey('meal_key', 'key')};`
         : `INSERT daily.nutrition_recommendation_feedback(owner_object_id,meal_key,preference,created_at,updated_at) OUTPUT INSERTED.* VALUES(@owner,@key,@preference,@now,@now);`, signal)).recordset[0]!;
-    });
+      changed();
+      return saved;
+    }, dailyQuerySources.favorites);
   }
   async preferences(keys: readonly string[], signal: AbortSignal): Promise<Record<string, unknown>[]> {
     if (!Array.isArray(keys) || keys.length < 1 || keys.length > 50) throw new TypeError('Invalid feedback keys');
@@ -396,6 +398,15 @@ export class NutritionStore {
     text(id);
     return (await this.read(this.request(this.pool, signal).input('id', sql.NVarChar(256), id),
       `SELECT * FROM daily.nutrition_meal_plans WHERE owner_object_id=@owner AND ${equalKey('id', 'id')};`, signal)).recordset[0] ?? null;
+  }
+  async findPlan(name: string, signal: AbortSignal): Promise<Record<string, unknown> | null> {
+    const normalized = normalizeSearchText(name);
+    const rows = (await this.read(this.request(this.pool, signal),
+      'SELECT TOP (1001) * FROM daily.nutrition_meal_plans WHERE owner_object_id=@owner ORDER BY id;', signal)).recordset;
+    if (rows.length > 1000) throw new ToolRefusal('Plan namespace exceeds safe lookup limits.');
+    const matches = rows.filter(row => normalizeSearchText(row.normalized_name as string) === normalized || normalizeSearchText(row.plan_name as string) === normalized);
+    if (matches.length > 1) throw new ToolRefusal('Plan name conflicts with another existing plan.');
+    return matches[0] ?? null;
   }
   async removePlan(id: string, expectedRevision: bigint, signal: AbortSignal): Promise<Record<string, unknown>> {
     text(id); if (typeof expectedRevision !== 'bigint' || expectedRevision < 1n || expectedRevision >= 9223372036854775807n) throw new TypeError('Invalid plan revision');

@@ -96,6 +96,35 @@ not redundant review. This source integration does not establish general
 conversational/spoken/photo evidence, physical-phone or hosted-client
 acceptance. Production remains off and original Daily canonical.
 
+## Inactive internal saved food
+
+An independent additive fifth factory composes `daily_saved_food`:
+`createDailyModules(true, data, undefined, data.nutrition, data.nutrition)`.
+The existing fourth argument and default/read-only/MCP compositions are intact.
+`lookup_saved` takes an exact owned name/alias; `read_preferences` takes at most
+50 canonical favourite IDs. Reads need no review, do not contact a provider and
+distinguish missing revision0 from a persisted null clear.
+
+`save_favorite` takes a name, aliases, expectedRevision and exactly one owned
+sourceIdempotencyKey or proposed definition. `save_plan` takes a name,
+description and owned favourite slot entries; `delete_plan` takes an exact ID
+and expected revision. `set_feedback` takes the exact favouriteId, preference
+(`like`, `dislike` or null) and expected revision. New records use revision0.
+Internal operation IDs derive server-side from the verified current human
+message; owner, operationId, confidence, provenance and confirmation arguments
+are not accepted. New definitions are estimates, not independently verified.
+
+Every mutation uses the existing present/browser-only native approval profile:
+120-second SQL/card/timer expiry,180-second operation/voice-relay bound and
+210-second hosted-agent read. Phone refuses before generic approval. Actual
+source/target snapshots freeze before review; source revisions and favourite
+fingerprints are checked again under canonical SQL locks. Replays return actual
+rows/tombstones, and uncertain failures permit one matching readback, never a
+write retry. Summaries over4000characters refuse without truncation.
+Preference commits refresh favourites only after acknowledgement; unchanged
+and replayed rows do not notify. None of these operations logs eaten food,
+exports Health, activates Daily or proves real client/account/device acceptance.
+
 ## Pinned provider contract and evidence limits
 
 Coordinator supplied read-only source action contracts at original HEAD `9e193554c9c8c7c23a788ed3d2b0582580b76c0f` and independently verified public Frida DTOs/session/endpoints. The migration deliberately pins release 10 / Frida 5.5 (November 2025), DOI https://doi.org/10.11583/DTU.29500682, dataset version 8 published 19 January 2026. DTU XLSX/ODS data are CC BY 4.0; PDF documentation retains DTU copyright. We use the documented public API, not downloaded dataset bytes, so no binary checksum/export claim is made. Every lookup carries DTU/version/release/DOI attribution and per-100-g edible-food basis.

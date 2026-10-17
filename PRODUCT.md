@@ -997,7 +997,7 @@ again, even if the favourite later changes. Edited source requests and deleted
 intakes cannot silently become another intake. Production remains off;
 this is not complete internal food workflow or #724 acceptance.
 
-The next inactive internal composition adds `daily_food_review` for portion
+The inactive internal composition includes `daily_food_review` for portion
 estimates, revisioned corrections and soft deletion. It uses the existing
 owner-bound one-time approval in Now, not model confirmation flags or a new
 proposal dispatcher. Review shows the exact before/after food, units, unknown
@@ -1013,6 +1013,20 @@ shared. No Health write, production activation or physical-phone acceptance is
 included; broader conversational and actual client/device gates remain.
 Both internal food tools refuse phone calls before generic approval; an approval
 cannot make their unsupported phone context valid.
+
+An additional independently opt-in internal `daily_saved_food` tool provides
+owned saved-name/alias lookup and versioned preference reads without mutation.
+Favourite/alias saves from an owned intake or proposed definition, server-built
+plans, plan soft deletion and canonical like/dislike/clear require the exact
+browser Now approval. Show actual before/after snapshots and bind source
+revisions/fingerprints under canonical SQL locks. New definitions stay estimates;
+plans and preferences never become eaten food or Health writes. Keep missing
+preferences distinct from persisted null clears. Replays return real saved
+records without another write or refresh. Current verified present chat/browser
+voice supplies write context; phone is unsupported. The two reviewed food tools
+share the bounded 180-second browser relay and 210-second hosted-agent read
+budgets; other tool deadlines remain unchanged. No production activation or
+full client/provider/device acceptance is implied.
 
 P12-05 adds an inactive, explicitly invoked health processor over the existing SQL inbox: metrics/sleep/workouts/detail/minute HR, canonical physical units, Copenhagen dates, exact session/checksum replay and bounded retry/quarantine. Domain changes, ingestion lineage and processed-feed freshness commit together; phone heartbeat stays separate. Empty workout exports cannot erase history, missing values stay unknown, and native nutrition cannot feed back into canonical meals. Owner history/detail reads are bounded and unregistered. No scheduler, source import, live device changes or activation; protected/live parity remains gated.
 

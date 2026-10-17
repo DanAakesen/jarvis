@@ -1,5 +1,26 @@
 # Decisions
 
+## Group internal saved-food integration without changing released callers (17 October 2026; P12-09)
+
+Continue the retained migration with one `daily_saved_food` tool for owned
+lookup/preferences and native-reviewed favourites/aliases, plans and canonical
+preferences. An additive fifth factory keeps the released fourth-argument
+composition source-compatible and avoids enabling new capabilities implicitly.
+Reuse the canonical store and shared external schema instead of a second writer
+or provider. Internal new IDs derive from the verified human source; proposed
+definitions stay estimates. Freeze actual before/after and source evidence,
+bind revisions/fingerprints under existing SQL locks and recover only matching
+real receipts without retrying writes. Preference changes use the existing
+favourites invalidation after commit, with no replay notification.
+
+Full pre-publication tracing found another transport deadline: the browser
+voice relay aborted ordinary calls after30seconds before the tool's own bound.
+Give only the two native-reviewed food tools180seconds at that wrapper; preserve
+session cancellation and other tools. Hosted-agent reads remain210seconds and
+cards120seconds. No extra runtime setting, transport, background mutation queue,
+schema, dependency or production activation is needed. Actual caller/SQL/relay
+qualification and normal release remain pending for this new local source.
+
 ## Reuse browser-only Now approval for internal food proposals (17 October 2026; P12-09)
 
 Continue Dan's authorised migration with the existing Now confirmation service
@@ -50,6 +71,12 @@ source/proposal/revision receipts; a read tombstone is labelled already-deleted,
 not a new mutation. No Health export or new persistence is introduced.
 This is browser-reviewed internal source work, not full conversational/spoken,
 photo-evidence, client/device acceptance, production activation or cutover.
+
+Final source `d17fe622` was independently qualified and reviewed without
+findings, then released through #874 / `f1d410b1` with the same `c0f112bf` tree.
+Deploy39006050135 selected backend and agent, not infrastructure/web; revision
+0000335 and Foundry version106 passed routine readiness/smoke. Keep this release
+separate from activation or actual private/client/device acceptance.
 
 ## Ground direct internal intake in the verified human request (17 October 2026; P12-09)
 

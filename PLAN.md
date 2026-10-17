@@ -1,8 +1,37 @@
 # Project plan
 
+## Internal Daily saved-food integration (17 October 2026; P12-09 / #724)
+
+The current local batch adds sensitive `daily_saved_food`: owned lookup and
+preference reads plus browser-reviewed favourite/alias, plan save/soft-delete
+and canonical preference writes. Reuse the delivered store, snapshots, revision
+locks, native authority and commit refresh; direct exact/favourite logging stays
+one-step. An additive fifth factory preserves the existing fourth-argument
+contract and independent opt-in. Shared external saved schemas remain unchanged;
+internal operation IDs and estimate provenance come from the verified source,
+not model fields. Preference commits now refresh favourites; repeats stay silent.
+Full entrypoint tracing found the browser voice relay's separate 30-second
+cap. Both reviewed food tools now receive 180 seconds there, with unchanged
+session cancellation and other tools' budgets, alongside their 210-second agent
+read limit. Real relay controls cover both exceptions and existing outcomes.
+The new pure shared-schema selection passes 10 cases; actual tool/HTTP/SQL,
+compilation and exact-head review/release remain to be qualified in normal CI.
+No next source candidate has been published yet.
+Daily stays off, original Daily canonical, and all private/client/device and
+export/reconciliation/delta/rollback/cutover gates remain.
+
 ## Internal Daily reviewed changes (17 October 2026; P12-09 / #724)
 
-The current source continuation adds `daily_food_review` for estimated intake,
+Delivered in #874 / merge `f1d410b1`, qualified source `d17fe622` and actual
+matching tree `c0f112bf`. Normal Deploy `39006050135` passed backend and agent,
+with infrastructure/web correctly skipped. Backend revision `0000335` ready
+and healthy, hosted-agent version `106` active. Actual smoke: 14/15 ok; the
+existing PC bridge warning remains, while chat identity reported ok this run
+without a causal-fix claim. The full release receipt and #724 opening were
+independently read back. This is inactive source delivery, not activation or
+actual client/device acceptance.
+
+The optional `daily_food_review` supports estimated intake,
 exact-key/revision corrections and soft deletion in the same independently
 opt-in internal composition. Reuse actual Now one-time confirmation, canonical
 nutrition storage, source identity, safe receipts and acknowledged refresh.
@@ -18,7 +47,7 @@ unused test parameter; it was corrected. Final review/model selection passed
 Changed-file lint passes with zero warnings. Source includes the real SQL
 confirmation-to-intake workflow, Fastify input-schema branch preservation,
 provenance and overlapping-receipt controls. Normal pinned tool/application/SQL
-CI, independent review and authorised release remain next.
+CI, independent review and authorised release were still pending at that point.
 Initial CI39002775817 passed 3691/3692 backend assertions and all other
 components, including SQL; CodeQL ran all four analyses successfully. Its one
 new real HTTP-schema failure revealed unknown nutrient nulls coerced to zero.
@@ -32,14 +61,18 @@ but further review identified the real 240-second ingress ceiling. Food now
 uses an explicit two-minute card expiry, three-minute whole-operation bound
 and 210-second agent read limit; other approvals remain five minutes.
 SQL, card and timer share the same lifetime, with no detached mutation queue.
-Fresh pinned qualification and exact-head review remain required.
+Fresh pinned qualification and exact-head review were required for that correction.
 Ingress-safe `766ffd3f` passed all ten CI job entries (3698 backend, 229 SQL
 and 730 Python tests) and all four actual CodeQL analyses. Its completed review
 found one remaining pre-execution phone path: generic approval could wait before
 either food tool rejected the unsupported session. The correction adds a
 dispatcher capability that refuses both food tools before approval, preserving
 other phone tools. Real HTTP denial/precedence controls and actual food metadata
-assertions cover the correction; successor qualification remains required.
+assertions cover the correction. Final `d17fe622` passed all ten CI job entries
+(3700 backend, 229 SQL, 730 hosted-agent Python tests), all four actual CodeQL
+analyses and completed exact-head independent review without findings. All
+three genuine findings were proved, replied to inline and resolved before
+normal guarded merge and the release above.
 Broader conversation/spoken acceptance, actual hosted client/provider/device,
 private reconciliation and cutover remain open. #724 stays open/default-off.
 

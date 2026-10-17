@@ -52,7 +52,7 @@ identity; model arguments contain only the operation. Saved favourite snapshots
 are checked under SQL locks, receipts recover actual committed rows, and
 deleted/source-edited retries refuse. This first explicit-command subset is not
 full internal estimate/correction/deletion or conversational acceptance.
-The next internal source continuation adds `daily_food_review` using real
+Released inactive #874 adds `daily_food_review` using real
 browser-only Now one-time approval for estimates, revisioned corrections and
 soft deletion, preserving the one-step direct tool. Reviews bind frozen
 before/after values and dates to source/operation identity, require present mode,
@@ -64,6 +64,20 @@ deadline, within the actual hosting request ceiling. Other approvals retain
 their five-minute default; no detached mutation queue or infrastructure change.
 Browser approval is not verified spoken/photo/device or general conversation
 acceptance; no complete #724 claim follows.
+Qualified `d17fe622` and actual merge `f1d410b1` share tree `c0f112bf`.
+Normal Deploy39006050135 passed backend/agent/Smoke with infrastructure/web
+skipped, ready backend0000335 and active hosted-agent106. Routine smoke14/15ok
+retains the PC bridge warning; chat identity was ok without a causal-fix claim.
+The #724 opening retains remaining internal saved-food/plan/preference/lookup,
+conversational, actual client and private migration acceptance.
+The current local continuation groups those internal saved-food operations in
+an independently opt-in fifth factory. `daily_saved_food` reads owned matches
+and preferences, and native-reviews favourite/alias saves, server-snapshotted
+plans/soft deletion and canonical like/dislike/clear. Canonical writers,
+source/revision/fingerprint checks and real receipts stay shared; no intake or
+Health write follows. Browser voice and agent wrapper deadlines are explicitly
+aligned with the existing two-minute food approval. This source is not yet
+qualified/released and does not complete conversational or client acceptance.
 No production activation, private migration, provider/device action or native
 dependency change follows from this source work; #724 remains open.
 
