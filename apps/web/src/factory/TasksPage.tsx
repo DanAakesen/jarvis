@@ -49,23 +49,32 @@ interface TaskFilters {
   search: string;
 }
 
-interface TaskSubmission {
-  fingerprint: string;
-  submissionId: string;
-}
-
 const taskSubmissionKey = 'jarvis.factory.taskSubmission:';
 const submissionIdPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-function readTaskSubmission(key: string): TaskSubmission | null {
+function readTaskSubmissions(key: string): Map<string, string> {
+  const submissions = new Map<string, string>();
   try {
     const value: unknown = JSON.parse(sessionStorage.getItem(key) ?? 'null');
-    return isObject(value) && typeof value.fingerprint === 'string' &&
-      typeof value.submissionId === 'string' && submissionIdPattern.test(value.submissionId)
-      ? { fingerprint: value.fingerprint, submissionId: value.submissionId } : null;
+    for (const entry of Array.isArray(value) ? value : [value]) {
+      if (isObject(entry) && typeof entry.fingerprint === 'string' && /^[0-9a-f]{64}$/i.test(entry.fingerprint) &&
+        typeof entry.submissionId === 'string' && submissionIdPattern.test(entry.submissionId)) {
+        submissions.set(entry.fingerprint, entry.submissionId);
+      }
+    }
   } catch {
-    return null;
+    // In-memory retries still work when storage is unavailable.
   }
+  return submissions;
+}
+
+function writeTaskSubmissions(key: string, submissions: Map<string, string>) {
+  try {
+    if (submissions.size === 0) sessionStorage.removeItem(key);
+    else sessionStorage.setItem(key, JSON.stringify(Array.from(submissions, ([fingerprint, submissionId]) => ({
+      fingerprint, submissionId,
+    }))));
+  } catch { /* In-memory retries still work when storage is unavailable. */ }
 }
 
 type PageState = 'loading' | 'ready' | 'error';
@@ -278,7 +287,7 @@ export function TasksPage({ backendUrl, getAccessToken }: Props) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [creating, setCreating] = useState(false);
   const creatingRef = useRef(false);
-  const submissionRef = useRef<TaskSubmission | null>(null);
+  const submissionsRef = useRef(new Map<string, Map<string, string>>());
   const [createError, setCreateError] = useState('');
   const [createProjectId, setCreateProjectId] = useState('');
   const [createAgent, setCreateAgent] = useState<Agent>('copilot');
@@ -526,22 +535,25 @@ export function TasksPage({ backendUrl, getAccessToken }: Props) {
       // Persist only the payload digest and retry key, never the task request.
       const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(body)));
       const fingerprint = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
-      let submission = submissionRef.current ?? readTaskSubmission(key);
-      if (submission?.fingerprint !== fingerprint) submission = { fingerprint, submissionId: crypto.randomUUID() };
-      submissionRef.current = submission;
-      try { sessionStorage.setItem(key, JSON.stringify(submission)); } catch { /* In-memory retries still work. */ }
+      const submissions = new Map([
+        ...readTaskSubmissions(key), ...(submissionsRef.current.get(key) ?? []),
+      ]);
+      const submissionId = submissions.get(fingerprint) ?? crypto.randomUUID();
+      submissions.set(fingerprint, submissionId);
+      submissionsRef.current.set(key, submissions);
+      writeTaskSubmissions(key, submissions);
       const value = await request(backendUrl, getAccessToken, '/factory/tasks', 'POST', {
-        ...body, submissionId: submission.submissionId,
+        ...body, submissionId,
       });
       if (!isTask(value) || !isObject(value) || typeof value.issueUrl !== 'string' ||
         !/^https:\/\/github\.com\/[^/]+\/[^/]+\/issues\/[1-9]\d*$/.test(value.issueUrl) ||
         typeof value.issueNumber !== 'number' || !Number.isSafeInteger(value.issueNumber) || value.issueNumber < 1) {
         throw new Error('Jarvis returned invalid task data. Try again.');
       }
-      submissionRef.current = null;
-      try {
-        if (readTaskSubmission(key)?.submissionId === submission.submissionId) sessionStorage.removeItem(key);
-      } catch { /* A completed submission must not block the form if storage is unavailable. */ }
+      const remaining = new Map([...readTaskSubmissions(key), ...submissions]);
+      if (remaining.get(fingerprint) === submissionId) remaining.delete(fingerprint);
+      submissionsRef.current.set(key, remaining);
+      writeTaskSubmissions(key, remaining);
       setNotice({ issueUrl: value.issueUrl, issueNumber: value.issueNumber });
       setDialogOpen(false);
       setReloadKey((current) => current + 1);

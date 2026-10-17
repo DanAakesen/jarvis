@@ -389,6 +389,58 @@ describe('Factory task board', () => {
     expect(submittedTasks()[2]!.submissionId).not.toBe(submittedTasks()[1]!.submissionId);
   });
 
+  it.each([false, true])('retains uncertain A across successful B and retries A with its original id (remount: %s)', async (remount) => {
+    const defaultFetch = fetchMock.getMockImplementation()!;
+    let loseResponse = true;
+    fetchMock.mockImplementation((input, init) => {
+      if (init?.method === 'POST' && loseResponse) return Promise.reject(new TypeError('Response lost'));
+      return defaultFetch(input, init);
+    });
+    const view = renderFactory();
+    const form = await openTaskForm('Uncertain A');
+    fireEvent.submit(form);
+    await screen.findByRole('alert');
+    const originalId = submittedTasks()[0]!.submissionId;
+    loseResponse = false;
+    fireEvent.change(screen.getByRole('textbox', { name: 'Task title' }), { target: { value: 'Successful B' } });
+    fireEvent.submit(form);
+    await screen.findByRole('link', { name: 'issue #108' });
+    expect(submittedTasks()[1]!.submissionId).not.toBe(originalId);
+    const stored = JSON.parse(sessionStorage.getItem('jarvis.factory.taskSubmission:https://api.example.com')!);
+    expect(stored).toEqual([{
+      fingerprint: expect.stringMatching(/^[0-9a-f]{64}$/),
+      submissionId: originalId,
+    }]);
+    if (remount) {
+      view.unmount();
+      renderFactory();
+    }
+    fireEvent.submit(await openTaskForm('Uncertain A'));
+    await screen.findByRole('link', { name: 'issue #108' });
+    expect(submittedTasks()[2]!.submissionId).toBe(originalId);
+    expect(sessionStorage.getItem('jarvis.factory.taskSubmission:https://api.example.com')).toBeNull();
+  });
+
+  it('reuses a legacy single-record submission after remount', async () => {
+    const defaultFetch = fetchMock.getMockImplementation()!;
+    let loseResponse = true;
+    fetchMock.mockImplementation((input, init) => init?.method === 'POST' && loseResponse
+      ? Promise.reject(new TypeError('Response lost')) : defaultFetch(input, init));
+    const view = renderFactory();
+    fireEvent.submit(await openTaskForm());
+    await screen.findByRole('alert');
+    const key = 'jarvis.factory.taskSubmission:https://api.example.com';
+    const [legacy] = JSON.parse(sessionStorage.getItem(key)!);
+    sessionStorage.setItem(key, JSON.stringify(legacy));
+    view.unmount();
+    renderFactory();
+    loseResponse = false;
+    fireEvent.submit(await openTaskForm());
+    await screen.findByRole('link', { name: 'issue #108' });
+    expect(submittedTasks()[1]!.submissionId).toBe(submittedTasks()[0]!.submissionId);
+    expect(sessionStorage.getItem(key)).toBeNull();
+  });
+
   it('synchronously blocks rapid duplicate form submissions while creation is pending', async () => {
     const defaultFetch = fetchMock.getMockImplementation()!;
     let finish!: (value: Response) => void;

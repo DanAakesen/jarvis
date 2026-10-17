@@ -22,7 +22,10 @@ retains this retry evidence and refuses rollback when records exist.
 No GitHub Projects integration, automatic backfill, chat behavior, merge
 policy or approval-flow change is included. Offline fake-backed tests cover
 creation, failures, deduplication, board placement and PR closure; live GitHub
-writes remain unverified.
+writes remain unverified. Synthetic Chromium inspection at 1440×900 and
+320×900 verifies success links, retained form/error states, one pending POST
+on double-click and stable retry IDs. Existing background release content
+overflows at 320px; the dialog itself fits and its actions remain accessible.
 
 ## Use text rather than orbs for loading (17 October 2026; P9-118 / #896)
 
