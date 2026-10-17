@@ -27,12 +27,14 @@ no core Settings change. All of it stays behind the default-off Daily gate (Dail
 off = Jarvis unchanged) with no production caller yet. Dan enters his own values;
 none is stored in code, tests or documents.
 
-Next, in order: the Settings section (Daily on only), then the default-off
-composition. The budget/candidate adapter and the read-only
-`daily_nutrition_suggest` tool are the second slice (allowance = resting burn +
-active energy so far today - deficit; unknowns flagged, never zero; only meals
-logged in Jarvis count; saved favourites are the only candidates). No provider,
-private or device access, live probe, Daily activation or acceptance is claimed.
+Slices, in order. Second (#899): the budget/candidate adapter and the read-only
+`daily_nutrition_suggest` tool (allowance = resting burn + active energy so far
+today - deficit; unknowns flagged, never zero; only meals logged in Jarvis
+count; saved favourites are the only candidates). Third (this slice): the web
+Settings section, shown only while Daily is on, saving on its own with no
+defaults, placeholders or example figures. Last: the default-off composition. No
+provider, private or device access, live probe, Daily activation or acceptance
+is claimed.
 
 ## On-screen views authority (17 October 2026; P11-09 / #885)
 
@@ -1980,6 +1982,7 @@ issue closure, new PR, push, hosted CI or deployment by this worker.
 A rolling intake phase. When Dan asks Jarvis to change its own code or a project's code, Jarvis drafts the issue, confirms it with Dan and creates it as `P11-NN` (P10-03). Rows are added here as the issues are created.
 | ID | Issue | Task | Acceptance criteria | Depends on | Status |
 | --- | --- | --- | --- | --- | --- |
+| P11-11 | [#895](https://github.com/DanAakesen/jarvis/issues/895) | Never read back details of completed actions in voice or chat | Successful writes get one short confirmation with at most a count; retain details in the written/on-screen record and allow them when requested; report failed, partial and unverified outcomes with the affected item and next step; preserve staging summaries; English/Danish voice rules and focused contracts; live model verification after deployment | None | Complete |
 | P11-09 | [#885](https://github.com/DanAakesen/jarvis/issues/885) | P0: Jarvis has full control of its own on-screen views in voice and chat | Create, update, arrange and close generated views in voice and chat for the authenticated owner without weakening owner-only authority or accepting model actor claims; no raw JSON on screen; specific machine-usable refusals; regressions for the refused shapes in both paths; offline find/show/stage/confirm test; Dan's live re-test closes it | None | In progress |
 | P11-08 | [#868](https://github.com/DanAakesen/jarvis/issues/868) | Stop Web CI repeating backend checks | Web checks contracts and frontend; dedicated Backend and every other required component/analysis remain green; record actual selection without a speculative speedup claim | None | Complete |
 | P11-06 | [#860](https://github.com/DanAakesen/jarvis/issues/860) | Priority hotfix: stop the mobile composer jumping over chat on focus | One phone viewport dock with chat open, closed or minimised; preserve drafts, reader following and saved desktop geometry through focus, keyboard resize/pan/dismissal and orientation; focused regressions, independent review and normal release gates; native-phone acceptance explicit | None | Not started |

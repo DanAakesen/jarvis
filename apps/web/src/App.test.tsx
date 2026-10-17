@@ -1835,6 +1835,40 @@ describe('App shell', () => {
     expect(document.querySelectorAll('.now-panel')).toHaveLength(1);
   });
 
+  it('keeps Nutrition targets out of Settings while Daily is off', async () => {
+    await renderSignedIn('/settings');
+
+    expect(await screen.findByRole('heading', { level: 2, name: 'Projects' })).not.toBeNull();
+    expect(screen.queryByRole('heading', { name: /^Nutrition targets/u })).toBeNull();
+    expect(fetchMock.mock.calls.some(([url]) => new URL(String(url)).pathname === '/daily/nutrition-targets')).toBe(false);
+  });
+
+  it('shows Nutrition targets on Settings once Daily is on and reads them as the signed-in owner', async () => {
+    const bound = (label: string, unit: string, min: number, max: number) => ({ label, unit, min, max });
+    fetchMock.mockImplementation(async (input) => {
+      const body = new URL(String(input)).pathname === '/daily/nutrition-targets'
+        ? {
+          targets: { restingKcal: 1750, deficitKcal: 350, proteinGrams: 110 },
+          missing: [],
+          updatedAt: '2026-10-17T09:30:00.000Z',
+          bounds: {
+            restingKcal: bound('Resting energy burn', 'kcal', 1000, 4000),
+            deficitKcal: bound('Daily deficit', 'kcal', 0, 2000),
+            proteinGrams: bound('Protein target', 'g', 30, 400),
+          },
+        }
+        : { state: 'awake' };
+      return new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    });
+    await renderSignedIn('/settings', true);
+
+    expect(await screen.findByRole('heading', { level: 2, name: /^Nutrition targets/u })).not.toBeNull();
+    expect(((await screen.findByLabelText('Resting energy burn (kcal)')) as HTMLInputElement).value).toBe('1750');
+    const read = fetchMock.mock.calls.find(([url]) => new URL(String(url)).pathname === '/daily/nutrition-targets');
+    expect(read?.[0]).toBe('https://api.example.com/daily/nutrition-targets');
+    expect(read?.[1]).toMatchObject({ method: 'GET', headers: { Authorization: expect.any(String) } });
+  });
+
   it('renders bounded Now data as an allowlisted generated view after sign-in', async () => {
     fetchMock.mockImplementation(async (input) => {
       const path = new URL(String(input)).pathname;

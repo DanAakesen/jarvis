@@ -433,6 +433,15 @@ tests and lint run locally. Real Fastify route, composition, relay and Python
 agent semantics need the existing pinned CI graph; local Fastify/jose are
 unavailable.
 
+The web Settings section (`apps/web/src/daily/`) has its own tests, again with
+synthetic figures only. Check that Daily off renders no section and makes no
+request, that a save sends only the changed fields (a cleared field sends
+`null`), that an invalid entry sends nothing, and that no server text is
+rendered. Run the web tests, lint and `npx tsc --noEmit` from `apps/web`. A
+machine whose locale is not en-US fails the existing credentials-date test in
+`SettingsPage.test.tsx` (it expects "Oct 5, 2026") on the locale alone; CI is the
+authority.
+
 ## Nutrition suggestion adapter checks (17 October 2026; P12-09)
 
 `daily_nutrition_suggest` composes only through the seventh `createDailyModules`

@@ -5006,8 +5006,9 @@ refuses.
 This reverses the earlier no-maintenance-maths rule for one formula only (see
 the decision log): allowance = resting burn + active energy so far today -
 deficit. It adds no BMR/TDEE estimate from weight, height or age and no
-coaching. The suggestion adapter below is the second slice; the Settings section
-and the default-off composition are separate slices. The values are personal
+coaching. The suggestion adapter below is the second slice and the web Settings
+section after it the third; the default-off composition is a separate slice.
+The values are personal
 health data in a public repository: none appears in code, fixtures, documents,
 logs or audit.
 
@@ -5053,6 +5054,28 @@ only an optional `limit`, resolves the owner before anything else, and stops aft
 20 seconds inside the unchanged 30-second agent and voice budgets. Being
 read-only, it joins no approval or relay-budget list, and its model-facing
 description carries no figures.
+
+### Nutrition targets Settings section (17 October 2026)
+
+The web client reads and saves the owner's three targets through the same
+`GET`/`PATCH /daily/nutrition-targets` route. `SettingsRoute` hands
+`SettingsPage` a `nutrition` slot only while `App` has `dailyEnabled`, which is
+false unless a caller sets it, so a Daily-off client renders no section and
+makes no request. The section is keyed by the signed-in account, so another
+account never inherits the figures. It sits after Projects and outside the
+settings form: it saves on its own like Routines, and Save settings neither
+includes nor waits for it.
+
+`apps/web/src/daily/nutrition-targets.ts` is the only code that calls the route.
+It sends an authenticated `no-store` GET and a PATCH carrying only the changed
+fields, and parses every reply strictly against the route contract (targets,
+`updatedAt` and the per-field bounds); anything off-contract is a failure, never
+a partial display. The client states no figure of its own: labels, units and
+ranges come from the reply, an unset target is an empty field, a cleared field
+sends `null`, and HTTP failures map to static copy (404 means "not available
+here"), so server text is never shown. A save renders the committed readback the
+route returns rather than the typed draft. Nothing is logged, and the browser
+keeps only the section's open/closed flag.
 
 ### Inactive nutrition MCP adapter (17 October 2026)
 
