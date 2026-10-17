@@ -1122,6 +1122,14 @@ h3 { margin: var(--space-5) 0 var(--space-2); font-size: var(--type-subsection);
 .settings-section { padding: 26px 0; border-bottom: 1px solid var(--rule); }
 .settings-section:first-child { padding-top: 0; }
 .settings-section h2 { margin-bottom: 18px; }
+.proactive-item { width: min(100%, 680px); min-width: 0; margin: 0 auto; padding: var(--space-5); border: 1px solid var(--rule); border-radius: var(--radius-panel); background: var(--surface-translucent); color: var(--text); }
+.proactive-item h1 { margin: 0 0 var(--space-4); font-size: var(--type-subheading); }
+.proactive-item h2 { overflow-wrap: anywhere; }
+.proactive-item p { overflow-wrap: anywhere; }
+.proactive-item-body { white-space: pre-wrap; }
+.proactive-item-time { color: var(--text-muted); font-size: var(--type-small); }
+.proactive-item-feedback { display: grid; justify-items: start; gap: var(--space-3); }
+.proactive-item .primary-button, .proactive-item .secondary-button { min-height: 44px; margin: 0; }
 .theme-choice-group { display: flex; min-width: 0; flex-wrap: wrap; gap: 4px 20px; margin-top: 16px; }
 .theme-choice-group .choice { margin: 0; color: var(--text); }
 .theme-choice-group input { width: 18px; height: 18px; margin: 0; }
@@ -3107,6 +3115,7 @@ a.task-chip:hover { background: var(--glass-pressed); }
 .collapsible-section.collapsible-section { padding: 4px 12px; }
 .collapsible-section h2.collapsible-heading { margin: 0; font-size: inherit; }
 .settings-page form { gap: 10px; margin-top: 10px; }
+.settings-page .collapsible-section { min-width: 0; }
 .settings-page > .collapsible-section { margin-top: 10px; }
 @media (max-width: 700px) { .collapsible-toggle { min-height: 52px; font-size: 17px; } }
 :root[data-motion="reduced"] :is(.collapsible-body, .collapsible-chevron) { transition: none; }

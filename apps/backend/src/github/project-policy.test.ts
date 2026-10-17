@@ -109,14 +109,18 @@ function fixture(
   project: PolicyPullRequest = candidate(),
   githubOptions: Parameters<typeof github>[0] = {},
   onBaseBranchRead?: () => void,
-  confirmationEnabled = true,
 ) {
-  const getPullRequest = vi.fn(async () => project);
+  let currentProject = project;
+  const getPullRequest = vi.fn(async () => currentProject);
   let taskActive = true;
   let runnerCompleted = true;
   let runnerHeadSha = project.headSha;
   const store: ProjectPolicyStore = {
     getPullRequest,
+    listOpenPullRequests: vi.fn(async () =>
+      currentProject.state === 'open' && currentProject.policy === 'complete_without_deployment'
+        ? [currentProject]
+        : []),
     async withActiveTask<T>(_taskId: string, operation: () => Promise<T>, expectedHeadSha: string) {
       if (taskActive && (!runnerCompleted || expectedHeadSha !== runnerHeadSha)) {
         return { kind: 'awaiting_runner' as const };
@@ -141,13 +145,8 @@ function fixture(
     issueForIssuesWrite: vi.fn(async () => 'issues-write-token'),
   };
   const api = github(githubOptions, onBaseBranchRead);
-  const confirmation = {
-    run<T>(_summary: string, action: () => Promise<T>): Promise<T> { return action(); },
-  };
-  const runConfirmed = confirmationEnabled ? vi.spyOn(confirmation, 'run') : undefined;
   const evaluator = createProjectPolicyEvaluator({
     store, tasks, tokenIssuer, fetch: api.fetch,
-    ...(runConfirmed ? { runConfirmed: confirmation.run } : {}),
   });
   return {
     evaluator,
@@ -157,7 +156,7 @@ function fixture(
     recordEvent,
     issue,
     issueForRepositoryRead,
-    runConfirmed,
+    setCandidate(candidate: PolicyPullRequest) { currentProject = candidate; },
     setTaskActive(active: boolean) { taskActive = active; },
     setRunnerCompleted(completed: boolean) { runnerCompleted = completed; },
     setRunnerHeadSha(sha: string) { runnerHeadSha = sha; },
@@ -182,30 +181,12 @@ describe('GitHub project completion policies', () => {
     expect(test.transition).toHaveBeenCalledExactlyOnceWith('7', 'Done', true);
   });
 
-  it('does not request merge approval before the current runner completion is verified', async () => {
+  it('does not attempt a merge before the current runner completion is verified', async () => {
     const test = fixture();
     test.setRunnerCompleted(false);
 
     await test.evaluator.handle(mapping);
 
-    expect(test.runConfirmed).not.toHaveBeenCalled();
-    expect(test.issue).not.toHaveBeenCalled();
-    expect(test.api.calls.some((call) => call.url.endsWith('/merge'))).toBe(false);
-  });
-
-  it.each(['completion', 'work_commit'] as const)('rechecks %s after deferred merge approval', async (control) => {
-    const test = fixture();
-    let approve: (() => Promise<unknown>) | undefined;
-    test.runConfirmed?.mockImplementationOnce(<T>(_summary: string, action: () => Promise<T>) => new Promise<T>((resolve, reject) => {
-      approve = () => action().then(resolve, reject);
-    }));
-    await test.evaluator.handle(mapping);
-    if (control === 'completion') test.setRunnerCompleted(false);
-    else test.setRunnerHeadSha('d'.repeat(40));
-    await approve?.();
-    await vi.waitFor(() => expect(test.recordEvent).toHaveBeenCalledWith(expect.objectContaining({
-      summary: 'The task runner changed before approval; the approved merge was not attempted.',
-    })));
     expect(test.issue).not.toHaveBeenCalled();
     expect(test.api.calls.some((call) => call.url.endsWith('/merge'))).toBe(false);
   });
@@ -262,7 +243,7 @@ describe('GitHub project completion policies', () => {
     expect(test.recordEvent).not.toHaveBeenCalled();
   });
 
-  it('completes without CI only after the pull request check grace period', async () => {
+  it('completes deliver_pr without CI only after the pull request check grace period', async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-10-06T12:00:00.000Z'));
     const test = fixture({
@@ -285,7 +266,62 @@ describe('GitHub project completion policies', () => {
         summary: 'No CI configured; completed without checks',
       }));
     } finally {
-      test.evaluator.stop();
+      await test.evaluator.stop();
+      vi.useRealTimers();
+    }
+  });
+
+  it('squash-merges without CI after the grace period', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-10-06T12:00:00.000Z'));
+    const test = fixture({
+      ...candidate(),
+      checks: 'pending',
+      openedAt: new Date().toISOString(),
+    }, { checkRuns: [] });
+
+    try {
+      await test.evaluator.handle(mapping);
+      expect(test.api.calls.some((call) => call.url.endsWith('/merge'))).toBe(false);
+
+      await vi.advanceTimersByTimeAsync(2 * 60_000);
+
+      expect(test.api.calls.filter((call) => call.url.endsWith('/merge'))).toHaveLength(1);
+      expect(test.transition).not.toHaveBeenCalled();
+    } finally {
+      await test.evaluator.stop();
+      vi.useRealTimers();
+    }
+  });
+
+  it('recovers an eligible no-check PR after a simulated restart', async () => {
+    vi.useFakeTimers();
+    const openedAt = new Date('2026-10-06T12:00:00.000Z');
+    vi.setSystemTime(openedAt);
+    const waiting = fixture({
+      ...candidate(),
+      checks: 'pending',
+      openedAt: openedAt.toISOString(),
+    }, { checkRuns: [] });
+    const restarted = fixture({
+      ...candidate(),
+      checks: 'pending',
+      openedAt: new Date(openedAt.getTime() - 2 * 60_000).toISOString(),
+    }, { checkRuns: [] });
+
+    try {
+      await waiting.evaluator.handle(mapping);
+      expect(waiting.api.calls.some((call) => call.url.endsWith('/merge'))).toBe(false);
+      await waiting.evaluator.stop();
+
+      restarted.evaluator.start();
+      await vi.waitFor(() => expect(restarted.api.calls.some((call) => call.url.endsWith('/merge'))).toBe(true));
+      expect(restarted.recordEvent).toHaveBeenCalledWith(expect.objectContaining({
+        type: 'project_policy_merge_requested',
+      }));
+    } finally {
+      await waiting.evaluator.stop();
+      await restarted.evaluator.stop();
       vi.useRealTimers();
     }
   });
@@ -319,17 +355,15 @@ describe('GitHub project completion policies', () => {
         summary: expect.stringContaining('pending or failed'),
       }));
     } finally {
-      test.evaluator.stop();
+      await test.evaluator.stop();
       vi.useRealTimers();
     }
   });
 
-  it('confirms eligible complete_without_deployment PR merges and waits for the merge webhook before Done', async () => {
+  it('squash-merges eligible complete_without_deployment PRs without confirmation and waits for the merge webhook before Done', async () => {
     const test = fixture();
 
     await test.evaluator.handle(mapping);
-    await vi.waitFor(() => expect(test.api.calls.some((call) => call.url.endsWith('/merge'))).toBe(true));
-    await vi.waitFor(() => expect(test.recordEvent).toHaveBeenCalled());
 
     expect(test.api.calls.at(-1)).toMatchObject({
       url: `https://api.github.com/repos/${repository}/pulls/42/merge`,
@@ -337,41 +371,75 @@ describe('GitHub project completion policies', () => {
       body: JSON.stringify({ merge_method: 'squash', sha: headSha }),
     });
     expect(test.transition).not.toHaveBeenCalled();
-    expect(test.runConfirmed).toHaveBeenCalledWith(
-      expect.stringContaining(`pull request #42 in ${repository}`),
-      expect.any(Function),
-    );
     expect(test.recordEvent).toHaveBeenCalledWith(expect.objectContaining({
       type: 'project_policy_merge_requested',
       summary: expect.stringContaining('awaiting its pull request webhook'),
     }));
+    await test.evaluator.recheckProject('42');
+    expect(test.api.calls.filter((call) => call.url.endsWith('/merge'))).toHaveLength(1);
 
-    const confirmation = fixture(
+    const mergeWebhook = fixture(
       { ...candidate(), state: 'merged', taskState: 'NeedsAttention' },
       { pullRequestState: 'closed', merged: true },
     );
-    await confirmation.evaluator.handle({ ...mapping, state: 'merged', mergedAt: '2026-10-04T12:05:00.000Z' });
-    expect(confirmation.transition).toHaveBeenCalledWith('7', 'Done', true);
+    await mergeWebhook.evaluator.handle({ ...mapping, state: 'merged', mergedAt: '2026-10-04T12:05:00.000Z' });
+    expect(mergeWebhook.transition).toHaveBeenCalledWith('7', 'Done', true);
     expect(test.issue).toHaveBeenCalledOnce();
   });
 
-  it('uses a separate write token only inside the approved active-task merge', async () => {
-    const test = fixture(candidate(), { enforceTokenPermissions: true });
-    let approve!: () => void;
-    const approved = new Promise<void>((resolve) => { approve = resolve; });
-    test.runConfirmed?.mockImplementation(async (_summary, action) => {
-      await approved;
-      return await action();
-    });
+  it('rechecks an already-open PR immediately after the live project policy changes', async () => {
+    const test = fixture(candidate('deliver_pr'));
+
+    await test.evaluator.recheckProject('42');
+    expect(test.api.calls.some((call) => call.url.endsWith('/merge'))).toBe(false);
+
+    test.setCandidate(candidate('complete_without_deployment'));
+    await test.evaluator.recheckProject('42');
+
+    expect(test.api.calls.filter((call) => call.url.endsWith('/merge'))).toHaveLength(1);
+  });
+
+  it('does not repeat GitHub merge refusals during later sweeps', async () => {
+    const test = fixture(candidate(), { mergeStatus: 405 });
+
+    await test.evaluator.recheckProject('42');
+    await test.evaluator.recheckProject('42');
+
+    expect(test.api.calls.filter((call) => call.url.endsWith('/merge'))).toHaveLength(1);
+    expect(test.recordEvent).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'project_policy_blocked',
+      summary: expect.stringContaining('GitHub refused the squash merge'),
+    }));
+  });
+
+  it('backs off and bounds retries after transient GitHub failures', async () => {
+    vi.useFakeTimers();
+    const test = fixture(candidate(), { requestStatus: 503 });
 
     try {
-      await test.evaluator.handle(mapping);
-      expect(test.issueForRepositoryRead).toHaveBeenCalledExactlyOnceWith(repository);
-      expect(test.issue).not.toHaveBeenCalled();
+      await test.evaluator.recheckProject('42');
+      const firstAttemptCount = test.api.calls.length;
+      await test.evaluator.recheckProject('42');
+      expect(test.api.calls).toHaveLength(firstAttemptCount);
+
+      await vi.advanceTimersByTimeAsync(60_000);
+      await test.evaluator.recheckProject('42');
+      expect(test.api.calls).toHaveLength(firstAttemptCount * 2);
+      expect(test.recordEvent).toHaveBeenCalledWith(expect.objectContaining({
+        type: 'project_policy_blocked',
+        summary: expect.stringContaining('retry automatically'),
+      }));
     } finally {
-      approve();
+      await test.evaluator.stop();
+      vi.useRealTimers();
     }
-    await vi.waitFor(() => expect(test.recordEvent).toHaveBeenCalled());
+  });
+
+  it('uses a separate write token only inside the active-task merge', async () => {
+    const test = fixture(candidate(), { enforceTokenPermissions: true });
+    await test.evaluator.handle(mapping);
+
+    expect(test.issueForRepositoryRead).toHaveBeenCalledExactlyOnceWith(repository);
     expect(test.issue).toHaveBeenCalledExactlyOnceWith(repository);
     expect(test.api.calls.at(-1)).toMatchObject({
       method: 'PUT',
@@ -381,29 +449,24 @@ describe('GitHub project completion policies', () => {
     expect(test.transition).not.toHaveBeenCalled();
   });
 
-  it('does not mint a write token if the task becomes inactive before merge approval', async () => {
+  it('does not mint a write token if the task becomes inactive before the merge', async () => {
     const test = fixture(candidate(), { enforceTokenPermissions: true });
-    test.runConfirmed?.mockImplementation(async (_summary, action) => {
-      test.setTaskActive(false);
-      return await action();
-    });
+    test.setTaskActive(false);
 
     await test.evaluator.handle(mapping);
-    await vi.waitFor(() => expect(test.recordEvent).toHaveBeenCalled());
     expect(test.issue).not.toHaveBeenCalled();
     expect(test.api.calls.some((call) => call.url.endsWith('/merge'))).toBe(false);
   });
 
-  it('fails closed when approved merge credentials cannot be obtained without blaming Dan or leaking errors', async () => {
+  it('fails closed when merge credentials cannot be obtained without leaking errors', async () => {
     const test = fixture(candidate(), { enforceTokenPermissions: true });
     test.issue.mockRejectedValue(new Error('PRIVATE synthetic credential error'));
 
     await test.evaluator.handle(mapping);
-    await vi.waitFor(() => expect(test.recordEvent).toHaveBeenCalled());
     expect(test.api.calls.some((call) => call.url.endsWith('/merge'))).toBe(false);
     expect(test.transition).not.toHaveBeenCalled();
     expect(test.recordEvent).toHaveBeenCalledWith(expect.objectContaining({
-      summary: 'Merge approval or credentials could not be verified; no merge was attempted.',
+      summary: 'GitHub merge credentials could not be verified; no merge was attempted.',
     }));
     expect(JSON.stringify(test.recordEvent.mock.calls)).not.toContain('PRIVATE');
   });
@@ -417,17 +480,6 @@ describe('GitHub project completion policies', () => {
     await vi.waitFor(() => expect(test.recordEvent).toHaveBeenCalled());
     expect(test.recordEvent).toHaveBeenCalledWith(expect.objectContaining({
       summary: expect.stringContaining('task is no longer active'),
-    }));
-  });
-
-  it('refuses to merge when Dan confirmation is unavailable', async () => {
-    const test = fixture(candidate(), {}, undefined, false);
-
-    await test.evaluator.handle(mapping);
-
-    expect(test.api.calls.some((call) => call.url.endsWith('/merge'))).toBe(false);
-    expect(test.recordEvent).toHaveBeenCalledWith(expect.objectContaining({
-      summary: expect.stringContaining('Dan confirmation is unavailable'),
     }));
   });
 

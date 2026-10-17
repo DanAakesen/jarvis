@@ -255,8 +255,8 @@ Both paths still require the same current generation/session/invocation,
 no-start-lease policy gate and ordinary GitHub delivery/policy verification.
 The backend completion event retains the work commit. The SQL policy gate
 compares that commit with the policy candidate's expected PR head while holding
-the task lock, including after deferred approval. A different green PR cannot
-substitute for unpublished current work.
+the task lock. A different green PR cannot substitute for unpublished current
+work.
 Proof identity expressions use explicit `Latin1_General_100_BIN2` comparison.
 JSON inherits the payload column's database-default collation, which can
 differ from the binary Foundry-session column and otherwise fail the gate with
@@ -284,9 +284,9 @@ sleep/dispatcher locks and commits its generation with the start lease.
 Completion proof carries the tracked session's generation, not a newly inferred
 task value. The locked policy gate requires an absent start lease and equality
 between task, session and proof generations, as well as the existing latest
-session/turn identifiers. This gate is shared by Done and approved merge,
-including the callback after deferred approval. Clearing a failed start's lease
-cannot restore the previous proof. No transaction is held across Foundry start.
+session/turn identifiers. This gate is shared by Done and the automatic
+project-policy merge. Clearing a failed start's lease cannot restore the
+previous proof. No transaction is held across Foundry start.
 
 Existing completion events are not backfilled. Existing session generation zero
 can receive fresh runtime verification, but old proof without a generation is
@@ -1850,16 +1850,69 @@ pending, unexpired request. Approval/rejection is a conditional single-use
 transition; the backend consumes an unexpired approval before calling the gated
 operation. Reject, timeout, cancellation, replay, unknown IDs, startup
 orphaning, and unverifiable identity all fail closed. The pending timer is five
-minutes. `runConfirmed` gates repository creation and the automatic squash-merge
-path; future delete, mail, calendar, out-of-browser computer and spend actions
-must use the same gate. Merge work is queued after webhook validation so the
-GitHub request is not held open while Dan responds.
+minutes. `runConfirmed` gates repository creation and other confirmation-required
+operations; future delete, mail, calendar, out-of-browser computer and spend
+actions must use the same gate. The `complete_without_deployment` project-policy
+merge is separate: selecting that policy is approval, so the guarded squash
+merge runs without a browser or Teams confirmation. Merge evaluation follows
+webhook validation and is also recovered by the startup/periodic policy sweep.
 
-The web approval remains visible in the header attention popover if voice is not
-active; the pending operation expires and fails closed after five minutes if the
-owner does not approve.
+Other web approvals remain visible in the header attention popover if voice is
+not active; those pending operations expire and fail closed after five minutes
+if Dan does not approve.
 Teams/Bot Service and Speech F0 code is not live-verified because those
 integrations are not part of the personal-tenant deployment.
+
+## Proactive Web Push backend (P13-01, 17 October 2026)
+
+The backend registers the owner-authenticated push routes only when
+`JARVIS_PUSH_ENABLED` is exactly `true`; the default is off. Disabled composition
+does not construct the push store, read or write push tables, create signing keys,
+or send provider requests, and the routes return ordinary 404s. No deployment,
+workflow or infrastructure setting enables this flag.
+
+`push_vapid_keys`, `push_subscriptions` and `proactive_items` are separate SQL
+tables. The store uses the process-owned SQL pool and
+`databaseReadRequest` for retryable reads. Subscriptions are owner-scoped,
+deduplicated by SHA-256 endpoint hash and capped at ten. Test items are durable
+and owner-protected; the first successful item load sets `opened_at`, meaning
+loaded rather than read.
+
+`apps/backend/src/push/webpush.ts` implements P-256 VAPID, ES256 signing and
+RFC 8291 `aes128gcm` encryption with `node:crypto`; no dependency is added. The
+private VAPID key is generated on first use, stored only in SQL and never
+returned. Subscription endpoints are checked against the provider-host allowlist
+before any server-side request. Provider acceptance is recorded as acceptance,
+not display or reading; encrypted push content contains only the version, generic
+title/body and item UUID. Retries are limited to transient provider responses and
+bounded by per-request/overall timeouts.
+
+P13-01 sends only a direct user-requested test. It adds no scheduler or quiet-hour
+guard; every future system-started send must enforce 22:00–07:00
+Europe/Copenhagen with no emergency exception. There is no Teams delivery path.
+The feature remains dark, and actual iPhone delivery is not yet proven.
+
+## Web push delivery (P13-02; default off)
+
+The web build exposes only the boolean result of `VITE_PUSH_ENABLED === "true"`
+through Vite's explicit `define`; its default is false. When enabled, the
+Notifications Settings section prefetches authenticated `GET /push/config` and
+registers the plain `public/sw.js` worker at `/` with worker updates uncached.
+Static Web Apps excludes `/sw.js` from its SPA fallback and sends
+`Cache-Control: no-cache`. The worker does not cache content or provide offline
+behavior; every push displays only the fixed generic Jarvis alert, retaining a
+validated UUID solely as notification data/tag.
+
+The web client calls authenticated `PUT /push/subscription`,
+`DELETE /push/subscription`, and `POST /push/test` through `backendFetch`.
+Notification permission is requested directly from the explicit opt-in action.
+The click handler builds `/proactive/:id` itself from a validated UUID and never
+uses a payload URL. That route calls authenticated `GET /proactive/items/:id`
+and remains inside `RequireSignIn`; the item response and notification reference
+grant no authorization. The sign-in path is stored as a validated same-origin
+session-storage value and consumed after MSAL returns to `/`. P13-02 changes no
+backend, deployment flag, identity or permission configuration; live phone
+permission, lock-screen delivery and tap-through remain unverified.
 
 ## Presence modes (P6-23; replaces P7-02 away mode)
 
@@ -4134,7 +4187,7 @@ dismisses historical board failures without deleting activity.
 
 When a task turn completes, P3-14 uses the repository-scoped GitHub App token to verify the task branch, reuse an open PR for the configured base if present, or compare the branch with the default branch and create a PR only when it is ahead. Branch/PR reads happen outside the task policy lock; the backend rechecks that the task is Running under the lock before the bounded PR create, reconciles an ambiguous create response with a matching-PR lookup, and records `pull_request_opened` before releasing it. This serializes the side effect with cancellation without holding the lock across the GitHub preflight. The new PR uses the task title and links to its Jarvis task through the configured Static Web App origin. The backend ends the completed sandbox without marking the task Done; GitHub's signed PR/check webhooks continue the P3-06 policy flow. A missing branch, no new commits, or GitHub API refusal records a clear task event and moves the task to Needs attention. Duplicate completions reuse the PR, including a second lookup after GitHub reports a duplicate create. The GitHub App token stays backend-side.
 
-P3-06 joins the task-linked PR record to its project policy, checks the recorded result against GitHub's current PR and check-run/commit-status APIs, and issues a repository-scoped token through the existing App token issuer. An open PR with no check runs or commit statuses waits two minutes from its recorded open time, then rechecks GitHub; only a still-empty result counts as no CI, and pending or failed records continue to block. `deliver_pr` marks a verified green or no-CI, non-draft PR Done without merging, recording no-CI completion in task activity. `complete_without_deployment` additionally requires the PR base SHA to match the current branch tip and GitHub to report a clean/mergeable PR, then requests a squash merge with the expected head SHA. GitHub enforces the repository's required checks and branch protection at merge time; a refusal is stored as a backend task event. A task-scoped SQL application lock serializes automatic merges with cancellation, and task state is rechecked while the lock is held. On merge acceptance, a task event is committed before releasing the lock; cancellation is refused until the signed merge webhook is persisted. GitHub rate limits remain retryable webhook failures. A successful merge response is not sufficient to mark Done: the backend waits for the signed `pull_request` webhook to persist the merged state, then verifies that state and checks before transitioning the task. Duplicate webhook deliveries re-evaluate the persisted row, so a transient follow-up failure can be retried. Fake-backed tests cover PR creation, both policies, and refusal reasons; live App installation and test-repository acceptance remain unverified.
+P3-06 joins the task-linked PR record to its live project policy, checks the recorded result against GitHub's current PR and check-run/commit-status APIs, and issues a repository-scoped token through the existing App token issuer. An open PR with no check runs or commit statuses waits two minutes from its recorded open time, then rechecks GitHub; only a still-empty result counts as no CI, and pending or failed records continue to block. `deliver_pr` marks a verified green or no-CI, non-draft PR Done without merging, recording no-CI completion in task activity. `complete_without_deployment` additionally requires the PR base SHA to match the current branch tip and GitHub to report a clean/mergeable PR, then immediately requests a squash merge with the expected head SHA; choosing the policy is approval, so this path asks for no confirmation and sends no message. The backend re-evaluates open PRs for active Running/NeedsAttention tasks at startup and every minute, and a project-policy PATCH triggers an immediate project-scoped recheck. This recovers the persisted no-check grace after restart. GitHub enforces the repository's required checks and branch protection at merge time; a refusal is stored as a backend task event and is not repeatedly attempted. Transient GitHub failures receive at most three retries with 1/2/4-minute backoff. A task-scoped SQL application lock serializes automatic merges with cancellation, and task state is rechecked while the lock is held. On merge acceptance, a task event is committed before releasing the lock; cancellation is refused until the signed merge webhook is persisted. A successful merge response is not sufficient to mark Done: the backend waits for the signed `pull_request` webhook to persist the merged state, then verifies that state and checks before transitioning the task. Duplicate webhook deliveries re-evaluate the persisted row, so a transient follow-up failure can be retried. Fake-backed tests cover PR creation, both policies, startup/restart recovery, policy changes, retries and refusal reasons; live App installation and test-repository acceptance remain unverified.
 
 
 **Codex login rules** (Pro login only; no API key):
@@ -5022,7 +5075,8 @@ resting energy burn (kcal), daily deficit (kcal) and protein target (g). A sixth
 optional `createDailyModules` argument, `nutritionTargets`, is a request-bound
 accessor. It is independent of the earlier factories, needs shared Daily data
 (otherwise construction throws) and composes only when Daily is on, so Daily off
-and every existing composition are unchanged. No production caller exists yet.
+and every existing composition are unchanged. Only the default-off Daily
+composition below calls it.
 Its presence moves the capabilities stage to `internal-nutrition-rehearsal`.
 
 Each target is one `dbo.settings` row at scope `global` with a Daily-owned,
@@ -5047,7 +5101,7 @@ This reverses the earlier no-maintenance-maths rule for one formula only (see
 the decision log): allowance = resting burn + active energy so far today -
 deficit. It adds no BMR/TDEE estimate from weight, height or age and no
 coaching. The suggestion adapter below is the second slice and the web Settings
-section after it the third; the default-off composition is a separate slice.
+section after it the third; the default-off composition is the last.
 The values are personal
 health data in a public repository: none appears in code, fixtures, documents,
 logs or audit.
@@ -5058,7 +5112,8 @@ A seventh optional `createDailyModules` argument, `nutritionSuggestions`
 (`{nutrition, health, now?}`), adds the read-only `daily_nutrition_suggest` tool.
 It needs shared Daily data and the sixth `nutritionTargets` accessor (otherwise
 construction throws) and composes only when Daily is on, so Daily off and every
-existing composition are unchanged. No production caller exists yet. It adds no
+existing composition are unchanged. Only the default-off Daily composition below
+calls it. It adds no
 route, migration, write, provider call, job or timer.
 
 One call fixes a single trusted clock reading (the Copenhagen date and time) and
@@ -5116,6 +5171,42 @@ sends `null`, and HTTP failures map to static copy (404 means "not available
 here"), so server text is never shown. A save renders the committed readback the
 route returns rather than the typed draft. Nothing is logged, and the browser
 keeps only the section's open/closed flag.
+
+### Default-off Daily composition (17 October 2026)
+
+`apps/backend/src/daily/composition.ts` is the only production entry to Daily.
+`index.ts` calls `composeDaily({ enabled, pool, ownerObjectId })` once, and
+`createProductionModules` places the result between the voice relay and the Teams
+bot; `app.ts` is untouched. `enabled` is `config.dailyEnabled === true`, which
+`loadConfig` sets only when `JARVIS_DAILY_ENABLED` is exactly `true`. Absent and
+`false` are off; any other value is a `ConfigurationError` that never echoes it.
+With the switch off the function returns `undefined` before it validates anything
+or reads the pool, so the module list, route table, tool catalogue, capability
+instructions, voice session tools, startup, background jobs and timers are those
+of Jarvis without Daily.
+
+With the switch on it needs the shared SQL pool and a UUID owner (otherwise
+startup fails), builds `createDailyData(pool, owner)` and returns the module of
+`createDailyModules` for the nutrition rehearsal: `GET /daily/capabilities`,
+`POST /daily/query`, `GET`/`PATCH /daily/nutrition-targets` and six tools
+(`daily_query`, `daily_food`, `daily_food_review`, `daily_saved_food`,
+`daily_nutrition_targets`, `daily_nutrition_suggest`), which takes the catalogue
+to 116 of its 128-tool limit. The connector, Frida lookup, feeds and health-upload
+arguments are left out, so the module has no MCP route, provider call, Google or
+Gmail read, job or timer. The targets and health accessors also compare the
+resolved owner with the composed owner and refuse a mismatch, on top of the check
+inside the data accessors. Root authentication is unchanged: a connector or
+runner principal is refused on every Daily route, and an agent is refused on the
+targets route because it reaches targets only through the approved tool.
+
+No workflow, Bicep, infrastructure, environment or deploy file sets
+`JARVIS_DAILY_ENABLED`, or the web switch `VITE_DAILY_ENABLED` reserved for the
+Daily page, so every environment keeps Daily off; `daily/default-off.test.ts`
+scans those files for both names. `daily/composition.test.ts` builds real
+applications: it compares a Daily-off one with one built without Daily, shows the
+module adds exactly its three routes and six tools, and checks that
+unauthenticated, other-user, runner, connector and mismatched-owner callers are
+refused before any SQL.
 
 ### Inactive nutrition MCP adapter (17 October 2026)
 

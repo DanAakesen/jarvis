@@ -279,11 +279,13 @@ function SelectField({
   );
 }
 
-export function SettingsPage({ backendUrl, getAccessToken, presence, projects, renderProjects, nutrition, memory, onBack }: {
+export function SettingsPage({ backendUrl, getAccessToken, presence, notifications, projects, renderProjects, nutrition, memory, onBack }: {
   backendUrl: string | null;
   getAccessToken: () => Promise<string>;
   /** Presence mode and instructions per mode, shown before the saved settings. */
   presence?: ReactNode;
+  /** Optional push opt-in controls, present only when the client feature gate is on. */
+  notifications?: ReactNode;
   /** Project management, rendered with this page's new-project defaults disclosure. */
   projects?: ReactNode;
   renderProjects?: (projectDefaults: ReactNode) => ReactNode;
@@ -561,6 +563,7 @@ export function SettingsPage({ backendUrl, getAccessToken, presence, projects, r
         <h1 id="settings-heading">Settings</h1>
       </header>
       {presence}
+      {notifications}
       {state === 'loading' && <Loader variant="text" label="Loading settings…" />}
       {state === 'error' && (
         <div className="settings-feedback" role="alert">
