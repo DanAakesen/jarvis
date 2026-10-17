@@ -1,6 +1,37 @@
 # Project plan
 
+## Release diagnosis (17 October 2026; safe CI reason codes)
+
+Continue autonomously without direct Azure or credentials. Both new owned
+read-only Status browser attempts reached sign-in, so neither performed login,
+storage/token inspection or a new model check. The app remains applied and
+verification blocked as recorded below.
+
+Add a bounded fixed-allowlist formatter to the existing Deploy smoke log. It
+prints only code-defined check/reason identifiers, never report details or
+model/tool/provider/user text. Keep the existing status validation, deadline and
+required acceptance predicate unchanged; no green retry or no-op fake success.
+Local12 targeted script tests and Ruff pass. Existing Bicep0.44.1 offline
+build/lint pass without Azure access or upgrade.
+
+The workflow edit selects all existing parts under the unchanged deploy planner;
+this is explicit, not an app-only assumption. No IaC, identity, scope, resource,
+secret or environment configuration changes. Normal exact-head qualification
+and existing main-only deployment must precede any new diagnostic result.
+
 ## Retained brief history (17 October 2026; P12-14 / #729)
+
+Source #878 is merged as `cca9c9d7`, exactly matching qualified `a9478e16`
+tree `b0487147`. Final normal CI passed all10 jobs:3754 backend,231 SQL,1081 web
+and48 contracts; all four actual analyses and exact-head review passed, with the
+compatibility finding resolved. Backend0000339 and web were updated by normal
+Deploy39029329877; health200/root/settings passed, infrastructure/agent skipped.
+**Deployment acceptance is blocked**, not complete: first smoke failed GitHub
+chat read plus its aggregate canary. One bounded failed-smoke-only recheck
+recovered GitHub read but failed chat navigation; no rebuild or third retry.
+The underlying reason is unproved. Need the retained safe reason codes/logs;
+direct Azure access is not permitted and Dan was unavailable for that question.
+Keep the healthy applied artifacts and all native/private gates unchanged.
 
 Next bounded inactive source work makes existing `briefing_runs` accessible
 through the same Daily query/tool and page, not a new screen, generator or

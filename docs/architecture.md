@@ -4576,6 +4576,13 @@ P8-33 scratch Chromium checks cover the adaptive quality thresholds, compact pho
 The reference lockfile is standalone, outside root workspaces, and contains the prototype's dependencies only. Bundled Three.js/Phosphor notices are retained. Physical/hardware performance, live activity/voice behavior and normal-rate flicker acceptance remain unverified; P8-31 adds no production Three.js dependency.
 ## Daily integration boundary (P12-01)
 
+Release diagnostics consume the existing authenticated smoke response inside
+the main-only deployment job. In addition to unchanged status lines, a bounded
+standard-library formatter emits exact fixed chat-reason codes; untrusted text
+and unknown codes are redacted. It cannot relax the existing gate or trigger a
+probe itself. This keeps diagnosis on the established CI identity without local
+Azure access, credential extraction or an additional diagnostics service.
+
 ### Historical brief reads (17 October 2026; inactive source)
 
 The existing `daily.briefing_runs` table feeds two shared query sources:

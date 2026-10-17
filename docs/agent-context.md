@@ -1,6 +1,35 @@
 # Agent context
 
+## Safe release reason logging (17 October 2026)
+
+Deploy smoke status lines and the required gate remain unchanged. The standard
+library `smoke_reasons.py` helper emits only fixed chat-check/reason code pairs.
+Unknown, absent or mismatched reasons are explicitly redacted; raw details,
+responses, tool arguments, provider bodies and report contents are never printed.
+CLI reads at most64KiB and fails explicitly on invalid/unreadable reports.
+Seven new formatter/wiring/redaction/CLI cases plus five existing smoke cases
+passed locally; Ruff passes. No dependency or runtime identity change.
+
+Changing Deploy YAML intentionally selects all existing deployment parts under
+current policy. No planner exception, skip, threshold/deadline weakening or new
+Azure identity is introduced. Unchanged Bicep0.44.1 passes offline build/lint;
+do not upgrade the tool or use local Azure APIs. Normal exact-head CI/review and
+the established main-only workflow are the release boundary.
+
 ## Retained brief-history checks (17 October 2026; inactive P12-14 source)
+
+Final a947 qualification passed normal CI39028701880, all10 jobs
+(backend3754/SQL231/web1081/contracts48), four actual analyses and exact review.
+Normal mergecca9 matches qualifiedb048. Deploy39029329877 applied backend339/
+web and passed health200/root/settings, but **failed required chat acceptance**.
+Attempt1: GitHub chat read down/aggregate canary down; attempt2's single bounded
+smoke-only diagnostic recheck recovered that but navigation was down. PC bridge
+and identity warnings remain separately nonblocking. No further retries,
+timeout increases, gate weakening, credential borrowing or direct Azure access.
+Existing component job timestamps prove no rebuild on the recheck. Need retained
+`system.smoke_check` reason codes or authorised operator telemetry; pipeline logs
+print only IDs/statuses. User unavailable is not a permission waiver. This release
+must not be reported as fully verified or trigger another unchanged deploy.
 
 The source adds bounded metadata/history and exact body reads from existing
 `briefing_runs` to the same query/tool/page. No migration, new store, notification

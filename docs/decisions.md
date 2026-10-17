@@ -1,5 +1,20 @@
 # Decisions
 
+## Expose safe smoke reason codes through existing CI (17 October 2026)
+
+Required chat acceptance failed twice on different actions after qualified878
+components were applied. Status-only CI logs cannot distinguish a timeout,
+agent error or failed receipt predicate. Passive owned browser attempts were
+signed out; do not log in, borrow credentials, weaken checks or bypass the
+project's prohibition on direct agent Azure access.
+
+Prefer a small fixed-code formatter in the existing Deploy workflow over a new
+diagnostic account/service/workflow. Preserve every status/deadline/gate and
+print no raw report or user/model/provider/tool content. Unknown reasons get an
+explicit redacted marker. This diagnoses failure; it does not claim its cause
+or repair the underlying canary. The workflow edit follows the unchanged full
+deployment policy; no resource/identity/IaC changes are included.
+
 ## Extend the shared Daily query for retained briefs (17 October 2026; P12-14)
 
 Historical brief data already has an owned canonical table but no read/tool/page
