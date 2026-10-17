@@ -266,6 +266,8 @@ Connector audit requires the existing SQL store's `recordDailyMcp` method and
 Normal message FKs remain required and rollback refuses retained connector
 audit. Server-to-server only: reject browser Origin, retain shared root CORS,
 and explicitly negotiate modern protocol in synthetic SDK clients.
+Saved-name lookup uses the existing `lookup_food`, owner-bound resolver and
+query DTO projection; preserve original component inputs and deployed 0049.
 
 Historical read continuation: Dan ordered deployment first, then Daily. After #866's
 successful deployment, JarvisPM claimed partial #724 directly in the existing

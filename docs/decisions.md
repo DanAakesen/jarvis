@@ -1,5 +1,14 @@
 # Decisions
 
+## Reuse saved-food lookup without expanding connector authority (17 October 2026; P12-09)
+
+Extend the existing `lookup_food` with an exclusive `savedName` alternative;
+preserve its original Frida component input and five-tool audit allowlist.
+Use the existing owner-bound favourite/alias-before-history resolver and shared
+query DTO projection, not a second search algorithm or raw SQL-row response.
+Missing/ambiguous/oversized records stay explicit; never fall back to a provider
+or write intake. No migration, permission or confirmation change is required.
+
 ## Isolate the inactive hosted nutrition connector (17 October 2026; P12-09)
 
 Continue Dan's authorised Daily source work after the completed releases,

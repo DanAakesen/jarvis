@@ -35,7 +35,12 @@ The current transport accepts modern MCP
 
 `read_nutrition` shares bounded meal/favourite/plan queries, provenance,
 unknown values and freshness with existing Daily reads. Definitions/plans are
-not eaten meals. `lookup_food` reuses the pinned public Frida adapter.
+not eaten meals. `lookup_food` accepts exactly one of its original `components`
+input (the pinned public Frida adapter) or `savedName` (existing owner-bound
+favourite/alias resolution before an exact historical meal name). Saved matches
+reuse shared query DTO whitelists, preserve stored quantities/nulls/provenance
+and report unknown freshness. Missing/ambiguous matches never fall back to
+Frida or create intake; oversized results refuse under the shared read budget.
 Write-enabled composition additionally exposes `log_food`, `correct_food`
 and `delete_food`; no Apple Health action follows. Favourites/plans remain
 read-only through this adapter.

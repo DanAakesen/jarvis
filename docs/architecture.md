@@ -4598,8 +4598,12 @@ selector, and retain a 96 KiB body limit. This server-to-server boundary
 does not widen the application's existing browser/CORS permissions.
 
 The adapter reuses `DailyQueryService` for bounded nutrition-only reads and
-the existing Frida lookup/typed handlers for log/correct/soft-delete. Server
-owner resolution, canonical SQL transactions/replay/revisions and acknowledged
+the existing Frida lookup/typed handlers for log/correct/soft-delete.
+`lookup_food.savedName` also reuses the existing owner-bound saved-food resolver:
+favourites/aliases precede exact historical names. Its DTO projection is shared
+with bounded Daily queries. Empty, ambiguous or oversized results never trigger
+a provider fallback or write. Original Frida component requests are unchanged.
+Server owner resolution, canonical SQL transactions/replay/revisions and acknowledged
 commit notifications remain authoritative. Model-supplied confirmations,
 record IDs, owner selectors and verified provenance are not accepted.
 External writes require native form review bound to SDK-signed, ten-minute

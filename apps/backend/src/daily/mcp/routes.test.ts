@@ -12,7 +12,7 @@ import { createDailyModules } from '../index.js';
 import { fridaReference, type FridaLookup } from '../nutrition/frida.js';
 import type { createNutritionHandlers } from '../nutrition/handlers.js';
 import { canonicalJson, prepareMeal, type MealInput } from '../nutrition/model.js';
-import type { DailyQueryService } from '../query.js';
+import { dailyResultByteLimit, type DailyQueryService } from '../query.js';
 import { dailyMcpMetadataPath, dailyMcpPath } from './paths.js';
 import { dailyMcpRoutes } from './routes.js';
 
@@ -156,6 +156,78 @@ describe('inactive hosted nutrition MCP adapter', () => {
     const refused = await client.callTool({ name: 'read_nutrition', arguments: { source: 'daily.health.metrics', owner: 'foreign' } });
     expect(refused.isError).toBe(true);
     expect(f.query.query).toHaveBeenCalledOnce();
+  });
+
+  it.each(['favorite', 'history'] as const)('returns the shared safe %s DTO for an owner-bound saved name without a provider call or write', async source => {
+    const f = await fixture();
+    vi.mocked(f.nutrition.lookupSaved).mockResolvedValue({
+      source, row: {
+        id: 'synthetic-saved-food', meal_name: 'Synthetic saved meal', energy_kcal: 240, protein_grams: null,
+        aliases_json: '["Synthetic alias"]', components_json: '[{"name":"Synthetic component"}]',
+        nutrient_provenance_json: '{"source":"synthetic-retained"}', revision: 3n,
+        meal_date: new Date('2026-10-15T00:00:00Z'),
+        owner_object_id: config.auth.ownerObjectId, private_synthetic_marker: 'never-expose-this',
+      },
+    });
+    const { client, messages } = await f.connect('read');
+    const result = await client.callTool({ name: 'lookup_food', arguments: { savedName: 'Synthetic alias' } });
+    expect(result.isError).not.toBe(true);
+    expect(result.structuredContent).toMatchObject({
+      status: 'available', period: null,
+      match: { source, record: {
+        id: 'synthetic-saved-food', meal_name: 'Synthetic saved meal', energy_kcal: 240, protein_grams: null,
+        components_json: [{ name: 'Synthetic component' }], nutrient_provenance_json: { source: 'synthetic-retained' },
+        ...(source === 'favorite' ? { aliases_json: ['Synthetic alias'] } : { revision: '3', meal_date: '2026-10-15' }),
+      } },
+      units: { energy_kcal: 'kcal', '*_grams': 'g' },
+      freshness: { observedAt: '2026-10-16T21:59:00.000Z', staleness: 'unknown' },
+    });
+    expect(f.nutrition.lookupSaved).toHaveBeenCalledWith('Synthetic alias', expect.objectContaining({ intent: 'lookup' }));
+    expect(f.nutrition.lookup).not.toHaveBeenCalled();
+    for (const name of ['log', 'correct', 'remove', 'favorite', 'plan'] as const) expect(f.nutrition[name]).not.toHaveBeenCalled();
+    expect(messages).toEqual([]);
+    expect(JSON.stringify(result)).not.toContain('never-expose-this');
+    expect(JSON.stringify(result)).not.toContain(config.auth.ownerObjectId);
+    expect(JSON.stringify(f.audit.mock.calls)).not.toContain('Synthetic alias');
+    expect(f.audit).toHaveBeenCalledWith(expect.objectContaining({ tool: 'lookup_food', phase: 'ok', outcome: 'ok' }));
+  });
+
+  it('keeps missing and ambiguous saved food explicit without guessing or falling back to Frida', async () => {
+    const f = await fixture();
+    const { client } = await f.connect('read');
+    const missing = await client.callTool({ name: 'lookup_food', arguments: { savedName: 'Synthetic missing meal' } });
+    expect(missing.structuredContent).toMatchObject({ status: 'empty', match: null });
+    vi.mocked(f.nutrition.lookupSaved).mockRejectedValueOnce(new ToolRefusal('Favourite alias is ambiguous.'));
+    const ambiguous = await client.callTool({ name: 'lookup_food', arguments: { savedName: 'Synthetic ambiguous alias' } });
+    expect(ambiguous.isError).toBe(true);
+    expect(ambiguous.content).toEqual([{ type: 'text', text: 'Favourite alias is ambiguous.' }]);
+    expect(f.nutrition.lookup).not.toHaveBeenCalled();
+    expect(f.nutrition.log).not.toHaveBeenCalled();
+  });
+
+  it('requires exactly one lookup mode and rejects owner selectors before reading saved food', async () => {
+    const f = await fixture();
+    const { client } = await f.connect('read');
+    for (const input of [
+      {}, { savedName: ' ' }, { savedName: 'Synthetic meal', owner: 'foreign' },
+      { savedName: 'Synthetic meal', components: [{ name: 'Synthetic food', grams: null, preparationMethod: null }] },
+    ]) {
+      expect((await client.callTool({ name: 'lookup_food', arguments: input })).isError).toBe(true);
+    }
+    expect(f.nutrition.lookupSaved).not.toHaveBeenCalled();
+    expect(f.nutrition.lookup).not.toHaveBeenCalled();
+  });
+
+  it('refuses an oversized saved record without exposing it or substituting a provider result', async () => {
+    const f = await fixture();
+    vi.mocked(f.nutrition.lookupSaved).mockResolvedValue({
+      source: 'favorite', row: { id: 'synthetic-oversized', meal_name: 'x'.repeat(dailyResultByteLimit) },
+    });
+    const { client } = await f.connect('read');
+    const result = await client.callTool({ name: 'lookup_food', arguments: { savedName: 'Synthetic oversized meal' } });
+    expect(result.isError).toBe(true);
+    expect(result.content).toEqual([{ type: 'text', text: 'Saved food exceeds the shared Daily response limit. No complete result is available.' }]);
+    expect(f.nutrition.lookup).not.toHaveBeenCalled();
   });
 
   it('requires native review even when a photo claims accurate confidence, freezes the Copenhagen occurrence and returns a committed receipt', async () => {
