@@ -1413,7 +1413,9 @@ describe('App shell', () => {
     const original = fetchMock.getMockImplementation()!;
     fetchMock.mockImplementation(async (input, init) => {
       const path = new URL(String(input)).pathname;
-      if (path === '/factory/projects') return new Response(JSON.stringify([{ id: '7', name: 'Jarvis', default_agent: 'copilot' }]));
+      if (path === '/factory/projects') return new Response(JSON.stringify([
+        { id: '7', name: 'Jarvis', default_agent: 'copilot', policy: 'deliver_pr' },
+      ]));
       if (path === '/factory/board') return boardResponse();
       return original(input, init);
     });

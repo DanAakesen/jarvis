@@ -4767,3 +4767,15 @@ shows unsaved, pending, confirmed, and failed states with an in-section retry,
 without changing the endpoint or project PATCH contract. Add project previews
 the saved defaults that the backend applies, and each registered project keeps
 its own editable settings.
+
+## P10-11 — Per-project completion policy controls (17 October 2026)
+
+Show the active completion policy as a labelled, descriptive two-choice radio
+group on project cards and project settings, and reuse that group beside the
+project choice in Create task. A choice uses the existing project PATCH; keep
+the saved choice visible until the server confirms the update, disable both
+options while saving, and provide an inline retry on failure. State that the
+change applies now, including to already-open pull requests. The new-project
+policy default is separate: it only pre-fills projects Jarvis registers later,
+and each project keeps its own changeable policy. This is web-only; the PATCH
+contract, default values, and P10-09 merge behavior do not change.
