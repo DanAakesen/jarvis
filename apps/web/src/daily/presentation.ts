@@ -8,6 +8,7 @@ export const dailySources: readonly { id: DailySourceId; label: string; dated: b
   { id: sources.meals, label: 'Food history', dated: true },
   { id: sources.favorites, label: 'Saved favourites', dated: false },
   { id: sources.plans, label: 'Meal plans', dated: false },
+  { id: sources.briefs, label: 'Brief history', dated: false },
   { id: sources.sync, label: 'Sync evidence', dated: false },
 ];
 export type Row = Record<string, DailyJson>;
@@ -21,6 +22,8 @@ const columns: Record<DailySourceId, readonly Column[]> = {
   [sources.meals]: [{ key: 'meal_date', label: 'Date' }, { key: 'meal_name', label: 'Food' }, { key: 'energy_kcal', label: 'Energy', unit: 'kcal' }, { key: 'confidence', label: 'Confidence' }],
   [sources.favorites]: [{ key: 'favorite_name', label: 'Favourite' }, { key: 'aliases_json', label: 'Aliases' }, { key: 'energy_kcal', label: 'Energy', unit: 'kcal' }, { key: 'confidence', label: 'Confidence' }],
   [sources.plans]: [{ key: 'plan_name', label: 'Plan' }, { key: 'energy_kcal', label: 'Energy', unit: 'kcal' }, { key: 'protein_grams', label: 'Protein', unit: 'g' }, { key: 'revision', label: 'Revision' }],
+  [sources.briefs]: [{ key: 'started_at', label: 'Started as recorded' }, { key: 'trigger', label: 'Trigger' }, { key: 'status', label: 'Historical status' }, { key: 'delivery_status', label: 'Historical delivery' }],
+  [sources.brief]: [{ key: 'id', label: 'Brief ID' }, { key: 'started_at', label: 'Started as recorded' }, { key: 'status', label: 'Historical status' }, { key: 'delivery_status', label: 'Historical delivery' }],
   [sources.sync]: [{ key: 'feed_kind', label: 'Feed' }, { key: 'accepted_evidence_at', label: 'Accepted' }, { key: 'processed_committed_at', label: 'Processed' }],
 };
 export function dailyColumns(source: DailySourceId) { return columns[source]; }
@@ -34,10 +37,11 @@ export function initialDailyPeriod(now = new Date()) {
   const start = new Date(`${endDate}T12:00:00Z`); start.setUTCDate(start.getUTCDate() - 6);
   return { startDate: start.toISOString().slice(0, 10), endDate };
 }
-export function dailyRequest(source: DailySourceId, period: { startDate: string; endDate: string }, cursor?: DailyCursor, workoutId?: string): DailyQuery | null {
-  const value = source === sources.sync ? { source } : source === sources.workout ? { source, workoutId } :
-    source === sources.heartRate ? { source, workoutId, limit: 50, ...(cursor ? { cursor } : {}) } :
-      source === sources.favorites || source === sources.plans ? { source, limit: 50, ...(cursor ? { cursor } : {}) } :
+export function dailyRequest(source: DailySourceId, period: { startDate: string; endDate: string }, cursor?: DailyCursor, recordId?: string): DailyQuery | null {
+  const value = source === sources.sync ? { source } : source === sources.workout ? { source, workoutId: recordId } :
+    source === sources.brief ? { source, briefId: recordId } :
+    source === sources.heartRate ? { source, workoutId: recordId, limit: 50, ...(cursor ? { cursor } : {}) } :
+      source === sources.favorites || source === sources.plans || source === sources.briefs ? { source, limit: 50, ...(cursor ? { cursor } : {}) } :
         { source, ...period, limit: 50, ...(cursor ? { cursor } : {}) };
   return isDailyQuery(value) ? value : null;
 }
@@ -56,6 +60,10 @@ export function dailyValue(value: DailyJson | undefined): string {
   }
   if (Array.isArray(value) && value.every(item => typeof item === 'string')) return value.length ? value.join(', ') : 'None';
   return JSON.stringify(value, null, 2);
+}
+export function dailyCellValue(source: DailySourceId, field: string, value: DailyJson | undefined) {
+  if ((source === sources.briefs || source === sources.brief) && typeof value === 'string') return value;
+  return field === 'metric_name' && typeof value === 'string' ? readable(value) : dailyValue(value);
 }
 export function dailyRowKey(row: Row, source: DailySourceId, ordinal: number) {
   if (typeof row.id === 'string') return `${source}:${row.id}`;

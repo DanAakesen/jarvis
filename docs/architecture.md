@@ -4576,6 +4576,32 @@ P8-33 scratch Chromium checks cover the adaptive quality thresholds, compact pho
 The reference lockfile is standalone, outside root workspaces, and contains the prototype's dependencies only. Bundled Three.js/Phosphor notices are retained. Physical/hardware performance, live activity/voice behavior and normal-rate flicker acceptance remain unverified; P8-31 adds no production Three.js dependency.
 ## Daily integration boundary (P12-01)
 
+### Historical brief reads (17 October 2026; inactive source)
+
+The existing `daily.briefing_runs` table feeds two shared query sources:
+periodless bounded metadata history and exact owned body detail. A parameterised
+read model uses the existing pool/cancellation helper without acquiring unrelated
+health-ingestion locks. Metadata excludes unbounded bodies and provider/delivery
+snapshots. Detail bounds SQL body retrieval and the existing768KiB response
+budget; provider snapshots, delivery evidence and owner fields are not projected.
+
+Both the shared query service and reader explicitly reject the nutrition-only
+connector. Existing module arguments, root auth, nutrition MCP allowlist and
+production default-off composition remain unchanged. History is ordered by
+stored start text and exact ID descending, with opaque matching cursors. Source
+timestamps are not converted or used to claim freshness; observation time remains
+the actual read time. The same query/tool DTO drives the single page and on-demand
+GenUI. No generation, delivery, recurrence, source import or new permission occurs.
+
+Capabilities negotiate separately from the unchanged query DTO/native-view v1
+contract. Unversioned/ordinary Accept requests retain the original nine-source
+v1 advertisement. Updated clients request
+`application/json;version=2, application/json`; upgraded servers return capability
+v2 with brief sources, `Content-Type` version2, no-store and `Vary: Accept`.
+Updated clients also accept a genuine nine-source v1 response from older backends.
+This preserves cached old web bundles during backend-first deployment and new
+bundles during rollback without widening CORS or adding caller query selectors.
+
 ### Default-off single-page composition (17 October 2026)
 
 `App({ dailyEnabled: false })` retains the released production route/rail/mobile

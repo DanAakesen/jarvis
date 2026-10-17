@@ -1,5 +1,29 @@
 # Decisions
 
+## Extend the shared Daily query for retained briefs (17 October 2026; P12-14)
+
+Historical brief data already has an owned canonical table but no read/tool/page
+path. Extend the current query sources rather than add a parallel API/tool
+protocol; a separate history screen conflicts with the confirmed one-page scope.
+Separate small metadata pages from bounded exact body reads, omit provider and
+delivery snapshots, and reuse the existing pool/query cancellation rather than
+the health processor's exclusive transaction lock.
+
+Legacy timestamp columns are stored text. Preserve them verbatim and describe
+the actual stored-text/ID ordering instead of inventing a timezone, current
+freshness or a new delivery. Unknown import completeness remains unknown. The
+nutrition connector has narrower authority than the human/hosted agent: reject
+it explicitly for briefs at both service and reader, without broadening MCP.
+No notification or schedule implementation is required to read history. This
+decision authorises no private import, provider access, activation or cutover.
+
+Review identified that even inactive source must preserve the existing strict
+v1 capability consumers. Negotiate capability v2 explicitly through standard
+Accept with plain-JSON fallback; retain the exact v1 source set for old clients.
+Do not merely filter unknown sources after breaking the old advertisement.
+The updated client accepts older v1 servers; no new CORS header or URL selector
+is needed. The query/native-view version stays unchanged.
+
 ## Prepare the single Daily page without activating migration (17 October 2026)
 
 Continue the confirmed one-page scope under Dan's standing autonomous migration

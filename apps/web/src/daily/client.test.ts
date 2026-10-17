@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { dailyQuerySources as sources, type DailyQuery } from '@jarvis/contracts';
+import { dailyCapabilitiesAccept, dailyQuerySources as sources, dailyQuerySourcesV1, type DailyQuery } from '@jarvis/contracts';
 import { DailyReadError, isDailyResult, loadDailySources, queryDaily } from './client';
 import { dailyFixture, jsonResponse } from './test-support';
 
@@ -31,6 +31,15 @@ describe('owner-authenticated Daily query client', () => {
     expect(init).toMatchObject({ method: 'POST', cache: 'no-store', body: JSON.stringify(query), headers: { Authorization: ['Bearer', 'synthetic-fixture'].join(' ') } });
     expect(init.signal).toBeInstanceOf(AbortSignal);
   });
+  it('bounds brief detail to one row and validates the exact history cursor without reinterpreting source time', () => {
+    const detail: DailyQuery = { source: sources.brief, briefId: ' padded ' };
+    expect(isDailyResult(dailyFixture(detail, [{ id: ' padded ', started_at: 'unknown timezone', body_json: null }]), detail)).toBe(true);
+    expect(isDailyResult(dailyFixture(detail, [{ id: 'padded' }]), detail)).toBe(false);
+    expect(isDailyResult(dailyFixture(detail, [{ id: 'a' }, { id: 'b' }]), detail)).toBe(false);
+    const history: DailyQuery = { source: sources.briefs, limit: 1 };
+    expect(isDailyResult(dailyFixture(history, [{ id: ' padded ' }], { startedAt: 'raw', id: ' padded ' }), history)).toBe(true);
+    expect(isDailyResult(dailyFixture(history, [{ id: ' padded ' }], { id: 'wrong-family' }), history)).toBe(false);
+  });
   it.each([401, 403, 404, 503])('surfaces HTTP %s without parsing or displaying provider diagnostics', async status => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse({ private_detail: 'must-not-escape' }, status)));
     try { await queryDaily('http://localhost:3999', query, token, signal()); throw new Error('Expected failure'); }
@@ -42,7 +51,7 @@ describe('owner-authenticated Daily query client', () => {
   });
   it('keeps disabled/unavailable capabilities distinct and accepts only known unique source IDs', async () => {
     const fetch = vi.fn()
-      .mockResolvedValueOnce(jsonResponse({ module: 'daily', version: 1, sources: Object.values(sources) }))
+      .mockResolvedValueOnce(jsonResponse({ module: 'daily', version: 2, sources: Object.values(sources) }))
       .mockResolvedValueOnce(jsonResponse({ module: 'daily', version: 1, sources: [sources.metrics, sources.metrics] }))
       .mockResolvedValueOnce(jsonResponse({ module: 'daily', version: 1, sources: ['arbitrary-provider'] }));
     vi.stubGlobal('fetch', fetch);
@@ -50,6 +59,16 @@ describe('owner-authenticated Daily query client', () => {
     await expect(loadDailySources('http://localhost:3999', token, signal())).rejects.toThrow('not available');
     await expect(loadDailySources('http://localhost:3999', token, signal())).rejects.toThrow('not available');
     await expect(queryDaily(null, query, token, signal())).rejects.toMatchObject({ kind: 'disabled' });
+  });
+  it('explicitly negotiates v2 yet accepts an unchanged v1 server without losing existing collections', async () => {
+    const fetch = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({ module: 'daily', version: 1, sources: dailyQuerySourcesV1 }))
+      .mockResolvedValueOnce(jsonResponse({ module: 'daily', version: 1, sources: Object.values(sources) }));
+    vi.stubGlobal('fetch', fetch);
+    expect(await loadDailySources('http://localhost:3999', token, signal())).toEqual(dailyQuerySourcesV1);
+    expect(fetch.mock.calls[0]?.[1]).toMatchObject({ headers: { Accept: dailyCapabilitiesAccept } });
+    expect(fetch).toHaveBeenCalledTimes(1);
+    await expect(loadDailySources('http://localhost:3999', token, signal())).rejects.toMatchObject({ kind: 'invalid' });
   });
   it('does not claim success for oversized or mismatched responses', async () => {
     const fetch = vi.fn()

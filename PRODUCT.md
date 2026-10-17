@@ -952,6 +952,12 @@ equivalent action rather than creating one tool per button. Missing tool
 coverage remains unfinished. This does not restore excluded features or waive
 private-data, provider, credential, device, approval or activation gates.
 
+Retained brief history belongs in that same page and chat/voice query workflow.
+Read existing historical metadata and exact body detail without generating,
+delivering or scheduling a new brief. Stored timestamps and historical delivery
+states are not current health/freshness evidence; do not infer a missing timezone.
+Preserve the original data and leave recurring Daily notifications off.
+
 16 October implementation resumption: the next inactive P12-09 slice shares
 one owner-authorised bounded query path between HTTP and the existing sensitive
 tool registry for retained health/sleep/workouts/minute heart rate, meal history

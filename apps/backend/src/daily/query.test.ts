@@ -37,13 +37,83 @@ function fixture() {
     items_json: '[{"favoriteId":"001","nutrients":{"energyKcal":123,"proteinGrams":null}}]',
     energy_kcal: 369, protein_grams: null, revision: 2n, deleted_at: '2026-10-16T07:20:00Z',
     owner_object_id: owner, updated_at: '2026-10-16T07:20:00Z', internal_metadata: 'must-not-escape' }], nextId: null });
+  const briefHistory = vi.fn().mockResolvedValue({ items: [{ id: ' synthetic-brief ', trigger: 'manual',
+    started_at: '2026-10-16T07:00:00', status: 'completed', delivery_status: 'not_requested',
+    updated_at: 'legacy-unverified-time', owner_object_id: owner, body_json: '"not-a-list-field"',
+    source_snapshots_json: '{"credential":"must-not-escape"}' }], next: null });
+  const briefDetail = vi.fn().mockResolvedValue({ id: ' synthetic-brief ', trigger: 'manual',
+    started_at: '2026-10-16T07:00:00', status: 'completed', delivery_status: 'not_requested',
+    preview_text: 'Synthetic historic brief', body_json: '{"sections":[{"text":"Synthetic stored body"}]}',
+    updated_at: 'legacy-unverified-time', owner_object_id: owner,
+    source_snapshots_json: '{"credential":"must-not-escape"}', delivery_evidence_json: '{"token":"must-not-escape"}' });
   const readers: DailyReaders = {
     health: vi.fn(() => ({ history, sync, workoutDetail, heartRate })),
     nutrition: vi.fn(() => ({ history: meals, favorites, plans })),
+    briefs: vi.fn(() => ({ history: briefHistory, detail: briefDetail })),
   };
-  return { service: new DailyQueryService(readers, () => clock), advance: () => { clock += 60000; }, readers, history, sync, workoutDetail, heartRate, meals, favorites, plans };
+  return { service: new DailyQueryService(readers, () => clock), advance: () => { clock += 60000; }, readers, history, sync, workoutDetail, heartRate, meals, favorites, plans, briefHistory, briefDetail };
 }
 describe('one shared Daily read contract', () => {
+  it('shares historical brief metadata/body through HTTP and the same sensitive tool, without interpreting time or delivering', async () => {
+    const f = fixture();
+    const query = { source: sources.briefs, limit: 1, cursor: { startedAt: 'raw stored time', id: ' previous ' } };
+    const tool = dailyQueryTool(f.service);
+    const result = await f.service.query(query, request(), signal());
+    expect(await tool.execute(query, request(), signal())).toEqual(result);
+    expect(tool.sensitive).toBe(true);
+    expect(result).toMatchObject({ period: null, units: {}, status: 'available',
+      freshness: { sourceProcessedCommittedAt: null, latestReturnedRecordUpdatedAt: null, staleness: 'unknown' } });
+    expect(result.items[0]).toMatchObject({ id: ' synthetic-brief ', started_at: '2026-10-16T07:00:00', updated_at: 'legacy-unverified-time' });
+    expect(result.items[0]).not.toHaveProperty('body_json');
+    expect(f.briefHistory).toHaveBeenLastCalledWith({ limit: 1, after: query.cursor }, expect.any(AbortSignal));
+    const detailQuery = { source: sources.brief, briefId: ' synthetic-brief ' };
+    const detail = await f.service.query(detailQuery, request(), signal());
+    expect(detail.items[0]).toMatchObject({ preview_text: 'Synthetic historic brief', body_json: { sections: [{ text: 'Synthetic stored body' }] } });
+    expect(f.briefDetail).toHaveBeenLastCalledWith(' synthetic-brief ', expect.any(AbortSignal));
+    expect(JSON.stringify(detail)).not.toContain('must-not-escape');
+    expect(JSON.stringify(detail)).not.toContain(owner);
+    expect(f.readers.health).not.toHaveBeenCalled();
+    expect(f.readers.nutrition).not.toHaveBeenCalled();
+    const app = Fastify();
+    app.decorate('ownerObjectId', owner);
+    app.decorateRequest('principal', null);
+    app.addHook('onRequest', async req => { req.principal = { objectId: owner, tenantId: owner, displayName: 'Synthetic' }; });
+    for (const module of createDailyModules(true, { query: f.service, changes: createDailyChanges() })) app.register(module.registerRoutes);
+    try {
+      for (const input of [query, detailQuery]) {
+        const response = await app.inject({ method: 'POST', url: '/daily/query', payload: input });
+        expect(response.statusCode).toBe(200);
+        expect(response.json()).toEqual(await tool.execute(input, request(), signal()));
+      }
+      for (const input of [{ ...detailQuery, briefId: null }, { ...detailQuery, owner },
+        { ...query, startDate: '2026-10-01' }, { ...query, cursor: { ...query.cursor, owner } }]) {
+        expect((await app.inject({ method: 'POST', url: '/daily/query', payload: input })).statusCode).toBe(400);
+      }
+    } finally { await app.close(); }
+  });
+  it('keeps brief paging/revisions and missing or failed detail honest', async () => {
+    const f = fixture();
+    const first = await f.briefHistory();
+    f.briefHistory.mockResolvedValue({ ...first, next: { startedAt: '2026-10-16T07:00:00', id: ' synthetic-brief ' } });
+    const result = await f.service.query({ source: sources.briefs }, request(), signal());
+    expect(result).toMatchObject({ status: 'partial', coverage: { hasMore: true, next: { startedAt: '2026-10-16T07:00:00', id: ' synthetic-brief ' } } });
+    f.advance();
+    expect((await f.service.query({ source: sources.briefs }, request(), signal())).revision).toBe(result.revision);
+    f.briefDetail.mockResolvedValue(null);
+    expect(await f.service.query({ source: sources.brief, briefId: 'missing' }, request(), signal())).toMatchObject({ status: 'empty', items: [] });
+    f.briefDetail.mockRejectedValue(new Error('synthetic-private'));
+    await expect(f.service.query({ source: sources.brief, briefId: 'missing' }, request(), signal())).rejects.toThrow('Daily data is unavailable');
+  });
+  it('rejects the nutrition-only connector at the shared brief boundary before any reader is invoked', async () => {
+    const f = fixture();
+    const connector = request({ principal: undefined, dailyConnectorPrincipal: { kind: 'jarvis-daily-connector', objectId: owner } });
+    for (const query of [{ source: sources.briefs }, { source: sources.brief, briefId: 'id' }]) {
+      await expect(f.service.query(query, connector, signal())).rejects.toMatchObject({ statusCode: 403 });
+    }
+    expect(f.readers.briefs).not.toHaveBeenCalled();
+    expect(f.readers.health).not.toHaveBeenCalled();
+    expect(f.readers.nutrition).not.toHaveBeenCalled();
+  });
   it('round-trips the real HTTP/module contract with a synthetic principal (not root-token acceptance)', async () => {
     const f = fixture(); const changes = createDailyChanges(); const hub = createEventHub<NowFeedUpdate>();
     const app = Fastify();

@@ -8,7 +8,7 @@ export const dailyViewIds = Object.freeze({
 export const dailyModuleId = 'daily';
 export const dailyContractVersion = 1;
 
-export const dailyQuerySources = Object.freeze({
+const legacyQuerySources = Object.freeze({
   metrics: 'daily.health.metrics',
   sleep: 'daily.health.sleep',
   workouts: 'daily.health.workouts',
@@ -19,10 +19,19 @@ export const dailyQuerySources = Object.freeze({
   plans: 'daily.nutrition.plans',
   sync: 'daily.sync',
 });
+export const dailyQuerySourcesV1 = Object.freeze(Object.values(legacyQuerySources));
+export const dailyCapabilitiesVersion = 2;
+export const dailyCapabilitiesAccept = 'application/json;version=2, application/json';
+export const dailyQuerySources = Object.freeze({
+  ...legacyQuerySources,
+  briefs: 'daily.briefs.history',
+  brief: 'daily.briefs.detail',
+});
 const record = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 const keys = (v, allowed) => Object.keys(v).every((key) => allowed.includes(key));
 const key = (v) => typeof v === 'string' && v.length > 0 && v.length <= 256 &&
   v.trim() === v && ![...v].some(c => c.charCodeAt(0) < 32 || c.charCodeAt(0) === 127);
+const briefId = (v) => typeof v === 'string' && v.length > 0 && v.length <= 256;
 const date = (v) => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/u.test(v) &&
   !v.startsWith('0000-') && Number.isFinite(Date.parse(v)) && new Date(v).toISOString().slice(0, 10) === v;
 const instant = (v) => typeof v === 'string' && v.length <= 64 &&
@@ -36,6 +45,13 @@ export function isDailyQuery(v) {
   if (Object.values(v).some(value => value === undefined)) return false;
   if (v.source === dailyQuerySources.sync) return keys(v, ['source']);
   if (v.source === dailyQuerySources.workout) return keys(v, ['source', 'workoutId']) && key(v.workoutId);
+  if (v.source === dailyQuerySources.brief) return keys(v, ['source', 'briefId']) && briefId(v.briefId);
+  if (v.source === dailyQuerySources.briefs) {
+    if (!keys(v, ['source', 'limit', 'cursor']) ||
+        (v.limit !== undefined && (!Number.isInteger(v.limit) || v.limit < 1 || v.limit > 100))) return false;
+    return v.cursor === undefined || (record(v.cursor) && keys(v.cursor, ['startedAt', 'id']) &&
+      typeof v.cursor.startedAt === 'string' && v.cursor.startedAt.length <= 64 && briefId(v.cursor.id));
+  }
   if (v.source === dailyQuerySources.favorites || v.source === dailyQuerySources.plans) {
     if (!keys(v, ['source', 'limit', 'cursor']) ||
         (v.limit !== undefined && (!Number.isInteger(v.limit) || v.limit < 1 || v.limit > 100))) return false;
@@ -59,10 +75,11 @@ export const dailyQuerySchema = Object.freeze({
   type: 'object',
   properties: {
     source: { type: 'string', enum: Object.values(dailyQuerySources) },
-    startDate: { type: 'string', description: 'Inclusive Europe/Copenhagen calendar date, YYYY-MM-DD; required for history.' },
+    startDate: { type: 'string', description: 'Inclusive Europe/Copenhagen date, YYYY-MM-DD; required for health/meal history, not briefs.' },
     endDate: { type: 'string', description: 'Inclusive calendar date; at most 366 days after startDate.' },
     workoutId: { type: 'string', maxLength: 256 },
-    limit: { type: 'integer', minimum: 1, maximum: 500, description: 'Nutrition sources allow at most 100; default 50.' },
+    briefId: { type: 'string', minLength: 1, maxLength: 256, description: 'Exact returned legacy brief ID, without trimming; only for brief detail.' },
+    limit: { type: 'integer', minimum: 1, maximum: 500, description: 'Nutrition and brief history allow at most 100; default 50.' },
     // Per-source validation deliberately runs on the original cursor, not Ajv-stripped fields.
     cursor: { type: 'object', additionalProperties: true, description: 'Replay exactly the previous result coverage.next cursor.' },
   },

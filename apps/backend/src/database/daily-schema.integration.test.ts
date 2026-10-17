@@ -6,6 +6,10 @@ import { loadDatabaseConfig } from './config.js';
 import { applyMigrations, readMigrations, readDownMigration, revertMigration } from './migrations.js';
 import { DailyOwnerStore } from '../daily/store/owner-store.js';
 import { dailyTables } from '../daily/store/schema.js';
+import { DailyBriefReadModel } from '../daily/briefs/read-model.js';
+import { DailyQueryService, dailyResultByteLimit } from '../daily/query.js';
+import { dailyQueryTool } from '../daily/tools/query.js';
+import { dailyQuerySources as sources } from '@jarvis/contracts';
 
 const configuration = loadDatabaseConfig();
 if (!configuration || process.env.NODE_ENV !== 'test' || configuration.server !== '127.0.0.1') {
@@ -96,6 +100,49 @@ describe('Daily SQL owner schema on real SQL Server', () => {
         VALUES (@owner,N'scalar-json',N'true',N'synthetic',N'2026-01-01');`);
     expect(await DailyOwnerStore.forRequest(pool, requestFor(owner)).read('attention_rule_config', { key: 'scalar-json' }, signal()))
       .toMatchObject({ value_json: 'true' });
+  });
+
+  it('reads real owned brief history/body without generation, delivery, snapshots or timestamp reinterpretation', async () => {
+    const insert = (ownerId: string, id: string, body: string) => pool.request()
+      .input('owner', sql.UniqueIdentifier, ownerId).input('id', sql.NVarChar(256), id)
+      .input('body', sql.NVarChar(sql.MAX), body).batch(`
+        INSERT daily.briefing_runs(owner_object_id,id,[trigger],started_at,status,preview_text,body_json,
+          source_snapshots_json,delivery_evidence_json,updated_at)
+        VALUES(@owner,@id,N'manual',N'raw stored time',N'completed',N'Synthetic historical preview',@body,
+          N'{"private":"must-not-escape"}',N'{"private":"must-not-escape"}',N'unknown source time');`);
+    for (const id of ['CaseID', 'caseid', 'padded ']) await insert(owner, id, '{"text":"Synthetic historical body"}');
+    await insert(other, 'CaseID', '{"text":"Other owner"}');
+    const reader = DailyBriefReadModel.forRequest(pool, requestFor(owner));
+    const service = new DailyQueryService({
+      health: () => { throw new Error('Brief reads must not load health'); },
+      nutrition: () => { throw new Error('Brief reads must not load nutrition'); },
+      briefs: req => DailyBriefReadModel.forRequest(pool, req),
+    }, () => Date.parse('2026-10-17T08:00:00Z'));
+    const tool = dailyQueryTool(service);
+    const seen: string[] = [];
+    let after: { startedAt: string; id: string } | null = null;
+    do {
+      const page = await reader.history({ limit: 1, ...(after ? { after } : {}) }, signal());
+      seen.push(...page.items.map(row => String(row.id)));
+      expect(page.items[0]).not.toHaveProperty('body_json');
+      after = page.next;
+    } while (after);
+    expect(seen).toEqual(['padded ', 'caseid', 'CaseID']);
+    expect(await reader.detail('padded', signal())).toBeNull();
+    expect(await reader.detail('Padded ', signal())).toBeNull();
+    const result = await tool.execute({ source: sources.brief, briefId: 'padded ' }, requestFor(owner), signal());
+    expect(result).toMatchObject({ period: null, status: 'available', items: [{
+      id: 'padded ', started_at: 'raw stored time', body_json: { text: 'Synthetic historical body' }, delivery_status: 'not_requested',
+    }], freshness: { sourceProcessedCommittedAt: null, latestReturnedRecordUpdatedAt: null, staleness: 'unknown' } });
+    expect(JSON.stringify(result)).not.toContain('must-not-escape');
+    expect(JSON.stringify(result)).not.toContain(owner);
+    expect((await DailyBriefReadModel.forRequest(pool, requestFor(other)).history({}, signal())).items).toHaveLength(1);
+    expect((await pool.request().query('SELECT COUNT(*) AS count FROM daily.briefing_runs')).recordset[0].count).toBe(4);
+    expect((await pool.request().query("SELECT COUNT(*) AS count FROM daily.briefing_runs WHERE delivery_status<>N'not_requested'")).recordset[0].count).toBe(0);
+    await insert(owner, 'oversized', JSON.stringify('x'.repeat(dailyResultByteLimit)));
+    await expect(reader.detail('oversized', signal())).rejects.toThrow('read budget');
+    const bytes = (await pool.request().query<{ bytes: string }>("SELECT DATALENGTH(body_json) AS bytes FROM daily.briefing_runs WHERE id=N'oversized'")).recordset[0]!.bytes;
+    expect(BigInt(bytes)).toBeGreaterThan(BigInt(dailyResultByteLimit) * 2n);
   });
 
   it('refuses destructive down migration while any Daily record exists', async () => {

@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { MIMEType } from 'node:util';
 import { buildApp } from '../app.js';
 import { loadConfig } from '../config.js';
 import { coreModule } from '../core/index.js';
@@ -8,6 +9,7 @@ import { resolveDailyOwner } from './owner.js';
 import { createDailyChanges } from './revisions.js';
 import type { DailyData, DailyFoodLookup } from './query.js';
 import type { InternalSavedNutrition } from './tools/saved-food.js';
+import { dailyCapabilitiesAccept, dailyQuerySources, dailyQuerySourcesV1 } from '@jarvis/contracts';
 
 const config = { ...loadConfig({}), logLevel: 'silent' as const };
 const owner = config.auth.ownerObjectId;
@@ -71,6 +73,29 @@ describe('Daily integration contract', () => {
     for (const field of ['owner', 'ownerId', 'sourceOwnerId']) {
       expect((await app.inject({ url: `/daily/capabilities?${field}=${other}`, headers: headers() })).statusCode).toBe(400);
     }
+  });
+  it('keeps legacy capability consumers on the exact v1 set and advertises briefs only on explicit v2 negotiation', async () => {
+    const query = vi.fn();
+    const data: DailyData = { query: { query }, changes: createDailyChanges() };
+    const app = buildApp(config, undefined, { auth, modules: [coreModule, ...createDailyModules(true, data)] });
+    apps.push(app);
+    for (const accept of [undefined, 'application/json']) {
+      const response = await app.inject({ url: '/daily/capabilities', headers: { ...headers(), ...(accept ? { accept } : {}) } });
+      expect(response.json()).toMatchObject({ version: 1, sources: dailyQuerySourcesV1 });
+      expect(response.json().sources).not.toContain(dailyQuerySources.briefs);
+      expect(response.json().sources).not.toContain(dailyQuerySources.brief);
+      expect(response.headers['cache-control']).toBe('no-store');
+      expect(response.headers.vary).toContain('Accept');
+    }
+    for (const accept of [dailyCapabilitiesAccept, 'application/json; version="2", application/json']) {
+      const modern = await app.inject({ url: '/daily/capabilities', headers: { ...headers(), accept } });
+      expect(modern.statusCode).toBe(200);
+      const type = new MIMEType(String(modern.headers['content-type']));
+      expect(type.essence).toBe('application/json');
+      expect(type.params.get('version')).toBe('2');
+      expect(modern.json()).toMatchObject({ version: 2, sources: Object.values(dailyQuerySources) });
+    }
+    expect(query).not.toHaveBeenCalled();
   });
   it('requires an explicit internal store factory rather than enabling writes with read-only data', async () => {
     const data: DailyData = { query: { query: vi.fn() }, changes: createDailyChanges() };

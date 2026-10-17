@@ -1,5 +1,39 @@
 # Agent context
 
+## Retained brief-history checks (17 October 2026; inactive P12-14 source)
+
+The source adds bounded metadata/history and exact body reads from existing
+`briefing_runs` to the same query/tool/page. No migration, new store, notification
+job, schedule, grant or provider call. Preserve raw stored timestamp/ID ordering;
+unknown source time cannot become freshness. Briefs explicitly refuse the
+nutrition-only `dailyConnectorPrincipal` in both service and reader; the shared
+owner resolver intentionally permits that principal for nutrition, so it is not
+a sufficient resource check on its own. Existing nutrition MCP stays allowlisted
+to its three nutrition sources.
+
+Local native contract4 checks, focused web25 checks, full web types and scoped
+web/backend lint pass. A compiler ref-taint warning from a handler-object prop
+was corrected with conventional event props; final page9 cases passed, including
+brief cursor/detail/back restoration and escaped body text. Real shared HTTP/
+tool/auth and added real-SQL case/cursor/body-budget/owner isolation checks are
+authored for normal pinned CI; no local runtime/SQL pass or dependency restore
+is claimed on the known missing-Fastify/jose graph.
+
+Actual App with synthetic data/auth only was inspected at1440px desktop dark,
+390px touch light and320px touch dark. Brief history/detail/back, verbatim
+timezone-less timestamp, literal nonexecuted script text and metadata/body
+separation worked; no page overflow, under44px controls or off-origin resources
+were observed. This is not private imported-history or physical-phone proof.
+The single-page foundation #877 is already released/receipted; do not requalify it.
+
+First665 CI's final real-SQL byte assertion exposed SQL bigint-as-text; compare
+with BigInt while retaining the exact threshold. Source review found expanded
+v1 capability advertisement would reject cached clients. Correct with explicit
+Accept-negotiated capability v2, original v1 source list and new-client v1
+fallback; keep every query-string selector rejected and shared CORS unchanged.
+Added native contracts, real HTTP old/new consumer and client compatibility cases.
+Corrected source requires normal exact-head qualification before release.
+
 ## Inactive Daily page checks (17 October 2026)
 
 Use the existing approved x64 Node22.23.3 and pinned single-React graph; do not

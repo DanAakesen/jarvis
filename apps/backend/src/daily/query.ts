@@ -14,16 +14,17 @@ import { SqlHealthProcessor } from './health/processor.js';
 import { NutritionStore } from './nutrition/store.js';
 import type { FridaLookup, FridaLookupAdapter, LookupComponent } from './nutrition/frida.js';
 import { createDailyChanges, type DailyChanges } from './revisions.js';
-import { dailyJson as json, projectDailyRecord as project, projectNutritionRecord } from './records.js';
-export { projectNutritionRecord } from './records.js';
+import { dailyJson as json, projectDailyRecord as project, projectNutritionRecord, dailyResultByteLimit } from './records.js';
+import { DailyBriefReadModel, briefDetailFields, briefMetadataFields } from './briefs/read-model.js';
+export { projectNutritionRecord, dailyResultByteLimit } from './records.js';
 
 export interface DailyReaders {
   health(request: FastifyRequest): Pick<DailyHealthReadModel, 'history' | 'workoutDetail' | 'heartRate' | 'sync'>;
   nutrition(request: FastifyRequest): Pick<NutritionStore, 'history' | 'favorites' | 'plans'>;
+  briefs(request: FastifyRequest): Pick<DailyBriefReadModel, 'history' | 'detail'>;
 }
 const feedFields = ['feed_kind', 'accepted_evidence_at', 'processed_committed_at', 'metric_rows', 'sleep_rows', 'workout_rows', 'heart_rate_minutes'];
 const inboxFields = ['retained', 'pending', 'quarantined', 'last_accepted_at', 'last_processed_upload_at'];
-export const dailyResultByteLimit = 768 * 1024;
 function latest(values: unknown[]): string | null {
   const times = values.filter(value => value !== null && value !== undefined).map(value => {
     if (!(typeof value === 'string' || value instanceof Date)) throw new ToolFailure('Daily timestamps are unavailable.');
@@ -41,6 +42,7 @@ export class DailyQueryService {
   async query(input: unknown, request: FastifyRequest, signal: AbortSignal): Promise<DailyQueryResult> {
     resolveDailyOwner(request);
     if (!isDailyQuery(input)) throw new ToolRefusal('Invalid Daily query. Use one source with only its supported selectors and exact returned cursor.');
+    if ((input.source === sources.briefs || input.source === sources.brief) && request.dailyConnectorPrincipal) throw new AuthenticationDenied(403);
     signal = AbortSignal.any([signal, AbortSignal.timeout(30_000)]);
     signal.throwIfAborted();
     try { return await this.read(input, request, signal); }
@@ -56,7 +58,19 @@ export class DailyQueryService {
     let next: DailyCursor | null = null;
     let sourceProcessedCommittedAt: string | null = null;
     let units: Record<string, string>;
-    if (input.source === sources.meals) {
+    const brief = input.source === sources.briefs || input.source === sources.brief;
+    if (input.source === sources.briefs) {
+      const page = await this.readers.briefs(request).history({
+        limit: input.limit ?? 50, ...(input.cursor ? { after: input.cursor } : {}),
+      }, signal);
+      items = page.items.map(row => project(row, briefMetadataFields));
+      next = page.next;
+      units = {};
+    } else if (input.source === sources.brief) {
+      const row = await this.readers.briefs(request).detail(input.briefId, signal);
+      if (row) items = [project(row, briefDetailFields)];
+      units = {};
+    } else if (input.source === sources.meals) {
       const page = await this.readers.nutrition(request).history({
         from: input.startDate, to: input.endDate, limit: input.limit ?? 50,
         ...(input.cursor ? { after: input.cursor } : {}),
@@ -117,7 +131,7 @@ export class DailyQueryService {
       provenance: { store: 'daily-sql', detail: 'retained-record', calculations: 'existing-read-model',
         consistency: 'independent-committed-reads' },
       freshness: { observedAt: new Date(this.now()).toISOString(), sourceProcessedCommittedAt,
-        latestReturnedRecordUpdatedAt: latest(items.map(row => row.updated_at)), staleness: 'unknown' },
+        latestReturnedRecordUpdatedAt: brief ? null : latest(items.map(row => row.updated_at)), staleness: 'unknown' },
       coverage: { returned: items.length, hasMore: next !== null, next, sourceCompleteness: 'unknown' },
       revision: '0'.repeat(64), // Reserve the final fingerprint bytes in the response budget.
     };
@@ -148,6 +162,7 @@ export function createDailyData(pool: sql.ConnectionPool, owner: string, now: ()
   const readers: DailyReaders = {
     health: request => { checkOwner(request); return DailyHealthReadModel.forRequest(pool, request); },
     nutrition,
+    briefs: request => { checkOwner(request); return DailyBriefReadModel.forRequest(pool, request); },
   };
   const foodLookup: DailyFoodLookup | undefined = frida
     ? async (input, request, signal) => { checkOwner(request); return frida.lookup(input, signal); }

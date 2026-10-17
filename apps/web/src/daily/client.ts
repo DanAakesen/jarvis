@@ -1,4 +1,4 @@
-import { dailyQuerySources, isDailyQuery, type DailyJson, type DailyQuery, type DailyQueryResult, type DailySourceId } from '@jarvis/contracts';
+import { dailyCapabilitiesAccept, dailyCapabilitiesVersion, dailyQuerySources, dailyQuerySourcesV1, isDailyQuery, type DailyJson, type DailyQuery, type DailyQueryResult, type DailySourceId } from '@jarvis/contracts';
 import { awaitWithSignal, backendFetch } from '../backend-request';
 
 const responseLimit = 1024 * 1024;
@@ -23,7 +23,7 @@ function json(value: unknown, depth = 0): value is DailyJson {
   return object(value) && Object.values(value).every(item => json(item, depth + 1));
 }
 export function isDailyResult(value: unknown, query: DailyQuery): value is DailyQueryResult {
-  const limit = query.source === dailyQuerySources.sync || query.source === dailyQuerySources.workout ? 1 : 'limit' in query ? query.limit ?? 50 : 50;
+  const limit = query.source === dailyQuerySources.sync || query.source === dailyQuerySources.workout || query.source === dailyQuerySources.brief ? 1 : 'limit' in query ? query.limit ?? 50 : 50;
   if (!object(value) || value.source !== query.source || !Array.isArray(value.items) ||
       value.items.length > limit ||
       !value.items.every(item => object(item) && json(item)) ||
@@ -42,6 +42,10 @@ export function isDailyResult(value: unknown, query: DailyQuery): value is Daily
         value.period.endDate !== query.endDate || value.period.timeZone !== 'Europe/Copenhagen') return false;
   } else if (value.period !== null) return false;
   if (query.source.startsWith('daily.nutrition.') && value.units.energy_kcal !== 'kcal') return false;
+  if (query.source === dailyQuerySources.brief && value.items.length) {
+    const first: unknown = value.items[0];
+    if (!object(first) || first.id !== query.briefId) return false;
+  }
   if (query.source === dailyQuerySources.sleep && value.units['*_hours'] !== 'h') return false;
   if (value.coverage.hasMore) {
     if (!object(value.coverage.next) || !isDailyQuery({ ...query, cursor: value.coverage.next }) || value.status !== 'partial') return false;
@@ -71,7 +75,7 @@ async function readJson(response: Response): Promise<unknown> {
     return value;
   } finally { await reader.cancel().catch(() => undefined); reader.releaseLock(); }
 }
-async function requestJson(backendUrl: string | null, path: string, getAccessToken: () => Promise<string>, signal: AbortSignal, body?: DailyQuery): Promise<unknown> {
+async function requestJson(backendUrl: string | null, path: string, getAccessToken: () => Promise<string>, signal: AbortSignal, body?: DailyQuery, accept = 'application/json'): Promise<unknown> {
   if (!backendUrl) throw new DailyReadError('The Daily backend is not configured.', 'disabled');
   signal = AbortSignal.any([signal, AbortSignal.timeout(120_000)]);
   let token: string;
@@ -79,7 +83,7 @@ async function requestJson(backendUrl: string | null, path: string, getAccessTok
   catch { signal.throwIfAborted(); throw new DailyReadError('Sign in again to read your Daily records.', 'auth'); }
   const response = await backendFetch(`${backendUrl.replace(/\/+$/u, '')}${path}`, {
     method: body ? 'POST' : 'GET', signal, cache: 'no-store',
-    headers: { Authorization: ['Bearer', token].join(' '), Accept: 'application/json', ...(body ? { 'Content-Type': 'application/json' } : {}) },
+    headers: { Authorization: ['Bearer', token].join(' '), Accept: accept, ...(body ? { 'Content-Type': 'application/json' } : {}) },
     ...(body ? { body: JSON.stringify(body) } : {}),
   });
   if (!response.ok) {
@@ -91,12 +95,15 @@ async function requestJson(backendUrl: string | null, path: string, getAccessTok
   return readJson(response);
 }
 export async function loadDailySources(backendUrl: string | null, getAccessToken: () => Promise<string>, signal: AbortSignal): Promise<DailySourceId[]> {
-  const value = await requestJson(backendUrl, '/daily/capabilities', getAccessToken, signal);
+  const value = await requestJson(backendUrl, '/daily/capabilities', getAccessToken, signal, undefined, dailyCapabilitiesAccept);
   const source = (input: unknown): input is DailySourceId => typeof input === 'string' &&
     Object.values(dailyQuerySources).some(known => known === input);
-  if (!object(value) || value.module !== 'daily' || value.version !== 1 ||
+  if (!object(value) || value.module !== 'daily' || (value.version !== 1 && value.version !== dailyCapabilitiesVersion) ||
       !Array.isArray(value.sources) || value.sources.length === 0 || !value.sources.every(source) ||
       new Set(value.sources).size !== value.sources.length) throw new DailyReadError('Daily data services are not available yet.', 'disabled');
+  if (value.version === 1 && value.sources.some(id => !dailyQuerySourcesV1.some(legacy => legacy === id))) {
+    throw new DailyReadError('Daily returned incompatible legacy capabilities. No collections were claimed.', 'invalid');
+  }
   return value.sources;
 }
 export async function queryDaily(backendUrl: string | null, query: DailyQuery, getAccessToken: () => Promise<string>, signal: AbortSignal): Promise<DailyQueryResult> {

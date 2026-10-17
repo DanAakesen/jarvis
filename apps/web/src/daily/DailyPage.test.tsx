@@ -11,7 +11,7 @@ afterEach(() => { cleanup(); vi.useRealTimers(); vi.unstubAllGlobals(); });
 function fixture(answer?: (query: DailyQuery) => Response | Promise<Response>) {
   const queries: DailyQuery[] = [];
   const fetch = vi.fn(async (url: string | URL, init?: RequestInit) => {
-    if (String(url).endsWith('/daily/capabilities')) return jsonResponse({ module: 'daily', version: 1, sources: Object.values(sources) });
+    if (String(url).endsWith('/daily/capabilities')) return jsonResponse({ module: 'daily', version: 2, sources: Object.values(sources) });
     const input: unknown = JSON.parse(String(init?.body));
     if (!isDailyQuery(input)) throw new Error('Invalid synthetic query');
     queries.push(input);
@@ -26,6 +26,31 @@ function page(refreshVersion = 0) {
 }
 
 describe('inactive single Daily data page', () => {
+  it('browses exact historical briefs and stored body in the same page without dates, delivery or extra endpoints', async () => {
+    const f = fixture(query => jsonResponse(dailyFixture(query,
+      query.source === sources.briefs ? [{ id: 'cursor' in query ? ' padded ' : 'source-first', trigger: 'manual', started_at: '2026-10-16T07:00:00',
+        status: 'completed', delivery_status: 'not_requested' }] :
+        query.source === sources.brief ? [{ id: ' padded ', started_at: '2026-10-16T07:00:00',
+          preview_text: 'Synthetic historical preview', body_json: 'Synthetic stored body <script>not executable</script>' }] : [],
+      query.source === sources.briefs && !('cursor' in query) ? { startedAt: '2026-10-16T07:00:00', id: 'source-first' } : null)));
+    render(page()); await screen.findByLabelText('Browse');
+    fireEvent.change(screen.getByLabelText('Browse'), { target: { value: sources.briefs } });
+    await screen.findByText('2026-10-16T07:00:00');
+    expect(screen.queryByLabelText('From')).toBeNull();
+    expect(screen.getByText(/Historical records only, not current health or a new delivery/u)).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
+    await screen.findByText(/1 record on page 2/u);
+    fireEvent.click(screen.getByRole('button', { name: 'Open brief' }));
+    await screen.findByRole('heading', { name: 'Brief details' });
+    await screen.findByText('Synthetic stored body <script>not executable</script>');
+    expect(document.querySelector('script')).toBeNull();
+    expect(f.queries.at(-1)).toEqual({ source: sources.brief, briefId: ' padded ' });
+    fireEvent.click(screen.getByRole('button', { name: 'Back to brief history' }));
+    await screen.findByRole('button', { name: 'Open brief' });
+    expect(screen.getByText(/1 record on page 2/u)).toBeTruthy();
+    expect(f.queries.at(-1)).toMatchObject({ source: sources.briefs, cursor: { startedAt: '2026-10-16T07:00:00', id: 'source-first' } });
+    expect(f.fetch.mock.calls.every(([url]) => /\/daily\/(?:capabilities|query)$/u.test(String(url)))).toBe(true);
+  });
   it('browses actual returned values, keeps zero/unknown and every same-date point, and reuses the shared chart', async () => {
     fixture(query => jsonResponse(dailyFixture(query, [
       { metric_name: 'synthetic_scan_mass', metric_date: '2026-10-17', value: 0, unit: 'kg' },

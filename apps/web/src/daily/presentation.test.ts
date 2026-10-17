@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { dailyQuerySources as sources, isDailyQuery } from '@jarvis/contracts';
-import { dailyColumns, dailyPlots, dailyRequest, dailyRowKey, dailySources, dailyValue, initialDailyPeriod } from './presentation';
+import { dailyCellValue, dailyColumns, dailyPlots, dailyRequest, dailyRowKey, dailySources, dailyValue, initialDailyPeriod } from './presentation';
 
 describe('retained Daily record presentation', () => {
   it('chooses Copenhagen calendar days across UTC midnight and year boundaries', () => {
@@ -21,6 +21,15 @@ describe('retained Daily record presentation', () => {
     expect(dailyValue(0)).toBe('0');
     expect(dailyValue(false)).toBe('No');
     expect(dailyValue([])).toBe('None');
+  });
+  it('keeps historical brief timestamps verbatim and uses exact stored-text cursors without guessed periods', () => {
+    const period = { startDate: '2026-10-01', endDate: '2026-10-07' };
+    const cursor = { startedAt: 'raw time', id: ' padded ' };
+    expect(dailyRequest(sources.briefs, period, cursor)).toEqual({ source: sources.briefs, limit: 50, cursor });
+    expect(dailyRequest(sources.brief, period, undefined, ' padded ')).toEqual({ source: sources.brief, briefId: ' padded ' });
+    expect(dailyCellValue(sources.briefs, 'started_at', '2026-10-01T12:00:00')).toBe('2026-10-01T12:00:00');
+    expect(dailyCellValue(sources.brief, 'completed_at', null)).toBe('Unknown');
+    expect(dailyPlots(sources.briefs, [{ value: 10 }])).toEqual([]);
   });
   it('keeps every same-date observation, zero and per-record units without daily aggregation', () => {
     const rows = [
