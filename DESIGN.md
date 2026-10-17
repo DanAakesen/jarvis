@@ -621,9 +621,12 @@ Keep the neutral foundation. The list uses one compact project panel per
 repository, with its settings, running-task count, last-release availability,
 and edit action grouped for scanning. Project settings use labelled form
 sections; save, archive confirmation, loading, retry, conflict, and
-success feedback stay close to the relevant actions. The Projects page has no
-creation form; an empty list points users to New projects defaults in Settings.
-Archive messaging explains
+success feedback stay close to the relevant actions. One Projects section holds
+the managed-project list, Add project action, and a nested collapsed Defaults for
+new projects disclosure. Its seven fields use the existing Settings save form;
+unsaved, pending, confirmed, and failed-save states appear beside the defaults,
+and a failed save can be retried there. The Add project dialog previews the
+server-saved defaults it applies to a new project. Archive messaging explains
 that history remains and the repository stays reserved. Counts refresh manually
 until live updates exist; missing release data is stated, not fabricated.
 Checked in Chromium 154 at 390 and 1280 px with scratch-only auth and API mocks:
@@ -641,6 +644,8 @@ projects and repositories. Chromium 154 checks at 390 and 1280 px exercised
 management without a form and explicit refresh. Neither width overflowed, buttons
 were 44 px high, and there were no browser errors. Live GitHub App, Entra, and
 Azure SQL behavior remains unverified.
+P9-121 keeps the same neutral controls and anchor while grouping project defaults
+with managed projects; no new color, border treatment, or motion is introduced.
 
 ## Task view (P1-08)
 
