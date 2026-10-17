@@ -267,7 +267,19 @@ def no_calendar_evidence(danish: bool) -> str:
     )
 
 
-def calendar_reply(name: str, evidence: dict[str, Any], danish: bool) -> str:
+def calendar_details_requested(text: str) -> bool:
+    return bool(re.search(
+        r"\b(?:read (?:them|it) (?:to me|aloud)|what (?:time|details|address|place)|"
+        r"when (?:is|was|are|were)|læs (?:dem|det) (?:op|for mig)|"
+        r"hvad (?:tid|var detaljerne|var adressen)|hvornår (?:er|var))\b",
+        text,
+        re.IGNORECASE,
+    ))
+
+
+def calendar_reply(
+    name: str, evidence: dict[str, Any], danish: bool, include_details: bool = False
+) -> str:
     payload = evidence.get("result")
     if evidence.get("outcome") != "ok" or not isinstance(payload, dict):
         reason = None
@@ -303,12 +315,24 @@ def calendar_reply(name: str, evidence: dict[str, Any], danish: bool) -> str:
         if isinstance(last_change, dict):
             text += "\n\n" + (
                 "Seneste registrerede resultat: " if danish else "Last recorded result: "
-            ) + calendar_reply("calendar_confirm_change", {"outcome": "ok", "result": last_change},
-                               danish)
+            ) + calendar_reply(
+                "calendar_confirm_change", {"outcome": "ok", "result": last_change},
+                danish, include_details,
+            )
         return text
     if name == "calendar_confirm_change" and payload.get("status") in {
         "completed", "cancelled", "partial", "unverified",
     }:
+        if payload.get("status") == "completed" and not include_details:
+            items = payload.get("items")
+            if isinstance(items, list) and len(items) > 1:
+                return (
+                    "Begge er i kalenderen." if danish and len(items) == 2 else
+                    f"Alle {len(items)} er i kalenderen." if danish else
+                    "Both are in your calendar." if len(items) == 2 else
+                    f"All {len(items)} are in your calendar."
+                )
+            return "Kalenderændringen er gennemført." if danish else "The calendar change is done."
         detail = payload.get("detail")
         if isinstance(detail, str) and detail:
             summary = payload.get("summary")
@@ -323,7 +347,11 @@ def calendar_reply(name: str, evidence: dict[str, Any], danish: bool) -> str:
                     "cancelled": "Annulleret" if danish else "Cancelled",
                 }
                 for index, item in enumerate(items, 1):
-                    if isinstance(item, dict) and isinstance(item.get("summary"), str):
+                    if (
+                        isinstance(item, dict)
+                        and (include_details or item.get("status") != "completed")
+                        and isinstance(item.get("summary"), str)
+                    ):
                         status = labels.get(item.get("status"), labels["unverified"])
                         lines.append(
                             f'{index}. {item["summary"]}\n'
