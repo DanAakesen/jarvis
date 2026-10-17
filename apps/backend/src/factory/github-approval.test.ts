@@ -278,9 +278,22 @@ describe.each(surfaces)('natural approval of a GitHub write (%s)', (surface) => 
     expect(f.puts()).toHaveLength(1);
   });
 
-  it('executes exactly once when two approvals race', async () => {
+  it('executes exactly once when two parallel tool calls in the same turn both carry the approval', async () => {
     const model = vi.fn(classifier());
     const f = fixture({ model });
+    await f.stage(surface);
+    f.advance(2_000);
+    const approval = dan('11', approving[0]!);
+    const results = await Promise.allSettled([f.write(surface, approval), f.write(surface, approval)]);
+    expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+    expect(results.filter((result) => result.status === 'rejected')).toHaveLength(1);
+    // Identical requests share one model call; the post-await re-check is what lets only one of them execute.
+    expect(model).toHaveBeenCalledTimes(1);
+    expect(f.puts()).toHaveLength(1);
+  });
+
+  it.runIf(surface === 'voice')('executes exactly once when two later messages race', async () => {
+    const f = fixture({ model: classifier() });
     await f.stage(surface);
     f.advance(2_000);
     const results = await Promise.allSettled([
