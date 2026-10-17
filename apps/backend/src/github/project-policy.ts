@@ -17,6 +17,7 @@ export interface PolicyPullRequest {
 
 export interface ProjectPolicyStore {
   getPullRequest(repository: string, number: number): Promise<PolicyPullRequest | null>;
+  listOpenPullRequests(projectId?: string): Promise<PolicyPullRequest[]>;
   withActiveTask<T>(
     taskId: string,
     operation: () => Promise<T>,
@@ -28,8 +29,6 @@ interface ProjectPolicyOptions {
   readonly store: ProjectPolicyStore;
   readonly tasks: Pick<TaskStore, 'transition' | 'recordEvent'>;
   readonly tokenIssuer: GitHubAppTokenIssuer;
-  readonly runConfirmed?: <T>(summary: string, action: () => Promise<T>) => Promise<T>;
-  readonly onConfirmationError?: (error: unknown) => void;
   readonly onError?: (error: unknown) => void;
   readonly fetch?: typeof fetch;
 }
@@ -46,7 +45,7 @@ interface PullRequestSnapshot {
 }
 
 class GithubRequestError extends Error {
-  constructor(readonly status: number, readonly rateLimited: boolean) {
+  constructor(readonly status: number, readonly rateLimited: boolean, readonly transient = false) {
     super('GitHub request failed');
   }
 }
@@ -99,18 +98,23 @@ async function requestJson(
   token: string,
   body?: unknown,
 ): Promise<Record<string, unknown>> {
-  const response = await fetchImpl(`${githubApi}${path}`, {
-    method: body === undefined ? 'GET' : 'PUT',
-    headers: {
-      Accept: 'application/vnd.github+json',
-      Authorization: `${['Bear', 'er'].join('')} ${token}`,
-      'X-GitHub-Api-Version': '2022-11-28',
-      ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
-    },
-    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-    signal: AbortSignal.timeout(10_000),
-    redirect: 'error',
-  });
+  let response: Response;
+  try {
+    response = await fetchImpl(`${githubApi}${path}`, {
+      method: body === undefined ? 'GET' : 'PUT',
+      headers: {
+        Accept: 'application/vnd.github+json',
+        Authorization: `${['Bear', 'er'].join('')} ${token}`,
+        'X-GitHub-Api-Version': '2022-11-28',
+        ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
+      },
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      signal: AbortSignal.timeout(10_000),
+      redirect: 'error',
+    });
+  } catch {
+    throw new GithubRequestError(0, false, true);
+  }
   if (!response.ok) {
     const rateLimited = await isRateLimitedResponse(response);
     await response.body?.cancel().catch(() => undefined);
@@ -171,6 +175,14 @@ function pullRequestSnapshot(value: Record<string, unknown>): PullRequestSnapsho
 type CheckStatus = 'passed' | 'none' | 'blocked';
 
 const noChecksGracePeriodMs = 2 * 60_000;
+const policySweepIntervalMs = 60_000;
+const maxTransientRetries = 3;
+const retryDelayMs = [60_000, 120_000, 240_000] as const;
+
+function transientGithubError(error: unknown): boolean {
+  return error instanceof GithubRequestError &&
+    (error.transient || error.rateLimited || error.status === 408 || error.status === 425 || error.status >= 500);
+}
 
 async function checkStatus(fetchImpl: typeof fetch, repository: string, sha: string, token: string): Promise<CheckStatus> {
   const encodedRepository = repository.split('/').map(encodeURIComponent).join('/');
@@ -227,17 +239,26 @@ export function createProjectPolicyEvaluator({
   store,
   tasks,
   tokenIssuer,
-  runConfirmed,
-  onConfirmationError,
   onError,
   fetch: fetchImpl = fetch,
 }: ProjectPolicyOptions) {
   const pendingMerges = new Set<string>();
+  const pendingEvaluations = new Set<string>();
+  const acceptedMerges = new Set<string>();
+  const refusedMerges = new Set<string>();
+  const lastReasons = new Map<string, string>();
+  const retries = new Map<string, { attempts: number; nextAttemptAt: number }>();
   const noChecksRechecks = new Map<string, ReturnType<typeof setTimeout>>();
   let stopped = false;
+  let sweepTimer: ReturnType<typeof setInterval> | undefined;
+  const sweeps = new Map<string, Promise<void>>();
 
   function pullRequestKey(candidate: PolicyPullRequest): string {
     return `${candidate.repository}:${candidate.number}`;
+  }
+
+  function retryKey(candidate: PolicyPullRequest): string {
+    return `${pullRequestKey(candidate)}:${candidate.headSha}`;
   }
 
   function clearNoChecksRecheck(candidate: PolicyPullRequest): void {
@@ -247,20 +268,19 @@ export function createProjectPolicyEvaluator({
     noChecksRechecks.delete(key);
   }
 
-  function scheduleNoChecksRecheck(candidate: PolicyPullRequest, retryDelayMs?: number): boolean {
+  function scheduleNoChecksRecheck(candidate: PolicyPullRequest): boolean {
     const key = pullRequestKey(candidate);
     if (stopped) return false;
     if (noChecksRechecks.has(key)) return true;
     const openedAt = Date.parse(candidate.openedAt);
     if (!Number.isFinite(openedAt)) return false;
-    const delay = retryDelayMs ?? Math.max(0, openedAt + noChecksGracePeriodMs - Date.now());
+    const delay = Math.max(0, openedAt + noChecksGracePeriodMs - Date.now());
     const timer = setTimeout(() => {
       noChecksRechecks.delete(key);
       void store.getPullRequest(candidate.repository, candidate.number)
-        .then(async (latest) => { if (latest) await evaluate(latest); })
+        .then(async (latest) => { if (latest) await evaluateOnce(latest); })
         .catch((error: unknown) => {
           onError?.(error);
-          if (retryDelayMs === undefined) scheduleNoChecksRecheck(candidate, 30_000);
         });
     }, delay);
     noChecksRechecks.set(key, timer);
@@ -273,6 +293,7 @@ export function createProjectPolicyEvaluator({
   }
 
   async function recordReason(taskId: string, reason: string): Promise<void> {
+    if (lastReasons.get(taskId) === reason) return;
     await tasks.recordEvent({
       taskId,
       type: 'project_policy_blocked',
@@ -280,6 +301,11 @@ export function createProjectPolicyEvaluator({
       payload: { reason },
       source: 'backend',
     });
+    lastReasons.set(taskId, reason);
+  }
+
+  function clearReason(taskId: string): void {
+    lastReasons.delete(taskId);
   }
 
   async function markDone(candidate: PolicyPullRequest, withoutChecks = false): Promise<void> {
@@ -288,6 +314,7 @@ export function createProjectPolicyEvaluator({
       return tasks.transition(candidate.taskId, 'Done', true);
     }, candidate.headSha);
     clearNoChecksRecheck(candidate);
+    clearReason(candidate.taskId);
     if (result.kind === 'awaiting_runner') {
       await recordReason(candidate.taskId, 'Runner completion has not been verified for the current task session; policy completion is waiting.');
       return;
@@ -307,75 +334,84 @@ export function createProjectPolicyEvaluator({
     }
   }
 
-  async function requestConfirmedMerge(
+  async function requestAutomaticMerge(
     candidate: PolicyPullRequest,
     path: string,
     headSha: string,
   ): Promise<void> {
-    if (!runConfirmed) {
-      await recordReason(candidate.taskId, 'Dan confirmation is unavailable; the merge was not attempted.');
-      return;
-    }
-    const eligible = await store.withActiveTask(candidate.taskId, async () => undefined, headSha);
-    if (eligible.kind === 'awaiting_runner') {
-      await recordReason(candidate.taskId, 'Runner completion has not been verified for the current task session; the merge was not attempted.');
-      return;
-    }
-    if (eligible.kind === 'inactive') {
-      await recordReason(candidate.taskId, 'The task is no longer active; the merge was not attempted.');
-      return;
-    }
     const key = `${candidate.repository}:${candidate.number}:${headSha}`;
-    if (pendingMerges.has(key)) return;
+    if (pendingMerges.has(key) || acceptedMerges.has(key) || refusedMerges.has(key)) return;
+    const retry = retries.get(retryKey(candidate));
+    if (retry && (retry.attempts > maxTransientRetries || retry.nextAttemptAt > Date.now())) return;
     pendingMerges.add(key);
-    const process = async () => {
-      let mergeAttempted = false;
-      try {
-        const merge = await runConfirmed(
-          `Squash-merge pull request #${candidate.number} in ${candidate.repository} at ${headSha.slice(0, 7)}.`,
-          () => store.withActiveTask(candidate.taskId, async () => {
-            const token = await tokenIssuer.issue(candidate.repository);
-            mergeAttempted = true;
-            const result = await requestJson(fetchImpl, `${path}/merge`, token, {
-              merge_method: 'squash',
-              sha: headSha,
-            });
-            if (result.merged === true) {
-              await tasks.recordEvent({
-                taskId: candidate.taskId,
-                type: 'project_policy_merge_requested',
-                summary: 'GitHub accepted the squash merge; awaiting its pull request webhook.',
-                payload: { pullRequest: candidate.number },
-                source: 'backend',
-              });
-            }
-            return result;
-          }, headSha),
-        );
-        if (merge.kind === 'awaiting_runner') {
-          await recordReason(candidate.taskId, 'The task runner changed before approval; the approved merge was not attempted.');
-        } else if (merge.kind === 'inactive') {
-          await recordReason(candidate.taskId, 'The task is no longer active; the approved merge was not attempted.');
-        } else if (merge.value.merged !== true) {
-          await recordReason(candidate.taskId, 'GitHub did not confirm the approved squash merge.');
+    let mergeAttempted = false;
+    try {
+      const merge = await store.withActiveTask(candidate.taskId, async () => {
+        const token = await tokenIssuer.issue(candidate.repository);
+        mergeAttempted = true;
+        const result = await requestJson(fetchImpl, `${path}/merge`, token, {
+          merge_method: 'squash',
+          sha: headSha,
+        });
+        if (result.merged === true) {
+          await tasks.recordEvent({
+            taskId: candidate.taskId,
+            type: 'project_policy_merge_requested',
+            summary: 'GitHub accepted the squash merge; awaiting its pull request webhook.',
+            payload: { pullRequest: candidate.number },
+            source: 'backend',
+          });
         }
-      } catch (error) {
-        const reason = error instanceof GithubRequestError && !error.rateLimited &&
-          error.status >= 400 && error.status < 500
-          ? 'GitHub refused the approved squash merge because merge rules or branch protection prevent it.'
-          : mergeAttempted
-            ? 'The GitHub merge result could not be verified; check the pull request before retrying.'
-            : 'Merge approval or credentials could not be verified; no merge was attempted.';
-        try { await recordReason(candidate.taskId, reason); }
-        catch (error) { onConfirmationError?.(error); }
-      } finally {
-        pendingMerges.delete(key);
+        return result;
+      }, headSha);
+      retries.delete(retryKey(candidate));
+      if (merge.kind === 'awaiting_runner') {
+        await recordReason(candidate.taskId, 'Runner completion has not been verified for the current task session; the merge was not attempted.');
+      } else if (merge.kind === 'inactive') {
+        await recordReason(candidate.taskId, 'The task is no longer active; the merge was not attempted.');
+      } else if (merge.value.merged !== true) {
+        refusedMerges.add(key);
+        await recordReason(candidate.taskId, 'GitHub did not confirm the squash merge.');
+      } else {
+        acceptedMerges.add(key);
+        clearReason(candidate.taskId);
       }
-    };
-    void process().catch((error: unknown) => onConfirmationError?.(error));
+    } catch (error) {
+      const transient = mergeAttempted && transientGithubError(error);
+      if (transient) {
+        const attempts = (retries.get(retryKey(candidate))?.attempts ?? 0) + 1;
+        if (attempts <= maxTransientRetries) {
+          retries.set(retryKey(candidate), {
+            attempts,
+            nextAttemptAt: Date.now() + retryDelayMs[Math.min(attempts - 1, retryDelayMs.length - 1)]!,
+          });
+        } else {
+          refusedMerges.add(key);
+        }
+      } else {
+        refusedMerges.add(key);
+      }
+      await recordReason(
+        candidate.taskId,
+        transient && (retries.get(retryKey(candidate))?.attempts ?? 0) <= maxTransientRetries
+          ? 'GitHub could not confirm the squash merge; Jarvis will retry automatically.'
+          : transient
+            ? 'GitHub could not confirm the squash merge after several attempts; review the pull request before retrying.'
+          : error instanceof GithubRequestError && error.status >= 400 && error.status < 500
+            ? 'GitHub refused the squash merge because merge rules or branch protection prevent it.'
+            : mergeAttempted
+              ? 'The GitHub merge result could not be verified; check the pull request.'
+              : 'GitHub merge credentials could not be verified; no merge was attempted.',
+      );
+      if (!transient) onError?.(error);
+    } finally {
+      pendingMerges.delete(key);
+    }
   }
 
   async function evaluate(candidate: PolicyPullRequest): Promise<void> {
+    const mergeKey = `${candidate.repository}:${candidate.number}:${candidate.headSha}`;
+    if (candidate.state === 'open' && (acceptedMerges.has(mergeKey) || refusedMerges.has(mergeKey))) return;
     if (candidate.taskState === 'Done' || candidate.taskState === 'Cancelled') {
       clearNoChecksRecheck(candidate);
       return;
@@ -486,7 +522,7 @@ export function createProjectPolicyEvaluator({
         return;
       }
 
-      await requestConfirmedMerge(candidate, path, pullRequest.headSha);
+      await requestAutomaticMerge(candidate, path, pullRequest.headSha);
     } catch (error) {
       if (error instanceof GithubRequestError && !error.rateLimited && error.status >= 400 && error.status < 500) {
         await recordReason(candidate.taskId, 'GitHub refused to verify the pull request state.');
@@ -496,18 +532,83 @@ export function createProjectPolicyEvaluator({
     }
   }
 
+  async function evaluateOnce(candidate: PolicyPullRequest): Promise<void> {
+    const key = `${pullRequestKey(candidate)}:${candidate.headSha}`;
+    if (pendingEvaluations.has(key)) return;
+    pendingEvaluations.add(key);
+    try {
+      await evaluate(candidate);
+    } finally {
+      pendingEvaluations.delete(key);
+    }
+  }
+
+  async function recheckOpenPullRequests(projectId?: string): Promise<void> {
+    if (stopped) return;
+    const sweepKey = projectId ?? '*';
+    const active = sweeps.get(sweepKey);
+    if (active) return active;
+    const sweep = (async () => {
+      const candidates = await store.listOpenPullRequests(projectId);
+      for (const candidate of candidates) {
+        if (stopped) break;
+        const retry = retries.get(retryKey(candidate));
+        if (retry && (retry.attempts > maxTransientRetries || retry.nextAttemptAt > Date.now())) continue;
+        try {
+          await evaluateOnce(candidate);
+        } catch (error) {
+          onError?.(error);
+          const transient = transientGithubError(error);
+          if (transient) {
+            const attempts = (retry?.attempts ?? 0) + 1;
+            if (attempts <= maxTransientRetries) {
+              retries.set(retryKey(candidate), {
+                attempts,
+                nextAttemptAt: Date.now() + retryDelayMs[Math.min(attempts - 1, retryDelayMs.length - 1)]!,
+              });
+              await recordReason(candidate.taskId, 'GitHub could not verify the pull request; Jarvis will retry automatically.');
+            } else {
+              retries.set(retryKey(candidate), { attempts, nextAttemptAt: Number.POSITIVE_INFINITY });
+              await recordReason(candidate.taskId, 'GitHub could not verify the pull request after several attempts; review it before retrying.');
+            }
+          } else {
+            await recordReason(candidate.taskId, 'The pull request could not be verified; review the task before retrying.');
+          }
+        }
+      }
+    })();
+    sweeps.set(sweepKey, sweep);
+    try {
+      await sweep;
+    } finally {
+      sweeps.delete(sweepKey);
+    }
+  }
+
   return {
+    start(): void {
+      if (stopped || sweepTimer) return;
+      void recheckOpenPullRequests().catch((error: unknown) => onError?.(error));
+      sweepTimer = setInterval(() => {
+        void recheckOpenPullRequests().catch((error: unknown) => onError?.(error));
+      }, policySweepIntervalMs);
+    },
+    recheckProject(projectId: string): Promise<void> {
+      return recheckOpenPullRequests(projectId);
+    },
     async handle(mapping: GithubWebhookMapping): Promise<void> {
       if (stopped) return;
       for (const number of pullRequestNumbers(mapping)) {
         const candidate = await store.getPullRequest(mapping.repository, number);
-        if (candidate) await evaluate(candidate);
+        if (candidate) await evaluateOnce(candidate);
       }
     },
-    stop(): void {
+    async stop(): Promise<void> {
       stopped = true;
+      if (sweepTimer) clearInterval(sweepTimer);
       noChecksRechecks.forEach(clearTimeout);
       noChecksRechecks.clear();
+      await Promise.allSettled(sweeps.values());
     },
   };
 }

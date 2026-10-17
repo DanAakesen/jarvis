@@ -44,6 +44,29 @@ describe('SQL project policy store', () => {
     expect(query.mock.calls[0]?.[0]).toContain('WHERE p.repo = @repository AND pr.number = @number');
   });
 
+  it('lists only live-policy open PRs for running or attention tasks', async () => {
+    const row = {
+      taskId: '7',
+      taskState: 'Running',
+      repository: 'DanAakesen/jarvis-test-target',
+      policy: 'complete_without_deployment',
+      number: 42,
+      state: 'open',
+      checks: 'passed',
+      headSha: 'a'.repeat(40),
+      openedAt: '2026-10-04T12:00:00.000Z',
+    };
+    const { pool, input, query } = fakePool([row]);
+
+    await expect(createProjectPolicyStore(pool).listOpenPullRequests('42')).resolves.toEqual([row]);
+
+    expect(input).toHaveBeenCalledWith('projectId', sql.BigInt, 42n);
+    expect(query.mock.calls[0]?.[0]).toContain("p.policy = N'complete_without_deployment'");
+    expect(query.mock.calls[0]?.[0]).toContain("pr.state = N'open'");
+    expect(query.mock.calls[0]?.[0]).toContain("t.state IN (N'Running', N'NeedsAttention')");
+    expect(query.mock.calls[0]?.[0]).toContain('AND p.id = @projectId');
+  });
+
   it('returns null when no task-linked pull request exists', async () => {
     const { pool } = fakePool();
 
