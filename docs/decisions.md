@@ -11,6 +11,31 @@ living stage, input/voice orbs, working cores and glass skeletons.
 Local Chromium fixtures cover both requested sizes/themes and reduced-motion
 mechanisms; Dan's visual acceptance and live Microsoft sign-in remain pending.
 
+## Compute the suggestion budget from stored active energy and Jarvis-logged meals (17 October 2026; P12-09 / #724)
+
+**Builder decision inside Dan's ruling, not a user-confirmed choice and not
+acceptance.** It implements the budget formula recorded in the entry below with
+the least inference the repository allows.
+
+- Burn is read only from the exact `active_energy` metric of today's stored
+  Health data. Resting, basal and total energy are never read, so the owner's
+  resting target is not counted twice. The metric name and its daily-total
+  semantics are not verified against a live export. Verifying them needs a real
+  export and stays an open check, not something this change assumes.
+- Freshness comes from the row's `updated_at`; `start_at`/`end_at` are not a
+  reliable last-sample time. A missing, duplicated, negative or non-kcal reading
+  is unknown with a reason code, never zero.
+- Eaten energy and protein count only meals logged in Jarvis; food eaten but not
+  logged is invisible, and the report names that source. A meal with unreadable
+  energy blocks energy left; a meal without protein makes protein left a
+  flagged upper bound. A partly read day (pages exhausted) is reported as
+  incomplete rather than treated as the whole day.
+- Candidates are the owner's saved favourites only, passed to the unchanged
+  `suggest` calculation and the persisted dislikes. Nothing invents a meal or a
+  quantity, and an unknown energy left applies no energy filter and says so.
+- The tool is read-only, sensitive and phone-denied, behind the default-off Daily
+  gate with no production caller. Daily off leaves Jarvis unchanged.
+
 ## Use owner-configured nutrition targets for the daily food budget (17 October 2026; P12-09 / #724)
 
 **Confirmed user decision, not a proposal or completed acceptance.** Dan ruled
@@ -37,10 +62,10 @@ data in a public repository, so no source, fixture, document, PR text or log
 carries real figures; tests use synthetic values and Dan enters his own.
 
 Everything stays behind the default-off Daily gate: Daily off leaves Jarvis
-unchanged and this slice has no production caller. The budget adapter must
-report unknown burn or unknown meal macros as unknown, never zero, and count
-only the exact active-energy metric so resting energy is not double-counted.
-That adapter, the Settings section and the default-off composition are separate
+unchanged and this slice has no production caller. The budget adapter (recorded
+in the entry above) reports unknown burn or unknown meal macros as unknown, never
+zero, and counts only the exact active-energy metric so resting energy is not
+double-counted. The Settings section and the default-off composition are separate
 slices. No provider, device or private access, live probe, activation or
 acceptance follows from this record.
 

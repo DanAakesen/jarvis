@@ -140,6 +140,30 @@ value. `../routes/nutrition-targets.ts` serves `GET`/`PATCH
 Tests use synthetic values; a real figure never belongs in a fixture, document,
 log or PR text because these are the owner's private health data.
 
+## Personalised suggestion budget
+
+`budget.ts` holds the pure arithmetic: allowance = resting target + active energy
+burned so far today - deficit target; energy left = allowance - energy eaten so
+far today; protein left = protein target - protein eaten so far today. Nothing
+projects the rest of the day or estimates a BMR/TDEE. A missing target, a missing
+or malformed burn reading, an unread page or a meal without a value is named by a
+reason code and leaves the dependent figure null, never zero; a meal without a
+protein value makes protein left an upper bound (`partial`).
+
+`suggestion-adapter.ts` (`readNutritionSuggestions`) reads the owner's targets,
+today's meals (the existing `history`), today's `active_energy` Health row
+(`DailyHealthReadModel.history('metrics', ...)`) and the saved favourites, each in
+at most three bounded pages, then calls the unchanged `suggestions` (energy filter,
+protein ordering, persisted dislikes). Only the exact `active_energy` metric is
+read, so resting energy is not counted twice; that name is trusted as stored and
+is not verified against a live export. Only meals logged in Jarvis count and only
+saved favourites are candidates, so unlogged food is invisible to it.
+
+`../tools/nutrition-suggest.ts` exposes the read-only `daily_nutrition_suggest`
+(sensitive, phone-denied, optional `limit`, 20-second bound). The seventh
+`createDailyModules` argument composes it with Daily on and the targets accessor;
+there is no production caller yet. Tests use synthetic values only.
+
 ## Pinned provider contract and evidence limits
 
 An explicit optional Frida argument to `createDailyData(pool, owner, now, frida)`
