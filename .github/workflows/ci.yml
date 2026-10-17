@@ -22,7 +22,9 @@ permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.event.pull_request.number || github.ref }}
+  # A delayed synchronize event can still carry draft=true after ready_for_review.
+  # Its skipped run must never cancel the ready candidate's qualification.
+  group: ci-${{ github.event.pull_request.number || github.ref }}${{ github.event_name == 'pull_request' && github.event.pull_request.draft && '-draft' || '' }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
@@ -127,7 +129,7 @@ jobs:
         run: python -m unittest discover -s .github/scripts/tests -v
 
   result:
-    name: CI result
+    name: ${{ github.event_name == 'pull_request' && github.event.pull_request.draft && 'Draft CI not qualified' || 'CI result' }}
     if: always() && (github.event_name != 'pull_request' || !github.event.pull_request.draft)
     needs: [plan, web, backend, database, foundry, runner, jarvis-agent, infra, python]
     runs-on: ubuntu-latest

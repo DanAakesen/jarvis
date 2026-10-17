@@ -1,11 +1,45 @@
 # Project plan
 
-Integration checkpoint: #882 merged on 17 October at
-`f6530a5921ce6f60635ab692261cbffcdf7a1e20`; its actual tree matches the
-qualified pipeline candidate. The Daily feed candidate below is being
-reconciled with that main. Its prior green checks and independent review are
-retained evidence, not qualification of this combined tree. Production
-application and acceptance remain separate until the normal pipeline reports them.
+Integration checkpoint: #883 merged on 17 October at
+`705af7c7c02c3154a646dda66d79790d71af8f54`, with its actual tree matching
+the qualified pipeline correction. This Daily candidate combines that main
+with the feed review corrections; earlier source checks are retained evidence,
+not qualification of this combined tree.
+
+The accepted #882 baseline remains backend341/agent109. The later normal
+Deploy39043117488 proved all four component identities could be reused without
+rebuilding or reapplying them, but required chat-capabilities acceptance failed
+with `agent_error`. Its immutable receipt remains `accepted=false`; #820 owns
+the functional follow-through and #880 stays open. This integration does not
+claim to fix that historical failure or complete private Daily acceptance.
+
+## Pipeline event-order recovery (#880, 17 October 2026)
+
+#882 merged normally atf6530a59 with the verified qualified tree; automatic
+Deploy39041096612 passed all8 jobs and its verified immutable receipt records
+all4 components applied/accepted=true (backend341,agent109). Required smoke
+passed; only pre-existing nonblocking PC bridge was down. #880 stays open for
+the bounded follow-up, not because this first rollout lacked acceptance.
+#881 integrated520c9ba8 hit an observed pipeline race:
+ready-event CI39041201026 was cancelled by delayed draft-snapshot CI39041201353,
+which then skipped. No Daily source failure was observed.
+
+One cancelled-ready-run recovery,39041201026 attempt2, was admitted without
+overlapping CI or rerunning green CodeQL/review. This builder owns the minimal
+prevention follow-up: isolate draft concurrency, keep ready supersession and
+required gates unchanged, use a distinct unqualified aggregate name for draft
+snapshots, test both admission orders, qualify exact source and
+return the PR/runtime evidence to the integration owner. No extra worker or
+production dispatch.
+
+The one recovery's application/SQL/image jobs passed; script discovery correctly
+failed an attempt2-sensitive fixture. Pin that fixture's intended attempt1 and
+add real previous-attempt-shape coverage, then run the script suite with
+synthetic `GITHUB_RUN_ATTEMPT=2`. No repeated recovery or gate weakening.
+All118 script cases pass under that environment; scoped Ruff/actionlint and
+whitespace checks pass. Current #883 source needs normal exact-head CI/review.
+Daily's independent later first-attempt green does not erase the failed
+attempt2 or establish this fixture correction.
 
 ## Continuous pipeline delivery (#880, 17 October 2026; implementation candidate)
 
