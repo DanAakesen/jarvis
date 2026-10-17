@@ -730,7 +730,12 @@ Jarvis is one backend with a shared core and one module per area, a static web a
   client ID and API scope. MSAL stores its cache in session storage; sign-in
   redirects the whole page to Entra (no popup, so embedded browsers and popup
   blockers work) and returns to the registered site root, where
-  `handleRedirectPromise` completes it. It requests only the delegated API scope
+  `handleRedirectPromise` completes it. A non-sensitive per-tab session-storage
+  marker, set just before `loginRedirect` and cleared when redirect handling
+  settles or launch fails, distinguishes returning `Signing you in` from
+  first-visit `Loading`; the outgoing button shows `Redirecting`. The marker
+  controls presentation only, never authentication or authorization.
+  It requests only the delegated API scope
   and sends the access token to `/me`. Cached accounts use silent token
   acquisition through the `/redirect.html` bridge. A missing backend URL disables
   sign-in instead of presenting a false success state.
@@ -5002,7 +5007,8 @@ This reverses the earlier no-maintenance-maths rule for one formula only (see
 the decision log): allowance = resting burn + active energy so far today -
 deficit. It adds no BMR/TDEE estimate from weight, height or age and no
 coaching. The suggestion adapter below is the second slice and the web Settings
-section after it the third; the default-off composition is a separate slice. The values are personal
+section after it the third; the default-off composition is a separate slice.
+The values are personal
 health data in a public repository: none appears in code, fixtures, documents,
 logs or audit.
 

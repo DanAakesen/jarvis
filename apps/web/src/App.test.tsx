@@ -11,6 +11,7 @@ import { dailyFixture, jsonResponse } from './daily/test-support';
 
 const {
   createAuthClient,
+  isSignInRedirectPending,
   restoreProfile,
   signIn,
   loadConversationHistory,
@@ -28,6 +29,7 @@ const {
   });
   return {
     createAuthClient: vi.fn(makeAuthClient),
+    isSignInRedirectPending: vi.fn(() => false),
     restoreProfile: vi.fn().mockResolvedValue(null),
     signIn: vi.fn(),
     loadConversationHistory: vi.fn().mockResolvedValue({ messages: [], nextCursor: null }),
@@ -44,7 +46,7 @@ const {
     }>,
   };
 });
-vi.mock('./auth', () => ({ createAuthClient, restoreProfile, signIn }));
+vi.mock('./auth', () => ({ createAuthClient, isSignInRedirectPending, restoreProfile, signIn }));
 vi.mock('./conversation-history', () => ({
   loadConversationHistory,
   createChatSession,
@@ -90,6 +92,7 @@ beforeEach(() => {
   localStorage.clear();
   createAuthClient.mockReturnValue(makeAuthClient());
   restoreProfile.mockResolvedValue(null);
+  isSignInRedirectPending.mockReturnValue(false);
   loadConversationHistory.mockResolvedValue({ messages: [], nextCursor: null });
   createChatSession.mockResolvedValue({ id: '41', language: 'da' });
   sendChatTurn.mockResolvedValue({
@@ -218,11 +221,26 @@ describe('Jarvis routes', () => {
     await waitFor(() => expect(restoreProfile).toHaveBeenCalled());
     expect(screen.queryByRole('heading', { level: 1 })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Sign in with Microsoft' })).toBeNull();
-    expect(screen.getByText('Checking for an existing sign-in…')).not.toBeNull();
+    expect(screen.getByRole('status').textContent).toBe('Loading');
+    expect(screen.getByText('Loading', { selector: '[aria-hidden="true"]' }).textContent).toBe('Loading...');
+    expect(document.querySelector('.loader-core')).toBeNull();
 
     restore({ name: 'Test User' });
     expect(await screen.findByRole('textbox', { name: 'Message Jarvis' })).not.toBeNull();
     expect(screen.queryByRole('button', { name: 'Sign in with Microsoft' })).toBeNull();
+  });
+
+  it('shows Signing you in only when returning from the Microsoft redirect', async () => {
+    isSignInRedirectPending.mockReturnValue(true);
+    let restore!: (profile: null) => void;
+    restoreProfile.mockReturnValue(new Promise(resolve => { restore = resolve; }));
+    render(<MemoryRouter><App config={config} /></MemoryRouter>);
+
+    expect(screen.getByRole('status').textContent).toBe('Signing you in');
+    expect(screen.getByText('Signing you in', { selector: '[aria-hidden="true"]' }).textContent).toBe('Signing you in...');
+    expect(document.querySelector('.loader-core')).toBeNull();
+    await act(async () => { restore(null); });
+    expect(await screen.findByRole('button', { name: 'Sign in with Microsoft' })).not.toBeNull();
   });
 
   it('shows the conversation window before history finishes loading and keeps its frame afterwards', async () => {
@@ -255,8 +273,11 @@ describe('Jarvis routes', () => {
 
     expect(signIn).toHaveBeenCalledWith(expect.anything(), config);
     expect(button.hasAttribute('disabled')).toBe(true);
-    expect(button.textContent).toContain('Sign in');
-    expect(screen.getByText('Opening Microsoft sign-in…')).not.toBeNull();
+    expect(button.textContent).toContain('Redirecting');
+    expect(button.getAttribute('aria-label')).toBe('Redirecting');
+    expect(button.getAttribute('aria-busy')).toBe('true');
+    expect(button.querySelector('.loader-dots')?.textContent).toBe('...');
+    expect(button.querySelector('canvas')).toBeNull();
   });
 
   it('shows the backend refusal and does not show a name for an unauthorized account', async () => {

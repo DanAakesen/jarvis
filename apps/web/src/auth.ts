@@ -8,6 +8,25 @@ export interface UserProfile {
   name: string;
 }
 
+const redirectMarker = 'jarvis.sign-in-redirect';
+
+export function isSignInRedirectPending(): boolean {
+  try {
+    return sessionStorage.getItem(redirectMarker) === 'pending';
+  } catch {
+    return false;
+  }
+}
+
+function markSignInRedirect(pending: boolean) {
+  try {
+    if (pending) sessionStorage.setItem(redirectMarker, 'pending');
+    else sessionStorage.removeItem(redirectMarker);
+  } catch {
+    // Storage restrictions must not prevent Microsoft sign-in.
+  }
+}
+
 export function createAuthClient(config: PublicConfig): PublicClientApplication {
   return new PublicClientApplication({
     auth: {
@@ -38,12 +57,14 @@ function signInFailureMessage(error: unknown): string {
  */
 export async function signIn(client: PublicClientApplication, config: PublicConfig): Promise<void> {
   try {
+    markSignInRedirect(true);
     await client.loginRedirect({
       scopes: [config.apiScope],
       prompt: 'select_account',
       redirectUri: `${window.location.origin}/`,
     });
   } catch (error) {
+    markSignInRedirect(false);
     throw new Error(signInFailureMessage(error), { cause: error });
   }
 }
@@ -54,6 +75,8 @@ export async function restoreProfile(client: PublicClientApplication, config: Pu
     redirected = await client.handleRedirectPromise();
   } catch (error) {
     throw new Error(signInFailureMessage(error), { cause: error });
+  } finally {
+    markSignInRedirect(false);
   }
   if (redirected?.account) {
     client.setActiveAccount(redirected.account);
