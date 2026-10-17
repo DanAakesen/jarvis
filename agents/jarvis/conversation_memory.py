@@ -368,22 +368,8 @@ def plan_refresh(
     )
 
 
-def select_chunk(turns: Sequence[MemoryTurn]) -> list[MemoryTurn]:
-    """The oldest run of the backlog that fits the input cap, leaving the newest raw."""
-    if len(turns) < MEMORY_KEEP_RAW + MEMORY_REFRESH_MARGIN:
-        return []
-    chunk: list[MemoryTurn] = []
-    size = 0
-    for turn in turns[:-MEMORY_KEEP_RAW]:
-        cost = min(len(turn.text), MEMORY_MESSAGE_CHARACTERS) + 24
-        if chunk and size + cost > MEMORY_INPUT_CHARACTERS:
-            break
-        chunk.append(turn)
-        size += cost
-    return chunk
-
-
-def build_prompt(base: SummaryRecord | None, chunk: Sequence[MemoryTurn]) -> str:
+def _memory_head(base: SummaryRecord | None) -> list[str]:
+    """The carried memory and the heading above the new messages."""
     lines: list[str] = []
     if base is None:
         lines.append("Previous memory: none yet.")
@@ -399,10 +385,36 @@ def build_prompt(base: SummaryRecord | None, chunk: Sequence[MemoryTurn]) -> str
             "</previous_open_items>",
         ]
     lines += ["", "New messages, oldest first (each line is one message):"]
-    for turn in chunk:
-        speaker = "Dan" if turn.role == "dan" else "Jarvis"
-        lines.append(f"[{turn.message_id} {speaker}] {_clean_message(turn.text)}")
-    return "\n".join(lines)
+    return lines
+
+
+def _message_line(turn: MemoryTurn) -> str:
+    speaker = "Dan" if turn.role == "dan" else "Jarvis"
+    return f"[{turn.message_id} {speaker}] {_clean_message(turn.text)}"
+
+
+def select_chunk(turns: Sequence[MemoryTurn], base: SummaryRecord | None) -> list[MemoryTurn]:
+    """The oldest run of the backlog that fits the input cap, leaving the newest raw.
+
+    The cap is on the whole prompt, so the carried memory and each message line are charged at
+    their exact length. The first message is always taken; refresh_summary refuses a prompt
+    that is still over the cap.
+    """
+    if len(turns) < MEMORY_KEEP_RAW + MEMORY_REFRESH_MARGIN:
+        return []
+    chunk: list[MemoryTurn] = []
+    size = len("\n".join(_memory_head(base)))
+    for turn in turns[:-MEMORY_KEEP_RAW]:
+        cost = len(_message_line(turn)) + 1
+        if chunk and size + cost > MEMORY_INPUT_CHARACTERS:
+            break
+        chunk.append(turn)
+        size += cost
+    return chunk
+
+
+def build_prompt(base: SummaryRecord | None, chunk: Sequence[MemoryTurn]) -> str:
+    return "\n".join([*_memory_head(base), *(_message_line(turn) for turn in chunk)])
 
 
 _SECTIONS = re.compile(
@@ -513,12 +525,15 @@ async def refresh_summary(plan: RefreshPlan, summarize: Summarizer) -> str:
     """
     async with httpx.AsyncClient(timeout=plan.http_timeout, follow_redirects=False) as client:
         turns = await _collect_backlog(client, plan)
-    chunk = select_chunk(turns)
+    chunk = select_chunk(turns, plan.base)
     if not chunk:
         return "no_backlog"
+    prompt = build_prompt(plan.base, chunk)
+    if len(prompt) > MEMORY_INPUT_CHARACTERS:
+        raise MemorySummaryError("summarise", "prompt_too_large")
     _gate.attempts.append(_clock())
     try:
-        completion = await summarize(SUMMARY_INSTRUCTIONS, build_prompt(plan.base, chunk))
+        completion = await summarize(SUMMARY_INSTRUCTIONS, prompt)
     except asyncio.CancelledError:
         raise
     except Exception as exc:

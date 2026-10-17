@@ -3066,8 +3066,10 @@ prompt carries it as labelled untrusted background followed by up to 40 raw mess
 after its covered range; without one the window stays at 20 messages. After a
 finished chat turn (never a smoke or errored one), a single-flight background task
 in `agents/jarvis/conversation_memory.py` folds the uncovered older messages (at most
-40,000 characters per call, 1,500 per message, newest 20 always raw) into the previous
-summary with one tool-free model call once 30 are uncovered. The call uses the chat
+40,000 characters per call, the carried summary included; 1,500 per message; newest 20
+always raw) into the previous summary with one tool-free model call once 30 are
+uncovered, and refuses a prompt still over the cap as `prompt_too_large` before the
+model is called. The call uses the chat
 model, or `JARVIS_SUMMARY_MODEL`, and reports usage as role `chat`. The task holds
 Dan's token in memory for about 90 seconds, never logs it, and scrubs secrets from
 input and output. A first summary pages back at most 400 messages and logs

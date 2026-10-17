@@ -77,7 +77,9 @@ folds the uncovered older messages into the previous summary with a tool-free ca
 to the chat model (`JARVIS_SUMMARY_MODEL` overrides it), reports usage as role
 `chat` and saves the next version through `POST /conversation/summary`. The backend
 setting `conversationSummaryDailyLimit` (default 24, 0 turns it off) bounds the
-cost. Any failure keeps the plain window and logs `chat.memory_summary_failed`,
+cost, and each call's whole prompt, carried summary included, stays within 40,000
+characters (an over-cap prompt fails as `prompt_too_large` before any model call). Any
+failure keeps the plain window and logs `chat.memory_summary_failed`,
 `chat.memory_summary_skipped`, `chat.memory_summary_gap` or
 `chat.memory_summary_saved` with codes only, never message text. Its tests run
 offline against `tests/fixtures/conversation_memory_300.json`.

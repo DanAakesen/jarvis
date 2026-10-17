@@ -274,8 +274,11 @@ untrusted background, and Jarvis may say it works from a summary of older messag
 Cost is bounded three ways: the setting `global.conversationSummaryDailyLimit`
 (integer 0 to 48, default 24, 0 turns the feature off), a rolling 24-hour attempt
 cap inside the agent, and a server-side 429 once the day's versions reach the
-limit. Each call is one tool-free request with at most about 40,000 characters in and
-6,000 tokens out, and its tokens go through `/usage/foundry`. At the default a long
+limit. Each call is one tool-free request with at most 40,000 characters in and
+6,000 tokens out, and its tokens go through `/usage/foundry`. The 40,000 covers the
+whole prompt: the carried summary and open items are charged against it before any new
+message is added, and a prompt still over it is refused as `prompt_too_large` before the
+model is called or an attempt is counted. At the default a long
 chat can fold roughly 240 messages a day; beyond that the summary lags and the
 window is still never worse than before.
 

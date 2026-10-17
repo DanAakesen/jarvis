@@ -29,6 +29,7 @@ from conversation_memory import (
     MEMORY_DAY_SECONDS,
     MEMORY_FAILURE_BACKOFF_SECONDS,
     MEMORY_INPUT_CHARACTERS,
+    MEMORY_KEEP_RAW,
     MEMORY_MESSAGE_CHARACTERS,
     MEMORY_OPEN_ITEMS_CHARACTERS,
     MEMORY_SUMMARY_CHARACTERS,
@@ -432,6 +433,21 @@ def make_plan(*, limit: int = 24, used: int = 0, count: int = 30) -> RefreshPlan
     )
 
 
+def filled(line: str, size: int) -> str:
+    """Repeated lines cut to exactly `size` characters."""
+    return "\n".join([line] * (size // len(line) + 1))[:size]
+
+
+def stored_record(**changes: Any) -> SummaryRecord:
+    """A stored summary at the largest size the backend accepts, so it carries the most."""
+    return parse_summary_record({
+        **GOOD_RECORD,
+        "summary": filled("- (12) Decision: ship on Friday.", MEMORY_SUMMARY_CHARACTERS),
+        "openItems": filled("- (15) Open task: book travel.", MEMORY_OPEN_ITEMS_CHARACTERS),
+        **changes,
+    })
+
+
 def test_recorded_fixture_is_a_long_conversation_with_decisions_in_the_first_half() -> None:
     assert len(MESSAGES) > 300
     ids = [int(message["id"]) for message in MESSAGES]
@@ -510,8 +526,7 @@ async def test_the_summary_grows_incrementally_and_never_rewrites_messages(backe
             f"{earlier['fromMessageId']} to {earlier['throughMessageId']}):"
         ) in prompt
         assert earlier["summary"] in prompt
-    bound = MEMORY_INPUT_CHARACTERS + MEMORY_SUMMARY_CHARACTERS + MEMORY_OPEN_ITEMS_CHARACTERS
-    assert max(len(prompt) for prompt in summariser.prompts) < bound
+    assert max(len(prompt) for prompt in summariser.prompts) <= MEMORY_INPUT_CHARACTERS
     # Messages are only ever read; the one write is appending the next summary version.
     assert {call.method for call in backend.calls} == {"GET", "POST"}
     assert {call.path for call in backend.posts} == {"/conversation/summary"}
@@ -824,22 +839,135 @@ async def test_the_daily_cap_is_a_rolling_window(backend, monkeypatch) -> None:
 
 def test_the_input_to_one_refresh_is_capped_and_the_newest_messages_stay_raw() -> None:
     turns = [MemoryTurn(number, "dan", "x" * 3_000) for number in range(1, 101)]
-    chunk = select_chunk(turns)
+    chunk = select_chunk(turns, None)
 
-    cost = sum(min(len(turn.text), MEMORY_MESSAGE_CHARACTERS) + 24 for turn in chunk)
     assert 0 < len(chunk) < 40 and chunk == turns[: len(chunk)]
-    assert cost <= MEMORY_INPUT_CHARACTERS
-    assert cost + MEMORY_MESSAGE_CHARACTERS + 24 > MEMORY_INPUT_CHARACTERS
-    prompt = build_prompt(None, chunk)
-    assert len(prompt) < MEMORY_INPUT_CHARACTERS + 1_000
+    assert len(build_prompt(None, chunk)) <= MEMORY_INPUT_CHARACTERS
+    # One more message would break the cap, so the chunk is as big as the cap allows.
+    assert len(build_prompt(None, turns[: len(chunk) + 1])) > MEMORY_INPUT_CHARACTERS
+
+
+def test_a_near_maximum_stored_summary_is_charged_against_the_input_cap() -> None:
+    record = stored_record()
+    assert len(record.summary) == MEMORY_SUMMARY_CHARACTERS
+    assert len(record.open_items) == MEMORY_OPEN_ITEMS_CHARACTERS
+    turns = [MemoryTurn(number, "dan", "word " * 400) for number in range(21, 221)]
+
+    fresh = select_chunk(turns, None)
+    chunk = select_chunk(turns, record)
+
+    # The carried memory takes room the new messages would otherwise have had.
+    assert 0 < len(chunk) < len(fresh)
+    assert chunk == turns[: len(chunk)]
+    assert len(build_prompt(record, chunk)) <= MEMORY_INPUT_CHARACTERS
+    assert len(build_prompt(record, turns[: len(chunk) + 1])) > MEMORY_INPUT_CHARACTERS
+
+
+WIDEST_ID = 9_223_372_036_854_000_000  # nineteen digits, the longest a message id can be
+
+
+@pytest.mark.parametrize(
+    "record",
+    [
+        pytest.param(None, id="no-summary-yet"),
+        pytest.param(parse_summary_record(GOOD_RECORD), id="small-summary"),
+        pytest.param(stored_record(), id="near-maximum-summary"),
+    ],
+)
+@pytest.mark.parametrize(
+    ("first_id", "role", "text"),
+    [
+        pytest.param(1, "dan", "x" * 3_000, id="long-messages-short-ids"),
+        pytest.param(WIDEST_ID, "jarvis", "y" * 3_000, id="long-messages-wide-ids"),
+        pytest.param(WIDEST_ID, "jarvis", "z" * 40, id="short-messages-wide-ids"),
+    ],
+)
+def test_the_chunk_is_the_largest_that_keeps_the_whole_prompt_within_the_cap(
+    record: SummaryRecord | None, first_id: int, role: str, text: str
+) -> None:
+    turns = [MemoryTurn(first_id + number, role, text) for number in range(1_200)]
+    backlog = turns[:-MEMORY_KEEP_RAW]
+
+    chunk = select_chunk(turns, record)
+
+    assert 0 < len(chunk) < len(backlog) and chunk == backlog[: len(chunk)]
+    assert len(build_prompt(record, chunk)) <= MEMORY_INPUT_CHARACTERS
+    assert len(build_prompt(record, backlog[: len(chunk) + 1])) > MEMORY_INPUT_CHARACTERS
+
+
+def test_the_carried_memory_is_measured_as_it_is_sent_not_as_it_was_stored() -> None:
+    record = stored_record(
+        summary=filled("key=a", MEMORY_SUMMARY_CHARACTERS),
+        openItems=filled("key=a", MEMORY_OPEN_ITEMS_CHARACTERS),
+    )
+    stored_size = len(record.summary) + len(record.open_items)
+    turns = [MemoryTurn(number, "dan", "word " * 400) for number in range(21, 221)]
+
+    # Scrubbing the stored text again makes it longer, so only the built prompt tells the size.
+    assert len(build_prompt(record, [])) > stored_size + 10_000
+    chunk = select_chunk(turns, record)
+
+    assert 0 < len(chunk) < len(select_chunk(turns, stored_record()))
+    assert len(build_prompt(record, chunk)) <= MEMORY_INPUT_CHARACTERS
+    assert len(build_prompt(record, turns[: len(chunk) + 1])) > MEMORY_INPUT_CHARACTERS
 
 
 def test_a_refresh_waits_for_a_backlog_and_always_leaves_the_newest_twenty_raw() -> None:
     turns = [MemoryTurn(number, "dan", "hello") for number in range(1, 61)]
 
-    assert select_chunk(turns[:29]) == []
-    assert select_chunk(turns[:30]) == turns[:10]
-    assert select_chunk(turns[:60]) == turns[:40]
+    assert select_chunk(turns[:29], None) == []
+    assert select_chunk(turns[:30], None) == turns[:10]
+    assert select_chunk(turns[:60], None) == turns[:40]
+
+
+def refresh_plan_over(record: SummaryRecord, turns: Sequence[MemoryTurn]) -> RefreshPlan:
+    return RefreshPlan(
+        token=TOKEN, backend_url=BACKEND, http_timeout=10, base=record,
+        budget=SummaryBudget(24, 0), turns=tuple(turns), next_cursor=None,
+    )
+
+
+async def test_the_prompt_the_model_receives_stays_within_the_cap_with_a_near_maximum_summary(
+    backend,
+) -> None:
+    record = stored_record()
+    backend.versions.append(
+        {**GOOD_RECORD, "summary": record.summary, "openItems": record.open_items}
+    )
+    turns = [MemoryTurn(number, "dan", "word " * 400) for number in range(21, 221)]
+    summariser = FakeSummariser()
+
+    outcome = await conversation_memory.refresh_summary(
+        refresh_plan_over(record, turns), summariser
+    )
+
+    assert outcome == "saved"
+    (prompt,) = summariser.prompts
+    assert record.summary in prompt and record.open_items in prompt
+    assert len(prompt) <= MEMORY_INPUT_CHARACTERS
+    assert len(prompt) > MEMORY_INPUT_CHARACTERS - 2 * MEMORY_MESSAGE_CHARACTERS
+    assert backend.posts[0].body["throughMessageId"] == str(
+        21 + len(re.findall(r"^\[\d+ Dan\]", prompt, re.MULTILINE)) - 1
+    )
+
+
+async def test_a_prompt_over_the_cap_is_refused_before_any_model_call(backend, caplog) -> None:
+    oversized = SummaryRecord(
+        version=2, from_message_id=10, through_message_id=20, message_count=11,
+        summary="- (12) Decision: ship on Friday.\n" * 1_500, open_items="",
+        model="fake-summary-model", created_at="2026-10-17T10:00:00.000Z",
+    )
+    turns = [MemoryTurn(number, "dan", "hello") for number in range(21, 61)]
+    summariser = FakeSummariser()
+
+    task = schedule_memory_refresh(refresh_plan_over(oversized, turns), summariser)
+    assert task is not None
+    await task
+
+    assert summariser.prompts == [] and backend.calls == []
+    assert conversation_memory._gate.attempts_today() == 0
+    assert conversation_memory._gate.backoff_until > 0
+    assert "chat.memory_summary_failed stage=summarise code=prompt_too_large" in events(caplog)
 
 
 def test_the_model_answer_is_capped_before_it_is_stored() -> None:
