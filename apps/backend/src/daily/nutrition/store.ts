@@ -3,7 +3,7 @@ import type { FastifyRequest } from 'fastify';
 import { setTimeout as delay } from 'node:timers/promises';
 import { resolveDailyOwner } from '../owner.js';
 import { ToolFailure, ToolRefusal } from '../../core/tool-registry.js';
-import { authorizeIntake, canonicalJson, date, instant, normalizeSearchText, nutrients, plan, suggest, text, writeDefinition, writeMeal, type BudgetContext, type FavoriteAuthority, type FavoriteInput, type IntakeAuthority, type MealInput, type PlanInput, type PlanRequest, type Suggestion } from './model.js';
+import { authorizeIntake, canonicalJson, date, favoriteSearchKey, instant, normalizeSearchText, nutrients, plan, suggest, text, writeDefinition, writeMeal, type BudgetContext, type FavoriteAuthority, type FavoriteInput, type IntakeAuthority, type MealInput, type PlanInput, type PlanRequest, type Suggestion } from './model.js';
 import { dailyQuerySources, type DailySourceId } from '@jarvis/contracts';
 import { createDailyChanges, type DailyChangeSink } from '../revisions.js';
 
@@ -259,8 +259,8 @@ export class NutritionStore {
   }
   /** Exact owner-owned favourites/aliases outrank historical meal-name matches. */
   async lookupSaved(name: string, signal: AbortSignal): Promise<{ source: 'favorite' | 'history'; row: Record<string, unknown> } | null> {
-    const favorite = await this.findFavorite(name, signal); if (favorite) return { source: 'favorite', row: favorite };
-    text(name, 2000);
+    const favorite = favoriteSearchKey(name) === null ? null : await this.findFavorite(name, signal);
+    if (favorite) return { source: 'favorite', row: favorite };
     const row = (await this.read(this.request(this.pool, signal).input('name', sql.NVarChar(sql.MAX), name),
       `SELECT TOP (1) ${select} FROM daily.nutrition_meals WHERE owner_object_id=@owner AND deleted_at IS NULL
         AND meal_name COLLATE Latin1_General_100_BIN2=@name AND DATALENGTH(meal_name)=DATALENGTH(@name) ORDER BY created_at DESC,id DESC;`, signal)).recordset[0];

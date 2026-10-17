@@ -142,6 +142,10 @@ core parity/backup/device/cutover gates.
 
 ### [P12-09: Daily API, tool registry & live revisions](https://github.com/DanAakesen/jarvis/issues/724)
 
+The next retained lookup slice exposes the existing saved favourite/alias and
+exact history resolver through `lookup_food.savedName`, sharing query DTOs.
+It adds no tool name, write authority, migration or activation.
+
 17 October source continuation: the existing JarvisPM session adds an optional
 [nutrition-only hosted MCP adapter](../apps/backend/src/daily/mcp/README.md).
 It reuses delivered reads and existing typed writers, a separate delegated

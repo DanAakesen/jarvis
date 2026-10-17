@@ -162,6 +162,19 @@ describe('nutrition failure/privacy boundaries', () => {
     db.query.mockResolvedValue({ recordset: Array(1001).fill({}) });
     await expect(store().findFavorite('name', signal())).rejects.toThrow('safe lookup limits');
   });
+  it('looks up full-length and non-key historical names exactly without entering the favourite namespace', async () => {
+    for (const name of ['x'.repeat(257), 'x'.repeat(2000), '\u5bff\u53f8', '\ufb03'.repeat(100)]) {
+      db.query.mockClear();
+      const row = { id: 'synthetic-history', meal_name: name };
+      db.query.mockResolvedValue({ recordset: [row] });
+      expect(await store().lookupSaved(name, signal())).toEqual({ source: 'history', row });
+      expect(db.query).toHaveBeenCalledExactlyOnceWith(expect.stringContaining('meal_name COLLATE Latin1_General_100_BIN2=@name'));
+      expect(db.inputs).toContainEqual(['name', sql.NVarChar(sql.MAX), name]);
+    }
+    db.query.mockClear();
+    await expect(store().lookupSaved('x'.repeat(2001), signal())).rejects.toThrow('Invalid nutrition text');
+    expect(db.query).not.toHaveBeenCalled();
+  });
   it('denies callers selecting another owner or a coding runner before SQL', () => {
     expect(() => NutritionStore.forRequest({} as sql.ConnectionPool, { ...request, principal: { objectId: 'other' } } as unknown as FastifyRequest)).toThrow();
     expect(() => NutritionStore.forRequest({} as sql.ConnectionPool, { ...request, runnerPrincipal: { kind: 'jarvis-runner' } } as unknown as FastifyRequest)).toThrow();

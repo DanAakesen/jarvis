@@ -47,6 +47,9 @@ function project(row: Record<string, unknown>, fields: readonly string[]): Recor
     return [field, value instanceof Date && field.endsWith('_date') ? value.toISOString().slice(0, 10) : json(value)];
   }));
 }
+export function projectNutritionRecord(row: Record<string, unknown>, source: 'favorite' | 'history'): Record<string, DailyJson> {
+  return project(row, source === 'favorite' ? favoriteFields : mealFields);
+}
 function latest(values: unknown[]): string | null {
   const times = values.filter(value => value !== null && value !== undefined).map(value => {
     if (!(typeof value === 'string' || value instanceof Date)) throw new ToolFailure('Daily timestamps are unavailable.');
@@ -84,7 +87,7 @@ export class DailyQueryService {
         from: input.startDate, to: input.endDate, limit: input.limit ?? 50,
         ...(input.cursor ? { after: input.cursor } : {}),
       }, signal);
-      items = page.rows.map(row => project(row, mealFields));
+      items = page.rows.map(row => projectNutritionRecord(row, 'history'));
       next = page.next;
       units = { energy_kcal: 'kcal', '*_grams': 'g', meal_date: 'Europe/Copenhagen calendar date' };
     } else if (input.source === sources.favorites || input.source === sources.plans) {
@@ -92,7 +95,7 @@ export class DailyQueryService {
       const page = await nutrition[input.source === sources.favorites ? 'favorites' : 'plans']({
         limit: input.limit ?? 50, ...(input.cursor ? { afterId: input.cursor.id } : {}),
       }, signal);
-      items = page.rows.map(row => project(row, input.source === sources.favorites ? favoriteFields : planFields));
+      items = page.rows.map(row => input.source === sources.favorites ? projectNutritionRecord(row, 'favorite') : project(row, planFields));
       next = page.nextId === null ? null : { id: page.nextId };
       units = { energy_kcal: 'kcal', '*_grams': 'g' };
     } else {

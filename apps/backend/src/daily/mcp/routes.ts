@@ -14,7 +14,7 @@ import { ToolFailure, ToolRefusal } from '../../core/tool-registry.js';
 import type { createNutritionHandlers, NutritionExecution } from '../nutrition/handlers.js';
 import { canonicalJson, prepareMeal } from '../nutrition/model.js';
 import { resolveDailyOwner } from '../owner.js';
-import type { DailyQueryService } from '../query.js';
+import { dailyResultByteLimit, projectNutritionRecord, type DailyQueryService } from '../query.js';
 import { dailyMcpMetadataPath, dailyMcpPath } from './paths.js';
 
 export interface DailyMcpOptions {
@@ -71,8 +71,9 @@ const lookupSchema = z.object({
   components: z.array(z.object({
     name: exactText(120), grams: z.number().finite().gt(0).max(5000).nullable(),
     preparationMethod: exactText(120).nullable(),
-  }).strict()).min(1).max(25),
-}).strict();
+  }).strict()).min(1).max(25).optional(),
+  savedName: exactText(2000).optional(),
+}).strict().refine(input => (input.components !== undefined) !== (input.savedName !== undefined));
 // MCP form schemas exclude additionalProperties; validate returned content strictly.
 const confirmSchema = z.object({ confirm: z.boolean() });
 const pendingSchema = z.object({
@@ -223,12 +224,26 @@ export function dailyMcpRoutes(query: Pick<DailyQueryService, 'query'>, options:
             return response({ ...await query.query(input, request, AbortSignal.any([signal, ctx.mcpReq.signal])) });
           }));
           server.registerTool('lookup_food', {
-            title: 'Look up food', description: 'Read DTU Frida nutrient estimates with honest unknown values and provenance. This never logs food.',
+            title: 'Look up food', description: 'Supply either savedName to resolve an owned favourite/alias before an exact historical meal name, or components for DTU Frida estimates. Saved records retain their quantities and unknowns; no match does not trigger a provider lookup. This never logs food.',
             _meta: security(),
             inputSchema: lookupSchema, annotations: { readOnlyHint: true, openWorldHint: true, destructiveHint: false },
           }, async (input, ctx) => safe(request, 'lookup_food', challenge(), async () => {
             authorize(request);
-            return response({ ...await options.nutrition.lookup(input.components, context(now(), 'lookup', ctx.mcpReq.signal)) });
+            const readContext = context(now(), 'lookup', ctx.mcpReq.signal);
+            if (input.savedName !== undefined) {
+              const match = await options.nutrition.lookupSaved(input.savedName, readContext);
+              const result = {
+                status: match ? 'available' : 'empty', period: null,
+                match: match ? { source: match.source, record: projectNutritionRecord(match.row, match.source) } : null,
+                units: { energy_kcal: 'kcal', '*_grams': 'g', meal_date: 'Europe/Copenhagen calendar date' },
+                provenance: { store: 'daily-sql', detail: 'retained-record' },
+                freshness: { observedAt: new Date(readContext.requestTime).toISOString(), staleness: 'unknown' },
+              };
+              if (Buffer.byteLength(JSON.stringify(result)) > dailyResultByteLimit) throw new ToolRefusal('Saved food exceeds the shared Daily response limit. No complete result is available.');
+              return response(result);
+            }
+            if (input.components === undefined) throw new ToolRefusal('Supply either savedName or components for food lookup.');
+            return response({ ...await options.nutrition.lookup(input.components, readContext) });
           }));
           if (writes) {
             server.registerTool('log_food', {

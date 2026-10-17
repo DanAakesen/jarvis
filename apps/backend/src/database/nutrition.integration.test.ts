@@ -207,4 +207,15 @@ describe('inactive nutrition services on real SQL Server', () => {
     expect(await store().log(input, authority, signal())).toMatchObject({ protein_grams: null, occurred_at: input.occurredAt });
     expect(await store().correct({ ...input, mealType: 'other' }, 1n, signal())).toMatchObject({ revision: '2', protein_grams: null });
   });
+  it('resolves retained full-length and non-key historical names without changing favourite-key rules', async () => {
+    const names = ['x'.repeat(257), 'x'.repeat(2000), '\u5bff\u53f8', '\ufb03'.repeat(100)];
+    for (const [index, mealName] of names.entries()) {
+      const input = { ...fixture(`lookup-history-${index}`), mealName };
+      await store().log(input, authority, signal());
+      expect(await store().lookupSaved(mealName, signal())).toMatchObject({
+        source: 'history', row: { id: input.id, meal_name: mealName, protein_grams: null },
+      });
+      expect(await NutritionStore.forRequest(pool, request(other), now).lookupSaved(mealName, signal())).toBeNull();
+    }
+  });
 });

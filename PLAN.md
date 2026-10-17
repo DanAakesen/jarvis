@@ -1,5 +1,13 @@
 # Project plan
 
+## Retained Daily saved-food lookup (17 October 2026; P12-09 / #724)
+
+#870's inactive connector is deployed. Continue retained parity by exposing
+saved favourite/alias and exact historical-name lookup through its existing
+`lookup_food`, with shared DTOs, no provider fallback and unchanged Frida input.
+Use normal exact-head qualification/release; #724 stays in progress. No new
+tool, migration, authority, account linking or Daily activation is included.
+
 ## CI workspace scoping (16 October 2026; P11-08 / #868)
 
 Web CI was running the root scripts across all three npm workspaces, repeating
