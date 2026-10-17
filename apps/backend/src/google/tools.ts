@@ -361,7 +361,8 @@ function gmailDate(value: unknown): string {
 
 async function currentDanMessage(request: FastifyRequest): Promise<ConversationMessage> {
   if (request.jarvisConversationMessage) {
-    if (request.principal === null || request.jarvisConversationMessage.role !== 'dan') {
+    if (request.principal === null || request.jarvisConversationMessage.role !== 'dan' ||
+        !request.jarvisConversationMessage.sessionId) {
       throw new ToolRefusal('A verified Dan message is required to approve this Google action.');
     }
     return request.jarvisConversationMessage;
@@ -374,7 +375,7 @@ async function currentDanMessage(request: FastifyRequest): Promise<ConversationM
   }
   const page = await request.server.conversationStore.getHistory({ limit: 1 });
   const message = page.messages[0];
-  if (!message || message.id !== id || message.role !== 'dan') {
+  if (!message || message.id !== id || message.role !== 'dan' || !message.sessionId) {
     throw new ToolRefusal('A verified Dan message is required to approve this Google action.');
   }
   return message;
@@ -706,6 +707,7 @@ export function createGoogleModule(
         return pendingActions.stage({
           scope: 'calendar',
           sourceMessageId: source.id,
+          sourceSessionId: source.sessionId,
           summary: event.summary,
           execute: async (signal) => {
             try {
@@ -846,6 +848,7 @@ export function createGoogleModule(
           return pendingActions.stage({
             scope: 'calendar',
             sourceMessageId: source.id,
+            sourceSessionId: source.sessionId,
             summary: `Update "${event.summary}" in Google Calendar: ${changes.join('; ')}.`,
             execute: async (confirmSignal) => {
               try {
@@ -892,6 +895,7 @@ export function createGoogleModule(
           return pendingActions.stage({
             scope: 'calendar',
             sourceMessageId: source.id,
+            sourceSessionId: source.sessionId,
             summary: `Move "${preview.subject}" to ${calendarLocalTime(start, timeZone)}–${calendarLocalTime(end, timeZone)} (${timeZone} local time).`,
             execute: async (confirmSignal) => {
               try {
@@ -926,6 +930,7 @@ export function createGoogleModule(
           return pendingActions.stage({
             scope: 'calendar',
             sourceMessageId: source.id,
+            sourceSessionId: source.sessionId,
             summary: `Delete "${event.summary}" from Google Calendar.`,
             execute: async (confirmSignal) => {
               try {
@@ -1108,6 +1113,7 @@ export function createGoogleModule(
           return pendingActions.stage({
             scope: 'mail',
             sourceMessageId: source.id,
+            sourceSessionId: source.sessionId,
             summary: `Replace Gmail draft "${(headers.subject ?? '(no subject)').slice(0, 200)}" (${draftId}) with subject "${subject}", to ${recipients.join(', ')}, and this exact plain-text body:\n${body}`,
             execute: async (signal) => {
               try {
@@ -1150,6 +1156,7 @@ export function createGoogleModule(
           return pendingActions.stage({
             scope: 'mail',
             sourceMessageId: source.id,
+            sourceSessionId: source.sessionId,
             summary: `Delete Gmail draft "${subject}" (${draftId}).`,
             execute: async (confirmSignal) => {
               try {
@@ -1177,6 +1184,7 @@ export function createGoogleModule(
         return pendingActions.stage({
           scope: 'mail',
           sourceMessageId: source.id,
+          sourceSessionId: source.sessionId,
           summary: `Archive Gmail message ${messageId}.`,
           execute: async (signal) => {
             try {
@@ -1246,6 +1254,7 @@ export function createGoogleModule(
           return pendingActions.stage({
             scope: 'mail',
             sourceMessageId: source.id,
+            sourceSessionId: source.sessionId,
             summary: `Update Gmail message ${messageId} labels: ${[
               ...(add.length ? [`add ${add.join(', ')}`] : []),
               ...(remove.length ? [`remove ${remove.join(', ')}`] : []),
@@ -1302,6 +1311,7 @@ export function createGoogleModule(
         return pendingActions.stage({
           scope: 'mail',
           sourceMessageId: source.id,
+          sourceSessionId: source.sessionId,
           summary: `Reply to "${originalSubject}" from ${senderAddress} with this exact text:\n${replyBody}`,
           execute: async (signal) => {
             try {
@@ -1348,6 +1358,7 @@ export function createGoogleModule(
         return pendingActions.stage({
           scope: 'mail',
           sourceMessageId: source.id,
+          sourceSessionId: source.sessionId,
           summary: `Send "${subject}" to ${recipients.join(', ')} with this exact text:\n${body}`,
           execute: async (signal) => {
             try {
