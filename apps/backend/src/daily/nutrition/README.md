@@ -77,6 +77,9 @@ No new proposal dispatcher, generic approval callback or model authority.
 The summary freezes exact before/after values, units, unknowns, dates and
 revision within 4000 characters. Concurrent pending reviews for a target
 refuse; the existing five-minute confirmation has a six-minute operation bound.
+The hosted agent allows 390 seconds for this tool's response only; ordinary
+tool and connection deadlines are unchanged. Nullable nutrient input uses a
+single number/null JSON-schema type so HTTP coercion cannot invent zero values.
 Store revision/range locks still own correctness after approval. Proposed
 nutrient/component changes remain estimates and clear any whole-meal verified
 claim; unchanged exact field provenance remains. Historical corrections and

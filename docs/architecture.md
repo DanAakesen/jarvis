@@ -4624,6 +4624,11 @@ staging and in the action callback. Existing Now owner-authenticated approval,
 persisted one-time consumption and five-minute expiry supply authority.
 Per-tool pending target keys prevent duplicate concurrent cards; six-minute
 cancellation bounds the operation. No global proposal manager or new table.
+The hosted agent gives only this tool a 390-second response-read deadline
+(operation plus 30 seconds), preserving the five-minute approval window.
+Configured research/ordinary deadlines and connection/write/pool limits remain
+unchanged. Generated input uses one number/null nutrient type, not a coercible
+numeric-first union; strict domain validation still follows HTTP validation.
 Frozen before/after summaries are bounded to 4000 characters and include units,
 unknowns, dates and revision. Existing store revision/range locks recheck writes
 and only acknowledged commits refresh Daily. Exact source-bound replays and

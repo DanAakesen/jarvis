@@ -19,6 +19,15 @@ Changed-file lint passes with zero warnings. Source includes the real SQL
 confirmation-to-intake workflow, Fastify input-schema branch preservation,
 provenance and overlapping-receipt controls. Normal pinned tool/application/SQL
 CI, independent review and authorised release remain next.
+Initial CI39002775817 passed 3691/3692 backend assertions and all other
+components, including SQL; CodeQL ran all four analyses successfully. Its one
+new real HTTP-schema failure revealed unknown nutrient nulls coerced to zero.
+The correction uses one nullable numeric type and expands null/zero HTTP
+controls. Independent review found the hosted-agent 30-second approval timeout;
+only this tool now receives a 390-second response-read deadline. Corrective
+pure review checks pass 16 cases, changed TypeScript lint and Python Ruff pass.
+Local HTTP/Python collection is blocked by missing Fastify/OpenTelemetry, not
+accepted as a pass. Successor pinned CI and exact-head review remain required.
 Broader conversation/spoken acceptance, actual hosted client/provider/device,
 private reconciliation and cutover remain open. #724 stays open/default-off.
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { canonicalJson, storedMeal } from './model.js';
-import { foodRecordRevision, foodReviewFingerprint, foodReviewSchema, foodReviewSummary, hasFoodReview, reviewedCorrection } from './review.js';
+import { foodRecordRevision, foodReviewFingerprint, foodReviewInputSchema, foodReviewSchema, foodReviewSummary, hasFoodReview, reviewedCorrection } from './review.js';
 
 const row = () => ({
   id: 'meal', idempotency_key: 'retained-key', meal_name: 'Synthetic meal', meal_type: null,
@@ -13,6 +13,15 @@ const origin = { sourceMessageId: '42', sourceFingerprint: 'source', operation: 
 const now = '2026-10-17T03:00:00Z';
 
 describe('internal nutrition review contracts', () => {
+  it('uses one nullable numeric input type so HTTP validation cannot coerce unknowns to zero', () => {
+    const nutrients = Object.fromEntries(['proteinGrams', 'carbohydratesGrams', 'fatGrams', 'fiberGrams']
+      .map(key => [key, { type: ['number', 'null'], minimum: 0, maximum: 1000 }]));
+    expect(foodReviewInputSchema).toMatchObject({
+      properties: { change: { properties: {
+        food: { properties: nutrients }, changes: { properties: nutrients },
+      } } },
+    });
+  });
   it('defaults unknown macros without allowing caller authority or confidence', () => {
     expect(foodReviewSchema.parse({ change: { operation: 'log_estimate', food: { mealName: 'Synthetic meal', energyKcal: 200 } } }).change).toMatchObject({
       food: { mealType: null, components: [], proteinGrams: null, carbohydratesGrams: null, fatGrams: null, fiberGrams: null },

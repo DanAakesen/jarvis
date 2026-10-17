@@ -22,6 +22,17 @@ graph. Run approved Node22 x64 checks serially, one worker from apps/backend.
 Real SQL coverage appends to the existing nutrition fixture because earlier
 cases depend on their original meal/favourite counts.
 
+Initial actual CI39002775817 passed 3691/3692 backend assertions, all other
+components including SQL, and all four CodeQL analyses. The sole new HTTP-schema
+failure exposed unknown nutrient nulls being coerced to zero; single nullable
+numeric types correct the input schema, with explicit null/zero HTTP controls.
+Independent source review identified the hosted-agent approval timeout; the
+tool-specific 390-second read deadline leaves other deadlines unchanged.
+Corrective pure review selection passes 16 cases; changed TypeScript ESLint and
+Python Ruff pass. Local HTTP collection lacks `fastify`; Python deadline-test
+collection lacks `opentelemetry`. Neither ran semantic assertions. Do not
+restore or stub either graph; successor normal CI must qualify both corrections.
+
 ## Internal Daily direct-intake checks (17 October 2026; P12-09)
 
 Use synthetic persisted Dan messages and owned favourite snapshots only.

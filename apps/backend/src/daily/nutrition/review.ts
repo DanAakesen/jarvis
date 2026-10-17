@@ -33,7 +33,17 @@ export const foodReviewInputSchema = z.toJSONSchema(z.object({
     operation: z.enum(['log_estimate', 'correct', 'delete']), food: food.optional(),
     idempotencyKey: target.idempotencyKey.optional(), expectedRevision: target.expectedRevision.optional(), changes: changes.optional(),
   }).strict(),
-}).strict(), { target: 'draft-7', io: 'input' });
+}).strict(), {
+  target: 'draft-7', io: 'input',
+  override: ({ zodSchema, jsonSchema }) => {
+    if (zodSchema !== macro) return;
+    // A single nullable type prevents Ajv coercing unknown nulls into zero.
+    const numeric = z.toJSONSchema(macro.unwrap(), { target: 'draft-7', io: 'input' });
+    delete numeric.$schema;
+    Object.assign(jsonSchema, numeric, { type: ['number', 'null'] });
+    delete jsonSchema.anyOf;
+  },
+});
 export type FoodReviewChange = z.infer<typeof foodReviewSchema>['change'];
 export interface FoodReviewOrigin {
   sourceMessageId: string; sourceFingerprint: string; operation: string; proposalFingerprint: string;

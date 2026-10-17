@@ -67,13 +67,15 @@ function fixture() {
 }
 
 describe('inactive internal food proposal review', () => {
-  it('preserves each operation through the real Fastify/Ajv input schema before strict tool validation', async () => {
+  it('preserves each operation and unknown versus zero through real Fastify/Ajv before strict tool validation', async () => {
     const app = Fastify();
     app.post('/synthetic-food-schema', { schema: { body: fixture().tool.inputSchema } }, async request => foodReviewSchema.parse(request.body));
     try {
       for (const input of [
         estimate(),
+        { change: { operation: 'log_estimate', food: { mealName: 'Synthetic meal', energyKcal: 0, proteinGrams: null, carbohydratesGrams: 0, fatGrams: null, fiberGrams: 0 } } },
         { change: { operation: 'correct', idempotencyKey: 'retained-key', expectedRevision: '1', changes: { energyKcal: 222 } } },
+        { change: { operation: 'correct', idempotencyKey: 'retained-key', expectedRevision: '1', changes: { proteinGrams: null, fatGrams: 0 } } },
         { change: { operation: 'delete', idempotencyKey: 'retained-key', expectedRevision: '1' } },
       ]) {
         const result = await app.inject({ method: 'POST', url: '/synthetic-food-schema', payload: input });

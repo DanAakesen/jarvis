@@ -18,6 +18,14 @@ Native approval is owner-bound and consumed once before the action. Neither
 origin alone, spoken text nor caller confirmation flags are write authority.
 Exact-label and actual saved-favourite direct requests keep their one-step path.
 
+Initial real HTTP-schema qualification found Ajv converting unknown nutrient
+nulls to zero through a numeric-first union. Generate a single nullable numeric
+type while retaining canonical bounds and strict domain validation. Independent
+review also found that the hosted agent's ordinary 30-second read timeout would
+cancel a pending food approval. Give only `daily_food_review` a fixed 390-second
+read budget, covering the six-minute backend bound and transport margin; do not
+increase general tool deadlines or introduce detached mutation execution.
+
 New nutrient/component proposals stay estimates and cannot retain a whole-meal
 verification claim. Preserve unchanged exact nutrient provenance and nulls.
 Existing SQL revision/range locks prevent stale correction/deletion, including
