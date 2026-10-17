@@ -3,6 +3,7 @@ import { backendFetch } from './backend-request';
 import { presenceLabel, presenceModes, usePresence, useDevicePresence, type PresenceMode } from './presence-store';
 import { Loader } from './Loader';
 import { CollapsibleSection } from './CollapsibleSection';
+import { ShellIcon } from './ShellIcon';
 
 type ModeInstructions = Record<PresenceMode, string>;
 const maxInstruction = 2_000;
@@ -39,9 +40,8 @@ export function PresenceChip({ backendUrl, getAccessToken }: { backendUrl: strin
       trigger.current?.focus();
     }}>
       <button ref={trigger} className="presence-chip-trigger" type="button" aria-expanded={open} aria-controls={menuId}
-        aria-label={`Presence: ${current.label}. Change mode`} onClick={() => setOpen((value) => !value)}>
-        <span className="presence-dot" aria-hidden="true" />
-        <span className="presence-chip-label">{current.label}</span>
+        aria-label={`Presence: ${current.label}. Change mode`} title={`Presence: ${current.label}`} onClick={() => setOpen((value) => !value)}>
+        <ShellIcon name={current.mode} />
       </button>
       {open && (
         <div id={menuId} className="presence-menu luminous-glass" role="group" aria-label="Presence mode">
